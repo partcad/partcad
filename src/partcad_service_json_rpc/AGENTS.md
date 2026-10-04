@@ -161,8 +161,19 @@ at all).
 Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|assembly|scene|file`,
 `export.part|assembly|scene`, `ai.regenerate|change`, `add.part|assembly|scene`, `package.load|path|refresh`, `init`,
 `list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults`, `cam.route`, `test`, `info`,
-`activate`, and `rpc.discover`. One method mirrors no subcommand — `assembly.instantiate`, which a client
-calls on its own behalf as the second half of a two-phase assembly build (see below). Server-to-client
+`activate`, and `rpc.discover`. Four methods mirror no subcommand:
+
+* `assembly.instantiate`, which a client calls on its own behalf as the second half of a two-phase assembly
+  build (see below).
+* `daemon.debug`, which reports where the service runs from and whether a debugger is attached. The editor
+  extension asks it once, when it is being debugged from a checkout, to decide whether to replace the daemon
+  with one that attaches to the debugger (`debugger.py`, `PC_DEBUGPY`).
+* `render.inline` and `render.formats`, behind the Viewer's 2D and Draft tabs. The first renders one object
+  to one file type -- `pc render -t <format> [-e <package>]` for a single object -- in a temporary directory,
+  and returns the file's bytes, name and extension rather than a path, since the daemon may be on another
+  machine; the client keeps the file and saves it where the user says. The second lists the file types a
+  package declares under `render:`, which is what a drawing package such as
+  `//pub/feature/render/draftwright` offers. Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,
 `stats`, `terminal`, `execute`, and the `*Done`/lifecycle signals).
 

@@ -214,11 +214,13 @@ a socket on ``127.0.0.1:9137``. The Python side of that connection is the
 install.
 
 Beside the 3D view the panel carries tabs for the questions that are about the
-object rather than its shape -- **Bill of Materials**, **Instructions** and
-**Supply**, each appearing where it applies. Those do not come over the socket
-above: they are answered by the PartCAD daemon and fetched the first time the
-tab is opened, so a failure in one of them is a daemon problem and says so in
-the tab, while the 3D view keeps working.
+object rather than its shape -- **FEA** and **CFD** under **Analysis**, and
+**Bill of Materials**, **Instructions** and **Procurement** under **Supply Chain**,
+each enabled where it applies -- and, beside the 3D view on the **Design** tab,
+**2D** and **Draft**, which render the object to a file. Those
+do not come over the socket above: they are answered by the PartCAD daemon and
+fetched the first time the tab is opened, so a failure in one of them is a
+daemon problem and says so in the tab, while the 3D view keeps working.
 
 Anything with a ``partcad`` that can reach that port can display into the same
 viewer -- including a ``pc`` run in a plain terminal, as long as a window with
@@ -258,3 +260,17 @@ Typical problems
    message in the ``PartCAD`` output view says which case this is.
  - Set ``PARTCAD_IDE_PORT`` to move a ``partcad`` process to a different port
    if 9137 is taken by something else on the machine.
+
+"The 3D view could not start: this window can't show 3D models."
+
+ - VS Code could not use the graphics card, so the window has no WebGL. The
+   message in the 3D tab says how to start VS Code so that it draws without the
+   graphics card, and how to make its icon do that every time. The other tabs
+   are not affected; the **2D** tab shows a picture of the object meanwhile.
+
+The **Draft** tab says a package is not found
+
+ - The drawing package, ``//pub/feature/render/draftwright``, comes from the
+   public PartCAD index. A workspace that does not import ``pub`` has no such
+   package; ``pc init`` adds that import, and ``examples/feature_render_custom``
+   shows it written out.

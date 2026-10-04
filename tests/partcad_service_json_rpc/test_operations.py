@@ -302,6 +302,10 @@ class FakeProject:
         obj = self.scenes.get(name)
         return obj.config if obj is not None else None
 
+    def get_part_config(self, name):
+        obj = self.parts.get(name)
+        return obj.config if obj is not None else None
+
     def declares_object(self, kind, name):
         # A real Project answers from its parsed 'partcad.yaml' whether it has
         # an object of this kind under this name, without building it. That is
@@ -2210,14 +2214,47 @@ def test_assembly_guide_reports_a_missing_assembly(monkeypatch):
 
 
 def test_bom_names_the_assembly_it_could_not_find():
-    # A name the package declares as neither an assembly nor a scene is looked
-    # for as an assembly, and the refusal says so. Reporting a bare "Object"
-    # instead tells the reader the least useful true thing there is.
+    # A name the package declares as nothing at all is looked for as an
+    # assembly, and the refusal says so. Reporting a bare "Object" instead tells
+    # the reader the least useful true thing there is.
+    session, _ = make_session()
+
+    assert operations.bom(session, {"package": "//", "object": "ghost"}) is None
+    assert session.partcad.logging.messages("error") == ["Assembly //:ghost is not found"]
+
+
+def test_bom_names_the_part_it_could_not_find():
     session, _ = make_session()
     session.partcad_ctx.projects["//"].add("parts", FakeObject("cube"))
 
-    assert operations.bom(session, {"package": "//", "object": "cube"}) is None
-    assert session.partcad.logging.messages("error") == ["Assembly //:cube is not found"]
+    assert operations.bom(session, {"package": "//", "object": "cube", "json": True}) is None
+    assert session.partcad.logging.messages("error") == ["Part //:cube is not found"]
+
+
+def test_bom_of_a_part_is_what_it_is_procured_as(monkeypatch):
+    """A part declared as one gets the part's BoM, not a refusal for not being an assembly."""
+    asked = []
+
+    async def part_bom_detailed_async(ctx, part):
+        asked.append(part)
+        return {"//:sheet": {"kind": "stock", "count": 1, "desc": "A sheet", "vendor": "acme", "sku": "S-1"}}
+
+    install_fake_partcad_modules(
+        monkeypatch, {"partcad.assembly": {"part_bom_detailed_async": part_bom_detailed_async}}
+    )
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].add("parts", FakeObject("blank"))
+    blank = FakeObject("blank", project_name="//")
+    session.partcad_ctx.shapes[("part", "//:blank")] = blank
+
+    result = operations.bom(session, {"package": "//", "object": "blank", "json": True})
+
+    assert asked == [blank]
+    assert result["assembly"] == "//:blank"
+    assert result["items"] == [
+        {"name": "//:sheet", "kind": "stock", "count": 1, "desc": "A sheet", "vendor": "acme", "sku": "S-1"}
+    ]
+    assert result["total"] == 1
 
 
 def test_bom_names_the_scene_it_could_not_find():
@@ -2949,3 +2986,209 @@ def test_supply_totals_price_a_set_by_one_supplier():
     # Nobody quoted the whole set: it is not priced
     items = [line("shaft", [("a", 10.0)]), line("clip", [("b", 12.0)])]
     assert operations._supply_totals(items) == []
+
+
+# 'render.inline' and 'render.formats': the IDE's 2D and Draft tabs. One object
+# rendered to one file that comes back as bytes, since the daemon may be on
+# another machine; and the file types a drawing package declares.
+
+
+class FakeRenderable(FakeShape):
+    """A shape whose render writes a file, as 'Shape.render_async()' does."""
+
+    def __init__(self, name, project_name="//", kind="part", filename=None, content=b"picture", uncached=()):
+        super().__init__(name=name, project_name=project_name, uncached=uncached, kind=kind)
+        self.filename = filename
+        self.content = content
+        self.render_calls = []
+
+    async def render_async(self, ctx, format_name, output_dir=None, options_package=None, **kwargs):
+        self.render_calls.append((format_name, options_package))
+        if self.filename is not None:
+            # Into a directory of its own when the name says so, as a name with a
+            # '/' in it does ('output.name_to_path').
+            path = os.path.join(output_dir, self.filename)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(self.content)
+
+
+def _inline_session(builtin=("png", "svg"), projects=None):
+    session, _ = make_session()
+    session.partcad.output = fake_output_module(builtin=builtin)
+    session.partcad.output.RENDER = "render"
+    for name, config_obj in (projects or {}).items():
+        session.partcad_ctx.projects[name] = FakeProject(name=name, config_obj=config_obj)
+    return session
+
+
+def test_render_inline_returns_the_file_it_rendered():
+    session = _inline_session()
+    part = FakeRenderable("cube", filename="cube.png", content=b"\x89PNG")
+    session.partcad_ctx.shapes[("part", "//:cube")] = part
+
+    result = operations.render_inline(session, {"package": "//", "object": "cube", "kind": "part", "format": "png"})
+
+    assert result == {
+        "object": "//:cube",
+        "format": "png",
+        "filename": "cube.png",
+        "extension": "png",
+        "content": "iVBORw==",
+    }
+    assert part.render_calls == [("png", None)]
+
+
+def test_render_inline_names_the_extension_the_implementation_wrote():
+    """'jpeg' is the file type and '.jpg' the file: the extension is read off the file, not guessed."""
+    session = _inline_session(builtin=("jpeg",))
+    session.partcad_ctx.shapes[("part", "//:cube")] = FakeRenderable("cube", filename="cube.jpg")
+
+    result = operations.render_inline(session, {"package": "//", "object": "cube", "format": "jpeg"})
+
+    assert (result["filename"], result["extension"]) == ("cube.jpg", "jpg")
+
+
+def test_render_inline_finds_a_file_written_under_a_directory():
+    session = _inline_session()
+    session.partcad_ctx.shapes[("part", "//:a/b")] = FakeRenderable("a/b", filename="a/b.svg")
+
+    result = operations.render_inline(session, {"package": "//", "object": "a/b", "format": "svg"})
+
+    assert result["filename"] == "b.svg"
+
+
+def test_render_inline_draws_with_the_package_it_is_given():
+    """'pc render -e': the file type is the drawing package's, not PartCAD's own."""
+    session = _inline_session(builtin=(), projects={"//draw": {"render": {"pdf": {"path": "draw.py"}}}})
+    part = FakeRenderable("cube", filename="cube.pdf")
+    session.partcad_ctx.shapes[("part", "//:cube")] = part
+
+    result = operations.render_inline(
+        session, {"package": "//", "object": "cube", "format": "pdf", "options_package": "//draw"}
+    )
+
+    assert result["extension"] == "pdf"
+    assert part.render_calls == [("pdf", "//draw")]
+
+
+def test_render_inline_refuses_a_drawing_package_that_is_not_there():
+    session = _inline_session()
+    session.partcad_ctx.shapes[("part", "//:cube")] = FakeRenderable("cube", filename="cube.svg")
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_inline(
+            session, {"package": "//", "object": "cube", "format": "svg", "options_package": "//nowhere"}
+        )
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "//nowhere" in caught.value.message
+    assert "imported by this workspace" in caught.value.message
+
+
+def test_render_inline_refuses_a_file_type_nothing_implements():
+    session = _inline_session()
+    part = FakeRenderable("cube", filename="cube.png")
+    session.partcad_ctx.shapes[("part", "//:cube")] = part
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_inline(session, {"package": "//", "object": "cube", "format": "nosuchtype"})
+
+    assert "Known types" in caught.value.message
+    assert part.render_calls == []
+
+
+def test_render_inline_refuses_an_interface():
+    session = _inline_session()
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_inline(session, {"package": "//", "object": "port", "kind": "interface", "format": "png"})
+
+    assert caught.value.message == (
+        "Only parts, assemblies, scenes and sketches can be rendered to a file; 'interface' is none of them"
+    )
+
+
+def test_render_inline_says_when_nothing_was_written():
+    """The implementation said why in the log; this says only that there is no file."""
+    session = _inline_session()
+    session.partcad_ctx.shapes[("part", "//:cube")] = FakeRenderable("cube", filename=None)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_inline(session, {"package": "//", "object": "cube", "format": "png"})
+
+    assert caught.value.message == "No png file was produced for //:cube; the log says why."
+
+
+def test_render_inline_reports_an_object_that_is_not_there():
+    session = _inline_session()
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_inline(session, {"package": "//", "object": "ghost", "format": "png"})
+
+    assert caught.value.message == "Part //:ghost is not found"
+
+
+def test_render_inline_leaves_no_file_behind(monkeypatch, tmp_path):
+    import tempfile
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    session = _inline_session()
+    session.partcad_ctx.shapes[("part", "//:cube")] = FakeRenderable("cube", filename="cube.png")
+
+    operations.render_inline(session, {"package": "//", "object": "cube", "format": "png"})
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_render_inline_asks_for_an_assemblys_subassemblies_first():
+    session = _inline_session()
+    top = FakeRenderable(
+        "top", kind="assembly", filename="top.png", uncached=[FakeShape(name="unit", project_name="//sub")]
+    )
+    session.partcad_ctx.shapes[("assembly", "//:top")] = top
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_inline(session, {"package": "//", "object": "top", "kind": "assembly", "format": "png"})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "unit", "kind": "assembly"}]
+    assert top.render_calls == []
+
+
+def test_render_formats_lists_what_a_package_renders_to():
+    session = _inline_session(
+        projects={
+            "//draw": {
+                "render": {
+                    "pdf": {"desc": "A drawing, as PDF.", "extension": "pdf"},
+                    "svg": {"desc": "A drawing, as SVG."},
+                    "readme": None,
+                }
+            }
+        }
+    )
+
+    assert operations.render_formats(session, {"package": "//draw"}) == {
+        "package": "//draw",
+        "formats": [
+            {"name": "pdf", "desc": "A drawing, as PDF.", "extension": "pdf"},
+            {"name": "svg", "desc": "A drawing, as SVG.", "extension": "svg"},
+            {"name": "readme", "desc": None, "extension": "readme"},
+        ],
+    }
+
+
+def test_render_formats_of_a_package_that_is_not_there():
+    session = _inline_session()
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_formats(session, {"package": "//pub/feature/render/draftwright"})
+
+    assert "//pub/feature/render/draftwright" in caught.value.message
+    assert "imported by this workspace" in caught.value.message
+
+
+def test_render_formats_of_a_package_that_renders_nothing():
+    session = _inline_session(projects={"//plain": {"parts": {}}})
+
+    assert operations.render_formats(session, {"package": "//plain"}) == {"package": "//plain", "formats": []}

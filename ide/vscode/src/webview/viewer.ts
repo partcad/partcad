@@ -10,15 +10,30 @@
 // instructions, and anything that can be bought has suppliers and prices, so the
 // panel is a strip of tabs over one object rather than a canvas:
 //
-//     3D  |  Bill of Materials  |  Instructions  |  Supply
+//     Design           |  Analysis   |  Supply Chain                                        |  Validation  |  Operations
+//       3D | 2D | Draft     FEA | CFD    Bill of Materials | Instructions | Procurement
 //
-// Which of them exist depends on what is being shown - see 'tabsFor()' - and the
-// 3D view is always the first, because that is what "show this part" means.
+// Three groups, each a strip of its own. Design is the object itself: turned in
+// 3D, rendered to a picture, drawn as a dimensioned drawing. Analysis is what
+// engineering analysis says about it, and Supply Chain what making it takes -
+// what it is made of, how it goes together, where to buy it. Validation and Operations hold
+// nothing yet, and are always disabled.
 //
-// This file is the shell: it owns the tab strip and the panes, routes what the
+// Every group always shows all of its tabs and disables the ones that do not
+// apply, and a group none of whose tabs apply is itself disabled; see 'Tabs'
+// for which tab each strip then opens on. Design and its 3D view are always the
+// first and always enabled, because that is what "show this part" means - and
+// what an empty panel, before anything has been selected, opens on.
+//
+// This file is the shell: it owns the tab strips and the panes, routes what the
 // extension host posts in, and asks for the contents of a tab the first time it
-// is looked at. Each pane draws itself ('scene.ts', 'bom.ts', 'document.ts',
-// 'supply.ts'); none of them talks to the host directly.
+// is looked at. Each pane draws itself ('scene.ts', 'render.ts', 'bom.ts',
+// 'document.ts', 'supply.ts'); none of them talks to the host directly.
+//
+// The 3D view is loaded on its own rather than imported: it needs WebGL, and a
+// window without it throws as the view is built. Imported, that took every other
+// tab down with it - the 2D tab included, which is exactly what such a window
+// can still show. See 'sceneLoaded'.
 //
 // Everything but the 3D view is answered by the PartCAD daemon, which this
 // renderer cannot reach: the panel's CSP forbids every network request, and the
@@ -31,36 +46,40 @@ import { hasCallouts } from './callouts';
 import { CaeView } from './cae';
 import { DocumentView } from './document';
 import { el, empty, placeholder } from './dom';
-import { fetchTab, ready, reportError } from './host';
+import { fetchFormats, fetchTab, ready, reportError, reportFailure, saveRendered } from './host';
 import {
     ANALYSIS_TABS,
     BomData,
     CaeData,
+    DRAFT_PLUGINS,
+    FormatsMessage,
     GuideData,
     HostMessage,
+    RENDER_TABS,
+    RenderData,
+    RenderFormat,
     ShowMessage,
     SupplyData,
     TabId,
     isAnalysisTab,
+    isRenderTab,
 } from './messages';
-import {
-    clearGeometry,
-    flicker,
-    resizeCanvas,
-    showGeometry,
-    setOpacity,
-    setAutoRotate,
-    setShowMetadata,
-    showItems,
-    spaceMouse,
-} from './scene';
+import { Choice, RenderView } from './render';
 import { SupplyView } from './supply';
 import { TabSpec, Tabs } from './tabs';
 import { Tree } from './tree';
 
 const panes: Record<TabId, HTMLElement> = {
+    design: byId('pane-design'),
+    analysis: byId('pane-analysis'),
+    supplyChain: byId('pane-supply-chain'),
+    validation: byId('pane-validation'),
+    operations: byId('pane-operations'),
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '3d': byId('pane-3d'),
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '2d': byId('pane-2d'),
+    draft: byId('pane-draft'),
     bom: byId('pane-bom'),
     instructions: byId('pane-instructions'),
     supply: byId('pane-supply'),
@@ -80,6 +99,82 @@ for (const tab of ANALYSIS_TABS) {
     caeViews[tab] = new CaeView(panes[tab], tab, (implementation) => runAnalysis(tab, implementation));
 }
 const tabs = new Tabs(byId('tabs'), onTabSelected);
+const designTabs = new Tabs(byId('design-tabs'), (tab) => onInnerSelected('design', tab));
+const analysisTabs = new Tabs(byId('analysis-tabs'), (tab) => onInnerSelected('analysis', tab));
+const supplyChainTabs = new Tabs(byId('supply-chain-tabs'), (tab) => onInnerSelected('supplyChain', tab));
+
+/** Each group of the panel's strip, and the strip of its own it holds. */
+const groups: Partial<Record<TabId, Tabs>> = {
+    design: designTabs,
+    analysis: analysisTabs,
+    supplyChain: supplyChainTabs,
+};
+
+/** The 3D view's module, once it has loaded; undefined before, and for good if it could not. */
+type Scene = typeof import('./scene');
+let scene: Scene | undefined;
+
+/**
+ * The 3D view, loaded apart from everything else.
+ *
+ * 'eager' keeps it in this bundle - the panel's CSP loads one script and no
+ * other - while still running it only when asked, so that its failure is a
+ * rejected promise here rather than an exception in the middle of loading this
+ * file. What it cannot draw it says where it would have drawn it, and the
+ * controls that only move a model go, since there is none to move.
+ */
+const sceneLoaded: Promise<Scene | undefined> = import(/* webpackMode: "eager" */ './scene').then(
+    (module) => {
+        scene = module;
+        scene.setShowMetadata(metadataCheckbox?.checked ?? true);
+        return module;
+    },
+    (error: unknown) => {
+        reportFailure('The 3D view could not start', error);
+        const controls = document.querySelector('.viewer-controls') as HTMLElement | null;
+        if (controls !== null) {
+            controls.hidden = true;
+        }
+        return undefined;
+    },
+);
+
+/** The file types the 2D tab offers: PartCAD's own pictures. */
+const PICTURES: Choice[] = [
+    { value: 'png', label: 'PNG' },
+    { value: 'jpeg', label: 'JPEG' },
+    { value: 'svg', label: 'SVG' },
+];
+
+/** What a drawing is best looked at as, when the drawing package offers it. */
+const PREFERRED_DRAFT_FORMATS = ['svg', 'png'];
+
+const renderViews: Partial<Record<TabId, RenderView>> = {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '2d': new RenderView(panes['2d'], {
+        formats: PICTURES,
+        onChange: () => renderTab('2d'),
+        onSave: () => saveRendered('2d'),
+    }),
+    draft: new RenderView(panes.draft, {
+        plugins: DRAFT_PLUGINS,
+        onChange: () => renderTab('draft'),
+        onPlugin: () => startDraft(),
+        onSave: () => saveRendered('draft'),
+    }),
+};
+
+/**
+ * The file types each drawing package renders to, once it has been asked.
+ *
+ * Kept across shows: it is what the package declares, not anything about the
+ * object on screen, and asking means loading the package - from the network,
+ * the first time.
+ */
+const draftFormats = new Map<string, RenderFormat[]>();
+
+/** The 'fetchFormats' the Draft tab is waiting for. */
+let awaitingFormats: number | undefined;
 
 // What the 3D view is showing, as a tree of items to switch on and off. It lives
 // beside the canvas rather than over it, with the Metadata and Animate boxes and
@@ -87,10 +182,10 @@ const tabs = new Tabs(byId('tabs'), onTabSelected);
 // one pane.
 const objectTree = new Tree(
     byId('tree'),
-    () => showItems(objectTree.visible()),
+    () => scene?.showItems(objectTree.visible()),
     // Pointing at a part or a sub-assembly flickers it, which is the one thing that
     // says "this row is that shape" without moving the camera.
-    (items) => flicker(items),
+    (items) => scene?.flicker(items),
 );
 
 // What a shape's metadata says about its elements - the angle and direction of a
@@ -101,9 +196,8 @@ const objectTree = new Tree(
 const metadataControl = document.getElementById('metadata-control') as HTMLElement | null;
 const metadataCheckbox = document.getElementById('metadata-checkbox') as HTMLInputElement;
 if (metadataCheckbox) {
-    setShowMetadata(metadataCheckbox.checked);
     metadataCheckbox.addEventListener('change', (event) => {
-        setShowMetadata((event.target as HTMLInputElement).checked);
+        scene?.setShowMetadata((event.target as HTMLInputElement).checked);
     });
 }
 
@@ -111,7 +205,7 @@ if (metadataCheckbox) {
 const animateCheckbox = document.getElementById('animate-checkbox') as HTMLInputElement;
 if (animateCheckbox) {
     animateCheckbox.addEventListener('change', (event) => {
-        setAutoRotate((event.target as HTMLInputElement).checked);
+        scene?.setAutoRotate((event.target as HTMLInputElement).checked);
     });
 }
 
@@ -122,7 +216,7 @@ if (opacitySlider && opacityValue) {
     opacitySlider.addEventListener('input', (event) => {
         const value = parseInt((event.target as HTMLInputElement).value, 10);
         const opacity = value / 100;
-        setOpacity(opacity);
+        scene?.setOpacity(opacity);
         opacityValue.textContent = `${value}%`;
     });
 }
@@ -162,10 +256,10 @@ const awaiting = new Map<TabId, number>();
 const requested = new Set<TabId>();
 
 /** Ask the host to fill a tab in, and remember which answer to accept. */
-function request(tab: TabId, implementation?: string): void {
+function request(tab: TabId, extra: { implementation?: string; format?: string; plugin?: string } = {}): void {
     lastToken += 1;
     awaiting.set(tab, lastToken);
-    fetchTab({ type: 'fetchTab', tab, token: lastToken, implementation });
+    fetchTab({ type: 'fetchTab', tab, token: lastToken, ...extra });
 }
 
 /** The instructions, once they have arrived: it owns the paging. */
@@ -190,39 +284,163 @@ function reset(tab: TabId): HTMLElement {
 }
 
 /**
- * The tabs an object gets.
+ * The panel's own strip for an object: the three groups, each enabled while any
+ * of its tabs is.
+ */
+function tabsFor(message: ShowMessage | undefined): TabSpec[] {
+    return [
+        { id: 'design', label: 'Design', pane: panes.design },
+        {
+            id: 'analysis',
+            label: 'Analysis',
+            pane: panes.analysis,
+            disabled: !Tabs.anyEnabled(analysisTabsFor(message)),
+            hint: 'No engineering analysis configurations are defined for this object',
+        },
+        {
+            id: 'supplyChain',
+            label: 'Supply Chain',
+            pane: panes.supplyChain,
+            disabled: !Tabs.anyEnabled(supplyChainTabsFor(message)),
+            hint: 'No manufacturing or procurement instructions are provided for this object',
+        },
+        // Placeholders for the groups to come: in the strip so that its shape is
+        // the one it will keep, disabled because they hold no tabs yet.
+        {
+            id: 'validation',
+            label: 'Validation',
+            pane: panes.validation,
+            disabled: true,
+            hint: 'No validation instructions are provided for this object',
+        },
+        {
+            id: 'operations',
+            label: 'Operations',
+            pane: panes.operations,
+            disabled: true,
+            hint: 'No operations data is collected for this object',
+        },
+    ];
+}
+
+/**
+ * Analysis: FEA and CFD, both always shown, enabled for a part.
  *
  * Everything but the 3D view is a question put to the daemon about
  * '<package>:<name>', so an object whose package the sender did not tell us
  * about - a shape shown from a script, or a 'partcad' older than the field -
- * gets the 3D view alone rather than tabs that could only fail.
+ * gets none of them rather than tabs that could only fail.
+ *
+ * Only a part is analysed. An assembly is a set of parts that each have boundary
+ * conditions of their own, and a load on the whole of one says nothing about
+ * which member carries it - so 'pc cae' takes a part, and so does this. Both are
+ * enabled whether or not the part declares 'fea:'/'cfd:', because "this part
+ * says nothing about FEA" is the answer somebody looking for the tab came to
+ * read.
  */
-function tabsFor(message: ShowMessage): TabSpec[] {
-    const specs: TabSpec[] = [{ id: '3d', label: '3D', pane: panes['3d'] }];
-    if (!message.package) {
-        return specs;
+function analysisTabsFor(message: ShowMessage | undefined): TabSpec[] {
+    const analysed = Boolean(message?.package) && message?.kind === 'part';
+    return [
+        { id: 'fea', label: 'FEA', pane: panes.fea, disabled: !analysed },
+        { id: 'cfd', label: 'CFD', pane: panes.cfd, disabled: !analysed },
+    ];
+}
+
+/**
+ * Supply Chain: the bill of materials, the instructions and where to buy, all
+ * three always shown, and enabled for the two things that are made and bought -
+ * a part and an assembly.
+ *
+ * A bill of materials is of an assembly, and of a part: what one of it is
+ * procured as - itself, or the stock it is made from (see 'pc bom'). Instructions
+ * are the steps that put an assembly together. A scene is where things are
+ * placed rather than a thing anybody builds or orders, and a sketch and an
+ * interface are things to build with - so for those three the whole group is
+ * disabled.
+ */
+function supplyChainTabsFor(message: ShowMessage | undefined): TabSpec[] {
+    const known = Boolean(message?.package);
+    const kind = message?.kind;
+    return [
+        {
+            id: 'bom',
+            label: 'Bill of Materials',
+            pane: panes.bom,
+            disabled: !(known && (kind === 'assembly' || kind === 'part')),
+        },
+        {
+            id: 'instructions',
+            label: 'Instructions',
+            pane: panes.instructions,
+            disabled: !(known && kind === 'assembly'),
+        },
+        {
+            id: 'supply',
+            label: 'Procurement',
+            pane: panes.supply,
+            disabled: !(known && (kind === 'assembly' || kind === 'part')),
+        },
+    ];
+}
+
+/** Rebuild every strip for an object: each group's own first, then the panel's. */
+function setAllTabs(message: ShowMessage | undefined): void {
+    // The groups' strips first, so that the panel's, opening a group, finds the
+    // tab under it already chosen.
+    designTabs.setTabs(designTabsFor(message));
+    analysisTabs.setTabs(analysisTabsFor(message));
+    supplyChainTabs.setTabs(supplyChainTabsFor(message));
+    tabs.setTabs(tabsFor(message));
+}
+
+/**
+ * The Design tab's own tabs for an object: all three always shown, 3D always
+ * enabled - it is what an empty panel opens on too.
+ *
+ * 2D is anything PartCAD can render to a picture: a part, an assembly, a scene
+ * or a sketch - not an interface, which is ports rather than a shape. Draft is a
+ * dimensioned drawing, which is made of a solid: a part or an assembly. Both are
+ * a render the daemon makes of '<package>:<name>', so an object with no package
+ * gets neither.
+ */
+function designTabsFor(message: ShowMessage | undefined): TabSpec[] {
+    const known = Boolean(message?.package);
+    const kind = message?.kind ?? '';
+    return [
+        { id: '3d', label: '3D', pane: panes['3d'] },
+        {
+            id: '2d',
+            label: '2D',
+            pane: panes['2d'],
+            disabled: !(known && ['part', 'assembly', 'scene', 'sketch'].includes(kind)),
+        },
+        {
+            id: 'draft',
+            label: 'Draft',
+            pane: panes.draft,
+            disabled: !(known && (kind === 'part' || kind === 'assembly')),
+        },
+    ];
+}
+
+/**
+ * The 3D view's control pane - what is on screen and how it is drawn - only
+ * while something is: with nothing shown it would be an empty list and controls
+ * for a model that is not there.
+ */
+const controlPane = document.querySelector('.pane-3d > .controls') as HTMLElement | null;
+
+function offerControls(shown: boolean): void {
+    if (controlPane !== null) {
+        controlPane.hidden = !shown;
     }
-    if (message.kind === 'assembly' || message.kind === 'scene') {
-        specs.push({ id: 'bom', label: 'Bill of Materials', pane: panes.bom });
+}
+
+/** Take back what the render tabs showed for the previous object. */
+function resetRenderTabs(text: string): void {
+    for (const tab of RENDER_TABS) {
+        renderViews[tab]?.setBusy(text);
     }
-    if (message.kind === 'assembly') {
-        // Instructions are the steps that put an assembly together, and a scene
-        // says only where things ended up - deliberately, so it has no steps to
-        // show. See 'partcad.scene'.
-        specs.push({ id: 'instructions', label: 'Instructions', pane: panes.instructions });
-    }
-    if (message.kind === 'part') {
-        // Only a part is analysed. An assembly is a set of parts that each have
-        // boundary conditions of their own, and a load on the whole of one says
-        // nothing about which member carries it - so 'pc cae' takes a part, and
-        // so does this. The tab is offered whether or not the part declares
-        // 'fea:'/'cfd:', because "this part says nothing about FEA" is the
-        // answer somebody looking for the tab came to read.
-        specs.push({ id: 'fea', label: 'FEA', pane: panes.fea });
-        specs.push({ id: 'cfd', label: 'CFD', pane: panes.cfd });
-    }
-    specs.push({ id: 'supply', label: 'Supply', pane: panes.supply });
-    return specs;
 }
 
 async function show(message: ShowMessage): Promise<void> {
@@ -238,6 +456,7 @@ async function show(message: ShowMessage): Promise<void> {
     for (const tab of ANALYSIS_TABS) {
         caeViews[tab]?.setBusy('Select this tab to run the analysis.');
     }
+    resetRenderTabs('Select this tab to render it.');
 
     // Set up viewer configuration on the window object for access by scene.ts
     if (message.config) {
@@ -261,22 +480,31 @@ async function show(message: ShowMessage): Promise<void> {
         const remembered = message.keepCamera ? objectTree.state() : undefined;
         objectTree.setObject(message.object, remembered);
     }
-    showItems(objectTree.visible());
     offerMetadata(message.object);
+    offerControls(true);
 
-    await showGeometry(message);
-    // Newer show arrived while this one was loading; abandon it.
+    // Without a 3D view the geometry has nowhere to go, but the object still has
+    // every other tab.
+    const view = await sceneLoaded;
     if (generation !== mine) {
         return;
     }
-    // Apply current opacity slider value to newly loaded geometry
-    if (opacitySlider) {
-        const opacity = parseInt(opacitySlider.value, 10) / 100;
-        setOpacity(opacity);
+    if (view !== undefined) {
+        view.showItems(objectTree.visible());
+        await view.showGeometry(message);
+        // Newer show arrived while this one was loading; abandon it.
+        if (generation !== mine) {
+            return;
+        }
+        // Apply current opacity slider value to newly loaded geometry
+        if (opacitySlider) {
+            const opacity = parseInt(opacitySlider.value, 10) / 100;
+            view.setOpacity(opacity);
+        }
     }
     // Rebuilt on every show, which also re-asks for whatever tab the user is on:
     // the object may be the same one after an edit, and its answers may not be.
-    tabs.setTabs(tabsFor(message));
+    setAllTabs(message);
 }
 
 function clear(): void {
@@ -285,30 +513,135 @@ function clear(): void {
     awaiting.clear();
     requested.clear();
     instructions = undefined;
-    clearGeometry();
+    scene?.clearGeometry();
     objectTree.clear();
     offerMetadata(undefined);
+    offerControls(false);
     for (const tab of DATA_TABS) {
         reset(tab);
     }
     for (const tab of ANALYSIS_TABS) {
         caeViews[tab]?.setBusy('Nothing to analyse.');
     }
-    tabs.setTabs([{ id: '3d', label: '3D', pane: panes['3d'] }]);
+    resetRenderTabs('Nothing to render.');
+    setAllTabs(undefined);
 }
 
 /** Ask for an analysis again, with whatever implementation was typed in. */
 function runAnalysis(tab: TabId, implementation: string): void {
     requested.add(tab);
     caeViews[tab]?.setBusy('Running the analysis…');
-    request(tab, implementation || undefined);
+    request(tab, { implementation: implementation || undefined });
 }
 
+/**
+ * Render the object to the file type a render tab has chosen.
+ *
+ * Again on every change of it, and never from a cache: a render is the object as
+ * it is now, and the host keeps only the file on screen - which is the one Save
+ * saves.
+ */
+function renderTab(tab: TabId): void {
+    const view = renderViews[tab];
+    if (view === undefined || shown === undefined) {
+        return;
+    }
+    requested.add(tab);
+    const format = view.format;
+    if (format === undefined) {
+        return;
+    }
+    view.setBusy(
+        tab === 'draft'
+            ? 'Drawing… The first drawing can take a few minutes, while PartCAD installs what makes it.'
+            : 'Rendering…',
+    );
+    request(tab, { format, plugin: tab === 'draft' ? view.plugin : undefined });
+}
+
+/**
+ * Start the Draft tab: learn what the chosen package draws, then draw.
+ *
+ * What a drawing package offers is whatever its 'render:' section declares, so
+ * the list is asked for rather than written here - once per package.
+ */
+function startDraft(): void {
+    const view = renderViews.draft;
+    const plugin = view?.plugin;
+    if (view === undefined || plugin === undefined) {
+        return;
+    }
+    requested.add('draft');
+    awaiting.delete('draft');
+    const known = draftFormats.get(plugin);
+    if (known !== undefined) {
+        view.setFormats(choicesOf(known), PREFERRED_DRAFT_FORMATS);
+        renderTab('draft');
+        return;
+    }
+    view.setFormats([]);
+    view.setBusy(`Asking ${plugin} what it can draw…`);
+    lastToken += 1;
+    awaitingFormats = lastToken;
+    fetchFormats({ type: 'fetchFormats', token: lastToken, plugin });
+}
+
+function onFormats(message: FormatsMessage): void {
+    if (message.token !== awaitingFormats) {
+        return;
+    }
+    awaitingFormats = undefined;
+    const view = renderViews.draft;
+    if (view === undefined || view.plugin !== message.plugin) {
+        return;
+    }
+    if (message.error !== undefined || message.formats === undefined) {
+        view.showError(message.error ?? `${message.plugin} said nothing about what it can draw.`);
+        return;
+    }
+    if (message.formats.length === 0) {
+        view.showError(`${message.plugin} does not draw anything: its 'render:' section is empty.`);
+        return;
+    }
+    draftFormats.set(message.plugin, message.formats);
+    view.setFormats(choicesOf(message.formats), PREFERRED_DRAFT_FORMATS);
+    renderTab('draft');
+}
+
+function choicesOf(formats: RenderFormat[]): Choice[] {
+    return formats.map((format) => ({
+        value: format.name,
+        label: format.name.toUpperCase(),
+        title: format.desc ?? undefined,
+    }));
+}
+
+/** The panel's strip opened a group: open whichever of its tabs it is on. */
 function onTabSelected(tab: TabId): void {
+    const inner = groups[tab]?.current;
+    if (inner !== undefined) {
+        onLeafSelected(inner);
+    }
+}
+
+/**
+ * A group's strip opened one of its tabs.
+ *
+ * A group's strip is rebuilt while another group may be the one on screen, and
+ * nothing is fetched for a tab nobody can see.
+ */
+function onInnerSelected(group: TabId, tab: TabId): void {
+    if (tabs.current === group) {
+        onLeafSelected(tab);
+    }
+}
+
+/** A tab with contents came on screen: draw it, asking for it if need be. */
+function onLeafSelected(tab: TabId): void {
     if (tab === '3d') {
         // The canvas had no size at all while the tab was hidden, and a WebGL
         // renderer does not find out on its own that it has one again.
-        resizeCanvas();
+        scene?.resizeCanvas();
         return;
     }
     if (isAnalysisTab(tab)) {
@@ -317,6 +650,14 @@ function onTabSelected(tab: TabId): void {
         caeViews[tab]?.resize();
     }
     if (requested.has(tab)) {
+        return;
+    }
+    if (tab === 'draft') {
+        startDraft();
+        return;
+    }
+    if (isRenderTab(tab)) {
+        renderTab(tab);
         return;
     }
     requested.add(tab);
@@ -343,6 +684,23 @@ function onTabData(
         return;
     }
     awaiting.delete(tab);
+
+    if (isRenderTab(tab)) {
+        const view = renderViews[tab];
+        if (error !== undefined) {
+            view?.showError(error);
+        } else if (data === null || data === undefined) {
+            view?.showError('PartCAD rendered nothing.');
+        } else {
+            try {
+                view?.show(data as RenderData);
+            } catch (e: unknown) {
+                view?.showError(`Failed to display this: ${e}`);
+                reportError(`failed to render the '${tab}' tab: ${e}`);
+            }
+        }
+        return;
+    }
 
     if (isAnalysisTab(tab)) {
         // The analysis panes are not rebuilt: they own a field the user types
@@ -411,16 +769,20 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
         show(message);
     } else if (message.type === 'tabData') {
         onTabData(message.tab, message.token, message.data, message.error, message.implementation);
+    } else if (message.type === 'formats') {
+        onFormats(message);
     } else if (message.type === 'spaceMouseState') {
-        spaceMouse.settings = message.settings;
-        spaceMouse.active = message.active;
-        spaceMouse.spacenavd = message.spacenavd;
-        spaceMouse.spacenavdDevice = message.spacenavdDevice;
+        if (scene !== undefined) {
+            scene.spaceMouse.settings = message.settings;
+            scene.spaceMouse.active = message.active;
+            scene.spaceMouse.spacenavd = message.spacenavd;
+            scene.spaceMouse.spacenavdDevice = message.spacenavdDevice;
+        }
     } else if (message.type === 'spaceMouseEvent') {
         if (message.motion !== undefined) {
-            spaceMouse.spacenavMotion(message.motion, performance.now());
+            scene?.spaceMouse.spacenavMotion(message.motion, performance.now());
         } else if (message.button !== undefined) {
-            spaceMouse.spacenavButton(message.button, message.pressed === true);
+            scene?.spaceMouse.spacenavButton(message.button, message.pressed === true);
         }
     } else if (message.type === 'updateConfig') {
         (window as any).partcadConfig = message.config;
@@ -440,10 +802,14 @@ window.addEventListener('keydown', (event: KeyboardEvent) => {
     // The instructions are pages to flip through, and the arrow keys are how a
     // reader flips them. Only while that tab is the one on screen: the same keys
     // orbit the camera on the 3D one.
-    if (tabs.current === 'instructions' && instructions?.handleKey(event.key)) {
+    if (
+        tabs.current === 'supplyChain' &&
+        supplyChainTabs.current === 'instructions' &&
+        instructions?.handleKey(event.key)
+    ) {
         event.preventDefault();
     }
 });
 
-tabs.setTabs([{ id: '3d', label: '3D', pane: panes['3d'] }]);
+setAllTabs(undefined);
 ready();

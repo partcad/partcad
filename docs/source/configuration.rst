@@ -2661,9 +2661,10 @@ procured at all.
   for each part made from it, and which parts each is for. Cutting several parts
   out of one piece is a question of layout that PartCAD does not answer yet, so
   the count is what buying for each part separately would take -- an upper
-  bound, never short. The detailed bill of materials lists the stock as line
-  items of kind ``stock``, with the vendor and the SKU to order them by, and
-  each made part names what it is made from in ``madeFrom``.
+  bound, never short. The detailed bill of materials (``pc bom``) lists what
+  has to be procured: a made part is not a line item of its own there but the
+  stock it is made from, of kind ``stock``, with the vendor and the SKU to
+  order it by.
 - **The assembly instructions** open, after the bill of materials, with the
   parts to manufacture: each one, how many of it, what it is made from, and its
   manufacturing instructions written out in full.

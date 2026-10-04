@@ -16,7 +16,6 @@ from . import sandbox_versions, shape_envelope, shape_ports
 from . import software as pc_software
 from . import telemetry, wrapper
 from .geom import Location
-from .plugin_provider_data_cart import ProviderCartItem
 from .process_crash import command_failure
 from .revision import package_revision
 from .shape import Shape
@@ -498,9 +497,9 @@ class Assembly(Shape):
         instead.
 
         Whether anybody actually sells it is the other, market-side question,
-        answered by '_is_available_to_buy()'. The two are easy to conflate and
-        are not interchangeable: this one says what the model intends, that one
-        says what can be bought today.
+        which the supply quote asks. The two are easy to conflate and are not
+        interchangeable: this one says what the model intends, that one says
+        what can be bought today.
         """
         if self.config.get("child", False):
             return False
@@ -618,12 +617,30 @@ class Assembly(Shape):
         Like 'get_bom()', the tree is flattened into a map keyed by the object's
         full name, counting how many times each occurs. Unlike it, every entry
         also carries what a bill of materials is read for: whether the item is a
-        part or an assembly, its description, and the store data that says what
-        to order.
+        part, an assembly or stock, its description, and the store data that
+        says what to order.
 
             {"//package:name": {"kind": "part", "count": 2, "desc": "...",
                                 "vendor": None, "sku": None, "count_per_sku": 1,
                                 "item_in_sku": None}}
+
+        It lists what has to be procured, by the rule 'get_supply_bom()' and
+        the cart follow, so that the three agree:
+
+        * a sub-assembly that declares a vendor and an SKU is one line item, of
+          kind "assembly" -- ordered whole, and nothing inside it is listed (see
+          'is_declared_purchasable()');
+        * any other sub-assembly is expanded into its own bill of materials;
+        * a part is what it is procured as (see 'partcad.procurement'): itself
+          when it declares a vendor and an SKU, or says neither how it is
+          bought nor how it is made; the stock it is made from when it is made,
+          followed while that stock is made in turn, as a line item of kind
+          "stock"; and nothing when it is made from nothing it names.
+
+        Which sub-assembly is ordered whole is decided by the declaration alone,
+        offline: whether anybody has one today is the supply quote's question.
+        Without 'ctx' no stock can be looked up, and every part is listed as
+        itself.
 
         Software the objects ship with is listed too, as entries of kind
         "software" (see 'get_bom_grouped_async'). A software line item is the
@@ -632,49 +649,46 @@ class Assembly(Shape):
         package, and the version and hash the declaration pins it to. Its
         'count' is how many times something in this assembly needs it - three
         boards running one firmware image is a count of three, the same way
-        three of anything else is.
+        three of anything else is. A part listed as its stock still ships its
+        software; an assembly ordered whole comes with its own already on it.
 
-        With 'stop_at_purchasable', a sub-assembly that can be bought whole -- it
-        declares a vendor and an SKU, and a supplier of its package has it
-        available -- becomes a line item of its own instead of being expanded
-        into its contents. It is then one thing to order rather than a list of
-        parts to source and assemble, and nothing below it appears in the BoM.
-        Querying the suppliers needs 'ctx'; without one, nothing is purchasable.
+        'stop_at_purchasable' is accepted and changes nothing. It used to be
+        what made a sub-assembly with a vendor and an SKU a line item, and then
+        only one a supplier reported in stock; every sub-assembly that declares
+        both is one now.
         """
         with pc_logging.Action("BoMDetailed", self.project_name, self.name):
-            return await self._get_bom_detailed_locked(ctx, stop_at_purchasable, {})
+            return await self._get_bom_detailed_locked(ctx)
 
     def get_bom_detailed(self, ctx=None, stop_at_purchasable: bool = False):
         return asyncio.run(self.get_bom_detailed_async(ctx, stop_at_purchasable))
 
-    async def _get_bom_detailed_locked(self, ctx, stop_at_purchasable, purchasable: dict):
+    async def _get_bom_detailed_locked(self, ctx):
         with self.lock:
             async with self.get_async_lock():
                 await self.do_instantiate()
-                return await self._get_bom_detailed_real(ctx, stop_at_purchasable, purchasable)
+                return await self._get_bom_detailed_real(ctx)
 
-    async def _get_bom_detailed_real(self, ctx, stop_at_purchasable, purchasable: dict):
+    async def _get_bom_detailed_real(self, ctx):
         bom = {}
         _bom_detailed_add_software(bom, ctx, self)
         for child in self.children:
             item = child.item
             if isinstance(item, Assembly):
                 # An assembly embedded in the parent's source file belongs to no
-                # package, so there is no name to order it by; it can only ever be
+                # package, so there is no name to order it by; it is always
                 # expanded, exactly as the grouped BoM treats it. That rule is
-                # part of the declaration half of '_is_available_to_buy()'.
-                if stop_at_purchasable and await _is_available_to_buy(ctx, item, purchasable):
+                # part of 'is_declared_purchasable()'.
+                if item.is_declared_purchasable():
                     # Bought whole, and so is whatever is inside it - the
                     # firmware its boards run comes flashed, and is no more a
                     # line item here than its screws are.
                     _bom_detailed_add(bom, item, "assembly")
                     continue
-                child_bom = await item._get_bom_detailed_locked(ctx, stop_at_purchasable, purchasable)
-                _bom_detailed_merge(bom, child_bom)
+                _bom_detailed_merge(bom, await item._get_bom_detailed_locked(ctx))
             else:
-                _bom_detailed_add(bom, item, "part")
+                await _bom_detailed_add_part(bom, ctx, item)
                 _bom_detailed_add_software(bom, ctx, item)
-                await _bom_detailed_add_stock(bom, ctx, item)
         return bom
 
 
@@ -793,34 +807,74 @@ def _bom_detailed_add(bom: dict, item, kind: str):
     entry["count"] += 1
 
 
-async def _bom_detailed_add_stock(bom: dict, ctx, item):
-    """Account for what a part that is made is made from, in a detailed BoM.
+async def _bom_detailed_add_part(bom: dict, ctx, part):
+    """Account for one more instance of a part: what it is procured as.
 
-    The part stays a line item of its own -- it is what goes into the assembly
-    -- and says what it is made from in 'madeFrom'. The stock is a line item of
-    kind "stock", carrying the vendor and the SKU it is ordered by, one piece
-    per part made from it (see 'partcad.procurement').
+    Itself when it is bought, or says neither how it is bought nor how it is
+    made; the stock it is made from when it is made, followed while that is made
+    in turn; nothing when it is made from nothing it names (see
+    'partcad.procurement'). Without a context nothing can be looked up, and the
+    part is listed as itself.
     """
     from . import procurement
 
-    if ctx is None or procurement.is_bought(item) or not procurement.is_made(item):
+    if ctx is None:
+        _bom_detailed_add(bom, part, "part")
         return
-    bom["%s:%s" % (item.project_name, item.name)]["madeFrom"] = procurement.stock_name(item)
-    for name in await procurement.procured_as(ctx, item):
-        entry = bom.get(name)
-        if entry is None:
-            resolved = await procurement.get_part_async(ctx, name)
-            store_data = resolved.get_store_data() if resolved is not None else None
-            entry = bom[name] = {
-                "kind": "stock",
-                "count": 0,
-                "desc": getattr(resolved, "desc", None),
-                "vendor": store_data.vendor if store_data else None,
-                "sku": store_data.sku if store_data else None,
-                "count_per_sku": store_data.count_per_sku if store_data else 1,
-                "item_in_sku": store_data.item_in_sku if store_data else None,
-            }
-        entry["count"] += 1
+    own = "%s:%s" % (part.project_name, part.name)
+    for name in await procurement.procured_as(ctx, part):
+        if name == own:
+            _bom_detailed_add(bom, part, "part")
+        else:
+            await _bom_detailed_add_stock_piece(bom, ctx, name)
+
+
+async def _bom_detailed_add_stock_piece(bom: dict, ctx, name: str):
+    """Account for one more piece of stock, by its fully qualified name.
+
+    A name that resolves to nothing is still a line item -- the cart and the
+    test say it is missing -- just one with nothing to order it by.
+    """
+    from . import procurement
+
+    entry = bom.get(name)
+    if entry is None:
+        resolved = await procurement.get_part_async(ctx, name)
+        store_data = resolved.get_store_data() if resolved is not None else None
+        entry = bom[name] = {
+            "kind": "stock",
+            "count": 0,
+            "desc": getattr(resolved, "desc", None),
+            "vendor": store_data.vendor if store_data else None,
+            "sku": store_data.sku if store_data else None,
+            "count_per_sku": store_data.count_per_sku if store_data else 1,
+            "item_in_sku": store_data.item_in_sku if store_data else None,
+        }
+    entry["count"] += 1
+
+
+async def part_bom_detailed_async(ctx, part) -> dict:
+    """The detailed BoM of one part: what one of it is procured as.
+
+    The same rule an assembly's BoM applies to each of its parts, and the same
+    shape of line item ('Assembly.get_bom_detailed_async()'), with the part as
+    the whole of the tree (see 'partcad.procurement'):
+
+    * a part that is bought, or that says neither how it is bought nor how it is
+      made, is its own bill of materials: one of itself;
+    * a part that is made is the stock it is made from -- followed while that is
+      made in turn, so a blank cut from a sheet cut from a roll is one roll;
+    * a part made from nothing it names, printed or formed, needs nothing
+      procured, and its bill of materials is empty.
+
+    The software it ships with is listed as well, as an assembly lists that of
+    each of its parts.
+    """
+    bom = {}
+    with pc_logging.Action("BoMDetailed", part.project_name, part.name):
+        await _bom_detailed_add_part(bom, ctx, part)
+        _bom_detailed_add_software(bom, ctx, part)
+    return bom
 
 
 def _bom_detailed_add_software(bom: dict, ctx, item):
@@ -855,48 +909,3 @@ def _bom_detailed_merge(bom: dict, other: dict):
             bom[name]["count"] += entry["count"]
         else:
             bom[name] = dict(entry)
-
-
-async def _is_available_to_buy(ctx, assembly, cache: dict) -> bool:
-    """Whether 'assembly' can be bought whole today instead of being assembled.
-
-    Where 'Assembly.is_declared_purchasable()' answers a question about the
-    model, this answers one about the *market*, and so it has to query the
-    suppliers. Both halves are required: what the model declares as orderable,
-    and a supplier of the assembly's own package that has it available. Either
-    half on its own is not something a buyer can act on, which is why a
-    procurement answer cannot be given offline the way a BoM walk can.
-
-    The declaration half is delegated to 'is_declared_purchasable()' rather than
-    re-derived here, so that the two never drift apart -- an assembly embedded
-    in its parent's source file, for one, is never orderable by name.
-
-    The answer is cached per assembly, so a sub-assembly used many times costs
-    one supplier query rather than one per instance.
-    """
-    if ctx is None:
-        return False
-
-    name = "%s:%s" % (assembly.project_name, assembly.name)
-    if name in cache:
-        return cache[name]
-
-    def answer(value: bool) -> bool:
-        cache[name] = value
-        return value
-
-    if not assembly.is_declared_purchasable():
-        return answer(False)
-
-    # Whether the package declares any supplier at all is asked here rather than
-    # left to 'find_part_suppliers()': that reports the absence as an error, and
-    # a package that simply does not sell anything is not one.
-    project = ctx.get_project(assembly.project_name)
-    if project is None or not await project.get_suppliers_async():
-        return answer(False)
-
-    item = ProviderCartItem()
-    item.set_shape(assembly)
-    # 'find_part_suppliers()' keeps only the providers that report the item as
-    # available, so a non-empty result is the availability answer.
-    return answer(bool(await ctx.find_part_suppliers(item)))

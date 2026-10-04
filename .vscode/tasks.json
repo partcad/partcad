@@ -78,11 +78,110 @@
     //     "isDefault": false
     //   }
     // }
+    // The extension's build: `npm: install`, then either `npm: compile` once or
+    // `npm: watch`, which is what the `Debug Extension and Python` launch
+    // configuration runs. Both depend on the install because nothing else
+    // installs `ide/vscode/node_modules` -- not the dev container,
+    // not `poetry install` -- and without it webpack is not there to run, no
+    // `dist/extension.js` is written, and the Extension Development Host fails
+    // to activate the extension with "Cannot find module".
     {
+        // `npm ci` when `package-lock.json` is newer than what was last
+        // installed from it (npm keeps a copy of it as
+        // `node_modules/.package-lock.json`), and nothing otherwise -- so it
+        // costs nothing on every launch but the first after a checkout moves
+        // the lockfile. A `process` task running Node rather than a shell
+        // one-liner, so that it means the same thing in every shell VS Code
+        // might pick, PowerShell included.
+        "label": "npm: install",
+        "type": "process",
+        "command": "node",
+        "args": [
+            "-e",
+            "const fs = require('fs'), cp = require('child_process'); const t = (f) => { try { return fs.statSync(f).mtimeMs; } catch { return -1; } }; if (t('node_modules/.package-lock.json') >= t('package-lock.json')) { console.log('ide/vscode/node_modules is up to date'); } else { process.exit(cp.spawnSync('npm', ['ci'], { stdio: 'inherit', shell: true }).status ?? 1); }"
+        ],
+        "options": {
+            "cwd": "${workspaceFolder}/ide/vscode"
+        },
+        "problemMatcher": [],
+        "presentation": {
+            "reveal": "silent",
+            "group": "watchers"
+        }
+    },
+    {
+        // A one-off build of both bundles, for when no watcher is wanted.
+        "label": "npm: compile",
+        "type": "npm",
+        "script": "compile",
+        "path": "ide/vscode",
+        "dependsOn": ["npm: install"],
+        "problemMatcher": {
+            "owner": "typescript",
+            "source": "ts",
+            "fileLocation": "absolute",
+            // ts-loader's "[tsl] ERROR in /abs/file.ts(12,3)" and, on the next
+            // line, "TS2322: Type 'string' is not assignable ...".
+            "pattern": [
+                {
+                    "regexp": "\\[tsl\\] (ERROR|WARNING) in (.*)\\((\\d+),(\\d+)\\)",
+                    "severity": 1,
+                    "file": 2,
+                    "line": 3,
+                    "column": 4
+                },
+                {
+                    "regexp": "^\\s*TS(\\d+):\\s*(.*)$",
+                    "code": 1,
+                    "message": 2
+                }
+            ]
+        },
+        "group": "build"
+    },
+    {
+        // Labelled explicitly: the launch configuration names it, and the
+        // label VS Code makes up for an npm task in a subdirectory is not this.
+        "label": "npm: watch",
         "type": "npm",
         "script": "watch",
-        "problemMatcher": ["$ts-webpack-watch", "$tslint-webpack-watch"],
+        "path": "ide/vscode",
+        "dependsOn": ["npm: install"],
         "isBackground": true,
+        // Written out rather than taken from `amodio.tsl-problem-matcher`, whose
+        // `$ts-webpack-watch` this used to name. That extension is only a
+        // recommendation, and the dev container does not install it; without
+        // it VS Code has no way to tell when the first build is done, and the
+        // launch either refuses to track the task or starts the host before
+        // there is anything to load. `webpack.config.js` names its two
+        // compilers so that webpack-cli says which one it is talking about,
+        // and the one the launch has to wait for is the extension's.
+        "problemMatcher": {
+            "owner": "typescript",
+            "source": "ts",
+            "fileLocation": "absolute",
+            // ts-loader's "[tsl] ERROR in /abs/file.ts(12,3)" and, on the next
+            // line, "TS2322: Type 'string' is not assignable ...".
+            "pattern": [
+                {
+                    "regexp": "\\[tsl\\] (ERROR|WARNING) in (.*)\\((\\d+),(\\d+)\\)",
+                    "severity": 1,
+                    "file": 2,
+                    "line": 3,
+                    "column": 4
+                },
+                {
+                    "regexp": "^\\s*TS(\\d+):\\s*(.*)$",
+                    "code": 1,
+                    "message": 2
+                }
+            ],
+            "background": {
+                "activeOnStart": true,
+                "beginsPattern": "Compiler 'extension' starting",
+                "endsPattern": "Compiler 'extension' finished"
+            }
+        },
         "presentation": {
             "reveal": "never",
             "group": "watchers"
@@ -90,8 +189,7 @@
         "group": {
             "kind": "build",
             "isDefault": true
-        },
-        "path": "ide/vscode"
+        }
     },
     {
         "type": "npm",

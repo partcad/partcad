@@ -382,8 +382,10 @@ at all).
   the user is taken at their word that they can make it -- so no supplier is asked for it. `procured_as` is the
   one rule: bought -> itself; made -> the `source:` of its `manufacturing:` section, followed down the chain; made
   from nothing it names -> nothing; neither -> itself. `get_supply_bom(ctx)` (the cart), the grouped BOM's `stock`
-  and `manufactured` sections (the readme and the instruction book), the detailed BOM's `stock` line items and
-  `madeFrom`, and `ManufacturabilityTest.stock_failure` all go through it. `get_supply_bom()` *without* a context
+  and `manufactured` sections (the readme and the instruction book), the detailed BOM (`pc bom`, which lists a made
+  part *as* its stock, and a sub-assembly with a vendor/SKU as one line item, exactly as the cart does -- and a
+  single part the same way, through `part_bom_detailed_async`), and `ManufacturabilityTest.stock_failure` all go
+  through it. `get_supply_bom()` *without* a context
   is still "what has to be had", parts as themselves, and is what the manufacturability test walks, because a
   made part is something it tests too. A part with both a vendor/SKU and instructions is tried as bought first
   and falls back to being made. One piece of stock per part: nesting is not modelled yet. The instruction book's

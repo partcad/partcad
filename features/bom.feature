@@ -52,13 +52,17 @@ Feature: `pc bom` command
       """
 
   @success @pc-bom
-  Scenario: The bill of materials counts the whole tree
+  Scenario: The bill of materials lists what has to be procured
     When I run "pc bom :top"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Bill of materials of //:top:"
-    # Two units of two cubes each, plus the one the top level assembly holds.
+    # The unit declares a vendor and an SKU, so it is ordered whole: two units,
+    # plus the one cube the top level assembly holds. The cubes inside the units
+    # are not listed.
+    And STDOUT should contain "//:unit"
+    And STDOUT should contain "UNIT-1"
     And STDOUT should contain "//:cube"
-    And STDOUT should contain "Total: 5"
+    And STDOUT should contain "Total: 3"
     And STDOUT should contain "DONE: BoM: //: top"
 
   @success @pc-bom
@@ -66,20 +70,56 @@ Feature: `pc bom` command
     When I run "pc -q bom --json :top"
     Then the command should exit with a status code of "0"
     And STDOUT should contain '"assembly": "//:top"'
+    And STDOUT should contain '"name": "//:unit"'
+    And STDOUT should contain '"kind": "assembly"'
     And STDOUT should contain '"name": "//:cube"'
     And STDOUT should contain '"kind": "part"'
-    And STDOUT should contain '"count": 5'
-    And STDOUT should contain '"total": 5'
+    And STDOUT should contain '"total": 3'
 
   @success @pc-bom
-  Scenario: A sub-assembly nobody supplies is expanded even when it names an SKU
-    # The unit declares a vendor and an SKU, but the package declares no
-    # supplier, so there is nowhere to buy it: it is still an assembly to build.
+  Scenario: A sub-assembly that names an SKU is ordered whole whether or not anybody has one
+    # The package declares no supplier, so nobody has a unit today. That is the
+    # supply quote's question: the bill of materials says what to order, and the
+    # unit says what to order it by. '--stop-at-purchasable' is still accepted.
     When I run "pc bom --stop-at-purchasable :top"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Total: 5"
-    # A purchased line item is the only thing that prints an SKU to order by.
-    And STDOUT should not contain "UNIT-1"
+    And STDOUT should contain "UNIT-1"
+    And STDOUT should contain "Total: 3"
+
+  @success @pc-bom
+  Scenario: A part's bill of materials is what it is procured as
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        sheet:
+          type: cadquery
+          path: cube.py
+          desc: A sheet somebody sells
+          vendor: acme
+          sku: SHEET-1
+        blank:
+          type: cadquery
+          path: cube.py
+          desc: A blank cut out of the sheet
+          manufacturing:
+            method: subtractive
+            source: sheet
+        bracket:
+          type: cadquery
+          path: cube.py
+          desc: A bracket bent from the blank
+          manufacturing:
+            method: sheet_metal
+            source: blank
+      """
+    When I run "pc bom :bracket"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Bill of materials of //:bracket:"
+    # Bent from the blank, which is cut from the sheet: one sheet, ordered by its
+    # SKU, and nothing else - the blank and the bracket are made, not bought.
+    And STDOUT should contain "//:sheet"
+    And STDOUT should contain "SHEET-1"
+    And STDOUT should contain "Total: 1"
 
   @success @pc-bom
   Scenario: The bill of materials lists the software the hardware ships with
@@ -193,7 +233,8 @@ Feature: `pc bom` command
     And STDOUT should contain '"count_per_sku": 1'
 
   @success @pc-bom
-  Scenario: A part is not an assembly
+  Scenario: A part that says neither how it is bought nor how it is made is its own bill of materials
     When I run "pc bom :cube"
-    Then the command should exit with a non-zero status code
-    And STDOUT should contain "Assembly //:cube is not found"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Bill of materials of //:cube:"
+    And STDOUT should contain "Total: 1"

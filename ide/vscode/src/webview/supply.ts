@@ -3,7 +3,7 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The "Supply" tab: where to buy what is on screen, and for how much.
+// The "Procurement" tab: where to buy what is on screen, and for how much.
 //
 // The line items and their quotes are the daemon's ('supply', which fills a
 // 'ProviderCart' exactly as 'pc supply quote' does and asks every supplier of
@@ -51,7 +51,7 @@ export class SupplyView {
         }
         empty(this.root);
 
-        this.root.appendChild(el('h1', undefined, 'Supply'));
+        this.root.appendChild(el('h1', undefined, 'Procurement'));
         this.root.appendChild(el('p', 'subtitle', data.object));
 
         if (data.items.length === 0) {
