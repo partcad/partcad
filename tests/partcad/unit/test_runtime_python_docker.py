@@ -1371,3 +1371,16 @@ def test_a_failed_environment_with_nothing_on_stderr_still_says_the_exit_code(tm
 
     with pytest.raises(Exception, match="exited with 3"):
         made._created(3, "")
+
+
+def test_pycairo_comes_from_the_wheel_partcads_own_image_carries(tmp_path):
+    # Ours ships a pycairo wheel and no compiler, so a newer pycairo sdist on
+    # PyPI must not outrank it: pycairo 1.29.2 broke every PNG render that way.
+    ours = runtime_python_docker.DockerPythonRuntime(_ctx(tmp_path), "3.11")
+    command = ours.pip_install_command("rlpycairo==0.3.0", False)
+    assert command[command.index("--only-binary") + 1] == "pycairo"
+
+
+def test_a_package_image_may_build_pycairo_itself(tmp_path):
+    theirs = _runtime(tmp_path)
+    assert "--only-binary" not in theirs.pip_install_command("rlpycairo==0.3.0", False)
