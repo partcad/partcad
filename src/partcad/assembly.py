@@ -11,7 +11,7 @@ import os
 import tempfile
 import typing
 
-from partcad_utils import timeouts
+from partcad_utils import assy_filter, timeouts
 
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, shape_ports
@@ -128,6 +128,36 @@ class Assembly(Shape):
         """
         return timeouts.declared(self.config)
 
+    def link_name(self, index: int) -> str:
+        """What this assembly addresses the child at ``index`` by.
+
+        The one definition of it, because four things ask: a ``connect:``
+        resolving its target, a ``map:`` naming a node, a filter selecting what
+        to keep ('partcad.assembly_filter'), and the label this assembly stamps
+        on the child's node for a reader of the tree ('_child_name_label').
+
+        It is the child's own name where it has one -- an ASSY file's ``name:``,
+        or the part or assembly the link places, which is what the factory falls
+        back to -- and otherwise its position in this assembly, one-based. The
+        positional form is `partcad_utils.assy_filter.synthetic_link_name`,
+        shared with the half of the feature that reads the *file* rather than the
+        built assembly, so ``pc filter`` and a filtered render name one link one
+        way.
+
+        An ASSY link never reaches the positional form: the factory resolves it
+        as the file is read, so that a ``connect:`` can name it too (see
+        'AssemblyFactoryAssy.handle_node_list'). What does reach it is a child
+        that nothing named -- a STEP or URDF element whose reader gave no name,
+        and an 'add()' with none -- which is exactly the case that used to be
+        shown as "<assembly>:None" and could not be addressed at all.
+        """
+        child = self.children[index]
+        return child.name if child.name is not None else assy_filter.synthetic_link_name(index)
+
+    def link_names(self) -> list:
+        """What this assembly addresses each of its children by, in order."""
+        return [self.link_name(index) for index in range(len(self.children))]
+
     async def get_subassemblies_async(self) -> list["Assembly"]:
         """The assemblies this one places, resolved but not built.
 
@@ -229,6 +259,18 @@ class Assembly(Shape):
         self.children.append(AssemblyChild(child_item, name, loc, comment, how))
         self._wrapped = None  # Invalidate if any
 
+    async def filtered_view_async(self, mask):
+        """This assembly with only the links ``mask`` keeps, as an assembly.
+
+        What 'Shape.filtered_view_async' is a hook for: an assembly is the one
+        kind of shape that has links to select from. 'partcad.assembly_filter'
+        is the whole of it, and is imported here rather than at the top because
+        it imports this module.
+        """
+        from . import assembly_filter
+
+        return await assembly_filter.filtered_async(self, mask)
+
     async def get_shape(self, ctx):
         await self.do_instantiate()
         if "child" not in self.config:
@@ -252,7 +294,7 @@ class Assembly(Shape):
         """
 
         @telemetry.instrument_function_async("Assembly._get_shape_real.per_child")
-        async def per_child(child):
+        async def per_child(index, child):
             envelope = await child.item.get_wrapped(ctx)
             if envelope is None:
                 # A child whose shape is missing, most often because its wrapper
@@ -270,7 +312,7 @@ class Assembly(Shape):
                 )
                 self.error(msg)
                 raise Exception(msg)
-            name, label = self._child_name_label(child)
+            name, label = self._child_name_label(child, index)
             return self._place(envelope, child.location, name, label)
 
         if len(self.children) == 0:
@@ -279,7 +321,7 @@ class Assembly(Shape):
         # Children are built concurrently but collected in declaration order, so
         # the resulting tree - and every artifact derived from it - is stable
         # across runs regardless of which child's wrapper happens to finish first.
-        tasks = [asyncio.create_task(per_child(child)) for child in self.children]
+        tasks = [asyncio.create_task(per_child(index, child)) for index, child in enumerate(self.children)]
         children = list(await asyncio.gather(*tasks))
 
         envelope = dict(self.get_cache_metadata())
@@ -319,13 +361,26 @@ class Assembly(Shape):
             return Location(self.location)
         return None
 
-    def _child_name_label(self, child):
+    def _child_name_label(self, child, index: int):
+        """The two things a child's node says about itself, and they differ.
+
+        'name' is the **object**: '<package>:<object>', what the child *is*. An
+        assembly that places the same bolt a hundred times stamps one name on a
+        hundred nodes, which is the point -- it is the identity the geometry
+        table is keyed by and the name 'pc inspect' resolves.
+
+        'label' is the **link**: what *this* assembly addresses the child by, and
+        so what a 'connect:', a 'map:' and a filter name (see 'link_name'). It
+        is what tells those hundred nodes apart, and it is the one a request
+        coming back from a reader of the tree has to carry -- which is why it is
+        never a fallback to something else: a child nothing named is labelled by
+        its position rather than by the object it holds.
+        """
         item = child.item
         project = getattr(item, "project_name", None)
         item_name = getattr(item, "name", None)
         name = ("%s:%s" % (project, item_name)) if project and item_name else item_name
-        label = child.name if child.name is not None else item_name
-        return name, label
+        return name, self.link_name(index)
 
     def _place(self, child_env, placement, name, label):
         """The child's node re-stamped for this assembly.

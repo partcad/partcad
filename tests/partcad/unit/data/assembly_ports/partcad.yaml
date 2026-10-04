@@ -81,7 +81,9 @@ assemblies:
     desc: A plate inside a named group
     map:
       inner: [frame/plate, handle]
-      unnamed: [loose, handle]
+      # Through a 'links:' that gives itself no name: it is called after where
+      # it is written, so it is a level of the path like any other.
+      unnamed: [link#2/loose, handle]
 
   # A file that says where the whole of what it holds is.
   rooted:

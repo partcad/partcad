@@ -154,6 +154,11 @@ command_groups = [
             "info",
             "bom",
             "convert",
+            # Beside `convert`: both leave the package holding something it did
+            # not hold before, made out of an object it did. `convert` rewrites
+            # one object into another format; `filter` writes a second object
+            # made of some of the first one's links.
+            "filter",
             "export",
             "render",
             # Beside `export` and `render` because that is what it is: the third

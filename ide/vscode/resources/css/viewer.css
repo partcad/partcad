@@ -97,10 +97,23 @@ body {
     font-size: 0.95em;
 }
 
-/* The 2D and Draft tabs: what to render to along the top, the file under it. */
+/* The 2D and Draft tabs: the control pane down the left, and beside it what to
+   render to along the top with the file under it. The same shape as the 3D pane,
+   which is a control pane and a canvas side by side, and the same '.controls'
+   rules below style both. */
 .pane.render {
     display: flex;
+    overflow: hidden;
+}
+
+/* What the control pane leaves: the header and the file, stacked. 'min-width: 0',
+   for the reason '.viewer' has it - a flex item's basis is its content, and an
+   image wider than the panel would otherwise push the control pane out of it. */
+.render-main {
+    display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
+    min-width: 0;
     overflow: hidden;
 }
 
@@ -207,6 +220,11 @@ body {
  * list is the tall thing here and Metadata, Animate and Opacity are up to three
  * lines under it (Metadata only for a model that has any).
  * It shrinks on a narrow panel rather than pushing the canvas out of one.
+ *
+ * Shared with the 2D and Draft panes, which have the same pane down their left
+ * and nothing under the tree in it. Deliberately not scoped to '.pane-3d': the
+ * three panes are answering one question and should not come to look like three
+ * different widgets.
  */
 .controls {
     display: flex;

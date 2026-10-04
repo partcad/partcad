@@ -21,7 +21,7 @@ import * as assert from 'assert';
 
 import { FLICKER_HZ, ItemId, flickerOn } from '../../webview/nodes';
 import { ShowNode } from '../../webview/messages';
-import { Tree } from '../../webview/tree';
+import { Selection, Tree, filterIsEmpty } from '../../webview/tree';
 
 /** Just enough of an element for 'dom.ts' and for the widget's own use of one. */
 class FakeElement {
@@ -32,6 +32,7 @@ class FakeElement {
     public hidden = false;
     public type = '';
     public checked = false;
+    public disabled = false;
     public indeterminate = false;
     public readonly attributes: Record<string, string> = {};
     private readonly listeners: Record<string, (() => void)[]> = {};
@@ -310,8 +311,9 @@ suite("The 3D view's control tree", () => {
     });
 
     test('showing the same object again keeps what the user switched off', () => {
+        const selection = new Selection();
         const [pane, element] = host();
-        const tree = new Tree(element, () => undefined);
+        const tree = new Tree(element, () => undefined, undefined, { selection });
         tree.setObject(assembly());
 
         const boxes = descendants(pane, 'input');
@@ -321,12 +323,26 @@ suite("The 3D view's control tree", () => {
         // What 'viewer.ts' does when the show says to keep the camera: the same
         // object after an edit, where losing the selection is as unwelcome as
         // losing the camera. Both directions are kept.
-        tree.setObject(assembly(), tree.state());
+        tree.setObject(assembly());
         const visible = tree.visible();
         assert.ok(visible.has('n0:ports'));
         assert.ok(!visible.has('n:p0'));
 
-        // And a show that is not the same object starts from the defaults.
+        // And a show that is not the same object starts from the defaults,
+        // which is what clearing the store means.
+        selection.clear();
+        tree.setObject(assembly());
+        assert.deepStrictEqual([...tree.visible()].sort(), ['n', 'n0', 'n:p0', 'n:ports']);
+    });
+
+    test('a tree with no store of its own starts from the defaults every time', () => {
+        // What a test does, and nothing in the panel: there what was ticked is
+        // the Design group's rather than one widget's.
+        const [pane, element] = host();
+        const tree = new Tree(element, () => undefined);
+        tree.setObject(assembly());
+        set(descendants(pane, 'input')[2], true);
+
         tree.setObject(assembly());
         assert.deepStrictEqual([...tree.visible()].sort(), ['n', 'n0', 'n:p0', 'n:ports']);
     });
@@ -462,5 +478,307 @@ suite("The 3D view's control tree", () => {
         tree.setObject(assembly());
 
         assert.deepStrictEqual([...new Set(created)].sort(), ['button', 'div', 'input', 'label', 'span']);
+    });
+});
+
+//
+// The same widget, as the 2D and Draft tabs use it.
+//
+// Those two cannot switch anything off on a stage: the picture is made by
+// PartCAD, on the other side of a JSON-RPC connection, so what the boxes produce
+// is a *filter* sent with the render and - on the 2D tab - which of the port
+// overlays to draw. What is pinned here is that the mask names the links PartCAD
+// names, which is the one thing that has to agree with
+// 'partcad_utils.assy_filter' at the other end of the wire.
+//
+
+/** An assembly with a named container and an unnamed one, which is the distinction. */
+function nested(): ShowNode {
+    return {
+        name: '//pkg:widget',
+        label: 'widget',
+        assembly: [
+            { name: '//pkg:cube', label: 'base', location: SOMEWHERE, gltf: 'Z2xURg==' },
+            {
+                name: '//pkg:widget:tower',
+                label: 'tower',
+                assembly: [
+                    { name: '//pkg:cube', label: 'lower', gltf: 'Z2xURg==' },
+                    { name: '//pkg:cube', label: 'upper', gltf: 'Z2xURg==' },
+                ],
+            },
+            {
+                // A nested 'links:' with no 'name:' of its own: PartCAD labels it
+                // by its position, so it is addressable like any other link.
+                name: '//pkg:widget:link#3',
+                label: 'link#3',
+                assembly: [{ name: '//pkg:pin', label: 'spike', gltf: 'Z2xURg==' }],
+            },
+        ],
+    };
+}
+
+/** The box of the row whose name is 'name'. */
+function boxOf(pane: FakeElement, name: string): FakeElement {
+    const found: FakeElement[] = [];
+    const walk = (element: FakeElement) => {
+        if (element.className === 'tree-label') {
+            const label = descendants(element, 'span').find((span) => span.className === 'tree-name');
+            if (label?.textContent === name) {
+                const box = element.children.find((child) => child.tagName === 'input');
+                if (box !== undefined) {
+                    found.push(box);
+                }
+            }
+        }
+        element.children.forEach(walk);
+    };
+    walk(pane);
+    assert.strictEqual(found.length, 1, `expected one row called ${name}`);
+    return found[0];
+}
+
+suite('The control tree of the 2D and Draft tabs', () => {
+    let created: string[] = [];
+
+    suiteSetup(() => {
+        (globalThis as unknown as { document: unknown }).document = {
+            createElement: (tagName: string) => {
+                created.push(tagName);
+                return new FakeElement(tagName);
+            },
+        };
+    });
+
+    suiteTeardown(() => {
+        delete (globalThis as unknown as { document?: unknown }).document;
+    });
+
+    setup(() => {
+        created = [];
+    });
+
+    function draft(object: ShowNode): [FakeElement, Tree] {
+        const [pane, element] = host();
+        const tree = new Tree(element, () => undefined, undefined, { ports: false, lockRoot: true });
+        tree.setObject(object);
+        return [pane, tree];
+    }
+
+    function twoD(object: ShowNode): [FakeElement, Tree] {
+        const [pane, element] = host();
+        const tree = new Tree(element, () => undefined, undefined, { lockRoot: true });
+        tree.setObject(object);
+        return [pane, tree];
+    }
+
+    test('the Draft tab lists no ports and no interfaces', () => {
+        // A dimensioned drawing is of the solid; nothing is drawn at a port in
+        // one, so a row for one would be a box with nothing behind it.
+        const [pane] = draft(assembly());
+        assert.deepStrictEqual(rows(pane), ['object mount', 'node bottom']);
+    });
+
+    test('the 2D tab lists them, starting where the 3D view starts', () => {
+        // The three tabs share one selection, so what starts out ticked cannot
+        // differ between them: the object's own ports, and nothing deeper. The
+        // first picture of an object that declares ports therefore has them
+        // drawn on it, which is what the panel beside it says.
+        const [pane, tree] = twoD(part());
+        assert.deepStrictEqual(rows(pane), [
+            'object bracket',
+            'interfaces interfaces',
+            'interface m3-thru',
+            'port thru-m3',
+        ]);
+        assert.deepStrictEqual(tree.overlay(), {
+            ports: true,
+            interfaces: true,
+            internals: false,
+            select: ['thru-m3'],
+        });
+    });
+
+    test('the root is ticked and cannot be cleared', () => {
+        const [pane] = twoD(nested());
+        const box = boxOf(pane, 'widget');
+        assert.strictEqual(box.checked, true);
+        assert.strictEqual(box.disabled, true);
+    });
+
+    test('nothing to filter while every box is ticked', () => {
+        // Sending a mask of the whole object would only make PartCAD walk it to
+        // arrive at the tree it already had.
+        const [, tree] = draft(nested());
+        assert.strictEqual(tree.filter(), undefined);
+    });
+
+    test('a part answers with no filter at all', () => {
+        const [, tree] = twoD(part());
+        assert.strictEqual(tree.filter(), undefined);
+    });
+
+    test('a cleared box leaves the links beside it named', () => {
+        const [pane, tree] = draft(nested());
+        set(boxOf(pane, 'tower'), false);
+        /* eslint-disable-next-line @typescript-eslint/naming-convention */
+        assert.deepStrictEqual(tree.filter(), { base: {}, 'link#3': {} });
+    });
+
+    test('a node with some of its children cleared is named with those children', () => {
+        const [pane, tree] = draft(nested());
+        set(boxOf(pane, 'lower'), false);
+        /* eslint-disable-next-line @typescript-eslint/naming-convention */
+        assert.deepStrictEqual(tree.filter(), { base: {}, tower: { upper: {} }, 'link#3': {} });
+    });
+
+    test('a container with no name of its own is named by its position', () => {
+        // Every row's label is the name the assembly addresses it by, so there
+        // is no row the mask cannot name.
+        const [pane, tree] = draft(nested());
+        set(boxOf(pane, 'base'), false);
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        assert.deepStrictEqual(tree.filter(), { tower: {}, 'link#3': {} });
+    });
+
+    test('clearing such a container drops what is inside it', () => {
+        const [pane, tree] = draft(nested());
+        set(boxOf(pane, 'spike'), false);
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        assert.deepStrictEqual(tree.filter(), { base: {}, tower: {}, 'link#3': {} });
+        set(boxOf(pane, 'link#3'), false);
+        assert.deepStrictEqual(tree.filter(), { base: {}, tower: {} });
+    });
+
+    test('every part cleared is a filter that keeps nothing, which is not a mask', () => {
+        // An empty mask reads as "everything" at the other end, so the caller has
+        // to tell this case apart and say there is nothing to render.
+        const [pane, tree] = draft(nested());
+        for (const name of ['base', 'tower', 'link#3']) {
+            set(boxOf(pane, name), false);
+        }
+        assert.deepStrictEqual(tree.filter(), {});
+        assert.strictEqual(filterIsEmpty(tree.filter()), true);
+        assert.strictEqual(filterIsEmpty(undefined), false);
+    });
+
+    test('a cleared port row takes the overlay off', () => {
+        const [pane, tree] = twoD(part());
+        set(boxOf(pane, 'interfaces'), false);
+        assert.deepStrictEqual(tree.overlay(), {
+            ports: false,
+            interfaces: false,
+            internals: false,
+            select: [],
+        });
+    });
+
+    test("the ports inside an assembly ask for '--with-internals'", () => {
+        // An assembly is taken at its word about which ports are its own, so
+        // reaching the ones inside it is a request of its own.
+        const [pane, tree] = twoD(assembly());
+        set(boxOf(pane, 'interfaces'), true);
+        // The assembly's own 'hold' is ticked to begin with, as the 3D view
+        // ticks it; the child's came back with the group.
+        assert.deepStrictEqual(tree.overlay(), {
+            ports: true,
+            interfaces: true,
+            internals: true,
+            select: ['bottom:TL-thru-m3', 'hold'],
+        });
+    });
+
+    test('a port under a cleared node asks for nothing', () => {
+        const [pane, tree] = twoD(assembly());
+        set(boxOf(pane, 'interfaces'), true);
+        set(boxOf(pane, 'bottom'), false);
+        assert.deepStrictEqual(tree.overlay(), {
+            ports: true,
+            interfaces: false,
+            internals: false,
+            select: ['hold'],
+        });
+    });
+
+    test('a ticked port is named the way PartCAD reports it', () => {
+        // The path of links, then the port, which is 'shape_ports.qualify' on
+        // the other side: the two sides compose the same string, which is what
+        // lets the panel ask for one port of one placement.
+        const [pane, tree] = twoD(assembly());
+        set(boxOf(pane, 'interfaces'), true);
+        assert.deepStrictEqual(tree.overlay().select.sort(), ['bottom:TL-thru-m3', 'hold']);
+
+        // The object's own ports carry no path: they are reported under their
+        // own names.
+        const [, own] = twoD(part());
+        assert.deepStrictEqual(own.overlay().select, ['thru-m3']);
+    });
+
+    test('one port of several can be cleared', () => {
+        const [pane, tree] = twoD(part());
+        assert.deepStrictEqual(tree.overlay().select, ['thru-m3']);
+        set(boxOf(pane, 'thru-m3'), false);
+        assert.deepStrictEqual(tree.overlay().select, []);
+        // The interface row is still ticked, so the boundary is still asked for
+        // -- it is the frame of that one port that is not.
+        assert.strictEqual(tree.overlay().interfaces, true);
+        assert.strictEqual(tree.overlay().ports, false);
+    });
+
+    test('the three tabs share one answer', () => {
+        // What somebody wants to look at is a property of the object, not of the
+        // tab it is being looked at on.
+        const selection = new Selection();
+        const [, element] = host();
+        const [draftPane, draftElement] = host();
+        const view = new Tree(element, () => undefined, undefined, { lockRoot: true, selection });
+        const drawing = new Tree(draftElement, () => undefined, undefined, {
+            ports: false,
+            lockRoot: true,
+            selection,
+        });
+        view.setObject(nested());
+        drawing.setObject(nested());
+
+        // Cleared on the Draft tab, and the 2D tab says so without being rebuilt.
+        set(boxOf(draftPane, 'tower'), false);
+        /* eslint-disable @typescript-eslint/naming-convention */
+        assert.deepStrictEqual(view.filter(), { base: {}, 'link#3': {} });
+        assert.deepStrictEqual(drawing.filter(), { base: {}, 'link#3': {} });
+        /* eslint-enable @typescript-eslint/naming-convention */
+    });
+
+    test('a port switched off survives a tab that does not list ports', () => {
+        // The Draft tab has no row for a port, so the state cannot live in the
+        // widgets: rebuilt from Draft's own rows, a port cleared on the 2D tab
+        // would come back ticked.
+        const selection = new Selection();
+        const [pane, element] = host();
+        const [, draftElement] = host();
+        const drawing = new Tree(draftElement, () => undefined, undefined, {
+            ports: false,
+            lockRoot: true,
+            selection,
+        });
+        const view = new Tree(element, () => undefined, undefined, { lockRoot: true, selection });
+        view.setObject(part());
+        drawing.setObject(part());
+
+        set(boxOf(pane, 'thru-m3'), false);
+        drawing.setObject(part());
+        view.setObject(part());
+        assert.deepStrictEqual(view.overlay().select, []);
+    });
+
+    test('an emptied pane has nothing to filter', () => {
+        const [, tree] = draft(nested());
+        tree.clear();
+        assert.strictEqual(tree.filter(), undefined);
+        assert.deepStrictEqual(tree.overlay(), {
+            ports: false,
+            interfaces: false,
+            internals: false,
+            select: [],
+        });
     });
 });

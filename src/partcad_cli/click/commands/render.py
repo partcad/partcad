@@ -14,6 +14,7 @@ import rich_click as click
 
 from .. import fast_only
 from ..exclude import exclude_option, exclude_params
+from ..link_filter import filter_option, filter_params
 from ..service import run
 from ..viewport import viewport_options, viewport_params
 
@@ -118,6 +119,19 @@ from ..viewport import viewport_options, viewport_params
     show_envvar=True,
 )
 @click.option(
+    "--port",
+    "ports",
+    help=(
+        "Draw only this port rather than every one of them, and repeat the option for several. "
+        "Named the way the log names it: the port's own name for a port of the object, "
+        "and the path of nodes then the port for one inside an assembly ('bolt:thread-m8'). "
+        "It says which ports, not that any are drawn, so it goes with one of the three options above"
+    ),
+    type=str,
+    multiple=True,
+    show_envvar=True,
+)
+@click.option(
     "--with-internals",
     help=(
         "Say how deep the three above reach rather than asking for a drawing of its own: with any of them, "
@@ -128,6 +142,7 @@ from ..viewport import viewport_options, viewport_params
     show_envvar=True,
 )
 @exclude_option
+@filter_option
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
 def cli(
@@ -151,6 +166,8 @@ def cli(
     with_all,
     with_internals,
     exclude,
+    ports,
+    link_filter,
     object,
 ):
     run(
@@ -175,8 +192,12 @@ def cli(
             "with_interfaces": with_interfaces,
             "with_all": with_all,
             "with_internals": with_internals,
+            # Empty is "every port the overlay found", which is what the three
+            # options above meant on their own before this existed.
+            "ports": list(ports) or None,
             "object": object,
             **exclude_params(exclude),
+            **filter_params(link_filter),
         },
         needs_context=True,
     )

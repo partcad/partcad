@@ -60,6 +60,8 @@ import jsonschema
 import jsonschema.exceptions
 import yaml
 
+from . import assy_filter
+
 SEVERITY_ERROR = "error"
 SEVERITY_WARNING = "warning"
 
@@ -70,6 +72,10 @@ SOURCE = "partcad"
 CODE_TEMPLATE = "jinja2"
 CODE_YAML = "yaml"
 CODE_SCHEMA = "schema"
+# A link that is named but not placed: what the schema cannot see, because it
+# is a relation between two parts of one document rather than the shape of
+# either. See 'check_links()'.
+CODE_LINKS = "links"
 
 # Kinds of masked region. They differ in what they are allowed to suppress:
 # an expression stands in for a *value*, a statement can add or remove *keys*.
@@ -157,6 +163,20 @@ SCENE_NO_HOW = (
     "'how' is not allowed in a scene: a scene states where things are, "
     "not how they got there. Declare it in an assembly instead"
 )
+
+# What this checker is, for a cache key to hash.
+#
+# A cached finding for an unchanged file is only valid while the thing that
+# produced it is the same. The schema is already half of that and is hashed
+# (see 'lint/schema.py'); this is the other half -- the checks that are not in
+# any schema. Bump it whenever a check is added, removed or changed, or the
+# findings a package was linted with before the change go on being reported
+# after it.
+#
+#   1 -- the template, YAML and schema checks.
+#   2 -- 'check_links': a 'connect:' or an 'interferes:' naming a link nothing
+#        places.
+CHECKER_VERSION = 2
 
 # An upper bound on how many findings a single file reports. A file that is
 # mid-edit can cascade; an editor gains nothing from the thousandth squiggle.
@@ -622,6 +642,200 @@ def _fallback_span(node):
     return _node_span(node)
 
 
+# ---- links that nothing places ---------------------------------------------
+
+
+# The two sections that place a node by relating it to another node of the same
+# 'links:' list. They differ in what they name on each side -- an interface or a
+# port -- and not at all in which link they connect *to*, which is 'name:' in
+# both.
+_CONNECT_SECTIONS = ("connect", "connectPorts")
+
+
+def _all_link_names(node, found=None) -> set:
+    """Every name this document gives a node, at any depth.
+
+    What 'interferes:' is checked against. A connection names the further items
+    one act of joining drives through, and those are matched by name across the
+    assemblies an ASSY file embeds (see 'Assembly.connected_children()' and
+    'partcad.test.interference'), so the whole document is the scope rather than
+    one 'links:' list.
+    """
+    if found is None:
+        found = set()
+    if isinstance(node, list):
+        for index, item in enumerate(node):
+            if isinstance(item, dict):
+                name = assy_filter.link_name(item, index)
+                if name is not None:
+                    found.add(name)
+            _all_link_names(item, found)
+        return found
+    if not isinstance(node, dict):
+        return found
+    _all_link_names(node.get(assy_filter.LINKS) or [], found)
+    return found
+
+
+def check_links(data, root_node=None, masked=None) -> list:
+    """Report a 'connect' or an 'interferes' that names a link nothing places.
+
+    The schema cannot: it describes the shape of one node, and this is a
+    relation between two of them. The relation is the whole point of a
+    ``connect:`` -- it says which link already in the assembly this one is
+    placed against -- and getting the name wrong is answered, when the assembly
+    is eventually built, with "Target part not found" and a part at the origin.
+    So it is checked here, where the file is, alongside everything else
+    ``pc lint`` says about it.
+
+    Three things are checked, and each of them is exactly what
+    ``AssemblyFactoryAssy`` does with the value:
+
+      * ``connect:``/``connectPorts:`` name a link of the **same** ``links:``
+        list, and one written **before** this node -- the factory looks for it
+        among the children placed so far, so a link named later is not there
+        yet (see 'handle_node' and 'handle_node_list');
+      * ``connect.interferes`` names a link of the document;
+      * the root node has no ``connect:`` at all, having no sibling to connect
+        to (see 'AssemblyFactoryAssy.apply_root_placement', which reports the
+        same thing when the file is read).
+
+    ``root_node`` is the composed YAML of the same text, used to put each
+    finding on the character it is about, and ``masked`` the record of what
+    Jinja2 stood in for. A finding that depends on what a template renders to is
+    dropped rather than reported, for the reason the whole module gives: an
+    editor that underlines correct code is worse than one that misses something.
+    """
+    diagnostics: list = []
+    if not isinstance(data, dict):
+        return diagnostics
+
+    everywhere = _all_link_names(data)
+
+    def report(path, message):
+        node = _resolve(root_node, path) if root_node is not None else None
+        start, end = _fallback_span(node)
+        diagnostics.append(
+            Diagnostic(
+                SEVERITY_ERROR,
+                message,
+                start[0],
+                start[1],
+                end[0],
+                end[1],
+                code=CODE_LINKS,
+                path="$." + ".".join(str(step) for step in path) if path else "$",
+            )
+        )
+
+    def templated(path, kind=_EXPR) -> bool:
+        """Whether a template stands where this value should be."""
+        if masked is None or root_node is None:
+            return False
+        node = _resolve(root_node, path)
+        if node is None:
+            return False
+        start, end = _node_span(node)
+        return masked.overlaps(start, end, kind)
+
+    # The root node is the assembly itself, so there is nothing beside it.
+    for section in _CONNECT_SECTIONS:
+        if data.get(section) is not None:
+            report(
+                [section],
+                "the root node of an ASSY file is the assembly itself and has nothing to '%s' to" % section,
+            )
+
+    def level(node, path):
+        links = node.get(assy_filter.LINKS)
+        if not isinstance(links, list):
+            return
+        links_path = path + [assy_filter.LINKS]
+
+        # A Jinja2 statement inside the list can add or remove items, so which
+        # links this level places is only known after rendering.
+        unknown = templated(links_path, _STMT)
+        names = []
+        for index, item in enumerate(links):
+            name = assy_filter.link_name(item, index) if isinstance(item, dict) else None
+            spelling = _name_key(item) if isinstance(item, dict) else None
+            if name is not None and spelling is not None and templated(links_path + [index, spelling]):
+                # A templated name: the set of names at this level is not known,
+                # so nothing about it can be reported.
+                unknown = True
+            names.append(name)
+
+        for index, item in enumerate(links):
+            if not isinstance(item, dict):
+                continue
+            item_path = links_path + [index]
+            if not unknown:
+                _check_connect(item, item_path, names, index, everywhere, report, templated)
+            level(item, item_path)
+
+    level(data, [])
+    return diagnostics
+
+
+def _name_key(node):
+    """Which key gave this node its name, so a finding can point at it.
+
+    ``None`` for a node whose name is its position in the list: there is nothing
+    in the file to point at, and nothing a template could have written there.
+    """
+    if node.get("name") is not None:
+        return "name"
+    for key in assy_filter.PLACES:
+        if node.get(key) is not None:
+            return key
+    return None
+
+
+def _check_connect(node, path, names, index, everywhere, report, templated) -> None:
+    """Check one node's connection against the links beside it."""
+    for section in _CONNECT_SECTIONS:
+        connect = node.get(section)
+        if not isinstance(connect, dict):
+            continue
+        target = connect.get("name")
+        target_path = path + [section, "name"]
+        if target is None:
+            report(
+                path + [section],
+                "'%s' does not say which link to connect to: it needs a 'name'" % section,
+            )
+        elif not templated(target_path):
+            target = str(target)
+            before = [name for name in names[:index] if name is not None]
+            after = [name for name in names[index + 1 :] if name is not None]
+            if target in before:
+                pass
+            elif target in after:
+                report(
+                    target_path,
+                    "'%s' is placed after this node, so it is not there to be connected to yet; "
+                    "move it above this node" % target,
+                )
+            elif target in everywhere:
+                report(
+                    target_path,
+                    "'%s' is not a link of the same 'links:' list, so this node cannot be connected to it" % target,
+                )
+            else:
+                report(target_path, "nothing in this file places a link called '%s'" % target)
+
+        interferes = connect.get("interferes")
+        if interferes is None:
+            continue
+        values = interferes if isinstance(interferes, list) else [interferes]
+        for position, other in enumerate(values):
+            if not isinstance(other, str):
+                continue
+            other_path = path + [section, "interferes"] + ([position] if isinstance(interferes, list) else [])
+            if not templated(other_path) and other not in everywhere:
+                report(other_path, "nothing in this file places a link called '%s'" % other)
+
+
 # ---- entry points ----------------------------------------------------------
 
 
@@ -671,6 +885,14 @@ def validate_source(text: str, schema: dict) -> list:
         return []
 
     diagnostics = _validate_schema(data, schema, root_node, masked)
+    # Only for an ASSY document, and only ever as well as the schema: a link
+    # that nothing places is not a shape the schema can describe, and a
+    # 'partcad.yaml' has no links at all. Asked of the schema rather than of the
+    # filename, because that is what the caller settled (see
+    # 'schema_for_file'), and the scene-simplified schema is the same document's
+    # -- a scene's 'connect:' names a link exactly as an assembly's does.
+    if schema is not None and schema.get("$id") == get_schema(ASSY_SCHEMA).get("$id"):
+        diagnostics.extend(check_links(data, root_node, masked))
     diagnostics.sort(key=lambda d: (d.line, d.column, d.message))
     return _dedupe(diagnostics)[:MAX_DIAGNOSTICS]
 

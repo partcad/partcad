@@ -14,6 +14,8 @@ from typing import Optional
 
 import yaml
 
+from partcad_utils import assy_filter
+
 from . import logging as pc_logging
 from . import telemetry
 from .assembly import Assembly, AssemblyChild
@@ -332,10 +334,36 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         for child in assembly.children:
             child.location = placement if child.location is None else placement * Location(child.location)
 
+    def link_names(self, node_list) -> list:
+        """What each link of one ``links:`` list is called, in file order.
+
+        The rule is `partcad_utils.assy_filter.link_name` and is shared with the
+        half of the feature that reads the file rather than the built assembly
+        (``pc filter``, and the ``connect:`` check ``pc lint`` runs), so one
+        link has one name wherever it is read.
+
+        Resolved here, over the whole list, rather than node by node: a
+        positional name is only a name in the context of its list, and a
+        collision between one and a declared name is only visible with the list
+        in hand. Such a collision is reported and left alone -- both links keep
+        the name, which makes a ``connect:`` to it resolve to the first of them,
+        exactly as two links declared with one name always have.
+        """
+        names = [assy_filter.link_name(node, index) for index, node in enumerate(node_list)]
+        declared = {name for node, name in zip(node_list, names) if assy_filter.link_name(node) is not None}
+        for index, (node, name) in enumerate(zip(node_list, names)):
+            if assy_filter.link_name(node) is None and name in declared:
+                pc_logging.error(
+                    "%s: link %d has no name of its own, so it is called '%s' -- which another link here is "
+                    "already called. Give one of them a 'name' of its own" % (self.name, index + 1, name)
+                )
+        return names
+
     async def handle_node_list(self, assembly, node_list):
         tasks = []
 
         check_stage_sequence(node_list, self.name)
+        names = self.link_names(node_list)
 
         async def wait_for_tasks():
             while len(tasks) > 0:
@@ -345,11 +373,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 if result is not None:
                     assembly.children.append(result)
 
-        for link in node_list:
+        for index, link in enumerate(node_list):
             if "connect" in link or "connectPorts" in link:
                 # wait for all previous nodes to get added first
                 await wait_for_tasks()
-            tasks.append(asyncio.create_task(self.handle_node(assembly, link)))
+            tasks.append(asyncio.create_task(self.handle_node(assembly, link, names[index])))
         await wait_for_tasks()
 
     def connect_how(self, node, connect, name):
@@ -370,12 +398,17 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             ),
         )
 
-    async def handle_node(self, assembly, node):
+    async def handle_node(self, assembly, node, link_name=None):
+        """One node of the file, as the child it places.
+
+        'link_name' is what this assembly addresses the child by, resolved over
+        the whole ``links:`` list by 'link_names()' -- which is the only place
+        that can resolve a *positional* name. A caller with no list to position
+        the node in (a file that is one part and nothing else) passes none, and
+        the name falls back to what the node itself says.
+        """
         # "name" is an optional parameter for both parts and assemblies
-        if "name" in node:
-            name = node["name"]
-        else:
-            name = None
+        name = link_name if link_name is not None else node.get("name")
 
         # "description" is what this node is, in words, and is optional for
         # every kind of node: the item a part or assembly node places, or the
@@ -459,10 +492,12 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             item = Assembly(
                 assembly.project_name,
                 {
-                    # An anonymous 'links:' list is named after what it is, not
-                    # after the nothing it was called: this name is what the node
-                    # carries into the tree, and a reader of that tree - the IDE
-                    # viewer draws it now - was being shown "<assembly>:None".
+                    # Every link has a name - its own, or its position in the
+                    # list (see 'link_names') - so the object a container node
+                    # declares is named after the link that declares it. It used
+                    # to be "<assembly>:links" for a container that named
+                    # itself nothing, which is a name two of them shared and
+                    # nothing could address.
                     "name": f"{self.name}:{name}" if name else f"{self.name}:links",
                     "child": True,
                     # A container node declares a sub-assembly, so what the node

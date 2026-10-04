@@ -54,7 +54,18 @@ from . import logging as pc_logging
 #      extrude, a sweep, a compound part and an ASSY assembly are stored under
 #      also cover the keys of what they are built from now, so an entry written
 #      under 5 was keyed on less than it needed to be.
-VERSION = 6
+#   7: a child node's "label" is what the assembly addresses the child by, and
+#      nothing else: its own name, or - for a child nothing named - its position
+#      in that assembly (see 'Assembly.link_name'). Under 6 such a child was
+#      labelled after the object it held, which an ASSY file's unnamed 'links:'
+#      made "<assembly>:links" - a label two of them shared, and not a name
+#      anything could address. The label is now what a 'connect:', a 'map:' and
+#      a filter name, so a reader of the tree can compose a request out of it.
+#      The same case as 5, and for the same reason: it is the payload's shape
+#      rather than the key's, so nothing about a declaration changes when
+#      PartCAD does and an entry written under 6 would go on being served - a
+#      panel offering to select links by names the daemon does not know.
+VERSION = 7
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.

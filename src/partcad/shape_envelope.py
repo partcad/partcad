@@ -23,6 +23,14 @@ A single shape is '{"name", "label", "brep"}'; an assembly is
 '{"name", "label", "assembly": [...]}'. Either may also carry an optional
 "location", an optional "properties" and an optional "metadata" (see the keys
 below).
+
+The two names answer different questions and a reader needs both. "name" is the
+*object*: '<package>:<object>', what the node holds, shared by every node that
+holds it. "label" is the *link*: what the node holding it addresses it by, which
+is what tells a hundred placements of one bolt apart and what a 'connect:', a
+'map:' and a filter name (see 'Assembly.link_name'). A label is therefore never
+a fallback to something else -- a child nothing named is labelled by its
+position in its parent.
 Requests/responses are ordinary JSON objects that carry such shape objects
 under keys like "shape" or "wrapped".
 

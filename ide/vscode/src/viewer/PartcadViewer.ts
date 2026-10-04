@@ -227,6 +227,7 @@ export class PartcadViewer implements vscode.Disposable {
         implementation?: string,
         format?: string,
         plugin?: string,
+        render?: RenderRequest,
     ): Promise<void> {
         if (RENDER_TABS.has(tab)) {
             // Before anything is awaited: two requests in flight reach the
@@ -273,6 +274,15 @@ export class PartcadViewer implements vscode.Disposable {
                 args.kind = target.kind ?? 'part';
                 args.format = format;
                 args.plugin = plugin;
+                // What the control pane beside the drawing asked for: the links
+                // to keep, and which of the port overlays to draw. Passed on as
+                // it arrived -- the filter is a mask of link names, which this
+                // side neither composes nor reads (see 'Tree.filter()').
+                args.filter = render?.filter;
+                args.withPorts = render?.withPorts;
+                args.withInterfaces = render?.withInterfaces;
+                args.withInternals = render?.withInternals;
+                args.ports = render?.ports;
                 const data = (await vscode.commands.executeCommand(command, args)) as RenderedData | undefined;
                 if (data?.content && this.lastShow === target && this.latestRender.get(tab) === token) {
                     this.keepRendered(tab, data);
@@ -420,6 +430,12 @@ export class PartcadViewer implements vscode.Disposable {
                 implementation?: string;
                 format?: string;
                 plugin?: string;
+                // What a render tab's control pane asked for; see 'RenderRequest'.
+                filter?: unknown;
+                withPorts?: boolean;
+                withInterfaces?: boolean;
+                withInternals?: boolean;
+                ports?: string[];
             }) => {
                 if (message.type === 'error') {
                     traceError(`PartCAD Viewer: ${message.message}`);
@@ -438,6 +454,13 @@ export class PartcadViewer implements vscode.Disposable {
                         message.implementation,
                         message.format,
                         message.plugin,
+                        {
+                            filter: message.filter,
+                            withPorts: message.withPorts,
+                            withInterfaces: message.withInterfaces,
+                            withInternals: message.withInternals,
+                            ports: message.ports,
+                        },
                     );
                 } else if (message.type === 'fetchFormats') {
                     void this.fetchFormats(message.token ?? 0, message.plugin ?? '');
@@ -503,7 +526,9 @@ export class PartcadViewer implements vscode.Disposable {
         try {
             performanceDebug = getViewerPerformanceDebugFromSetting('partcad');
         } catch (error) {
-            traceVerbose(`PartCAD Viewer: failed to read performanceDebug setting: ${(error as Error)?.message ?? error}`);
+            traceVerbose(
+                `PartCAD Viewer: failed to read performanceDebug setting: ${(error as Error)?.message ?? error}`,
+            );
         }
         void this.panel?.webview.postMessage({
             type: 'updateConfig',
@@ -617,6 +642,22 @@ function removeQuietly(target: string): void {
     } catch (error: any) {
         traceVerbose(`PartCAD Viewer: could not remove ${target}: ${error?.message ?? error}`);
     }
+}
+
+/**
+ * What a render tab asks for beside the file type: the control pane's answer.
+ *
+ * 'filter' is a mask of link names ('pc render --filter'), composed in the panel
+ * and read by PartCAD; nothing on this side looks inside it. The three flags are
+ * '--with-ports'/'--with-interfaces'/'--with-internals'.
+ */
+interface RenderRequest {
+    filter?: unknown;
+    withPorts?: boolean;
+    withInterfaces?: boolean;
+    withInternals?: boolean;
+    /** Which ports to draw, by the name PartCAD reports each under. */
+    ports?: string[];
 }
 
 /** What 'render.inline' answers with; see 'RenderData' in 'webview/messages.ts'. */

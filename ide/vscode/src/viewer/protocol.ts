@@ -109,7 +109,16 @@ export interface ViewerInterface {
  * the same frame, and moves with the node that holds it.
  */
 export interface ViewerNode {
+    /** The object: '<package>:<object>', shared by every node that holds it. */
     name?: string | null;
+    /**
+     * The link: what the node holding this one addresses it by, and so what
+     * tells a hundred placements of one bolt apart. The 'name:' of the ASSY link
+     * that placed it, or - for a child nothing named - its position in its
+     * parent; never a fallback to the object's own name. That is what makes it
+     * the name a request coming back can carry, which is how the panel beside
+     * the 2D and Draft tabs composes a filter out of the rows it is showing.
+     */
     label?: string | null;
     location?: ViewerLocation | null;
     /** Which entry of the root's 'geometry' table is this node's geometry. */

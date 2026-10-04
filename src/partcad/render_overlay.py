@@ -31,7 +31,7 @@ from . import output, shape_ports
 
 
 class Overlay:
-    """Which of the overlays a render was asked for.
+    """Which of the overlays a render was asked for, and of which ports.
 
     A single value rather than three booleans, because it travels the whole way
     from the command line through the context and the package down to the
@@ -40,23 +40,51 @@ class Overlay:
 
     'internals' is not an overlay of its own: it says how deep the two above
     reach, and on its own it asks for nothing.
+
+    'select' narrows *which* ports are drawn, by the name each is reported
+    under: the port's own name for a port of the object, and the node path
+    then the port for one inside it ('shape_ports.qualify'), which is exactly
+    the name this module writes into the log beside every port it draws. None
+    means all of them, which is what a plain '--with-ports' asks for; a set
+    means those and no others, which is what the panel beside the IDE's 2D tab
+    asks for and what 'pc render --port' spells on the command line.
     """
 
-    def __init__(self, ports: bool = False, interfaces: bool = False, internals: bool = False):
+    def __init__(self, ports: bool = False, interfaces: bool = False, internals: bool = False, select=None):
         self.ports = bool(ports)
         self.interfaces = bool(interfaces)
         self.internals = bool(internals)
+        self.select = None if select is None else frozenset(select)
 
     def __bool__(self):
         return self.ports or self.interfaces
 
     def __repr__(self):
-        return "Overlay(ports=%r, interfaces=%r, internals=%r)" % (self.ports, self.interfaces, self.internals)
+        return "Overlay(ports=%r, interfaces=%r, internals=%r, select=%r)" % (
+            self.ports,
+            self.interfaces,
+            self.internals,
+            None if self.select is None else sorted(self.select),
+        )
+
+    def key(self):
+        """What makes two overlays ask for the same thing, for a cache to hash."""
+        return (self.interfaces, self.internals, None if self.select is None else tuple(sorted(self.select)))
+
+    def draws(self, name: str) -> bool:
+        """Whether the port reported under ``name`` is one of the ones asked for."""
+        return self.select is None or name in self.select
 
     @staticmethod
-    def of(ports: bool = False, interfaces: bool = False, all: bool = False, internals: bool = False):
-        """The overlay these flags ask for, or None if they ask for nothing."""
-        overlay = Overlay(ports=ports or all, interfaces=interfaces or all, internals=internals)
+    def of(ports: bool = False, interfaces: bool = False, all: bool = False, internals: bool = False, select=None):
+        """The overlay these flags ask for, or None if they ask for nothing.
+
+        A selection on its own asks for nothing: it says *which* ports, not that
+        there are any to draw, so naming ports without naming an overlay draws
+        the picture it would have drawn anyway. The two IDE tabs and the command
+        line both send the flags beside the names for that reason.
+        """
+        overlay = Overlay(ports=ports or all, interfaces=interfaces or all, internals=internals, select=select)
         return overlay if overlay else None
 
 
@@ -80,6 +108,10 @@ def effective(overlay, impl):
         ports=bool(impl.parameters.get("with_ports")) or (overlay is not None and overlay.ports),
         interfaces=bool(impl.parameters.get("with_interfaces")) or (overlay is not None and overlay.interfaces),
         internals=bool(impl.parameters.get("with_internals")) or (overlay is not None and overlay.internals),
+        # Which ports is this run's answer and nothing the configuration says: a
+        # file type asks for an overlay permanently, and a selection is about
+        # the one picture somebody is looking at.
+        select=None if overlay is None else overlay.select,
     )
     return result if result else None
 
@@ -106,6 +138,8 @@ async def collect_async(shape, ctx, overlay: Overlay) -> list:
 
     records = []
     for record in await shape_ports.ports_async(shape, ctx, deep=overlay.internals):
+        if not overlay.draws(record.name):
+            continue
         drawn = {
             "port": record.name,
             "interface": record.interface,
@@ -139,7 +173,12 @@ def report(shape, records: list, overlay: Overlay) -> None:
         # ports draws none of them until it says which of them are its own.
         from .assembly import Assembly
 
-        if isinstance(shape, Assembly) and not overlay.internals:
+        if overlay.select is not None:
+            pc_logging.warning(
+                "%s:%s: nothing to draw for %s: none of the ports asked for is one this object reports: %s"
+                % (shape.project_name, shape.name, asked_for, ", ".join(sorted(overlay.select)))
+            )
+        elif isinstance(shape, Assembly) and not overlay.internals:
             pc_logging.warning(
                 "%s:%s: nothing to draw for %s: this assembly externalizes no ports of its own "
                 "('map:'); '--with-internals' draws what is inside it" % (shape.project_name, shape.name, asked_for)

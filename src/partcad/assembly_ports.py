@@ -104,26 +104,31 @@ def mapped_interface_names(config: dict) -> list:
 def node_index(assembly, prefix: str = "", placement: Location = None, index: dict = None) -> dict:
     """{node path -> (item, where this assembly put it)}.
 
-    The nodes a 'map:' may name. An anonymous 'links:' container contributes no
-    path element - it is a grouping in the file rather than a thing - so the
-    nodes of an ASSY file are named exactly as the file names them however
-    deeply the file nests them. A named container contributes its name and is
-    itself addressable. A sub-assembly that a package declares is addressable
-    and is not descended into: see this module's docstring.
+    The nodes a 'map:' may name. Every level of the tree is one, because every
+    link has a name: its own, or - for a 'links:' that gives itself neither a
+    'name:' nor an object to be named after - where it is written, as 'link#2'
+    (see 'Assembly.link_name'). So a node is named by the path of links that
+    reaches it, and 'frame/plate' and 'link#2/loose' are both paths of two.
+
+    A container used to contribute nothing when it had no name of its own, on
+    the grounds that it was a grouping in the file rather than a thing. That
+    made two nodes in two such containers the same path, and there was no way
+    to say which was meant. A sub-assembly that a package declares is
+    addressable and is not descended into: see this module's docstring.
     """
     from .assembly import Assembly
 
     index = {} if index is None else index
     placement = Location() if placement is None else placement
 
-    for child in assembly.children:
+    for index_of, child in enumerate(assembly.children):
         child_placement = placement
         if child.location is not None:
             child_placement = placement * shape_ports.as_location(child.location)
 
         item = child.item
         container = isinstance(item, Assembly) and item.config.get("child", False)
-        path = NODE_SEPARATOR.join([part for part in (prefix, child.name) if part])
+        path = NODE_SEPARATOR.join([part for part in (prefix, assembly.link_name(index_of)) if part])
 
         if path and path != prefix:
             if path in index:

@@ -67,7 +67,7 @@ import {
 import { Choice, RenderView } from './render';
 import { SupplyView } from './supply';
 import { TabSpec, Tabs } from './tabs';
-import { Tree } from './tree';
+import { LinkFilter, OverlayRequest, Selection, Tree, filterIsEmpty } from './tree';
 
 const panes: Record<TabId, HTMLElement> = {
     design: byId('pane-design'),
@@ -139,6 +139,18 @@ const sceneLoaded: Promise<Scene | undefined> = import(/* webpackMode: "eager" *
     },
 );
 
+/**
+ * What is ticked, for the whole Design group.
+ *
+ * One answer across 3D, 2D and Draft: what somebody wants to look at is a
+ * property of the object, not of the tab it is being looked at on, so switching
+ * tabs shows the same selection and a box cleared on one is cleared on the
+ * others. Cleared when the object changes, and only then -- the same object
+ * shown again (an edit saved, a re-render) keeps it, for the reason the camera
+ * is kept. See 'Selection'.
+ */
+const selection = new Selection();
+
 /** The file types the 2D tab offers: PartCAD's own pictures. */
 const PICTURES: Choice[] = [
     { value: 'png', label: 'PNG' },
@@ -165,6 +177,85 @@ const renderViews: Partial<Record<TabId, RenderView>> = {
 };
 
 /**
+ * The control pane of each render tab: what the object is made of, as boxes.
+ *
+ * The same tree the 3D view has, asked for the same reason and read differently:
+ * nothing here can switch a shape off on a stage, because the picture is made by
+ * PartCAD and arrives as a file. So the ticked boxes become a filter sent with
+ * the render ('Tree.filter()'), and on the 2D tab also the port overlays to draw
+ * on it ('Tree.overlay()').
+ *
+ * Two options separate them from the 3D view's. Draft lists no ports or
+ * interfaces: a dimensioned drawing is of the solid, and nothing is drawn at a
+ * port in one. And both fix the root's box ticked -- the object is what is being
+ * rendered, so there is no picture with it cleared.
+ *
+ * What starts out ticked is *not* one of them: all three share one selection, so
+ * one of them deciding otherwise would show a different answer on each tab. So
+ * the 2D tab's first picture of an object that declares ports has them drawn on
+ * it, because that is what the panel beside it says -- the panel and the picture
+ * agreeing is worth more than a cleaner default.
+ */
+const renderTrees: Partial<Record<TabId, Tree>> = {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '2d': new Tree(renderViews['2d']!.treeHost, () => onBoxChanged(), undefined, {
+        lockRoot: true,
+        selection,
+    }),
+    draft: new Tree(renderViews.draft!.treeHost, () => onBoxChanged(), undefined, {
+        ports: false,
+        lockRoot: true,
+        selection,
+    }),
+};
+
+/**
+ * How long a tick waits before the render it asks for is sent, in milliseconds.
+ *
+ * A render is a round trip to the daemon and a drawing is minutes of one, while
+ * choosing what to look at is several ticks in a row: three boxes cleared one
+ * after another would otherwise be three renders, the first two of them already
+ * stale as they were asked for. Short enough to feel immediate, long enough to
+ * gather a handful of clicks.
+ */
+const SELECTION_SETTLE_MS = 400;
+
+const settling: Partial<Record<TabId, ReturnType<typeof setTimeout>>> = {};
+
+/**
+ * A box was ticked or cleared, on whichever tab is on screen.
+ *
+ * The selection is shared, so this is one handler for all three: the 3D view
+ * redraws (it owns the geometry and can), and the two render tabs are answered
+ * by the daemon, so what they had is no longer what the panel says -- their
+ * pictures are forgotten and the one on screen is asked for again.
+ */
+function onBoxChanged(): void {
+    scene?.showItems(objectTree.visible());
+    for (const tab of RENDER_TABS) {
+        // No longer the picture the panel describes. Dropped rather than
+        // re-rendered: a tab nobody is looking at is rendered when it is opened,
+        // which is the rule every other tab of this panel keeps.
+        requested.delete(tab);
+        awaiting.delete(tab);
+    }
+    const open = tabs.current === 'design' ? designTabs.current : undefined;
+    if (open === undefined || !isRenderTab(open)) {
+        return;
+    }
+    const pending = settling[open];
+    if (pending !== undefined) {
+        clearTimeout(pending);
+    }
+    settling[open] = setTimeout(() => {
+        delete settling[open];
+        if (tabs.current === 'design' && designTabs.current === open) {
+            renderTab(open);
+        }
+    }, SELECTION_SETTLE_MS);
+}
+
+/**
  * The file types each drawing package renders to, once it has been asked.
  *
  * Kept across shows: it is what the package declares, not anything about the
@@ -182,10 +273,11 @@ let awaitingFormats: number | undefined;
 // one pane.
 const objectTree = new Tree(
     byId('tree'),
-    () => scene?.showItems(objectTree.visible()),
+    () => onBoxChanged(),
     // Pointing at a part or a sub-assembly flickers it, which is the one thing that
     // says "this row is that shape" without moving the camera.
     (items) => scene?.flicker(items),
+    { selection },
 );
 
 // What a shape's metadata says about its elements - the angle and direction of a
@@ -256,7 +348,19 @@ const awaiting = new Map<TabId, number>();
 const requested = new Set<TabId>();
 
 /** Ask the host to fill a tab in, and remember which answer to accept. */
-function request(tab: TabId, extra: { implementation?: string; format?: string; plugin?: string } = {}): void {
+function request(
+    tab: TabId,
+    extra: {
+        implementation?: string;
+        format?: string;
+        plugin?: string;
+        filter?: LinkFilter;
+        withPorts?: boolean;
+        withInterfaces?: boolean;
+        withInternals?: boolean;
+        ports?: string[];
+    } = {},
+): void {
     lastToken += 1;
     awaiting.set(tab, lastToken);
     fetchTab({ type: 'fetchTab', tab, token: lastToken, ...extra });
@@ -474,11 +578,25 @@ async function show(message: ShowMessage): Promise<void> {
     // What the user had switched off is kept when the camera is: both mean "the
     // same object again", which is what a save and a re-render produce, and
     // losing a selection to one is as unwelcome as losing the camera.
+    if (!message.keepCamera) {
+        // A different object: what was ticked about the last one says nothing
+        // about this one. Kept when the camera is, which is the same question -
+        // "is this the same object again" - and a save and a re-render are.
+        selection.clear();
+    }
     if (message.object === null) {
         objectTree.clear();
+        for (const tab of RENDER_TABS) {
+            renderTrees[tab]?.clear();
+            renderViews[tab]?.offerControls(false);
+        }
     } else {
-        const remembered = message.keepCamera ? objectTree.state() : undefined;
-        objectTree.setObject(message.object, remembered);
+        objectTree.setObject(message.object);
+        // The same object and the same selection, listed again for each pane.
+        for (const tab of RENDER_TABS) {
+            renderTrees[tab]?.setObject(message.object);
+            renderViews[tab]?.offerControls(true);
+        }
     }
     offerMetadata(message.object);
     offerControls(true);
@@ -515,6 +633,10 @@ function clear(): void {
     instructions = undefined;
     scene?.clearGeometry();
     objectTree.clear();
+    for (const tab of RENDER_TABS) {
+        renderTrees[tab]?.clear();
+        renderViews[tab]?.offerControls(false);
+    }
     offerMetadata(undefined);
     offerControls(false);
     for (const tab of DATA_TABS) {
@@ -551,12 +673,37 @@ function renderTab(tab: TabId): void {
     if (format === undefined) {
         return;
     }
+    // What the boxes beside the drawing ask for: which links to keep, and - on
+    // the 2D tab, whose rows include the ports and the interfaces - which of
+    // those to draw on top of the projection.
+    const tree = renderTrees[tab];
+    const filter = tree?.filter();
+    if (filterIsEmpty(filter)) {
+        // Every part has been unticked. There is no picture of that, and the
+        // filter language has no way to ask for one either (an empty mask reads
+        // as "everything"), so it is said here rather than sent.
+        view.setBusy('Nothing is selected. Tick something on the left to render it.');
+        awaiting.delete(tab);
+        return;
+    }
+    const overlay = tree?.overlay();
     view.setBusy(
         tab === 'draft'
             ? 'Drawing… The first drawing can take a few minutes, while PartCAD installs what makes it.'
             : 'Rendering…',
     );
-    request(tab, { format, plugin: tab === 'draft' ? view.plugin : undefined });
+    request(tab, {
+        format,
+        plugin: tab === 'draft' ? view.plugin : undefined,
+        filter,
+        withPorts: overlay?.ports,
+        withInterfaces: overlay?.interfaces,
+        withInternals: overlay?.internals,
+        // The ports themselves, so the picture draws the ones the panel says and
+        // no others. Left out when the panel lists none - the Draft tab - so
+        // that nothing narrows an overlay a file type asked for itself.
+        ports: overlay !== undefined && overlay.select.length > 0 ? overlay.select : undefined,
+    });
 }
 
 /**

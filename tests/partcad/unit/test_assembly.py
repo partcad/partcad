@@ -167,13 +167,14 @@ def test_the_root_nodes_own_placement_moves_what_it_holds():
     assert rooted._root_location() is None
 
 
-def test_an_anonymous_links_list_is_named_after_what_it_is():
-    """An ASSY file's 'links:' becomes an assembly of its own inside the object.
+def test_a_links_list_that_names_itself_nothing_is_named_by_its_position():
+    """Every link of an ASSY file has a name, and that is the one rule.
 
-    It is no object of any package and nobody names it in a 'connect:', but it is
-    a node of the tree the assembly is instantiated as - the IDE viewer draws that
-    tree now - so it needs a name a reader can make sense of. An anonymous one used
-    to be called "<assembly>:None".
+    Its own 'name:', the part or assembly it places, or - for a 'links:' that
+    gives itself neither - where it is written, one-based. So nothing is called
+    "<assembly>:None" or "<assembly>:links": the first was unreadable and the
+    second was a name two of them shared and nothing could address, while a
+    position is a name a 'connect:', a 'map:' and a filter can all use.
     """
     ctx = pc.init("tests/partcad/unit/data/assembly_ports/partcad.yaml")
     grouped = ctx._get_assembly(":grouped")
@@ -181,13 +182,39 @@ def test_an_anonymous_links_list_is_named_after_what_it_is():
     asyncio.run(grouped.do_instantiate())
 
     # The file's root list is this assembly, and the two 'links:' lists inside it
-    # are nodes of their own: one named 'frame', one anonymous.
-    assert sorted(child.item.name for child in grouped.children) == ["grouped:frame", "grouped:links"]
+    # are nodes of their own: one named 'frame', the second one unnamed.
+    assert grouped.link_names() == ["frame", "link#2"]
+    assert [child.item.name for child in grouped.children] == ["grouped:frame", "grouped:link#2"]
+    # The name is the child's own, so a 'connect:' resolving its target and the
+    # filter selecting what to keep look at the same thing.
+    assert [child.name for child in grouped.children] == ["frame", "link#2"]
 
     # A 'links:' list inside the file is still seen through where it is what an
     # assembly is made of: its connections are this assembly's own, which is what
     # 'connected_children()' answers and the grouped bill of materials reads.
-    assert sorted(child.name for child in grouped.connected_children() if child.name) == ["frame", "loose", "plate"]
+    assert sorted(child.name for child in grouped.connected_children() if child.name) == [
+        "frame",
+        "link#2",
+        "loose",
+        "plate",
+    ]
+
+
+def test_a_child_nothing_named_at_all_is_still_addressable():
+    """What 'add()' and a STEP or URDF reader that named nothing produce.
+
+    'Assembly.link_name' is what every reader of the tree goes through, so a
+    child with no name of its own is addressed by its position rather than being
+    unaddressable - which is what the label on its node then says, instead of
+    the name of the object it happens to hold.
+    """
+    assembly = Assembly("//pkg", {"name": "built"})
+    assembly.add(_SlowChild("a", delay=0.0))
+    assembly.add(_SlowChild("b", delay=0.0), "second")
+
+    assert assembly.link_names() == ["link#1", "second"]
+    assert assembly._child_name_label(assembly.children[0], 0) == ("test:a", "link#1")
+    assert assembly._child_name_label(assembly.children[1], 1) == ("test:b", "second")
 
 
 def test_assembly_child_order_is_declaration_order():

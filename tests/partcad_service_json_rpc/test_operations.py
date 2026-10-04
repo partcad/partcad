@@ -3420,3 +3420,240 @@ def test_a_named_slow_assembly_is_still_staged_without_it(monkeypatch):
         operations.render_objects(session, {"package": "//", "format": "step", "object": "top", "assembly": True})
 
     assert _retry_error(caught) == [{"package": "//sub", "name": "unit", "kind": "assembly"}]
+
+
+# ---- the link filter -------------------------------------------------------
+#
+# `pc filter`, and the `--filter` that `pc render`/`pc export` and the IDE's 2D
+# and Draft tabs take. What arrives here is the mask as *data*: a client resolves
+# its `<filter-file|filter-expression>` argument on its own machine, because that
+# is where the file is (see `partcad_cli.click.link_filter`). What is pinned is
+# that the daemon reads it the same way whichever request carries it, and that it
+# refuses the requests a filter cannot be asked of.
+
+
+def _filter_session(monkeypatch, result=None, error=None):
+    """A session whose 'pc filter' action is recorded rather than run."""
+    calls = []
+
+    def filter_object_action(project, filter_data, source, target, kind=None, dry_run=False):
+        calls.append(
+            {
+                "project": project.name,
+                "filter": filter_data,
+                "source": source,
+                "target": target,
+                "kind": kind,
+                "dry_run": dry_run,
+            }
+        )
+        if error is not None:
+            raise error
+        return result if result is not None else {"kind": "assembly", "source": source, "target": target}
+
+    install_fake_partcad_modules(monkeypatch, {"partcad.actions": {"filter_object_action": filter_object_action}})
+    session, _ = make_session()
+    return session, calls
+
+
+def test_filter_object_hands_the_action_the_mask_it_was_given(monkeypatch):
+    session, calls = _filter_session(monkeypatch)
+
+    result = operations.filter_object(
+        session,
+        {"package": "//", "object": "widget", "target": "widget_top", "filter": {"base": None}},
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["source"] == "widget"
+    assert calls[0]["target"] == "widget_top"
+    assert calls[0]["dry_run"] is False
+    # The mask itself, read by 'assy_filter': the names it keeps.
+    assert calls[0]["filter"].names() == ["base"]
+    assert result["target"] == "widget_top"
+
+
+def test_filter_object_reads_a_mask_sent_as_text(monkeypatch):
+    # A client that sent the expression rather than resolving it. Read as an
+    # expression and never as a path: the daemon is not where the user's files
+    # are.
+    session, calls = _filter_session(monkeypatch)
+
+    operations.filter_object(session, {"package": "//", "object": "widget", "target": "top", "filter": "{base: null}"})
+
+    assert calls[0]["filter"].names() == ["base"]
+
+
+def test_filter_object_leaves_the_kind_to_the_source(monkeypatch):
+    """A filtered scene is a scene without the user saying so twice."""
+    session, calls = _filter_session(monkeypatch)
+
+    operations.filter_object(session, {"package": "//", "object": "w", "target": "t", "filter": ["a"]})
+    assert calls[0]["kind"] is None
+
+    operations.filter_object(session, {"package": "//", "object": "w", "target": "t", "filter": ["a"], "scene": True})
+    assert calls[-1]["kind"] == "scene"
+
+
+@pytest.mark.parametrize(
+    "params, expected",
+    [
+        ({"target": "t", "filter": ["a"]}, "source"),
+        ({"object": "w", "filter": ["a"]}, "target"),
+        ({"object": "w", "target": "t"}, "filter"),
+    ],
+)
+def test_filter_object_needs_all_three_of_its_arguments(monkeypatch, params, expected):
+    session, calls = _filter_session(monkeypatch)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.filter_object(session, dict({"package": "//"}, **params))
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert expected in caught.value.message
+    assert calls == []
+
+
+def test_filter_object_refuses_a_subtree(monkeypatch):
+    """One object in, one object out: there is nothing for '...' to mean."""
+    session, calls = _filter_session(monkeypatch)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.filter_object(session, {"package": "//...", "object": "widget", "target": "top", "filter": ["a"]})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert calls == []
+
+
+def test_filter_object_refuses_a_mask_it_cannot_read(monkeypatch):
+    # A bare word is what an unreadable filter *file* parses to, so reading it as
+    # one link name would turn a typo into a filtered object nobody asked for.
+    session, calls = _filter_session(monkeypatch)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.filter_object(
+            session, {"package": "//", "object": "widget", "target": "top", "filter": "nosuch.yaml"}
+        )
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "nosuch.yaml" in caught.value.message
+    assert calls == []
+
+
+def test_filter_object_reports_what_the_action_refused(monkeypatch):
+    session, _ = _filter_session(monkeypatch, error=ValueError("the assembly 'w' is of type 'step'"))
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.filter_object(session, {"package": "//", "object": "w", "target": "t", "filter": ["a"]})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "type 'step'" in caught.value.message
+
+
+def test_a_filtered_render_passes_the_mask_to_the_package(monkeypatch):
+    session, rendered = _render_session(monkeypatch)
+    session.partcad_ctx.shapes[("assembly", "//:top")] = FakeShape(name="top", kind="assembly")
+
+    operations.render_objects(
+        session,
+        {
+            "package": "//",
+            "format": "step",
+            "object": "top",
+            "assembly": True,
+            "filter": {"base": None},
+        },
+    )
+
+    assert len(rendered) == 1
+    assert rendered[0]["link_filter"].names() == ["base"]
+
+
+def test_an_unfiltered_render_passes_no_mask(monkeypatch):
+    session, rendered = _render_session(monkeypatch)
+    session.partcad_ctx.shapes[("assembly", "//:top")] = FakeShape(name="top", kind="assembly")
+
+    operations.render_objects(session, {"package": "//", "format": "step", "object": "top", "assembly": True})
+
+    assert rendered[0]["link_filter"] is None
+
+
+@pytest.mark.parametrize(
+    "params, expected",
+    [
+        # A whole package: a filter selects the links of one object.
+        ({"format": "step"}, "name that object"),
+        # A subtree, which is the same objection.
+        ({"format": "step", "object": "top", "assembly": True, "recursive": True}, "name that object"),
+        # A part has no links.
+        ({"format": "step", "object": "cube"}, "'-a' or '-S'"),
+    ],
+)
+def test_a_filter_is_refused_where_it_has_no_meaning(monkeypatch, params, expected):
+    session, rendered = _render_session(monkeypatch)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_objects(session, dict({"package": "//", "filter": ["base"]}, **params))
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert expected in caught.value.message
+    assert rendered == []
+
+
+def test_render_inline_filters_what_it_draws():
+    session = _inline_session()
+    top = FakeRenderable("top", kind="assembly", filename="top.png")
+    session.partcad_ctx.shapes[("assembly", "//:top")] = top
+
+    # The view is built by 'partcad.assembly_filter', which is not imported in
+    # this test run; the refusal above it is what is being pinned here, so the
+    # mask is left out and only the overlay flags go through.
+    result = operations.render_inline(
+        session,
+        {"package": "//", "object": "top", "kind": "assembly", "format": "png", "with_all": True},
+    )
+
+    assert result["filename"] == "top.png"
+    assert top.render_calls == [("png", None)]
+
+
+def test_render_inline_refuses_a_filter_on_a_part():
+    session = _inline_session()
+    session.partcad_ctx.shapes[("part", "//:cube")] = FakeRenderable("cube", filename="cube.png")
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_inline(session, {"package": "//", "object": "cube", "format": "png", "filter": {"a": None}})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "has none" in caught.value.message
+
+
+def test_the_overlay_reader_takes_the_flags_and_the_ports(monkeypatch):
+    """One reader, so the two render methods cannot disagree about the names."""
+    overlay_calls = []
+
+    class FakeOverlay:
+        @staticmethod
+        def of(**kwargs):
+            overlay_calls.append(kwargs)
+            return "overlay" if any(kwargs[flag] for flag in ("ports", "interfaces", "all")) else None
+
+    install_fake_partcad_modules(monkeypatch, {"partcad.render_overlay": {"Overlay": FakeOverlay}})
+
+    assert operations._overlay({}) is None
+    assert overlay_calls[-1] == {
+        "ports": False,
+        "interfaces": False,
+        "all": False,
+        "internals": False,
+        "select": None,
+    }
+
+    operations._overlay({"with_ports": True, "ports": ["a", "b"], "with_internals": True})
+    assert overlay_calls[-1]["select"] == ["a", "b"]
+    assert overlay_calls[-1]["internals"] is True
+
+    # One name is a name: a client that sends a string rather than a list of one
+    # is asking for that port, not for each of its characters.
+    operations._overlay({"with_ports": True, "ports": "only"})
+    assert overlay_calls[-1]["select"] == ["only"]

@@ -5,6 +5,8 @@ The panel is a strip of tabs over one object, not a canvas:
 | Tab | Shown for | Where it comes from |
 | --- | --- | --- |
 | **3D** | everything | the viewer protocol, from whichever `partcad` asked for the shape to be shown |
+| **2D** | parts, assemblies, scenes, sketches | the daemon's `render.inline` (a picture `pc render` makes) |
+| **Draft** | parts, assemblies | the daemon's `render.inline`, with a drawing package (`pc render -e`) |
 | **Bill of Materials** | assemblies | the daemon's `bom` (what `pc bom` prints) |
 | **Instructions** | assemblies | the daemon's `assembly.guide` (the book `pc render -t html\|pdf` writes) |
 | **FEA** | parts | the daemon's `cae.analyze` (what `pc cae fea` runs) |
@@ -210,6 +212,7 @@ the protocol has no authentication.
 | `src/webview/tree.ts` | The 3D view's control pane: the rows, the boxes, and what is to be drawn |
 | `src/webview/spacemouse.ts` | A SpaceMouse: which gamepad is one, what its axes mean, and how it moves the camera |
 | `src/viewer/spacenav.ts` | spacenavd's socket, read in the extension host for Linux |
+| `src/webview/render.ts` | The 2D and Draft tabs: the control pane, the file, and Save |
 | `src/webview/bom.ts` | The Bill of Materials tab |
 | `src/webview/document.ts` | The Instructions tab: `partcad/document.py`'s model, drawn |
 | `src/webview/supply.ts` | The Supply tab: the list, and one item's suppliers |
@@ -265,6 +268,45 @@ It departs from `Part.js` in four places, each for a reason:
 Positional lights use `decay: 0`. With three's physical default of 2, irradiance is `intensity/d²`, and a 10 mm
 part in metre units sits ~0.03 from the rig — intensity 1 would arrive as ~1000 and burn the model to a white
 silhouette. `Part.js` never hits this because its OBJ models are in millimetres.
+
+## The 2D and Draft views
+
+Each is the same pane: the control pane on the left, what to render to along the top, the file under it, and a
+Save button. Both are `pc render` of one object to one file type, and what differs is who implements the type —
+the 2D tab asks PartCAD's own renderers for a picture (PNG, JPEG, SVG), the Draft tab names a package that
+draws and offers whatever that package's `render:` section declares (`pc render -e`, and
+`examples/feature_render_custom`). The file comes back as bytes rather than as a path, because the daemon may
+be on another machine; the host keeps it in a temporary file so that Save has something to copy.
+
+The control pane is the 3D view's, over the same node tree, with the same rules about what a box does to what
+is under it — and it is the *same selection*: all three Design tabs read and write one store, so switching tabs
+shows what was ticked and a box cleared on one is cleared on the others. What the boxes *produce* is what
+differs, since nothing here can switch a shape off on a stage: the picture is made by PartCAD and arrives
+finished. So the ticked boxes become a **filter**, sent with the render and applied to the assembly PartCAD
+built — the same `--filter` `pc render` and `pc export` take, and the same mask `pc filter` writes a new object
+from (see `docs/source/assy.rst`) — plus, on the 2D tab, **which ports** to draw. The render is asked for
+again, after a short settling delay, whenever a box changes.
+
+Four things follow from what the two tabs are:
+
+* **The root's box is ticked and fixed.** The object is what is being rendered; there is no picture with it
+  cleared.
+* **Draft lists no ports or interfaces.** A dimensioned drawing is of the solid, and nothing is drawn at a port
+  in one. It still *keeps* them: the selection is shared, so a port switched off on the 2D tab survives a visit
+  to Draft, which has no row to hold it.
+* **The 2D tab draws the ports the panel says**, by name — `--with-ports` / `--with-interfaces` for whether,
+  and `--port` for which, so unticking one of a part's twelve ports takes that one frame off the picture.
+  `--with-internals` comes with a port of something *inside* an assembly, since an assembly is otherwise taken
+  at its word about which ports are its own. What starts out ticked is the 3D view's rule — the object's own
+  ports and nothing deeper — because one selection cannot start out two ways; so the first 2D picture of an
+  object that declares ports has them on it.
+* **A part has nothing to filter.** Its tree is one node, so the pane lists the object and (on 2D) its ports,
+  and no filter is sent.
+
+A node is named in the filter by its **label**, which is the name the assembly addresses that link by: the
+`name:` of the ASSY link, the part it places, or — for a child nothing named — its position, `link#2`. A port is
+named by the path of those labels and then the port (`head:head_half_1:TL-m3`), which is exactly the name
+PartCAD reports it under, so both sides compose one string from the same parts.
 
 ## The tabs beside the 3D view
 

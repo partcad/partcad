@@ -445,6 +445,20 @@ class JsonRpcBackend implements PartcadBackend {
                 format: a.format,
                 // eslint-disable-next-line @typescript-eslint/naming-convention
                 options_package: a.plugin,
+                // The panel beside the drawing: which links of the object to
+                // keep, and whether its ports and interfaces are drawn on top of
+                // the projection. The same two things 'pc render --filter' and
+                // '--with-ports'/'--with-interfaces'/'--with-internals' ask for,
+                // under the names that operation reads.
+                filter: a.filter,
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                with_ports: a.withPorts,
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                with_interfaces: a.withInterfaces,
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                with_internals: a.withInternals,
+                // Which ports, where the panel narrowed it to some of them.
+                ports: a.ports,
             }),
         );
         reg('partcad.renderFormats', (a) => this.send('render.formats', { package: a.package }));

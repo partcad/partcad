@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, List, Optional
 
 import ruamel.yaml
 
+from partcad_utils import assy_filter
+
 from . import (
     assembly,
     assembly_config,
@@ -2711,7 +2713,20 @@ class Project(project_config.Configuration):
         overlay=None,
         render_opts: Optional[dict] = None,
         fast_only: bool = False,
+        link_filter=None,
     ):
+        """Write out the files this package's objects are configured to produce.
+
+        'link_filter' is a 'partcad_utils.assy_filter.Filter': the links of an
+        assembly or a scene to keep, so that what is written is a subset of one
+        object rather than the whole of it (``pc render --filter``). One run's
+        answer, overriding the ``filter:`` a file type declares -- which is the
+        other way to ask for the same thing, per file type and permanently (see
+        'output.Implementation.link_filter'). Either way it reaches the
+        documents generated from an assembly as well as the files the shapes
+        themselves are written to, so that a filtered bill of materials lists
+        what the filtered object is made of.
+        """
         with pc_logging.Action("RenderPkg", self.name):
             # A skipped package has nothing to render, and must not be asked to:
             # its declarations are still in 'config_obj' (nothing rewrites the
@@ -2742,6 +2757,12 @@ class Project(project_config.Configuration):
                 # is illustrated with the assembly, which is building it.
                 shapes = fast_only_mod.without_slow(shapes)
 
+            # The merged output configuration of each shape, kept for the
+            # document pass below: that is where a 'filter:' declared on a
+            # 'readme'/'pdf'/'html' file type is read from, and resolving the
+            # layering twice would be two answers to one question.
+            configured = {}
+
             tasks = []
             # Every file type that has a built-in implementation, plus any the
             # packages involved implement themselves.
@@ -2766,6 +2787,7 @@ class Project(project_config.Configuration):
 
             for shape in shapes:
                 shape_cfg = self._output_cfg(shape, options_project)
+                configured[(shape.kind, shape.name)] = shape_cfg
                 formats = output_formats + [
                     name
                     for name in output.format_names(shape_cfg)
@@ -2785,6 +2807,13 @@ class Project(project_config.Configuration):
                                     output_dir=output_dir,
                                     options_package=options_package,
                                     overlay=overlay,
+                                    # One run's '--filter', if there was one.
+                                    # Left to each file type's own 'filter:'
+                                    # otherwise, which is why this goes down to
+                                    # the file rather than being applied to the
+                                    # shape here: one object may be rendered to
+                                    # a filtered PNG and a whole STEP.
+                                    link_filter=link_filter,
                                     # One run's worth of export parameters (the
                                     # viewport of 'pc render --view'), on top of
                                     # everything the configuration resolved to.
@@ -2808,8 +2837,11 @@ class Project(project_config.Configuration):
                 for assembly_name in self._assembly_documents_to_render(
                     shapes, assemblies, format, document_format, render
                 ):
+                    view = await self._document_view_async(
+                        shapes, configured, "assembly", assembly_name, document_format, link_filter
+                    )
                     if document_format == "readme":
-                        await self.render_assembly_readme_async(assembly_name, render, output_dir)
+                        await self.render_assembly_readme_async(assembly_name, render, output_dir, shape=view)
                     else:
                         await self.render_assembly_guide_async(
                             assembly_name,
@@ -2817,6 +2849,7 @@ class Project(project_config.Configuration):
                             render,
                             output_dir,
                             ignore_manufacturability,
+                            shape=view,
                         )
 
             # A scene lists what it holds exactly as an assembly does, so it
@@ -2824,12 +2857,45 @@ class Project(project_config.Configuration):
             # assembly guide is an account of putting something together, and
             # nothing in a scene was put together (see 'partcad.scene').
             for scene_name in self._assembly_documents_to_render(shapes, scenes, format, "readme", render, "scene"):
-                await self.render_assembly_readme_async(scene_name, render, output_dir, kind="scene")
+                await self.render_assembly_readme_async(
+                    scene_name,
+                    render,
+                    output_dir,
+                    kind="scene",
+                    shape=await self._document_view_async(
+                        shapes, configured, "scene", scene_name, "readme", link_filter
+                    ),
+                )
 
             # The package document is skipped when specific assemblies or scenes
             # were asked for: their own documents are what was requested.
             if (format == "readme" and not assemblies and not scenes) or (format is None and "readme" in render):
                 self.render_readme_async(render, output_dir)
+
+    async def _document_view_async(self, shapes, configured, kind, name, document_format, link_filter):
+        """The object a generated document is of, or ``None`` for the object itself.
+
+        A document is a file type like any other, so it is filtered like one:
+        this run's ``--filter`` if there was one, and otherwise the ``filter:``
+        the document's own file type declares. What differs is that it is not
+        written by 'Shape._render_one_async' -- a markdown bill of materials and
+        an instruction book are built from the assembly's *tree* rather than
+        from its geometry -- so the view is made here and handed over.
+        """
+        mask = link_filter
+        if mask is None:
+            declared = output.normalize((configured.get((kind, name)) or {}).get(document_format))
+            try:
+                mask = assy_filter.of(declared.get("filter"))
+            except assy_filter.FilterError as e:
+                pc_logging.error("%s:%s: %s: %s" % (self.name, name, document_format, e))
+                return None
+        if mask is None or mask.keeps_all:
+            return None
+        for shape in shapes:
+            if shape.kind == kind and shape.name == name:
+                return await shape.filtered_view_async(mask)
+        return None
 
     def _assembly_documents_to_render(
         self, shapes, assemblies, format, document_format, render_cfg=None, kind="assembly"
@@ -3027,6 +3093,7 @@ class Project(project_config.Configuration):
         overlay=None,
         render_opts: Optional[dict] = None,
         fast_only: bool = False,
+        link_filter=None,
     ):
         asyncio.run(
             self.render_async(
@@ -3042,6 +3109,7 @@ class Project(project_config.Configuration):
                 overlay,
                 render_opts,
                 fast_only,
+                link_filter,
             )
         )
 
@@ -3094,16 +3162,22 @@ class Project(project_config.Configuration):
         return markup, test_image_path
 
     def _assembly_document_target(
-        self, format, extension, assembly_name, render_cfg=None, output_dir=None, kind="assembly"
+        self, format, extension, assembly_name, render_cfg=None, output_dir=None, kind="assembly", shape=None
     ):
         """Where a document of one assembly or scene goes, and what it is about.
 
         Returns '(assembly, path, dir_path, return_path, render_cfg, output_dir)',
         or 'None' if this package has no such object of that kind.
+
+        'shape' is the object to document when it is not the declared one: a
+        filtered view of it (see 'render_async'), which carries the same name
+        and the same configuration and so goes to the same place.
         """
         assembly = self.get_scene(assembly_name) if kind == "scene" else self.get_assembly(assembly_name)
         if assembly is None:
             return None
+        if shape is not None:
+            assembly = shape
 
         if render_cfg is None:
             render_cfg = self.config_obj.get("render", {}) or {}
@@ -3129,7 +3203,9 @@ class Project(project_config.Configuration):
         return_path = os.path.relpath(output_dir, dir_path)
         return assembly, path, dir_path, return_path, render_cfg, output_dir
 
-    async def render_assembly_readme_async(self, assembly_name, render_cfg=None, output_dir=None, kind="assembly"):
+    async def render_assembly_readme_async(
+        self, assembly_name, render_cfg=None, output_dir=None, kind="assembly", shape=None
+    ):
         """Generate the markdown document of a single assembly or scene.
 
         Where the package document lists what the package declares, this one lists
@@ -3140,7 +3216,7 @@ class Project(project_config.Configuration):
         Returns the path of the generated document, or 'None' if there is no such
         object in this package.
         """
-        target = self._assembly_document_target("readme", ".md", assembly_name, render_cfg, output_dir, kind)
+        target = self._assembly_document_target("readme", ".md", assembly_name, render_cfg, output_dir, kind, shape)
         if target is None:
             return None
         assembly, path, dir_path, return_path, render_cfg, output_dir = target
@@ -3164,6 +3240,7 @@ class Project(project_config.Configuration):
         render_cfg=None,
         output_dir=None,
         ignore_manufacturability=False,
+        shape=None,
     ):
         """Generate the assembly instruction book of a single assembly.
 
@@ -3178,7 +3255,9 @@ class Project(project_config.Configuration):
         if format not in assembly_guide.GUIDE_FORMATS:
             raise ValueError("Unsupported assembly document format: %s" % format)
 
-        target = self._assembly_document_target(format, "." + format, assembly_name, render_cfg, output_dir)
+        target = self._assembly_document_target(
+            format, "." + format, assembly_name, render_cfg, output_dir, shape=shape
+        )
         if target is None:
             return None
         assembly, path, dir_path, _return_path, render_cfg, output_dir = target

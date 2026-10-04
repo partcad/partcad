@@ -40,6 +40,49 @@ and not one, and `location` on that root moves all three - there is no node of i
 own for it to move instead. A `links:` list *inside* the file is a node like any
 other: it is addressable by `name` from a `map:`, and what it holds belongs to it.
 
+.. _assy-link-names:
+
+What a link is called
+---------------------
+
+Every link of an ASSY file has a name, and one rule gives it:
+
+1. its own ``name:``, where it gives one;
+2. otherwise the part or the assembly it places;
+3. otherwise its position in the ``links:`` list it is written in, one-based, as
+   ``link#2``.
+
+Only a ``links:`` container reaches the third -- a node that places something is
+named after it -- and it exists so that there is no such thing as a link that
+cannot be named. That one name is what everything uses: what a ``connect:``
+names as the link to connect to, what a ``map:`` names as a node (joined with
+``/`` for a path of them, ``head/head_half_1``), what a connection's
+``interferes:`` names, what a :ref:`filter <assy-filter>` selects, and what the
+`PartCAD extension for VS Code <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_
+shows as the row for that link in the viewer.
+
+It is not the same thing as the *object* a link places, and the viewer shows
+both: an assembly that places the same bolt a hundred times holds one object
+under a hundred link names, and it is the link name that says which of them this
+one is. So a position is used rather than the object's name where there is
+nothing else -- a name shared by a hundred rows would say nothing about any of
+them.
+
+  .. code-block:: yaml
+
+    links:
+      - part: bolt            # called 'bolt'
+      - part: bolt
+        name: upper           # called 'upper'
+      - name: head            # called 'head'
+        links:
+          - part: head_half   # called 'head_half', and 'head/head_half' from a 'map:'
+      - links:                # called 'link#4': the fourth entry of this list
+          - part: plate       # called 'plate', and 'link#4/plate' from a 'map:'
+
+A positional name is relative to the list it is written in, so adding a link
+above one renames it. Name a container you intend to refer to.
+
 Parts
 -----
 
@@ -496,6 +539,156 @@ coordinates somebody worked out by hand.
           to: rail
           # 'how' would be an error here
 
+.. _assy-filter:
+
+=========================
+Part of an assembly
+=========================
+
+A sub-assembly worth looking at on its own is often not an object of its own: the
+head of the logo, one bay of a rack, the parts that arrive in one box. A
+**filter** names the links to keep and leaves the rest out.
+
+A filter is a tree of link names mirroring the tree the ASSY file already is:
+
+.. code-block:: yaml
+
+  head:                 # kept, and only the children named under it
+    head_half_1:
+  bolt:                 # kept, with everything inside it
+
+Three rules, and nothing else:
+
+* a link the filter names is kept, and a link it does not name is dropped;
+* a link named with nothing under it keeps everything under it;
+* a link named with at least one child under it keeps those children and drops
+  its other ones.
+
+A link is named the way :ref:`everything else names it <assy-link-names>`: its
+``name:``, the part or the assembly it places, or its position in its ``links:``
+list. So there is no link a filter cannot name.
+
+A filter may equally be written as a list, which is the convenient form when
+nothing below the names matters:
+
+.. code-block:: yaml
+
+  - head
+  - bolt
+
+There are three ways to use one, and they do different things.
+
+Filtering for one picture
+-------------------------
+
+``pc render`` and ``pc export`` take ``--filter``, and write nothing into the
+package: the assembly is built as it always is and the filter is applied to the
+result, for this one file.
+
+.. code-block:: shell
+
+  pc render -a -t png --filter head.yaml -O ./ logo
+  pc render -a -t png --filter '{bone1: null, bone2: null}' -O ./ logo
+  pc export -a -t step --filter '[bone1, bone2]' -O ./ logo
+
+The argument is a **filename first**: a file somebody keeps beside the package
+and edits. Only when there is no such file is the text read as the filter
+itself, as JSON or YAML -- which is the convenient form for one link and for
+whatever a script composes. A name that is neither is refused, naming both
+things that went wrong, so a mistyped filename is not quietly read as a link
+name.
+
+Everything kept stays where the whole assembly put it. A filter never re-resolves
+a ``connect:``, which is the only reading of "part of this assembly" that is true
+of the thing on the bench. Because the result is built rather than written, a
+filter here may also select *inside* a link that places an assembly of another
+package.
+
+The same options are available in the
+`PartCAD extension for VS Code <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_:
+the **2D** and **Draft** tabs of the viewer list what the object is made of
+beside the drawing, with a checkbox on every item, and what is ticked is the
+filter the render is made with. On the 2D tab the list also holds each node's
+ports and interfaces, and ticking one draws that port on the projection -- the
+same thing ``--with-ports``, ``--with-interfaces`` and ``--port`` ask for. All
+three Design tabs share one selection, so what is ticked on the 3D view is what
+the 2D and Draft tabs draw, and a box cleared on one is cleared on the others.
+
+Filtering every time the file is written
+----------------------------------------
+
+A ``filter:`` on a ``render:`` or ``export:`` file type says the same thing
+permanently, so a package can keep a picture of one sub-assembly checked in
+beside the drawing of the whole of it. It is declared per file type, in either
+place a file type is configured -- the package's own section, and the object's:
+
+.. code-block:: yaml
+
+  render:
+    png:
+      # Every PNG this package writes is of these links only.
+      filter: [base]
+
+  assemblies:
+    widget:
+      type: assy
+      render:
+        svg:
+          # And this object's SVG is of these, whatever the package said.
+          filter:
+            tower:
+              upper:
+        step: {}   # the whole of it, as ever
+
+``pc render --filter`` and ``pc export --filter`` override it for one run, the
+way ``--view`` overrides a configured viewport. A part and a sketch have no
+links, so a filter over one of them is reported rather than ignored.
+
+Filtering into a new object
+---------------------------
+
+``pc filter`` writes a declaration instead: the ASSY file of ``SRC`` with
+everything the filter drops taken out of it, as ``DST.assy``, declared beside
+``SRC``.
+
+.. code-block:: shell
+
+  pc filter head.yaml logo logo_head
+  pc filter '{bone1: null, bone2: null}' logo logo_bones
+
+``DST`` is then an object like any other: it renders, it exports, it has a bill
+of materials, suppliers quote for it, and it is a file somebody can review as a
+diff. If ``SRC`` is an assembly then ``DST`` is an assembly, and if ``SRC`` is a
+scene then ``DST`` is a scene -- the kind follows the source. An existing ``DST``
+is overwritten; its declaration is left alone when it already points at the same
+file, so whatever file types were configured for it survive a re-run.
+
+The **file** is filtered rather than the built assembly, which is what makes the
+result an assembly somebody can build: every link kept keeps its ``connect:``,
+its ``how:``, its parameters and its comments. (That is also why ``pc filter``
+needs an Assembly YAML file to work from. A ``step`` or ``urdf`` assembly has no
+links of its own, and ``pc convert assembly -t assy`` is what turns one into a
+file that does.) The one thing it cannot do is select inside a link that places
+a part or another package's assembly; it says so and keeps that link whole.
+
+A link whose name was its position has that position **written into** the copy as
+a ``name:``. Filtering moves links -- the second of five is the first of two once
+the one above it has gone -- so a position would otherwise rename it, and
+anything that named it would point at nothing.
+
+What filtering can break is exactly one thing, and it is checked: **a link that
+is kept may be connected to a link that was dropped**. ``pc filter`` reports
+every one of them, naming the line, and so does :ref:`pc lint <assy-lint>` over
+the file afterwards.
+
+.. code-block:: text
+
+  logo_head.assy:12:13: nothing in this file places a link called 'bolt'
+
+Name those links in the filter too, or place the kept ones with ``location:``.
+
+.. _assy-lint:
+
 ==========
 Validation
 ==========
@@ -505,6 +698,13 @@ ASSY files are checked against a JSON schema
 document *after* Jinja2 rendering: the node keys above, the shape of an OCCT
 location, and the fact that ``location``, ``connectPorts`` and ``connect`` -- or
 ``part``, ``assembly`` and ``links`` -- exclude one another.
+
+One thing is checked beside the schema, because no schema can describe it: a
+``connect:``/``connectPorts:`` names a link of the **same** ``links:`` list,
+written **above** this node, since that is where PartCAD looks for it as the
+assembly is built. So does every name in a connection's ``interferes:``, which
+may be anywhere in the file. A name that is wrong would otherwise be answered,
+much later, with "Target part not found" and a part at the origin.
 
 A file read as a **scene** is checked against the same schema with ``how``
 forbidden. The scene schema is derived from the one above rather than kept

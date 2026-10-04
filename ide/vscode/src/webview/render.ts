@@ -5,12 +5,22 @@
 //
 // The 2D and Draft tabs: the object rendered to a file, shown, and saved.
 //
-// Both are one pane of the same shape - what to render to along the top, the
-// file under it, and a Save button - because both are the same operation,
-// 'pc render' of one object to one file type. What differs is who implements the
-// file type: the 2D tab asks PartCAD's own renderers for a picture (PNG, JPEG,
-// SVG), and the Draft tab names a package that draws, the way 'pc render -e'
-// names one, and offers whatever that package declares.
+// Both are one pane of the same shape - what the object is made of down the left,
+// what to render to along the top, the file under it, and a Save button - because
+// both are the same operation, 'pc render' of one object to one file type. What
+// differs is who implements the file type: the 2D tab asks PartCAD's own
+// renderers for a picture (PNG, JPEG, SVG), and the Draft tab names a package
+// that draws, the way 'pc render -e' names one, and offers whatever that package
+// declares.
+//
+// The pane down the left is the one the 3D view has, built by the same 'Tree' and
+// styled by the same rules, because it is answering the same question. What it
+// cannot do here is switch something off on a stage: the picture is made by
+// PartCAD and arrives as a file. So the boxes compose a *filter* instead, sent
+// with the render, and - on the 2D tab, whose rows include the ports and the
+// interfaces - which overlays to draw on top of the projection. This file owns
+// the element the tree is drawn into and nothing else about it: who fills it in
+// and what a change does are 'viewer.ts'.
 //
 // The file is shown the way the browser shows it: a picture through an <img>,
 // which pans and zooms ('image.ts'), and which cannot run any script an SVG
@@ -50,10 +60,25 @@ export class RenderView {
     private readonly plugins: HTMLSelectElement | undefined;
     private readonly save = el('button', 'render-save', 'Save…');
     private readonly body = el('div', 'render-body');
+    private readonly controls = el('div', 'controls');
+    /**
+     * Where the control pane's tree is drawn. Owned here because the pane is
+     * part of this one's layout; filled in by 'viewer.ts', which is what knows
+     * the object and what a change to a box should do.
+     */
+    public readonly treeHost = el('div', 'tree');
     private image: ImageView | undefined;
 
     constructor(pane: HTMLElement, options: RenderViewOptions) {
         pane.classList.add('render');
+        this.treeHost.setAttribute('role', 'tree');
+        this.controls.appendChild(this.treeHost);
+        // Hidden until there is an object to list, the way the 3D view's is:
+        // with nothing shown it would be an empty list beside an empty picture.
+        this.controls.hidden = true;
+        pane.appendChild(this.controls);
+
+        const main = el('div', 'render-main');
         const header = el('div', 'render-header');
 
         if (options.plugins !== undefined) {
@@ -83,8 +108,14 @@ export class RenderView {
         this.save.addEventListener('click', () => options.onSave());
         header.appendChild(this.save);
 
-        pane.appendChild(header);
-        pane.appendChild(this.body);
+        main.appendChild(header);
+        main.appendChild(this.body);
+        pane.appendChild(main);
+    }
+
+    /** Show or hide the control pane: there is nothing to list without an object. */
+    public offerControls(shown: boolean): void {
+        this.controls.hidden = !shown;
     }
 
     /** The file type chosen, or undefined while there is none to choose from. */

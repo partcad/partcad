@@ -166,7 +166,14 @@ pc --no-ansi render -t png --view iso -O ./out/ports --with-all bracket         
 
 `--with-ports` marks and names every port, `--with-interfaces` names each
 interface instance and joins it to the ports it owns, and `--with-all` draws
-both. On an assembly or a scene all three walk everything inside it and place
+both. `--port <name>` narrows that to one port, repeated for several — named the
+way the log names it, which for a port inside an assembly is the path of links
+and then the port (`head:head_half_1:TL-m3`). It says *which* ports rather than
+that any are drawn, so it goes with one of the three:
+
+```sh
+pc --no-ansi render -t png --view iso -O ./out/ports --with-all --port TL-m3 bracket
+``` On an assembly or a scene all three walk everything inside it and place
 each child's ports where it put the child, which is how a connection that went
 wrong is found: two frames that should have met and did not. Every port drawn is
 also named on stderr, which is where the exact string for an Assembly YAML file
@@ -182,7 +189,44 @@ A package can ask for this permanently instead, with `with_ports:` or
 covers reading these drawings when the ports themselves are what is being
 worked on.
 
-## 8. Report what happened
+## 8. Rendering part of an assembly
+
+`--filter` keeps only some of the links of an assembly or a scene, so a picture
+can be of one sub-assembly without a declaration for it. It takes a JSON or YAML
+*file* naming the links, or the same written out on the command line:
+
+```sh
+pc --no-ansi render -a -t png -O ./out --filter ./head.yaml logo
+pc --no-ansi render -a -t png -O ./out --filter '{bone1: null, bone2: null}' logo
+pc --no-ansi render -a -t png -O ./out --filter '[bone1, bone2]' logo
+```
+
+A link the filter names is kept and a link it does not name is dropped. A link
+named with nothing under it keeps everything under it; a link named with children
+under it keeps those children and drops its other ones. A link is named the way
+the Assembly YAML file names it — its `name:`, or the part or assembly it places
+— which is also the name a `connect:` uses, so read the `.assy` file to find out
+what the names are.
+
+It needs the object named, with `-a` or `-S` saying which kind it is: a part has
+no links, and neither has a whole package, so both are refused. It is subject to
+§6 as well — the file is the one an unfiltered render would have written, under
+the object's own name — so give each filter a directory of its own.
+
+Nothing is written into the package. There are two other ways to ask for the
+same thing, and the right one depends on how long the answer should last:
+
+* a `filter:` on a `render:` file type in `partcad.yaml` — per file type, so one
+  object can have a picture of one sub-assembly checked in beside the drawing of
+  the whole of it. Use this when the user wants the subset *kept*; `--filter`
+  overrides it for one run.
+* `pc filter FILTER SRC DST`, which writes `DST.assy` and declares it beside
+  `SRC`. Use this when the user wants the subset to *become* an object of the
+  package — one that renders, exports and has a bill of materials of its own.
+
+Say which you did rather than filtering the same assembly again and again.
+
+## 9. Report what happened
 
 Name the files that were written, with their paths, and which view each one is.
 Nothing in this skill changes `partcad.yaml` — say so if the user might have

@@ -1424,8 +1424,9 @@ class Shape(ShapeConfiguration):
         Two file types of one object can ask for different overlays, and what
         the answers differ in is whether the port boundaries came along - so a
         collection that has them also answers a file type that does not - and
-        how deep the walk went, which is a different set of ports rather than
-        the same set told differently.
+        how deep the walk went and which ports were asked for, each of which is
+        a different set of ports rather than the same set told differently (see
+        'Overlay.key').
 
         Failing to work it out must not cost the picture: an overlay is an
         annotation on a render, not the render. The failure is reported and the
@@ -1435,10 +1436,11 @@ class Shape(ShapeConfiguration):
         "nothing" would then take the markers off the next file type too, which
         never asked for a boundary at all.
         """
-        if (True, overlay.internals) in cache:
-            return cache[(True, overlay.internals)]
-        if not overlay.interfaces and (False, overlay.internals) in cache:
-            return cache[(False, overlay.internals)]
+        _, internals, select = overlay.key()
+        if (True, internals, select) in cache:
+            return cache[(True, internals, select)]
+        if not overlay.interfaces and (False, internals, select) in cache:
+            return cache[(False, internals, select)]
 
         try:
             records = await render_overlay.collect_async(self, ctx, overlay)
@@ -1446,7 +1448,7 @@ class Shape(ShapeConfiguration):
             pc_logging.error("%s:%s: failed to locate the ports to draw: %s" % (self.project_name, self.name, e))
             return []
         render_overlay.report(self, records, overlay)
-        cache[(overlay.interfaces, overlay.internals)] = records
+        cache[overlay.key()] = records
         return records
 
     async def _run_implementation_async(self, ctx, impl, script, request, final_filepath):
@@ -1584,6 +1586,44 @@ class Shape(ShapeConfiguration):
             self.error("Failed to deserialize response: %s" % e)
             return None
 
+    async def filtered_view_async(self, mask):
+        """This shape with only the links a filter keeps, or this shape.
+
+        A hook rather than a branch, because only an assembly has links: a part,
+        a sketch and an interface are one shape, and a filter over one of them
+        selects from nothing. That is reported rather than ignored - somebody
+        asked for part of an object that has no parts - and the whole shape is
+        written, which is the picture they would have got anyway.
+
+        'partcad.assembly_filter' is the override (see 'Assembly').
+        """
+        pc_logging.error(
+            "%s:%s: a filter selects the links of an assembly or a scene, and a %s has none; "
+            "the whole of it is written" % (self.project_name, self.name, self.kind)
+        )
+        return self
+
+    async def _output_subject_async(self, ctx, obj, mask, views):
+        """The shape one output file is of, and its tree.
+
+        Itself and the tree the caller already built, unless a filter applies -
+        and then a view of it (see 'partcad.assembly_filter'), whose tree is
+        built here. Kept per filter for the length of one 'render_async' call:
+        one object may be written to several file types and a 'filter:' is
+        declared per file type, so two of them asking for the same subset build
+        it once.
+        """
+        if mask is None or mask.keeps_all:
+            return self, obj, {}
+        key = mask.key()
+        if key not in views:
+            view = await self.filtered_view_async(mask)
+            tree = obj if view is self else await view.get_wrapped(ctx)
+            # A ports cache of its own: a view's ports are not the whole
+            # object's, and the two would otherwise answer for each other.
+            views[key] = (view, tree, {})
+        return views[key]
+
     async def _render_one_async(
         self,
         ctx,
@@ -1596,6 +1636,8 @@ class Shape(ShapeConfiguration):
         kwargs,
         overlay=None,
         ports_cache=None,
+        link_filter=None,
+        views=None,
     ):
         """Produce one output file, whatever its type."""
         impl, final_filepath = self.output_getopts(ctx, format_name, project, filepath, options_project, output_dir)
@@ -1614,14 +1656,28 @@ class Shape(ShapeConfiguration):
 
         script = await self._materialize_output_script(ctx, impl)
 
+        # What this file is of. The run's own '--filter' wins over the one the
+        # file type declares, the way '--view' wins over a configured viewport:
+        # a declaration is permanent and a command line is about this picture.
+        try:
+            mask = link_filter if link_filter is not None else impl.link_filter
+        except ValueError as e:
+            self.error("%s: %s" % (format_name, e))
+            return
+        subject, obj, subject_ports = await self._output_subject_async(
+            ctx, obj, mask, views if views is not None else {}
+        )
+
         effective_overlay = render_overlay.effective(overlay, impl)
         ports = None
         if effective_overlay is not None:
-            ports = await self._overlay_ports_async(
-                ctx, effective_overlay, ports_cache if ports_cache is not None else {}
+            ports = await subject._overlay_ports_async(
+                ctx,
+                effective_overlay,
+                subject_ports if subject is not self else (ports_cache if ports_cache is not None else {}),
             )
 
-        request = await self._output_request(ctx, obj, impl, kwargs, overlay=effective_overlay, ports=ports)
+        request = await subject._output_request(ctx, obj, impl, kwargs, overlay=effective_overlay, ports=ports)
         result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
         if result is None:
             return
@@ -1660,6 +1716,7 @@ class Shape(ShapeConfiguration):
         options_project: Optional[Project] = None,
         output_dir=None,
         overlay=None,
+        link_filter=None,
         **kwargs,
     ) -> None:
         """Write this shape out as one output file type, or as all of them.
@@ -1714,8 +1771,11 @@ class Shape(ShapeConfiguration):
                 return
 
             # Shared by every file type this call writes, so that an object
-            # whose ports are asked for in three formats is walked once.
+            # whose ports are asked for in three formats is walked once - and,
+            # where a 'filter:' applies, so that two file types asking for the
+            # same subset of it build that subset once.
             ports_cache = {}
+            views = {}
 
             for fmt in [format_name] if format_name else output.all_formats(ctx):
                 await self._render_one_async(
@@ -1729,6 +1789,8 @@ class Shape(ShapeConfiguration):
                     kwargs,
                     overlay=overlay,
                     ports_cache=ports_cache,
+                    link_filter=link_filter,
+                    views=views,
                 )
 
     def render(
@@ -1741,6 +1803,7 @@ class Shape(ShapeConfiguration):
         options_project: Optional[Project] = None,
         output_dir=None,
         overlay=None,
+        link_filter=None,
         **kwargs,
     ) -> None:
         # By keyword, every one of them. 'render_async' grew an
@@ -1760,6 +1823,7 @@ class Shape(ShapeConfiguration):
                 options_project=options_project,
                 output_dir=output_dir,
                 overlay=overlay,
+                link_filter=link_filter,
                 **kwargs,
             )
         )

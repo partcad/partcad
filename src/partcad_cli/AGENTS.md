@@ -57,6 +57,16 @@ what stays in the client is the exit code and `--json`. It exits non-zero if any
 produced no route, and reports every one of them rather than stopping at the first: a route is a file, and an
 object whose section is wrong must not cost the other nineteen theirs.
 
+**`pc filter` is a daemon command with one argument that is resolved here, and the reason is where the file
+is.** Writing a declaration puts it squarely on the daemon's side, like every other package-mutating command --
+a client doing it itself would leave the warm context serving the package as it was before. But the
+`<filter-file|filter-expression>` argument is a *filename first*, and the file is on the machine the user typed
+the command on: a daemon can be remote, where the path names nothing, or names something else. So
+`click/link_filter.py` resolves it here and sends the mask (a small mapping of link names), never the path --
+and a mistyped filename costs a message rather than a round trip. The same module adds `--filter` to
+`pc render` and `pc export`, so the three commands cannot come to read the argument differently; what a filter
+*means* is `partcad_utils.assy_filter`, read by both ends.
+
 **`pc lint` sits on both sides of the line, one mode each.** `pc lint [-P/-r]` checks a *package*: which
 packages, resolved how, with which files, is the package graph, so it is a thin daemon client like any other.
 `pc lint --file` checks the *files named on the command line*, in this process: an ASSY file and a

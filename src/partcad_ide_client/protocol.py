@@ -32,7 +32,8 @@ interface is a node per port. A node is
 
     {
       "name":       the object's full name, or null
-      "label":      what this node is called where it sits, or null
+      "label":      the name the node holding this one addresses it by, or null
+                    on the root (which nothing holds)
       "location":   [[tx,ty,tz], [ax,ay,az], angle] - where this node sits inside
                     its parent, or absent for one that was not placed
       "gltf":       this node's own geometry, or absent for one that has none
@@ -102,6 +103,19 @@ MSG_ACK = "ack"
 # envelope: the compressed geometry payload of one node.
 KEY_GLTF = "gltf"
 KEY_NAME = "name"
+# The two names answer different questions and a reader needs both.
+#
+# 'name' is the *object*: '<package>:<object>', what the node holds. An assembly
+# that places the same bolt a hundred times stamps one name on a hundred nodes,
+# which is what makes the geometry table shareable.
+#
+# 'label' is the *link*: what the node holding this one addresses it by, which is
+# what tells those hundred nodes apart. It is the 'name:' of the ASSY link that
+# placed it, or - for a child nothing named - its position in its parent (see
+# 'Assembly.link_name'); never a fallback to the object's own name. That is what
+# makes it the name a request coming *back* can carry: the panel beside the 2D
+# and Draft tabs composes a filter out of the labels it is showing, and a
+# 'connect:', a 'map:' and 'pc filter' all name a link the same way.
 KEY_LABEL = "label"
 # What is inside a node, as nodes. The same key the BREP form uses, because it is
 # the same tree.
