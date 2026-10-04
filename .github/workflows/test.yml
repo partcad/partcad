@@ -1676,7 +1676,16 @@ jobs:
       - name: Basic integration test for CLI (on the public repo)
         shell: bash -el {0}
         env:
-          PC_PARTCAD_PACKAGE_SUB: ${{ github.workspace }}/partcad
+          # What a sandbox installs when a package's own Python asks for
+          # 'partcad' (openvmp's parts do 'import partcad'): this checkout,
+          # rather than the release on PyPI, so the index is tested against the
+          # code under test. It is the checkout's root, where 'pyproject.toml'
+          # is. It used to say ".../partcad", which was the core package's
+          # directory before everything became one wheel; that directory is
+          # gone, and pip failed every such install with "File ... does not
+          # exist", leaving each of those parts with "No module named
+          # 'partcad'".
+          PC_PARTCAD_PACKAGE_SUB: ${{ github.workspace }}
         run: |
           . ~/.bashrc
           . ~/.bash_profile
