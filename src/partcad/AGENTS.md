@@ -504,7 +504,8 @@ at all).
   quietly changing.
 
   **Every part leaves its factory through one step, whatever produced it** (`Shape._validated_part`, called by
-  `Shape.get_wrapped` for `kind == "part"` on a cache miss): a native type, a mesh import, an extrusion and a
+  `Shape.get_wrapped` for `kind == "part"` on a cache miss, when it has a context and the factory handed back a
+  shape object; an envelope holding no geometry has nothing to judge): a native type, a mesh import, an extrusion and a
   partType plugin such as the LDraw library are all asked the same `wrapper_solidity` question, once per built
   part, with `solidify` on. A converted part comes back with the solid in place of the shell and with its
   `measurements` taken again from that solid — and only those: annotations and sections describe the same faces
