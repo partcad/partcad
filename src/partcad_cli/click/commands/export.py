@@ -9,6 +9,7 @@ import os
 import rich_click as click
 
 from .. import fast_only
+from ..exclude import exclude_option, exclude_params
 from ..service import run
 
 
@@ -77,6 +78,7 @@ from ..service import run
     help="The object is a scene",
     is_flag=True,
 )
+@exclude_option
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
 def cli(
@@ -91,6 +93,7 @@ def cli(
     interface,
     assembly,
     scene,
+    exclude,
     object,
 ):
     run(
@@ -110,6 +113,7 @@ def cli(
             "assembly": assembly,
             "scene": scene,
             "object": object,
+            **exclude_params(exclude),
         },
         needs_context=True,
     )

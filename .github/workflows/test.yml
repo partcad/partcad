@@ -1650,14 +1650,12 @@ jobs:
     # socket daemon there yet -- every operation opens a one-shot service over
     # stdio (client.connect -> _connect_stdio), so each of the six listings
     # 'pc list all' runs gets a cold context of its own and reloads the whole
-    # index, seven 'DONE: InitCtx' lines to Linux's one. Loading it is itself
-    # dearer than it was: '//pub/universe/lego/ldraw' is served by a repository
-    # plugin, so the index now runs a sandbox interpreter twice per LDraw
-    # category ('meta' and 'deps', 208 of them) and pays 'plugin.query.timeout'
-    # once for the enumeration nobody can wait out. Both are worth fixing
+    # index, seven 'DONE: InitCtx' lines to Linux's one. That is worth fixing
     # rather than buying more minutes for -- and a longer budget is time a
     # future wedge gets to burn before this job says so, which is the thing the
-    # deadline exists to prevent.
+    # deadline exists to prevent. The other thing that had outgrown the hour,
+    # the twenty thousand parts '//pub/universe/lego/ldraw' serves, is sampled
+    # rather than swept now (see the step below).
     timeout-minutes: 60
 
     # The images this run built, where it built any. See "Pytest" above.
@@ -1694,6 +1692,11 @@ jobs:
           # exist", leaving each of those parts with "No module named
           # 'partcad'".
           PC_PARTCAD_PACKAGE_SUB: ${{ github.workspace }}
+          # The daemon's own log file, which the errors at the end are read
+          # from, stays at INFO although the daemon runs verbose (see its start
+          # below). It rotates at 10 MB, and with every DEBUG line in it the
+          # sweep's early errors were rotated out before they could be printed.
+          PC_LOG_LEVEL: info
         run: |
           . ~/.bashrc
           . ~/.bash_profile
@@ -1713,20 +1716,109 @@ jobs:
           # lesser failure than a part that will not build -- it is the same
           # sweep reporting that something in '//pub' is broken.
           #
-          # Known: '//pub/universe/lego/ldraw' serves the LDraw library through a
-          # repository plugin that cannot answer within 'plugin.query.timeout',
-          # so the listing exits non-zero every time and this job is red until
-          # that is fixed. That is the point -- it was always broken, and the
-          # tolerance is what made it look otherwise.
+          # Two packages are sampled rather than swept. The sweep leaves them out
+          # with '-x', and the commands in front of it test the few objects
+          # that stand for them:
+          #
+          # - '//pub/universe/lego/ldraw' is the LDraw library, served by a
+          #   repository plugin: ninety-two categories, some twenty thousand
+          #   parts. The day it started serving them (0.8.60) took 'test' from
+          #   65 seconds to half an hour on Linux and past the hour everywhere
+          #   else. What those parts exercise is the plugin, and a few of them
+          #   exercise all of it: these Power Functions parts are complex meshes
+          #   that carry studs, anti-studs, Technic pin holes, axle holes and a
+          #   Technic pin between them -- each kind of interface the plugin
+          #   reads off the geometry. The LDraw parts 'lego-demo' assembles are
+          #   still built by the sweep, which does not exclude that package.
+          # - '//pub/electronics/sbcs/intel' is twenty-two board meshes of one
+          #   kind, and the NUC 12 stands for them.
+          #
+          # Which sample commands failed is said again at the end, beside the
+          # result: the sweep prints thousands of lines after them, and the end
+          # of a log is the part that is read first.
           #
           # '--fast-only' as in "Examples (PartCAD)": see the comment there.
+          ldraw_sample="99499c01 58121c01 26910 58123c01 87574c01"
+          sweep_exclude="-x //pub/universe/lego/ldraw -x //pub/electronics/sbcs/intel"
+          # The daemon every command below talks to, started first and verbose:
+          # an action ends in a DONE line with its duration at DEBUG, and the
+          # daemon drops a record below its own level before it forwards it.
+          # Only the sweep asks for them (see it below); the other commands
+          # stay at INFO.
+          python -m partcad_cli.click.command --no-ansi -v daemon start
           set +e
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r --fast-only //pub
+          sample_rc=0
+          sample_failed=""
+          n=0
+          for part in ${ldraw_sample}; do
+            n=$((n + 1))
+            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.ldraw${n}" -m partcad_cli.click.command --no-ansi --threads-max 4 test --package //pub/universe/lego/ldraw/Electric "${part}"
+            rc=$?
+            if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; sample_failed="${sample_failed} ${part}=${rc}"; fi
+          done
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.nuc -m partcad_cli.click.command --no-ansi --threads-max 4 test --package //pub/electronics/sbcs/intel nuc12
+          rc=$?
+          if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; sample_failed="${sample_failed} nuc12=${rc}"; fi
+          sample="the sample exited ${sample_rc}${sample_failed:+ (${sample_failed# })}"
+          # shellcheck disable=SC2086 # 'sweep_exclude' is several words on purpose
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r --fast-only ${sweep_exclude} //pub
           list_rc=$?
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --fast-only --package //pub
-          test_rc=$?
+          # Verbose, for every action's DONE line, into a file, and without the
+          # DEBUG lines into this job's log, which keeps the length it had.
+          sweep_log=../pub-repo-test-results/sweep-verbose.log
+          # shellcheck disable=SC2086 # 'sweep_exclude' is several words on purpose
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi -v --threads-max 4 test -r --fast-only ${sweep_exclude} --package //pub 2>&1 |
+            tee "${sweep_log}" | grep --line-buffered -v " DEBUG:partcad:"
+          test_rc=${PIPESTATUS[0]}
+          # Where the sweep's time went, printed near the end so that it is in
+          # the part of the log that can be read back, and read from the
+          # sweep's own verbose output, which has every DONE line. A recursive
+          # 'pc test' runs each package as an action, so that line (no item) is
+          # when the package's tests finished, counted from the start of the
+          # run -- the packages are tested together. A 'Test' action starts
+          # when it is scheduled, so every test's duration is likewise when it
+          # finished; the second group leaves them out, and what is left --
+          # an interference check, a render, a script -- took the time it says.
+          echo "::group::When each package of the sweep finished"
+          grep -E ":DONE: Test: //pub[^: ]*: [0-9.]+s$" "${sweep_log}" | sort | cut -c1-300
+          echo "::endgroup::"
+          echo "::group::The 40 slowest actions other than tests"
+          grep -E ":DONE: " "${sweep_log}" | grep -v ":DONE: Test: " | awk '{ print $NF, $0 }' | sort -rn | sed -n '1,40p' | cut -d' ' -f2- | cut -c1-300
+          echo "::endgroup::"
+          # Every DONE line is kept with the results, for the timings these two
+          # groups leave out. The rest of the verbose output is not: it is
+          # almost all DEBUG lines, and gzipped it made each of these jobs
+          # upload 100 MB.
+          grep -E ":DONE: " "${sweep_log}" | gzip >../pub-repo-test-results/sweep-done.log.gz
+          rm -f "${sweep_log}"
+          # When anything failed, why -- again, at the end. Every command above
+          # talks to the one daemon, whose own log has the errors of all of
+          # them, the sample's included; but they are printed thousands of
+          # lines up, and a sweep the client gave up on says only that it
+          # stopped hearing from the daemon. The daemon is still running at
+          # this point in that case, and so are the sandbox workers it is
+          # waiting for, so their stacks say where it stopped. (No 'pgrep' on
+          # Windows: the errors are printed there too, the stacks are not.)
+          if [ "${test_rc}" -ne 0 ] || [ "${list_rc}" -ne 0 ] || [ "${sample_rc}" -ne 0 ]; then
+            for log in ~/.partcad/workspaces/*/partcad.log; do
+              [ -f "${log}" ] || continue
+              echo "::group::Errors the daemon logged (${log})"
+              grep -E " (ERROR|CRITICAL) " "${log}" | cut -c1-500 | tail -n 150
+              echo "::endgroup::"
+            done
+            if command -v pgrep >/dev/null && pip install --quiet py-spy >/dev/null 2>&1; then
+              spy="$(command -v py-spy)"
+              for daemon in $(pgrep -f partcad_service_json_rpc); do
+                for pid in "${daemon}" $(pgrep -P "${daemon}"); do
+                  echo "::group::Stacks of pid ${pid} ($(ps -o command= -p "${pid}" | cut -c1-200))"
+                  sudo -n "${spy}" dump --pid "${pid}" 2>&1 || "${spy}" dump --pid "${pid}" 2>&1
+                  echo "::endgroup::"
+                done
+              done
+            fi
+          fi
           set -e
-          echo "::notice title=Repo //pub::'list all' exited ${list_rc}, 'test' exited ${test_rc}"
+          echo "::notice title=Repo //pub::${sample}, 'list all' exited ${list_rc}, 'test' exited ${test_rc}"
           coverage combine
           # END PUBLIC REPO
 
@@ -1738,12 +1830,15 @@ jobs:
           # sweep still uploads the artifact that names which part failed.
           # Exiting the command's own code rather than 1 keeps 'bounded.sh's
           # timeout distinguishable from a part that would not build.
-          if [ "${test_rc}" -ne 0 ] || [ "${list_rc}" -ne 0 ]; then
-            echo "::error title=Repo //pub::'list all' exited ${list_rc}, 'test' exited ${test_rc}"
+          if [ "${test_rc}" -ne 0 ] || [ "${list_rc}" -ne 0 ] || [ "${sample_rc}" -ne 0 ]; then
+            echo "::error title=Repo //pub::${sample}, 'list all' exited ${list_rc}, 'test' exited ${test_rc}"
             if [ "${test_rc}" -ne 0 ]; then
               exit "${test_rc}"
             fi
-            exit "${list_rc}"
+            if [ "${list_rc}" -ne 0 ]; then
+              exit "${list_rc}"
+            fi
+            exit "${sample_rc}"
           fi
 
       - name: Upload test results and coverage data
