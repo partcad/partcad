@@ -235,3 +235,42 @@ def test_absent_params_are_allowed():
     """`log.mode` with no params at all means "not ansi", not a protocol error."""
     messages = _serve([{"jsonrpc": "2.0", "id": 1, "method": "log.mode"}], _speak)
     assert {"jsonrpc": "2.0", "id": 1, "result": {"ansi": False}} in messages
+
+
+def test_an_action_ended_twice_is_reported_rather_than_waited_on_forever():
+    """The daemon drives the renderer synchronously, from the thread that logged.
+
+    So whatever the renderer itself logs comes straight back into it on that same
+    thread. It used to report an action ending with nothing open under its key
+    while holding its own lock, and the report waited for that lock for good -- and
+    with it the event loop of the request being served, which is how a daemon
+    rendering an assembly instruction book for the IDE stopped answering anybody,
+    using no CPU at all. Two actions open under one key are what makes an end find
+    nothing, and 'tests/conftest.py' fails a test that opens them; this is about
+    the renderer surviving one that does anyway.
+    """
+    import threading
+
+    from partcad_utils import logging_remote_server
+
+    drawn = []
+    renderer = AnsiEventRenderer(drawn.append)
+    # Wired as 'Session' wires it for a connection that asked for ANSI.
+    logging_remote_server.init(renderer.handle)
+    try:
+
+        def overlap():
+            logging_remote_server._action_start("BoundingBox", "//pkg", "screw")
+            logging_remote_server._action_start("BoundingBox", "//pkg", "screw")
+            logging_remote_server._action_end("BoundingBox", "//pkg", "screw")
+            logging_remote_server._action_end("BoundingBox", "//pkg", "screw")
+
+        thread = threading.Thread(target=overlap, daemon=True)
+        thread.start()
+        thread.join(timeout=10)
+        assert not thread.is_alive(), "the renderer deadlocked on its own report"
+    finally:
+        logging_remote_server.fini()
+        renderer.close()
+
+    assert "action_key not found: BoundingBox-//pkg:screw" in "".join(drawn)

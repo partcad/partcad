@@ -275,6 +275,8 @@ class Shape(ShapeConfiguration):
         # Memory cache
         self._wrapped = None
         self._bounding_box = None
+        # What 'get_solidity_async()' found, kept for the same reason as the box.
+        self._solidity = None
         # Everything recorded about this shape's geometry when it was built -
         # its measurements, and whatever its source stated (see
         # 'shape_envelope.KEY_METADATA'). Learnt while building or read back
@@ -2783,23 +2785,37 @@ class Shape(ShapeConfiguration):
         arithmetic is wrong, which is why this has to be asked rather than
         noticed. Measured in a sandbox, like every other operation on geometry.
         """
-        obj = await self.get_wrapped(ctx)
-        if obj is None:
-            return None
-        result = await self._ask_solidity(ctx, obj)
-        if result is None:
-            return None
-        return {
-            "solids": result.get("solids", 0),
-            "volume": result.get("volume"),
-            "min_solid_volume": result.get("min_solid_volume"),
-            "valid": result.get("valid"),
-            "problems": result.get("problems"),
-        }
+        if self._solidity is not None:
+            return self._solidity
+
+        # Held across the question, and the answer remembered, for the reason
+        # 'get_bounding_box_async' gives: 'pc test' runs the 'solidity' and the
+        # 'validity' tests of one part at once, and both ask exactly this.
+        async with self.locked():
+            if self._solidity is not None:
+                return self._solidity
+            obj = await self.get_wrapped(ctx)
+            if obj is None:
+                return None
+            result = await self._ask_solidity(ctx, obj)
+            if result is None:
+                return None
+            self._solidity = {
+                "solids": result.get("solids", 0),
+                "volume": result.get("volume"),
+                "min_solid_volume": result.get("min_solid_volume"),
+                "valid": result.get("valid"),
+                "problems": result.get("problems"),
+            }
+            return self._solidity
 
     async def _ask_solidity(self, ctx, obj, solidify=False):
-        """The solidity wrapper's answer about 'obj', or None if it gave none."""
-        with pc_logging.Action("Solidity", self.project_name, self.name):
+        """The solidity wrapper's answer about 'obj', or None if it gave none.
+
+        'solidify' is a part being built rather than one being asked about, and
+        its action is named for that: the two are different work on one shape.
+        """
+        with pc_logging.Action("Solidify" if solidify else "Solidity", self.project_name, self.name):
             request = {"wrapped": obj}
             if solidify:
                 request["solidify"] = True
@@ -2905,6 +2921,18 @@ class Shape(ShapeConfiguration):
         if self._bounding_box is not None:
             return self._bounding_box
 
+        # Held across the measurement, so that a caller arriving while it runs
+        # waits for it and reads the box it remembered, rather than measuring the
+        # same shape again beside it. An instruction book asks for one part's box
+        # from every step that part takes part in, all at once; without this
+        # each of them was a sandbox process, and an action open under the same
+        # name as the others (see 'logging_ansi_terminal.action_key').
+        async with self.locked():
+            if self._bounding_box is not None:
+                return self._bounding_box
+            return await self._measure_bounding_box(ctx)
+
+    async def _measure_bounding_box(self, ctx):
         obj = await self.get_wrapped(ctx)
         if obj is None:
             return None

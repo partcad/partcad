@@ -51,6 +51,16 @@ at all).
   it waits for its parts, and each of those takes a thread from the constrained one -- assemblies waiting there
   is how enough of them at once run it out of threads, every one waiting for a part with nowhere left to run.
 
+- **No two actions open under one name** (`pc_logging.Action(op, package, item, extra)`): the progress display
+  tracks running actions by `op`, package and item alone (`logging_ansi_terminal.action_key`), so a second one
+  opened while the first runs replaces it, and is timed wrong; when the display runs on the daemon for the IDE,
+  that used to hang the daemon outright. Where two of one kind can run on one object at once, either they are
+  different work, and the name says which (`extra`, as a
+  repository plugin's queries carry their key, or as an instruction book's exploded views carry their
+  section), or they are the same work done twice, and the second waits for the first under `Shape.locked()`
+  and reads what it remembered (`get_bounding_box_async`, `get_solidity_async`). `tests/conftest.py` fails any
+  test in which two open actions share a key, and says where each was opened.
+
 - **What an assembly places, without building it** (`Assembly.get_subassemblies_async`,
   `get_uncached_subassemblies_async`, `Shape.is_cached_async`, `Cache.contains_data_async`): the assemblies a
   declaration points at, read from the declaration -- an ASSY file's `assembly:` links, the object an alias or

@@ -293,6 +293,9 @@ class GuideStep:
     counterpart_name: str
     counterpart_location: Location
     connection: Optional[dict] = None
+    # Whether the counterpart is the partial assembly of everything placed so
+    # far, which exists for this step alone, rather than one of the items.
+    counterpart_so_far: bool = False
     # What the ASSY file says about this step in words, as opposed to the
     # sentence 'description()' composes out of the connection: the node's own
     # 'description' (what the item being added is) and the 'comment' of the
@@ -500,6 +503,7 @@ async def _build_section(ctx, assembly, content=None, top=False, budget=None):
             counterpart=counterpart,
             counterpart_name=counterpart_name,
             counterpart_location=counterpart_location,
+            counterpart_so_far=all(counterpart is not candidate.item for candidate in placed),
             connection=child.connection,
             item_description=child.description,
             comment=child.comment,
@@ -619,13 +623,20 @@ def _normalized(vector):
     return tuple(float(value) / length for value in vector)
 
 
-def exploded_assembly(step: GuideStep) -> Assembly:
-    """The two items of a step, connected but held apart."""
+def exploded_assembly(section: GuideSection, step: GuideStep) -> Assembly:
+    """The two items of a step, connected but held apart.
+
+    Named after the assembly the step belongs to as well as the step's number:
+    the sections of a book are drawn at once, so every section's first step is
+    being projected at the same time, and an action is told apart from the
+    others open beside it by the name of what it is working on (see
+    'logging_ansi_terminal.action_key').
+    """
     project_name = getattr(step.counterpart, "project_name", None) or getattr(step.item, "project_name", "")
     pair = Assembly(
         project_name,
         {
-            "name": "step-%d-exploded" % step.number,
+            "name": "%s-step-%d-exploded" % (section.assembly.name or "assembly", step.number),
             "child": True,
             "cache": False,
         },
@@ -1058,7 +1069,7 @@ async def _step_page(section: GuideSection, step: GuideStep, images: ImageSource
             caption=step.counterpart_name,
         ),
         images.shape_image_async(
-            exploded_assembly(step),
+            exploded_assembly(section, step),
             key="%s-step-%d-exploded" % (section.name, step.number),
             alt="%s exploded" % step.item_name,
             caption="Exploded view: the two are shown %.1fmm apart." % step.distance,
@@ -1091,10 +1102,15 @@ async def _step_page(section: GuideSection, step: GuideStep, images: ImageSource
 def _counterpart_key(section: GuideSection, step: GuideStep):
     """A name for the counterpart's picture.
 
-    A named item is its own picture wherever it is used; the partial assembly of
-    a step is not, so it is keyed by the step it belongs to.
+    An item is its own picture wherever it is used; the partial assembly of a
+    step is not, so it is keyed by the step it belongs to.
+
+    That includes an assembly embedded in the ASSY file's 'links:'. It used to be
+    keyed by the step too, being a 'child' as the partial one is, which drew it
+    twice at once - here and on its own section's page - as two projections of
+    one object under one action name (see 'logging_ansi_terminal.action_key').
     """
-    if isinstance(step.counterpart, Assembly) and step.counterpart.config.get("child", False):
+    if step.counterpart_so_far:
         return "%s-step-%d-so-far" % (section.name, step.number)
     return None
 
