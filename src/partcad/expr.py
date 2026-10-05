@@ -281,7 +281,7 @@ def _is_numeric(node: ast.AST, values: dict[str, Any]) -> bool:
         return isinstance(node.value, (int, float))  # bool is an int, and 'True * 3' is 3
     if isinstance(node, ast.Name):
         # A parameter is looked up before a constant when the expression runs,
-        # so it is asked about first here as well: a parameter called 'e' that
+        # so it is asked about first here as well: a parameter called 'E' that
         # holds text is text.
         if node.id in values:
             return isinstance(values[node.id], (int, float))
@@ -305,8 +305,21 @@ def _is_numeric(node: ast.AST, values: dict[str, Any]) -> bool:
     return False
 
 
+# Constants that expressions used to have in lower case, and the name each one
+# goes by now. Only to say so when one is used: see 'CAD_CONSTANTS'.
+RENAMED_CONSTANTS = {"pi": "PI", "e": "E"}
+
+
 def _check(tree: ast.AST, expression: str, values: dict[str, Any]) -> None:
     for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id in RENAMED_CONSTANTS and node.id not in values:
+            raise ExpressionError(
+                expression,
+                NameError(
+                    "'%s' is not defined: a constant is named in upper case, write '%s'"
+                    % (node.id, RENAMED_CONSTANTS[node.id])
+                ),
+            )
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mult):
             # Multiplying a sequence repeats it, and the repeat count is the
             # size of the result: "%'x' * 1000000000%" is a gigabyte allocated

@@ -110,7 +110,7 @@ def test_a_template_and_an_expression_have_the_same_constants():
     for name, value in CAD_CONSTANTS.items():
         assert context[name] == value
         assert expr.substitute("%%%s%%" % name, {}) == value
-    assert _render("{{ '%.4f' % pi }}|{{ '%.4f' % SQRT_2 }}") == "3.1416|1.4142"
+    assert _render("{{ '%.4f' % E }}|{{ '%.4f' % M_E }}|{{ '%.4f' % SQRT_2 }}") == "2.7183|2.7183|1.4142"
 
 
 # --- and in a package on disk ------------------------------------------------

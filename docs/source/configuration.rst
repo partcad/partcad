@@ -140,7 +140,7 @@ are available while it is being rendered:
     - Whether that version is the one given or newer. Takes a string,
       ``partcad_version_at_least("0.8.77")``, or the numbers themselves,
       ``partcad_version_at_least(0, 8, 77)``.
-  * - ``pi``/``PI``/``M_PI``, ``e``, ``SQRT_2``, ``SQRT_3``, ``SQRT_5``
+  * - ``PI``/``M_PI``, ``E``/``M_E``, ``SQRT_2``, ``SQRT_3``, ``SQRT_5``
     - The constants a CAD file keeps reaching for.
   * - ``INCH``/``INCHES``, ``FOOT``/``FEET``
     - Millimetres per imperial unit: 25.4 and 304.8.
@@ -148,6 +148,11 @@ are available while it is being rendered:
 The constants in the last two rows are also what a ``%...%`` expression can use
 (see `Expressions`_): one table serves both, so a name that works in
 ``{{ ... }}`` works in ``%...%`` too.
+
+A constant is named in upper case. That is the convention for every name in
+that table and for any added to it: what is lower case in an expression is a
+function (``sqrt``, ``sin``) or a parameter, and a parameter is as likely to be
+called ``e`` as a constant is.
 
 Serving two PartCADs at once
 ----------------------------
@@ -1324,8 +1329,8 @@ expression gets it formatted in, which is what builds a name or a description.
 Inside the delimiters is an ordinary arithmetic expression over the object's
 parameters, with the usual functions available (``sqrt``, ``sin``, ``cos``,
 ``floor``, ``min``, ``max``, ``round`` ...) and the same constants a template has
-(``pi``, ``SQRT_2``, ``INCH`` ...; see :ref:`templates`). A constant is a number
-like any other, so ``%pi * size / 4%`` is an expression; a parameter of the same
+(``PI``, ``SQRT_2``, ``INCH`` ...; see :ref:`templates`). A constant is a number
+like any other, so ``%PI * size / 4%`` is an expression; a parameter of the same
 name takes its place. Arithmetic,
 comparisons, a conditional, indexing and the plain methods of a string or a
 number (``index``, ``split``, ``replace``, ``startswith`` ...) are all of it: a
@@ -1334,6 +1339,14 @@ built and any CAD script runs -- so an expression may not call anything else,
 reach into an object, or define one. An expression that cannot be evaluated is
 reported by name and left standing as the text it was written as, so a
 misspelling costs that one value rather than the package.
+
+.. note::
+
+  Expressions used to have ``pi`` and ``e`` in lower case, and no longer do:
+  constants are upper case, as they are in a template. Write ``PI``, which
+  every PartCAD that evaluates expressions has had, and ``E``. An expression
+  that still says ``pi`` or ``e`` is reported with that advice, unless the
+  object has a parameter by that name.
 
 .. note::
 

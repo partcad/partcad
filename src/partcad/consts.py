@@ -38,11 +38,16 @@ DEVEL_INDEX_REVISION = "devel"
 # the Jinja2 template the file is rendered from (see 'config_template'), and the
 # '%...%' expressions resolved once an object is asked for (see 'expr'). A name
 # that works in '{{ ... }}' and fails in '%...%' is two languages for one file.
+#
+# A constant is named in upper case, and that is the whole of the convention:
+# what is lower case in an expression is a function ('sqrt', 'sin') or one of
+# the object's own parameters. So there is no 'pi' or 'e' here, which would be
+# a parameter's name as often as a constant's.
 CAD_CONSTANTS = {
-    "pi": math.pi,
     "PI": math.pi,
     "M_PI": math.pi,
-    "e": math.e,
+    "E": math.e,
+    "M_E": math.e,
     "SQRT_2": math.sqrt(2),
     "SQRT_3": math.sqrt(3),
     "SQRT_5": math.sqrt(5),
