@@ -187,3 +187,57 @@ def test_a_failed_collection_is_not_remembered(monkeypatch):
     assert asyncio.run(shape._overlay_ports_async(ctx, Overlay(interfaces=True), cache)) == []
     ports_only = asyncio.run(shape._overlay_ports_async(ctx, Overlay(ports=True), cache))
     assert [record["port"] for record in ports_only] == ["only-when-asked-without-boundaries"]
+
+
+# ---- which ports, rather than whether any ---------------------------------
+#
+# The overlay PartCAD draws used to be three booleans, so a panel that lists a
+# part's twelve ports had no way to ask for one of them. 'select' is that: the
+# names the records come back under, which is what '--port' spells and what the
+# IDE's 2D tab composes from the rows it is showing.
+
+
+def test_a_selection_on_its_own_asks_for_nothing():
+    # It says *which* ports, not that there are any to draw, so naming ports
+    # without naming an overlay draws the picture it would have drawn anyway.
+    assert Overlay.of(select=["a"]) is None
+    assert Overlay.of(ports=True, select=["a"]) is not None
+
+
+def test_an_overlay_draws_every_port_until_it_is_told_which():
+    assert Overlay(ports=True).draws("anything")
+    overlay = Overlay(ports=True, select=["a", "b"])
+    assert overlay.draws("a") and overlay.draws("b")
+    assert not overlay.draws("c")
+
+
+def test_two_overlays_asking_for_the_same_thing_have_one_key():
+    # What the per-call port cache is keyed on: a collection for one selection
+    # must not answer for another.
+    assert Overlay(ports=True, select=["a", "b"]).key() == Overlay(ports=True, select=["b", "a"]).key()
+    assert Overlay(ports=True, select=["a"]).key() != Overlay(ports=True, select=["b"]).key()
+    assert Overlay(ports=True).key() != Overlay(ports=True, select=["a"]).key()
+    # The flag that says *whether* the frames are drawn is not part of it: a
+    # collection made for one answers the other.
+    assert Overlay(ports=True).key() == Overlay(interfaces=False, ports=False).key()
+
+
+def test_a_selection_narrows_what_is_collected():
+    every = {record["port"] for record in _collect("example-bracket")}
+    assert len(every) > 1
+    one = sorted(every)[0]
+
+    records = _collect("example-bracket", overlay=Overlay(ports=True, select=[one]))
+    assert [record["port"] for record in records] == [one]
+
+
+def test_a_file_type_cannot_narrow_the_ports_itself():
+    """Which ports is this run's answer; a file type asks for the overlay.
+
+    A declaration is permanent and a selection is about the one picture somebody
+    is looking at, so 'effective()' carries the command line's and reads nothing
+    from the configuration.
+    """
+    impl = _implementation(output.RENDER, {"with_ports": True, "ports": ["declared"]})
+    assert effective(None, impl).select is None
+    assert effective(Overlay(ports=True, select=["asked"]), impl).select == frozenset({"asked"})

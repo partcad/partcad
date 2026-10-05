@@ -4,6 +4,8 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from partcad_utils import assy_filter
+
 from ..assembly import Assembly
 from .test import Test
 
@@ -227,11 +229,19 @@ def _is_container(item):
     return _is_assembly(item) and bool((getattr(item, "config", None) or {}).get("child", False))
 
 
-def _label(child):
-    """What a child is called in the tree the geometry is built as (see 'Assembly._child_name_label')."""
-    if child.name is not None:
-        return child.name
-    return getattr(getattr(child, "item", None), "name", None)
+def _link_name(node, index, child):
+    """What 'node' addresses its child at 'index' by.
+
+    'Assembly.link_name' where there is one, which is the one definition of it
+    and is what the geometry is labelled with ('Assembly._child_name_label') -
+    so a path built here names the same nodes as the tree the overlaps are
+    reported against. A tree handed to this check that is not an 'Assembly'
+    answers the same question the same way, by the same rule.
+    """
+    link_name = getattr(node, "link_name", None)
+    if link_name is not None:
+        return link_name(index)
+    return child.name if child.name is not None else assy_filter.synthetic_link_name(index)
 
 
 def _join(prefix, label):
@@ -239,27 +249,27 @@ def _join(prefix, label):
 
 
 def _named_links(assembly, prefix, address="", found=None):
-    """{address: path} of every named link an 'interferes:' written in 'assembly' can name.
+    """{address: path} of every link an 'interferes:' written in 'assembly' can name.
 
     Addressed exactly as 'map:' addresses nodes (see 'assembly_ports.node_index'):
-    a named link by its name, one inside a named container by 'container/name',
-    and one inside an unnamed container as if the container were not there. A
-    link with no name is not addressable at all - it has to be given one to be
-    named - and a declared sub-assembly is addressable as a whole and never
+    by the path of link names that reaches it, 'container/name' for one inside a
+    container. Every link has a name (see 'Assembly.link_name'), so every one of
+    them can be named -- including a 'links:' container that gave itself none,
+    which is 'link#2' and is a level of the path like any other.
+
+    A declared sub-assembly is the one thing addressable as a whole and never
     reached into: to excuse an overlap with something inside one, name the
-    sub-assembly.
+    sub-assembly. The address and the path differ only by 'prefix', which is
+    what the connection is written relative to.
     """
     found = {} if found is None else found
-    for child in _children(assembly):
-        path = _join(prefix, _label(child))
-        item = getattr(child, "item", None)
-        if child.name is not None:
-            child_address = _join(address, child.name)
-            found.setdefault(child_address, path)
-            if _is_container(item):
-                _named_links(item, path, child_address, found)
-        elif _is_container(item):
-            _named_links(item, path, address, found)
+    for index, child in enumerate(_children(assembly)):
+        label = _link_name(assembly, index, child)
+        path = _join(prefix, label)
+        child_address = _join(address, label)
+        found.setdefault(child_address, path)
+        if _is_container(getattr(child, "item", None)):
+            _named_links(child.item, path, child_address, found)
     return found
 
 
@@ -278,8 +288,8 @@ def _item_at(assembly, path):
     item = None
     remaining = path
     while remaining:
-        for child in _children(node):
-            label = _label(child)
+        for index, child in enumerate(_children(node)):
+            label = _link_name(node, index, child)
             if remaining == label or remaining.startswith(label + "/"):
                 item = getattr(child, "item", None)
                 remaining = remaining[len(label) + 1 :]
@@ -369,8 +379,8 @@ async def _plan(ctx, shape):
 async def _plan_level(ctx, level, prefix, plan, root):
     children = _children(level)
     paths = {}
-    for child in children:
-        path = _join(prefix, _label(child))
+    for index, child in enumerate(children):
+        path = _join(prefix, _link_name(level, index, child))
         paths[id(child)] = path
         item = getattr(child, "item", None)
         if _is_container(item):
@@ -379,7 +389,7 @@ async def _plan_level(ctx, level, prefix, plan, root):
             plan.opaque.append(path)
             plan.subassemblies.append((path, item))
 
-    siblings = {child.name: child for child in children if child.name is not None}
+    siblings = {_link_name(level, index, child): child for index, child in enumerate(children)}
     named = None
     for child in children:
         connection = getattr(child, "connection", None)
@@ -400,7 +410,7 @@ async def _plan_level(ctx, level, prefix, plan, root):
             other = named.get(name)
             if other is None:
                 plan.problems.append(
-                    "'%s' names '%s' in 'interferes:', which is not a named link%s"
+                    "'%s' names '%s' in 'interferes:', which is not a link%s"
                     % (here, name, " of '%s'" % prefix if prefix else "")
                 )
                 continue

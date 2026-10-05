@@ -96,7 +96,35 @@ implements it: read the `export:` and `render:` sections of `partcad.yaml`. A
 package can declare a file type of its own, and it is then nameable with `-t`
 like any other.
 
-## 4. Report what happened
+## 4. Exporting part of an assembly
+
+`--filter` keeps only some of the links of an assembly or a scene, so one
+sub-assembly can be exported without a declaration for it. It takes a JSON or
+YAML *file* naming the links, or the same written out on the command line:
+
+```sh
+pc --no-ansi export -a -t step -O ./out --filter ./head.yaml logo
+pc --no-ansi export -a -t step -O ./out --filter '[bone1, bone2]' logo
+```
+
+A link the filter names is kept and a link it does not name is dropped; a link
+named with nothing under it keeps everything under it, and a link named with
+children under it keeps those children only. The names are the ones the Assembly
+YAML file uses, which are the names a `connect:` uses — read the `.assy` file to
+find them. Everything kept stays where the whole assembly put it.
+
+The object has to be named, with `-a` or `-S` for its kind: a part has no links,
+and neither has a whole package. The file written is the one an unfiltered export
+would have written, under the object's own name, so send two filters of one object
+to directories of their own with `-O`.
+
+Nothing is written into the package. A `filter:` on an `export:` file type in
+`partcad.yaml` asks for the same thing permanently, per file type, which is what
+the user wants when the subset should be exported every time; and
+`pc filter FILTER SRC DST` makes the subset an object of the package, which is
+what they want when it should have a name.
+
+## 5. Report what happened
 
 Name the files that were written, with their paths — all of them for `-t urdf`
 or a whole-package export, or a count plus the directory when there are many.

@@ -736,6 +736,38 @@ Object commands
   are is not a fixed list -- it is whatever the graph declares under ``import:`` with ``scene`` among its
   ``kinds`` -- so a package that teaches PartCAD an arrangement format converts to and from it too.
 
+``pc filter``
+  Declare a second assembly (or scene) made of some of the links of an existing one::
+
+    pc filter FILTER SRC DST
+
+  ``FILTER`` names the links to keep -- a JSON or YAML file, or the same written out on the command line --
+  and ``DST`` is the new object: the ASSY file of ``SRC`` with everything the filter drops taken out of it,
+  written as ``DST.assy`` and declared beside ``SRC``. If ``SRC`` is an assembly then ``DST`` is an assembly,
+  and if ``SRC`` is a scene then ``DST`` is a scene; ``-a``/``-S`` settle it only for a package that declares
+  both under one name. An existing ``DST`` is overwritten, and ``--dry-run`` says what would be written
+  without writing it.
+
+  .. code-block:: shell
+
+    pc filter head.yaml logo logo_head
+    pc filter '{bone1: null, bone2: null}' logo logo_bones
+    pc filter '[block]' -S bench bench_block
+
+  What a filter is, and what naming a link with and without children means, is the same everywhere it is
+  accepted -- see :ref:`assy-filter`, which also covers the ``--filter`` of the two commands below and the
+  equivalent in the VS Code viewer. The short of it: a link the filter names is kept, a link it does not name
+  is dropped, and a link named with children under it keeps those children only.
+
+  The **file** is filtered rather than the built assembly, so every link kept keeps its ``connect:``, its
+  ``how:``, its parameters and its comments, and the result is an assembly somebody can build. That needs an
+  Assembly YAML file to work from: an assembly held in a foreign format has no links of its own, and
+  ``pc convert assembly -t assy`` is what turns one into a file that does.
+
+  Dropping a link that another link was connected to is the one thing filtering can break, and it is checked:
+  every ``connect:`` left pointing at nothing is reported, naming the line, by this command and by ``pc lint``
+  afterwards.
+
 ``pc export``
   Export a 3D view of parts, assemblies, or scenes. Use ``-a`` for an assembly and ``-S`` for a scene.
   Choose the format with ``-t``:
@@ -744,6 +776,12 @@ Object commands
   and ``-P <package>...`` or ``...:<name>`` to export the packages below this one too (see
   :ref:`recursive-names`). ``urdf`` writes a ``.urdf`` file plus a directory of the mesh files it
   references.
+
+  ``--filter`` exports a *part* of one assembly or scene: the links it names, where the assembly put
+  them, without writing anything into the package (see :ref:`assy-filter`). It applies to one named object --
+  ``-a`` or ``-S`` says which kind it is -- so it is refused for a whole package and for a ``...`` subtree.
+  A ``filter:`` on an ``export:`` file type asks for the same thing permanently, per file type, and this
+  overrides it for one run.
 
   ``-t`` also takes a full path, ``-t sim-gazebo:world``, which names the package the implementation lives
   in. That is how a format PartCAD ships no implementation of is reached, and an engine's own scene format is
@@ -763,6 +801,34 @@ Object commands
   itself (see :ref:`output-files`). ``-e`` works the same way as it does for ``pc export``, reading the
   ``render:`` options from another package. ``-P <package>...`` and ``...:<name>`` render a whole subtree, the
   same way they do for ``pc export`` (see :ref:`recursive-names`).
+
+  ``--filter`` renders a *part* of one assembly or scene, exactly as it does for ``pc export`` above:
+
+  .. code-block:: shell
+
+    pc render -a -t png --filter head.yaml -O ./ logo
+    pc render -a -t png --filter '{bone1: null, bone2: null}' -O ./ logo
+
+  The file it writes is the one an unfiltered render would have written, under the object's own name, so two
+  filters of one object overwrite each other -- use ``-O`` to send them to directories of their own. Unlike
+  ``pc filter``, this leaves the package untouched and can select inside a link that places another package's
+  assembly, because what is filtered is the assembly that was built rather than any file.
+
+  A ``filter:`` on a ``render:`` file type says the same thing permanently and **per file type**, so one
+  object can have a picture of one sub-assembly checked in beside the drawing of the whole of it. It is read
+  in either place a file type is configured -- the package's ``render:`` section and the object's own -- and
+  ``--filter`` overrides it for one run, the way ``--view`` overrides a configured viewport. See
+  :ref:`assy-filter`.
+
+  ``--port`` draws one named port rather than every one of them, and is repeated for several. A port is named
+  the way the log names it -- its own name for a port of the object, and the path of links then the port for
+  one inside an assembly, ``head/head_half_1`` becoming ``head:head_half_1:TL-m3`` -- which is also the path
+  the VS Code viewer shows as rows. It says *which* ports rather than that any are drawn, so it goes with one
+  of the three options below:
+
+  .. code-block:: shell
+
+    pc render -t png --with-all --with-internals --port bolt:thread-m8 -O ./ logo
 
   ``--with-ports`` draws every port of the object on the projection: a coordinate frame at each, with the long
   arrow along ``+Z`` — the direction a part travels along when it is connected through that port — and the

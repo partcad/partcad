@@ -377,6 +377,18 @@
       "required": ["simulation"],
       "additionalProperties": false
     },
+    "link-filter": {
+      "description": "Which links of an assembly or a scene a file is of: a mapping of link name to the same thing again, or a list of names. A link the filter names is kept and a link it does not name is dropped; a link named with nothing under it keeps everything inside it, and one named with children under it keeps those children only. A link is named the way the Assembly YAML file names it -- its 'name:', the part or assembly it places, or its position in its 'links:' list as 'link#2' -- which is the same name a 'connect:' uses. See docs/source/assy.rst",
+      "anyOf": [
+        { "type": "object", "additionalProperties": { "$ref": "#/definitions/link-filter" } },
+        {
+          "type": "array",
+          "items": { "anyOf": [{ "type": "string", "minLength": 1 }, { "$ref": "#/definitions/link-filter" }] }
+        },
+        { "type": "null" },
+        { "type": "boolean" }
+      ]
+    },
     "output-type": {
       "oneOf": [
         { "type": "null" },
@@ -399,6 +411,10 @@
               "type": "boolean",
               "default": false,
               "description": "Whether this file has to come out byte-for-byte the same every time it is written from the same object. Set to true for a drawing that is kept in a repository, so that a diff answers whether it changed: the built-in 2D projections then go through OpenCASCADE's exact hidden-line algorithm rather than the polygonal one, every number is rounded to the precision the file type claims, and a DXF gets fixed header metadata instead of the clock and a fresh pair of GUIDs. Off by default because the exact projection is much the slower of the two on a large assembly. Unlike the other fields here it is also handed to the implementation, so an implementation another package supplies reads it and means the same thing by it"
+            },
+            "filter": {
+              "$ref": "#/definitions/link-filter",
+              "description": "Write this file type of only part of the object: the links of the assembly or scene to keep. Declared here it applies every time the file is written, so a package can keep a picture of one sub-assembly checked in beside the drawing of the whole of it; 'pc render --filter' and 'pc export --filter' ask for the same thing for one run and override it. PartCAD acts on it itself -- the implementation is handed the smaller shape -- so an implementation another package supplies needs to know nothing about it. A part and a sketch have no links, and a filter over one of them is reported rather than ignored"
             },
             "extension": { "type": "string", "minLength": 1 },
             "prefix": { "type": "string", "minLength": 1 },

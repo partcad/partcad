@@ -160,8 +160,8 @@ at all).
 
 Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|assembly|scene|file`,
 `export.part|assembly|scene`, `ai.regenerate|change`, `add.part|assembly|scene`, `package.load|path|refresh`, `init`,
-`list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults`, `cam.route`, `test`, `info`,
-`activate`, and `rpc.discover`. Four methods mirror no subcommand:
+`list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults`, `cam.route`, `filter.object`,
+`test`, `info`, `activate`, and `rpc.discover`. Four methods mirror no subcommand:
 
 * `assembly.instantiate`, which a client calls on its own behalf as the second half of a two-phase assembly
   build (see below).
@@ -173,7 +173,19 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   and returns the file's bytes, name and extension rather than a path, since the daemon may be on another
   machine; the client keeps the file and saves it where the user says. The second lists the file types a
   package declares under `render:`, which is what a drawing package such as
-  `//pub/feature/render/draftwright` offers. Server-to-client
+  `//pub/feature/render/draftwright` offers.
+
+  Both of those tabs also have a control pane now, and what it asks for rides on `render.inline`: `filter`,
+  the links of the object to keep, and `with_ports`/`with_interfaces`/`with_internals`, which are the same
+  things `pc render --filter` and `--with-*` ask for. The filter arrives as **data** rather than as the text a
+  user typed, because resolving the argument means looking for a file on the machine that typed it (see
+  "Command boundary" in `src/partcad_cli/AGENTS.md`); a string is still accepted and read as an expression,
+  never as a path. `_link_filter` is the one reader of the parameter, so `render.objects`, `render.inline` and
+  `filter.object` cannot come to disagree about it.
+
+  `filter.object` is `pc filter`: a second object made of some of the links of the first. It is a daemon
+  method because it writes a declaration, like every other package-mutating command -- a client doing it
+  itself would leave this warm context serving the package as it was before. Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,
 `stats`, `terminal`, `execute`, and the `*Done`/lifecycle signals).
 

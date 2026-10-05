@@ -32,6 +32,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Optional
 
+from . import assembly_filter
 from . import document as doc
 from . import logging as pc_logging
 from .assembly import Assembly
@@ -531,19 +532,21 @@ def _counterpart(assembly, placed, child):
         only = placed[0]
         return only.item, only.name or only.item.name, only.location or Location()
 
-    partial = Assembly(
-        assembly.project_name,
-        {
+    # The items placed so far, as an assembly in their own right -- which is what
+    # whoever is following the instructions is holding at this point. The same
+    # thing a filtered render is (see 'partcad.assembly_filter'): a view of an
+    # assembly made of some of its children, where the assembly put them. A
+    # declaration of its own, rather than this assembly's: a step is not the
+    # object, so it must not inherit the object's name, its placement or the file
+    # types configured for it.
+    partial = assembly_filter.derive(
+        assembly,
+        placed,
+        config={
             "name": "%s-step-%d" % (assembly.name or "assembly", len(placed)),
             "child": True,
-            "cache": False,
         },
     )
-    # Nothing instantiates this one: it is populated here, once, and never
-    # re-read from a configuration file.
-    partial.instantiate = lambda _: True
-    for candidate in placed:
-        partial.add(candidate.item, candidate.name, candidate.location or Location())
     return partial, "the sub-assembly so far", Location()
 
 

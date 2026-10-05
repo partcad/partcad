@@ -179,18 +179,23 @@ def test_an_embedded_links_assembly_is_a_node_like_any_other():
     """The tree is the one an assembly is instantiated as, and that is one of its nodes.
 
     An ASSY file's 'links:' becomes an assembly of its own inside the object the
-    file defines. It is no object of any package and nobody names it in a
-    'connect:', but it is there, it holds a placement, and a reader of the tree
+    file defines. It is there, it holds a placement, and a reader of the tree
     sees what the file wrote.
+
+    Its *label* is what the assembly addresses it by, which for a child nothing
+    named is its position ('Assembly.link_name') and not the name of the object
+    it holds: a label is the one thing in the node that tells one placement from
+    another, so it is never a fallback to something shared.
     """
     plate = fake_part("plate")
     group = fake_assembly(
-        "outer:links", children=[placed(plate, "inner")], location=[[0, 0, 7], [0, 0, 1], 0], child=True
+        "outer:link#1", children=[placed(plate, "inner")], location=[[0, 0, 7], [0, 0, 1], 0], child=True
     )
     node = _tree(fake_assembly("outer", children=[placed(group, None)]))
 
     (container,) = _children(node)
-    assert container["label"] == "outer:links"
+    assert container["name"] == "//pkg:outer:link#1"
+    assert container["label"] == "link#1"
     assert _translation(container[shape_envelope.KEY_LOCATION]) == pytest.approx((0.0, 0.0, 7.0))
     assert [child["label"] for child in _children(container)] == ["inner"]
 

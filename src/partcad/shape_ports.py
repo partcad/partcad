@@ -278,33 +278,34 @@ def embeds(child) -> bool:
     """Whether this child's contents belong to the assembly holding it.
 
     An ASSY file's 'links:' becomes an assembly of its own inside the object the
-    file defines, and so does every nested 'links:' - assemblies that are no
-    object of any package and that nobody names in a 'connect:'. They are passed
-    over for exactly the reason 'Assembly.connected_children()' passes over them:
-    what they hold belongs to the assembly that embeds them. So such a child
-    contributes no node path of its own, and what is inside it is named as though
-    the embedding assembly held it directly.
+    file defines, and so does every nested 'links:'. They are no object of any
+    package, and what they hold belongs to the assembly that embeds them -
+    which is what 'Assembly.connected_children()' and the grouped bill of
+    materials are about.
+
+    It says nothing about a port's *address*; see 'child_owner'.
     """
     return bool(getattr(child.item, "config", {}).get("child", False))
 
 
-def child_label(child) -> str:
-    """What one child of an assembly is called: the node's name, or the object's.
+def child_owner(owner: str, name: str) -> str:
+    """The node path of one child of an assembly, given what it is called.
 
-    The node's name first, which is what an ASSY file's 'links:' writes and what
-    a 'connect:' names: an assembly is mostly repeats of a few objects, so the
-    object's name says which part it is and not which of them this is.
+    Every level of the tree is in it, a container included. It used to skip the
+    containers an ASSY file embeds, on the grounds that nothing could name one -
+    and that made two ports in two different containers the same address:
+
+        links:
+          - name: a
+            links: [{part: plate, name: p}]
+          - name: b
+            links: [{part: plate, name: p}]
+
+    both answered to 'p:<port>'. Every link has a name now
+    ('Assembly.link_name'), so the path is the path and an address names one
+    port.
     """
-    name = child.name if child.name is not None else getattr(child.item, "name", None)
-    return name or ""
-
-
-def child_owner(owner: str, child) -> str:
-    """The node path of one child of an assembly."""
-    if embeds(child):
-        return owner
-    label = child_label(child)
-    return qualify(owner, label) if label else owner
+    return qualify(owner, name) if name else owner
 
 
 def as_location(location) -> Location:
@@ -360,8 +361,15 @@ async def _collect(shape, ctx, owner: str, placement: Location, deep: bool, out:
         return
 
     await shape.do_instantiate()
-    for child in shape.children:
-        await _collect(child.item, ctx, child_owner(owner, child), child_placement(placement, child), deep, out)
+    for index, child in enumerate(shape.children):
+        await _collect(
+            child.item,
+            ctx,
+            child_owner(owner, shape.link_name(index)),
+            child_placement(placement, child),
+            deep,
+            out,
+        )
 
 
 async def ports_async(shape, ctx, deep: bool = False) -> list:

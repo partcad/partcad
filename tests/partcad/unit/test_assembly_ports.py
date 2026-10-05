@@ -261,3 +261,23 @@ def test_the_search_index_is_built_once_and_not_before_it_is_asked_for():
     first = project.interface_indexes["part"]
     search_parts(ctx, "//", False, "", "m3")
     assert project.interface_indexes["part"] is first
+
+
+def test_a_port_inside_an_assembly_is_named_by_every_level_above_it():
+    """The node path, container levels included, then the port.
+
+    It used to skip the containers an ASSY file embeds, on the grounds that
+    nothing could name one - and that made two ports in two such containers the
+    same address. Every link has a name now ('Assembly.link_name'), so the path
+    is the path, and it is the same path the viewer shows as rows and the same
+    string 'pc render --port' takes.
+    """
+    ctx = pc.init(PACKAGE)
+    grouped = ctx._get_assembly(":grouped")
+    records = asyncio.run(shape_ports.ports_async(grouped, ctx, deep=True))
+    names = {record.name for record in records}
+
+    assert "frame:plate:handle" in names
+    # The second 'links:' names itself nothing, so it is 'link#2' - and the two
+    # plates' ports are told apart rather than sharing one address.
+    assert "link#2:loose:handle" in names

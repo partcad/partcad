@@ -65,6 +65,11 @@ _OPERATIONS = {
     "render.inline": operations.render_inline,
     "render.formats": operations.render_formats,
     "convert.object": operations.convert_object,
+    # 'pc filter': a second object made of some of the links of the first. It
+    # writes a declaration, which is what makes it a daemon method like every
+    # other package-mutating command -- a client doing it itself would leave the
+    # warm context serving the package as it was before.
+    "filter.object": operations.filter_object,
     "open.tools": operations.open_tools,
     "adhoc.convert": operations.adhoc_convert,
     "adhoc.render": operations.adhoc_render,

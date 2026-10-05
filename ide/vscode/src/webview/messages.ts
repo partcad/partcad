@@ -103,7 +103,22 @@ export interface ShowInterface {
  * in the same frame and moves with the node holding it.
  */
 export interface ShowNode {
+    /**
+     * The object this node holds: '<package>:<object>'. An assembly that places
+     * the same bolt a hundred times sends one name on a hundred nodes.
+     */
     name?: string | null;
+    /**
+     * The link: what the node holding this one addresses it by, which is what
+     * tells those hundred nodes apart.
+     *
+     * The 'name:' of the ASSY link that placed it, or - for a child nothing
+     * named - its position in its parent, one-based ('link#2'). Never a
+     * fallback to the object's own name, which is what makes it usable as a
+     * name a request carries back: a 'connect:', a 'map:', 'pc filter' and the
+     * mask this panel composes ('Tree.filter()') all name a link this way.
+     * See 'Assembly.link_name' and 'partcad_utils.assy_filter'.
+     */
     label?: string | null;
     location?: Placement | null;
     /**
@@ -322,6 +337,36 @@ export interface FetchTabMessage {
      * PartCAD's own.
      */
     plugin?: string;
+    /**
+     * On a render tab: which links of the object to draw, as the mask
+     * 'pc render --filter' takes - a mapping of link name to the mask that
+     * applies inside it, where an empty mapping keeps everything below.
+     *
+     * Composed from the boxes ticked in the panel beside the drawing
+     * ('Tree.filter()'), and left out when every one of them is ticked: there is
+     * nothing to filter then, and sending a mask of the whole object would only
+     * make PartCAD walk it to arrive at the same tree.
+     */
+    filter?: unknown;
+    /**
+     * On the 2D tab: whether the ports and the interfaces ticked in that panel
+     * are drawn on top of the projection, which is 'pc render --with-ports' /
+     * '--with-interfaces' / '--with-internals'. The Draft tab sends none: a
+     * dimensioned drawing is of the solid, and its panel lists no ports.
+     */
+    withPorts?: boolean;
+    withInterfaces?: boolean;
+    withInternals?: boolean;
+    /**
+     * On the 2D tab: which of the object's ports to draw, by the name PartCAD
+     * reports each under -- the port's own name for a port of the object, and
+     * the path of links then the port for one inside it ('bolt:thread-m8').
+     * What 'pc render --port' names on the command line.
+     *
+     * Left out when the panel ticked none, so that an overlay a file type asked
+     * for itself is not narrowed to nothing.
+     */
+    ports?: string[];
 }
 
 /** Renderer to host: which file types a package renders to, for the Draft tab. */

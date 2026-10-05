@@ -146,6 +146,36 @@ into geometry -- a node's `location` places its geometry, its children and its p
 them down the tree (see "Coordinates and units" in
 [docs/partcad-viewer.md](./docs/partcad-viewer.md), which also says what starts out checked).
 
+**The 2D and Draft tabs have the same control pane, and it means something different there.** All three Design
+tabs are asking one question of one tree -- which of these do I want to see? -- so all three use `tree.ts`, and
+the differences are two options on it (`TreeOptions`): Draft lists no ports or interfaces, because a
+dimensioned drawing is of the solid, and both render tabs fix the root's box ticked, because the object is what
+is being rendered. What the boxes *do* differs because those two cannot switch anything off on a stage: the
+picture is made by PartCAD and arrives as a file. So the ticked boxes resolve to a **filter** sent with the
+render (`Tree.filter()` -- the mask `pc render --filter` takes, read by `partcad_utils.assy_filter`) and, on
+the 2D tab, to which port overlays to draw (`Tree.overlay()` -- `--with-ports`/`--with-interfaces`/
+`--with-internals`). Do not add a second tree widget for that: a row's meaning would then have two definitions.
+
+**The three tabs share one answer** (`Selection`). What somebody wants to look at is a property of the object,
+not of the tab it is being looked at on, so the state lives outside the widgets and each of them reads and
+writes it: switching tabs shows the same selection, and a box cleared on one is cleared on the others. That the
+Draft tab lists no ports is exactly why it cannot live in the widgets -- rebuilt from Draft's own rows, a port
+cleared on the 2D tab would come back ticked. It follows that **what starts out ticked cannot differ between
+the tabs**, so the 2D tab's first picture of an object that declares ports has them drawn on it: the panel and
+the picture agreeing is worth more than a cleaner default.
+
+Three details there are load-bearing. A node row is named by its **label**, which is the name the assembly
+addresses that link by, down to a child nothing named (`link#2`) -- see `Assembly.link_name`; there is no row
+the mask cannot name and no second rule for one. A port row carries the name PartCAD *reports* it under (the
+path of labels, then the port), which is `shape_ports.qualify` on the other side -- the two sides compose the
+same string from the same parts, which is what lets the panel ask for one port of one placement
+(`pc render --port`). And an *empty* mask is not "keep everything": the filter language has no spelling for
+"keep nothing", so `filterIsEmpty` tells that case apart and the pane says there is nothing to render rather
+than sending a mask PartCAD would read as the whole object. A change to a box is debounced before the render is
+asked for (`SELECTION_SETTLE_MS`), because a drawing is minutes of daemon time and choosing what to look at is
+several clicks; the two render tabs then forget their picture and the one on screen asks again, which is how a
+box ticked on the 3D view reaches them.
+
 **The geometry itself arrives once per distinct shape, not once per node.** PartCAD sends it as a table on the
 root keyed by a digest of the exact shape, with every node naming an entry (`gltfRef`), so an assembly that
 places one bolt a hundred times is a hundred nodes and one piece of geometry. `PartcadViewer.inflate` therefore
@@ -204,7 +234,10 @@ Four things about it are load-bearing:
   talked into being markup; a template literal can.
 - **The webview has one test suite, and it brings its own DOM.** `src/test/suite/viewerTree.test.ts` runs in the
   extension host, which has none, so it installs a stand-in with the handful of methods `dom.ts` asks of an
-  element and exercises what the pane lists for a node tree, and which of it ends up drawn, through it. That is as far as this reaches: a test
+  element and exercises what the pane lists for a node tree, which of it ends up drawn, what the render tabs'
+  boxes resolve to, and that the three tabs share one answer, through it. Note that `tsc -p .` does **not**
+  compile `src/webview` as a root, so a type error reachable only from there -- a use before declaration, say
+  -- surfaces in `npm run compile` (webpack, over `tsconfig.webview.json`) and nowhere else. Run both. That is as far as this reaches: a test
   that imported anything else of `src/webview` would import `scene.ts`, which builds a `WebGLRenderer` as it
   loads. Note that `tsconfig.json` excludes `src/webview` as a *root* -- an imported module is still compiled,
   which is why this works, and why what it imports has to be free of three.js.

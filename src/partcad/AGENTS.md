@@ -653,6 +653,57 @@ at all).
   that one is re-stamped from the declaration on every materialization — including a cache hit, where nothing
   has read the file at all.
 
+- **A view of an assembly is an assembly** (`./src/partcad/assembly_filter.py`). Two things show part of one
+  rather than the whole of it -- an instruction book's "the sub-assembly so far", and
+  `pc render`/`pc export --filter` -- and both go through `derive()`: an `Assembly` whose children are handed
+  over rather than read out of a declaration. Everything that works on an assembly then works on it, because it
+  *is* one, and the items in it are the very items the source placed, in the very places it put them. A filter
+  never re-resolves a `connect:`; what is kept stays where the assembly as a whole put it, which is the only
+  reading of "part of this assembly" that is true of the thing on the bench. A derived assembly is never
+  cacheable: its identity is "that assembly, minus these links", which no declaration states and no cache key
+  covers, so an entry written under the source's name would be served the next time the *whole* object was
+  asked for. A view keeps the source's name, placement and declaration (unless the caller replaces it), which
+  is what makes a filtered render land in the file the unfiltered one would have and keeps the package's file
+  types applying to it.
+
+  **The mask itself is not here.** What a filter is, how it is written, and what naming a link with and without
+  children means is `partcad_utils.assy_filter`, which also filters an ASSY *document* -- because `pc filter`
+  (`./src/partcad/actions/filter.py`) writes a filtered copy of the file as a new object of the package, and a
+  filtered render and that filtered copy have to hold the same parts. A link is addressed by
+  `Assembly.link_name`, which is the bullet below. A link whose name was its *position* has that position
+  written into the copy as a `name:`: filtering moves links, so a position would rename it and anything that
+  named it would point at nothing.
+
+  **A filter is resolved per output file, not per shape** (`Shape._render_one_async`). `filter:` is a
+  `render:`/`export:` file-type field, so one object can be rendered to a filtered PNG and a whole STEP;
+  `--filter` is one run's answer and overrides it, the way `--view` overrides a configured viewport. The
+  subject is built at most once per mask for the length of a `render_async` call (`Filter.key`), and the field
+  is held out of the implementation's parameters (`output.SELECTION_KEYS`) because PartCAD acts on it itself --
+  the script is handed the smaller shape rather than the whole one and a note about it. A generated document is
+  filtered the same way but not by that path (`Project._document_view_async`): a markdown bill of materials is
+  built from the assembly's tree rather than from its geometry.
+
+- **Every link has a name, and `Assembly.link_name` is it.** Its own (`name:`, or the part or assembly it
+  places, which is what the ASSY factory falls back to) or, for a child nothing named, its position in its
+  parent -- `link#2`, from `partcad_utils.assy_filter.synthetic_link_name`, shared with the half of the filter
+  that reads the *file*. Four things ask: a `connect:` resolving its target, a `map:` naming a node, a filter
+  selecting what to keep, and the **label** an assembly stamps on a child's node.
+
+  That last one is why it has to be total. A node of a shape tree carries two names and they answer different
+  questions: `name` is the *object* (`<package>:<object>`, one name on a hundred nodes placing one bolt) and
+  `label` is the *link* (what tells those hundred apart). A label is therefore never a fallback to the object's
+  own name -- a child nothing named is labelled by its position -- and that is what makes it the name a request
+  coming *back* can carry: the IDE's 2D and Draft panels compose a filter out of the labels they are showing,
+  and the daemon resolves it with `link_name`. Before this an unnamed `links:` was labelled
+  `<assembly>:links`, which two of them shared and nothing could address, so there was no name to send.
+
+  Two things followed from making it total, and both are fixes rather than side effects. A deep port is now
+  named by **every** level above it (`shape_ports.child_owner`), container levels included, so two ports in two
+  unnamed containers are no longer one address -- and the path the panel shows is the string
+  `pc render --port` takes. And a `map:` reaches through such a container by naming it (`link#2/loose`) where
+  it used to reach straight through; a declaration that did is answered with the paths that do exist, so it
+  says what to write instead.
+
 - **`map:`** (`./src/partcad/assembly_ports.py`): what an assembly externalizes of what it is made of. Two
   elements are a node and one of its ports, three are a node, an interface it implements and the instance of
   it — by ASSY *node* name, because an assembly places the same part six times. A mapped interface instance
@@ -872,6 +923,16 @@ carries the line and column it came from. **A gap in the configuration schema is
 file**, not a message in a CI log nobody reads: whatever PartCAD's own tooling writes has to validate. `pc init`
 writes empty (null) sections, so every section accepts null; every registered part type has to be in the
 `parts` enum (`sdf` was not, and two shipped examples failed their own check because of it).
+
+**One check is not a schema check, and could not be.** A `connect:`/`connectPorts:` names a link of the same
+`links:` list, written above this node -- a relation between two parts of one document rather than the shape of
+either -- and so does every name in a connection's `interferes:`. `assy_lint.check_links` is that check, run by
+`validate_source` for an ASSY document (and for a scene's, whose `connect:` names a link exactly as an
+assembly's does) and for nothing else. It exists because a name that is wrong is otherwise answered, much later
+and much further away, with "Target part not found" and a part at the origin -- and because dropping a link
+another link was connected to is the one thing `pc filter` can break, which is why that command runs this check
+over the file it has just written. Like everything else here it stays quiet about what the Jinja2 mask made
+unknowable: a templated name, or a loop around the `links:` list, silences the level it is on.
 
 The **scene** schema is that same schema with `how` forbidden, derived from it by
 `assy_lint.scene_schema()` rather than kept beside it as a second file — a copy is a copy that stops matching.

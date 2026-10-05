@@ -23,6 +23,7 @@ import pytest
 
 from partcad_utils.assy_lint import (
     ASSY_SCHEMA,
+    CODE_LINKS,
     CODE_SCHEMA,
     CODE_TEMPLATE,
     CODE_YAML,
@@ -156,9 +157,12 @@ def test_misspelled_property_points_at_the_key():
 
 
 def test_misspelled_property_of_a_nested_object():
-    diagnostic = only("links:\n  - part: cube\n    connect:\n      name: other\n      toInstanse: X\n")
+    # The link the 'connect:' names is placed above it, so the misspelling is
+    # the only thing wrong with the document: a 'connect:' to a link nothing
+    # places is a finding of its own (see 'check_links' below).
+    diagnostic = only("links:\n  - part: other\n  - part: cube\n    connect:\n      name: other\n      toInstanse: X\n")
     assert "toInstanse" in diagnostic.message
-    assert (diagnostic.line, diagnostic.column) == (4, 6)
+    assert (diagnostic.line, diagnostic.column) == (5, 6)
 
 
 def test_location_that_is_not_an_occt_location():
@@ -173,7 +177,14 @@ def test_location_that_is_not_an_occt_location():
     [
         ("links:\n  - part: cube\n    assembly: other\n", ("part", "assembly")),
         (
-            "links:\n  - part: cube\n    location: [[0, 0, 0], [0, 0, 1], 0]\n    connect:\n      name: other\n",
+            # 'other' is placed above, so the clash is the only finding; see
+            # 'test_misspelled_property_of_a_nested_object'.
+            "links:\n"
+            "  - part: other\n"
+            "  - part: cube\n"
+            "    location: [[0, 0, 0], [0, 0, 1], 0]\n"
+            "    connect:\n"
+            "      name: other\n",
             ("location", "connect"),
         ),
     ],
@@ -407,3 +418,136 @@ def test_jinja2_in_a_configuration_is_not_mistaken_for_broken_yaml():
         )
         == []
     )
+
+
+# ---- links that nothing places ---------------------------------------------
+#
+# A relation between two parts of one document, which no schema can describe: a
+# 'connect:' says which link already in the assembly this one is placed against,
+# and a name that is wrong is answered, much later and much further away, with
+# "Target part not found" and a part at the origin. See 'check_links'.
+
+
+def link_findings(text):
+    return [diagnostic for diagnostic in check(text) if diagnostic.code == CODE_LINKS]
+
+
+def one_link_finding(text):
+    found = link_findings(text)
+    assert len(found) == 1, "expected exactly one finding, got %r" % (found,)
+    return found[0]
+
+
+CHAIN = "links:\n  - part: a\n    name: first\n  - part: b\n    name: second\n"
+
+
+def test_a_connect_to_a_preceding_sibling_is_clean():
+    assert link_findings(CHAIN + "  - part: c\n    connectPorts:\n      name: first\n") == []
+
+
+def test_a_connect_to_a_link_nothing_places():
+    finding = one_link_finding(CHAIN + "  - part: c\n    connectPorts:\n      name: third\n")
+    assert "third" in finding.message
+    assert finding.severity == SEVERITY_ERROR
+    # On the name itself, not on the node: that is the character to fix.
+    assert finding.line == 7
+
+
+def test_a_connect_to_a_link_placed_later_says_so():
+    # The factory looks for the target among the children placed so far, so a
+    # link written below this one is not there yet -- which is a different
+    # mistake from a misspelling and reads differently.
+    text = "links:\n  - part: a\n    connectPorts:\n      name: later\n  - part: b\n    name: later\n"
+    assert "after this node" in one_link_finding(text).message
+
+
+def test_a_connect_across_two_links_lists_says_so():
+    text = (
+        "links:\n"
+        "  - name: frame\n"
+        "    links:\n"
+        "      - part: a\n"
+        "        name: inner\n"
+        "  - part: b\n"
+        "    connectPorts:\n"
+        "      name: inner\n"
+    )
+    assert "same 'links:' list" in one_link_finding(text).message
+
+
+def test_a_connect_that_names_no_link_at_all():
+    assert "needs a 'name'" in one_link_finding(CHAIN + "  - part: c\n    connect: {}\n").message
+
+
+def test_interferes_may_name_a_link_anywhere_in_the_file():
+    # A connection joins two items; a screw driven through them passes through
+    # more, and 'interferes' names those. They are matched by name across the
+    # assemblies a file embeds, so the whole document is the scope.
+    text = (
+        "links:\n"
+        "  - name: frame\n"
+        "    links:\n"
+        "      - part: a\n"
+        "        name: inner\n"
+        "  - part: b\n"
+        "    name: screw\n"
+        "    connect:\n"
+        "      name: frame\n"
+        "      interferes: [inner]\n"
+    )
+    assert link_findings(text) == []
+
+
+def test_interferes_that_names_nothing():
+    text = CHAIN + "  - part: c\n    connect:\n      name: first\n      interferes: [second, nosuch]\n"
+    assert "nosuch" in one_link_finding(text).message
+
+
+def test_the_root_node_has_nothing_to_connect_to():
+    # Reported here as well as when the file is read, where
+    # 'apply_root_placement' says the same thing: the root node *is* the
+    # assembly, so it has no sibling.
+    assert "nothing to 'connect' to" in one_link_finding("connect:\n  name: x\nlinks:\n  - part: a\n").message
+
+
+def test_a_node_is_addressed_by_what_it_places_when_it_has_no_name():
+    assert link_findings("links:\n  - part: cube\n  - part: b\n    connectPorts:\n      name: cube\n") == []
+
+
+def test_a_templated_name_silences_the_check():
+    # Which link a template places is only known once it has been rendered, and
+    # a finding that depends on what the mask hid is dropped rather than
+    # reported: an editor that underlines correct code is worse than one that
+    # misses something.
+    text = "links:\n  - part: a\n    name: {{ which }}\n  - part: b\n    connectPorts:\n      name: {{ which }}\n"
+    assert link_findings(text) == []
+
+
+def test_a_loop_around_the_links_silences_the_check():
+    text = (
+        "links:\n"
+        "{% for n in [1, 2] %}\n"
+        "  - part: a\n"
+        "    name: plate_{{ n }}\n"
+        "{% endfor %}\n"
+        "  - part: b\n"
+        "    connectPorts:\n"
+        "      name: plate_1\n"
+    )
+    assert link_findings(text) == []
+
+
+def test_a_scene_connect_is_checked_the_same_way():
+    # A scene states where things are, and it says so with the same 'connect:'
+    # an assembly uses; only 'how' is forbidden there.
+    found = validate_source(
+        CHAIN + "  - part: c\n    connectPorts:\n      name: third\n",
+        schema_for_file("bench.assy", FLAVOR_SCENE),
+    )
+    assert [one.message for one in found if one.code == CODE_LINKS] == [
+        "nothing in this file places a link called 'third'"
+    ]
+
+
+def test_a_configuration_has_no_links_to_check():
+    assert [one for one in config_diagnostics("parts:\n  cube:\n    type: cadquery\n") if one.code == CODE_LINKS] == []

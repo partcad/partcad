@@ -305,6 +305,14 @@ RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 # are held out of the plugin's request for the same reason 'path' is.
 SIMULATION_KEYS = frozenset({"format", "formatOptions"})
 
+# The same, for the two sections that write a file *of an object*: 'filter' says
+# which of that object's links the file is of (see 'partcad_utils.assy_filter'),
+# which PartCAD acts on itself -- it hands the implementation a smaller shape
+# rather than the same shape and a note about it. Reserved in these two sections
+# only: a 'cam:' route or an 'import:' reader may well have a parameter of its
+# own called 'filter', and hiding it from one would be a silent break.
+SELECTION_KEYS = frozenset({"filter"})
+
 # The same, for the 'import:' section. None of these is a parameter of the
 # reader: 'kinds' says which object kinds may be declared with this type,
 # 'noun' and 'dropped' are how the core words what the reader reports, and
@@ -463,7 +471,30 @@ class Implementation:
             return RESERVED_KEYS | SIMULATION_KEYS
         if self.section == IMPORT:
             return RESERVED_KEYS | IMPORT_KEYS
+        if self.section in SECTIONS:
+            return RESERVED_KEYS | SELECTION_KEYS
         return RESERVED_KEYS
+
+    @property
+    def link_filter(self):
+        """The links this file type is of, as declared, or ``None`` for all of them.
+
+        What ``filter:`` on a ``render:``/``export:`` file type says, read
+        through the same layering as every other field of one -- so a package
+        says it for every object it renders and an object says it for itself,
+        and the one being rendered wins. It is PartCAD's own: the implementation
+        is handed the shape the filter leaves rather than the whole one and a
+        note about it, which is why it is reserved above.
+
+        Raises:
+            partcad_utils.assy_filter.FilterError: the declaration is not a mask
+                of link names. Reported as the configuration error it is rather
+                than taken for "keep everything", which would render the whole
+                object and say nothing.
+        """
+        from partcad_utils import assy_filter
+
+        return assy_filter.of(self.config.get("filter"))
 
     @property
     def parameters(self) -> dict:

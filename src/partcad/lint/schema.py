@@ -10,6 +10,7 @@ from partcad.cache_hash import CacheHash
 # and a client checks the one file being edited in its own process. Two copies
 # of that check would let an editor and CI disagree about a file.
 from partcad_utils.assy_lint import (
+    CHECKER_VERSION,
     FLAVOR_ASSEMBLY,
     FLAVOR_SCENE,
     SEVERITY_WARNING,
@@ -58,9 +59,16 @@ class YamlLinting(Linting):
         # implied by anything else in the hash: moving a file's declaration from
         # 'assemblies:' to 'scenes:' changes which schema it is checked against
         # without touching the file.
+        #
+        # 'CHECKER_VERSION' is the other half, and is what the schema cannot
+        # cover: a check that no schema can express (a 'connect:' naming a link
+        # nothing places) is in the checker and nowhere else, so a cache key
+        # without it would go on serving the findings from before that check
+        # existed for every file nobody has edited since.
         hash = super().get_hash(name, target)
         hash.add_string(json.dumps(self.schema(name, target), sort_keys=True))
         hash.add_string(str(self.flavor(name, target)))
+        hash.add_string("checker-v%d" % CHECKER_VERSION)
         return hash
 
     async def validate(self, ctx: Context, package: Project, target: str, lint_ctx: dict = {}) -> LintingReport:

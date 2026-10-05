@@ -272,6 +272,7 @@ def test_the_synchronous_render_forwards_its_arguments_by_name(monkeypatch):
         "options_project": None,
         "output_dir": "output-dir",
         "overlay": "overlay",
+        "link_filter": None,
     }
 
 

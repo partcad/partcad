@@ -58,6 +58,13 @@ class AssemblyFactoryFile(AssemblyFactory):
             self.assembly.cache_dependencies.append(self.path)
         else:
             pc_logging.warning(f"The {self.OBJECT_KIND} path is not set: {self.assembly.name}")
+        # The source file with its template rendered, for a caller that has to
+        # read the document PartCAD reads rather than the text somebody wrote:
+        # 'pc filter' rewrites that document, and a templated file is not YAML
+        # until it has been rendered. The object keeps no other handle on its
+        # factory, and the parameter values a template is rendered with are the
+        # factory's (see 'template_params').
+        self.assembly.rendered_source = lambda: self.rendered_source()
         super().post_create()
 
     # -- Templating ---------------------------------------------------------

@@ -163,6 +163,47 @@ def _object_kind(params) -> str:
     return "part"
 
 
+def _link_filter(params, what: str):
+    """The link mask a request carries, or ``None`` when it carries none.
+
+    What arrives is the data a client resolved out of its
+    ``<filter-file|filter-expression>`` argument -- read there because the file
+    is on the client's machine and this daemon may not even be on it. A client
+    that sent the expression as text has it read here, as an expression and
+    never as a path, which is what keeps a filename from being looked for in the
+    daemon's filesystem.
+    """
+    from partcad_utils import assy_filter
+
+    try:
+        return assy_filter.of(params.get("filter"))
+    except assy_filter.FilterError as e:
+        raise JsonRpcError(USAGE_ERROR, "%s: %s" % (what, e)) from e
+
+
+def _overlay(params):
+    """The port overlay a request asks for, or ``None`` for none.
+
+    The four flags say *whether* the ports and the interfaces are drawn, and
+    ``ports`` says *which* -- by the name each is reported under, which is the
+    port's own name for a port of the object and the node path then the port for
+    one inside it. One reader, so ``render.objects`` and ``render.inline`` cannot
+    come to disagree about the parameter names (see 'partcad.render_overlay').
+    """
+    from partcad.render_overlay import Overlay
+
+    select = params.get("ports")
+    if isinstance(select, str):
+        select = [select]
+    return Overlay.of(
+        ports=params.get("with_ports", False),
+        interfaces=params.get("with_interfaces", False),
+        all=params.get("with_all", False),
+        internals=params.get("with_internals", False),
+        select=None if select is None else [str(name) for name in select],
+    )
+
+
 def _targets(ctx, pc, packages, object_name, kind):
     """The ``(package, object)`` pairs that a named object resolves to, where it exists.
 
@@ -3450,6 +3491,16 @@ def render_objects(session, params):
     this one run. They resolve to the very parameters a ``render:`` file type
     configures, so the override lands on top of the configuration rather than
     beside it, and a file type that does not project never reads them.
+
+    ``filter`` keeps only some of the links of one assembly or scene, so that
+    what is written is a view of it (see `partcad.assembly_filter`). It writes
+    nothing into the package -- ``pc filter`` is what declares such a view as an
+    object of its own -- and it asks about one named object, which is why it is
+    refused for a whole package and for a subtree. A ``filter:`` on a file type
+    says the same thing permanently, and this overrides it.
+
+    ``ports`` narrows the overlay to the ports it names, by the name each is
+    reported under; see `partcad.render_overlay`.
     """
     ctx = _ctx(session, params)
     if ctx is None:
@@ -3487,17 +3538,25 @@ def render_objects(session, params):
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
 
     from partcad.exception import AssemblyDocumentError
-    from partcad.render_overlay import Overlay
 
-    # "--with-ports"/"--with-interfaces"/"--with-all": draw the connection
-    # metadata on top of the projection. Only 'pc render' offers them, and only
-    # the 'render:' file types act on them (see Shape._output_request).
-    overlay = Overlay.of(
-        ports=params.get("with_ports", False),
-        interfaces=params.get("with_interfaces", False),
-        all=params.get("with_all", False),
-        internals=params.get("with_internals", False),
-    )
+    # "--with-ports"/"--with-interfaces"/"--with-all"/"--port": draw the
+    # connection metadata on top of the projection. Only 'pc render' offers
+    # them, and only the 'render:' file types act on them (see
+    # Shape._output_request).
+    overlay = _overlay(params)
+
+    link_filter = _link_filter(params, "the filter")
+    if link_filter is not None:
+        if object_name is None or recursive:
+            raise JsonRpcError(
+                USAGE_ERROR,
+                "A filter selects the links of one assembly or scene; name that object, without a '...'",
+            )
+        if _object_kind(params) not in ("assembly", "scene"):
+            raise JsonRpcError(
+                USAGE_ERROR,
+                "Only an assembly or a scene has links to filter; name which one it is with '-a' or '-S'",
+            )
 
     with pc.logging.Process(params.get("label", "Render"), package):
         try:
@@ -3515,6 +3574,7 @@ def render_objects(session, params):
                 overlay,
                 render_opts,
                 recursive,
+                link_filter,
             )
         except AssemblyDocumentError as e:
             # Asking for an assembly instruction book of something that has no
@@ -3569,6 +3629,13 @@ def render_inline(session, params):
     supplies the implementation -- ``pc render -e``, which is how a drawing by
     ``//pub/feature/render/draftwright`` is asked for.
 
+    ``filter``, the four ``with_*`` flags and ``ports`` are the panel beside the
+    drawing, as the same two things ``pc render`` offers: the links of the object
+    to keep (an assembly or a scene -- a part has none, and naming one is refused
+    rather than ignored) and which of the object's ports and interfaces are drawn
+    on top of the projection. They are what the ticked boxes of that panel
+    resolve to, so the tab and the command line produce the same picture.
+
     The file is written into a temporary directory on the daemon's machine, read
     back and base64-encoded, and the directory removed. A path would not do:
     the daemon may be on another machine, and the client decides where the file
@@ -3621,6 +3688,13 @@ def render_inline(session, params):
             )
     _validate_output_format(pc, ctx, fmt, [package] + ([options_package] if options_package else []))
 
+    link_filter = _link_filter(params, "the filter")
+    if link_filter is not None and kind not in ("assembly", "scene"):
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "Only an assembly or a scene has links to filter; '%s' has none" % kind,
+        )
+
     if kind in ("assembly", "scene"):
         # Phase one of an assembly build, as for every other request that ends
         # in one: see '_stage_named_object'.
@@ -3629,10 +3703,21 @@ def render_inline(session, params):
     if shape is None:
         raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
 
+    overlay = _overlay(params)
+
     directory = tempfile.mkdtemp(prefix="partcad-render-")
     try:
         with pc.logging.Process("Render", package, name):
-            asyncio.run(shape.render_async(ctx, fmt, output_dir=directory, options_package=options_package))
+            asyncio.run(
+                shape.render_async(
+                    ctx,
+                    fmt,
+                    output_dir=directory,
+                    options_package=options_package,
+                    overlay=overlay,
+                    link_filter=link_filter,
+                )
+            )
         # Found rather than predicted: which extension a file type writes, and
         # under which name, is the implementation's configuration to decide.
         # One render writes one file; the newest is taken should an
@@ -3670,6 +3755,7 @@ def _render_objects(
     overlay=None,
     render_opts=None,
     recursive=False,
+    link_filter=None,
 ):
     """The body of 'render_objects', once the request has been made sense of."""
     import asyncio
@@ -3716,6 +3802,7 @@ def _render_objects(
             ignore_manufacturability,
             overlay,
             render_opts,
+            link_filter,
         )
     )
 
@@ -3732,6 +3819,7 @@ async def _render_packages_async(
     ignore_manufacturability,
     overlay=None,
     render_opts=None,
+    link_filter=None,
 ):
     """Render the given packages, several at a time.
 
@@ -3818,12 +3906,65 @@ async def _render_packages_async(
                     overlay=overlay,
                     render_opts=render_opts,
                     fast_only=fast_only,
+                    link_filter=link_filter,
                 )
 
     results = await asyncio.gather(*[render_package(package) for package in packages], return_exceptions=True)
     for result in results:
         if isinstance(result, BaseException):
             raise result
+
+
+def filter_object(session, params):
+    """Write a filtered copy of an assembly or a scene as another object."""
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    source = params.get("object")
+    target = params.get("target")
+    if not source:
+        raise JsonRpcError(USAGE_ERROR, "No source object is given")
+    if not target:
+        raise JsonRpcError(USAGE_ERROR, "No target object is given")
+    # One object in, one object out: there is nothing for a subtree of packages
+    # to mean here.
+    _refuse_recursion(params)
+    _refuse_recursion({"package": params.get("package"), "object": target})
+
+    mask = _link_filter(params, "the filter")
+    if mask is None:
+        raise JsonRpcError(USAGE_ERROR, "No filter is given")
+
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
+
+    from partcad.actions import filter_object_action
+
+    kind = _object_kind(params)
+    # A part is what an object is when nothing says otherwise, and a part has no
+    # links; left unsaid here, the kind follows the source object (see
+    # 'actions.filter._detect_kind'), which is what makes a filtered scene a
+    # scene without the user saying so twice.
+    if kind not in ("assembly", "scene"):
+        kind = None
+
+    with pc.logging.Process("Filter", package, source):
+        try:
+            return filter_object_action(
+                package_obj,
+                mask,
+                source,
+                target,
+                kind=kind,
+                dry_run=bool(params.get("dry_run", False)),
+            )
+        except ValueError as e:
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
 
 
 def convert_object(session, params):
