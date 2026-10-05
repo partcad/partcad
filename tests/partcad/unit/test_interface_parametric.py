@@ -20,6 +20,7 @@ import pytest
 
 import partcad as pc
 from partcad import expr
+from partcad.consts import CAD_CONSTANTS
 
 PACKAGE = "tests/partcad/unit/data/parametric_interfaces/partcad.yaml"
 
@@ -148,6 +149,21 @@ def test_arithmetic_a_coordinate_actually_needs_still_works():
 def test_multiplication_of_things_that_are_numbers_is_allowed(expression, expected):
     """ "Provably a number" has to admit the arithmetic a coordinate is made of."""
     assert expr.substitute(expression, {"size": 4.0, "label": "M4-0.7"}) == expected
+
+
+@pytest.mark.parametrize("name", sorted(CAD_CONSTANTS))
+def test_every_constant_a_template_has_is_a_number_an_expression_can_multiply(name):
+    """'%pi * module / 4%' used to fail: 'pi' was in scope but not "certainly a number"."""
+    assert expr.substitute("%%%s%%" % name, {}) == CAD_CONSTANTS[name]
+    assert expr.substitute("%%size * %s%%" % name, {"size": 2.0}) == 2.0 * CAD_CONSTANTS[name]
+    assert expr.substitute("%%%s * size%%" % name, {"size": 2.0}) == CAD_CONSTANTS[name] * 2.0
+
+
+def test_a_parameter_takes_the_place_of_a_constant_of_its_name():
+    """The parameter is what the expression reads, so it is what the guard asks about too."""
+    assert expr.substitute("%e * 2%", {"e": 3.0}) == 6.0
+    with pytest.raises(expr.ExpressionError):
+        expr.substitute("%e * 1000000000%", {"e": "x"})
 
 
 def test_an_expression_may_be_a_conditional():

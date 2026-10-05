@@ -30,7 +30,7 @@ too asks first, which is what 'is defined' is for:
 Jinja2's 'and' short-circuits, so the call is not made where the name is absent.
 """
 
-import math
+from .consts import CAD_CONSTANTS
 
 
 def version_components(version: str) -> tuple[int, int, int]:
@@ -100,15 +100,8 @@ def render_context(package_name: str, version: str) -> dict:
         "partcad_version_minor": minor,
         "partcad_version_build": build,
         "partcad_version_at_least": at_least,
-        # The constants a CAD file keeps reaching for.
-        "M_PI": math.pi,
-        "PI": math.pi,
-        "SQRT_2": math.sqrt(2),
-        "SQRT_3": math.sqrt(3),
-        "SQRT_5": math.sqrt(5),
-        "INCH": 25.4,
-        "INCHES": 25.4,
-        "FOOT": 304.8,
-        "FEET": 304.8,
+        # The constants a CAD file keeps reaching for: the same table '%...%'
+        # expressions use.
+        **CAD_CONSTANTS,
         "get_from_config": lambda: None,
     }

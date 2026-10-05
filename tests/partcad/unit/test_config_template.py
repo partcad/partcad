@@ -17,7 +17,8 @@ import jinja2
 import pytest
 
 import partcad as pc
-from partcad import config_template
+from partcad import config_template, expr
+from partcad.consts import CAD_CONSTANTS
 
 PACKAGE = "tests/partcad/unit/data/config_template/partcad.yaml"
 
@@ -101,6 +102,15 @@ def test_a_package_can_ask_before_it_names_any_of_this():
 def test_the_constants_a_cad_file_reaches_for_are_still_there():
     assert _render("{{ INCH }}|{{ FOOT }}|{{ package_name }}") == "25.4|304.8|//test"
     assert _render("{{ '%.4f' % PI }}") == "3.1416"
+
+
+def test_a_template_and_an_expression_have_the_same_constants():
+    """One table for '{{ ... }}' and '%...%', so a name cannot work in only one of them."""
+    context = config_template.render_context("//test", "0.8.77")
+    for name, value in CAD_CONSTANTS.items():
+        assert context[name] == value
+        assert expr.substitute("%%%s%%" % name, {}) == value
+    assert _render("{{ '%.4f' % pi }}|{{ '%.4f' % SQRT_2 }}") == "3.1416|1.4142"
 
 
 # --- and in a package on disk ------------------------------------------------
