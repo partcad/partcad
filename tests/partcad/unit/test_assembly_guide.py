@@ -561,7 +561,7 @@ class _RecordingShape:
         self.name = name
         self.renders = 0
 
-    async def render_svg_somewhere_async(self, ctx=None, project=None, filepath=None, annotations=None):
+    async def render_svg_somewhere_async(self, ctx=None, project=None, filepath=None, annotations=None, **kwargs):
         self.renders += 1
         # Long enough for whoever else wants this picture to arrive while it is
         # being drawn, which is the whole point of the test.
@@ -603,7 +603,7 @@ class _CrowdShape(_RecordingShape):
         cls.in_flight = 0
         cls.peak = 0
 
-    async def render_svg_somewhere_async(self, ctx=None, project=None, filepath=None, annotations=None):
+    async def render_svg_somewhere_async(self, ctx=None, project=None, filepath=None, annotations=None, **kwargs):
         _CrowdShape.in_flight += 1
         _CrowdShape.peak = max(_CrowdShape.peak, _CrowdShape.in_flight)
         try:
@@ -947,3 +947,64 @@ def test_assembly_guide_data_says_whether_the_assembly_is_meant_to_be_made():
     assert guide["document"]["pages"]
 
     assert prj.assembly_guide_data("logo", ignore_manufacturability=True)["manufacturable"] is True
+
+
+def test_a_reproducible_book_asks_for_reproducible_illustrations():
+    """The pages are drawn from projections, so settling the writer is half of it.
+
+    'reproducible' on the PDF file type fixes reportlab's clock and its
+    document id, and leaves the pictures alone -- and the pictures were the
+    full-precision polygonal projection, whose numbers are float noise at the
+    sixteenth digit. The book then came out byte for byte the same twice on one
+    machine and a few tens of bytes different on the next, which is the one
+    thing a checked-in document may not do.
+
+    'None' rather than 'False' when nothing is asked for, and that is the part
+    worth asserting: these illustrations go through the package's own 'svg:'
+    file type, so an explicit 'False' would be this caller turning the flag
+    *off* for a package that had asked for it.
+    """
+    asked = []
+
+    class FakeShape:
+        project_name = "//pkg"
+        name = "widget"
+
+        async def render_svg_somewhere_async(self, ctx=None, project=None, filepath=None, **kwargs):
+            asked.append(kwargs.get("reproducible"))
+            with open(filepath, "w") as f:
+                f.write("<svg/>")
+
+    with tempfile.TemporaryDirectory() as directory:
+        for reproducible, expected in ((True, True), (False, None), (None, None)):
+            images = assembly_guide.RenderedImages(
+                None, None, os.path.join(directory, str(reproducible)), reproducible=reproducible
+            )
+            assert asyncio.run(images.shape_image_async(FakeShape())) is not None
+            assert asked[-1] is expected
+
+
+def test_a_one_off_projection_forwards_whether_it_has_to_be_reproducible():
+    """'render_svg_somewhere_async' is the only way to ask for one of these.
+
+    It writes where no file type named, so there is no declaration that could
+    carry the flag; the argument is the whole of it. Asserted on the forwarding
+    rather than on a file, because what broke was the link and not the renderer.
+    """
+    seen = {}
+
+    class Shape(pc.shape.Shape):
+        def __init__(self):
+            pass
+
+        async def render_async(self, ctx, format_name, **kwargs):
+            seen.update(kwargs)
+            seen["format_name"] = format_name
+
+    with tempfile.NamedTemporaryFile(suffix=".svg") as f:
+        asyncio.run(Shape().render_svg_somewhere_async(None, filepath=f.name, reproducible=True))
+        assert seen["format_name"] == "svg"
+        assert seen["reproducible"] is True
+
+        asyncio.run(Shape().render_svg_somewhere_async(None, filepath=f.name))
+        assert seen["reproducible"] is None

@@ -3271,6 +3271,13 @@ class Project(project_config.Configuration):
             return None
         assembly, path, dir_path, _return_path, render_cfg, output_dir = target
 
+        # One answer for the whole book, because it is two things and both of
+        # them drift: the file reportlab writes, and the projections its pages
+        # are drawn from. Settling only the first left the PDF differing
+        # between machines by a few tens of bytes -- the clock was gone and the
+        # pictures were still whoever rendered them.
+        reproducible = self._document_reproducible(assembly, format, render_cfg)
+
         async with assembly_guide.guide_document_async(
             self.ctx,
             self,
@@ -3278,14 +3285,13 @@ class Project(project_config.Configuration):
             format.upper(),
             dir_path,
             ignore_manufacturability,
+            reproducible=reproducible,
             recursive=recursive,
             build_parts=build_parts,
             choices=choices,
         ) as document:
             self.ctx.ensure_dirs_for_file(path)
-            await self._write_document_async(
-                document, format, path, reproducible=self._document_reproducible(assembly, format, render_cfg)
-            )
+            await self._write_document_async(document, format, path, reproducible=reproducible)
 
         return path
 

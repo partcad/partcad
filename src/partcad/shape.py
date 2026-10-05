@@ -2723,6 +2723,7 @@ class Shape(ShapeConfiguration):
         line_weight=None,
         viewport_origin=None,
         annotations=None,
+        reproducible=None,
     ):
         """Renders an SVG file somewhere, ignoring where the project wants it.
 
@@ -2731,6 +2732,17 @@ class Shape(ShapeConfiguration):
         instruction book uses them to show the gap an exploded view introduces
         (see assembly_guide.py); they are projected together with the shape, so
         they land where the geometry they point at does.
+
+        'reproducible' asks for the projection that is the same on any machine
+        rather than the fast one, as an explicit argument because this render
+        goes somewhere the configuration never named -- so there is no file type
+        whose declaration could say it (see 'output.REPRODUCIBLE_KEY'). 'None'
+        leaves it to the configuration, which is what every caller that only
+        wants to look at the picture means; 'False' would be this caller
+        insisting, and would turn the flag off for a package that had asked for
+        it. An instruction book that is checked in asks for 'True': its pages
+        are drawn from these projections, so a picture that differs between two
+        machines is a document that differs between them.
         """
         if filepath is None:
             with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
@@ -2746,6 +2758,7 @@ class Shape(ShapeConfiguration):
             line_weight=line_weight,
             viewport_origin=viewport_origin,
             annotations=annotations,
+            reproducible=reproducible,
         )
         if not annotations and os.path.exists(filepath):
             # An annotated projection is a one-off illustration, not this shape's
@@ -2761,6 +2774,7 @@ class Shape(ShapeConfiguration):
         line_weight=None,
         viewport_origin=None,
         annotations=None,
+        reproducible=None,
     ):
         asyncio.run(
             self.render_svg_somewhere_async(
@@ -2770,6 +2784,7 @@ class Shape(ShapeConfiguration):
                 line_weight=line_weight,
                 viewport_origin=viewport_origin,
                 annotations=annotations,
+                reproducible=reproducible,
             )
         )
 
