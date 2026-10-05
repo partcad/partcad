@@ -3273,12 +3273,12 @@ class Project(project_config.Configuration):
                     f.write(pc_document.render_html(document))
             else:
                 await render_pdf_async(
-                    self.ctx, document, path, reproducible=self._document_reproducible(assembly, format)
+                    self.ctx, document, path, reproducible=self._document_reproducible(assembly, format, render_cfg)
                 )
 
         return path
 
-    def _document_reproducible(self, shape, format) -> bool:
+    def _document_reproducible(self, shape, format, render_cfg=None) -> bool:
         """Whether a generated document of 'shape' has to be the same bytes every time.
 
         'reproducible:' on the file type, read the way the file types that *do*
@@ -3293,10 +3293,15 @@ class Project(project_config.Configuration):
         time it was written cannot do -- so the instruction book stayed out of
         the sweep until the PDF could promise that (see 'render:' in
         'examples/feature_import/partcad.yaml' and 'document_pdf').
+
+        'render_cfg' is the one the book is being laid out by, when a caller
+        handed one over; without it, the package's own 'render:' is, which is
+        what '_assembly_document_target' defaults it to as well.
         """
+        if render_cfg is None:
+            render_cfg = (self.config_obj or {}).get("render")
         found = None
-        for config in (self.config_obj, getattr(shape, "config", None)):
-            section = (config or {}).get("render")
+        for section in (render_cfg, (getattr(shape, "config", None) or {}).get("render")):
             if not isinstance(section, dict):
                 continue
             cfg = output.normalize(section.get(format))

@@ -909,6 +909,26 @@ def test_a_document_is_reproducible_only_where_it_is_asked_for():
         _reproducible({"pdf": {"reproducible": "sometimes"}}, None)
 
 
+def test_a_render_cfg_handed_in_is_the_one_read():
+    """What 'render_assembly_guide_async' was given, not what the package says.
+
+    A caller can hand over a 'render_cfg' of its own, and that is the one the
+    book is laid out by; reading 'reproducible' from the package instead lost
+    it whenever the package did not say the same. The object's own setting
+    still overrides it, as it overrides the package's.
+    """
+    owner = SimpleNamespace(config_obj={})
+    plain = SimpleNamespace(config={})
+    asked = {"pdf": {"reproducible": True}}
+    assert pc.project.Project._document_reproducible(owner, plain, "pdf", asked) is True
+    # Handed in, it replaces the package's answer rather than adding to it.
+    owner = SimpleNamespace(config_obj={"render": {"pdf": {"reproducible": True}}})
+    assert pc.project.Project._document_reproducible(owner, plain, "pdf", {}) is False
+    # And the object still has the last word.
+    refusing = SimpleNamespace(config={"render": {"pdf": {"reproducible": False}}})
+    assert pc.project.Project._document_reproducible(owner, refusing, "pdf", asked) is False
+
+
 def test_the_pdf_request_carries_whether_it_has_to_be_reproducible():
     """The flag has to reach the sandbox, because only the sandbox can act on it.
 
