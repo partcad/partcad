@@ -36,6 +36,8 @@ writes and PartCAD checks.
 import hashlib
 import os
 import platform
+import re
+import socket
 import tempfile
 import threading
 import time
@@ -172,7 +174,39 @@ def resolve_image(client, image: str, version: str = "") -> str:
     )
 
 
-def image_available(image: str, version: str = "") -> bool:
+# Why an image could not be used, by image name, for whoever has to explain the
+# fallback that followed. 'image_available' answers a yes/no question and the
+# answer is acted on silently, which is right for the decision and useless for
+# the person whose analysis then fails somewhere the image would have worked.
+_UNAVAILABLE_REASONS = {}
+
+
+def unavailable_reason(image: str) -> Optional[str]:
+    """Why 'image_available' last said no to ``image``; ``None`` if it has not."""
+    return _UNAVAILABLE_REASONS.get(image)
+
+
+# How the daemon reaches this machine's directories, by the image 'image_available'
+# asked about (see 'mount_sources'), for 'misses' to check a context's against.
+_SOURCES = {}
+
+
+def misses(image: str, needed) -> bool:
+    """Whether the daemon cannot bind one of ``needed`` for ``image``; records why, as 'image_available' does.
+
+    Separate from 'image_available' because the directories are a context's
+    and the answer to that question is not: asked after it said yes.
+    """
+    missing = unbacked(needed, _SOURCES.get(image))
+    if missing:
+        _UNAVAILABLE_REASONS[image] = (
+            "the Docker daemon does not share this filesystem, and %s %s not on any of the mounts it could "
+            "bind from instead" % (", ".join(missing), "is" if len(missing) == 1 else "are")
+        )
+    return bool(missing)
+
+
+def image_available(image: str, version: str = "", needed=()) -> bool:
     """Whether this machine can get an image to run that sandbox in.
 
     Local first, then a pull, exactly as starting the sandbox would -- so a
@@ -185,20 +219,44 @@ def image_available(image: str, version: str = "") -> bool:
     simply not permitted to pull from the registry PartCAD publishes to.
     """
     if not runtime.docker_available():
+        _UNAVAILABLE_REASONS[image] = "no container runtime is answering here"
         return False
     try:
         client = docker.from_env()
-    except Exception:
+    except Exception as e:
+        _UNAVAILABLE_REASONS[image] = "the Docker client could not be created: %s" % e
         return False
     try:
         resolved = resolve_image(client, image, version)
-    except Exception:
+    except Exception as e:
+        _UNAVAILABLE_REASONS[image] = "it could not be pulled: %s" % e
         return False
     # An image is only half of it. The other half is whether the daemon that
     # would run it can see the directories PartCAD is going to bind -- see
     # 'mounts_are_shared'. A machine that fails this is one where every part
     # would fail later, in a way that names nothing.
-    return mounts_are_shared(client, resolved)
+    sources = mount_sources(client, resolved)
+    if sources is False:
+        _UNAVAILABLE_REASONS[image] = (
+            "the Docker daemon cannot see this machine's files, so nothing can be bind-mounted into a "
+            "container -- which is what a dev container using the host's Docker socket, or a 'DOCKER_HOST' "
+            "on another machine, looks like"
+        )
+        return False
+    # Reaching the files through this container's mounts is only as good as
+    # the mounts: a directory the sandbox needs on none of them is a start that
+    # fails later (see 'DockerPythonRuntime._mounts'), asked here instead, where
+    # "no" still leaves PartCAD another sandbox to choose.
+    _SOURCES[image] = sources
+    _UNAVAILABLE_REASONS.pop(image, None)
+    return not misses(image, [*needed, tempfile.gettempdir(), INSTALL_DIR])
+
+
+def unbacked(paths, sources) -> list:
+    """Which of ``paths`` the daemon cannot bind, given 'mount_sources'; none where it shares this filesystem."""
+    if sources is None:
+        return []
+    return [p for p in paths if p and docker_mount.backed_by(p, sources) is None]
 
 
 # Whether a directory this process creates is the one the daemon binds, keyed by
@@ -214,7 +272,30 @@ _PROBE_FILE = "partcad-mount-probe"
 
 
 def mounts_are_shared(client, image: str) -> bool:
-    """Whether the daemon binds *these* directories, or ones of the same name.
+    """Whether the sandbox can bind PartCAD's directories into a container at all.
+
+    True where the daemon shares this filesystem, and also where it does not
+    but has each directory somewhere it can say -- see :func:`mount_sources`.
+    """
+    return mount_sources(client, image) is not False
+
+
+def mount_sources(client, image: str):
+    """How the daemon reaches this process's directories: ``None``, a list, or ``False``.
+
+    ``None`` -- it binds *these* directories: an ordinary host, or a daemon in
+    this very container.
+
+    A list of (here, daemon-side) pairs -- it does not share this filesystem,
+    but this process runs in a container *on that daemon*, and the directories
+    PartCAD binds are mounts of that container whose daemon-side locations the
+    daemon reported. Binds take their source from there and keep their target,
+    so inside the sandbox every path is still the one PartCAD knows (see
+    ``docker_mount``). ``PC_DOCKER_MOUNT_SOURCES`` -- ``here=there`` pairs
+    separated by ``;`` -- says the same thing by hand, for a setup this cannot
+    work out.
+
+    ``False`` -- neither; the sandbox cannot be used here.
 
     Every part of this sandbox rests on that. PartCAD hands the daemon its own
     paths and expects the container to open its own files there -- the wrappers,
@@ -232,34 +313,138 @@ def mounts_are_shared(client, image: str) -> bool:
     Two arrangements do this and neither is unusual. A dev container with the
     host's ``/var/run/docker.sock`` bound into it -- "Docker outside of Docker",
     which this repository's own dev container uses -- is the common one, and
-    ``DOCKER_HOST`` pointing at another machine is the other. A daemon *inside*
-    this container is fine, and so is an ordinary host; which is why this is a
-    probe and not a guess about the environment. The question is not "am I in a
-    container" but "does that daemon see this directory", and one container that
-    looks for a file answers it.
-
-    A ``False`` makes the sandbox unavailable rather than degraded. There is no
-    halfway: PartCAD would be handing a wrapper paths that mean something else
-    over there, which is the whole class of bug binding directories onto
-    themselves exists to prevent.
+    the list above is its answer. ``DOCKER_HOST`` pointing at another machine
+    is the other, and has none: this process is not a container over there. So
+    each is a probe and not a guess about the environment -- one container that
+    looks for a file, asked again with the mapping if it was not found without.
     """
     key = (getattr(getattr(client, "api", None), "base_url", None), image)
     with _MOUNTS_SHARED_GUARD:
         if key in _MOUNTS_SHARED:
             return _MOUNTS_SHARED[key]
 
-    shared = _probe_mounts(client, image)
-    if not shared:
-        pc_logging.debug(
-            "The Docker daemon at %s does not share this filesystem, so the 'docker' sandbox cannot "
-            "bind PartCAD's directories into a container." % (key[0],)
-        )
+    if _probe_mounts(client, image):
+        answer = None
+    else:
+        sources = _declared_sources()
+        if sources is None:
+            sources = _own_container_sources(client)
+        answer = sources if sources and _probe_mounts(client, image, sources) else False
+        if answer is False:
+            pc_logging.debug(
+                "The Docker daemon at %s does not share this filesystem, so the 'docker' sandbox cannot "
+                "bind PartCAD's directories into a container." % (key[0],)
+            )
+        else:
+            pc_logging.debug(
+                "The Docker daemon at %s does not share this filesystem; binding from where it has "
+                "this container's mounts: %s" % (key[0], sources)
+            )
     with _MOUNTS_SHARED_GUARD:
-        _MOUNTS_SHARED[key] = shared
-    return shared
+        _MOUNTS_SHARED[key] = answer
+    return answer
 
 
-def _probe_mounts(client, image: str) -> bool:
+def client_mounts(sources) -> dict:
+    """Every directory this process's container has from the daemon, bound where it is here.
+
+    All of them, rather than the ones the context at hand asked for. The
+    sandbox container is shared and replaced when the mounts it needs differ,
+    and inside one dev container they used to differ for no reason that
+    mattered: a test with a temporary '~' needs '/tmp' and the workspace, and
+    the daemon with the real one needs '~/.partcad' too. Each removed the
+    other's container, and the one whose container went on running commands
+    by name in its replacement -- with somebody else's mounts, so that what it
+    wrote went where it never looked. One set per dev container, so nothing in
+    it ever replaces anything.
+
+    Directories only: a socket or a file bound in (the host's Docker socket,
+    the CI runner's command files) is not something a sandbox has any use for,
+    and the Docker socket least of all.
+    """
+    mounts = {}
+    for here, there in sorted(sources or ()):
+        here = here.rstrip("/") or "/"
+        if os.path.isdir(here) and not os.path.islink(here) and here != "/":
+            mounts[there.rstrip("/") or "/"] = {"bind": here, "mode": "rw"}
+    return mounts
+
+
+def container_name(image: str, mounts=None) -> str:
+    """The sandbox container for ``image`` with ``mounts``: one per image and mount set.
+
+    Named after the image alone, one container served every process on the
+    daemon, and any of them needing different mounts replaced it -- a package
+    outside the home directory on an ordinary host, another dev container on
+    the same machine, a test with a temporary home. Whoever had started it went
+    on running commands by name in the replacement, with somebody else's
+    mounts: writing where it never looked, reading what was not its own, and
+    killed outright if a command was running when it was removed.
+
+    So the mounts are in the name: where each one comes from and where it
+    lands. Processes needing the same ones share a container, which is safe
+    because they see the same files -- every project under one home directory
+    on an ordinary host, everything in one dev container (see 'client_mounts').
+    Processes needing different ones each have their own, and never touch each
+    other's. Without ``mounts``, the name before '_start' has worked them out.
+    """
+    name = "pc-sandbox-" + _short(image)
+    if not mounts:
+        return name
+    whose = repr(sorted((source, spec["bind"]) for source, spec in mounts.items()))
+    return name + "-" + _short(whose)
+
+
+def _declared_sources():
+    """``PC_DOCKER_MOUNT_SOURCES`` as (here, there) pairs; ``None`` if it is not set."""
+    value = os.environ.get("PC_DOCKER_MOUNT_SOURCES", "").strip()
+    if not value:
+        return None
+    pairs = []
+    for item in value.split(";"):
+        here, sep, there = item.partition("=")
+        if sep and here.strip() and there.strip():
+            pairs.append((here.strip(), there.strip()))
+    return pairs
+
+
+# What the daemon calls a container's own directory, which is where the files
+# it bind-mounts into every container (/etc/hostname, /etc/hosts) come from --
+# so a container's mount table names its own id. More reliable than the
+# hostname, which a container can be given.
+_CONTAINER_ID = re.compile(r"/containers/([0-9a-f]{64})/")
+
+
+def _own_container_sources(client):
+    """This process's container's mounts, as the daemon has them; ``None`` if it is not one of its.
+
+    Binds and volumes alike: a volume's 'Source' is where the daemon keeps it,
+    which it can bind from as well as from anywhere else. A tmpfs has no source
+    and nothing to bind from.
+    """
+    candidates = []
+    try:
+        with open("/proc/self/mountinfo") as f:
+            candidates += _CONTAINER_ID.findall(f.read())
+    except OSError:
+        pass
+    candidates.append(socket.gethostname())
+
+    for candidate in dict.fromkeys(candidates):
+        try:
+            container = client.containers.get(candidate)
+        except Exception:
+            continue
+        sources = [
+            (mount["Destination"], mount["Source"])
+            for mount in container.attrs.get("Mounts") or []
+            if mount.get("Type") in ("bind", "volume") and mount.get("Source") and mount.get("Destination")
+        ]
+        return sources or None
+    return None
+
+
+def _probe_mounts(client, image: str, sources=None) -> bool:
     """One throwaway container, asked whether it can see a file made here."""
     with tempfile.TemporaryDirectory() as probe:
         marker = os.path.join(probe, _PROBE_FILE)
@@ -286,7 +471,7 @@ def _probe_mounts(client, image: str) -> bool:
                     "import os,sys; sys.exit(0 if os.path.isfile(%r) else 1)" % docker_mount.translate(marker),
                 ],
                 entrypoint=[],
-                volumes=docker_mount.mounts([probe]),
+                volumes=docker_mount.mounts([probe], sources=sources),
                 # The same user the sandbox's own container runs as, for the
                 # same reason and with the same platform rule -- see
                 # '_start_once'. Not decoration: a temporary directory is the
@@ -325,13 +510,14 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         super().__init__(ctx, "docker-" + _short(image), version)
 
         self.image = image
-        # One container per image, and nothing else in the name. It outlives
-        # the process that started it, so the next 'pc' command finds it warm
-        # rather than paying for a start; only a new version or image tag makes
-        # it a different container. Naming it after the mounts as well was
-        # tried, and traded that reuse for a container per context.
-        self.container_name = "pc-sandbox-" + _short(image)
+        # Named after the image and, once '_start' knows them, the mounts -- see
+        # 'container_name'. It outlives the process that started it, so the
+        # next 'pc' command with the same mounts finds it warm.
+        self.container_name = container_name(image)
         self._container = None
+        # Where the daemon has the directories, when it is not here -- see
+        # 'mount_sources'. Set by '_start'.
+        self._mount_sources = None
 
         # The interpreter inside the container, always POSIX. 'exec_name' is
         # 'python.exe' on a Windows host, which is what the base class uses to
@@ -400,6 +586,45 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         paths += [p for p in getattr(self.ctx, "sandbox_paths", ()) or () if p]
         return paths
 
+    def _mounts(self, sources) -> dict:
+        """The binds for '_mounted', from where the daemon has them (see 'mount_sources').
+
+        With ``sources``, a directory the daemon does not have cannot be bound.
+        The home directory may go: it is there to cover the others in one mount,
+        and each of them is still asked for on its own. Anything else is a path
+        a wrapper will be handed and the container will not have, so the
+        sandbox is refused here, naming it, rather than failing later on a file
+        that is not there.
+
+        And with ``sources`` what is bound is not this context's directories
+        but every directory mount of the container this process runs in -- see
+        'client_mounts' -- under a name that says whose they are.
+        """
+        paths = self._mounted
+        if sources is not None:
+            home = os.path.expanduser("~")
+            missing = unbacked([p for p in paths if p != home], sources)
+            if missing:
+                raise runtime.SandboxUnavailable(
+                    "the 'docker' sandbox runs on a Docker daemon that does not share this filesystem, and "
+                    "binds from where it keeps this container's mounts -- but %s %s not on any of them. "
+                    "Mount %s into this container (a bind or a volume), or name where the daemon has %s "
+                    "in PC_DOCKER_MOUNT_SOURCES."
+                    % (
+                        ", ".join(missing),
+                        "is" if len(missing) == 1 else "are",
+                        "it" if len(missing) == 1 else "them",
+                        "it" if len(missing) == 1 else "them",
+                    )
+                )
+        self._mount_sources = sources
+        # Where the daemon is somebody else's, everything this container has
+        # from it rather than only what this context asked for -- see
+        # 'client_mounts'. Either way the container is named after the result.
+        mounts = docker_mount.mounts(paths) if sources is None else client_mounts(sources)
+        self.container_name = container_name(self.image, mounts)
+        return mounts
+
     @property
     def _container_home(self) -> str:
         """Where '~' points inside the container. See '_exec'."""
@@ -467,7 +692,8 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             # 'mounts_are_shared'. Only a *declared* 'pythonSandbox: docker'
             # reaches this: where PartCAD chooses, 'image_available' asked the
             # same question first and chose another sandbox.
-            if not mounts_are_shared(client, resolve_image(client, self.image, self.version)):
+            sources = mount_sources(client, resolve_image(client, self.image, self.version))
+            if sources is False:
                 raise runtime.SandboxUnavailable(
                     "the 'docker' sandbox needs a container runtime that can see this machine's files, "
                     "and this one cannot: a directory created here is not the directory it binds. That "
@@ -476,7 +702,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                     "that stays here with 'pythonSandbox' -- 'conda' and 'venv' both work."
                 )
 
-            mounts = docker_mount.mounts(self._mounted)
+            mounts = self._mounts(sources)
             for attempt in range(_START_ATTEMPTS):
                 container = self._start_once(client, mounts)
                 if container is not None:
@@ -554,7 +780,9 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         image = self._resolve_image(client)
         os.makedirs(self._container_home, exist_ok=True)
         for host, spec in mounts.items():
-            os.makedirs(host, exist_ok=True)
+            # Made here, where this process sees it: with mount sources the key
+            # is the daemon's name for the directory, which is nothing here.
+            os.makedirs(spec["bind"] if self._mount_sources is not None else host, exist_ok=True)
             pc_logging.debug("Sandbox mount: %s -> %s" % (host, spec["bind"]))
 
         with pc_logging.Action("Container", self.version, self.container_name):

@@ -116,6 +116,14 @@ credential before logging it, so a value the client has no business holding neve
   `socket_path`/`is_alive` in `partcad_utils.workspace` do for POSIX. Importing `is_pipe_alive` from
   `.win_pipe`, which has no such name, is what shipped: on Windows `ensure_daemon` raised ImportError on the
   first line of the branch, and all a client saw was `partcad-json-rpc.exe ... exited 1`.
+- `config_restart.py` — the daemon (socket and pipe alike) **restarts when `~/.partcad/config.yaml` changes**,
+  which it otherwise read once, at start, for as long as it stayed warm. Restarting is *leaving*: it unlinks its
+  endpoint at once, so the next client starts a fresh daemon that reads the new file, while the connections it
+  still has finish their requests and are then sent `doRestart` (which the extension answers by reconnecting).
+  The daemon never starts its successor — that is a client's job, with that client's flags. Polled by content,
+  not mtime; `PC_DAEMON_RESTART_ON_CONFIG=0` turns it off. After a restart the socket path and the pid file
+  belong to the successor, which is why `SocketServer` forgets its path once unlinked and `_cleanup` removes
+  only a pid file holding its own pid.
 - `client.py` — `DaemonClient` and `start_daemon`, used by the CLI (and any Python caller) to reach the daemon.
 - `__main__.py` — the `partcad-json-rpc` entry point: channel selection (`--socket` default, `--stdio`,
   `--http`) and CLI-style flags mirroring `pc` globals.

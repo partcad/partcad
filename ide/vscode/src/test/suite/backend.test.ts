@@ -8,7 +8,7 @@
 
 import * as assert from 'assert';
 
-import { daemonEndpointIn } from '../../common/backend';
+import { CloseWatch, daemonEndpointIn } from '../../common/backend';
 
 suite('Where the daemon is', () => {
     test('a socket path is the endpoint', () => {
@@ -50,5 +50,56 @@ suite('Where the daemon is', () => {
 
     test('the endpoint is found past anything printed before it', () => {
         assert.strictEqual(daemonEndpointIn('Starting the daemon...\n/tmp/pc/socket\n'), '/tmp/pc/socket');
+    });
+});
+
+suite('When the service goes away', () => {
+    test('a close nobody asked for is news', () => {
+        const watch = new CloseWatch();
+        let told = 0;
+        watch.onUnexpected(() => told++);
+        watch.closed();
+        assert.strictEqual(told, 1);
+    });
+
+    test('it is news once', () => {
+        // `stop()` disposes a connection that has already closed, which can
+        // close it again; a second reconnect would replace the first's backend.
+        const watch = new CloseWatch();
+        let told = 0;
+        watch.onUnexpected(() => told++);
+        watch.closed();
+        watch.closed();
+        assert.strictEqual(told, 1);
+    });
+
+    test('a close this side asked for is not', () => {
+        // `stop()` and `stopDaemon()`: whoever called them reconnects, or means
+        // there to be no connection at all.
+        const watch = new CloseWatch();
+        let told = 0;
+        watch.onUnexpected(() => told++);
+        watch.expect();
+        watch.closed();
+        assert.strictEqual(told, 0);
+    });
+
+    test('a handler that has been disposed is not told', () => {
+        const watch = new CloseWatch();
+        let told = 0;
+        watch.onUnexpected(() => told++).dispose();
+        watch.closed();
+        assert.strictEqual(told, 0);
+    });
+
+    test('one handler failing does not keep the others from hearing', () => {
+        const watch = new CloseWatch();
+        let told = 0;
+        watch.onUnexpected(() => {
+            throw new Error('boom');
+        });
+        watch.onUnexpected(() => told++);
+        watch.closed();
+        assert.strictEqual(told, 1);
     });
 });

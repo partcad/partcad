@@ -198,19 +198,37 @@ def test_the_same_image_is_the_same_sandbox(tmp_path):
     assert one.container_name == two.container_name
 
 
-def test_one_container_serves_every_context(tmp_path):
-    """The name says which image and nothing else, so it outlives the process.
+def test_contexts_with_the_same_mounts_share_a_container(tmp_path):
+    """Reuse across contexts and across runs is the reason to keep one warm.
 
-    It was briefly named after the mounts too, which made a container that no
-    other context could reuse -- and reuse across contexts and across runs is
-    the whole reason to keep one warm. Contexts differing in what they mount
-    share it; whichever of them starts it, the next one finds it running.
+    Contexts needing the same mounts see the same files, so one container serves
+    them all; whichever of them starts it, the next one finds it running.
     """
     one = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
     two = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
-    two.ctx.sandbox_paths = [str(tmp_path / "somebody-elses-files")]
 
+    assert one._mounts(None) == two._mounts(None)
     assert one.container_name == two.container_name
+
+
+def test_contexts_with_different_mounts_do_not_share_a_container(tmp_path):
+    """Sharing one was what let them break each other.
+
+    Named after the image alone, a context needing other mounts replaced the
+    container, and the context that had started it went on running commands
+    by name in the replacement -- without its own files, or killed outright if
+    a command was running when it went. Two parallel PartCAD processes on
+    projects in different places did this to each other on any host.
+    """
+    one = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
+    two = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
+    # Outside both the home directory and the temporary one, which every
+    # context mounts anyway: a package somewhere else entirely -- and rooted at
+    # this filesystem's own root, so that it is a path Windows can mount too.
+    two.ctx.sandbox_paths = [os.path.join(os.path.abspath(os.sep), "somebody-elses-files")]
+
+    assert one._mounts(None) != two._mounts(None)
+    assert one.container_name != two.container_name
 
 
 def test_a_new_image_tag_is_a_new_container(tmp_path):
@@ -1166,7 +1184,7 @@ def test_two_ad_hoc_runs_ask_for_the_same_mounts(tmp_path, monkeypatch):
     def one_run():
         made = _runtime(tmp_path)
         made.ctx.root_path = tempfile.mkdtemp(dir=str(tmp_path / "tmp"))
-        return sorted(docker_mount.mounts(made._mounted)), made.container_name
+        return sorted(made._mounts(None)), made.container_name
 
     first, first_name = one_run()
     second, second_name = one_run()

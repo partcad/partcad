@@ -33,6 +33,7 @@ from partcad_utils.workspace import (
     socket_path,
 )
 
+from . import config_restart
 from .rpc.methods import build_registry
 from .transport.socket_server import SocketServer
 
@@ -56,6 +57,7 @@ def ensure_daemon(
     root_path: Optional[str] = None,
     liveness_timeout: float = LIVENESS_TIMEOUT,
     daemon_argv=(),
+    replace_different: bool = False,
 ) -> str:
     """Ensure a daemon serves the workspace and return (and print) its endpoint.
 
@@ -64,9 +66,18 @@ def ensure_daemon(
     workspace directory and returning the warm :class:`Session` the daemon
     serves (the directory is where its rotating log file lives).
 
-    ``daemon_argv`` is only consulted on Windows, and only when a daemon is
-    actually started: the service's own settings flags, to hand to the new
-    process. The POSIX daemon is a fork of this one and already has them.
+    ``daemon_argv`` is the service's own settings flags. A Windows daemon is a
+    new process and is handed them; a POSIX one is a fork of this one and
+    already has them. Either way they are what the daemon answers
+    ``daemon.settings`` with.
+
+    ``replace_different`` is "a daemon started *this* way": a live daemon
+    started with other settings is asked to restart, and one is started with
+    these. Without it any live daemon will do -- which is right for a client
+    that sends its configuration with every request anyway (``pc``'s own
+    commands), and wrong for the one that does not (the editor extension, which
+    configures the daemon only through these flags, by way of ``pc daemon
+    start``).
     """
     root = root_path or determine_root_path()
 
@@ -92,6 +103,17 @@ def ensure_daemon(
         from .win_pipe import spawn_pipe_daemon
 
         pipe = pipe_name(root)
+        if replace_different and is_pipe_alive(pipe, liveness_timeout):
+            if _settings_differ(lambda params: _pipe_ask(pipe, params, liveness_timeout), daemon_argv):
+                # It stops offering the pipe on its own loop, a moment after
+                # answering; starting the replacement before then would hand
+                # out a name the old daemon still answers on -- with the old
+                # settings, which is the one thing this launch was for.
+                if not _wait_until(lambda: not is_pipe_alive(pipe, liveness_timeout), START_TIMEOUT):
+                    raise RuntimeError(
+                        "the PartCAD daemon serving %s was asked to restart with other settings and was still "
+                        "answering after %ss; run 'pc daemon stop' and try again" % (pipe, START_TIMEOUT)
+                    )
         if not is_pipe_alive(pipe, liveness_timeout):
             spawn_pipe_daemon(root, daemon_argv)
             # Wait for it to answer before saying where it is. The POSIX branch
@@ -118,7 +140,16 @@ def ensure_daemon(
         # behind a socket it has already bound - does not answer a probe in
         # time, and replacing it would leave two daemons serving one workspace.
         # A daemon that is gone refuses the connection, and is replaced.
-        if is_listening(sock, liveness_timeout):
+        #
+        # And it is kept unless asked for with other settings *and* able to say
+        # so: the settings question is asked only when it matters, inside the
+        # lock (a second launcher arriving meanwhile must find either this one's
+        # daemon or none), and a daemon too busy to answer it is kept, not
+        # restarted, for the reason above.
+        if is_listening(sock, liveness_timeout) and not (
+            replace_different
+            and _settings_differ(lambda params: _socket_ask(sock, params, liveness_timeout), daemon_argv)
+        ):
             print(sock, flush=True)
             return sock
         if os.path.exists(sock):
@@ -131,7 +162,7 @@ def ensure_daemon(
         server_sock.listen(64)
         print(sock, flush=True)
 
-    _serve_detached(server_sock, sock, wdir, build_session)
+    _serve_detached(server_sock, sock, wdir, build_session, daemon_argv)
     return sock
 
 
@@ -140,6 +171,65 @@ def ensure_daemon(
 # it can serve, and the alternative to waiting is telling the client to connect
 # to a pipe that is not there.
 START_TIMEOUT = 120.0
+
+
+def _settings_differ(ask: Callable, settings) -> bool:
+    """Ask a live daemon whether it runs with ``settings``; True if it is making way.
+
+    A daemon that cannot answer -- one older than ``daemon.settings``, or one
+    that went quiet -- is kept. There is no graceful way to move it aside, and
+    stopping it outright would take the requests of every other client with it.
+    """
+    reply = ask({"settings": list(settings)})
+    result = reply.get("result") if isinstance(reply, dict) else None
+    restarting = isinstance(result, dict) and bool(result.get("restarting"))
+    if restarting:
+        print(
+            "PartCAD daemon: the one running was started as %s; restarting it as %s"
+            % (result.get("settings"), list(settings)),
+            file=sys.stderr,
+            flush=True,
+        )
+    return restarting
+
+
+def _socket_ask(sock: str, params, timeout: float):
+    from partcad_utils.framing import read_message, write_message
+
+    from .config_restart import SETTINGS_METHOD
+
+    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client.settimeout(timeout)
+    try:
+        client.connect(sock)
+        stream = client.makefile("rwb")
+        try:
+            write_message(stream, {"jsonrpc": "2.0", "id": 0, "method": SETTINGS_METHOD, "params": params})
+            return read_message(stream)
+        finally:
+            stream.close()
+    except OSError:
+        return None
+    finally:
+        with contextlib.suppress(OSError):
+            client.close()
+
+
+def _pipe_ask(pipe: str, params, timeout: float):  # pragma: no cover - Windows only
+    from partcad_utils.win_pipe import pipe_request
+
+    from .config_restart import SETTINGS_METHOD
+
+    return pipe_request(pipe, SETTINGS_METHOD, timeout, params)
+
+
+def _wait_until(predicate: Callable[[], bool], timeout: float) -> bool:
+    deadline = time.monotonic() + timeout
+    while not predicate():
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.1)
+    return True
 
 
 def _wait_for_pipe(pipe: str, liveness_timeout: float) -> bool:
@@ -154,7 +244,9 @@ def _wait_for_pipe(pipe: str, liveness_timeout: float) -> bool:
     return False
 
 
-def _serve_detached(server_sock: socket.socket, sock: str, wdir: str, build_session: Callable) -> None:
+def _serve_detached(
+    server_sock: socket.socket, sock: str, wdir: str, build_session: Callable, launch_settings=()
+) -> None:
     """Double-fork; the launcher returns, the detached grandchild serves."""
     if os.fork() > 0:
         # Launcher: hand the socket path back to whoever invoked us and exit
@@ -172,7 +264,9 @@ def _serve_detached(server_sock: socket.socket, sock: str, wdir: str, build_sess
     _write_pid(wdir)
 
     session = build_session(wdir)
-    server = SocketServer(session, build_registry(), on_shutdown=lambda: _cleanup(wdir))
+    server = SocketServer(
+        session, build_registry(), on_shutdown=lambda: _cleanup(wdir), launch_settings=launch_settings
+    )
 
     def _terminate(_signum, _frame):
         server.stop()
@@ -180,9 +274,15 @@ def _serve_detached(server_sock: socket.socket, sock: str, wdir: str, build_sess
     signal.signal(signal.SIGTERM, _terminate)
     signal.signal(signal.SIGINT, _terminate)
 
+    # The configuration was read once, above, and this process may now serve
+    # for days. An edit to it restarts the daemon (see `config_restart`).
+    watcher = config_restart.watch(server.restart)
+
     try:
         server.serve_accepted(server_sock, sock)
     finally:
+        if watcher is not None:
+            watcher.stop()
         _cleanup(wdir)
         # Exit through the interpreter rather than os._exit(): the daemon has
         # done its own cleanup above, and everything else that wants to run at
@@ -208,5 +308,16 @@ def _write_pid(wdir: str) -> None:
 
 
 def _cleanup(wdir: str) -> None:
-    with contextlib.suppress(OSError):
-        os.unlink(pid_path(wdir))
+    """Remove the pid file, if it is still this daemon's.
+
+    After a restart it need not be: the daemon that replaced this one wrote its
+    own pid there while this one was still finishing its last requests, and
+    removing that would leave `pc daemon stop` unable to wait for the daemon
+    that is actually serving.
+    """
+    path = pid_path(wdir)
+    with contextlib.suppress(OSError, ValueError):
+        with open(path, encoding="utf-8") as f:
+            if int(f.read().strip()) != os.getpid():
+                return
+        os.unlink(path)

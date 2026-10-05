@@ -20,7 +20,11 @@
     "host-sockets": "\"${localWorkspaceFolder}/.devcontainer/host-sockets-init.cmd\""
   },
   "postCreateCommand": {
-    "Start D-Bus": "sudo service dbus start && (until systemctl is-active --quiet dbus; do sleep 1; done)"
+    "Start D-Bus": "sudo service dbus start && (until systemctl is-active --quiet dbus; do sleep 1; done)",
+    // The two volumes under "mounts" below: a volume Docker creates for a
+    // directory the image does not have is root's, and /tmp must stay
+    // writable by everyone with the sticky bit, as it was in the image.
+    "Volume ownership": "sudo chown vscode:vscode /home/vscode/.partcad && sudo chmod 1777 /tmp"
   },
   "postStartCommand": {
     "pre-commit": "pre-commit install --config dev-tools/pre-commit-config.yaml",
@@ -64,10 +68,27 @@
     // container side reads as "nothing here" and passes over in silence.
   ],
   "mounts": [
-    // TODO: For some reason this leads to tests hanging in the CI.
-    // "source=partcad-partcad,target=/home/vscode/.partcad,type=volume",
     "source=partcad-cache,target=/home/vscode/.cache,type=volume",
-    "source=partcad-config,target=/home/vscode/.config,type=volume"
+    "source=partcad-config,target=/home/vscode/.config,type=volume",
+    // PartCAD's state and the temporary directory, on volumes rather than in
+    // the container's own layer -- so that the 'docker' Python sandbox works
+    // in here. That sandbox bind-mounts these directories into its containers,
+    // and the daemon doing it is the *host's* (see the Docker socket above),
+    // which cannot see a path that exists only inside this container. It can
+    // see a volume, and PartCAD binds from where the daemon keeps each mount of
+    // this container while leaving every path as it is in here -- see
+    // 'mount_sources' in src/partcad/runtime_python_docker.py. The workspace
+    // needs nothing: it is a bind from the host already.
+    //
+    // One pair per container: ${devcontainerId} is stable for a workspace
+    // folder, so a rebuild keeps the sandboxes and clones, and two checkouts
+    // never share a /tmp. Remove the two volumes to start from nothing.
+    //
+    // A volume on ~/.partcad was once tried here and taken out with a note that
+    // it made CI's tests hang; that was a single volume shared by every
+    // container, which this is not.
+    "source=partcad-state-${devcontainerId},target=/home/vscode/.partcad,type=volume",
+    "source=partcad-tmp-${devcontainerId},target=/tmp,type=volume"
   ],
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {

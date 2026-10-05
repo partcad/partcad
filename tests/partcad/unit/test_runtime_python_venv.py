@@ -196,7 +196,20 @@ def test_a_creation_that_writes_no_interpreter_is_a_failure_too(ctx, tmp_path):
 # --------------------------------------------------------------------------- #
 
 
-def test_venv_is_the_fallback_when_conda_is_absent(monkeypatch):
+@pytest.fixture
+def nothing_stated(monkeypatch, tmp_path):
+    """A machine whose configuration names no sandbox, so the fallback is what is read.
+
+    Both halves matter, and CI tripped over the second: the dev container's
+    test jobs state 'PC_PYTHON_SANDBOX=conda', and a stated sandbox is what
+    'python_sandbox' answers with, whatever the fallback would have been. See
+    the fixture of the same purpose in test_python_sandbox_default.py.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("PC_PYTHON_SANDBOX", raising=False)
+
+
+def test_venv_is_the_fallback_when_conda_is_absent(monkeypatch, nothing_stated):
     """'none' was, and it is not a sandbox: it installs into the user's Python."""
     import partcad_utils.user_config as user_config_module
 
@@ -205,7 +218,7 @@ def test_venv_is_the_fallback_when_conda_is_absent(monkeypatch):
     assert UserConfig().python_sandbox == "venv"
 
 
-def test_conda_is_still_preferred_when_it_is_there(monkeypatch):
+def test_conda_is_still_preferred_when_it_is_there(monkeypatch, nothing_stated):
     """It is the only sandbox that can provision an interpreter version."""
     import partcad_utils.user_config as user_config_module
 

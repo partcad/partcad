@@ -112,7 +112,7 @@ def launcher_argv() -> list:
     return [sys.executable, "-m", "partcad_service_json_rpc"]
 
 
-def start_daemon(cwd: Optional[str] = None, extra_args=()) -> str:
+def start_daemon(cwd: Optional[str] = None, extra_args=(), replace_different: bool = False) -> str:
     r"""Ensure a daemon serves the workspace at ``cwd``; return its endpoint.
 
     An AF_UNIX socket path on POSIX, a ``\\.\pipe\...`` name on Windows: the
@@ -123,8 +123,14 @@ def start_daemon(cwd: Optional[str] = None, extra_args=()) -> str:
 
     :func:`connect` below still runs a one-shot stdio service on Windows; this
     is what `pc daemon start` and the editor extension use.
+
+    ``replace_different`` means "a daemon started with *these* ``extra_args``":
+    one already serving with other settings restarts, rather than being reused
+    with the request's flags quietly dropped. Off for :func:`connect`, whose
+    caller sends its configuration with every request and is served the same by
+    any daemon.
     """
-    argv = launcher_argv() + ["--socket", *extra_args]
+    argv = launcher_argv() + ["--socket", *(["--replace-different"] if replace_different else []), *extra_args]
     # check=False: the returncode is handled below, so that the error can
     # carry what the launcher printed rather than only its exit status.
     result = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, check=False)

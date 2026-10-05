@@ -26,7 +26,12 @@ def cli() -> None:
     # This used to answer Windows with a sentence saying there was no daemon --
     # on stdout, with a zero exit status, which is where the endpoint goes. The
     # editor extension connected to the sentence.
-    click.echo(client.start_daemon(extra_args=daemon_args()))
+    #
+    # `replace_different`: this command is asked for a daemon started a
+    # particular way -- the extension's settings arrive as these globals and
+    # nowhere else -- so one already running some other way is restarted
+    # rather than handed back with the flags dropped.
+    click.echo(client.start_daemon(extra_args=daemon_args(), replace_different=True))
 
 
 def daemon_args() -> list:
@@ -38,8 +43,8 @@ def daemon_args() -> list:
     `user_config` rather than from the click parameters, so a value set in the
     user's configuration file travels as well as one typed on the command line.
 
-    Only ever consulted when a daemon is actually started: one already serving
-    the workspace keeps the settings it was started with.
+    A daemon already serving the workspace with other settings is restarted
+    with these (see `cli` above).
     """
     from partcad_utils.user_config import user_config
 
@@ -48,9 +53,12 @@ def daemon_args() -> list:
         args.append("--offline")
     if getattr(user_config, "force_update", False):
         args.append("--force-update")
-    sandbox = getattr(user_config, "python_sandbox", None)
-    if sandbox:
-        args.extend(["--python-sandbox", sandbox])
+    # Only a sandbox somebody chose. `python_sandbox` always has a value --
+    # conda where the host has it, venv otherwise -- because that is the
+    # fallback; forwarding it made it a *stated* choice on the daemon, and a
+    # stated sandbox is obeyed, so the daemon never got to prefer Docker.
+    if getattr(user_config, "python_sandbox_declared", False):
+        args.extend(["--python-sandbox", user_config.python_sandbox])
     level = logging.getLogger("partcad").getEffectiveLevel()
     if level <= logging.DEBUG:
         args.append("--verbose")

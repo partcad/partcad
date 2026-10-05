@@ -17,6 +17,7 @@ package that declared it" apart from "resolved against whoever is reading".
 import asyncio
 import hashlib
 import os
+import subprocess
 
 import jsonschema
 import pytest
@@ -36,6 +37,30 @@ VENDOR_BLOB = "//:vendor-blob"
 DIAGNOSTICS = "//sub:diagnostics"
 CONTROLLER = "//:controller"
 SENSOR = "//sub:sensor"
+
+
+def _git_names_a_commit_here() -> bool:
+    """Whether git can say which commit the fixture is read from, from where the tests run.
+
+    Not always: a git worktree's '.git' is a file pointing into the main
+    repository's '.git/worktrees/', and a container that mounts only the
+    worktree cannot follow it -- every git command there fails. Asked of git
+    itself rather than of PartCAD, so that a PartCAD that stopped finding the
+    revision still fails wherever git can find it, which includes CI.
+    """
+    try:
+        found = subprocess.run(
+            ["git", "-C", DATA, "rev-parse", "HEAD"], capture_output=True, text=True, timeout=30, check=False
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return found.returncode == 0 and len(found.stdout.strip()) == 40
+
+
+needs_git = pytest.mark.skipif(
+    not _git_names_a_commit_here(),
+    reason="git cannot name the commit this checkout is at from here (e.g. a worktree whose .git is not mounted)",
+)
 
 
 @pytest.fixture
@@ -323,6 +348,7 @@ def test_the_bom_lists_the_software_of_every_part(ctx):
     assert bom[SERVICE_TOOL]["count"] == 1
 
 
+@needs_git
 def test_a_software_line_item_names_its_package_and_revision(ctx):
     bom = _detailed(ctx)
     entry = bom[FIRMWARE]
@@ -351,6 +377,7 @@ def test_the_bom_without_a_context_lists_no_software(ctx):
     assert [name for name, entry in bom.items() if entry["kind"] == "software"] == []
 
 
+@needs_git
 def test_the_grouped_bom_groups_software_by_package(ctx):
     device = ctx._get_assembly(":device")
     grouped = asyncio.run(device.get_bom_grouped_async(ctx))

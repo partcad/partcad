@@ -159,15 +159,23 @@
         "order": 1,
         "properties": {
           "partcad.pythonSandbox": {
-            "default": "conda",
-            "description": "What sandboxing method to use for invoking Python scripts?",
+            "default": "",
+            "description": "What sandboxing method to use for invoking Python scripts. Leave it automatic unless you mean it: a method chosen here is obeyed, so a package's own container image (a CAE solver, say) is not used unless the method is 'docker'.",
             "enum": [
+              "",
+              "docker",
               "conda",
+              "venv",
+              "remote",
               "pypy",
               "none"
             ],
             "enumDescriptions": [
+              "Let PartCAD choose: Docker where a container runtime answers, else conda where this machine has it, else venv. The same as 'pythonSandbox' in ~/.partcad/config.yaml when that is set.",
+              "Build sandboxes in Docker containers, including the image a package names for itself.",
               "Use conda to create a sandboxed environment.",
+              "Use a virtual environment built from a Python on this machine.",
+              "Use the partcad-service-remote-docker service named by 'remoteSandbox'.",
               "Use pypy to create a sandboxed environment.",
               "Do not create a sandboxed environment. Use the current Python environment instead."
             ],
@@ -181,8 +189,8 @@
         "order": 2,
         "properties": {
           "partcad.open.useDocker": {
-            "default": false,
-            "description": "Let PartCAD run a third-party application (\"Open in...\": FreeCAD, Blender, Gazebo, MuJoCo, KiCad) in a Docker container when it is not installed on this machine. The container is named after the application ('partcad-freecad', 'partcad-blender', 'partcad-gazebo', 'partcad-mujoco', 'partcad-kicad'), keeps the workspace mounted at the path it has here, and shows its windows on this machine's X display - which macOS and Windows need an X server for.",
+            "default": true,
+            "description": "Let PartCAD run a third-party application (\"Open in...\": FreeCAD, Blender, Gazebo, MuJoCo, KiCad) in a Docker container when it is not installed on this machine, and Docker is running here. The container is named after the application ('partcad-freecad', 'partcad-blender', 'partcad-gazebo', 'partcad-mujoco', 'partcad-kicad'), keeps the workspace mounted at the path it has here, and shows its windows on this machine's X display - which macOS and Windows need an X server for.",
             "scope": "machine",
             "type": "boolean"
           },

@@ -558,6 +558,14 @@ jobs:
             # See "Which images this run uses" on "Scope".
             PC_CONTAINER_IMAGE_TAG=${{ needs.scope.outputs.image-override }}
             PC_CONTAINER_IMAGE_OWNER=${{ needs.scope.outputs.image-owner }}
+            # The conda sandbox, stated, for this job alone, and for its running time:
+            # every scenario builds a fresh sandbox under a temporary $HOME, and on the
+            # "docker" sandbox that took this suite past the two hours above (~100
+            # minutes on conda, over 120 on Docker; the one failure it had there, a
+            # pycairo build, is fixed). "Run: pc" and "Run: pytest" keep the Docker
+            # sandbox covered in the dev container; remove this line once this job is
+            # sharded or a sandbox build gets cheaper.
+            PC_PYTHON_SANDBOX=conda
 
           # The suite's status is kept and reported, and the coverage report is
           # written either way. Ending on "coverage xml" reported *its* status,

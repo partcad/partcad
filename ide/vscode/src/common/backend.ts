@@ -49,6 +49,12 @@ export interface PartcadBackend {
     /** Terminate the shared daemon (socket channel only); no-op otherwise. */
     stopDaemon?(): Promise<void>;
     /**
+     * Called when the service goes away without having been asked to: the
+     * daemon was killed, crashed, or restarted itself (it does when
+     * `~/.partcad/config.yaml` changes). Not called for `stop()`/`stopDaemon()`.
+     */
+    onUnexpectedClose?(handler: () => void): Disposable;
+    /**
      * Whether the service renders the ANSI log display for this connection.
      *
      * When it does, its output already carries the level prefixes and colours,
@@ -75,11 +81,56 @@ type CliAccess = {
     sharedDaemon?: boolean;
 };
 
+/**
+ * Whether a connection's close is news: the service going away on its own,
+ * rather than this side having asked for it.
+ *
+ * Tells its handlers once. A connection closes once, but `stop()` disposes it
+ * again after a close nobody asked for, and nothing should hear of one close
+ * twice -- a second reconnect would replace the first one's backend.
+ */
+export class CloseWatch {
+    private settled = false;
+    private readonly handlers: (() => void)[] = [];
+
+    /** This side is about to end the connection; its close is not news. */
+    expect(): void {
+        this.settled = true;
+    }
+
+    onUnexpected(handler: () => void): Disposable {
+        this.handlers.push(handler);
+        return new Disposable(() => {
+            const i = this.handlers.indexOf(handler);
+            if (i >= 0) {
+                this.handlers.splice(i, 1);
+            }
+        });
+    }
+
+    /** The connection has closed. */
+    closed(): void {
+        if (this.settled) {
+            return;
+        }
+        this.settled = true;
+        traceInfo('PartCAD service: the connection closed without being asked to');
+        for (const handler of this.handlers.splice(0)) {
+            try {
+                handler();
+            } catch (e) {
+                traceError(`PartCAD: handling the service going away failed: ${e}`);
+            }
+        }
+    }
+}
+
 /** Talks to the standalone `partcad-json-rpc` service over a framed connection. */
 class JsonRpcBackend implements PartcadBackend {
     private readonly handlers = new Map<string, ((params: any) => void)[]>();
     private readonly commandDisposables: Disposable[] = [];
     private running = false;
+    private readonly closeWatch = new CloseWatch();
     /** Whether the service is drawing the log display for us (see `requestRenderedLogs`). */
     public rendersLogs = false;
     private readonly cliPath: string | undefined;
@@ -102,6 +153,7 @@ class JsonRpcBackend implements PartcadBackend {
         this.connection.onError((e) => traceError(`PartCAD service connection error: ${JSON.stringify(e)}`));
         this.connection.onClose(() => {
             this.running = false;
+            this.closeWatch.closed();
         });
         this.connection.listen();
         this.running = true;
@@ -177,9 +229,14 @@ class JsonRpcBackend implements PartcadBackend {
         return this.running;
     }
 
+    onUnexpectedClose(handler: () => void): Disposable {
+        return this.closeWatch.onUnexpected(handler);
+    }
+
     async stop(): Promise<void> {
         // Close only this client's connection; the shared daemon keeps running so
         // other windows/CLI invocations for the workspace stay served.
+        this.closeWatch.expect();
         this.running = false;
         this.commandDisposables.forEach((d) => d.dispose());
         this.commandDisposables.length = 0;
@@ -197,6 +254,10 @@ class JsonRpcBackend implements PartcadBackend {
         // waits for the process to be gone rather than for the acknowledgement.
         // Falls back to asking over the wire if `pc` is not reachable, which
         // still gets the daemon to exit -- just without the wait.
+        //
+        // The daemon exiting closes this connection, and whoever asked for that
+        // is about to reconnect: it is not the service going away on its own.
+        this.closeWatch.expect();
         if (this.sharedDaemon) {
             try {
                 await runCli(this.cliPath, ['daemon', 'stop'], this.cwd, this.outputChannel);
@@ -343,7 +404,7 @@ class JsonRpcBackend implements PartcadBackend {
             // has to be converted first, and a file name does not always say
             // which type it holds. `pc open` decides what to do with it.
             ...(arg?.type ? ['--type', arg.type] : []),
-            ...(config.get<boolean>('open.useDocker') === true ? ['--use-docker'] : []),
+            ...((config.get<boolean>('open.useDocker') ?? true) ? ['--use-docker'] : []),
             ...(image ? ['--docker-image', image] : []),
             arg?.path ?? '',
             '--json',

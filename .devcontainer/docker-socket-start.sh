@@ -47,9 +47,23 @@ fi
 if command -v socat >/dev/null 2>&1; then
   # Proxy it instead of touching its permissions: the listening socket is ours
   # to own, and the host's stays exactly as the host left it.
+  #
+  # "-t 86400": how long socat keeps a connection after one direction of it
+  # has ended. The default is half a second, and that is fatal to "docker exec
+  # -i": the client closes its stdin as soon as it has written the request --
+  # at once, when there is none -- and half a second later socat dropped the
+  # whole connection, output stream included. The client then reported exit 0
+  # while the command went on running in the container: PartCAD's Docker
+  # sandbox was told "-m venv" had succeeded while pip was still being
+  # installed, and failed every install after it ("No module named pip"). Only
+  # where this proxy is in use, which is wherever the host's socket is not ours
+  # to write -- GitHub's runners, and not a typical workstation -- and so for a
+  # long time only in CI (#727). Docker ends the stream when the command ends,
+  # so a long timeout costs nothing; it is a bound on a connection whose other
+  # side has gone, not a wait.
   sudo pkill -f "UNIX-LISTEN:${socket}" || true
   sudo rm -f "${socket}"
-  sudo nohup socat \
+  sudo nohup socat -t 86400 \
     "UNIX-LISTEN:${socket},fork,mode=660,user=$(id -u),group=$(id -g)" \
     "UNIX-CONNECT:${host_socket}" </dev/null >/dev/null 2>&1 &
   disown

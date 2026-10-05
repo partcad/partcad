@@ -8,8 +8,11 @@ not a distribution of its own; run all commands below from the repo root unless 
 [`partcad_service_json_rpc`](../partcad_service_json_rpc), through
 [`partcad_client`](../partcad_client): `start` goes through
 `partcad_client.client.start_daemon()` (forwarding the daemon-affecting globals —
-`--offline`, `--force-update`, `--python-sandbox`, verbosity — which otherwise stop at the client's own
-`user_config`), while `stop` calls `partcad_client.daemon.stop_daemon()`.
+`--offline`, `--force-update`, `--python-sandbox` when one was actually chosen, verbosity — which otherwise stop
+at the client's own `user_config`), while `stop` calls `partcad_client.daemon.stop_daemon()`. `start` asks for a
+daemon started *with those settings*: one already running with others restarts (`daemon.settings`, see
+`partcad_service_json_rpc/config_restart.py`) rather than being reused with the flags dropped. Every other
+command takes whatever daemon is running, since it sends its own configuration with each request.
 
 These two are also the VS Code extension's way in. It does not derive socket paths or probe liveness itself: it
 runs `pc daemon start`, reads the endpoint from stdout, and connects — so there is one implementation of "where

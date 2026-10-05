@@ -20,7 +20,7 @@ import sys
 
 from partcad_utils import process_role
 
-from . import __version__, debugger
+from . import __version__, config_restart, debugger
 from .core.session import Session
 from .rpc.methods import build_registry
 from .transport.stdio import serve_stdio
@@ -44,6 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="ADDR",
         help="Serve over HTTP at ADDR (default %s) in the foreground." % DEFAULT_HTTP_ADDRESS,
+    )
+    parser.add_argument(
+        "--replace-different",
+        action="store_true",
+        help="Restart a running daemon that was started with different settings, instead of reusing it.",
     )
     # Internal: serve a specific named pipe (used by the detached Windows child).
     parser.add_argument("--serve-pipe", default=None, help=argparse.SUPPRESS)
@@ -144,6 +149,10 @@ def _build_session(args: argparse.Namespace, log_dir: str = None) -> Session:
     # client of the workspace rather than one command.
     process_role.mark_daemon()
 
+    # Before anything reads the configuration, so that an edit made while the
+    # session is being built still counts as one (see 'config_restart').
+    config_restart.remember()
+
     # The same reasoning puts the debugger here: every serving process, and only
     # those, and before the session exists so that building it can be stepped
     # through. A no-op unless PC_DEBUGPY is set.
@@ -164,7 +173,7 @@ def main(argv=None) -> int:
     if args.serve_pipe is not None:  # pragma: no cover - Windows only
         from .win_pipe import serve_pipe
 
-        serve_pipe(_build_session(args), build_registry(), args.serve_pipe)
+        serve_pipe(_build_session(args), build_registry(), args.serve_pipe, settings=settings_argv(args))
         return 0
 
     if args.http is not None:
@@ -182,7 +191,11 @@ def main(argv=None) -> int:
     # daemon child (after fork), so the fast path (a live daemon) stays cheap.
     from . import daemon
 
-    daemon.ensure_daemon(lambda wdir: _build_session(args, wdir), daemon_argv=settings_argv(args))
+    daemon.ensure_daemon(
+        lambda wdir: _build_session(args, wdir),
+        daemon_argv=settings_argv(args),
+        replace_different=args.replace_different,
+    )
     return 0
 
 
