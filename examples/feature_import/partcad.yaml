@@ -620,24 +620,29 @@ assemblies:
       by, and what somebody has to do to make that joint.
     # The assembly instructions are checked in beside the ASSY file -
     # 'AeroAssembly_assy_example/AeroAssembly_connected.pdf', which is where
-    # the assembly's own name puts them - and regenerated with:
+    # the assembly's own name puts them - and produced by the 'pc render -r'
+    # sweep like every other checked-in artifact in this tree, so the
+    # 'Examples (PartCAD)' job holds them to the same thing it holds the
+    # drawings to: a sweep that leaves the working tree as it is.
     #
-    #   pc render -t pdf -a AeroAssembly_assy_example/AeroAssembly_connected
-    #
-    # Asked for rather than declared under 'render:', which is deliberate.
-    # A declared file type is produced by the 'pc render -r' sweep, and CI
-    # requires that sweep to leave the examples byte for byte as they are
-    # checked in; reportlab stamps every PDF it writes with the time it was
-    # written, so a declared one would differ on every run and would have to
-    # join the list of files nobody watches. This one is watched: it changes
-    # when somebody changes the assembly and regenerates it, which is the only
-    # thing that should change it.
+    # It was asked for by hand until it could promise that. reportlab stamps
+    # every PDF it writes with the time it was written and a fresh document
+    # id, so a declared one differed on every run; the book was rendered with
+    # 'pc render -t pdf -a ...' instead, and watched by whoever remembered to
+    # look. 'reproducible: true' is what settles the clock and the id - it is
+    # the same flag every drawing here sets, for the same reason, and
+    # 'examples/partcad.yaml' says once why the whole tree sets it. What it
+    # does on a document rather than a drawing is in 'document_pdf' and
+    # 'wrapper_render_pdf'.
+    render:
+      pdf:
+        reproducible: true
 
 # The package document: 'docs.intro' and 'docs.usage' above, plus what the
 # package declares. It is what a reader meets on GitHub, and it is what the
 # assembly instruction book links back to. Markdown is written byte for byte
 # the same every time, so 'pc render -r' leaving it unchanged is a check rather
-# than noise - which is exactly what the PDF beside it cannot promise.
+# than noise - which is now true of the instruction book beside it as well.
 render:
   readme:
     # Nothing here is rendered to an image, so every one of these sections

@@ -10,12 +10,14 @@ import os
 import re
 import sys
 import tempfile
+from types import SimpleNamespace
 
 import pytest
 
 import partcad as pc
 from partcad import assembly_factory_assy, assembly_guide
 from partcad import document as pc_document
+from partcad import document_pdf, shape_envelope
 from partcad.assembly import Assembly, AssemblyChild
 from partcad.exception import NotAnAssemblyFileError, NotManufacturableError
 from partcad.geom import Location
@@ -857,3 +859,85 @@ def test_section_page_of_a_one_off_assembly_says_nothing_about_repeating_it():
     assert texts == []
     (properties,) = [block for block in page.blocks if isinstance(block, pc_document.Properties)]
     assert [name for name, _ in properties.items] == ["Package", "Steps"]
+
+
+#
+# Whether the book is the same bytes every time
+#
+
+
+def _reproducible(package_render, object_render):
+    """'Project._document_reproducible' over two configurations, unbound.
+
+    A 'Project' is a package on disk; what this reads is two dicts, so it is
+    called against the two dicts rather than against a tree in a temporary
+    directory.
+    """
+    owner = SimpleNamespace(config_obj={"render": package_render} if package_render is not None else {})
+    shape = SimpleNamespace(config={"render": object_render} if object_render is not None else {})
+    return pc.project.Project._document_reproducible(owner, shape, "pdf")
+
+
+def test_a_document_is_reproducible_only_where_it_is_asked_for():
+    """'reproducible:' on the file type, the object's answer overriding the package's.
+
+    The same layering a wrapper file type gets, for the one field a document
+    has any use for -- a document is assembled by PartCAD rather than by a
+    wrapper, so it never reaches 'Shape._output_getopts'.
+    """
+    # Nothing said anywhere: off, as everywhere else.
+    assert _reproducible(None, None) is False
+    assert _reproducible({}, {}) is False
+    assert _reproducible({"pdf": None}, None) is False
+
+    # Either level can ask for it.
+    assert _reproducible({"pdf": {"reproducible": True}}, None) is True
+    assert _reproducible(None, {"pdf": {"reproducible": True}}) is True
+
+    # The object overrides the package, in both directions.
+    assert _reproducible({"pdf": {"reproducible": False}}, {"pdf": {"reproducible": True}}) is True
+    assert _reproducible({"pdf": {"reproducible": True}}, {"pdf": {"reproducible": False}}) is False
+
+    # A file type named only as the short form says nothing about this.
+    assert _reproducible({"pdf": "./"}, None) is False
+
+    # Another file type's setting is not this one's.
+    assert _reproducible({"svg": {"reproducible": True}}, None) is False
+
+    # And a value that is not a flag is refused rather than guessed at.
+    with pytest.raises(ValueError):
+        _reproducible({"pdf": {"reproducible": "sometimes"}}, None)
+
+
+def test_the_pdf_request_carries_whether_it_has_to_be_reproducible():
+    """The flag has to reach the sandbox, because only the sandbox can act on it.
+
+    'invariant' is reportlab's, so the whole of 'reproducible' for a PDF is
+    this one field arriving in the request. Asserted here rather than through a
+    rendered file: reportlab lives in the sandbox and not on the host, and a
+    link that goes missing between the two is invisible from either end -- the
+    book still renders, and still carries the clock.
+    """
+    document = pc_document.Document(
+        title="widget", pages=[pc_document.Page(blocks=[pc_document.Paragraph("A widget.")])]
+    )
+
+    seen = []
+
+    class FakeRuntime:
+        async def ensure_async(self, *args, **kwargs):
+            return None
+
+        async def run_async(self, command, request_serialized):
+            seen.append(shape_envelope.deserialize(request_serialized.strip().splitlines()[-1]))
+            return 0, shape_envelope.serialize({"success": True}), ""
+
+    ctx = SimpleNamespace(get_python_runtime=lambda **kwargs: FakeRuntime())
+
+    for asked, expected in ((True, True), (False, False)):
+        asyncio.run(document_pdf.render_pdf_async(ctx, document, "/tmp/widget.pdf", reproducible=asked))
+        assert seen[-1]["reproducible"] is expected
+
+    # Nothing asked for: the default is the same as everywhere else.
+    asyncio.run(document_pdf.render_pdf_async(ctx, document, "/tmp/widget.pdf"))
+    assert seen[-1]["reproducible"] is False

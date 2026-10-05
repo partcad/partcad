@@ -26,11 +26,21 @@ from .process_crash import command_failure
 DEFAULT_PAGE_SIZE = "A4"
 
 
-async def render_pdf_async(ctx, document: pc_document.Document, path, page_size=DEFAULT_PAGE_SIZE):
-    """Write 'document' to 'path' as a PDF file."""
+async def render_pdf_async(
+    ctx, document: pc_document.Document, path, page_size=DEFAULT_PAGE_SIZE, reproducible: bool = False
+):
+    """Write 'document' to 'path' as a PDF file.
+
+    'reproducible' asks for the same bytes for the same book -- what every
+    other file type's 'reproducible:' asks for, and what a document checked
+    into a repository needs to be a baseline rather than a diff on every run.
+    It is off by default for the same reason it is everywhere else: a book
+    produced only to be read does not need it. See 'output.REPRODUCIBLE_KEY'.
+    """
     request = {
         "document": pc_document.to_data(document),
         "page_size": page_size,
+        "reproducible": bool(reproducible),
     }
     request_serialized = shape_envelope.serialize(request)
 
@@ -57,5 +67,5 @@ async def render_pdf_async(ctx, document: pc_document.Document, path, page_size=
     return path
 
 
-def render_pdf(ctx, document: pc_document.Document, path, page_size=DEFAULT_PAGE_SIZE):
-    return asyncio.run(render_pdf_async(ctx, document, path, page_size))
+def render_pdf(ctx, document: pc_document.Document, path, page_size=DEFAULT_PAGE_SIZE, reproducible: bool = False):
+    return asyncio.run(render_pdf_async(ctx, document, path, page_size, reproducible=reproducible))

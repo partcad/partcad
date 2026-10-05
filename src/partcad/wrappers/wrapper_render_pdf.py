@@ -49,9 +49,16 @@ MIN_WRAP_WIDTH = 24.0
 class Composer:
     """Lays blocks out on paper, breaking to a new page when one runs out."""
 
-    def __init__(self, path, page_size, footer=None):
+    def __init__(self, path, page_size, footer=None, reproducible=False):
         self.width, self.height = page_size
-        self.canvas = pdf_canvas.Canvas(path, pagesize=(self.width, self.height))
+        # 'invariant' is what makes the same book the same file. Without it
+        # reportlab writes the wall clock into '/CreationDate' and '/ModDate'
+        # and a random '/ID', so two runs a second apart differ in bytes while
+        # saying the same thing -- which is the one thing a checked-in document
+        # may not do (see 'output.REPRODUCIBLE_KEY'). It settles nothing else:
+        # the illustrations arrive as SVGs that were already rendered, and
+        # whether *those* are reproducible is the projection's business.
+        self.canvas = pdf_canvas.Canvas(path, pagesize=(self.width, self.height), invariant=1 if reproducible else 0)
         self.footer = footer
         self.page_number = 0
         self._start_page()
@@ -327,7 +334,7 @@ def process(path, request):
         if footer:
             footer = _plain(footer)
 
-        composer = Composer(path, page_size, footer)
+        composer = Composer(path, page_size, footer, reproducible=bool(request.get("reproducible")))
         for number, page in enumerate(document.get("pages") or []):
             if number > 0:
                 composer.new_page()
