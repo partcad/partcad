@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 20:49+0000\n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -17,7 +17,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/contributing.rst:2
 msgid "Contributing"
@@ -865,16 +865,184 @@ msgstr ""
 "``/run/user/$(id -u)/gnupg/`` befindet, nicht unter ``~/.gnupg/``:"
 
 #: ../../source/contributing.rst:400
+msgid "Without Docker: a native checkout"
+msgstr ""
+
+#: ../../source/contributing.rst:402
+msgid ""
+"Both routes above start a container, and a container needs a Docker "
+"daemon. Some machines have none and cannot be given one — the sandbox a "
+"cloud coding agent runs in, a CI runner with no privileged access. There "
+"the dev container is not a thing to insist on, so install into the "
+"checkout and run everything directly:"
+msgstr ""
+
+#: ../../source/contributing.rst:410
+msgid ""
+"That installs git-lfs, runs ``poetry install``, installs OpenSCAD, checks"
+" for the one thing a parallel install can get wrong (below), and reports "
+"what else this machine has. Afterwards, every command in the rest of this"
+" page works with its ``devcontainer exec`` prefix dropped and its "
+"``poetry run`` kept."
+msgstr ""
+
+#: ../../source/contributing.rst:414
+msgid ""
+"git-lfs is installed first, and it is the one step whose absence costs "
+"something you cannot see. ``.gitattributes`` routes every ``.png``, "
+"``.jpg`` and ``.svg`` through the ``lfs`` filter, and git resolves a "
+"``filter=`` attribute naming a driver that no config defines by storing "
+"the file *verbatim* — no warning, no error, nothing in the commit to look"
+" at afterwards. So an image committed from a machine without git-lfs is "
+"raw bytes at a path declared to hold a pointer, and it surfaces on "
+"somebody else's machine as ``Encountered N files that should have been "
+"pointers, but weren't``, with N files that ``git checkout`` cannot clean:"
+" git keeps cleaning their real bytes into a pointer and comparing that "
+"against a raw blob. The four images under "
+"``examples/feature_render/images/`` were committed that way and have "
+"since been repaired. Repairing one is ``git add --renormalize <path>`` "
+"and a commit. The exceptions to the rule are listed in ``.gitattributes``"
+" with a reason beside each; read them before adding one."
+msgstr ""
+
+#: ../../source/contributing.rst:424
+msgid ""
+"OpenSCAD is installed rather than merely reported because PartCAD treats "
+"it as part of the toolchain and not as an optional extra: the standalone "
+"bundles carry one, ``pc healthcheck`` asks after it, and a ``.scad`` part"
+" raises \"OpenSCAD executable is not found\" rather than degrading. The "
+"script uses ``apt-get`` or Homebrew, and stops if it has neither — an "
+"environment without OpenSCAD is not set up, and finding that out from a "
+"test run half an hour later is the outcome this avoids."
+msgstr ""
+
+#: ../../source/contributing.rst:430
+msgid ""
+"This is still a fallback rather than a second supported environment, and "
+"it is worth being explicit about what it does not give you:"
+msgstr ""
+
+#: ../../source/contributing.rst:433
+msgid ""
+"**The** ``pre-commit`` **hooks do not run.** ``pre-commit`` is installed "
+"by the dev container's image, not by ``poetry install``, and ``.git/hooks"
+"/pre-commit`` is written by ``pre-commit install`` running inside the "
+"container. So there is no hook to fail, and ``git commit`` runs no gate "
+"at all without saying so. Run ``pytest``, ``behave`` and the linters "
+"yourself before committing; CI runs them regardless. The linter that "
+"gates is ``isort``:"
+msgstr ""
+
+#: ../../source/contributing.rst:442
+msgid ""
+"``--filter-files`` is what makes the ``extend_skip``/``extend_skip_glob``"
+" entries in ``pyproject.toml`` apply to files named on the command line, "
+"and those entries are not style preferences — they hold the import order "
+"that the CAD sandbox wrappers need in order to pin expat before OCP "
+"loads. ``black`` and ``flake8`` are configured but do not gate; the root "
+"``AGENTS.md`` says what each would take to turn on."
+msgstr ""
+
+#: ../../source/contributing.rst:446
+msgid ""
+"**A Docker daemon**, which only the KiCad example needs. Without one that"
+" example is skipped, whether the machine said so in advance — "
+"``PC_USE_DOCKER=false`` in the environment, or ``useDocker: false`` in "
+"the user configuration — or the daemon simply is not answering. Having no"
+" container runtime is the one thing that test passes over: an image it "
+"cannot pull, a ``kicad-cli`` that errors and a part that comes back empty"
+" all still fail it, because those are the KiCad path being broken rather "
+"than the machine lacking a feature."
+msgstr ""
+
+#: ../../source/contributing.rst:451
+msgid ""
+"**conda**, without which the ``pythonSandbox`` option falls back to "
+"``venv``. That builds a real virtual environment of PartCAD's own and "
+"runs the CAD wrappers in it; it just cannot provision an *interpreter "
+"version*, so a package asking for a Python this host does not have "
+"renders on the host's instead and says so."
+msgstr ""
+
+#: ../../source/contributing.rst:457
+msgid ""
+"**Do not run the whole** ``behave`` **suite on such a machine — run the "
+"one feature your change touches.** Every scenario takes a throwaway "
+"``$HOME`` (the ``Given I have temporary $HOME`` in each feature's "
+"``Background``), so a scenario that renders anything builds a CAD sandbox"
+" of its own from nothing and deletes it again: roughly 2.7 GB and minutes"
+" of ``pip`` each, across 166 scenarios, and several of those on disk at "
+"once under ``behavex``'s parallel workers. That is hours and tens of "
+"gigabytes, and where the disk is a fixed allowance it ends in \"no space "
+"left on device\" rather than in a result."
+msgstr ""
+
+#: ../../source/contributing.rst:469
+msgid ""
+"A green whole-suite ``behave`` is not a prerequisite for opening a pull "
+"request from a machine like this: CI shards that suite and runs it there."
+" Say in the pull request which features you did run."
+msgstr ""
+
+#: ../../source/contributing.rst:474
+msgid ""
+"**Two wheels that install the same file can leave the checkout "
+"segfaulting, and nothing reports it.** Poetry installs in parallel, so on"
+" a machine slow enough to lose that race both workers write that one path"
+" at once and what lands is a blend of the two wheels. Both installs "
+"report success."
+msgstr ""
+
+#: ../../source/contributing.rst:478
+msgid ""
+"What you see is much later and somewhere else: an ``import`` of a native "
+"module like that hands a corrupt ELF to the dynamic loader, and the "
+"interpreter dies with ``Fatal Python error: Segmentation fault`` — during"
+" pytest *collection*, if a test module imports it at import time, so no "
+"test has failed and there is nothing to point at."
+msgstr ""
+
+#: ../../source/contributing.rst:487
+msgid ""
+"``setup-native.sh`` runs the second of those. The dev container's image "
+"installs from ``.devcontainer/requirements.txt`` with pip, one wheel at a"
+" time, which is why this is not the container's problem."
+msgstr ""
+
+#: ../../source/contributing.rst:490
+msgid ""
+"The pair that did this was ``cadquery-ocp`` and ``cadquery-ocp-novtk``, "
+"which both ship one 160 MB ``OCP/OCP.cpython-*.so``. ``cadquery-ocp`` is "
+"no longer declared in ``pyproject.toml`` — nothing in this environment "
+"imports ``cadquery`` in process, and build123d pulls the novtk build in "
+"regardless — so one distribution owns that file and it can no longer be "
+"written twice. The checker stays for the next such pair, which will not "
+"announce itself either."
+msgstr ""
+
+#: ../../source/contributing.rst:496
+msgid ""
+"It also stays for the other half of the same problem, which **an existing"
+" checkout will hit exactly once**: uninstalling a distribution deletes "
+"the files its RECORD names, the ones a wheel beside it also installed "
+"included. So ``poetry sync`` removing ``cadquery-ocp`` takes ``OCP/`` "
+"away from ``cadquery-ocp-novtk``, which stays installed, and ``import "
+"OCP`` stops working with nothing in either command's output about it. The"
+" checker reports a distribution whose recorded files are gone, and "
+"``--fix`` puts them back."
+msgstr ""
+
+#: ../../source/contributing.rst:503
 msgid "Install Dependencies"
 msgstr "Abhängigkeiten installieren"
 
-#: ../../source/contributing.rst:402
+#: ../../source/contributing.rst:505
 msgid "We are using `Poetry`_ to manage dependencies and virtual environments."
 msgstr ""
 "Wir verwenden `Poetry`_ zur Verwaltung von Abhängigkeiten und virtuellen "
 "Umgebungen."
 
-#: ../../source/contributing.rst:406
+#: ../../source/contributing.rst:509
 msgid ""
 "Poetry is a tool for dependency management and packaging in Python. It "
 "allows you to declare the libraries your project depends on and it will "
@@ -887,7 +1055,7 @@ msgstr ""
 "Poetry bietet eine Lockfile, um wiederholbare Installationen "
 "sicherzustellen, und kann Ihr Projekt zur Distribution bauen."
 
-#: ../../source/contributing.rst:410
+#: ../../source/contributing.rst:513
 msgid ""
 "Once the Dev Container is started, open a shell session in the Terminal "
 "view of VS Code. The current working directory will be "
@@ -899,7 +1067,7 @@ msgstr ""
 "``/workspaces/partcad`` mit den Quelldateien. Um Python-Pakete zu "
 "installieren, führen Sie Folgendes aus:"
 
-#: ../../source/contributing.rst:417
+#: ../../source/contributing.rst:520
 msgid ""
 "It will create virtual environment in ``.venv/`` directory and download "
 "about 1.5 GB dependencies. Once all dependencies are downloaded Poetry "
@@ -911,11 +1079,50 @@ msgstr ""
 "heruntergeladen sind, installiert Poetry auch das aktuelle Paket im "
 "editierbaren Modus, und Sie sehen Folgendes:"
 
-#: ../../source/contributing.rst:425
+#: ../../source/contributing.rst:529
+msgid ""
+"**A checkout that predates the one-wheel layout needs cleaning out "
+"first.** This repository used to hold six Python distributions in six "
+"top-level directories -- ``partcad/``, ``partcad-cli/``, ``partcad-"
+"client/``, ``partcad-ide-client/``, ``partcad-service-json-rpc/``, "
+"``partcad-utils/`` -- and to install a seventh, ``partcad-dev``, as the "
+"root project. Switching to the branch that collapsed them into ``src/`` "
+"leaves both behind, and neither goes away on its own:"
+msgstr ""
+
+#: ../../source/contributing.rst:535
+msgid ""
+"``git`` does not remove the old directories, because the only files still"
+" in them are ignored ones (``__pycache__/``, ``*.egg-info/``). They look "
+"empty and are not."
+msgstr ""
+
+#: ../../source/contributing.rst:537
+msgid ""
+"``.venv`` keeps the ``partcad-dev`` install. Its ``.pth`` still puts the "
+"six deleted ``*/src`` directories on ``sys.path`` and its ``pc`` still "
+"points at the pre-rename entry point, so ``pc`` fails with "
+"``ModuleNotFoundError: No module named 'partcad_cli.click.command'``. "
+"``poetry install`` does not replace it -- the distribution was renamed, "
+"so Poetry does not know it is there -- and ``pip uninstall partcad-dev`` "
+"refuses to remove it, with ``ValueError: ('Invalid group name', 'poetry-"
+"multiproject-plugin')``, because the metadata it left behind names an "
+"entry point group that is not valid."
+msgstr ""
+
+#: ../../source/contributing.rst:544
+msgid "Delete both from the repository root, then install again:"
+msgstr ""
+
+#: ../../source/contributing.rst:553
+msgid "A fresh clone needs none of this."
+msgstr ""
+
+#: ../../source/contributing.rst:556
 msgid "Activate Environment"
 msgstr "Umgebung aktivieren"
 
-#: ../../source/contributing.rst:427
+#: ../../source/contributing.rst:558
 msgid ""
 "In order to update your ``$PATH`` and be able to run commandline tools "
 "such as ``pytest`` you need to activate virtual environment:"
@@ -924,11 +1131,11 @@ msgstr ""
 "``pytest`` ausführen zu können, müssen Sie die virtuelle Umgebung "
 "aktivieren:"
 
-#: ../../source/contributing.rst:434
+#: ../../source/contributing.rst:565
 msgid "or"
 msgstr "oder"
 
-#: ../../source/contributing.rst:440
+#: ../../source/contributing.rst:571
 msgid ""
 "After that you will be able to run ``pc``, for example ``pc version``, "
 "which will output something along the lines:"
@@ -936,11 +1143,11 @@ msgstr ""
 "Danach können Sie ``pc`` ausführen, zum Beispiel ``pc version``, was etwa"
 " Folgendes ausgibt:"
 
-#: ../../source/contributing.rst:448
+#: ../../source/contributing.rst:579
 msgid "Make Changes"
 msgstr "Änderungen vornehmen"
 
-#: ../../source/contributing.rst:450
+#: ../../source/contributing.rst:581
 msgid ""
 "Make the changes through Visual Studio Code how you would do for any "
 "other project."
@@ -948,11 +1155,11 @@ msgstr ""
 "Nehmen Sie die Änderungen über Visual Studio Code vor, wie Sie es bei "
 "jedem anderen Projekt tun würden."
 
-#: ../../source/contributing.rst:453
+#: ../../source/contributing.rst:584
 msgid "Manual Tests"
 msgstr "Manuelle Tests"
 
-#: ../../source/contributing.rst:455
+#: ../../source/contributing.rst:586
 msgid ""
 "To test functionality of the Python core module, use corresponding "
 "command line interface (CLI) commands."
@@ -960,7 +1167,7 @@ msgstr ""
 "Um die Funktionalität des Python-Kernmoduls zu testen, verwenden Sie die "
 "entsprechenden Befehle der Befehlszeilenschnittstelle (CLI)."
 
-#: ../../source/contributing.rst:457
+#: ../../source/contributing.rst:588
 msgid ""
 "To test CLI functionality, simply type commands in a shell session in the"
 " Terminal view of the VSCode where the development takes place."
@@ -969,7 +1176,7 @@ msgstr ""
 "Shell-Sitzung in der Terminal-Ansicht des VSCode ein, in dem entwickelt "
 "wird."
 
-#: ../../source/contributing.rst:459
+#: ../../source/contributing.rst:590
 msgid ""
 "To test VSCode plugin, run the following commands in a shell session in "
 "the Terminal view before restarting the VSCode:"
@@ -977,7 +1184,7 @@ msgstr ""
 "Um das VSCode-Plugin zu testen, führen Sie die folgenden Befehle in einer"
 " Shell-Sitzung in der Terminal-Ansicht aus, bevor Sie VSCode neu starten:"
 
-#: ../../source/contributing.rst:468
+#: ../../source/contributing.rst:599
 msgid ""
 "To test the Python core module using the VSCode plugin, click the "
 "`Restart PartCAD` icon in the PartCAD's `Context` view after each change."
@@ -986,7 +1193,7 @@ msgstr ""
 "Sie nach jeder Änderung auf das Symbol `Restart PartCAD` in der "
 "`Context`-Ansicht von PartCAD."
 
-#: ../../source/contributing.rst:472
+#: ../../source/contributing.rst:603
 msgid ""
 "If you are developing inside the PartCAD Dev container using PartCAD "
 "VSCode extension, and are seeing this:"
@@ -994,7 +1201,7 @@ msgstr ""
 "Wenn Sie innerhalb des PartCAD-Dev-Containers mit der PartCAD-VSCode-"
 "Erweiterung entwickeln und Folgendes sehen:"
 
-#: ../../source/contributing.rst:478
+#: ../../source/contributing.rst:609
 msgid ""
 "then you are likely to have Git configured to use SSH creds to access "
 "GitHub, while the SSH creds are not available in the Dev container."
@@ -1003,7 +1210,7 @@ msgstr ""
 " den Zugriff auf GitHub verwendet, während diese SSH-Zugangsdaten im Dev "
 "Container nicht verfügbar sind."
 
-#: ../../source/contributing.rst:481
+#: ../../source/contributing.rst:612
 msgid ""
 "This could be fixed by running ``ssh-add`` on the host and confirmed by "
 "running ``ssh-add -l`` inside the container."
@@ -1011,7 +1218,7 @@ msgstr ""
 "Dies lässt sich beheben, indem Sie ``ssh-add`` auf dem Host ausführen, "
 "und bestätigen, indem Sie ``ssh-add -l`` im Container ausführen."
 
-#: ../../source/contributing.rst:484
+#: ../../source/contributing.rst:615
 msgid ""
 "To test documentation changes, run the following command before "
 "navigating your favorite VSCode browser extension to `./docs/build/html`:"
@@ -1020,7 +1227,7 @@ msgstr ""
 "aus, bevor Sie mit Ihrer bevorzugten VSCode-Browser-Erweiterung zu "
 "`./docs/build/html` navigieren:"
 
-#: ../../source/contributing.rst:490
+#: ../../source/contributing.rst:621
 msgid ""
 "Alternatively, run the following command before navigating your favorite "
 "VSCode browser extension to `127.0.0.1:8000`:"
@@ -1028,15 +1235,15 @@ msgstr ""
 "Alternativ führen Sie den folgenden Befehl aus, bevor Sie mit Ihrer "
 "bevorzugten VSCode-Browser-Erweiterung zu `127.0.0.1:8000` navigieren:"
 
-#: ../../source/contributing.rst:497
+#: ../../source/contributing.rst:628
 msgid "Automated Tests"
 msgstr "Automatisierte Tests"
 
-#: ../../source/contributing.rst:500
+#: ../../source/contributing.rst:631
 msgid "Pytest"
 msgstr "Pytest"
 
-#: ../../source/contributing.rst:502
+#: ../../source/contributing.rst:633
 msgid ""
 "PartCAD uses ``pytest`` for unit testing, where a particular piece of "
 "code or feature is tested."
@@ -1044,16 +1251,16 @@ msgstr ""
 "PartCAD verwendet ``pytest`` für Unit-Tests, bei denen ein bestimmtes "
 "Stück Code oder eine bestimmte Funktion getestet wird."
 
-#: ../../source/contributing.rst:504
+#: ../../source/contributing.rst:635
 msgid ""
 "If you `activated virtual environment`_ you can just run ``pytest`` from "
 "a bash session in the Terminal view of VSCode."
 msgstr ""
-"Wenn Sie die `activated virtual environment`_ aktiviert haben, können Sie einfach "
-"``pytest`` aus einer Bash-Sitzung in der Terminal-Ansicht von VSCode "
-"ausführen."
+"Wenn Sie die `activated virtual environment`_ aktiviert haben, können Sie"
+" einfach ``pytest`` aus einer Bash-Sitzung in der Terminal-Ansicht von "
+"VSCode ausführen."
 
-#: ../../source/contributing.rst:506
+#: ../../source/contributing.rst:637
 msgid ""
 "You can also use VS Code's built-in **Testing** integration to run and "
 "debug tests via the UI. To set this up:"
@@ -1062,19 +1269,19 @@ msgstr ""
 "verwenden, um Tests über die Benutzeroberfläche auszuführen und zu "
 "debuggen. So richten Sie dies ein:"
 
-#: ../../source/contributing.rst:508
+#: ../../source/contributing.rst:639
 msgid "Open the Command Palette (``Ctrl+Shift+P`` or ``Cmd+Shift+P``)"
 msgstr "Öffnen Sie die Befehlspalette (``Ctrl+Shift+P`` oder ``Cmd+Shift+P``)"
 
-#: ../../source/contributing.rst:509
+#: ../../source/contributing.rst:640
 msgid "Run ``Python: Select Interpreter``"
 msgstr "Führen Sie ``Python: Select Interpreter`` aus"
 
-#: ../../source/contributing.rst:510
+#: ../../source/contributing.rst:641
 msgid "Select ``('.venv': Poetry) .venv/bin/python`` from the list"
 msgstr "Wählen Sie ``('.venv': Poetry) .venv/bin/python`` aus der Liste"
 
-#: ../../source/contributing.rst:512
+#: ../../source/contributing.rst:643
 msgid ""
 "You also can run ``pytest`` without activating environment via Poetry, "
 "for example:"
@@ -1082,12 +1289,15 @@ msgstr ""
 "Sie können ``pytest`` auch ausführen, ohne die Umgebung zu aktivieren, "
 "über Poetry, zum Beispiel:"
 
-#: ../../source/contributing.rst:518
+#: ../../source/contributing.rst:649
+#, fuzzy
 msgid ""
 "The tests for the core module are located in the ``./tests/partcad`` "
-"directory. The tests for the CLI module are located in the ``./partcad-"
-"cli/tests`` directory. The tests for the LSP server of VSCode plugin are "
-"located in the ``./ide/vscode/src/test/python_tests`` directory."
+"directory. The tests for the CLI module are located in the "
+"``./tests/partcad_cli`` directory. The tests for the IDE viewer client "
+"are located in the ``./tests/partcad_ide_client`` directory. The tests "
+"for the LSP server of VSCode plugin are located in the "
+"``./ide/vscode/src/test/python_tests`` directory."
 msgstr ""
 "Die Tests für das Kernmodul befinden sich im Verzeichnis "
 "``./tests/partcad``. Die Tests für das CLI-Modul befinden sich im "
@@ -1095,11 +1305,47 @@ msgstr ""
 "VSCode-Plugins befinden sich im Verzeichnis ``./partcad-ide-"
 "vscode/src/test/python_tests``."
 
-#: ../../source/contributing.rst:523
+#: ../../source/contributing.rst:654
+msgid ""
+"**The first run is slow, and that is the sandboxes rather than the "
+"tests.** A test whose part is scripted (build123d, CadQuery, SDF, "
+"OpenSCAD) runs in a Python environment PartCAD provisions on first use --"
+" a fresh interpreter plus a pip install of the CAD stack -- and whichever"
+" test is the first to need a given one pays for building it. Once built "
+"they are cached under ``~/.partcad`` and reused, so the same suite that "
+"took half an hour cold takes minutes warm. The ``pytest`` ``pre-commit`` "
+"hook allows 15 minutes per test for that reason (``PC_PYTEST_TIMEOUT`` "
+"overrides it); a test reported as timing out on a cold cache is worth "
+"simply running again before it is treated as a bug."
+msgstr ""
+
+#: ../../source/contributing.rst:662
+msgid ""
+"**A gate reads the session's verdict, not pytest's exit code.** The two "
+"disagree on Windows, in both directions: pytest has exited ``0`` with a "
+"test having failed, and it exits ``127`` after a session in which every "
+"test passed. So a caller that must not be wrong sets "
+"``PYTEST_RESULT_MARKER`` to a path, and the ``pytest_sessionfinish`` hook"
+" in the repository's root ``conftest.py`` writes ``success`` there only "
+"when pytest's *final* exit status is clean *and* it counted no failed "
+"tests, and ``failure`` otherwise -- a collection error included, which "
+"pytest reports as exit status 2. \"Final\" is load-bearing: pytest's "
+"terminal reporter can still raise the status after the inner session "
+"hooks have run (exceeding ``--max-warnings`` is how), so the hook is the "
+"outermost wrapper and reads ``session.exitstatus`` rather than the status"
+" it was handed. Both gates do this -- the ``pytest`` ``pre-commit`` hook "
+"and the ``Pytest`` job in CI -- and both fail unless they read "
+"``success``, so a run that never reaches the hook at all (a crash mid-"
+"suite, a runner that goes away) writes no marker and fails too. Nothing "
+"is written unless that variable is set, so an ordinary ``poetry run "
+"pytest`` is unaffected."
+msgstr ""
+
+#: ../../source/contributing.rst:676
 msgid "Behave"
 msgstr "Behave"
 
-#: ../../source/contributing.rst:525
+#: ../../source/contributing.rst:678
 msgid ""
 "PartCAD uses ``behave`` for integration testing, where a part of the "
 "system is tested as a whole."
@@ -1107,7 +1353,7 @@ msgstr ""
 "PartCAD verwendet ``behave`` für Integrationstests, bei denen ein Teil "
 "des Systems als Ganzes getestet wird."
 
-#: ../../source/contributing.rst:527
+#: ../../source/contributing.rst:680
 msgid ""
 "To run tests using ``behave``, execute the following command in an "
 "activated environment:"
@@ -1115,7 +1361,7 @@ msgstr ""
 "Um Tests mit ``behave`` auszuführen, führen Sie den folgenden Befehl in "
 "einer aktivierten Umgebung aus:"
 
-#: ../../source/contributing.rst:533
+#: ../../source/contributing.rst:686
 msgid ""
 "Feature definitions and step implementations are located in the "
 "``./features`` directory."
@@ -1123,11 +1369,235 @@ msgstr ""
 "Feature-Definitionen und Step-Implementierungen befinden sich im "
 "Verzeichnis ``./features``."
 
-#: ../../source/contributing.rst:536
+#: ../../source/contributing.rst:689
+msgid "Examples"
+msgstr ""
+
+#: ../../source/contributing.rst:691
+msgid ""
+"The packages under ``./examples`` are documentation, and they are also a "
+"regression test. Each one declares a ``render:`` section, and the images "
+"and ``README.md`` files that ``pc render`` produces from it are **checked"
+" in**. That is deliberate: a change in how PartCAD renders then shows up "
+"as a diff in those files, and whoever made the change gets to decide "
+"whether it is an improvement or a regression before it reaches a reader "
+"of the README."
+msgstr ""
+
+#: ../../source/contributing.rst:698
+msgid ""
+"So if your change affects what a projection or a generated document looks"
+" like, re-render the examples and commit the result along with it:"
+msgstr ""
+
+#: ../../source/contributing.rst:705
+msgid ""
+"Two things guard the invariant. The ``example-images`` ``pre-commit`` "
+"hook is instant and checks only what is already on disk: every image an "
+"example's ``README.md`` points at has to exist and be checked in, and no "
+"``.gitignore`` may hide one. It exists because the mistake that costs is "
+"asymmetric -- a regenerated ``README.md`` is a tracked file and stages "
+"itself with ``git add -u``, while the images beside it are new and "
+"untracked and do not. The ``Examples (PartCAD)`` CI job then renders "
+"everything and fails if the working tree changed at all; that check runs "
+"on one cell of the matrix, because what is checked in is one rendering."
+msgstr ""
+
+#: ../../source/contributing.rst:715
+msgid ""
+"Everything PartCAD implements itself can be a baseline, and what asks for"
+" one is ``reproducible: true`` on the file type -- the flag every "
+"``export:`` and ``render:`` file type takes (see :ref:`the reproducible "
+"flag <reproducible>`). Every drawing under ``examples/`` sets it, and a "
+"new example has to set it too, or what it checks in is a file that "
+"differs from itself on the next run."
+msgstr ""
+
+#: ../../source/contributing.rst:721
+msgid ""
+"It buys three things. The SVG projection goes through OpenCASCADE's exact"
+" hidden-line algorithm rather than the polygonal one, which projects a "
+"triangulation and so draws a slightly different silhouette on a different"
+" architecture. Every number written into the drawing is rounded to the "
+"``precision`` the file type claims, which is what stops a stroke width "
+"that differs in its sixteenth digit from being a diff. And a DXF -- which"
+" a CAD tool would otherwise stamp with the time it was written and a "
+"fresh pair of GUIDs -- gets fixed values for those and a pinned order for"
+" its ``CLASSES`` section, which ezdxf otherwise derives from a ``set`` "
+"and so emits differently per process."
+msgstr ""
+
+#: ../../source/contributing.rst:732
+msgid ""
+"It is ``false`` by default, because the exact projection is much the "
+"slower of the two on anything large and is the one that can take the "
+"sandbox down; a picture produced only to be looked at should be the "
+"fastest correct one. And it is a floor rather than a promise -- it "
+"settles everything PartCAD chooses, and what is left is the kernel's own "
+"arithmetic, on which two architectures can still disagree along a curved "
+"silhouette. That is the other reason this check runs on one cell of the "
+"matrix."
+msgstr ""
+
+#: ../../source/contributing.rst:740
+msgid ""
+"That cell is ``ubuntu-latest`` on x86_64, rendering in the ``docker`` "
+"Python sandbox -- so that is the machine the checked-in drawings belong "
+"to, and the one to re-render them on. A render from anywhere else is a "
+"true drawing of the same object and still not the file the check compares"
+" against: twenty-seven of them came back from an arm64 laptop differing "
+"along a curve, and the job stayed red for everybody until they were "
+"rendered again on Linux. A machine with a container runtime already picks"
+" that sandbox by itself; a configuration that has said otherwise is "
+"overruled for one run with ``PC_PYTHON_SANDBOX=docker``."
+msgstr ""
+
+#: ../../source/contributing.rst:749
+msgid ""
+"An implementation another package supplies is not PartCAD's to fix, and "
+"one of them may well write a different file every time. Those files are "
+"named in the CI check's ``UNSTABLE`` list, which is deliberately short: "
+"every entry is a file nobody is watching any more, so it needs a reason "
+"there and the same reason where a reader of that package will meet it."
+msgstr ""
+
+#: ../../source/contributing.rst:755
+msgid ""
+"Four of the five entries today are the raster projections of "
+"``examples/feature_render``, and what they drift on is the encoding "
+"rather than the picture: PartCAD's own SVG goes into svglib, reportlab "
+"and Pillow, and that stack is resolved into the sandbox when it is "
+"provisioned. ``reproducible`` settles the projection they are drawn from "
+"and cannot settle what a new release of an encoder does with it."
+msgstr ""
+
+#: ../../source/contributing.rst:762
+msgid ""
+"The fifth is ``examples/feature_render_custom/bracket.svg``. Its PDF "
+"sibling was there too and came off once the implementation started "
+"passing ``reproducible`` through to draftwright's own flag of the same "
+"name; the SVG is still there because draftwright writes the x-axis "
+"rotation of an elliptical arc at whatever the float came out as, and two "
+"architectures disagree about it in the last bit. PartCAD rounds its own "
+"drawings to the precision the file type claims, which is what makes those"
+" comparable -- those bytes are not PartCAD's."
+msgstr ""
+
+#: ../../source/contributing.rst:771
+msgid "Coverage"
+msgstr ""
+
+#: ../../source/contributing.rst:773
+msgid ""
+"Every suite above measures coverage, and no one of those measurements "
+"means much on its own: the ``Pytest`` job never starts a CAD sandbox, "
+"``Behave`` drives the installed ``pc`` and never imports a unit-test "
+"helper, and the example sweeps walk success paths only. CI merges them. "
+"The ``Coverage`` job runs after every suite, combines the raw "
+"``.coverage`` data each one uploaded, and publishes the result three "
+"ways:"
+msgstr ""
+
+#: ../../source/contributing.rst:778
+msgid ""
+"the ``coverage-html-report`` artifact on the run -- download it, unpack "
+"it and open ``htmlcov/index.html``;"
+msgstr ""
+
+#: ../../source/contributing.rst:779
+msgid ""
+"**one comment** on the pull request, edited in place on every push, with "
+"the project rate, the patch rate and the changed statements nothing "
+"exercised;"
+msgstr ""
+
+#: ../../source/contributing.rst:781
+msgid ""
+"the ``Coverage`` check itself, which is the only thing here that can fail"
+" your pull request."
+msgstr ""
+
+#: ../../source/contributing.rst:783
+msgid ""
+"This replaced Codecov, and there is no third-party service in it any "
+"more. The merge is ``coverage combine`` over the data files, which is a "
+"**union of line numbers**, not an average of percentages: a line "
+"``Behave`` hit on Windows and ``Pytest`` missed on Linux is covered once."
+" What lets it see those as one file is the ``[paths]`` section of ``dev-"
+"tools/coverage.rc``, which maps the three roots the same file is recorded"
+" under -- the checkout, ``site-packages``, and either of those with "
+"Windows separators -- onto one."
+msgstr ""
+
+#: ../../source/contributing.rst:789
+msgid ""
+"**The requirement is a floor under patch coverage.** \"Patch\" is the "
+"statements your pull request added or changed, and the floor is the "
+"project's own statement coverage *in the same run*: cover what you write "
+"at least as well as this repository is already covered. Nothing is stored"
+" between runs and nothing is compared against history, so there is no "
+"baseline to maintain and no way for the bar to drift. A change that "
+"touches no statement coverage measures -- documentation, workflows, a "
+"test -- has no patch to hold to it and passes with a notice saying so."
+msgstr ""
+
+#: ../../source/contributing.rst:796
+msgid ""
+"Lines that are not statements are in neither half of that fraction: a "
+"comment, a blank line, or a file the ``include`` list in ``dev-"
+"tools/coverage.rc`` does not name. The figure answers \"is the new code "
+"exercised\", not \"how much did you type\"."
+msgstr ""
+
+#: ../../source/contributing.rst:800
+msgid ""
+"Every suite measures through the same ``dev-tools/coverage.rc``, and that"
+" is load-bearing rather than tidy: it sets ``branch = True``, and "
+"``coverage combine`` will not mix branch data with statement-only data. "
+"The suites that drive ``coverage run`` pass the file on the command line;"
+" ``pytest`` measures through pytest-cov, which finds no configuration on "
+"its own here, so ``addopts`` names ``--cov-config=dev-"
+"tools/coverage.rc``. Drop that and the merge does not degrade, it fails "
+"outright."
+msgstr ""
+
+#: ../../source/contributing.rst:806
+msgid ""
+"A file **no job imported at all** does count, and it takes a step to make"
+" it. coverage.py reports the files it saw, so a module nothing exercises "
+"is absent from the merged data rather than zero in it -- which would be a"
+" hole in precisely the shape of the change worth catching, since a brand-"
+"new untested module would contribute no statements at all and the "
+"requirement would find nothing to hold. The merge therefore walks the "
+"packages in scope and records every file it did not find, at nought "
+"percent, before writing any report. This is also why the project rate "
+"here is lower than the one Codecov used to show: it was never that high."
+msgstr ""
+
+#: ../../source/contributing.rst:813
+msgid ""
+"To see the same numbers locally, run whichever suites your change touches"
+" and then merge what they wrote:"
+msgstr ""
+
+#: ../../source/contributing.rst:822
+msgid ""
+"Two notes on the comment. It is posted by the run itself, so on a pull "
+"request **from a fork** it does not appear: GitHub gives such a run a "
+"read-only token, on purpose, and no setting here changes that. The report"
+" is in the ``Coverage`` job's summary instead, and the requirement still "
+"gates. And ``CI-Dev`` measures coverage too but does not feed this report"
+" -- a ``needs:`` does not reach across workflows, so there is no moment "
+"at which ``CI`` knows that run has finished. Its suites are the same "
+"suites run in the dev container; it keeps publishing its own "
+"``coverage.xml`` inside its test-results artifact."
+msgstr ""
+
+#: ../../source/contributing.rst:830
 msgid "Commit & Push Changes"
 msgstr "Änderungen committen und pushen"
 
-#: ../../source/contributing.rst:538
+#: ../../source/contributing.rst:832
 msgid ""
 "You can commit changes from either terminal or VS Code UI which will "
 "trigger local git hooks managed by ``pre-commit`` to enforce coding "
@@ -1138,11 +1608,11 @@ msgstr ""
 "die von ``pre-commit`` verwaltet werden, um Programmierstandards "
 "durchzusetzen und manche Probleme frühzeitig zu erkennen."
 
-#: ../../source/contributing.rst:542
+#: ../../source/contributing.rst:836
 msgid "pre-commit"
 msgstr "pre-commit"
 
-#: ../../source/contributing.rst:546
+#: ../../source/contributing.rst:840
 msgid ""
 "`pre-commit`_ is a framework for managing and maintaining multi-language "
 "pre-commit hooks."
@@ -1150,15 +1620,16 @@ msgstr ""
 "`pre-commit`_ ist ein Framework zur Verwaltung und Pflege von "
 "sprachübergreifenden Pre-Commit-Hooks."
 
-#: ../../source/contributing.rst:548
+#: ../../source/contributing.rst:842
+#, fuzzy
 msgid ""
-"Configuration file is located at ``.devcontainer/.pre-commit-"
-"config.yaml`` where you can see all supported hooks."
+"Configuration file is located at ``dev-tools/pre-commit-config.yaml`` "
+"where you can see all supported hooks."
 msgstr ""
 "Die Konfigurationsdatei befindet sich unter ``.devcontainer/.pre-commit-"
 "config.yaml``, wo Sie alle unterstützten Hooks sehen können."
 
-#: ../../source/contributing.rst:550
+#: ../../source/contributing.rst:844
 msgid ""
 "In rare cases, you might need to temporarily disable hooks. There are two"
 " options:"
@@ -1166,25 +1637,25 @@ msgstr ""
 "In seltenen Fällen müssen Sie die Hooks möglicherweise vorübergehend "
 "deaktivieren. Es gibt zwei Optionen:"
 
-#: ../../source/contributing.rst:552
+#: ../../source/contributing.rst:846
 msgid "Use `temporarily disable hooks`_ to skip specific individual hooks"
 msgstr ""
 "Verwenden Sie `temporarily disable hooks`_, um bestimmte einzelne Hooks "
 "zu überspringen"
 
-#: ../../source/contributing.rst:553
+#: ../../source/contributing.rst:847
 msgid "Use `git commit --no-verify`_ to skip all hooks at once"
 msgstr ""
 "Verwenden Sie `git commit --no-verify`_, um alle Hooks auf einmal zu "
 "überspringen"
 
-#: ../../source/contributing.rst:555
+#: ../../source/contributing.rst:849
 msgid "Remember: These hooks are required to pass in CI before PR merge."
 msgstr ""
 "Denken Sie daran: Diese Hooks müssen in CI erfolgreich durchlaufen, bevor"
 " ein PR gemergt werden kann."
 
-#: ../../source/contributing.rst:559
+#: ../../source/contributing.rst:853
 msgid ""
 "While you can remove local git hooks completely, be aware that: 1. Your "
 "PR will be blocked from merging until all hook checks pass in CI 2. "
@@ -1199,19 +1670,19 @@ msgstr ""
 "zusätzliche Commits erstellen müssen, um Probleme zu beheben, die Hooks "
 "lokal erkannt hätten"
 
-#: ../../source/contributing.rst:564
+#: ../../source/contributing.rst:858
 msgid "Option 1: Using pre-commit (recommended)"
 msgstr "Option 1: pre-commit verwenden (empfohlen)"
 
-#: ../../source/contributing.rst:573
+#: ../../source/contributing.rst:867
 msgid "Option 2: Manual removal (use with caution):"
 msgstr "Option 2: Manuelle Entfernung (mit Vorsicht verwenden):"
 
-#: ../../source/contributing.rst:588
+#: ../../source/contributing.rst:882
 msgid "Open Pull Request"
 msgstr "Pull Request öffnen"
 
-#: ../../source/contributing.rst:590
+#: ../../source/contributing.rst:884
 msgid ""
 "There are multiple options how PR could be opened, please refer to the "
 "following to choose option which works best for you."
@@ -1219,19 +1690,19 @@ msgstr ""
 "Es gibt mehrere Möglichkeiten, einen PR zu öffnen; bitte sehen Sie sich "
 "das Folgende an, um die für Sie am besten geeignete Option zu wählen."
 
-#: ../../source/contributing.rst:593
+#: ../../source/contributing.rst:887
 msgid "`Creating a pull request`_"
 msgstr "`Creating a pull request`_"
 
-#: ../../source/contributing.rst:594
+#: ../../source/contributing.rst:888
 msgid "`GitHub Pull Requests in Visual Studio Code`_"
 msgstr "`GitHub Pull Requests in Visual Studio Code`_"
 
-#: ../../source/contributing.rst:597
+#: ../../source/contributing.rst:891
 msgid "Meet PR Merge Criteria"
 msgstr "PR-Merge-Kriterien erfüllen"
 
-#: ../../source/contributing.rst:599
+#: ../../source/contributing.rst:893
 msgid ""
 "Depending on files changed in PR you might need to get required checks to"
 " pass first and get reviews from owners or maintainers, following are "
@@ -1242,27 +1713,730 @@ msgstr ""
 "Reviews von Owners oder Maintainern einholen; nachfolgend die zugehörigen"
 " GH-Dokumente:"
 
-#: ../../source/contributing.rst:602
+#: ../../source/contributing.rst:896
 msgid "`About Status Checks`_"
 msgstr "`About Status Checks`_"
 
-#: ../../source/contributing.rst:603
+#: ../../source/contributing.rst:897
 msgid "`Required reviews`_"
 msgstr "`Required reviews`_"
 
-#: ../../source/contributing.rst:606
+#: ../../source/contributing.rst:902
+msgid "How much CI a change runs"
+msgstr ""
+
+#: ../../source/contributing.rst:904
+msgid ""
+"Two questions decide it, and they are asked separately: **how deep** the "
+"matrix goes, and **which jobs** the change can say anything about at all."
+msgstr ""
+
+#: ../../source/contributing.rst:907
+msgid "Depth: three tiers"
+msgstr ""
+
+#: ../../source/contributing.rst:910
+msgid ""
+"CI fans out over operating systems, and a pull request does not pay for "
+"all of them."
+msgstr ""
+
+#: ../../source/contributing.rst:912 ../../source/contributing.rst:1030
+msgid "``pr``"
+msgstr ""
+
+#: ../../source/contributing.rst:913
+msgid ""
+"What a pull request runs on every push to it. The oldest and the newest "
+"supported Python, with nothing in between, and every image except macOS "
+"-- whose runners bill at ten times the Linux rate, and which no "
+"standalone bundle or IDE is built for here either. **Both Windows images "
+"stay.** Windows is not a second macOS to economise on: its path "
+"separator, drive letters and line endings are a standing source of "
+"breakage in code written on Linux, so it is the platform a pull request "
+"most needs."
+msgstr ""
+
+#: ../../source/contributing.rst:919 ../../source/contributing.rst:1031
+msgid "``queue``"
+msgstr ""
+
+#: ../../source/contributing.rst:920
+msgid ""
+"What the merge queue runs, which is what a pull request used to: every "
+"current image, macOS included, and the full Python range. Nothing reaches"
+" ``devel`` without having passed this, so the coverage a pull request "
+"drops is coverage the commit still has to earn -- one run per merge "
+"instead of one per push."
+msgstr ""
+
+#: ../../source/contributing.rst:924 ../../source/contributing.rst:1032
+msgid "``deep``"
+msgstr ""
+
+#: ../../source/contributing.rst:925
+msgid ""
+"Everything, the older OS versions included: the nightly schedule, a "
+"manual workflow run, and any push, which includes the release. On a pull "
+"request, put ``#deepTest`` anywhere in the title or the description and "
+"re-run the checks. Worth doing when the change touches packaging, "
+"dependencies, the standalone bundle or the snap, or anything else where "
+"an older OS version could behave differently. It runs exactly what it "
+"always ran -- it is unaffected by everything on this page."
+msgstr ""
+
+#: ../../source/contributing.rst:933
+msgid ""
+"The marker is matched as a plain substring, so a pull request that merely"
+" *mentions* it -- one editing this page, say -- opts itself in and runs "
+"the full matrix. That is deliberate: a matcher clever enough to tell a "
+"marker from a mention is a rule you would have to know before your opt-in"
+" worked, and over-running is the safe direction. If a description has to "
+"name the marker without asking for it, write it split across two code "
+"spans."
+msgstr ""
+
+#: ../../source/contributing.rst:942
+msgid "Running CI in your own fork"
+msgstr ""
+
+#: ../../source/contributing.rst:944
+msgid ""
+"A pull request **against this repository whose branch lives in your "
+"fork** runs with a read-only token and no repository secrets. That is "
+"GitHub's rule, not a setting either side can change, and it holds whether"
+" or not you have write access here -- what decides it is that the head is"
+" somewhere else. Most of CI does not care: the tests, the linters, the "
+"extension and the bundles all run on a fork exactly as they run here."
+msgstr ""
+
+#: ../../source/contributing.rst:949
+msgid ""
+"A pull request **inside your fork** -- branch to branch, both in your "
+"copy -- is a different thing and gets the full run: a writable token, "
+"your own secrets, your own container images. Nothing is held back there, "
+"because nothing about it is untrusted from your fork's point of view. "
+"That is the run to open when you want CI to behave exactly as it does on "
+"a pull request here, and it is worth knowing that the test for it is the "
+"head being in *another* repository and not the head repository being a "
+"fork of something -- the two differ for precisely this case, and reading "
+"the wrong one used to leave a fork unable to test its own work."
+msgstr ""
+
+#: ../../source/contributing.rst:956
+msgid ""
+"One thing does. A change under ``tools/containers/`` (or a ``#images`` "
+"marker) means the run has to *build* PartCAD's container images and push "
+"them somewhere its own test jobs can pull them from, and a fork's pull "
+"request cannot push anywhere. Such a run falls back to the release's "
+"images, so the change you made to them goes untested -- which used to be "
+"a ``::warning::`` somewhere inside a green run."
+msgstr ""
+
+#: ../../source/contributing.rst:961
+msgid ""
+"The ``Prerequisites`` job now says so before the run instead, and says "
+"where to go:"
+msgstr ""
+
+#: ../../source/contributing.rst:971
+msgid ""
+"That job asks the registry what it grants the token, and it treats the "
+"answer as confirmation only. A granted ``push`` proves the write works; a"
+" withheld one proves nothing, because ghcr answers ``pull`` and no "
+"``push`` on ``partcad/partcad`` itself -- the repository that publishes "
+"every one of these images. So the job never stops a run over that answer."
+" What it costs is the case it was added for: a fork whose **Workflow "
+"permissions** are read-only is not caught before its push, only at it."
+msgstr ""
+
+#: ../../source/contributing.rst:977
+msgid ""
+"**Run CI in your fork to get that coverage.** Push the branch to your "
+"fork and start *CI* from its **Actions** tab with \"Run workflow\". There"
+" the token writes to ``ghcr.io/<you>/partcad-container-*``, the run "
+"builds your images, and its test jobs pull what it built rather than "
+"upstream's -- ``PC_CONTAINER_IMAGE_OWNER`` is what redirects them, beside"
+" the ``PC_CONTAINER_IMAGE_TAG`` that redirects the tag. Link the run on "
+"your pull request and a reviewer can see it went green."
+msgstr ""
+
+#: ../../source/contributing.rst:983
+msgid ""
+"Two things a fork needs once, and ``Prerequisites`` fails with both if "
+"they are missing:"
+msgstr ""
+
+#: ../../source/contributing.rst:985
+msgid ""
+"**Actions enabled.** A fork's **Actions** tab starts with \"I understand "
+"my workflows, go ahead and enable them\"."
+msgstr ""
+
+#: ../../source/contributing.rst:986
+msgid ""
+"**Read and write workflow permissions**, under **Settings -> Actions -> "
+"General**. Nothing else: the ``ghcr.io/<you>/partcad-container-*`` "
+"package is created on the first push, and no secret of your own is "
+"needed."
+msgstr ""
+
+#: ../../source/contributing.rst:989
+msgid ""
+"Note that a fork's default branch is called ``devel`` too, and a push to "
+"it used to run a matrix in which every single job was skipped -- the "
+"``Version updated`` rule below is about *this* repository, where a bump "
+"follows every merge within minutes, and a fork has no bump coming. It no "
+"longer applies to a fork."
+msgstr ""
+
+#: ../../source/contributing.rst:993
+msgid ""
+"``SSH_PRIVATE_KEY_RO`` is the other secret this repository holds, and "
+"what it is for is a dependency that is not public. These suites drive "
+"``pc install``, and a PartCAD package may declare a ``git`` dependency on"
+" any repository -- so a **private** fork testing its own packages clones "
+"its own private repositories in CI, and this is the credential that lets "
+"it. The public upstream needs none: its own dependencies are public and "
+"clone over https."
+msgstr ""
+
+#: ../../source/contributing.rst:998
+msgid ""
+"So ``Prerequisites`` asks for it where the repository is private and "
+"reports it as *not needed* where it is public, and the behave jobs start "
+"no agent where there is no key -- unconditional, the agent action is "
+"handed an empty string and fails the whole job with \"The ssh-private-key"
+" argument is empty\". The privacy of the repository is a heuristic for "
+"\"its dependencies are private too\", not a fact: if your fork is private"
+" but everything it installs is public, set ``needs-ssh: \"false\"`` on "
+"the ``Prerequisites`` job in your copy of ``test.yml`` and ``test-"
+"dev.yml``."
+msgstr ""
+
+#: ../../source/contributing.rst:1004
+msgid ""
+"A push to ``devel`` **in this repository** is the exception to all three:"
+" it runs no matrix at all unless its head commit message starts with "
+"``Version updated``, which is the release commit. (A fork is exempt -- "
+"see `Running CI in your own fork`_ above. The reasoning below is about "
+"the bump that follows every merge here, and a fork has no bump coming, so"
+" the rule would leave it with a run in which every job is skipped.) Every"
+" push to ``devel`` is followed by one of those within minutes and it "
+"carries the same tree, so what a merge costs is one build of that tree "
+"rather than two -- and the artifacts it produces are stamped with the "
+"version they will be released under rather than with the one the merge "
+"replaced. ``Standalone`` and ``IDE`` are gated on this too; they used to "
+"run on the merge as well, which is where the second build and the stale "
+"version number came from. Neither has a ``paths:`` filter on its push "
+"trigger any more: the gate is what decides, and a filter in front of it "
+"could only ever hide it -- a version bump happens to touch "
+"``pyproject.toml`` and ``ide/vscode/package.json`` today, and the day "
+"``dev-tools/bumpversion.toml`` stops naming such a file nothing would be "
+"built on ``devel`` again with nothing to say so."
+msgstr ""
+
+#: ../../source/contributing.rst:1016
+msgid ""
+"That exception applies to pushes and to nothing else -- the nightly run "
+"has no head commit to read a message from, so the guard leads with the "
+"event name and lets every other trigger through. It did not, from the day"
+" the guard was written until 0.8.32, and the nightly was skipped every "
+"night in between: if you change that condition, keep the event-name "
+"clause first. The two workflows that can also be *called* -- "
+"``Standalone`` and ``IDE``, both of which ``Deployment`` calls to build "
+"what a release carries -- lead with their ``inputs`` marker before that, "
+"because inside a called workflow the whole ``github`` context is the "
+"caller's and there is no other way to recognise one."
+msgstr ""
+
+#: ../../source/contributing.rst:1023
+msgid "The ``Standalone`` workflow reads the same tiers, job by job:"
+msgstr ""
+
+#: ../../source/contributing.rst:1029
+msgid "Job"
+msgstr ""
+
+#: ../../source/contributing.rst:1033
+msgid "``Build``"
+msgstr ""
+
+#: ../../source/contributing.rst:1034
+msgid "3 bundles (no macOS)"
+msgstr ""
+
+#: ../../source/contributing.rst:1035
+msgid "4 bundles"
+msgstr ""
+
+#: ../../source/contributing.rst:1036
+msgid "all 7"
+msgstr ""
+
+#: ../../source/contributing.rst:1037
+#, fuzzy
+msgid "``Install``"
+msgstr "`Install on Mac`_"
+
+#: ../../source/contributing.rst:1038
+msgid "2 (every bundle ``install.sh`` can install)"
+msgstr ""
+
+#: ../../source/contributing.rst:1039
+msgid "4 (adds the macOS bundle on the *next* macOS)"
+msgstr ""
+
+#: ../../source/contributing.rst:1040
+msgid "8"
+msgstr ""
+
+#: ../../source/contributing.rst:1041
+msgid "``Snap``"
+msgstr ""
+
+#: ../../source/contributing.rst:1042
+msgid "1 (amd64)"
+msgstr ""
+
+#: ../../source/contributing.rst:1043 ../../source/contributing.rst:1047
+msgid "not run"
+msgstr ""
+
+#: ../../source/contributing.rst:1044
+msgid "2, on a ``devel`` push or a dispatch"
+msgstr ""
+
+#: ../../source/contributing.rst:1045
+msgid "``Examples via bundle``"
+msgstr ""
+
+#: ../../source/contributing.rst:1046
+msgid "2 (the ``PartCAD`` suite only)"
+msgstr ""
+
+#: ../../source/contributing.rst:1048
+msgid "6"
+msgstr ""
+
+#: ../../source/contributing.rst:1050
+msgid ""
+"``Snap`` and ``Examples`` have always been skipped in the merge queue and"
+" on the release path -- nothing downstream consumes a snap, and the "
+"deterministic ``Build`` and ``Install`` jobs are what gate a release. "
+"What is new is that a pull request packs one snap rather than two (the "
+"recipe is one file and the two jobs run it over payloads ``Build`` and "
+"``Install`` have already exercised, at ~45 minutes of squashing each), "
+"and that the ``All`` example suite -- ``continue-on-error``, because the "
+"public index carries packages this repository cannot fix -- is left to "
+"deep runs."
+msgstr ""
+
+#: ../../source/contributing.rst:1057
+msgid ""
+"The ``IDE`` workflow follows the same tiers, because each IDE carries a "
+"bundle: no macOS IDE on a pull request, the Intel macOS one on a deep run"
+" only. A release always builds all seven bundles and all four IDEs, and "
+"refuses to publish if any is missing."
+msgstr ""
+
+#: ../../source/contributing.rst:1061
+msgid "Scope: what the change touches"
+msgstr ""
+
+#: ../../source/contributing.rst:1064
+msgid ""
+"Depth decides how wide a job fans out. Scope decides whether it runs at "
+"all, and it applies to the merge queue exactly as it does to a pull "
+"request. ``.github/actions/changed-scopes`` sorts the changed files into "
+"buckets and turns each subject on or off:"
+msgstr ""
+
+#: ../../source/contributing.rst:1072
+msgid "A change touching only..."
+msgstr ""
+
+#: ../../source/contributing.rst:1073
+msgid "runs"
+msgstr ""
+
+#: ../../source/contributing.rst:1074
+msgid ""
+"``docs/``, ``.claude/``, ``openspec/``, and any ``*.md`` or ``*.rst`` no "
+"row below claims"
+msgstr ""
+
+#: ../../source/contributing.rst:1075
+msgid "``Documentation``"
+msgstr ""
+
+#: ../../source/contributing.rst:1076
+msgid "``ai-agents/``, ``.claude-plugin/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1077
+msgid "``Claude Code plugin``"
+msgstr ""
+
+#: ../../source/contributing.rst:1078
+msgid "``ai-agents/common/``, ``ai-agents/claude/.claude-plugin/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1079
+msgid ""
+"``Claude Code plugin``, **and** the tests and the wheel -- the wheel "
+"ships the skills too"
+msgstr ""
+
+#: ../../source/contributing.rst:1080
+#, fuzzy
+msgid "``.devcontainer/``"
+msgstr "Dev Containers"
+
+#: ../../source/contributing.rst:1081
+msgid ""
+"the ``CI-Dev`` container, ``Run: behave`` and ``Run: pc`` -- but not "
+"``Run: pytest``"
+msgstr ""
+
+#: ../../source/contributing.rst:1082
+msgid "``ide/vscode/``, ``ide/vscode-shim/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1083
+msgid "``npm test``, ``VS Code extension``, ``IDE``"
+msgstr ""
+
+#: ../../source/contributing.rst:1084
+msgid "``ide/standalone/``, ``.vscode/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1085
+msgid "``IDE``"
+msgstr ""
+
+#: ../../source/contributing.rst:1086
+msgid ""
+"``dev-tools/pyinstaller/``, ``dev-tools/snap/``, ``.snapcraft.yaml``, "
+"``install.sh``"
+msgstr ""
+
+#: ../../source/contributing.rst:1087
+msgid "``Standalone``, ``IDE``"
+msgstr ""
+
+#: ../../source/contributing.rst:1088
+msgid "``pyproject.toml``, ``poetry.lock``, root ``requirements*``"
+msgstr ""
+
+#: ../../source/contributing.rst:1089
+msgid "the tests, the wheel **and** ``Standalone``"
+msgstr ""
+
+#: ../../source/contributing.rst:1090
+msgid "``tools/containers/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1091
+msgid ""
+"the tests and the wheel, **and** a rebuild of PartCAD's own container "
+"images -- see below"
+msgstr ""
+
+#: ../../source/contributing.rst:1092
+msgid ""
+"``src/``, ``tests/``, ``features/``, ``examples/``, ``cad/``, ``tools/``,"
+" ``dev-tools/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1093
+msgid "the tests and the wheel, but **not** ``Standalone``"
+msgstr ""
+
+#: ../../source/contributing.rst:1094
+msgid "anything else"
+msgstr ""
+
+#: ../../source/contributing.rst:1095
+msgid "all of the above, ``Standalone`` included"
+msgstr ""
+
+#: ../../source/contributing.rst:1096
+msgid "``.github/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1097
+msgid "everything, this being the thing that decides what runs"
+msgstr ""
+
+#: ../../source/contributing.rst:1099
+msgid ""
+"**The table above is grouped by subject, for reading. The classifier is "
+"an ordered list of rules and the first one that matches a path wins**, "
+"and the two orders are not the same -- ``.github/`` is the last row here "
+"and the first rule there. What matters is the shape of that list: every "
+"rule that names a *directory* comes before every rule that matches by "
+"*extension*."
+msgstr ""
+
+#: ../../source/contributing.rst:1104
+msgid ""
+"So a Markdown file belongs to whatever directory claims it first. ``ai-"
+"agents/common/skills/render/SKILL.md`` is the plugin -- and, since "
+"``src/partcad/ai_agents`` symlinks it into the wheel, the wheel -- rather"
+" than prose about either, and ``examples/feature_render/README.md`` is "
+"what ``pc render -r`` wrote and what the ``Examples (PartCAD)`` job "
+"compares against a fresh render; neither is documentation."
+msgstr ""
+
+#: ../../source/contributing.rst:1109
+msgid ""
+"``AGENTS.md`` and ``CLAUDE.md`` are matched ahead of the *source* "
+"directories, which is why ``src/partcad/AGENTS.md`` is documentation -- "
+"this repository keeps a package's own beside its code. They are not "
+"matched ahead of the directories above those, so they are **not** "
+"documentation wherever they sit: ``.github/AGENTS.md`` is CI, ``ai-"
+"agents/AGENTS.md`` is the plugin, and ``ide/vscode/AGENTS.md`` belongs to"
+" the extension. If you are adding a rule, its position in that list is "
+"the decision; ``.github/actions/changed-scopes`` carries the list in "
+"order, and ``tests/dev_tools/test_changed_scopes.py`` pins these cases."
+msgstr ""
+
+#: ../../source/contributing.rst:1116
+msgid ""
+"Two of those rows are the same distinction from either side, and it is "
+"the only place a source change and a dependency change are treated "
+"differently. Freezing is the most expensive thing this repository does --"
+" ~500MB of OpenCASCADE per runner -- and what makes a frozen bundle "
+"differ from a working wheel is nearly always what went *into* it: a "
+"dependency shipping a data file PyInstaller cannot see, a new transitive "
+"import, a wheel with no build for one platform. So a dependency change "
+"freezes and a change to ``src/`` alone does not."
+msgstr ""
+
+#: ../../source/contributing.rst:1122
+msgid ""
+"That is a trade rather than a fact. A source change *can* break the "
+"freeze -- a lazily imported module, a file read relative to ``__file__``;"
+" ``dev-tools/pyinstaller/README.md`` has the list -- and that is now "
+"found on ``devel`` after the merge rather than on the pull request. "
+"Specifically on the version bump that follows the merge, which is the "
+"same tree with a version on it and the commit a release is cut from; a "
+"release still refuses to publish with a platform missing, and "
+"``#deepTest`` still builds the whole set before a merge for a change that"
+" warrants it. Note also which way the last row falls: an unclassified "
+"path counts as **both** source and dependency, so a bundle is skipped "
+"only for a directory somebody has named as source."
+msgstr ""
+
+#: ../../source/contributing.rst:1130
+msgid ""
+"Two properties are worth knowing before you edit that list. It is **fail-"
+"safe**: a path it has not been taught counts as both source and a "
+"dependency, so it runs everything a source change runs, the standalone "
+"bundles included, and a new directory can only ever run too much. It does"
+" not turn on the four subjects that only their own directory turns on -- "
+"the documentation, the extension, the IDE, the plugin -- and that is not "
+"a gap: each is built from one fixed directory, so a path outside them "
+"cannot change what they contain. And it is a job condition rather than a "
+"``paths:`` filter on the trigger, deliberately -- ``merge_group`` "
+"supports no ``paths:`` filter at all, so a trigger-level list is one the "
+"merge queue ignores; and a workflow skipped by ``paths:`` never creates "
+"the check run that a *required* check waits for, while a job skipped by a"
+" condition reports ``skipped``, which counts as passing."
+msgstr ""
+
+#: ../../source/contributing.rst:1140
+msgid ""
+"``.devcontainer`` is the one entry that is a judgement rather than a "
+"mechanism. ``Run: pytest`` in ``CI-Dev`` is the ``Pytest`` matrix over "
+"again on one image and one interpreter, and a change to the container's "
+"configuration cannot make the unit tests disagree with what that matrix "
+"already said. What it can break is whether anything works inside the "
+"container at all, and ``Run: behave`` and ``Run: pc`` -- which drive the "
+"command line end to end, in the container -- are the jobs that ask that."
+msgstr ""
+
+#: ../../source/contributing.rst:1146
+msgid ""
+"Both workflows install each macOS artifact on macOS 15 *and* on macOS 26,"
+" because there is one macOS build per architecture and it is frozen on "
+"the older release -- so \"a bundle runs on the OS it was built on and "
+"everything newer\" stopped being an assumption and became something a job"
+" checks. Only the Intel half of that is deep-only."
+msgstr ""
+
+#: ../../source/contributing.rst:1151
+msgid ""
+"The Python axis is not the same for every job, because not every job is "
+"testing the same thing. ``Pytest`` and ``Examples (All)`` run the whole "
+"supported range: they exercise PartCAD's own code, so the interpreter it "
+"runs on is the point. ``Examples (PartCAD)`` and ``Repo //pub`` render "
+"packages, so what they are really testing is the sandbox -- and a sandbox"
+" is built at the version PartCAD pins rather than at the version PartCAD "
+"is running on, so they run the two ends of the range a sandbox can be "
+"built at instead (``sandbox_versions.MIN_PYTHON_VERSION_CADQUERY`` and "
+"``MAX_PYTHON_VERSION_CAD``). ``Behave`` drives the command line, so it "
+"stays on the oldest and newest supported Python."
+msgstr ""
+
+#: ../../source/contributing.rst:1160
+msgid "Testing a change to a container image"
+msgstr ""
+
+#: ../../source/contributing.rst:1162
+msgid ""
+"PartCAD ships container images of its own: the Python sandbox base images"
+" the ``docker`` sandbox renders in, and the KiCad sandbox ``pc open "
+"--with kicad`` and ``test_part_example_kicad`` start. Every one of them "
+"is addressed by the release that built it -- ``<name>:<release>``, plus "
+"the architecture suffix where there is one -- and that tag is written by "
+"exactly one run: the version bump on ``devel``."
+msgstr ""
+
+#: ../../source/contributing.rst:1167
+msgid ""
+"That leaves a gap on a pull request, and it is not a small one. A run "
+"that *changes* ``tools/containers`` builds those images as a test, but "
+"its tests go on pulling the tag the last release published -- so a "
+"Dockerfile fix cannot be proven in the pull request that makes it, and a "
+"Dockerfile regression cannot be caught there at all. That is how "
+"``tools/containers/python/Dockerfile`` came to carry the ``pycairo`` "
+"wheel reportlab needs while every PNG in every rendering job went on "
+"failing: the fix was in the repository and not in the tag, and no run "
+"could tell."
+msgstr ""
+
+#: ../../source/contributing.rst:1174
+msgid ""
+"So a run that changes an image builds and publishes "
+"``<release>-<branch>-<digest>-<commit>`` instead, and points its own "
+"tests at it. The commit is in the name because a branch is not unique in "
+"time: two pushes to one branch are two runs, and each has to own the tag "
+"it builds, tests and deletes. Nothing but that run ever asks for that "
+"tag, which is what makes publishing it from an unreviewed branch safe -- "
+"the release tag, the one somebody else pulls, is still only ever written "
+"by the bump. The run exports ``PC_CONTAINER_IMAGE_TAG`` to every job that"
+" runs a test, and ``partcad_utils.container_image.image_tag`` reads it: "
+"unset, which is every installed PartCAD, it is the release."
+msgstr ""
+
+#: ../../source/contributing.rst:1181
+msgid "Two things turn it on:"
+msgstr ""
+
+#: ../../source/contributing.rst:1183
+msgid ""
+"A change under ``tools/containers/`` does, by itself. That is the row in "
+"the table above."
+msgstr ""
+
+#: ../../source/contributing.rst:1184
+msgid ""
+"``#images`` anywhere in the pull request's title or description does, for"
+" a change the paths cannot see -- a workflow edit, a base image that "
+"moved under an unpinned tag, a dependency that changes what gets "
+"installed into the image. It is matched as a plain substring, exactly "
+"like ``#deepTest``, with the same consequence: a pull request that merely"
+" mentions it opts itself in."
+msgstr ""
+
+#: ../../source/contributing.rst:1189
+msgid ""
+"What the switch turns on is not the build. ``Build Docker Containers`` is"
+" gated on the union of the ``pytest``, ``behave`` and ``examples`` gates "
+"*and* on this run having a tag of its own, so it runs on any run whose "
+"tests could reach a container -- and a pull request that fires neither "
+"trigger builds these images for ``linux/amd64`` as a test, exactly as it "
+"did before any of this, and renders against the release's. That fourth "
+"condition is what stops ``#images`` meaning nothing on a change that runs"
+" no tests at all: a documentation-only pull request that opts in still "
+"builds and publishes, rather than opting into a build the other three "
+"gates would then skip. What firing a trigger adds is the ``linux/arm64`` "
+"half, which goes through QEMU and costs minutes per version; publishing "
+"the result; pointing that run's own tests at it through "
+"``PC_CONTAINER_IMAGE_TAG``; and deleting it afterwards. Worth paying "
+"where an image changed, worth nothing where none did, which is the whole "
+"reason for a switch."
+msgstr ""
+
+#: ../../source/contributing.rst:1200
+msgid ""
+"From a **fork** the trigger fires and cannot finish, and the run says so "
+"in a ``::warning::``. A fork's ``GITHUB_TOKEN`` is read-only however the "
+"workflow declares its permissions, so nothing there can publish -- and a "
+"tag claimed but not published is every test job failing to pull an image "
+"that was never there, which is worse than the gap it was meant to close. "
+"So such a pull request falls back to what every pull request did before "
+"any of this: it builds the images as a test and runs against the "
+"release's. If you are changing one of these images from a fork, expect a "
+"maintainer to re-run the change from a branch of this repository before "
+"it lands."
+msgstr ""
+
+#: ../../source/contributing.rst:1208
+msgid ""
+"These tags are cleaned up, in two places. ``CI`` deletes the Python "
+"sandbox tags it published once its own test jobs have finished -- it is "
+"their only consumer, the dev container being unable to use the ``docker``"
+" sandbox at all -- and ``Prune container images`` sweeps nightly for "
+"anything left: the KiCad tag, which ``CI`` cannot delete because ``CI-"
+"Dev`` reads it too and a ``needs:`` does not reach across a workflow; "
+"whatever a cancelled run abandoned; and the ``partcad-devcontainer`` "
+"tags, which ``CI-Dev`` has been publishing on every non-bump run since "
+"long before any of this and which nothing has ever removed. The sweep "
+"deletes a tag only when it looks like ``<release>-<something that is not "
+"py<N>>`` *and* the version is a month old, so the release tags, the "
+"``<release>-py<N>-<arch>`` images and the moving ``py<N>-<arch>`` tags "
+"are all out of its reach by construction. Run it by hand with ``dry-run``"
+" to see what it would take."
+msgstr ""
+
+#: ../../source/contributing.rst:1218
+msgid ""
+"One detail is worth knowing if you are reading the workflows: the tag "
+"goes *on* the image and the release goes *into* it. A "
+"``<release>-<branch>-<digest>-<commit>`` image still installs the "
+"release, because what it is built to test is this commit's Dockerfile. "
+"``.github/actions/container-images`` is where all of this is decided, "
+"once, for both ``CI`` and ``CI-Dev`` -- they hand the same answer to the "
+"same ``Container (KiCad)`` build, which could not be told two different "
+"tags to build one image under."
+msgstr ""
+
+#: ../../source/contributing.rst:1224
+msgid ""
+"A test job does not build these images. It pulls what ``Build Docker "
+"Containers`` built, which is why every job that can reach a container "
+"waits for that one. ``.github/actions/sandbox-image`` used to build a "
+"copy per job, because on a pull request the published tag was somebody "
+"else's build and nothing could tell whether this commit had changed the "
+"Dockerfile -- and that is the question the ``images`` gate above now "
+"answers for the whole run. What is left in the action is a pull, plus a "
+"build for the one caller with no such job to wait for: ``Examples via "
+"bundle`` in ``Standalone``, which runs on the version bump in a different"
+" workflow from the one publishing that release's images. That build is "
+"not a second implementation either -- both it and ``Build Docker "
+"Containers`` run ``dev-tools/ci/build-sandbox-image.sh``, so there is one"
+" answer to \"how is this image built\" and the two cannot drift into "
+"testing an image built differently from the one that was published. "
+"Changing that script counts as a container change, like changing a "
+"Dockerfile."
+msgstr ""
+
+#: ../../source/contributing.rst:1236
 msgid "Implementation Details"
 msgstr "Implementierungsdetails"
 
-#: ../../source/contributing.rst:608
+#: ../../source/contributing.rst:1238
 msgid "The following information is useful for PartCAD contributors."
 msgstr "Die folgenden Informationen sind für PartCAD-Mitwirkende nützlich."
 
-#: ../../source/contributing.rst:613
+#: ../../source/contributing.rst:1243
 msgid "Coordinates / Location"
 msgstr "Koordinaten / Lage"
 
-#: ../../source/contributing.rst:615
+#: ../../source/contributing.rst:1245
 msgid ""
 "PartCAD uses OpenCASCADE Location objects (TopLoc_Location) to represent "
 "locations of objects in 3D space."
@@ -1270,11 +2444,11 @@ msgstr ""
 "PartCAD verwendet OpenCASCADE-Location-Objekte (TopLoc_Location), um die "
 "Lage von Objekten im 3D-Raum darzustellen."
 
-#: ../../source/contributing.rst:621
+#: ../../source/contributing.rst:1251
 msgid "The above list represents a location with the following components:"
 msgstr "Die obige Liste stellt eine Lage mit den folgenden Komponenten dar:"
 
-#: ../../source/contributing.rst:623
+#: ../../source/contributing.rst:1253
 msgid ""
 "``[1, 2, 3]``: Translation or offset (in millimeters) along the X, Y, and"
 " Z axes"
@@ -1282,21 +2456,21 @@ msgstr ""
 "``[1, 2, 3]``: Verschiebung bzw. Versatz (in Millimetern) entlang der X-,"
 " Y- und Z-Achse"
 
-#: ../../source/contributing.rst:624
+#: ../../source/contributing.rst:1254
 msgid "``[4, 5, 6]``: The X, Y and Z sizes of the vector to rotate around"
 msgstr ""
 "``[4, 5, 6]``: Die X-, Y- und Z-Komponenten des Vektors, um den rotiert "
 "wird"
 
-#: ../../source/contributing.rst:625
+#: ../../source/contributing.rst:1255
 msgid "``70``: The angle of rotation around the above vector"
 msgstr "``70``: Der Rotationswinkel um den obigen Vektor"
 
-#: ../../source/contributing.rst:629
+#: ../../source/contributing.rst:1259
 msgid "Internal geometry representation"
 msgstr "Interne Geometriedarstellung"
 
-#: ../../source/contributing.rst:631
+#: ../../source/contributing.rst:1261
 msgid ""
 "PartCAD maintains parts as OpenCASCADE objects. Similar to ``wrapped`` "
 "objects found in ``CadQuery`` and ``build123d``."
@@ -1304,15 +2478,15 @@ msgstr ""
 "PartCAD verwaltet Teile als OpenCASCADE-Objekte. Ähnlich den "
 "``wrapped``-Objekten aus ``CadQuery`` und ``build123d``."
 
-#: ../../source/contributing.rst:635
+#: ../../source/contributing.rst:1265
 msgid "Parallelism"
 msgstr "Parallelität"
 
-#: ../../source/contributing.rst:637
+#: ../../source/contributing.rst:1267
 msgid "Asynchronous at heart"
 msgstr "Im Kern asynchron"
 
-#: ../../source/contributing.rst:639
+#: ../../source/contributing.rst:1269
 msgid ""
 "PartCAD is designed to run most of its logic as coroutines in the "
 "asyncio's event loop."
@@ -1320,11 +2494,11 @@ msgstr ""
 "PartCAD ist so konzipiert, dass der Großteil seiner Logik als Koroutinen "
 "in der Event-Loop von asyncio läuft."
 
-#: ../../source/contributing.rst:641
+#: ../../source/contributing.rst:1271
 msgid "Threads for the muscle"
 msgstr "Threads für die Muskelkraft"
 
-#: ../../source/contributing.rst:643
+#: ../../source/contributing.rst:1273
 msgid ""
 "There is a separate thread pool created for long-running procedures that "
 "are CPU intensive. The number of threads matches the number of CPU cores "
@@ -1334,7 +2508,7 @@ msgstr ""
 "Vorgänge. Die Anzahl der Threads entspricht der Anzahl der CPU-Kerne "
 "minus 1 (falls mehr als 1 vorhanden ist)."
 
-#: ../../source/contributing.rst:646
+#: ../../source/contributing.rst:1276
 msgid ""
 "Coroutines can spawn tasks on the thread pool. Tasks on the thread pool "
 "can't call coroutines that use asyncio.Lock()."
@@ -1342,11 +2516,11 @@ msgstr ""
 "Koroutinen können Tasks im Thread-Pool erzeugen. Tasks im Thread-Pool "
 "können keine Koroutinen aufrufen, die asyncio.Lock() verwenden."
 
-#: ../../source/contributing.rst:648
+#: ../../source/contributing.rst:1278
 msgid "Digest external code properly"
 msgstr "Externen Code ordnungsgemäß verarbeiten"
 
-#: ../../source/contributing.rst:650
+#: ../../source/contributing.rst:1280
 msgid ""
 "Separate processes are spawned (optionally, in a sandboxed environment) "
 "to process third-party CAD-as-code parts and assemblies. One thread is "
@@ -1359,11 +2533,11 @@ msgstr ""
 "belegt, um auf dessen Abschluss zu warten (um die Anzahl der belegten "
 "CPU-Kerne zu begrenzen)."
 
-#: ../../source/contributing.rst:653
+#: ../../source/contributing.rst:1283
 msgid "Friendly face"
 msgstr "Freundliches Gesicht"
 
-#: ../../source/contributing.rst:655
+#: ../../source/contributing.rst:1285
 msgid ""
 "To make it apparent to external users, all externally visible coroutines "
 "have names that end with \"_async\". Each such coroutine is accompanied "

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 10:40+0000\n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -85,12 +85,12 @@ msgstr "Extensión de Visual Studio Code"
 #: ../../source/use_cases.rst:36
 msgid ""
 "The PartCAD extension is `available "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
-"in VS Code extension marketplace."
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_ in VS Code extension marketplace."
 msgstr ""
 "La extensión de PartCAD está `disponible "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
-"en el mercado de extensiones de VS Code."
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_ en el mercado de extensiones de VS Code."
 
 #: ../../source/use_cases.rst:41
 msgid "Command line tools"
@@ -121,8 +121,9 @@ msgstr ""
 "explorar piezas:"
 
 #: ../../source/use_cases.rst:87
+#, fuzzy
 msgid ""
-"The last command displays the chosen part in ``OCP CAD Viewer`` view in "
+"The last command displays the chosen part in ``PartCAD Viewer`` view in "
 "Visual Studio Code. There is currently no support for ``cq-server``. "
 "Please, let `support@partcad.org <mailto:support@partcad.org>`_ know if "
 "there is any other tool we should support."
@@ -162,11 +163,71 @@ msgstr "Imágenes ráster"
 msgid "PNG"
 msgstr "PNG"
 
-#: ../../source/use_cases.rst:111
+#: ../../source/use_cases.rst:107
+msgid "JPEG"
+msgstr ""
+
+#: ../../source/use_cases.rst:109
+msgid ""
+"Both raster formats accept ``width`` and ``height`` (in pixels, ``512`` "
+"by default); the projection is scaled to fit inside them while keeping "
+"its aspect ratio. JPEG accepts a few more options, since it is a lossy "
+"format without an alpha channel:"
+msgstr ""
+
+#: ../../source/use_cases.rst:127
+msgid ""
+"The default ``4:4:4`` subsampling keeps the full chroma resolution. A "
+"projection is line art, and the coarser modes smear color across its one-"
+"pixel-wide edges; switch to ``4:2:0`` when a smaller file matters more "
+"than the edges."
+msgstr ""
+
+#: ../../source/use_cases.rst:131
+msgid ""
+"The rendered file is named after the object with the format's own "
+"extension, so ``jpeg`` produces ``<name>.jpg``."
+msgstr ""
+
+#: ../../source/use_cases.rst:134
+msgid ""
+"Which direction the object is looked at from is ``viewport_origin``, and "
+"which way is up in the resulting picture is ``viewport_up``. Both are "
+"accepted by every projection above (and by ``dxf``), on the package or on"
+" a single object:"
+msgstr ""
+
+#: ../../source/use_cases.rst:153
+msgid ""
+"Left unset, a part is drawn from the front-right-top corner (which is "
+"what makes it read as 3D) and a sketch head-on. PartCAD is Z-up with "
+"``+Y`` pointing away from the front view, which is what puts ``+X`` on "
+"the right of it. The distance does not matter — the pair names a "
+"direction, and the projection is scaled to fit whatever it is written "
+"into."
+msgstr ""
+
+#: ../../source/use_cases.rst:159
+msgid ""
+"``pc render`` takes the same two as ``--viewport-origin``/``--viewport-"
+"up``, and names the common directions with ``--view`` (``front``, "
+"``back``, ``left``, ``right``, ``top``, ``bottom``, ``iso``), for a view "
+"that belongs to one command rather than to the package:"
+msgstr ""
+
+#: ../../source/use_cases.rst:169
+msgid ""
+"A file that is not in a package at all is rendered by ``pc adhoc "
+"render``, which takes the same three options. They are the only way to "
+"aim one, there being no ``partcad.yaml`` to configure a viewport in; left"
+" off, the projection comes out the way the renderer draws one by default:"
+msgstr ""
+
+#: ../../source/use_cases.rst:182
 msgid "Export models"
 msgstr "Exportar modelos"
 
-#: ../../source/use_cases.rst:113
+#: ../../source/use_cases.rst:184
 msgid ""
 "Individual parts, assemblies and scenes can also can be exported into 3D "
 "model file formats, including:"
@@ -174,39 +235,39 @@ msgstr ""
 "Las piezas, ensamblajes y escenas individuales también se pueden exportar"
 " a formatos de archivo de modelo 3D, entre ellos:"
 
-#: ../../source/use_cases.rst:116
+#: ../../source/use_cases.rst:187
 msgid "`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_"
 msgstr "`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_"
 
-#: ../../source/use_cases.rst:117
+#: ../../source/use_cases.rst:188
 msgid "`BREP <https://en.wikipedia.org/wiki/Boundary_representation>`_"
 msgstr "`BREP <https://en.wikipedia.org/wiki/Boundary_representation>`_"
 
-#: ../../source/use_cases.rst:118
+#: ../../source/use_cases.rst:189
 msgid "`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_"
 msgstr "`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_"
 
-#: ../../source/use_cases.rst:119
+#: ../../source/use_cases.rst:190
 msgid "`3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_"
 msgstr "`3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_"
 
-#: ../../source/use_cases.rst:120
+#: ../../source/use_cases.rst:191
 msgid "`ThreeJS <https://en.wikipedia.org/wiki/Three.js>`_"
 msgstr "`ThreeJS <https://en.wikipedia.org/wiki/Three.js>`_"
 
-#: ../../source/use_cases.rst:121
+#: ../../source/use_cases.rst:192
 msgid "`OBJ <https://en.wikipedia.org/wiki/Wavefront_.obj_file>`_"
 msgstr "`OBJ <https://en.wikipedia.org/wiki/Wavefront_.obj_file>`_"
 
-#: ../../source/use_cases.rst:122
+#: ../../source/use_cases.rst:193
 msgid "`GLTF <https://en.wikipedia.org/wiki/GlTF>`_"
 msgstr "`GLTF <https://en.wikipedia.org/wiki/GlTF>`_"
 
-#: ../../source/use_cases.rst:123
+#: ../../source/use_cases.rst:194
 msgid "`IGES <https://en.wikipedia.org/wiki/IGES>`_"
 msgstr "`IGES <https://en.wikipedia.org/wiki/IGES>`_"
 
-#: ../../source/use_cases.rst:125
+#: ../../source/use_cases.rst:196
 msgid ""
 "Expect more output formats to be added to the list of supported export "
 "formats in the future."
@@ -214,21 +275,21 @@ msgstr ""
 "Se espera que en el futuro se agreguen más formatos de salida a la lista "
 "de formatos de exportación admitidos."
 
-#: ../../source/use_cases.rst:136
+#: ../../source/use_cases.rst:207
 msgid "Consume models"
 msgstr "Consumir modelos"
 
-#: ../../source/use_cases.rst:139
+#: ../../source/use_cases.rst:210
 msgid "CAD Design GUIs"
 msgstr "Interfaces gráficas de diseño CAD"
 
-#: ../../source/use_cases.rst:141
+#: ../../source/use_cases.rst:212
 msgid ""
 "You can use models from the public PartCAD repository in a CAD Design "
 "GUI, such as FreeCAD or its paid alternatives."
 msgstr ""
 
-#: ../../source/use_cases.rst:144
+#: ../../source/use_cases.rst:215
 msgid ""
 "FreeCAD has a PartCAD add-on. The ``PartCAD`` workbench lists the "
 "packages, parts and assemblies PartCAD can reach as a hierarchy, "
@@ -239,7 +300,7 @@ msgid ""
 "it."
 msgstr ""
 
-#: ../../source/use_cases.rst:151
+#: ../../source/use_cases.rst:222
 #, fuzzy
 msgid ""
 "For the other apps, no add-on is available yet. Export the models to STEP"
@@ -252,11 +313,11 @@ msgstr ""
 " Por ahora, exporte los modelos a archivos STEP o 3MF e impórtelos en la "
 "interfaz gráfica de diseño CAD que prefiera."
 
-#: ../../source/use_cases.rst:161
+#: ../../source/use_cases.rst:232
 msgid "Python: CadQuery"
 msgstr "Python: CadQuery"
 
-#: ../../source/use_cases.rst:163
+#: ../../source/use_cases.rst:234
 msgid ""
 "Here are some examples of how to fetch PartCAD models from within a "
 "``CadQuery`` script:"
@@ -264,11 +325,11 @@ msgstr ""
 "Aquí hay algunos ejemplos de cómo obtener modelos de PartCAD desde dentro"
 " de un script de ``CadQuery``:"
 
-#: ../../source/use_cases.rst:189
+#: ../../source/use_cases.rst:260
 msgid "Python: build123d"
 msgstr "Python: build123d"
 
-#: ../../source/use_cases.rst:191
+#: ../../source/use_cases.rst:262
 msgid ""
 "Here are some examples of how to fetch PartCAD models from within a "
 "``build123d`` script:"
@@ -276,11 +337,11 @@ msgstr ""
 "Aquí hay algunos ejemplos de cómo obtener modelos de PartCAD desde dentro"
 " de un script de ``build123d``:"
 
-#: ../../source/use_cases.rst:217
+#: ../../source/use_cases.rst:288
 msgid "Python: any format"
 msgstr "Python: cualquier formato"
 
-#: ../../source/use_cases.rst:219
+#: ../../source/use_cases.rst:290
 msgid ""
 "``pc.get_part_cadquery()`` and ``pc.get_part_build123d()`` above are thin"
 " aliases for the general conversion API, which returns the result in "
@@ -291,7 +352,7 @@ msgstr ""
 "devuelve el resultado en memoria para cualquier formato admitido en lugar"
 " de escribir un archivo de salida:"
 
-#: ../../source/use_cases.rst:235
+#: ../../source/use_cases.rst:306
 msgid ""
 "The supported part types are ``build123d`` and ``cadquery``, which return"
 " the CAD library's own object, plus the serialized formats ``3mf``, "
@@ -312,7 +373,7 @@ msgstr ""
 "``bytes``. El tipo de retorno depende únicamente del tipo de pieza "
 "solicitado, nunca de las opciones de exportación."
 
-#: ../../source/use_cases.rst:244
+#: ../../source/use_cases.rst:315
 msgid ""
 "``pc.convert_assembly()`` and ``pc.convert_sketch()`` do the same for "
 "assemblies and sketches, and ``Shape.convert()`` is available directly on"
@@ -322,23 +383,23 @@ msgstr ""
 "ensamblajes y bocetos, y ``Shape.convert()`` está disponible directamente"
 " en cualquier objeto de pieza, boceto o ensamblaje."
 
-#: ../../source/use_cases.rst:249
+#: ../../source/use_cases.rst:320
 msgid "Python"
 msgstr "Python"
 
-#: ../../source/use_cases.rst:274
+#: ../../source/use_cases.rst:345
 msgid "shell"
 msgstr "shell"
 
-#: ../../source/use_cases.rst:292
+#: ../../source/use_cases.rst:363
 msgid "Produce models"
 msgstr "Producir modelos"
 
-#: ../../source/use_cases.rst:295
+#: ../../source/use_cases.rst:366
 msgid "Part: Files"
 msgstr "Pieza: archivos"
 
-#: ../../source/use_cases.rst:297
+#: ../../source/use_cases.rst:368
 msgid ""
 "One way to define parts in PartCAD is by providing a file in any of the "
 "currently supported formats: STEP, BREP, STL, 3MF, OBJ. There is no "
@@ -353,11 +414,11 @@ msgstr ""
 "(idealmente, de forma implícita, agregando el soporte correspondiente a "
 "build123d)."
 
-#: ../../source/use_cases.rst:318
+#: ../../source/use_cases.rst:389
 msgid "Part: CAD scripts"
 msgstr "Pieza: scripts CAD"
 
-#: ../../source/use_cases.rst:320
+#: ../../source/use_cases.rst:391
 msgid ""
 "Another way to define parts is by using CAD scripting technologies such "
 "as OpenSCAD. This is the only CAD scripting language supported at the "
@@ -371,11 +432,11 @@ msgstr ""
 "arriba es la disponibilidad de parámetros. Sin embargo, los parámetros de"
 " OpenSCAD aún no son compatibles."
 
-#: ../../source/use_cases.rst:334
+#: ../../source/use_cases.rst:405
 msgid "Part: Python scripts"
 msgstr "Pieza: scripts de Python"
 
-#: ../../source/use_cases.rst:336
+#: ../../source/use_cases.rst:407
 msgid ""
 "The most powerful way to define parts is by using modeling frameworks "
 "such as CadQuery and build123d. PartCAD uses CQGI to load models (in "
@@ -385,15 +446,15 @@ msgstr ""
 "modelado como CadQuery y build123d. PartCAD usa CQGI para cargar modelos "
 "(en otras palabras: intercepta las llamadas a `show_object()`)."
 
-#: ../../source/use_cases.rst:350
+#: ../../source/use_cases.rst:421
 msgid "Assembly"
 msgstr "Ensamblaje"
 
-#: ../../source/use_cases.rst:379
+#: ../../source/use_cases.rst:450
 msgid "Publish packages"
 msgstr "Publicar paquetes"
 
-#: ../../source/use_cases.rst:381
+#: ../../source/use_cases.rst:452
 msgid ""
 "It's very simple to publish your package to the public PartCAD "
 "repository. First, publish your package as a repo on GitHub. Then create "

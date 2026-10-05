@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 20:49+0000\n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -17,7 +17,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/assy.rst:2
 msgid "Assembly YAML"
@@ -57,17 +57,77 @@ msgstr "Contenedores"
 
 #: ../../source/assy.rst:22
 msgid ""
-"The top-level node of an ASSY file is a container node. The container "
-"nodes have the following syntax:"
+"A container node is a node that holds other nodes rather than placing an "
+"object. The container nodes have the following syntax:"
 msgstr ""
-"El nodo de nivel superior de un archivo ASSY es un nodo contenedor. Los "
-"nodos contenedores tienen la siguiente sintaxis:"
 
-#: ../../source/assy.rst:37
+#: ../../source/assy.rst:36
+msgid ""
+"The top-level node of an ASSY file is such a node, and it **is the "
+"assembly**: what it holds is held by the assembly directly, not by "
+"anything in between. So an assembly declared from a file whose root lists"
+" three parts has three nodes in it and not one, and `location` on that "
+"root moves all three - there is no node of its own for it to move "
+"instead. A `links:` list *inside* the file is a node like any other: it "
+"is addressable by `name` from a `map:`, and what it holds belongs to it."
+msgstr ""
+
+#: ../../source/assy.rst:46
+msgid "What a link is called"
+msgstr ""
+
+#: ../../source/assy.rst:48
+msgid "Every link of an ASSY file has a name, and one rule gives it:"
+msgstr ""
+
+#: ../../source/assy.rst:50
+msgid "its own ``name:``, where it gives one;"
+msgstr ""
+
+#: ../../source/assy.rst:51
+msgid "otherwise the part or the assembly it places;"
+msgstr ""
+
+#: ../../source/assy.rst:52
+msgid ""
+"otherwise its position in the ``links:`` list it is written in, one-"
+"based, as ``link#2``."
+msgstr ""
+
+#: ../../source/assy.rst:55
+msgid ""
+"Only a ``links:`` container reaches the third -- a node that places "
+"something is named after it -- and it exists so that there is no such "
+"thing as a link that cannot be named. That one name is what everything "
+"uses: what a ``connect:`` names as the link to connect to, what a "
+"``map:`` names as a node (joined with ``/`` for a path of them, "
+"``head/head_half_1``), what a connection's ``interferes:`` names, what a "
+":ref:`filter <assy-filter>` selects, and what the `PartCAD extension for "
+"VS Code <https://marketplace.visualstudio.com/items?itemName=PartCAD"
+".partcad-official>`_ shows as the row for that link in the viewer."
+msgstr ""
+
+#: ../../source/assy.rst:64
+msgid ""
+"It is not the same thing as the *object* a link places, and the viewer "
+"shows both: an assembly that places the same bolt a hundred times holds "
+"one object under a hundred link names, and it is the link name that says "
+"which of them this one is. So a position is used rather than the object's"
+" name where there is nothing else -- a name shared by a hundred rows "
+"would say nothing about any of them."
+msgstr ""
+
+#: ../../source/assy.rst:83
+msgid ""
+"A positional name is relative to the list it is written in, so adding a "
+"link above one renames it. Name a container you intend to refer to."
+msgstr ""
+
+#: ../../source/assy.rst:87
 msgid "Parts"
 msgstr "Piezas"
 
-#: ../../source/assy.rst:39
+#: ../../source/assy.rst:89
 msgid ""
 "The following syntax is used to create a node that places a part in the "
 "assembly:"
@@ -75,7 +135,18 @@ msgstr ""
 "La siguiente sintaxis se usa para crear un nodo que coloca una pieza en "
 "el ensamblaje:"
 
-#: ../../source/assy.rst:59
+#: ../../source/assy.rst:117
+msgid ""
+"The `name` a node is given is how everything else in and around this "
+"assembly refers to it: the `name` of a `connect`/`connectPorts` names a "
+"node, and so does the first element of the `map:` section that decides "
+"which of the ports inside this assembly the assembly itself has (see :ref"
+":`assembly-ports`). A node with no `name` of its own is known by the name"
+" of the part or assembly it places, which is enough until the same one is"
+" placed twice."
+msgstr ""
+
+#: ../../source/assy.rst:124
 msgid ""
 "One and only one method for placing the object is acceptable. Therefore "
 "the sections `location`, `connectPorts` and `connect` are mutually "
@@ -91,7 +162,7 @@ msgstr ""
 "mientras que `connectPorts` es específico para conectar con puertos y sin"
 " acoplamiento de interfaces."
 
-#: ../../source/assy.rst:64
+#: ../../source/assy.rst:129
 msgid ""
 "The `with` and `to` fields are used to specify the names of interfaces. "
 "Where `with` is the interface of the part that is getting added to the "
@@ -108,14 +179,758 @@ msgstr ""
 "`withPort` y `toPort` se usan para especificar los nombres de los "
 "puertos."
 
-#: ../../source/assy.rst:71
+#: ../../source/assy.rst:135
+msgid ""
+"The `exploded` field does not affect the assembly itself: it is how far "
+"apart the two parts are drawn in the exploded view of this step in the "
+"assembly instruction book (`pc render -t pdf` and `pc render -t html`). "
+"Without it, the two are spaced by half of the largest dimension of the "
+"two."
+msgstr ""
+
+#: ../../source/assy.rst:141
+msgid "Expected overlaps"
+msgstr ""
+
+#: ../../source/assy.rst:143
+msgid ""
+"`pc test` checks that the parts of an assembly do not share space - "
+"except where a joint says they must. A pin snapped into its hole, a screw"
+" cutting its own thread: the joint is made by occupying the material, and"
+" a model that holds no springs holds it overlapping. Three things say so,"
+" and all three are read from the joint, never declared against a pair of "
+"parts:"
+msgstr ""
+
+#: ../../source/assy.rst:149
+msgid ""
+"the mating or the `how` of the connection says `snapIn` or `selfScrew`, "
+"or an interface it joins cuts its own thread (`selfScrew`). The overlap "
+"expected is between the two parts that provide the joined ports - "
+"followed through any `map:` of a sub-assembly to the part inside it that "
+"provides the port;"
+msgstr ""
+
+#: ../../source/assy.rst:153
+msgid ""
+"`interferes` lists the further nodes the same act of joining drives into:"
+" a screw connected to the part its head bears on cuts its thread in the "
+"ones underneath as well, and a sub-assembly fitted by one of its pins "
+"drives its other pins into the same neighbour."
+msgstr ""
+
+#: ../../source/assy.rst:158
+msgid ""
+"`interferes` names nodes of the same `links:` list as the connection, by "
+"the :ref:`name of the link <assy-link-names>`, which every link has: a "
+"node inside a `links:` container is `container/name`, and a container "
+"that gave itself no name is a level of that path like any other "
+"(`link#2/bracket`). A node may be a part or an assembly. Naming an "
+"assembly excuses every overlap between the two, which is as precise as "
+"the declaration is: a sub-assembly with a mapped port is named rather "
+"than the part inside it that provides the port, since it is the sub-"
+"assembly that is fitted."
+msgstr ""
+
+#: ../../source/assy.rst:167
+msgid ""
+"An assembly answers only for what it puts together. A sub-assembly "
+"declared in `partcad.yaml` and placed in it has a verdict of its own, "
+"which the assembly takes rather than repeats: only the overlaps between "
+"what it places are looked at there, and every assembly - declared or a "
+"`links:` container - is first compared by the box around everything in "
+"it."
+msgstr ""
+
+#: ../../source/assy.rst:174
 msgid "Assemblies"
 msgstr "Ensamblajes"
 
-#: ../../source/assy.rst:73
+#: ../../source/assy.rst:176
 msgid ""
 "The following syntax is used to create a node that places an assembly in "
 "the assembly:"
 msgstr ""
 "La siguiente sintaxis se usa para crear un nodo que coloca un ensamblaje "
 "dentro del ensamblaje:"
+
+#: ../../source/assy.rst:184
+msgid "Description"
+msgstr ""
+
+#: ../../source/assy.rst:186
+msgid ""
+"The `description` field of any node is free form text about that node: "
+"the part or the assembly it places, or - on a container node - the sub-"
+"assembly it declares."
+msgstr ""
+
+#: ../../source/assy.rst:198
+msgid ""
+"It is used when the assembly is documented (`pc render -t pdf` and `pc "
+"render -t html`): the description of the file's own root node is what the"
+" assembly instruction book says about the assembly as a whole, unless the"
+" package that declares the assembly gives it a `desc` of its own; the "
+"description of a container node is what the book says about that sub-"
+"assembly; and the description of a part or assembly node is shown with "
+"the step that adds it. Nothing else in PartCAD parses it or acts upon it."
+msgstr ""
+
+#: ../../source/assy.rst:207
+msgid "Comment"
+msgstr ""
+
+#: ../../source/assy.rst:209
+msgid ""
+"The `comment` field of a `connect` or `connectPorts` section is free form"
+" text."
+msgstr ""
+
+#: ../../source/assy.rst:218
+msgid ""
+"It is supplementary context for a human, or for an LLM, that is reading "
+"the assembly. PartCAD never parses it and never acts upon it; it is shown"
+" as a note beside the step this connection makes in the assembly "
+"instruction book, and reported by `pc info`."
+msgstr ""
+
+#: ../../source/assy.rst:225
+msgid ""
+"`comment` is **not** a place for assembly instructions. Everything that "
+"is required to perform the assembly must be codified in the other ASSY "
+"fields, so that the tools that consume the assembly - and not just the "
+"people reading it - have the complete picture. Anything stated only in "
+"`comment` is invisible to them."
+msgstr ""
+
+#: ../../source/assy.rst:232
+msgid "How"
+msgstr ""
+
+#: ../../source/assy.rst:234
+msgid ""
+"The `how` field of a `connect` or `connectPorts` section describes how "
+"the object is expected to be brought into place. All of its fields are "
+"optional, and so is the section itself: an omitted field means the "
+"default below."
+msgstr ""
+
+#: ../../source/assy.rst:260
+msgid ""
+"The units are SI, with the exception of lengths, which are in millimetres"
+" like everywhere else in PartCAD:"
+msgstr ""
+
+#: ../../source/assy.rst:264
+msgid "Field"
+msgstr ""
+
+#: ../../source/assy.rst:264
+msgid "Quantity"
+msgstr ""
+
+#: ../../source/assy.rst:264
+msgid "Unit"
+msgstr ""
+
+#: ../../source/assy.rst:266
+msgid "``pushForceMax``"
+msgstr ""
+
+#: ../../source/assy.rst:266 ../../source/assy.rst:274
+msgid "force"
+msgstr ""
+
+#: ../../source/assy.rst:266 ../../source/assy.rst:274
+msgid "``N`` (newton)"
+msgstr ""
+
+#: ../../source/assy.rst:268
+msgid "``pushDistance``"
+msgstr ""
+
+#: ../../source/assy.rst:268 ../../source/assy.rst:272
+msgid "length"
+msgstr ""
+
+#: ../../source/assy.rst:268 ../../source/assy.rst:272
+msgid "``mm`` (millimetre)"
+msgstr ""
+
+#: ../../source/assy.rst:270
+msgid "``turnTorqueMax``"
+msgstr ""
+
+#: ../../source/assy.rst:270
+msgid "torque"
+msgstr ""
+
+#: ../../source/assy.rst:270
+msgid "``N*m`` (newton-metre)"
+msgstr ""
+
+#: ../../source/assy.rst:272
+msgid "``threadStep``"
+msgstr ""
+
+#: ../../source/assy.rst:274
+msgid "``hold*Force`` ``hold*ForceMin`` ``hold*ForceMax``"
+msgstr ""
+
+#: ../../source/assy.rst:279
+msgid ""
+"Pushing an object into place is a linear motion, so ``pushForceMax`` "
+"bounds a **force** in newtons. Turning it is a rotation, so "
+"``turnTorqueMax`` bounds a **torque** in newton-metres."
+msgstr ""
+
+#: ../../source/assy.rst:285
+msgid ""
+"``pushForceMax`` was called ``pushTorqueMax`` in the first draft of this "
+"section. The old spelling is still accepted, with a warning, and means "
+"the same thing."
+msgstr ""
+
+#: ../../source/assy.rst:289
+msgid ""
+"`threadStep` is the **lead**: the axial distance the object advances per "
+"full turn. For a multi-start thread that is the pitch multiplied by the "
+"number of starts, not the pitch itself. When it is non-zero, the "
+"assembler manages the pushing force and the turning torque together, so "
+"that the resulting motion reproduces the given thread (or, more "
+"generally, rotation) pattern, staying within `pushForceMax` and "
+"`turnTorqueMax`. The default of `0.00` means a straight push with no "
+"turning."
+msgstr ""
+
+#: ../../source/assy.rst:297
+msgid ""
+"A thread belongs to the interfaces rather than to any one connection, so "
+"it is normally declared there and left out here - see :ref:`interface-"
+"thread` below. Given on a connection, it overrides what the interfaces "
+"say for that one step."
+msgstr ""
+
+#: ../../source/assy.rst:301
+msgid ""
+"`pushDirection` is not a field: it is deduced from the connection itself "
+"and reported alongside the rest. It is the direction, in the assembly's "
+"coordinates, that the object travels while it is pushed into place - so "
+"the object starts at `pushDistance` back along it."
+msgstr ""
+
+#: ../../source/assy.rst:306
+msgid ""
+"The interfaces are what it is deduced from. The positive Z axis of an "
+"interface points **into** the object the interface belongs to, which is "
+"exactly the way a part coming to meet it has to travel. "
+"`examples/feature_interface` shows this directly: both faces of the same "
+"3mm bracket are instances of one interface, the ``outer`` one at ``z=0`` "
+"unrotated and the ``inner`` one at ``z=3`` turned around, so the two axes"
+" point at each other through the material. Each of the four M3 screws in "
+"that example is connected to one of those faces, and its deduced "
+"direction points from the screw through the bracket towards the motor - "
+"reversing, as it must, when the motor is placed on the other side."
+msgstr ""
+
+#: ../../source/assy.rst:316
+msgid ""
+"`pushDistance` is how far away from its final place the object starts: "
+"the distance, along `pushDirection`, between the staging pose and the "
+"pose where its `with` ports coincide with the target's `to` ports. When "
+"it is omitted, it is derived from the object being connected, as **1.5 "
+"times that object's own length along the Z axis of the interface "
+"location** it is connected by - far enough for the object to clear the "
+"target before the insertion move begins. That measurement needs the "
+"object's geometry, so it is made only when something asks for it, never "
+"while the assembly is merely being instantiated. If the geometry cannot "
+"be built at all, the distance is reported as unset rather than guessed."
+msgstr ""
+
+#: ../../source/assy.rst:327
+msgid ""
+"`stage` names a group of steps that are expected to be connected **at the"
+" same time** rather than one after another: consecutive nodes carrying "
+"the same `stage` form one such group. It is a free-form label, so it can "
+"say what the group is for. A `stage` that is interrupted by another one "
+"and then resumes is reported, since the steps it names are then not "
+"consecutive and will not be performed together."
+msgstr ""
+
+#: ../../source/assy.rst:355
+msgid ""
+"`holdWith` names the interface of the object that is getting added to the"
+" assembly, to be used to hold that object while it is connected. `holdTo`"
+" names the interface of the object that is already in the assembly, which"
+" is held the same way. Either may be a single interface name or a list of"
+" them."
+msgstr ""
+
+#: ../../source/assy.rst:376
+msgid ""
+"When `holdWith` is omitted, it defaults to the `hold` field of the "
+"`connect` section of the part or the assembly being added (see "
+":ref:`hold`). When `holdTo` is omitted, it defaults to the `hold` field "
+"of the object being connected to. When neither is set, the assembler is "
+"free to hold the object however it sees fit."
+msgstr ""
+
+#: ../../source/assy.rst:381
+msgid ""
+"`holdWithInstance` and `holdToInstance` select which instance of the "
+"interface to hold by, for the cases where the object implements more than"
+" one instance of it. They are matched positionally against `holdWith` and"
+" `holdTo`. When omitted, the instance defaults to the `holdInstance` "
+"field of that same section, and, failing that, to the first instance of "
+"the interface."
+msgstr ""
+
+#: ../../source/assy.rst:387
+msgid ""
+"`holdWithForceMin` and `holdWithForceMax` bound the force each end is "
+"held with, in newtons - enough to keep the object from moving, not so "
+"much as to damage it. `holdWithForce` sets both at once, and "
+"`holdToForce*` are the same for the object being connected to. Each bound"
+" is resolved on its own, from the first of these that gives it:"
+msgstr ""
+
+#: ../../source/assy.rst:393
+msgid "the bound itself, `holdWithForceMin` or `holdWithForceMax`;"
+msgstr ""
+
+#: ../../source/assy.rst:394
+msgid "`holdWithForce`, which sets both;"
+msgstr ""
+
+#: ../../source/assy.rst:395
+msgid ""
+"the `holdForceMin`/`holdForceMax` field of the `connect` section of the "
+"part or the assembly (see :ref:`hold`);"
+msgstr ""
+
+#: ../../source/assy.rst:397
+msgid "the `holdForce` field of that same section, which sets both;"
+msgstr ""
+
+#: ../../source/assy.rst:398
+msgid "the defaults, **3 N** for the minimum and **7 N** for the maximum."
+msgstr ""
+
+#: ../../source/assy.rst:400
+msgid ""
+"A minimum that ends up above its maximum is a contradiction rather than a"
+" range: it is reported, and both bounds fall back to the defaults."
+msgstr ""
+
+#: ../../source/assy.rst:406
+msgid "The thread of an interface"
+msgstr ""
+
+#: ../../source/assy.rst:408
+msgid ""
+"An interface may declare the thread that connections made through it "
+"advance along, and whether it cuts its own:"
+msgstr ""
+
+#: ../../source/assy.rst:419
+msgid ""
+"Both are inherited by the interfaces that inherit this one, so a thread "
+"is spelled out once, on the interface that introduces it. In "
+"`examples/feature_interface` the abstract `m3` interface carries `0.5` "
+"and the abstract `m4` carries `0.7` - the real pitches of those screws - "
+"and every opening, screw and hole pattern derived from them connects with"
+" the right thread without repeating it."
+msgstr ""
+
+#: ../../source/assy.rst:426
+msgid ""
+"A connection inherits `threadStep` from the two interfaces it mates. They"
+" have to agree on it: two different threads cannot be screwed together, "
+"and a connection whose ends disagree is reported and fails ``pc test``. "
+"Unless, that is, one of them declares `selfScrew` - a self-tapping screw,"
+" or the plain hole one goes into. Then the thread of the end that does "
+"have to match one is the thread that gets cut, and failing that the one "
+"the self-tapping end brings with it."
+msgstr ""
+
+#: ../../source/assy.rst:435
+msgid "Reading the instructions back"
+msgstr ""
+
+#: ../../source/assy.rst:437
+msgid ""
+"Everything resolved from the sections above - the inherited threads, the "
+"deduced push direction, the forces each end is held with - is reported by"
+msgstr ""
+
+#: ../../source/assy.rst:444
+msgid ""
+"under ``Connections``, one entry per connected object. That is the "
+"assembly's own account of how it is built, for a person or for whatever "
+"performs it."
+msgstr ""
+
+#: ../../source/assy.rst:448
+msgid "Testing the instructions"
+msgstr ""
+
+#: ../../source/assy.rst:450
+msgid ""
+"Everything above is resolved leniently: a field that is missing takes its"
+" default, and one that contradicts itself is reported and replaced with a"
+" default, so that an assembly always builds. ``pc test`` is what looks "
+"past that leniency. Its ``connect`` test fails an assembly whose "
+"instructions had to be repaired to be usable, and passes one that is "
+"sound - **including one that says nothing at all** and takes every "
+"default."
+msgstr ""
+
+#: ../../source/assy.rst:457
+msgid "What it rejects today:"
+msgstr ""
+
+#: ../../source/assy.rst:459
+msgid ""
+"a ``*Min`` above its corresponding ``*Max`` - ``holdWithForceMin`` above "
+"``holdWithForceMax``, or ``holdToForceMin`` above ``holdToForceMax``. A "
+"minimum above a maximum is a contradiction rather than a range."
+msgstr ""
+
+#: ../../source/assy.rst:462
+msgid ""
+"two interfaces that disagree about their `threadStep` with neither "
+"declaring `selfScrew`."
+msgstr ""
+
+#: ../../source/assy.rst:472
+msgid "Holding an object"
+msgstr ""
+
+#: ../../source/assy.rst:474
+msgid ""
+"The defaults for the `how` fields above are declared once, next to the "
+"part or the assembly itself, in `partcad.yaml`:"
+msgstr ""
+
+#: ../../source/assy.rst:495
+msgid ""
+"Everything an object contributes to every connection it takes part in "
+"lives in that one `connect` section, rather than among the fields that "
+"describe the object itself."
+msgstr ""
+
+#: ../../source/assy.rst:503
+msgid "Scenes"
+msgstr ""
+
+#: ../../source/assy.rst:505
+msgid ""
+"The same file format defines a **scene**: a placed arrangement of "
+"objects, such as a workcell, a table with parts laid out on it, or a "
+"simulation world. A package declares one by pointing at the file from its"
+" ``scenes:`` section rather than its ``assemblies:`` section (see "
+":ref:`scenes`); there is no assembly object in between, and nothing about"
+" the file itself says which it is."
+msgstr ""
+
+#: ../../source/assy.rst:517
+msgid ""
+"Everything above applies, with one exception: **a scene may not use** "
+"``how``. An assembly is a product and says how it is put together, which "
+"is what the assembly instruction book is generated from. A scene states "
+"only an end state, and nothing in it was assembled, so there is nothing "
+"to say about the assembling. Declaring ``how`` in a scene is an error, "
+"both while the scene is being built and in the editor."
+msgstr ""
+
+#: ../../source/assy.rst:524
+msgid ""
+"The ``connect`` and ``connectPorts`` sections themselves stay. Placing a "
+"gripper against the fixture it holds is a statement about where things "
+"are, and saying it with the ports the two objects declare is better than "
+"saying it with coordinates somebody worked out by hand."
+msgstr ""
+
+#: ../../source/assy.rst:547
+msgid "Part of an assembly"
+msgstr ""
+
+#: ../../source/assy.rst:549
+msgid ""
+"A sub-assembly worth looking at on its own is often not an object of its "
+"own: the head of the logo, one bay of a rack, the parts that arrive in "
+"one box. A **filter** names the links to keep and leaves the rest out."
+msgstr ""
+
+#: ../../source/assy.rst:553
+msgid ""
+"A filter is a tree of link names mirroring the tree the ASSY file already"
+" is:"
+msgstr ""
+
+#: ../../source/assy.rst:561
+msgid "Three rules, and nothing else:"
+msgstr ""
+
+#: ../../source/assy.rst:563
+msgid "a link the filter names is kept, and a link it does not name is dropped;"
+msgstr ""
+
+#: ../../source/assy.rst:564
+msgid "a link named with nothing under it keeps everything under it;"
+msgstr ""
+
+#: ../../source/assy.rst:565
+msgid ""
+"a link named with at least one child under it keeps those children and "
+"drops its other ones."
+msgstr ""
+
+#: ../../source/assy.rst:568
+msgid ""
+"A link is named the way :ref:`everything else names it <assy-link-"
+"names>`: its ``name:``, the part or the assembly it places, or its "
+"position in its ``links:`` list. So there is no link a filter cannot "
+"name."
+msgstr ""
+
+#: ../../source/assy.rst:572
+msgid ""
+"A filter may equally be written as a list, which is the convenient form "
+"when nothing below the names matters:"
+msgstr ""
+
+#: ../../source/assy.rst:580
+msgid "There are three ways to use one, and they do different things."
+msgstr ""
+
+#: ../../source/assy.rst:583
+msgid "Filtering for one picture"
+msgstr ""
+
+#: ../../source/assy.rst:585
+msgid ""
+"``pc render`` and ``pc export`` take ``--filter``, and write nothing into"
+" the package: the assembly is built as it always is and the filter is "
+"applied to the result, for this one file."
+msgstr ""
+
+#: ../../source/assy.rst:595
+msgid ""
+"The argument is a **filename first**: a file somebody keeps beside the "
+"package and edits. Only when there is no such file is the text read as "
+"the filter itself, as JSON or YAML -- which is the convenient form for "
+"one link and for whatever a script composes. A name that is neither is "
+"refused, naming both things that went wrong, so a mistyped filename is "
+"not quietly read as a link name."
+msgstr ""
+
+#: ../../source/assy.rst:602
+msgid ""
+"Everything kept stays where the whole assembly put it. A filter never re-"
+"resolves a ``connect:``, which is the only reading of \"part of this "
+"assembly\" that is true of the thing on the bench. Because the result is "
+"built rather than written, a filter here may also select *inside* a link "
+"that places an assembly of another package."
+msgstr ""
+
+#: ../../source/assy.rst:608
+msgid ""
+"The same options are available in the `PartCAD extension for VS Code "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_: the **2D** and **Draft** tabs of the viewer list what the "
+"object is made of beside the drawing, with a checkbox on every item, and "
+"what is ticked is the filter the render is made with. On the 2D tab the "
+"list also holds each node's ports and interfaces, and ticking one draws "
+"that port on the projection -- the same thing ``--with-ports``, ``--with-"
+"interfaces`` and ``--port`` ask for. All three Design tabs share one "
+"selection, so what is ticked on the 3D view is what the 2D and Draft tabs"
+" draw, and a box cleared on one is cleared on the others."
+msgstr ""
+
+#: ../../source/assy.rst:619
+msgid "Filtering every time the file is written"
+msgstr ""
+
+#: ../../source/assy.rst:621
+msgid ""
+"A ``filter:`` on a ``render:`` or ``export:`` file type says the same "
+"thing permanently, so a package can keep a picture of one sub-assembly "
+"checked in beside the drawing of the whole of it. It is declared per file"
+" type, in either place a file type is configured -- the package's own "
+"section, and the object's:"
+msgstr ""
+
+#: ../../source/assy.rst:644
+msgid ""
+"``pc render --filter`` and ``pc export --filter`` override it for one "
+"run, the way ``--view`` overrides a configured viewport. A part and a "
+"sketch have no links, so a filter over one of them is reported rather "
+"than ignored."
+msgstr ""
+
+#: ../../source/assy.rst:649
+msgid "Filtering into a new object"
+msgstr ""
+
+#: ../../source/assy.rst:651
+msgid ""
+"``pc filter`` writes a declaration instead: the ASSY file of ``SRC`` with"
+" everything the filter drops taken out of it, as ``DST.assy``, declared "
+"beside ``SRC``."
+msgstr ""
+
+#: ../../source/assy.rst:660
+msgid ""
+"``DST`` is then an object like any other: it renders, it exports, it has "
+"a bill of materials, suppliers quote for it, and it is a file somebody "
+"can review as a diff. If ``SRC`` is an assembly then ``DST`` is an "
+"assembly, and if ``SRC`` is a scene then ``DST`` is a scene -- the kind "
+"follows the source. An existing ``DST`` is overwritten; its declaration "
+"is left alone when it already points at the same file, so whatever file "
+"types were configured for it survive a re-run."
+msgstr ""
+
+#: ../../source/assy.rst:667
+msgid ""
+"The **file** is filtered rather than the built assembly, which is what "
+"makes the result an assembly somebody can build: every link kept keeps "
+"its ``connect:``, its ``how:``, its parameters and its comments. (That is"
+" also why ``pc filter`` needs an Assembly YAML file to work from. A "
+"``step`` or ``urdf`` assembly has no links of its own, and ``pc convert "
+"assembly -t assy`` is what turns one into a file that does.) The one "
+"thing it cannot do is select inside a link that places a part or another "
+"package's assembly; it says so and keeps that link whole."
+msgstr ""
+
+#: ../../source/assy.rst:675
+msgid ""
+"A link whose name was its position has that position **written into** the"
+" copy as a ``name:``. Filtering moves links -- the second of five is the "
+"first of two once the one above it has gone -- so a position would "
+"otherwise rename it, and anything that named it would point at nothing."
+msgstr ""
+
+#: ../../source/assy.rst:680
+msgid ""
+"What filtering can break is exactly one thing, and it is checked: **a "
+"link that is kept may be connected to a link that was dropped**. ``pc "
+"filter`` reports every one of them, naming the line, and so does :ref:`pc"
+" lint <assy-lint>` over the file afterwards."
+msgstr ""
+
+#: ../../source/assy.rst:689
+msgid ""
+"Name those links in the filter too, or place the kept ones with "
+"``location:``."
+msgstr ""
+
+#: ../../source/assy.rst:695
+msgid "Validation"
+msgstr ""
+
+#: ../../source/assy.rst:697
+msgid ""
+"ASSY files are checked against a JSON schema "
+"(``src/partcad_utils/schema/assy.json``) that describes the document "
+"*after* Jinja2 rendering: the node keys above, the shape of an OCCT "
+"location, and the fact that ``location``, ``connectPorts`` and "
+"``connect`` -- or ``part``, ``assembly`` and ``links`` -- exclude one "
+"another."
+msgstr ""
+
+#: ../../source/assy.rst:703
+msgid ""
+"One thing is checked beside the schema, because no schema can describe "
+"it: a ``connect:``/``connectPorts:`` names a link of the **same** "
+"``links:`` list, written **above** this node, since that is where PartCAD"
+" looks for it as the assembly is built. So does every name in a "
+"connection's ``interferes:``, which may be anywhere in the file. A name "
+"that is wrong would otherwise be answered, much later, with \"Target part"
+" not found\" and a part at the origin."
+msgstr ""
+
+#: ../../source/assy.rst:710
+msgid ""
+"A file read as a **scene** is checked against the same schema with "
+"``how`` forbidden. The scene schema is derived from the one above rather "
+"than kept beside it, so the two cannot drift apart; only the one rule "
+"differs."
+msgstr ""
+
+#: ../../source/assy.rst:714
+#, python-brace-format, python-format
+msgid ""
+"Because the file on disk is a template rather than the YAML it renders "
+"to, the checker masks every Jinja2 construct before parsing: ``{{ expr "
+"}}`` becomes a placeholder value and ``{% tag %}`` becomes blanks of the "
+"same size. The masked document keeps the exact line and column layout of "
+"the file, so a template error, a YAML error and a schema violation are "
+"all reported at the character they came from, and a loop or conditional "
+"body is checked once. Anything the mask makes unknowable -- what an "
+"expression evaluates to, which branch of an ``{% if %}`` is taken -- is "
+"left unreported rather than guessed at."
+msgstr ""
+
+#: ../../source/assy.rst:723
+msgid "Run the checks over a package from the command line with:"
+msgstr ""
+
+#: ../../source/assy.rst:729
+msgid "or narrow it to ASSY files only:"
+msgstr ""
+
+#: ../../source/assy.rst:735
+msgid ""
+"To check individual files instead, name them. This runs in the ``pc`` "
+"process itself -- no daemon, no package to load -- so it answers even "
+"when the package does not:"
+msgstr ""
+
+#: ../../source/assy.rst:743
+msgid ""
+"Add ``--json`` for machine-readable findings (zero-based line and column "
+"numbers), and ``--stdin`` to check content that has not been saved, which"
+" is how an editor checks the buffer on screen:"
+msgstr ""
+
+#: ../../source/assy.rst:751
+msgid ""
+"Whether a single file is checked as an assembly or as a scene is not "
+"something the file says, so ``pc lint --file`` works it out from the "
+"``partcad.yaml`` files around it: a file at least one scene declares and "
+"no assembly declares is a scene. Say so outright with ``--schema``:"
+msgstr ""
+
+#: ../../source/assy.rst:760
+msgid ""
+"The `PartCAD extension for VS Code "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_ runs exactly that while an ASSY file is open and shows the "
+"findings in the Problems view. It answers the same question from the "
+"package contents it has already loaded, which is the declaration itself "
+"rather than a guess at it, and falls back to the command's own answer for"
+" a file no loaded package mentions. Set ``partcad.lint.enabled`` to "
+"``false`` to turn that off."
+msgstr ""
+
+#: ../../source/assy.rst:767
+msgid ""
+"``partcad.yaml`` is checked the same way, by the same checker, against "
+"the configuration schema (``src/partcad_utils/schema/partcad.json``) -- "
+"see :doc:`configuration`. It is a Jinja2 template too, so it is masked "
+"before parsing exactly as an ASSY file is, and it has no assembly/scene "
+"flavor: nothing points at a package configuration, so ``--schema`` does "
+"not apply to one."
+msgstr ""
+
+#~ msgid ""
+#~ "The top-level node of an ASSY "
+#~ "file is a container node. The "
+#~ "container nodes have the following "
+#~ "syntax:"
+#~ msgstr ""
+#~ "El nodo de nivel superior de un"
+#~ " archivo ASSY es un nodo contenedor."
+#~ " Los nodos contenedores tienen la "
+#~ "siguiente sintaxis:"

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ru\n"
@@ -18,7 +18,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/troubleshooting.rst:2
 msgid "Troubleshooting"
@@ -33,7 +33,10 @@ msgid ""
 "The command line interface is the most basic (though not the most "
 "convenient) way to troubleshoot PartCAD configuration, model declarations"
 " and definitions."
-msgstr "Интерфейс командной строки — это самый базовый (хотя и не самый удобный) способ устранения неполадок в конфигурации PartCAD, объявлениях и определениях моделей."
+msgstr ""
+"Интерфейс командной строки — это самый базовый (хотя и не самый удобный) "
+"способ устранения неполадок в конфигурации PartCAD, объявлениях и "
+"определениях моделей."
 
 #: ../../source/troubleshooting.rst:13
 msgid "Status"
@@ -43,179 +46,500 @@ msgstr "Статус"
 msgid ""
 "The status of PartCAD context can be evaluated using the ``system "
 "status`` command."
-msgstr "Состояние контекста PartCAD можно оценить с помощью команды ``system status``."
+msgstr ""
+"Состояние контекста PartCAD можно оценить с помощью команды ``system "
+"status``."
 
 #: ../../source/troubleshooting.rst:21
 msgid ""
 "Pay attention to any exception or error message produced by the "
 "``status`` command."
-msgstr "Обратите внимание на любые исключения или сообщения об ошибках, выдаваемые командой ``status``."
+msgstr ""
+"Обратите внимание на любые исключения или сообщения об ошибках, "
+"выдаваемые командой ``status``."
 
-#: ../../source/troubleshooting.rst:25
+#: ../../source/troubleshooting.rst:24
+msgid ""
+"The same command has two more reports, for the two things that most often"
+" turn out to be the answer -- what the configuration actually resolved "
+"to, and what the environment actually said:"
+msgstr ""
+
+#: ../../source/troubleshooting.rst:33
+msgid ""
+"They are worth reading together. The first says what an option resolved "
+"to once the configuration file, the ``PC_*`` environment and the command "
+"line had all been applied; the second says what the environment asked "
+"for. They disagree whenever a command-line option won, a variable was "
+"misspelled, or a value was rejected -- which covers most of the cases "
+"where somebody runs either of them. Variables whose names say they carry "
+"a credential are listed but printed as ``<scrubbed>``, so the output is "
+"something you can attach to a bug report."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:41
+msgid ""
+"If the work is being done by a daemon -- which it is for most commands --"
+" ask the daemon the same two questions:"
+msgstr ""
+
+#: ../../source/troubleshooting.rst:50
+msgid ""
+"A daemon is warm and shared per workspace, so the configuration and "
+"environment it reports are whatever its own environment held when "
+"something first started it, possibly days ago and possibly from a VS Code"
+" window. Your command does not run under them -- every command hands the "
+"daemon its own resolved configuration -- but the daemon's own copy is "
+"what it falls back on, and the environment it inherited is not something "
+"this side can reconstruct any other way."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:58
 msgid "Health Check"
 msgstr "Проверка работоспособности"
 
-#: ../../source/troubleshooting.rst:27
+#: ../../source/troubleshooting.rst:60
 msgid ""
 "The ``healthcheck`` command can also be used to verify if the PartCAD "
 "environment on your workstation is setup correctly."
-msgstr "Команду ``healthcheck`` также можно использовать для проверки того, что окружение PartCAD на вашей рабочей станции настроено правильно."
+msgstr ""
+"Команду ``healthcheck`` также можно использовать для проверки того, что "
+"окружение PartCAD на вашей рабочей станции настроено правильно."
 
-#: ../../source/troubleshooting.rst:34
+#: ../../source/troubleshooting.rst:67
 msgid ""
 "Please, follow the instructions provided by the ``healthcheck`` command "
 "to fix any issues it detects."
-msgstr "Пожалуйста, следуйте инструкциям, предоставляемым командой ``healthcheck``, чтобы устранить любые обнаруженные ею проблемы."
+msgstr ""
+"Пожалуйста, следуйте инструкциям, предоставляемым командой "
+"``healthcheck``, чтобы устранить любые обнаруженные ею проблемы."
 
-#: ../../source/troubleshooting.rst:37
+#: ../../source/troubleshooting.rst:70
 msgid "Use ``--dry-run`` option to see what healthcheck tests can be executed."
-msgstr "Используйте параметр ``--dry-run``, чтобы увидеть, какие проверки healthcheck могут быть выполнены."
+msgstr ""
+"Используйте параметр ``--dry-run``, чтобы увидеть, какие проверки "
+"healthcheck могут быть выполнены."
 
-#: ../../source/troubleshooting.rst:43
+#: ../../source/troubleshooting.rst:76
 msgid ""
 "The ``healthcheck`` command also can take a ``--fix`` option to "
 "automatically fix the issues it detects if possible."
-msgstr "Команда ``healthcheck`` также может принимать параметр ``--fix`` для автоматического исправления обнаруженных ею проблем, если это возможно."
+msgstr ""
+"Команда ``healthcheck`` также может принимать параметр ``--fix`` для "
+"автоматического исправления обнаруженных ею проблем, если это возможно."
 
-#: ../../source/troubleshooting.rst:50
+#: ../../source/troubleshooting.rst:83
 msgid ""
 "In order to selectively execute only a subset of the healthchecks tests, "
 "the ``healthcheck`` command can be used with the ``--filters`` option "
 "that accepts a comma-separated list of test tags."
-msgstr "Чтобы выборочно выполнить только часть проверок healthcheck, команду ``healthcheck`` можно использовать с параметром ``--filters``, который принимает список тегов проверок, разделённых запятыми."
+msgstr ""
+"Чтобы выборочно выполнить только часть проверок healthcheck, команду "
+"``healthcheck`` можно использовать с параметром ``--filters``, который "
+"принимает список тегов проверок, разделённых запятыми."
 
-#: ../../source/troubleshooting.rst:57 ../../source/troubleshooting.rst:86
-#: ../../source/troubleshooting.rst:128
+#: ../../source/troubleshooting.rst:89
+msgid ""
+"Most of what ``healthcheck`` finds is reported as a warning and the "
+"command still succeeds, because most of it is a machine missing something"
+" it can do without. There is one exception, and it is about sandboxes."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:94
+msgid "Can this machine render anything?"
+msgstr ""
+
+#: ../../source/troubleshooting.rst:96
+msgid ""
+"PartCAD imports no CAD kernel of its own. Every part is produced by a "
+"script run in a sandbox, and there are two mechanisms that can provide "
+"one on a machine that starts with nothing: conda, which installs an "
+"interpreter and the CAD stack beside it, and a container runtime, which "
+"carries both already. Three checks report on this, and they share the "
+"``sandbox`` tag:"
+msgstr ""
+
+#: ../../source/troubleshooting.rst:106
+msgid ""
+"``CondaAvailable`` -- a warning when conda or mamba cannot be found. "
+"PartCAD builds a virtual environment instead, which works wherever the "
+"host has a usable Python."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:109
+msgid ""
+"``DockerAvailable`` -- a warning when no container runtime answers. Note "
+"that a Docker daemon running *Windows* containers counts as none here: "
+"every image PartCAD uses is a Linux image. Set ``useDocker: false`` (or "
+"``PC_USE_DOCKER=false``) on a machine that has a daemon and should not "
+"use it, and the check stops looking."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:114
+msgid ""
+"``SandboxAvailable`` -- an **error**, and the only check that makes ``pc "
+"healthcheck`` exit non-zero."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:117
+msgid ""
+"A stated ``pythonSandbox`` is obeyed, and that is most of what "
+"``SandboxAvailable`` does. \"Is there conda or a container\" is the right"
+" question only when nobody has said which sandbox to use, because that is"
+" when PartCAD is the one choosing between them. If you wrote "
+"``pythonSandbox: venv`` -- a CI job that builds a virtual environment "
+"from the interpreter it already has, an air-gapped machine, a container "
+"image with no conda in it -- nothing is misconfigured, and the check "
+"passes:"
+msgstr ""
+
+#: ../../source/troubleshooting.rst:130
+msgid ""
+"A declared sandbox is then checked against what *it* needs and nothing "
+"else: ``conda`` needs a conda, ``docker`` needs a container runtime, and "
+"``venv``, ``pypy`` and ``none`` need only the Python PartCAD is running "
+"under. (``remote`` needs a reachable ``partcad-service-remote-docker``, "
+"which is a network address this check does not ping.) Asking for "
+"``conda`` on a machine that has none is a failure -- being unable to do "
+"what was asked is not a reason to quietly do something else."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:138
+msgid ""
+"Three things need a container specifically, and say so when they are "
+"reached rather than in advance: an implementation whose package declares "
+"``container:``, importing a KiCad PCB (``useDockerKicad``), and the "
+"``docker`` Python sandbox when it was asked for by name. If ``pc "
+"render``, ``pc export`` or ``pc inspect`` reports that no container "
+"runtime is available, start Docker or take the other route the message "
+"names -- for KiCad that is installing KiCad on this machine and setting "
+"``useDockerKicad: false``."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:147 ../../source/troubleshooting.rst:185
+#: ../../source/troubleshooting.rst:243
 msgid "Typical problems"
 msgstr "Типичные проблемы"
 
-#: ../../source/troubleshooting.rst:59
+#: ../../source/troubleshooting.rst:149
 msgid ""
 "When running `pc ...` commands, getting: \"pc is not a recognized "
 "command...\""
-msgstr "При выполнении команд `pc ...` появляется: \"pc is not a recognized command...\""
+msgstr ""
+"При выполнении команд `pc ...` появляется: \"pc is not a recognized "
+"command...\""
 
-#: ../../source/troubleshooting.rst:61
+#: ../../source/troubleshooting.rst:151
 msgid ""
 "Make sure that Conda environment is activated in the current terminal, "
 "for example by running `conda info`"
-msgstr "Убедитесь, что окружение Conda активировано в текущем терминале, например выполнив `conda info`"
+msgstr ""
+"Убедитесь, что окружение Conda активировано в текущем терминале, например"
+" выполнив `conda info`"
 
-#: ../../source/troubleshooting.rst:62
+#: ../../source/troubleshooting.rst:152
 msgid ""
 "With the :ref:`standalone build <standalone-cli>`, there is no "
 "environment to activate: the commands are linked into ``~/.local/bin``, "
 "which has to be on ``PATH``. Run ``~/.local/bin/pc version`` to confirm "
 "the installation itself is fine, then add the directory to ``PATH``."
-msgstr "В случае :ref:`автономной сборки <standalone-cli>` активировать нечего: команды связаны в ``~/.local/bin``, который должен находиться в ``PATH``. Выполните ``~/.local/bin/pc version``, чтобы убедиться, что сама установка в порядке, затем добавьте этот каталог в ``PATH``."
+msgstr ""
+"В случае :ref:`автономной сборки <standalone-cli>` активировать нечего: "
+"команды связаны в ``~/.local/bin``, который должен находиться в ``PATH``."
+" Выполните ``~/.local/bin/pc version``, чтобы убедиться, что сама "
+"установка в порядке, затем добавьте этот каталог в ``PATH``."
 
-#: ../../source/troubleshooting.rst:66
+#: ../../source/troubleshooting.rst:156
 msgid "Which one is running, the standalone build or a wheel?"
 msgstr "Что запущено — автономная сборка или wheel-пакет?"
 
-#: ../../source/troubleshooting.rst:68
+#: ../../source/troubleshooting.rst:158
 msgid ""
 "``command -v pc`` says. A path under ``~/.local/share/partcad`` (or "
 "wherever ``--install-dir`` pointed) is the standalone build; a path "
 "inside a Python environment is the wheel. Having both installed is "
 "supported, but only the first on ``PATH`` runs."
-msgstr "Это покажет ``command -v pc``. Путь внутри ``~/.local/share/partcad`` (или туда, куда указывал ``--install-dir``) — это автономная сборка; путь внутри окружения Python — это wheel-пакет. Установка обоих одновременно поддерживается, но запускается только первый в ``PATH``."
+msgstr ""
+"Это покажет ``command -v pc``. Путь внутри ``~/.local/share/partcad`` "
+"(или туда, куда указывал ``--install-dir``) — это автономная сборка; путь"
+" внутри окружения Python — это wheel-пакет. Установка обоих одновременно "
+"поддерживается, но запускается только первый в ``PATH``."
 
-#: ../../source/troubleshooting.rst:74
+#: ../../source/troubleshooting.rst:162
+msgid "Imports hang, or time out reaching a repository the browser can open:"
+msgstr ""
+
+#: ../../source/troubleshooting.rst:164
+msgid ""
+"The network is very likely one where a proxy is the only route out. "
+"PartCAD reads ``HTTPS_PROXY``, ``HTTP_PROXY`` and ``NO_PROXY`` for "
+"everything it downloads -- git repositories, tarballs and ``fileFrom: "
+"url`` files alike -- so exporting them is usually the whole fix. See :ref"
+":`proxy-configuration`."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:168
+msgid ""
+"If a fetch fails to verify a certificate rather than hanging, the proxy "
+"is re-terminating TLS and its CA is not trusted here. Point "
+"``SSL_CERT_FILE`` and ``REQUESTS_CA_BUNDLE`` at the proxy's CA bundle."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:173
 msgid "PartCAD VSCode Extension"
 msgstr "Расширение PartCAD для VSCode"
 
-#: ../../source/troubleshooting.rst:76
+#: ../../source/troubleshooting.rst:175
 msgid ""
 "The recommended way to use PartCAD is by using the Visual Studio "
 "Extension called ``PartCAD``. Follow the extension documentation for "
 "instructions on how to use this extension."
-msgstr "Рекомендуемый способ использования PartCAD — через расширение Visual Studio под названием ``PartCAD``. Инструкции по использованию этого расширения см. в его документации."
+msgstr ""
+"Рекомендуемый способ использования PartCAD — через расширение Visual "
+"Studio под названием ``PartCAD``. Инструкции по использованию этого "
+"расширения см. в его документации."
 
-#: ../../source/troubleshooting.rst:80
+#: ../../source/troubleshooting.rst:179
 msgid ""
 "For troubleshooting purposes, the ``PartCAD`` terminal view output may "
 "not suffice due to the ephemeral nature of some output in that view (many"
 " output lines get overwritten). To get the complete and detailed error "
 "log, see the ``PartCAD`` output in the ``Output`` view."
-msgstr "Для целей устранения неполадок вывода терминального представления ``PartCAD`` может быть недостаточно из-за эфемерной природы части вывода в этом представлении (многие строки вывода перезаписываются). Чтобы получить полный и подробный журнал ошибок, откройте вывод ``PartCAD`` в представлении ``Output``."
+msgstr ""
+"Для целей устранения неполадок вывода терминального представления "
+"``PartCAD`` может быть недостаточно из-за эфемерной природы части вывода "
+"в этом представлении (многие строки вывода перезаписываются). Чтобы "
+"получить полный и подробный журнал ошибок, откройте вывод ``PartCAD`` в "
+"представлении ``Output``."
 
-#: ../../source/troubleshooting.rst:88
-msgid "Message in \"Explorer\" left panel: \"No Python (>= 3.10) installed\""
+#: ../../source/troubleshooting.rst:187
+#, fuzzy
+msgid "Message in \"Explorer\" left panel: \"PartCAD ... is not found\""
 msgstr "Сообщение в левой панели \"Explorer\": \"No Python (>= 3.10) installed\""
 
-#: ../../source/troubleshooting.rst:90
+#: ../../source/troubleshooting.rst:189
 msgid ""
-"Install Conda environment into the current working directory (main menu: "
-"View -> Command palette -> Python: Create environment...)"
-msgstr "Установите окружение Conda в текущий рабочий каталог (главное меню: View -> Command palette -> Python: Create environment...)"
+"Press \"Install or update PartCAD\" in the \"Explorer\" left panel and "
+"the extension downloads a standalone PartCAD for you. No Python is "
+"needed."
+msgstr ""
 
-#: ../../source/troubleshooting.rst:91
+#: ../../source/troubleshooting.rst:191
 msgid ""
-"Choose interpreter (main menu: View -> Command palette -> Python: Choose "
-"interpreter...)"
-msgstr "Выберите интерпретатор (главное меню: View -> Command palette -> Python: Choose interpreter...)"
+"Or, if you would rather use your own Python environment, run ``pip "
+"install partcad`` in it: the extension finds the ``partcad-json-rpc`` "
+"that puts on your ``PATH`` and uses that instead of downloading anything."
+msgstr ""
 
-#: ../../source/troubleshooting.rst:92
+#: ../../source/troubleshooting.rst:194
 msgid ""
 "Reload PartCAD extension (by pressing \"Reload\" button in \"Context\" "
 "left panel)"
-msgstr "Перезагрузите расширение PartCAD (нажав кнопку \"Reload\" в левой панели \"Context\")"
+msgstr ""
+"Перезагрузите расширение PartCAD (нажав кнопку \"Reload\" в левой панели "
+"\"Context\")"
 
-#: ../../source/troubleshooting.rst:94
+#: ../../source/troubleshooting.rst:196
 msgid ""
 "\"The PartCAD extension is being initialized...\" in \"Explorer\" gets "
 "into infinite loop (and nothing happens in the corresponding terminal "
 "window)"
-msgstr "\"The PartCAD extension is being initialized...\" в \"Explorer\" зацикливается (и в соответствующем окне терминала ничего не происходит)"
+msgstr ""
+"\"The PartCAD extension is being initialized...\" в \"Explorer\" "
+"зацикливается (и в соответствующем окне терминала ничего не происходит)"
 
-#: ../../source/troubleshooting.rst:96
+#: ../../source/troubleshooting.rst:198
 msgid "Close and reopen VSCode"
 msgstr "Закройте и снова откройте VSCode"
 
-#: ../../source/troubleshooting.rst:98
-msgid "Error while loading part or assembly view: \"Unknown module: CadQuery\""
-msgstr "Ошибка при загрузке представления детали или сборки: \"Unknown module: CadQuery\""
-
-#: ../../source/troubleshooting.rst:100
-msgid ""
-"In \"OCP CAD Viewer -> Viewer manager\" left panel, install the needed "
-"libraries by pressing \"Quickstart CadQuery\" button"
-msgstr "В левой панели \"OCP CAD Viewer -> Viewer manager\" установите нужные библиотеки, нажав кнопку \"Quickstart CadQuery\""
-
-#: ../../source/troubleshooting.rst:102
+#: ../../source/troubleshooting.rst:200
 msgid "Error while loading part or assembly view: \"Module ... not found\""
-msgstr "Ошибка при загрузке представления детали или сборки: \"Module ... not found\""
+msgstr ""
+"Ошибка при загрузке представления детали или сборки: \"Module ... not "
+"found\""
 
-#: ../../source/troubleshooting.rst:104
+#: ../../source/troubleshooting.rst:202
+#, fuzzy
 msgid ""
-"Make sure that extension version matches PartCAD Python module version in"
-" `pc version` command output"
-msgstr "Убедитесь, что версия расширения совпадает с версией Python-модуля PartCAD в выводе команды `pc version`"
+"Make sure that the extension version matches the PartCAD version in ``pc "
+"version`` command output"
+msgstr ""
+"Убедитесь, что версия расширения совпадает с версией Python-модуля "
+"PartCAD в выводе команды `pc version`"
 
-#: ../../source/troubleshooting.rst:108
-msgid "OCP CAD Viewer"
+#: ../../source/troubleshooting.rst:206
+#, fuzzy
+msgid "PartCAD Viewer"
 msgstr "OCP CAD Viewer"
 
-#: ../../source/troubleshooting.rst:110
+#: ../../source/troubleshooting.rst:208
 msgid ""
-"If the PartCAD vscode extension does not work for you then it is possible"
-" to troubleshoot PartCAD using the ``OCP CAD Viewer`` vscode extension "
-"alone."
-msgstr "Если расширение PartCAD для vscode у вас не работает, то устранять неполадки PartCAD можно с помощью одного лишь vscode-расширения ``OCP CAD Viewer``."
+"The ``PartCAD Viewer`` is a tab the extension opens when a part, "
+"assembly, scene, sketch or interface is inspected. PartCAD tessellates "
+"the shape in a sandboxed runtime, and sends the result to the extension "
+"as compressed glTF over a socket on ``127.0.0.1:9137``. The Python side "
+"of that connection is the ``partcad_ide_client`` package, which ships "
+"inside ``partcad`` itself -- so ``pip install partcad`` is all that is "
+"needed, and there is nothing separate to install."
+msgstr ""
 
-#: ../../source/troubleshooting.rst:113
+#: ../../source/troubleshooting.rst:216
 msgid ""
-"Any part or assembly can be displayed in ``OCP CAD Viewer`` by running "
-"``pc inspect <part>`` or ``pc inspect -a <assembly>`` in a terminal."
-msgstr "Любую деталь или сборку можно отобразить в ``OCP CAD Viewer``, выполнив ``pc inspect <part>`` или ``pc inspect -a <assembly>`` в терминале."
+"Beside the 3D view the panel carries tabs for the questions that are "
+"about the object rather than its shape -- **FEA** and **CFD** under "
+"**Analysis**, and **Bill of Materials**, **Instructions** and "
+"**Procurement** under **Supply Chain**, each enabled where it applies -- "
+"and, beside the 3D view on the **Design** tab, **2D** and **Draft**, "
+"which render the object to a file. Those do not come over the socket "
+"above: they are answered by the PartCAD daemon and fetched the first time"
+" the tab is opened, so a failure in one of them is a daemon problem and "
+"says so in the tab, while the 3D view keeps working."
+msgstr ""
 
-#: ../../source/troubleshooting.rst:130
-msgid "Demo preview window is not shown on the right panel"
-msgstr "Окно предпросмотра демо не отображается на правой панели"
-
-#: ../../source/troubleshooting.rst:132
+#: ../../source/troubleshooting.rst:225
 msgid ""
-"Close the right panel and press \"Arrow\" button in \"Viewer manager\" "
-"left panel (next to \"ocp_vscode\")"
-msgstr "Закройте правую панель и нажмите кнопку \"Arrow\" в левой панели \"Viewer manager\" (рядом с \"ocp_vscode\")"
+"Anything with a ``partcad`` that can reach that port can display into the"
+" same viewer -- including a ``pc`` run in a plain terminal, as long as a "
+"window with the extension is open. While the extension is active it puts "
+"the PartCAD command line tools on the ``PATH`` of terminals opened in "
+"that window, so ``pc`` is there without any further setup "
+"(``partcad.addToolsToTerminalPath`` turns that off):"
+msgstr ""
+
+#: ../../source/troubleshooting.rst:245
+msgid "``Failed to load \"partcad_ide_client\"`` in the PartCAD terminal view"
+msgstr ""
+
+#: ../../source/troubleshooting.rst:247
+msgid ""
+"The package ships inside ``partcad``, so this means the installation is "
+"damaged rather than incomplete. Reinstall with ``pip install --force-"
+"reinstall partcad``, or press \"Update PartCAD\" in the \"Context\" left "
+"panel."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:251
+msgid ""
+"On a PartCAD older than 0.8.0 it was a separate ``partcad-ide-client`` "
+"distribution that was never published; upgrading is the fix."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:254
+msgid "``No PartCAD IDE with an open PartCAD Viewer detected``"
+msgstr ""
+
+#: ../../source/troubleshooting.rst:256
+msgid ""
+"Nothing is listening on the viewer port. Open a window with the PartCAD "
+"extension active; the extension starts listening when it activates."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:258
+msgid ""
+"If two windows are open, only one of them may own the port on platforms "
+"without ``SO_REUSEPORT``. The \"PartCAD Viewer port ... is already in "
+"use\" message in the ``PartCAD`` output view says which case this is."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:261
+msgid ""
+"Set ``PARTCAD_IDE_PORT`` to move a ``partcad`` process to a different "
+"port if 9137 is taken by something else on the machine."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:264
+msgid "\"The 3D view could not start: this window can't show 3D models.\""
+msgstr ""
+
+#: ../../source/troubleshooting.rst:266
+msgid ""
+"VS Code could not use the graphics card, so the window has no WebGL. The "
+"message in the 3D tab says how to start VS Code so that it draws without "
+"the graphics card, and how to make its icon do that every time. The other"
+" tabs are not affected; the **2D** tab shows a picture of the object "
+"meanwhile."
+msgstr ""
+
+#: ../../source/troubleshooting.rst:271
+msgid "The **Draft** tab says a package is not found"
+msgstr ""
+
+#: ../../source/troubleshooting.rst:273
+msgid ""
+"The drawing package, ``//pub/feature/render/draftwright``, comes from the"
+" public PartCAD index. A workspace that does not import ``pub`` has no "
+"such package; ``pc init`` adds that import, and "
+"``examples/feature_render_custom`` shows it written out."
+msgstr ""
+
+#~ msgid ""
+#~ "Install Conda environment into the "
+#~ "current working directory (main menu: "
+#~ "View -> Command palette -> Python: "
+#~ "Create environment...)"
+#~ msgstr ""
+#~ "Установите окружение Conda в текущий "
+#~ "рабочий каталог (главное меню: View ->"
+#~ " Command palette -> Python: Create "
+#~ "environment...)"
+
+#~ msgid ""
+#~ "Choose interpreter (main menu: View ->"
+#~ " Command palette -> Python: Choose "
+#~ "interpreter...)"
+#~ msgstr ""
+#~ "Выберите интерпретатор (главное меню: View "
+#~ "-> Command palette -> Python: Choose "
+#~ "interpreter...)"
+
+#~ msgid "Error while loading part or assembly view: \"Unknown module: CadQuery\""
+#~ msgstr ""
+#~ "Ошибка при загрузке представления детали "
+#~ "или сборки: \"Unknown module: CadQuery\""
+
+#~ msgid ""
+#~ "In \"OCP CAD Viewer -> Viewer "
+#~ "manager\" left panel, install the needed"
+#~ " libraries by pressing \"Quickstart "
+#~ "CadQuery\" button"
+#~ msgstr ""
+#~ "В левой панели \"OCP CAD Viewer ->"
+#~ " Viewer manager\" установите нужные "
+#~ "библиотеки, нажав кнопку \"Quickstart "
+#~ "CadQuery\""
+
+#~ msgid ""
+#~ "If the PartCAD vscode extension does "
+#~ "not work for you then it is "
+#~ "possible to troubleshoot PartCAD using "
+#~ "the ``OCP CAD Viewer`` vscode extension"
+#~ " alone."
+#~ msgstr ""
+#~ "Если расширение PartCAD для vscode у "
+#~ "вас не работает, то устранять неполадки"
+#~ " PartCAD можно с помощью одного лишь"
+#~ " vscode-расширения ``OCP CAD Viewer``."
+
+#~ msgid ""
+#~ "Any part or assembly can be "
+#~ "displayed in ``OCP CAD Viewer`` by "
+#~ "running ``pc inspect <part>`` or ``pc"
+#~ " inspect -a <assembly>`` in a "
+#~ "terminal."
+#~ msgstr ""
+#~ "Любую деталь или сборку можно отобразить"
+#~ " в ``OCP CAD Viewer``, выполнив ``pc"
+#~ " inspect <part>`` или ``pc inspect -a"
+#~ " <assembly>`` в терминале."
+
+#~ msgid "Demo preview window is not shown on the right panel"
+#~ msgstr "Окно предпросмотра демо не отображается на правой панели"
+
+#~ msgid ""
+#~ "Close the right panel and press "
+#~ "\"Arrow\" button in \"Viewer manager\" "
+#~ "left panel (next to \"ocp_vscode\")"
+#~ msgstr ""
+#~ "Закройте правую панель и нажмите кнопку"
+#~ " \"Arrow\" в левой панели \"Viewer "
+#~ "manager\" (рядом с \"ocp_vscode\")"
