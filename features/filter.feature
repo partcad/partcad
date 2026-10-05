@@ -8,6 +8,13 @@ Feature: `pc filter` command
   # the IDE's 2D and Draft tabs. What this feature covers is the half that is
   # this command's own: the file it writes, the declaration it adds, and the one
   # thing filtering can break.
+  #
+  # A filter written on the command line goes through the multi-line form and
+  # *double* quotes, for the reason 'features/render.feature' gives at length:
+  # these commands run through 'subprocess.run(shell=True)', which is 'cmd.exe'
+  # on Windows, where "'" quotes nothing and arrives as part of the value. The
+  # expression would then be "'[base]'" -- no such file, and a quoted scalar
+  # rather than a mask, which is refused.
 
   Background: A package with an assembly and a scene to select from
     Given I am in "/tmp/sandbox/behave" directory
@@ -63,7 +70,10 @@ Feature: `pc filter` command
 
   @success
   Scenario: A filter written on the command line
-    When I run "pc --no-ansi filter '{base: null}' widget widget_base"
+    When I run command
+      """
+      pc --no-ansi filter "{base: null}" widget widget_base
+      """
     Then the command should exit with a status code of "0"
     And STDERR should contain "Created the assembly 'widget_base' from 'widget'"
     And a file named "widget_base.assy" should exist
@@ -78,7 +88,10 @@ Feature: `pc filter` command
 
   @success
   Scenario: The new object is one every other command works on
-    When I run "pc --no-ansi filter '[base]' widget widget_base"
+    When I run command
+      """
+      pc --no-ansi filter "[base]" widget widget_base
+      """
     Then the command should exit with a status code of "0"
     When I run "pc --no-ansi bom widget_base"
     Then the command should exit with a status code of "0"
@@ -86,7 +99,10 @@ Feature: `pc filter` command
 
   @success
   Scenario: A link named with children keeps those children only
-    When I run "pc --no-ansi filter '{tower: {upper: null}}' widget widget_top"
+    When I run command
+      """
+      pc --no-ansi filter "{tower: {upper: null}}" widget widget_top
+      """
     Then the command should exit with a status code of "0"
     And a file named "widget_top.assy" should contain "name: upper"
     And a file named "widget_top.assy" should not contain "name: lower"
@@ -107,7 +123,10 @@ Feature: `pc filter` command
 
   @success
   Scenario: A filtered scene is a scene
-    When I run "pc --no-ansi filter '[block]' table table_block"
+    When I run command
+      """
+      pc --no-ansi filter "[block]" table table_block
+      """
     Then the command should exit with a status code of "0"
     And STDERR should contain "Created the scene 'table_block' from 'table'"
     And a file named "table_block.assy" should exist
@@ -116,7 +135,10 @@ Feature: `pc filter` command
 
   @success
   Scenario: Nothing is written on a dry run
-    When I run "pc --no-ansi filter --dry-run '[base]' widget widget_base"
+    When I run command
+      """
+      pc --no-ansi filter --dry-run "[base]" widget widget_base
+      """
     Then the command should exit with a status code of "0"
     And STDERR should contain "[Dry Run] Would write the assembly 'widget_base'"
     And a file named "widget_base.assy" should not exist
@@ -124,9 +146,15 @@ Feature: `pc filter` command
 
   @success
   Scenario: Re-running it replaces the file and keeps the declaration
-    When I run "pc --no-ansi filter '[base]' widget widget_part"
+    When I run command
+      """
+      pc --no-ansi filter "[base]" widget widget_part
+      """
     Then the command should exit with a status code of "0"
-    When I run "pc --no-ansi filter '[tower]' widget widget_part"
+    When I run command
+      """
+      pc --no-ansi filter "[tower]" widget widget_part
+      """
     Then the command should exit with a status code of "0"
     And a file named "widget_part.assy" should contain "name: tower"
     And a file named "widget_part.assy" should not contain "name: base"
@@ -155,7 +183,10 @@ Feature: `pc filter` command
         chain:
           type: assy
       """
-    When I run "pc --no-ansi filter '[second]' chain chain_cut"
+    When I run command
+      """
+      pc --no-ansi filter "[second]" chain chain_cut
+      """
     Then the command should exit with a non-zero status code
     And STDERR should contain "nothing in this file places a link called 'first'"
     # 'pc lint' sees the same thing, from the same checker, over the file that
@@ -188,7 +219,10 @@ Feature: `pc filter` command
         nested:
           type: assy
       """
-    When I run "pc --no-ansi filter '{link#2: null}' nested nested_group"
+    When I run command
+      """
+      pc --no-ansi filter "{link#2: null}" nested nested_group
+      """
     Then the command should exit with a status code of "0"
     And a file named "nested_group.assy" should contain "name: inner"
     And a file named "nested_group.assy" should not contain "name: base"
@@ -212,15 +246,17 @@ Feature: `pc filter` command
             svg:
               prefix: out
               filter: [base]
-            png:
+            dxf:
               prefix: out
       """
     And a directory named "out" exists
     When I run "pc --no-ansi render -a widget"
     Then the command should exit with a status code of "0"
-    # Per file type: the SVG is of one link and the PNG of the whole of it.
+    # Per file type: the SVG is of one link and the DXF of the whole of it.
+    # Two vector targets rather than one raster one, so that what this asserts
+    # is the filter rather than whether this machine can rasterize.
     And a file named "out/widget.svg" should exist
-    And a file named "out/widget.png" should exist
+    And a file named "out/widget.dxf" should exist
 
   @failure
   Scenario: A configured filter that is not a mask of link names
@@ -244,7 +280,10 @@ Feature: `pc filter` command
 
   @failure
   Scenario: A name that is not a link of the assembly
-    When I run "pc --no-ansi filter '[nosuch]' widget widget_none"
+    When I run command
+      """
+      pc --no-ansi filter "[nosuch]" widget widget_none
+      """
     Then the command should exit with a non-zero status code
     And STDERR should contain "there is no link called 'nosuch'"
 
@@ -256,12 +295,18 @@ Feature: `pc filter` command
 
   @failure
   Scenario: The source and the target cannot be the same object
-    When I run "pc --no-ansi filter '[base]' widget widget"
+    When I run command
+      """
+      pc --no-ansi filter "[base]" widget widget
+      """
     Then the command should exit with a status code of "2"
     And STDERR should contain "is the source"
 
   @failure
   Scenario: An object the package does not declare
-    When I run "pc --no-ansi filter '[base]' nosuch nosuch_part"
+    When I run command
+      """
+      pc --no-ansi filter "[base]" nosuch nosuch_part
+      """
     Then the command should exit with a status code of "2"
     And STDERR should contain "is not an assembly or a scene"

@@ -112,24 +112,42 @@ def test_interferes_reaches_a_link_inside_a_named_container():
     assert plan.opaque == []  # a container is part of the assembly that holds it
 
 
-def test_interferes_may_not_name_a_link_that_has_no_name():
+def test_interferes_names_a_link_that_has_no_name_of_its_own_by_its_position():
+    """A container that named itself nothing is 'link#1', and so is a level of the path.
+
+    It used to be unaddressable, and what was inside it was named as if it were
+    not there - which made two brackets in two such containers one name. Every
+    link has a name now (see 'Assembly.link_name'), so the container is named
+    and the bracket is 'link#1/bracket'.
+    """
     unnamed = _assembly("asm:links", [_link("bracket", _part("bracket"))], container=True)
     asm = _assembly(
         "asm",
         [
             _link(None, unnamed),
-            _link("screw", _part("screw"), _joint("bracket", interferes=["asm:links"])),
+            _link("screw", _part("screw"), _joint("plate", interferes=["link#1/bracket"])),
+            _link("plate", _part("plate")),
         ],
     )
     plan = _plan(asm)
-    assert plan.problems and "not a named link" in plan.problems[0]
-    # ...while what is inside an unnamed container is named as if it were not there.
-    assert (
-        _plan(
-            _assembly("a2", [_link(None, unnamed), _link("screw", _part("s"), _joint("x", interferes=["bracket"]))])
-        ).problems
-        == []
+    assert plan.problems == []
+    assert plan.expected == {("screw", "link#1/bracket")}
+
+    # The container itself is nameable as a whole, by that same name.
+    whole = _assembly(
+        "asm",
+        [_link(None, unnamed), _link("screw", _part("screw"), _joint("plate", interferes=["link#1"]))],
     )
+    assert _plan(whole).expected == {("screw", "link#1")}
+
+    # What is no link of it is still reported, and is no longer reported as a
+    # link that merely has no name.
+    wrong = _assembly(
+        "asm",
+        [_link(None, unnamed), _link("screw", _part("screw"), _joint("plate", interferes=["bracket"]))],
+    )
+    problems = _plan(wrong).problems
+    assert problems and "which is not a link" in problems[0]
 
 
 def test_a_declared_subassembly_answers_for_its_own_inside_once_however_often_it_is_placed(monkeypatch):

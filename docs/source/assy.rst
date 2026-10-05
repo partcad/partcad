@@ -155,13 +155,14 @@ the joint, never declared against a pair of parts:
   underneath as well, and a sub-assembly fitted by one of its pins drives its
   other pins into the same neighbour.
 
-`interferes` names nodes of the same `links:` list as the connection, by
-`name`, which a node must have to be named; a node inside a named `links:`
-container is `container/name`, and one inside an unnamed container is named as
-if the container were not there. A node may be a part or an assembly. Naming an
-assembly excuses every overlap between the two, which is as precise as the
-declaration is: a sub-assembly with a mapped port is named rather than the part
-inside it that provides the port, since it is the sub-assembly that is fitted.
+`interferes` names nodes of the same `links:` list as the connection, by the
+:ref:`name of the link <assy-link-names>`, which every link has: a node inside a
+`links:` container is `container/name`, and a container that gave itself no name
+is a level of that path like any other (`link#2/bracket`). A node may be a part
+or an assembly. Naming an assembly excuses every overlap between the two, which
+is as precise as the declaration is: a sub-assembly with a mapped port is named
+rather than the part inside it that provides the port, since it is the
+sub-assembly that is fitted.
 
 An assembly answers only for what it puts together. A sub-assembly declared in
 `partcad.yaml` and placed in it has a verdict of its own, which the assembly

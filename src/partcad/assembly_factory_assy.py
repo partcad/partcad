@@ -1191,9 +1191,10 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             #              those as well; the connection is to one of them and
             #              the interference is with all of them, and only the
             #              connection knows which. Each names a node of this
-            #              'links:' list by its 'name' ('container/name' inside
-            #              a named container), part or assembly; a node with no
-            #              name cannot be named. An assembly named excuses
+            #              'links:' list by its name ('container/name' inside a
+            #              container), part or assembly; every link has one, so
+            #              every one of them can be named (see
+            #              'Assembly.link_name'). An assembly named excuses
             #              every overlap between it and this node. Read by
             #              'partcad.test.interference'.
             # values: a node name, or a list of them
