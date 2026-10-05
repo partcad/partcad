@@ -177,6 +177,52 @@ suite('The tab strips', () => {
         assert.strictEqual(tabs.current, 'cfd');
     });
 
+    test('the tab clicked is opened again once it applies again, whatever was fallen back to meanwhile', () => {
+        // The Manufacturing strip disables Buy for the moment it takes to learn
+        // what is bought; a reader who was on Buy lands on Buy again.
+        const { tabs, bar, panes } = strip();
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }));
+        button(bar, 'CFD').click();
+
+        tabs.setTabs(specs(panes, { fea: true, cfd: false }));
+        assert.strictEqual(tabs.current, 'fea');
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }));
+        assert.strictEqual(tabs.current, 'cfd');
+    });
+
+    test('a secondary tab is never opened for the user, only by a click', () => {
+        const { tabs, bar, panes } = strip();
+        const secondary = (fea: boolean) =>
+            specs(panes, { fea: true, cfd: true }).map((spec) => ({
+                ...spec,
+                secondary: spec.id === 'fea' && fea,
+            }));
+
+        tabs.setTabs(secondary(true));
+        assert.strictEqual(tabs.current, 'cfd');
+
+        // Clicked, it opens - and the next object it is not secondary for opens
+        // on it, because that is the tab the user chose.
+        button(bar, 'FEA').click();
+        assert.strictEqual(tabs.current, 'fea');
+        tabs.setTabs(secondary(true));
+        assert.strictEqual(tabs.current, 'cfd');
+        tabs.setTabs(secondary(false));
+        assert.strictEqual(tabs.current, 'fea');
+    });
+
+    test('a rebuild for the same object keeps the tab on screen, secondary or not', () => {
+        const { tabs, bar, panes } = strip();
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }));
+        button(bar, 'FEA').click();
+
+        tabs.setTabs(
+            specs(panes, { fea: true, cfd: true }).map((spec) => ({ ...spec, secondary: spec.id === 'fea' })),
+            { keepCurrent: true },
+        );
+        assert.strictEqual(tabs.current, 'fea');
+    });
+
     test('a group is enabled while any of its tabs is', () => {
         const panes = { fea: new FakeElement('div'), cfd: new FakeElement('div') };
         assert.strictEqual(Tabs.anyEnabled(specs(panes, { fea: false, cfd: true })), true);

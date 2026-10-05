@@ -290,6 +290,7 @@ class FakeProject:
         self.guides = {}
         self.guide_error = None
         self.guide_requests = []
+        self.guide_options = []
         # A real package's parsed configuration carries its name, which is what
         # the client reads each row's label from.
         self.config_obj.setdefault("name", name)
@@ -351,8 +352,9 @@ class FakeProject:
     async def get_suppliers_async(self):
         return self.get_suppliers()
 
-    async def assembly_guide_data_async(self, assembly_name, ignore_manufacturability=False):
+    async def assembly_guide_data_async(self, assembly_name, ignore_manufacturability=False, **options):
         self.guide_requests.append((assembly_name, ignore_manufacturability))
+        self.guide_options.append(options)
         if self.guide_error is not None:
             raise self.guide_error
         return self.guides.get(assembly_name)
@@ -2298,13 +2300,49 @@ def test_assembly_guide_returns_the_document_of_the_assembly(monkeypatch):
     install_fake_partcad_modules(monkeypatch, {"partcad.exception": {"AssemblyDocumentError": FakeDocumentError}})
     session, _ = make_session()
     document = {"title": "top", "pages": [{"title": "top", "blocks": []}]}
-    session.partcad_ctx.projects["//"].guides["top"] = document
+    guide = {"document": document, "plan": {"id": "root"}, "pages": {"root": 0}}
+    session.partcad_ctx.projects["//"].guides["top"] = guide
 
     result = operations.assembly_guide(session, {"package": "//", "object": "top"})
 
-    assert result == {"assembly": "//:top", "document": document}
+    assert result == {"assembly": "//:top", **guide}
     assert session.partcad_ctx.projects["//"].guide_requests == [("top", False)]
+    # A client that says nothing about what to include gets the whole book, which
+    # is what it always got.
+    assert session.partcad_ctx.projects["//"].guide_options == [
+        {"recursive": True, "build_parts": True, "choices": {}, "format": None}
+    ]
     assert ("Guide", "//") in session.partcad.logging.processes
+
+
+def test_assembly_guide_passes_what_to_include_and_the_choices_of_the_object(monkeypatch):
+    # The CLI cannot tell which fully qualified name its 'OBJECT' is, so it sends
+    # the choices of every object it has saved any for, and the daemon picks.
+    install_fake_partcad_modules(monkeypatch, {"partcad.exception": {"AssemblyDocumentError": FakeDocumentError}})
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].guides["top"] = {"document": {}, "plan": {}, "pages": {}}
+    bvb = {"//:top": {"//:bracket": "build"}, "//:other": {"//:bracket": "buy"}}
+
+    operations.assembly_guide(
+        session,
+        {"package": "//", "object": "top", "subassemblies": False, "build_parts": True, "bvb": bvb},
+    )
+
+    (options,) = session.partcad_ctx.projects["//"].guide_options
+    assert options["recursive"] is False
+    assert options["build_parts"] is True
+    assert options["choices"] == {"//:bracket": "build"}
+
+
+def test_assembly_guide_refuses_a_format_it_does_not_write(monkeypatch):
+    install_fake_partcad_modules(monkeypatch, {"partcad.exception": {"AssemblyDocumentError": FakeDocumentError}})
+    session, _ = make_session()
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.assembly_guide(session, {"package": "//", "object": "top", "format": "docx"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "not as 'docx'" in str(caught.value)
 
 
 def test_assembly_guide_reports_a_refusal_as_a_usage_error(monkeypatch):

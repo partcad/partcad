@@ -82,7 +82,7 @@ body {
     overflow: auto;
 }
 
-/* Design, Analysis and Supply Chain are each a strip of their own over
+/* Design, Analysis and Manufacturing are each a strip of their own over
    panes of their own, laid out the way the panel lays out the outer ones. Their
    tabs are a step quieter than the panel's, so that the two strips read as one
    inside the other rather than as two rows of equals. */
@@ -921,4 +921,216 @@ a {
     white-space: nowrap;
     min-width: 3rem;
     text-align: right;
+}
+
+/*
+ * Build vs Buy: a line per object, a picture of it first, and a switch saying
+ * whether it is made here or ordered.
+ */
+
+table.bvb-table td {
+    vertical-align: middle;
+}
+
+.bvb-picture {
+    width: 64px;
+}
+
+/* The thumbnails are projections on a transparent background with green lines,
+   the way the 2D tab draws them, so they sit on white for the reason that tab's
+   picture does: a dark theme would swallow them. */
+.thumbnail {
+    width: 64px;
+    height: 64px;
+    border-radius: 3px;
+    background: #fff;
+}
+
+.thumbnail img {
+    display: block;
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+}
+
+.bvb-desc {
+    margin-top: 0.2em;
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.9em;
+    white-space: pre-line;
+}
+
+/* The label is above the switch rather than beside it, so that the column is
+   as narrow as the longer of the two words and reads down the table. */
+.bvb-choice {
+    width: 4.5rem;
+    text-align: center;
+}
+
+.bvb-toggle {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    cursor: pointer;
+}
+
+.bvb-toggle.locked {
+    cursor: default;
+}
+
+/* In place of the switch of a line that can be neither bought nor built: red,
+   because it is what keeps the object from being manufacturable. */
+.bvb-missing {
+    color: var(--vscode-errorForeground, #f14c4c);
+    font-weight: 600;
+    cursor: help;
+}
+
+.bvb-toggle-label {
+    font-size: 0.85em;
+    color: var(--vscode-descriptionForeground);
+}
+
+input.switch {
+    appearance: none;
+    position: relative;
+    width: 2.2rem;
+    height: 1.1rem;
+    margin: 0;
+    border: 1px solid var(--vscode-checkbox-border, var(--vscode-panel-border, currentColor));
+    border-radius: 0.55rem;
+    background: var(--vscode-checkbox-background, transparent);
+    cursor: inherit;
+}
+
+input.switch::after {
+    content: '';
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: calc(1.1rem - 4px);
+    height: calc(1.1rem - 4px);
+    border-radius: 50%;
+    background: var(--vscode-descriptionForeground);
+    transition: transform 0.12s ease;
+}
+
+input.switch:checked {
+    border-color: var(--vscode-button-background);
+    background: var(--vscode-button-background);
+}
+
+input.switch:checked::after {
+    background: var(--vscode-button-foreground);
+    transform: translateX(1.1rem);
+}
+
+input.switch:disabled {
+    opacity: 0.5;
+}
+
+input.switch:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+}
+
+/*
+ * Build: the list of steps on the left, the selected one on the right.
+ */
+
+.pane.build {
+    display: flex;
+    overflow: hidden;
+}
+
+.build-list {
+    display: flex;
+    flex: 0 0 18rem;
+    flex-direction: column;
+    max-width: 40%;
+    min-height: 0;
+    border-right: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.build-tree {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.3rem 0;
+}
+
+.build-recursive {
+    flex: 0 0 auto;
+    padding: 0.4rem 0.6rem;
+    border-top: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.build-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.4rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.build-item:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.build-item.selected {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.build-item:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.build-item .twisty {
+    flex: 0 0 1em;
+    text-align: center;
+}
+
+.build-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Making a part and putting an assembly together are the steps the list adds to
+   the links of the assembly; they are told apart from the links at a glance. */
+.build-manufacture .build-title {
+    font-style: italic;
+}
+
+.build-assembly .build-title {
+    font-weight: 600;
+}
+
+.build-main {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.build-main > .placeholder,
+.build-main > .error {
+    padding: 1rem;
+}
+
+/* The Assembly tab: the 2D tab's header over a paged document. */
+.assembly-body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.assembly-body > .placeholder,
+.assembly-body > .error {
+    padding: 1rem;
+    white-space: pre-line;
 }

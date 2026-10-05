@@ -556,6 +556,52 @@ class Assembly(Shape):
                 "parts": result.get("parts", 0),
             }
 
+    async def get_step_problems(self, include_located: bool = True):
+        """What keeps the steps of this assembly from being followed by hand.
+
+        Each entry is '(child name, problem)'. Somebody putting the assembly
+        together needs every item after the first to say what it is joined to
+        - a 'connect' or 'connectPorts' section - and how it goes on: pushed,
+        snapped or screwed in, said by that section's 'how' or by the mating or
+        the interfaces it connects through (see 'ConnectHow.motion_declared()').
+        The first item of each list of links is what the rest is added to, and
+        is joined to nothing.
+
+        'include_located' also reports items placed by 'location:', the first
+        included: a coordinate says where a thing ends up and not what holds it
+        there. The 'connectivity' test already fails a manufacturable assembly
+        for that, so the 'manufacturability' test leaves it out rather than
+        failing the same item twice.
+
+        Read from the declarations as they are instantiated; nothing is built.
+        """
+        await self.do_instantiate()
+        problems = []
+
+        def walk(assembly):
+            for index, child in enumerate(assembly.children):
+                name = child.name or getattr(child.item, "name", None) or "item %d" % (index + 1)
+                if child.located:
+                    if include_located:
+                        problems.append((name, "it is placed by 'location:', which does not say what it is joined to"))
+                elif index > 0 and child.connection is None:
+                    problems.append((name, "it is not connected to anything: it has no 'connect' section"))
+                elif index > 0 and (child.how is None or not child.how.motion_declared()):
+                    problems.append(
+                        (
+                            name,
+                            "nothing says how it is put in place: its 'connect' section has no 'how', and "
+                            "neither the mating nor the interfaces it connects through say whether it is "
+                            "pushed, snapped or screwed in",
+                        )
+                    )
+                item = child.item
+                if isinstance(item, Assembly) and item.config.get("child", False):
+                    walk(item)
+
+        walk(self)
+        return problems
+
     async def resolve_connect_metadata(self, ctx):
         """Fill in the parts of the connection metadata that need the geometry.
 

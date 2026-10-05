@@ -48,6 +48,29 @@ from ..shape_config import final_config as _final_config
 from .test import Test
 
 
+async def tolerance_failure(part) -> str | None:
+    """Why a part that is made does not say how precisely, or None if it does.
+
+    The verdict of 'ManufacturabilityTest.tolerance_failure', which documents
+    the three answers 'get_tolerance()' can give. Module-level so that the
+    Build vs Buy tree ('partcad.build_plan') asks it of a part the same way this
+    test does, rather than with a second reading of the same rule.
+    """
+    tolerance = await part.get_tolerance()
+    if tolerance is None:
+        return "No manufacturing tolerance: the part type '%s' does not accept one" % part.config.get("type")
+    if math.isnan(tolerance):
+        return None
+    if tolerance == 0.0:
+        return "No manufacturing tolerance is specified"
+    return None
+
+
+async def tolerance_is_per_feature(part) -> bool:
+    tolerance = await part.get_tolerance()
+    return tolerance is not None and math.isnan(tolerance)
+
+
 class ManufacturabilityTest(Test):
     def __init__(self) -> None:
         super().__init__("manufacturability")
@@ -249,15 +272,9 @@ class ManufacturabilityTest(Test):
         Assemblies reach it for free - 'test_assembly()' runs every test in
         'tests_to_run' over its supply BoM, and this test is one of them.
         """
-        tolerance = await part.get_tolerance()
-        if tolerance is None:
-            return "No manufacturing tolerance: the part type '%s' does not accept one" % part.config.get("type")
-        if math.isnan(tolerance):
+        if await tolerance_is_per_feature(part):
             self.debug(part, "Tolerated feature by feature by the file it is read from")
-            return None
-        if tolerance == 0.0:
-            return "No manufacturing tolerance is specified"
-        return None
+        return await tolerance_failure(part)
 
     async def test_part(self, tests_to_run: list[Test], ctx, part: Part, test_ctx: dict = {}) -> bool:
         """Whether this part can be had: bought, or made from what can be had.
@@ -381,6 +398,13 @@ class ManufacturabilityTest(Test):
                 self.failed(assembly, "Can't be assembled")
                 # TODO(clairbee): Verify that at least one provider is available
                 failed = True
+            else:
+                # Every step has to be one somebody can follow: what it joins,
+                # and how it goes on. Items placed by 'location:' are the
+                # 'connectivity' test's to fail, so they are not failed twice.
+                for step, problem in await assembly.get_step_problems(include_located=False):
+                    self.failed(assembly, "Step '%s' can't be followed: %s" % (step, problem))
+                    failed = True
 
             # When testing the contents of a manufacturable assembly, ignore their
             # manufacturability preference

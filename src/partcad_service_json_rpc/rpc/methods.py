@@ -53,6 +53,11 @@ _OPERATIONS = {
     "list.mates": operations.list_mates,
     "bom": operations.bom,
     "assembly.guide": operations.assembly_guide,
+    # Not CLI commands: what the IDE's Build vs Buy and Build tabs are drawn
+    # from (see 'partcad.build_plan').
+    "manufacturing.tree": operations.manufacturing_tree,
+    "manufacturing.details": operations.manufacturing_details,
+    "manufacturing.plan": operations.manufacturing_plan,
     "supply.quote": operations.supply_quote,
     "cae.analyze": operations.cae_analyze,
     "cae.defaults": operations.cae_defaults,

@@ -431,6 +431,42 @@ one goes into. Then the thread of the end that does have to match one is the
 thread that gets cut, and failing that the one the self-tapping end brings with
 it.
 
+How a mating goes together
+--------------------------
+
+A pair of interfaces that always goes together the same way - an M3 screw into
+an M3 tapped hole, a clip onto its rail - says so once, in a ``how`` section of
+its mating, instead of on every connection:
+
+  .. code-block:: yaml
+
+    interfaces:
+      m3-screw:
+        mates:
+          m3-tapped:
+            how:
+              turnTorqueMax: 0.6
+              turnDirection: cw
+              threadStep: 0.5
+      clip:
+        mates:
+          rail:
+            how:
+              snapIn: true
+              pushForceMax: 20
+
+It takes the fields of a connection's ``how`` that say how the object goes in:
+``pushForceMax``, ``pushDistance``, ``turnDirection``, ``turnTorqueMax``,
+``threadStep``, ``selfScrew`` and ``snapIn``. ``stage`` is not one of them -
+which steps are done together is the assembly's to say - and nor are the
+``hold*`` fields, which belong to the objects (see :ref:`hold`).
+
+Every connection made through the pair gets them, and an ASSY file overrides
+them **field by field**: a step whose own ``how`` gives only ``turnTorqueMax``
+keeps the mating's thread and direction. The order, most specific first, is the
+connection's ``how``, the mating's ``how``, the mating's own ``selfScrew`` and
+``snapIn``, the interfaces' ``threadStep`` and ``selfScrew``, and the defaults.
+
 Reading the instructions back
 -----------------------------
 
@@ -465,6 +501,31 @@ What it rejects today:
 .. code-block:: shell
 
     pc test -a connect-instructions
+
+Steps that can be followed
+--------------------------
+
+Defaults are enough for an assembly to build, and they are not enough for a
+person to put it together. So an assembly that is meant to be made
+(``manufacturable: true``) is held to more by ``pc test``: every item after the
+first of each list of links has to be connected (``connect`` or
+``connectPorts``), and something has to say **how** it goes into place - pushed,
+snapped or screwed in. That is said by any of:
+
+* the connection's own ``how``, with at least one of ``pushForceMax``,
+  ``pushDistance``, ``turnDirection``, ``turnTorqueMax``, ``threadStep``,
+  ``selfScrew`` or ``snapIn`` (``stage`` and the ``hold*`` fields say when and by
+  what, not how);
+* the mating of the two interfaces it connects through: any field of its
+  ``how`` (see "How a mating goes together" above), or its own ``snapIn`` or
+  ``selfScrew``, which then says it for every connection that pairs them;
+* the interfaces themselves, with a ``threadStep`` or ``selfScrew``: a thread is
+  screwed in.
+
+The ``manufacturability`` test reports each step that says none of these; an
+item placed by ``location:`` is the ``connectivity`` test's to report. The IDE's
+Build vs Buy table shows an assembly with such steps as **Missing**, listing
+them, until they are fixed.
 
 .. _hold:
 

@@ -27,9 +27,9 @@ Anything that can reach that port displays into the same viewer, including a `pc
 terminal. Set `PARTCAD_IDE_PORT` to move both ends off the default port.
 
 The panel is a strip of tabs over the one object, not just a canvas: groups, **Design** (the object
-itself), **Analysis** (analysing it) and **Supply Chain** (making it), each with tabs of its own, then
+itself), **Analysis** (analysing it) and **Manufacturing** (making it), each with tabs of its own, then
 **Validation** and **Operations**, which are always disabled for now. Every group
-shows all of its tabs, disabling what does not apply, and Analysis and Supply Chain are disabled
+shows all of its tabs, disabling what does not apply, and Analysis and Manufacturing are disabled
 themselves when none of theirs does - hovering over a disabled group says why; each opens on the tab last opened in it while that one applies,
 and on the first that does otherwise.
 
@@ -39,9 +39,11 @@ and on the first that does otherwise.
 | **Design → 2D** | The object rendered to a PNG, JPEG or SVG picture, as `pc render` renders it, with **Save…**. |
 | **Design → Draft** | For a part or an assembly: a dimensioned technical drawing by `//pub/feature/render/draftwright`, in the formats it offers (PDF, SVG, DXF), with **Save…**. |
 | **Analysis → FEA**, **CFD** | For a part: the analysis `pc cae` runs, and what it found. |
-| **Supply Chain → Bill of Materials** | For a part or an assembly: what has to be procured to have it, as `pc bom` lists it - a made part as the stock it is made from, a sub-assembly with a vendor and an SKU as one item ordered whole. |
-| **Supply Chain → Instructions** | For an assembly that declares its steps: the assembly guide, step by step. |
-| **Supply Chain → Procurement** | For a part or an assembly: where it can be bought, and a quote per supplier. Supply Chain is disabled for a scene, a sketch or an interface. |
+| **Manufacturing → Build vs Buy** | For a part or an assembly: every part, piece of stock and sub-assembly it is made of, with a picture, a count, its size, weight and material, and a **Build**/**Buy** switch on each. A line that can only be bought or only be built has its switch fixed, saying why; a line that can be neither is marked **Missing**; building a line brings in what it is made of, buying it hides that. The choices are kept on this machine, in `~/.partcad/garage/default/bvb/`, and `pc instructions` reads them too. |
+| **Manufacturing → Build** | For whatever is built: the order to make it in - a part's stock first and the part last; an assembly's links, each built part preceded by the step that makes it, and with **Recursively** each built sub-assembly before the link that adds it. Selecting a step shows its page of the instructions: how to make a part (and its CAM toolpath, where it is cut), or the step that adds a link. |
+| **Manufacturing → Bill of Materials** | For a part or an assembly: what has to be procured to have it, as `pc bom` lists it - a made part as the stock it is made from, a sub-assembly with a vendor and an SKU as one item ordered whole. |
+| **Manufacturing → Buy** | For whatever is bought: where it can be bought, and a quote per supplier. |
+| **Manufacturing → Assembly** | For an assembly: the assembly instructions as a PDF or HTML document, with **Recursive** and **Build parts** (`pc instructions -r -b`) and **Save…**. Manufacturing is disabled for a scene, a sketch or an interface. |
 
 Only the 3D view comes over the viewer protocol. The others are questions about `<package>:<name>` that this
 extension puts to the PartCAD daemon, fetched the first time a tab is looked at and cached until the next

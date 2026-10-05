@@ -348,76 +348,9 @@ class GuideSection:
     # How many of this assembly the whole build needs. An assembly used more
     # than once is documented once, so this is what says it has to be made
     # again - and it counts the copies of whatever uses it too, since four
-    # towers with a spire each need four spires.
+    # towers with a spire each need four spires. The build plan counted it
+    # ('build_plan'), the same walk that decided where it is documented.
     count: int = 1
-
-
-async def collect_sections_async(ctx, assembly) -> list:
-    """Every assembly that has to be built, in the order it has to be built in.
-
-    Sub-assemblies come before the assembly that uses them - they have to exist
-    before it can be put together - and the top level assembly comes last. An
-    assembly used more than once is documented once.
-
-    The walk stays sequential, because that order and that "once" are the whole
-    of what it is for. What it finds is then built all at once: a section's
-    steps are measured in a sandbox, and no two of those measurements wait on
-    each other. 'asyncio.gather' hands the sections back in the order they were
-    walked in, so the book is still assembled bottom up.
-    """
-    nodes = []
-    seen = set()
-    await _collect_section(ctx, assembly, nodes, seen, top=True)
-
-    budget = _sandbox_budget()
-    return list(
-        await asyncio.gather(*[_build_section(ctx, node, content, top, budget) for node, content, top in nodes])
-    )
-
-
-def count_sections(sections, grouped) -> None:
-    """Tell each section how many of its assembly the build needs.
-
-    From the bill of materials, which has counted them already: a BOM is a
-    count of what goes into the thing, and an assembly used four times goes
-    into it four times. Deriving it again by walking the tree would be a second
-    answer to a question that already has one, free to disagree with the BOM
-    printed two pages earlier.
-
-    An assembly embedded in the 'links:' of an ASSY file belongs to no package
-    and so is in no BOM; it is documented where it appears and built once.
-    """
-    counts = grouped.get("assemblies") or {}
-    for section in sections:
-        entry = (counts.get(section.assembly.project_name) or {}).get(section.assembly.name)
-        if entry:
-            section.count = entry.get("count", 1)
-
-
-def collect_sections(ctx, assembly) -> list:
-    return asyncio.run(collect_sections_async(ctx, assembly))
-
-
-async def _collect_section(ctx, assembly, nodes, seen, top=False):
-    """Append what each section is made of, deepest first.
-
-    What is appended is the assembly, not the section: building the section
-    measures geometry, and every section's steps are measured together by the
-    caller rather than one section at a time on the way back up.
-    """
-    await assembly.do_instantiate()
-
-    key = _assembly_key(assembly)
-    if key in seen:
-        return
-    seen.add(key)
-
-    content = _step_source(assembly)
-    for child in content.children:
-        if isinstance(child.item, Assembly):
-            await _collect_section(ctx, child.item, nodes, seen)
-
-    nodes.append((assembly, content, top))
 
 
 def _step_source(assembly):
@@ -860,12 +793,67 @@ def build_readme_document(project, assembly, images: ImageSource, dir_path=None)
     return asyncio.run(build_readme_document_async(project, assembly, images, dir_path))
 
 
-async def build_guide_document_async(ctx, project, assembly, images: ImageSource, dir_path=None) -> doc.Document:
-    """The assembly instruction book of an assembly.
+@dataclass
+class Guide:
+    """An instruction book, and the plan it was written from.
 
-    A title page, the bill of materials, then every assembly - sub-assemblies
-    first - with a page showing what it should look like once it is together and
-    a page for each of its steps, and a page of links to close.
+    'pages' says which page each item of the plan is explained on, by the
+    item's id: what the IDE's Build tab shows when an item is selected, so that
+    the step on screen and the page of the book are one and the same.
+    """
+
+    document: doc.Document
+    plan: object = None
+    pages: dict = field(default_factory=dict)
+
+
+async def build_guide_document_async(
+    ctx,
+    project,
+    assembly,
+    images: ImageSource,
+    dir_path=None,
+    recursive=True,
+    build_parts=True,
+    choices=None,
+) -> doc.Document:
+    """The assembly instruction book of an assembly (see 'build_guide_async')."""
+    guide = await build_guide_async(ctx, project, assembly, images, dir_path, recursive, build_parts, choices)
+    return guide.document
+
+
+async def build_guide_async(
+    ctx,
+    project,
+    assembly,
+    images: ImageSource,
+    dir_path=None,
+    recursive=True,
+    build_parts=True,
+    choices=None,
+    force_manufacturing=False,
+) -> Guide:
+    """The assembly instruction book of an assembly, and the plan it follows.
+
+    A title page, the bill of materials, then a page for every item of the
+    build plan ('partcad.build_plan') in the order the plan lists them, and a
+    page of links to close. The plan is the tree of the assembly's links, with
+    an item before a link for whatever has to be made before that link can be
+    added: so a part that is built is explained just before it is first needed,
+    a sub-assembly is put together just before the link that adds it, and a
+    thing used in many places is explained once, with how many to make.
+
+    'recursive' puts the sub-assemblies that are built into the book, each with
+    its own page and steps; without it the book is this assembly's own steps,
+    with a sub-assembly added as the finished thing it is. 'build_parts' puts
+    in a page for every part that is made rather than bought: what it is made
+    from, the manufacturing instructions written out, and a drawing of the
+    route a machine cuts it with where one can be produced. 'choices' are the
+    user's Build vs Buy choices; this assembly itself is built, whatever they
+    say, since its instructions are what was asked for. A line item that cannot
+    be had at all ('build_plan.is_missing') is never built, so nothing is said
+    about making it. 'force_manufacturing' is '--ignore-manufacturability',
+    which takes the assembly and all of it as meant to be made.
 
     Every page is composed at the same time. What a page costs is its
     projections, one sandbox process each, and no page is an input to any other;
@@ -874,38 +862,124 @@ async def build_guide_document_async(ctx, project, assembly, images: ImageSource
     given them, so the book reads in the order it was written in whatever order
     the projections land.
     """
-    sections = await collect_sections_async(ctx, assembly)
-    grouped = await assembly.get_bom_grouped_async(ctx)
-    count_sections(sections, grouped)
+    from . import build_plan
 
-    composed = await asyncio.gather(
-        _title_page(project, assembly, images, sections),
-        *[_section_pages(project, section, images, len(sections)) for section in sections],
+    tree, index = await build_plan.tree_async(ctx, assembly, force_manufacturing=force_manufacturing)
+    # The assembly asked about is documented whatever is wrong with following
+    # it: 'check_source' has decided it is one to write instructions for, and
+    # what its steps fail to say is for 'pc test' and the Build vs Buy table to
+    # report - an instruction book that refused to show the steps would hide
+    # exactly what needs fixing.
+    tree["build"] = bool(tree.get("children"))
+    tree["manufacturable"] = True
+    choices = dict(choices or {})
+    choices[tree["name"]] = build_plan.BUILD
+    plan = build_plan.plan(tree, choices, recursive=recursive, build_parts=build_parts)
+
+    containers = [item for item in plan.walk() if item.type == build_plan.ITEM_ASSEMBLY]
+    budget = _sandbox_budget()
+    built = await asyncio.gather(
+        *[
+            _build_section(
+                ctx,
+                resolve_alias(ctx, index.objects[item.node["id"]]),
+                top=item.id == build_plan.ROOT_ID,
+                budget=budget,
+            )
+            for item in containers
+        ]
     )
+    sections = {}
+    for item, section in zip(containers, built):
+        section.count = item.count
+        sections[item.container] = section
 
-    pages = [composed[0]]
-    pages.append(doc.Page(title="Bill of Materials", blocks=_bom_page_blocks(project, grouped, dir_path)))
-    pages += await _manufacturing_pages(ctx, project, grouped, images)
+    grouped = await assembly.get_bom_grouped_async(ctx)
 
-    for section_pages in composed[1:]:
-        pages += section_pages
+    # Which coroutine writes the page of which items, in the order the pages
+    # are read in. The base of an assembly - the first link, which no step adds
+    # - is explained on that assembly's own page rather than on one of its own.
+    composers = []
+    page_items = []
+    same_page = {}
 
+    def visit(item):
+        if item.type == build_plan.ITEM_ASSEMBLY:
+            if item.id != build_plan.ROOT_ID:
+                composers.append(_section_page(project, sections[item.container], images))
+                page_items.append(item.id)
+            for child in item.children:
+                visit(child)
+        elif item.type == build_plan.ITEM_LINK:
+            section = sections[item.container]
+            if item.step == 0:
+                if item.container == build_plan.ROOT_ID:
+                    composers.append(_section_page(project, section, images))
+                    page_items.append(item.id)
+                else:
+                    same_page[item.id] = item.container
+            else:
+                composers.append(_step_page(section, section.steps[item.step - 1], images))
+                page_items.append(item.id)
+        elif item.type == build_plan.ITEM_MANUFACTURE:
+            composers.append(_manufacture_page(ctx, project, item, index, images))
+            page_items.append(item.id)
+
+    visit(plan)
+
+    composed = await asyncio.gather(_title_page(project, assembly, images, list(sections.values())), *composers)
+
+    pages = [composed[0], doc.Page(title="Bill of Materials", blocks=_bom_page_blocks(project, grouped, dir_path))]
+    page_of = {build_plan.ROOT_ID: 0}
+    for item_id, page in zip(page_items, composed[1:]):
+        page_of[item_id] = len(pages)
+        pages.append(page)
+    for item_id, container in same_page.items():
+        page_of[item_id] = page_of[container]
     pages.append(_links_page(project, assembly, grouped, dir_path))
 
-    return doc.Document(
+    document = doc.Document(
         title=assembly.name,
         subtitle=assembly.desc,
         pages=pages,
         footer=doc.GENERATED_BY,
     )
+    return Guide(document=document, plan=plan, pages=page_of)
 
 
-def build_guide_document(ctx, project, assembly, images: ImageSource, dir_path=None) -> doc.Document:
-    return asyncio.run(build_guide_document_async(ctx, project, assembly, images, dir_path))
+def build_guide_document(ctx, project, assembly, images: ImageSource, dir_path=None, **options) -> doc.Document:
+    return asyncio.run(build_guide_document_async(ctx, project, assembly, images, dir_path, **options))
+
+
+async def build_part_plan_async(ctx, project, part, images: ImageSource, choices=None) -> Guide:
+    """What making a part takes, as pages: the IDE's Build tab for a part.
+
+    The plan of a part is the chain of what it is made from, deepest first and
+    the part itself last ('build_plan.plan'), and each item of it is explained
+    on the same page an assembly's instruction book explains it on.
+    """
+    from . import build_plan
+
+    tree, index = await build_plan.tree_async(ctx, part)
+    plan = build_plan.plan(tree, choices)
+    composed = await asyncio.gather(
+        _part_title_page(project, part, images),
+        *[_manufacture_page(ctx, project, item, index, images) for item in plan.children],
+    )
+    page_of = {build_plan.ROOT_ID: 0}
+    for number, item in enumerate(plan.children, 1):
+        page_of[item.id] = number
+    document = doc.Document(
+        title=part.name,
+        subtitle=getattr(part, "desc", None),
+        pages=list(composed),
+        footer=doc.GENERATED_BY,
+    )
+    return Guide(document=document, plan=plan, pages=page_of)
 
 
 @asynccontextmanager
-async def guide_document_async(ctx, project, assembly, label, dir_path=None, ignore_manufacturability=False):
+async def guide_document_async(ctx, project, assembly, label, dir_path=None, ignore_manufacturability=False, **options):
     """The instruction book of an assembly, for as long as its pictures exist.
 
     A context manager rather than a plain call because the illustrations are
@@ -920,14 +994,35 @@ async def guide_document_async(ctx, project, assembly, label, dir_path=None, ign
     'co_varnames'. What 'asynccontextmanager' leaves in the class is contextlib's
     'helper(*args, **kwds)', whose 'co_varnames' has two entries, so a third
     positional argument raises IndexError before the document is ever built.
+
+    'options' are those of 'build_guide_async': 'recursive', 'build_parts' and
+    'choices'.
     """
+    async with guide_async(ctx, project, assembly, label, dir_path, ignore_manufacturability, **options) as guide:
+        yield guide.document
+
+
+@asynccontextmanager
+async def guide_async(ctx, project, assembly, label, dir_path=None, ignore_manufacturability=False, **options):
+    """'guide_document_async', yielding the plan and its pages with the document."""
     assembly = resolve_alias(ctx, assembly)
     check_source(assembly, ignore_manufacturability)
 
     with pc_logging.Action("Guide%s" % label, project.name, assembly.name):
         with tempfile.TemporaryDirectory() as assets_dir:
             images = RenderedImages(ctx, project, assets_dir)
-            yield await build_guide_document_async(ctx, project, assembly, images, dir_path)
+            yield await build_guide_async(
+                ctx, project, assembly, images, dir_path, force_manufacturing=ignore_manufacturability, **options
+            )
+
+
+@asynccontextmanager
+async def part_plan_async(ctx, project, part, choices=None):
+    """'build_part_plan_async', for as long as its pictures exist."""
+    with pc_logging.Action("PlanData", project.name, part.name):
+        with tempfile.TemporaryDirectory() as assets_dir:
+            images = RenderedImages(ctx, project, assets_dir)
+            yield await build_part_plan_async(ctx, project, part, images, choices)
 
 
 async def _title_page(project, assembly, images, sections):
@@ -957,73 +1052,126 @@ def _bom_page_blocks(project, grouped, dir_path):
     return blocks
 
 
-async def _manufacturing_pages(ctx, project, grouped, images: ImageSource) -> list:
-    """The parts to make before anything is assembled, and how to make each.
+async def _part_title_page(project, part, images):
+    blocks = [doc.Heading(part.name, level=1)]
+    image = await images.shape_image_async(part, alt=part.name)
+    if image is not None:
+        blocks.append(doc.ImageRow([image], height=0.5))
+    blocks += _prose_blocks(getattr(part, "desc", None))
+    blocks.append(doc.Properties([("Package", project.name)]))
+    return doc.Page(title=part.name, blocks=blocks)
 
-    The first thing the book asks of its reader after the bill of materials:
-    every part that is made rather than bought, how many of it, what it is made
-    from, and its manufacturing instructions written out in full (see
-    'partcad.manufacturing_instructions'). Text for now; a picture of each
-    method is for when PartCAD can draw one.
+
+async def _manufacture_page(ctx, project, item, index, images: ImageSource):
+    """How to make one part: what it is made from, the instructions, the route.
+
+    The manufacturing instructions written out in full (see
+    'partcad.manufacturing_instructions') come first, since they are what the
+    reader follows; then the drawing of the route a machine cuts it with, where
+    the part declares a job and a route can be produced (see 'cam_preview').
+    Primitive on purpose: until PartCAD can draw each method, text and the
+    route are what there is to show.
     """
-    from . import procurement
     from .manufacturing_instructions import describe
     from .part_config import PartConfiguration
 
-    manufactured = grouped.get("manufactured") or {}
-    if not manufactured:
+    node = item.node or {}
+    part = index.objects.get(node.get("id"))
+    name = item.name
+    stock = node.get("stock") or {}
+
+    blocks = [doc.Heading(item.title, level=1)]
+    if part is None:
+        blocks.append(doc.Paragraph("%s is not found, so there is nothing to say about making it." % name))
+        return doc.Page(title=item.title, blocks=blocks)
+
+    picture, routes = await asyncio.gather(
+        images.shape_image_async(part, alt=name),
+        _route_images(ctx, part, images),
+    )
+    if picture is not None:
+        blocks.append(doc.ImageRow([picture], height=0.25))
+    blocks += _prose_blocks(getattr(part, "desc", None))
+    properties = [("Package", part.project_name), ("Needed", str(item.count))]
+    if stock.get("name"):
+        properties.append(("Made from", stock["name"]))
+    blocks.append(doc.Properties(properties))
+
+    data = PartConfiguration.get_manufacturing_data(part)
+    for line in describe(data, stock.get("name")):
+        blocks.append(doc.Paragraph(line))
+
+    for image, note in routes:
+        if image is not None:
+            blocks.append(doc.ImageRow([image], height=0.45))
+        if note:
+            blocks.append(doc.Paragraph(note))
+    return doc.Page(title=item.title, blocks=blocks)
+
+
+async def _route_images(ctx, part, images: ImageSource) -> list:
+    """The routes a machine cuts the part with, drawn: [(image or None, note)].
+
+    One per machine the part names that is routed (a saw is not: its cuts are
+    the instructions above), or one for the part as a whole when it declares a
+    job without naming a machine. Nothing for a part that says nothing about
+    being cut. A route that cannot be produced is a note rather than a failure
+    of the page: the instructions above it still stand.
+    """
+    from . import cam as pc_cam
+    from . import cam_preview
+    from .part_config import PartConfiguration
+    from .part_config_manufacturing import ROUTED_MACHINES
+
+    directory = getattr(images, "directory", None)
+    if ctx is None or directory is None or not pc_cam.declares_job(part):
         return []
+    data = PartConfiguration.get_manufacturing_data(part)
+    machines = [kind for kind in data.machine_choices() if kind in ROUTED_MACHINES and data.machines[kind].declared]
+    budget = getattr(images, "_budget", None) or _sandbox_budget()
 
-    entries = [
-        (package_name, name, manufactured[package_name][name])
-        for package_name in sorted(manufactured.keys())
-        for name in sorted(manufactured[package_name].keys())
-    ]
-    parts = await asyncio.gather(
-        *[procurement.get_part_async(ctx, "%s:%s" % (package_name, name)) for package_name, name, _ in entries]
-    )
-    pictures = await asyncio.gather(
-        *[
-            images.shape_image_async(part, alt=name) if part is not None else _nothing()
-            for (_, name, _), part in zip(entries, parts)
-        ]
-    )
-
-    blocks = [doc.Heading("Parts to Manufacture", level=1)]
-    blocks.append(
-        doc.Paragraph(
-            "Make these before assembling anything. Each is made from the stock listed in the bill of materials."
+    async def one(machine):
+        label = "%s:%s" % (part.project_name, part.name) + ("" if machine is None else " (%s)" % machine)
+        output_dir = tempfile.mkdtemp(prefix="route-", dir=directory)
+        try:
+            async with budget:
+                result = await part.route_async(ctx, output_dir=output_dir, machine=machine)
+            with open(result["filepath"]) as f:
+                text = f.read()
+        except Exception as e:  # pylint: disable=broad-except
+            pc_logging.debug("No route for %s: %s" % (label, e))
+            return None, "The route for %s could not be produced: %s" % (label, str(e).strip().splitlines()[0])
+        drawing, stats = cam_preview.svg(text)
+        if drawing is None:
+            return None, None
+        path = os.path.join(directory, _slug("route-" + label) + ".svg")
+        with open(path, "w") as f:
+            f.write(drawing)
+        caption = "The route%s, seen from above: %d cutting moves, %.0f mm in the cut; rapid moves dashed." % (
+            "" if machine is None else " on the %s" % machine,
+            stats["cuts"],
+            stats["cut_length"],
         )
-    )
-    for (package_name, name, entry), part, picture in zip(entries, parts, pictures):
-        blocks.append(doc.Heading(name, level=2))
-        if picture is not None:
-            blocks.append(doc.ImageRow([picture], height=0.25))
-        blocks += _prose_blocks(entry.get("desc"))
-        properties = [("Package", package_name), ("Needed", str(entry["count"]))]
-        if entry.get("stock"):
-            properties.append(("Made from", entry["stock"]))
-        blocks.append(doc.Properties(properties))
-        if part is None:
-            continue
-        data = PartConfiguration.get_manufacturing_data(part)
-        for line in describe(data, entry.get("stock")):
-            blocks.append(doc.Paragraph(line))
-    return [doc.Page(title="Parts to Manufacture", blocks=blocks)]
+        return doc.Image(file=path, alt="Route of %s" % label, caption=caption), None
+
+    return list(await asyncio.gather(*[one(machine) for machine in machines or [None]]))
 
 
-async def _nothing():
-    return None
-
-
-async def _section_pages(project, section: GuideSection, images: ImageSource, section_count):
+async def _section_pages(project, section: GuideSection, images: ImageSource, section_count=1):
+    """An assembly's own page and a page for each of its steps, in that order."""
     # The assembly's own picture and every one of its steps at once: they are
     # separate projections of separate things, and which page each lands on is
     # decided here rather than by whichever finished first.
-    image, *step_pages = await asyncio.gather(
-        images.shape_image_async(section.assembly, alt=section.name),
+    page, *step_pages = await asyncio.gather(
+        _section_page(project, section, images),
         *[_step_page(section, step, images) for step in section.steps],
     )
+    return [page] + step_pages
+
+
+async def _section_page(project, section: GuideSection, images: ImageSource):
+    """An assembly's own page: what it looks like together, and what to start with."""
+    image = await images.shape_image_async(section.assembly, alt=section.name)
 
     title = "Assembly: %s" % section.name if not section.top else section.name
     blocks = [doc.Heading(title, level=1)]
@@ -1046,13 +1194,11 @@ async def _section_pages(project, section: GuideSection, images: ImageSource, se
                 % (section.count, section.count)
             )
         )
-    if section.top and section_count > 1:
-        blocks.append(doc.Paragraph("Assemble the sub-assemblies documented above before starting on this one."))
     if section.base_name:
         blocks.append(doc.Paragraph("Start with %s." % section.base_name))
         blocks += _prose_blocks(section.base_description)
 
-    return [doc.Page(title=section.name, blocks=blocks)] + step_pages
+    return doc.Page(title=section.name, blocks=blocks)
 
 
 async def _step_page(section: GuideSection, step: GuideStep, images: ImageSource):

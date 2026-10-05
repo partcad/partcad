@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { readChoices, writeChoices } from '../common/garage';
 import { traceError, traceVerbose } from '../common/log/logging';
 import { getViewerPerformanceDebugFromSetting } from '../common/settings';
 import * as utils from '../utils';
@@ -41,9 +42,15 @@ interface WebviewNode extends Omit<ViewerNode, 'assembly' | 'sketches' | 'geomet
  * asks and this answers -- see 'fetchTab'.
  */
 const TAB_COMMANDS: Record<string, string> = {
+    // What the object is made of and what each part of it declares; the user's
+    // choices are added here, from this machine (see 'common/garage.ts').
+    bvb: 'partcad.manufacturingTree',
+    // The build plan, and the instruction pages it points into.
+    build: 'partcad.manufacturingPlan',
     bom: 'partcad.bom',
-    instructions: 'partcad.assemblyGuide',
     supply: 'partcad.supplyQuote',
+    // The assembly instructions, as a document and as the file Save writes.
+    assembly: 'partcad.assemblyGuide',
     // Both analyses are the one operation; which of them is asked for travels
     // as an argument, exactly as 'pc cae fea' and 'pc cae cfd' are one
     // operation with the analysis in the request.
@@ -58,6 +65,22 @@ const TAB_COMMANDS: Record<string, string> = {
 
 /** The tabs that render the object to a file, which is then kept and can be saved. */
 const RENDER_TABS = new Set(['2d', 'draft']);
+
+/** The tabs whose answer carries a file to keep for Save: the render tabs, and the assembly instructions. */
+const FILE_TABS = new Set([...RENDER_TABS, 'assembly']);
+
+/** What the renderer sends with a 'fetchTab'; see 'FetchTabMessage' in 'webview/messages.ts'. */
+interface FetchTabRequest extends RenderRequest {
+    tab: string;
+    token: number;
+    implementation?: string;
+    format?: string;
+    plugin?: string;
+    choices?: Record<string, 'build' | 'buy'>;
+    recursive?: boolean;
+    buildParts?: boolean;
+    document?: boolean;
+}
 
 /** A file a render tab is showing, kept until the next one replaces it. */
 interface RenderedFile {
@@ -221,15 +244,11 @@ export class PartcadViewer implements vscode.Disposable {
      * assembly that has no assembly steps is told why, and the reader sees that
      * instead of an empty tab.
      */
-    private async fetchTab(
-        tab: string,
-        token: number,
-        implementation?: string,
-        format?: string,
-        plugin?: string,
-        render?: RenderRequest,
-    ): Promise<void> {
-        if (RENDER_TABS.has(tab)) {
+    private async fetchTab(message: FetchTabRequest): Promise<void> {
+        const { tab, token, implementation, format, plugin } = message;
+        // What a render tab's control pane asked for; see 'RenderRequest'.
+        const render: RenderRequest = message;
+        if (FILE_TABS.has(tab)) {
             // Before anything is awaited: two requests in flight reach the
             // awaits below in either order, and the one to keep the file of is
             // the newest asked for, not the last to get this far. Tokens only
@@ -290,6 +309,43 @@ export class PartcadViewer implements vscode.Disposable {
                 post({ data });
                 return;
             }
+            if (tab === 'bvb') {
+                args.kind = target.kind ?? 'part';
+                const data = (await vscode.commands.executeCommand(command, args)) as { object?: string } | undefined;
+                // The daemon names the object in full; that name, not the one
+                // the viewer was shown under, is what the choices are kept by.
+                const object = data?.object ?? `${target.package}:${target.name}`;
+                post({ data: data ? { ...data, choices: readChoices(object) } : data });
+                return;
+            }
+            if (tab === 'build') {
+                args.kind = target.kind ?? 'part';
+                args.choices = message.choices ?? {};
+                args.recursive = message.recursive === true;
+                args.document = message.document === true;
+                post({ data: await vscode.commands.executeCommand(command, args) });
+                return;
+            }
+            if (tab === 'assembly') {
+                args.choices = message.choices ?? {};
+                args.recursive = message.recursive === true;
+                args.buildParts = message.buildParts === true;
+                args.format = format;
+                const data = (await vscode.commands.executeCommand(command, args)) as
+                    { file?: { filename: string; extension: string; content: string } } | undefined;
+                const file = data?.file;
+                if (file?.content && this.lastShow === target && this.latestRender.get(tab) === token) {
+                    this.keepRendered(tab, file);
+                }
+                // The file stays here, which is where Save copies it from; the
+                // renderer only needs to know there is one.
+                post({
+                    data: data
+                        ? { ...data, file: file ? { filename: file.filename, extension: file.extension } : undefined }
+                        : data,
+                });
+                return;
+            }
             if (analysis) {
                 args.analysis = tab;
                 args.implementation = used;
@@ -322,8 +378,41 @@ export class PartcadViewer implements vscode.Disposable {
         }
     }
 
+    /**
+     * Fill the Build vs Buy table's pictures and measurements in, a few objects
+     * at a time. Not a tab of its own: one table asks this many times over.
+     */
+    private async fetchDetails(token: number, objects: unknown, width?: number, height?: number): Promise<void> {
+        const post = (payload: { items?: unknown; error?: string }) =>
+            void this.panel?.webview.postMessage({ type: 'details', token, ...payload });
+        try {
+            if (!(await vscode.commands.getCommands(true)).includes('partcad.manufacturingDetails')) {
+                throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
+            }
+            const answer = (await vscode.commands.executeCommand('partcad.manufacturingDetails', {
+                objects,
+                width,
+                height,
+            })) as { items?: unknown } | undefined;
+            post({ items: answer?.items ?? [] });
+        } catch (error: any) {
+            traceError(`PartCAD Viewer: failed to fetch the Build vs Buy details: ${error?.message ?? error}`);
+            post({ error: `${error?.message ?? error}` });
+        }
+    }
+
+    /** Keep what the user chose to build and to buy, on this machine. */
+    private saveChoices(object: string, choices: Record<string, 'build' | 'buy'>): void {
+        try {
+            writeChoices(object, choices);
+        } catch (error: any) {
+            traceError(`PartCAD Viewer: failed to save the Build vs Buy choices: ${error?.message ?? error}`);
+            void vscode.window.showErrorMessage(`Could not save the Build vs Buy choices: ${error?.message ?? error}`);
+        }
+    }
+
     /** Write what a render tab received to a file of its own, replacing the last one. */
-    private keepRendered(tab: string, data: RenderedData): void {
+    private keepRendered(tab: string, data: Omit<RenderedData, 'object' | 'format'>): void {
         try {
             if (this.renderDirectory === undefined) {
                 this.renderDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'partcad-viewer-'));
@@ -422,21 +511,16 @@ export class PartcadViewer implements vscode.Disposable {
         });
         panel.onDidChangeViewState(() => this.postSpaceMouseState());
         panel.webview.onDidReceiveMessage(
-            (message: {
-                type: string;
-                message?: string;
-                tab?: string;
-                token?: number;
-                implementation?: string;
-                format?: string;
-                plugin?: string;
-                // What a render tab's control pane asked for; see 'RenderRequest'.
-                filter?: unknown;
-                withPorts?: boolean;
-                withInterfaces?: boolean;
-                withInternals?: boolean;
-                ports?: string[];
-            }) => {
+            (
+                message: Partial<FetchTabRequest> & {
+                    type: string;
+                    message?: string;
+                    object?: string;
+                    objects?: unknown;
+                    width?: number;
+                    height?: number;
+                },
+            ) => {
                 if (message.type === 'error') {
                     traceError(`PartCAD Viewer: ${message.message}`);
                 } else if (message.type === 'ready') {
@@ -448,20 +532,13 @@ export class PartcadViewer implements vscode.Disposable {
                         this.handle(this.lastShow);
                     }
                 } else if (message.type === 'fetchTab') {
-                    void this.fetchTab(
-                        message.tab ?? '',
-                        message.token ?? 0,
-                        message.implementation,
-                        message.format,
-                        message.plugin,
-                        {
-                            filter: message.filter,
-                            withPorts: message.withPorts,
-                            withInterfaces: message.withInterfaces,
-                            withInternals: message.withInternals,
-                            ports: message.ports,
-                        },
-                    );
+                    void this.fetchTab({ ...message, tab: message.tab ?? '', token: message.token ?? 0 });
+                } else if (message.type === 'fetchDetails') {
+                    void this.fetchDetails(message.token ?? 0, message.objects ?? [], message.width, message.height);
+                } else if (message.type === 'saveChoices') {
+                    if (message.object) {
+                        this.saveChoices(message.object, message.choices ?? {});
+                    }
                 } else if (message.type === 'fetchFormats') {
                     void this.fetchFormats(message.token ?? 0, message.plugin ?? '');
                 } else if (message.type === 'save') {
@@ -597,12 +674,14 @@ export class PartcadViewer implements vscode.Disposable {
 						<div id="pane-cfd" class="pane" hidden></div>
 						</div>
 						</div>
-						<div id="pane-supply-chain" class="pane pane-group" hidden>
-						<div id="supply-chain-tabs" class="tabs sub-tabs" hidden></div>
+						<div id="pane-manufacturing" class="pane pane-group" hidden>
+						<div id="manufacturing-tabs" class="tabs sub-tabs" hidden></div>
 						<div class="panes">
+						<div id="pane-bvb" class="pane" hidden></div>
+						<div id="pane-build" class="pane" hidden></div>
 						<div id="pane-bom" class="pane" hidden></div>
-						<div id="pane-instructions" class="pane" hidden></div>
 						<div id="pane-supply" class="pane" hidden></div>
+						<div id="pane-assembly" class="pane" hidden></div>
 						</div>
 						</div>
 						<div id="pane-validation" class="pane" hidden></div>

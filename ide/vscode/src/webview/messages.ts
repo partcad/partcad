@@ -20,23 +20,25 @@ import type { SpaceMouseSettings } from './spacemouse';
  *
  * Two levels of them. The panel's own strip is five groups, always the same
  * five: 'design', the object itself; 'analysis', what analysing it says;
- * 'supplyChain', what making it takes; and 'validation' and 'operations',
+ * 'manufacturing', what making it takes; and 'validation' and 'operations',
  * which have nothing in them yet and are shown disabled. Each group is a strip of its own: the
- * object as '3d' (first, always), '2d' and 'draft'; 'fea' and 'cfd'; 'bom',
- * 'instructions' and 'supply' (labelled Procurement).
+ * object as '3d' (first, always), '2d' and 'draft'; 'fea' and 'cfd'; 'bvb'
+ * (Build vs Buy), 'build', 'bom', 'supply' (labelled Buy) and 'assembly'.
  */
 export type TabId =
     | 'design'
     | 'analysis'
-    | 'supplyChain'
+    | 'manufacturing'
     | 'validation'
     | 'operations'
     | '3d'
     | '2d'
     | 'draft'
+    | 'bvb'
+    | 'build'
     | 'bom'
-    | 'instructions'
     | 'supply'
+    | 'assembly'
     | 'fea'
     | 'cfd';
 
@@ -306,11 +308,20 @@ export interface FormatsMessage {
     error?: string;
 }
 
+/** The answer to one 'fetchDetails': what the Build vs Buy table shows of each line beside its name. */
+export interface DetailsMessage {
+    type: 'details';
+    token: number;
+    items?: ItemDetails[];
+    error?: string;
+}
+
 export type HostMessage =
     | ShowMessage
     | ClearMessage
     | TabDataMessage
     | FormatsMessage
+    | DetailsMessage
     | SpaceMouseStateMessage
     | SpaceMouseEventMessage
     | UpdateConfigMessage;
@@ -367,6 +378,41 @@ export interface FetchTabMessage {
      * for itself is not narrowed to nothing.
      */
     ports?: string[];
+    /**
+     * On the Build and Assembly tabs: what the user chose to build and to buy
+     * on the Build vs Buy tab. The renderer holds it and sends it with every
+     * request rather than the host reading it back, so that what is asked is
+     * exactly what is on screen.
+     */
+    choices?: Choices;
+    /** On the Build and Assembly tabs: whether sub-assemblies are documented as well. */
+    recursive?: boolean;
+    /** On the Assembly tab: whether the steps that make the built parts are included. */
+    buildParts?: boolean;
+    /** On the Build tab: the plan alone (false, fast), or the pages it points into as well (true). */
+    document?: boolean;
+}
+
+/** Renderer to host: the thumbnails and measurements of these objects, sized 'width' x 'height'. */
+export interface FetchDetailsMessage {
+    type: 'fetchDetails';
+    token: number;
+    objects: { name: string; kind: string }[];
+    width: number;
+    height: number;
+}
+
+/**
+ * Renderer to host: the user changed what is built and what is bought.
+ *
+ * Kept by the host, on this machine, in the garage (see 'common/garage.ts'),
+ * and never by the daemon: it is this user's decision about how they will get
+ * hold of the thing, and the daemon may be somebody else's.
+ */
+export interface SaveChoicesMessage {
+    type: 'saveChoices';
+    object: string;
+    choices: Choices;
 }
 
 /** Renderer to host: which file types a package renders to, for the Draft tab. */
@@ -453,6 +499,10 @@ export interface DocumentData {
 export interface GuideData {
     assembly: string;
     document: DocumentData;
+    pages?: Record<string, number>;
+    plan?: PlanItem;
+    /** The document written in the format asked for, for Save. */
+    file?: { filename: string; extension: string; content?: string };
 }
 
 /** One supplier's answer for one line item. */
@@ -551,4 +601,106 @@ export interface RenderData {
     filename: string;
     extension: string;
     content: string;
+}
+
+/** What the user chose for each line that can be both built and bought, by its full name. */
+export type Choices = Record<string, 'build' | 'buy'>;
+
+/**
+ * One node of what an object is made of, as 'manufacturing.tree' answers.
+ *
+ * The object's own structure - an assembly's links in order, a part's stock -
+ * with what each node declares about being built and being bought. No geometry:
+ * it is asked on every show, because which Manufacturing tabs apply depends on it.
+ */
+export interface TreeNode {
+    /** Unique within one tree: the path to this node. */
+    id: string;
+    /** '//package:name'; an embedded assembly is named after its parent and link. */
+    name: string;
+    kind: 'part' | 'assembly';
+    /** The link's name inside the parent assembly. */
+    link?: string | null;
+    desc?: string | null;
+    /** It declares a vendor and an SKU. */
+    buy: boolean;
+    /** It declares how it is made (a part) or has links to put together (an assembly). */
+    build: boolean;
+    vendor?: string | null;
+    sku?: string | null;
+    /** The material reference, as written. */
+    material?: string | null;
+    /** Nested in its parent's ASSY file: always built, and never a line of its own. */
+    embedded?: boolean;
+    /** A stock reference that resolves to nothing. */
+    missing?: boolean;
+    /**
+     * Meant to be made where it is used: false when it, or its package, says
+     * 'manufacturable: false' and nothing manufacturable it is used in
+     * overrides that (see 'partcad.build_plan._manufacturable'). Absent from
+     * a daemon too old to say, which reads as true.
+     */
+    manufacturable?: boolean;
+    /**
+     * What stops it from being built, worded as 'pc test -f manufacturability'
+     * words it: incomplete instructions, no tolerance, an unpinned file, an
+     * assembly that is not an ASSY file. 'build' is false whenever this is not
+     * empty.
+     */
+    problems?: string[];
+    /** What a made part is made from. */
+    stock?: TreeNode;
+    /** An assembly's links, in order. */
+    children?: TreeNode[];
+}
+
+/** The 'bvb' tab's data: the tree, and what this user chose for it last time. */
+export interface BvbData {
+    object: string;
+    kind: string;
+    tree: TreeNode;
+    choices: Choices;
+}
+
+/** One object's thumbnail and measurements, as 'manufacturing.details' answers. */
+export interface ItemDetails {
+    name: string;
+    kind?: string;
+    /** Base64 SVG, already sized by the daemon. */
+    thumbnail?: string | null;
+    /** The bounding box's size, in millimetres. */
+    size?: [number, number, number] | null;
+    volume?: number | null;
+    /** In grams. */
+    mass?: number | null;
+    error?: string;
+}
+
+/**
+ * One item of a build plan, as 'manufacturing.plan' answers.
+ *
+ * The order the thing is made in: the Build tab's list, and the order of the
+ * pages of the assembly instructions - the same plan, worked out once, by the
+ * daemon, so that the two cannot disagree.
+ */
+export interface PlanItem {
+    id: string;
+    type: 'part' | 'assembly' | 'link' | 'manufacture';
+    name: string;
+    title: string;
+    kind?: 'part' | 'assembly';
+    link?: string;
+    count: number;
+    step?: number;
+    children?: PlanItem[];
+}
+
+/** The 'build' tab's data: the plan, and, once asked for, the pages it points into. */
+export interface PlanData {
+    object: string;
+    kind: string;
+    plan: PlanItem;
+    document?: DocumentData;
+    /** Plan item id -> index into 'document.pages'. */
+    pages?: Record<string, number>;
 }

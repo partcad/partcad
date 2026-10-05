@@ -23,7 +23,7 @@
 // been, and every other tab goes on working.
 //
 
-import { FetchFormatsMessage, FetchTabMessage, TabId } from './messages';
+import { FetchDetailsMessage, FetchFormatsMessage, FetchTabMessage, SaveChoicesMessage, TabId } from './messages';
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 
@@ -41,6 +41,16 @@ export function fetchTab(message: FetchTabMessage): void {
 
 /** Ask the host which file types a package renders to; it answers with 'formats'. */
 export function fetchFormats(message: FetchFormatsMessage): void {
+    vscode.postMessage(message);
+}
+
+/** Ask the host for thumbnails and measurements; it answers with 'details'. */
+export function fetchDetails(message: FetchDetailsMessage): void {
+    vscode.postMessage(message);
+}
+
+/** Hand the host what the user chose to build and to buy, to keep on this machine. */
+export function saveChoices(message: SaveChoicesMessage): void {
     vscode.postMessage(message);
 }
 
