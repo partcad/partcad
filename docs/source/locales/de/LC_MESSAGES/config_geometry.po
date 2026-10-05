@@ -1,0 +1,654 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/config_geometry.rst:3
+msgid "Sketches and interfaces"
+msgstr ""
+
+#: ../../source/config_geometry.rst:9
+msgid "Sketches"
+msgstr "Skizzen"
+
+#: ../../source/config_geometry.rst:11
+msgid "Sketches are declared in ``partcad.yaml`` using the following syntax:"
+msgstr "Skizzen werden in ``partcad.yaml`` mit folgender Syntax deklariert:"
+
+#: ../../source/config_geometry.rst:25
+msgid "Basic"
+msgstr "Basis"
+
+#: ../../source/config_geometry.rst:27
+msgid "The basic sketches are defined using the following syntax:"
+msgstr "Die Basisskizzen werden mit folgender Syntax definiert:"
+
+#: ../../source/config_geometry.rst:72
+msgid ""
+"There must be only one field ``circle``, ``square``, ``rectangle`` or "
+"``slot`` at the top level of the sketch. Inside ``inner`` each shape may be "
+"given once by its own name, and several at a time in the plural list beside "
+"it."
+msgstr ""
+
+#: ../../source/config_geometry.rst:75
+msgid ""
+"A **slot** is a rectangle with semicircular ends -- two arcs and two lines "
+"-- which is what a slotted hole is. ``length`` is measured over those ends, "
+"the way a drawing dimensions it, so a slot as long as it is wide is a circle "
+"rather than an error."
+msgstr ""
+
+#: ../../source/config_geometry.rst:80
+msgid ""
+"Unlike the other shapes, a slot is placed by the centre of its **first** "
+"rounded end rather than by its middle, and ``angle`` turns it about that "
+"point. That is where a slot comes from: it is a hole that may also sit "
+"somewhere else, so it starts where the plain hole would have been and runs "
+"``length - width`` from there. A port keeps its coordinates when the opening "
+"it marks is slotted, and the freedom of movement that goes with it runs from "
+"zero rather than from half a slot back. It is also the only one of these "
+"shapes whose direction is part of what it is."
+msgstr ""
+
+#: ../../source/config_geometry.rst:98
+msgid "DXF"
+msgstr "DXF"
+
+#: ../../source/config_geometry.rst:100
+msgid ""
+"A sketch can be defined using a `DXF <https://en.wikipedia.org/wiki/"
+"AutoCAD_DXF>`_ file. Such sketches are declared using the following syntax:"
+msgstr ""
+"Eine Skizze kann über eine `DXF <https://en.wikipedia.org/wiki/"
+"AutoCAD_DXF>`_-Datei definiert werden. Solche Skizzen werden mit folgender "
+"Syntax deklariert:"
+
+#: ../../source/config_geometry.rst:117
+msgid "Layers, and reading one drawing several ways"
+msgstr ""
+
+#: ../../source/config_geometry.rst:119
+msgid ""
+"``include`` and ``exclude`` are **object-type parameters**: the ``dxf`` type "
+"contributes them rather than the author of the sketch inventing them, in the "
+"same way ``material``, ``color`` and ``tolerance`` are contributed to a part "
+"(see :ref:`parameters`). Two things follow from that, and both are the point "
+"of it."
+msgstr ""
+
+#: ../../source/config_geometry.rst:124
+msgid ""
+"First, they exist whether or not the declaration mentions them, so whoever "
+"*refers* to the sketch can set them -- and a reference is the natural place "
+"for this to be decided, because which layers are wanted depends on what the "
+"sketch is being used for:"
+msgstr ""
+
+#: ../../source/config_geometry.rst:154
+msgid ""
+"A list is written with commas in it, as above. Nothing has to be declared in "
+"advance for either reference to work, and each of them is its own sketch -- "
+"with its own cache entry -- so the two do not have to be rendered twice or "
+"kept in step by hand."
+msgstr ""
+
+#: ../../source/config_geometry.rst:159
+msgid ""
+"Layer names are matched **case-insensitively**, and only one of ``include`` "
+"and ``exclude`` may be given -- both are the DXF importer's own rules. A "
+"reference setting either of them is deciding how the drawing is read, so it "
+"replaces what the declaration said rather than being added to it: a sketch "
+"declaring ``include: [OUTLINE]`` and referred to as ``panel;exclude=NOTES`` "
+"is read by that exclusion alone. A reference that sets *both* is refused, "
+"the way a declaration writing both is."
+msgstr ""
+
+#: ../../source/config_geometry.rst:167
+msgid ""
+"A drawing whose selected layers do not close into faces is imported as the "
+"**wires** it draws. That is what a drawing of bend lines is: two parallel "
+"lines across a blank are where it is folded, and a line is open by nature. "
+"PartCAD says so when it happens, because the other way to arrive there is an "
+"outline with a gap in it, which is a mistake rather than a drawing of lines."
+msgstr ""
+
+#: ../../source/config_geometry.rst:173
+msgid ""
+"Second, the fields above are the **default** the reference overrides. They "
+"go on meaning exactly what they always meant, and a sketch that carries "
+"neither reads every layer. The long form is available too, for a sketch that "
+"wants to describe its own default:"
+msgstr ""
+
+#: ../../source/config_geometry.rst:189
+msgid ""
+"Every other sketch type rejects the two names, the way a part type rejects "
+"an object-type parameter it cannot honour: a layer is something a DXF has, "
+"and accepting the parameter silently on an SVG would leave a package "
+"believing it was filtering something."
+msgstr ""
+
+#: ../../source/config_geometry.rst:197
+msgid "Annotations"
+msgstr ""
+
+#: ../../source/config_geometry.rst:199
+msgid ""
+"A DXF entity may carry **extended data** -- XDATA -- which is what an "
+"application wrote against that entity, in the file, beside the geometry. It "
+"is where a drawing states what the geometry cannot: two identical lines are "
+"a bend up through 90 degrees and a bend down through 30, and nothing about "
+"the lines says which."
+msgstr ""
+
+#: ../../source/config_geometry.rst:205
+msgid ""
+"PartCAD reads it as the file is imported and carries it beside the geometry "
+"from then on, so it is a property of the **sketch** rather than of the file "
+"it came from. That is what lets :ref:`sheet metal instructions <sheet-"
+"metal>` be a sketch: the check reads what the sketch reports, and a sketch "
+"type that learns to state the same thing needs no change anywhere else. "
+"Today ``dxf`` is the only type that states anything, so sheet metal "
+"instructions have to be read from a DXF in practice -- but not by anything's "
+"design."
+msgstr ""
+
+#: ../../source/config_geometry.rst:213
+msgid "Both of the usual spellings are read, and either may be used:"
+msgstr ""
+
+#: ../../source/config_geometry.rst:226
+msgid ""
+"Keys are read case-insensitively -- ``ANGLE`` and ``angle`` are one key -- "
+"and values are kept exactly as the file states them. What is carried per "
+"element is its DXF type, its layer, its handle, where it is, and those key/"
+"value pairs; an element with no extended data is still carried, with nothing "
+"against it, because \"this drawing annotates nothing\" and \"this line was "
+"left un-annotated\" are different answers. The layer filters above apply, so "
+"the annotations describe what is in the sketch and not what was filtered out "
+"of it."
+msgstr ""
+
+#: ../../source/config_geometry.rst:234
+msgid ""
+"``pc info`` on the sketch prints them, under ``Annotations``, beside what "
+"the drawing says about *itself*: which DXF it is, what ``$INSUNITS`` says "
+"its numbers are in, and -- under ``Layers`` -- **every** layer the file has, "
+"with how many elements of which types are on each and whether this sketch "
+"reads it. That last is not the question the annotations answer, and it is "
+"why the drawing is described as well as read: a layer filter that matched "
+"nothing and a layer that is not in the file both produce a sketch with "
+"nothing in it."
+msgstr ""
+
+#: ../../source/config_geometry.rst:242
+msgid ""
+"A STEP file states the same kind of thing in its own vocabulary -- a "
+"``PROPERTY_DEFINITION`` hung on a product or on one named feature of one, "
+"and ``PRESENTATION_LAYER_ASSIGNMENT`` for its layers -- and ``pc info`` on a "
+"``step`` part or assembly reports those under ``Properties`` and ``Layers``, "
+"with the keys lower-cased the same way."
+msgstr ""
+
+#: ../../source/config_geometry.rst:249
+msgid "SVG"
+msgstr "SVG"
+
+#: ../../source/config_geometry.rst:251
+msgid ""
+"A sketch can be defined using an `SVG <https://en.wikipedia.org/wiki/SVG>`_ "
+"file. Such sketches are declared using the following syntax:"
+msgstr ""
+"Eine Skizze kann über eine `SVG <https://en.wikipedia.org/wiki/SVG>`_-Datei "
+"definiert werden. Solche Skizzen werden mit folgender Syntax deklariert:"
+
+#: ../../source/config_geometry.rst:267
+msgid "CAD Scripts"
+msgstr "CAD-Skripte"
+
+#: ../../source/config_geometry.rst:269
+msgid "See the \"CAD Scripts\" section in the \"Parts\" chapter below."
+msgstr "Siehe den Abschnitt „CAD Scripts“ im nachfolgenden Kapitel „Parts“."
+
+#: ../../source/config_geometry.rst:275
+msgid "Interfaces"
+msgstr "Interfaces"
+
+#: ../../source/config_geometry.rst:277
+msgid "Interfaces are declared in ``partcad.yaml`` using the following syntax:"
+msgstr "Interfaces werden in ``partcad.yaml`` mit folgender Syntax deklariert:"
+
+#: ../../source/config_geometry.rst:355
+msgid "Motion and physics"
+msgstr ""
+
+#: ../../source/config_geometry.rst:357
+msgid ""
+"``motion`` and ``physics`` are a *record* of a connection, next to the "
+"``parameters`` that make it move. Where a parameter is executable - naming "
+"it in a connection places the parts - ``motion`` states what kind of joint "
+"the connection is, about which axis, and between which limits, and "
+"``physics`` states what a simulation needs to know about the cost of moving "
+"it."
+msgstr ""
+
+#: ../../source/config_geometry.rst:363
+msgid ""
+"Every property has a PartCAD name and a PartCAD unit, and the set of them is "
+"closed: angles are degrees and lengths millimetres, as everywhere else in "
+"PartCAD, and the rest is SI. Nothing is stored under the name of the format "
+"it came from. A format that states something PartCAD has no property for "
+"fails the import rather than tucking the value away, and a property PartCAD "
+"holds that a target format cannot state is reported when it is exported - so "
+"the gap is always visible in one direction or the other."
+msgstr ""
+
+#: ../../source/config_geometry.rst:371
+msgid ""
+"``pc convert assembly -t assy`` fills both sections in from a URDF's joints "
+"- see :doc:`simulation` for the mapping."
+msgstr ""
+
+#: ../../source/config_geometry.rst:375
+msgid "Abstract interfaces"
+msgstr "Abstrakte Interfaces"
+
+#: ../../source/config_geometry.rst:377
+msgid ""
+"Abstract interfaces can't be implemented by parts directly. They also can't "
+"be used for mating with other interfaces. They are a convenience feature so "
+"that a property can be implemented once but inherited multiple times by all "
+"child interfaces."
+msgstr ""
+"Abstrakte Interfaces können nicht direkt von Teilen implementiert werden. "
+"Sie können auch nicht für das Mating mit anderen Interfaces verwendet "
+"werden. Sie sind eine Komfortfunktion, damit eine Eigenschaft einmal "
+"implementiert, aber von allen Kind-Interfaces mehrfach geerbt werden kann."
+
+#: ../../source/config_geometry.rst:383
+msgid "Port visualization"
+msgstr "Port-Visualisierung"
+
+#: ../../source/config_geometry.rst:385
+msgid ""
+"When a part or an assembly is rendered (in a GUI or when exported to a "
+"file), the ports can be visualized. When ports are visualized, each port "
+"looks like a coordinate system (3D location, direction and rotation) and, "
+"optionally, as a 2D image of an alleged \"boundary\" (or \"siluette\") of "
+"the port."
+msgstr ""
+"Wenn ein Teil oder eine Baugruppe gerendert wird (in einer GUI oder beim "
+"Export in eine Datei), können die Ports visualisiert werden. Werden Ports "
+"visualisiert, sieht jeder Port wie ein Koordinatensystem aus (3D-Lage, "
+"Richtung und Rotation) und optional als 2D-Bild einer vermeintlichen "
+"„Begrenzung“ (oder „Silhouette“) des Ports."
+
+#: ../../source/config_geometry.rst:390
+msgid ""
+"It is recommended to define the port boundary at all times. Here is an "
+"example how to define the port boundary using a primitive sketch:"
+msgstr ""
+"Es wird empfohlen, die Port-Begrenzung stets zu definieren. Hier ist ein "
+"Beispiel, wie die Port-Begrenzung mithilfe einer primitiven Skizze definiert "
+"wird:"
+
+#: ../../source/config_geometry.rst:405
+msgid "Here is how it will get visualized:"
+msgstr "So wird es visualisiert:"
+
+#: ../../source/config_geometry.rst:411
+msgid ""
+"The same two things are drawn on a rendered projection by ``pc render --with-"
+"ports`` and ``--with-interfaces`` (``--with-all`` for both): a marker and a "
+"name at each port, and each interface instance named once with a line out to "
+"every port that belongs to it, over the port boundaries above. An assembly "
+"or a :ref:`scene <scenes>` is taken at its word -- what is drawn is what it "
+"says its ports are (see :ref:`assembly-ports`) -- and ``--with-internals`` "
+"draws what is inside one anyway, each child's ports placed where the "
+"assembly put the child, which is how a connection that did not come out as "
+"intended is found. See :doc:`cli`, and :ref:`drawing-ports` for asking a "
+"package to keep such a drawing checked in."
+msgstr ""
+
+#: ../../source/config_geometry.rst:423
+msgid "Port matching"
+msgstr "Port-Abgleich"
+
+#: ../../source/config_geometry.rst:425
+msgid ""
+"Each port has the coordinates of the logical center of the port and the "
+"direction (orientation) of the port. Whenever two ports are meant to connect "
+"without any offset or angle (e.g. male and female connectors), their "
+"coordinates should match and their directions should be opposite (rotated "
+"180 degrees around [1, 1, 0]). The suggested convention is to use the Z-axis "
+"(blue) as the main direction. Male ports should have the Z-axis pointing "
+"outwards, while female ports should have the Z-axis pointing inwards."
+msgstr ""
+"Jeder Port besitzt die Koordinaten seines logischen Mittelpunkts und die "
+"Richtung (Ausrichtung) des Ports. Sollen sich zwei Ports ohne Versatz oder "
+"Winkel verbinden (z. B. Stecker und Buchse), sollten ihre Koordinaten "
+"übereinstimmen und ihre Richtungen entgegengesetzt sein (um 180 Grad um [1, "
+"1, 0] gedreht). Die empfohlene Konvention ist, die Z-Achse (blau) als "
+"Hauptrichtung zu verwenden. Bei männlichen Ports sollte die Z-Achse nach "
+"außen zeigen, bei weiblichen Ports nach innen."
+
+#: ../../source/config_geometry.rst:435
+msgid "Matching multiple ports"
+msgstr "Abgleich mehrerer Ports"
+
+#: ../../source/config_geometry.rst:437
+msgid ""
+"Sometimes there are multiple interchangeable ports within one interface. For "
+"example, take a look at the NEMA-17 mounting ports:"
+msgstr ""
+"Manchmal gibt es mehrere austauschbare Ports innerhalb eines Interfaces. "
+"Betrachten Sie zum Beispiel die NEMA-17-Montageports:"
+
+#: ../../source/config_geometry.rst:444
+msgid ""
+"It is desired that any mounting port of the motor can be connected to any "
+"mounting port of the bracket. That can be achieved by orienting the ports in "
+"a circular direction. See how the X-axis (red) is pointing to the next port "
+"clockwise (right-hand rule). If any pair of ports is aligned then all three "
+"other port pairs are aligned too."
+msgstr ""
+"Es ist gewünscht, dass jeder Montageport des Motors mit jedem Montageport "
+"der Halterung verbunden werden kann. Das lässt sich erreichen, indem die "
+"Ports kreisförmig ausgerichtet werden. Beachten Sie, wie die X-Achse (rot) "
+"im Uhrzeigersinn zum nächsten Port zeigt (Rechte-Hand-Regel). Wenn ein "
+"Portpaar ausgerichtet ist, sind alle drei anderen Portpaare ebenfalls "
+"ausgerichtet."
+
+#: ../../source/config_geometry.rst:455
+msgid "Interface parameters"
+msgstr "Interface-Parameter"
+
+#: ../../source/config_geometry.rst:457
+msgid ""
+"Each interface may declare parameters to allow parametrized mating (e.g. a "
+"slotted hole allows for a mating at an offset within the size of the slot). "
+"There is a list of predefined parameters that are easy to use:"
+msgstr ""
+"Jedes Interface kann Parameter deklarieren, um parametrisiertes Mating zu "
+"ermöglichen (z. B. erlaubt ein Langloch ein Mating mit einem Versatz "
+"innerhalb der Größe des Lochs). Es gibt eine Liste vordefinierter, leicht zu "
+"verwendender Parameter:"
+
+#: ../../source/config_geometry.rst:461
+msgid "moveX, moveY, moveZ: offset along X, Y, and Z axes"
+msgstr "moveX, moveY, moveZ: Versatz entlang der X-, Y- und Z-Achse"
+
+#: ../../source/config_geometry.rst:462
+msgid "turnX, turnY, turnZ: rotation around X, Y, and Z axes"
+msgstr "turnX, turnY, turnZ: Rotation um die X-, Y- und Z-Achse"
+
+#: ../../source/config_geometry.rst:474
+msgid ""
+"However custom parameters can be defined to use an arbitrary direction "
+"vector and an arbitrary offset or rotation."
+msgstr ""
+"Es können jedoch benutzerdefinierte Parameter definiert werden, um einen "
+"beliebigen Richtungsvektor und einen beliebigen Versatz oder eine beliebige "
+"Rotation zu verwenden."
+
+#: ../../source/config_geometry.rst:489
+msgid ""
+"When the interface is inherited or used to connect parts, the parameter "
+"values get resolved and applied as inheritance or connection coordinate "
+"offsets."
+msgstr ""
+"Wenn das Interface geerbt oder zum Verbinden von Teilen verwendet wird, "
+"werden die Parameterwerte aufgelöst und als Vererbungs- oder "
+"Verbindungskoordinaten-Versätze angewendet."
+
+#: ../../source/config_geometry.rst:525
+msgid "Parametric interfaces"
+msgstr ""
+
+#: ../../source/config_geometry.rst:527
+msgid ""
+"An interface can be declared once and asked for with values, exactly as a "
+"part or a sketch is: the values go in ``parameters:``, and a reference names "
+"them with the same ``;<name>=<value>`` suffix ``pc inspect cube;width=20`` "
+"uses."
+msgstr ""
+
+#: ../../source/config_geometry.rst:550
+msgid ""
+"Every set of values is one interface, whatever order they are written in and "
+"however the numbers are spelled: ``m-thru;size=4,depth=2``, ``m-thru;depth=2,"
+"size=4`` and ``m-thru;depth=2.0,size=4.00`` are one object with one name. "
+"That matters beyond tidiness -- an interface's name is what a mating is "
+"registered under, so two objects for one set of values would be two halves "
+"of a connection that never find each other."
+msgstr ""
+
+#: ../../source/config_geometry.rst:558
+msgid "One section, two kinds of parameter"
+msgstr ""
+
+#: ../../source/config_geometry.rst:560
+msgid ""
+"``parameters:`` on an interface has meant `Interface parameters`_ -- the "
+"freedom of movement a *made* connection keeps -- since interfaces existed. "
+"It now holds both kinds, because \"the same way as for a part\" is the point "
+"and a second section would be a second thing to learn. They are told apart "
+"by what each declares rather than by where it is written, and the two "
+"vocabularies do not overlap: a freedom-of-movement parameter states a range "
+"and an axis, a construction parameter states a value type and a default."
+msgstr ""
+
+#: ../../source/config_geometry.rst:580
+msgid ""
+"An entry is a **freedom-of-movement** parameter when any of the following is "
+"true, and a **construction** parameter otherwise:"
+msgstr ""
+
+#: ../../source/config_geometry.rst:583
+msgid ""
+"it is one of the six predefined names -- ``moveX``, ``moveY``, ``moveZ``, "
+"``turnX``, ``turnY``, ``turnZ`` (or the hyphenated spellings a ``mates:`` "
+"section uses);"
+msgstr ""
+
+#: ../../source/config_geometry.rst:586
+msgid "it is written in the short list form ``[min, max, default]``;"
+msgstr ""
+
+#: ../../source/config_geometry.rst:587
+msgid ""
+"it states ``min``, ``max`` or ``dir``, or ``type: move`` / ``type: turn``."
+msgstr ""
+
+#: ../../source/config_geometry.rst:589
+msgid ""
+"Every freedom-of-movement parameter PartCAD has ever accepted is caught by "
+"the first or the third of those -- a custom name is *required* to state its "
+"``dir`` -- so a declaration written before this existed keeps the meaning it "
+"had."
+msgstr ""
+
+#: ../../source/config_geometry.rst:593
+msgid ""
+"A part's or an assembly's ``parameters:`` is not split: for a shape that "
+"section has only ever meant the values it is built from."
+msgstr ""
+
+#: ../../source/config_geometry.rst:596
+msgid ""
+"An interface's own freedom of movement takes precedence over the one it "
+"inherits, so an interface narrows -- or widens -- what its parent allowed by "
+"naming the same parameter again. ``m-screw`` above says how far *this* screw "
+"may be driven in; ``m``, which it inherits, says only that a screw may move "
+"along its axis at all."
+msgstr ""
+
+#: ../../source/config_geometry.rst:604
+msgid ""
+"Before this, the inherited declaration won and a child's was discarded, so "
+"an interface could not say anything about the freedom it was given. Packages "
+"that already declare one therefore start behaving as they read: ``//pub/std/"
+"metric/m`` has always said a screw may be driven in ``length - 2``, and now "
+"it is. A range that runs *backwards* -- which that same expression produces "
+"for the 1mm screws in its own list -- is reported and read as no movement, "
+"rather than handed to a solver as an interval with nothing in it."
+msgstr ""
+
+#: ../../source/config_geometry.rst:613
+msgid "Expressions"
+msgstr ""
+
+#: ../../source/config_geometry.rst:615
+msgid ""
+"Wherever a declaration says something about the connection -- ``desc``, "
+"``ports``, ``inherits``, ``implements``, ``mates``, ``alias``, "
+"``parameters`` (its freedom-of-movement half), ``leadPort``, ``threadStep``, "
+"``selfScrew``, ``multiConnect`` and ``motion`` -- a value may be written as "
+"an expression over the interface's own values, between percent signs:"
+msgstr ""
+
+#: ../../source/config_geometry.rst:637
+msgid ""
+"A value that is *nothing but* an expression evaluates to the value itself, "
+"which is what lets a coordinate be written as one; a value that merely "
+"contains an expression gets it formatted in, which is what builds a name or "
+"a description. Inside the delimiters is an ordinary arithmetic expression "
+"over the object's parameters, with the usual functions available (``sqrt``, "
+"``sin``, ``cos``, ``floor``, ``min``, ``max``, ``round``, ``pi``, "
+"``INCH`` ...). Arithmetic, comparisons, a conditional, indexing and the "
+"plain methods of a string or a number (``index``, ``split``, ``replace``, "
+"``startswith`` ...) are all of it: a declaration is read whenever a package "
+"is loaded -- long before anything is built and any CAD script runs -- so an "
+"expression may not call anything else, reach into an object, or define one. "
+"An expression that cannot be evaluated is reported by name and left standing "
+"as the text it was written as, so a misspelling costs that one value rather "
+"than the package."
+msgstr ""
+
+#: ../../source/config_geometry.rst:653
+msgid ""
+"``%...%`` rather than Jinja2's ``{{ ... }}``, and it is not an alternative "
+"to it. ``partcad.yaml`` is rendered as a Jinja2 template *before* it is "
+"parsed (see :ref:`templates`), which is one step too early for a value that "
+"depends on which instance of an object is being asked for: at that point "
+"there are no instances yet. The two do not collide -- Jinja2 never sees "
+"``%...%``, and ``%...%`` is resolved long after Jinja2 has finished. The "
+"spelling is not new either: the names in an ``inherits:`` section have been "
+"written ``%moveX:value*2%`` since interfaces existed, and that form still "
+"means what it meant. Writing just ``%moveX%``, with no colon, is the part "
+"that is new -- the old resolver required the colon and failed without it."
+msgstr ""
+
+#: ../../source/config_geometry.rst:665
+msgid "Parametrized sketches on ports"
+msgstr ""
+
+#: ../../source/config_geometry.rst:667
+msgid ""
+"A port's sketch takes parameter values too, either in ``params:`` beside it "
+"or spelled into its name (``sketch: \"m;size=%size%\"``) -- they are the "
+"same thing. So one sketch draws the boundary of every size the interface "
+"family has, instead of one pre-generated sketch per size:"
+msgstr ""
+
+#: ../../source/config_geometry.rst:681
+msgid ""
+"A ``basic`` sketch has no script to hand its parameters to, so an expression "
+"is how it reads them; a ``cadquery`` or ``build123d`` sketch gets them as "
+"build parameters as usual."
+msgstr ""
+
+#: ../../source/config_geometry.rst:686
+msgid "Parametric ports on a part"
+msgstr ""
+
+#: ../../source/config_geometry.rst:688
+msgid ""
+"The same applies to the ``ports:`` and ``implements:`` sections of a part or "
+"an assembly, over that shape's own ``parameters:``. A plate that is asked "
+"for by thickness implements the through-hole of that thickness:"
+msgstr ""
+
+#: ../../source/config_geometry.rst:702
+msgid ""
+"Nothing else in a shape's declaration is touched: ``desc`` is prose and "
+"``fileUrl`` is a URL that may be percent-encoded, and neither is an "
+"expression."
+msgstr ""
+
+#: ../../source/config_geometry.rst:708
+msgid "The same opening, drawn differently"
+msgstr ""
+
+#: ../../source/config_geometry.rst:710
+msgid ""
+"An inherited instance may restate the boundary its ports are drawn with. A "
+"slotted hole *is* a through hole -- it inherits one, mates as one, and keeps "
+"its port where the plain hole would have been -- and what tells them apart "
+"is the outline and the freedom of movement:"
+msgstr ""
+
+#: ../../source/config_geometry.rst:729
+msgid ""
+"``sketch:`` is a reference like any other, so the values go in the name. It "
+"replaces the boundary of every port that instance brings in; an instance "
+"that says nothing about it keeps the boundary the inherited interface draws "
+"with."
+msgstr ""
+
+#: ../../source/config_geometry.rst:734
+msgid "Interface aliases"
+msgstr ""
+
+#: ../../source/config_geometry.rst:736
+msgid ""
+"``alias:`` declares that an interface *is* another one, under a different "
+"name. A bare string is the short form of the same thing, the way it is for a "
+"sketch or a part:"
+msgstr ""
+
+#: ../../source/config_geometry.rst:747
+msgid ""
+"The alias has the target's ports, under the target's port names -- not "
+"prefixed, the way an ``inherits:`` instance name would prefix them -- it is "
+"a drop-in for the target, so it mates with whatever the target mates with, "
+"and what it does not declare for itself (its description, ``leadPort``, "
+"``abstract``, ``motion``, ``physics``, ``threadStep`` ...) it takes from the "
+"target."
+msgstr ""
+
+#: ../../source/config_geometry.rst:753
+msgid ""
+"That is what lets a package make a family parametric without withdrawing the "
+"names it has published. A package that spelled out ``m3-thru-3``, ``m3-"
+"thru-4``, ``m4-thru-3`` and several thousand more can declare the family "
+"once and keep every one of those names as a one-line alias: a part that says "
+"``implements: m3-thru-3`` goes on working, with the same ports under the "
+"same names, and a part written today can say ``m-thru;size=3,depth=3`` "
+"instead. See the ``//pub/std/metric/m`` package, which is exactly this."
+msgstr ""
+
+#: ../../source/config_geometry.rst:762
+msgid "Interface examples"
+msgstr "Interface-Beispiele"
+
+#: ../../source/config_geometry.rst:764
+msgid "See the `feature_interfaces` example for more information."
+msgstr "Weitere Informationen finden Sie im Beispiel `feature_interfaces`."

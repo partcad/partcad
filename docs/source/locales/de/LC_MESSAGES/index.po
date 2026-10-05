@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -17,11 +17,36 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/index.rst:22
-msgid "Contents:"
+msgid "Getting started"
+msgstr ""
+
+#: ../../source/index.rst:30
+#, fuzzy
+msgid "Concepts"
 msgstr "Inhalt:"
+
+#: ../../source/index.rst:36
+msgid "Command line"
+msgstr ""
+
+#: ../../source/index.rst:42
+msgid "Package configuration"
+msgstr ""
+
+#: ../../source/index.rst:48
+msgid "Assemblies"
+msgstr ""
+
+#: ../../source/index.rst:54
+msgid "Guides"
+msgstr ""
+
+#: ../../source/index.rst:62
+msgid "Help"
+msgstr ""
 
 #: ../../source/index.rst:3
 msgid "PartCAD"
@@ -35,8 +60,8 @@ msgid ""
 "effective workflows at all product lifecycle phases."
 msgstr ""
 "`PartCAD <https://github.com/partcad/partcad>`_ ist der Standard für die "
-"Dokumentation fertigungsfähiger physischer Produkte. Es bringt eine Reihe "
-"von Werkzeugen mit, um Produktinformationen zu pflegen und effiziente, "
+"Dokumentation fertigungsfähiger physischer Produkte. Es bringt eine Reihe"
+" von Werkzeugen mit, um Produktinformationen zu pflegen und effiziente, "
 "wirksame Arbeitsabläufe in allen Phasen des Produktlebenszyklus zu "
 "ermöglichen."
 
@@ -56,13 +81,13 @@ msgstr ""
 "PartCAD ist mehr als ein traditionelles CAD-Werkzeug zum Zeichnen. "
 "Tatsächlich ist es **überhaupt nicht zum Zeichnen gedacht**. Die "
 "Buchstaben „CAD“ in PartCAD stehen für „computer-aided design“ in einem "
-"allgemeineren Sinne, wobei „Design“ für den Prozess steht, von einer Idee "
-"zu **einer klaren und deterministischen Spezifikation eines "
+"allgemeineren Sinne, wobei „Design“ für den Prozess steht, von einer Idee"
+" zu **einer klaren und deterministischen Spezifikation eines "
 "fertigungsfähigen physischen Produkts** zu gelangen – mithilfe eines "
 "Computers (einschließlich des Einsatzes von KI-Modellen). PartCAD begann "
 "als **der erste Paketmanager für Hardware** und ist heute das **CAD der "
-"nächsten Generation**, das eine einzelne visionäre Person in ein "
-"Ein-Personen-Unternehmen verwandeln kann, oder einen zukünftigen Product "
+"nächsten Generation**, das eine einzelne visionäre Person in ein Ein-"
+"Personen-Unternehmen verwandeln kann, oder einen zukünftigen Product "
 "Manager so produktiv (**und viel schneller!**) macht wie 10 klassische "
 "technische Abteilungen von früher."
 
@@ -73,7 +98,7 @@ msgid ""
 "support/30min>`_ **to discuss how PartCAD can revolutionize your product "
 "development process.**"
 msgstr ""
-"PartCAD entwickelt sich ständig weiter, wobei laufend neue Funktionen und "
-"Integrationen hinzugefügt werden. `Kontaktieren Sie uns "
+"PartCAD entwickelt sich ständig weiter, wobei laufend neue Funktionen und"
+" Integrationen hinzugefügt werden. `Kontaktieren Sie uns "
 "<https://calendly.com/partcad-support/30min>`_, **um zu besprechen, wie "
 "PartCAD Ihren Produktentwicklungsprozess revolutionieren kann.**"

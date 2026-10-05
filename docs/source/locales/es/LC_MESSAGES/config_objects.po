@@ -1,0 +1,516 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/config_objects.rst:3
+msgid "Objects and common metadata"
+msgstr ""
+
+#: ../../source/config_objects.rst:9
+msgid "Objects"
+msgstr "Objetos"
+
+#: ../../source/config_objects.rst:11
+msgid "PartCAD :ref:`packages` may contain the following objects:"
+msgstr "Los :ref:`packages` de PartCAD pueden contener los siguientes objetos:"
+
+#: ../../source/config_objects.rst:13
+msgid ""
+":ref:`sketches` are 2D objects that can be used to create 3D objects (e.g. "
+"using :ref:`extrude` or :ref:`sweep`), but can also be used to aid "
+"visualization of :ref:`interfaces` or to provide detailed instructions for "
+"AI actors."
+msgstr ""
+"Los :ref:`sketches` son objetos 2D que se pueden usar para crear objetos 3D "
+"(por ejemplo, mediante :ref:`extrude` o :ref:`sweep`), pero también se "
+"pueden usar para ayudar a visualizar :ref:`interfaces` o para proporcionar "
+"instrucciones detalladas a agentes de IA."
+
+#: ../../source/config_objects.rst:16
+msgid ""
+":ref:`interfaces` are abstract objects that describe the endpoint of a "
+"connection between parts and provide sufficient information to automatically "
+"determine the mating of parts."
+msgstr ""
+"Las :ref:`interfaces` son objetos abstractos que describen el punto final de "
+"una conexión entre piezas y proporcionan información suficiente para "
+"determinar automáticamente el acoplamiento de las piezas."
+
+#: ../../source/config_objects.rst:19
+msgid ""
+":ref:`parts` are 3D objects that are meant to be available for purchase or "
+"manufacturing."
+msgstr ""
+"Las :ref:`parts` son objetos 3D destinados a estar disponibles para compra o "
+"fabricación."
+
+#: ../../source/config_objects.rst:21
+msgid ""
+":ref:`assemblies` are instructions how to put parts and other assemblies "
+"together to be used as a single object."
+msgstr ""
+"Los :ref:`assemblies` son instrucciones sobre cómo unir piezas y otros "
+"ensamblajes para usarlos como un solo objeto."
+
+#: ../../source/config_objects.rst:23
+msgid ""
+":ref:`scenes` are placed arrangements of objects - a workcell, a table, a "
+"simulation world - stating where things are and not how they got there."
+msgstr ""
+
+#: ../../source/config_objects.rst:26
+msgid ""
+":ref:`software` is what the product ships with that is not geometry: a "
+"firmware image, a binary, a disk image. It is always a file."
+msgstr ""
+
+#: ../../source/config_objects.rst:29
+msgid ""
+":ref:`providers` are implementations of a way to get parts and assemblies "
+"(to purchase them or to manufacture them)."
+msgstr ""
+"Los :ref:`providers` son implementaciones de una forma de obtener piezas y "
+"ensamblajes (para comprarlos o fabricarlos)."
+
+#: ../../source/config_objects.rst:33
+msgid "Common Metadata"
+msgstr "Metadatos comunes"
+
+#: ../../source/config_objects.rst:35
+msgid "All :ref:`objects` in PartCAD may carry the following metadata:"
+msgstr ""
+"Todos los :ref:`objects` en PartCAD pueden llevar los siguientes metadatos:"
+
+#: ../../source/config_objects.rst:40
+msgid "Tags"
+msgstr ""
+
+#: ../../source/config_objects.rst:42
+msgid ""
+"Not everything a package can be built out of exists everywhere. The KiCad "
+"example is the case this was introduced for: KiCad publishes its official "
+"container images for ``linux/amd64`` only, so the sandbox PartCAD runs "
+"``kicad-cli`` in cannot be pulled on an Arm host at all. That is a property "
+"of the design, not a fault in it, and the package saying so is better than "
+"every consumer of it finding out at use."
+msgstr ""
+
+#: ../../source/config_objects.rst:49
+msgid ""
+"A **tag** is a short string naming something that is true of *here*. Every "
+"context carries the tags true of itself."
+msgstr ""
+
+#: ../../source/config_objects.rst:52
+msgid "What the machine is:"
+msgstr ""
+
+#: ../../source/config_objects.rst:54
+msgid ""
+"the CPU architecture -- ``x86_64`` and ``amd64`` on 64-bit Intel/AMD, "
+"``arm64``, ``aarch64`` and ``arm`` on 64-bit Arm (all of them, so that a "
+"package need not know which spelling the host happens to report);"
+msgstr ""
+
+#: ../../source/config_objects.rst:57
+msgid ""
+"the operating system -- ``linux``, ``macos`` (also ``darwin``), ``windows``;"
+msgstr ""
+
+#: ../../source/config_objects.rst:58
+msgid ""
+"the operating system and its version, as ``<os>-<version>``. On Linux that "
+"is the distribution rather than the kernel, read from ``/etc/os-release``: "
+"``ubuntu`` and ``ubuntu-24.04``, plus whatever ``ID_LIKE`` names "
+"(``debian``). On macOS, ``macos-26`` and ``macos-26.1``. On Windows, "
+"``windows-11``."
+msgstr ""
+
+#: ../../source/config_objects.rst:63
+msgid ""
+"How PartCAD is configured to work -- one tag per boolean option, carried in "
+"one of two spellings, the option's name when it is on and that name prefixed "
+"with ``!`` when it is off:"
+msgstr ""
+
+#: ../../source/config_objects.rst:67
+msgid ""
+"``useDocker`` / ``!useDocker`` -- whether PartCAD may use Docker at all;"
+msgstr ""
+
+#: ../../source/config_objects.rst:68
+msgid "``useDockerPython`` / ``!useDockerPython``;"
+msgstr ""
+
+#: ../../source/config_objects.rst:69
+msgid "``useDockerKicad`` / ``!useDockerKicad``."
+msgstr ""
+
+#: ../../source/config_objects.rst:71
+msgid ""
+"These report each option **as configured**, not as it ends up applying: "
+"``useDocker`` is a master switch over the other two, so ``useDockerKicad`` "
+"and ``!useDocker`` can hold at once. Both spellings exist so that either "
+"answer can be named -- a package that cares which way an option is set "
+"should not have to guess what an absent tag meant. Note that ``!`` is part "
+"of a tag's name, not an operator: a tag is matched, never evaluated, and ``!"
+"`` means nothing anywhere else."
+msgstr ""
+
+#: ../../source/config_objects.rst:79
+msgid ""
+"Anything PartCAD cannot work out for itself -- that this is the build "
+"machine, that this host is behind a proxy -- is added by the user, through "
+"the ``tags`` user configuration option (``pc config`` shows it) or the "
+"``PC_TAGS`` environment variable. ``pc system status`` prints the whole "
+"resolved set:"
+msgstr ""
+
+#: ../../source/config_objects.rst:89
+msgid ""
+"Tags are matched case-insensitively, and are shown in the spelling PartCAD "
+"names them by -- which is why ``useDocker`` is camelCase (it is an option "
+"name) and ``arm64`` is not."
+msgstr ""
+
+#: ../../source/config_objects.rst:93
+msgid ""
+"A package, or any object of a package, may then declare the conditions it "
+"does **not** work under, using ``unless``:"
+msgstr ""
+
+#: ../../source/config_objects.rst:108
+msgid ""
+"``unless`` is a list of **clauses**, and *any one* of them excluding is "
+"enough (OR). A clause is either a single tag, or a list of tags that must "
+"*all* hold together (AND). Either level may be written as a bare tag when "
+"there is only one, so all of these are valid:"
+msgstr ""
+
+#: ../../source/config_objects.rst:119
+msgid ""
+"An empty clause is refused rather than ignored: it would hold everywhere."
+msgstr ""
+
+#: ../../source/config_objects.rst:121
+msgid ""
+"Wherever a clause holds, the declaration is skipped -- it is not enumerated, "
+"not listed, and not instantiated -- and PartCAD says so once, at ``INFO``, "
+"naming the clause that did it:"
+msgstr ""
+
+#: ../../source/config_objects.rst:129
+msgid ""
+"Skipping a package skips what it brings in: its subfolders and its declared "
+"dependencies are not imported either."
+msgstr ""
+
+#: ../../source/config_objects.rst:132
+msgid ""
+"Note that there is deliberately no inverse condition (\"only on\"). A "
+"declaration is expected to work everywhere; naming the exceptions keeps the "
+"common case unwritten, and keeps a platform that does not exist yet from "
+"silently excluding everything written before it."
+msgstr ""
+
+#: ../../source/config_objects.rst:137
+msgid ""
+"A reference to an object that was skipped does not resolve. An alias or an "
+"``enrich`` built on an object excluded here has to carry the same "
+"``unless``, or it will be left pointing at nothing."
+msgstr ""
+
+#: ../../source/config_objects.rst:144
+msgid "Requirements"
+msgstr "Requisitos"
+
+#: ../../source/config_objects.rst:146
+msgid ""
+"Objects may contain a list of requirements in free form (any YAML syntax "
+"works). These requirements help describe the object in more detail. They are "
+"not used by PartCAD itself, but by AI or human actors to create, improve, or "
+"better understand the object."
+msgstr ""
+"Los objetos pueden contener una lista de requisitos en formato libre "
+"(cualquier sintaxis YAML funciona). Estos requisitos ayudan a describir el "
+"objeto con más detalle. No son usados por PartCAD en sí, sino por agentes de "
+"IA o humanos para crear, mejorar o comprender mejor el objeto."
+
+#: ../../source/config_objects.rst:151
+msgid ""
+"The requirements are from the user’s perspective and serve to guide the "
+"design. Once the design is complete, it may impose further requirements (for "
+"example, on manufacturing), but those are not part of this section. This "
+"section exclusively covers the requirements used to create the design."
+msgstr ""
+"Los requisitos son desde la perspectiva del usuario y sirven para guiar el "
+"diseño. Una vez que el diseño está completo, puede imponer requisitos "
+"adicionales (por ejemplo, sobre fabricación), pero esos no forman parte de "
+"esta sección. Esta sección cubre exclusivamente los requisitos usados para "
+"crear el diseño."
+
+#: ../../source/config_objects.rst:190
+msgid "Files"
+msgstr "Archivos"
+
+#: ../../source/config_objects.rst:192
+msgid ""
+"For objects that are defined using a source file, the default file path is "
+"the name of the object plus the extension of that file type."
+msgstr ""
+"Para los objetos que se definen usando un archivo fuente, la ruta de archivo "
+"predeterminada es el nombre del objeto más la extensión de ese tipo de "
+"archivo."
+
+#: ../../source/config_objects.rst:195
+msgid ""
+"An alternative file path (absolute or relative to the package path) can be "
+"defined explicitly using the `path` parameter:"
+msgstr ""
+"Se puede definir explícitamente una ruta de archivo alternativa (absoluta o "
+"relativa a la ruta del paquete) usando el parámetro `path`:"
+
+#: ../../source/config_objects.rst:205
+msgid ""
+"When the source file is not kept in the package source repository but has to "
+"be pulled from a remote location (a STEP file published by the part vendor, "
+"for example), declare where to get it from using ``fileFrom`` and "
+"``fileUrl``:"
+msgstr ""
+
+#: ../../source/config_objects.rst:218
+msgid ""
+"The file is fetched lazily: nothing is downloaded until the object is used "
+"for the first time, and the downloaded file is reused afterwards. Since the "
+"file is not expected to be a part of the package, PartCAD does not complain "
+"about it being missing while the package is loaded."
+msgstr ""
+
+#: ../../source/config_objects.rst:223
+msgid ""
+"``fileFrom`` and ``fileUrl`` must be declared together. They are recognized "
+"in :ref:`parts`, :ref:`sketches`, :ref:`assemblies` (an assembly's source "
+"file is pulled the same way, whether it is an ``.assy`` file or a CAD "
+"file), :ref:`scenes` and :ref:`software`."
+msgstr ""
+
+#: ../../source/config_objects.rst:231
+msgid "Pinning what is downloaded"
+msgstr ""
+
+#: ../../source/config_objects.rst:233
+msgid ""
+"A URL serves whatever it serves at the moment it is fetched. The same "
+"declaration can produce a different file tomorrow -- the vendor revises the "
+"model, the branch moves, the host is not the one you thought. ``fileHash``, "
+"beside ``fileUrl``, pins the bytes:"
+msgstr ""
+
+#: ../../source/config_objects.rst:247
+msgid ""
+"The download is refused unless the file hashes to this, and the bytes that "
+"were refused are deleted rather than left behind -- the next run skips the "
+"download when the file is already there, and would otherwise reuse the file "
+"the hash had just rejected."
+msgstr ""
+
+#: ../../source/config_objects.rst:252
+msgid ""
+"Write it as ``<algorithm>:<digest>`` over ``md5``, ``sha1``, ``sha256`` or "
+"``sha512``. A bare digest works too, and the algorithm is read from its "
+"length, which is the form most vendors publish."
+msgstr ""
+
+#: ../../source/config_objects.rst:256
+msgid ""
+"``fileHash`` is recognized wherever ``fileFrom`` is, and it is **optional "
+"but required for reproducibility**. The schema never demands one, of any "
+"kind of object, and nothing refuses to load, build or lint an object that "
+"omits it. What such an object cannot do is promise that the next run "
+"produces the same thing, and manufacturing is repetition -- so ``pc test`` "
+"refuses to call it manufacturable (see :ref:`reproducibility`). Pull a "
+"vendor's model down and never claim it can be made, and none of this touches "
+"you."
+msgstr ""
+
+#: ../../source/config_objects.rst:264
+msgid ""
+"``pc add`` writes one for you. Given a URL instead of a path it fetches the "
+"file once and records the hash of what came back, so an object added that "
+"way is pinned from the moment it exists."
+msgstr ""
+
+#: ../../source/config_objects.rst:268
+msgid ""
+"A file served by a repository plugin -- what PartCAD uses for a package with "
+"no source tree of its own -- may carry a ``fileHash`` too, and it is "
+"verified the same way. It is not yet required, because nothing has been put "
+"in place for such a package to pin what its plugin serves."
+msgstr ""
+
+#: ../../source/config_objects.rst:273
+msgid ""
+"This has nothing to do with the hashes PartCAD computes for itself -- a "
+"shape's cache key, or the commit a package was read at. Those identify "
+"something PartCAD built or fetched; ``fileHash`` states, in advance, which "
+"bytes a package is asking for."
+msgstr ""
+
+#: ../../source/config_objects.rst:281
+msgid "Reproducibility and manufacturability"
+msgstr ""
+
+#: ../../source/config_objects.rst:283
+msgid ""
+"Manufacturing is repetition: the run after this one has to produce the same "
+"thing, so everything that goes into a product has to be gettable a second "
+"time and be the same thing. There are three ways an object can promise that, "
+"and the ``manufacturability`` check of ``pc test`` fails one that offers "
+"none of them:"
+msgstr ""
+
+#: ../../source/config_objects.rst:288
+msgid ""
+"**It is bought.** A ``vendor`` and an ``sku`` name a thing to order, and "
+"ordering it again is what \"the same again\" means for it -- whatever file "
+"the declaration also carries is a drawing of what arrives rather than the "
+"identity of it. Only :ref:`parts` and :ref:`assemblies` can say this; the "
+"schema gives ``vendor``/``sku`` to those two alone."
+msgstr ""
+
+#: ../../source/config_objects.rst:293
+msgid ""
+"**The package carries the file.** Its revision identifies the file exactly."
+msgstr ""
+
+#: ../../source/config_objects.rst:294
+msgid "**The file is pinned** with a ``fileHash``."
+msgstr ""
+
+#: ../../source/config_objects.rst:296
+msgid ""
+"A :ref:`sketch <sketches>` cannot be bought, so for it the second and third "
+"are the whole of it -- nothing manufactures a drawing, but a part extruded "
+"from one is no more repeatable than the drawing was. :ref:`software` is the "
+"same case, and for the same reason: a firmware image nobody can identify "
+"makes the bill of materials that names it worthless."
+msgstr ""
+
+#: ../../source/config_objects.rst:308
+msgid ""
+"The rule is about being *identified*, not about being available -- the file "
+"may download perfectly well and still be a different file than it was last "
+"month."
+msgstr ""
+
+#: ../../source/config_objects.rst:311
+msgid ""
+"Software is the one kind of object where a missing ``fileHash`` is reported "
+"by ``pc lint`` as well, before anything is built or fetched at all."
+msgstr ""
+
+#: ../../source/config_objects.rst:314
+msgid ""
+"A file served by a repository plugin is exempt from all of this for now. A "
+"``fileHash`` given for one is verified like any other; it is simply not "
+"required yet, because nothing has been put in place for a plugin-backed "
+"package to pin what its plugin serves."
+msgstr ""
+
+#: ../../source/config_objects.rst:320
+msgid "Parameters"
+msgstr "Parámetros"
+
+#: ../../source/config_objects.rst:322
+msgid ""
+"Objects may declare parameters. Once parameters are declared, each use of "
+"such objects may be accompanied by a set of parameter values. The parameter "
+"values are resolved and applied to the object to create a parametrized "
+"variant of the object. The parametrized variant remains stored (e.g. at "
+"runtime) as a separate object in the same package where the original object "
+"is declared. This allows for the same parametrized object to be used "
+"multiple times."
+msgstr ""
+"Los objetos pueden declarar parámetros. Una vez declarados los parámetros, "
+"cada uso de dichos objetos puede acompañarse de un conjunto de valores de "
+"parámetro. Los valores de los parámetros se resuelven y aplican al objeto "
+"para crear una variante parametrizada del objeto. La variante parametrizada "
+"permanece almacenada (por ejemplo, en tiempo de ejecución) como un objeto "
+"separado en el mismo paquete donde se declara el objeto original. Esto "
+"permite que el mismo objeto parametrizado se use varias veces."
+
+#: ../../source/config_objects.rst:337
+msgid ""
+"The short form ``<param name>: <default value>`` may be used whenever the "
+"type can be inferred from the value."
+msgstr ""
+"La forma corta ``<param name>: <default value>`` se puede usar siempre que "
+"el tipo se pueda inferir del valor."
+
+#: ../../source/config_objects.rst:340
+msgid ""
+"Assemblies declare parameters the same way. Their values are passed to the "
+"``.assy`` file as ``param_<param name>`` when its Jinja templates are "
+"resolved:"
+msgstr ""
+"Los ensamblajes declaran parámetros de la misma manera. Sus valores se pasan "
+"al archivo ``.assy`` como ``param_<param name>`` cuando se resuelven sus "
+"plantillas Jinja:"
+
+#: ../../source/config_objects.rst:358
+msgid "Other"
+msgstr "Otros"
+
+#: ../../source/config_objects.rst:360
+msgid "There are other optional fields that are common to all objects:"
+msgstr "Hay otros campos opcionales que son comunes a todos los objetos:"
+
+#: ../../source/config_objects.rst:362
+msgid "``desc``: <text>"
+msgstr "``desc``: <text>"
+
+#: ../../source/config_objects.rst:364
+msgid "Description of the object."
+msgstr "Descripción del objeto."
+
+#: ../../source/config_objects.rst:366
+msgid "``offset``: <OCCT Location object>"
+msgstr "``offset``: <OCCT Location object>"
+
+#: ../../source/config_objects.rst:368
+msgid "Defines the offset to apply to the CAD model when this object is used."
+msgstr ""
+"Define el desplazamiento a aplicar al modelo CAD cuando se usa este objeto."
+
+#: ../../source/config_objects.rst:370
+msgid "``cache``: <bool> (default: `True`)"
+msgstr "``cache``: <bool> (predeterminado: `True`)"
+
+#: ../../source/config_objects.rst:372
+msgid ""
+"The value `false` indicates the intent to exclude this object from any "
+"caching behavior. It may be due to storage size or time considerations, or "
+"due to known issues with dependency tracking. It does not override any "
+"global caching settings."
+msgstr ""
+"El valor `false` indica la intención de excluir este objeto de cualquier "
+"comportamiento de caché. Puede deberse a consideraciones de tamaño de "
+"almacenamiento o tiempo, o a problemas conocidos con el seguimiento de "
+"dependencias. No anula ninguna configuración de caché global."

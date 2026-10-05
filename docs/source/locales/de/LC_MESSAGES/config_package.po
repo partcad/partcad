@@ -1,0 +1,577 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/config_package.rst:3
+msgid "Packages and dependencies"
+msgstr ""
+
+#: ../../source/config_package.rst:9
+msgid "Packages"
+msgstr "Pakete"
+
+#: ../../source/config_package.rst:11
+msgid ""
+"The package is defined using the configuration file ``partcad.yaml`` placed "
+"in the package folder. Besides the package properties and, optionally, a "
+"list of imported dependencies, ``partcad.yaml`` declares a list of :ref:"
+"`objects` contained in this package."
+msgstr ""
+"Das Paket wird über die Konfigurationsdatei ``partcad.yaml`` im Paketordner "
+"definiert. Neben den Paketeigenschaften und optional einer Liste "
+"importierter Abhängigkeiten deklariert ``partcad.yaml`` eine Liste von :ref:"
+"`objects`, die in diesem Paket enthalten sind."
+
+#: ../../source/config_package.rst:58
+msgid "The package name"
+msgstr "Der Paketname"
+
+#: ../../source/config_package.rst:60
+msgid ""
+"A package is always addressed by its **location** -- the package path at "
+"which it was loaded, derived from its parent. For example, a package in the "
+"subfolder ``gobilda`` of the package ``//vendor`` is addressed as ``//vendor/"
+"gobilda`` regardless of what it declares about itself."
+msgstr ""
+"Ein Paket wird immer über seinen **Speicherort** (location) angesprochen -- "
+"den Paketpfad, unter dem es geladen wurde, abgeleitet von seinem "
+"übergeordneten Paket. Zum Beispiel wird ein Paket im Unterordner ``gobilda`` "
+"des Pakets ``//vendor`` als ``//vendor/gobilda`` angesprochen, unabhängig "
+"davon, was es über sich selbst deklariert."
+
+#: ../../source/config_package.rst:65
+msgid ""
+"The optional ``name`` field declares the package's **identity**: the package "
+"path at which the package expects to be seen. It only takes effect when the "
+"package is loaded as the root (the top-most package of the current context) "
+"-- this lets a package be developed standalone using the very same package "
+"path its consumers will see it at. In every other case ``name`` does not "
+"change where the package is loaded; the location always wins."
+msgstr ""
+"Das optionale Feld ``name`` deklariert die **Identität** des Pakets: den "
+"Paketpfad, unter dem das Paket gesehen werden möchte. Es wirkt sich nur aus, "
+"wenn das Paket als Root (das oberste Paket des aktuellen Kontexts) geladen "
+"wird -- dies erlaubt es, ein Paket eigenständig unter genau demselben "
+"Paketpfad zu entwickeln, unter dem seine Konsumenten es sehen werden. In "
+"jedem anderen Fall ändert ``name`` nicht, wo das Paket geladen wird; der "
+"Speicherort gewinnt immer."
+
+#: ../../source/config_package.rst:72
+msgid ""
+"This makes it safe to vendor a package -- copy it into your own package tree "
+"to drop a dependency or to follow your own naming convention:"
+msgstr ""
+"Dies macht es sicher, ein Paket zu vendoren -- es in Ihren eigenen Paketbaum "
+"zu kopieren, um eine Abhängigkeit fallen zu lassen oder Ihrer eigenen "
+"Namenskonvention zu folgen:"
+
+#: ../../source/config_package.rst:75
+msgid ""
+"The vendored copy is loaded at its location in your tree, not at the "
+"``name`` it declares. If the same package is vendored at two locations (even "
+"at two different versions), each is an independent instance, addressed at "
+"its own location, and the two never interact."
+msgstr ""
+"Die vendorte Kopie wird an ihrem Speicherort in Ihrem Baum geladen, nicht am "
+"von ihr deklarierten ``name``. Wird dasselbe Paket an zwei Speicherorten "
+"vendort (sogar in zwei verschiedenen Versionen), ist jede eine eigenständige "
+"Instanz, angesprochen an ihrem eigenen Speicherort, und die beiden "
+"interagieren nie miteinander."
+
+#: ../../source/config_package.rst:79
+msgid ""
+"References the package makes to itself using its declared ``name`` are "
+"automatically redirected to the location where the copy was actually loaded. "
+"A vendored copy therefore uses itself, instead of silently pulling in "
+"another copy from the package path it was originally taken from."
+msgstr ""
+"Verweise, die das Paket über seinen deklarierten ``name`` auf sich selbst "
+"macht, werden automatisch zu dem Speicherort umgeleitet, an dem die Kopie "
+"tatsächlich geladen wurde. Eine vendorte Kopie verwendet daher sich selbst, "
+"statt stillschweigend eine andere Kopie vom Paketpfad zu ziehen, aus dem sie "
+"ursprünglich stammt."
+
+#: ../../source/config_package.rst:84
+msgid ""
+"As a consequence, a vendored package cannot reference the original copy of "
+"itself by its declared ``name``: that package path always resolves to the "
+"local instance. This is intentional -- referencing two copies of the same "
+"package at once is almost always a mistake, and the alternative would be an "
+"implicit, easily-missed dependency on the upstream package."
+msgstr ""
+"Infolgedessen kann ein vendortes Paket nicht über seinen deklarierten "
+"``name`` auf seine eigene Originalkopie verweisen: Dieser Paketpfad löst "
+"sich immer zur lokalen Instanz auf. Dies ist beabsichtigt -- der "
+"gleichzeitige Verweis auf zwei Kopien desselben Pakets ist fast immer ein "
+"Fehler, und die Alternative wäre eine implizite, leicht zu übersehende "
+"Abhängigkeit vom Upstream-Paket."
+
+#: ../../source/config_package.rst:94
+msgid "Templates"
+msgstr ""
+
+#: ../../source/config_package.rst:96
+msgid ""
+"``partcad.yaml`` is a Jinja2 template rendered to YAML before it is parsed, "
+"so a package can generate declarations rather than write every one out. "
+"These names are available while it is being rendered:"
+msgstr ""
+
+#: ../../source/config_package.rst:104
+msgid "Name"
+msgstr ""
+
+#: ../../source/config_package.rst:105
+msgid "What it is"
+msgstr ""
+
+#: ../../source/config_package.rst:106
+msgid "``package_name``"
+msgstr ""
+
+#: ../../source/config_package.rst:107
+msgid "The package path this package is being loaded at."
+msgstr ""
+
+#: ../../source/config_package.rst:108
+msgid "``partcad_version``"
+msgstr ""
+
+#: ../../source/config_package.rst:109
+msgid "The version of PartCAD doing the rendering, whole: ``\"0.8.77\"``."
+msgstr ""
+
+#: ../../source/config_package.rst:110
+msgid ""
+"``partcad_version_major``, ``partcad_version_minor``, "
+"``partcad_version_build``"
+msgstr ""
+
+#: ../../source/config_package.rst:111
+msgid "The same version as its three numbers."
+msgstr ""
+
+#: ../../source/config_package.rst:112
+msgid "``partcad_version_at_least(...)``"
+msgstr ""
+
+#: ../../source/config_package.rst:113
+msgid ""
+"Whether that version is the one given or newer. Takes a string, "
+"``partcad_version_at_least(\"0.8.77\")``, or the numbers themselves, "
+"``partcad_version_at_least(0, 8, 77)``."
+msgstr ""
+
+#: ../../source/config_package.rst:116
+msgid "``PI``/``M_PI``, ``SQRT_2``, ``SQRT_3``, ``SQRT_5``"
+msgstr ""
+
+#: ../../source/config_package.rst:117
+msgid "The constants a CAD file keeps reaching for."
+msgstr ""
+
+#: ../../source/config_package.rst:118
+msgid "``INCH``/``INCHES``, ``FOOT``/``FEET``"
+msgstr ""
+
+#: ../../source/config_package.rst:119
+msgid "Millimetres per imperial unit: 25.4 and 304.8."
+msgstr ""
+
+#: ../../source/config_package.rst:122
+msgid "Serving two PartCADs at once"
+msgstr ""
+
+#: ../../source/config_package.rst:124
+msgid ""
+"A package that wants a feature this release has and the last one did not has "
+"a choice: raise its ``partcad:`` requirement, which takes the package away "
+"from everyone who has not updated, or write both forms and pick between them."
+msgstr ""
+
+#: ../../source/config_package.rst:136
+msgid ""
+"A PartCAD older than these names defines none of them, and a template that "
+"names one there fails to render at all. So a package that has to work on "
+"those asks first -- Jinja2's ``and`` short-circuits, so the call is never "
+"made where the name is absent:"
+msgstr ""
+
+#: ../../source/config_package.rst:145
+msgid ""
+"The comparison is made one number at a time, which is the whole point of "
+"having it: ``0.8.9`` is *older* than ``0.8.77``, and every comparison of the "
+"strings says the opposite."
+msgstr ""
+
+#: ../../source/config_package.rst:151
+msgid ""
+"``partcad_version_at_least`` is a function rather than a Jinja2 macro, which "
+"is what it looks like it should be. A macro always renders to *text*, so a "
+"false one comes back as the string ``\"False\"`` -- which is not empty, and "
+"so is true to ``{% if %}``. A comparison that reads as its own opposite is "
+"not a thing to leave lying in a template."
+msgstr ""
+
+#: ../../source/config_package.rst:159
+msgid "Validation"
+msgstr ""
+
+#: ../../source/config_package.rst:161
+msgid ""
+"``partcad.yaml`` is checked against a JSON schema (``src/partcad_utils/"
+"schema/partcad.json``) that describes everything below: which sections "
+"exist, which fields each kind of declaration takes, and which of them "
+"exclude or require one another."
+msgstr ""
+
+#: ../../source/config_package.rst:166
+msgid "Run the check over a package, or over the file alone:"
+msgstr ""
+
+#: ../../source/config_package.rst:174
+msgid ""
+"Every finding names the line and column it came from. ``partcad.yaml`` is a "
+"Jinja2 template rendered to YAML before it is parsed (see ``includePaths`` "
+"below), so the checker masks each template construct before parsing rather "
+"than rendering the file, which would need the values the template is waiting "
+"for. It is the same checker :doc:`ASSY files <assy>` go through, and the "
+"`PartCAD extension for VS Code <https://marketplace.visualstudio.com/items?"
+"itemName=PartCAD.partcad-official>`_ runs it on the open document -- so a "
+"mistyped section is underlined as it is typed, including in the file that is "
+"stopping the package from loading at all. Set ``partcad.lint.enabled`` to "
+"``false`` to turn that off."
+msgstr ""
+
+#: ../../source/config_package.rst:187
+msgid "Dependencies"
+msgstr "Abhängigkeiten"
+
+#: ../../source/config_package.rst:189
+msgid "Here are some examples of a dependency declaration in ``partcad.yaml``:"
+msgstr ""
+"Hier sind einige Beispiele für eine Abhängigkeitsdeklaration in ``partcad."
+"yaml``:"
+
+#: ../../source/config_package.rst:195
+msgid "Method"
+msgstr "Methode"
+
+#: ../../source/config_package.rst:195
+msgid "Example"
+msgstr "Beispiel"
+
+#: ../../source/config_package.rst:0
+msgid "Local package"
+msgstr "Lokales Paket"
+
+#: ../../source/config_package.rst:0
+msgid "(in the same"
+msgstr "(im selben"
+
+#: ../../source/config_package.rst:0
+msgid "source code"
+msgstr "Quellcode-"
+
+#: ../../source/config_package.rst:0
+msgid "repository)"
+msgstr "Repository)"
+
+#: ../../source/config_package.rst:203
+msgid "GIT repository :raw-html:`<br />` (HTTPS, SSH)"
+msgstr "GIT-Repository :raw-html:`<br />` (HTTPS, SSH)"
+
+#: ../../source/config_package.rst:210
+msgid "Hosted tar ball :raw-html:`<br />` (HTTPS)"
+msgstr "Gehostetes Tarball-Archiv :raw-html:`<br />` (HTTPS)"
+
+#: ../../source/config_package.rst:217
+msgid ""
+"Each dependency becomes a subpackage of the current package. All subfolders "
+"of the current package are considered subpackages (of the type `local`) if "
+"they contain a ``partcad.yaml`` file. Subfolders do not need to be "
+"explicitly declared as a dependency, but may be declared to provide a more "
+"detailed description."
+msgstr ""
+"Jede Abhängigkeit wird zu einem Unterpaket des aktuellen Pakets. Alle "
+"Unterordner des aktuellen Pakets gelten als Unterpakete (vom Typ `local`), "
+"wenn sie eine ``partcad.yaml``-Datei enthalten. Unterordner müssen nicht "
+"explizit als Abhängigkeit deklariert werden, können aber deklariert werden, "
+"um eine detailliertere Beschreibung bereitzustellen."
+
+#: ../../source/config_package.rst:222
+msgid "External packages"
+msgstr "Externe Pakete"
+
+#: ../../source/config_package.rst:224
+msgid ""
+"A dependency of type ``external`` is a package whose contents are served by "
+"a **repository plugin** instead of being read from a folder (``local``) or a "
+"remote archive (``git``, ``tar``). Its ``plugin`` field references a "
+"repository declared in the ``repositories`` section (see :ref:"
+"`repositories`):"
+msgstr ""
+"Eine Abhängigkeit vom Typ ``external`` ist ein Paket, dessen Inhalte von "
+"einem **Repository-Plugin** bereitgestellt werden, statt aus einem Ordner "
+"(``local``) oder einem entfernten Archiv (``git``, ``tar``) gelesen zu "
+"werden. Das Feld ``plugin`` referenziert ein im Abschnitt ``repositories`` "
+"deklariertes Repository (siehe :ref:`repositories`):"
+
+#: ../../source/config_package.rst:240
+msgid ""
+"The package's objects (parts, sketches, assemblies, ...), its child "
+"packages, and its metadata are all fetched from the plugin on demand, rather "
+"than being enumerated up front. This keeps loading cheap even when the "
+"repository is large or remote: a part is fetched only when it is actually "
+"used."
+msgstr ""
+"Die Objekte des Pakets (Teile, Skizzen, Baugruppen, ...), seine Unterpakete "
+"und seine Metadaten werden alle bei Bedarf vom Plugin abgerufen, statt im "
+"Voraus aufgelistet zu werden. Dies hält das Laden auch dann günstig, wenn "
+"das Repository groß oder entfernt ist: Ein Teil wird nur abgerufen, wenn es "
+"tatsächlich verwendet wird."
+
+#: ../../source/config_package.rst:245
+msgid ""
+"An external package can host a hierarchy. When its children are listed, the "
+"plugin reports child package names; each child is imported as another "
+"external package backed by the same plugin, with a ``subfolder`` that scopes "
+"its requests within the repository. In this way one plugin can serve an "
+"entire tree of packages, each with its own sketches, parts, assemblies, "
+"providers and further children."
+msgstr ""
+"Ein externes Paket kann eine Hierarchie beherbergen. Wenn seine Kindpakete "
+"aufgelistet werden, meldet das Plugin die Namen der Kindpakete; jedes Kind "
+"wird als weiteres externes Paket importiert, das vom selben Plugin "
+"unterstützt wird, mit einem ``subfolder``, der seine Anfragen innerhalb des "
+"Repositorys eingrenzt. Auf diese Weise kann ein einziges Plugin einen "
+"gesamten Baum von Paketen bereitstellen, jedes mit seinen eigenen Skizzen, "
+"Teilen, Baugruppen, Anbietern und weiteren Kindern."
+
+#: ../../source/config_package.rst:252
+msgid ""
+"Non-null responses from a plugin are cached on disk, keyed by the plugin "
+"reference and the request; a request the plugin has no answer for is "
+"remembered only for the run that made it, and is put to the plugin again "
+"after a restart. The same key also names the directory the plugin's own "
+"files are materialized into, and a file already there is served without "
+"asking the plugin again."
+msgstr ""
+
+#: ../../source/config_package.rst:258
+msgid ""
+"The cache does not know when the plugin's code changes, so a plugin that "
+"starts answering differently - a new field on every part it serves, or the "
+"same parts measured another way - would keep being served the stale, pre-"
+"change entries. The plugin says so itself, with a module-level constant in "
+"its script::"
+msgstr ""
+
+#: ../../source/config_package.rst:268
+msgid ""
+"It is folded into the cache location, so raising it moves the whole "
+"repository (and every child in its hierarchy) to a fresh cache namespace at "
+"once. It defaults to ``0`` when the script names none, and a repository with "
+"no script of its own - an ``enrich`` one, which rewrites another "
+"repository's answers - has no code to version and stays at ``0``."
+msgstr ""
+
+#: ../../source/config_package.rst:274
+msgid ""
+"The number lives in the plugin because it is the plugin's own business. A "
+"package that imports a plugin-backed library has no way of knowing that the "
+"library now measures its parts differently, and should not have to be told: "
+"it would have to be told again in every package that imports it, and each of "
+"them would be a place to forget. So this is not a field of the dependency "
+"that imports the plugin, and PartCAD reads it out of the script rather than "
+"asking for it - the answer is needed before the first question can be asked. "
+"The script is parsed, never executed."
+msgstr ""
+
+#: ../../source/config_package.rst:283
+msgid ""
+"See ``examples/plugin_repository_basic`` (a package backed by a local file), "
+"``examples/plugin_repository_full`` (backed by an HTTP endpoint) and "
+"``examples/plugin_repository_tree`` (a hierarchy of packages)."
+msgstr ""
+"Siehe ``examples/plugin_repository_basic`` (ein Paket, das von einer lokalen "
+"Datei unterstützt wird), ``examples/plugin_repository_full`` (unterstützt "
+"von einem HTTP-Endpunkt) und ``examples/plugin_repository_tree`` (eine "
+"Hierarchie von Paketen)."
+
+#: ../../source/config_package.rst:291
+msgid "Repositories"
+msgstr "Repositories"
+
+#: ../../source/config_package.rst:293
+msgid ""
+"A repository plugin serves the contents of a package: its objects, its child "
+"packages and its metadata. It is what backs an ``external`` dependency (see "
+"`External packages`_)."
+msgstr ""
+"Ein Repository-Plugin stellt die Inhalte eines Pakets bereit: seine Objekte, "
+"seine Unterpakete und seine Metadaten. Es ist das, was eine ``external``-"
+"Abhängigkeit unterstützt (siehe `External packages`_)."
+
+#: ../../source/config_package.rst:297
+msgid ""
+"Repositories are declared in ``partcad.yaml`` using the following syntax:"
+msgstr ""
+"Repositories werden in ``partcad.yaml`` mit folgender Syntax deklariert:"
+
+#: ../../source/config_package.rst:311
+msgid ""
+"``enrich`` repositories are references to other repositories with some "
+"parameters modified to specific values."
+msgstr ""
+"``enrich``-Repositories sind Verweise auf andere Repositories, bei denen "
+"einige Parameter auf bestimmte Werte geändert wurden."
+
+#: ../../source/config_package.rst:314
+msgid ""
+"``basic`` repositories are implemented as Python scripts, invoked the same "
+"way as provider scripts (via ``runpy``, with the input in the global "
+"``request`` and the output in the global ``output``). A repository script "
+"answers a single, generic key/value request:"
+msgstr ""
+"``basic``-Repositories werden als Python-Skripte implementiert, die auf "
+"dieselbe Weise wie Anbieter-Skripte aufgerufen werden (über ``runpy``, mit "
+"der Eingabe im globalen ``request`` und der Ausgabe im globalen ``output``). "
+"Ein Repository-Skript beantwortet eine einzige, generische Schlüssel/Wert-"
+"Anfrage:"
+
+#: ../../source/config_package.rst:319
+msgid "`request[\"api\"] == \"get\"`"
+msgstr "`request[\"api\"] == \"get\"`"
+
+#: ../../source/config_package.rst:320
+msgid "`request[\"key\"]`: the key being requested"
+msgstr "`request[\"key\"]`: der angeforderte Schlüssel"
+
+#: ../../source/config_package.rst:321
+msgid ""
+"`output[\"result\"]`: the value stored under that key (or ``null`` if "
+"unknown)"
+msgstr ""
+"`output[\"result\"]`: der unter diesem Schlüssel gespeicherte Wert (oder "
+"``null``, falls unbekannt)"
+
+#: ../../source/config_package.rst:323
+msgid ""
+"The keys address every kind of data uniformly, so serving a new kind of "
+"object or a new piece of metadata needs no new API:"
+msgstr ""
+"Die Schlüssel sprechen jede Art von Daten einheitlich an, sodass das "
+"Bereitstellen einer neuen Art von Objekt oder eines neuen Metadaten-Elements "
+"keine neue API erfordert:"
+
+#: ../../source/config_package.rst:326
+msgid ""
+"``objects/<kind>`` -- all objects of a kind, as ``{name: config, ...}``. The "
+"kinds are the ten in ``Project.OBJECT_KINDS``: ``material``, ``interface``, "
+"``sketch``, ``part``, ``assembly``, ``scene``, ``provider``, ``repository``, "
+"``software``, ``partType``"
+msgstr ""
+
+#: ../../source/config_package.rst:330
+msgid ""
+"``objects/<kind>/<name>`` -- a single object's config, fetched without "
+"listing the whole repository"
+msgstr ""
+"``objects/<kind>/<name>`` -- die Konfiguration eines einzelnen Objekts, "
+"abgerufen ohne das gesamte Repository aufzulisten"
+
+#: ../../source/config_package.rst:332
+msgid "``deps`` -- the names of the child packages"
+msgstr "``deps`` -- die Namen der Unterpakete"
+
+#: ../../source/config_package.rst:333
+msgid ""
+"``meta`` -- package-level properties (``desc``, ``render``, "
+"``manufacturable``, ``suppliers``, ...), and ``objectKinds`` (see below)"
+msgstr ""
+
+#: ../../source/config_package.rst:335
+msgid ""
+"``files/<path>`` -- the base64-encoded content of a file an object "
+"references by ``path``. A plugin-backed package has no source tree, so a "
+"file-backed object's file is fetched from the plugin and materialized into "
+"the package's cache directory when the object is built."
+msgstr ""
+"``files/<path>`` -- der Base64-kodierte Inhalt einer Datei, auf die ein "
+"Objekt über ``path`` verweist. Ein von einem Plugin unterstütztes Paket hat "
+"keinen Quellbaum, daher wird die Datei eines dateibasierten Objekts vom "
+"Plugin abgerufen und im Cache-Verzeichnis des Pakets materialisiert, wenn "
+"das Objekt gebaut wird."
+
+#: ../../source/config_package.rst:340
+msgid ""
+"For a hierarchy, a child package's requests are prefixed with its "
+"``subfolder``: a child in ``motors`` asks for ``motors/objects/part``, "
+"``motors/deps`` and so on, all served by the same script."
+msgstr ""
+"Bei einer Hierarchie werden die Anfragen eines Unterpakets mit seinem "
+"``subfolder`` vorangestellt: Ein Kind in ``motors`` fragt ``motors/objects/"
+"part``, ``motors/deps`` und so weiter an, alle bereitgestellt vom selben "
+"Skript."
+
+#: ../../source/config_package.rst:345
+msgid "Say which kinds a package has"
+msgstr ""
+
+#: ../../source/config_package.rst:347
+msgid ""
+"Every key is a separate run of the script, and a package has ten kinds of "
+"object. Something as ordinary as listing the packages that hold anything to "
+"look at asks after four of them, per package, and for a hierarchy of a "
+"hundred packages that is four hundred runs -- most of them to be told "
+"\"none\"."
+msgstr ""
+
+#: ../../source/config_package.rst:352
+msgid ""
+"A package's ``meta`` may therefore carry ``objectKinds``, the kinds that "
+"package holds at all:"
+msgstr ""
+
+#: ../../source/config_package.rst:359
+msgid ""
+"PartCAD then answers \"none\" for every other kind without asking. This "
+"narrows what is asked for and never what may be served: a plugin that lists "
+"a kind it turns out to have none of is simply asked a question it answers "
+"emptily, and a plugin that says nothing is asked about everything, as "
+"before. It is read out of the metadata PartCAD has already fetched and is "
+"never worth a request of its own, so a package reached on its own -- rather "
+"than through a traversal, which reads ``meta`` for every package as it goes "
+"-- is queried exactly as it was."
+msgstr ""
+
+#: ../../source/config_package.rst:367
+msgid ""
+"Responses are cached per key (in memory and on disk), so a repository that "
+"is slow or remote is queried as little as possible. See ``examples/"
+"plugin_repository_basic``, ``examples/plugin_repository_full`` (an HTTP-"
+"backed repository) and ``examples/plugin_repository_tree`` (a hierarchy)."
+msgstr ""
+"Antworten werden pro Schlüssel zwischengespeichert (im Speicher und auf der "
+"Festplatte), sodass ein langsames oder entferntes Repository so selten wie "
+"möglich abgefragt wird. Siehe ``examples/plugin_repository_basic``, "
+"``examples/plugin_repository_full`` (ein HTTP-basiertes Repository) und "
+"``examples/plugin_repository_tree`` (eine Hierarchie)."

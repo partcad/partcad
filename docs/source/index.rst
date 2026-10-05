@@ -21,17 +21,47 @@ product development process.**
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Getting started
 
    intro.rst
    installation.rst
    tutorial.rst
-   cli.rst
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Concepts
+
    design.rst
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Command line
+
+   cli.rst
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Package configuration
+
    configuration.rst
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Assemblies
+
    assy.rst
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Guides
+
    simulation.rst
    use_cases.rst
    features.rst
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Help
+
    troubleshooting.rst
    contributing.rst

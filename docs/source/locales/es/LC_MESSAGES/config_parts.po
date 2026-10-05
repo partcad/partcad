@@ -1,0 +1,881 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/config_parts.rst:3 ../../source/config_parts.rst:9
+msgid "Parts"
+msgstr "Piezas"
+
+#: ../../source/config_parts.rst:11
+msgid "Parts are declared in ``partcad.yaml`` using the following syntax:"
+msgstr ""
+"Las piezas se declaran en ``partcad.yaml`` usando la siguiente sintaxis:"
+
+#: ../../source/config_parts.rst:77
+msgid ""
+"Depending on the type of the part, the configuration may have different "
+"options."
+msgstr ""
+"Según el tipo de la pieza, la configuración puede tener diferentes opciones."
+
+#: ../../source/config_parts.rst:79
+msgid ""
+"``multiConnect`` says whether one instance of an interface may take more "
+"than one object. It is ``false`` by default, because most joints are made "
+"once: a stud takes one brick, a bolt hole takes one bolt, and two objects "
+"connected to the same instance is a mistake ``pc test`` reports. Set it on "
+"the joints that are not made once - a shaft carrying several parts along its "
+"length, a rail, a bus bar:"
+msgstr ""
+
+#: ../../source/config_parts.rst:92
+msgid ""
+"The ``threadStep``, ``selfScrew`` and ``multiConnect`` fields of an "
+"interface are inherited by the interfaces that inherit it, and by the "
+"connections made through it. Two interfaces that are connected have to agree "
+"on their thread unless one of them cuts its own. See :doc:`assy`."
+msgstr ""
+
+#: ../../source/config_parts.rst:97
+msgid ""
+"The fields of the ``connect`` section are the defaults for the ``holdWith*`` "
+"and ``holdTo*`` fields of the ``how`` section of an Assembly YAML "
+"``connect``/``connectPorts`` node. See :doc:`assy`."
+msgstr ""
+
+#: ../../source/config_parts.rst:101
+msgid ""
+"``images`` names the pictures a part was modeled from -- a technical "
+"drawing, a photograph, a sketch -- as paths relative to the package. They "
+"are what ``pc render -t readme`` puts beside the part, next to its own "
+"rendered image, so that a reader of the README sees what the model was made "
+"to match. Assemblies, sketches and interfaces take the same field, and it "
+"says nothing about how the object is built: nothing reads these images but "
+"the README."
+msgstr ""
+
+#: ../../source/config_parts.rst:108
+msgid ""
+"The ``properties`` section says what the shape this part produces is, as "
+"opposed to ``parameters``, which say what is asked of the type that produces "
+"it. See :ref:`properties` below."
+msgstr ""
+
+#: ../../source/config_parts.rst:112
+msgid "See :ref:`location` for more information on the OCCT Location object."
+msgstr ""
+"Consulte :ref:`location` para más información sobre el objeto OCCT Location."
+
+#: ../../source/config_parts.rst:115
+msgid "CAD Scripts"
+msgstr "Scripts CAD"
+
+#: ../../source/config_parts.rst:117
+msgid "Define parts with CodeCAD scripts using the following syntax:"
+msgstr "Defina piezas con scripts CodeCAD usando la siguiente sintaxis:"
+
+#: ../../source/config_parts.rst:143 ../../source/config_parts.rst:276
+#: ../../source/config_parts.rst:305 ../../source/config_parts.rst:333
+msgid "Example"
+msgstr "Ejemplo"
+
+#: ../../source/config_parts.rst:143 ../../source/config_parts.rst:276
+#: ../../source/config_parts.rst:351
+msgid "Configuration"
+msgstr "Configuración"
+
+#: ../../source/config_parts.rst:143 ../../source/config_parts.rst:276
+#: ../../source/config_parts.rst:305 ../../source/config_parts.rst:333
+msgid "Result"
+msgstr "Resultado"
+
+#: ../../source/config_parts.rst:0
+msgid "`CadQuery <https://github.com/CadQuery/cadquery>`_ or"
+msgstr "`CadQuery <https://github.com/CadQuery/cadquery>`_ o"
+
+#: ../../source/config_parts.rst:0
+msgid "`build123d <https://github.com/gumyr/build123d>`_ script"
+msgstr "script de `build123d <https://github.com/gumyr/build123d>`_"
+
+#: ../../source/config_parts.rst:0
+msgid "in ``src/cylinder.py``"
+msgstr "en ``src/cylinder.py``"
+
+#: ../../source/config_parts.rst:0
+msgid "`OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_ script"
+msgstr "script de `OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_"
+
+#: ../../source/config_parts.rst:0
+msgid "in ``cube.scad``"
+msgstr "en ``cube.scad``"
+
+#: ../../source/config_parts.rst:160
+msgid "Chili3D scripts"
+msgstr ""
+
+#: ../../source/config_parts.rst:162
+msgid ""
+"`Chili3D <https://github.com/xiangechen/chili3d>`_ scripts are JavaScript, "
+"not Python, and live in ``.chili`` files:"
+msgstr ""
+
+#: ../../source/config_parts.rst:171
+msgid ""
+"A ``.chili`` file is an ES module. PartCAD runs it in a sandboxed Node.js "
+"with the Chili3D API already loaded, and takes whatever the script hands "
+"back as the part. These are available as globals:"
+msgstr ""
+
+#: ../../source/config_parts.rst:175
+msgid "``chili3d``"
+msgstr ""
+
+#: ../../source/config_parts.rst:176
+msgid "the Chili3D module namespace (``Plane``, ``XYZ``, ...)"
+msgstr ""
+
+#: ../../source/config_parts.rst:178
+msgid "``shapeFactory``"
+msgstr ""
+
+#: ../../source/config_parts.rst:179
+msgid "a ready-made ``new chili3d.ShapeFactory()``"
+msgstr ""
+
+#: ../../source/config_parts.rst:181
+msgid "``wasm``"
+msgstr ""
+
+#: ../../source/config_parts.rst:182
+msgid "the OCCT WebAssembly kernel, for what the high-level API does not cover"
+msgstr ""
+
+#: ../../source/config_parts.rst:184
+msgid "``show(...)``"
+msgstr ""
+
+#: ../../source/config_parts.rst:185
+msgid "declare a shape (or an array of them) to be the part's result"
+msgstr ""
+
+#: ../../source/config_parts.rst:187
+msgid "``show_object(...)``"
+msgstr ""
+
+#: ../../source/config_parts.rst:188
+msgid "an alias of ``show``, so a script reads like its CadQuery counterpart"
+msgstr ""
+
+#: ../../source/config_parts.rst:190
+msgid "``parameters``"
+msgstr ""
+
+#: ../../source/config_parts.rst:191
+msgid "the part's build parameters, also injected as globals by name"
+msgstr ""
+
+#: ../../source/config_parts.rst:202
+msgid ""
+"A script that does not call ``show()`` may instead export its result as "
+"``default``, ``shape``, ``result`` or ``part``. Either way the shape may be "
+"a raw ``TopoDS_Shape``, the ``Result`` the Chili3D API returns, or the "
+"``IShape`` inside it - PartCAD unwraps all of them, and reports the error a "
+"failed ``Result`` carries rather than producing an empty part."
+msgstr ""
+
+#: ../../source/config_parts.rst:208
+msgid ""
+"The script is evaluated inside the PartCAD sandbox, so ``import`` works the "
+"way it does in any Node.js project: by name for anything the package "
+"declares under ``javascriptRequirements``, and relative for a file next to "
+"the script."
+msgstr ""
+
+#: ../../source/config_parts.rst:218
+msgid "Choosing versions"
+msgstr ""
+
+#: ../../source/config_parts.rst:220
+msgid ""
+"``javascriptVersion`` names the Node.js major version to render on, and "
+"``chili3dVersion`` the version of Chili3D to render with. Both may be set on "
+"the package and overridden on an individual part:"
+msgstr ""
+
+#: ../../source/config_parts.rst:236
+msgid ""
+"``chili3dVersion`` takes an exact version, or any range or tag npm accepts "
+"(``\"^1.1\"``, ``\"latest\"``). Naming ``chili3d`` under "
+"``javascriptRequirements`` does the same thing; where both are given the "
+"dedicated option wins, and a part's choice wins over its package's. Note "
+"that not every Chili3D release publishes the WebAssembly kernel PartCAD "
+"needs - one that does not fails with a message naming the version."
+msgstr ""
+
+#: ../../source/config_parts.rst:243
+msgid ""
+"Unlike the Python script types, where PartCAD pins CadQuery and build123d "
+"and overrides a package that asks for a different version, this really is "
+"the package's choice. A Node.js sandbox is identified by the set of "
+"dependencies it holds, so a package on its own Chili3D gets an environment "
+"of its own and changes nothing for any other package - or for another part "
+"of the same one."
+msgstr ""
+
+#: ../../source/config_parts.rst:249
+msgid "Two notes on how this differs from the Python script types:"
+msgstr ""
+
+#: ../../source/config_parts.rst:251
+msgid ""
+"``patch`` expressions are JavaScript regular expressions rather than Python "
+"ones. The syntax is nearly identical, but the replacement follows "
+"JavaScript's rules: a capture group is referenced as ``$1`` where Python "
+"would write ``\\1``, and a literal dollar sign is written ``$$``."
+msgstr ""
+
+#: ../../source/config_parts.rst:255
+msgid ""
+"Chili3D is an input format only. A part can be *defined* by a ``.chili`` "
+"script and then exported to STEP, STL, 3MF and everything else PartCAD "
+"writes, but no exporter produces a ``.chili`` file."
+msgstr ""
+
+#: ../../source/config_parts.rst:260
+msgid "CAD Files"
+msgstr "Archivos CAD"
+
+#: ../../source/config_parts.rst:262
+msgid "Define parts with CAD files using the following syntax:"
+msgstr "Defina piezas con archivos CAD usando la siguiente sintaxis:"
+
+#: ../../source/config_parts.rst:271
+msgid ""
+"A CAD file published elsewhere (in a vendor's catalog, for example) does not "
+"have to be committed to the package: see :ref:`files` for how to have "
+"PartCAD download it on demand."
+msgstr ""
+
+#: ../../source/config_parts.rst:0
+msgid "CAD file"
+msgstr "Archivo CAD"
+
+#: ../../source/config_parts.rst:0
+msgid "(`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_ in ``screw.step``,"
+msgstr "(`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_ en ``screw.step``,"
+
+#: ../../source/config_parts.rst:0
+msgid ""
+"`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_ in ``screw.stl``,"
+msgstr ""
+"`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_ en ``screw.stl``,"
+
+#: ../../source/config_parts.rst:0
+msgid ""
+"or `3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_ in "
+"``screw.3mf``)"
+msgstr ""
+"o `3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_ en "
+"``screw.3mf``)"
+
+#: ../../source/config_parts.rst:292
+msgid "Extrude"
+msgstr "Extrusión"
+
+#: ../../source/config_parts.rst:294
+msgid "Define parts by extruding a sketch using the following syntax:"
+msgstr "Defina piezas extruyendo un boceto usando la siguiente sintaxis:"
+
+#: ../../source/config_parts.rst:319
+msgid "Sweep"
+msgstr "Barrido"
+
+#: ../../source/config_parts.rst:321
+msgid "Define parts by sweeping a sketch using the following syntax:"
+msgstr ""
+"Defina piezas mediante el barrido de un boceto usando la siguiente sintaxis:"
+
+#: ../../source/config_parts.rst:345
+msgid "References"
+msgstr "Referencias"
+
+#: ../../source/config_parts.rst:347
+msgid ""
+"It is also possible to declare new parts by referencing other parts that are "
+"already defined elsewhere."
+msgstr ""
+"También es posible declarar nuevas piezas referenciando otras piezas ya "
+"definidas en otro lugar."
+
+#: ../../source/config_parts.rst:351
+msgid "Method"
+msgstr "Método"
+
+#: ../../source/config_parts.rst:351
+msgid "Description"
+msgstr "Descripción"
+
+#: ../../source/config_parts.rst:353
+msgid "Alias"
+msgstr "Alias"
+
+#: ../../source/config_parts.rst:0
+msgid "Create a shallow"
+msgstr "Crea un clon superficial"
+
+#: ../../source/config_parts.rst:0
+msgid "clone of the"
+msgstr "de"
+
+#: ../../source/config_parts.rst:0
+msgid "existing part."
+msgstr "la pieza existente."
+
+#: ../../source/config_parts.rst:0
+msgid "For example, to"
+msgstr "Por ejemplo, para"
+
+#: ../../source/config_parts.rst:0
+msgid "make it easier to"
+msgstr "facilitar su"
+
+#: ../../source/config_parts.rst:0
+msgid "reference it locally."
+msgstr "referencia local."
+
+#: ../../source/config_parts.rst:360
+msgid "Enrich"
+msgstr "Enrich"
+
+#: ../../source/config_parts.rst:0
+msgid "Create an opinionated"
+msgstr "Crea una alternativa"
+
+#: ../../source/config_parts.rst:0
+msgid "alternative to the"
+msgstr "personalizada a la"
+
+#: ../../source/config_parts.rst:0
+msgid "existing part by"
+msgstr "pieza existente"
+
+#: ../../source/config_parts.rst:0
+msgid "initializing some of"
+msgstr "inicializando algunos de"
+
+#: ../../source/config_parts.rst:0
+msgid "its parameters, and"
+msgstr "sus parámetros, y"
+
+#: ../../source/config_parts.rst:0
+msgid "overriding any of its"
+msgstr "anulando cualquiera de"
+
+#: ../../source/config_parts.rst:0
+msgid "properties. For"
+msgstr "sus propiedades. Por"
+
+#: ../../source/config_parts.rst:0
+msgid "example, to avoid"
+msgstr "ejemplo, para evitar"
+
+#: ../../source/config_parts.rst:0
+msgid "passing the same set"
+msgstr "pasar el mismo conjunto"
+
+#: ../../source/config_parts.rst:0
+msgid "of parameters many times."
+msgstr "de parámetros muchas veces."
+
+#: ../../source/config_parts.rst:372
+msgid ""
+"Both are references rather than parts of their own. An ``enrich`` resolves "
+"to the *instance* of the object it points at that has the values it asks for "
+"-- the same object PartCAD produces for ``<name>;<param>=<value>`` -- so "
+"that instance belongs to the package declaring the source, and one instance "
+"serves every enrich, in any package, that asks for the same values. An "
+"``alias`` resolves to the object itself."
+msgstr ""
+
+#: ../../source/config_parts.rst:379
+msgid ""
+"That is also what the shape cache is keyed on: a reference takes the key of "
+"what it points at, so the geometry is stored once however many references "
+"lead to it rather than once per reference. A reference that moves or scales "
+"what it points at hands back different geometry and so keys differently -- "
+"on the source's key, plus what it adds."
+msgstr ""
+
+#: ../../source/config_parts.rst:385
+msgid ""
+"Because asking for a value is asking for the instance that has it, and an "
+"instance is named ``<name>;<param>=<value>,...``, a ``with:`` value may not "
+"contain ``,``, ``;`` or ``=``: such a value could not be named. The same "
+"holds for what a parameter declares as its ``default:`` or offers in its "
+"``enum:``."
+msgstr ""
+
+#: ../../source/config_parts.rst:390
+msgid ""
+"An enrich says which values it wants, and nothing about how the object is "
+"built. ``path``, the requirements, the sandbox versions, the inputs of the "
+"types that build one object out of another -- and ``parameters:``, which "
+"``with:`` is the way to state -- belong to the declaration of the object "
+"itself. Declaring one of them on an enrich is reported as ignored, and the "
+"object it produces is the one it would have produced without it."
+msgstr ""
+
+#: ../../source/config_parts.rst:397
+msgid ""
+"Both are available for :ref:`sketches` and :ref:`assemblies` too, spelled "
+"the same way."
+msgstr ""
+
+#: ../../source/config_parts.rst:403
+msgid "Part types the package defines itself"
+msgstr ""
+
+#: ../../source/config_parts.rst:405
+msgid ""
+"The types above are the ones PartCAD implements. A package can also declare "
+"a type of its own, in a ``partTypes`` section, and then build parts with it. "
+"This is worth doing when a family of parts is produced the same way every "
+"time -- generated from a table, fetched from a catalogue, built by a "
+"modelling helper the package already has -- and the difference between them "
+"is a handful of parameters rather than a script each."
+msgstr ""
+
+#: ../../source/config_parts.rst:427
+msgid ""
+"``kind`` is ``wrapper``, which is the default and currently the only kind. "
+"Its ``path`` (``<name>.py`` if left out) is a Python script that PartCAD "
+"runs in the sandbox once per part, with the part's ``request`` in its "
+"globals -- the resolved ``parameters`` among them -- and which leaves the "
+"geometry in a global ``output``:"
+msgstr ""
+
+#: ../../source/config_parts.rst:441
+msgid ""
+"Because the script runs in a sandbox it may import OCP, build123d or "
+"CadQuery; ``pythonRequirements`` on the ``partType`` says what that sandbox "
+"needs, exactly as it does for a package. This is the same mechanism as a "
+"custom output implementation (see :ref:`output-files`), pointed at building "
+"a shape rather than writing a file."
+msgstr ""
+
+#: ../../source/config_parts.rst:447
+msgid ""
+"A ``type`` beginning with ``:`` names a ``partType`` of the part's own "
+"package and is expanded to ``<package path>:<name>`` when the package is "
+"loaded. Write the package path out to use another package's type, which is "
+"what makes these shareable: a package that declares a ``partType`` is a "
+"package other people can import and build parts with. A ``partType`` is "
+"listed like any other object but is never a shape in its own right -- it is "
+"how parts are made, not one of them."
+msgstr ""
+
+#: ../../source/config_parts.rst:454
+msgid ""
+"See ``examples/produce_part_wrapper`` for the whole of the example above."
+msgstr ""
+
+#: ../../source/config_parts.rst:456
+msgid ""
+"Should PartCAD implement a type natively that you find yourself writing "
+"again and again, please file an issue on GitHub or write to `support@partcad."
+"org <mailto:support@partcad.org>`_."
+msgstr ""
+
+#: ../../source/config_parts.rst:463
+msgid "Parameters"
+msgstr "Parámetros"
+
+#: ../../source/config_parts.rst:465
+msgid ""
+"Parameters are **inputs**. They are a request made of the object type that "
+"produces the part - the ``width`` a CadQuery script extrudes to, the "
+"``tolerance`` a mesh is faceted at - and they only mean anything if that "
+"type accepts them. Two parts that differ in a parameter are different "
+"shapes, so a parameter is part of what the shape cache is keyed on."
+msgstr ""
+
+#: ../../source/config_parts.rst:471
+msgid ""
+"What comes back out is :ref:`properties`, and the two are not the same thing "
+"even where they share a name: ``parameters.material`` asks for a part to be "
+"made of something, and ``properties.material`` states what the part that "
+"came out is made of."
+msgstr ""
+
+#: ../../source/config_parts.rst:476
+msgid ""
+"Most parameters are the part's own invention. A script may call one whatever "
+"it likes, and nothing outside that script knows what it means, so PartCAD "
+"lets a part declare any name it wants. A few are **object-type parameters** "
+"instead: contributed by the part *type* rather than declared out of nothing, "
+"with a meaning PartCAD itself acts on. They are therefore only available on "
+"the types that can honour them. Today there are three - ``material``, "
+"``color`` and ``tolerance``."
+msgstr ""
+
+#: ../../source/config_parts.rst:484
+msgid ""
+"What decides which types accept them is whether the part is a single "
+"homogeneous body - one solid, made of one thing - because that is what has "
+"to be true for one ``material:``, one ``color:`` or one ``tolerance:`` to be "
+"true of the whole part. A mesh is one body: an STL file is a surface with "
+"nothing inside it to vary, and the only way it has a material at all is for "
+"somebody to say so. So is a solid built by a script, and so is one extruded "
+"from a single sketch. ``stl``, ``cadquery``, ``build123d``, ``sdf``, "
+"``scad`` and ``extrude`` accept all three."
+msgstr ""
+
+#: ../../source/config_parts.rst:493
+msgid ""
+"A STEP file is not one body. It can carry many solids, each already stating "
+"a material and a colour of its own, and naming one for the file would be a "
+"claim about a part the file itself describes better. ``step`` rejects them, "
+"and so does ``kicad``, which is a STEP file behind a footprint. What such a "
+"part is made of belongs under :ref:`properties`, where a shape says what it "
+"turned out to be rather than what was asked of it. How precisely it has to "
+"be made is a separate question and has an answer of its own, below: see :ref:"
+"`tolerance-field`."
+msgstr ""
+
+#: ../../source/config_parts.rst:502
+msgid ""
+"Every other part type rejects them too, but for a different reason: whether "
+"it should accept them has not been decided yet, and answering \"no\" until "
+"somebody decides leaves the question open rather than settling it by "
+"accident."
+msgstr ""
+
+#: ../../source/config_parts.rst:506
+msgid ""
+"Declaring one of these under ``parameters:`` of a type that does not accept "
+"it is an error, not a warning. It costs the package that one part - the rest "
+"of the package loads and builds as usual - and the command that found it "
+"reports a failure. No other parameter name is restricted anywhere: what is "
+"policed is the handful of names PartCAD gives a meaning to, not the right to "
+"declare parameters. It is the parameter's *name* that is policed, too, and "
+"not the shape of its declaration - any parameter may carry ``color:`` and "
+"``material:`` fields of its own describing what one of its values looks "
+"like, whatever the part type."
+msgstr ""
+
+#: ../../source/config_parts.rst:516
+msgid ""
+"``tolerance`` is the one of the three that has a default, ``0.0``: it reads "
+"back as that on any type that accepts it, whether or not a part declares "
+"one. The default is applied when the value is read and is never written into "
+"the part's ``parameters:`` section, because that section is part of what the "
+"shape cache is keyed on - writing a default in would move the cache key of "
+"every part that never mentioned a tolerance, for a value nobody set. A "
+"tolerance somebody did declare keys the cache like any other input, because "
+"it is one."
+msgstr ""
+
+#: ../../source/config_parts.rst:524
+msgid ""
+"A tolerance of ``0.0`` means nobody said. It reads as a demand for perfect "
+"precision, which is not something a manufacturer can be asked for, so :doc:"
+"`pc test <cli>` fails a part that is going to be *made* and has no tolerance "
+"- including a part reached through an assembly in the package. A part that "
+"is bought rather than made is not asked: it comes as it comes."
+msgstr ""
+
+#: ../../source/config_parts.rst:530
+msgid ""
+"A CadQuery or build123d script is handed every parameter the part declares, "
+"each as a variable of the same name, and the script has to assign that name "
+"at its own top level for the value to land anywhere - a parameter the script "
+"never mentions is a parameter nobody will read, so naming one is an error "
+"and usually a typo. Object-type parameters are the one exception, because "
+"the part may be required to declare one the script has no use for: a script "
+"that assigns ``material`` still receives the declared material, and a script "
+"that does not mention it is left alone rather than refused. Nothing else is "
+"forgiven. An SDF script takes its parameters differently - they are "
+"prepended to it as assignments - so this never arose there."
+msgstr ""
+
+#: ../../source/config_parts.rst:541
+msgid ""
+"Each part may have a list of parameters that are passed into the scripts to "
+"modify the part. The parameters can be of types ``string``, ``float``, "
+"``int`` and ``bool``. The parameter values can be restricted by specifying "
+"the list of possible values in ``enum``. The initial parameter value is set "
+"using ``default``."
+msgstr ""
+"Cada pieza puede tener una lista de parámetros que se pasan a los scripts "
+"para modificar la pieza. Los parámetros pueden ser de tipos ``string``, "
+"``float``, ``int`` y ``bool``. Los valores de los parámetros se pueden "
+"restringir especificando la lista de valores posibles en ``enum``. El valor "
+"inicial del parámetro se establece usando ``default``."
+
+#: ../../source/config_parts.rst:559
+msgid ""
+"There are several parameter names that are reserved for values used in "
+"visualization, simulation calculations and, if applicable, manufacturing "
+"(also referred to as ``MCFTT parameters`` using their first letters):"
+msgstr ""
+"Hay varios nombres de parámetro reservados para valores usados en "
+"visualización, cálculos de simulación y, si corresponde, fabricación "
+"(también llamados ``parámetros MCFTT`` por sus iniciales en inglés):"
+
+#: ../../source/config_parts.rst:563
+msgid "``material``"
+msgstr "``material``"
+
+#: ../../source/config_parts.rst:565
+msgid ""
+"Must point at an object of type ``material``, as ``<package>:<name>``. Some "
+"of them are defined in ``//pub/std/manufacturing/material``; see :ref:"
+"`materials` for declaring your own. This one is an object-type parameter, so "
+"it may only be declared on the part types listed above. When a request is "
+"made to a manufacturing API, a close enough material is selected from the "
+"materials provided by the manufacturer. The responsibility to select the "
+"right material is on the implementation of the manufacturing API (the "
+"``provider`` object in PartCAD)."
+msgstr ""
+
+#: ../../source/config_parts.rst:575
+msgid "``color``"
+msgstr "``color``"
+
+#: ../../source/config_parts.rst:577
+msgid "This one is an object-type parameter too, with the same restriction."
+msgstr ""
+
+#: ../../source/config_parts.rst:579
+msgid "**Not implemented yet. Use color names for now.**"
+msgstr "**Aún no implementado. Por ahora, use nombres de color.**"
+
+#: ../../source/config_parts.rst:581
+msgid "``finish``"
+msgstr "``finish``"
+
+#: ../../source/config_parts.rst:583
+msgid "Optional. Can be omitted for no finish."
+msgstr "Opcional. Se puede omitir si no hay acabado."
+
+#: ../../source/config_parts.rst:585 ../../source/config_parts.rst:591
+msgid "**Not implemented yet.**"
+msgstr "**Aún no implementado.**"
+
+#: ../../source/config_parts.rst:587
+msgid "``texture``"
+msgstr "``texture``"
+
+#: ../../source/config_parts.rst:589
+msgid "Optional. Can be omitted for no texture."
+msgstr "Opcional. Se puede omitir si no hay textura."
+
+#: ../../source/config_parts.rst:593
+msgid "``tolerance``"
+msgstr "``tolerance``"
+
+#: ../../source/config_parts.rst:595
+msgid ""
+"An object-type parameter as well, and the one with a default: omitting it is "
+"the same as writing ``0.0``, which is a claim to perfect precision and is "
+"what ``pc test`` rejects on a part that is to be manufactured. Give it a "
+"real value on anything you intend to have made."
+msgstr ""
+
+#: ../../source/config_parts.rst:600
+msgid ""
+"``step`` and ``kicad`` parts state this as a ``tolerance:`` field instead of "
+"as a parameter, and their file may state it for them; see :ref:`tolerance-"
+"field`."
+msgstr ""
+
+#: ../../source/config_parts.rst:604
+msgid ""
+"If the part has variable MCFTT parameters depending on the surface, then "
+"either this part must be broken down into multiple parts, or the values must "
+"be derived from CAD files/scripts (not implemented yet). In the latter case "
+"the part will not be eligible for manufacturing features, unless a specific "
+"manufacturing service provider recognizes (vendor,SKU) values and have "
+"received corresponding manufacturing instructions out-of-band."
+msgstr ""
+"Si la pieza tiene parámetros MCFTT variables según la superficie, entonces "
+"esta pieza debe dividirse en varias piezas, o los valores deben derivarse de "
+"archivos/scripts CAD (aún no implementado). En este último caso, la pieza no "
+"será elegible para funcionalidades de fabricación, a menos que un proveedor "
+"de servicios de fabricación específico reconozca los valores (vendor, SKU) y "
+"haya recibido instrucciones de fabricación correspondientes fuera de banda."
+
+#: ../../source/config_parts.rst:611
+msgid ""
+"The MCFTT parameters are not required and have no impact on parts that have "
+"``vendor`` and ``sku`` set and that are procured using providers of the type "
+"``store``."
+msgstr ""
+"Los parámetros MCFTT no son obligatorios y no tienen impacto en las piezas "
+"que tienen ``vendor`` y ``sku`` establecidos y que se adquieren usando "
+"proveedores del tipo ``store``."
+
+#: ../../source/config_parts.rst:615
+msgid ""
+"The MCFTT parameters are a request, and the request is a manufacturing one: "
+"they say what the part should be made of, and how well, for the provider "
+"that will make it. They are not a claim about a shape that exists. A part "
+"read from a STEP file that already states its material does not answer them, "
+"and the answer is not what an exporter writes into a file. That is :ref:"
+"`properties`, below."
+msgstr ""
+
+#: ../../source/config_parts.rst:624
+msgid "Tolerance on the types that state it in the file"
+msgstr ""
+
+#: ../../source/config_parts.rst:626
+msgid ""
+"``step`` and ``kicad`` reject the ``tolerance`` *parameter*, for the reason "
+"above, which would leave them with no way to say how precisely a part has to "
+"be made and nothing to answer :doc:`pc test <cli>` with. They have one, "
+"because a STEP file has somewhere of its own to say it: AP242 carries the "
+"whole of GD&T - a plus/minus tolerance on a dimension, a flatness or a "
+"position tolerance on a feature - so PartCAD reads the file."
+msgstr ""
+
+#: ../../source/config_parts.rst:633
+msgid ""
+"Plenty of STEP files carry none of it. For them - and only on the types "
+"whose file could have carried it - the part declaration takes a ``tolerance:"
+"`` **field** of its own:"
+msgstr ""
+
+#: ../../source/config_parts.rst:644
+msgid ""
+"It is a field rather than a parameter because it asks nothing of the type "
+"that produces the shape: the file is read the same way whether or not it is "
+"there, and nothing is built differently for it. It is accepted only on the "
+"types that take it; declaring it anywhere else is the same per-object error "
+"that declaring a rejected parameter is, and says ``field`` rather than "
+"``parameter`` so that the two are not confused. An ``alias`` or an "
+"``enrich`` may carry it and ignores it, like everything else it carries that "
+"describes how its source is built."
+msgstr ""
+
+#: ../../source/config_parts.rst:653
+msgid ""
+"There are then three places a part's tolerance can come from, and PartCAD "
+"reads them in this order:"
+msgstr ""
+
+#: ../../source/config_parts.rst:656
+msgid ""
+"The ``tolerance:`` field, where the type takes one. It outranks the file: it "
+"is written precisely because the file did not say, and a file that later "
+"starts saying something else is a change to look at rather than one to adopt "
+"silently."
+msgstr ""
+
+#: ../../source/config_parts.rst:660
+msgid ""
+"What the file itself states. A file that states one tolerance answers with "
+"it, whatever unit it is written in - a file in inches is read as inches."
+msgstr ""
+
+#: ../../source/config_parts.rst:662
+msgid ""
+"The ``tolerance`` parameter, for the homogeneous types that accept it, with "
+"its default of ``0.0``."
+msgstr ""
+
+#: ../../source/config_parts.rst:665
+msgid ""
+"A file that tolerances several features differently has no single tolerance, "
+"and PartCAD does not invent one: the tightest overstates what most of the "
+"part needs, the loosest understates what one of its features does, and an "
+"average is true of nothing. It reads back as ``NaN`` instead, which means "
+"*tolerated, feature by feature* - and ``pc test`` accepts it. Such a part "
+"does say how precisely it has to be made, in more detail than one number "
+"holds, and the file is what goes to the manufacturer."
+msgstr ""
+
+#: ../../source/config_parts.rst:673
+msgid ""
+"What ``pc test`` rejects is still only a part that could have said and did "
+"not: ``0.0`` on a type that takes the field or the parameter. A part whose "
+"type takes neither and whose file states nothing is reported differently "
+"again, naming the type - that is a fact about the part type rather than "
+"about the declaration."
+msgstr ""
+
+#: ../../source/config_parts.rst:678
+msgid ""
+"The geometric uncertainty every STEP file carries "
+"(``UNCERTAINTY_MEASURE_WITH_UNIT``, typically ``1e-07`` mm) is deliberately "
+"not read. It is the precision the geometry was written to, not a tolerance "
+"anybody is being held to, and reading it would give every STEP file ever "
+"exported a manufacturing tolerance no shop can work to."
+msgstr ""
+
+#: ../../source/config_parts.rst:687
+msgid "Properties"
+msgstr ""
+
+#: ../../source/config_parts.rst:689
+msgid ""
+"Properties are **outputs**. They are what instantiating the object produced "
+"- what the resulting shape reports about itself - and they are declared "
+"where the shape cannot report them on its own. A mesh has no material and no "
+"mass, so the only way a part read from an STL has either is to say so; a "
+"URDF import fills this section in from what the file already stated."
+msgstr ""
+
+#: ../../source/config_parts.rst:707
+msgid ""
+"Assemblies take the same section. Nothing in it takes part in the shape "
+"cache - it says nothing about the geometry - which also means nothing "
+"notices when an edit to the CAD invalidates it. It does travel with the "
+"shape: a property declared on a part is carried on the shape that part "
+"produces, through the cache and through every assembly that embeds it, so an "
+"export of a whole robot finds each link's properties on the link. That is "
+"also where the properties inherit the caching a name and a placement already "
+"have: an object's own are stamped on from its configuration every time it is "
+"read, but the ones on the parts *inside* a cached assembly are part of that "
+"assembly's cached tree, and editing them does not invalidate it any more "
+"than renaming a part does. ``pc system reset``, or a change to something the "
+"assembly does hash, is what picks them up."
+msgstr ""
+
+#: ../../source/config_parts.rst:719
+msgid ""
+"Every ``physics`` property has a PartCAD name and a PartCAD unit, and the "
+"set of them is closed. Lengths are millimetres and angles degrees, as "
+"everywhere else in PartCAD; everything else is SI, so a mass is kilograms "
+"and an inertia tensor kg·m². Nothing is stored under the name of the format "
+"it came from: a URDF import reads ``<inertial>`` and the friction and "
+"contact settings of a ``<gazebo>`` block into these properties one value at "
+"a time, and a URDF export writes each of them back into the element that "
+"states it. A URDF that says something PartCAD has no property for stops the "
+"import instead of being carried opaquely, and a property PartCAD holds that "
+"URDF cannot state is reported when it is exported. See :doc:`simulation`."
+msgstr ""
+
+#: ../../source/config_parts.rst:730
+msgid ""
+"A file type that has a way to state these declares ``properties: true`` in "
+"its ``export:`` section, and is handed them keyed by the full name of the "
+"shape they belong to. URDF is the one built-in format that does."
+msgstr ""

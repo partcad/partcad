@@ -1,0 +1,537 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/config_package.rst:3
+msgid "Packages and dependencies"
+msgstr ""
+
+#: ../../source/config_package.rst:9
+msgid "Packages"
+msgstr "包"
+
+#: ../../source/config_package.rst:11
+msgid ""
+"The package is defined using the configuration file ``partcad.yaml`` placed "
+"in the package folder. Besides the package properties and, optionally, a "
+"list of imported dependencies, ``partcad.yaml`` declares a list of :ref:"
+"`objects` contained in this package."
+msgstr ""
+"包是通过放置在包目录中的配置文件 ``partcad.yaml`` 来定义的。除了包的属性、以"
+"及可选的已导入依赖列表之外， ``partcad.yaml`` 还声明了此包中包含的 :ref:"
+"`objects` 列表。"
+
+#: ../../source/config_package.rst:58
+msgid "The package name"
+msgstr "包名称"
+
+#: ../../source/config_package.rst:60
+msgid ""
+"A package is always addressed by its **location** -- the package path at "
+"which it was loaded, derived from its parent. For example, a package in the "
+"subfolder ``gobilda`` of the package ``//vendor`` is addressed as ``//vendor/"
+"gobilda`` regardless of what it declares about itself."
+msgstr ""
+"一个包始终通过它的 **location** （位置）来寻址——也就是它被加载时所处的包路"
+"径，该路径由其父包推导得出。例如，包 ``//vendor`` 的子文件夹 ``gobilda`` 中的"
+"包会被寻址为 ``//vendor/gobilda`` ，而不管它对自身作何声明。"
+
+#: ../../source/config_package.rst:65
+msgid ""
+"The optional ``name`` field declares the package's **identity**: the package "
+"path at which the package expects to be seen. It only takes effect when the "
+"package is loaded as the root (the top-most package of the current context) "
+"-- this lets a package be developed standalone using the very same package "
+"path its consumers will see it at. In every other case ``name`` does not "
+"change where the package is loaded; the location always wins."
+msgstr ""
+"可选的 ``name`` 字段声明了包的 **identity** （身份）：也就是该包期望被看到时"
+"所处的包路径。它只有在包作为根包（当前上下文中最顶层的包）被加载时才会生效——"
+"这使得一个包可以独立开发，并使用其使用者最终看到它时所用的完全相同的包路径。"
+"在其他所有情况下， ``name`` 都不会改变包被加载的位置；始终是位置说了算。"
+
+#: ../../source/config_package.rst:72
+msgid ""
+"This makes it safe to vendor a package -- copy it into your own package tree "
+"to drop a dependency or to follow your own naming convention:"
+msgstr ""
+"这使得对一个包进行 vendoring（内联复制）是安全的——把它复制到你自己的包树中，"
+"以去掉某个依赖，或遵循你自己的命名约定："
+
+#: ../../source/config_package.rst:75
+msgid ""
+"The vendored copy is loaded at its location in your tree, not at the "
+"``name`` it declares. If the same package is vendored at two locations (even "
+"at two different versions), each is an independent instance, addressed at "
+"its own location, and the two never interact."
+msgstr ""
+"被内联复制的副本会在它于你的包树中所处的位置被加载，而不是在它所声明的 "
+"``name`` 处。如果同一个包被内联复制到两个位置（甚至是两个不同的版本），那么每"
+"一个都是独立的实例，各自按其自身位置寻址，两者之间从不相互影响。"
+
+#: ../../source/config_package.rst:79
+msgid ""
+"References the package makes to itself using its declared ``name`` are "
+"automatically redirected to the location where the copy was actually loaded. "
+"A vendored copy therefore uses itself, instead of silently pulling in "
+"another copy from the package path it was originally taken from."
+msgstr ""
+"包使用其所声明的 ``name`` 对自身所做的引用，会被自动重定向到该副本实际被加载"
+"的位置。因此，被内联复制的副本会使用它自己，而不是悄悄地从它最初被取出的包路"
+"径再引入另一个副本。"
+
+#: ../../source/config_package.rst:84
+msgid ""
+"As a consequence, a vendored package cannot reference the original copy of "
+"itself by its declared ``name``: that package path always resolves to the "
+"local instance. This is intentional -- referencing two copies of the same "
+"package at once is almost always a mistake, and the alternative would be an "
+"implicit, easily-missed dependency on the upstream package."
+msgstr ""
+"因此，被内联复制的包无法通过其所声明的 ``name`` 来引用它自身的原始副本：那个"
+"包路径始终会解析到本地实例。这是有意为之的——同时引用同一个包的两个副本几乎总"
+"是一个错误，而另一种做法则会造成对上游包的一种隐式的、极易被忽视的依赖。"
+
+#: ../../source/config_package.rst:94
+msgid "Templates"
+msgstr ""
+
+#: ../../source/config_package.rst:96
+msgid ""
+"``partcad.yaml`` is a Jinja2 template rendered to YAML before it is parsed, "
+"so a package can generate declarations rather than write every one out. "
+"These names are available while it is being rendered:"
+msgstr ""
+
+#: ../../source/config_package.rst:104
+msgid "Name"
+msgstr ""
+
+#: ../../source/config_package.rst:105
+msgid "What it is"
+msgstr ""
+
+#: ../../source/config_package.rst:106
+msgid "``package_name``"
+msgstr ""
+
+#: ../../source/config_package.rst:107
+msgid "The package path this package is being loaded at."
+msgstr ""
+
+#: ../../source/config_package.rst:108
+msgid "``partcad_version``"
+msgstr ""
+
+#: ../../source/config_package.rst:109
+msgid "The version of PartCAD doing the rendering, whole: ``\"0.8.77\"``."
+msgstr ""
+
+#: ../../source/config_package.rst:110
+msgid ""
+"``partcad_version_major``, ``partcad_version_minor``, "
+"``partcad_version_build``"
+msgstr ""
+
+#: ../../source/config_package.rst:111
+msgid "The same version as its three numbers."
+msgstr ""
+
+#: ../../source/config_package.rst:112
+msgid "``partcad_version_at_least(...)``"
+msgstr ""
+
+#: ../../source/config_package.rst:113
+msgid ""
+"Whether that version is the one given or newer. Takes a string, "
+"``partcad_version_at_least(\"0.8.77\")``, or the numbers themselves, "
+"``partcad_version_at_least(0, 8, 77)``."
+msgstr ""
+
+#: ../../source/config_package.rst:116
+msgid "``PI``/``M_PI``, ``SQRT_2``, ``SQRT_3``, ``SQRT_5``"
+msgstr ""
+
+#: ../../source/config_package.rst:117
+msgid "The constants a CAD file keeps reaching for."
+msgstr ""
+
+#: ../../source/config_package.rst:118
+msgid "``INCH``/``INCHES``, ``FOOT``/``FEET``"
+msgstr ""
+
+#: ../../source/config_package.rst:119
+msgid "Millimetres per imperial unit: 25.4 and 304.8."
+msgstr ""
+
+#: ../../source/config_package.rst:122
+msgid "Serving two PartCADs at once"
+msgstr ""
+
+#: ../../source/config_package.rst:124
+msgid ""
+"A package that wants a feature this release has and the last one did not has "
+"a choice: raise its ``partcad:`` requirement, which takes the package away "
+"from everyone who has not updated, or write both forms and pick between them."
+msgstr ""
+
+#: ../../source/config_package.rst:136
+msgid ""
+"A PartCAD older than these names defines none of them, and a template that "
+"names one there fails to render at all. So a package that has to work on "
+"those asks first -- Jinja2's ``and`` short-circuits, so the call is never "
+"made where the name is absent:"
+msgstr ""
+
+#: ../../source/config_package.rst:145
+msgid ""
+"The comparison is made one number at a time, which is the whole point of "
+"having it: ``0.8.9`` is *older* than ``0.8.77``, and every comparison of the "
+"strings says the opposite."
+msgstr ""
+
+#: ../../source/config_package.rst:151
+msgid ""
+"``partcad_version_at_least`` is a function rather than a Jinja2 macro, which "
+"is what it looks like it should be. A macro always renders to *text*, so a "
+"false one comes back as the string ``\"False\"`` -- which is not empty, and "
+"so is true to ``{% if %}``. A comparison that reads as its own opposite is "
+"not a thing to leave lying in a template."
+msgstr ""
+
+#: ../../source/config_package.rst:159
+msgid "Validation"
+msgstr ""
+
+#: ../../source/config_package.rst:161
+msgid ""
+"``partcad.yaml`` is checked against a JSON schema (``src/partcad_utils/"
+"schema/partcad.json``) that describes everything below: which sections "
+"exist, which fields each kind of declaration takes, and which of them "
+"exclude or require one another."
+msgstr ""
+
+#: ../../source/config_package.rst:166
+msgid "Run the check over a package, or over the file alone:"
+msgstr ""
+
+#: ../../source/config_package.rst:174
+msgid ""
+"Every finding names the line and column it came from. ``partcad.yaml`` is a "
+"Jinja2 template rendered to YAML before it is parsed (see ``includePaths`` "
+"below), so the checker masks each template construct before parsing rather "
+"than rendering the file, which would need the values the template is waiting "
+"for. It is the same checker :doc:`ASSY files <assy>` go through, and the "
+"`PartCAD extension for VS Code <https://marketplace.visualstudio.com/items?"
+"itemName=PartCAD.partcad-official>`_ runs it on the open document -- so a "
+"mistyped section is underlined as it is typed, including in the file that is "
+"stopping the package from loading at all. Set ``partcad.lint.enabled`` to "
+"``false`` to turn that off."
+msgstr ""
+
+#: ../../source/config_package.rst:187
+msgid "Dependencies"
+msgstr "依赖"
+
+#: ../../source/config_package.rst:189
+msgid "Here are some examples of a dependency declaration in ``partcad.yaml``:"
+msgstr "下面是 ``partcad.yaml`` 中依赖声明的一些示例："
+
+#: ../../source/config_package.rst:195
+msgid "Method"
+msgstr "方式"
+
+#: ../../source/config_package.rst:195
+msgid "Example"
+msgstr "示例"
+
+#: ../../source/config_package.rst:0
+msgid "Local package"
+msgstr "本地包"
+
+#: ../../source/config_package.rst:0
+msgid "(in the same"
+msgstr "（位于同一"
+
+#: ../../source/config_package.rst:0
+msgid "source code"
+msgstr "源代码"
+
+#: ../../source/config_package.rst:0
+msgid "repository)"
+msgstr "仓库中）"
+
+#: ../../source/config_package.rst:203
+msgid "GIT repository :raw-html:`<br />` (HTTPS, SSH)"
+msgstr "GIT 仓库 :raw-html:`<br />` （HTTPS、SSH）"
+
+#: ../../source/config_package.rst:210
+msgid "Hosted tar ball :raw-html:`<br />` (HTTPS)"
+msgstr "托管的 tar 包 :raw-html:`<br />` （HTTPS）"
+
+#: ../../source/config_package.rst:217
+msgid ""
+"Each dependency becomes a subpackage of the current package. All subfolders "
+"of the current package are considered subpackages (of the type `local`) if "
+"they contain a ``partcad.yaml`` file. Subfolders do not need to be "
+"explicitly declared as a dependency, but may be declared to provide a more "
+"detailed description."
+msgstr ""
+"每个依赖都会成为当前包的一个子包。当前包的所有子文件夹，只要包含 ``partcad."
+"yaml`` 文件，都会被视为子包（类型为 `local` ）。子文件夹不需要被显式声明为依"
+"赖，但也可以进行声明，以便提供更详细的描述。"
+
+#: ../../source/config_package.rst:222
+msgid "External packages"
+msgstr "外部包"
+
+#: ../../source/config_package.rst:224
+msgid ""
+"A dependency of type ``external`` is a package whose contents are served by "
+"a **repository plugin** instead of being read from a folder (``local``) or a "
+"remote archive (``git``, ``tar``). Its ``plugin`` field references a "
+"repository declared in the ``repositories`` section (see :ref:"
+"`repositories`):"
+msgstr ""
+"类型为 ``external`` 的依赖是这样一种包：它的内容由一个 **仓库插件** 提供，而"
+"不是从文件夹（ ``local`` ）或远程归档（ ``git`` 、 ``tar`` ）中读取。它的 "
+"``plugin`` 字段引用了在 ``repositories`` 部分中声明的一个仓库（参见 :ref:"
+"`repositories` ）："
+
+#: ../../source/config_package.rst:240
+msgid ""
+"The package's objects (parts, sketches, assemblies, ...), its child "
+"packages, and its metadata are all fetched from the plugin on demand, rather "
+"than being enumerated up front. This keeps loading cheap even when the "
+"repository is large or remote: a part is fetched only when it is actually "
+"used."
+msgstr ""
+"该包的对象（零件、草图、装配体……）、它的子包以及它的元数据，都是按需从插件获"
+"取的，而不是预先全部枚举出来。这样即使仓库很大或位于远程，加载也依然开销很"
+"低：只有在某个零件实际被使用时才会去获取它。"
+
+#: ../../source/config_package.rst:245
+msgid ""
+"An external package can host a hierarchy. When its children are listed, the "
+"plugin reports child package names; each child is imported as another "
+"external package backed by the same plugin, with a ``subfolder`` that scopes "
+"its requests within the repository. In this way one plugin can serve an "
+"entire tree of packages, each with its own sketches, parts, assemblies, "
+"providers and further children."
+msgstr ""
+"一个外部包可以承载一个层级结构。当列出它的子项时，插件会报告各子包的名称；每"
+"个子包都会作为另一个由同一插件支撑的外部包被导入，并带有一个 ``subfolder`` ，"
+"用于将其请求限定在仓库内的相应范围。通过这种方式，一个插件可以服务于整棵包"
+"树，其中每个包都有自己的草图、零件、装配体、提供方以及更深一层的子项。"
+
+#: ../../source/config_package.rst:252
+msgid ""
+"Non-null responses from a plugin are cached on disk, keyed by the plugin "
+"reference and the request; a request the plugin has no answer for is "
+"remembered only for the run that made it, and is put to the plugin again "
+"after a restart. The same key also names the directory the plugin's own "
+"files are materialized into, and a file already there is served without "
+"asking the plugin again."
+msgstr ""
+
+#: ../../source/config_package.rst:258
+msgid ""
+"The cache does not know when the plugin's code changes, so a plugin that "
+"starts answering differently - a new field on every part it serves, or the "
+"same parts measured another way - would keep being served the stale, pre-"
+"change entries. The plugin says so itself, with a module-level constant in "
+"its script::"
+msgstr ""
+
+#: ../../source/config_package.rst:268
+msgid ""
+"It is folded into the cache location, so raising it moves the whole "
+"repository (and every child in its hierarchy) to a fresh cache namespace at "
+"once. It defaults to ``0`` when the script names none, and a repository with "
+"no script of its own - an ``enrich`` one, which rewrites another "
+"repository's answers - has no code to version and stays at ``0``."
+msgstr ""
+
+#: ../../source/config_package.rst:274
+msgid ""
+"The number lives in the plugin because it is the plugin's own business. A "
+"package that imports a plugin-backed library has no way of knowing that the "
+"library now measures its parts differently, and should not have to be told: "
+"it would have to be told again in every package that imports it, and each of "
+"them would be a place to forget. So this is not a field of the dependency "
+"that imports the plugin, and PartCAD reads it out of the script rather than "
+"asking for it - the answer is needed before the first question can be asked. "
+"The script is parsed, never executed."
+msgstr ""
+
+#: ../../source/config_package.rst:283
+msgid ""
+"See ``examples/plugin_repository_basic`` (a package backed by a local file), "
+"``examples/plugin_repository_full`` (backed by an HTTP endpoint) and "
+"``examples/plugin_repository_tree`` (a hierarchy of packages)."
+msgstr ""
+"参见 ``examples/plugin_repository_basic`` （一个由本地文件支撑的包）、 "
+"``examples/plugin_repository_full`` （由 HTTP 端点支撑）和 ``examples/"
+"plugin_repository_tree`` （一个包的层级结构）。"
+
+#: ../../source/config_package.rst:291
+msgid "Repositories"
+msgstr "仓库"
+
+#: ../../source/config_package.rst:293
+msgid ""
+"A repository plugin serves the contents of a package: its objects, its child "
+"packages and its metadata. It is what backs an ``external`` dependency (see "
+"`External packages`_)."
+msgstr ""
+"仓库插件负责提供一个包的内容：它的对象、它的子包以及它的元数据。它正是为 "
+"``external`` 依赖提供支撑的东西（参见 `External packages`_ ）。"
+
+#: ../../source/config_package.rst:297
+msgid ""
+"Repositories are declared in ``partcad.yaml`` using the following syntax:"
+msgstr "仓库在 ``partcad.yaml`` 中使用以下语法声明："
+
+#: ../../source/config_package.rst:311
+msgid ""
+"``enrich`` repositories are references to other repositories with some "
+"parameters modified to specific values."
+msgstr "``enrich`` 仓库是对其他仓库的引用，其中一些参数被修改为特定的值。"
+
+#: ../../source/config_package.rst:314
+msgid ""
+"``basic`` repositories are implemented as Python scripts, invoked the same "
+"way as provider scripts (via ``runpy``, with the input in the global "
+"``request`` and the output in the global ``output``). A repository script "
+"answers a single, generic key/value request:"
+msgstr ""
+"``basic`` 仓库以 Python 脚本的形式实现，其调用方式与提供方脚本相同（通过 "
+"``runpy`` ，输入放在全局的 ``request`` 中，输出放在全局的 ``output`` 中）。一"
+"个仓库脚本会响应单个通用的键/值请求："
+
+#: ../../source/config_package.rst:319
+msgid "`request[\"api\"] == \"get\"`"
+msgstr "`request[\"api\"] == \"get\"`"
+
+#: ../../source/config_package.rst:320
+msgid "`request[\"key\"]`: the key being requested"
+msgstr "`request[\"key\"]`：所请求的键"
+
+#: ../../source/config_package.rst:321
+msgid ""
+"`output[\"result\"]`: the value stored under that key (or ``null`` if "
+"unknown)"
+msgstr "`output[\"result\"]`：存储在该键之下的值（如果未知则为 ``null`` ）"
+
+#: ../../source/config_package.rst:323
+msgid ""
+"The keys address every kind of data uniformly, so serving a new kind of "
+"object or a new piece of metadata needs no new API:"
+msgstr ""
+"这些键以统一的方式对每一种数据进行寻址，因此提供一种新类型的对象或一项新的元"
+"数据都无需新的 API："
+
+#: ../../source/config_package.rst:326
+msgid ""
+"``objects/<kind>`` -- all objects of a kind, as ``{name: config, ...}``. The "
+"kinds are the ten in ``Project.OBJECT_KINDS``: ``material``, ``interface``, "
+"``sketch``, ``part``, ``assembly``, ``scene``, ``provider``, ``repository``, "
+"``software``, ``partType``"
+msgstr ""
+
+#: ../../source/config_package.rst:330
+msgid ""
+"``objects/<kind>/<name>`` -- a single object's config, fetched without "
+"listing the whole repository"
+msgstr "``objects/<kind>/<name>`` —— 单个对象的配置，无需列出整个仓库即可获取"
+
+#: ../../source/config_package.rst:332
+msgid "``deps`` -- the names of the child packages"
+msgstr "``deps`` —— 各子包的名称"
+
+#: ../../source/config_package.rst:333
+msgid ""
+"``meta`` -- package-level properties (``desc``, ``render``, "
+"``manufacturable``, ``suppliers``, ...), and ``objectKinds`` (see below)"
+msgstr ""
+
+#: ../../source/config_package.rst:335
+msgid ""
+"``files/<path>`` -- the base64-encoded content of a file an object "
+"references by ``path``. A plugin-backed package has no source tree, so a "
+"file-backed object's file is fetched from the plugin and materialized into "
+"the package's cache directory when the object is built."
+msgstr ""
+"``files/<path>`` —— 某个对象通过 ``path`` 引用的文件的 base64 编码内容。由插"
+"件支撑的包没有源代码树，因此在构建某个由文件支撑的对象时，其文件会从插件获"
+"取，并具体化到该包的缓存目录中。"
+
+#: ../../source/config_package.rst:340
+msgid ""
+"For a hierarchy, a child package's requests are prefixed with its "
+"``subfolder``: a child in ``motors`` asks for ``motors/objects/part``, "
+"``motors/deps`` and so on, all served by the same script."
+msgstr ""
+"对于层级结构，子包的请求会以它的 ``subfolder`` 作为前缀： ``motors`` 中的一个"
+"子包会请求 ``motors/objects/part`` 、 ``motors/deps`` 等等，全部由同一个脚本"
+"提供服务。"
+
+#: ../../source/config_package.rst:345
+msgid "Say which kinds a package has"
+msgstr ""
+
+#: ../../source/config_package.rst:347
+msgid ""
+"Every key is a separate run of the script, and a package has ten kinds of "
+"object. Something as ordinary as listing the packages that hold anything to "
+"look at asks after four of them, per package, and for a hierarchy of a "
+"hundred packages that is four hundred runs -- most of them to be told "
+"\"none\"."
+msgstr ""
+
+#: ../../source/config_package.rst:352
+msgid ""
+"A package's ``meta`` may therefore carry ``objectKinds``, the kinds that "
+"package holds at all:"
+msgstr ""
+
+#: ../../source/config_package.rst:359
+msgid ""
+"PartCAD then answers \"none\" for every other kind without asking. This "
+"narrows what is asked for and never what may be served: a plugin that lists "
+"a kind it turns out to have none of is simply asked a question it answers "
+"emptily, and a plugin that says nothing is asked about everything, as "
+"before. It is read out of the metadata PartCAD has already fetched and is "
+"never worth a request of its own, so a package reached on its own -- rather "
+"than through a traversal, which reads ``meta`` for every package as it goes "
+"-- is queried exactly as it was."
+msgstr ""
+
+#: ../../source/config_package.rst:367
+msgid ""
+"Responses are cached per key (in memory and on disk), so a repository that "
+"is slow or remote is queried as little as possible. See ``examples/"
+"plugin_repository_basic``, ``examples/plugin_repository_full`` (an HTTP-"
+"backed repository) and ``examples/plugin_repository_tree`` (a hierarchy)."
+msgstr ""
+"响应会按键进行缓存（在内存中和磁盘上），因此对于速度慢或位于远程的仓库，会尽"
+"可能少地查询它。参见 ``examples/plugin_repository_basic`` 、 ``examples/"
+"plugin_repository_full`` （一个由 HTTP 支撑的仓库）和 ``examples/"
+"plugin_repository_tree`` （一个层级结构）。"
