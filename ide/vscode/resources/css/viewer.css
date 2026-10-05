@@ -1152,3 +1152,26 @@ input.switch:focus-visible {
 .assembly-banner[hidden] {
     display: none;
 }
+
+/* A Build vs Buy line's name, when it opens the file the object is made from:
+   a button that looks like a link, the way VS Code draws one. */
+.bvb-table .source-link {
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-weight: 600;
+    color: var(--vscode-textLink-foreground);
+    text-align: left;
+    cursor: pointer;
+}
+
+.bvb-table .source-link:hover {
+    color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
+    text-decoration: underline;
+}
+
+.bvb-table .source-link:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+}

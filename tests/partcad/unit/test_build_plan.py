@@ -367,3 +367,18 @@ def test_a_part_whose_instructions_do_not_hold_up_cannot_be_built():
     assert panel["build"] is False
     assert panel["problems"] == ["No manufacturing tolerance is specified"]
     assert build_plan.is_missing(panel)
+
+
+def test_every_line_says_which_file_it_is_made_from():
+    """What the IDE opens when a line's name is clicked"""
+    import os
+
+    import partcad as pc
+
+    ctx = pc.init("examples")
+    logo = _tree(ctx, "assembly", "//produce_assembly_assy:logo")
+
+    assert logo["source"].endswith(os.path.join("produce_assembly_assy", "logo.assy"))
+    for line in _walk(logo):
+        assert line["source"] is None or (os.path.isabs(line["source"]) and os.path.exists(line["source"]))
+    assert any(line["source"] and line["kind"] == "part" for line in _walk(logo))

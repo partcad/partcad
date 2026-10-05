@@ -54,6 +54,11 @@ export function saveChoices(message: SaveChoicesMessage): void {
     vscode.postMessage(message);
 }
 
+/** Ask the host to open a source file in an editor; only the host can reach the file system. */
+export function openSource(path: string): void {
+    vscode.postMessage({ type: 'openSource', path });
+}
+
 /** Ask the host to save what a render tab is showing, wherever the user says. */
 export function saveRendered(tab: TabId): void {
     vscode.postMessage({ type: 'save', tab });

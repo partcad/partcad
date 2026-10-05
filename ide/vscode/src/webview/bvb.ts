@@ -311,6 +311,8 @@ export interface BvbCallbacks {
     onChange: (choices: Choices) => void;
     /** These lines have no thumbnail or measurements yet. */
     requestDetails: (objects: { name: string; kind: string }[]) => void;
+    /** A line's name was clicked: open the file it is made from. */
+    openSource: (path: string) => void;
 }
 
 /** The Build vs Buy table. */
@@ -456,7 +458,7 @@ export class BvbView {
         line.appendChild(picture);
 
         const name = el('td');
-        name.appendChild(el('span', 'name', row.name));
+        name.appendChild(sourceLink(row, this.callbacks.openSource));
         name.appendChild(el('span', 'badge', row.node.missing ? 'missing' : row.kind));
         if (row.node.desc) {
             name.appendChild(el('div', 'bvb-desc', row.node.desc));
@@ -508,4 +510,23 @@ function drawMissing(node: TreeNode): HTMLElement {
     const label = el('span', 'bvb-missing', 'Missing');
     label.title = `${MISSING_HINT}\n${missingReason(node)}`;
     return label;
+}
+
+/**
+ * A line's name: a link that opens the file the object is made from, where it
+ * has one, and plain text where it has none.
+ *
+ * A button styled as a link rather than an <a href>: the panel has nowhere for
+ * an href to go - its CSP forbids navigation - and the host is what opens
+ * files. A button is also what the keyboard reaches.
+ */
+function sourceLink(row: BvbRow, openSource: (path: string) => void): HTMLElement {
+    const source = row.node.source;
+    if (!source) {
+        return el('span', 'name', row.name);
+    }
+    const link = el('button', 'name source-link', row.name);
+    link.title = `Open ${source}`;
+    link.addEventListener('click', () => openSource(source));
+    return link;
 }

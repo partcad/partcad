@@ -60,6 +60,7 @@ import {
     fetchDetails,
     fetchFormats,
     fetchTab,
+    openSource,
     ready,
     reportError,
     reportFailure,
@@ -120,7 +121,7 @@ const supplyView = new SupplyView(panes.supply);
 // The three Manufacturing panes that hold controls of their own - switches, a
 // checkbox, a format - own their panes for the life of the panel, as the
 // analyses do: rebuilding one on every show would take back what the user set.
-const bvbView = new BvbView(panes.bvb, { onChange: onChoicesChanged, requestDetails });
+const bvbView = new BvbView(panes.bvb, { onChange: onChoicesChanged, requestDetails, openSource });
 const buildView = new BuildView(panes.build, { onRecursive: () => requestPlan() });
 const assemblyView = new AssemblyView(panes.assembly, {
     onChange: () => requestGuide(),

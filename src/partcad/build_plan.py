@@ -92,6 +92,20 @@ def _qualified(obj) -> str:
     return "%s:%s" % (obj.project_name, obj.name)
 
 
+def _source(obj) -> Optional[str]:
+    """The file the object is made from - its script, its STEP file, its ASSY file - or None.
+
+    What the IDE opens in an editor when the line's name is clicked. A path on
+    the daemon's machine, which is the editor's machine whenever the workspace
+    is local; an object made from nothing of its own (an alias, an enrich) has
+    none.
+    """
+    import os
+
+    path = getattr(obj, "path", None)
+    return os.path.abspath(path) if isinstance(path, str) and path else None
+
+
 def _material(obj) -> Optional[str]:
     reference = getattr(obj, "material_reference", None)
     return reference() if reference is not None else None
@@ -253,6 +267,7 @@ async def _assembly_node_async(ctx, assembly, node_id, link, parent_name, index,
         "vendor": store.vendor,
         "sku": store.sku,
         "material": _material(assembly),
+        "source": None if embedded else (_source(assembly) or _source(target)),
     }
     if embedded:
         node["embedded"] = True
@@ -299,6 +314,7 @@ async def _part_node_async(ctx, part, node_id, link, index, depth, forced=False)
         "vendor": store.vendor,
         "sku": store.sku,
         "material": _material(part),
+        "source": _source(part),
     }
     # Followed whenever it says how it is made, problems or not: the stock is a
     # line of its own, with problems of its own to show.

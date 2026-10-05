@@ -635,6 +635,12 @@ export interface TreeNode {
     sku?: string | null;
     /** The material reference, as written. */
     material?: string | null;
+    /**
+     * The file the object is made from - its script, STEP or ASSY file - as an
+     * absolute path on the daemon's machine, or absent when it has none of its
+     * own. What the line's name opens in an editor.
+     */
+    source?: string | null;
     /** Nested in its parent's ASSY file: always built, and never a line of its own. */
     embedded?: boolean;
     /** A stock reference that resolves to nothing. */

@@ -405,6 +405,34 @@ export class PartcadViewer implements vscode.Disposable {
         }
     }
 
+    /**
+     * Open the file an object is made from, beside the viewer.
+     *
+     * The path is the daemon's, which is this machine's whenever the workspace
+     * is local - the ordinary case. When it is not (a daemon elsewhere), there
+     * is nothing here to open, and the user is told where the file is rather
+     * than shown an editor for a path that does not exist.
+     */
+    private async openSource(file: string): Promise<void> {
+        if (!fs.existsSync(file)) {
+            void vscode.window.showWarningMessage(
+                `PartCAD: ${file} is not on this machine (it is where the PartCAD daemon runs), so it cannot be opened here.`,
+            );
+            return;
+        }
+        try {
+            await vscode.window.showTextDocument(vscode.Uri.file(file), {
+                viewColumn: vscode.ViewColumn.One,
+                preview: false,
+            });
+        } catch (error: any) {
+            // Not text - a STEP file opens as one, but a binary 3MF does not:
+            // hand it to whatever VS Code opens such a file with.
+            traceVerbose(`PartCAD Viewer: ${file} is not a text document: ${error?.message ?? error}`);
+            await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(file), vscode.ViewColumn.One);
+        }
+    }
+
     /** Keep what the user chose to build and to buy, on this machine. */
     private saveChoices(object: string, choices: Record<string, 'build' | 'buy'>): void {
         try {
@@ -520,6 +548,7 @@ export class PartcadViewer implements vscode.Disposable {
                     type: string;
                     message?: string;
                     object?: string;
+                    path?: string;
                     objects?: unknown;
                     width?: number;
                     height?: number;
@@ -539,6 +568,10 @@ export class PartcadViewer implements vscode.Disposable {
                     void this.fetchTab({ ...message, tab: message.tab ?? '', token: message.token ?? 0 });
                 } else if (message.type === 'fetchDetails') {
                     void this.fetchDetails(message.token ?? 0, message.objects ?? [], message.width, message.height);
+                } else if (message.type === 'openSource') {
+                    if (message.path) {
+                        void this.openSource(message.path);
+                    }
                 } else if (message.type === 'saveChoices') {
                     if (message.object) {
                         this.saveChoices(message.object, message.choices ?? {});
