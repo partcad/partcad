@@ -6,6 +6,7 @@
 
 import rich_click as click
 
+from ... import fast_only
 from ...service import run
 
 
@@ -18,6 +19,7 @@ from ...service import run
     help="Recursively search in all imported packages (older spelling of '<package>...')",
     show_envvar=True,
 )
+@fast_only.option()
 @click.option(
     "--package",
     "-P",
@@ -37,10 +39,10 @@ from ...service import run
     required=True,
 )
 @click.pass_obj
-def cli(cli_ctx, recursive: bool, package: str, keyword: str) -> None:
+def cli(cli_ctx, recursive: bool, fast_only: bool, package: str, keyword: str) -> None:
     run(
         cli_ctx,
         "search.objects",
-        {"kind": "scenes", "package": package, "recursive": recursive, "keyword": keyword},
+        {"kind": "scenes", "package": package, "recursive": recursive, "fast_only": fast_only, "keyword": keyword},
         needs_context=True,
     )

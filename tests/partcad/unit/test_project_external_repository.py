@@ -902,3 +902,16 @@ def test_each_kind_is_instantiated_on_its_own_first_access():
     # Read again: no second enumeration and no second instantiation pass.
     _ = repo.parts
     assert fake.keys == ["objects/assembly", "objects/part"]
+
+
+def test_a_package_still_loading_resolves_its_plugin_from_itself(tmp_path):
+    """Not by looking itself up again, which answers None until it has loaded.
+
+    'get_project(self.name)' starts from the root and takes the context's lock
+    to arrive at the object already in hand - and while the package is still
+    being loaded, which is when a plugin-backed package is first asked for its
+    dependencies, it has nothing to arrive at.
+    """
+    ctx, ext, fake = _plugin_package_under_a_root(tmp_path, {"deps": []})
+    del ctx.projects[ext.name]  # not registered yet: still being loaded
+    assert ext._get_repository() is fake

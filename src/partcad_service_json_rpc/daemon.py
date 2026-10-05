@@ -28,7 +28,7 @@ from typing import Callable, Optional
 from partcad_utils.workspace import (
     LIVENESS_TIMEOUT,
     determine_root_path,
-    is_alive,
+    is_listening,
     pid_path,
     socket_path,
 )
@@ -88,7 +88,7 @@ def ensure_daemon(
     if os.name == "nt":
         # Where the pipe is and whether anything answers on it comes from
         # `partcad_utils.win_pipe`, for the same reason the POSIX branch below
-        # takes `socket_path`/`is_alive` from `partcad_utils.workspace`: it is
+        # takes `socket_path`/`is_listening` from `partcad_utils.workspace`: it is
         # the rendezvous, and both ends have to read it from one place. Only
         # spawning the server is this package's own half.
         #
@@ -135,9 +135,18 @@ def ensure_daemon(
         os.chmod(wdir, 0o700)
 
     with _flock(os.path.join(wdir, "lock")):
-        if is_alive(sock, liveness_timeout) and not (
-            # Asked only when it matters, and inside the lock: a second launcher
-            # arriving meanwhile must find either this one's daemon or none.
+        # Listening is enough, answering is not required: a daemon serves one
+        # request at a time, so a busy one - or one still building its session
+        # behind a socket it has already bound - does not answer a probe in
+        # time, and replacing it would leave two daemons serving one workspace.
+        # A daemon that is gone refuses the connection, and is replaced.
+        #
+        # And it is kept unless asked for with other settings *and* able to say
+        # so: the settings question is asked only when it matters, inside the
+        # lock (a second launcher arriving meanwhile must find either this one's
+        # daemon or none), and a daemon too busy to answer it is kept, not
+        # restarted, for the reason above.
+        if is_listening(sock, liveness_timeout) and not (
             replace_different
             and _settings_differ(lambda params: _socket_ask(sock, params, liveness_timeout), daemon_argv)
         ):

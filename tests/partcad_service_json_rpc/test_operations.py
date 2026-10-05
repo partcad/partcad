@@ -124,6 +124,29 @@ class FakePartcad:
         # A real 'partcad' exposes this, and the load operations catch through
         # it to tell "PartCAD is too old" apart from an ordinary failure.
         self.exception = types.SimpleNamespace(NeedsUpdateException=FakeNeedsUpdateException)
+        self.fast_only = FakeFastOnly(self.logging)
+
+
+class FakeFastOnly:
+    """'partcad.fast_only', reading the same 'timeout' the real one reads.
+
+    Whether an object is slow is the real module's question, and is tested
+    beside it; what is under test here is which objects an operation asks.
+    """
+
+    def __init__(self, logging):
+        self._logging = logging
+
+    def leaves_out(self, shape):
+        seconds = getattr(shape, "timeout", None)
+        if seconds is None:
+            return False
+        self._logging.info("Skipping '%s:%s'" % (shape.project_name, shape.name))
+        return True
+
+    def leaves_out_declared(self, project, kind, name, quiet=False):
+        config = project.object_config(kind, name) or {}
+        return config.get("timeout") is not None
 
 
 class FakeShape:
@@ -344,8 +367,16 @@ class FakeProject:
         self.parts_requested.append(name)
         return self.parts.get(name)
 
-    async def test_log_wrapper_async(self, ctx, tests=None):
+    async def test_log_wrapper_async(self, ctx, tests=None, fast_only=False):
         self.tested_whole_package = True
+        self.tested_fast_only = fast_only
+
+    def object_config(self, kind, name):
+        obj = getattr(self, self._sections[kind]).get(name)
+        return obj.config if obj is not None else None
+
+    def get_assembly(self, name):
+        return self.assemblies.get(name)
 
     async def render_async(self, **kwargs):
         self.render_requests.append(kwargs)
@@ -388,6 +419,8 @@ class FakeContext:
         self.requested = []
         # (parent, kinds) of every warm-up a listing asked for.
         self.prefetched = []
+        # What every walk was told to leave out ('-x'), in the order asked.
+        self.excluded = []
         self.mates = {}
         # How many times an operation asked for the packages whose
         # configuration changed to be reloaded (see '_ctx').
@@ -456,7 +489,7 @@ class FakeContext:
     def stats_recalc(self):
         self.stats_packages = 3
 
-    def prefetch_object_configs(self, parent_name, kinds):
+    def prefetch_object_configs(self, parent_name, kinds, exclude=()):
         """What a listing asks for before it walks, recorded rather than done.
 
         A real context sends the enumerations of a plugin-backed tree in flight
@@ -510,10 +543,12 @@ class FakeContext:
             package = self.get_current_project_path() + "/" + package
         return package
 
-    def get_all_packages(self, parent_name=None, has_stuff=True):
+    def get_all_packages(self, parent_name=None, has_stuff=True, exclude=()):
+        self.excluded.append(list(exclude))
         projects = list(self.projects.values())
         if parent_name is not None:
             projects = [p for p in projects if p.name.startswith(parent_name)]
+        projects = [p for p in projects if not any(p.name == e or p.name.startswith(e + "/") for e in exclude)]
         if has_stuff:
             # As in Context.get_packages(): packages with no sketch, part or
             # assembly are dropped -- which is why `list interfaces` asks for
@@ -1236,6 +1271,88 @@ def test_list_interfaces_recursive_covers_packages_with_nothing_else_in_them():
     output = session.partcad.logging.only("info")
     assert row_for(output, "m3").startswith("\t//pkg1")
     assert lines_of(output)[-1] == "Total: 1"
+
+
+# --- '-x'/'--exclude': what a walk leaves out --------------------------------
+
+
+def test_a_listing_leaves_an_excluded_package_and_what_is_below_it_out():
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    ctx.projects["//kept"] = FakeProject(name="//kept").add("parts", FakeObject("bolt"))
+    ctx.projects["//gone"] = FakeProject(name="//gone").add("parts", FakeObject("nut"))
+    ctx.projects["//gone/below"] = FakeProject(name="//gone/below").add("parts", FakeObject("washer"))
+
+    operations.list_objects(session, {"kind": "parts", "package": "//", "recursive": True, "exclude": ["//gone"]})
+
+    output = session.partcad.logging.only("info")
+    assert row_for(output, "bolt").startswith("\t//kept")
+    assert "nut" not in output and "washer" not in output
+    assert ctx.excluded == [["//gone"]]
+
+
+def test_a_recursive_test_does_not_test_an_excluded_package(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+    sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+    session.partcad_ctx.projects["//sub"] = sub
+
+    operations.test_run(session, {"recursive": True, "object": "widget", "exclude": ["//sub"]})
+
+    assert root.parts_requested == ["widget"]
+    assert sub.parts_requested == []
+
+
+def test_a_mate_listing_leaves_out_a_mate_with_either_end_excluded():
+    """'ctx.mates' holds the mates of every package loaded, whatever loaded it,
+    so the walk leaving a package out does not leave its mates out by itself."""
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    ctx.projects["//kept"] = FakeProject(name="//kept")
+    ctx.mates = {
+        "//kept:pin": {
+            "//kept:hole": FakeObject("kept-kept", desc="kept to kept"),
+            "//gone/below:hole": FakeObject("kept-gone", desc="kept to gone"),
+        },
+        "//gone:stud": {"//kept:hole": FakeObject("gone-kept", desc="gone to kept")},
+    }
+
+    operations.list_mates(session, {"package": "//", "recursive": True, "exclude": ["//gone"]})
+
+    output = session.partcad.logging.only("info")
+    assert "kept to kept" in output
+    assert "kept to gone" not in output and "gone to kept" not in output
+    assert lines_of(output)[-1] == "Total: 1 mating interfaces"
+
+
+def test_a_provider_listing_leaves_an_excluded_package_out():
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    for name in ("//kept", "//gone", "//gone/below"):
+        project = FakeProject(name=name).add("parts", FakeObject("bolt"))
+        project.add("providers", FakeObject("store" + name.replace("/", "-"), desc="sells " + name))
+        ctx.projects[name] = project
+
+    operations.list_providers(session, {"package": "//", "recursive": True, "exclude": ["//gone"]})
+
+    output = session.partcad.logging.only("info")
+    assert "sells //kept" in output
+    assert "sells //gone" not in output
+    assert ctx.excluded == [["//gone"]]
+
+
+def test_an_excluded_package_is_named_the_way_a_package_is():
+    """Relative to the current package, and with any '...' dropped: excluding a
+    package always excludes everything below it, so the suffix says nothing."""
+    ctx = FakeContext()
+    ctx.current_project_path = "//pub"
+
+    excluded = operations._excluded(ctx, {"exclude": ["universe/lego/ldraw", "//pub/electronics...", "//other/"]})
+
+    assert excluded == ["//pub/universe/lego/ldraw", "//pub/electronics", "//other"]
+    assert operations._excluded(ctx, {}) == []
 
 
 def test_list_packages_reports_the_package_with_its_url():
@@ -3192,3 +3309,114 @@ def test_render_formats_of_a_package_that_renders_nothing():
     session = _inline_session(projects={"//plain": {"parts": {}}})
 
     assert operations.render_formats(session, {"package": "//plain"}) == {"package": "//plain", "formats": []}
+
+
+# ---- --fast-only -------------------------------------------------------------
+#
+# An assembly that declares 'timeout:' is one its package says is slow, and a
+# command run with '--fast-only' passes over it (see 'partcad.fast_only'). What
+# is pinned here is that every operation offering the flag hands it on, and
+# leaves out what it names itself.
+
+
+def _slow(name, **kwargs):
+    obj = FakeObject(name, config={"desc": "takes a while", "timeout": 1800}, **kwargs)
+    obj.timeout = 1800.0
+    return obj
+
+
+def test_a_listing_with_fast_only_leaves_out_what_declares_a_timeout():
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("assemblies", FakeObject("quick", desc="a moment"))
+    root.add("assemblies", _slow("slow"))
+
+    operations.list_objects(session, {"kind": "assemblies", "package": "//", "fast_only": True})
+
+    output = session.partcad.logging.only("info")
+    assert row_for(output, "quick")
+    assert "slow" not in output
+    assert lines_of(output)[-1] == "Total: 1"
+
+
+def test_a_listing_without_it_lists_everything():
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("assemblies", FakeObject("quick", desc="a moment"))
+    root.add("assemblies", _slow("slow"))
+
+    operations.list_objects(session, {"kind": "assemblies", "package": "//"})
+
+    assert lines_of(session.partcad.logging.only("info"))[-1] == "Total: 2"
+
+
+def test_a_search_with_fast_only_leaves_out_what_declares_a_timeout(monkeypatch):
+    install_fake_search(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("assemblies", FakeObject("quick", desc="a cube tower", project_name="//"))
+    root.add("assemblies", _slow("slow", desc="a cube skyscraper", project_name="//"))
+
+    operations.search_objects(session, {"kind": "assemblies", "keyword": "cube", "package": "//", "fast_only": True})
+
+    output = lines_of(session.partcad.logging.only("info"))
+    assert output[1].startswith("\t// quick")
+    assert output[-1] == "Matches: 1"
+
+
+def test_a_whole_package_test_run_hands_fast_only_on(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+
+    operations.test_run(session, {"fast_only": True})
+
+    assert root.tested_whole_package
+    assert root.tested_fast_only is True
+
+
+def test_a_named_slow_assembly_is_not_tested_with_fast_only(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].add("assemblies", _slow("slow", project_name="//"))
+
+    operations.test_run(session, {"object": "slow", "assembly": True, "fast_only": True})
+
+    log = session.partcad.logging
+    assert "Skipping '//:slow'" in log.messages("info")
+    assert log.messages("error") == []
+
+
+def test_a_render_hands_fast_only_on(monkeypatch):
+    session, rendered = _render_session(monkeypatch)
+
+    operations.render_objects(session, {"package": "//", "format": "step", "fast_only": True})
+
+    assert rendered and rendered[0]["fast_only"] is True
+
+
+def test_a_named_slow_assembly_is_not_staged_with_fast_only(monkeypatch):
+    """Staging builds what it places, which is exactly what was asked not to be."""
+    session, rendered = _render_session(monkeypatch)
+    top = _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+    top.timeout = 1800.0
+
+    operations.render_objects(
+        session, {"package": "//", "format": "step", "object": "top", "assembly": True, "fast_only": True}
+    )
+
+    # No retry error: nothing was asked to be built first. The render itself is
+    # what passes over the assembly, and it was told to.
+    assert rendered and rendered[0]["fast_only"] is True
+
+
+def test_a_named_slow_assembly_is_still_staged_without_it(monkeypatch):
+    session, rendered = _render_session(monkeypatch)
+    top = _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+    top.timeout = 1800.0
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_objects(session, {"package": "//", "format": "step", "object": "top", "assembly": True})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "unit", "kind": "assembly"}]

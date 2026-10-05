@@ -11,6 +11,8 @@ import os
 import tempfile
 import typing
 
+from partcad_utils import timeouts
+
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, shape_ports
 from . import software as pc_software
@@ -86,6 +88,18 @@ class AssemblyChild:
 
 
 @telemetry.instrument()
+async def _recorded_box(ctx, item):
+    """An item's box: the one it recorded when it was built, or else what it says when asked."""
+    get_measurements = getattr(item, "get_measurements_async", None)
+    if get_measurements is not None and not isinstance(item, Assembly):
+        measurements = await get_measurements(ctx) or {}
+        box = measurements.get(shape_envelope.METADATA_BBOX)
+        if box is not None and len(box) == 6:
+            return tuple(box)
+    get_box = getattr(item, "get_bounding_box_async", None)
+    return None if get_box is None else await get_box(ctx)
+
+
 class Assembly(Shape):
     path: typing.Optional[str] = None
 
@@ -103,6 +117,16 @@ class Assembly(Shape):
         # assembly nobody declared - one put together in Python with 'add()' -
         # which has no declaration to read them out of.
         self._subassemblies = None
+
+    @property
+    def timeout(self) -> typing.Optional[float]:
+        """The seconds this assembly declares building it may take ('timeout:'), or None.
+
+        Announced to a waiting client while anything is done to the assembly
+        (see 'Shape.locked'), and what '--fast-only' leaves it out for. See
+        'partcad_utils.timeouts'.
+        """
+        return timeouts.declared(self.config)
 
     async def get_subassemblies_async(self) -> list["Assembly"]:
         """The assemblies this one places, resolved but not built.
@@ -343,7 +367,51 @@ class Assembly(Shape):
             problems.extend([(child.name, problem) for problem in child.how.problems])
         return problems
 
-    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0):
+    async def get_bounding_box_async(self, ctx):
+        """The box around everything in this assembly, built from its children's boxes.
+
+        An assembly - one a package declares, or a 'links:' list inside an ASSY
+        file, named or not - is its children where it puts them, so its box is
+        theirs where it puts them: each child's box with its eight corners
+        placed, the box around those, and the assembly's own placement on top.
+        Nothing is built that is not built already. A part's box is the one it
+        recorded when it was built; a sub-assembly's is this same composition,
+        one level down.
+
+        Where a child is turned, the box around its turned box is larger than
+        the box around the turned child - never smaller. That is what a box is
+        for here: deciding quickly what cannot touch what, which a box that is
+        too large never gets wrong.
+        """
+        if self._bounding_box is not None:
+            return self._bounding_box
+        await self.do_instantiate()
+
+        async def placed_corners(child):
+            box = await _recorded_box(ctx, child.item)
+            if box is None:
+                return []
+            corners = [(x, y, z) for x in (box[0], box[3]) for y in (box[1], box[4]) for z in (box[2], box[5])]
+            location = child.location
+            if location is None:
+                return corners
+            if not isinstance(location, Location):
+                location = Location(location)
+            return [location.transform_point(corner) for corner in corners]
+
+        points = [point for corners in await asyncio.gather(*map(placed_corners, self.children)) for point in corners]
+        if not points:
+            return None
+        root = self._root_location()
+        if root is not None:
+            points = [root.transform_point(point) for point in points]
+        self._bounding_box = tuple(
+            [min(point[axis] for point in points) for axis in range(3)]
+            + [max(point[axis] for point in points) for axis in range(3)]
+        )
+        return self._bounding_box
+
+    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0, expected=(), opaque=()):
         """The pairs of parts in this assembly whose solids share space.
 
         Returned as {"overlaps": [{"a", "b", "volume"}, ...], "unchecked": [...],
@@ -361,6 +429,16 @@ class Assembly(Shape):
         touch bound nothing, and a boolean over tessellated faces answers with a
         sliver rather than with zero. It is not a place to hide an overlap that
         is meant to be there.
+
+        'expected' is that place: the pairs whose joint says they share space,
+        as (a, b) name patterns. They are not measured at all, since nothing
+        would be done with the answer, and a seated pin is the slowest boolean
+        an assembly has. Neither is reported, then, nor counted as indeterminate.
+        Each is a pair of subtrees: a part, or everything under an assembly.
+
+        'opaque' names the declared sub-assemblies under this one whose inside
+        has a verdict of its own already. Only what crosses the boundary of one
+        is examined; what lies wholly inside it is that sub-assembly's business.
         """
         obj = await self.get_wrapped(ctx)
         if obj is None:
@@ -385,6 +463,8 @@ class Assembly(Shape):
                     "assembly_json": shape_envelope.dumps(obj),
                     "min_volume": min_volume,
                     "min_fraction": min_fraction,
+                    "expected": [list(pair) for pair in expected],
+                    "opaque": list(opaque),
                 }
             )
 

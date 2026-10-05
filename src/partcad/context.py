@@ -63,6 +63,16 @@ def _is_within(name: str, parent_name: Optional[str]) -> bool:
     return name == parent_name or name.startswith(parent_name.rstrip("/") + "/")
 
 
+def is_excluded(name: str, exclude) -> bool:
+    """Whether a package is one of 'exclude', or sits underneath one of them.
+
+    What a walk over a subtree leaves out when it is told to ('pc test -x'):
+    excluding a package excludes everything below it, by the same rule that
+    puts a package below its parent.
+    """
+    return any(_is_within(name, excluded) for excluded in exclude or ())
+
+
 # How long a package's 'partcad.yaml' is taken to be unchanged after it was
 # last checked (see 'Context.reload_changed_packages').
 CONFIG_CHECK_INTERVAL = 15.0
@@ -965,16 +975,23 @@ class Context:
 
         return next_project
 
-    def import_all(self, parent_name=None):
+    def import_all(self, parent_name=None, exclude=()):
+        """Load 'parent_name' and every package below it, but nothing in 'exclude'.
+
+        An excluded package is not imported, so nothing below it is either: for
+        a plugin-backed hierarchy that is every round trip its children would
+        have cost. Something else may still load it - an assembly naming one of
+        its parts does - and 'get_packages' leaves it out of the walk then too.
+        """
         if parent_name is None:
             parent_name = self.name
-        asyncio.run(self._import_all_wrapper(self.projects[parent_name]))
+        asyncio.run(self._import_all_wrapper(self.projects[parent_name], exclude))
 
-    async def _import_all_wrapper(self, project):
+    async def _import_all_wrapper(self, project, exclude=()):
         iterate_tasks = []
         import_tasks = []
 
-        iterate_tasks.append(asyncio.create_task(self._import_all_recursive(project)))
+        iterate_tasks.append(asyncio.create_task(self._import_all_recursive(project, exclude)))
 
         while iterate_tasks or import_tasks:
             if iterate_tasks:
@@ -989,10 +1006,15 @@ class Context:
                 import_tasks = list(import_tasks_set)
                 for import_task in import_done:
                     next_project = import_task.result()
-                    iterate_tasks.append(asyncio.create_task(self._import_all_recursive(next_project)))
+                    iterate_tasks.append(asyncio.create_task(self._import_all_recursive(next_project, exclude)))
 
-    async def _import_all_recursive(self, project):
+    async def _import_all_recursive(self, project, exclude=()):
         tasks = []
+
+        if is_excluded(project.name, exclude):
+            # Only the package the walk starts from can get here; every other
+            # one is checked before it is imported, below.
+            return []
 
         if project.broken:
             pc_logging.warn("Ignoring the broken package: %s" % project.name)
@@ -1039,6 +1061,9 @@ class Context:
                     # Avoid circular dependencies of the root package
                     # TODO(clairbee): fix circular dependencies in general
                     continue
+                if is_excluded(next_project_path, exclude):
+                    pc_logging.debug("Not importing the excluded package: %s" % next_project_path)
+                    continue
                 pc_logging.debug("Importing: %s..." % next_project_path)
 
                 tasks.append(
@@ -1063,6 +1088,9 @@ class Context:
             ):
                 # TODO(clairbee): check if this subdir is already imported
                 next_project_path = get_child_project_path(project.name, subdir)
+                if is_excluded(next_project_path, exclude):
+                    pc_logging.debug("Not importing the excluded package: %s" % next_project_path)
+                    continue
 
                 # Here, we do not jump over the projects that are already imported,
                 # because we want to import all sub-folders, even if their parent
@@ -1079,19 +1107,25 @@ class Context:
 
         return tasks
 
-    def get_all_packages(self, parent_name=None, has_stuff: bool = True):
+    def get_all_packages(self, parent_name=None, has_stuff: bool = True, exclude=()):
+        """'parent_name' and every package below it, leaving out 'exclude'.
+
+        'exclude' is package names, each of which takes everything below it
+        along: the walk does not import them, and the result does not list them
+        even when something else has loaded them in the meantime.
+        """
         # TODO(clairbee): leverage root_project.get_child_project_names()
-        self.import_all(parent_name)
+        self.import_all(parent_name, exclude)
         if has_stuff:
             # 'get_packages' below reads HAS_STUFF_KINDS out of every package,
             # one kind at a time, and for a plugin-backed package each of those
             # is a round trip to the plugin. Warm them here instead: every
             # package and every kind at once, on the traversal's event loop, so
             # what follows reads a memo. See Project.prefetch_object_configs_async.
-            self.prefetch_object_configs(parent_name, HAS_STUFF_KINDS)
-        return self.get_packages(parent_name=parent_name, has_stuff=has_stuff)
+            self.prefetch_object_configs(parent_name, HAS_STUFF_KINDS, exclude)
+        return self.get_packages(parent_name=parent_name, has_stuff=has_stuff, exclude=exclude)
 
-    def prefetch_object_configs(self, parent_name, kinds):
+    def prefetch_object_configs(self, parent_name, kinds, exclude=()):
         """Warm 'kinds' across every loaded package, concurrently.
 
         A no-op for the packages that are local, which is most of them; what it
@@ -1105,7 +1139,7 @@ class Context:
         (see 'list_objects').
         """
         projects = [p for p in self.projects.values() if _is_within(p.name, parent_name)]
-        projects = [p for p in projects if not p.skipped]
+        projects = [p for p in projects if not p.skipped and not is_excluded(p.name, exclude)]
         if not projects:
             return
 
@@ -1123,15 +1157,18 @@ class Context:
         # ran its own 'asyncio.run', so there is no loop to nest inside.
         asyncio.run(prefetch())
 
-    def get_packages(self, parent_name: str = None, has_stuff: bool = True) -> list[dict[str, str]]:
+    def get_packages(self, parent_name: str = None, has_stuff: bool = True, exclude=()) -> list[dict[str, str]]:
         """Every loaded package, or only those with something to look at in them.
 
         'has_stuff' is what makes it the second: a package is kept only if it
-        holds an object of one of HAS_STUFF_KINDS.
+        holds an object of one of HAS_STUFF_KINDS. Nothing in 'exclude', or
+        below it, is kept either way.
         """
         projects = self.projects.values()
         if parent_name is not None:
             projects = filter(lambda x: _is_within(x.name, parent_name), projects)
+        if exclude:
+            projects = filter(lambda x: not is_excluded(x.name, exclude), projects)
 
         # Unconditionally, not only under 'has_stuff': a skipped package holds
         # no objects, so the filter below would drop it anyway, but a caller
@@ -1690,6 +1727,7 @@ class Context:
         ignore_manufacturability=False,
         overlay=None,
         render_opts=None,
+        fast_only=False,
     ):
         if project_path is None:
             project_path = self.get_current_project_path()
@@ -1702,6 +1740,7 @@ class Context:
             ignore_manufacturability=ignore_manufacturability,
             overlay=overlay,
             render_opts=render_opts,
+            fast_only=fast_only,
         )
 
     def render(
@@ -1713,6 +1752,7 @@ class Context:
         ignore_manufacturability=False,
         overlay=None,
         render_opts=None,
+        fast_only=False,
     ):
         if project_path is None:
             project_path = self.get_current_project_path()
@@ -1725,6 +1765,7 @@ class Context:
             ignore_manufacturability=ignore_manufacturability,
             overlay=overlay,
             render_opts=render_opts,
+            fast_only=fast_only,
         )
 
     # TODO(clairbee): convert it into: ctx.get_runtime("python", "conda", {"version": "3.11"})

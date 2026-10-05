@@ -5,7 +5,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-__version__: str = "0.8.144"
+__version__: str = "0.8.150"
 
 # Must come before anything that spawns a process: everything PartCAD executes
 # in a Python sandbox inherits this environment, so this is where the sandbox
@@ -84,6 +84,10 @@ from . import telemetry
 telemetry.init(__version__)
 
 from . import actions, exception, healthcheck, logging, tags, utils
+
+# Bound for the daemon, whose operations reach what '--fast-only' leaves out
+# through the package (see 'partcad.fast_only').
+from . import fast_only  # noqa: F401
 
 # Imported for the binding rather than for anything here: it makes
 # `partcad.plugin` resolve as an attribute of the package, which is how the

@@ -73,11 +73,58 @@ over the packages that declare none: a tree of forty packages in which three dec
 renders, not thirty-seven complaints. Finding it nowhere in the subtree is the one failure, and it is reported
 once.
 
+``-x``/``--exclude`` leaves a package **and everything below it** out of the walk, and can be given more than
+once::
+
+    pc test -P //pub... -x //pub/universe/lego/ldraw    # all of //pub but the LDraw library's twenty thousand parts
+    pc list parts ... -x vendor -x experimental         # relative names are relative to the current package
+
+An excluded package is not loaded by the walk at all, which is what makes it worth having for a package served
+by a repository plugin: none of the requests its children would have cost are made. It does not make the package
+unreachable -- an assembly elsewhere in the tree can still use one of its parts -- only absent from the walk.
+Every command that walks a subtree takes it: ``pc test``, ``pc render``, ``pc export``, ``pc lint``, ``pc info``,
+``pc sim``, ``pc cam`` and the ``pc list`` commands.
+
 ``-r``/``--recursive`` is the older spelling of a ``...`` on the package name and still works everywhere it
 did. It cannot say where the walk starts, it is not available on every command that could use one (``pc info``
 has none), and the rest of this page is written with ``...``. Note that ``pc supply find -r`` and
 ``pc supply quote -r`` mean something else entirely — break every assembly down to its parts — and take no
 ``...``.
+
+.. _fast-only:
+
+***********************************
+Slow assemblies and ``--fast-only``
+***********************************
+
+``pc`` gives up on the daemon when it has said nothing for five minutes. That is a bound on *silence*, not on
+the command -- a recursive render reports every object as it goes and can run for an hour -- and building or
+rendering one large assembly is exactly a stretch of silence. An assembly (or a scene) that is known to take
+longer says so where it is declared, in seconds:
+
+.. code-block:: yaml
+
+  assemblies:
+    skyscraper:
+      type: assy
+      timeout: 1800
+
+While the daemon works on it -- building it, rendering it, exporting it, testing it -- it tells ``pc`` so,
+and ``pc`` waits up to 1800 seconds instead of 300 for as long as that lasts. A declared timeout only ever
+lengthens the wait, never shortens it, and ``PC_DAEMON_IDLE_TIMEOUT`` still sets the default (``0`` waits
+forever, whatever an assembly declares).
+
+Declaring a timeout is also saying the assembly is slow, and ``--fast-only`` (``-f``) leaves out every assembly
+and scene that says so::
+
+    pc render --fast-only //pub...       # render everything quick in the whole public index
+    pc test -r --fast-only               # test this package and everything below it, the quick parts
+
+It is read from the declaration alone, so leaving an object out builds nothing. An assembly that *places* a
+slow one is built by building that one, and is left out only if it declares a timeout of its own. The flag is
+offered by ``pc render``, ``pc export``, ``pc test``, ``pc sim``, ``pc list`` and ``pc search``; on ``pc test``
+and ``pc sim`` it is ``--fast-only`` alone, since ``-f`` is their ``--filter``. Every recursive run over
+``//pub`` in PartCAD's own CI passes it.
 
 *************
 Host commands

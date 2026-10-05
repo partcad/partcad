@@ -437,3 +437,28 @@ def test_a_templated_configuration_is_not_reported_as_broken_yaml(tmp_path):
     check_run = SchemaLinting("PartcadSchema")
     report = asyncio.run(check_run.validate(ctx, project, check_run.get_targets(ctx, project)[0]))
     assert report.messages == []
+
+
+@pytest.mark.parametrize(
+    "section, declaration",
+    [
+        ("assemblies", {"type": "assy"}),
+        ("assemblies", {"type": "step"}),
+        ("assemblies", {"type": "sim-mujoco:mjcf"}),
+        ("scenes", {"type": "assy"}),
+    ],
+)
+def test_schema_an_assembly_or_a_scene_may_declare_how_long_it_takes(section, declaration):
+    """'timeout:' -- seconds, and what '--fast-only' leaves the object out for."""
+    validate({section: {"tower": dict(declaration, timeout=1800)}})
+
+
+@pytest.mark.parametrize("value", [0, -1, "1800", 2.5, True])
+def test_schema_a_timeout_is_a_whole_positive_number_of_seconds(value):
+    assert failures({"assemblies": {"tower": {"type": "assy", "timeout": value}}})
+
+
+def test_schema_a_part_does_not_declare_a_timeout():
+    """A part is built from its own files in one go; it is an assembly that is
+    built out of other things for long enough to need one."""
+    assert failures({"parts": {"bolt": {"type": "step", "timeout": 1800}}})

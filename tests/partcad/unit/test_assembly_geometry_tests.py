@@ -21,7 +21,7 @@ import asyncio
 import pytest
 
 from partcad.test.degenerate import DegenerateTest
-from partcad.test.interference import InterferenceTest, _is_expected, _matches
+from partcad.test.interference import InterferenceTest, _is_expected, _within
 
 
 class _Shape:
@@ -46,7 +46,7 @@ class _Shape:
             raise self._raises
         return self._box
 
-    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0):
+    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0, expected=(), opaque=()):
         if self._raises:
             raise self._raises
         self.asked_with = (min_volume, min_fraction)
@@ -226,11 +226,13 @@ def test_parts_that_are_not_valid_solids_are_reported_rather_than_hidden(caplog)
     assert "lower" in caplog.text
 
 
-def test_a_pair_is_named_without_saying_where_in_the_tree_it_sits():
-    assert _matches("gearbox/shaft", "shaft")
-    assert _matches("shaft", "shaft")
-    # ...but not by accident: a suffix is a whole path element.
-    assert not _matches("driveshaft", "shaft")
+def test_a_pair_names_subtrees_by_their_path_from_the_assembly_checked():
+    """A path is exact and covers what is under it: a part, or a whole sub-assembly."""
+    assert _within("shaft", "shaft")
+    assert _within("gearbox/shaft", "gearbox")
+    # ...and nothing else: not a name that ends the same, nor a deeper namesake.
+    assert not _within("driveshaft", "shaft")
+    assert not _within("gearbox/shaft", "shaft")
 
 
 def test_the_cache_key_moves_when_the_thresholds_do():
@@ -456,10 +458,11 @@ class _How:
 
 
 class _Child:
-    def __init__(self, name, connection=None, how=None):
+    def __init__(self, name, connection=None, how=None, item=None):
         self.name = name
         self.connection = connection
         self.how = how
+        self.item = item
 
 
 def _made(flag):
@@ -470,12 +473,22 @@ def _made(flag):
 
 
 class _ConnectedAssembly(_Assembly):
+    """An assembly of parts, some joined: the links an ASSY file lists, in order.
+
+    Every name a joint or an 'interferes:' refers to is one of these links,
+    since that is what those names name.
+    """
+
     def __init__(self, children=(), **kwargs):
         super().__init__(**kwargs)
-        self._children = list(children)
-
-    def connected_children(self):
-        return iter(self._children)
+        self.children = list(children)
+        named = {child.name for child in self.children}
+        for child in list(self.children):
+            connection = child.connection or {}
+            for name in [connection.get("target")] + list(connection.get("interferes") or []):
+                if name is not None and name not in named:
+                    self.children.append(_Child(name))
+                    named.add(name)
 
 
 def _joint(name, target, interface=None, how=None, interferes=None):
@@ -602,3 +615,94 @@ def test_naming_a_further_item_is_enough_on_its_own():
         overlaps=overlaps,
     )
     assert _run_with_ctx(InterferenceTest(), asm, _IfaceCtx(set()))
+
+
+def test_the_pairs_the_joints_account_for_are_handed_to_the_check(monkeypatch):
+    """So that the wrapper can skip measuring them, rather than measure and discard."""
+    import partcad.test.interference as interference
+
+    async def _planned(ctx, shape):
+        plan = interference._Plan()
+        plan.expected.add(("beam", "pin"))
+        return plan
+
+    monkeypatch.setattr(interference, "_plan", _planned)
+    seen = {}
+    shape = _Assembly(overlaps=[{"a": "beam", "b": "pin", "volume": 5.0}])
+    original = shape.get_interference_async
+
+    async def _spy(ctx, min_volume=0.05, min_fraction=0.0, expected=(), opaque=()):
+        seen["expected"] = list(expected)
+        return await original(ctx, min_volume, min_fraction, expected, opaque)
+
+    shape.get_interference_async = _spy
+    # Still filtered from the answer, whether or not the wrapper skipped it.
+    assert _run(InterferenceTest(), shape)
+    assert seen["expected"] == [("beam", "pin")]
+
+
+def test_the_expected_pairs_are_sent_to_the_wrapper():
+    import json as _json
+
+    from partcad.assembly import Assembly
+
+    captured = {}
+
+    class _Runtime:
+        async def ensure_async(self, *args):
+            return None
+
+        async def run_async(self, command, request_serialized):
+            captured["request"] = request_serialized
+            return 0, '{"success": true, "overlaps": [], "unchecked": [], "parts": 0}', ""
+
+    class _Ctx:
+        def get_python_runtime(self, version=None):
+            return _Runtime()
+
+    assembly = Assembly.__new__(Assembly)
+    assembly.project_name = "pkg"
+    assembly.name = "asm"
+
+    async def _wrapped(ctx):
+        return {"name": "asm", "label": "asm", "assembly": []}
+
+    assembly.get_wrapped = _wrapped
+    asyncio.run(assembly.get_interference_async(_Ctx(), expected=[("beam", "pin")]))
+    assert _json.loads(captured["request"])["expected"] == [["beam", "pin"]]
+
+
+def test_the_expected_pairs_are_read_from_an_assembly_that_is_not_instantiated_yet():
+    """The connections exist only once the assembly is instantiated.
+
+    The expected pairs are now worked out before the geometry is, and measuring
+    the geometry is what used to instantiate the assembly. Read from an assembly
+    nobody had instantiated, they came out empty: nothing was skipped, and
+    every seated pin was reported as a collision.
+    """
+    from types import SimpleNamespace
+
+    class _Lazy(_Assembly):
+        def __init__(self):
+            super().__init__(overlaps=[{"a": "pin", "b": "beam", "volume": 5.0}])
+            self.children = []
+            self.seen = None
+
+        async def do_instantiate(self):
+            self.children = [
+                SimpleNamespace(name="beam", connection=None, how=None, item=None),
+                SimpleNamespace(
+                    name="pin",
+                    connection={"target": "beam", "with_interface": None, "to_interface": None},
+                    how=SimpleNamespace(self_screw=False, snap_in=True),
+                    item=None,
+                ),
+            ]
+
+        async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0, expected=(), opaque=()):
+            self.seen = list(expected)
+            return await super().get_interference_async(ctx, min_volume, min_fraction, expected, opaque)
+
+    shape = _Lazy()
+    assert _run(InterferenceTest(), shape)
+    assert shape.seen == [("pin", "beam")]

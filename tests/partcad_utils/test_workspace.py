@@ -146,3 +146,36 @@ def test_is_alive_true_when_something_answers(socket_dir):
         assert workspace.is_alive(fake.path) is True
     finally:
         fake.stop()
+
+
+def test_is_listening_false_when_socket_absent(tmp_path):
+    assert workspace.is_listening(str(tmp_path / "nope")) is False
+
+
+def test_is_listening_false_when_the_daemon_is_gone(socket_dir):
+    """A socket file left behind by a daemon that was killed refuses the connection."""
+    path = str(socket_dir / "socket")
+    gone = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    gone.bind(path)
+    gone.listen(1)
+    gone.close()  # the file stays; nothing listens on it
+    assert os.path.exists(path)
+    assert workspace.is_listening(path) is False
+
+
+def test_a_busy_daemon_is_listening_though_it_does_not_answer(socket_dir):
+    """The case 'is_alive' cannot tell from a dead one, and a launcher must.
+
+    Bound and listening, but never accepting: what a daemon looks like while it
+    serves somebody else's long request, or while it is still building its
+    session. It is not alive by the probe's standard and must not be replaced.
+    """
+    path = str(socket_dir / "socket")
+    busy = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    busy.bind(path)
+    busy.listen(8)
+    try:
+        assert workspace.is_alive(path, timeout=0.2) is False
+        assert workspace.is_listening(path, timeout=0.2) is True
+    finally:
+        busy.close()

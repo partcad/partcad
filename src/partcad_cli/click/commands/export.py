@@ -8,6 +8,8 @@ import os
 
 import rich_click as click
 
+from .. import fast_only
+from ..exclude import exclude_option, exclude_params
 from ..service import run
 
 
@@ -51,6 +53,7 @@ from ..service import run
     help="Recursively test all imported packages (older spelling of '<package>...')",
     is_flag=True,
 )
+@fast_only.option()
 @click.option(
     "-s",
     "--sketch",
@@ -75,6 +78,7 @@ from ..service import run
     help="The object is a scene",
     is_flag=True,
 )
+@exclude_option
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
 def cli(
@@ -84,10 +88,12 @@ def cli(
     package: str,
     options_package: str,
     recursive,
+    fast_only,
     sketch,
     interface,
     assembly,
     scene,
+    exclude,
     object,
 ):
     run(
@@ -101,11 +107,13 @@ def cli(
             "package": package,
             "options_package": options_package,
             "recursive": recursive,
+            "fast_only": fast_only,
             "sketch": sketch,
             "interface": interface,
             "assembly": assembly,
             "scene": scene,
             "object": object,
+            **exclude_params(exclude),
         },
         needs_context=True,
     )

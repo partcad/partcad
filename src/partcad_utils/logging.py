@@ -148,12 +148,25 @@ def default_action_end(self_ops, op: str, package: str, item: str = None):
         debug("Finished action: %s: %s: %s" % (op, package, item))
 
 
+# The window an object's declared timeout is open for (see 'Timeout' below). It
+# means something only to a client waiting on a daemon, so the default -- the
+# in-process backends -- is to do nothing with it.
+def default_timeout_start(self_ops, seconds: float, package: str, item: str | None = None):
+    pass
+
+
+def default_timeout_end(self_ops, seconds: float, package: str, item: str | None = None):
+    pass
+
+
 # Dependency injection point for logging plugins
 class Ops:
     process_start = default_process_start
     process_end = default_process_end
     action_start = default_action_start
     action_end = default_action_end
+    timeout_start = default_timeout_start
+    timeout_end = default_timeout_end
 
 
 ops = Ops()
@@ -277,3 +290,30 @@ class Action(object):
         ops.action_end(self.op, self.package, self.item)
         self.span_ctx_mgr.__exit__(*args)
         _done(debug, self.op, self.package, self.item, self.start)
+
+
+class Timeout(object):
+    """The stretch of work an object's declared ``timeout:`` covers.
+
+    Opened by whatever works on the object, and announced through ``ops`` the
+    way a process or an action is: in-process it is nothing, and in a daemon it
+    is a pair of markers that tell the waiting client to wait ``seconds``
+    rather than its default for as long as this is open (see
+    ``partcad_utils.timeouts``). ``seconds`` of None is an object that declares
+    none, and is nothing everywhere -- so a caller can wrap every object
+    without asking first.
+    """
+
+    def __init__(self, seconds: float | None, package: str, item: str | None = None):
+        self.seconds = seconds
+        self.package = package
+        self.item = item
+
+    def __enter__(self):
+        if self.seconds is not None:
+            ops.timeout_start(self.seconds, self.package, self.item)
+        return self
+
+    def __exit__(self, *_args):
+        if self.seconds is not None:
+            ops.timeout_end(self.seconds, self.package, self.item)

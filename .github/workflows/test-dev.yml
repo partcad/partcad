@@ -28,7 +28,7 @@ permissions:
   contents: read
 
 env:
-  VERSION: 0.8.144
+  VERSION: 0.8.150
   CONTAINER_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}-devcontainer
   TOTAL_TIMEOUT: 900
@@ -770,9 +770,10 @@ jobs:
             poetry --no-ansi --no-interaction show --tree
             status=0
             # TODO: Use similar 'coverage run' in behave steps when calling pc
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r //pub/examples)" || status=$?
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r --package //pub/examples)" || status=$?
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r --package //pub/examples)" || status=$?
+            # '--fast-only' as in test.yml's "Examples (PartCAD)": see the comment there.
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r --fast-only //pub/examples)" || status=$?
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r --fast-only --package //pub/examples)" || status=$?
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r --fast-only --package //pub/examples)" || status=$?
             poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o pc-test-results/coverage.xml || true
             exit $status
 

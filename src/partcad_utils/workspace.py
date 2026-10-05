@@ -88,3 +88,32 @@ def is_alive(path: str, timeout: float = LIVENESS_TIMEOUT) -> bool:
     finally:
         with contextlib.suppress(OSError):
             client.close()
+
+
+def is_listening(path: str, timeout: float = LIVENESS_TIMEOUT) -> bool:
+    """True if something is listening on the socket, whether or not it answers.
+
+    The question a launcher has to ask before it replaces a daemon, which is not
+    the one 'is_alive' asks. A daemon serves one request at a time, so one busy
+    with a long request does not answer 'rpc.discover' within a second - and
+    neither does one still building its session, since the socket is bound
+    before the session is. Reading either as dead is how a burst of clients
+    each unlinked the socket of a daemon that was working and started one of
+    their own: three daemons for one workspace, each holding some of the
+    clients.
+
+    A daemon that is gone cannot be mistaken for one that is busy. Its socket
+    file outlives it, but nothing listens on it, and connecting is refused.
+    """
+    if not os.path.exists(path):
+        return False
+    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client.settimeout(timeout)
+    try:
+        client.connect(path)
+        return True
+    except OSError:
+        return False
+    finally:
+        with contextlib.suppress(OSError):
+            client.close()

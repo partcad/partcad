@@ -123,9 +123,16 @@ class ProjectExternalRepository(ProjectPlugin):
             return self._request_cache.setdefault(key, value)
 
     def _get_repository(self):
-        """Resolve the backing repository plugin, once, on first use."""
+        """Resolve the backing repository plugin, once, on first use.
+
+        The reference is resolved by this package itself rather than by looking
+        this package up again: 'get_project(self.name)' starts from the root,
+        takes 'ctx.lock', and answers None while the package is still loading -
+        the case 'get_project_from' is written for - to arrive at the object
+        that is already in hand.
+        """
         if self._repository is None and self._plugin_ref is not None:
-            package_name, repository_name = self.ctx.get_project(self.name).resolve(self._plugin_ref)
+            package_name, repository_name = self.resolve(self._plugin_ref)
             source = self.ctx.get_project(package_name)
             if source is not None:
                 self._repository = source.get_repository(repository_name)

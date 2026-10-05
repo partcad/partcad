@@ -26,7 +26,7 @@ from packaging.specifiers import SpecifierSet
 
 from partcad_utils import conda as pc_conda
 from partcad_utils import config_report, staging
-from partcad_utils.utils import directory_size_mb, split_recursive_object
+from partcad_utils.utils import directory_size_mb, split_recursive_object, split_recursive_package
 
 from ..rpc.dispatcher import JsonRpcError
 from . import events
@@ -133,6 +133,20 @@ def _request(params, default="."):
         params.get("object"),
     )
     return package, object_name, recursive or bool(params.get("recursive"))
+
+
+def _excluded(ctx, params) -> list:
+    """The packages a walk over a subtree is to leave out ('-x'/'--exclude').
+
+    Each is resolved the way '--package' is, so a relative name is relative to
+    the current package, and a '...' on the end changes nothing: excluding a
+    package always excludes everything below it. See 'Context.get_all_packages'.
+    """
+    excluded = []
+    for name in params.get("exclude") or ():
+        package, _ = split_recursive_package(name)
+        excluded.append(ctx.resolve_package_path(package))
+    return excluded
 
 
 def _object_kind(params) -> str:
@@ -345,7 +359,13 @@ def _stage_named_object(session, ctx, pc, params, package, object_name, recursiv
     # The object may name a package of its own, which is the one that produces
     # it whatever '--package' selected.
     owner, name = pc.utils.resolve_resource_path(package, object_name)
-    _stage_subassemblies(session, ctx, getter(_qualified(owner, name)))
+    shape = getter(_qualified(owner, name))
+    if params.get("fast_only") and getattr(shape, "timeout", None) is not None:
+        # Not built at all: '--fast-only' leaves it out, which the render says
+        # when it gets to it. Staging it first would build exactly what was
+        # asked not to be.
+        return
+    _stage_subassemblies(session, ctx, shape)
 
 
 def instantiate_assembly(session, params):
@@ -1001,7 +1021,10 @@ def info_object(session, params):
         # '//pub/examples...' with no object: the package and every package
         # below it, each reported as this reports one.
         if recursive:
-            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package_name, has_stuff=False)]
+            packages = [
+                p["name"]
+                for p in ctx.get_all_packages(parent_name=package_name, has_stuff=False, exclude=_excluded(ctx, params))
+            ]
         else:
             packages = [package_name]
         for name in packages:
@@ -1019,7 +1042,10 @@ def info_object(session, params):
     # spelled as a flag on every command that could want it.
     kind = "software" if params.get("software") else _object_kind(params)
     if recursive:
-        packages = [p["name"] for p in ctx.get_all_packages(parent_name=package_name, has_stuff=False)]
+        packages = [
+            p["name"]
+            for p in ctx.get_all_packages(parent_name=package_name, has_stuff=False, exclude=_excluded(ctx, params))
+        ]
         targets = _targets(ctx, pc, packages, object_name, kind)
         if not targets:
             _nowhere(pc, object_name, package_name)
@@ -1280,7 +1306,9 @@ async def _test_package_async(pc, package, coroutine):
         return await coroutine
 
 
-async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assembly, scene, object_name):
+async def _test_async(
+    ctx, pc, packages, filter_prefix, sketch, interface, assembly, scene, object_name, fast_only=False
+):
     import asyncio
 
     from partcad.test.all import tests as all_tests
@@ -1319,7 +1347,7 @@ async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assem
             pc.logging.error("Package %s is not found" % target)
             continue
         if not obj:
-            task = prj.test_log_wrapper_async(ctx, tests=tests_to_run)
+            task = prj.test_log_wrapper_async(ctx, tests=tests_to_run, fast_only=fast_only)
             tasks.append(_test_package_async(pc, target, task) if len(packages) > 1 else task)
         elif interface:
             shape = prj.get_interface(obj)
@@ -1345,6 +1373,8 @@ async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assem
                 pc.logging.error("%s is not found" % obj)
             elif not shape.finalized:
                 pc.logging.warning("%s is not finalized" % obj)
+            elif fast_only and pc.fast_only.leaves_out(shape):
+                continue
             else:
                 tasks.extend([t.test_log_wrapper(tests_to_run, ctx, shape) for t in tests_to_run])
 
@@ -1369,7 +1399,7 @@ def test_run(session, params):
 
     with pc.logging.Process("Test", package):
         if recursive:
-            all_packages = ctx.get_all_packages(parent_name=package)
+            all_packages = ctx.get_all_packages(parent_name=package, exclude=_excluded(ctx, params))
             if ctx.stats_git_ops:
                 pc.logging.info("Git operations: %s" % ctx.stats_git_ops)
             packages = [p["name"] for p in all_packages]
@@ -1398,6 +1428,7 @@ def test_run(session, params):
                 params.get("assembly"),
                 params.get("scene"),
                 object_name,
+                bool(params.get("fast_only")),
             )
         )
     return None
@@ -1437,7 +1468,7 @@ def lint_run(session, params):
 
     with pc.logging.Process("Lint", package):
         if recursive:
-            all_packages = ctx.get_all_packages(parent_name=package)
+            all_packages = ctx.get_all_packages(parent_name=package, exclude=_excluded(ctx, params))
             if ctx.stats_git_ops:
                 pc.logging.info("Git operations: %s" % ctx.stats_git_ops)
             packages = [p["name"] for p in all_packages]
@@ -1447,7 +1478,7 @@ def lint_run(session, params):
     return None
 
 
-async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_name):
+async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_name, fast_only=False):
     """Run every declared simulation of what was selected, one after another.
 
     Sequentially, and deliberately: a simulation plugin is a whole simulator
@@ -1496,6 +1527,9 @@ async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_na
             targets.extend(("part", shape) for shape in list(prj.parts.values()))
             targets.extend(("assembly", shape) for shape in list(prj.assemblies.values()))
 
+    if fast_only:
+        targets = [(kind, shape) for kind, shape in targets if not pc.fast_only.leaves_out(shape)]
+
     results = []
     for kind, shape in targets:
         for declaration in pc_simulation.of_shape(shape):
@@ -1523,7 +1557,7 @@ def simulate_run(session, params):
 
     with pc.logging.Process("Simulate", package):
         if recursive:
-            all_packages = ctx.get_all_packages(parent_name=package)
+            all_packages = ctx.get_all_packages(parent_name=package, exclude=_excluded(ctx, params))
             packages = [p["name"] for p in all_packages]
         else:
             packages = [package]
@@ -1549,6 +1583,7 @@ def simulate_run(session, params):
                 object_name,
                 params.get("assembly"),
                 params.get("filter"),
+                bool(params.get("fast_only")),
             )
         )
 
@@ -2065,7 +2100,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.144"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.150"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -2235,6 +2270,7 @@ def list_objects(session, params):
     pc = session.partcad
     kind = params.get("kind", "parts")
     selected, _, recursive = _request(params)
+    fast_only = bool(params.get("fast_only"))
 
     package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
@@ -2242,6 +2278,7 @@ def list_objects(session, params):
         pc.logging.error("Package %s is not found" % package)
         return None
     package = package_obj.name  # '//' may resolve to a differently-named package
+    excluded = _excluded(ctx, params)
 
     with pc.logging.Process("List" + kind.capitalize(), package):
         count = 0
@@ -2249,7 +2286,9 @@ def list_objects(session, params):
             # `list interfaces` and `list software` walk every package; the
             # others only those with content.
             has_stuff = kind not in _LIST_EVERY_PACKAGE
-            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=has_stuff)]
+            packages = [
+                p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=has_stuff, exclude=excluded)
+            ]
         else:
             packages = [package]
 
@@ -2257,7 +2296,7 @@ def list_objects(session, params):
         # package has nothing to fetch and pays nothing; a plugin-backed one
         # would otherwise be asked for its enumeration as the walk below
         # reaches it, in turn, each wait end to end.
-        ctx.prefetch_object_configs(package, [_LIST_KINDS[kind]])
+        ctx.prefetch_object_configs(package, [_LIST_KINDS[kind]], excluded)
 
         output = _LIST_LABELS.get(kind, "PartCAD objects") + ":\n"
         for project_name in packages:
@@ -2274,6 +2313,14 @@ def list_objects(session, params):
                 # build it: a recursive listing of a catalog used to run a
                 # factory per row (see 'Project.object_descriptions').
                 rows = project.object_descriptions(_LIST_KINDS[kind])
+            if fast_only:
+                # What a '--fast-only' run over the same tree would reach, read
+                # from the same declarations and building nothing either.
+                rows = {
+                    name: desc
+                    for name, desc in rows.items()
+                    if not pc.fast_only.leaves_out_declared(project, _LIST_KINDS[kind], name, quiet=True)
+                }
             for name, desc in sorted(rows.items()):
                 line = "\t"
                 if recursive:
@@ -2310,7 +2357,10 @@ def list_packages(session, params):
     with pc.logging.Process("ListPackages", package):
         pkg_count = 0
         if recursive:
-            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
+            packages = [
+                p["name"]
+                for p in ctx.get_all_packages(parent_name=package, has_stuff=True, exclude=_excluded(ctx, params))
+            ]
         else:
             packages = [package]
 
@@ -2353,7 +2403,10 @@ def list_providers(session, params):
     with pc.logging.Process("ListProviders", package):
         provider_kinds = 0
         if recursive:
-            projects = sorted(p["name"] for p in ctx.get_all_packages(package if package != "." else None))
+            projects = sorted(
+                p["name"]
+                for p in ctx.get_all_packages(package if package != "." else None, exclude=_excluded(ctx, params))
+            )
         else:
             projects = [package]
 
@@ -2402,10 +2455,13 @@ def list_mates(session, params):
         return None
     package = package_obj.name
 
+    from partcad.context import is_excluded
+
     with pc.logging.Process("ListMates", package):
         mating_kinds = 0
+        excluded = _excluded(ctx, params)
         if recursive:
-            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package)]
+            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, exclude=excluded)]
         else:
             packages = [package]
 
@@ -2434,6 +2490,12 @@ def list_mates(session, params):
                 ):
                     continue
                 if not recursive and source_package_name != package and target_package_name != package:
+                    continue
+                # 'ctx.mates' holds the mates of every package loaded, by
+                # whatever loaded it -- an assembly elsewhere using a part of an
+                # excluded package loads that package too. So leaving it out of
+                # the walk above is not enough to leave its mates out.
+                if is_excluded(source_package_name, excluded) or is_excluded(target_package_name, excluded):
                     continue
                 line = "\t"
                 line += "%s" % display_source + " " + " " * (35 - len(display_source))
@@ -2826,7 +2888,9 @@ def cam_route(session, params):
     # machine.
     machine = params.get("machine")
     if recursive:
-        packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
+        packages = [
+            p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True, exclude=_excluded(ctx, params))
+        ]
     else:
         packages = [package]
 
@@ -3283,6 +3347,10 @@ def search_objects(session, params):
             if takes_interface
             else search_fn(ctx, package, recursive, keyword)
         )
+        if params.get("fast_only") and kind in ("assemblies", "scenes"):
+            # Quietly, as a listing does: a row left out because it was asked
+            # to be is not news.
+            found = [obj for obj in found if getattr(obj, "timeout", None) is None]
         for obj in found:
             if kind == "packages":
                 line = "\t%s" % obj.name
@@ -3607,7 +3675,9 @@ def _render_objects(
     import asyncio
 
     if recursive:
-        packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
+        packages = [
+            p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True, exclude=_excluded(ctx, params))
+        ]
     else:
         packages = [package]
 
@@ -3692,6 +3762,7 @@ async def _render_packages_async(
     # import them.
     pc.output.all_formats(ctx)
 
+    fast_only = bool(params.get("fast_only"))
     at_once = asyncio.Semaphore(max(1, process_slots.count))
 
     async def render_package(package):
@@ -3709,6 +3780,7 @@ async def _render_packages_async(
                     ignore_manufacturability=ignore_manufacturability,
                     overlay=overlay,
                     render_opts=render_opts,
+                    fast_only=fast_only,
                 )
             else:
                 sketches, interfaces, parts, assemblies, scenes = [], [], [], [], []
@@ -3745,6 +3817,7 @@ async def _render_packages_async(
                     ignore_manufacturability=ignore_manufacturability,
                     overlay=overlay,
                     render_opts=render_opts,
+                    fast_only=fast_only,
                 )
 
     results = await asyncio.gather(*[render_package(package) for package in packages], return_exceptions=True)

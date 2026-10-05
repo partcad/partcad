@@ -503,6 +503,18 @@ at all).
   `pc convert` round-trips through them, and a surface model somebody shipped is worth reporting rather than
   quietly changing.
 
+  **Every part leaves its factory through one step, whatever produced it** (`Shape._validated_part`, called by
+  `Shape.get_wrapped` for `kind == "part"` on a cache miss, when it has a context and the factory handed back a
+  shape object; an envelope holding no geometry has nothing to judge): a native type, a mesh import, an extrusion and a
+  partType plugin such as the LDraw library are all asked the same `wrapper_solidity` question, once per built
+  part, with `solidify` on. A converted part comes back with the solid in place of the shell and with its
+  `measurements` taken again from that solid — and only those: annotations and sections describe the same faces
+  and are kept, while a shell's volume of nought is not merged under the solid's. What is still wrong is logged
+  as a warning, never raised, and a sandbox that cannot answer leaves the part as it was; validating geometry is
+  not a reason to stop building it. `FILE_AUTHORITY_TYPES` (`step`, `brep`) are asked with `solidify` off, for
+  the reason above: judged, reported, not converted. Do not give a factory or a plugin a path around this step,
+  and do not add a type to that set for any reason other than the file being the authority on the part.
+
   Which leaves the core to notice the ones that were not converted, and it does that **without a CAD kernel
   and without a sandbox**: `brep_inspect.py` reads the `TShapes` section of the BREP payload the core already
   holds — one record per shape, each opening with a two-letter type code — and counts the shells no solid

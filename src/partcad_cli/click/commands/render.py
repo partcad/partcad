@@ -12,6 +12,8 @@ import os
 
 import rich_click as click
 
+from .. import fast_only
+from ..exclude import exclude_option, exclude_params
 from ..service import run
 from ..viewport import viewport_options, viewport_params
 
@@ -66,6 +68,7 @@ from ..viewport import viewport_options, viewport_params
     is_flag=True,
     show_envvar=True,
 )
+@fast_only.option()
 @click.option(
     "-s",
     "--sketch",
@@ -124,6 +127,7 @@ from ..viewport import viewport_options, viewport_params
     is_flag=True,
     show_envvar=True,
 )
+@exclude_option
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
 def cli(
@@ -137,6 +141,7 @@ def cli(
     package,
     options_package,
     recursive,
+    fast_only,
     sketch,
     interface,
     assembly,
@@ -145,6 +150,7 @@ def cli(
     with_interfaces,
     with_all,
     with_internals,
+    exclude,
     object,
 ):
     run(
@@ -160,6 +166,7 @@ def cli(
             "package": package,
             "options_package": options_package,
             "recursive": recursive,
+            "fast_only": fast_only,
             "sketch": sketch,
             "interface": interface,
             "assembly": assembly,
@@ -169,6 +176,7 @@ def cli(
             "with_all": with_all,
             "with_internals": with_internals,
             "object": object,
+            **exclude_params(exclude),
         },
         needs_context=True,
     )
