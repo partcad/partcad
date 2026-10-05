@@ -167,8 +167,8 @@ Object IDs
 ==========
 
 PartCAD packages contain objects of different types: *sketches*, *parts*,
-*assemblies*, *scenes*, *interfaces*, *mates*, *providers*, *software* and
-*partTypes*.
+*assemblies*, *scenes*, *interfaces*, *mates*, *materials*, *providers*,
+*software* and *partTypes*.
 All of them need to get referenced.
 
 Single object
