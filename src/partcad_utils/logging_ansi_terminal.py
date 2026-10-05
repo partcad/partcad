@@ -103,6 +103,32 @@ def ansi_action_end(op: str, package: str, item: str = None):
     )
 
 
+def action_key(op: str, package: str, item: str = None) -> str:
+    """What an action is told apart from every other action by, while it runs.
+
+    The progress display tracks running actions by this alone, so two actions
+    open at once must never share one: the second would replace the first in
+    the footer, the first to end would take the entry both were sharing, and the
+    other would end with nothing to end and nobody timing it. An action that can
+    run beside another of its kind on the same object says what it is for in its
+    name ('extra') until the two differ; 'tests/conftest.py' fails any test in
+    which two open actions share a key.
+    """
+    # Formatted rather than concatenated: the renderer computes this while
+    # holding its lock, and a caller that hands over something other than a
+    # string must not be able to make it raise there and keep the lock forever.
+    if item is None:
+        return "%s-%s" % (op, package)
+    return "%s-%s:%s" % (op, package, item)
+
+
+def _target(record) -> str:
+    """What a process or an action is working on, as the footer shows it."""
+    if record.item is None:
+        return "%s" % record.package
+    return "%s:%s" % (record.package, record.item)
+
+
 class AnsiTerminalProgressHandler(logging.Handler):
     MAX_LINES = 8
     HEAD_LINES = 3
@@ -142,6 +168,13 @@ class AnsiTerminalProgressHandler(logging.Handler):
 
         # output accumulates the string that will be emitted before 'return'
         output = ""
+        # What went wrong while the lock was held, reported once it is not. A
+        # report is a log record, and a log record comes back here: straight
+        # back, on this same thread, where the renderer is driven synchronously
+        # (a daemon rendering for the IDE, see 'logging_ansi_render'). Reported
+        # under the lock, it waits for the lock forever, and so does every task
+        # of the event loop that thread is running.
+        complaint = None
 
         # protect the status data store in 'self' from other threads
         self.thread_lock.acquire()
@@ -151,9 +184,7 @@ class AnsiTerminalProgressHandler(logging.Handler):
             if hasattr(record, "pc_event"):
                 if record.pc_event == "process_start":
                     self.process = record.op
-                    self.process_target = record.package
-                    if record.item is not None:
-                        self.process_target += ":" + record.item
+                    self.process_target = _target(record)
                     self.process_start = time.time()
                     self.actions_total = 0
 
@@ -185,29 +216,19 @@ class AnsiTerminalProgressHandler(logging.Handler):
                     return
 
                 elif record.pc_event == "action_start":
-                    action = {"op": record.op}
-                    target = record.package
-                    if record.item is not None:
-                        target += ":" + record.item
-                    action["target"] = target
-                    action["start"] = time.time()
-                    self.actions[record.op + "-" + target] = action
+                    action = {"op": record.op, "target": _target(record), "start": time.time()}
+                    self.actions[action_key(record.op, record.package, record.item)] = action
 
                     self.actions_running += 1
                     self.actions_total += 1
                 elif record.pc_event == "action_end":
-                    target = record.package
-                    if record.item is not None:
-                        target += ":" + record.item
-                    action_key = record.op + "-" + target
-                    if action_key in self.actions:
-                        del self.actions[record.op + "-" + target]
+                    key = action_key(record.op, record.package, record.item)
+                    if key in self.actions:
+                        del self.actions[key]
                     else:
-                        """Missing action key typically indicates nested actions with identical names.
-                        This occurs with 'alias' or 'enrich' actions. Always use unique target names
-                        as the same source may be used in multiple aliases and enriches."""
-
-                        error("action_key not found: %s: among %s" % (action_key, str(self.actions.keys())))
+                        # Two actions were open under one key at once (see
+                        # 'action_key'), and the other one has ended already.
+                        complaint = "action_key not found: %s: among %s" % (key, str(self.actions.keys()))
 
                     self.actions_running -= 1
                 ignore_message = True
@@ -279,6 +300,8 @@ class AnsiTerminalProgressHandler(logging.Handler):
         if len(output) > 0:
             self.stream.write(output)
             self.stream.flush()
+        if complaint is not None:
+            error(complaint)
 
         return
 
