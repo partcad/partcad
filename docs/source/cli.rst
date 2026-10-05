@@ -777,7 +777,7 @@ Object commands
   :ref:`recursive-names`). ``urdf`` writes a ``.urdf`` file plus a directory of the mesh files it
   references.
 
-  ``--filter``/``-f`` exports a *part* of one assembly or scene: the links it names, where the assembly put
+  ``--filter`` exports a *part* of one assembly or scene: the links it names, where the assembly put
   them, without writing anything into the package (see :ref:`assy-filter`). It applies to one named object --
   ``-a`` or ``-S`` says which kind it is -- so it is refused for a whole package and for a ``...`` subtree.
   A ``filter:`` on an ``export:`` file type asks for the same thing permanently, per file type, and this
@@ -802,7 +802,7 @@ Object commands
   ``render:`` options from another package. ``-P <package>...`` and ``...:<name>`` render a whole subtree, the
   same way they do for ``pc export`` (see :ref:`recursive-names`).
 
-  ``--filter``/``-f`` renders a *part* of one assembly or scene, exactly as it does for ``pc export`` above:
+  ``--filter`` renders a *part* of one assembly or scene, exactly as it does for ``pc export`` above:
 
   .. code-block:: shell
 

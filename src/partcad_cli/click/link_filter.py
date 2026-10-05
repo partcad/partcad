@@ -61,9 +61,17 @@ def resolve(ctx, param, value):
 
 
 def filter_option(command):
-    """Add ``--filter`` to a command."""
+    """Add ``--filter`` to a command.
+
+    No short form. ``-f`` is ``--fast-only`` on both commands that take this
+    one, and Click resolves a repeated short flag by letting the last one
+    registered win -- so claiming it here turned ``pc render -f widget`` into a
+    filter of 'widget' with no object named, silently, where it used to be a
+    fast-only render of 'widget'. ``fast_only.option(short=False)`` is how a
+    command that owns ``-f`` for something else says so (``pc test``, ``pc
+    sim``), and neither of these two does.
+    """
     return click.option(
-        "-f",
         "--filter",
         "link_filter",
         help=HELP,

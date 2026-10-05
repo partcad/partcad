@@ -134,3 +134,48 @@ def test_every_top_level_command_is_in_exactly_one_help_panel():
         "these commands are in no panel of command_groups, so `pc --help` puts them in a trailing "
         f"unnamed 'Commands' panel: {', '.join(ungrouped)}"
     )
+
+
+def _commands(cmd, ctx, path, found):
+    """Every command in the tree, as (label, command) pairs."""
+    found.append((" ".join(path), cmd))
+    if not isinstance(cmd, click.Group):
+        return
+    for name in cmd.list_commands(ctx):
+        sub = cmd.get_command(ctx, name)
+        if sub is None:
+            continue
+        sub_ctx = sub.context_class(sub, info_name=name, parent=ctx)
+        _commands(sub, sub_ctx, path + [name], found)
+
+
+def test_no_command_spells_one_option_two_ways():
+    """Two options of one command may not share a flag, and Click will not refuse it.
+
+    It resolves a repeated flag by letting the last one registered win, with a
+    `UserWarning` raised at *parse* time -- which the suite runs with warnings
+    off and which a user sees once, underneath the output they asked for. So the
+    flag quietly changes meaning: `--filter` was given `-f` on `pc render` and
+    `pc export`, where `-f` is `--fast-only`, and `pc render -f widget` became a
+    filter of 'widget' with no object named rather than a fast-only render of
+    'widget'.
+
+    `fast_only.option(short=False)` exists for a command that owns `-f` for
+    something else, which is how `pc test` and `pc sim` keep theirs. This
+    asserts that nothing has to remember.
+    """
+    found = []
+    ctx = root.context_class(root, info_name="pc")
+    _commands(root, ctx, ["pc"], found)
+    assert len(found) > 1, "the walk reached only the root"
+
+    collisions = []
+    for label, cmd in found:
+        seen = {}
+        for param in cmd.params:
+            for flag in list(param.opts) + list(param.secondary_opts):
+                seen.setdefault(flag, []).append(param.name)
+        for flag, owners in sorted(seen.items()):
+            if len(owners) > 1:
+                collisions.append("%s: %s is %s" % (label, flag, " and ".join(owners)))
+    assert not collisions, "one flag, two options:\n  " + "\n  ".join(collisions)
