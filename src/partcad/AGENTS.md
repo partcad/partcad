@@ -746,12 +746,22 @@ at all).
   composition, shared by an assembly placing a child and an interface placing a sketch on a port).
 
   **How fine the tessellation is, is a budget in pixels rather than a distance in millimetres**
-  (`shape_gltf.SCREEN_PIXELS`/`PIXEL_BUDGET`, applied by `wrapper_gltf._budget`). What decides whether a preview
-  is smooth enough is how far a facet lands from the surface *on the screen*, so the linear deflection is the
-  bounding box diagonal of the whole tree over a thousand pixels at half a pixel each — measured in the sandbox,
-  because that is where the geometry is, with the placements composed, because eight parts 50 mm across are 50 mm
-  stacked and 2 m spread out. A part and an assembly then get the same answer to "smooth enough" and deflections
-  three orders apart to reach it. Clamped at both ends; a caller that passes `tolerance` in mm overrides the lot.
+  (`shape_gltf.SCREEN_PIXELS`/`PIXEL_BUDGET`, applied by `shape_gltf.tolerance_for`). What decides whether a
+  preview is smooth enough is how far a facet lands from the surface *on the screen*, so the linear deflection is
+  the bounding box diagonal of the whole tree over a thousand pixels at half a pixel each. A part and an assembly
+  then get the same answer to "smooth enough" and deflections three orders apart to reach it. Clamped at both
+  ends; a caller that passes `tolerance` in mm overrides the lot, and a tree that records no size at all gets
+  `NOMINAL_SIZE` rather than the floor — the floor is the finest setting there is and the least-known tree is the
+  last one to spend it on.
+
+  **That size is read, not measured** (`shape_gltf.size_of`). Every shape a wrapper returned carries the box it
+  was measured in as it was built (`metadata.measurements.bbox`), so sizing a tree is arithmetic over numbers
+  already in hand: no kernel, no sandbox pass, and the same box `Shape.get_bounding_box_async()` hands every
+  other caller — because two ways of computing "how big is it" are two answers to it. The placements are composed
+  down the tree, and a node's eight corners are placed and re-bounded rather than its two extremes moved, since a
+  rotated box's extremes are not the extremes of the rotated box. Re-bounding over-states, never the reverse, so
+  a tree of rotated parts is sized a little large and tessellated a little coarse: the safe direction. The
+  sandbox is handed millimetres and refuses a request without them.
 
   Two things about it are counter-intuitive enough to be worth stating. **It has to be absolute**, and
   `build123d.export_gltf` is not: it reaches OCCT through `Shape.mesh()`, which passes `isRelative=True`, so the
@@ -764,6 +774,18 @@ at all).
   `AeroAssembly_connected`, holding the linear budget: 0.2 rad is 48304 triangles, 0.4 is 23480, 0.5 is 19752.
   `tests/partcad/unit/test_shape_gltf.py` tessellates a real cylinder to hold both facts, because nothing else
   would notice either of them breaking — the preview would simply be coarse, or enormous, at every setting.
+
+  **One primitive per shape, not one per face** (`wrapper_gltf._write_merged`). A glTF loader makes a mesh per
+  primitive and a mesh is a draw call, and OCCT writes a primitive per *face* unless asked otherwise — so a part
+  of fifty faces is fifty draw calls and the eight-part `AeroAssembly_connected` was 507 of them. Asking is
+  `RWGltf_CafWriter.SetMergeFaces`, and the merge is lossless: the triangles and their vertices are concatenated
+  rather than welded, so the shading is identical and the payload is smaller (less JSON, fewer accessors). That
+  took 507 draw calls to 8. It is also why the writer is driven here rather than through `build123d.export_gltf`,
+  which builds one internally and exposes no way to set it — which costs a reach into build123d's private
+  `_create_xde`, with `export_gltf` as the fallback (a preview slow to orbit beats no preview) and
+  `tests/partcad/unit/test_shape_gltf.py` counting the primitives so that a release which moved it fails there
+  rather than in someone's frame rate. The edges that bound no face stay a primitive of their own, because a
+  line is a different draw mode from a triangle.
 
   **One entry per distinct geometry, however many nodes are made of it** (`shape_envelope.KEY_GEOMETRY`, with
   each node naming its entry in `KEY_GLTF_REF`). An assembly places the same bolt a hundred times; that bolt is

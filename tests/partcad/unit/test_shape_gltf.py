@@ -28,7 +28,7 @@ import pytest
 from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
 
 import partcad as pc
-from partcad import shape_gltf
+from partcad import shape_envelope, shape_gltf
 from partcad.geom import Location
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
@@ -51,6 +51,19 @@ def node(shape, location=None, children=None, **extra):
     return entry
 
 
+def vertices(glb: bytes) -> int:
+    """How many vertices a binary glTF holds, read off its POSITION accessors."""
+    length = struct.unpack("<I", glb[12:16])[0]
+    meta = json.loads(glb[20 : 20 + length])
+    accessors = meta.get("accessors", [])
+    return sum(
+        accessors[primitive["attributes"]["POSITION"]]["count"]
+        for mesh in meta.get("meshes", [])
+        for primitive in mesh.get("primitives", [])
+        if "POSITION" in primitive.get("attributes", {})
+    )
+
+
 def triangles(glb: bytes) -> int:
     """How many triangles a binary glTF holds, read off its accessors."""
     length = struct.unpack("<I", glb[12:16])[0]
@@ -64,60 +77,34 @@ def triangles(glb: bytes) -> int:
     return total
 
 
-class TestBudget:
-    """What deflection the tessellation runs at, in mm."""
+def measured(bbox, location=None, children=None, **extra):
+    """A node carrying the box it recorded when it was built, and nothing else.
 
-    def test_it_is_a_fraction_of_the_size_of_what_is_shown(self):
-        """Which is the whole point: a preview is looked at as a whole.
-
-        A part 10 mm across and an assembly 10 m across want the same answer to
-        "is this smooth enough" and deflections a thousand apart to get it.
-        """
-        request = {"screenDivisor": 2000.0, "minTolerance": 0.001, "maxTolerance": 10.0}
-        assert wrapper_gltf._budget(400.0, request) == pytest.approx(0.2)
-        assert wrapper_gltf._budget(4000.0, request) == pytest.approx(2.0)
-
-    def test_a_caller_that_says_what_it_wants_is_not_second_guessed(self):
-        request = {"tolerance": 0.05, "screenDivisor": 2000.0}
-        assert wrapper_gltf._budget(400.0, request) == pytest.approx(0.05)
-
-    def test_it_is_clamped_at_both_ends(self):
-        """The floor is for a tiny object, the ceiling for a bogus bounding box.
-
-        Without the floor a 1 mm part would be tessellated to half a micron for a
-        gain no screen can show; without the ceiling one stray node a kilometre
-        from the origin would flatten everything else into facets.
-        """
-        request = {"screenDivisor": 2000.0, "minTolerance": 0.01, "maxTolerance": 1.0}
-        assert wrapper_gltf._budget(1.0, request) == pytest.approx(0.01)
-        assert wrapper_gltf._budget(1000000.0, request) == pytest.approx(1.0)
-
-    def test_a_tree_with_nothing_to_measure_gets_the_floor(self):
-        """An interface whose ports carry no boundary has no size at all."""
-        request = {"screenDivisor": 2000.0, "minTolerance": 0.02, "maxTolerance": 1.0}
-        assert wrapper_gltf._budget(None, request) == pytest.approx(0.02)
-
-    def test_the_core_and_the_sandbox_agree_on_the_policy(self):
-        """The numbers are the core's; the sandbox is where the size is known.
-
-        Stated in 'shape_gltf' and applied in the wrapper, so this is the test that
-        notices if the sandbox's fallbacks and the core's constants drift apart.
-        """
-        assert shape_gltf.SCREEN_DIVISOR == shape_gltf.SCREEN_PIXELS / shape_gltf.PIXEL_BUDGET
-        request = {
-            "screenDivisor": shape_gltf.SCREEN_DIVISOR,
-            "minTolerance": shape_gltf.MIN_TOLERANCE,
-            "maxTolerance": shape_gltf.MAX_TOLERANCE,
+    Which is all 'size_of' reads: no geometry, no kernel. Every shape a wrapper
+    returned carries this (see 'ocp_serialize.encode_shape').
+    """
+    entry = dict(extra)
+    if bbox is not None:
+        entry[shape_envelope.KEY_METADATA] = {
+            shape_envelope.METADATA_MEASUREMENTS: {shape_envelope.METADATA_BBOX: list(bbox)}
         }
-        assert wrapper_gltf._budget(2000.0, request) == pytest.approx(2000.0 / shape_gltf.SCREEN_DIVISOR)
+    if location is not None:
+        entry[shape_envelope.KEY_LOCATION] = location.as_packed()
+    if children is not None:
+        entry[shape_envelope.KEY_ASSEMBLY] = list(children)
+    return entry
 
 
 class TestSize:
-    """What the budget is a fraction *of*: the whole tree, where it sits."""
+    """What the budget is a fraction *of*: the whole tree, where it sits.
+
+    Read from what each shape recorded as it was built rather than measured again,
+    so none of this needs a CAD kernel - which is the point. Two answers to "how big
+    is it" is what a second measurement would be.
+    """
 
     def test_a_single_shape_is_measured_as_itself(self):
-        size = wrapper_gltf._size(node(box(10, 10, 10)), {}, [])
-        assert size == pytest.approx(3**0.5 * 10, rel=1e-3)
+        assert shape_gltf.size_of(measured([0, 0, 0, 10, 10, 10])) == pytest.approx(3**0.5 * 10)
 
     def test_the_placements_are_composed_down_the_tree(self):
         """Eight parts 10 mm across are 10 mm stacked and metres apart spread out.
@@ -126,72 +113,109 @@ class TestSize:
         that factor - so a walk that ignored the placements would size a large
         assembly as if it were one of its parts.
         """
-        together = wrapper_gltf._size(
-            {ocp_serialize.KEY_ASSEMBLY: [node(box(10, 10, 10)), node(box(10, 10, 10))]},
-            {},
-            [],
-        )
-        apart = wrapper_gltf._size(
+        together = shape_gltf.size_of(
             {
-                ocp_serialize.KEY_ASSEMBLY: [
-                    node(box(10, 10, 10)),
-                    node(box(10, 10, 10), location=Location([[1000, 0, 0], [0, 0, 1], 0])),
+                shape_envelope.KEY_ASSEMBLY: [
+                    measured([0, 0, 0, 10, 10, 10]),
+                    measured([0, 0, 0, 10, 10, 10]),
                 ]
-            },
-            {},
-            [],
+            }
         )
-        assert together == pytest.approx(3**0.5 * 10, rel=1e-3)
-        assert apart > 1000
+        apart = shape_gltf.size_of(
+            {
+                shape_envelope.KEY_ASSEMBLY: [
+                    measured([0, 0, 0, 10, 10, 10]),
+                    measured([0, 0, 0, 10, 10, 10], location=Location([[1000, 0, 0], [0, 0, 1], 0])),
+                ]
+            }
+        )
+        assert together == pytest.approx(3**0.5 * 10)
+        assert apart == pytest.approx((1010.0**2 + 10**2 + 10**2) ** 0.5)
 
     def test_a_placement_on_a_parent_reaches_its_children(self):
         """Composed placement first then the node's own, as 'placed()' states it."""
-        nested = wrapper_gltf._size(
+        spread = [
+            measured([0, 0, 0, 10, 10, 10]),
+            measured([0, 0, 0, 10, 10, 10], location=Location([[500, 0, 0], [0, 0, 1], 0])),
+        ]
+        moved = shape_gltf.size_of(
             {
-                ocp_serialize.KEY_LOCATION: Location([[500, 0, 0], [0, 0, 1], 0]).as_packed(),
-                ocp_serialize.KEY_ASSEMBLY: [
-                    node(box(10, 10, 10)),
-                    node(box(10, 10, 10), location=Location([[500, 0, 0], [0, 0, 1], 0])),
-                ],
-            },
-            {},
-            [],
+                shape_envelope.KEY_LOCATION: Location([[70, 0, 0], [0, 0, 1], 0]).as_packed(),
+                shape_envelope.KEY_ASSEMBLY: spread,
+            }
         )
-        # The two boxes end up 500 mm apart wherever the parent puts the pair.
-        assert nested == pytest.approx(
-            wrapper_gltf._size(
-                {
-                    ocp_serialize.KEY_ASSEMBLY: [
-                        node(box(10, 10, 10)),
-                        node(box(10, 10, 10), location=Location([[500, 0, 0], [0, 0, 1], 0])),
-                    ]
-                },
-                {},
-                [],
-            ),
-            rel=1e-6,
-        )
+        # Wherever the parent puts the pair, the pair is the same size.
+        assert moved == pytest.approx(shape_gltf.size_of({shape_envelope.KEY_ASSEMBLY: spread}))
 
-    def test_a_tree_with_no_geometry_has_no_size(self):
-        assert wrapper_gltf._size({ocp_serialize.KEY_ASSEMBLY: []}, {}, []) is None
+    def test_a_rotated_box_is_re_bounded_rather_than_moved(self):
+        """Its eight corners are placed, because its two extremes are not its extent.
 
-    def test_a_shape_is_decoded_once_however_often_it_appears(self):
-        """The cache the two passes share: measuring must not cost a second decode."""
-        shape = box(10, 10, 10)
-        payload = ocp_serialize.compressed_brep(shape)
-        shapes = {}
-        wrapper_gltf._size(
+        A 10 mm cube turned 45 degrees about Z spans 10*sqrt(2) across X and Y, and
+        moving only (min, max) would report it as still 10 - under-stating the size
+        and so over-tessellating everything in the tree.
+        """
+        turned = shape_gltf.size_of(measured([0, 0, 0, 10, 10, 10], location=Location([[0, 0, 0], [0, 0, 1], 45])))
+        assert turned == pytest.approx(((10 * 2**0.5) ** 2 + (10 * 2**0.5) ** 2 + 100) ** 0.5)
+        # Over-stated rather than under-stated, which is the safe direction.
+        assert turned > shape_gltf.size_of(measured([0, 0, 0, 10, 10, 10]))
+
+    def test_a_tree_that_recorded_nothing_has_no_size(self):
+        assert shape_gltf.size_of({shape_envelope.KEY_ASSEMBLY: []}) is None
+        assert shape_gltf.size_of(measured(None)) is None
+
+    def test_a_node_that_recorded_nothing_is_passed_over(self):
+        """One stripped node does not cost the tree the sizes the others recorded."""
+        size = shape_gltf.size_of(
             {
-                ocp_serialize.KEY_ASSEMBLY: [
-                    {ocp_serialize.KEY_BREP: payload},
-                    {ocp_serialize.KEY_BREP: payload},
-                    {ocp_serialize.KEY_BREP: payload},
+                shape_envelope.KEY_ASSEMBLY: [
+                    measured(None, location=Location([[9000, 0, 0], [0, 0, 1], 0])),
+                    measured([0, 0, 0, 10, 10, 10]),
                 ]
-            },
-            shapes,
-            [],
+            }
         )
-        assert len(shapes) == 1
+        assert size == pytest.approx(3**0.5 * 10)
+
+
+class TestTolerance:
+    """The budget, applied: what deflection a tree is tessellated at, in mm."""
+
+    def test_it_is_a_fraction_of_the_size_of_what_is_shown(self):
+        """Which is the whole point: a preview is looked at as a whole.
+
+        A part 10 mm across and an assembly 10 m across want the same answer to
+        "is this smooth enough" and deflections a thousand apart to get it.
+        """
+        small = shape_gltf.tolerance_for(measured([0, 0, 0, 10, 10, 10]))
+        large = shape_gltf.tolerance_for(measured([0, 0, 0, 10000, 10000, 10000]))
+        assert large == pytest.approx(small * 1000)
+        assert small == pytest.approx(3**0.5 * 10 / shape_gltf.SCREEN_DIVISOR)
+
+    def test_it_is_clamped_at_both_ends(self):
+        """The floor is for a tiny object, the ceiling for a bogus bounding box.
+
+        Without the floor a speck would be tessellated to a nanometre for a gain no
+        screen can show; without the ceiling one stray node a kilometre from the
+        origin would flatten everything else into facets.
+        """
+        assert shape_gltf.tolerance_for(measured([0, 0, 0, 0.0001, 0.0001, 0.0001])) == pytest.approx(
+            shape_gltf.MIN_TOLERANCE
+        )
+        assert shape_gltf.tolerance_for(measured([0, 0, 0, 1e9, 1e9, 1e9])) == pytest.approx(shape_gltf.MAX_TOLERANCE)
+
+    def test_a_tree_of_unknown_size_gets_the_nominal_one(self):
+        """Not the floor: the finest setting there is, for the least known tree.
+
+        A tree records no size when it has no geometry - an interface whose ports
+        carry no boundary, where the tolerance decides nothing - or when its
+        metadata was stripped, where guessing palm-sized beats guessing microscopic.
+        """
+        assert shape_gltf.tolerance_for({shape_envelope.KEY_ASSEMBLY: []}) == pytest.approx(
+            shape_gltf.NOMINAL_SIZE / shape_gltf.SCREEN_DIVISOR
+        )
+
+    def test_the_budget_is_half_a_pixel_of_a_thousand(self):
+        """The two numbers the divisor is made of, so it cannot drift from them."""
+        assert shape_gltf.SCREEN_DIVISOR == shape_gltf.SCREEN_PIXELS / shape_gltf.PIXEL_BUDGET
 
 
 class TestSharing:
@@ -308,13 +332,10 @@ class TestSharing:
 
     def test_the_table_is_on_the_root_of_what_comes_back(self, monkeypatch):
         monkeypatch.setattr(wrapper_gltf, "_to_glb", lambda shape, *_: b"glTF-stub")
-        result = wrapper_gltf.process({"tree": node(box(10, 10, 10)), "screenDivisor": 2000.0})
+        result = wrapper_gltf.process({"tree": node(box(10, 10, 10)), "tolerance": 0.2})
 
         assert result["success"] is True
         assert list(result["tree"][ocp_serialize.KEY_GEOMETRY]) == [result["tree"][ocp_serialize.KEY_GLTF_REF]]
-        # And it says what it chose, which is the number that decides all of this.
-        assert result["tolerance"] == pytest.approx(result["size"] / 2000.0)
-        assert result["angularTolerance"] == 0.4
 
 
 class TestDigest:
@@ -482,3 +503,116 @@ class TestEdges:
         converted = wrapper_gltf._convert(tree, 0.1, 0.4, [], {}, {}, set())
 
         assert converted[ocp_serialize.KEY_METADATA][ocp_serialize.METADATA_ANNOTATIONS] == annotations
+
+
+def primitives(glb: bytes) -> int:
+    """How many primitives a binary glTF holds - which is how many draw calls it is.
+
+    A glTF loader makes one mesh per primitive and a mesh is a draw call, so this is
+    the number that decides whether an assembly can be orbited.
+    """
+    length = struct.unpack("<I", glb[12:16])[0]
+    meta = json.loads(glb[20 : 20 + length])
+    return sum(len(mesh.get("primitives", [])) for mesh in meta.get("meshes", []))
+
+
+class TestOnePrimitivePerShape:
+    """What makes a large assembly drawable: a draw call per shape, not per face.
+
+    OCCT writes a primitive per face unless asked otherwise, and asking means
+    driving its writer directly rather than through 'build123d.export_gltf' - which
+    reaches for a private helper of build123d's. These are the tests that fail if
+    that helper moves, loudly, instead of leaving a preview that is merely slow.
+    """
+
+    def drilled(self):
+        """A plate with four holes: faces enough that per-face is visibly different."""
+        from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
+        from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+        solid = BRepPrimAPI_MakeBox(60.0, 40.0, 5.0).Shape()
+        for x, y in ((10, 10), (50, 10), (10, 30), (50, 30)):
+            hole = BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(x, y, -1.0), gp_Dir(0, 0, 1)), 3.0, 7.0).Shape()
+            solid = BRepAlgoAPI_Cut(solid, hole).Shape()
+        return solid
+
+    def test_a_shape_of_many_faces_is_one_primitive(self):
+        glb = wrapper_gltf._to_glb(self.drilled(), 0.05, 0.4)
+        assert primitives(glb) == 1
+
+    def test_the_merge_loses_no_geometry(self):
+        """Concatenated, not welded: the same triangles over the same vertices.
+
+        Welding would smooth the hard edges of every part in the viewer, which is a
+        change nobody asked for and one that no triangle count would reveal - hence
+        the vertices here as well as the triangles.
+        """
+        shape = self.drilled()
+        wrapper_gltf._mesh(shape, 0.05, 0.4)
+        merged = wrapper_gltf._export(shape, 0.4)
+
+        # Meshed again, because '_export' frees the triangulation it wrote out -
+        # which is also why it documents that it meshes nothing itself.
+        wrapper_gltf._mesh(shape, 0.05, 0.4)
+        monkey = wrapper_gltf._create_xde
+        try:
+            wrapper_gltf._create_xde = None
+            per_face = wrapper_gltf._export(shape, 0.4)
+        finally:
+            wrapper_gltf._create_xde = monkey
+
+        assert primitives(per_face) > 1, "export_gltf is expected to write a primitive per face"
+        assert primitives(merged) == 1
+        assert triangles(merged) == triangles(per_face)
+        assert vertices(merged) == vertices(per_face)
+
+    def test_without_the_builder_it_still_draws(self):
+        """A preview that is slow to orbit beats no preview at all.
+
+        'export_gltf' is the fallback, so a build123d that moved its document
+        builder costs draw calls rather than the 3D view.
+        """
+        shape = self.drilled()
+        monkey = wrapper_gltf._create_xde
+        try:
+            wrapper_gltf._create_xde = None
+            glb = wrapper_gltf._to_glb(shape, 0.05, 0.4)
+        finally:
+            wrapper_gltf._create_xde = monkey
+        assert triangles(glb) > 0
+        assert primitives(glb) > 1
+
+    def test_the_lines_of_an_open_sketch_survive_the_merge(self):
+        """Faces merge into one primitive; the edges that bound none stay their own.
+
+        They have to: a line segment is a different draw mode from a triangle, so
+        merging the two would be drawing one as the other. This is the test that
+        notices if 'SetMergeFaces' ever swallowed them (see '_with_lines').
+        """
+        from OCP.BRep import BRep_Builder
+        from OCP.TopoDS import TopoDS_Compound
+
+        compound = TopoDS_Compound()
+        builder = BRep_Builder()
+        builder.MakeCompound(compound)
+        builder.Add(compound, BRepPrimAPI_MakeBox(10.0, 10.0, 10.0).Shape())
+        builder.Add(compound, edge((0, 0, 20), (10, 10, 20)))
+
+        glb = wrapper_gltf._to_glb(compound, 0.05, 0.4)
+        assert primitives(glb) == 2
+        assert len(line_primitives(glb)) == 1
+        assert triangles(glb) == 12
+
+
+class TestTheSandboxDoesNotDecideTheBudget:
+    """It is handed millimetres, because the core already knows the size."""
+
+    def test_a_request_with_no_tolerance_is_refused(self):
+        with pytest.raises(Exception, match="tolerance"):
+            wrapper_gltf.process({"tree": node(box(10, 10, 10))})
+
+    def test_what_it_was_given_is_what_it_reports(self, monkeypatch):
+        monkeypatch.setattr(wrapper_gltf, "_to_glb", lambda shape, *_: b"glTF-stub")
+        result = wrapper_gltf.process({"tree": node(box(10, 10, 10)), "tolerance": 0.25})
+        assert result["tolerance"] == pytest.approx(0.25)
+        assert result["angularTolerance"] == pytest.approx(0.4)

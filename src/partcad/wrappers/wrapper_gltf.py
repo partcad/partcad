@@ -30,7 +30,6 @@
 
 import hashlib
 import json
-import math
 import os
 import struct
 import sys
@@ -75,8 +74,79 @@ def _mesh(shape, tolerance, angular_tolerance):
     BRepMesh_IncrementalMesh(shape, tolerance, False, angular_tolerance, True)
 
 
+# build123d's builder for the document OCCT's glTF writer writes, resolved on
+# first use: False until it has been looked for, then it or None. Looked up rather
+# than imported at the top because importing build123d is what costs, and this
+# file is imported by tests that never export anything.
+_create_xde = False
+
+
+def _xde_builder():
+    """build123d's XCAF document builder, or None if this release has none.
+
+    Private to build123d, and the one piece of it that has to be reached for: see
+    '_write_merged' for what driving the writer directly buys and what is given up
+    when this is absent.
+    """
+    global _create_xde
+    if _create_xde is False:
+        try:
+            from build123d.exporters3d import _create_xde as builder
+        except Exception:
+            builder = None
+        _create_xde = builder
+    return _create_xde
+
+
+def _write_merged(obj, path, builder) -> bool:
+    """Write 'obj' to 'path' as a binary glTF of one primitive per shape.
+
+    Which is the whole reason the writer is driven here rather than through
+    'build123d.export_gltf': a glTF loader makes a mesh per primitive and a mesh is
+    a draw call, OCCT writes a primitive per *face* by default, and a part of fifty
+    faces is therefore fifty draw calls - a fifty-part assembly two and a half
+    thousand, which is what makes one slow to orbit however few triangles it has.
+    'SetMergeFaces' concatenates them into one, losslessly: the triangles and their
+    vertices are copied rather than welded, so the shading is identical and only the
+    grouping differs.
+
+    Everything else here is export_gltf's, deliberately. The document is built by
+    the same helper, and the rotation is the same one it applies - OCCT is Z up and
+    glTF is Y up, and whoever draws the result undoes exactly this (see
+    'frames.ts'), so the two must not drift apart.
+    """
+    import build123d as b3d
+    from OCP.BRepTools import BRepTools
+    from OCP.Message import Message, Message_Gravity, Message_ProgressRange
+    from OCP.RWGltf import RWGltf_CafWriter
+    from OCP.TColStd import TColStd_IndexedDataMapOfStringString
+    from OCP.TCollection import TCollection_AsciiString
+
+    original = obj.location
+    obj.location *= b3d.Location((0, 0, 0), (1, 0, 0), -90)
+    try:
+        doc = builder(obj, b3d.Unit.MM, auto_naming=False)
+        # OCCT reports progress and warnings through the default messenger, which
+        # prints to this process's stdout - and stdout is how a wrapper answers.
+        for printer in Message.DefaultMessenger_s().Printers():
+            printer.SetTraceLevel(Message_Gravity.Message_Fail)
+        writer = RWGltf_CafWriter(TCollection_AsciiString(path), True)
+        writer.SetParallel(True)
+        writer.SetMergeFaces(True)
+        return bool(writer.Perform(doc, TColStd_IndexedDataMapOfStringString(), Message_ProgressRange()))
+    finally:
+        obj.location = original
+        BRepTools.Clean_s(obj.wrapped)
+
+
 def _export(shape, angular_tolerance):
     """The binary glTF of 'shape' as it is already triangulated.
+
+    One primitive per shape where that can be asked for (see '_write_merged'), and
+    export_gltf's one per face where it cannot - a preview that is slow to orbit
+    rather than no preview at all. Nothing downstream assumes which happened;
+    'test_shape_gltf.py' counts the primitives, so a build123d release that moved
+    the document builder fails there rather than in someone's frame rate.
 
     Deliberately does no meshing of its own - see _mesh, which is the half of this
     that decides how fine the result is. Separate so that it is possible to ask what
@@ -88,19 +158,21 @@ def _export(shape, angular_tolerance):
     # it silently returns None and export_gltf then fails on None.location.
     obj = b3d.Compound.cast(ocp_serialize.compound_of([shape]))
 
-    # export_gltf only writes to a path, so the buffer has to come back off the
+    # The writer only writes to a path, so the buffer has to come back off the
     # disk. A temp file rather than the shape's render output: this is a preview,
     # not a render, and must not leave artifacts in the package directory.
     handle, path = tempfile.mkstemp(suffix=".glb", prefix="partcad-gltf-")
     os.close(handle)
     try:
-        b3d.export_gltf(
-            obj,
-            path,
-            binary=True,
-            linear_deflection=_ALREADY_MESHED,
-            angular_deflection=angular_tolerance,
-        )
+        builder = _xde_builder()
+        if builder is None or not _write_merged(obj, path, builder):
+            b3d.export_gltf(
+                obj,
+                path,
+                binary=True,
+                linear_deflection=_ALREADY_MESHED,
+                angular_deflection=angular_tolerance,
+            )
         if not os.path.exists(path) or os.path.getsize(path) == 0:
             raise Exception("the exporter produced no glTF")
         with open(path, "rb") as f:
@@ -322,73 +394,6 @@ def _shape(brep, shapes):
     return digest, shapes[digest]
 
 
-def _size(tree, shapes, errors):
-    """The diagonal of the whole tree's bounding box, in mm, or None if it has none.
-
-    The placements are composed on the way down, because that is what decides how
-    big the thing on the screen is: eight parts 50 mm across are 50 mm if they sit
-    on top of each other and 2 m if they are spread out, and the deflection that
-    looks right differs by the same factor. Composed the way the tree states it -
-    the placement being applied first, then the node's own - so that this agrees
-    with 'shape_envelope.placed()' and with whoever draws the result.
-
-    Only the nodes. The sketches a port is drawn with sit at a port, which is inside
-    the object whose port it is, so they cannot make the tree bigger than its nodes
-    already make it.
-    """
-    from OCP.Bnd import Bnd_Box
-    from OCP.BRepBndLib import BRepBndLib
-
-    box = Bnd_Box()
-
-    def walk(node, location):
-        if not isinstance(node, dict):
-            return
-        own = node.get(ocp_serialize.KEY_LOCATION)
-        if own is None:
-            here = location
-        else:
-            placement = ocp_serialize.toploc_from_packed(own)
-            here = placement if location is None else location.Multiplied(placement)
-        brep = node.get(ocp_serialize.KEY_BREP)
-        if brep:
-            try:
-                _, shape = _shape(brep, shapes)
-                # 'Moved' shares the underlying geometry rather than copying it, so
-                # measuring where a node sits costs nothing beyond the box itself.
-                BRepBndLib.Add_s(shape if here is None else shape.Moved(here), box, True)
-            except Exception as e:
-                errors.append("%s: %s" % (node.get("label") or node.get("name") or "a shape", e))
-        for child in node.get(ocp_serialize.KEY_ASSEMBLY) or []:
-            walk(child, here)
-
-    walk(tree, None)
-    if box.IsVoid():
-        return None
-    x0, y0, z0, x1, y1, z1 = box.Get()
-    return math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2 + (z1 - z0) ** 2)
-
-
-def _budget(size, request):
-    """The linear deflection to tessellate at, in mm.
-
-    Either what the caller asked for outright, or the screen-space budget the core
-    sent worked out against the size measured above. Clamped at both ends: the floor
-    stops a tiny object being tessellated to death for a gain no screen can show,
-    and the ceiling stops one stray node far from the origin turning everything else
-    into facets.
-    """
-    asked = request.get("tolerance")
-    if asked is not None:
-        return float(asked)
-    floor = float(request.get("minTolerance", 0.001))
-    ceiling = float(request.get("maxTolerance", 10.0))
-    divisor = float(request.get("screenDivisor") or 0.0)
-    if not size or divisor <= 0.0:
-        return floor
-    return min(max(size / divisor, floor), ceiling)
-
-
 def _convert(value, tolerance, angular_tolerance, errors, shapes, geometry, failed):
     """'value' with every piece of BREP in it replaced by a reference to its glTF.
 
@@ -443,16 +448,19 @@ def process(request):
     tree = request.get("tree")
     if not isinstance(tree, dict):
         raise Exception("No shape tree to convert into glTF")
-    angular_tolerance = request.get("angularTolerance", 0.4)
+    # In millimetres, and decided by the caller. Not worked out here, although this
+    # is the one process holding a kernel: the size it would be worked out from is
+    # recorded in the tree, the core reads it from there ('shape_gltf.size_of'), and
+    # measuring it again here would be a second answer to one question.
+    tolerance = request.get("tolerance")
+    if tolerance is None:
+        raise Exception("No tolerance to tessellate at; the caller decides it (see 'shape_gltf.tolerance_for')")
+    tolerance = float(tolerance)
+    angular_tolerance = float(request.get("angularTolerance", 0.4))
 
     errors = []
-    # Decoded shapes are kept across both passes: measuring the tree needs the same
-    # geometry that tessellating it does, and decoding a BREP twice is the one cost
-    # that measuring first would otherwise add.
+    # One decoded shape per distinct geometry, shared by every node naming it.
     shapes = {}
-    size = _size(tree, shapes, errors) if request.get("tolerance") is None else None
-    tolerance = _budget(size, request)
-
     geometry = {}
     converted = _convert(tree, tolerance, angular_tolerance, errors, shapes, geometry, set())
     converted[ocp_serialize.KEY_GEOMETRY] = geometry
@@ -461,11 +469,12 @@ def process(request):
         "exception": None,
         "tree": converted,
         "errors": errors,
-        # What was chosen and what it was chosen from, so that the core can say so
-        # rather than leave the one number that decides the size of all this unsaid.
+        # What was used, so that the core can say so rather than leave the numbers
+        # that decide the size of all this unsaid. 'mergedFaces' is None when
+        # nothing was exported and so nothing was found out.
         "tolerance": tolerance,
         "angularTolerance": angular_tolerance,
-        "size": size,
+        "mergedFaces": None if _create_xde is False else (_create_xde is not None),
     }
 
 
