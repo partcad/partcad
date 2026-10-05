@@ -111,9 +111,10 @@ def no_sandbox(monkeypatch):
         raise AssertionError("the core measured on demand instead of at build time")
 
     # Patched on the module itself rather than on a name 'shape.py' holds,
-    # because 'shape.py' does not hold one any more: it no longer imports
-    # 'measure' at all, which is the strongest form this assertion has. The
-    # patch is what would catch a lazy path being reintroduced.
+    # because 'shape.py' holds none: the one path there that measures on demand
+    # - a bounding box asked of a shape that recorded none - imports 'measure'
+    # lazily. So the patch reaches it, and catches it being taken for a shape
+    # that did record its size.
     monkeypatch.setattr(pc_measure, "measurements", refuse)
     monkeypatch.setattr(pc_measure, "bbox", refuse)
 
@@ -325,6 +326,50 @@ def test_an_empty_bounding_box_is_left_out_rather_than_invented(ctx, no_sandbox)
     measured = {"bbox": None, "volume": None, "solids": 0}
 
     assert asyncio.run(_Shape(measured=measured, name="empty")._reported_async(ctx)) == {}
+
+
+#
+# What the callers that need a size are given
+#
+
+
+def test_the_bounding_box_asked_for_is_the_one_recorded(ctx, no_sandbox):
+    """No sandbox to answer a question the shape answered when it was built.
+
+    The degenerate check and the exploded view ask for a part's box; the box
+    they get is the one in its envelope, and the fixture fails the test if a
+    process is started to compute it again.
+    """
+    shape = _Shape(name="boxed")
+
+    assert asyncio.run(shape.get_bounding_box_async(ctx)) == tuple(MEASURED["bbox"])
+    assert asyncio.run(shape.get_max_dimension_async(ctx)) == 20.0
+    assert shape.builds == 1
+
+
+def test_a_recorded_empty_box_is_an_answer_and_is_not_measured_again(ctx, no_sandbox):
+    """Measured and bounding nothing: 'None', from the record, with no sandbox."""
+    measured = {"bbox": None, "volume": None, "solids": 0}
+
+    assert asyncio.run(_Shape(measured=measured, name="boxed-empty").get_bounding_box_async(ctx)) is None
+
+
+def test_only_a_shape_that_recorded_no_size_is_measured_on_demand(ctx, monkeypatch):
+    """The one fallback, and it measures with the code that measures at build time."""
+    asked = []
+
+    async def bbox(context, shape, frame=None):
+        asked.append(shape)
+        return [0.0, 0.0, 0.0, 1.0, 2.0, 3.0]
+
+    monkeypatch.setattr(pc_measure, "bbox", bbox)
+    shape = _Shape(measured=None, name="boxed-unmeasured")
+
+    assert asyncio.run(shape.get_bounding_box_async(ctx)) == (0.0, 0.0, 0.0, 1.0, 2.0, 3.0)
+    # ...and remembered, so asking again does not measure again.
+    assert asyncio.run(shape.get_bounding_box_async(ctx)) == (0.0, 0.0, 0.0, 1.0, 2.0, 3.0)
+    assert len(asked) == 1
+    assert shape_envelope.is_shape_object(asked[0])
 
 
 #

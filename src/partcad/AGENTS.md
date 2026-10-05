@@ -491,8 +491,10 @@ at all).
   deserialized, to compute what was free at build time. `shape_measure.bbox` drops the gap OCCT pads a box by,
   so a 120 mm block measures 120.
 
-  `wrapper_measure` still exists for the one caller that measures something it did not build:
-  `measure.bbox(frame=...)`, which re-measures a shape in a **port's** frame rather than its own.
+  `Shape.get_bounding_box_async` reads that recorded box too; it does not measure a shape that carries one.
+  `wrapper_measure` still exists for what was not measured at build time: `measure.bbox(frame=...)`, which
+  re-measures a shape in a **port's** frame rather than its own, and the bounding box of a shape that recorded
+  none (a cache entry older than the measurements, or geometry too broken to measure as it was encoded).
 
 - **A part is a body, not a skin** (`wrappers/wrapper_common.solidify`, `brep_inspect.py`,
   `test/shell.py`): a shell is a set of faces with nothing said about which side of them is material; a solid
