@@ -832,10 +832,13 @@ Object commands
 
   ``--with-ports`` draws every port of the object on the projection: a coordinate frame at each, with the long
   arrow along ``+Z`` — the direction a part travels along when it is connected through that port — and the
-  name a ``connectPorts:`` would have to use written beside it. ``--with-interfaces`` names each *instance* of
-  an interface once, draws a line from that name out to each port that belongs to it, and draws each port's
-  boundary sketch where the port is. ``--with-all`` draws both. Every port drawn is also listed in the log,
-  with the exact name to write in an Assembly YAML file.
+  name a ``connectPorts:`` would have to use, joined to it by a line. ``--with-interfaces`` names each
+  *instance* of an interface once, draws a line from that name out to each port that belongs to it, and draws
+  each port's boundary sketch where the port is. ``--with-all`` draws both. Every port drawn is also listed in
+  the log, with the exact name to write in an Assembly YAML file.
+
+  The names are written around the object rather than on it: spread evenly around it, each on the side its
+  port is on, and with its line made as long as it takes for no name to land on the object or on another name.
 
   An assembly is taken at its word: what is drawn is what it says its ports are -- the ones its ``map:``
   externalizes and the ones it declares (see :ref:`assembly-ports`) -- and not everything inside it. That is

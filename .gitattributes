@@ -28,6 +28,15 @@
 # bytes where 60711 went in. `.3mf` is a zip container and the sniff does catch
 # it; named here too, so that neither rests on the heuristic.
 #
+# `.pdf` is also in LFS, below, and both lines are kept on purpose. Either one
+# alone stops the sniff -- `binary` and the `-text` on the LFS line each do it
+# -- so the `binary` line is what still holds if the LFS line is ever taken
+# away. Their order is the part that matters: `binary` is a macro for
+# `-diff -merge -text`, so a `binary` line placed *after* the LFS one would
+# take `diff=lfs` and `merge=lfs` back off while leaving `filter=lfs` in place.
+# The file would still be stored in LFS and would stop diffing as the text its
+# pointer is. `.pdf` is listed before the LFS block for that reason.
+#
 # `.ico` is one file, `ide/standalone/resources/partcad-ide.ico`, the
 # Windows IDE's icon, and `.bmp` is the pair beside it that Inno Setup draws the
 # installer's wizard with. They are deliberately not LFS like the `.png` and
@@ -76,6 +85,17 @@
 # there is not a broken picture, it is an example that fails to build, and it
 # would fail in CI first, where nothing fetches LFS.
 #
+# Both `.pdf`s in the tree are the output rule rather than the input one, and
+# nothing is held out: `examples/feature_render_custom/bracket.pdf` and
+# `examples/feature_import/AeroAssembly_assy_example/AeroAssembly_connected.pdf`
+# are written by `pc render` -- a drawing and an assembly instruction book --
+# and nothing reads either back. A README links to each, which is a reader
+# following a link rather than a build opening a file, and that is the same
+# thing every rendered `.png` in this tree already is. Half a megabyte of
+# reportlab output, rewritten in full whenever the assembly or the renderer
+# changes, is exactly what LFS is for; kept in the index it would be half a
+# megabyte of history per revision.
+#
 # The sixth is not a build input: `/examples/produce_sketch_basic/*.svg` are
 # renders like all the rest. They are held out because they are the smallest
 # drawings here by a wide margin -- seven files, 560 bytes to 15 KB, of a circle
@@ -93,6 +113,7 @@
 **/*.jpg filter=lfs diff=lfs merge=lfs -text
 **/*.png filter=lfs diff=lfs merge=lfs -text
 **/*.svg filter=lfs diff=lfs merge=lfs -text
+**/*.pdf filter=lfs diff=lfs merge=lfs -text
 /ide/vscode/resources/logo_128x128.png -filter binary
 /ide/vscode/resources/**/*.svg -filter binary
 /cad/freecad/resources/icons/*.svg -filter binary

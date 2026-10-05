@@ -3267,12 +3267,47 @@ class Project(project_config.Configuration):
         ) as document:
             self.ctx.ensure_dirs_for_file(path)
             if format == "html":
+                # Already the same bytes every time: nothing in the HTML is
+                # read off a clock, so there is no 'reproducible' to honour.
                 with open(path, "w") as f:
                     f.write(pc_document.render_html(document))
             else:
-                await render_pdf_async(self.ctx, document, path)
+                await render_pdf_async(
+                    self.ctx, document, path, reproducible=self._document_reproducible(assembly, format, render_cfg)
+                )
 
         return path
+
+    def _document_reproducible(self, shape, format, render_cfg=None) -> bool:
+        """Whether a generated document of 'shape' has to be the same bytes every time.
+
+        'reproducible:' on the file type, read the way the file types that *do*
+        go through an implementation read it: the package's setting, with the
+        object's own overriding it. A document is assembled by PartCAD rather
+        than by a wrapper (see 'output.NON_WRAPPER_FORMATS'), so it never
+        reaches 'Shape._output_getopts' and the full layering that does; this
+        is the one field of it a document has any use for.
+
+        It matters for a book that is checked in. 'pc render -r' over
+        'examples/' has to leave the tree as it is, which a file carrying the
+        time it was written cannot do -- so the instruction book stayed out of
+        the sweep until the PDF could promise that (see 'render:' in
+        'examples/feature_import/partcad.yaml' and 'document_pdf').
+
+        'render_cfg' is the one the book is being laid out by, when a caller
+        handed one over; without it, the package's own 'render:' is, which is
+        what '_assembly_document_target' defaults it to as well.
+        """
+        if render_cfg is None:
+            render_cfg = (self.config_obj or {}).get("render")
+        found = None
+        for section in (render_cfg, (getattr(shape, "config", None) or {}).get("render")):
+            if not isinstance(section, dict):
+                continue
+            cfg = output.normalize(section.get(format))
+            if output.REPRODUCIBLE_KEY in cfg:
+                found = cfg[output.REPRODUCIBLE_KEY]
+        return output.as_flag(found)
 
     async def assembly_guide_data_async(self, assembly_name, ignore_manufacturability=False):
         """The assembly instruction book as plain data, pictures included.

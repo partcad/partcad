@@ -1386,14 +1386,21 @@ jobs:
           coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-partcad-test-results/coverage.xml
           mamba deactivate
 
-      # The images and README.md files under 'examples/' are what the render
-      # above produces, and they are checked in on purpose: a change in how
-      # PartCAD renders then shows up here as a diff, which is the only thing
-      # that makes them a regression canary rather than decoration. Without this
-      # a render that produces different - or new - files passes green, which is
-      # how several examples came to reference images that were never committed.
-      # To make it pass, re-render locally and commit the result, or fix the
-      # regression.
+      # The images, README.md files and assembly instruction books under
+      # 'examples/' are what the render above produces, and they are checked in
+      # on purpose: a change in how PartCAD renders then shows up here as a
+      # diff, which is the only thing that makes them a regression canary rather
+      # than decoration. Without this a render that produces different - or new
+      # - files passes green, which is how several examples came to reference
+      # images that were never committed. To make it pass, re-render locally and
+      # commit the result, or fix the regression.
+      #
+      # The instruction book joined that sweep once a PDF could be the same
+      # bytes twice: reportlab writes the wall clock and a fresh document id
+      # into every file unless asked not to, so 'AeroAssembly_connected.pdf'
+      # used to be rendered by hand and watched by whoever remembered. It is
+      # 'reproducible: true' on the file type that settles those - see
+      # 'render:' on that assembly in 'examples/feature_import/partcad.yaml'.
       #
       # This job rather than a job of its own, so the check reuses the sandboxes
       # the render above has already provisioned; and one cell of the matrix
