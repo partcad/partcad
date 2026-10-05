@@ -1134,3 +1134,21 @@ input.switch:focus-visible {
     padding: 1rem;
     white-space: pre-line;
 }
+
+/* The Assembly tab's "Non Manufacturable!" banner: one line, in front of the
+   format, rather than an error over half of the pane - the instructions are
+   written all the same. */
+.assembly-banner {
+    padding: 0.1rem 0.5rem;
+    border-radius: 3px;
+    background: var(--vscode-inputValidation-warningBackground, #5c4a00);
+    border: 1px solid var(--vscode-inputValidation-warningBorder, #b89500);
+    color: var(--vscode-foreground);
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: help;
+}
+
+.assembly-banner[hidden] {
+    display: none;
+}

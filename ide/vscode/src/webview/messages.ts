@@ -503,6 +503,11 @@ export interface GuideData {
     plan?: PlanItem;
     /** The document written in the format asked for, for Save. */
     file?: { filename: string; extension: string; content?: string };
+    /**
+     * Whether the assembly is meant to be made ('manufacturable:', on it or its
+     * package). The tab asks for the instructions regardless, and says so.
+     */
+    manufacturable?: boolean;
 }
 
 /** One supplier's answer for one line item. */

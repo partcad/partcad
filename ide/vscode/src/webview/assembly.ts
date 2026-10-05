@@ -37,6 +37,7 @@ export class AssemblyView {
     private readonly recursiveBox = el('input');
     private readonly buildPartsBox = el('input');
     private readonly save = el('button', 'render-save', 'Save…');
+    private readonly banner = el('span', 'assembly-banner', 'Non Manufacturable!');
     private readonly body = el('div', 'assembly-body');
     private document: DocumentView | undefined;
 
@@ -54,6 +55,14 @@ export class AssemblyView {
         }
         this.formats.setAttribute('aria-label', 'Format');
         this.formats.addEventListener('change', () => callbacks.onChange());
+        // In front of the format, on the same line: the instructions are written
+        // all the same, and this is what says they describe something nobody is
+        // meant to build.
+        this.banner.hidden = true;
+        this.banner.title =
+            "This assembly is declared 'manufacturable: false', on itself or on its package. " +
+            'The instructions are written anyway, as with --ignore-manufacturability.';
+        header.appendChild(this.banner);
         header.appendChild(el('span', 'render-label', 'Format'));
         header.appendChild(this.formats);
 
@@ -94,6 +103,11 @@ export class AssemblyView {
         return this.buildPartsBox.checked;
     }
 
+    /** Show or hide the banner; undefined while it is not known yet. */
+    public setManufacturable(manufacturable: boolean | undefined): void {
+        this.banner.hidden = manufacturable !== false;
+    }
+
     public setBusy(text: string): void {
         this.clear();
         this.body.appendChild(placeholder(text));
@@ -107,6 +121,9 @@ export class AssemblyView {
     public show(data: GuideData): void {
         this.clear();
         this.document = new DocumentView(this.body, data.document);
+        if (data.manufacturable !== undefined) {
+            this.setManufacturable(data.manufacturable);
+        }
         // Only a file the host kept can be saved; a daemon too old to write one
         // still has its document shown.
         this.save.disabled = data.file === undefined;

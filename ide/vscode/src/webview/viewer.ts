@@ -732,6 +732,7 @@ function resetManufacturing(text: string): void {
     bvbView.setBusy(text);
     buildView.forget();
     buildView.setBusy('Select this tab to see how this is built.');
+    assemblyView.setManufacturable(undefined);
     assemblyView.setBusy('Select this tab to write the assembly instructions.');
 }
 
@@ -1131,6 +1132,9 @@ function onBvb(data: BvbData | undefined, error: string | undefined): void {
             data.choices = data.choices ?? {};
             const result = bvbView.render(data);
             manufacturing = { data, result };
+            // Known as soon as the tree is, which is long before the
+            // instructions are written: the Assembly tab says so up front.
+            assemblyView.setManufacturable(data.tree.manufacturable);
         } catch (e: unknown) {
             manufacturing = 'failed';
             bvbView.showError(`Failed to display this: ${e}`);

@@ -929,3 +929,21 @@ def test_the_pdf_request_carries_whether_it_has_to_be_reproducible():
     # Nothing asked for: the default is the same as everywhere else.
     asyncio.run(document_pdf.render_pdf_async(ctx, document, "/tmp/widget.pdf"))
     assert seen[-1]["reproducible"] is False
+
+
+@pytest.mark.slow
+def test_assembly_guide_data_says_whether_the_assembly_is_meant_to_be_made():
+    """Written regardless when asked to be, and saying which it is
+
+    The IDE's Assembly tab always asks with 'ignore_manufacturability' and puts
+    a banner over an assembly nobody is meant to build, instead of an error
+    where the instructions would be.
+    """
+    ctx = pc.init("examples")
+    prj = ctx.get_project("//produce_assembly_assy")
+
+    guide = prj.assembly_guide_data("logo_embedded", ignore_manufacturability=True)
+    assert guide["manufacturable"] is False
+    assert guide["document"]["pages"]
+
+    assert prj.assembly_guide_data("logo", ignore_manufacturability=True)["manufacturable"] is True

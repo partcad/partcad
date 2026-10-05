@@ -3352,9 +3352,11 @@ class Project(project_config.Configuration):
         is the links that are useful to a reader over a wire - the urls the
         packages declare.
 
-        Returns '{"document", "plan", "pages"}' - the build plan the book follows
+        Returns '{"document", "plan", "pages", "manufacturable"}' - the build plan the book follows
         and the page of it each plan item is on, which is what the IDE's Build
-        tab pairs up - and, when a 'format' is given, '"file"': the very same
+        tab pairs up - whether the assembly is meant to be made at all, which a
+        caller passing 'ignore_manufacturability' learns only from this - and,
+        when a 'format' is given, '"file"': the very same
         document written down in it, as '{"filename", "extension", "content"}'
         with the content base64-encoded, for a client to save on its own side.
         """
@@ -3378,6 +3380,10 @@ class Project(project_config.Configuration):
                 "document": pc_document.to_data(guide.document, embed_images=True),
                 "plan": guide.plan.to_data(),
                 "pages": guide.pages,
+                # Whether the assembly is meant to be made, judged exactly as
+                # 'check_source' judges it: a client that asked with
+                # 'ignore_manufacturability' still has to be able to say so.
+                "manufacturable": bool(assembly_guide.resolve_alias(self.ctx, assembly).is_manufacturable),
             }
             if format is not None:
                 result["file"] = await self._document_file_async(guide.document, format, assembly_name)

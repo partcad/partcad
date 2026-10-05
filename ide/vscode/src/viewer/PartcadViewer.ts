@@ -331,6 +331,10 @@ export class PartcadViewer implements vscode.Disposable {
                 args.recursive = message.recursive === true;
                 args.buildParts = message.buildParts === true;
                 args.format = format;
+                // Written whether or not the assembly is meant to be made: the
+                // tab says which, in a banner, rather than refusing to show the
+                // steps (the daemon answers 'manufacturable' either way).
+                args.ignoreManufacturability = true;
                 const data = (await vscode.commands.executeCommand(command, args)) as
                     { file?: { filename: string; extension: string; content: string } } | undefined;
                 const file = data?.file;
