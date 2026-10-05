@@ -110,6 +110,35 @@ suite('Terminal PATH', () => {
         assert.ok(fs.existsSync(path.join(dir, CLI)), 'the same directory holds `pc`');
     });
 
+    test("under the debugger the directory is the checkout's .venv, as for the service", async () => {
+        // `restartBackend` runs `<checkout>/.venv/bin/partcad-json-rpc` when the
+        // extension is debugged with Python attached. The PATH has to follow it:
+        // looking the tools up the ordinary way found nothing in a dev container
+        // and left the debug window's terminals without `pc`.
+        const checkout = path.join(tmp, 'checkout');
+        const venvBin = path.join(checkout, '.venv', process.platform === 'win32' ? 'Scripts' : 'bin');
+        fs.mkdirSync(venvBin, { recursive: true });
+        fs.writeFileSync(path.join(venvBin, EXE), '');
+        const context = {
+            ...fakeContext(new RecordingCollection()),
+            extensionMode: vscode.ExtensionMode.Development,
+            extensionPath: path.join(checkout, 'ide', 'vscode'),
+        } as unknown as vscode.ExtensionContext;
+        await pointServicePathAt(undefined);
+
+        const saved = process.env.PC_DEBUGPY;
+        process.env.PC_DEBUGPY = 'localhost:5678';
+        try {
+            assert.strictEqual(toolsDirectory(context, 'partcad'), venvBin);
+        } finally {
+            if (saved === undefined) {
+                delete process.env.PC_DEBUGPY;
+            } else {
+                process.env.PC_DEBUGPY = saved;
+            }
+        }
+    });
+
     // ---- what the collection is left holding -------------------------------
 
     test('a first install puts the directory on PATH without a reload', async () => {
