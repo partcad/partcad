@@ -21,6 +21,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
+import { checkoutService, debugCheckout } from './debug';
 import { traceInfo } from './log/logging';
 import { resolveServicePath } from './provision';
 import { getAddToolsToTerminalPathFromSetting } from './settings';
@@ -63,7 +64,12 @@ let applied: string | undefined | null = null;
  * will do with the PATH it has not been given yet.
  */
 export function toolsDirectory(context: vscode.ExtensionContext, serverId: string): string | undefined {
-    const execPath = resolveServicePath(context, serverId);
+    // The service `restartBackend` runs, looked up the same way: under the
+    // debugger that is the checkout's own `.venv`, which `resolveServicePath`
+    // knows nothing about -- so a debug window used to put nothing on the PATH
+    // and its terminals had no `pc` at all.
+    const checkout = debugCheckout(context);
+    const execPath = (checkout && checkoutService(checkout)) || resolveServicePath(context, serverId);
     return execPath ? path.dirname(execPath) : undefined;
 }
 
