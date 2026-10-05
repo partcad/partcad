@@ -2898,9 +2898,16 @@ class Shape(ShapeConfiguration):
         """The axis-aligned bounding box of this shape, in its own coordinates.
 
         Returned as '(x_min, y_min, z_min, x_max, y_max, z_max)', or 'None' when
-        the shape is empty or failed to instantiate. Measured in a sandbox, like
-        every other operation on geometry, and remembered afterwards: the callers
-        that need a size (exploded views) ask for the same one repeatedly.
+        the shape is empty or failed to instantiate, and remembered afterwards:
+        the callers that need a size (exploded views) ask for the same one
+        repeatedly.
+
+        It is the box the shape recorded when it was built (see
+        'get_measurements_async'), which is the answer every shape a wrapper
+        returned already carries - building it is what measured it, and reading
+        it back is a cache read. Only a shape that recorded no box is measured
+        here, in a sandbox, by the same code that measures one as it is built:
+        two ways of computing "how big is it" would be two answers to it.
         """
         if self._bounding_box is not None:
             return self._bounding_box
@@ -2909,40 +2916,23 @@ class Shape(ShapeConfiguration):
         if obj is None:
             return None
 
-        with pc_logging.Action("BoundingBox", self.project_name, self.name):
-            request_serialized = shape_envelope.serialize({"wrapped": obj})
+        measured = await self.get_measurements_async(ctx)
+        if measured is not None:
+            # Measured, so trusted either way: a box of None is a shape that
+            # built and bounds nothing, and measuring it again says so again.
+            box = measured.get(shape_envelope.METADATA_BBOX)
+        else:
+            # Lazily, because this is the one path in this module that measures
+            # on demand, and it is reached only by a shape nothing measured.
+            from . import measure as pc_measure
 
-            runtime = ctx.get_python_runtime(version="3.11")
-            await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+            with pc_logging.Action("BoundingBox", self.project_name, self.name):
+                box = await pc_measure.bbox(ctx, obj)
+        if box is None:
+            return None
 
-            # The wrapper writes nothing, but every wrapper is invoked with an
-            # output path; give it one inside a directory of our own, which is
-            # removed with the call.
-            with tempfile.TemporaryDirectory(prefix="partcad-bbox-") as unused_dir:
-                command = [wrapper.get("bbox.py"), os.path.join(unused_dir, "unused.txt")]
-                exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
-            if exitcode != 0 and len(errors) == 0:
-                errors = command_failure(command, exitcode)
-            if errors:
-                pc_logging.error(errors)
-                raise Exception(errors)
-
-            response_lines = response_serialized.strip().splitlines()
-            if not response_lines:
-                pc_logging.error("Empty response from wrapper: %s" % command[0])
-                return None
-            result = shape_envelope.deserialize(response_lines[-1].strip())
-
-            if not result.get("success", False):
-                pc_logging.error(
-                    "BoundingBox failed for %s:%s: %s"
-                    % (self.project_name, self.name, result.get("exception", "Unknown error"))
-                )
-                return None
-
-            box = result.get("bounding_box")
-            self._bounding_box = None if box is None else tuple(box)
-            return self._bounding_box
+        self._bounding_box = tuple(box)
+        return self._bounding_box
 
     def get_bounding_box(self, ctx):
         return asyncio.run(self.get_bounding_box_async(ctx))
