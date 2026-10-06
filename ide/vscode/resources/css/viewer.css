@@ -321,14 +321,13 @@ body {
     min-height: 0;
 }
 
-.viewer canvas,
-.viewer svg.surface {
+.viewer canvas {
     display: block;
     width: 100%;
     height: 100%;
 }
 
-/* The 3D view drawn without a GPU (see 'svgRenderer' in scene.ts): said in a
+/* The 3D view drawn without a GPU (see 'painter.ts'): said in a
    corner, with how to have the GPU back in its tooltip. */
 .software-notice {
     position: absolute;
