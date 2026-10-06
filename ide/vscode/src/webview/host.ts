@@ -157,7 +157,7 @@ const LINUX_ICON_COMMAND = String.raw`for f in /usr/share/applications/code.desk
  * ('.overlay.failure' in 'viewer.css'), and three.js's own words go last, for
  * whoever is asked to help.
  */
-function noWebGL(message: string): string {
+export function noWebGL(message: string): string {
     const os = platform();
     const terminal = { windows: 'Command Prompt', mac: 'the Terminal app', linux: 'a terminal' }[os];
     const lines = [

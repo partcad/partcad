@@ -228,6 +228,15 @@ Four things about it are load-bearing:
   handler registered, no `ready` posted, nothing logged. `host.ts` traps `error`/`unhandledrejection` and puts
   the reason in the overlay; it lives there because every webview module imports it, and a module's
   dependencies are evaluated before its own body, so it is installed before anything can throw.
+- **No WebGL is not no 3D view.** `scene.ts` catches the `WebGLRenderer` constructor's throw and draws the same
+  scene with three's `SVGRenderer` instead (`software`): the CPU projects the triangles and the DOM holds them
+  as SVG polygons, so there is nothing to install and no switch to restart VS Code with. It is a different
+  renderer with different limits, and the code says where it differs: it draws only when something changed
+  (`invalidate`), not every frame; the model does not turn on its own until asked; the light rig is replaced
+  by a light that moves with the camera, because it knows no spot or hemisphere lights and has no environment
+  map; a solid is drawn front-side only, because it orders whole triangles by depth and a far face would
+  stripe the near one; and a model over `SOFTWARE_TRIANGLE_BUDGET` triangles is drawn as boxes while the
+  camera moves. The advice for getting the GPU back (`host.ts` `noWebGL`) is its notice's tooltip.
 - **Nothing is escaped on its way into a pane.** What the tabs display is text out of a package's
   configuration -- a description, a part name, a supplier's answer, the name of a port -- so every pane builds
   its DOM node by node through `src/webview/dom.ts` rather than assigning `innerHTML`. `textContent` cannot be

@@ -68,6 +68,13 @@ one is. So a position is used rather than the object's name where there is
 nothing else -- a name shared by a hundred rows would say nothing about any of
 them.
 
+Names need not be unique, though. A file that places four legs in a loop may
+call every one of them ``leg``, and a name every leg answers to cannot pick one
+of them out. So a :ref:`filter <assy-filter>` may also name **any** link by its
+position, ``link#3``, whatever it is otherwise called -- the IDE's 2D and Draft
+panels name a link that way exactly when its name is shared with another link
+beside it.
+
   .. code-block:: yaml
 
     links:

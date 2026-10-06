@@ -49,12 +49,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { SVGRenderer } from 'three/examples/jsm/renderers/SVGRenderer.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import { calloutsOf } from './callouts';
 import { el } from './dom';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
-import { reportError } from './host';
+import { noWebGL, reportError } from './host';
 import { ShowMessage, ShowNode } from './messages';
 import { ItemId, PORT_COLOR, PORT_OPACITY, flickerOn, nodeId, portId, totalSize } from './nodes';
 import { SpaceMouse, navigate } from './spacemouse';
@@ -66,14 +67,88 @@ const AUTO_ROTATE_SPEED = 5.0;
 const container = document.getElementById('viewer') as HTMLDivElement;
 const overlay = document.getElementById('overlay') as HTMLDivElement;
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setPixelRatio(window.devicePixelRatio);
-// The panel's background is the editor's, so the canvas stays transparent and
-// the viewer follows the user's colour theme rather than fighting it.
-renderer.setClearColor(0x000000, 0);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-container.appendChild(renderer.domElement);
+/**
+ * The GPU renderer, or undefined when this window has no WebGL to give it.
+ *
+ * Its constructor throws when there is no context - in a virtual machine, over
+ * remote desktop, on a Linux box whose GPU process failed - and the view used to
+ * end there, with instructions for restarting VS Code in a mode it could draw
+ * in. It draws regardless now: see 'svgRenderer'.
+ */
+let webgl: THREE.WebGLRenderer | undefined;
+/** Why there is no GPU renderer, in three's words, for the notice that says so. */
+let noWebGLReason: string | undefined;
+try {
+    webgl = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    webgl.setPixelRatio(window.devicePixelRatio);
+    // The panel's background is the editor's, so the canvas stays transparent and
+    // the viewer follows the user's colour theme rather than fighting it.
+    webgl.setClearColor(0x000000, 0);
+    webgl.toneMapping = THREE.ACESFilmicToneMapping;
+    webgl.outputColorSpace = THREE.SRGBColorSpace;
+} catch (error: unknown) {
+    webgl = undefined;
+    noWebGLReason = error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * The renderer that needs no GPU: the same scene, projected on the CPU and drawn
+ * as SVG polygons, flat-shaded.
+ *
+ * three's own, so it takes the scene graph as it is - the glTF meshes, the port
+ * triads and boundaries, the lights - and nothing here is drawn twice. What it
+ * costs is speed: every triangle is a polygon in the DOM, which is a few
+ * milliseconds for a part and a tenth of a second for an assembly of 60,000
+ * triangles. So it draws only when something changed ('invalidate'), and a big
+ * model is drawn as boxes while the camera is being moved ('proxies').
+ */
+const svgRenderer = webgl === undefined ? new SVGRenderer() : undefined;
+// Each triangle is its own polygon, and an anti-aliased edge between two of them
+// lets the background through as a hairline along every seam of the mesh: each
+// is drawn a pixel larger than it is, so that its neighbours overlap it.
+if (svgRenderer !== undefined) {
+    svgRenderer.overdraw = 1;
+}
+
+/** Whether the 3D view is drawn without a GPU (see 'svgRenderer'). */
+export const software = webgl === undefined;
+
+/** Why, when it is: what three said when it could not create a WebGL context. */
+export const softwareReason = noWebGLReason;
+
+const surface = (webgl?.domElement ?? svgRenderer!.domElement) as HTMLElement | SVGElement;
+surface.classList.add('surface');
+container.appendChild(surface);
+
+if (software) {
+    // Said, small and out of the way: the view works, and the reader should know
+    // why it is flat-shaded and slower than it could be - and how to have the
+    // GPU back, which is the advice the view used to give instead of a picture.
+    const notice = el('div', 'software-notice', 'Drawn without a graphics card');
+    notice.title = noWebGL(noWebGLReason ?? 'WebGL is not available');
+    container.appendChild(notice);
+}
+
+/** Draw the stage once. */
+function drawStage(): void {
+    if (webgl !== undefined) {
+        webgl.render(scene, camera);
+    } else {
+        svgRenderer!.render(scene, camera);
+    }
+}
+
+/**
+ * Something on the stage changed: the software renderer draws on the next frame.
+ *
+ * The GPU renderer draws every frame anyway and ignores this. The software one
+ * draws only when told, because a frame of it is a DOM's worth of polygons.
+ */
+let dirty = true;
+
+function invalidate(): void {
+    dirty = true;
+}
 
 // The text pinned to the model - what its metadata says about its elements - is
 // DOM laid over the canvas rather than geometry drawn into it: text drawn as
@@ -88,17 +163,26 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 10000);
 camera.position.set(0, 0, 5);
 
-const controls = new OrbitControls(camera, renderer.domElement);
+const controls = new OrbitControls(camera, surface as HTMLElement);
 controls.enableDamping = true;
-controls.autoRotate = true;
+// Turning on its own is a frame every 16 ms for as long as the panel is open,
+// which the software renderer cannot afford: off there until it is asked for.
+controls.autoRotate = !software;
 controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
+// Any movement of the camera - a drag, the damping after it, a turn of the
+// model on its own - is a new picture.
+controls.addEventListener('change', invalidate);
 
 // An environment map stands in for drei's <Environment preset="...">: image
 // based lighting is what makes a machined surface read as one. RoomEnvironment
 // is generated in code, so it costs no asset and works offline.
-const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = STAGE_INTENSITY;
+// It is rendered on the GPU, so only where there is one; the software renderer
+// lights the model with the lights below and nothing else.
+if (webgl !== undefined) {
+    const pmrem = new THREE.PMREMGenerator(webgl);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = STAGE_INTENSITY;
+}
 
 // <Stage>'s light rig, plus the two lights Part.js adds itself. Positions are
 // set from the model's size in frame(), because a rig scaled for a 10 mm part
@@ -121,6 +205,27 @@ const hemisphereLight = new THREE.HemisphereLight(0x40c040, 0x000000, 0.7);
 const partPointLight = new THREE.PointLight(0xffffff, 1, 0, 0);
 scene.add(ambientLight, spotLight, stagePointLight, hemisphereLight, partPointLight);
 
+// Drawn without a GPU, the model is lit differently: the software renderer
+// knows ambient, directional and point lights and nothing else, and a flat face
+// takes one colour, so the rig above - a spot, a hemisphere, point lights tuned
+// for image-based lighting - washes every face out to the same pale tint. What
+// reads instead is a light that moves with the viewer, so that faces turned
+// away from it darken as they turn, and enough ambient light that none goes
+// black.
+if (software) {
+    scene.remove(spotLight, stagePointLight, hemisphereLight, partPointLight);
+    ambientLight.intensity = 0.2;
+    const headlight = new THREE.DirectionalLight(0xffffff, 0.85);
+    // From above and to the left of the viewer rather than from the viewer: a
+    // light from the eye lights every face it can see about equally, and flat
+    // faces that differ by their angle alone then read as one.
+    headlight.position.set(-0.7, 1, 0.5);
+    camera.add(headlight);
+    camera.add(headlight.target);
+    headlight.target.position.set(0, 0, -1);
+    scene.add(camera);
+}
+
 /**
  * Whether what a shape's metadata says about its elements is pinned to them.
  *
@@ -130,6 +235,7 @@ scene.add(ambientLight, spotLight, stagePointLight, hemisphereLight, partPointLi
  */
 export function setShowMetadata(enabled: boolean): void {
     labelRenderer.domElement.style.display = enabled ? '' : 'none';
+    invalidate();
 }
 
 /** Everything the current show put on the stage; replaced wholesale by the next. */
@@ -183,6 +289,7 @@ export function flicker(items: Set<ItemId> | undefined): void {
     }
     flickering = items;
     flickeringSince = performance.now();
+    invalidate();
 }
 
 /** Set the visibility of these items from the pane's state, ignoring any flicker. */
@@ -224,6 +331,7 @@ export function showItems(visible: ReadonlySet<string>): void {
             object.visible = visible.has(id);
         }
     }
+    invalidate();
 }
 
 /**
@@ -314,6 +422,8 @@ export function clearGeometry(): void {
     drawnBy.clear();
     visibleItems = undefined;
     flickering = undefined;
+    dropProxies();
+    invalidate();
     overlay.textContent = 'Nothing to display yet.';
     overlay.style.display = '';
 }
@@ -754,6 +864,15 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // the time of opening a large assembly goes, and it is the step that does not
     // grow with the number of times a shape is placed.
     const geometry = new Geometry();
+    if (software && message.kind !== 'sketch') {
+        // The software renderer orders whole triangles by their depth rather than
+        // each pixel, and a long thin triangle on the far side of a solid is
+        // drawn over the near side often enough to stripe it. A solid is closed,
+        // so its far side is never what is seen: drawn front-side only, it is not
+        // drawn at all. A sketch is a lamina that is seen from both sides, and
+        // keeps both (see 'Geometry.load').
+        geometry.material.side = THREE.FrontSide;
+    }
     const failedToParse = await geometry.load(object, total, superseded);
     if (superseded()) {
         return;
@@ -837,6 +956,8 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // the camera has to stay where it is when an item is unchecked, and a model
     // that reframed itself on every checkbox would be unusable.
     frame(group, message.keepCamera);
+    buildProxies(group);
+    invalidate();
 
     // Nothing parsed: an empty scene with the overlay hidden is a viewer that
     // looks idle, which is the one thing this must not look like. The reason
@@ -944,7 +1065,12 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
 
         // Create on-screen stats display
         if (!(window as any).pcViewerStats) {
-            (window as any).pcViewerStats = { frameTimeHistory: [], lastLogTime: 0, statsDisplay: null, geometryInfo: '' };
+            (window as any).pcViewerStats = {
+                frameTimeHistory: [],
+                lastLogTime: 0,
+                statsDisplay: null,
+                geometryInfo: '',
+            };
         }
         if (!(window as any).pcViewerStats.statsDisplay) {
             const div = document.createElement('div');
@@ -978,10 +1104,15 @@ export function resizeCanvas(): void {
     if (width === 0 || height === 0) {
         return;
     }
-    renderer.setSize(width, height, false);
+    if (webgl !== undefined) {
+        webgl.setSize(width, height, false);
+    } else {
+        svgRenderer!.setSize(width, height);
+    }
     labelRenderer.setSize(width, height);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    invalidate();
 }
 
 /** What the Animate box says; a SpaceMouse being moved pauses it without unticking it. */
@@ -1026,6 +1157,7 @@ export function setOpacity(opacity: number): void {
             apply(material);
         }
     });
+    invalidate();
 }
 
 function animate(): void {
@@ -1043,6 +1175,8 @@ function animate(): void {
     controls.autoRotate = autoRotate && motion === undefined;
     controls.update();
     if (flickering !== undefined) {
+        // A flicker is a change on every frame it lasts.
+        invalidate();
         const on = flickerOn(performance.now() - flickeringSince);
         for (const id of flickering) {
             // Only what the pane is drawing: a hover says which of the things on
@@ -1055,14 +1189,25 @@ function animate(): void {
             }
         }
     }
-    renderer.render(scene, camera);
+    if (webgl === undefined && !dirty) {
+        // Nothing moved and nothing changed: the picture on screen is still it.
+        return;
+    }
+    dirty = false;
+    drawStage();
     labelRenderer.render(scene, camera);
 
     // FPS tracking for performance logging (behind config flag)
     const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
     if (perfDebug) {
         if (!(window as any).pcViewerStats) {
-            (window as any).pcViewerStats = { frameTimeHistory: [], lastLogTime: 0, lastFrameTime: now, statsDisplay: null, geometryInfo: '' };
+            (window as any).pcViewerStats = {
+                frameTimeHistory: [],
+                lastLogTime: 0,
+                lastFrameTime: now,
+                statsDisplay: null,
+                geometryInfo: '',
+            };
         }
         const stats = (window as any).pcViewerStats;
         const frameInterval = now - stats.lastFrameTime;
@@ -1074,13 +1219,14 @@ function animate(): void {
 
         // Log FPS every second
         if (now - stats.lastLogTime > 1000) {
-            const avg = stats.frameTimeHistory.reduce((a: number, b: number) => a + b, 0) / stats.frameTimeHistory.length;
+            const avg =
+                stats.frameTimeHistory.reduce((a: number, b: number) => a + b, 0) / stats.frameTimeHistory.length;
             const fps = 1000 / avg;
             console.log(`[PartCAD Viewer] FPS: ${fps.toFixed(1)} (frame time: ${avg.toFixed(2)}ms)`);
 
             // Update on-screen display with FPS and graphics info
-            const renderInfo = renderer.info.render;
-            const memInfo = renderer.info.memory;
+            const renderInfo = webgl?.info.render ?? { calls: 0, triangles: 0 };
+            const memInfo = webgl?.info.memory ?? { geometries: 0, textures: 0 };
             if (stats.statsDisplay) {
                 const fpsInfo = `\nFPS: ${fps.toFixed(1)} | Frame: ${avg.toFixed(1)}ms`;
                 const graphicsInfo = `\nDraw Calls: ${renderInfo.calls} | Geometries: ${memInfo.geometries}`;
@@ -1097,6 +1243,89 @@ function animate(): void {
     }
 }
 
+/**
+ * How many triangles the software renderer draws while the camera is moving.
+ *
+ * Above it, a frame is long enough that a drag stutters, so while one lasts the
+ * model is drawn as the outline of each of its pieces' boxes - which says where
+ * everything is and moves at once - and in full again when it is let go.
+ */
+const SOFTWARE_TRIANGLE_BUDGET = 30000;
+
+/** The boxes a big model is drawn as while it is being moved, or undefined. */
+let proxies: THREE.Group | undefined;
+
+function trianglesOf(group: THREE.Object3D): number {
+    let count = 0;
+    group.traverse((node) => {
+        const mesh = node as THREE.Mesh;
+        if (!mesh.isMesh || mesh.geometry === undefined) {
+            return;
+        }
+        const geometry = mesh.geometry as THREE.BufferGeometry;
+        const vertices = geometry.index?.count ?? geometry.getAttribute('position')?.count ?? 0;
+        count += vertices / 3;
+    });
+    return count;
+}
+
+function dropProxies(): void {
+    if (proxies !== undefined) {
+        scene.remove(proxies);
+        proxies.traverse((node) => {
+            const helper = node as THREE.Box3Helper;
+            helper.geometry?.dispose();
+        });
+        proxies = undefined;
+    }
+}
+
+/** On the software renderer, and for a model over the budget: a box per mesh, in place. */
+function buildProxies(group: THREE.Group): void {
+    dropProxies();
+    if (!software || trianglesOf(group) <= SOFTWARE_TRIANGLE_BUDGET) {
+        return;
+    }
+    group.updateMatrixWorld(true);
+    proxies = new THREE.Group();
+    proxies.visible = false;
+    group.traverse((node) => {
+        const mesh = node as THREE.Mesh;
+        if (!mesh.isMesh) {
+            return;
+        }
+        const box = new THREE.Box3().setFromObject(mesh);
+        if (!box.isEmpty()) {
+            proxies!.add(new THREE.Box3Helper(box, 0x40c040));
+        }
+    });
+    scene.add(proxies);
+}
+
+if (software) {
+    controls.addEventListener('start', () => {
+        if (proxies !== undefined && content !== undefined) {
+            content.visible = false;
+            proxies.visible = true;
+        }
+    });
+    controls.addEventListener('end', () => {
+        if (proxies !== undefined && content !== undefined) {
+            content.visible = true;
+            proxies.visible = false;
+        }
+        invalidate();
+    });
+}
+
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
-renderer.setAnimationLoop(animate);
+if (webgl !== undefined) {
+    webgl.setAnimationLoop(animate);
+} else {
+    const loop = () => {
+        animate();
+        requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+}

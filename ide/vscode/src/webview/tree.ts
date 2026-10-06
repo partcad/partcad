@@ -418,16 +418,25 @@ export class Tree {
      * is addressed by its position (see 'ShowNode.label'). So there is no row
      * here that cannot be named and no second rule for one.
      *
+     * Labels need not be unique, though: an ASSY file that places four legs in a
+     * loop may call every one of them 'leg', and a mask that says 'leg' keeps all
+     * four however many of their boxes are cleared. So a row whose label another
+     * row beside it shares is named by its position instead - 'link#2' - which
+     * PartCAD accepts for any link (see 'assy_filter.Filter.select_link'). The
+     * node rows are the object's links in order, so the position is the row's.
+     *
      * Only node rows take part. A port is not a link, and whether one is drawn
      * is the overlay's business, not the filter's.
      */
     private links(rows: Row[]): { mask: LinkFilter; whole: boolean } {
         const mask: LinkFilter = {};
         let whole = true;
-        for (const row of rows) {
-            if (row.item.kind !== 'node') {
-                continue;
-            }
+        const nodes = rows.filter((row) => row.item.kind === 'node');
+        const counts = new Map<string, number>();
+        for (const row of nodes) {
+            counts.set(row.item.name, (counts.get(row.item.name) ?? 0) + 1);
+        }
+        for (const [position, row] of nodes.entries()) {
             if (!row.checked) {
                 whole = false;
                 continue;
@@ -437,7 +446,8 @@ export class Tree {
             // An empty mask is how the filter language says "and everything
             // inside it", which is exactly what a subtree with every box ticked
             // means -- and it is shorter than naming all of them.
-            mask[row.item.name] = inner.whole ? {} : inner.mask;
+            const name = (counts.get(row.item.name) ?? 0) > 1 ? `link#${position + 1}` : row.item.name;
+            mask[name] = inner.whole ? {} : inner.mask;
         }
         return { mask, whole };
     }

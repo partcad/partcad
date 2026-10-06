@@ -378,3 +378,35 @@ def test_a_collision_inside_a_selected_container_is_refused_too():
     }
     with pytest.raises(FilterError, match="'tower'"):
         assy_filter.filter_document(doc, assy_filter.parse({"tower": ["link#2"]}))
+
+
+#
+# Links that share a name
+#
+
+
+def test_any_link_answers_to_its_position_as_well_as_its_name():
+    mask = assy_filter.of({"link#2": {}, "top": {}})
+
+    assert mask.select_link("leg", 1) == ("link#2", mask.children["link#2"])
+    assert mask.select_link("top", 2) == ("top", mask.children["top"])
+    # Its name first: a link called 'top' at position 2 is selected as 'top'.
+    assert mask.select_link("leg", 0) == (None, None)
+    assert assy_filter.KEEP_ALL.select_link("leg", 3) == ("leg", assy_filter.KEEP_ALL)
+
+
+def test_one_of_several_links_of_one_name_is_kept_by_its_position():
+    document = {
+        "links": [
+            {"part": "leg", "name": "leg"},
+            {"part": "leg", "name": "leg"},
+            {"part": "leg", "name": "leg"},
+            {"part": "top"},
+        ]
+    }
+
+    problems = assy_filter.filter_document(document, assy_filter.of({"link#2": {}, "top": {}}))
+
+    assert problems == []
+    assert [link.get("name", link.get("part")) for link in document["links"]] == ["leg", "top"]
+    assert len(document["links"]) == 2

@@ -11,8 +11,8 @@ The panel is a strip of tabs over one object, not a canvas:
 | **CFD** | parts | the daemon's `cae.analyze` (what `pc cae cfd` runs) |
 | **Build vs Buy** | parts, assemblies | the daemon's `manufacturing.tree` and `manufacturing.details`, and the user's choices from `~/.partcad/garage` |
 | **Build** | whatever is built | the daemon's `manufacturing.plan` (the order `pc instructions` writes its pages in) |
-| **Bill of Materials** | parts, assemblies | the daemon's `bom` (what `pc bom` prints) |
 | **Buy** | whatever is bought | the daemon's `supply.quote` (the cart `pc supply quote` fills) |
+| **Bill of Materials** | parts, assemblies | the daemon's `bom` (what `pc bom` prints) |
 | **Assembly** | assemblies | the daemon's `assembly.guide` (the book `pc instructions -t html\|pdf` writes) |
 
 The 3D view is always the first: "show this part" means the geometry. The rest are questions about
