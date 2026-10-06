@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 14:45+0000\n"
+"POT-Creation-Date: 2026-10-06 16:15+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ru\n"
@@ -84,8 +84,7 @@ msgstr "Внешняя фигура: `circle`, `rectangle`, `square`, `slot`"
 
 #: ../../source/design.rst:34
 msgid "Optional inner shape: `circle`, `rectangle`, `square`, `slot`"
-msgstr ""
-"Необязательная внутренняя фигура: `circle`, `rectangle`, `square`, `slot`"
+msgstr "Необязательная внутренняя фигура: `circle`, `rectangle`, `square`, `slot`"
 
 #: ../../source/design.rst:36 ../../source/design.rst:65
 msgid "Files"
@@ -151,8 +150,9 @@ msgid "Parts"
 msgstr "Детали"
 
 #: ../../source/design.rst:63
-msgid "PartCAD has an evergrowing list of ways to define the part model:"
-msgstr "PartCAD имеет постоянно растущий список способов задания модели детали:"
+msgid "PartCAD has an ever-growing list of ways to define the part model:"
+msgstr ""
+"PartCAD имеет постоянно растущий список способов задания модели детали:"
 
 #: ../../source/design.rst:67
 msgid "`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_"
@@ -283,8 +283,8 @@ msgid ""
 "PartCAD scenes can be exported to and simulated in Gazebo, but without "
 "using XML while creating the scene. See :doc:`simulation`."
 msgstr ""
-"PartCAD пока не реализует сцены. Но идея в том, чтобы воспроизвести те же "
-"возможности, что и миры в Gazebo, в такой степени, чтобы сцены PartCAD "
+"PartCAD пока не реализует сцены. Но идея в том, чтобы воспроизвести те же"
+" возможности, что и миры в Gazebo, в такой степени, чтобы сцены PartCAD "
 "можно было экспортировать в Gazebo и симулировать в нём, но без "
 "использования XML при создании сцены. См. :doc:`simulation`."
 
@@ -395,8 +395,8 @@ msgid ""
 " *software* and *partTypes*. All of them need to get referenced."
 msgstr ""
 "Пакеты PartCAD содержат объекты разных типов: *эскизы*, *детали*, "
-"*сборки*, *сцены*, *интерфейсы*, *сопряжения*, *материалы*, *поставщики*, "
-"*программное обеспечение* и *partTypes*. На все из них нужно уметь "
+"*сборки*, *сцены*, *интерфейсы*, *сопряжения*, *материалы*, *поставщики*,"
+" *программное обеспечение* и *partTypes*. На все из них нужно уметь "
 "ссылаться."
 
 #: ../../source/design.rst:175
@@ -531,9 +531,9 @@ msgid ""
 "of PartCAD features."
 msgstr ""
 "Инструменты командной строки PartCAD устанавливаются с помощью "
-"PyPI-пакета ``partcad``, который также содержит Python-модуль и "
-"JSON-RPC-сервис. Основной инструмент называется ``pc``. Предполагается, "
-"что инструменты командной строки предоставляют полный набор возможностей "
+"PyPI-пакета ``partcad``, который также содержит Python-модуль и JSON-"
+"RPC-сервис. Основной инструмент называется ``pc``. Предполагается, что "
+"инструменты командной строки предоставляют полный набор возможностей "
 "PartCAD."
 
 #: ../../source/design.rst:258
@@ -551,8 +551,8 @@ msgstr ""
 "Расширение PartCAD для ``vscode`` задумано как основной графический "
 "инструмент. **PartCAD IDE** — это то же расширение, редактор и "
 "инструменты командной строки в одном приложении, для машины, на которой "
-"не настроены ни Python, ни редактор. Надстройка для **FreeCAD** позволяет "
-"просматривать те же пакеты внутри FreeCAD и импортировать объекты в "
+"не настроены ни Python, ни редактор. Надстройка для **FreeCAD** позволяет"
+" просматривать те же пакеты внутри FreeCAD и импортировать объекты в "
 "открытый документ."
 
 #: ../../source/design.rst:266

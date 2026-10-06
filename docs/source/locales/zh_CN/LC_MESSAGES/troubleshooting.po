@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-06 14:39+0000\n"
+"POT-Creation-Date: 2026-10-06 16:15+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -68,9 +68,9 @@ msgid ""
 "a credential are listed but printed as ``<scrubbed>``, so the output is "
 "something you can attach to a bug report."
 msgstr ""
-"这两份报告值得对照着看。第一份说明在配置文件、 ``PC_*`` 环境变量和命令行都生效之后，某个选项最终解析成了什么；第二份说明环境本"
-"身要求的是什么。只要命令行选项胜出、变量名拼错，或者某个取值被拒绝，两者就会不一致——而这几乎涵盖了人们运行这两份报告的大多数场景。名称"
-"表明携带凭据的变量仍会被列出，但其取值会打印为 ``<scrubbed>``，因此这份输出可以直接附在缺陷报告里。"
+"这两份报告值得对照着看。第一份说明在配置文件、 ``PC_*`` "
+"环境变量和命令行都生效之后，某个选项最终解析成了什么；第二份说明环境本身要求的是什么。只要命令行选项胜出、变量名拼错，或者某个取值被拒绝，两者就会不一致——而这几乎涵盖了人们运行这两份报告的大多数场景。名称表明携带凭据的变量仍会被列出，但其取值会打印为"
+" ``<scrubbed>``，因此这份输出可以直接附在缺陷报告里。"
 
 #: ../../source/troubleshooting.rst:41
 msgid ""
@@ -88,9 +88,9 @@ msgid ""
 "what it falls back on, and the environment it inherited is not something "
 "this side can reconstruct any other way."
 msgstr ""
-"守护进程是按工作区共享的常驻进程，因此它所报告的配置和环境，就是当初启动它的那个进程当时持有的环境——可能是几天以前，也可能来自某个 V"
-"S Code 窗口。你的命令并不在那套环境下运行——每个命令都会把自己解析好的配置交给守护进程——但守护进程自己的那份副本正是它的回退值"
-"，而它所继承的环境，在客户端这一侧没有别的办法可以重建出来。"
+"守护进程是按工作区共享的常驻进程，因此它所报告的配置和环境，就是当初启动它的那个进程当时持有的环境——可能是几天以前，也可能来自某个 VS "
+"Code "
+"窗口。你的命令并不在那套环境下运行——每个命令都会把自己解析好的配置交给守护进程——但守护进程自己的那份副本正是它的回退值，而它所继承的环境，在客户端这一侧没有别的办法可以重建出来。"
 
 #: ../../source/troubleshooting.rst:58
 msgid "Health Check"
@@ -133,8 +133,8 @@ msgid ""
 "command still succeeds, because most of it is a machine missing something"
 " it can do without. There is one exception, and it is about sandboxes."
 msgstr ""
-"``healthcheck`` 发现的大多数问题都会以警告的形式报告，命令本身仍然成功，因为它们大多只是机器上缺了某些并非必需的东西。只"
-"有一个例外，它与沙箱有关。"
+"``healthcheck`` "
+"发现的大多数问题都会以警告的形式报告，命令本身仍然成功，因为它们大多只是机器上缺了某些并非必需的东西。只有一个例外，它与沙箱有关。"
 
 #: ../../source/troubleshooting.rst:94
 msgid "Can this machine render anything?"
@@ -149,9 +149,9 @@ msgid ""
 "carries both already. Three checks report on this, and they share the "
 "``sandbox`` tag:"
 msgstr ""
-"PartCAD 自身不导入任何 CAD 内核。每个零件都由运行在沙箱中的脚本生成；在一台一无所有的机器上，有两种机制可以提供这样的沙箱："
-"conda，它会装上一个解释器以及随附的 CAD 技术栈；以及容器运行时，它本身就已经带着这两样东西。有三项检查会报告这方面的情况，它们"
-"共用 ``sandbox`` 标签："
+"PartCAD 自身不导入任何 CAD "
+"内核。每个零件都由运行在沙箱中的脚本生成；在一台一无所有的机器上，有两种机制可以提供这样的沙箱：conda，它会装上一个解释器以及随附的 CAD "
+"技术栈；以及容器运行时，它本身就已经带着这两样东西。有三项检查会报告这方面的情况，它们共用 ``sandbox`` 标签："
 
 #: ../../source/troubleshooting.rst:106
 msgid ""
@@ -159,8 +159,8 @@ msgid ""
 "PartCAD builds a virtual environment instead, which works wherever the "
 "host has a usable Python."
 msgstr ""
-"``CondaAvailable`` ——在找不到 conda 或 mamba 时给出警告。PartCAD 会改为构建一个虚拟环境，只要"
-"宿主机上有可用的 Python，这种方式就能工作。"
+"``CondaAvailable`` ——在找不到 conda 或 mamba 时给出警告。PartCAD "
+"会改为构建一个虚拟环境，只要宿主机上有可用的 Python，这种方式就能工作。"
 
 #: ../../source/troubleshooting.rst:109
 msgid ""
@@ -170,16 +170,15 @@ msgid ""
 "``PC_USE_DOCKER=false``) on a machine that has a daemon and should not "
 "use it, and the check stops looking."
 msgstr ""
-"``DockerAvailable`` ——在没有容器运行时响应时给出警告。注意，运行 *Windows* 容器的 Docker 守护进"
-"程在这里等同于没有：PartCAD 使用的每个镜像都是 Linux 镜像。如果某台机器上有守护进程但不应该使用它，就设置 ``useDo"
-"cker: false`` （或 ``PC_USE_DOCKER=false``），该检查便不再查找。"
+"``DockerAvailable`` ——在没有容器运行时响应时给出警告。注意，运行 *Windows* 容器的 Docker "
+"守护进程在这里等同于没有：PartCAD 使用的每个镜像都是 Linux 镜像。如果某台机器上有守护进程但不应该使用它，就设置 "
+"``useDocker: false`` （或 ``PC_USE_DOCKER=false``），该检查便不再查找。"
 
 #: ../../source/troubleshooting.rst:114
 msgid ""
 "``SandboxAvailable`` -- an **error**, and the only check that makes ``pc "
 "healthcheck`` exit non-zero."
-msgstr ""
-"``SandboxAvailable`` ——一个 **错误**，也是唯一会让 ``pc healthcheck`` 以非零状态退出的检查。"
+msgstr "``SandboxAvailable`` ——一个 **错误**，也是唯一会让 ``pc healthcheck`` 以非零状态退出的检查。"
 
 #: ../../source/troubleshooting.rst:117
 msgid ""
@@ -192,10 +191,10 @@ msgid ""
 "image with no conda in it -- nothing is misconfigured, and the check "
 "passes:"
 msgstr ""
-"明确写出的 ``pythonSandbox`` 会被遵守，这也是 ``SandboxAvailable`` 所做的大部分工作。只有在没人"
-"指明该用哪种沙箱时，“有没有 conda 或容器”才是正确的问题，因为那时才轮到 PartCAD 在两者之间做选择。如果你写的是 ``p"
-"ythonSandbox: venv``——比如一个用现成解释器构建虚拟环境的 CI 任务、一台离网的机器，或者一个不含 conda 的"
-"容器镜像——那就谈不上配置错误，该检查会通过："
+"明确写出的 ``pythonSandbox`` 会被遵守，这也是 ``SandboxAvailable`` "
+"所做的大部分工作。只有在没人指明该用哪种沙箱时，“有没有 conda 或容器”才是正确的问题，因为那时才轮到 PartCAD "
+"在两者之间做选择。如果你写的是 ``pythonSandbox: venv``——比如一个用现成解释器构建虚拟环境的 CI "
+"任务、一台离网的机器，或者一个不含 conda 的容器镜像——那就谈不上配置错误，该检查会通过："
 
 #: ../../source/troubleshooting.rst:130
 msgid ""
@@ -207,10 +206,11 @@ msgid ""
 "``conda`` on a machine that has none is a failure -- being unable to do "
 "what was asked is not a reason to quietly do something else."
 msgstr ""
-"随后，被声明的沙箱只按照 *它自己* 的需要来检查，别的一概不管： ``conda`` 需要一个 conda， ``docker`` 需"
-"要容器运行时，而 ``venv``、 ``pypy`` 和 ``none`` 只需要 PartCAD 正在运行其上的那个 Python。"
-"（ ``remote`` 需要一个可达的 ``partcad-service-remote-docker``，那是一个网络地址，本检查不"
-"会去探测它。）在一台没有 conda 的机器上要求 ``conda`` 就是失败——做不到被要求的事，并不构成悄悄改做别的事的理由。"
+"随后，被声明的沙箱只按照 *它自己* 的需要来检查，别的一概不管： ``conda`` 需要一个 conda， ``docker`` "
+"需要容器运行时，而 ``venv``、 ``pypy`` 和 ``none`` 只需要 PartCAD 正在运行其上的那个 Python。（ "
+"``remote`` 需要一个可达的 ``partcad-service-remote-"
+"docker``，那是一个网络地址，本检查不会去探测它。）在一台没有 conda 的机器上要求 ``conda`` "
+"就是失败——做不到被要求的事，并不构成悄悄改做别的事的理由。"
 
 #: ../../source/troubleshooting.rst:138
 msgid ""
@@ -223,13 +223,14 @@ msgid ""
 "names -- for KiCad that is installing KiCad on this machine and setting "
 "``useDockerKicad: false``."
 msgstr ""
-"有三样东西明确需要容器，而且它们只在真正被用到时才会说明，不会提前告知：包中声明了 ``container:`` 的实现、导入 KiCa"
-"d PCB（ ``useDockerKicad``），以及按名称指定使用的 ``docker`` Python 沙箱。如果 ``pc r"
-"ender``、 ``pc export`` 或 ``pc inspect`` 报告没有可用的容器运行时，请启动 Docker，或者采用"
-"消息中指出的另一条路径——对于 KiCad 来说，那就是在本机安装 KiCad 并设置 ``useDockerKicad: false``。"
+"有三样东西明确需要容器，而且它们只在真正被用到时才会说明，不会提前告知：包中声明了 ``container:`` 的实现、导入 KiCad "
+"PCB（ ``useDockerKicad``），以及按名称指定使用的 ``docker`` Python 沙箱。如果 ``pc "
+"render``、 ``pc export`` 或 ``pc inspect`` 报告没有可用的容器运行时，请启动 "
+"Docker，或者采用消息中指出的另一条路径——对于 KiCad 来说，那就是在本机安装 KiCad 并设置 ``useDockerKicad: "
+"false``。"
 
 #: ../../source/troubleshooting.rst:147 ../../source/troubleshooting.rst:185
-#: ../../source/troubleshooting.rst:243
+#: ../../source/troubleshooting.rst:244
 msgid "Typical problems"
 msgstr "常见问题"
 
@@ -283,9 +284,9 @@ msgid ""
 "url`` files alike -- so exporting them is usually the whole fix. See :ref"
 ":`proxy-configuration`."
 msgstr ""
-"这很可能是一个只能经由代理出网的网络。PartCAD 下载任何内容时都会读取 ``HTTPS_PROXY``、 ``HTTP_PROXY"
-"`` 和 ``NO_PROXY``——git 仓库、tarball 以及 ``fileFrom: url`` 文件都一样——所以导出这几"
-"个变量通常就是全部的解决办法。参见 :ref:`proxy-configuration`。"
+"这很可能是一个只能经由代理出网的网络。PartCAD 下载任何内容时都会读取 ``HTTPS_PROXY``、 ``HTTP_PROXY`` 和 "
+"``NO_PROXY``——git 仓库、tarball 以及 ``fileFrom: url`` "
+"文件都一样——所以导出这几个变量通常就是全部的解决办法。参见 :ref:`proxy-configuration`。"
 
 #: ../../source/troubleshooting.rst:168
 msgid ""
@@ -293,8 +294,8 @@ msgid ""
 "is re-terminating TLS and its CA is not trusted here. Point "
 "``SSL_CERT_FILE`` and ``REQUESTS_CA_BUNDLE`` at the proxy's CA bundle."
 msgstr ""
-"如果抓取不是卡住，而是证书校验失败，那就说明代理重新终结了 TLS，而它的 CA 在这里不被信任。请把 ``SSL_CERT_FILE`"
-"` 和 ``REQUESTS_CA_BUNDLE`` 指向该代理的 CA 证书包。"
+"如果抓取不是卡住，而是证书校验失败，那就说明代理重新终结了 TLS，而它的 CA 在这里不被信任。请把 ``SSL_CERT_FILE`` 和 "
+"``REQUESTS_CA_BUNDLE`` 指向该代理的 CA 证书包。"
 
 #: ../../source/troubleshooting.rst:173
 msgid "PartCAD VSCode Extension"
@@ -330,25 +331,25 @@ msgid ""
 "the extension downloads a standalone PartCAD for you. No Python is "
 "needed."
 msgstr ""
-"在“Explorer”左侧面板中按下“Install or update PartCAD”，扩展就会为你下载一份独立版 PartCAD。"
-"完全不需要 Python。"
+"在“Explorer”左侧面板中按下“Install or update PartCAD”，扩展就会为你下载一份独立版 PartCAD。完全不需要"
+" Python。"
 
 #: ../../source/troubleshooting.rst:191
 msgid ""
 "Or, if you would rather use your own Python environment, run ``pip "
 "install partcad`` in it: the extension finds the ``partcad-json-rpc`` "
-"that puts on your ``PATH`` and uses that instead of downloading anything."
+"that ``pip`` puts on your ``PATH`` and uses that instead of downloading "
+"anything."
 msgstr ""
-"或者，如果你更愿意使用自己的 Python 环境，就在其中运行 ``pip install partcad``：扩展会找到由此放到你 `"
-"`PATH`` 上的 ``partcad-json-rpc`` 并加以使用，而不再去下载任何东西。"
+"或者，如果你更愿意使用自己的 Python 环境，就在其中运行 ``pip install partcad``：扩展会找到由 ``pip`` 放到你 ``PATH`` 上的 ``partcad-json-rpc`` 并加以使用，而不再去下载任何东西。"
 
-#: ../../source/troubleshooting.rst:194
+#: ../../source/troubleshooting.rst:195
 msgid ""
 "Reload PartCAD extension (by pressing \"Reload\" button in \"Context\" "
 "left panel)"
 msgstr "重新加载 PartCAD 扩展（点击“Context”左侧面板中的“Reload”按钮）"
 
-#: ../../source/troubleshooting.rst:196
+#: ../../source/troubleshooting.rst:197
 msgid ""
 "\"The PartCAD extension is being initialized...\" in \"Explorer\" gets "
 "into infinite loop (and nothing happens in the corresponding terminal "
@@ -357,25 +358,25 @@ msgstr ""
 "“Explorer”中的“The PartCAD extension is being "
 "initialized...”陷入无限循环（并且对应的终端窗口中没有任何反应）"
 
-#: ../../source/troubleshooting.rst:198
+#: ../../source/troubleshooting.rst:199
 msgid "Close and reopen VSCode"
 msgstr "关闭并重新打开 VSCode"
 
-#: ../../source/troubleshooting.rst:200
+#: ../../source/troubleshooting.rst:201
 msgid "Error while loading part or assembly view: \"Module ... not found\""
 msgstr "加载零件或装配体视图时出错：“Module ... not found”"
 
-#: ../../source/troubleshooting.rst:202
+#: ../../source/troubleshooting.rst:203
 msgid ""
 "Make sure that the extension version matches the PartCAD version in ``pc "
 "version`` command output"
 msgstr "请确保扩展的版本与 ``pc version`` 命令输出中的 PartCAD 版本一致"
 
-#: ../../source/troubleshooting.rst:206
+#: ../../source/troubleshooting.rst:207
 msgid "PartCAD Viewer"
 msgstr ""
 
-#: ../../source/troubleshooting.rst:208
+#: ../../source/troubleshooting.rst:209
 msgid ""
 "The ``PartCAD Viewer`` is a tab the extension opens when a part, "
 "assembly, scene, sketch or interface is inspected. PartCAD tessellates "
@@ -385,30 +386,26 @@ msgid ""
 "inside ``partcad`` itself -- so ``pip install partcad`` is all that is "
 "needed, and there is nothing separate to install."
 msgstr ""
-"``PartCAD Viewer`` 是在查看零件、装配体、场景、草图或接口时由扩展打开的一个标签页。PartCAD 会在沙箱化的运行时"
-"中对形状做网格化，并通过 ``127.0.0.1:9137`` 上的套接字把结果以压缩的 glTF 形式发送给扩展。这条连接的 Pyth"
-"on 一侧是 ``partcad_ide_client`` 包，它随 ``partcad`` 本身一起发布——因此只需要 ``pip i"
-"nstall partcad``，没有任何需要单独安装的东西。"
+"``PartCAD Viewer`` 是在查看零件、装配体、场景、草图或接口时由扩展打开的一个标签页。PartCAD "
+"会在沙箱化的运行时中对形状做网格化，并通过 ``127.0.0.1:9137`` 上的套接字把结果以压缩的 glTF 形式发送给扩展。这条连接的 "
+"Python 一侧是 ``partcad_ide_client`` 包，它随 ``partcad`` 本身一起发布——因此只需要 ``pip "
+"install partcad``，没有任何需要单独安装的东西。"
 
-#: ../../source/troubleshooting.rst:216
+#: ../../source/troubleshooting.rst:217
 msgid ""
 "Beside the 3D view the panel carries tabs for the questions that are "
 "about the object rather than its shape -- **FEA** and **CFD** under "
-"**Analysis**, and **Bill of Materials**, **Instructions** and "
-"**Procurement** under **Supply Chain**, each enabled where it applies -- "
-"and, beside the 3D view on the **Design** tab, **2D** and **Draft**, "
-"which render the object to a file. Those do not come over the socket "
-"above: they are answered by the PartCAD daemon and fetched the first time"
-" the tab is opened, so a failure in one of them is a daemon problem and "
-"says so in the tab, while the 3D view keeps working."
+"**Analysis**, and **Build vs Buy**, **Build**, **Buy**, **Bill of "
+"Materials** and **Assembly** under **Manufacturing**, each enabled where "
+"it applies -- and, beside the 3D view on the **Design** tab, **2D** and "
+"**Draft**, which render the object to a file. Those do not come over the "
+"socket above: they are answered by the PartCAD daemon and fetched the "
+"first time the tab is opened, so a failure in one of them is a daemon "
+"problem and says so in the tab, while the 3D view keeps working."
 msgstr ""
-"除 3D 视图之外，该面板还带有一些标签页，用于回答那些关于对象本身而非其形状的问题—— **Analysis** 下的 **FEA**"
-" 和 **CFD**，以及 **Supply Chain** 下的 **Bill of Materials**、 **Instructi"
-"ons** 和 **Procurement**，它们各自在适用时才启用——另外在 **Design** 标签页上，3D 视图旁边还有 *"
-"*2D** 和 **Draft**，它们会把对象渲染成文件。这些内容并不走上面那个套接字：它们由 PartCAD 守护进程作答，并在首次"
-"打开相应标签页时获取，因此其中某一项失败属于守护进程的问题，并会在该标签页中说明，而 3D 视图仍可继续工作。"
+"除 3D 视图之外，该面板还带有一些标签页，用于回答那些关于对象本身而非其形状的问题—— **Analysis** 下的 **FEA** 和 **CFD**，以及 **Manufacturing** 下的 **Build vs Buy**、 **Build**、 **Buy**、 **Bill of Materials** 和 **Assembly**，它们各自在适用时才启用——另外在 **Design** 标签页上，3D 视图旁边还有 **2D** 和 **Draft**，它们会把对象渲染成文件。这些内容并不走上面那个套接字：它们由 PartCAD 守护进程作答，并在首次打开相应标签页时获取，因此其中某一项失败属于守护进程的问题，并会在该标签页中说明，而 3D 视图仍可继续工作。"
 
-#: ../../source/troubleshooting.rst:225
+#: ../../source/troubleshooting.rst:226
 msgid ""
 "Anything with a ``partcad`` that can reach that port can display into the"
 " same viewer -- including a ``pc`` run in a plain terminal, as long as a "
@@ -417,64 +414,65 @@ msgid ""
 "that window, so ``pc`` is there without any further setup "
 "(``partcad.addToolsToTerminalPath`` turns that off):"
 msgstr ""
-"只要装有 ``partcad`` 并且能够访问该端口，任何程序都可以把内容显示到同一个查看器中——包括在普通终端里运行的 ``pc``，"
-"前提是有一个启用了该扩展的窗口处于打开状态。扩展处于活动状态时，会把 PartCAD 命令行工具加入该窗口中新开终端的 ``PATH``"
-"，因此无需任何额外设置就能使用 ``pc`` （ ``partcad.addToolsToTerminalPath`` 可以关闭这一行为）："
+"只要装有 ``partcad`` 并且能够访问该端口，任何程序都可以把内容显示到同一个查看器中——包括在普通终端里运行的 "
+"``pc``，前提是有一个启用了该扩展的窗口处于打开状态。扩展处于活动状态时，会把 PartCAD 命令行工具加入该窗口中新开终端的 "
+"``PATH``，因此无需任何额外设置就能使用 ``pc`` （ ``partcad.addToolsToTerminalPath`` "
+"可以关闭这一行为）："
 
-#: ../../source/troubleshooting.rst:245
+#: ../../source/troubleshooting.rst:246
 msgid "``Failed to load \"partcad_ide_client\"`` in the PartCAD terminal view"
 msgstr "PartCAD 终端视图中出现 ``Failed to load \"partcad_ide_client\"``"
 
-#: ../../source/troubleshooting.rst:247
+#: ../../source/troubleshooting.rst:248
 msgid ""
 "The package ships inside ``partcad``, so this means the installation is "
 "damaged rather than incomplete. Reinstall with ``pip install --force-"
 "reinstall partcad``, or press \"Update PartCAD\" in the \"Context\" left "
 "panel."
 msgstr ""
-"该包随 ``partcad`` 一起发布，所以这说明安装被损坏了，而不是不完整。请用 ``pip install --force-rei"
-"nstall partcad`` 重新安装，或者在“Context”左侧面板中按下“Update PartCAD”。"
+"该包随 ``partcad`` 一起发布，所以这说明安装被损坏了，而不是不完整。请用 ``pip install --force-"
+"reinstall partcad`` 重新安装，或者在“Context”左侧面板中按下“Update PartCAD”。"
 
-#: ../../source/troubleshooting.rst:251
+#: ../../source/troubleshooting.rst:252
 msgid ""
 "On a PartCAD older than 0.8.0 it was a separate ``partcad-ide-client`` "
 "distribution that was never published; upgrading is the fix."
 msgstr ""
-"在早于 0.8.0 的 PartCAD 上，它曾是一个独立的 ``partcad-ide-client`` 分发包，而那个分发包从未发布"
-"过；升级即可解决。"
+"在早于 0.8.0 的 PartCAD 上，它曾是一个独立的 ``partcad-ide-client`` "
+"分发包，而那个分发包从未发布过；升级即可解决。"
 
-#: ../../source/troubleshooting.rst:254
+#: ../../source/troubleshooting.rst:255
 msgid "``No PartCAD IDE with an open PartCAD Viewer detected``"
 msgstr ""
 
-#: ../../source/troubleshooting.rst:256
+#: ../../source/troubleshooting.rst:257
 msgid ""
 "Nothing is listening on the viewer port. Open a window with the PartCAD "
 "extension active; the extension starts listening when it activates."
 msgstr "没有任何程序在监听查看器端口。请打开一个启用了 PartCAD 扩展的窗口；扩展在激活时就会开始监听。"
 
-#: ../../source/troubleshooting.rst:258
+#: ../../source/troubleshooting.rst:259
 msgid ""
 "If two windows are open, only one of them may own the port on platforms "
 "without ``SO_REUSEPORT``. The \"PartCAD Viewer port ... is already in "
 "use\" message in the ``PartCAD`` output view says which case this is."
 msgstr ""
-"如果打开了两个窗口，在不支持 ``SO_REUSEPORT`` 的平台上只有其中一个能占有该端口。 ``PartCAD`` 输出视图中的"
-"“PartCAD Viewer port ... is already in use”消息会说明属于哪种情况。"
+"如果打开了两个窗口，在不支持 ``SO_REUSEPORT`` 的平台上只有其中一个能占有该端口。 ``PartCAD`` "
+"输出视图中的“PartCAD Viewer port ... is already in use”消息会说明属于哪种情况。"
 
-#: ../../source/troubleshooting.rst:261
+#: ../../source/troubleshooting.rst:262
 msgid ""
 "Set ``PARTCAD_IDE_PORT`` to move a ``partcad`` process to a different "
 "port if 9137 is taken by something else on the machine."
 msgstr ""
-"如果 9137 端口已被机器上的其他程序占用，可以设置 ``PARTCAD_IDE_PORT``，把某个 ``partcad`` 进程挪"
-"到别的端口上。"
+"如果 9137 端口已被机器上的其他程序占用，可以设置 ``PARTCAD_IDE_PORT``，把某个 ``partcad`` "
+"进程挪到别的端口上。"
 
-#: ../../source/troubleshooting.rst:264
+#: ../../source/troubleshooting.rst:265
 msgid "\"Drawn without a graphics card\" in the corner of the 3D view"
 msgstr "3D 视图角落里出现“Drawn without a graphics card”"
 
-#: ../../source/troubleshooting.rst:266
+#: ../../source/troubleshooting.rst:267
 msgid ""
 "VS Code could not use the graphics card, so the window has no WebGL, and "
 "the 3D view draws the model on the processor instead: flat-shaded, and "
@@ -484,24 +482,25 @@ msgid ""
 "and how to make its icon do that every time. The PartCAD IDE does this "
 "already."
 msgstr ""
-"VS Code 无法使用显卡，于是该窗口没有 WebGL，3D 视图改为在处理器上绘制模型：采用平面着色，模型较大时速度更慢，并且在旋转"
-"过程中以方块代替绘制。把鼠标悬停在该提示上，可以看到如何启动 VS Code 才能重新获得 WebGL（由 Chromium 自身以软件"
-"方式绘制，外观与平常的视图一致），以及如何让它的图标每次都这样启动。PartCAD IDE 已经默认这样做了。"
+"VS Code 无法使用显卡，于是该窗口没有 WebGL，3D "
+"视图改为在处理器上绘制模型：采用平面着色，模型较大时速度更慢，并且在旋转过程中以方块代替绘制。把鼠标悬停在该提示上，可以看到如何启动 VS "
+"Code 才能重新获得 WebGL（由 Chromium "
+"自身以软件方式绘制，外观与平常的视图一致），以及如何让它的图标每次都这样启动。PartCAD IDE 已经默认这样做了。"
 
-#: ../../source/troubleshooting.rst:273
+#: ../../source/troubleshooting.rst:274
 msgid "The **Draft** tab says a package is not found"
 msgstr "**Draft** 标签页提示找不到某个包"
 
-#: ../../source/troubleshooting.rst:275
+#: ../../source/troubleshooting.rst:276
 msgid ""
 "The drawing package, ``//pub/feature/render/draftwright``, comes from the"
 " public PartCAD index. A workspace that does not import ``pub`` has no "
 "such package; ``pc init`` adds that import, and "
 "``examples/feature_render_custom`` shows it written out."
 msgstr ""
-"绘图所用的包 ``//pub/feature/render/draftwright`` 来自公共 PartCAD 索引。没有导入 ``p"
-"ub`` 的工作区里不存在这个包； ``pc init`` 会添加该导入，而 ``examples/feature_render_cus"
-"tom`` 则给出了把它完整写出来的示例。"
+"绘图所用的包 ``//pub/feature/render/draftwright`` 来自公共 PartCAD 索引。没有导入 ``pub`` "
+"的工作区里不存在这个包； ``pc init`` 会添加该导入，而 ``examples/feature_render_custom`` "
+"则给出了把它完整写出来的示例。"
 
 #~ msgid ""
 #~ "Install Conda environment into the "
