@@ -835,18 +835,36 @@
       "additionalProperties": false
     },
     "port-map": {
-      "description": "What an assembly externalizes of the things it is made of. The key is the new name; the value names what it stands for: [node, port] externalizes a port of that node under that name, and [node, interface, instance] externalizes that instance of that interface under that instance name (the interface itself is read off the node -- an assembly is in no position to rename one). The node is the ASSY file's node name -- a link's 'name:', or the part/assembly name where the link has none -- and not the name of the part, since an assembly may place the same part six times. A node inside a named container is reached through it ('frame/bracket'); the anonymous 'links:' containers an ASSY file is built out of contribute nothing to the path, and a sub-assembly that a package declares is not descended into -- it externalizes its own ports and this assembly maps those.",
+      "description": "New names for ports and interface instances, in addition to what the object declares. The key is the new name; the value names what it stands for. In an assembly, [node, port] is a port of that node and [node, interface, instance] that instance of that interface (the interface itself is read off the node -- an object is in no position to rename one); the node is the ASSY file's node name -- a link's 'name:', or the part/assembly name where the link has none -- reached through a named container as 'frame/bracket', and a sub-assembly that a package declares is not descended into: it externalizes its own ports and this one maps those. Without a node, [port] is a port the object has of its own: for an enrich or an alias, a port of what it points at; for anything else, one it declares. The long form says the same by key and may move and turn the new name relative to what it names, in that frame: the moves, then the turns.",
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9_/.%-]+$": {
-          "type": "array",
-          "items": [
-            { "type": "string", "minLength": 1, "description": "The ASSY node." },
-            { "type": "string", "minLength": 1, "description": "A port of that node, or an interface it implements." },
-            { "type": "string", "description": "The instance of that interface. The empty string is the unnamed one." }
-          ],
-          "minItems": 2,
-          "maxItems": 3
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "description": "[port], [node, port] or [node, interface, instance]. The instance may be the empty string, the unnamed one.",
+              "minItems": 1,
+              "maxItems": 3
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node": { "type": "string", "minLength": 1, "description": "The ASSY node. Without it, what is named is the object's own." },
+                "port": { "type": "string", "minLength": 1, "description": "The port. Either this or 'interface'." },
+                "interface": { "type": "string", "minLength": 1, "description": "The interface. Either this or 'port'." },
+                "instance": { "type": "string", "description": "The instance of the interface. The empty string, the default, is the unnamed one." },
+                "moveX": { "$ref": "#/definitions/number-or-expression", "description": "Millimetres along X of what is named." },
+                "moveY": { "$ref": "#/definitions/number-or-expression", "description": "Millimetres along Y of what is named." },
+                "moveZ": { "$ref": "#/definitions/number-or-expression", "description": "Millimetres along Z of what is named." },
+                "turnX": { "$ref": "#/definitions/number-or-expression", "description": "Degrees about X, after the moves." },
+                "turnY": { "$ref": "#/definitions/number-or-expression", "description": "Degrees about Y, after the moves." },
+                "turnZ": { "$ref": "#/definitions/number-or-expression", "description": "Degrees about Z, after the moves." }
+              },
+              "oneOf": [{ "required": ["port"] }, { "required": ["interface"] }],
+              "additionalProperties": false
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1539,6 +1557,7 @@
                     }
                   ]
                 },
+                "map": { "$ref": "#/definitions/port-map" },
                 "implements": { "$ref": "#/definitions/implements" },
                 "ports": { "$ref": "#/definitions/ports-section" },
                 "manufacturable": { "type": "boolean" },

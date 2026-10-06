@@ -321,6 +321,14 @@ Then fix it where it belongs: a part missing a mating feature it really has is a
 gap in the package that serves the part, not something to work around in the
 assembly. Report it or fix it there, and the assembly gets shorter for free.
 
+A part that is a standard part under a name of its own (an `enrich`, such as a
+leg cut from a post) has the standard part's ports. Where the joint is *near*
+one of them rather than on it, give it a name of the leg's own with `map:`
+instead of declaring a new port by coordinates: `{port: <its port>, moveX: ...,
+turnZ: ...}`, in the frame of that port, written in terms of the enrich's `with`
+values where it depends on them (`"%length * 25.4%"`). See "New names for what
+an object has" in the configuration docs.
+
 ### Do not predict a mate; try it
 
 Where a joint comes out wrong and the geometry says it should not, stop

@@ -48,6 +48,12 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
       map: # (optional)
         <new port name>: [<node>, <port of that node>]
         <new instance name>: [<node>, <interface that node implements>, <instance of it>]
+        <another port name>: [<port of this assembly's own>]
+        <a name near another>: # the long form, which also moves and turns
+          node: <(optional) node; without it, what is named is this assembly's own>
+          port: <port>  # or "interface: <interface>" and "instance: <instance>"
+          moveX: <(optional) mm along X of what is named; moveY, moveZ alike>
+          turnX: <(optional) degrees about X, after the moves; turnY, turnZ alike>
 
       # Declared the way a part declares them, for what the map cannot say.
       implements: # (optional) the list of interfaces to implement
@@ -192,6 +198,55 @@ business. An assembly that declares no ``map:``, no ``ports:`` and no
 ``implements:`` therefore has no ports at all -- which is the answer to "what
 can I connect to this", not a failure. ``pc render --with-internals`` looks
 inside one anyway, for finding the connection that went wrong (see :doc:`cli`).
+
+.. _map-own:
+
+New names for what an object has
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+An entry with no node names something the object has of its own, and gives it a
+name that says what it is for. That is what a ``map:`` is for on a part, and on
+an enrich or an alias of anything: their own is what they point at, the same
+geometry with the same ports. Anything else's own is what it declares in
+``ports:`` and ``implements:``. In the list form that is ``[<port>]``; the long
+form spells out by key what the list form says by position -- ``node``,
+``port``, or ``interface`` and ``instance`` -- and is the one that can name an
+interface of the object's own, since ``[<interface>, <instance>]`` would read as
+a node and a port.
+
+The long form also places the new name *near* what it names rather than on it:
+``moveX``, ``moveY`` and ``moveZ`` in millimetres and ``turnX``, ``turnY`` and
+``turnZ`` in degrees, in the frame of what is named -- the moves, then the
+turns, the way an interface's freedom of movement is applied. A leg cut to
+length from a standard post knows where its own corners are; the desk it is for
+says where on it an apron goes:
+
+.. code-block:: yaml
+
+  parts:
+    leg:
+      type: enrich
+      source: //pub/std/imperial/dimensional-lumber:lumber
+      with: {width: 4, height: 4, length: 29.25}
+      map:
+        top: [y1-x0-z1]            # a corner of the post, by what it is for
+        apron:
+          port: x1-y1-z1
+          moveY: "%-0.75 * 25.4%"  # in from the edge, and written in terms of 'with'
+        apron-turned:
+          port: x1-y1-z1
+          turnZ: 90
+
+An interface instance is mapped the same way, and the result is a new instance
+of the same interface: ``corner: {interface: m3-thru, instance: TL, moveX: -1}``
+adds ``corner`` beside ``TL``.
+
+The names a map gives are *added* to what the object has. An enrich or an alias
+of a part keeps every port and interface of what it points at, as it does
+without a ``map:``, unless it declares ``ports:`` or ``implements:`` of its own
+or moves the geometry with ``offset:`` -- the rule it has always followed. An
+assembly, which has no ports but the ones it states, has the ones its map
+names.
 
 Other assembly types
 ^^^^^^^^^^^^^^^^^^^^

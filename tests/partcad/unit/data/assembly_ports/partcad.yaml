@@ -43,6 +43,46 @@ parts:
     implements:
       m3-screw: [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], 180.0]
 
+  # A plate under a name of its own, with its own names for some of what it
+  # has: a 'map:' with no node names a port or interface instance of the
+  # object itself - for an enrich, of what it points at.
+  named-plate:
+    type: enrich
+    source: plate
+    map:
+      lift: [handle]
+      raised:
+        port: handle
+        moveZ: 2.0
+        turnZ: 90.0
+      corner:
+        interface: m3-thru
+        instance: TL
+        moveX: -1.0
+
+  # Not a reference: what it has of its own is what it declares.
+  relabelled-plate:
+    type: cadquery
+    path: plate.py
+    ports:
+      a: [[1.0, 2.0, 3.0], [0.0, 0.0, 1.0], 0.0]
+    map:
+      b:
+        port: a
+        moveX: 1.0
+
+  # Every way of getting the new forms wrong.
+  broken-plate:
+    type: enrich
+    source: plate
+    map:
+      neither: {moveX: 1.0}
+      both: {port: handle, interface: m3-thru}
+      unknown_key: {port: handle, spin: 3}
+      instance_alone: {port: handle, instance: TL}
+      not_a_number: {port: handle, moveX: far}
+      node_on_a_part: [lower, handle]
+
 assemblies:
   # The subject: two plates, with one port and one interface instance of each
   # externalized under names of this assembly's choosing.
@@ -126,3 +166,29 @@ assemblies:
       no_such_interface: [lower, nowhere, TL]
       no_such_instance: [lower, m3-thru, nowhere]
       not_a_tuple: lower
+
+  # An assembly under a name of its own, renaming what its source externalizes.
+  mount-renamed:
+    type: enrich
+    source: mount
+    map:
+      handle: [hold]
+      shifted:
+        interface: m3-thru
+        instance: top
+        moveZ: 5.0
+
+  # A node's port, externalized somewhere near it rather than on it.
+  mount-offset:
+    type: assy
+    path: mount.assy
+    map:
+      beside:
+        node: lower
+        port: handle
+        moveX: 3.0
+
+  # Something connected through a name an enrich part mapped.
+  named_joined:
+    type: assy
+    desc: A plate on a plate, joined through a mapped port

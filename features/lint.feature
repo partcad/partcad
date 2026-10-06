@@ -1006,6 +1006,67 @@ Feature: `pc lint` command
     When I run "pc lint"
     Then the command should exit with a status code of "0"
 
+  @success
+  Scenario: A part may give new names to the ports it has
+    # 'map:' without a node: a port of the object's own - for an enrich, of
+    # what it points at - under a new name, moved and turned near it if asked.
+    # See "New names for what an object has".
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package that names a corner of a plate after what it is for
+      interfaces:
+        m3-thru:
+          ports:
+            m3:
+      parts:
+        plate:
+          type: step
+          implements:
+            m3-thru:
+              TL: [[-10, 10, 0], [0, 0, 1], 0]
+          ports:
+            handle: [[0, 0, 5], [0, 0, 1], 0]
+        lid:
+          type: enrich
+          source: plate
+          map:
+            lift: [handle]
+            raised:
+              port: handle
+              moveZ: 2
+              turnZ: 90
+            corner:
+              interface: m3-thru
+              instance: TL
+              moveX: -1
+      """
+    And a file named "plate.step" with content:
+      """
+      This is a STEP file for plate
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+
+  @failure
+  Scenario: A long map entry names a port or an interface, not both
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package whose map says two things at once
+      parts:
+        plate:
+          type: step
+          map:
+            hold:
+              port: handle
+              interface: m3-thru
+      """
+    And a file named "plate.step" with content:
+      """
+      This is a STEP file for plate
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "1"
+
   @failure
   Scenario: A map entry has to name a node and what of it to externalize
     Given a file named "partcad.yaml" with content:

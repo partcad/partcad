@@ -38,6 +38,33 @@ link, or the part/assembly name where the link has none - and not the name of
 the part. An assembly places the same part six times; five of those are not the
 one being externalized.
 
+The same section renames what the object has of its own, which is what an
+object that is not an assembly can do with it. Without a node, an entry names
+a port or an interface instance the object would have without its 'map:' -- an
+enrich's or an alias's are those of what it points at, anything else's are
+the ones it declares -- and gives it another name::
+
+    parts:
+      leg:
+        type: enrich
+        source: //pub/std/imperial/dimensional-lumber:lumber
+        with: {width: 4, height: 4, length: 29.25}
+        map:
+          top: [y1-x0-z1]            # one element: a port of its own
+          rail:                      # the long form, which also moves and turns it
+            port: x1-y1-z1
+            moveZ: -12.7
+            turnZ: 90
+
+The long form spells out what the list form says by position -- 'node',
+'port', or 'interface' and 'instance' -- and adds 'moveX'/'moveY'/'moveZ'
+(millimetres) and 'turnX'/'turnY'/'turnZ' (degrees): an offset in the frame of
+what is named, applied as the moves and then the turns in that order, the way
+the freedom of movement of an interface is. It is the same mapping either way:
+a node's port seen from outside the assembly, or the object's own port under a
+name that says what it is for, and both may land somewhere near the original
+rather than on it.
+
 What is *not* reachable is what another object externalizes nothing of: the
 path walks through the anonymous 'links:' containers an ASSY file is built out
 of, because those are this assembly's own structure, and stops at a
@@ -87,17 +114,110 @@ class MappedPorts:
         self.inherits = {}
 
 
+# The offsets an entry may carry, in the order they are applied: the moves,
+# then the turns, as an interface's freedom of movement is.
+MOVES = {"moveX": (1.0, 0.0, 0.0), "moveY": (0.0, 1.0, 0.0), "moveZ": (0.0, 0.0, 1.0)}
+TURNS = {"turnX": (1.0, 0.0, 0.0), "turnY": (0.0, 1.0, 0.0), "turnZ": (0.0, 0.0, 1.0)}
+
+# What the long form of an entry may say besides the offsets.
+REFERENCE_KEYS = ("node", "port", "interface", "instance")
+
+
+class MapEntry:
+    """One entry of a 'map:' section, whichever way it was written.
+
+    'node' is None for an entry that names something the object has of its
+    own. Exactly one of 'port' and 'interface' is set; 'instance' goes with the
+    interface. 'offset' is where the new name goes relative to what it names.
+    """
+
+    def __init__(self, node=None, port=None, interface=None, instance=None, offset=None):
+        self.node = node
+        self.port = port
+        self.interface = interface
+        self.instance = instance
+        self.offset = offset if offset is not None else Location()
+
+
+def parse_entry(name: str, spec, where: str):
+    """A 'MapEntry' for one entry, or None after reporting what is wrong with it.
+
+    The list form says by position what the long form says by key: '[port]',
+    '[node, port]' and '[node, interface, instance]'. Only the long form can
+    carry an offset, and only it can name an interface of the object's own,
+    since '[interface, instance]' would read as '[node, port]'.
+    """
+    if isinstance(spec, (list, tuple)):
+        if len(spec) not in (1, 2, 3) or not all(isinstance(x, str) for x in spec):
+            pc_logging.error(
+                "%s: '%s' must be [port], [node, port] or [node, interface, instance], got: %r" % (where, name, spec)
+            )
+            return None
+        if len(spec) == 1:
+            return MapEntry(port=spec[0])
+        if len(spec) == 2:
+            return MapEntry(node=spec[0], port=spec[1])
+        return MapEntry(node=spec[0], interface=spec[1], instance=spec[2])
+
+    if not isinstance(spec, dict):
+        # One string is not a list of one, and reading it as a list of
+        # characters is the kind of help nobody asked for.
+        pc_logging.error(
+            "%s: '%s' must be a list ([port], [node, port] or [node, interface, instance]) "
+            "or a mapping with 'port' or 'interface'" % (where, name)
+        )
+        return None
+
+    unknown = sorted(set(spec) - set(REFERENCE_KEYS) - set(MOVES) - set(TURNS))
+    if unknown:
+        pc_logging.error("%s: '%s' says %s, which a map entry does not take" % (where, name, ", ".join(unknown)))
+        return None
+    if ("port" in spec) == ("interface" in spec):
+        pc_logging.error("%s: '%s' must name either a 'port' or an 'interface'" % (where, name))
+        return None
+    if "instance" in spec and "interface" not in spec:
+        pc_logging.error("%s: '%s' names an 'instance' of no 'interface'" % (where, name))
+        return None
+    for key in REFERENCE_KEYS:
+        if key in spec and not isinstance(spec[key], str):
+            pc_logging.error("%s: '%s': '%s' must be a name, got: %r" % (where, name, key, spec[key]))
+            return None
+
+    offset = Location()
+    for key, axis in list(MOVES.items()) + list(TURNS.items()):
+        value = spec.get(key, 0)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            pc_logging.error("%s: '%s': '%s' must be a number, got: %r" % (where, name, key, value))
+            return None
+        if value == 0:
+            continue
+        if key in MOVES:
+            offset = offset * Location(tuple(v * value for v in axis), (0, 0, 1), 0)
+        else:
+            offset = offset * Location((0, 0, 0), axis, value)
+
+    return MapEntry(
+        node=spec.get("node"),
+        port=spec.get("port"),
+        interface=spec.get("interface"),
+        instance=spec.get("instance", "") if "interface" in spec else None,
+        offset=offset,
+    )
+
+
 def mapped_interface_names(config: dict) -> list:
     """The interfaces a 'map:' section names, read from the text alone.
 
-    No node is resolved and nothing is instantiated: the three-element form
-    states the interface, which is what makes an assembly findable by
+    No node is resolved and nothing is instantiated: the three-element form and
+    the long form state the interface, which is what makes an object findable by
     'pc search --interface' at the price of reading its declaration.
     """
     names = []
     for spec in (config.get(MAP) or {}).values():
         if isinstance(spec, (list, tuple)) and len(spec) == 3 and isinstance(spec[1], str):
             names.append(spec[1])
+        elif isinstance(spec, dict) and isinstance(spec.get("interface"), str):
+            names.append(spec["interface"])
     return names
 
 
@@ -229,12 +349,14 @@ def _merge_inherit(mapped: MappedPorts, inherit: InterfaceInherits, where: str) 
         existing.instances[instance_name] = location
 
 
-def _resolve_port(shape, mapped: MappedPorts, name: str, item, placement: Location, port_name: str, where: str) -> None:
-    """The two-element form: one port of one node, under a name of this assembly's own.
+def _resolve_port(
+    shape, mapped: MappedPorts, name: str, item, placement: Location, port_name: str, where: str, offset=None
+) -> None:
+    """One port of one node - or of the object itself - under a name of this object's own.
 
     The port itself is not moved - a port of a part stays a port of that part.
-    What this assembly gets is a port of its own at the place that one ended up,
-    drawn with the same boundary.
+    What this object gets is a port of its own at the place that one ended up,
+    moved and turned by the entry's offset, and drawn with the same boundary.
     """
     ports = item.with_ports.get_ports()
     port = ports.get(port_name)
@@ -254,7 +376,7 @@ def _resolve_port(shape, mapped: MappedPorts, name: str, item, placement: Locati
         name,
         shape.with_ports.project,
         sketch=port.sketch,
-        location=placement * port_location(port),
+        location=placement * port_location(port) * (offset if offset is not None else Location()),
         sketch_params=port.sketch_params,
     )
 
@@ -269,8 +391,9 @@ def _resolve_instance(
     interface_name: str,
     instance_name: str,
     where: str,
+    offset=None,
 ) -> None:
-    """The three-element form: one instance of one interface a node implements.
+    """One instance of one interface a node - or the object itself - implements.
 
     Spelled as the 'implements:' this assembly would have had to write for
     itself, so that everything downstream treats it as exactly that. The
@@ -294,6 +417,8 @@ def _resolve_instance(
         return
 
     location = placement * _instance_location(ctx, item, matched, instance_name)
+    if offset is not None:
+        location = location * offset
     try:
         inherit = InterfaceInherits(matched, shape.with_ports.project, {name: location.as_packed()})
     except Exception as e:
@@ -305,50 +430,158 @@ def _resolve_instance(
     _merge_inherit(mapped, inherit, where)
 
 
-async def _resolve_entry(ctx, shape, mapped: MappedPorts, nodes: dict, name: str, spec, where: str) -> None:
+class _Own:
+    """What an entry with no node names things of: the object as it is without its map.
+
+    For an enrich or an alias that is what it points at - the same geometry,
+    with the same ports. For anything else it is what the object declares in
+    'ports:' and 'implements:', read on their own: the object's own
+    'with_ports' cannot be asked, because what it answers is about to include
+    this very map.
+    """
+
+    def __init__(self, shape, with_ports):
+        self.name = shape.name
+        self.project_name = getattr(shape, "project_name", None)
+        self.with_ports = with_ports
+
+
+def _declaration(shape) -> dict:
+    """The object's declaration as written.
+
+    Not 'shape.config': an enrich reports the configuration of the instance it
+    resolved to once it is prepared (see 'enrich.adopt_source_config'), type
+    and all, while its 'with_ports' keeps what it was declared as.
+    """
+    with_ports = getattr(shape, "with_ports", None)
+    return (getattr(with_ports, "config", None) or getattr(shape, "config", None)) or {}
+
+
+def is_reference(shape) -> bool:
+    """Whether this object is another one under a name of its own (an enrich or an alias)."""
+    return _declaration(shape).get("type") in ("alias", "enrich")
+
+
+async def _source_of(ctx, shape):
+    """The object an enrich or an alias points at, prepared, or None."""
+    from .assembly import Assembly
+
+    config = shape.config or {}
+    declaration = _declaration(shape)
+    source_name = (
+        config.get("source_resolved")
+        or declaration.get("source_resolved")
+        or config.get("source")
+        or declaration.get("source")
+    )
+    if not source_name:
+        return None
+    if isinstance(shape, Assembly):
+        source = ctx._get_assembly(source_name)
+    else:
+        source = await ctx._get_part_async(source_name)
+    if source is None:
+        return None
+    await shape_ports.prepare_async(source, ctx)
+    return source
+
+
+async def _own(ctx, shape):
+    """See '_Own'. None, after saying why, if an enrich's source cannot be found."""
+    from .port import WithPorts
+
+    if is_reference(shape):
+        source = await _source_of(ctx, shape)
+        if source is None or getattr(source, "with_ports", None) is None:
+            return None
+        return source
+
+    config = {key: value for key, value in (shape.with_ports.config or {}).items() if key != MAP}
+    return _Own(shape, WithPorts(shape.name, shape.with_ports.project, config))
+
+
+def keeps_source_ports(shape) -> bool:
+    """Whether this object has the ports of what it points at, besides what it maps.
+
+    The rule an alias has always followed (see 'PartFactoryAlias'): a part that
+    is another one under a new name has its ports, unless it declares ports or
+    interfaces of its own or moves the geometry they sit on. A 'map:' adds names
+    to those rather than replacing them - which is the point of giving a port of
+    a standard part a name that says what it is for.
+    """
+    from .assembly import Assembly
+
+    if isinstance(shape, Assembly) or not is_reference(shape):
+        return False
+    config = _declaration(shape)
+    return not any(key in config for key in ("implements", "ports", "offset", "scale"))
+
+
+def _adopt_all(shape, mapped: MappedPorts, source) -> None:
+    """Every port and interface of 'source', as this object's own (see 'keeps_source_ports')."""
+    carrier = source.with_ports
+    for name, inherit in (carrier.get_parents() or {}).items():
+        mapped.inherits[name] = inherit
+    owned = shape_ports.interface_of_port(carrier)
+    for port_name, port in (carrier.get_ports() or {}).items():
+        if port_name in owned:
+            continue
+        mapped.ports[port_name] = InterfacePort(
+            port_name,
+            shape.with_ports.project,
+            sketch=port.sketch,
+            location=port_location(port),
+            sketch_params=port.sketch_params,
+        )
+
+
+async def _resolve_entry(ctx, shape, mapped: MappedPorts, nodes, own, name: str, spec, where: str) -> None:
     """One entry of a 'map:' section: what it names, if it names anything usable.
 
     Everything a declaration can get wrong is reported here and costs the user
-    that one port rather than the assembly: a node this file does not have, a
-    port that node does not have, an interface it does not implement, an
-    instance of it that does not exist, and a value that is neither of the two
-    forms.
+    that one port rather than the object: a node this assembly does not have,
+    a port that node does not have, an interface it does not implement, an
+    instance of it that does not exist, and a value that is none of the forms.
     """
-    if isinstance(spec, str):
-        # One string is not a tuple of two, and reading it as a list of
-        # characters is the kind of help nobody asked for.
-        pc_logging.error(
-            "%s: '%s' must name a node and a port, or a node, an interface and an instance" % (where, name)
-        )
-        return
-    if not isinstance(spec, (list, tuple)) or len(spec) not in (2, 3) or not all(isinstance(x, str) for x in spec):
-        pc_logging.error("%s: '%s' must be [node, port] or [node, interface, instance], got: %r" % (where, name, spec))
+    entry = parse_entry(name, spec, where)
+    if entry is None:
         return
 
-    node_name = spec[0]
-    node = nodes.get(node_name)
-    if node is None:
-        pc_logging.error("%s: there is no node '%s' in this assembly: %s" % (where, node_name, sorted(nodes.keys())))
-        return
-
-    item, placement = node
-    if getattr(item, "with_ports", None) is None:
-        pc_logging.error("%s: the node '%s' has no ports at all" % (where, node_name))
-        return
-
-    # The node may be an assembly that externalizes ports of its own, and this
-    # one is entitled to map those: its map has to be resolved first.
-    await shape_ports.prepare_async(item, ctx)
-    placement = _item_placement(item, placement)
-
-    if len(spec) == 2:
-        _resolve_port(shape, mapped, name, item, placement, spec[1], where)
+    if entry.node is None:
+        if own is None:
+            pc_logging.error("%s: '%s': what this object points at cannot be found" % (where, name))
+            return
+        item, placement = own, Location()
     else:
-        _resolve_instance(ctx, shape, mapped, name, item, placement, spec[1], spec[2], where)
+        if nodes is None:
+            pc_logging.error("%s: '%s' names the node '%s', and only an assembly has nodes" % (where, name, entry.node))
+            return
+        node = nodes.get(entry.node)
+        if node is None:
+            pc_logging.error(
+                "%s: there is no node '%s' in this assembly: %s" % (where, entry.node, sorted(nodes.keys()))
+            )
+            return
+        item, placement = node
+        if getattr(item, "with_ports", None) is None:
+            pc_logging.error("%s: the node '%s' has no ports at all" % (where, entry.node))
+            return
+
+        # The node may be an assembly that externalizes ports of its own, and
+        # this one is entitled to map those: its map has to be resolved first.
+        await shape_ports.prepare_async(item, ctx)
+        placement = _item_placement(item, placement)
+
+    if entry.port is not None:
+        _resolve_port(shape, mapped, name, item, placement, entry.port, where, entry.offset)
+    else:
+        _resolve_instance(
+            ctx, shape, mapped, name, item, placement, entry.interface, entry.instance, where, entry.offset
+        )
 
 
 async def resolve_async(shape, ctx) -> None:
-    """Work out what this assembly's 'map:' externalizes, and hand it its ports.
+    """Work out what this object's 'map:' names, and hand it its ports.
 
     Idempotent and safe to call on anything: an object with no 'map:' is left
     alone, and one that has been resolved already is not resolved again (see
@@ -366,25 +599,39 @@ async def resolve_async(shape, ctx) -> None:
         with_ports.set_mapped(mapped)
         return
 
-    if not isinstance(shape, Assembly):
-        pc_logging.error("%s: only an assembly has anything inside it to externalize" % where)
-        with_ports.set_mapped(mapped)
-        return
-
     with pc_logging.Action("Map", shape.project_name, shape.name):
-        try:
-            await shape.do_instantiate()
-            nodes = node_index(shape)
-        except Exception as e:
-            pc_logging.error("%s: failed to walk the assembly: %s" % (where, e))
-            with_ports.set_mapped(mapped)
-            return
+        own = None
+        if keeps_source_ports(shape) or any(_names_no_node(spec) for spec in declared.values()):
+            try:
+                own = await _own(ctx, shape)
+            except Exception as e:
+                pc_logging.error("%s: failed to find what this object points at: %s" % (where, e))
+
+        if own is not None and keeps_source_ports(shape):
+            _adopt_all(shape, mapped, own)
+
+        nodes = None
+        if isinstance(shape, Assembly) and any(not _names_no_node(spec) for spec in declared.values()):
+            try:
+                await shape.do_instantiate()
+                nodes = node_index(shape)
+            except Exception as e:
+                pc_logging.error("%s: failed to walk the assembly: %s" % (where, e))
+                with_ports.set_mapped(mapped)
+                return
 
         for name, spec in declared.items():
             try:
-                await _resolve_entry(ctx, shape, mapped, nodes, name, spec, where)
+                await _resolve_entry(ctx, shape, mapped, nodes, own, name, spec, where)
             except Exception as e:
-                # One unusable entry costs the user that port, not the assembly.
+                # One unusable entry costs the user that port, not the object.
                 pc_logging.error("%s: failed to map '%s': %s" % (where, name, e))
 
     with_ports.set_mapped(mapped)
+
+
+def _names_no_node(spec) -> bool:
+    """Whether an entry, as written, names something of the object's own."""
+    if isinstance(spec, (list, tuple)):
+        return len(spec) == 1
+    return isinstance(spec, dict) and "node" not in spec
