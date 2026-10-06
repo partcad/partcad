@@ -146,15 +146,59 @@ def check_source(assembly, ignore_manufacturability: bool = False):
 #
 
 
+# Where an illustration of the book is looked at from, as camera positions: the
+# iso views from above first - the view a picture of an object is expected to
+# be - and then a view of each side from a little above it. An exploded step is
+# drawn from whichever shows its gap best (see 'view_along'); everything else
+# from the first.
+ISO_VIEWS = ((100, -100, 100), (100, 100, 100), (-100, 100, 100), (-100, -100, 100))
+SIDE_VIEWS = ((0, -100, 50), (100, 0, 50), (0, 100, 50), (-100, 0, 50))
+
+# How much better a side view has to show a gap before it is taken over an iso
+# view, which reads as 3D where a side view does not: a push straight down is
+# seen nearly as well from an iso corner, a push sideways is not.
+SIDE_VIEW_MARGIN = 0.15
+
+VIEW_UP = (0, 0, 1)
+
+
+def _gap_visibility(view, along) -> float:
+    """How much of a gap along 'along' is seen from 'view': 1 across it, 0 end on."""
+    v = _normalized(view)
+    a = _normalized(along)
+    cross = (v[1] * a[2] - v[2] * a[1], v[2] * a[0] - v[0] * a[2], v[0] * a[1] - v[1] * a[0])
+    return math.sqrt(sum(c * c for c in cross))
+
+
+def view_along(along=None):
+    """The camera position an illustration is drawn from.
+
+    Chosen here rather than read from the package: a package's 'render:' says
+    how *its* drawings look - a 'viewport_origin' that suits its catalogue
+    pictures, a 'with_ports:' for its connection drawings - and an instruction
+    book that inherited it showed a step from wherever that happened to point.
+    So the book draws with PartCAD's own options (see 'Shape._output_getopts')
+    and picks the view itself: the iso view for an object, and for a step the
+    view that shows the gap it opens, 'along' being the way the item moves.
+    """
+    if not along or _normalized(along) is None:
+        return ISO_VIEWS[0]
+    iso = max(ISO_VIEWS, key=lambda view: _gap_visibility(view, along))
+    side = max(SIDE_VIEWS, key=lambda view: _gap_visibility(view, along))
+    if _gap_visibility(side, along) > _gap_visibility(iso, along) + SIDE_VIEW_MARGIN:
+        return side
+    return iso
+
+
 class ImageSource:
     """Where the pictures of a document come from."""
 
-    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None):
+    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None):
         return None
 
-    def shape_image(self, shape, key=None, alt=None, caption=None, annotations=None):
+    def shape_image(self, shape, key=None, alt=None, caption=None, annotations=None, along=None):
         # Inherited by every image source, so each of them offers both forms.
-        return asyncio.run(self.shape_image_async(shape, key, alt, caption, annotations))
+        return asyncio.run(self.shape_image_async(shape, key, alt, caption, annotations, along))
 
 
 class PackageImages(ImageSource):
@@ -170,7 +214,7 @@ class PackageImages(ImageSource):
         self.output_dir = output_dir
         self.return_path = return_path
 
-    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None):
+    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None):
         # The image is looked up where the shape's own configuration puts it, the
         # same way rendering it there does. Deep copy: the merge is in place.
         image_cfg = render_cfg_merge(copy.deepcopy(self.render_cfg), shape.config.get("render") or {})
@@ -222,7 +266,7 @@ class RenderedImages(ImageSource):
         # is never holding one. See '_sandbox_budget()'.
         self._budget = _sandbox_budget()
 
-    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None):
+    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None):
         if key is None:
             key = "%s:%s" % (shape.project_name, shape.name)
 
@@ -247,6 +291,9 @@ class RenderedImages(ImageSource):
                         # insisting, and would turn the flag off for a package
                         # that had asked for it on its 'svg:' file type.
                         reproducible=True if self.reproducible else None,
+                        viewport_origin=view_along(along),
+                        viewport_up=VIEW_UP,
+                        defaults_only=True,
                     )
                 if not os.path.exists(path):
                     pc_logging.warning("Failed to render the illustration of %s" % key)
@@ -1240,6 +1287,7 @@ async def _step_page(section: GuideSection, step: GuideStep, images: ImageSource
             alt="%s exploded" % step.item_name,
             caption="Exploded view: the two are shown %.1fmm apart." % step.distance,
             annotations=[step.gap] if step.gap else None,
+            along=step.direction,
         ),
     )
 

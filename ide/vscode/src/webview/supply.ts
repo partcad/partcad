@@ -51,8 +51,8 @@ export class SupplyView {
         }
         empty(this.root);
 
-        this.root.appendChild(el('h1', undefined, 'Buy'));
-        this.root.appendChild(el('p', 'subtitle', data.object));
+        // No title: the tab and the panel already say what this is and what it
+        // is of.
 
         if (data.items.length === 0) {
             this.root.appendChild(placeholder('There is nothing here to order.'));
@@ -135,7 +135,11 @@ export class SupplyView {
             this.root.appendChild(back);
         }
 
-        this.root.appendChild(el('h1', undefined, item.name));
+        // Named when it was picked out of the list, which is the one time the
+        // item is not the object on screen and nothing else says which it is.
+        if (this.listed) {
+            this.root.appendChild(el('h1', undefined, item.name));
+        }
         if (item.desc) {
             this.root.appendChild(el('p', 'subtitle', item.desc));
         }

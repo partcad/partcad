@@ -480,7 +480,7 @@ class _CountingImages(assembly_guide.ImageSource):
         self.in_flight = 0
         self.peak = 0
 
-    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None):
+    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None):
         self.drawn.append(key or shape.name)
         self.in_flight += 1
         self.peak = max(self.peak, self.in_flight)
@@ -535,7 +535,7 @@ def test_the_pages_are_in_the_order_they_are_read_in():
     """
 
     class _Backwards(_CountingImages):
-        async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None):
+        async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None):
             # The later the step, the sooner its pictures are done.
             self.delay = 0.05 / (1 + len(self.drawn))
             return await super().shape_image_async(shape, key, alt, caption, annotations)
@@ -607,7 +607,7 @@ class _CrowdShape(_RecordingShape):
         _CrowdShape.in_flight += 1
         _CrowdShape.peak = max(_CrowdShape.peak, _CrowdShape.in_flight)
         try:
-            await super().render_svg_somewhere_async(ctx, project, filepath, annotations)
+            await super().render_svg_somewhere_async(ctx, project, filepath, annotations, **kwargs)
         finally:
             _CrowdShape.in_flight -= 1
 
@@ -1008,3 +1008,45 @@ def test_a_one_off_projection_forwards_whether_it_has_to_be_reproducible():
 
         asyncio.run(Shape().render_svg_somewhere_async(None, filepath=f.name))
         assert seen["reproducible"] is None
+
+
+def test_an_object_is_drawn_from_the_iso_view_whatever_its_package_says():
+    assert assembly_guide.view_along(None) == assembly_guide.ISO_VIEWS[0]
+
+
+def test_a_step_pushed_down_is_drawn_from_an_iso_view():
+    # Seen nearly as well from a corner as from the side, and a corner reads as 3D.
+    assert assembly_guide.view_along((0, 0, -1)) in assembly_guide.ISO_VIEWS
+
+
+def test_a_step_pushed_sideways_is_drawn_from_the_side_its_gap_shows_from():
+    view = assembly_guide.view_along((1, 0, 0))
+    assert view in assembly_guide.SIDE_VIEWS
+    # Looking across the gap, not along it.
+    assert view[0] == 0
+
+
+class _ViewRecordingShape(_RecordingShape):
+    def __init__(self, name):
+        super().__init__(name)
+        self.views = []
+
+    async def render_svg_somewhere_async(self, ctx=None, project=None, filepath=None, annotations=None, **view):
+        self.views.append(view)
+        await super().render_svg_somewhere_async(ctx, project, filepath, annotations)
+
+
+def test_an_illustration_is_drawn_with_partcads_own_options_and_the_view_it_needs():
+    shape = _ViewRecordingShape("bracket")
+
+    async def draw(directory):
+        images = assembly_guide.RenderedImages(None, None, directory)
+        return await images.shape_image_async(shape, key="step", along=(1, 0, 0))
+
+    with tempfile.TemporaryDirectory() as directory:
+        asyncio.run(draw(directory))
+
+    (view,) = shape.views
+    assert view["defaults_only"] is True
+    assert view["viewport_origin"] in assembly_guide.SIDE_VIEWS
+    assert view["viewport_up"] == assembly_guide.VIEW_UP

@@ -205,7 +205,8 @@ export class BuildView {
             return;
         }
         const pages = el('div', 'document-pages');
-        const rendered = renderPage(page, data.document.footer);
+        // Without the page's own heading: the item selected on the left is it.
+        const rendered = renderPage(page, data.document.footer, { headless: true });
         rendered.classList.add('current');
         pages.appendChild(rendered);
         const wrapper = el('div', 'document');

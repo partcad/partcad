@@ -1175,3 +1175,26 @@ input.switch:focus-visible {
     outline: 1px solid var(--vscode-focusBorder);
     outline-offset: 1px;
 }
+
+/* The Assembly tab is one column - its header over the document - and not the
+   control pane and drawing side by side that '.pane.render', whose header it
+   borrows, lays out for the 2D and Draft tabs. */
+.pane.render.assembly {
+    flex-direction: column;
+}
+
+.assembly-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* The page arrows over the page, where a document shown in a pane would
+   otherwise have its heading. */
+.document-bar.top {
+    order: -1;
+    border-top: none;
+    border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
