@@ -169,7 +169,7 @@ part that named that machine**:
 - ``manufacturability-cut`` -- the stock, cut where every declared cut says,
   **is** the part. See :ref:`subtractive-cut`.
 
-Both are measured by sampling each face's own normal against the axis, not by
+The first two are measured by sampling each face's own normal against the axis, not by
 reading its surface type. The type is not the question: a cylinder is a wall
 when it is coaxial with the axis and a defect when it lies across it, and a
 surface extruded along the axis is a perfectly good wall whatever it is made of.

@@ -60,7 +60,7 @@ and mating.
 Parts
 =====
 
-PartCAD has an evergrowing list of ways to define the part model:
+PartCAD has an ever-growing list of ways to define the part model:
 
 - Files
 

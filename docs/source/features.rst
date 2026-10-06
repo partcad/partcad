@@ -53,7 +53,7 @@ The PartCAD Viewer
 ------------------
 
 Displaying an object opens the ``PartCAD Viewer``, which is a strip of tabs over that one object rather than
-a bare canvas: groups of tabs, each with tabs of its own -- **Design**, **Analysis** and **Supply Chain**,
+a bare canvas: groups of tabs, each with tabs of its own -- **Design**, **Analysis** and **Manufacturing**,
 followed by **Validation** and **Operations**, which have nothing in them yet and are always disabled. Design
 is always the first:
 

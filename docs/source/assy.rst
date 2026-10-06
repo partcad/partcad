@@ -150,7 +150,7 @@ Expected overlaps
 `pc test` checks that the parts of an assembly do not share space - except where
 a joint says they must. A pin snapped into its hole, a screw cutting its own
 thread: the joint is made by occupying the material, and a model that holds no
-springs holds it overlapping. Three things say so, and all three are read from
+springs holds it overlapping. Two things say so, and both are read from
 the joint, never declared against a pair of parts:
 
 * the mating or the `how` of the connection says `snapIn` or `selfScrew`, or an

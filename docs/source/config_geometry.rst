@@ -385,7 +385,7 @@ Port visualization
 When a part or an assembly is rendered (in a GUI or when exported to a file),
 the ports can be visualized.
 When ports are visualized, each port looks like a coordinate system (3D location, direction and rotation)
-and, optionally, as a 2D image of an alleged "boundary" (or "siluette") of the port.
+and, optionally, as a 2D image of an alleged "boundary" (or "silhouette") of the port.
 
 It is recommended to define the port boundary at all times.
 Here is an example how to define the port boundary using a primitive sketch:

@@ -43,10 +43,6 @@ Command line tools
 Whether you consider publishing new CAD models or consuming already existing ones,
 it makes sense to browse what's already available.
 
-The PartCAD's integration into WebAssembly is not yet completed and, thus, there
-is currently no public website where you can browse the public PartCAD
-repository.
-
 The command line tools are the easiest way to browse parts:
 
   .. code-block:: shell
@@ -181,7 +177,7 @@ the way the renderer draws one by default:
 Export models
 =============
 
-Individual parts, assemblies and scenes can also can be exported into 3D
+Individual parts, assemblies and scenes can also be exported into 3D
 model file formats, including:
 
   - `STEP <https://en.wikipedia.org/wiki/ISO_10303>`_
