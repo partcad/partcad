@@ -56,6 +56,13 @@ a CAD addon, or documentation.
   the daemon writing them gives up on exactly the assemblies that said they would be slow. The same key is
   what `--fast-only` leaves an assembly out for (`partcad.fast_only`).
 
+  `garage` is the one piece here that only *clients* touch: the user's Build vs Buy choices, one file per
+  object under `~/.partcad/garage/default/bvb/`, written by the IDE and read by `pc instructions`, and sent to
+  the daemon with the request that needs them rather than read by it — a daemon can be remote, and these are
+  the decisions of whoever sits at the client. The editor extension has a TypeScript copy of its path and
+  escaping (`ide/vscode/src/common/garage.ts`), which is why the escaping is the one both languages have
+  built in.
+
 * [src/partcad_client](./src/partcad_client):
 
   What a **client** does, and a daemon must not: discovering the daemon serving a workspace and connecting to

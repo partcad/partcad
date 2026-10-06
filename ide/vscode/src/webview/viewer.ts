@@ -10,14 +10,15 @@
 // instructions, and anything that can be bought has suppliers and prices, so the
 // panel is a strip of tabs over one object rather than a canvas:
 //
-//     Design           |  Analysis   |  Supply Chain                                        |  Validation  |  Operations
-//       3D | 2D | Draft     FEA | CFD    Bill of Materials | Instructions | Procurement
+//     Design           |  Analysis   |  Manufacturing                                                    |  Validation  |  Operations
+//       3D | 2D | Draft     FEA | CFD    Build vs Buy | Build | Bill of Materials | Buy | Assembly
 //
 // Three groups, each a strip of its own. Design is the object itself: turned in
 // 3D, rendered to a picture, drawn as a dimensioned drawing. Analysis is what
-// engineering analysis says about it, and Supply Chain what making it takes -
-// what it is made of, how it goes together, where to buy it. Validation and Operations hold
-// nothing yet, and are always disabled.
+// engineering analysis says about it, and Manufacturing what making it takes -
+// which of its parts are made and which are ordered, how to make them, what it
+// is made of, where to buy it, how it goes together. Validation and Operations
+// hold nothing yet, and are always disabled.
 //
 // Every group always shows all of its tabs and disables the ones that do not
 // apply, and a group none of whose tabs apply is itself disabled; see 'Tabs'
@@ -28,7 +29,14 @@
 // This file is the shell: it owns the tab strips and the panes, routes what the
 // extension host posts in, and asks for the contents of a tab the first time it
 // is looked at. Each pane draws itself ('scene.ts', 'render.ts', 'bom.ts',
-// 'document.ts', 'supply.ts'); none of them talks to the host directly.
+// 'bvb.ts', 'build.ts', 'assembly.ts', 'supply.ts'); none of them talks to the
+// host directly.
+//
+// The Manufacturing strip is the one whose shape depends on an answer. Whether
+// anything is built (the Build tab) and whether anything is bought (the Buy tab)
+// is what the user decided on the Build vs Buy tab, over a tree only the daemon
+// can read - so that tree is asked for on every show of a part or an assembly,
+// whichever tab is open, and the strip is rebuilt when it arrives.
 //
 // The 3D view is loaded on its own rather than imported: it needs WebGL, and a
 // window without it throws as the view is built. Imported, that took every other
@@ -41,20 +49,37 @@
 // contents are asked for ('fetchTab') and delivered ('tabData'), never fetched.
 //
 
+import { AssemblyView } from './assembly';
 import { renderBom } from './bom';
+import { BuildView } from './build';
+import { BvbResult, BvbView, THUMBNAIL_SIZE, visibleRows } from './bvb';
 import { hasCallouts } from './callouts';
 import { CaeView } from './cae';
-import { DocumentView } from './document';
 import { el, empty, placeholder } from './dom';
-import { fetchFormats, fetchTab, ready, reportError, reportFailure, saveRendered } from './host';
+import {
+    fetchDetails,
+    fetchFormats,
+    fetchTab,
+    openSource,
+    ready,
+    reportError,
+    reportFailure,
+    saveChoices,
+    saveRendered,
+} from './host';
 import {
     ANALYSIS_TABS,
     BomData,
+    BvbData,
     CaeData,
+    Choices,
     DRAFT_PLUGINS,
+    DetailsMessage,
+    FetchTabMessage,
     FormatsMessage,
     GuideData,
     HostMessage,
+    PlanData,
     RENDER_TABS,
     RenderData,
     RenderFormat,
@@ -72,7 +97,7 @@ import { LinkFilter, OverlayRequest, Selection, Tree, filterIsEmpty } from './tr
 const panes: Record<TabId, HTMLElement> = {
     design: byId('pane-design'),
     analysis: byId('pane-analysis'),
-    supplyChain: byId('pane-supply-chain'),
+    manufacturing: byId('pane-manufacturing'),
     validation: byId('pane-validation'),
     operations: byId('pane-operations'),
     // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -80,17 +105,28 @@ const panes: Record<TabId, HTMLElement> = {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '2d': byId('pane-2d'),
     draft: byId('pane-draft'),
+    bvb: byId('pane-bvb'),
+    build: byId('pane-build'),
     bom: byId('pane-bom'),
-    instructions: byId('pane-instructions'),
     supply: byId('pane-supply'),
+    assembly: byId('pane-assembly'),
     fea: byId('pane-fea'),
     cfd: byId('pane-cfd'),
 };
 
 /** The tabs whose panes are rebuilt from scratch on every show. */
-const DATA_TABS: TabId[] = ['bom', 'instructions', 'supply'];
+const DATA_TABS: TabId[] = ['bom', 'supply'];
 
 const supplyView = new SupplyView(panes.supply);
+// The three Manufacturing panes that hold controls of their own - switches, a
+// checkbox, a format - own their panes for the life of the panel, as the
+// analyses do: rebuilding one on every show would take back what the user set.
+const bvbView = new BvbView(panes.bvb, { onChange: onChoicesChanged, requestDetails, openSource });
+const buildView = new BuildView(panes.build, { onRecursive: () => requestPlan() });
+const assemblyView = new AssemblyView(panes.assembly, {
+    onChange: () => requestGuide(),
+    onSave: () => saveRendered('assembly'),
+});
 // Each analysis owns its pane for the life of the panel: the implementation
 // field is the user's, and rebuilding the pane on every show would take back
 // what they typed into it.
@@ -101,13 +137,13 @@ for (const tab of ANALYSIS_TABS) {
 const tabs = new Tabs(byId('tabs'), onTabSelected);
 const designTabs = new Tabs(byId('design-tabs'), (tab) => onInnerSelected('design', tab));
 const analysisTabs = new Tabs(byId('analysis-tabs'), (tab) => onInnerSelected('analysis', tab));
-const supplyChainTabs = new Tabs(byId('supply-chain-tabs'), (tab) => onInnerSelected('supplyChain', tab));
+const manufacturingTabs = new Tabs(byId('manufacturing-tabs'), (tab) => onInnerSelected('manufacturing', tab));
 
 /** Each group of the panel's strip, and the strip of its own it holds. */
 const groups: Partial<Record<TabId, Tabs>> = {
     design: designTabs,
     analysis: analysisTabs,
-    supplyChain: supplyChainTabs,
+    manufacturing: manufacturingTabs,
 };
 
 /** The 3D view's module, once it has loaded; undefined before, and for good if it could not. */
@@ -348,26 +384,29 @@ const awaiting = new Map<TabId, number>();
 const requested = new Set<TabId>();
 
 /** Ask the host to fill a tab in, and remember which answer to accept. */
-function request(
-    tab: TabId,
-    extra: {
-        implementation?: string;
-        format?: string;
-        plugin?: string;
-        filter?: LinkFilter;
-        withPorts?: boolean;
-        withInterfaces?: boolean;
-        withInternals?: boolean;
-        ports?: string[];
-    } = {},
-): void {
+function request(tab: TabId, extra: Omit<FetchTabMessage, 'type' | 'tab' | 'token'> = {}): void {
     lastToken += 1;
     awaiting.set(tab, lastToken);
     fetchTab({ type: 'fetchTab', tab, token: lastToken, ...extra });
 }
 
-/** The instructions, once they have arrived: it owns the paging. */
-let instructions: DocumentView | undefined;
+/**
+ * What the object on screen is made of and what the user chose for it, once the
+ * daemon has said: what the Build and Buy tabs are enabled by. 'failed' when it
+ * could not say - a daemon too old to have been asked - which leaves Buy enabled
+ * as it always was and Build, which needs the same daemon, disabled.
+ */
+let manufacturing: { data: BvbData; result: BvbResult } | 'failed' | undefined;
+
+/** The thumbnails and measurements still to ask for, and the batch in flight. */
+let detailsQueue: { name: string; kind: string }[] = [];
+let detailsToken: number | undefined;
+
+/** How many objects one 'fetchDetails' asks about. The daemon answers one request at a time, so the table fills in steps rather than all at the end, and other tabs get a turn in between. */
+const DETAILS_BATCH = 6;
+
+/** Which half of the Build tab is in flight: the plan, or the pages. */
+let buildPhase: 'plan' | 'document' = 'plan';
 
 function byId(id: string): HTMLElement {
     return document.getElementById(id) as HTMLElement;
@@ -402,10 +441,10 @@ function tabsFor(message: ShowMessage | undefined): TabSpec[] {
             hint: 'No engineering analysis configurations are defined for this object',
         },
         {
-            id: 'supplyChain',
-            label: 'Supply Chain',
-            pane: panes.supplyChain,
-            disabled: !Tabs.anyEnabled(supplyChainTabsFor(message)),
+            id: 'manufacturing',
+            label: 'Manufacturing',
+            pane: panes.manufacturing,
+            disabled: !Tabs.anyEnabled(manufacturingTabsFor(message)),
             hint: 'No manufacturing or procurement instructions are provided for this object',
         },
         // Placeholders for the groups to come: in the strip so that its shape is
@@ -451,38 +490,69 @@ function analysisTabsFor(message: ShowMessage | undefined): TabSpec[] {
 }
 
 /**
- * Supply Chain: the bill of materials, the instructions and where to buy, all
- * three always shown, and enabled for the two things that are made and bought -
- * a part and an assembly.
+ * Manufacturing: what is built and what is bought, how to build it, what it is
+ * made of, where to buy it and how it goes together - all five always shown,
+ * and enabled for the two things that are made and bought, a part and an
+ * assembly.
  *
- * A bill of materials is of an assembly, and of a part: what one of it is
- * procured as - itself, or the stock it is made from (see 'pc bom'). Instructions
- * are the steps that put an assembly together. A scene is where things are
- * placed rather than a thing anybody builds or orders, and a sketch and an
- * interface are things to build with - so for those three the whole group is
- * disabled.
+ * A scene is where things are placed rather than a thing anybody builds or
+ * orders, and a sketch and an interface are things to build with - so for those
+ * three the whole group is disabled.
+ *
+ * Build and Buy are enabled by what the user chose on Build vs Buy: Build while
+ * something needed is built, Buy while something needed is bought. Until the
+ * daemon has said what the object is made of, neither is known, and both say
+ * so. Build vs Buy itself is 'secondary' for a part that is one line - a part
+ * with no stock - because a table of one line is not what somebody opening the
+ * group came for; it is there to be clicked, and is not opened for them.
+ * Assembly is the assembly instructions, which only an assembly has.
  */
-function supplyChainTabsFor(message: ShowMessage | undefined): TabSpec[] {
+function manufacturingTabsFor(message: ShowMessage | undefined): TabSpec[] {
     const known = Boolean(message?.package);
     const kind = message?.kind;
+    const made = known && (kind === 'assembly' || kind === 'part');
+    const state = message === undefined ? undefined : manufacturing;
+    const pending = made && state === undefined;
+    const working = 'Working out what is built and what is bought…';
+    const result = state === undefined || state === 'failed' ? undefined : state.result;
     return [
+        {
+            id: 'bvb',
+            label: 'Build vs Buy',
+            pane: panes.bvb,
+            disabled: !made,
+            secondary: kind === 'part' && result !== undefined && visibleRows(result).length < 2,
+        },
+        {
+            id: 'build',
+            label: 'Build',
+            pane: panes.build,
+            disabled: !made || result === undefined || !result.anyBuild,
+            hint: pending
+                ? working
+                : state === 'failed'
+                  ? 'PartCAD could not say how this is made'
+                  : 'Nothing is built: everything here is bought (see Build vs Buy)',
+        },
         {
             id: 'bom',
             label: 'Bill of Materials',
             pane: panes.bom,
-            disabled: !(known && (kind === 'assembly' || kind === 'part')),
-        },
-        {
-            id: 'instructions',
-            label: 'Instructions',
-            pane: panes.instructions,
-            disabled: !(known && kind === 'assembly'),
+            disabled: !made,
         },
         {
             id: 'supply',
-            label: 'Procurement',
+            label: 'Buy',
             pane: panes.supply,
-            disabled: !(known && (kind === 'assembly' || kind === 'part')),
+            disabled: !made || pending || (result !== undefined && !result.anyBuy),
+            hint: pending ? working : 'Nothing is bought: everything here is built (see Build vs Buy)',
+        },
+        {
+            id: 'assembly',
+            label: 'Assembly',
+            pane: panes.assembly,
+            disabled: !(known && kind === 'assembly'),
+            hint: 'Only an assembly has assembly instructions',
         },
     ];
 }
@@ -493,7 +563,7 @@ function setAllTabs(message: ShowMessage | undefined): void {
     // tab under it already chosen.
     designTabs.setTabs(designTabsFor(message));
     analysisTabs.setTabs(analysisTabsFor(message));
-    supplyChainTabs.setTabs(supplyChainTabsFor(message));
+    manufacturingTabs.setTabs(manufacturingTabsFor(message));
     tabs.setTabs(tabsFor(message));
 }
 
@@ -553,7 +623,6 @@ async function show(message: ShowMessage): Promise<void> {
     // Nothing in flight belongs to this object, whatever it was asked for.
     awaiting.clear();
     requested.clear();
-    instructions = undefined;
     for (const tab of DATA_TABS) {
         reset(tab);
     }
@@ -561,6 +630,13 @@ async function show(message: ShowMessage): Promise<void> {
         caeViews[tab]?.setBusy('Select this tab to run the analysis.');
     }
     resetRenderTabs('Select this tab to render it.');
+    resetManufacturing('Asking PartCAD what this is made of…');
+    // Asked for now, whichever tab is open: which Manufacturing tabs apply
+    // depends on the answer. No geometry is built for it.
+    if (message.package && (message.kind === 'part' || message.kind === 'assembly')) {
+        requested.add('bvb');
+        request('bvb');
+    }
 
     // Set up viewer configuration on the window object for access by scene.ts
     if (message.config) {
@@ -630,7 +706,6 @@ function clear(): void {
     shown = undefined;
     awaiting.clear();
     requested.clear();
-    instructions = undefined;
     scene?.clearGeometry();
     objectTree.clear();
     for (const tab of RENDER_TABS) {
@@ -646,7 +721,115 @@ function clear(): void {
         caeViews[tab]?.setBusy('Nothing to analyse.');
     }
     resetRenderTabs('Nothing to render.');
+    resetManufacturing('Nothing to show.');
     setAllTabs(undefined);
+}
+
+/** Take back what the Manufacturing tabs that own their panes showed for the previous object. */
+function resetManufacturing(text: string): void {
+    manufacturing = undefined;
+    detailsQueue = [];
+    detailsToken = undefined;
+    bvbView.setBusy(text);
+    buildView.forget();
+    buildView.setBusy('Select this tab to see how this is built.');
+    assemblyView.setManufacturable(undefined);
+    assemblyView.setBusy('Select this tab to write the assembly instructions.');
+}
+
+/** The choices on screen: what the Build and Assembly tabs are asked with. */
+function currentChoices(): Choices {
+    return manufacturing !== undefined && manufacturing !== 'failed' ? manufacturing.data.choices : {};
+}
+
+/**
+ * The user moved a switch on Build vs Buy.
+ *
+ * Kept on this machine by the host. What the Build and Assembly tabs showed is
+ * no longer the plan, so both are asked again when next looked at - neither is
+ * on screen while a switch on Build vs Buy is being moved - and the strip is
+ * rebuilt, since what is built and what is bought decides what it offers.
+ */
+function onChoicesChanged(choices: Choices): void {
+    if (manufacturing === undefined || manufacturing === 'failed' || shown === undefined) {
+        return;
+    }
+    const result = bvbView.current;
+    manufacturing = { data: { ...manufacturing.data, choices }, result: result ?? manufacturing.result };
+    saveChoices({ type: 'saveChoices', object: manufacturing.data.object, choices });
+    for (const tab of ['build', 'assembly'] as TabId[]) {
+        requested.delete(tab);
+        awaiting.delete(tab);
+    }
+    buildView.setBusy('Select this tab to see how this is built.');
+    assemblyView.setBusy('Select this tab to write the assembly instructions.');
+    manufacturingTabs.setTabs(manufacturingTabsFor(shown), { keepCurrent: true });
+}
+
+/** Queue thumbnails and measurements to ask for, a few at a time. */
+function requestDetails(objects: { name: string; kind: string }[]): void {
+    detailsQueue.push(...objects);
+    pumpDetails();
+}
+
+function pumpDetails(): void {
+    // Only while the table is on screen. The tree is asked for on every show,
+    // since the strip needs it, but the pictures are a projection per line - an
+    // assembly selected only to be turned in 3D would otherwise queue one for
+    // each of its parts ahead of every other tab's request.
+    const onScreen = tabs.current === 'manufacturing' && manufacturingTabs.current === 'bvb';
+    if (!onScreen || detailsToken !== undefined || detailsQueue.length === 0) {
+        return;
+    }
+    const batch = detailsQueue.splice(0, DETAILS_BATCH);
+    lastToken += 1;
+    detailsToken = lastToken;
+    fetchDetails({
+        type: 'fetchDetails',
+        token: lastToken,
+        objects: batch,
+        width: THUMBNAIL_SIZE,
+        height: THUMBNAIL_SIZE,
+    });
+}
+
+function onDetails(message: DetailsMessage): void {
+    if (message.token !== detailsToken) {
+        return;
+    }
+    detailsToken = undefined;
+    if (message.items !== undefined) {
+        bvbView.setDetails(message.items);
+    } else if (message.error !== undefined) {
+        reportError(`failed to fetch the Build vs Buy details: ${message.error}`);
+    }
+    pumpDetails();
+}
+
+/** Ask for the Build tab's plan, and then for its pages. */
+function requestPlan(): void {
+    if (shown === undefined) {
+        return;
+    }
+    requested.add('build');
+    buildPhase = 'plan';
+    buildView.setBusy('Working out the order things are made in…');
+    request('build', { choices: currentChoices(), recursive: buildView.recursive, document: false });
+}
+
+/** Ask for the assembly instructions, as the Assembly tab is set. */
+function requestGuide(): void {
+    if (shown === undefined) {
+        return;
+    }
+    requested.add('assembly');
+    assemblyView.setBusy('Writing the assembly instructions… The first time takes a while: every step is drawn.');
+    request('assembly', {
+        choices: currentChoices(),
+        recursive: assemblyView.recursive,
+        buildParts: assemblyView.buildParts,
+        format: assemblyView.format,
+    });
 }
 
 /** Ask for an analysis again, with whatever implementation was typed in. */
@@ -796,11 +979,29 @@ function onLeafSelected(tab: TabId): void {
         // had no size while its tab was hidden.
         caeViews[tab]?.resize();
     }
+    if (tab === 'bvb') {
+        // The table's pictures waited for it to be looked at (see 'pumpDetails').
+        pumpDetails();
+    }
     if (requested.has(tab)) {
         return;
     }
     if (tab === 'draft') {
         startDraft();
+        return;
+    }
+    if (tab === 'build') {
+        requestPlan();
+        return;
+    }
+    if (tab === 'assembly') {
+        requestGuide();
+        return;
+    }
+    if (tab === 'bvb') {
+        requested.add('bvb');
+        bvbView.setBusy('Asking PartCAD what this is made of…');
+        request('bvb');
         return;
     }
     if (isRenderTab(tab)) {
@@ -849,6 +1050,30 @@ function onTabData(
         return;
     }
 
+    if (tab === 'bvb') {
+        onBvb(data as BvbData | undefined, error);
+        return;
+    }
+    if (tab === 'build') {
+        onPlan(data as PlanData | undefined, error);
+        return;
+    }
+    if (tab === 'assembly') {
+        if (error !== undefined) {
+            assemblyView.showError(error);
+        } else if (data === null || data === undefined) {
+            assemblyView.showError('PartCAD wrote no assembly instructions.');
+        } else {
+            try {
+                assemblyView.show(data as GuideData);
+            } catch (e: unknown) {
+                assemblyView.showError(`Failed to display this: ${e}`);
+                reportError(`failed to render the 'assembly' tab: ${e}`);
+            }
+        }
+        return;
+    }
+
     if (isAnalysisTab(tab)) {
         // The analysis panes are not rebuilt: they own a field the user types
         // into, and 'reset()' would take it away mid-sentence.
@@ -892,13 +1117,61 @@ function onTabData(
     }
 }
 
+/**
+ * What the object is made of has arrived: draw the table, and rebuild the strip
+ * it decides.
+ *
+ * Not with 'keepCurrent': this is the first the strip learns about the object,
+ * and Build vs Buy of a part with nothing under it is not a tab to be left on.
+ */
+function onBvb(data: BvbData | undefined, error: string | undefined): void {
+    if (error !== undefined || data === undefined || data === null) {
+        manufacturing = 'failed';
+        bvbView.showError(error ?? 'PartCAD had nothing to say about what this is made of.');
+    } else {
+        try {
+            data.choices = data.choices ?? {};
+            const result = bvbView.render(data);
+            manufacturing = { data, result };
+            // Known as soon as the tree is, which is long before the
+            // instructions are written: the Assembly tab says so up front.
+            assemblyView.setManufacturable(data.tree.manufacturable);
+        } catch (e: unknown) {
+            manufacturing = 'failed';
+            bvbView.showError(`Failed to display this: ${e}`);
+            reportError(`failed to render the 'bvb' tab: ${e}`);
+        }
+    }
+    if (shown !== undefined) {
+        manufacturingTabs.setTabs(manufacturingTabsFor(shown));
+    }
+}
+
+/** The Build tab's plan, or its pages: the plan is drawn, and the pages asked for after it. */
+function onPlan(data: PlanData | undefined, error: string | undefined): void {
+    const phase = buildPhase;
+    if (error !== undefined || data === undefined || data === null) {
+        const message = error ?? 'PartCAD had nothing to say about how this is built.';
+        if (phase === 'plan') {
+            buildView.showError(message);
+        } else {
+            buildView.showDocumentError(message);
+        }
+        return;
+    }
+    if (phase === 'plan') {
+        buildView.showPlan(data);
+        buildPhase = 'document';
+        request('build', { choices: currentChoices(), recursive: buildView.recursive, document: true });
+        return;
+    }
+    buildView.showDocument(data);
+}
+
 function render(tab: TabId, pane: HTMLElement, data: unknown): void {
     switch (tab) {
         case 'bom':
             renderBom(pane, data as BomData);
-            return;
-        case 'instructions':
-            instructions = new DocumentView(pane, (data as GuideData).document);
             return;
         case 'supply':
             supplyView.render(data as SupplyData, shown?.kind ?? null);
@@ -918,6 +1191,8 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
         onTabData(message.tab, message.token, message.data, message.error, message.implementation);
     } else if (message.type === 'formats') {
         onFormats(message);
+    } else if (message.type === 'details') {
+        onDetails(message);
     } else if (message.type === 'spaceMouseState') {
         if (scene !== undefined) {
             scene.spaceMouse.settings = message.settings;
@@ -950,9 +1225,9 @@ window.addEventListener('keydown', (event: KeyboardEvent) => {
     // reader flips them. Only while that tab is the one on screen: the same keys
     // orbit the camera on the 3D one.
     if (
-        tabs.current === 'supplyChain' &&
-        supplyChainTabs.current === 'instructions' &&
-        instructions?.handleKey(event.key)
+        tabs.current === 'manufacturing' &&
+        manufacturingTabs.current === 'assembly' &&
+        assemblyView.handleKey(event.key)
     ) {
         event.preventDefault();
     }

@@ -14,6 +14,7 @@ import copy
 import inspect
 import os
 import re
+import tempfile
 import threading
 import typing
 
@@ -3241,11 +3242,19 @@ class Project(project_config.Configuration):
         output_dir=None,
         ignore_manufacturability=False,
         shape=None,
+        recursive=True,
+        build_parts=True,
+        choices=None,
     ):
         """Generate the assembly instruction book of a single assembly.
 
         'format' is "pdf" or "html": the same document either way, laid out on
         paper or as pages to flip through in a browser.
+
+        'recursive', 'build_parts' and 'choices' are those of
+        'assembly_guide.build_guide_async'. Both flags default to on here: a
+        book written into the package, which is what 'pc render' asks for, is
+        the whole of it. 'pc instructions' asks for less by default.
 
         Returns the path of the generated document, or 'None' if there is no such
         assembly in this package. Raises 'AssemblyDocumentError' if the assembly
@@ -3263,18 +3272,20 @@ class Project(project_config.Configuration):
         assembly, path, dir_path, _return_path, render_cfg, output_dir = target
 
         async with assembly_guide.guide_document_async(
-            self.ctx, self, assembly, format.upper(), dir_path, ignore_manufacturability
+            self.ctx,
+            self,
+            assembly,
+            format.upper(),
+            dir_path,
+            ignore_manufacturability,
+            recursive=recursive,
+            build_parts=build_parts,
+            choices=choices,
         ) as document:
             self.ctx.ensure_dirs_for_file(path)
-            if format == "html":
-                # Already the same bytes every time: nothing in the HTML is
-                # read off a clock, so there is no 'reproducible' to honour.
-                with open(path, "w") as f:
-                    f.write(pc_document.render_html(document))
-            else:
-                await render_pdf_async(
-                    self.ctx, document, path, reproducible=self._document_reproducible(assembly, format, render_cfg)
-                )
+            await self._write_document_async(
+                document, format, path, reproducible=self._document_reproducible(assembly, format, render_cfg)
+            )
 
         return path
 
@@ -3309,7 +3320,25 @@ class Project(project_config.Configuration):
                 found = cfg[output.REPRODUCIBLE_KEY]
         return output.as_flag(found)
 
-    async def assembly_guide_data_async(self, assembly_name, ignore_manufacturability=False):
+    async def _write_document_async(self, document, format, path, reproducible=False):
+        """Write a generated document down in one of 'assembly_guide.GUIDE_FORMATS'."""
+        if format == "html":
+            # Already the same bytes every time: nothing in the HTML is read
+            # off a clock, so there is no 'reproducible' to honour.
+            with open(path, "w") as f:
+                f.write(pc_document.render_html(document))
+        else:
+            await render_pdf_async(self.ctx, document, path, reproducible=reproducible)
+
+    async def assembly_guide_data_async(
+        self,
+        assembly_name,
+        ignore_manufacturability=False,
+        recursive=True,
+        build_parts=True,
+        choices=None,
+        format=None,
+    ):
         """The assembly instruction book as plain data, pictures included.
 
         The same document 'render_assembly_guide_async()' writes to a file, for a
@@ -3322,18 +3351,75 @@ class Project(project_config.Configuration):
         where it was written, and this one is not written anywhere. What is left
         is the links that are useful to a reader over a wire - the urls the
         packages declare.
+
+        Returns '{"document", "plan", "pages", "manufacturable"}' - the build plan the book follows
+        and the page of it each plan item is on, which is what the IDE's Build
+        tab pairs up - whether the assembly is meant to be made at all, which a
+        caller passing 'ignore_manufacturability' learns only from this - and,
+        when a 'format' is given, '"file"': the very same
+        document written down in it, as '{"filename", "extension", "content"}'
+        with the content base64-encoded, for a client to save on its own side.
         """
         assembly = self.get_assembly(assembly_name)
         if assembly is None:
             return None
+        if format is not None and format not in assembly_guide.GUIDE_FORMATS:
+            raise ValueError("Unsupported assembly document format: %s" % format)
 
-        async with assembly_guide.guide_document_async(
-            self.ctx, self, assembly, "Data", ignore_manufacturability=ignore_manufacturability
-        ) as document:
-            return pc_document.to_data(document, embed_images=True)
+        async with assembly_guide.guide_async(
+            self.ctx,
+            self,
+            assembly,
+            "Data",
+            ignore_manufacturability=ignore_manufacturability,
+            recursive=recursive,
+            build_parts=build_parts,
+            choices=choices,
+        ) as guide:
+            result = {
+                "document": pc_document.to_data(guide.document, embed_images=True),
+                "plan": guide.plan.to_data(),
+                "pages": guide.pages,
+                # Whether the assembly is meant to be made, judged exactly as
+                # 'check_source' judges it: a client that asked with
+                # 'ignore_manufacturability' still has to be able to say so.
+                "manufacturable": bool(assembly_guide.resolve_alias(self.ctx, assembly).is_manufacturable),
+            }
+            if format is not None:
+                result["file"] = await self._document_file_async(guide.document, format, assembly_name)
+            return result
 
-    def assembly_guide_data(self, assembly_name, ignore_manufacturability=False):
-        return asyncio.run(self.assembly_guide_data_async(assembly_name, ignore_manufacturability))
+    async def _document_file_async(self, document, format, name):
+        """A document written down in a format, as bytes a client can save."""
+        import base64
+
+        with tempfile.TemporaryDirectory(prefix="partcad-guide-") as directory:
+            filename = "%s.%s" % (re.sub(r"[^A-Za-z0-9_.-]+", "_", name.rsplit("/", 1)[-1]) or "assembly", format)
+            path = os.path.join(directory, filename)
+            await self._write_document_async(document, format, path)
+            with open(path, "rb") as f:
+                content = base64.b64encode(f.read()).decode("ascii")
+        return {"filename": filename, "extension": format, "content": content}
+
+    async def part_plan_data_async(self, part_name, choices=None):
+        """What making a part takes, as the IDE's Build tab shows it for a part.
+
+        The plan of a part - the chain of stock it is made from, deepest first -
+        and a page for each item, in the same shape 'assembly_guide_data_async'
+        returns them in.
+        """
+        part = await self.get_part_async(part_name)
+        if part is None:
+            return None
+        async with assembly_guide.part_plan_async(self.ctx, self, part, choices) as guide:
+            return {
+                "document": pc_document.to_data(guide.document, embed_images=True),
+                "plan": guide.plan.to_data(),
+                "pages": guide.pages,
+            }
+
+    def assembly_guide_data(self, assembly_name, ignore_manufacturability=False, **options):
+        return asyncio.run(self.assembly_guide_data_async(assembly_name, ignore_manufacturability, **options))
 
     def render_assembly_guide(
         self,
@@ -3342,9 +3428,12 @@ class Project(project_config.Configuration):
         render_cfg=None,
         output_dir=None,
         ignore_manufacturability=False,
+        **options,
     ):
         return asyncio.run(
-            self.render_assembly_guide_async(assembly_name, format, render_cfg, output_dir, ignore_manufacturability)
+            self.render_assembly_guide_async(
+                assembly_name, format, render_cfg, output_dir, ignore_manufacturability, **options
+            )
         )
 
     def render_readme_async(self, render_cfg, output_dir):

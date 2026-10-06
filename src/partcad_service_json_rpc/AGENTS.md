@@ -169,7 +169,7 @@ at all).
 Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|assembly|scene|file`,
 `export.part|assembly|scene`, `ai.regenerate|change`, `add.part|assembly|scene`, `package.load|path|refresh`, `init`,
 `list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults`, `cam.route`, `filter.object`,
-`test`, `info`, `activate`, and `rpc.discover`. Four methods mirror no subcommand:
+`test`, `info`, `activate`, and `rpc.discover`. Five methods mirror no subcommand:
 
 * `assembly.instantiate`, which a client calls on its own behalf as the second half of a two-phase assembly
   build (see below).
@@ -193,7 +193,23 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
 
   `filter.object` is `pc filter`: a second object made of some of the links of the first. It is a daemon
   method because it writes a declaration, like every other package-mutating command -- a client doing it
-  itself would leave this warm context serving the package as it was before. Server-to-client
+  itself would leave this warm context serving the package as it was before.
+* `manufacturing.tree`, `manufacturing.details` and `manufacturing.plan`, behind the Viewer's Build vs Buy and
+  Build tabs (see `partcad/build_plan.py`). The tree is every line item an object is made of, each saying
+  whether it can be bought, built, or both, and costs what `bom` costs -- nothing is built for it. The details
+  are a thumbnail and the measurements of *several* objects per request, because this daemon answers one request
+  at a time and a table of forty rows asked row by row would queue every other tab behind it; the thumbnails are
+  kept in PartCAD's cache under the shape's key and the size (`partcad/thumbnail.py`). The plan is what has to be
+  done, in order, given the user's Build vs Buy choices -- which the client sends with every request, since they
+  are kept on the client's machine (`partcad_utils/garage.py`) and never read from disk here. With `document`
+  it also carries the pages that explain each item, which for an assembly is the very instruction book
+  `assembly.guide` writes, and `pages` maps each item to its page, so the step on screen and the page of the
+  book are one. `assembly.guide` returns the plan and the pages too, takes `subassemblies` (`pc instructions -r`; `recursive`
+  on a request that names an object already means a walk over packages, and is refused), `build_parts`,
+  `choices` (or `bvb`, every object's, for a client that cannot resolve the name -- `pc instructions`) and,
+  with `format`, the document written down as PDF or HTML, as bytes for the client to save on its side.
+
+Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,
 `stats`, `terminal`, `execute`, and the `*Done`/lifecycle signals).
 

@@ -471,6 +471,42 @@ class JsonRpcBackend implements PartcadBackend {
                 object: a.name,
                 // eslint-disable-next-line @typescript-eslint/naming-convention
                 ignore_manufacturability: a.ignoreManufacturability,
+                // 'pc instructions -r' and '-b', and what the user chose to build
+                // and to buy - which the daemon is told rather than reads, since
+                // it is kept on this machine (see 'garage.ts').
+                // Not 'recursive': on a request naming an object, that is a walk
+                // over the packages below it, and the daemon refuses it.
+                subassemblies: a.recursive,
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                build_parts: a.buildParts,
+                choices: a.choices,
+                // When given, the document comes back written in it as well, for
+                // Save: the daemon may be on another machine.
+                format: a.format,
+            }),
+        );
+        // The Manufacturing tabs. The tree is what an object is made of and what
+        // each part of it declares about being built and bought - no geometry,
+        // so it is cheap enough to ask on every show. The details are the
+        // thumbnails and measurements of its lines, a few at a time. The plan is
+        // the order it is built in, and with 'document' the pages of the
+        // instruction book it points into.
+        reg('partcad.manufacturingTree', (a) =>
+            this.send('manufacturing.tree', { package: a.pkg, object: a.name, kind: a.kind }),
+        );
+        reg('partcad.manufacturingDetails', (a) =>
+            this.send('manufacturing.details', { objects: a.objects, width: a.width, height: a.height }),
+        );
+        reg('partcad.manufacturingPlan', (a) =>
+            this.send('manufacturing.plan', {
+                package: a.pkg,
+                object: a.name,
+                kind: a.kind,
+                choices: a.choices,
+                subassemblies: a.recursive,
+                document: a.document,
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                ignore_manufacturability: a.ignoreManufacturability,
             }),
         );
         reg('partcad.supplyQuote', (a) =>

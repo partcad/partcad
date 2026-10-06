@@ -423,6 +423,9 @@ class Context:
         self.cache_shapes = ShapeCache(user_config=self.user_config)
         self.cache_tests = Cache("tests", user_config=self.user_config)
         self.cache_lints = Cache("lints", user_config=self.user_config)
+        # Pictures drawn for lists of objects (see 'partcad.thumbnail'), under
+        # the cache key of the shape they are a picture of.
+        self.cache_renders = Cache("renders", user_config=self.user_config)
 
         self.connection_status = {}
 

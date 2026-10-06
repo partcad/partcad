@@ -62,6 +62,21 @@ HOW_FIELDS = (
     "holdToForceMax",
 )
 
+# The fields of 'how' that say how the object is brought into place - pushed,
+# turned, screwed, snapped - as opposed to when ('stage') or by what it is held
+# ('hold*'). A step somebody has to perform has to have one of these said about
+# it, here or by the mating or the interfaces it is connected by: see
+# 'ConnectHow.motion_declared()'.
+HOW_MOTION_FIELDS = (
+    "pushForceMax",
+    "pushDistance",
+    "turnDirection",
+    "turnTorqueMax",
+    "threadStep",
+    "selfScrew",
+    "snapIn",
+)
+
 # Fields that were renamed, and the field that replaces each of them. They are
 # still accepted, so that the ASSY files written against the earlier spelling
 # keep working, but they are reported so that they can be fixed.
@@ -243,6 +258,16 @@ class ConnectHow:
             if field not in HOW_FIELDS:
                 pc_logging.error("%s: unknown 'how' field, ignoring: %s" % (where, field))
 
+        # What the ASSY file said, field by field: a mating's 'how' fills in
+        # every motion field this does not state (see 'resolve()').
+        self._stated = set(config.keys())
+
+        # Whether this connection's own 'how' says how the object moves into
+        # place. What else says it is found as the connection is resolved
+        # ('motion_sources').
+        self._motion_in_how = any(field in config for field in HOW_MOTION_FIELDS)
+        self.motion_sources = ["how"] if self._motion_in_how else []
+
         self.stage = self._stage(config)
         self.push_force_max = self._number(config, "pushForceMax", DEFAULT_PUSH_FORCE_MAX)
         self.turn_direction = self._turn_direction(config)
@@ -400,6 +425,8 @@ class ConnectHow:
         being mated. They are what an unspecified 'threadStep' is inherited from.
         """
         self.problems = []
+        self.motion_sources = ["how"] if self._motion_in_how else []
+        self._inherit_mating_how(_mating_between(source_interface, target_interface))
         self._push_item = source_item
         self._push_frame = source_frame
         self.push_direction = _push_direction(mated_frame)
@@ -441,9 +468,11 @@ class ConnectHow:
         of this joint alone. The more specific one wins, so a 'how' that says
         either way is left as it is.
         """
+        mating = _mating_between(source_interface, target_interface)
+        if getattr(mating, "snap_in", False):
+            self._motion_from("mating")
         if self.snap_in_specified:
             return
-        mating = _mating_between(source_interface, target_interface)
         self.snap_in = bool(getattr(mating, "snap_in", False))
 
     def _resolve_thread_step(self, source_interface, target_interface):
@@ -471,6 +500,11 @@ class ConnectHow:
         # and 'how' knows when it is true of this joint alone.
         mating = _mating_between(source_interface, target_interface)
         cuts_its_own = any(self_screw for _, _, self_screw in ends) or bool(getattr(mating, "self_screw", False))
+        if getattr(mating, "self_screw", False):
+            self._motion_from("mating")
+        if declared or any(self_screw for _, _, self_screw in ends):
+            # A thread, or a thread cut, is how the object goes in: turned.
+            self._motion_from("interface")
         if not self.self_screw_specified:
             self.self_screw = cuts_its_own
         # Against the resolved answer rather than the interfaces' own: a mating
@@ -497,6 +531,60 @@ class ConnectHow:
         candidates = matched or brought
         if candidates:
             self.thread_step = candidates[0]
+
+    def _inherit_mating_how(self, mating):
+        """Take every motion field this connection does not state from the mating's 'how'.
+
+        Field by field: an ASSY 'how' that gives only 'turnTorqueMax' still
+        gets the mating's thread and push force. What the mating states counts
+        as stated - it is more specific than what the interfaces imply, so a
+        mating's 'threadStep' is not then replaced by theirs.
+        """
+        how = getattr(mating, "how", None) or {}
+        inherited = {field: value for field, value in how.items() if field not in self._stated}
+        if not inherited:
+            return
+        self._motion_from("mating")
+        if "pushForceMax" in inherited:
+            self.push_force_max = self._number(inherited, "pushForceMax", self.push_force_max)
+        if "turnDirection" in inherited:
+            self.turn_direction = self._turn_direction(inherited)
+        if "turnTorqueMax" in inherited:
+            self.turn_torque_max = self._number(inherited, "turnTorqueMax", self.turn_torque_max)
+        if "pushDistance" in inherited:
+            distance = self._number(inherited, "pushDistance", None)
+            if distance is not None:
+                self.push_distance = distance
+                self.push_distance_specified = True
+        if "threadStep" in inherited:
+            step = self._number(inherited, "threadStep", None)
+            if step is not None:
+                self.thread_step = step
+                self.thread_step_specified = True
+        if "snapIn" in inherited:
+            value, stated = self._flag(inherited, "snapIn")
+            if stated:
+                self.snap_in, self.snap_in_specified = value, True
+        if "selfScrew" in inherited:
+            value, stated = self._flag(inherited, "selfScrew")
+            if stated:
+                self.self_screw, self.self_screw_specified = value, True
+
+    def _motion_from(self, source):
+        if source not in self.motion_sources:
+            self.motion_sources.append(source)
+
+    def motion_declared(self) -> bool:
+        """Whether anything says how the object is brought into place.
+
+        This connection's own 'how' - any of 'HOW_MOTION_FIELDS' - or the
+        mating of the two interfaces it connects ('snapIn', 'selfScrew'), or
+        those interfaces themselves (a 'threadStep', a 'selfScrew'). Without
+        any of them every field takes its default, which is a complete
+        description for a machine to fill in and none at all for the person
+        doing the step: whether it is pushed, snapped or screwed in is not said.
+        """
+        return bool(self.motion_sources)
 
     def _problem(self, message):
         """Record what makes these instructions invalid, and report it."""

@@ -128,9 +128,9 @@ End-to-end walkthrough, with the data flow diagram and what each tab is:
 send (`PartcadViewer`). `src/webview/` is what runs *inside* that webview: `viewer.ts` is the shell,
 `scene.ts` the three.js renderer, and one module per tab beside it.
 
-**The panel is a strip of tabs over one object, not a canvas.** 3D first, then the bill of materials and the
-assembly instructions for an assembly, then FEA and CFD for a part, then supply information for anything that
-can be bought. Only the 3D
+**The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA and CFD for a part, then
+Manufacturing: what is built and what is bought, how to build it, the bill of materials, where to buy it and the
+assembly instructions. Only the 3D
 view comes over the viewer protocol; every other tab is a question about `<package>:<name>` that the renderer
 cannot ask itself -- the CSP forbids network access and the daemon is behind the host's JSON-RPC connection --
 so it asks the host (`fetchTab`) and the host answers (`tabData`), on first look. Which is why the show

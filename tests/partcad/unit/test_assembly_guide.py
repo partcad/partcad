@@ -687,13 +687,25 @@ def test_assembly_guide_data_carries_the_same_document_with_its_pictures():
     prj = ctx.get_project(CONNECT_PACKAGE)
     assert prj is not None
 
-    data = prj.assembly_guide_data(CONNECT_ASSEMBLY, ignore_manufacturability=True)
+    guide = prj.assembly_guide_data(CONNECT_ASSEMBLY, ignore_manufacturability=True)
+    data = guide["document"]
 
     titles = [page["title"] for page in data["pages"]]
     assert titles[0] == CONNECT_ASSEMBLY
     assert titles[1] == "Bill of Materials"
     assert titles[-1] == "Links"
     assert "%s: step 1" % CONNECT_ASSEMBLY in titles
+
+    # Every item of the plan the book follows is on a page of it: the assembly
+    # itself on the title page, its first link on its own page, and every other
+    # link on the page of the step that adds it.
+    plan = guide["plan"]
+    pages = guide["pages"]
+    assert pages[plan["id"]] == 0
+    links = plan["children"]
+    assert titles[pages[links[0]["id"]]] == CONNECT_ASSEMBLY
+    assert titles[pages[links[1]["id"]]] == "%s: step 1" % CONNECT_ASSEMBLY
+    assert [pages[link["id"]] for link in links] == sorted(pages[link["id"]] for link in links)
 
     images = [
         image
@@ -752,10 +764,16 @@ def test_render_assembly_guide_sub_assemblies():
     titles = re.findall(r'<section class="page" id="page-\d+" data-title="([^"]*)">', html)
 
     # The head is embedded in the ASSY file of the assembly that uses it, so it
-    # is documented under its own name, and before the assembly that uses it:
-    # it has to exist before that one can be put together.
+    # is documented under its own name, and just before the step that adds it:
+    # it has to exist by then, and nothing before that step needs it. That step
+    # is the second one - the first adds the second bone to the first.
     assert "logo_embedded_head" in titles
-    assert titles.index("logo_embedded_head: step 1") < titles.index("logo_embedded: step 1")
+    assert (
+        titles.index("logo_embedded: step 1")
+        < titles.index("logo_embedded_head")
+        < titles.index("logo_embedded_head: step 1")
+        < titles.index("logo_embedded: step 2")
+    )
     assert "<h1>Assembly: logo_embedded_head</h1>" in html
     assert "<h1>logo_embedded_head: step 1 of 1</h1>" in html
     # The container the root node of an ASSY file creates is not a sub-assembly
@@ -785,56 +803,6 @@ def test_render_assembly_guide_refuses_a_non_manufacturable_assembly():
         prj.render_assembly_guide("logo_embedded", "pdf", output_dir=output_dir)
 
     assert not os.path.exists(os.path.join(output_dir, "logo_embedded.pdf"))
-
-
-class _FakeAssembly:
-    """Just enough of an assembly for the bill of materials to be looked up by"""
-
-    def __init__(self, name, project_name="//pkg"):
-        self.project_name = project_name
-        self.name = name
-        self.config = {}
-
-
-def _section(name, project_name="//pkg"):
-    return assembly_guide.GuideSection(assembly=_FakeAssembly(name, project_name), name=name)
-
-
-def test_repeat_count_comes_from_the_bill_of_materials():
-    """How many of each sub-assembly to make is what the BOM already counted
-
-    Deriving it again by walking the tree would be a second answer to a
-    question the BOM has answered, free to disagree with the page that prints
-    it.
-    """
-    spire, tower, castle = (_section(n) for n in ("spire", "tower", "castle"))
-    grouped = {"assemblies": {"//pkg": {"spire": {"count": 9}, "tower": {"count": 4}}}}
-
-    assembly_guide.count_sections([spire, tower, castle], grouped)
-
-    assert spire.count == 9
-    assert tower.count == 4
-    # The top level assembly is not in its own bill of materials.
-    assert castle.count == 1
-
-
-def test_repeat_count_of_an_embedded_assembly_is_one():
-    """An assembly embedded in an ASSY file is in no package, so in no BOM"""
-    head = _section("logo_embedded_head")
-
-    assembly_guide.count_sections([head], {"assemblies": {}})
-
-    assert head.count == 1
-
-
-def test_repeat_count_does_not_confuse_two_packages():
-    """Two packages may each declare an assembly of the same name"""
-    mine, theirs = _section("spire", "//mine"), _section("spire", "//theirs")
-    grouped = {"assemblies": {"//mine": {"spire": {"count": 9}}, "//theirs": {"spire": {"count": 2}}}}
-
-    assembly_guide.count_sections([mine, theirs], grouped)
-
-    assert (mine.count, theirs.count) == (9, 2)
 
 
 def test_section_page_says_how_many_of_a_repeated_assembly_to_make():
@@ -961,3 +929,21 @@ def test_the_pdf_request_carries_whether_it_has_to_be_reproducible():
     # Nothing asked for: the default is the same as everywhere else.
     asyncio.run(document_pdf.render_pdf_async(ctx, document, "/tmp/widget.pdf"))
     assert seen[-1]["reproducible"] is False
+
+
+@pytest.mark.slow
+def test_assembly_guide_data_says_whether_the_assembly_is_meant_to_be_made():
+    """Written regardless when asked to be, and saying which it is
+
+    The IDE's Assembly tab always asks with 'ignore_manufacturability' and puts
+    a banner over an assembly nobody is meant to build, instead of an error
+    where the instructions would be.
+    """
+    ctx = pc.init("examples")
+    prj = ctx.get_project("//produce_assembly_assy")
+
+    guide = prj.assembly_guide_data("logo_embedded", ignore_manufacturability=True)
+    assert guide["manufacturable"] is False
+    assert guide["document"]["pages"]
+
+    assert prj.assembly_guide_data("logo", ignore_manufacturability=True)["manufacturable"] is True

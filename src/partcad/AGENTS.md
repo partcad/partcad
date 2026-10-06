@@ -399,7 +399,26 @@ at all).
   is still "what has to be had", parts as themselves, and is what the manufacturability test walks, because a
   made part is something it tests too. A part with both a vendor/SKU and instructions is tried as bought first
   and falls back to being made. One piece of stock per part: nesting is not modelled yet. The instruction book's
-  "Parts to Manufacture" pages repeat each part's instructions as text (`manufacturing_instructions.py`).
+  manufacturing pages repeat each part's instructions as text (`manufacturing_instructions.py`) and draw its
+  route from above where one can be produced (`cam_preview.py`).
+
+- **Build vs Buy decides the build plan, and the plan decides the instruction book** (`build_plan.py`): the
+  tree of an object's line items says what each can be (bought, built, both, neither); `effective_choice` is
+  the user's choice where both are possible and "buy" until they make one, the same default `procurement`
+  takes. `plan()` turns the tree and the choices into the order things are done in -- each assembly's links in
+  file order, with whatever a link needs made placed just before it, and a thing used in several places made
+  once, in the lowest-level assembly holding all of them. `assembly_guide.build_guide_async` writes its pages in
+  exactly that order and returns which page is which item's; the IDE's Build tab lists the same plan, so the two
+  cannot disagree. The IDE recounts the Build vs Buy rows itself (`ide/vscode/src/webview/bvb.ts`), so the
+  effective-choice rule is written there too. The choices are kept by clients only (`partcad_utils/garage.py`).
+  "Can be built" in that tree is what `pc test -f manufacturability` would accept without geometry or a
+  supplier: instructions that are complete, a tolerance, a pinned file, an ASSY file for an assembly (the
+  `problems` of a node, worded as the test words them; `test/manufacturability.tolerance_failure` is shared).
+  `manufacturable: false` makes a node missing unless something manufacturable it is used in overrides it -
+  the test's `force_manufacturing`, which `--ignore-manufacturability` turns on at the root. An ASSY assembly is buildable
+  only if every step says what it joins and how it goes on (`Assembly.get_step_problems`, shared with the
+  `manufacturability` test; `ConnectHow.motion_declared` reads the connection's `how`, the mating and the
+  interfaces).
 
 - **A sheet metal part names what is bent and how** (`part_config_manufacturing.py`,
   `test/manufacturability_sheet_metal.py`, `wrappers/dxf_metadata.py`): `sheet_metal` is the one manufacturing

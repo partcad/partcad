@@ -7,11 +7,13 @@ The panel is a strip of tabs over one object, not a canvas:
 | **3D** | everything | the viewer protocol, from whichever `partcad` asked for the shape to be shown |
 | **2D** | parts, assemblies, scenes, sketches | the daemon's `render.inline` (a picture `pc render` makes) |
 | **Draft** | parts, assemblies | the daemon's `render.inline`, with a drawing package (`pc render -e`) |
-| **Bill of Materials** | assemblies | the daemon's `bom` (what `pc bom` prints) |
-| **Instructions** | assemblies | the daemon's `assembly.guide` (the book `pc render -t html\|pdf` writes) |
 | **FEA** | parts | the daemon's `cae.analyze` (what `pc cae fea` runs) |
 | **CFD** | parts | the daemon's `cae.analyze` (what `pc cae cfd` runs) |
-| **Supply** | everything | the daemon's `supply.quote` (the cart `pc supply quote` fills) |
+| **Build vs Buy** | parts, assemblies | the daemon's `manufacturing.tree` and `manufacturing.details`, and the user's choices from `~/.partcad/garage` |
+| **Build** | whatever is built | the daemon's `manufacturing.plan` (the order `pc instructions` writes its pages in) |
+| **Bill of Materials** | parts, assemblies | the daemon's `bom` (what `pc bom` prints) |
+| **Buy** | whatever is bought | the daemon's `supply.quote` (the cart `pc supply quote` fills) |
+| **Assembly** | assemblies | the daemon's `assembly.guide` (the book `pc instructions -t html\|pdf` writes) |
 
 The 3D view is always the first: "show this part" means the geometry. The rest are questions about
 `<package>:<name>` that only the extension host can put to the daemon — the panel's CSP forbids every network
@@ -213,9 +215,13 @@ the protocol has no authentication.
 | `src/webview/spacemouse.ts` | A SpaceMouse: which gamepad is one, what its axes mean, and how it moves the camera |
 | `src/viewer/spacenav.ts` | spacenavd's socket, read in the extension host for Linux |
 | `src/webview/render.ts` | The 2D and Draft tabs: the control pane, the file, and Save |
+| `src/webview/bvb.ts` | The Build vs Buy tab: which lines are needed and how many, and the table |
+| `src/webview/build.ts` | The Build tab: the build plan, and the page of the selected step |
 | `src/webview/bom.ts` | The Bill of Materials tab |
-| `src/webview/document.ts` | The Instructions tab: `partcad/document.py`'s model, drawn |
-| `src/webview/supply.ts` | The Supply tab: the list, and one item's suppliers |
+| `src/webview/assembly.ts` | The Assembly tab: the instructions in a format, with Save |
+| `src/webview/document.ts` | `partcad/document.py`'s model, drawn: a page, or the book paged through |
+| `src/webview/supply.ts` | The Buy tab: the list, and one item's suppliers |
+| `src/common/garage.ts` | Where the Build vs Buy choices are kept, on this machine |
 | `src/webview/cae.ts` | The FEA and CFD tabs: the result model, and the findings |
 | `src/partcad/cae.py` | What a part declares about an analysis, and in what units |
 | `src/partcad/assembly_guide.py` | The instruction book, built once for every format |
@@ -318,10 +324,31 @@ out to the network, so a round trip easily outlives a change of selection.
 **Bill of Materials** is `Assembly.get_bom_detailed_async()` — the tree flattened and counted, with the store
 data that says what to order — in the columns `pc bom` prints it in.
 
-**Instructions** is the very document `pc render -t html|pdf` writes: built once in
+**Build vs Buy** is the one tab asked for before it is looked at. Whether the Build tab and the Buy tab apply
+depends on what the user decided here, over a tree only the daemon can read (`manufacturing.tree`: an
+assembly's links, a part's stock, and what each declares about being built and bought — no geometry, so it is
+cheap enough to ask on every show), so it is asked for on every show of a part or an assembly and the
+Manufacturing strip is rebuilt when it arrives; until then Build and Buy are disabled and say why. The table is
+worked out from that tree in the webview (`bvb.ts`), on every click, rather than asked for: the daemon answers
+one request at a time, and a switch that waits for a round trip feels broken. The rule it applies — what a line
+that can only be bought, only be built, or both is; that what a line is made of is needed only while it is
+built — is the same one `partcad.build_plan` orders the Build tab by, and the two have to agree. The thumbnails
+and measurements (`manufacturing.details`) come a few lines at a time, so that the table fills in and other tabs
+get a turn; the daemon caches each thumbnail under the shape's hash *and* its size. What the user chose is kept
+by the extension host, in `~/.partcad/garage/default/bvb/<object>.json` — never by the daemon, which may be
+somebody else's — and sent with every Build and Assembly request.
+
+**Build** is the build plan (`manufacturing.plan`) on the left and a page of the instruction book on the right.
+The plan is asked for alone first, because it is cheap and the list is what the user came for, and then again
+with `document: true` for the pages, which takes every illustration to be drawn. Each plan item names the page
+it shows, so the list and the book are one plan in one order.
+
+**Assembly** is the very document `pc instructions -t html|pdf` writes: built once in
 `partcad/assembly_guide.py` as the renderer-independent model in `partcad/document.py`, handed over by
 `assembly.guide` through `document.to_data(embed_images=True)`, and drawn by `src/webview/document.ts` one page
-at a time. The illustrations are inlined as data URIs rather than pointed at, because they live in a temporary
+at a time, in the format, with the **Recursive** and **Build parts** choices, the header asks for. The file
+itself comes back beside the model and is kept by the host for **Save…**: a PDF is not something a webview can
+show, and both are written from the one model. The illustrations are inlined as data URIs rather than pointed at, because they live in a temporary
 directory that is deleted as soon as the document is built — and because the CSP forbids fetching anything
 anyway. An assembly PartCAD cannot write instructions for (not an ASSY file, or not meant to be built) is
 refused with the reason, and the tab shows that.

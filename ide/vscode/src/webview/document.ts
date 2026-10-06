@@ -92,7 +92,14 @@ export class DocumentView {
     }
 }
 
-function renderPage(page: DocumentPage, footer: string | null | undefined): HTMLElement {
+/**
+ * One page of a document, on its own.
+ *
+ * What the Build tab shows for the step selected in its list: a page of the
+ * very book the Assembly tab pages through, so that a step reads the same in
+ * both.
+ */
+export function renderPage(page: DocumentPage, footer: string | null | undefined): HTMLElement {
     const section = el('section', 'page');
     for (const block of page.blocks) {
         const node = renderBlock(block);

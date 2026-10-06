@@ -964,6 +964,43 @@
               "type": "boolean",
               "default": false
             },
+            "how": {
+              "description": "How every connection that joins these two interfaces is made, unless the connection says otherwise: each field an ASSY file's 'how' states overrides the same field here, and only that one. The motion fields of an ASSY 'how' only - 'stage' belongs to the assembly and the 'hold*' fields to the objects. See docs/source/assy.rst.",
+              "type": "object",
+              "properties": {
+                "pushForceMax": {
+                  "description": "The maximum linear force to push the object into place with, in newtons (N).",
+                  "type": "number",
+                  "minimum": 0
+                },
+                "pushDistance": {
+                  "description": "How far back along the push direction the object starts, in millimeters.",
+                  "type": "number",
+                  "minimum": 0
+                },
+                "turnDirection": {
+                  "description": "Which way the object is turned: \"cw\" or \"ccw\", in any case.",
+                  "type": "string",
+                  "pattern": "^([cC][wW]|[cC][cC][wW])$"
+                },
+                "turnTorqueMax": {
+                  "description": "The maximum torque to turn the object with, in newton-metres (N*m).",
+                  "type": "number",
+                  "minimum": 0
+                },
+                "threadStep": {
+                  "description": "The axial distance the object advances per full turn, in millimeters. Outranks what the interfaces declare.",
+                  "type": "number",
+                  "minimum": 0
+                },
+                "selfScrew": { "description": "Whether the joint cuts its own thread.", "type": "boolean" },
+                "snapIn": {
+                  "description": "Whether the joint is made by pushing one past a feature on the other that springs back behind it.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
             "sourcePortSelector": { "type": "string", "minLength": 1 },
             "targetPortSelector": { "type": "string", "minLength": 1 }
           },

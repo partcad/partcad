@@ -2711,6 +2711,27 @@ def _bom_table(items: list) -> str:
     return output
 
 
+def _choices(params, path) -> dict:
+    """The user's Build vs Buy choices for the object at 'path'.
+
+    They are the client's, never this daemon's to read from disk (see
+    'partcad_utils.garage'): the IDE sends the ones it holds as ``choices``,
+    and the CLI - which does not know the fully qualified name the user's
+    'OBJECT' resolves to - sends every object's as ``bvb``, for this to pick
+    from once it does.
+    """
+    choices = params.get("choices")
+    if not isinstance(choices, dict):
+        choices = (params.get("bvb") or {}).get(path)
+    return dict(choices) if isinstance(choices, dict) else {}
+
+
+def _flag(params, name, default):
+    """A boolean request parameter that an older client may not send at all."""
+    value = params.get(name)
+    return default if value is None else bool(value)
+
+
 def assembly_guide(session, params):
     """Return the assembly instruction book of an assembly as plain data.
 
@@ -2721,6 +2742,19 @@ def assembly_guide(session, params):
     viewer is a webview on the other side of this connection, and the pictures of
     an instruction book live in a temporary directory that is deleted as soon as
     the document has been built.
+
+    ``subassemblies`` puts the steps of the sub-assemblies that are built into
+    the book - ``pc instructions -r``, under a name of its own because
+    ``recursive`` on a request is a walk over packages (see ``_request``) - and
+    ``build_parts`` the making of the parts that are (see
+    ``assembly_guide.build_guide_async``); both default to on, which is the book
+    a client too old to send them always got. ``choices`` (or ``bvb``, see
+    ``_choices``) are the user's Build vs Buy choices. ``format`` - "pdf" or
+    "html" - also writes the same document down in that format and returns the
+    file's bytes as ``file``, which is how ``pc instructions`` and the IDE's
+    Assembly tab save it on their own side of a connection that may cross
+    machines. ``plan`` and ``pages`` say which page explains which item of the
+    build plan.
     """
     import asyncio
 
@@ -2733,6 +2767,7 @@ def assembly_guide(session, params):
     if resolved is None:
         return None
     package, object_name = resolved
+    path = _qualified(package, object_name)
 
     from partcad.exception import AssemblyDocumentError
 
@@ -2741,12 +2776,26 @@ def assembly_guide(session, params):
         pc.logging.error("Package %s is not found" % package)
         return None
 
+    fmt = params.get("format") or None
+    if fmt is not None:
+        from partcad.assembly_guide import GUIDE_FORMATS
+
+        if fmt not in GUIDE_FORMATS:
+            raise JsonRpcError(
+                USAGE_ERROR,
+                "Assembly instructions are written as %s, not as '%s'" % (" or ".join(GUIDE_FORMATS), fmt),
+            )
+
     with pc.logging.Process("Guide", package, object_name):
         try:
-            document = asyncio.run(
+            guide = asyncio.run(
                 project.assembly_guide_data_async(
                     object_name,
                     ignore_manufacturability=bool(params.get("ignore_manufacturability")),
+                    recursive=_flag(params, "subassemblies", True),
+                    build_parts=_flag(params, "build_parts", True),
+                    choices=_choices(params, path),
+                    format=fmt,
                 )
             )
         except AssemblyDocumentError as e:
@@ -2754,11 +2803,192 @@ def assembly_guide(session, params):
             # steps, or that is not meant to be built: what the user asked for,
             # not a failure of the machinery.
             raise JsonRpcError(USAGE_ERROR, str(e)) from e
-        if document is None:
+        if guide is None:
             pc.logging.error("Assembly %s:%s is not found" % (package, object_name))
             return None
 
-    return {"assembly": _qualified(package, object_name), "document": document}
+    return {"assembly": path, **guide}
+
+
+def _manufactured_object(ctx, pc, params):
+    """The part or assembly a manufacturing request is about, and its full name.
+
+    Which of the two is read from ``kind``, as the IDE knows it from what it is
+    showing; nothing else is made or bought.
+    """
+    kind = params.get("kind") or "part"
+    if kind not in ("part", "assembly"):
+        raise JsonRpcError(USAGE_ERROR, "Only parts and assemblies are built or bought; '%s' is neither" % kind)
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, name = resolved
+    path = _qualified(package, name)
+    obj = ctx.get_assembly(path) if kind == "assembly" else ctx.get_part(path)
+    if obj is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+    return kind, path, obj
+
+
+def manufacturing_tree(session, params):
+    """The line items of a part or an assembly, and whether each is built or bought.
+
+    What the IDE's Build vs Buy table is drawn from (see ``partcad.build_plan``):
+    every link of the assembly and of its sub-assemblies, and the stock each
+    part is made from, each saying whether it can be bought (a vendor and an
+    SKU), built (manufacturing instructions, or links to put together), or both.
+    Nothing is built to answer it, so it costs what a bill of materials costs.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    found = _manufactured_object(ctx, pc, params)
+    if found is None:
+        return None
+    kind, path, obj = found
+
+    from partcad import build_plan
+
+    with pc.logging.Process("BvB", *path.split(":", 1)):
+        tree, _index = asyncio.run(build_plan.tree_async(ctx, obj))
+    return {"object": path, "kind": kind, "tree": tree}
+
+
+def manufacturing_details(session, params):
+    """A picture and the measurements of each of several objects.
+
+    The rest of a row of the IDE's Build vs Buy table: ``objects`` are
+    ``{"name": "//pkg:obj", "kind": "part"|"assembly"}``, and each comes back
+    with an SVG thumbnail ``width`` by ``height`` pixels (base64; see
+    ``partcad.thumbnail``, which keeps it in PartCAD's cache under the shape's
+    key and the size), its size in millimetres, its volume, and its mass in
+    grams where its material says how dense it is.
+
+    Several objects to one request, because the daemon answers one request at a
+    time and a table of forty rows is forty pictures: one request per row would
+    queue every other tab behind them. They are drawn together, as many at once
+    as the machine has sandbox slots. One object failing is that object's
+    ``error``, not the request's.
+    """
+    import asyncio
+    import base64
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    width = int(params.get("width") or 64)
+    height = int(params.get("height") or width)
+    objects = [entry for entry in params.get("objects") or [] if isinstance(entry, dict) and entry.get("name")]
+
+    resolved = []
+    for entry in objects:
+        kind = entry.get("kind") or "part"
+        name = entry["name"]
+        obj = ctx.get_assembly(name) if kind == "assembly" else ctx.get_part(name) if kind == "part" else None
+        if kind == "assembly":
+            # Phase one of an assembly build, as for every other request that
+            # ends in one: see '_stage_named_object'.
+            _stage_subassemblies(session, ctx, obj)
+        resolved.append((name, kind, obj))
+
+    from partcad import thumbnail
+    from partcad.sandbox_lock import process_slots
+
+    async def details(name, kind, obj, budget):
+        item = {"name": name, "kind": kind, "thumbnail": None, "size": None, "volume": None, "mass": None}
+        if obj is None:
+            item["error"] = "%s is not found" % name
+            return item
+        try:
+            async with budget:
+                picture = await thumbnail.svg_thumbnail_async(ctx, obj, width, height)
+            if picture is not None:
+                item["thumbnail"] = base64.b64encode(picture).decode("ascii")
+            measured = await obj.get_measurements_async(ctx) or {}
+            box = measured.get("bbox")
+            if box:
+                item["size"] = [box[axis + 3] - box[axis] for axis in range(3)]
+            volume = measured.get("volume")
+            if volume is not None:
+                item["volume"] = volume
+                material = obj.get_material(ctx) if hasattr(obj, "get_material") else None
+                if material is not None:
+                    item["mass"] = material.mass(abs(volume))
+        except Exception as e:  # pylint: disable=broad-except
+            item["error"] = str(e)
+        return item
+
+    async def everything():
+        budget = asyncio.Semaphore(max(1, process_slots.count))
+        return await asyncio.gather(*[details(name, kind, obj, budget) for name, kind, obj in resolved])
+
+    with pc.logging.Process("Details", "%d objects" % len(resolved)):
+        items = asyncio.run(everything())
+    return {"items": items}
+
+
+def manufacturing_plan(session, params):
+    """What has to be done to build a part or an assembly, in order.
+
+    The IDE's Build tab: ``plan`` is what it lists on the left (see
+    ``partcad.build_plan.plan``), given the user's Build vs Buy ``choices`` and
+    ``subassemblies`` (the Build tab's "Recursively"). With ``document`` the pages each item is explained on come
+    too - for an assembly, the very instruction book ``assembly.guide`` writes
+    with the parts that are built included, and ``pages`` says which page is
+    which item's, so that what the Build tab shows for a step is the page of
+    the book for it. Without ``document`` nothing is built and the answer is
+    quick, which is what lets the list appear before the pages are ready.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    found = _manufactured_object(ctx, pc, params)
+    if found is None:
+        return None
+    kind, path, obj = found
+    package, name = path.split(":", 1)
+    choices = _choices(params, path)
+    # Not 'recursive', which every request that names an object reads as a
+    # walk over the packages below it (see '_request').
+    recursive = bool(params.get("subassemblies"))
+
+    from partcad import build_plan
+    from partcad.exception import AssemblyDocumentError
+
+    result = {"object": path, "kind": kind}
+    with pc.logging.Process("Plan", package, name):
+        if not params.get("document"):
+            tree, _index = asyncio.run(build_plan.tree_async(ctx, obj))
+            result["plan"] = build_plan.plan(tree, choices, recursive=recursive).to_data()
+            return result
+
+        project = ctx.get_project(package)
+        try:
+            if kind == "assembly":
+                data = asyncio.run(
+                    project.assembly_guide_data_async(
+                        name,
+                        ignore_manufacturability=_flag(params, "ignore_manufacturability", True),
+                        recursive=recursive,
+                        build_parts=True,
+                        choices=choices,
+                    )
+                )
+            else:
+                data = asyncio.run(project.part_plan_data_async(name, choices=choices))
+        except AssemblyDocumentError as e:
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    if data is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+    result.update(data)
+    return result
 
 
 def cae_defaults(session, params):

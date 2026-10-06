@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from . import logging as pc_logging
 from .interface import Interface
 
 
@@ -76,6 +77,24 @@ class Mating:
         # either part on its own.
         self.snap_in = bool(config.get("snapIn", False)) if isinstance(config, dict) else False
 
+        # option: "how"
+        # description: how every connection that joins these two interfaces is
+        #              made, unless the connection says otherwise: the motion
+        #              half of a connection's own 'how' ('HOW_MOTION_FIELDS' in
+        #              'assembly_connect') - pushed with how much force, turned
+        #              which way and how hard, along what thread, snapped or
+        #              self-screwed. It is the pairing that knows it - an M3
+        #              screw goes into an M3 tapped hole the same way in every
+        #              assembly - so it is said once, here, and an ASSY file
+        #              states only what is different about one joint: any field
+        #              of its 'how' overrides the same field here, and only that
+        #              field. 'stage' and the 'hold*' fields are not here: when a
+        #              step is done, and by what each object is held, are facts
+        #              about the assembly and the object respectively.
+        # values: a section
+        # default: none
+        self.how = self._how(config.get("how"))
+
         if "sourcePortSelector" in config:
             if reverse:
                 self.target_port_selector = config["sourcePortSelector"]
@@ -91,3 +110,24 @@ class Mating:
                 self.target_port_selector = config["targetPortSelector"]
         else:
             self.target_port_selector = None
+
+    def _how(self, how) -> dict:
+        """The 'how' section of this mating, keeping only what it may say."""
+        from .assembly_connect import HOW_MOTION_FIELDS
+
+        if how is None:
+            return {}
+        where = "%s -> %s" % (getattr(self.source, "full_name", "?"), getattr(self.target, "full_name", "?"))
+        if not isinstance(how, dict):
+            pc_logging.error("%s: a mating's 'how' must be a section, ignoring: %s" % (where, how))
+            return {}
+        kept = {}
+        for field, value in how.items():
+            if field in HOW_MOTION_FIELDS:
+                kept[field] = value
+            else:
+                pc_logging.error(
+                    "%s: a mating's 'how' says how the two go together (%s), ignoring: %s"
+                    % (where, ", ".join(HOW_MOTION_FIELDS), field)
+                )
+        return kept

@@ -161,6 +161,10 @@ command_groups = [
             "filter",
             "export",
             "render",
+            # Beside `render` because `pc render -t pdf` writes the same book:
+            # this is the one that asks which parts of it to write, and that
+            # reads the Build vs Buy choices of this machine.
+            "instructions",
             # Beside `export` and `render` because that is what it is: the third
             # thing a script produces from a shape, configured in a section of
             # `partcad.yaml` of the same shape as theirs. `cam` is the fourth,

@@ -89,7 +89,7 @@ Every command that walks a subtree takes it: ``pc test``, ``pc render``, ``pc ex
 did. It cannot say where the walk starts, it is not available on every command that could use one (``pc info``
 has none), and the rest of this page is written with ``...``. Note that ``pc supply find -r`` and
 ``pc supply quote -r`` mean something else entirely — break every assembly down to its parts — and take no
-``...``.
+``...``, and so does ``pc instructions -r``, which puts the steps of the sub-assemblies into the instructions.
 
 .. _fast-only:
 
@@ -900,10 +900,16 @@ Object commands
   holds are counted towards the assembly that embeds it.
 
   ``-t pdf`` and ``-t html`` generate the assembly instruction book of the assembly named by ``-a``: a title
-  page, the same bill of materials, then — sub-assemblies first, since they have to exist before the assembly
-  that uses them — a page showing each (sub-)assembly as it should look once it is together, followed by one
-  page per assembly step. A step page shows the two items being joined, and below them an exploded view of the
-  joint with a line drawn across the gap it opens. That gap is half of the largest dimension of the two items,
+  page, the same bill of materials, then a page per assembly step, in the order the Assembly YAML file lists
+  the links. Whatever has to be made before a step can be done is explained just before it: a sub-assembly
+  gets a page showing it as it should look once it is together, followed by its own steps, and a part that is
+  manufactured rather than bought gets a page saying what it is made from, its manufacturing instructions
+  written out, and — where it declares a job a route can be produced for (see ``pc cam``) — the route drawn
+  from above. Something used in several places is explained once, with how many to make, in the lowest-level
+  assembly that holds every place it is used, so it is made before the first step that needs it. ``pc render``
+  writes the complete book — every sub-assembly that is built and every part that is — and ``pc instructions``
+  below writes as much of it as is asked for. A step page shows the two items being joined, and below them an
+  exploded view of the joint with a line drawn across the gap it opens. That gap is half of the largest dimension of the two items,
   unless the step sets ``exploded:`` in its ``connect:`` or ``connectPorts:`` section (see :doc:`assy`). The
   last page collects
   links: to this assembly and its package, to every other package that supplies at least three of its parts,
@@ -919,6 +925,32 @@ Object commands
   YAML file, and an assembly that has none is refused rather than reduced to a title page and a parts list. An
   assembly that is not meant to be built at all (``manufacturable: false``, on the assembly or inherited from
   its package) is refused too; pass ``--ignore-manufacturability`` to generate the document anyway.
+
+``pc instructions``
+  Write the assembly instructions of the assembly named, as ``-t pdf`` (the default) or ``-t html``, into the
+  current directory or the one ``-O`` names. It is the book ``pc render -t pdf`` writes, and the one the IDE's
+  **Assembly** tab shows and saves; what differs is that it asks how much of it to write:
+
+  * on its own, this assembly's own steps, in the order of its links, with a sub-assembly added as the finished
+    thing it is;
+  * ``-r``/``--recursive`` puts in the steps of every sub-assembly that is built, each just before the step that
+    adds it;
+  * ``-b``/``--build-parts`` puts in how to make every part that is built, each just before the step that first
+    needs it. Primitive for now: the manufacturing instructions written out, and the route drawn where a part
+    declares one.
+
+  What is built and what is bought is what was chosen in the IDE's **Build vs Buy** tab for this assembly,
+  which keeps the choices on the machine they were made on, in
+  ``~/.partcad/garage/default/bvb/<assembly, escaped>.json``. Where nothing was chosen, a line item that can be
+  either is bought, as the bill of materials assumes. The steps and pages come in the very order the IDE's
+  **Build** tab lists them in, so a step selected there and a page of the file are the same step.
+
+  The file is written by ``pc`` itself, on the machine it runs on, whichever machine the daemon is on.
+
+  .. code-block:: shell
+
+    pc instructions robot                         # robot.pdf: this assembly's own steps
+    pc instructions -t html -r -b -O docs/ robot  # every step and every part made, as HTML
 
 *****************
 Workflow commands
