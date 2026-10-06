@@ -558,7 +558,7 @@ The initial parameter value is set using ``default``.
 
 There are several parameter names that are reserved for values used in
 visualization, simulation calculations and, if applicable, manufacturing
-(also referred to as ``MCFTT parameters`` using their first letters):
+(also referred to as **MCFTT parameters** using their first letters):
 
 - ``material``
 

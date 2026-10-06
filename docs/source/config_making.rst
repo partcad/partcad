@@ -374,7 +374,7 @@ Two questions, one about each half of the declaration:
   | ``radius``      | The **inner** radius of the bend, in millimetres. More   |
   |                 | than zero -- zero is a fold, not a bend.                 |
   +-----------------+----------------------------------------------------------+
-  | ``direction``   | ``up`` or ``down``, in either case.                      |
+  | ``direction``   | ``up`` or ``down``; letter case does not matter.         |
   +-----------------+----------------------------------------------------------+
 
   Where they come from is the sketch's business, not this check's: a DXF states
