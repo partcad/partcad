@@ -71,14 +71,12 @@ msgid "Basic shapes"
 msgstr "基本形状"
 
 #: ../../source/design.rst:33
-#, fuzzy
 msgid "Outer shape: `circle`, `rectangle`, `square`, `slot`"
-msgstr "外部形状： `circle` 、 `rectangle` 、 `square`"
+msgstr "外部形状： `circle` 、 `rectangle` 、 `square` 、 `slot`"
 
 #: ../../source/design.rst:34
-#, fuzzy
 msgid "Optional inner shape: `circle`, `rectangle`, `square`, `slot`"
-msgstr "可选的内部形状： `circle` 、 `rectangle` 、 `square`"
+msgstr "可选的内部形状： `circle` 、 `rectangle` 、 `square` 、 `slot`"
 
 #: ../../source/design.rst:36 ../../source/design.rst:65
 msgid "Files"
@@ -176,24 +174,20 @@ msgid ""
 msgstr "装配体是关于如何将零件和其他装配体组合到一起的参数化说明。"
 
 #: ../../source/design.rst:86
-#, fuzzy
 msgid ""
 "PartCAD is expected to have an ever-growing list of ways to define "
 "assemblies using existing parts."
-msgstr "PartCAD 定义零件模型的方式在不断增加，目前包括："
+msgstr "预计 PartCAD 使用现有零件定义装配体的方式会不断增加。"
 
 #: ../../source/design.rst:89
 msgid "ASSY: assembly YAML"
-msgstr ""
+msgstr "ASSY：装配体 YAML"
 
 #: ../../source/design.rst:91
-#, fuzzy
 msgid ""
 "The native format. The idea behind ASSY is to create a simplistic way to "
 "enumerate parts, define their parameters and define how parts connect."
-msgstr ""
-"预计 PartCAD 使用现有零件定义装配体的方式会不断增加。不过，目前仅支持一种方式，称为 ASSY：assembly YAML。ASSY "
-"背后的理念是提供一种极其简单的方式来枚举零件、定义它们的参数并定义零件之间如何连接。"
+msgstr "原生格式。ASSY 背后的理念是提供一种极其简单的方式来枚举零件、定义它们的参数并定义零件之间如何连接。"
 
 #: ../../source/design.rst:94
 msgid "STEP"
@@ -203,7 +197,7 @@ msgstr ""
 msgid ""
 "A STEP file that carries an assembly structure, used as an assembly "
 "directly, with its components becoming parts of the package."
-msgstr ""
+msgstr "一个携带装配结构的 STEP 文件，可直接用作装配体，其中的各个组件会成为该包中的零件。"
 
 #: ../../source/design.rst:99
 msgid "URDF"
@@ -216,6 +210,8 @@ msgid ""
 " file produces, evaluated with every joint at its zero position. PartCAD "
 "can also write a URDF (plus the meshes it references) from any assembly."
 msgstr ""
+"一份 `URDF <https://wiki.ros.org/urdf>`_ 机器人描述，可直接用作装配体。它的连杆会构成与 ASSY "
+"文件所生成的相同的那棵已放置零件树，并在每个关节都处于零位的状态下求值。PartCAD 也可以从任意装配体写出 URDF（以及它所引用的网格）。"
 
 #: ../../source/design.rst:106
 msgid ""
@@ -227,28 +223,30 @@ msgid ""
 "transmissions - is dropped, and reported. :doc:`simulation` describes "
 "that gap and what closing it would take."
 msgstr ""
+"URDF 描述的是一个 *可仿真的* 机器人。它关于连杆自身所给出的信息——质量、惯量、摩擦与接触、材料和颜色——会成为该连杆所对应零件"
+"上具名的 PartCAD 属性，并在导出时重新写出。而由刚性放置构成的装配体无处安放的信息——关节运动学、碰撞几何、传感器、传动装置——"
+"则会被丢弃，并给出相应的提示。 :doc:`simulation` 介绍了这一差距，以及弥合它需要做些什么。"
 
 #: ../../source/design.rst:113
 msgid ""
 "For an assembly defined by a file another tool produced - the STEP and "
 "the URDF above - nothing is copied into the package, so the file stays "
 "the source of truth."
-msgstr ""
+msgstr "对于由其他工具生成的文件所定义的装配体——即上面的 STEP 和 URDF——不会有任何内容被复制进包中，因此该文件始终是事实来源。"
 
 #: ../../source/design.rst:118
 msgid "Scenes"
 msgstr "场景"
 
 #: ../../source/design.rst:120
-#, fuzzy
 msgid ""
 "PartCAD does not yet implement scenes. But the idea is to be able to "
 "reproduce the same features as worlds in Gazebo to the extent that "
 "PartCAD scenes can be exported to and simulated in Gazebo, but without "
 "using XML while creating the scene. See :doc:`simulation`."
 msgstr ""
-"PartCAD 尚未实现场景功能。但其设想是能够重现与 Gazebo 中的世界（world）相同的特性，使 PartCAD 场景可以导出到 "
-"Gazebo 中并在其中进行仿真，同时在创建场景时无需使用 XML。"
+"PartCAD 尚未实现场景功能。但其设想是能够重现与 Gazebo 中的世界（world）相同的特性，使 PartCAD 场景可以导出"
+"到 Gazebo 中并在其中进行仿真，同时在创建场景时无需使用 XML。参见 :doc:`simulation` 。"
 
 #: ../../source/design.rst:126
 msgid "Monorepos"
@@ -336,14 +334,13 @@ msgid "Object IDs"
 msgstr "对象 ID"
 
 #: ../../source/design.rst:169
-#, fuzzy
 msgid ""
 "PartCAD packages contain objects of different types: *sketches*, *parts*,"
 " *assemblies*, *scenes*, *interfaces*, *mates*, *materials*, *providers*,"
 " *software* and *partTypes*. All of them need to get referenced."
 msgstr ""
-"PartCAD 包中包含不同类型的对象： *草图* 、 *零件* 、 *装配体* 、 *场景* 、 *接口* 、 *提供方* "
-"等等。所有这些对象都需要被引用。"
+"PartCAD 包中包含不同类型的对象： *草图* 、 *零件* 、 *装配体* 、 *场景* 、 *接口* 、 *配合* 、 *材料*"
+" 、 *提供方* 、 *软件* 和 *partTypes* 。所有这些对象都需要被引用。"
 
 #: ../../source/design.rst:175
 msgid "Single object"
@@ -452,20 +449,18 @@ msgid "Command line tools"
 msgstr "命令行工具"
 
 #: ../../source/design.rst:253
-#, fuzzy
 msgid ""
 "PartCAD CLI tools get installed using the PyPI package ``partcad``, which"
 " also carries the Python module and the JSON-RPC service. The main tool "
 "is called ``pc``. The CLI tools are supposed to provide the complete set "
 "of PartCAD features."
 msgstr ""
-"PartCAD 的 CLI 工具通过 PyPI 模块 ``partcad-cli`` 安装。主工具称为 ``pc`` 。这些 CLI 工具旨在提供"
-" PartCAD 的完整功能集。"
+"PartCAD 的 CLI 工具通过 PyPI 包 ``partcad`` 安装，该包同时还包含 Python 模块和 JSON-RPC"
+" 服务。主工具称为 ``pc`` 。这些 CLI 工具旨在提供 PartCAD 的完整功能集。"
 
 #: ../../source/design.rst:258
-#, fuzzy
 msgid "Graphical interfaces"
-msgstr "接口"
+msgstr "图形界面"
 
 #: ../../source/design.rst:260
 msgid ""
@@ -475,6 +470,9 @@ msgid ""
 " nor an editor set up. A **FreeCAD** add-on browses the same packages "
 "inside FreeCAD and imports objects into the open document."
 msgstr ""
+"面向 ``vscode`` 的 PartCAD 扩展被设计为主要的图形化工具。 **PartCAD IDE** 则把该扩展、编辑器和命令"
+"行工具集成在同一个应用中，面向既没有配置 Python 也没有配置编辑器的机器。 **FreeCAD** 插件可以在 FreeCAD 内"
+"浏览同样的包，并把对象导入到当前打开的文档中。"
 
 #: ../../source/design.rst:266
 msgid ""
@@ -483,6 +481,8 @@ msgid ""
 "sandboxes, so they all see the same packages and the same cache as ``pc``"
 " does on the same machine. See :doc:`installation` for all three."
 msgstr ""
+"这三者本身都不携带 PartCAD。它们都是 ``partcad-json-rpc`` 服务的客户端，由该服务持有预热的上下文和沙箱，因"
+"此在同一台机器上，它们看到的包和缓存与 ``pc`` 完全相同。这三者的安装方法请参见 :doc:`installation` 。"
 
 #: ../../source/design.rst:274
 msgid "Libraries and frameworks"

@@ -21,7 +21,7 @@ msgstr ""
 
 #: ../../source/config_geometry.rst:3
 msgid "Sketches and interfaces"
-msgstr ""
+msgstr "草图与接口"
 
 #: ../../source/config_geometry.rst:9
 msgid "Sketches"
@@ -46,6 +46,8 @@ msgid ""
 "be given once by its own name, and several at a time in the plural list "
 "beside it."
 msgstr ""
+"草图的顶层只能有一个 ``circle`` 、 ``square`` 、 ``rectangle`` 或 ``slot`` 字段。在 `"
+"`inner`` 内部，每种形状都可以用它自己的名称给出一次，也可以用旁边的复数形式列表一次给出多个。"
 
 #: ../../source/config_geometry.rst:75
 msgid ""
@@ -54,6 +56,8 @@ msgid ""
 "those ends, the way a drawing dimensions it, so a slot as long as it is "
 "wide is a circle rather than an error."
 msgstr ""
+"**长圆形** （slot）是两端为半圆的矩形——两段圆弧加两条直线——长圆孔就是这样的形状。 ``length`` 是跨过这两端测量的"
+"，与工程图标注尺寸的方式一致，因此长度与宽度相等的长圆形是一个圆，而不是一个错误。"
 
 #: ../../source/config_geometry.rst:80
 msgid ""
@@ -66,6 +70,10 @@ msgid ""
 "it runs from zero rather than from half a slot back. It is also the only "
 "one of these shapes whose direction is part of what it is."
 msgstr ""
+"与其他形状不同，长圆形是按它 **第一个** 圆端的中心来定位的，而不是按它的中点，并且 ``angle`` 是绕该点旋转它。这正是长圆"
+"形的来历：它是一个还可以落在别处的孔，因此它从普通圆孔原本所在的位置起步，并从那里延伸 ``length - width`` 。当某个端"
+"口所标记的开口被改成长圆孔时，该端口会保持它的坐标，而随之而来的活动自由度从零开始，而不是从半个长圆形之前开始。它也是这些形状中唯一一个"
+"方向本身就是其组成部分的形状。"
 
 #: ../../source/config_geometry.rst:98
 msgid "DXF"
@@ -82,7 +90,7 @@ msgstr ""
 
 #: ../../source/config_geometry.rst:117
 msgid "Layers, and reading one drawing several ways"
-msgstr ""
+msgstr "图层，以及用多种方式读取同一张图"
 
 #: ../../source/config_geometry.rst:119
 msgid ""
@@ -92,6 +100,9 @@ msgid ""
 "contributed to a part (see :ref:`parameters`). Two things follow from "
 "that, and both are the point of it."
 msgstr ""
+"``include`` 和 ``exclude`` 是 **对象类型参数** ：它们由 ``dxf`` 类型贡献，而不是由草图的作者发明"
+"出来，就像 ``material`` 、 ``color`` 和 ``tolerance`` 被贡献给零件一样（参见 :ref:`par"
+"ameters` ）。由此带来两点结果，而这两点正是它的意义所在。"
 
 #: ../../source/config_geometry.rst:124
 msgid ""
@@ -100,6 +111,8 @@ msgid ""
 "natural place for this to be decided, because which layers are wanted "
 "depends on what the sketch is being used for:"
 msgstr ""
+"第一，无论声明中有没有提到它们，它们都存在，因此 *引用* 该草图的一方可以设置它们——而引用处正是决定这件事的自然位置，因为需要哪些图"
+"层，取决于这张草图被用来做什么："
 
 #: ../../source/config_geometry.rst:154
 msgid ""
@@ -108,6 +121,8 @@ msgid ""
 "sketch -- with its own cache entry -- so the two do not have to be "
 "rendered twice or kept in step by hand."
 msgstr ""
+"列表像上面那样用逗号分隔书写。两种引用都不需要事先声明任何东西就能生效，而且每一种引用本身都是一张草图——各有自己的缓存条目——所以这两"
+"者不必渲染两次，也不必靠手工保持同步。"
 
 #: ../../source/config_geometry.rst:159
 msgid ""
@@ -119,6 +134,10 @@ msgid ""
 " ``panel;exclude=NOTES`` is read by that exclusion alone. A reference "
 "that sets *both* is refused, the way a declaration writing both is."
 msgstr ""
+"图层名称的匹配 **不区分大小写** ，并且 ``include`` 和 ``exclude`` 只能给出其中一个——这两条都是 DXF"
+" 导入器自己的规则。引用处设置其中任何一个，都是在决定这张图如何被读取，因此它会替换声明中所说的内容，而不是叠加在其之上：一张声明了 `"
+"`include: [OUTLINE]`` 、却被以 ``panel;exclude=NOTES`` 方式引用的草图，只按那条排除规则读"
+"取。同时设置 *两者* 的引用会被拒绝，正如同时写出两者的声明会被拒绝一样。"
 
 #: ../../source/config_geometry.rst:167
 msgid ""
@@ -129,6 +148,8 @@ msgid ""
 "arrive there is an outline with a gap in it, which is a mistake rather "
 "than a drawing of lines."
 msgstr ""
+"如果所选图层不能闭合成面，这张图会按它所画出的 **线框** 导入。折弯线图纸正是这种情况：横跨坯料的两条平行线表示折弯的位置，而线条天"
+"生就是开放的。发生这种情况时 PartCAD 会予以说明，因为导致同样结果的另一种可能是轮廓线中存在缺口，那是一个错误，而不是一张线条图。"
 
 #: ../../source/config_geometry.rst:173
 msgid ""
@@ -137,6 +158,8 @@ msgid ""
 "carries neither reads every layer. The long form is available too, for a "
 "sketch that wants to describe its own default:"
 msgstr ""
+"第二，上面那些字段是引用所覆盖的 **默认值** 。它们的含义与一直以来完全相同，两者都不写的草图会读取每一个图层。对于想要描述自身默认"
+"值的草图，还可以使用完整写法："
 
 #: ../../source/config_geometry.rst:189
 msgid ""
@@ -145,10 +168,12 @@ msgid ""
 " DXF has, and accepting the parameter silently on an SVG would leave a "
 "package believing it was filtering something."
 msgstr ""
+"其他每一种草图类型都会拒绝这两个名称，就像零件类型会拒绝它无法兑现的对象类型参数一样：图层是 DXF 才有的东西，而在 SVG 上默默接"
+"受这个参数，会让包误以为自己正在过滤什么。"
 
 #: ../../source/config_geometry.rst:197
 msgid "Annotations"
-msgstr ""
+msgstr "注记"
 
 #: ../../source/config_geometry.rst:199
 msgid ""
@@ -158,6 +183,8 @@ msgid ""
 "lines are a bend up through 90 degrees and a bend down through 30, and "
 "nothing about the lines says which."
 msgstr ""
+"DXF 实体可以带有 **扩展数据** ——XDATA——也就是某个应用程序在文件中、几何体旁边针对该实体写下的内容。图纸正是在这里陈述"
+"几何体无法表达的内容：两条完全相同的直线，一条是向上折弯 90 度，另一条是向下折弯 30 度，而线条本身丝毫说明不了哪条是哪条。"
 
 #: ../../source/config_geometry.rst:205
 msgid ""
@@ -170,10 +197,13 @@ msgid ""
 "anything, so sheet metal instructions have to be read from a DXF in "
 "practice -- but not by anything's design."
 msgstr ""
+"PartCAD 在导入文件时读取它，并从此把它带在几何体旁边，因此它是 **草图** 的属性，而不是它所来源文件的属性。正因如此， :r"
+"ef:`钣金说明 <sheet-metal>` 才可以是一张草图：检查读取的是草图所陈述的内容，而某种草图类型一旦学会陈述同样的内容，别"
+"处都不需要任何改动。目前 ``dxf`` 是唯一会陈述内容的类型，所以实际上钣金说明只能从 DXF 中读取——但这并不是谁刻意设计的结果。"
 
 #: ../../source/config_geometry.rst:213
 msgid "Both of the usual spellings are read, and either may be used:"
-msgstr ""
+msgstr "两种常见写法都会被读取，任选其一即可："
 
 #: ../../source/config_geometry.rst:226
 msgid ""
@@ -186,6 +216,9 @@ msgid ""
 "filters above apply, so the annotations describe what is in the sketch "
 "and not what was filtered out of it."
 msgstr ""
+"键的读取不区分大小写—— ``ANGLE`` 和 ``angle`` 是同一个键——而取值则完全按文件中所陈述的样子保留。每个元素所携带"
+"的是它的 DXF 类型、所在图层、句柄、位置，以及那些键值对；没有扩展数据的元素仍然会被携带，只是名下什么都没有，因为“这张图没有任何注"
+"记”和“这条线没有被注记”是两个不同的答案。上面的图层过滤同样适用，因此注记描述的是草图中存在的内容，而不是被过滤掉的内容。"
 
 #: ../../source/config_geometry.rst:234
 msgid ""
@@ -198,6 +231,10 @@ msgid ""
 "filter that matched nothing and a layer that is not in the file both "
 "produce a sketch with nothing in it."
 msgstr ""
+"对草图执行 ``pc info`` 会在 ``Annotations`` 下打印它们，旁边还有这张图对 *自身* 的说明：它是哪个 DX"
+"F 文件、 ``$INSUNITS`` 说它的数字使用什么单位，以及——在 ``Layers`` 下—— **每一个** 文件中存在的图"
+"层，连同每个图层上有多少个什么类型的元素，以及这张草图是否读取该图层。最后这一项并不是注记所回答的问题，而这正是既要读取图纸、也要描述图"
+"纸的原因：匹配不到任何内容的图层过滤器，和文件中根本不存在的图层，都会产出一张空无一物的草图。"
 
 #: ../../source/config_geometry.rst:242
 msgid ""
@@ -207,6 +244,9 @@ msgid ""
 "on a ``step`` part or assembly reports those under ``Properties`` and "
 "``Layers``, with the keys lower-cased the same way."
 msgstr ""
+"STEP 文件用它自己的词汇陈述同一类内容——挂在某个产品上、或挂在该产品某个具名特征上的 ``PROPERTY_DEFINITION`"
+"` ，以及用于图层的 ``PRESENTATION_LAYER_ASSIGNMENT`` ——而对 ``step`` 零件或装配体执行 "
+"``pc info`` 会在 ``Properties`` 和 ``Layers`` 下报告这些内容，键同样会被转为小写。"
 
 #: ../../source/config_geometry.rst:249
 msgid "SVG"
@@ -237,7 +277,7 @@ msgstr "接口在 ``partcad.yaml`` 中使用以下语法声明："
 
 #: ../../source/config_geometry.rst:355
 msgid "Motion and physics"
-msgstr ""
+msgstr "运动与物理"
 
 #: ../../source/config_geometry.rst:357
 msgid ""
@@ -248,6 +288,9 @@ msgid ""
 "and ``physics`` states what a simulation needs to know about the cost of "
 "moving it."
 msgstr ""
+"``motion`` 和 ``physics`` 是对某个连接的 *记录* ，与让它动起来的 ``parameters`` 并列。参数是"
+"可执行的——在连接中写出它就会把零件摆放到位——而 ``motion`` 陈述的是该连接属于哪种关节、绕哪根轴、在哪些极限之间，而 ``"
+"physics`` 则陈述仿真需要了解的、移动它所付出的代价。"
 
 #: ../../source/config_geometry.rst:363
 msgid ""
@@ -260,12 +303,18 @@ msgid ""
 " it is exported - so the gap is always visible in one direction or the "
 "other."
 msgstr ""
+"每个属性都有一个 PartCAD 名称和一个 PartCAD 单位，而且这组属性是封闭的：角度以度为单位，长度以毫米为单位，与 Part"
+"CAD 中其他地方一致，其余一律采用国际单位制。任何内容都不会以它所来源格式中的名称存储。如果某种格式陈述了 PartCAD 没有对应属"
+"性的内容，导入会失败，而不是把该取值悄悄收起来；而 PartCAD 持有、目标格式却无法陈述的属性，会在导出时被报告出来——因此这种缺口"
+"总会在某一个方向上显现出来。"
 
 #: ../../source/config_geometry.rst:371
 msgid ""
 "``pc convert assembly -t assy`` fills both sections in from a URDF's "
 "joints - see :doc:`simulation` for the mapping."
 msgstr ""
+"``pc convert assembly -t assy`` 会根据 URDF 的关节填写这两个小节——映射关系请参见 :doc:`s"
+"imulation` 。"
 
 #: ../../source/config_geometry.rst:375
 msgid "Abstract interfaces"
@@ -316,6 +365,12 @@ msgid ""
 "and :ref:`drawing-ports` for asking a package to keep such a drawing "
 "checked in."
 msgstr ""
+"``pc render --with-ports`` 和 ``--with-interfaces`` （两者都要则用 ``--with-"
+"all`` ）会把同样这两样东西画在渲染出的投影上：每个端口处的一个标记和一个名称，以及每个接口实例只标注一次名称、并用连线连到属于它的"
+"每一个端口，都画在上面那些端口边界之上。装配体或 :ref:`场景 <scenes>` 的说法会被直接采信——画出来的就是它所声明的端口"
+"（参见 :ref:`assembly-ports` ）——而 ``--with-internals`` 则无论如何都会画出其内部的内容，"
+"每个子对象的端口都放在装配体安放该子对象的位置上，这正是找出某个连接没有按预期成形的办法。请参见 :doc:`cli` ；关于如何让包把"
+"这样一张图保存在版本库中，请参见 :ref:`drawing-ports` 。"
 
 #: ../../source/config_geometry.rst:423
 msgid "Port matching"
@@ -390,7 +445,7 @@ msgstr "当接口被继承或用于连接零件时，参数值会被解析，并
 
 #: ../../source/config_geometry.rst:525
 msgid "Parametric interfaces"
-msgstr ""
+msgstr "参数化接口"
 
 #: ../../source/config_geometry.rst:527
 msgid ""
@@ -399,6 +454,8 @@ msgid ""
 "names them with the same ``;<name>=<value>`` suffix ``pc inspect "
 "cube;width=20`` uses."
 msgstr ""
+"接口可以只声明一次，然后带着取值去请求它，方式与零件或草图完全一样：取值写在 ``parameters:`` 中，而引用则用 ``pc "
+"inspect cube;width=20`` 所使用的那种 ``;<name>=<value>`` 后缀来指明它们。"
 
 #: ../../source/config_geometry.rst:550
 msgid ""
@@ -409,10 +466,13 @@ msgid ""
 " is what a mating is registered under, so two objects for one set of "
 "values would be two halves of a connection that never find each other."
 msgstr ""
+"每一组取值对应一个接口，无论它们以什么顺序书写，也无论数字写成什么形式： ``m-thru;size=4,depth=2`` 、 ``m"
+"-thru;depth=2,size=4`` 和 ``m-thru;depth=2.0,size=4.00`` 是同一个对象，有同一个名"
+"称。这件事的意义不止于整洁——接口的名称正是配合登记时所用的依据，因此同一组取值对应两个对象，就会变成一个连接的两半永远找不到彼此。"
 
 #: ../../source/config_geometry.rst:558
 msgid "One section, two kinds of parameter"
-msgstr ""
+msgstr "一个小节，两类参数"
 
 #: ../../source/config_geometry.rst:560
 msgid ""
@@ -425,12 +485,15 @@ msgid ""
 "states a range and an axis, a construction parameter states a value type "
 "and a default."
 msgstr ""
+"自接口存在以来，接口上的 ``parameters:`` 一直指的是 `Interface parameters`_ ——也就是一个 *"
+"已建立* 的连接所保留的活动自由度。现在它同时容纳两类参数，因为“与零件的方式相同”正是重点所在，而再加一个小节就等于再多一样要学的东西"
+"。区分它们靠的是各自声明了什么，而不是写在哪里，而且两套词汇互不重叠：活动自由度参数陈述的是一个范围和一根轴，构造参数陈述的是取值类型和默认值。"
 
 #: ../../source/config_geometry.rst:580
 msgid ""
 "An entry is a **freedom-of-movement** parameter when any of the following"
 " is true, and a **construction** parameter otherwise:"
-msgstr ""
+msgstr "当下列任意一条成立时，某个条目就是 **活动自由度** 参数，否则就是 **构造** 参数："
 
 #: ../../source/config_geometry.rst:583
 msgid ""
@@ -438,14 +501,17 @@ msgid ""
 " ``turnX``, ``turnY``, ``turnZ`` (or the hyphenated spellings a "
 "``mates:`` section uses);"
 msgstr ""
+"它是六个预定义名称之一—— ``moveX`` 、 ``moveY`` 、 ``moveZ`` 、 ``turnX`` 、 ``turn"
+"Y`` 、 ``turnZ`` （或者 ``mates:`` 小节所使用的带连字符写法）；"
 
 #: ../../source/config_geometry.rst:586
 msgid "it is written in the short list form ``[min, max, default]``;"
-msgstr ""
+msgstr "它以简短的列表形式 ``[min, max, default]`` 书写；"
 
 #: ../../source/config_geometry.rst:587
 msgid "it states ``min``, ``max`` or ``dir``, or ``type: move`` / ``type: turn``."
 msgstr ""
+"它陈述了 ``min`` 、 ``max`` 或 ``dir`` ，或者 ``type: move`` / ``type: turn`` 。"
 
 #: ../../source/config_geometry.rst:589
 msgid ""
@@ -454,12 +520,14 @@ msgid ""
 "state its ``dir`` -- so a declaration written before this existed keeps "
 "the meaning it had."
 msgstr ""
+"PartCAD 曾经接受过的每一个活动自由度参数，都会被其中的第一条或第三条捕获——自定义名称 *必须* 陈述它的 ``dir`` ——"
+"因此在这套规则出现之前写下的声明，仍保持它原有的含义。"
 
 #: ../../source/config_geometry.rst:593
 msgid ""
 "A part's or an assembly's ``parameters:`` is not split: for a shape that "
 "section has only ever meant the values it is built from."
-msgstr ""
+msgstr "零件或装配体的 ``parameters:`` 不作这样的区分：对于形状而言，该小节一直都只表示构建它所依据的取值。"
 
 #: ../../source/config_geometry.rst:596
 msgid ""
@@ -469,6 +537,8 @@ msgid ""
 "*this* screw may be driven in; ``m``, which it inherits, says only that a"
 " screw may move along its axis at all."
 msgstr ""
+"接口自身的活动自由度优先于它所继承的那一个，因此接口只要再次写出同一个参数，就能收窄——或放宽——其父接口所允许的范围。上面的 ``m-"
+"screw`` 说明的是 *这颗* 螺钉可以旋入多深；而它所继承的 ``m`` 只说明螺钉可以沿其轴线移动而已。"
 
 #: ../../source/config_geometry.rst:604
 msgid ""
@@ -481,10 +551,14 @@ msgid ""
 " read as no movement, rather than handed to a solver as an interval with "
 "nothing in it."
 msgstr ""
+"在此之前，继承来的声明会胜出，子接口的声明则被丢弃，因此接口无法对它所获得的自由度说任何话。于是，已经声明过这类参数的包，开始按其字面意"
+"思运作： ``//pub/std/metric/m`` 一直都写着螺钉可以旋入 ``length - 2`` ，现在它确实如此了。方向 "
+"*相反* 的范围——同一个表达式对它自己列表中的 1mm 螺钉正好会产出这种范围——会被报告出来并按“没有移动”读取，而不是作为一个空区"
+"间交给求解器。"
 
 #: ../../source/config_geometry.rst:615
 msgid "Expressions"
-msgstr ""
+msgstr "表达式"
 
 #: ../../source/config_geometry.rst:617
 msgid ""
@@ -495,6 +569,10 @@ msgid ""
 " may be written as an expression over the interface's own values, between"
 " percent signs:"
 msgstr ""
+"凡是声明中说明该连接的地方—— ``desc`` 、 ``ports`` 、 ``inherits`` 、 ``implements``"
+" 、 ``mates`` 、 ``alias`` 、 ``parameters`` （其活动自由度的那一半）、 ``leadPort``"
+" 、 ``threadStep`` 、 ``selfScrew`` 、 ``multiConnect`` 和 ``motion`` ——"
+"取值都可以写成基于接口自身取值的表达式，放在百分号之间："
 
 #: ../../source/config_geometry.rst:639
 msgid ""
@@ -516,6 +594,14 @@ msgid ""
 "reported by name and left standing as the text it was written as, so a "
 "misspelling costs that one value rather than the package."
 msgstr ""
+"一个 *完全由* 表达式构成的取值，其求值结果就是该值本身，这正是坐标可以写成表达式的原因；而仅仅包含表达式的取值，会把求值结果格式化进"
+"去，这正是用来构造名称或描述的方式。定界符内部是一个基于对象参数的普通算术表达式，可以使用常见的函数（ ``sqrt`` 、 ``sin"
+"`` 、 ``cos`` 、 ``floor`` 、 ``min`` 、 ``max`` 、 ``round`` ……）以及与模板相同的"
+"常量（ ``PI`` 、 ``SQRT_2`` 、 ``INCH`` ……；参见 :ref:`templates` ）。常量和其他数字没"
+"有区别，因此 ``%PI * size / 4%`` 是一个表达式；同名的参数会取代它。算术运算、比较、条件表达式、索引，以及字符串或数"
+"字的普通方法（ ``index`` 、 ``split`` 、 ``replace`` 、 ``startswith`` ……）就是全部"
+"内容了：声明在每次加载包时都会被读取——远在任何东西被构建、任何 CAD 脚本运行之前——所以表达式不能调用其他任何东西，不能深入某个对"
+"象，也不能定义对象。无法求值的表达式会按名称被报告出来，并原样保留为它书写时的文本，因此拼写错误只会损失那一个取值，而不会损失整个包。"
 
 #: ../../source/config_geometry.rst:658
 msgid ""
@@ -525,6 +611,9 @@ msgid ""
 "expression that still says ``pi`` or ``e`` is reported with that advice, "
 "unless the object has a parameter by that name."
 msgstr ""
+"表达式过去有小写的 ``pi`` 和 ``e`` ，现在不再有了：常量一律大写，与模板中的做法一致。请写 ``PI`` ——每一个会对表"
+"达式求值的 PartCAD 版本都有它——以及 ``E`` 。仍然写着 ``pi`` 或 ``e`` 的表达式会连同这条建议一起被报告出"
+"来，除非该对象正好有一个同名参数。"
 
 #: ../../source/config_geometry.rst:666
 msgid ""
@@ -540,10 +629,16 @@ msgid ""
 " ``%moveX%``, with no colon, is the part that is new -- the old resolver "
 "required the colon and failed without it."
 msgstr ""
+"这里用的是 ``%...%`` ，而不是 Jinja2 的 ``{{ ... }}`` ，而且它并不是后者的替代品。 ``partcad"
+".yaml`` 在被解析 *之前* 会先作为 Jinja2 模板渲染（参见 :ref:`templates` ），这对于取决于正在请求对"
+"象哪个实例的取值来说，时机早了一步：那时还没有任何实例。两者不会冲突——Jinja2 从来看不到 ``%...%`` ，而 ``%..."
+"%`` 要在 Jinja2 完成很久之后才被解析。这种写法也不是新东西： ``inherits:`` 小节中的名称自接口存在以来就写作 "
+"``%moveX:value*2%`` ，这种形式的含义至今未变。新的只是可以只写 ``%moveX%`` 、不带冒号这一点——旧的解析"
+"器要求必须有冒号，没有冒号就会失败。"
 
 #: ../../source/config_geometry.rst:678
 msgid "Parametrized sketches on ports"
-msgstr ""
+msgstr "端口上的参数化草图"
 
 #: ../../source/config_geometry.rst:680
 #, python-format
@@ -553,6 +648,8 @@ msgid ""
 "the same thing. So one sketch draws the boundary of every size the "
 "interface family has, instead of one pre-generated sketch per size:"
 msgstr ""
+"端口的草图同样接受参数取值，既可以写在它旁边的 ``params:`` 中，也可以直接写进它的名称里（ ``sketch: \"m;siz"
+"e=%size%\"`` ）——两者是一回事。这样，一张草图就能画出该接口族所有尺寸的边界，而不必为每个尺寸预先生成一张草图："
 
 #: ../../source/config_geometry.rst:694
 msgid ""
@@ -560,10 +657,12 @@ msgid ""
 "expression is how it reads them; a ``cadquery`` or ``build123d`` sketch "
 "gets them as build parameters as usual."
 msgstr ""
+"``basic`` 草图没有脚本可以接收它的参数，因此表达式就是它读取参数的方式；而 ``cadquery`` 或 ``build123"
+"d`` 草图则照常以构建参数的形式获得它们。"
 
 #: ../../source/config_geometry.rst:699
 msgid "Parametric ports on a part"
-msgstr ""
+msgstr "零件上的参数化端口"
 
 #: ../../source/config_geometry.rst:701
 msgid ""
@@ -571,6 +670,8 @@ msgid ""
 " or an assembly, over that shape's own ``parameters:``. A plate that is "
 "asked for by thickness implements the through-hole of that thickness:"
 msgstr ""
+"同样的做法也适用于零件或装配体的 ``ports:`` 和 ``implements:`` 小节，基于该形状自身的 ``paramete"
+"rs:`` 。一块按厚度来请求的板，实现的就是该厚度的通孔："
 
 #: ../../source/config_geometry.rst:715
 msgid ""
@@ -578,10 +679,11 @@ msgid ""
 "``fileUrl`` is a URL that may be percent-encoded, and neither is an "
 "expression."
 msgstr ""
+"形状声明中的其他内容一概不受影响： ``desc`` 是散文， ``fileUrl`` 是一个可能经过百分号编码的 URL，两者都不是表达式。"
 
 #: ../../source/config_geometry.rst:721
 msgid "The same opening, drawn differently"
-msgstr ""
+msgstr "同一个开口，画法不同"
 
 #: ../../source/config_geometry.rst:723
 msgid ""
@@ -590,6 +692,8 @@ msgid ""
 "keeps its port where the plain hole would have been -- and what tells "
 "them apart is the outline and the freedom of movement:"
 msgstr ""
+"继承来的实例可以重新陈述它的端口所用的边界。长圆孔 *就是* 通孔——它继承自通孔，按通孔配合，并把端口保持在普通圆孔原本所在的位置——"
+"区分两者的是轮廓和活动自由度："
 
 #: ../../source/config_geometry.rst:742
 msgid ""
@@ -598,10 +702,12 @@ msgid ""
 "instance that says nothing about it keeps the boundary the inherited "
 "interface draws with."
 msgstr ""
+"``sketch:`` 和其他引用一样，因此取值写在名称里。它会替换该实例带入的每一个端口的边界；对此只字未提的实例，则保留所继承接口绘"
+"制时使用的边界。"
 
 #: ../../source/config_geometry.rst:747
 msgid "Interface aliases"
-msgstr ""
+msgstr "接口别名"
 
 #: ../../source/config_geometry.rst:749
 msgid ""
@@ -609,6 +715,7 @@ msgid ""
 " name. A bare string is the short form of the same thing, the way it is "
 "for a sketch or a part:"
 msgstr ""
+"``alias:`` 声明某个接口 *就是* 另一个接口，只是换了个名称。直接写一个字符串是同一件事的简短形式，就像草图或零件的写法一样："
 
 #: ../../source/config_geometry.rst:760
 msgid ""
@@ -619,6 +726,9 @@ msgid ""
 "``leadPort``, ``abstract``, ``motion``, ``physics``, ``threadStep`` ...) "
 "it takes from the target."
 msgstr ""
+"别名拥有目标接口的端口，并沿用目标接口的端口名称——不带前缀，不像 ``inherits:`` 的实例名称那样会给它们加上前缀——它可以"
+"直接替代目标接口，因此目标接口能与什么配合，它就能与什么配合；而它没有为自己声明的内容（描述、 ``leadPort`` 、 ``abs"
+"tract`` 、 ``motion`` 、 ``physics`` 、 ``threadStep`` ……）则取自目标接口。"
 
 #: ../../source/config_geometry.rst:766
 msgid ""
@@ -631,6 +741,10 @@ msgid ""
 "``m-thru;size=3,depth=3`` instead. See the ``//pub/std/metric/m`` "
 "package, which is exactly this."
 msgstr ""
+"正因如此，包才能够在不撤回已发布名称的前提下，把一整族接口参数化。一个逐一写出 ``m3-thru-3`` 、 ``m3-thru-4`"
+"` 、 ``m4-thru-3`` 以及另外好几千个名称的包，可以只声明这一族一次，并把其中每一个名称都保留为一行别名：写着 ``imp"
+"lements: m3-thru-3`` 的零件照常工作，端口和名称都保持不变，而今天新写的零件则可以改写 ``m-thru;size="
+"3,depth=3`` 。请参见 ``//pub/std/metric/m`` 包，它正是这么做的。"
 
 #: ../../source/config_geometry.rst:775
 msgid "Interface examples"

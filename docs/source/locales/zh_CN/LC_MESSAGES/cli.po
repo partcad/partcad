@@ -59,6 +59,13 @@ msgid ""
 " variable, as ``develIndex`` in the user configuration, and as the "
 "``partcad.develIndex`` setting of the VS Code extension."
 msgstr ""
+"``--devel-index`` 就是其中一个通用选项，值得单独说明。公共索引（即 ``pub`` 依赖，发布于 `partcad-i"
+"ndex <https://github.com/partcad/partcad-index>`_ ）位于一个独立的仓库中，包会在 ``"
+"main`` 上导入它：这既是 ``pc init`` 写入该依赖的修订版本，也是普通导入本来就会落到的默认分支。无论哪种方式，这都是已"
+"发布的状态。 ``--devel-index`` 改为导入它的 ``devel`` 分支——发布时 ``main`` 会快进到的那个分支"
+"——因此可以在变更发布之前就试用暂存在那里的改动。它会替换包所指定的修订版本，而不是服从后者，这正是它存在的意义。该重定向跟随的是仓库而"
+"不是依赖名，因此只要索引出现在依赖树中的任何位置都会生效，同时不影响其他任何依赖。同一开关也可以通过 ``PC_DEVEL_INDEX`"
+"` 环境变量、用户配置中的 ``develIndex`` ，以及 VS Code 扩展的 ``partcad.develIndex`` 设置来使用。"
 
 #: ../../source/cli.rst:21
 msgid ""
@@ -68,6 +75,10 @@ msgid ""
 "``0``, ``false``, ``no``, ``off`` or an empty value turn it off, ignoring"
 " case. Setting one to anything else turns it on."
 msgstr ""
+"每一个布尔型的 ``PC_*`` 变量（ ``PC_DEVEL_INDEX`` 、 ``PC_FORCE_UPDATE`` 、 ``PC"
+"_OFFLINE`` 、 ``PC_CACHE_FILES`` 、 ``PC_TELEMETRY_*`` 系列开关等）都按同样的方式读取"
+"： ``1`` 、 ``true`` 、 ``yes`` 、 ``on`` 表示开启， ``0`` 、 ``false`` 、 ``no"
+"`` 、 ``off`` 或空值表示关闭，且不区分大小写。把它设成其他任何值都表示开启。"
 
 #: ../../source/cli.rst:26
 msgid ""
@@ -82,6 +93,10 @@ msgid ""
 "has been running since before you set it, and there is no daemon to "
 "restart after changing a setting."
 msgstr ""
+"大多数命令由一个后台守护进程提供服务，它在两次调用之间保持热状态，这就引出一个问题：这些工作究竟运行在 *谁的* 配置之下。答案始终是你"
+"的配置，而且是你运行该命令那一刻的配置： ``pc`` 会解析它的用户配置——配置文件、 ``PC_*`` 环境变量以及命令行上的选项，"
+"层层叠加——并随每个请求把一份副本交给守护进程，守护进程据此构建包上下文，而不是使用它启动时所带的配置。因此，即使某个守护进程早在你设置"
+"该选项之前就已在运行， ``pc --devel-index list`` 仍然就是字面上的意思；更改设置之后也没有任何守护进程需要重启。"
 
 #: ../../source/cli.rst:34
 msgid ""
@@ -90,6 +105,8 @@ msgid ""
 "assembly whose sub-assemblies have not been built yet prints a line "
 "naming them::"
 msgstr ""
+"装配体是由其他装配体构建而成的，而守护进程 **一次只构建一个，每个都在各自独立的请求中完成** 。因此，请求一个子装配体尚未构建的装配"
+"体时，会先打印出一行列出它们的名字： ::"
 
 #: ../../source/cli.rst:39
 msgid ""
@@ -100,16 +117,19 @@ msgid ""
 "request, and it is entirely automatic -- there is nothing to turn on and "
 "no command of your own to run."
 msgstr ""
+"然后再逐个构建它们，最后构建你所请求的对象。你会看到每一步各有一行 ``DONE:`` ，而不是整体只有一行；没有任何东西会被构建两次，"
+"因为每一个在完成时都会被缓存。正因如此，一个耗时数分钟的装配体不再需要塞进单个请求中；而且这完全是自动的——没有什么需要开启，也不需要你"
+"自己运行任何命令。"
 
 #: ../../source/cli.rst:48
 msgid "Naming a package and what is below"
-msgstr ""
+msgstr "指定一个包及其下层的包"
 
 #: ../../source/cli.rst:50
 msgid ""
 "A package name ending in ``...`` means **that package and every package "
 "below it**, transitively::"
-msgstr ""
+msgstr "以 ``...`` 结尾的包名表示 **该包以及它下层的每一个包** ，并且是传递性的： ::"
 
 #: ../../source/cli.rst:56
 msgid ""
@@ -118,12 +138,14 @@ msgid ""
 "separator is optional, so ``//pub/examples/...`` is the same request as "
 "``//pub/examples...``."
 msgstr ""
+"单独的 ``...`` 表示当前包及其下层的全部内容，而 ``//...`` 表示从根开始的整个工作区。最后一个路径分隔符可以省略，因此"
+" ``//pub/examples/...`` 与 ``//pub/examples...`` 是同一个请求。"
 
 #: ../../source/cli.rst:60
 msgid ""
 "The suffix can also be written on an **object** name, in front of the "
 "``:``, which is what makes it more than a flag::"
-msgstr ""
+msgstr "该后缀也可以写在 **对象** 名上，放在 ``:`` 之前，这正是它不只是一个标志的原因： ::"
 
 #: ../../source/cli.rst:68
 msgid ""
@@ -131,6 +153,8 @@ msgid ""
 "so it wins over ``-P`` — the same rule a fully qualified "
 "``//package:name`` already follows."
 msgstr ""
+"带有该后缀的对象名同时也指明了遍历的起点，因此它的优先级高于 ``-P`` ——这与完全限定的 ``//package:name`` 已"
+"经遵循的规则相同。"
 
 #: ../../source/cli.rst:71
 msgid ""
@@ -140,12 +164,14 @@ msgid ""
 " renders, not thirty-seven complaints. Finding it nowhere in the subtree "
 "is the one failure, and it is reported once."
 msgstr ""
+"对一个具名对象的遍历，会向子树中的每一个包询问它 **自己的** 同名对象，并跳过没有声明该对象的包：在四十个包组成的树中，若其中三个声"
+"明了 ``bolt`` ，结果就是三次渲染，而不是三十七条抱怨。只有在整个子树中都找不到它才算失败，并且只报告一次。"
 
 #: ../../source/cli.rst:76
 msgid ""
 "``-x``/``--exclude`` leaves a package **and everything below it** out of "
 "the walk, and can be given more than once::"
-msgstr ""
+msgstr "``-x`` / ``--exclude`` 会把一个包 **以及它下层的所有内容** 排除在遍历之外，并且可以多次给出： ::"
 
 #: ../../source/cli.rst:82
 msgid ""
@@ -157,6 +183,10 @@ msgid ""
 " subtree takes it: ``pc test``, ``pc render``, ``pc export``, ``pc "
 "lint``, ``pc info``, ``pc sim``, ``pc cam`` and the ``pc list`` commands."
 msgstr ""
+"被排除的包根本不会被这次遍历加载，这正是它对由仓库插件提供服务的包格外有价值的原因：它的子包本来会产生的请求一个都不会发出。这并不会让该"
+"包变得不可访问——树中其他地方的装配体仍然可以使用它的某个零件——只是它不出现在本次遍历中而已。每一条会遍历子树的命令都支持它： ``p"
+"c test`` 、 ``pc render`` 、 ``pc export`` 、 ``pc lint`` 、 ``pc info``"
+" 、 ``pc sim`` 、 ``pc cam`` 以及各条 ``pc list`` 命令。"
 
 #: ../../source/cli.rst:88
 msgid ""
@@ -169,10 +199,14 @@ msgid ""
 "``...``, and so does ``pc instructions -r``, which puts the steps of the "
 "sub-assemblies into the instructions."
 msgstr ""
+"``-r`` / ``--recursive`` 是在包名上写 ``...`` 的旧写法，并且在原先支持它的所有地方仍然有效。它无法指明"
+"遍历的起点，也并非每一条本可以使用它的命令都提供它（ ``pc info`` 就没有），而本页其余部分一律使用 ``...`` 。注意 "
+"``pc supply find -r`` 和 ``pc supply quote -r`` 的含义完全不同——把每个装配体拆解到零件—"
+"—并且不接受 ``...`` ； ``pc instructions -r`` 也是如此，它会把子装配体的步骤放进装配说明中。"
 
 #: ../../source/cli.rst:98
 msgid "Slow assemblies and ``--fast-only``"
-msgstr ""
+msgstr "耗时较长的装配体与 ``--fast-only``"
 
 #: ../../source/cli.rst:100
 msgid ""
@@ -183,6 +217,8 @@ msgid ""
 "assembly (or a scene) that is known to take longer says so where it is "
 "declared, in seconds:"
 msgstr ""
+"当守护进程五分钟没有任何输出时， ``pc`` 就会放弃等待。这限制的是 *静默* 的时长，而不是命令的时长——递归渲染会边走边报告每一"
+"个对象，可以运行一个小时——而构建或渲染一个大型装配体正好就是一段静默。已知会耗时更久的装配体（或场景）会在声明处用秒数说明这一点："
 
 #: ../../source/cli.rst:112
 msgid ""
@@ -193,12 +229,15 @@ msgid ""
 "still sets the default (``0`` waits forever, whatever an assembly "
 "declares)."
 msgstr ""
+"在守护进程处理它的过程中——构建、渲染、导出、测试——它会把这一点告知 ``pc`` ，于是在此期间 ``pc`` 最多等待 1800 "
+"秒而不是 300 秒。声明的超时只会延长等待，绝不会缩短它，而默认值仍由 ``PC_DAEMON_IDLE_TIMEOUT`` 设定（ "
+"``0`` 表示无限等待，无论装配体声明了什么）。"
 
 #: ../../source/cli.rst:117
 msgid ""
 "Declaring a timeout is also saying the assembly is slow, and ``--fast-"
 "only`` (``-f``) leaves out every assembly and scene that says so::"
-msgstr ""
+msgstr "声明超时同时也等于声明该装配体很慢，而 ``--fast-only`` （ ``-f`` ）会跳过每一个这样声明的装配体和场景： ::"
 
 #: ../../source/cli.rst:123
 msgid ""
@@ -210,6 +249,11 @@ msgid ""
 "only`` alone, since ``-f`` is their ``--filter``. Every recursive run "
 "over ``//pub`` in PartCAD's own CI passes it."
 msgstr ""
+"它只读取声明本身，因此跳过某个对象就不会构建任何东西。一个 *放置* 了慢对象的装配体会通过构建那个慢对象来完成构建，只有当它自己也声明"
+"了超时时才会被跳过。提供该标志的命令有 ``pc render`` 、 ``pc export`` 、 ``pc test`` 、 ``"
+"pc sim`` 、 ``pc list`` 和 ``pc search`` ；在 ``pc test`` 和 ``pc sim`` 上"
+"只能写作 ``--fast-only`` ，因为 ``-f`` 在它们那里是 ``--filter`` 。PartCAD 自己的 CI "
+"中每一次对 ``//pub`` 的递归运行都会带上它。"
 
 #: ../../source/cli.rst:131
 msgid "Host commands"
@@ -257,6 +301,10 @@ msgid ""
 "which of its fields are configured, never as the name and addresses in "
 "them."
 msgstr ""
+"``pc system status config`` — 输出本次安装所解析出的配置，其中配置文件、 ``PC_*`` 环境变量和命令"
+"行都已经应用。这与 ``pc config`` 的报告相同，之所以和下面两条并列，是为了让“这台机器在做什么”成为一条命令、三种答案。值"
+"为机密的选项只说明它是否已设置； ``git.auth`` 条目保留主机、用户名和密钥路径，而丢弃密码与口令；而 ``user`` 小节"
+"只报告它的哪些字段已配置，绝不报告其中的姓名和地址。"
 
 #: ../../source/cli.rst:150
 msgid ""
@@ -270,6 +318,11 @@ msgid ""
 "between the underscores of its name — is listed but printed as "
 "``<scrubbed>``, so the report stays something you can paste into a bug."
 msgstr ""
+"``pc system status env`` — 输出本 ``pc`` 进程启动时所带的 ``PC_*`` 环境变量。它与上面那份报"
+"告并不是一回事：配置报告说的是某个选项最终解析成了什么，而这里说的是环境要求了什么；只要命令行选项取胜或某个值被拒绝，两者就会不一致。如"
+"果变量名表明其值用于认证—— ``PC_REMOTE_SANDBOX_TOKEN`` ，或者名字的下划线之间含有 ``TOKEN`` 、"
+" ``KEY`` 、 ``SECRET`` 、 ``PASSWORD`` 、 ``CREDENTIAL`` 或 ``AUTH`` 的其他"
+"任何变量——它仍会被列出，但打印为 ``<scrubbed>`` ，这样这份报告始终是可以直接粘进缺陷报告里的东西。"
 
 #: ../../source/cli.rst:156
 msgid ""
@@ -287,6 +340,10 @@ msgid ""
 "hand. ``--stale`` narrows it to what is out of date: images built for "
 "another PartCAD release, and containers nothing is using."
 msgstr ""
+"``pc system prune`` — 删除 PartCAD 为 ``docker`` 沙箱创建的容器和镜像。只删除带有 PartC"
+"AD 标签的内容（参见 ``tools/containers/README.md`` ），因此别人放在这台机器上的镜像绝不会被动到——作"
+"者未采用该约定的第三方沙箱镜像同样不会，它只能手工删除。 ``--stale`` 将范围收窄到已经过时的内容：为其他 PartCAD 发"
+"布版本构建的镜像，以及无人使用的容器。"
 
 #: ../../source/cli.rst:163
 msgid ""
@@ -301,16 +358,15 @@ msgid ""
 msgstr "``pc system telemetry`` — 检查或清除本地存储的遥测数据（ ``info`` 、 ``clear`` ）。"
 
 #: ../../source/cli.rst:166
-#, fuzzy
 msgid "``pc upgrade``"
-msgstr "``pc update``"
+msgstr ""
 
 #: ../../source/cli.rst:167
 msgid ""
 "Upgrade PartCAD itself to the latest version. This upgrades the "
 "installation on this machine; the packages a package imports are ``pc "
 "update``."
-msgstr ""
+msgstr "把 PartCAD 自身升级到最新版本。它升级的是这台机器上的安装；而一个包所导入的那些包用 ``pc update`` 更新。"
 
 #: ../../source/cli.rst:170
 msgid ""
@@ -326,6 +382,10 @@ msgid ""
 "command exits. An installation that runs from a source checkout is "
 "reported and skipped — update that one with ``git``."
 msgstr ""
+"无论当初以哪种方式安装，PartCAD 都能升级自己：Python wheel 用 ``pip`` 升级，独立打包件则下载对应的发布版本"
+"、校验其校验和，并安装在正在运行的那份副本旁边。在确实发现更新版本之前，不会下载任何内容，也不会惊动任何守护进程；一旦发现，机器上运行的"
+"每一个 PartCAD 守护进程都会被要求停止并等待其退出，因为它们执行的文件都即将被替换。新版本安装在旧版本旁边，随后旧版本被删除——"
+"包括该命令自身正在运行的那份副本，它会在命令退出时立即消失。从源码检出运行的安装会被报告并跳过——那一种请用 ``git`` 更新。"
 
 #: ../../source/cli.rst:179
 msgid ""
@@ -334,24 +394,25 @@ msgid ""
 "instead of the latest one. Under the global ``--offline`` flag the "
 "version check is skipped entirely."
 msgstr ""
+"使用 ``--check`` 可以只报告是否有更新的 PartCAD 可用而不安装任何东西，使用 ``--to-version`` 可以"
+"安装指定版本而不是最新版本。在全局 ``--offline`` 标志下，版本检查会被完全跳过。"
 
 #: ../../source/cli.rst:183
 msgid ""
 "The \"Update PartCAD\" command in the VS Code extension runs exactly "
 "this, so the two never drift apart."
-msgstr ""
+msgstr "VS Code 扩展中的“Update PartCAD”命令运行的正是这条命令，因此两者永远不会产生分歧。"
 
 #: ../../source/cli.rst:185
-#, fuzzy
 msgid "``pc daemon``"
-msgstr "``pc update``"
+msgstr ""
 
 #: ../../source/cli.rst:186
 msgid ""
 "Manage the background daemon described above. There is one per workspace,"
 " it is started on demand by the first command that needs it, and it is "
 "not normally something to think about — these are here for when it is:"
-msgstr ""
+msgstr "管理上文所述的后台守护进程。每个工作区一个，由第一条需要它的命令按需启动，通常无需为它费心——下面这些命令是为需要费心的时候准备的："
 
 #: ../../source/cli.rst:190
 msgid ""
@@ -362,6 +423,9 @@ msgid ""
 "language. The endpoint is printed once the daemon answers on it, so "
 "whoever reads it can connect straight away."
 msgstr ""
+"``pc daemon start`` — 如果本工作区的守护进程尚未运行则启动它，并打印它所服务的端点——一个套接字路径，在 Wind"
+"ows 上则是一个命名管道。VS Code 扩展也是这样找到守护进程的，这样“它在哪里”只有一种实现，而不是每种语言一种。端点是在守护进"
+"程已经能在上面应答之后才打印的，因此读到它的人可以立刻连接。"
 
 #: ../../source/cli.rst:194
 msgid ""
@@ -371,13 +435,15 @@ msgid ""
 "and ``install.sh --uninstall`` run before removing the files a daemon "
 "runs from; it exits non-zero if one did not stop."
 msgstr ""
+"``pc daemon stop`` — 停止为本工作区服务的守护进程，并说明此前是否有一个在运行。 ``--all`` 会停止这台机器"
+"上的每一个 PartCAD 守护进程并等待它们各自退出；IDE 的卸载程序和 ``install.sh --uninstall`` 在删"
+"除守护进程所运行的文件之前，运行的正是这条命令。如果有某个没有停止，它会以非零状态退出。"
 
 #: ../../source/cli.rst:198
-#, fuzzy
 msgid ""
 "``pc daemon status`` — Display the state of the internal data the daemon "
 "holds."
-msgstr "``pc system status`` — 显示 PartCAD 所使用的内部数据的状态，包括本地缓存的位置。"
+msgstr "``pc daemon status`` — 显示守护进程所持有的内部数据的状态。"
 
 #: ../../source/cli.rst:199
 msgid ""
@@ -390,6 +456,10 @@ msgid ""
 " above); it is what the daemon falls back on for a client that sends "
 "none."
 msgstr ""
+"``pc daemon status config`` — 输出守护进程自身解析出的配置，是 ``pc system status co"
+"nfig`` 在守护进程一侧的对应命令。两者有意不同：守护进程是按工作区共享并保持热状态的，因此它自己的配置就是最初启动它的那个环境当时"
+"所持有的内容——可能是几天以前，也可能来自某个 VS Code 窗口。它并不是你的命令所运行的那份配置（如上文所述，那份配置随命令一起传"
+"递）；它是守护进程在客户端没有发送配置时所回落到的那一份。"
 
 #: ../../source/cli.rst:204
 msgid ""
@@ -403,6 +473,10 @@ msgid ""
 "the work, just not a different one. Credentials are scrubbed on the far "
 "side, so the value never reaches the wire."
 msgstr ""
+"``pc daemon status env`` — 输出守护进程进程正在使用的 ``PC_*`` 环境变量。在 POSIX 上，这是唯"
+"一一份完全无法从这一侧推算出来的报告，因为共享套接字的守护进程继承的是启动它的那个进程的环境。在 Windows 上，客户端连接的是作为"
+"自己子进程生成的一次性 stdio 服务，而不是命名管道守护进程，因此答案通常与 ``pc system status env`` 相同"
+"——它仍然是实际干活的那个进程的环境，只不过不是另一个进程的。凭据会在对端被擦除，因此其值从不会出现在传输中。"
 
 #: ../../source/cli.rst:210
 msgid ""
@@ -411,6 +485,8 @@ msgid ""
 "sandboxed runtime environments, or the filesystem cache respectively; "
 "without them all of it goes."
 msgstr ""
+"``pc daemon reset`` — 丢弃上述状态。 ``--repo-only`` 、 ``--sandbox-only`` 和"
+" ``--cache-only`` 分别把范围收窄到缓存的依赖、沙箱化的运行时环境或文件系统缓存；不带这些选项时，全部都会被清除。"
 
 #: ../../source/cli.rst:213
 msgid ""
@@ -418,6 +494,8 @@ msgid ""
 "(``type``, ``env``, ``sentryDsn``), the daemon-side counterpart of ``pc "
 "system set``."
 msgstr ""
+"``pc daemon set telemetry`` — 设置守护进程的遥测设置（ ``type`` 、 ``env`` 、 ``se"
+"ntryDsn`` ），是 ``pc system set`` 在守护进程一侧的对应命令。"
 
 #: ../../source/cli.rst:216
 msgid ""
@@ -427,6 +505,8 @@ msgid ""
 "daemon such a command started is one that inherited *this* shell, so ask "
 "when the daemon you mean is already up."
 msgstr ""
+"这三份 ``status`` 报告都会访问为本工作区服务的守护进程，如果还没有守护进程在应答，就会启动一个——毕竟无法读取一个并不存在的"
+"进程的配置或环境。由这样一条命令启动的守护进程，继承的是 *当前这个* shell，所以请在你所指的守护进程已经起来之后再去询问。"
 
 #: ../../source/cli.rst:220
 msgid ""
@@ -434,6 +514,7 @@ msgid ""
 "hands the daemon its own resolved user configuration, as explained above."
 " Stopping one is for upgrades and for clearing a wedged state."
 msgstr ""
+"更改设置之后不需要重启任何守护进程：如上文所述，每一条命令都会把它自己解析出的用户配置交给守护进程。停止守护进程是为了升级，以及为了清除卡住的状态。"
 
 #: ../../source/cli.rst:225
 msgid ""
@@ -444,15 +525,17 @@ msgid ""
 "service of its own — so what a daemon buys on Windows today is the editor"
 " extension's warm context."
 msgstr ""
+"在 Windows 上，守护进程服务的是命名管道而不是 Unix 套接字，并且是作为分离进程启动的，而不是通过 fork； ``pc d"
+"aemon start`` / ``stop`` 的工作方式相同，打印的答案也是同一类。 ``pc`` 自身目前还没有使用它——那里的每"
+"条命令仍然各自运行一个服务——因此守护进程今天在 Windows 上带来的好处，是编辑器扩展的热上下文。"
 
 #: ../../source/cli.rst:230
-#, fuzzy
 msgid "``pc open``"
-msgstr "``pc update``"
+msgstr ""
 
 #: ../../source/cli.rst:231
 msgid "Open a file in a third-party application, on this machine::"
-msgstr ""
+msgstr "在这台机器上用第三方应用程序打开一个文件： ::"
 
 #: ../../source/cli.rst:241
 msgid ""
@@ -469,6 +552,14 @@ msgid ""
 "looked for under all three of the names it has had (``gz sim``, ``ign "
 "gazebo``, ``gazebo``), and whichever the machine has is the one used."
 msgstr ""
+"``--with`` 指定应用程序： ``freecad`` （默认）、 ``blender`` ，以及用于电路板的 ``kicad``"
+" ，这几个是 PartCAD 自己提供的。 ``gazebo`` 和 ``mujoco`` 来自相应引擎的插件包（ `partcad-s"
+"im-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ 、 `partc"
+"ad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ ），与该"
+"引擎场景格式的读取器、导出器和仿真器放在一起，因此它们只在导入了相应插件包的工作区中可用，在其他任何地方都是未知的应用程序。只要本机装有"
+"该应用程序，就一定会使用本机的：命令会在 ``PATH`` 上查找，在 macOS 上查找 ``/Applications`` ，在 W"
+"indows 上查找 ``Program Files`` ，在 Linux 上还会查找 flatpak。Gazebo 会按它用过的全部三"
+"个名字（ ``gz sim`` 、 ``ign gazebo`` 、 ``gazebo`` ）查找，机器上有哪个就用哪个。"
 
 #: ../../source/cli.rst:251
 msgid ""
@@ -486,6 +577,12 @@ msgid ""
 "extension passes the declared type of the object you clicked. A "
 "``.blend`` is Blender's own file and is opened, not converted."
 msgstr ""
+"Blender 只读取网格，别的一概不读，因此不是网格的文件会先被转换成 STL 再交给 Blender：STL、OBJ 或 glTF "
+"按原样导入，而 STEP 文件、CadQuery 脚本，或者 Blender 没有自带导入器的网格格式（3MF）则会先转换。这是 ``p"
+"c open`` 唯一一件要请求 PartCAD 守护进程去做的事，因为把实体变成网格属于 CAD 工作；窗口仍然在运行该命令的那台机器"
+"上打开。转换后的副本写在本工作区自己的目录下（绝不会写在你的文件旁边），以它来源的对象命名，并在该对象发生变化之前一直复用。当文件名说明"
+"不了文件内容时，用 ``--type`` 指明—— ``.py`` 可能是 CadQuery 脚本、build123d 脚本或 SDF "
+"脚本——VS Code 扩展会传入你所点击对象的声明类型。 ``.blend`` 是 Blender 自己的文件，会直接打开，而不是转换。"
 
 #: ../../source/cli.rst:261
 msgid ""
@@ -499,6 +596,11 @@ msgid ""
 "stored in (``sceneExtensions``), which is how a file that already is one "
 "goes straight over without any conversion at all."
 msgstr ""
+"MuJoCo 只读取 MJCF，不读取任何其他模型格式，而本来就不是 MJCF 的场景在这里 **不会** 被转换。这并非疏漏：MJCF"
+" 由 ``partcad-sim-mujoco`` 的导出器写出，Gazebo 世界由 ``partcad-sim-gazebo`` 的"
+"读取器读取，而交给 ``pc open`` 的文件外面没有包，无法借由包去使用其中任何一个。因此这样的文件会被拒绝，并提示那条确实可行的"
+"导出路径，而不是被错误地转换。应用程序的 ``open:`` 条目列出了它自己的格式所使用的扩展名（ ``sceneExtensions"
+"`` ），正因如此，本来就是该格式的文件可以完全不经转换直接交过去。"
 
 #: ../../source/cli.rst:268
 msgid ""
@@ -508,6 +610,9 @@ msgid ""
 " to its engine's format (``pc export -S -t sim-mujoco:mjcf``), and open "
 "that."
 msgstr ""
+"只有在包内部才有意义的对象——ASSY 文件、URDF——没有可以即时转换的东西，出于同样的原因也会被拒绝：请先把它导出为网格（ ``p"
+"c export -t stl`` ），或者把场景导出为其引擎的格式（ ``pc export -S -t sim-mujoco:mjc"
+"f`` ），再打开导出的结果。"
 
 #: ../../source/cli.rst:272
 msgid ""
@@ -519,6 +624,10 @@ msgid ""
 " is handed over as it is. Every application but Blender is given the file"
 " it was pointed at, whatever it holds."
 msgstr ""
+"当电路板与所指定的文件不是同一个东西时，交给 KiCad 的是电路板而不是那个文件： ``kicad`` 零件本身 *就是* KiCad"
+" 命令行从电路板写出的 STEP 文件，因此对它执行 ``pc open --with kicad`` 打开的是旁边的 ``.kicad"
+"_pro`` （或 ``.kicad_pcb`` 、 ``.kicad_sch`` ）。这里不会创建任何东西，也不会渲染任何东西——旁边"
+"没有电路板的文件会按原样交过去。除 Blender 之外的每一个应用程序，拿到的都是它被指向的那个文件，无论里面装的是什么。"
 
 #: ../../source/cli.rst:278
 msgid ""
@@ -547,6 +656,19 @@ msgid ""
 "and says to remove it, rather than opening a name the container cannot "
 "resolve."
 msgstr ""
+"带上 ``--use-docker`` 时，没有本地安装的机器会改为在容器中运行该应用程序——每个应用程序一个容器，并以它命名（ ``p"
+"artcad-freecad`` 、 ``partcad-blender`` 、 ``partcad-gazebo`` 、 ``part"
+"cad-mujoco`` 、 ``partcad-kicad`` ），首次运行时从该应用程序的镜像创建（ ``--docker-imag"
+"e`` 可以覆盖它；FreeCAD 用的是 ``linuxserver/freecad:latest`` ，因为 FreeCAD 项目没"
+"有发布自己的镜像，Blender 出于同样的原因用 ``linuxserver/blender:latest`` ，KiCad 用的是 "
+"PartCAD 本就为 ``kicad`` 零件构建的 ``ghcr.io/partcad/partcad-container-kica"
+"d`` 镜像，而某个引擎用的则是它的插件包所声明的镜像），之后一直复用，因此你准备好的容器会始终是被使用的那一个。不带 ``--use-"
+"docker`` 时，一台既没有该应用程序也没有 Docker 的机器会收到明确的说明，而不是执行了一条悄无声息什么也没做的命令。删除该"
+"应用程序自己的容器（ ``docker rm -f partcad-freecad`` 、 ``partcad-blender`` 、 "
+"``partcad-gazebo`` 、 ``partcad-mujoco`` 、 ``partcad-kicad`` ），下一次 ``"
+"pc open`` 就会创建一个全新的。工作区以及存放本工作区守护进程套接字的目录，都会 **挂载到它们在宿主机上的路径** ，正是这一"
+"点让同一个路径在两边含义相同。不在本工作区中的文件，会改为挂载它自己所属的工作区，这样被挂载的内容总是包含交给应用程序的那个文件；为某个"
+"工作区创建、却从另一个工作区使用的容器会如实说明这一点，并提示把它删除，而不是去打开一个容器无法解析的名字。"
 
 #: ../../source/cli.rst:296
 msgid ""
@@ -558,6 +680,9 @@ msgid ""
 "connection. When there is none, the command says which one to install and"
 " what to run rather than starting a container whose window never appears."
 msgstr ""
+"容器化的应用程序使用宿主机的 X 显示。在 Linux 上该显示通常是一个套接字，它会连同其授权 cookie 一起共享给容器，无需任何"
+"配置；而通过 TCP 访问的显示——转发来的显示，或 macOS、Windows 上的 X 服务器（XQuartz、VcXsrv）——则"
+"必须先安装好，并允许它接受连接。如果一个都没有，命令会告诉你该安装哪一个、该运行什么，而不是启动一个窗口永远不会出现的容器。"
 
 #: ../../source/cli.rst:302
 msgid ""
@@ -569,6 +694,10 @@ msgid ""
 "what happened (or the reason it did not) as one object, which is what the"
 " VS Code extension's \"Open in...\" context menu reads."
 msgstr ""
+"与 ``pc lint --file`` 和 ``pc upgrade`` 一样，这条命令从不与守护进程通信——守护进程可能在远端，那样"
+"窗口就会打开在别人的屏幕上。这同时也是它接受路径而不是 ``<package>:<part>`` 名称的原因：解析名称是一个包依赖图的问"
+"题，而这条命令不会做那次往返。 ``--json`` 会把发生了什么（或者没能打开的原因）作为一个对象打印出来，VS Code 扩展的“"
+"Open in...”右键菜单读取的正是它。"
 
 #: ../../source/cli.rst:310
 msgid "Package commands"
@@ -597,6 +726,10 @@ msgid ""
 "Cursor. Both come out of the installed PartCAD, so they state the version"
 " that wrote them. Neither is a reason for the command to fail."
 msgstr ""
+"它还会设置包所在的仓库： ``.vscode/launch.json`` 中的一条 **Render** 命令，以及教会编码智能体驱动 "
+"PartCAD 的 AI 智能体技能——面向 Claude Code 的、位于 ``.claude/skills/`` 的 ``pc``"
+" 插件，以及面向 Cursor 的、位于 ``.cursor/skills/`` 的 ``pc-`` 前缀技能。两者都来自已安装的 Pa"
+"rtCAD，因此它们会声明是哪个版本写出了它们。两者都不构成该命令失败的理由。"
 
 #: ../../source/cli.rst:322
 msgid ""
@@ -609,6 +742,10 @@ msgid ""
 "does not know is an error, because a typo that installs nothing looks "
 "exactly like an agent that is not supported yet."
 msgstr ""
+"``--no-skills`` 会跳过这些技能。 ``--skills-only`` 则 *只* 安装它们，完全不碰任何包——已经有包的"
+"仓库就是这样获得这些技能，或获得更新版 PartCAD 的技能的；既然没有什么要创建，已有的 ``partcad.yaml`` 既不会被"
+"读取也不会被替换。 ``--agents`` 选择为哪些智能体安装： ``all`` （默认），或者由 ``claude`` 和 ``c"
+"ursor`` 组成的逗号分隔列表。PartCAD 不认识的智能体会报错，因为一个什么也没装上的拼写错误，看起来与一个尚未被支持的智能体一模一样。"
 
 #: ../../source/cli.rst:329
 msgid ""
@@ -619,6 +756,9 @@ msgid ""
 "carry a ``metadata.partcad`` stamp saying which release wrote them, and a"
 " ``pc-`` skill without one is somebody else's and is left alone."
 msgstr ""
+"再次安装会更新已有的内容，并 **删除 PartCAD 已不再提供的技能** ：遗留下来的已废弃技能描述的是一个早已变化的 CLI，这比"
+"完全没有技能更糟，因为智能体还是会照着它做。只有 PartCAD 自己的技能会被删除——Cursor 的副本带有 ``metadata."
+"partcad`` 标记，说明是哪个发布版本写出了它们，而没有该标记的 ``pc-`` 技能属于别人，会被原样保留。"
 
 #: ../../source/cli.rst:334
 msgid "``pc install``"
@@ -637,6 +777,11 @@ msgid ""
 "the current one, and name it as ``-P <package>...`` to prepare the "
 "objects of the packages below it too (see :ref:`recursive-names`)."
 msgstr ""
+"下载构建当前包所需的一切内容，相当于 PartCAD 版的 ``npm install`` 。它会获取所有导入的包，然后通过计算缓存键来"
+"准备每一个草图、零件和装配体：这会下载 ``fileFrom`` 背后的文件，并解析每一个别名、enrich、复合体和装配体链接，从而加"
+"载这些对象真正依赖的包。每一项 :ref:`software` 也会通过获取其文件来准备——它没有缓存键，因为它是一个文件，而不是由文件"
+"构建出来的东西。不构建任何东西。使用 ``-P`` 可以安装当前包以外的包，写成 ``-P <package>...`` 则会连同其下层"
+"包中的对象一起准备（参见 :ref:`recursive-names` ）。"
 
 #: ../../source/cli.rst:344
 msgid "``pc update``"
@@ -648,6 +793,7 @@ msgid ""
 " the packages a package imports; to upgrade the PartCAD installation "
 "itself, use ``pc upgrade``."
 msgstr ""
+"强制把所有导入的包更新到它们的最新版本。这更新的是一个包所导入的那些包；要升级 PartCAD 安装本身，请使用 ``pc upgrade`` 。"
 
 #: ../../source/cli.rst:348
 msgid "``pc lint``"
@@ -666,6 +812,11 @@ msgid ""
 "forbidden), or ``auto``, the default, which reads the declaration out of "
 "the package that names the file."
 msgstr ""
+"对包内的文件运行检查。把包写成 ``-P <package>...`` 可以同时检查其下层的包（参见 :ref:`recursive-n"
+"ames` ），使用 ``-f`` 则只运行名称以给定前缀开头的检查。 ``--file PATH`` （可重复）改为检查指定的文件，并"
+"且在当前进程中进行，而不经由守护进程；加上 ``--json`` 可获得机器可读的检查结果，加上 ``--stdin`` 可检查从标准输"
+"入提供的未保存内容。 ``--schema`` 指明用 ``--file`` 给出的 ASSY 文件按哪个模式检查—— ``assemb"
+"ly`` 、 ``scene`` （与前者相同，但禁止 ``how:`` ），或者默认值 ``auto`` ，它会从引用该文件的包中读取其声明。"
 
 #: ../../source/cli.rst:359
 msgid "Object commands"
@@ -676,14 +827,14 @@ msgid "``pc list``"
 msgstr "``pc list``"
 
 #: ../../source/cli.rst:362
-#, fuzzy
 msgid ""
 "List components. Subcommands select what to list: ``all``, ``parts``, "
 "``sketches``, ``assemblies``, ``scenes``, ``interfaces``, ``mates``, "
 "``providers``, ``software``, and ``packages``."
 msgstr ""
-"列出组件。子命令用于选择要列出的内容： ``all`` 、 ``parts`` 、 ``sketches`` 、 ``assemblies`` 、"
-" ``interfaces`` 、 ``mates`` 和 ``packages`` 。"
+"列出组件。子命令用于选择要列出的内容： ``all`` 、 ``parts`` 、 ``sketches`` 、 ``assemblie"
+"s`` 、 ``scenes`` 、 ``interfaces`` 、 ``mates`` 、 ``providers`` 、 ``so"
+"ftware`` 和 ``packages`` 。"
 
 #: ../../source/cli.rst:365
 msgid ""
@@ -691,17 +842,20 @@ msgid ""
 "default. Name it as ``<package>...`` to list the packages below it too — "
 "``pc list parts //pub/examples...`` (see :ref:`recursive-names`)."
 msgstr ""
+"每条子命令都以要列出的包作为参数，默认是当前包。把它写成 ``<package>...`` 可以同时列出其下层的包—— ``pc lis"
+"t parts //pub/examples...`` （参见 :ref:`recursive-names` ）。"
 
 #: ../../source/cli.rst:368
 msgid "``pc add``"
 msgstr "``pc add``"
 
 #: ../../source/cli.rst:369
-#, fuzzy
 msgid ""
 "Add an object to a package. Subcommands: ``dep`` (a dependency), "
 "``sketch``, ``part``, ``assembly``, ``scene``, and ``software``."
-msgstr "向包中添加一个对象。子命令： ``dep`` （依赖项）、 ``sketch`` 、 ``part`` 和 ``assembly`` 。"
+msgstr ""
+"向包中添加一个对象。子命令： ``dep`` （依赖项）、 ``sketch`` 、 ``part`` 、 ``assembly`` 、"
+" ``scene`` 和 ``software`` 。"
 
 #: ../../source/cli.rst:372
 msgid ""
@@ -715,6 +869,10 @@ msgid ""
 "because a declaration written without the hash is the unpinned one this "
 "exists to avoid."
 msgstr ""
+"每条对象子命令都接受包中已有的一个文件， **或者一个 http(s) URL** 。给出 URL 时，该文件会被获取一次，以便在写入声"
+"明时带上返回内容的 ``fileHash`` ——从 URL 添加的对象自诞生起就是被钉住的，因此也是可复现的（参见 :ref:`fil"
+"e-hash` ）。获取到的副本不会保留：包有意不携带该文件，而是由 ``pc install`` 在首次需要时获取。获取失败则什么也不"
+"会添加，因为不带哈希写出的声明正是这套机制要避免的那种未钉住的声明。"
 
 #: ../../source/cli.rst:379
 msgid "``pc import``"
@@ -734,6 +892,12 @@ msgid ""
 "assembly of the ``step`` type or a scene of that reader's type instead "
 "(see :ref:`assembly_step` and :ref:`scenes`)."
 msgstr ""
+"把一个已有的对象导入到包中。子命令： ``part`` （导入一个已有零件，并可选地转换其格式）、 ``assembly`` （从文件导"
+"入一个装配体，同时创建其零件和一个 Assembly YAML 文件），以及 ``scene`` （导入一个布置文件——Gazebo 世"
+"界、MJCF 模型——同时创建其零件和一个 Assembly YAML 场景）。当文件扩展名没有说明格式、或者说得不对时，用 ``pc "
+"import scene -t`` 指明格式；由 *包* 提供读取能力的格式也是这样指定的： ``sim-gazebo:world`` "
+"、 ``sim-mujoco:mjcf`` 。 ``pc import`` 是一次性的转换；若想持续读取源文件本身，请改为把它声明为 `"
+"`step`` 类型的装配体，或声明为相应读取器类型的场景（参见 :ref:`assembly_step` 和 :ref:`scenes` ）。"
 
 #: ../../source/cli.rst:390
 msgid "``pc test``"
@@ -754,6 +918,13 @@ msgid ""
 ":ref:`pc cam <cam>`), and whether the engineering analyses a part asks "
 "for come back clean (``fea`` and ``cfd``; see :ref:`pc cae <cae>`)."
 msgstr ""
+"对零件、装配体或场景运行测试。把包写成 ``-P <package>...`` 可以同时测试其下层的包，或者把对象写成 ``...:<n"
+"ame>`` 以测试从这里往下所有同名的对象（参见 :ref:`recursive-names` ）。使用 ``-f`` 按名称前缀过滤"
+"，使用 ``-s`` / ``-i`` / ``-a`` / ``-S`` 分别表示草图、接口、装配体或场景。这些测试涵盖：对象能否构建"
+"（ ``cad`` ）、能否被制造或采购（ ``manufacturability`` 及其下的各种工艺方法）、装配体的连接说明能否被执"
+"行（ ``connect`` ；参见 :doc:`assy` 中的“Testing the instructions”）、机器切削它所用"
+"的加工路径能否生成（ ``cam`` ；参见 :ref:`pc cam <cam>` ），以及零件所要求的工程分析是否都通过（ ``fe"
+"a`` 和 ``cfd`` ；参见 :ref:`pc cae <cae>` ）。"
 
 #: ../../source/cli.rst:401
 msgid ""
@@ -764,6 +935,10 @@ msgid ""
 "manufacturability`` selects that check and its three method-specific "
 "siblings, and ``-f cam`` selects the route check alone."
 msgstr ""
+"在 :ref:`pc cam <cam>` 出现之前， ``manufacturability`` 这项检查一直叫 ``cam`` ，于"
+"是一个词在回答两个问题——“这东西究竟能不能被制造出来”和“这是制造它的程序”。现在它们是两项不同的检查，而 ``-f`` 是按名称 *"
+"前缀* 过滤的： ``-f manufacturability`` 会选中该检查及其三个针对具体工艺方法的同族检查，而 ``-f cam"
+"`` 只会选中加工路径这一项检查。"
 
 #: ../../source/cli.rst:406
 msgid ""
@@ -783,6 +958,12 @@ msgid ""
 " its answer is read straight out of the geometry the object has already "
 "produced, so it is asked of every part."
 msgstr ""
+"其中三项问的是另一回事：不是对象是否构建成功，而是构建出来的东西是否就是别人想要的。 ``shell`` 会让返回结果是 *曲面* 而不"
+"是实体的零件失败——一组面，却没有说明哪一侧是材料，它渲染和导出起来都和本该做出的零件一样，但针对它的每一次布尔运算得到的结果里都没有实"
+"体，于是干涉检查、CAM、FEA 以及由它算出的任何质量都是错的。 ``degenerate`` 会让在某个方向上已经没有尺寸的零件失败"
+"：比如一块 2 x 2 的砖，因为某个子文件没能取到而被网格化成了一个扁平的圆盘。 ``solidity`` 会让面朝向向内的零件失败，"
+"这种零件尺寸量出来是对的，报告的体积却是 *负数* 。这三项针对的都是在图片里看起来完全正确的对象，正因如此才必须主动去问，而不能指望被"
+"发现；而且它们都不需要求解器。 ``shell`` 更是什么都不需要：它的答案直接从对象已经产出的几何中读出，因此对每一个零件都会询问。"
 
 #: ../../source/cli.rst:417
 msgid ""
@@ -794,6 +975,9 @@ msgid ""
 "exempt on what it *is*: a sketch is not measured for having size in every"
 " direction, and an assembly is checked through its parts."
 msgstr ""
+"这三项检查都不能在对象上关闭。一个是曲面的零件、一个在某个方向上塌陷的零件，或者一个里外翻转的零件，都是下游无法用它进行任何计算的零件—"
+"—无论它本来想做成什么——而一项对象可以把自己排除在外的检查，最终只会去报告那些本来就不需要检查的对象。某一类对象豁免，是基于它 *是什"
+"么* ：草图不会被要求在每个方向上都有尺寸，而装配体则通过它的零件来检查。"
 
 #: ../../source/cli.rst:423
 msgid ""
@@ -804,6 +988,9 @@ msgid ""
 "assembled, and everything it is procured from -- its parts, and the sub-"
 "assemblies that are ordered assembled -- has to be obtainable on its own."
 msgstr ""
+"可制造性测试所要求的，恰好就是 ``pc supply`` 会去订购的东西。按整件出售的装配体（参见 :ref:`procurement"
+"` ）只要有供应商在售就算通过，并且不会被拆开：它内部的零件是卖方的问题。其他每一个装配体都必须声明它是如何装配起来的，而它所采购的一切"
+"——它的零件，以及按整件订购的子装配体——都必须能够单独获得。"
 
 #: ../../source/cli.rst:429
 msgid ""
@@ -816,11 +1003,14 @@ msgid ""
 "obtainable and be the one that was meant. A board nobody can flash is not"
 " a board anybody can make."
 msgstr ""
+"它还要求待制造的东西是 *可复现的* ：从包所获取而非携带的文件中读取的对象，必须用 ``fileHash`` 把它钉住，否则就没有任何"
+"东西说明它是由哪些字节做出来的，下一次运行可能悄无声息地做出别的东西（参见 :ref:`reproducibility` ）。对象所声明"
+"的 :ref:`software` 也有同样的要求——每一处引用都必须能够解析，解析到的文件必须能够获得，并且必须就是本来想要的那一个。"
+"没有人能烧录的电路板，也就不是任何人能制造的电路板。"
 
 #: ../../source/cli.rst:435
-#, fuzzy
 msgid "``pc sim``"
-msgstr "``pc system``"
+msgstr ""
 
 #: ../../source/cli.rst:436
 msgid ""
@@ -832,6 +1022,10 @@ msgid ""
 "and ``--json`` to print the whole of what each simulation plugin "
 "reported. A validation that does not hold exits non-zero."
 msgstr ""
+"运行零件或装配体在其 ``simulate:`` 小节中声明的仿真，并检查每项仿真所声明的 ``validation:`` 条件。当对象"
+"是装配体时使用 ``-a`` ；使用 ``-P <package>...`` 或 ``...:<name>`` 可以把下层各包所声明的仿"
+"真也一并运行（参见 :ref:`recursive-names` ）；使用 ``-f`` 只运行指定名称的那一项仿真；使用 ``--js"
+"on`` 打印每个仿真插件所报告的全部内容。校验未通过时会以非零状态退出。"
 
 #: ../../source/cli.rst:443
 msgid ""
@@ -843,6 +1037,10 @@ msgid ""
 "hands back. Nothing needs installing to run one -- the plugin runs in a "
 "PartCAD sandbox that installs whatever it needs."
 msgstr ""
+"``pc test`` 问的是零件能不能被 *制造* 出来，而这条命令问的是它能不能 *正常工作* ：它会按声明所述的 ``offset"
+":`` 把对象放进声明所指定的场景中，让该场景经由声明所指定的仿真插件运行，然后在插件返回的 ``before`` 和 ``after`"
+"` 上求 ``validation:`` 表达式的值。运行一次仿真不需要安装任何东西——插件在 PartCAD 沙箱中运行，沙箱会自行安"
+"装它所需要的一切。"
 
 #: ../../source/cli.rst:449
 msgid ""
@@ -856,6 +1054,12 @@ msgid ""
 "on its own is a few lines. See :doc:`simulation` and "
 "``examples/feature_simulate``."
 msgstr ""
+"PartCAD 自身不实现任何仿真器：由包导入一个仿真器并在 ``simulation:`` 中指定它（ `partcad-sim-mu"
+"joco <https://github.com/partcad/partcad-sim-mujoco>`_ 是 MuJoCo 的那一个"
+"， `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo"
+">`_ 是 Gazebo 的那一个；每一个还会声明相应引擎自有场景格式的读取器、写入器和 ``pc open`` 条目）。而 *场景* "
+"确实有一个内置的默认值——一个只装着该对象的空世界——因此为一个独立零件做仿真只需要寥寥几行。参见 :doc:`simulation` "
+"和 ``examples/feature_simulate`` 。"
 
 #: ../../source/cli.rst:456
 msgid "``pc inspect``"
@@ -882,6 +1086,8 @@ msgid ""
 " package with no object at all to report each package of a subtree (see "
 ":ref:`recursive-names`)."
 msgstr ""
+"显示零件、装配体、场景或软件的详细信息，包括它的参数。把对象写成 ``...:<name>`` 可以报告从这里往下所有同名的对象，或者把"
+"包写成 ``<package>...`` 而完全不给出对象，以报告整个子树中的每一个包（参见 :ref:`recursive-names` ）。"
 
 #: ../../source/cli.rst:465
 msgid ""
@@ -893,6 +1099,9 @@ msgid ""
 " was written, with the error, which is why no mass and no friction came "
 "from it. See :ref:`materials`."
 msgstr ""
+"凡是对象说明了自己由什么材料制成的地方，它所指定的材料都会被解析并以 ``Material`` 的形式报告——正式名称与全称、两种表示方"
+"式的密度、摩擦系数，以及材料目录所声明的标签——而不是旁边的配置本就已经显示出来的那个裸引用。无法解析的引用会按原样报告，并附上错误信息"
+"，这也解释了为什么由它得不到质量和摩擦数据。参见 :ref:`materials` 。"
 
 #: ../../source/cli.rst:471
 msgid ""
@@ -906,6 +1115,11 @@ msgid ""
 " a negative volume means the faces are oriented inward and is reported as"
 " it stands."
 msgstr ""
+"对于任何带有几何的对象，它还会报告 PartCAD 在构建时 **测量** 到的结果： ``BoundingBox`` 以 ``min`"
+"` 、 ``max`` 和 ``size`` 给出，单位为毫米；而对任何含有实体的对象，还会给出以立方毫米为单位的 ``Volume``"
+" ，并由 ``Solids`` 说明这是多少个实体的体积。这两者都无法从声明中读出：零件可能是一个脚本、一个文件，或者另外两个零件的布尔"
+"运算结果，而要知道它有多大，唯一的办法就是把它构建出来。草图、壳体或线框有包围盒而没有体积；体积为负意味着面的朝向是向内的，这一点会按实"
+"际情况如实报告。"
 
 #: ../../source/cli.rst:478
 msgid ""
@@ -919,6 +1133,11 @@ msgid ""
 "the file states them, so what reads them need not know which format "
 "answered."
 msgstr ""
+"对于从 **文件** 中读取的对象，它还会报告该文件本身所声明的内容——STEP 零件或装配体（以及会产出 STEP 的 ``kicad"
+"`` 零件）会报告其文件头、产品、图层和用户自定义属性；DXF 草图会报告其图层、单位，以及带有扩展数据的图元。后者正是钣金折弯声明其 "
+"``angle`` 、 ``radius`` 和 ``direction`` 的地方；参见 :ref:`sketch-annotatio"
+"ns` 和 :ref:`sheet-metal` 。两种格式报告这些键值对的方式是一致的：键一律小写，值按文件中声明的原样给出，因此读取"
+"它们的一方无需知道是哪种格式作出的回答。"
 
 #: ../../source/cli.rst:485
 msgid ""
@@ -927,18 +1146,19 @@ msgid ""
 "in the file both produce a sketch with nothing in it, and this is what "
 "tells them apart."
 msgstr ""
+"报告全部图层而不是只报告草图实际读取的图层，是有意为之：一个什么都没匹配上的图层过滤器，和一个根本不在文件中的图层，产生的都是一个空空如"
+"也的草图，而这份报告正是用来区分这两种情况的。"
 
 #: ../../source/cli.rst:489
-#, fuzzy
 msgid "``pc bom``"
-msgstr "``pc info``"
+msgstr ""
 
 #: ../../source/cli.rst:490
 msgid ""
 "Print the bill of materials of a part, an assembly or a scene: what has "
 "to be procured to have it, with how many of each are needed and, where "
 "the object says so, the vendor and the SKU to order it by."
-msgstr ""
+msgstr "打印零件、装配体或场景的物料清单：要拥有它必须采购些什么、每样各需要多少，以及在对象有所说明时，按什么供应商和 SKU 下单。"
 
 #: ../../source/cli.rst:493
 msgid ""
@@ -949,6 +1169,9 @@ msgid ""
 "is bought, and listed with ``kind: stock``; and nothing at all when it is"
 " made from nothing it names (printed, formed)."
 msgstr ""
+"一个零件以什么形式被采购，取决于它自身：当它声明了 ``vendor`` 和 ``sku`` 时，或者当它既没说明怎么买也没说明怎么做时"
+"，采购的就是零件本身；当它带有 ``manufacturing:`` 说明时，采购的是它所用的原材料——并且会顺着这些说明一路往下，直到"
+"找到真正被购买的东西为止，列出时标以 ``kind: stock`` ；而当它由任何未被指名的东西制成（打印、成型）时，则什么也不采购。"
 
 #: ../../source/cli.rst:497
 msgid ""
@@ -956,6 +1179,8 @@ msgid ""
 "item, ordered whole, and its own contents are left out. Any other sub-"
 "assembly is expanded into its own bill of materials, by these same rules."
 msgstr ""
+"声明了 ``vendor`` 和 ``sku`` 的子装配体算作一个条目，按整件订购，它自己的内容不再列出。其他任何子装配体都会按同样这"
+"些规则展开成它自己的物料清单。"
 
 #: ../../source/cli.rst:501
 msgid ""
@@ -968,6 +1193,10 @@ msgid ""
 "purchasable`` is still accepted and changes nothing: a sub-assembly that "
 "declares a vendor and an SKU is always ordered whole now."
 msgstr ""
+"``pc supply`` 正是按这条规则往购物车里添东西的，因此两者在每一项数量上都一致。供应商今天有没有货，是供应报价要回答的问题；"
+"物料清单依据的是模型所声明的内容，并且离线即可给出答案。使用 ``-P`` 指定对象所属的包，使用 ``-p <name>=<value"
+">`` 设置参数，使用 ``-j`` / ``--json`` 在标准输出上生成 JSON 而不是表格。 ``-s`` / ``--st"
+"op-at-purchasable`` 仍然被接受，但不再产生任何影响：现在只要子装配体声明了供应商和 SKU，就一定按整件订购。"
 
 #: ../../source/cli.rst:508
 msgid ""
@@ -977,11 +1206,12 @@ msgid ""
 " a firmware image — unlike a bracket — is a different file once its "
 "package publishes again."
 msgstr ""
+"零件和装配体所附带的 :ref:`software` 会列在它自己的标题之下，与硬件分开计数。每一行软件都会写明它来自哪个包，以及那个包"
+"的修订版本，因为固件镜像不像支架——它所属的包一旦再次发布，它就是另一个文件了。"
 
 #: ../../source/cli.rst:515
-#, fuzzy
 msgid "``pc cae``"
-msgstr "``pc add``"
+msgstr ""
 
 #: ../../source/cli.rst:516
 msgid ""
@@ -989,6 +1219,7 @@ msgid ""
 "Subcommands: ``fea`` (finite element analysis) and ``cfd`` (computational"
 " fluid dynamics). Both take one part::"
 msgstr ""
+"对零件运行一次工程分析并报告其结果。子命令： ``fea`` （有限元分析）和 ``cfd`` （计算流体力学）。两者都接受一个零件： ::"
 
 #: ../../source/cli.rst:522
 msgid ""
@@ -999,6 +1230,9 @@ msgid ""
 "interface type to one value for all of its instances, or a nested map "
 "naming the instance::"
 msgstr ""
+"零件在一个以该分析命名的小节中说明它被什么固定住、又承受什么。 ``fix:`` 指明哪些部位保持不动——可以是一个接口类型的列表，也可"
+"以是从接口类型到被固定的那些实例的映射。 ``load:`` 指明哪些部位受力——可以是从接口类型到适用于其全部实例的单个数值的映射，也"
+"可以是指明具体实例的嵌套映射： ::"
 
 #: ../../source/cli.rst:540
 msgid ""
@@ -1012,6 +1246,11 @@ msgid ""
 "``cfd:`` takes the same two keys with the same meaning: what is held "
 "still, and what force the flow puts on it."
 msgstr ""
+"``load`` 的值是一个 **力** 。它可以写成数字加单位——力的单位有 ``n`` 、 ``nm`` 、 ``mn`` 、 ``"
+"kn`` 或 ``newton`` ，质量的单位有 ``mg`` 、 ``g`` 、 ``kg`` 、 ``ton`` 、 ``tonn"
+"e`` 、 ``lb`` 或 ``pound`` ——匹配时不区分大小写，单位前可以有空格也可以没有，可以带复数 ``s`` 也可以不带"
+"。只写一个数字表示 **以千克为单位的质量** ，这也正是“这块搁板承载 5”的含义。质量按 9.8 N/kg 换算成力，因此存储下来并"
+"交给求解器的始终是牛顿。 ``cfd:`` 接受含义相同的这两个键：什么保持不动，以及流体对它施加多大的力。"
 
 #: ../../source/cli.rst:547
 msgid ""
@@ -1023,6 +1262,10 @@ msgid ""
 " or as the array itself with ``--json``. ``pc cae`` exits non-zero when "
 "there is at least one, so it can be used as a gate."
 msgstr ""
+"分析所产生的模型会写入 ``<part>.<analysis>.<extension>`` 并按原样保存。那是什么格式——3D 还是 2"
+"D——由实现方决定，PartCAD 不会对它进行转换。 **检查结论** 是答案的另一半：一个 JSON 数组，内容是该分析对这个零件的"
+"评述，默认以表格形式打印，加上 ``--json`` 则直接打印数组本身。只要至少有一条结论， ``pc cae`` 就会以非零状态退出"
+"，因此它可以用作一道关卡。"
 
 #: ../../source/cli.rst:553
 msgid ""
@@ -1036,6 +1279,12 @@ msgid ""
 "declared in its own (see :ref:`output-files`), and installed as a "
 "dependency."
 msgstr ""
+"由谁来运行分析由 ``<package>:<file type>`` 指定。它默认取 :doc:`用户配置 <configuration"
+">` 中的 ``caeFeaImplementation`` / ``caeCfdImplementation`` 选项—— ``//p"
+"ub/feature/cae/calculix:fea`` 和 ``//pub/feature/cae/calculix:cfd`` —"
+"—而 ``-i`` / ``--implementation`` 可以为单次运行覆盖它。PartCAD 不提供任何求解器：实现方就是一个"
+"和其他包一样的包，在 ``cae:`` 小节中声明，方式与导出或渲染的实现在各自小节中的声明完全相同（参见 :ref:`output-f"
+"iles` ），并作为依赖安装。"
 
 #: ../../source/cli.rst:560
 msgid ""
@@ -1048,6 +1297,9 @@ msgid ""
 "user who ran one of them and then the other must not be told two "
 "different things about the same machine."
 msgstr ""
+"对于给不出答案的分析， ``pc cae`` 和 ``pc test`` 的报告方式完全一致：询问的是哪个实现、它说了什么、以及它在哪个"
+"平台上无法工作。补救办法各不相同——安装求解器、换一台机器、修正零件——而只有实现方自己给出的那句话才能说明该用哪一种，因此这句话会被原"
+"样转述，而不会被归类。命令和检查说法完全一致是有意为之：先后运行过这两者的用户，不应该就同一台机器得到两种不同的说法。"
 
 #: ../../source/cli.rst:566
 msgid ""
@@ -1069,6 +1321,13 @@ msgid ""
 "key is built from, so a remembered one would go on failing a part that "
 "now analyses perfectly well."
 msgstr ""
+"``pc test`` 运行的是同样的分析。它的 ``fea`` 和 ``cfd`` 测试只适用于声明了相应小节的零件——除此之外一概不"
+"适用，因此一个装满螺栓的包不会为它们付出任何代价。 **只有一种情况算通过：分析运行了，并且没有报告任何结论。** 格式有误的小节算失败"
+"；无法解析的插件算失败（该包不是依赖、没能加载，或者没有声明这种文件类型——无论在哪里打开这个包，配置都是错的）；能够解析却无法运行的插"
+"件同样算失败，无论缺的是求解器、网格生成器，还是一个构建不起来的沙箱。最后这一种有意不算跳过：声明了 ``fea:`` 的零件已经提出了"
+"一个问题，而什么也没回答的插件就是失败了。因此，在共享的包中声明 ``fea:`` 确实会让每一个没有安装该实现所需内容的人 ``pc "
+"test`` 失败——这正是声明它的含义，而不愿对读者提出这种要求的包就不应该声明这个小节。它也是 ``pc test`` 唯一不会记住"
+"的判定结果——安装求解器并不会改变任何参与缓存键计算的内容，于是一个被记住的失败结果，会让一个如今完全能分析通过的零件继续失败下去。"
 
 #: ../../source/cli.rst:579
 msgid ""
@@ -1086,11 +1345,17 @@ msgid ""
 "fix. A Docker daemon running Windows containers is not one of these "
 "runtimes: every image PartCAD uses is a Linux image."
 msgstr ""
+"**唯一的例外是没有容器运行时的机器。** 指定了 ``container:`` 或 ``dockerImage`` 的实现（参见 :d"
+"oc:`configuration` ）等于在说：pip 装不上的那些东西是通过容器送达的；而在没有容器运行时可供运行的地方，根本就没有"
+"提出过任何问题，于是该检查会跳过，并给出一条带有完整报告的 ``WARNING`` 。它仍然会声明那些让它能在 ``conda`` 或 "
+"``venv`` 沙箱中运行的依赖要求，因此在已原生安装了非 Python 组件的主机上，它会在那里运行，而在那里失败就是失败。完全没有"
+"指定镜像的实现得不到任何例外；而一旦机器上 *确实* 有容器运行时，指定了镜像的实现也就失去了这项例外——拉不下来的镜像或缺少求解器的镜"
+"像，是有人可以修好的问题。运行 Windows 容器的 Docker 守护进程不属于这里所说的运行时：PartCAD 使用的每一个镜像都"
+"是 Linux 镜像。"
 
 #: ../../source/cli.rst:591
-#, fuzzy
 msgid "``pc cam``"
-msgstr "``pc add``"
+msgstr ""
 
 #: ../../source/cli.rst:592
 msgid ""
@@ -1100,6 +1365,8 @@ msgid ""
 "route, which is what a CNC router does to sheet goods and what a mill "
 "does to a plate::"
 msgstr ""
+"为声明了加工路径的对象生成路径文件：也就是机器切削它们所用的程序。它取对象自身的轮廓，按刀具半径做偏置，然后在一系列深度上逐层切削——这"
+"是一条 2.5D 的加工路径，正是 CNC 雕刻机加工板材、铣床加工平板时所做的事： ::"
 
 #: ../../source/cli.rst:603
 msgid ""
@@ -1116,6 +1383,11 @@ msgid ""
 " cut, and a scene is an arrangement of things that were each cut on their"
 " own."
 msgstr ""
+"与 ``pc cae`` 不同，这是一条 **包级别** 的命令。分析是针对单个零件提出的；而加工路径构成的是一个包的切削清单，因此在不"
+"指名任何对象时， ``pc cam`` 会为包中每一个说明了自己如何制造的草图和零件各生成一条路径，并静默跳过所有没有说明的对象。大多数"
+"对象根本不会被切削，一个包中四十个零件里只有三个要切削才是常态，而不是三十七条警告。但指名一个什么也没声明的对象 *就是* 错误：指名它"
+"就是在询问它，而什么也不返回，看起来会和一条写到了用户没注意到的地方的路径一模一样。装配体和场景完全不生成路径——装配体是拼装起来的而不"
+"是切削出来的，而场景是一组各自单独切削出来的东西的布置。"
 
 #: ../../source/cli.rst:612
 msgid ""
@@ -1123,6 +1395,7 @@ msgid ""
 " section that already says how it is made -- beside the machine it "
 "belongs to::"
 msgstr ""
+"对象在那个本就说明了它如何制造的 ``manufacturing:`` 小节中，说明从它身上切出什么、以及怎么切——就写在它所属的机器旁边： ::"
 
 #: ../../source/cli.rst:633
 msgid ""
@@ -1135,12 +1408,17 @@ msgid ""
 "and ``panel.cnc.nc``. A part that really is machined in stages is a chain"
 " of parts, each naming the previous one as its ``source``."
 msgstr ""
+"直接写在 ``manufacturing:`` 之下的键，由该零件所指定的每一台机器共用；写在某台机器自己的子小节中的键则属于那台机器，"
+"并且优先级更高。一个零件可以指定好几台机器—— ``cnc:`` 、 ``laser:`` 、 ``drill:`` ——它们是 **互"
+"为替代的方案** ，是它可以被制造出来的几种方式，而不是它依次要经过的几道工序，因此用 ``--machine`` 选择为哪一台生成程序"
+"，而生成的程序会并排落在一起，比如 ``panel.laser.nc`` 和 ``panel.cnc.nc`` 。真正要分多道工序加工的"
+"零件，应当写成一串零件，每一个都把前一个指定为自己的 ``source`` 。"
 
 #: ../../source/cli.rst:642
 msgid ""
 "A *sketch* has one of these sections too, with no ``method:`` in it: a "
 "drawing is not made from anything, it is a path a machine follows."
-msgstr ""
+msgstr "*草图* 也有这样一个小节，只是其中没有 ``method:`` ：图样不是由任何东西制成的，它就是一条机器要走的路径。"
 
 #: ../../source/cli.rst:645
 msgid ""
@@ -1155,6 +1433,10 @@ msgid ""
 "refused rather than cut through. ``engrave`` follows the outline itself, "
 "offset by nothing, which is what a V-bit or a drag knife wants."
 msgstr ""
+"``operation:`` 说明刀具沿轮廓的哪一侧走。 ``profile`` 沿材料的外侧以及每个孔的内侧走刀，因此对象能以其名义尺"
+"寸保留下来——并且会先切孔，因为轮廓切削的最后一刀会把零件与原材料分离，而在那之后再去切孔，切的就是一块已经不再被夹持的东西了。 ``p"
+"ocket`` 清除轮廓以内的材料，一圈一圈地来，从最内圈开始，这样壁面是最后被切的，刀具只有一侧参与切削，而不是整个埋在槽里；型腔中间"
+"的凸岛会被拒绝，而不是被直接切掉。 ``engrave`` 则沿轮廓本身走刀，不做任何偏置，这正是 V 型刀或拖刀所需要的。"
 
 #: ../../source/cli.rst:653
 msgid ""
@@ -1169,6 +1451,12 @@ msgid ""
 "18 mm thick is cut 18 mm deep whether the program says ``G21`` or "
 "``G20``."
 msgstr ""
+"长度可以写成数字加单位—— ``mm`` 、 ``cm`` 、 ``m`` 、 ``um`` 、 ``in`` 、 ``inch`` 、"
+" ``\"`` 、 ``ft`` 、 ``mil`` 或 ``thou`` ——匹配时不区分大小写，单位前可以有空格也可以没有，可以带复数"
+"也可以不带。只写一个数字表示 **毫米** 。进给量可以只写长度、只写时间，或者两者都写： ``2400`` 、 ``2400 mm/m"
+"in`` 、 ``40 mm/s`` 、 ``60 in/min`` ；只写一个数字表示毫米每分钟。主轴转速以 rpm 为单位，写不写这"
+"个词都可以。 *文件* 本身用什么单位书写是另一个问题，由该文件类型的 ``units:`` 参数决定：一个 18 mm 厚的零件，无论"
+"程序里写的是 ``G21`` 还是 ``G20`` ，切深都是 18 mm。"
 
 #: ../../source/cli.rst:661
 msgid ""
@@ -1176,6 +1464,7 @@ msgid ""
 " absolute height, so it means the same thing wherever the object sits in "
 "Z."
 msgstr ""
+"``safe_z:`` 是 **相对于对象顶面的安全高度** ，而不是一个绝对高度，因此无论对象在 Z 方向上处于什么位置，它的含义都相同。"
 
 #: ../../source/cli.rst:664
 msgid ""
@@ -1188,6 +1477,9 @@ msgid ""
 "from the part -- a route produced against a diameter nobody chose is "
 "wrong by exactly the amount nobody noticed."
 msgstr ""
+"``depth:`` 是唯一一个带条件默认值的键。没有说明的对象会被 **切穿** ，从其包围盒的顶面一直切到底面。草图没有可供切穿的厚"
+"度，因此没有说明切多深的草图会被拒绝。 ``diameter:`` 则完全没有默认值，而且绝不能给它加一个：其他每一个参数都有站得住脚的"
+"默认值，而刀具直径是唯一一个无法从零件推断出来的数字——按一个没人选过的直径生成的加工路径，其错误量恰恰就是没人注意到的那个量。"
 
 #: ../../source/cli.rst:671
 msgid ""
@@ -1200,6 +1492,10 @@ msgid ""
 "every layer -- a ``mm/min`` written by the package is understood as "
 "surely as one written on the object."
 msgstr ""
+"该小节的每一个键同时也是生成加工路径的 ``cam:`` 文件类型的参数，这使它成了同一个命名空间上的三层结构：最底下是 ``//bui"
+"ltin/cam`` ，然后是包自己的 ``cam:`` 小节，再然后是对象的 ``manufacturing:`` 。于是，一个要从同"
+"一张板材上切出二十个零件的包只需设置一次刀具，而唯一需要更小刀具的那个零件自己说明即可。上面所说的换算在每一层都会发生——包里写的 ``"
+"mm/min`` 和写在对象上的一样能被正确理解。"
 
 #: ../../source/cli.rst:677
 msgid ""
@@ -1212,6 +1508,10 @@ msgid ""
 " file, and an object whose section is wrong must not cost the other "
 "nineteen theirs."
 msgstr ""
+"加工路径会写入 ``<object>.<extension>`` ——比如 ``panel.nc`` ——放在包旁边，或者放在 ``-O"
+"`` 所指定的位置。 ``--json`` 会把生成的结果按其本来的数组形式打印出来：文件、写出它的实现，以及该实现对这条路径所统计的各"
+"项数据。只要被询问的对象中有任何一个没有生成出路径， ``pc cam`` 就会以非零状态退出，并且会把它们全部报告出来，而不是在第一个"
+"失败处停下：加工路径就是文件，而一个小节写错了的对象，不该让另外十九个对象失去它们的文件。"
 
 #: ../../source/cli.rst:683
 msgid ""
@@ -1227,6 +1527,12 @@ msgid ""
 "object's own ``manufacturing:`` section, or by ``-i`` for one run -- in "
 "that order of precedence, narrowest last."
 msgstr ""
+"由谁来生成它由 ``<package>:<file type>`` 指定。与分析不同，PartCAD **自带了一个** ——加工路径是"
+"在对象自身轮廓上做的算术，而不是别人那套有着自己发布周期的程序，这正是 ``export:`` 和 ``render:`` 早已通过的检"
+"验——因此 ``camImplementation`` 默认为 ``//builtin/cam:gcode`` ，什么都不用安装。需要自"
+"有方言的控制器，就是一个在自己的 ``cam:`` 小节中声明文件类型的包，方式与导出或渲染的实现在各自小节中的声明完全相同（参见 :r"
+"ef:`output-files` ），可以由该选项指定、由对象自己 ``manufacturing:`` 小节中的 ``impleme"
+"ntation:`` 指定，或者由 ``-i`` 为单次运行指定——优先级依次递增，最具体的排在最后。"
 
 #: ../../source/cli.rst:692
 msgid ""
@@ -1238,6 +1544,9 @@ msgid ""
 " or a version, so the same object and the same parameters produce the "
 "same bytes on any machine."
 msgstr ""
+"内置实现写出的是纯粹的 RS-274，其中每一条曲线都被线性化到与真实曲线相差不超过 ``tolerance:`` ：圆弧指令只有在它所"
+"在的平面能挺过后处理器时才还是圆弧，而一个公差值恰好说明了这种近似的代价有多大，换成圆弧加公差反而说得更少。文件中没有任何时间戳、主机名"
+"或版本号，因此同一个对象、同一组参数，在任何机器上都会产生完全相同的字节。"
 
 #: ../../source/cli.rst:698
 msgid ""
@@ -1254,6 +1563,11 @@ msgid ""
 "not hold against the object: nothing was ever asked there, so it skips, "
 "loudly, and does not remember the skip."
 msgstr ""
+"``pc test`` 把这件事作为它的 ``cam`` 检查来运行，而且用的就是同一份代码：该检查会生成加工路径，只有真的生成出来了，"
+"对象才算通过。它只适用于说明了自己如何制造的对象，除此之外一概不适用，因此一个装满螺栓的包不会为它付出任何代价——与 ``fea`` 和"
+" ``cfd`` 检查相同的门槛，也是相同的代价模型。通过只有一种方式：路径被写了出来。格式有误的小节算失败，无法解析的实现算失败，能够"
+"解析却什么也没生成出来的实现同样算失败——刀具比要切的孔还大、轮廓被偏置吃掉了、沙箱构建不起来。唯一不会算到对象头上的，是机器根本无法准"
+"备沙箱这一种情况：那里从来没有提出过任何问题，因此它会跳过，而且会大声地跳过，并且不会记住这次跳过。"
 
 #: ../../source/cli.rst:707
 msgid ""
@@ -1265,6 +1579,9 @@ msgid ""
 "after the part moved on. So the check routes into a temporary directory "
 "and deletes it."
 msgstr ""
+"与各项分析不同，该检查 **不会** 保留它所生成的东西。分析之所以把模型写在包旁边，是因为那个模型正是有人要的答案；而检查生成的加工路"
+"径只是副产品，一份留在包旁边的副产品会与这条命令写出的那一份难以区分——可能被意外提交进版本库，也可能在零件早已变化之后仍被当作最新的来"
+"读。因此该检查把路径生成到一个临时目录中，随后删除它。"
 
 #: ../../source/cli.rst:713
 msgid ""
@@ -1276,6 +1593,9 @@ msgid ""
 "for it. Both are computer-aided manufacturing, which is why one word "
 "answered for both until this command existed."
 msgstr ""
+"**原先叫做 ``cam`` 的那项检查现在叫 ``manufacturability`` 。** 它问的是一个对象究竟 *能不能* 被"
+"制造出来或买到——几何形状是否适合它所声明的工艺方法、它所用的材料是否可复现、是否能找到供应商——这与后处理器能否为它生成程序是两个不同"
+"的问题。两者都属于计算机辅助制造，这也正是在这条命令出现之前，一个词同时回答了两件事的原因。"
 
 #: ../../source/cli.rst:719
 msgid ""
@@ -1290,6 +1610,10 @@ msgid ""
 "lead-in, no tab and no ramp -- the tool plunges at the start of each "
 "contour and the part is free at the end of the last pass."
 msgstr ""
+"**轮廓取的是切削底面处的那个截面** ，而这正是值得了解的限制所在。对于棱柱形的对象——面板、平板、垫片，以及任何从等厚原材料上切出来"
+"的东西——每一个深度上的轮廓都是同一个。而对于截面在切削过程中会变化的对象，并不存在唯一正确的答案，于是加工路径以底面为准，并明确说明这"
+"一点：给出一条警告，指出两端相差多少。因为由用户没有料到的轮廓生成出来的路径，正是那种一路到机床上都看起来像成功了的失败。此外也没有引入"
+"线、没有连接片、没有斜向下刀——刀具在每条轮廓的起点直接扎刀，而在最后一刀走完时零件就自由了。"
 
 #: ../../source/cli.rst:727
 msgid "``pc convert``"
@@ -1313,17 +1637,25 @@ msgid ""
 "with ``scene`` among its ``kinds`` -- so a package that teaches PartCAD "
 "an arrangement format converts to and from it too."
 msgstr ""
+"把零件、草图、装配体或场景转换成另一种格式，并更新它们在包中的类型。子命令： ``part`` 、 ``sketch`` 、 ``ass"
+"embly`` 和 ``scene`` 。装配体可以在 ``assy`` 与 ``urdf`` 之间转换：转为 URDF 时，它会写出 "
+"``.urdf`` 文件以及它所引用的网格；转为 ASSY 时，它会为每个 URDF 连杆写出一个 ``stl`` 零件，为每个关节写出"
+"一对接口，并写出一个用 ``connect:`` 放置这些零件的 ``.assy`` 。场景可以在 ``assy`` 与包依赖图能够作为"
+"场景读取的任何文件格式之间转换——今天有 ``sim-gazebo:world`` 和 ``sim-mujoco:mjcf`` 两种，各"
+"自来自相应引擎的插件包。转为这类格式时，它会写出该文件以及它所引用的网格；转为 ASSY 时，它会把该文件所放置的每一个形状都复制进包中"
+"作为包自己的零件，并写出一个放置它们的 ``.assy`` 。具体有哪些格式并不是一份固定的清单——凡是依赖图在 ``import:``"
+" 下声明、且 ``kinds`` 中含有 ``scene`` 的都算——因此，一个教会 PartCAD 认识某种布置格式的包，也就同时支"
+"持与该格式之间的互转。"
 
 #: ../../source/cli.rst:739
-#, fuzzy
 msgid "``pc filter``"
-msgstr "``pc test``"
+msgstr ""
 
 #: ../../source/cli.rst:740
 msgid ""
 "Declare a second assembly (or scene) made of some of the links of an "
 "existing one::"
-msgstr ""
+msgstr "声明第二个装配体（或场景），它由某个已有装配体的部分链接组成： ::"
 
 #: ../../source/cli.rst:744
 msgid ""
@@ -1336,6 +1668,11 @@ msgid ""
 "declares both under one name. An existing ``DST`` is overwritten, and "
 "``--dry-run`` says what would be written without writing it."
 msgstr ""
+"``FILTER`` 指定要保留哪些链接——可以是一个 JSON 或 YAML 文件，也可以把同样的内容直接写在命令行上——而 ``DS"
+"T`` 是新的对象：它是 ``SRC`` 的 ASSY 文件去掉过滤器所丢弃的全部内容之后的结果，写作 ``DST.assy`` 并声明"
+"在 ``SRC`` 旁边。如果 ``SRC`` 是装配体， ``DST`` 就是装配体；如果 ``SRC`` 是场景， ``DST`` "
+"就是场景； ``-a`` / ``-S`` 只在包用同一个名字同时声明了两者时才用来区分。已存在的 ``DST`` 会被覆盖，而 ``-"
+"-dry-run`` 只说明会写出什么而不真正写出。"
 
 #: ../../source/cli.rst:757
 msgid ""
@@ -1346,6 +1683,9 @@ msgid ""
 " a link it does not name is dropped, and a link named with children under"
 " it keeps those children only."
 msgstr ""
+"过滤器是什么，以及指定一个链接时带不带其子链接各是什么含义，在所有接受过滤器的地方都是一样的——参见 :ref:`assy-filter"
+"` ，那里也涵盖了下面两条命令的 ``--filter`` 以及 VS Code 查看器中的等价功能。简而言之：过滤器指定的链接会被保留"
+"，没有指定的链接会被丢弃，而指定时带上了子链接的链接则只保留那些子链接。"
 
 #: ../../source/cli.rst:762
 msgid ""
@@ -1356,6 +1696,9 @@ msgid ""
 "has no links of its own, and ``pc convert assembly -t assy`` is what "
 "turns one into a file that does."
 msgstr ""
+"被过滤的是 **文件** 而不是已构建的装配体，因此每一个保留下来的链接都会保留它的 ``connect:`` 、 ``how:`` 、"
+"参数和注释，得到的结果是一个别人可以真正构建出来的装配体。这需要有一个 Assembly YAML 文件作为出发点：以外来格式保存的装配"
+"体没有自己的链接，而 ``pc convert assembly -t assy`` 正是把它变成一个有链接的文件的办法。"
 
 #: ../../source/cli.rst:767
 msgid ""
@@ -1364,13 +1707,14 @@ msgid ""
 "at nothing is reported, naming the line, by this command and by ``pc "
 "lint`` afterwards."
 msgstr ""
+"丢掉一个本来被其他链接连接着的链接，是过滤唯一可能破坏的东西，而这一点是会被检查的：每一条指向空处的 ``connect:`` 都会被报"
+"告并指明所在行，本命令会报告，之后的 ``pc lint`` 也会报告。"
 
 #: ../../source/cli.rst:771
 msgid "``pc export``"
 msgstr "``pc export``"
 
 #: ../../source/cli.rst:772
-#, fuzzy
 msgid ""
 "Export a 3D view of parts, assemblies, or scenes. Use ``-a`` for an "
 "assembly and ``-S`` for a scene. Choose the format with ``-t``: ``step``,"
@@ -1381,9 +1725,11 @@ msgid ""
 ":`recursive-names`). ``urdf`` writes a ``.urdf`` file plus a directory of"
 " the mesh files it references."
 msgstr ""
-"导出零件、装配体或场景的 3D 视图。使用 ``-t`` 选择格式： ``step`` 、 ``brep`` 、 ``stl`` 、 "
-"``3mf`` 、 ``threejs`` 、 ``obj`` 、 ``gltf`` 或 ``iges`` 。使用 ``-O`` "
-"设置输出目录，使用 ``-r`` 递归导出。"
+"导出零件、装配体或场景的 3D 视图。装配体使用 ``-a`` ，场景使用 ``-S`` 。使用 ``-t`` 选择格式： ``step"
+"`` 、 ``brep`` 、 ``stl`` 、 ``3mf`` 、 ``threejs`` 、 ``obj`` 、 ``gltf``"
+" 、 ``iges`` 、 ``urdf`` ，或者某个包自行实现的任意文件类型（参见 :ref:`output-files` ）。使用"
+" ``-O`` 设置输出目录，使用 ``-P <package>...`` 或 ``...:<name>`` 可一并导出其下层的包（参见"
+" :ref:`recursive-names` ）。 ``urdf`` 会写出一个 ``.urdf`` 文件，外加一个存放它所引用的网格文件的目录。"
 
 #: ../../source/cli.rst:780
 msgid ""
@@ -1395,6 +1741,10 @@ msgid ""
 "type asks for the same thing permanently, per file type, and this "
 "overrides it for one run."
 msgstr ""
+"``--filter`` 导出一个装配体或场景的 *一部分* ：它所指定的那些链接，位置就是装配体给它们安排的位置，并且不会向包中写入任"
+"何内容（参见 :ref:`assy-filter` ）。它只适用于一个具名对象—— ``-a`` 或 ``-S`` 说明它是哪一类——因"
+"此对整个包以及 ``...`` 子树都会被拒绝。 ``export:`` 文件类型上的 ``filter:`` 是在按文件类型永久性地提"
+"出同样的要求，而这个选项会为单次运行覆盖它。"
 
 #: ../../source/cli.rst:786
 msgid ""
@@ -1413,6 +1763,14 @@ msgid ""
 "package's objects -- the same answer for every file type at once, where "
 "``-t <package>:<type>`` is the answer for one."
 msgstr ""
+"``-t`` 也接受完整路径，如 ``-t sim-gazebo:world`` ，它指明了实现所在的包。PartCAD 没有自带实现的"
+"格式正是这样被用到的，而引擎自有的场景格式就属于这一类：Gazebo 世界（SDFormat）由 `partcad-sim-gazebo"
+" <https://github.com/partcad/partcad-sim-gazebo>`_ 写出，MuJoCo 模型（MJCF"
+"）由 `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoc"
+"o>`_ 写出，与同样掌握该格式知识的读取器和仿真器放在一起，因此 ``-t sim-gazebo:world`` 才是能解析成功的写法"
+"，而单写 ``-t world`` 什么也解析不到。两者都会像 ``urdf`` 那样写出一个文件外加一个存放其所引用网格的目录。 ``"
+"-e`` 指定另一个包，使用它的 ``export:`` 选项和实现，这样就能把一个包的导出器应用到另一个包的对象上——它一次性为所有文"
+"件类型给出同一个答案，而 ``-t <package>:<type>`` 只为某一种文件类型给出答案。"
 
 #: ../../source/cli.rst:798
 msgid "``pc render``"
@@ -1428,12 +1786,17 @@ msgid ""
 "``-P <package>...`` and ``...:<name>`` render a whole subtree, the same "
 "way they do for ``pc export`` (see :ref:`recursive-names`)."
 msgstr ""
+"把零件、装配体或场景的 2D 投影渲染到一个平面上。使用 ``-t`` 选择格式： ``svg`` 、 ``png`` 、 ``jpeg"
+"`` 、 ``dxf`` 、 ``readme`` 、 ``pdf`` 、 ``html`` ，或者某个包自行实现的任意文件类型（参见 "
+":ref:`output-files` ）。 ``-e`` 的用法与它在 ``pc export`` 中相同，即从另一个包读取 ``re"
+"nder:`` 选项。 ``-P <package>...`` 和 ``...:<name>`` 可渲染整个子树，用法与它们在 ``pc"
+" export`` 中相同（参见 :ref:`recursive-names` ）。"
 
 #: ../../source/cli.rst:805
 msgid ""
 "``--filter`` renders a *part* of one assembly or scene, exactly as it "
 "does for ``pc export`` above:"
-msgstr ""
+msgstr "``--filter`` 渲染一个装配体或场景的 *一部分* ，用法与它在上面的 ``pc export`` 中完全相同："
 
 #: ../../source/cli.rst:812
 msgid ""
@@ -1444,6 +1807,9 @@ msgid ""
 " that places another package's assembly, because what is filtered is the "
 "assembly that was built rather than any file."
 msgstr ""
+"它写出的文件，就是一次不带过滤的渲染本会写出的那个文件，使用对象自己的名字，因此对同一个对象用两个过滤器会互相覆盖——请用 ``-O``"
+" 把它们分别送进各自的目录。与 ``pc filter`` 不同，这条命令完全不改动包，并且可以在一个放置了其他包装配体的链接内部进行选"
+"择，因为被过滤的是已经构建出来的装配体，而不是任何文件。"
 
 #: ../../source/cli.rst:817
 msgid ""
@@ -1455,6 +1821,9 @@ msgid ""
 "run, the way ``--view`` overrides a configured viewport. See :ref:`assy-"
 "filter`."
 msgstr ""
+"``render:`` 文件类型上的 ``filter:`` 是在 **按文件类型** 永久性地提出同样的要求，因此同一个对象可以把某个"
+"子装配体的图片与整体的工程图一起提交进版本库。配置文件类型的两个地方——包的 ``render:`` 小节和对象自己的小节——都会读取它"
+"，而 ``--filter`` 会为单次运行覆盖它，就像 ``--view`` 覆盖已配置的视口那样。参见 :ref:`assy-filter` 。"
 
 #: ../../source/cli.rst:823
 msgid ""
@@ -1466,6 +1835,10 @@ msgid ""
 "shows as rows. It says *which* ports rather than that any are drawn, so "
 "it goes with one of the three options below:"
 msgstr ""
+"``--port`` 只绘制指定名称的那一个端口，而不是全部端口；要绘制多个就重复给出该选项。端口的命名方式与日志中的一致——对象自身的"
+"端口用它自己的名字，而装配体内部的端口则用链接路径加端口名，例如 ``head/head_half_1`` 写作 ``head:head"
+"_half_1:TL-m3`` ——这也正是 VS Code 查看器以行的形式显示的那个路径。它说明的是绘制 *哪些* 端口，而不是要不"
+"要绘制端口，因此需要与下面三个选项之一一起使用："
 
 #: ../../source/cli.rst:833
 msgid ""
@@ -1479,6 +1852,10 @@ msgid ""
 " both. Every port drawn is also listed in the log, with the exact name to"
 " write in an Assembly YAML file."
 msgstr ""
+"``--with-ports`` 会在投影上绘制该对象的每一个端口：每个端口处画一个坐标系，其中长箭头沿 ``+Z`` ——也就是零件通"
+"过该端口连接时所沿着的方向——并以一条引线连到 ``connectPorts:`` 中必须使用的那个名字上。 ``--with-inte"
+"rfaces`` 则为接口的每一个 *实例* 各标注一次名称，从该名称向属于它的每一个端口各画一条引线，并在端口所在处画出该端口的边界草"
+"图。 ``--with-all`` 两者都画。每一个被绘制的端口也会在日志中列出，并给出在 Assembly YAML 文件中应当书写的确切名称。"
 
 #: ../../source/cli.rst:840
 msgid ""
@@ -1486,6 +1863,8 @@ msgid ""
 "around it, each on the side its port is on, and with its line made as "
 "long as it takes for no name to land on the object or on another name."
 msgstr ""
+"这些名称写在对象周围而不是写在对象上：均匀地分布在它四周，各自位于其端口所在的那一侧，并且引线会被拉到足够长，以保证没有任何名称落在对象"
+"上或落在另一个名称上。"
 
 #: ../../source/cli.rst:843
 msgid ""
@@ -1499,6 +1878,11 @@ msgid ""
 "went wrong is found: two frames that should have met and did not. On its "
 "own it asks for nothing; it says how deep the three options above reach."
 msgstr ""
+"装配体的说法会被照单全收：绘制出来的是它所声称的那些端口——由它的 ``map:`` 对外暴露的，以及它自己声明的（参见 :ref:`a"
+"ssembly-ports` ）——而不是它内部的一切。这与 ``pc info`` 和 ``connect:`` 所看到的边界是同一个"
+"，一个把它所包含的四十个端口中的三个对外暴露的装配体，指的就是那三个。 ``--with-internals`` 则会把内部的内容也画出"
+"来，每个子对象的端口都画在装配体安置该子对象的位置上，出错的连接正是这样被找出来的：两个本该相遇却没有相遇的坐标系。它本身不要求绘制任何"
+"东西；它说明的是上面三个选项要深入到哪一层。"
 
 #: ../../source/cli.rst:851
 msgid ""
@@ -1511,6 +1895,11 @@ msgid ""
 "in). ``port_marker_size`` and ``port_label_size`` set how big the markers"
 " and the names are, as a fraction of the projection's largest dimension."
 msgstr ""
+"这些选项适用于正在写出的任何一种格式——在 ``svg`` 、 ``png`` 、 ``jpeg`` 和 ``dxf`` 之下，投影本身"
+"是同一个——而包也可以在自己的某个文件类型上声明 ``with_ports:`` 、 ``with_interfaces:`` 或 ``"
+"with_internals:`` 来永久性地提出同样的要求（参见 :ref:`output-files` ，以及 ``examples"
+"/feature_interface`` ，那里有四张这样的图提交在版本库中）。 ``port_marker_size`` 和 ``po"
+"rt_label_size`` 设定标记和名称的大小，取值是投影最大尺寸的一个比例。"
 
 #: ../../source/cli.rst:859
 msgid ""
@@ -1521,6 +1910,8 @@ msgid ""
 "is worth the same second and third ``--view`` below that an ambiguous "
 "feature is."
 msgstr ""
+"端口是一个坐标系而不是几何体，但它和其他一切一样会被投影：它所沿着偏移的那根轴，正是某个投影所压缩掉的那根轴，因此沿视线方向相距一毫米的"
+"两个坐标系会被画成上下重叠的样子。出现歧义的端口，和出现歧义的特征一样，值得用下面所说的第二个、第三个 ``--view`` 再看一遍。"
 
 #: ../../source/cli.rst:864
 msgid ""
@@ -1533,6 +1924,11 @@ msgid ""
 "so ``--view top --viewport-up 0,1,0.5`` tilts the top view without "
 "spelling the rest of it out:"
 msgstr ""
+"``--view`` 为这一次运行选择观察对象的方向： ``front`` 、 ``back`` 、 ``left`` 、 ``righ"
+"t`` 、 ``top`` 、 ``bottom`` 或 ``iso`` 。每个名字都是一对向量的简写，而 ``--viewport-o"
+"rigin`` 和 ``--viewport-up`` 则以 ``X,Y,Z`` 的形式直接给出这对向量：前者是相机所在的位置，后者是最"
+"终画面中哪个方向朝上。两者中的任何一个都会替换掉名字所解析出的那个向量，因此 ``--view top --viewport-up 0,"
+"1,0.5`` 可以在不把其余部分全部写出来的情况下，把俯视图倾斜一点："
 
 #: ../../source/cli.rst:876
 msgid ""
@@ -1544,12 +1940,16 @@ msgid ""
 "PartCAD is Z-up with ``+Y`` pointing away from the front view, which is "
 "what puts ``+X`` on the right of it."
 msgstr ""
+"这三者就是 ``partcad.yaml`` 中某个渲染文件类型的 ``viewport_origin`` 和 ``viewport_u"
+"p`` （参见 :ref:`output-files` ），只不过是为单条命令传入而不是写进配置——因此它们会叠加在包和对象已有的配置之"
+"上，而不做投影的文件类型（ ``step`` 、 ``readme`` 、装配说明书）则从不读取它们。PartCAD 采用 Z 轴朝上，"
+" ``+Y`` 指向远离主视图的方向，这也正是 ``+X`` 位于主视图右侧的原因。"
 
 #: ../../source/cli.rst:882
 msgid ""
 "A rendered file is named after the object, so several views of one object"
 " go into directories of their own rather than over each other:"
-msgstr ""
+msgstr "渲染出的文件以对象命名，因此同一个对象的多个视图要分别放进各自的目录，否则会互相覆盖："
 
 #: ../../source/cli.rst:892
 msgid ""
@@ -1561,6 +1961,10 @@ msgid ""
 "from and counted). An assembly can also ask for its own document in the "
 "package configuration, by declaring ``readme`` in its ``render`` section."
 msgstr ""
+"``-t readme`` 生成的是一份 markdown 文档而不是投影：可以是包的文档（ ``README.md`` ，列出该包所声"
+"明的内容），也可以在用 ``-a`` 指定了某个装配体时，生成该装配体自己的文档（ ``<assembly>.md`` ，列出物料清单—"
+"—它由哪些零件和子装配体递归构成，按它们所来自的包分组并计数）。装配体也可以在包配置中通过在它的 ``render`` 小节里声明 ``"
+"readme`` 来索取自己的文档。"
 
 #: ../../source/cli.rst:898
 msgid ""
@@ -1569,6 +1973,8 @@ msgid ""
 "belongs to no package, so it is not listed on its own: the parts it holds"
 " are counted towards the assembly that embeds it."
 msgstr ""
+"只有包所声明的装配体才会作为子装配体列出。嵌在 Assembly YAML 文件的嵌套 ``links:`` 小节中的装配体不属于任何包"
+"，因此不会被单独列出：它所包含的零件会计入嵌入它的那个装配体。"
 
 #: ../../source/cli.rst:902
 msgid ""
@@ -1598,6 +2004,17 @@ msgid ""
 "document in the package configuration, by declaring ``pdf`` or ``html`` "
 "in its ``render`` section."
 msgstr ""
+"``-t pdf`` 和 ``-t html`` 生成由 ``-a`` 指定的装配体的装配说明书：一个标题页、同样的物料清单，然后按 A"
+"ssembly YAML 文件列出链接的顺序，每个装配步骤一页。每一步开始之前必须先做好的东西，都会紧挨着这一步加以说明：子装配体会有一"
+"页展示它装好后应有的样子，随后是它自己的各个步骤；而需要制造而不是购买的零件会有一页说明它由什么制成、写出它的制造说明，并且在它声明了可"
+"以生成加工路径的作业时（参见 ``pc cam`` ），附上自上方绘制的加工路径。在多处用到的东西只说明一次，并注明要做多少个，位置放在"
+"包含它全部使用位置的那个最底层装配体中，这样它会在第一个需要它的步骤之前被做出来。 ``pc render`` 写出的是完整的说明书——"
+"每一个需要构建的子装配体和每一个需要制造的零件都在内——而下文的 ``pc instructions`` 则按要求写出其中的一部分。步骤"
+"页会展示正在被接合的两个对象，下方是该接合处的爆炸视图，并在它张开的间隙上画一条连线。这个间隙的大小是两个对象最大尺寸的一半，除非该步骤"
+"在它的 ``connect:`` 或 ``connectPorts:`` 小节中设置了 ``exploded:`` （参见 :doc:`"
+"assy` ）。最后一页汇总了各种链接：指向本装配体及其所属的包、指向每一个至少提供了它三个零件的其他包，以及指向 PartCAD。HT"
+"ML 是一个自包含的文件，一次显示一页，两侧有箭头（也可以用方向键）来翻页。与 ``readme`` 一样，装配体也可以在包配置中通过在"
+"它的 ``render`` 小节里声明 ``pdf`` 或 ``html`` 来索取这两种文档。"
 
 #: ../../source/cli.rst:920
 msgid ""
@@ -1606,6 +2023,8 @@ msgid ""
 "implementation like any other file type, and no instruction book is "
 "generated over it (see :ref:`output-files`)."
 msgstr ""
+"而带 ``path`` 来声明它则表示相反的意思：这个 ``pdf`` 是包自己的一个文件——一张工程图、一份数据手册——像其他任何文件"
+"类型一样由相应实现写出，并且不会再在它之上生成装配说明书（参见 :ref:`output-files` ）。"
 
 #: ../../source/cli.rst:924
 msgid ""
@@ -1616,11 +2035,13 @@ msgid ""
 " on the assembly or inherited from its package) is refused too; pass "
 "``--ignore-manufacturability`` to generate the document anyway."
 msgstr ""
+"这两种格式都只对声明为 ``type: assy`` 的装配体有定义：步骤来自 Assembly YAML 文件，而没有步骤的装配体会被"
+"拒绝，而不是被简化成一个标题页加一份零件清单。完全不打算被制造的装配体（在装配体上声明、或从它所属的包继承而来的 ``manufactu"
+"rable: false`` ）同样会被拒绝；要无论如何都生成该文档，请传入 ``--ignore-manufacturability`` 。"
 
 #: ../../source/cli.rst:929
-#, fuzzy
 msgid "``pc instructions``"
-msgstr "``pc inspect``"
+msgstr ""
 
 #: ../../source/cli.rst:930
 msgid ""
@@ -1630,18 +2051,21 @@ msgid ""
 "**Assembly** tab shows and saves; what differs is that it asks how much "
 "of it to write:"
 msgstr ""
+"把所指定装配体的装配说明写入当前目录或 ``-O`` 所指定的目录，格式为 ``-t pdf`` （默认）或 ``-t html`` 。"
+"它就是 ``pc render -t pdf`` 写出的那本说明书，也是 IDE 的 **Assembly** 选项卡所显示并保存的那一"
+"本；区别在于它可以指定要写出其中的多少内容："
 
 #: ../../source/cli.rst:934
 msgid ""
 "on its own, this assembly's own steps, in the order of its links, with a "
 "sub-assembly added as the finished thing it is;"
-msgstr ""
+msgstr "单独使用时，写出本装配体自己的各个步骤，顺序与它的链接一致，其中子装配体按它装好后的成品形态加入；"
 
 #: ../../source/cli.rst:936
 msgid ""
 "``-r``/``--recursive`` puts in the steps of every sub-assembly that is "
 "built, each just before the step that adds it;"
-msgstr ""
+msgstr "``-r`` / ``--recursive`` 会把每一个需要构建的子装配体的步骤也放进来，各自紧挨在添加它的那一步之前；"
 
 #: ../../source/cli.rst:938
 msgid ""
@@ -1650,6 +2074,8 @@ msgid ""
 "manufacturing instructions written out, and the route drawn where a part "
 "declares one."
 msgstr ""
+"``-b`` / ``--build-parts`` 会把每一个需要制造的零件的做法也放进来，各自紧挨在第一个需要它的步骤之前。目前还比"
+"较简陋：写出制造说明，并在零件声明了加工路径时把路径画出来。"
 
 #: ../../source/cli.rst:942
 msgid ""
@@ -1661,12 +2087,16 @@ msgid ""
 " the very order the IDE's **Build** tab lists them in, so a step selected"
 " there and a page of the file are the same step."
 msgstr ""
+"哪些东西是自己做、哪些是买来的，取决于在 IDE 的 **Build vs Buy** 选项卡中为该装配体所做的选择，这些选择保存在做出"
+"选择的那台机器上，位于 ``~/.partcad/garage/default/bvb/<assembly, escaped>.json"
+"`` 。凡是没有做出选择的，两者皆可的条目一律按购买处理，这与物料清单的假设一致。步骤和页面的顺序与 IDE 的 **Build** 选"
+"项卡所列出的顺序完全一致，因此在那里选中的某一步与文件中的某一页就是同一步。"
 
 #: ../../source/cli.rst:948
 msgid ""
 "The file is written by ``pc`` itself, on the machine it runs on, "
 "whichever machine the daemon is on."
-msgstr ""
+msgstr "该文件由 ``pc`` 自己写出，写在它自己运行的那台机器上，无论守护进程在哪台机器上。"
 
 #: ../../source/cli.rst:957
 msgid "Workflow commands"
@@ -1706,6 +2136,10 @@ msgid ""
 "item instead of being taken apart. Pass ``--recursive`` (``-r``) to walk "
 "all the way down to the parts regardless, and order those."
 msgstr ""
+"``find`` 和 ``quote`` 同样接受零件和装配体。所请求的装配体若是按整件出售的（即设置了 ``vendor`` 和 ``"
+"sku`` ，参见 :ref:`procurement` ），就按一个条目订购。其他任何装配体都会按它所由以构成的那些对象来采购，并且遍"
+"历会在每一个按整件出售的子装配体处停下：这样的子装配体会按一个条目订购，而不会被拆开。传入 ``--recursive`` （ ``-r"
+"`` ）可以无视这一点，一路遍历到零件，并按零件订购。"
 
 #: ../../source/cli.rst:975
 msgid "Other commands"
@@ -1723,12 +2157,16 @@ msgid ""
 "created and nothing is configured. Subcommands, each taking ``part`` or "
 "``sketch``:"
 msgstr ""
+"即时执行的临时操作，作用于不属于任何包的文件：PartCAD 会把该文件声明在一个用完即弃的临时包中，产出一个输出文件，然后再把这个包删"
+"掉。不会创建任何东西，也不会配置任何东西。子命令如下，每一条都接受 ``part`` 或 ``sketch`` ："
 
 #: ../../source/cli.rst:982
 msgid ""
 "``pc adhoc convert`` — write the file back out as another format (``pc "
 "adhoc convert part bracket.step bracket.stl``)."
 msgstr ""
+"``pc adhoc convert`` — 把该文件以另一种格式重新写出（ ``pc adhoc convert part brack"
+"et.step bracket.stl`` ）。"
 
 #: ../../source/cli.rst:984
 msgid ""
@@ -1736,6 +2174,8 @@ msgid ""
 "``jpeg`` or ``dxf`` (``pc adhoc render part --view top bracket.step "
 "bracket.png``)."
 msgstr ""
+"``pc adhoc render`` — 写出它的一张 2D 投影： ``svg`` 、 ``png`` 、 ``jpeg`` 或 `"
+"`dxf`` （ ``pc adhoc render part --view top bracket.step bracket.png`` ）。"
 
 #: ../../source/cli.rst:987
 msgid ""
@@ -1746,6 +2186,10 @@ msgid ""
 "are the only way to aim one. The output file name may be left off when "
 "``--output`` names the type: the file is then named after the input."
 msgstr ""
+"两者都会根据文件名推断类型，也都接受 ``--input`` / ``--output`` 来直接指明类型。 ``pc adhoc re"
+"nder`` 接受与 ``pc render`` 相同的 ``--view`` 、 ``--viewport-origin`` 和 ``"
+"--viewport-up`` ——而且这里没有 ``partcad.yaml`` 可供配置视口，因此它们是瞄准视角的唯一办法。当 ``"
+"--output`` 已经指明了类型时，输出文件名可以省略：此时文件会以输入文件来命名。"
 
 #: ../../source/cli.rst:992
 msgid ""
@@ -1755,6 +2199,8 @@ msgid ""
 "package implements itself is available to neither, since there is no "
 "package here to declare it in."
 msgstr ""
+"该用这两者中的哪一个，取决于想要哪一类文件，这与 ``pc export`` 和 ``pc render`` 之间的区别是一样的：是另一"
+"款 CAD 工具可以继续加工的几何，还是一张图片。包自行实现的文件类型对两者都不可用，因为这里没有包可供声明它。"
 
 #: ../../source/cli.rst:996
 msgid ""
@@ -1764,6 +2210,9 @@ msgid ""
 "package and use ``pc convert assembly``, ``pc export`` or ``pc render`` "
 "instead."
 msgstr ""
+"装配体格式 ``assy`` 和 ``urdf`` 会被两者拒绝：ASSY 文件是一组指向某个包中零件的引用，而 URDF 的每个连杆都"
+"会变成一个零件，因此离开了包，两者都毫无意义。请把它声明在一个包中，改用 ``pc convert assembly`` 、 ``pc "
+"export`` 或 ``pc render`` 。"
 
 #: ../../source/cli.rst:1000
 msgid "``pc healthcheck``"
@@ -1788,13 +2237,16 @@ msgid ""
 "silently, since a stale skill looks exactly like a current one. ``--fix``"
 " reinstalls them, for the agents that had them and no others."
 msgstr ""
+"其中有一项检查针对的是本仓库而不是主机： ``AgentSkills`` 会把这里安装的 AI 智能体技能与正在运行的 PartCAD "
+"作比较，并报告出那些由较旧发布版本写出的技能。 ``pc upgrade`` 会替换 PartCAD，却把这些技能原地留下，因此如果没有"
+"这项检查，智能体就会继续照着一个早已变化的 CLI 的说明去做——而且是悄无声息地，因为过时的技能看起来和最新的一模一样。 ``--fi"
+"x`` 会重新安装它们，只针对本来就装了技能的那些智能体。"
 
 #: ../../source/cli.rst:1010
 msgid "``pc search``"
 msgstr "``pc search``"
 
 #: ../../source/cli.rst:1011
-#, fuzzy
 msgid ""
 "Search for objects by keyword. Subcommands: ``all``, ``parts``, "
 "``sketches``, ``assemblies``, ``scenes``, ``interfaces``, and "
@@ -1803,7 +2255,8 @@ msgid ""
 ":`recursive-names`)."
 msgstr ""
 "按关键字搜索对象。子命令： ``all`` 、 ``parts`` 、 ``sketches`` 、 ``assemblies`` 、 "
-"``interfaces`` 和 ``packages`` 。"
+"``scenes`` 、 ``interfaces`` 和 ``packages`` 。 ``-P`` 指定要搜索的包，默认为根包；写成"
+" ``-P <package>...`` 时会一并搜索其下层的包（参见 :ref:`recursive-names` ）。"
 
 #: ../../source/cli.rst:1015
 msgid ""
@@ -1817,6 +2270,11 @@ msgid ""
 "by -- it is the name a whole family is known by. A bare name is the "
 "interface this package declares, and ``//package:name`` is any other."
 msgstr ""
+"``pc search parts`` 和 ``pc search assemblies`` 还接受 ``-i`` / ``--inte"
+"rface`` ，它按对象 *通过什么来连接* 搜索，而不是按它的声明内容搜索： ``pc search parts -i m4-thr"
+"u`` 会找出每一个带 4mm 通孔的零件，也会找出那些实现了 ``m4-thru-3`` 或任何其他由它派生出的接口的零件，因为一个板"
+"厚 3mm 的 4mm 通孔零件本来就是一个带 4mm 通孔的零件。因此，抽象接口是最适合用来搜索的东西——它正是整整一族接口共用的那个"
+"名字。只写名字指的是本包所声明的接口，而 ``//package:name`` 则可以指任何其他包中的接口。"
 
 #: ../../source/cli.rst:1022
 msgid ""
@@ -1826,6 +2284,9 @@ msgid ""
 " per package and kept for the rest of the run. ``--keyword`` and "
 "``--interface`` may be given together, and then both have to hold."
 msgstr ""
+"答案来自各处声明—— ``implements:`` ，以及装配体的 ``map:`` ——因此为了得出它，不会构建任何东西，也不会实例"
+"化任何东西；这些声明中所指定的接口，每个包只解析一次，并在本次运行的其余过程中一直保留。 ``--keyword`` 和 ``--int"
+"erface`` 可以同时给出，此时两个条件都必须满足。"
 
 #~ msgid "Download and set up all packages imported by the current package."
 #~ msgstr "下载并设置当前包所导入的全部包。"

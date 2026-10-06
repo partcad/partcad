@@ -121,14 +121,13 @@ msgstr ""
 "детали:"
 
 #: ../../source/use_cases.rst:87
-#, fuzzy
 msgid ""
 "The last command displays the chosen part in ``PartCAD Viewer`` view in "
 "Visual Studio Code. There is currently no support for ``cq-server``. "
 "Please, let `support@partcad.org <mailto:support@partcad.org>`_ know if "
 "there is any other tool we should support."
 msgstr ""
-"Последняя команда отображает выбранную деталь в представлении ``OCP CAD "
+"Последняя команда отображает выбранную деталь в представлении ``PartCAD "
 "Viewer`` в Visual Studio Code. В настоящее время ``cq-server`` не "
 "поддерживается. Пожалуйста, сообщите по адресу `support@partcad.org "
 "<mailto:support@partcad.org>`_, если есть какой-либо другой инструмент, "
@@ -165,7 +164,7 @@ msgstr "PNG"
 
 #: ../../source/use_cases.rst:107
 msgid "JPEG"
-msgstr ""
+msgstr "JPEG"
 
 #: ../../source/use_cases.rst:109
 msgid ""
@@ -174,6 +173,10 @@ msgid ""
 "its aspect ratio. JPEG accepts a few more options, since it is a lossy "
 "format without an alpha channel:"
 msgstr ""
+"Оба растровых формата принимают ``width`` и ``height`` (в пикселях, по "
+"умолчанию ``512``); проекция масштабируется так, чтобы поместиться в них "
+"с сохранением пропорций. JPEG принимает ещё несколько параметров, "
+"поскольку это формат с потерями и без альфа-канала:"
 
 #: ../../source/use_cases.rst:127
 msgid ""
@@ -182,12 +185,18 @@ msgid ""
 "pixel-wide edges; switch to ``4:2:0`` when a smaller file matters more "
 "than the edges."
 msgstr ""
+"Субдискретизация ``4:4:4``, используемая по умолчанию, сохраняет полное "
+"цветовое разрешение. Проекция — это штриховая графика, а более грубые "
+"режимы размазывают цвет по её однопиксельным рёбрам; переходите на "
+"``4:2:0``, когда меньший размер файла важнее рёбер."
 
 #: ../../source/use_cases.rst:131
 msgid ""
 "The rendered file is named after the object with the format's own "
 "extension, so ``jpeg`` produces ``<name>.jpg``."
 msgstr ""
+"Отрисованный файл называется по имени объекта с собственным расширением "
+"формата, поэтому ``jpeg`` даёт ``<name>.jpg``."
 
 #: ../../source/use_cases.rst:134
 msgid ""
@@ -196,6 +205,10 @@ msgid ""
 "accepted by every projection above (and by ``dxf``), on the package or on"
 " a single object:"
 msgstr ""
+"То, с какого направления смотрят на объект, задаёт ``viewport_origin``, а "
+"то, где верх на получающейся картинке, — ``viewport_up``. Оба принимаются "
+"всеми проекциями выше (и форматом ``dxf``) — на уровне пакета или "
+"отдельного объекта:"
 
 #: ../../source/use_cases.rst:153
 msgid ""
@@ -206,6 +219,12 @@ msgid ""
 "direction, and the projection is scaled to fit whatever it is written "
 "into."
 msgstr ""
+"Если их не задать, деталь рисуется из угла «спереди-справа-сверху» "
+"(именно это и заставляет её читаться как трёхмерную), а эскиз — прямо в "
+"лоб. В PartCAD ось Z направлена вверх, а ``+Y`` указывает от вида спереди "
+"вглубь, из-за чего ``+X`` оказывается справа на нём. Расстояние значения "
+"не имеет: пара задаёт направление, а проекция масштабируется под то, во "
+"что она записывается."
 
 #: ../../source/use_cases.rst:159
 msgid ""
@@ -214,6 +233,11 @@ msgid ""
 "``back``, ``left``, ``right``, ``top``, ``bottom``, ``iso``), for a view "
 "that belongs to one command rather than to the package:"
 msgstr ""
+"``pc render`` принимает те же два параметра как "
+"``--viewport-origin``/``--viewport-up`` и называет распространённые "
+"направления через ``--view`` (``front``, ``back``, ``left``, ``right``, "
+"``top``, ``bottom``, ``iso``) — для вида, который относится к одной "
+"команде, а не к пакету:"
 
 #: ../../source/use_cases.rst:169
 msgid ""
@@ -222,6 +246,11 @@ msgid ""
 "aim one, there being no ``partcad.yaml`` to configure a viewport in; left"
 " off, the projection comes out the way the renderer draws one by default:"
 msgstr ""
+"Файл, который вообще не находится в пакете, отрисовывается командой ``pc "
+"adhoc render``, которая принимает те же три параметра. Это единственный "
+"способ нацелить проекцию, поскольку здесь нет ``partcad.yaml``, в котором "
+"можно настроить область просмотра; если их не указать, проекция получится "
+"такой, какой её рисует отрисовщик по умолчанию:"
 
 #: ../../source/use_cases.rst:182
 msgid "Export models"
@@ -288,6 +317,8 @@ msgid ""
 "You can use models from the public PartCAD repository in a CAD Design "
 "GUI, such as FreeCAD or its paid alternatives."
 msgstr ""
+"Вы можете использовать модели из публичного репозитория PartCAD в "
+"графическом CAD-редакторе, таком как FreeCAD или его платные аналоги."
 
 #: ../../source/use_cases.rst:215
 msgid ""
@@ -299,19 +330,23 @@ msgid ""
 " its own. See :ref:`FreeCAD add-on <freecad-addon>` for how to install "
 "it."
 msgstr ""
+"У FreeCAD есть надстройка PartCAD. Верстак ``PartCAD`` показывает в виде "
+"иерархии пакеты, детали и сборки, до которых может дотянуться PartCAD, "
+"генерирует диалог по параметрам выбранной детали или сборки и импортирует "
+"результат в открытый документ в виде файла STEP. Он управляет автономным "
+"сервисом PartCAD, поэтому собственное окружение Python для FreeCAD не "
+"нужно. О том, как его установить, см. :ref:`надстройка для FreeCAD "
+"<freecad-addon>`."
 
 #: ../../source/use_cases.rst:222
-#, fuzzy
 msgid ""
 "For the other apps, no add-on is available yet. Export the models to STEP"
 " or 3MF files and import those files into the CAD Design GUI of your "
 "choice."
 msgstr ""
-"Вы можете использовать модели из публичного репозитория PartCAD в "
-"графическом CAD-редакторе, таком как FreeCAD или его платные аналоги. "
-"Плагины PartCAD для этих приложений пока недоступны. Пока что "
-"экспортируйте модели в файлы STEP или 3MF и импортируйте эти файлы в "
-"выбранный вами графический CAD-редактор."
+"Для остальных приложений надстройка пока недоступна. Экспортируйте модели "
+"в файлы STEP или 3MF и импортируйте эти файлы в выбранный вами "
+"графический CAD-редактор."
 
 #: ../../source/use_cases.rst:232
 msgid "Python: CadQuery"

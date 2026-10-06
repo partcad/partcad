@@ -21,7 +21,7 @@ msgstr ""
 
 #: ../../source/config_package.rst:3
 msgid "Packages and dependencies"
-msgstr ""
+msgstr "包与依赖"
 
 #: ../../source/config_package.rst:9
 msgid "Packages"
@@ -106,7 +106,7 @@ msgstr ""
 
 #: ../../source/config_package.rst:94
 msgid "Templates"
-msgstr ""
+msgstr "模板"
 
 #: ../../source/config_package.rst:96
 msgid ""
@@ -114,14 +114,16 @@ msgid ""
 "parsed, so a package can generate declarations rather than write every "
 "one out. These names are available while it is being rendered:"
 msgstr ""
+"``partcad.yaml`` 是一个 Jinja2 模板，在被解析之前会先渲染成 YAML，因此一个包可以生成各项声明，而不必把每一"
+"条都写出来。在它被渲染的过程中，可以使用以下这些名称："
 
 #: ../../source/config_package.rst:104
 msgid "Name"
-msgstr ""
+msgstr "名称"
 
 #: ../../source/config_package.rst:105
 msgid "What it is"
-msgstr ""
+msgstr "含义"
 
 #: ../../source/config_package.rst:106
 msgid "``package_name``"
@@ -129,7 +131,7 @@ msgstr ""
 
 #: ../../source/config_package.rst:107
 msgid "The package path this package is being loaded at."
-msgstr ""
+msgstr "该包正被加载到的那个包路径。"
 
 #: ../../source/config_package.rst:108
 msgid "``partcad_version``"
@@ -137,7 +139,7 @@ msgstr ""
 
 #: ../../source/config_package.rst:109
 msgid "The version of PartCAD doing the rendering, whole: ``\"0.8.77\"``."
-msgstr ""
+msgstr "执行本次渲染的 PartCAD 版本，完整形式： ``\"0.8.77\"`` 。"
 
 #: ../../source/config_package.rst:110
 msgid ""
@@ -147,7 +149,7 @@ msgstr ""
 
 #: ../../source/config_package.rst:111
 msgid "The same version as its three numbers."
-msgstr ""
+msgstr "同一个版本，以三个数字的形式给出。"
 
 #: ../../source/config_package.rst:112
 msgid "``partcad_version_at_least(...)``"
@@ -159,6 +161,8 @@ msgid ""
 "``partcad_version_at_least(\"0.8.77\")``, or the numbers themselves, "
 "``partcad_version_at_least(0, 8, 77)``."
 msgstr ""
+"该版本是否等于或新于给定的版本。它接受一个字符串， ``partcad_version_at_least(\"0.8.77\")`` ，也接"
+"受直接给出的数字， ``partcad_version_at_least(0, 8, 77)`` 。"
 
 #: ../../source/config_package.rst:116
 msgid "``PI``/``M_PI``, ``E``/``M_E``, ``SQRT_2``, ``SQRT_3``, ``SQRT_5``"
@@ -166,7 +170,7 @@ msgstr ""
 
 #: ../../source/config_package.rst:117
 msgid "The constants a CAD file keeps reaching for."
-msgstr ""
+msgstr "CAD 文件中反复要用到的那些常量。"
 
 #: ../../source/config_package.rst:118
 msgid "``INCH``/``INCHES``, ``FOOT``/``FEET``"
@@ -174,7 +178,7 @@ msgstr ""
 
 #: ../../source/config_package.rst:119
 msgid "Millimetres per imperial unit: 25.4 and 304.8."
-msgstr ""
+msgstr "每个英制单位对应的毫米数：25.4 和 304.8。"
 
 #: ../../source/config_package.rst:121
 msgid ""
@@ -182,6 +186,8 @@ msgid ""
 "can use (see :ref:`expressions`): one table serves both, so a name that "
 "works in ``{{ ... }}`` works in ``%...%`` too."
 msgstr ""
+"最后两行中的常量同样可以被 ``%...%`` 表达式使用（参见 :ref:`expressions` ）：一张表同时服务于两者，因此在"
+" ``{{ ... }}`` 中可用的名称，在 ``%...%`` 中也同样可用。"
 
 #: ../../source/config_package.rst:125
 msgid ""
@@ -190,10 +196,12 @@ msgid ""
 "expression is a function (``sqrt``, ``sin``) or a parameter, and a "
 "parameter is as likely to be called ``e`` as a constant is."
 msgstr ""
+"常量一律以大写命名。这是该表中每一个名称、以及今后新增名称所遵循的约定：表达式中凡是小写的，要么是函数（ ``sqrt`` 、 ``si"
+"n`` ），要么是参数；而一个参数被叫做 ``e`` 的可能性，并不比一个常量被这样叫的可能性小。"
 
 #: ../../source/config_package.rst:131
 msgid "Serving two PartCADs at once"
-msgstr ""
+msgstr "同时兼容两个 PartCAD 版本"
 
 #: ../../source/config_package.rst:133
 msgid ""
@@ -202,6 +210,8 @@ msgid ""
 " away from everyone who has not updated, or write both forms and pick "
 "between them."
 msgstr ""
+"如果一个包想用上本次发布版本才有、而上一个版本还没有的功能，它可以二选一：提高自己的 ``partcad:`` 要求，但这会让所有尚未更"
+"新的人都用不了这个包；或者把两种写法都写上，再在它们之间做出选择。"
 
 #: ../../source/config_package.rst:145
 msgid ""
@@ -210,6 +220,8 @@ msgid ""
 "work on those asks first -- Jinja2's ``and`` short-circuits, so the call "
 "is never made where the name is absent:"
 msgstr ""
+"比这些名称出现得更早的 PartCAD 一个也不定义它们，而在那样的环境中，只要模板用到其中之一就会完全无法渲染。因此，必须在那些版本上"
+"也能工作的包要先做判断——Jinja2 的 ``and`` 是短路求值的，所以在名称不存在的地方永远不会真的发起调用："
 
 #: ../../source/config_package.rst:154
 msgid ""
@@ -217,6 +229,8 @@ msgid ""
 "having it: ``0.8.9`` is *older* than ``0.8.77``, and every comparison of "
 "the strings says the opposite."
 msgstr ""
+"比较是逐个数字进行的，这正是它存在的全部意义： ``0.8.9`` 比 ``0.8.77`` *更旧* ，而任何按字符串所做的比较给出的"
+"都是相反的结论。"
 
 #: ../../source/config_package.rst:160
 #, python-brace-format, python-format
@@ -227,10 +241,13 @@ msgid ""
 " not empty, and so is true to ``{% if %}``. A comparison that reads as "
 "its own opposite is not a thing to leave lying in a template."
 msgstr ""
+"``partcad_version_at_least`` 是一个函数，而不是看上去本该是的那种 Jinja2 宏。宏总是渲染成 *文本*"
+" ，因此一个结果为假的宏返回的是字符串 ``\"False\"`` ——它并不是空串，于是对 ``{% if %}`` 来说就是真。一个读起"
+"来恰好与自身含义相反的比较，不该留在模板里。"
 
 #: ../../source/config_package.rst:168
 msgid "Validation"
-msgstr ""
+msgstr "校验"
 
 #: ../../source/config_package.rst:170
 msgid ""
@@ -239,10 +256,13 @@ msgid ""
 "below: which sections exist, which fields each kind of declaration takes,"
 " and which of them exclude or require one another."
 msgstr ""
+"``partcad.yaml`` 会依据一份 JSON schema（ ``src/partcad_utils/schema/partc"
+"ad.json`` ）进行校验，该 schema 描述了下文的全部内容：存在哪些小节、每一类声明接受哪些字段，以及它们之间哪些互相排斥、"
+"哪些互为必需。"
 
 #: ../../source/config_package.rst:175
 msgid "Run the check over a package, or over the file alone:"
-msgstr ""
+msgstr "可以对整个包运行检查，也可以只对该文件运行检查："
 
 #: ../../source/config_package.rst:183
 msgid ""
@@ -258,6 +278,12 @@ msgid ""
 "package from loading at all. Set ``partcad.lint.enabled`` to ``false`` to"
 " turn that off."
 msgstr ""
+"每一条结果都会指明它所来自的行号和列号。 ``partcad.yaml`` 是一个 Jinja2 模板，在被解析之前会先渲染成 YAML"
+"（参见下文的 ``includePaths`` ），因此检查器会在解析前把每一处模板构造屏蔽掉，而不是去渲染该文件——渲染需要模板正在等"
+"待的那些值。 :doc:`ASSY 文件 <assy>` 所经过的也正是同一个检查器，而 `PartCAD 的 VS Code 扩展 <"
+"https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_ 会在打开的文档上运行它——于是一个拼错的小节在输入时就会被标上下划线，包括在那个让整个包根本无法加载的文件里。把"
+" ``partcad.lint.enabled`` 设为 ``false`` 即可关闭该功能。"
 
 #: ../../source/config_package.rst:196
 msgid "Dependencies"
@@ -357,6 +383,8 @@ msgid ""
 "files are materialized into, and a file already there is served without "
 "asking the plugin again."
 msgstr ""
+"插件返回的非空响应会缓存在磁盘上，以插件引用和请求作为键；对于插件给不出答案的请求，只会在发出该请求的那一次运行中被记住，重启之后会再次"
+"向插件发出。同一个键也用来命名插件自身文件被具体化到的那个目录，而已经存在于其中的文件会直接提供，不再去询问插件。"
 
 #: ../../source/config_package.rst:267
 msgid ""
@@ -366,6 +394,8 @@ msgid ""
 "pre-change entries. The plugin says so itself, with a module-level "
 "constant in its script::"
 msgstr ""
+"缓存无从知晓插件的代码何时发生了变化，因此一个开始给出不同答案的插件——比如给它提供的每个零件都加上一个新字段，或者换一种方式去度量同样"
+"的那些零件——仍然会被供以变更之前的过时条目。这一点由插件自己说明，通过在其脚本中设置一个模块级常量： ::"
 
 #: ../../source/config_package.rst:277
 msgid ""
@@ -375,6 +405,9 @@ msgid ""
 "repository with no script of its own - an ``enrich`` one, which rewrites "
 "another repository's answers - has no code to version and stays at ``0``."
 msgstr ""
+"它会被并入缓存位置，因此把它调高，就会一次性把整个仓库（以及其层级结构中的每一个子包）移到一个全新的缓存命名空间中。当脚本没有给出它时，"
+"默认为 ``0`` ；而没有自己脚本的仓库——也就是 ``enrich`` 类型的仓库，它只是改写另一个仓库的答案——没有代码需要版本化"
+"，因此始终保持为 ``0`` 。"
 
 #: ../../source/config_package.rst:283
 msgid ""
@@ -387,6 +420,9 @@ msgid ""
 "script rather than asking for it - the answer is needed before the first "
 "question can be asked. The script is parsed, never executed."
 msgstr ""
+"这个数字之所以放在插件里，是因为它本就是插件自己的事。一个导入了由插件支撑的库的包，无从知晓该库如今改用另一种方式度量它的零件，也不应该"
+"需要别人来告知：否则在每一个导入它的包里都得再被告知一遍，而其中每一处都可能被遗漏。因此，这不是导入该插件的那个依赖的字段；而且 Par"
+"tCAD 是从脚本中把它读出来的，而不是去询问它——因为在能提出第一个问题之前就已经需要这个答案了。脚本只会被解析，绝不会被执行。"
 
 #: ../../source/config_package.rst:292
 msgid ""
@@ -459,6 +495,10 @@ msgid ""
 "``interface``, ``sketch``, ``part``, ``assembly``, ``scene``, "
 "``provider``, ``repository``, ``software``, ``partType``"
 msgstr ""
+"``objects/<kind>`` —— 某一种类的全部对象，形式为 ``{name: config, ...}`` 。种类就是 ``"
+"Project.OBJECT_KINDS`` 中的那十种： ``material`` 、 ``interface`` 、 ``sketc"
+"h`` 、 ``part`` 、 ``assembly`` 、 ``scene`` 、 ``provider`` 、 ``reposit"
+"ory`` 、 ``software`` 、 ``partType``"
 
 #: ../../source/config_package.rst:339
 msgid ""
@@ -475,6 +515,8 @@ msgid ""
 "``meta`` -- package-level properties (``desc``, ``render``, "
 "``manufacturable``, ``suppliers``, ...), and ``objectKinds`` (see below)"
 msgstr ""
+"``meta`` —— 包级别的属性（ ``desc`` 、 ``render`` 、 ``manufacturable`` 、 ``s"
+"uppliers`` ……），以及 ``objectKinds`` （见下文）"
 
 #: ../../source/config_package.rst:344
 msgid ""
@@ -497,7 +539,7 @@ msgstr ""
 
 #: ../../source/config_package.rst:354
 msgid "Say which kinds a package has"
-msgstr ""
+msgstr "声明一个包拥有哪些种类"
 
 #: ../../source/config_package.rst:356
 msgid ""
@@ -507,12 +549,14 @@ msgid ""
 "a hundred packages that is four hundred runs -- most of them to be told "
 "\"none\"."
 msgstr ""
+"每一个键都对应脚本的一次独立运行，而一个包有十种对象。像“列出所有装有可供查看之物的包”这样再普通不过的操作，每个包都要问其中四种；对于"
+"一个由一百个包组成的层级结构，这就是四百次运行——其中大多数得到的答复都是“没有”。"
 
 #: ../../source/config_package.rst:361
 msgid ""
 "A package's ``meta`` may therefore carry ``objectKinds``, the kinds that "
 "package holds at all:"
-msgstr ""
+msgstr "因此，一个包的 ``meta`` 可以带上 ``objectKinds`` ，也就是该包确实拥有的那些种类："
 
 #: ../../source/config_package.rst:368
 msgid ""
@@ -525,6 +569,10 @@ msgid ""
 " its own -- rather than through a traversal, which reads ``meta`` for "
 "every package as it goes -- is queried exactly as it was."
 msgstr ""
+"这样一来，对于其余的每一种，PartCAD 都会直接答复“没有”，而不再去询问。它收窄的只是被询问的内容，绝不会收窄可以被提供的内容：如"
+"果某个插件列出了一种它其实并没有的种类，那也不过是被问了一个它只能空答的问题；而什么都不声明的插件仍会像以前一样被问到每一种。它是从 P"
+"artCAD 已经获取到的元数据中读出的，永远不值得为它单独发出一次请求，因此单独访问某个包时——而不是通过遍历，遍历会一路读取每个包的"
+" ``meta`` ——查询方式与原先完全一样。"
 
 #: ../../source/config_package.rst:376
 msgid ""

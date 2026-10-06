@@ -63,6 +63,9 @@ msgid ""
 " turn out to be the answer -- what the configuration actually resolved "
 "to, and what the environment actually said:"
 msgstr ""
+"Derselbe Befehl bietet zwei weitere Berichte, für die beiden Dinge, die "
+"sich am häufigsten als die Antwort erweisen -- worauf die Konfiguration "
+"tatsächlich aufgelöst wurde, und was die Umgebung tatsächlich gesagt hat:"
 
 #: ../../source/troubleshooting.rst:33
 msgid ""
@@ -75,12 +78,24 @@ msgid ""
 "a credential are listed but printed as ``<scrubbed>``, so the output is "
 "something you can attach to a bug report."
 msgstr ""
+"Es lohnt sich, beide gemeinsam zu lesen. Der erste sagt, worauf eine "
+"Option aufgelöst wurde, nachdem die Konfigurationsdatei, die "
+"``PC_*``-Umgebung und die Befehlszeile angewendet worden sind; der zweite "
+"sagt, was die Umgebung angefordert hat. Sie widersprechen sich immer dann, "
+"wenn eine Befehlszeilenoption gewonnen hat, eine Variable falsch "
+"geschrieben war oder ein Wert abgelehnt wurde -- was die meisten Fälle "
+"abdeckt, in denen jemand einen der beiden Berichte aufruft. Variablen, "
+"deren Namen besagen, dass sie ein Geheimnis enthalten, werden aufgeführt, "
+"aber als ``<scrubbed>`` ausgegeben, sodass Sie die Ausgabe einem "
+"Fehlerbericht beilegen können."
 
 #: ../../source/troubleshooting.rst:41
 msgid ""
 "If the work is being done by a daemon -- which it is for most commands --"
 " ask the daemon the same two questions:"
 msgstr ""
+"Wenn die Arbeit von einem Daemon erledigt wird -- was bei den meisten "
+"Befehlen der Fall ist --, stellen Sie dem Daemon dieselben zwei Fragen:"
 
 #: ../../source/troubleshooting.rst:50
 msgid ""
@@ -92,6 +107,14 @@ msgid ""
 "what it falls back on, and the environment it inherited is not something "
 "this side can reconstruct any other way."
 msgstr ""
+"Ein Daemon ist warm und wird pro Workspace gemeinsam genutzt, sodass die "
+"Konfiguration und die Umgebung, die er berichtet, diejenigen sind, die "
+"seine eigene Umgebung enthielt, als ihn etwas zum ersten Mal gestartet hat "
+"-- möglicherweise vor Tagen und möglicherweise aus einem VS-Code-Fenster. "
+"Ihr Befehl läuft nicht unter diesen Werten -- jeder Befehl übergibt dem "
+"Daemon seine eigene aufgelöste Konfiguration --, aber die eigene Kopie des "
+"Daemons ist das, worauf er zurückfällt, und die Umgebung, die er geerbt "
+"hat, lässt sich von dieser Seite auf keine andere Weise rekonstruieren."
 
 #: ../../source/troubleshooting.rst:58
 msgid "Health Check"
@@ -144,10 +167,14 @@ msgid ""
 "command still succeeds, because most of it is a machine missing something"
 " it can do without. There is one exception, and it is about sandboxes."
 msgstr ""
+"Das meiste, was ``healthcheck`` findet, wird als Warnung gemeldet, und der "
+"Befehl ist dennoch erfolgreich, weil es sich meist um etwas handelt, das "
+"einem Rechner fehlt und auf das er verzichten kann. Es gibt eine Ausnahme, "
+"und sie betrifft Sandboxes."
 
 #: ../../source/troubleshooting.rst:94
 msgid "Can this machine render anything?"
-msgstr ""
+msgstr "Kann dieser Rechner überhaupt etwas rendern?"
 
 #: ../../source/troubleshooting.rst:96
 msgid ""
@@ -158,6 +185,13 @@ msgid ""
 "carries both already. Three checks report on this, and they share the "
 "``sandbox`` tag:"
 msgstr ""
+"PartCAD importiert keinen eigenen CAD-Kernel. Jedes Teil wird von einem "
+"Skript erzeugt, das in einer Sandbox läuft, und es gibt zwei Mechanismen, "
+"die eine solche auf einem Rechner bereitstellen können, der mit nichts "
+"beginnt: conda, das einen Interpreter und den CAD-Stack daneben "
+"installiert, und eine Container-Laufzeitumgebung, die beides schon "
+"mitbringt. Drei Prüfungen berichten darüber, und sie teilen sich die "
+"Markierung ``sandbox``:"
 
 #: ../../source/troubleshooting.rst:106
 msgid ""
@@ -165,6 +199,9 @@ msgid ""
 "PartCAD builds a virtual environment instead, which works wherever the "
 "host has a usable Python."
 msgstr ""
+"``CondaAvailable`` -- eine Warnung, wenn conda oder mamba nicht gefunden "
+"werden kann. PartCAD baut stattdessen eine virtuelle Umgebung, was überall "
+"dort funktioniert, wo der Host ein brauchbares Python hat."
 
 #: ../../source/troubleshooting.rst:109
 msgid ""
@@ -174,12 +211,20 @@ msgid ""
 "``PC_USE_DOCKER=false``) on a machine that has a daemon and should not "
 "use it, and the check stops looking."
 msgstr ""
+"``DockerAvailable`` -- eine Warnung, wenn keine Container-Laufzeitumgebung "
+"antwortet. Beachten Sie, dass ein Docker-Daemon, der *Windows*-Container "
+"ausführt, hier als keine zählt: jedes Image, das PartCAD verwendet, ist "
+"ein Linux-Image. Setzen Sie ``useDocker: false`` (oder "
+"``PC_USE_DOCKER=false``) auf einem Rechner, der einen Daemon hat, ihn aber "
+"nicht verwenden soll, und die Prüfung sucht nicht weiter."
 
 #: ../../source/troubleshooting.rst:114
 msgid ""
 "``SandboxAvailable`` -- an **error**, and the only check that makes ``pc "
 "healthcheck`` exit non-zero."
 msgstr ""
+"``SandboxAvailable`` -- ein **Fehler**, und die einzige Prüfung, die ``pc "
+"healthcheck`` mit einem Rückgabewert ungleich null beenden lässt."
 
 #: ../../source/troubleshooting.rst:117
 msgid ""
@@ -192,6 +237,14 @@ msgid ""
 "image with no conda in it -- nothing is misconfigured, and the check "
 "passes:"
 msgstr ""
+"Ein angegebenes ``pythonSandbox`` wird befolgt, und das ist das meiste, "
+"was ``SandboxAvailable`` tut. „Gibt es conda oder einen Container“ ist nur "
+"dann die richtige Frage, wenn niemand gesagt hat, welche Sandbox verwendet "
+"werden soll, denn nur dann wählt PartCAD selbst zwischen ihnen. Wenn Sie "
+"``pythonSandbox: venv`` geschrieben haben -- ein CI-Job, der aus dem "
+"vorhandenen Interpreter eine virtuelle Umgebung baut, ein Rechner ohne "
+"Netzzugang, ein Container-Image ohne conda darin --, ist nichts falsch "
+"konfiguriert, und die Prüfung bestätigt das:"
 
 #: ../../source/troubleshooting.rst:130
 msgid ""
@@ -203,6 +256,14 @@ msgid ""
 "``conda`` on a machine that has none is a failure -- being unable to do "
 "what was asked is not a reason to quietly do something else."
 msgstr ""
+"Eine deklarierte Sandbox wird dann daran gemessen, was *sie* benötigt, und "
+"an nichts anderem: ``conda`` braucht ein conda, ``docker`` braucht eine "
+"Container-Laufzeitumgebung, und ``venv``, ``pypy`` und ``none`` brauchen "
+"nur das Python, unter dem PartCAD läuft. (``remote`` braucht einen "
+"erreichbaren ``partcad-service-remote-docker``, also eine Netzwerkadresse, "
+"die diese Prüfung nicht anpingt.) ``conda`` auf einem Rechner anzufordern, "
+"der keines hat, ist ein Fehlschlag -- dass etwas Angefordertes nicht "
+"möglich ist, ist kein Grund, stillschweigend etwas anderes zu tun."
 
 #: ../../source/troubleshooting.rst:138
 msgid ""
@@ -215,6 +276,15 @@ msgid ""
 "names -- for KiCad that is installing KiCad on this machine and setting "
 "``useDockerKicad: false``."
 msgstr ""
+"Drei Dinge brauchen ausdrücklich einen Container und sagen das erst, wenn "
+"sie erreicht werden, nicht im Voraus: eine Implementierung, deren Paket "
+"``container:`` deklariert, der Import einer KiCad-Platine "
+"(``useDockerKicad``) und die Python-Sandbox ``docker``, wenn sie "
+"namentlich angefordert wurde. Wenn ``pc render``, ``pc export`` oder ``pc "
+"inspect`` meldet, dass keine Container-Laufzeitumgebung verfügbar ist, "
+"starten Sie Docker oder gehen Sie den anderen Weg, den die Meldung nennt "
+"-- bei KiCad ist das, KiCad auf diesem Rechner zu installieren und "
+"``useDockerKicad: false`` zu setzen."
 
 #: ../../source/troubleshooting.rst:147 ../../source/troubleshooting.rst:185
 #: ../../source/troubleshooting.rst:243
@@ -272,6 +342,8 @@ msgstr ""
 #: ../../source/troubleshooting.rst:162
 msgid "Imports hang, or time out reaching a repository the browser can open:"
 msgstr ""
+"Importe hängen oder laufen beim Erreichen eines Repositorys in einen "
+"Timeout, das der Browser öffnen kann:"
 
 #: ../../source/troubleshooting.rst:164
 msgid ""
@@ -281,6 +353,11 @@ msgid ""
 "url`` files alike -- so exporting them is usually the whole fix. See :ref"
 ":`proxy-configuration`."
 msgstr ""
+"Das Netzwerk ist sehr wahrscheinlich eines, in dem ein Proxy der einzige "
+"Weg nach außen ist. PartCAD liest ``HTTPS_PROXY``, ``HTTP_PROXY`` und "
+"``NO_PROXY`` für alles, was es herunterlädt -- git-Repositories, Tarballs "
+"und ``fileFrom: url``-Dateien gleichermaßen --, sodass es meist schon die "
+"ganze Lösung ist, sie zu exportieren. Siehe :ref:`proxy-configuration`."
 
 #: ../../source/troubleshooting.rst:168
 msgid ""
@@ -288,6 +365,10 @@ msgid ""
 "is re-terminating TLS and its CA is not trusted here. Point "
 "``SSL_CERT_FILE`` and ``REQUESTS_CA_BUNDLE`` at the proxy's CA bundle."
 msgstr ""
+"Wenn ein Abruf daran scheitert, ein Zertifikat zu verifizieren, statt zu "
+"hängen, terminiert der Proxy TLS neu und seine CA ist hier nicht "
+"vertrauenswürdig. Richten Sie ``SSL_CERT_FILE`` und ``REQUESTS_CA_BUNDLE`` "
+"auf das CA-Bundle des Proxys."
 
 #: ../../source/troubleshooting.rst:173
 msgid "PartCAD VSCode Extension"
@@ -317,9 +398,8 @@ msgstr ""
 " ``Output``-Ansicht."
 
 #: ../../source/troubleshooting.rst:187
-#, fuzzy
 msgid "Message in \"Explorer\" left panel: \"PartCAD ... is not found\""
-msgstr "Meldung im linken „Explorer“-Panel: „No Python (>= 3.10) installed“"
+msgstr "Meldung im linken „Explorer“-Panel: „PartCAD ... is not found“"
 
 #: ../../source/troubleshooting.rst:189
 msgid ""
@@ -327,6 +407,9 @@ msgid ""
 "the extension downloads a standalone PartCAD for you. No Python is "
 "needed."
 msgstr ""
+"Drücken Sie im linken „Explorer“-Panel auf „Install or update PartCAD“, "
+"und die Erweiterung lädt ein eigenständiges PartCAD für Sie herunter. "
+"Python wird nicht benötigt."
 
 #: ../../source/troubleshooting.rst:191
 msgid ""
@@ -334,6 +417,10 @@ msgid ""
 "install partcad`` in it: the extension finds the ``partcad-json-rpc`` "
 "that puts on your ``PATH`` and uses that instead of downloading anything."
 msgstr ""
+"Oder führen Sie, wenn Sie lieber Ihre eigene Python-Umgebung verwenden, "
+"darin ``pip install partcad`` aus: die Erweiterung findet das "
+"``partcad-json-rpc``, das dadurch in Ihrem ``PATH`` landet, und verwendet "
+"es, anstatt etwas herunterzuladen."
 
 #: ../../source/troubleshooting.rst:194
 msgid ""
@@ -361,19 +448,16 @@ msgid "Error while loading part or assembly view: \"Module ... not found\""
 msgstr "Fehler beim Laden der Teil- oder Baugruppenansicht: „Module ... not found“"
 
 #: ../../source/troubleshooting.rst:202
-#, fuzzy
 msgid ""
 "Make sure that the extension version matches the PartCAD version in ``pc "
 "version`` command output"
 msgstr ""
-"Stellen Sie sicher, dass die Version der Erweiterung mit der Version des "
-"PartCAD-Python-Moduls in der Ausgabe des Befehls `pc version` "
-"übereinstimmt"
+"Stellen Sie sicher, dass die Version der Erweiterung mit der "
+"PartCAD-Version in der Ausgabe des Befehls ``pc version`` übereinstimmt"
 
 #: ../../source/troubleshooting.rst:206
-#, fuzzy
 msgid "PartCAD Viewer"
-msgstr "OCP CAD Viewer"
+msgstr "PartCAD Viewer"
 
 #: ../../source/troubleshooting.rst:208
 msgid ""
@@ -385,6 +469,14 @@ msgid ""
 "inside ``partcad`` itself -- so ``pip install partcad`` is all that is "
 "needed, and there is nothing separate to install."
 msgstr ""
+"Der ``PartCAD Viewer`` ist ein Tab, den die Erweiterung öffnet, wenn ein "
+"Teil, eine Baugruppe, eine Szene, eine Skizze oder ein Interface "
+"inspiziert wird. PartCAD tesselliert die Form in einer "
+"Sandbox-Laufzeitumgebung und sendet das Ergebnis als komprimiertes glTF "
+"über einen Socket auf ``127.0.0.1:9137`` an die Erweiterung. Die "
+"Python-Seite dieser Verbindung ist das Paket ``partcad_ide_client``, das "
+"in ``partcad`` selbst enthalten ist -- ``pip install partcad`` genügt "
+"also, und es gibt nichts separat zu installieren."
 
 #: ../../source/troubleshooting.rst:216
 msgid ""
@@ -398,6 +490,16 @@ msgid ""
 " the tab is opened, so a failure in one of them is a daemon problem and "
 "says so in the tab, while the 3D view keeps working."
 msgstr ""
+"Neben der 3D-Ansicht trägt das Panel Tabs für die Fragen, die das Objekt "
+"statt seiner Form betreffen -- **FEA** und **CFD** unter **Analysis** "
+"sowie **Bill of Materials**, **Instructions** und **Procurement** unter "
+"**Supply Chain**, jeweils aktiviert, wo es zutrifft -- und, neben der "
+"3D-Ansicht auf dem Tab **Design**, **2D** und **Draft**, die das Objekt in "
+"eine Datei rendern. Diese kommen nicht über den oben genannten Socket: sie "
+"werden vom PartCAD-Daemon beantwortet und beim ersten Öffnen des Tabs "
+"abgerufen, sodass ein Fehlschlag in einem von ihnen ein Daemon-Problem ist "
+"und im Tab auch so gemeldet wird, während die 3D-Ansicht weiter "
+"funktioniert."
 
 #: ../../source/troubleshooting.rst:225
 msgid ""
@@ -408,10 +510,18 @@ msgid ""
 "that window, so ``pc`` is there without any further setup "
 "(``partcad.addToolsToTerminalPath`` turns that off):"
 msgstr ""
+"Alles, was ein ``partcad`` hat und diesen Port erreichen kann, kann in "
+"denselben Viewer anzeigen -- einschließlich eines ``pc``-Aufrufs in einem "
+"einfachen Terminal, solange ein Fenster mit der Erweiterung geöffnet ist. "
+"Während die Erweiterung aktiv ist, legt sie die "
+"PartCAD-Befehlszeilenwerkzeuge in den ``PATH`` von Terminals, die in "
+"diesem Fenster geöffnet werden, sodass ``pc`` ohne weitere Einrichtung "
+"verfügbar ist (``partcad.addToolsToTerminalPath`` schaltet das ab):"
 
 #: ../../source/troubleshooting.rst:245
 msgid "``Failed to load \"partcad_ide_client\"`` in the PartCAD terminal view"
 msgstr ""
+"``Failed to load \"partcad_ide_client\"`` in der PartCAD-Terminalansicht"
 
 #: ../../source/troubleshooting.rst:247
 msgid ""
@@ -420,22 +530,32 @@ msgid ""
 "reinstall partcad``, or press \"Update PartCAD\" in the \"Context\" left "
 "panel."
 msgstr ""
+"Das Paket ist in ``partcad`` enthalten, dies bedeutet also, dass die "
+"Installation beschädigt und nicht unvollständig ist. Installieren Sie mit "
+"``pip install --force-reinstall partcad`` neu, oder drücken Sie im linken "
+"„Context“-Panel auf „Update PartCAD“."
 
 #: ../../source/troubleshooting.rst:251
 msgid ""
 "On a PartCAD older than 0.8.0 it was a separate ``partcad-ide-client`` "
 "distribution that was never published; upgrading is the fix."
 msgstr ""
+"In PartCAD-Versionen älter als 0.8.0 war es eine separate Distribution "
+"``partcad-ide-client``, die nie veröffentlicht wurde; ein Upgrade ist die "
+"Lösung."
 
 #: ../../source/troubleshooting.rst:254
 msgid "``No PartCAD IDE with an open PartCAD Viewer detected``"
-msgstr ""
+msgstr "``No PartCAD IDE with an open PartCAD Viewer detected``"
 
 #: ../../source/troubleshooting.rst:256
 msgid ""
 "Nothing is listening on the viewer port. Open a window with the PartCAD "
 "extension active; the extension starts listening when it activates."
 msgstr ""
+"Auf dem Viewer-Port lauscht nichts. Öffnen Sie ein Fenster mit aktiver "
+"PartCAD-Erweiterung; die Erweiterung beginnt zu lauschen, sobald sie "
+"aktiviert wird."
 
 #: ../../source/troubleshooting.rst:258
 msgid ""
@@ -443,16 +563,23 @@ msgid ""
 "without ``SO_REUSEPORT``. The \"PartCAD Viewer port ... is already in "
 "use\" message in the ``PartCAD`` output view says which case this is."
 msgstr ""
+"Wenn zwei Fenster geöffnet sind, kann auf Plattformen ohne "
+"``SO_REUSEPORT`` nur eines davon den Port besitzen. Die Meldung „PartCAD "
+"Viewer port ... is already in use“ in der Ausgabeansicht ``PartCAD`` sagt, "
+"welcher Fall vorliegt."
 
 #: ../../source/troubleshooting.rst:261
 msgid ""
 "Set ``PARTCAD_IDE_PORT`` to move a ``partcad`` process to a different "
 "port if 9137 is taken by something else on the machine."
 msgstr ""
+"Setzen Sie ``PARTCAD_IDE_PORT``, um einen ``partcad``-Prozess auf einen "
+"anderen Port zu verschieben, falls 9137 von etwas anderem auf dem Rechner "
+"belegt ist."
 
 #: ../../source/troubleshooting.rst:264
 msgid "\"Drawn without a graphics card\" in the corner of the 3D view"
-msgstr ""
+msgstr "„Drawn without a graphics card“ in der Ecke der 3D-Ansicht"
 
 #: ../../source/troubleshooting.rst:266
 msgid ""
@@ -464,10 +591,18 @@ msgid ""
 "and how to make its icon do that every time. The PartCAD IDE does this "
 "already."
 msgstr ""
+"VS Code konnte die Grafikkarte nicht nutzen, sodass das Fenster kein WebGL "
+"hat und die 3D-Ansicht das Modell stattdessen auf dem Prozessor zeichnet: "
+"flach schattiert und bei einem großen Modell langsamer, das beim Drehen "
+"als Kästen gezeichnet wird. Fahren Sie mit der Maus über den Hinweis, um "
+"zu erfahren, wie Sie VS Code starten, damit es wieder WebGL hat (von "
+"Chromium selbst in Software gezeichnet, was wie die gewohnte Ansicht "
+"aussieht), und wie Sie sein Symbol dazu bringen, das jedes Mal zu tun. Die "
+"PartCAD IDE macht das bereits."
 
 #: ../../source/troubleshooting.rst:273
 msgid "The **Draft** tab says a package is not found"
-msgstr ""
+msgstr "Der Tab **Draft** meldet, dass ein Paket nicht gefunden wird"
 
 #: ../../source/troubleshooting.rst:275
 msgid ""
@@ -476,6 +611,10 @@ msgid ""
 "such package; ``pc init`` adds that import, and "
 "``examples/feature_render_custom`` shows it written out."
 msgstr ""
+"Das Zeichnungspaket ``//pub/feature/render/draftwright`` kommt aus dem "
+"öffentlichen PartCAD-Index. Ein Workspace, der ``pub`` nicht importiert, "
+"hat kein solches Paket; ``pc init`` fügt diesen Import hinzu, und "
+"``examples/feature_render_custom`` zeigt ihn ausgeschrieben."
 
 #~ msgid ""
 #~ "Install Conda environment into the "

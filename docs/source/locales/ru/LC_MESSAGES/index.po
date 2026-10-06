@@ -22,32 +22,31 @@ msgstr ""
 
 #: ../../source/index.rst:22
 msgid "Getting started"
-msgstr ""
+msgstr "Первые шаги"
 
 #: ../../source/index.rst:30
-#, fuzzy
 msgid "Concepts"
-msgstr "Содержание:"
+msgstr "Концепции"
 
 #: ../../source/index.rst:36
 msgid "Command line"
-msgstr ""
+msgstr "Командная строка"
 
 #: ../../source/index.rst:42
 msgid "Package configuration"
-msgstr ""
+msgstr "Конфигурация пакета"
 
 #: ../../source/index.rst:48
 msgid "Assemblies"
-msgstr ""
+msgstr "Сборки"
 
 #: ../../source/index.rst:54
 msgid "Guides"
-msgstr ""
+msgstr "Руководства"
 
 #: ../../source/index.rst:62
 msgid "Help"
-msgstr ""
+msgstr "Справка"
 
 #: ../../source/index.rst:3
 msgid "PartCAD"

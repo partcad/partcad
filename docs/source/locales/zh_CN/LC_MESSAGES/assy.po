@@ -54,7 +54,7 @@ msgstr "容器"
 msgid ""
 "A container node is a node that holds other nodes rather than placing an "
 "object. The container nodes have the following syntax:"
-msgstr ""
+msgstr "容器节点是容纳其他节点、而不放置对象的节点。容器节点的语法如下："
 
 #: ../../source/assy.rst:36
 msgid ""
@@ -66,28 +66,32 @@ msgid ""
 "instead. A `links:` list *inside* the file is a node like any other: it "
 "is addressable by `name` from a `map:`, and what it holds belongs to it."
 msgstr ""
+"ASSY 文件的顶层节点就是这样一个节点，而且它 **就是装配体本身** ：它所容纳的内容由装配体直接容纳，中间不经过任何其他层级。因此"
+"，由一个根节点列出了三个零件的文件所声明的装配体，其中有三个节点而不是一个，并且该根节点上的 `location` 会同时移动这三者——"
+"没有一个专属于它自己的节点可供移动。而写在文件 *内部* 的 `links:` 列表，则是与其他节点一样的节点：它可以从 `map:` "
+"中通过 `name` 寻址，并且它所容纳的内容归它所有。"
 
 #: ../../source/assy.rst:46
 msgid "What a link is called"
-msgstr ""
+msgstr "链接的名称"
 
 #: ../../source/assy.rst:48
 msgid "Every link of an ASSY file has a name, and one rule gives it:"
-msgstr ""
+msgstr "ASSY 文件的每个链接都有一个名称，并由同一条规则确定："
 
 #: ../../source/assy.rst:50
 msgid "its own ``name:``, where it gives one;"
-msgstr ""
+msgstr "它自己的 ``name:`` ，如果给出了的话；"
 
 #: ../../source/assy.rst:51
 msgid "otherwise the part or the assembly it places;"
-msgstr ""
+msgstr "否则，是它所放置的零件或装配体的名称；"
 
 #: ../../source/assy.rst:52
 msgid ""
 "otherwise its position in the ``links:`` list it is written in, one-"
 "based, as ``link#2``."
-msgstr ""
+msgstr "否则，是它在所处的 ``links:`` 列表中的位置（从 1 开始计数），形如 ``link#2`` 。"
 
 #: ../../source/assy.rst:55
 msgid ""
@@ -101,6 +105,12 @@ msgid ""
 "VS Code <https://marketplace.visualstudio.com/items?itemName=PartCAD"
 ".partcad-official>`_ shows as the row for that link in the viewer."
 msgstr ""
+"只有 ``links:`` 容器才会用到第三条——放置了某个对象的节点以该对象命名——它的存在是为了确保不存在无法命名的链接。这个唯一的"
+"名称正是各处所使用的： ``connect:`` 用它指明要连接到哪个链接， ``map:`` 用它指明某个节点（用 ``/`` 连接起"
+"来即构成一条由它们组成的路径，如 ``head/head_half_1`` ），连接的 ``interferes:`` 用它指名节点， "
+":ref:`过滤器 <assy-filter>` 用它进行筛选，`面向 VS Code 的 PartCAD 扩展 <https://ma"
+"rketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`"
+"_ 也用它作为查看器中该链接所在行的名称。"
 
 #: ../../source/assy.rst:64
 msgid ""
@@ -111,6 +121,9 @@ msgid ""
 " name where there is nothing else -- a name shared by a hundred rows "
 "would say nothing about any of them."
 msgstr ""
+"它与链接所放置的 *对象* 并不是一回事，而查看器会同时显示两者：一个把同一颗螺栓放置了一百次的装配体，持有的是一个对象、却对应着一百个"
+"链接名称，而正是链接名称说明了这一个究竟是其中的哪一个。因此，只有在没有其他依据时才使用位置、而不是对象的名称——一个被一百行共用的名称"
+"，对其中任何一行都说明不了什么。"
 
 #: ../../source/assy.rst:71
 msgid ""
@@ -121,12 +134,15 @@ msgid ""
 "called -- the IDE's 2D and Draft panels name a link that way exactly when"
 " its name is shared with another link beside it."
 msgstr ""
+"不过，名称不必是唯一的。一个在循环中放置四条腿的文件可以把它们全都叫做 ``leg`` ，而四条腿都响应的同一个名称，无法把其中某一条单"
+"独挑出来。因此， :ref:`过滤器 <assy-filter>` 也可以用位置来指名 **任何** 一个链接，即 ``link#3``"
+" ，无论它本来叫什么——IDE 的 2D 和 Draft 面板，恰恰是在某个链接的名称与旁边另一个链接重名时，才以这种方式来称呼它。"
 
 #: ../../source/assy.rst:90
 msgid ""
 "A positional name is relative to the list it is written in, so adding a "
 "link above one renames it. Name a container you intend to refer to."
-msgstr ""
+msgstr "位置名称是相对于它所写入的那个列表而言的，因此在某个链接上方新增一个链接，就会改变它的名称。对于打算引用的容器，请为其命名。"
 
 #: ../../source/assy.rst:94
 msgid "Parts"
@@ -148,6 +164,9 @@ msgid ""
 " of the part or assembly it places, which is enough until the same one is"
 " placed twice."
 msgstr ""
+"赋予某个节点的 `name` ，是这个装配体内部及其周边的一切引用它的方式： `connect` / `connectPorts` 的 "
+"`name` 指名的是一个节点，决定该装配体本身拥有其内部哪些端口的 `map:` 一节，其第一个元素也是如此（参见 :ref:`ass"
+"embly-ports` ）。没有自己 `name` 的节点，以它所放置的零件或装配体的名称为名，这在同一个对象被放置两次之前都是够用的。"
 
 #: ../../source/assy.rst:131
 msgid ""
@@ -183,10 +202,12 @@ msgid ""
 "Without it, the two are spaced by half of the largest dimension of the "
 "two."
 msgstr ""
+"`exploded` 字段并不影响装配体本身：它决定的是在装配说明书（ `pc render -t pdf` 和 `pc render "
+"-t html` ）中，该步骤的爆炸视图里两个零件被画得相距多远。不给出它时，两者的间距为两者最大尺寸的一半。"
 
 #: ../../source/assy.rst:148
 msgid "Expected overlaps"
-msgstr ""
+msgstr "预期的重叠"
 
 #: ../../source/assy.rst:150
 msgid ""
@@ -197,6 +218,9 @@ msgid ""
 " and all three are read from the joint, never declared against a pair of "
 "parts:"
 msgstr ""
+"`pc test` 会检查装配体中的各零件不占用同一空间——除非某个接合要求它们必须如此。卡入孔中的销钉、自行切出螺纹的螺钉：接合正是通"
+"过占据材料来实现的，而不含弹簧的模型只能以重叠的方式来保持它。有三样东西可以声明这一点，并且这三样都是从接合本身读取的，绝不是针对某一对"
+"零件来声明的："
 
 #: ../../source/assy.rst:156
 msgid ""
@@ -206,6 +230,8 @@ msgid ""
 "followed through any `map:` of a sub-assembly to the part inside it that "
 "provides the port;"
 msgstr ""
+"连接的配合或 `how` 声明了 `snapIn` 或 `selfScrew` ，或者它所接合的某个接口会自行切出螺纹（ `selfSc"
+"rew` ）。预期的重叠出现在提供所接合端口的那两个零件之间——并会沿着子装配体的任何 `map:` 一直追溯到其内部提供该端口的那个零件；"
 
 #: ../../source/assy.rst:160
 msgid ""
@@ -214,6 +240,8 @@ msgid ""
 "ones underneath as well, and a sub-assembly fitted by one of its pins "
 "drives its other pins into the same neighbour."
 msgstr ""
+"`interferes` 列出同一次接合动作还会挤入的其他节点：一颗螺钉连接到它的头部所抵靠的零件上时，也会在下方的那些零件中切出螺纹；"
+"而通过自身某一根销钉装配到位的子装配体，也会把它的其他销钉挤入同一个相邻件中。"
 
 #: ../../source/assy.rst:165
 msgid ""
@@ -227,6 +255,11 @@ msgid ""
 "than the part inside it that provides the port, since it is the sub-"
 "assembly that is fitted."
 msgstr ""
+"`interferes` 通过每个链接都具备的 :ref:`链接名称 <assy-link-names>` ，指名与该连接处于同一个 `"
+"links:` 列表中的节点： `links:` 容器内部的节点写作 `container/name` ，而未给自己命名的容器也和其他层"
+"级一样，是该路径中的一级（ `link#2/bracket` ）。节点可以是零件，也可以是装配体。指名一个装配体，会豁免两者之间的所有重"
+"叠，其精确程度就取决于这条声明本身：对于带有映射端口的子装配体，应当指名该子装配体，而不是其内部提供该端口的那个零件，因为被装配到位的是"
+"这个子装配体。"
 
 #: ../../source/assy.rst:174
 msgid ""
@@ -237,6 +270,9 @@ msgid ""
 "`links:` container - is first compared by the box around everything in "
 "it."
 msgstr ""
+"装配体只对自己所组装的内容负责。在 `partcad.yaml` 中声明、并被放入其中的子装配体有自己的判定结果，装配体直接采纳该结果而"
+"不会重复判定：在那里只考察它所放置的各对象之间的重叠，并且每个装配体——无论是声明出来的还是一个 `links:` 容器——都先按包围其"
+"全部内容的盒体来比较。"
 
 #: ../../source/assy.rst:181
 msgid "Assemblies"
@@ -250,7 +286,7 @@ msgstr "以下语法用于创建一个将装配体放入装配体的节点："
 
 #: ../../source/assy.rst:191
 msgid "Description"
-msgstr ""
+msgstr "描述"
 
 #: ../../source/assy.rst:193
 msgid ""
@@ -258,6 +294,7 @@ msgid ""
 "the part or the assembly it places, or - on a container node - the sub-"
 "assembly it declares."
 msgstr ""
+"任何节点的 `description` 字段都是关于该节点的自由格式文本：它所放置的零件或装配体，或者——在容器节点上——它所声明的子装配体。"
 
 #: ../../source/assy.rst:205
 msgid ""
@@ -269,16 +306,19 @@ msgid ""
 "assembly; and the description of a part or assembly node is shown with "
 "the step that adds it. Nothing else in PartCAD parses it or acts upon it."
 msgstr ""
+"它会在为装配体生成文档时使用（ `pc render -t pdf` 和 `pc render -t html` ）：文件自身根节点的描"
+"述，就是装配说明书中对整个装配体的说明，除非声明该装配体的包为它给出了自己的 `desc` ；容器节点的描述，是说明书中对那个子装配体的"
+"说明；而零件或装配体节点的描述，则与添加它的那个步骤一同显示。PartCAD 中没有任何其他地方会解析它或据其行事。"
 
 #: ../../source/assy.rst:214
 msgid "Comment"
-msgstr ""
+msgstr "注释"
 
 #: ../../source/assy.rst:216
 msgid ""
 "The `comment` field of a `connect` or `connectPorts` section is free form"
 " text."
-msgstr ""
+msgstr "`connect` 或 `connectPorts` 一节的 `comment` 字段是自由格式文本。"
 
 #: ../../source/assy.rst:225
 msgid ""
@@ -287,6 +327,8 @@ msgid ""
 " as a note beside the step this connection makes in the assembly "
 "instruction book, and reported by `pc info`."
 msgstr ""
+"它是为阅读该装配体的人、或为 LLM 提供的补充背景信息。PartCAD 从不解析它，也从不据其行事；它会作为备注显示在装配说明书中该连"
+"接所对应的步骤旁边，并由 `pc info` 报告。"
 
 #: ../../source/assy.rst:232
 msgid ""
@@ -296,10 +338,12 @@ msgid ""
 "people reading it - have the complete picture. Anything stated only in "
 "`comment` is invisible to them."
 msgstr ""
+"`comment` **不是** 用来写装配说明的地方。执行装配所需的一切，都必须在其他 ASSY 字段中明确编码，这样一来，消费该装配"
+"体的工具——而不只是阅读它的人——才能掌握完整的信息。只写在 `comment` 中的内容，对它们是不可见的。"
 
 #: ../../source/assy.rst:239
 msgid "How"
-msgstr ""
+msgstr "How（装配方式）"
 
 #: ../../source/assy.rst:241
 msgid ""
@@ -308,24 +352,26 @@ msgid ""
 "optional, and so is the section itself: an omitted field means the "
 "default below."
 msgstr ""
+"`connect` 或 `connectPorts` 一节的 `how` 字段描述该对象预期以何种方式被安放到位。它的所有字段都是可选的"
+"，这一节本身也是可选的：省略某个字段即表示采用下面给出的默认值。"
 
 #: ../../source/assy.rst:267
 msgid ""
 "The units are SI, with the exception of lengths, which are in millimetres"
 " like everywhere else in PartCAD:"
-msgstr ""
+msgstr "单位采用国际单位制，长度除外——长度与 PartCAD 中其他各处一样，以毫米为单位："
 
 #: ../../source/assy.rst:271
 msgid "Field"
-msgstr ""
+msgstr "字段"
 
 #: ../../source/assy.rst:271
 msgid "Quantity"
-msgstr ""
+msgstr "物理量"
 
 #: ../../source/assy.rst:271
 msgid "Unit"
-msgstr ""
+msgstr "单位"
 
 #: ../../source/assy.rst:273
 msgid "``pushForceMax``"
@@ -333,11 +379,11 @@ msgstr ""
 
 #: ../../source/assy.rst:273 ../../source/assy.rst:281
 msgid "force"
-msgstr ""
+msgstr "力"
 
 #: ../../source/assy.rst:273 ../../source/assy.rst:281
 msgid "``N`` (newton)"
-msgstr ""
+msgstr "``N`` （牛顿）"
 
 #: ../../source/assy.rst:275
 msgid "``pushDistance``"
@@ -345,11 +391,11 @@ msgstr ""
 
 #: ../../source/assy.rst:275 ../../source/assy.rst:279
 msgid "length"
-msgstr ""
+msgstr "长度"
 
 #: ../../source/assy.rst:275 ../../source/assy.rst:279
 msgid "``mm`` (millimetre)"
-msgstr ""
+msgstr "``mm`` （毫米）"
 
 #: ../../source/assy.rst:277
 msgid "``turnTorqueMax``"
@@ -357,11 +403,11 @@ msgstr ""
 
 #: ../../source/assy.rst:277
 msgid "torque"
-msgstr ""
+msgstr "力矩"
 
 #: ../../source/assy.rst:277
 msgid "``N*m`` (newton-metre)"
-msgstr ""
+msgstr "``N*m`` （牛顿·米）"
 
 #: ../../source/assy.rst:279
 msgid "``threadStep``"
@@ -377,6 +423,8 @@ msgid ""
 "bounds a **force** in newtons. Turning it is a rotation, so "
 "``turnTorqueMax`` bounds a **torque** in newton-metres."
 msgstr ""
+"把对象推入到位是一种直线运动，因此 ``pushForceMax`` 限定的是以牛顿为单位的 **力** 。转动它则是一种旋转，因此 `"
+"`turnTorqueMax`` 限定的是以牛顿·米为单位的 **力矩** 。"
 
 #: ../../source/assy.rst:292
 msgid ""
@@ -384,6 +432,8 @@ msgid ""
 "section. The old spelling is still accepted, with a warning, and means "
 "the same thing."
 msgstr ""
+"在本节的初稿中， ``pushForceMax`` 曾被称作 ``pushTorqueMax`` 。旧写法目前仍被接受（并伴随一条警告）"
+"，含义完全相同。"
 
 #: ../../source/assy.rst:296
 msgid ""
@@ -396,6 +446,9 @@ msgid ""
 "`turnTorqueMax`. The default of `0.00` means a straight push with no "
 "turning."
 msgstr ""
+"`threadStep` 是 **导程** ：对象每转一整圈所前进的轴向距离。对于多头螺纹，它等于螺距乘以头数，而不是螺距本身。当它非零"
+"时，装配器会把推力和转动力矩放在一起管理，使最终的运动复现所给定的螺纹（更一般地说，是旋转）规律，并始终保持在 `pushForceMa"
+"x` 和 `turnTorqueMax` 的范围之内。默认值 `0.00` 表示只做直线推入、不做转动。"
 
 #: ../../source/assy.rst:304
 msgid ""
@@ -404,6 +457,8 @@ msgid ""
 "thread` below. Given on a connection, it overrides what the interfaces "
 "say for that one step."
 msgstr ""
+"螺纹属于接口，而不属于某一个单独的连接，因此它通常在接口那里声明、在这里省略——参见下文的 :ref:`interface-thread"
+"` 。若在某个连接上给出了它，它会在那一个步骤中覆盖接口的说法。"
 
 #: ../../source/assy.rst:308
 msgid ""
@@ -412,6 +467,8 @@ msgid ""
 "coordinates, that the object travels while it is pushed into place - so "
 "the object starts at `pushDistance` back along it."
 msgstr ""
+"`pushDirection` 不是一个字段：它由连接本身推导得出，并与其余内容一同报告。它是在装配体坐标系中，对象被推入到位时所行进的"
+"方向——因此对象的起点就在沿该方向回退 `pushDistance` 处。"
 
 #: ../../source/assy.rst:313
 msgid ""
@@ -426,6 +483,10 @@ msgid ""
 "direction points from the screw through the bracket towards the motor - "
 "reversing, as it must, when the motor is placed on the other side."
 msgstr ""
+"推导的依据正是接口。接口的 Z 轴正方向指向该接口所属对象的 **内部** ，而这恰恰就是前来与之相接的零件必须行进的方向。 `exam"
+"ples/feature_interface`  直接展示了这一点：同一块 3mm 支架的两个面都是同一个接口的实例， ``outer`"
+"` 那个位于 ``z=0`` 且未旋转， ``inner`` 那个位于 ``z=3`` 且被翻转过来，于是两条轴穿过材料彼此相对。该示例"
+"中的四颗 M3 螺钉各自连接到其中一个面上，其推导出的方向从螺钉穿过支架指向电机——而当电机被放到另一侧时，这个方向也必然随之反向。"
 
 #: ../../source/assy.rst:323
 msgid ""
@@ -440,6 +501,10 @@ msgid ""
 "while the assembly is merely being instantiated. If the geometry cannot "
 "be built at all, the distance is reported as unset rather than guessed."
 msgstr ""
+"`pushDistance` 是对象的起点距其最终位置有多远：即沿 `pushDirection` 方向，预备位姿与其 `with` 端"
+"口和目标的 `to` 端口重合时的位姿之间的距离。省略它时，该值由被连接的对象推导得出，取为 **该对象自身沿其所用接口位置的 Z 轴方"
+"向的长度的 1.5 倍** ——这足以让对象在插入动作开始之前与目标完全错开。这项测量需要对象的几何体，因此只有在有需求时才会进行，绝不"
+"会仅因为装配体被实例化就去做。如果几何体根本无法构建，该距离会报告为未设置，而不是去猜测。"
 
 #: ../../source/assy.rst:334
 msgid ""
@@ -450,6 +515,9 @@ msgid ""
 "and then resumes is reported, since the steps it names are then not "
 "consecutive and will not be performed together."
 msgstr ""
+"`stage` 命名的是一组预期 **同时** 连接、而不是一个接一个连接的步骤：带有相同 `stage` 的连续节点构成这样的一组。它"
+"是自由格式的标签，因此可以说明这一组是做什么用的。如果某个 `stage` 被另一个打断之后又恢复，系统会报告这一情况，因为它所指的那些"
+"步骤此时并不连续，也就不会被同时执行。"
 
 #: ../../source/assy.rst:362
 msgid ""
@@ -459,6 +527,8 @@ msgid ""
 " is held the same way. Either may be a single interface name or a list of"
 " them."
 msgstr ""
+"`holdWith` 指名正在被添加到装配体中的那个对象的接口，用于在连接过程中握持该对象。 `holdTo` 指名已经存在于装配体中的"
+"那个对象的接口，它以同样的方式被握持。两者都可以是单个接口名称，也可以是一组接口名称的列表。"
 
 #: ../../source/assy.rst:383
 msgid ""
@@ -468,6 +538,9 @@ msgid ""
 "of the object being connected to. When neither is set, the assembler is "
 "free to hold the object however it sees fit."
 msgstr ""
+"省略 `holdWith` 时，它默认取被添加的零件或装配体的 `connect` 一节中的 `hold` 字段（参见 :ref:`ho"
+"ld` ）。省略 `holdTo` 时，它默认取被连接到的那个对象的 `hold` 字段。两者都未设置时，装配器可以按它认为合适的任何方"
+"式握持该对象。"
 
 #: ../../source/assy.rst:388
 msgid ""
@@ -478,6 +551,9 @@ msgid ""
 "field of that same section, and, failing that, to the first instance of "
 "the interface."
 msgstr ""
+"`holdWithInstance` 和 `holdToInstance` 用于选择按接口的哪一个实例来握持，适用于对象实现了该接口的多"
+"个实例的情形。它们按位置与 `holdWith` 和 `holdTo` 相对应。省略时，实例默认取同一节中的 `holdInstance"
+"` 字段；若仍没有，则取该接口的第一个实例。"
 
 #: ../../source/assy.rst:394
 msgid ""
@@ -487,44 +563,49 @@ msgid ""
 "`holdToForce*` are the same for the object being connected to. Each bound"
 " is resolved on its own, from the first of these that gives it:"
 msgstr ""
+"`holdWithForceMin` 和 `holdWithForceMax` 限定握持每一端所用的力，单位为牛顿——足以让对象不发生移"
+"动，又不至于损坏它。 `holdWithForce` 一次性设置两者，而 `holdToForce*` 对被连接到的那个对象起同样的作用"
+"。每个边界值各自独立解析，取下列来源中第一个给出它的："
 
 #: ../../source/assy.rst:400
 msgid "the bound itself, `holdWithForceMin` or `holdWithForceMax`;"
-msgstr ""
+msgstr "边界值本身，即 `holdWithForceMin` 或 `holdWithForceMax` ；"
 
 #: ../../source/assy.rst:401
 msgid "`holdWithForce`, which sets both;"
-msgstr ""
+msgstr "`holdWithForce` ，它同时设置两者；"
 
 #: ../../source/assy.rst:402
 msgid ""
 "the `holdForceMin`/`holdForceMax` field of the `connect` section of the "
 "part or the assembly (see :ref:`hold`);"
 msgstr ""
+"零件或装配体的 `connect` 一节中的 `holdForceMin` / `holdForceMax` 字段（参见 :ref:`h"
+"old` ）；"
 
 #: ../../source/assy.rst:404
 msgid "the `holdForce` field of that same section, which sets both;"
-msgstr ""
+msgstr "同一节中的 `holdForce` 字段，它同时设置两者；"
 
 #: ../../source/assy.rst:405
 msgid "the defaults, **3 N** for the minimum and **7 N** for the maximum."
-msgstr ""
+msgstr "默认值，最小值为 **3 N** ，最大值为 **7 N** 。"
 
 #: ../../source/assy.rst:407
 msgid ""
 "A minimum that ends up above its maximum is a contradiction rather than a"
 " range: it is reported, and both bounds fall back to the defaults."
-msgstr ""
+msgstr "最终高于其最大值的最小值是一个矛盾，而不是一个区间：这会被报告，并且两个边界值都回退到默认值。"
 
 #: ../../source/assy.rst:413
 msgid "The thread of an interface"
-msgstr ""
+msgstr "接口的螺纹"
 
 #: ../../source/assy.rst:415
 msgid ""
 "An interface may declare the thread that connections made through it "
 "advance along, and whether it cuts its own:"
-msgstr ""
+msgstr "接口可以声明：通过它建立的连接沿着怎样的螺纹前进，以及它是否自行切出螺纹："
 
 #: ../../source/assy.rst:426
 msgid ""
@@ -535,6 +616,9 @@ msgid ""
 "and every opening, screw and hole pattern derived from them connects with"
 " the right thread without repeating it."
 msgstr ""
+"这两项都会被继承该接口的那些接口所继承，因此螺纹只需在引入它的那个接口上写明一次。在 `examples/feature_interfa"
+"ce` 中，抽象接口 `m3` 带有 `0.5` ，抽象接口 `m4` 带有 `0.7` ——即这些螺钉的真实螺距——而由它们派生出的每"
+"一个开口、螺钉和孔位阵列，都无需重复声明就能以正确的螺纹进行连接。"
 
 #: ../../source/assy.rst:433
 msgid ""
@@ -546,10 +630,13 @@ msgid ""
 "have to match one is the thread that gets cut, and failing that the one "
 "the self-tapping end brings with it."
 msgstr ""
+"连接会从它所配合的两个接口继承 `threadStep` 。两者必须在这一点上一致：两种不同的螺纹无法拧在一起，两端不一致的连接会被报告"
+"，并使 ``pc test`` 失败。除非其中一端声明了 `selfScrew` ——比如自攻螺钉，或者它所拧入的普通光孔。这时，确实必"
+"须与之匹配的那一端的螺纹，就是被切出来的那个螺纹；若没有这样的一端，则采用自攻的那一端自身带来的螺纹。"
 
 #: ../../source/assy.rst:442
 msgid "How a mating goes together"
-msgstr ""
+msgstr "配合是如何装到一起的"
 
 #: ../../source/assy.rst:444
 msgid ""
@@ -557,6 +644,8 @@ msgid ""
 " into an M3 tapped hole, a clip onto its rail - says so once, in a "
 "``how`` section of its mating, instead of on every connection:"
 msgstr ""
+"总是以同一种方式装到一起的一对接口——M3 螺钉拧入 M3 攻丝孔、卡扣扣上它的导轨——只需在其配合的 ``how`` 一节中声明一次，"
+"而不必在每个连接上都写一遍："
 
 #: ../../source/assy.rst:465
 msgid ""
@@ -567,6 +656,10 @@ msgid ""
 "assembly's to say - and nor are the ``hold*`` fields, which belong to the"
 " objects (see :ref:`hold`)."
 msgstr ""
+"它接受连接的 ``how`` 中那些说明对象如何进入的字段： ``pushForceMax`` 、 ``pushDistance`` 、"
+" ``turnDirection`` 、 ``turnTorqueMax`` 、 ``threadStep`` 、 ``selfScre"
+"w`` 和 ``snapIn`` 。 ``stage`` 不在其中——哪些步骤一起完成由装配体来决定—— ``hold*`` 这些字段也"
+"不在其中，它们属于对象（参见 :ref:`hold` ）。"
 
 #: ../../source/assy.rst:471
 msgid ""
@@ -577,16 +670,20 @@ msgid ""
 "the mating's own ``selfScrew`` and ``snapIn``, the interfaces' "
 "``threadStep`` and ``selfScrew``, and the defaults."
 msgstr ""
+"通过这一对接口建立的每个连接都会获得这些设置，而 ASSY 文件会 **逐个字段地** 覆盖它们：一个自身的 ``how`` 只给出了 "
+"``turnTorqueMax`` 的步骤，仍保留配合所给的螺纹和方向。按从最具体到最一般的顺序依次是：连接的 ``how`` 、配合的"
+" ``how`` 、配合自身的 ``selfScrew`` 和 ``snapIn`` 、接口的 ``threadStep`` 和 ``s"
+"elfScrew`` ，最后是默认值。"
 
 #: ../../source/assy.rst:478
 msgid "Reading the instructions back"
-msgstr ""
+msgstr "回读装配说明"
 
 #: ../../source/assy.rst:480
 msgid ""
 "Everything resolved from the sections above - the inherited threads, the "
 "deduced push direction, the forces each end is held with - is reported by"
-msgstr ""
+msgstr "由上述各节解析得出的一切——继承而来的螺纹、推导出的推入方向、握持每一端所用的力——都会由以下命令报告"
 
 #: ../../source/assy.rst:487
 msgid ""
@@ -594,10 +691,12 @@ msgid ""
 "assembly's own account of how it is built, for a person or for whatever "
 "performs it."
 msgstr ""
+"报告位于 ``Connections`` 之下，每个被连接的对象对应一条记录。这就是装配体对自己如何被装配出来的说明，既供人阅读，也供执"
+"行装配的任何一方使用。"
 
 #: ../../source/assy.rst:491
 msgid "Testing the instructions"
-msgstr ""
+msgstr "测试装配说明"
 
 #: ../../source/assy.rst:493
 msgid ""
@@ -609,10 +708,13 @@ msgid ""
 "sound - **including one that says nothing at all** and takes every "
 "default."
 msgstr ""
+"上面的一切都是宽松解析的：缺失的字段取其默认值，自相矛盾的字段会被报告并替换为默认值，这样装配体总能构建出来。 ``pc test`` "
+"正是越过这种宽松去审视的那一环。它的 ``connect`` 测试会让那些必须经过修复才可用的装配说明不通过，而让本身就健全的装配说明通"
+"过—— **包括什么都没说、全部采用默认值的那种** 。"
 
 #: ../../source/assy.rst:500
 msgid "What it rejects today:"
-msgstr ""
+msgstr "它目前会拒绝的情况："
 
 #: ../../source/assy.rst:502
 msgid ""
@@ -620,16 +722,19 @@ msgid ""
 "``holdWithForceMax``, or ``holdToForceMin`` above ``holdToForceMax``. A "
 "minimum above a maximum is a contradiction rather than a range."
 msgstr ""
+"某个 ``*Min`` 高于与之对应的 ``*Max`` —— ``holdWithForceMin`` 高于 ``holdWithFo"
+"rceMax`` ，或者 ``holdToForceMin`` 高于 ``holdToForceMax`` 。高于最大值的最小值是一个矛"
+"盾，而不是一个区间。"
 
 #: ../../source/assy.rst:505
 msgid ""
 "two interfaces that disagree about their `threadStep` with neither "
 "declaring `selfScrew`."
-msgstr ""
+msgstr "两个接口的 `threadStep` 不一致，而且两者都没有声明 `selfScrew` 。"
 
 #: ../../source/assy.rst:513
 msgid "Steps that can be followed"
-msgstr ""
+msgstr "可以照着做的步骤"
 
 #: ../../source/assy.rst:515
 msgid ""
@@ -640,6 +745,9 @@ msgid ""
 " ``connectPorts``), and something has to say **how** it goes into place -"
 " pushed, snapped or screwed in. That is said by any of:"
 msgstr ""
+"默认值足以让装配体构建出来，却不足以让人把它装配起来。因此，对于打算真正制造出来的装配体（ ``manufacturable: true"
+"`` ）， ``pc test`` 的要求更高：每个链接列表中第一项之后的每一项都必须是连接起来的（ ``connect`` 或 ``c"
+"onnectPorts`` ），并且必须有某处说明它 **以何种方式** 被安放到位——是推入、卡入还是拧入。下列任何一处都可以说明这一点："
 
 #: ../../source/assy.rst:522
 msgid ""
@@ -648,6 +756,9 @@ msgid ""
 "``selfScrew`` or ``snapIn`` (``stage`` and the ``hold*`` fields say when "
 "and by what, not how);"
 msgstr ""
+"连接自身的 ``how`` ，其中至少给出 ``pushForceMax`` 、 ``pushDistance`` 、 ``turnDi"
+"rection`` 、 ``turnTorqueMax`` 、 ``threadStep`` 、 ``selfScrew`` 或 ``s"
+"napIn`` 之一（ ``stage`` 和 ``hold*`` 这些字段说明的是何时以及用什么来做，而不是以何种方式）；"
 
 #: ../../source/assy.rst:526
 msgid ""
@@ -656,12 +767,14 @@ msgid ""
 " or ``selfScrew``, which then says it for every connection that pairs "
 "them;"
 msgstr ""
+"它所通过的那两个接口之间的配合：该配合的 ``how`` 的任意字段（参见上文“配合是如何装到一起的”），或者配合自身的 ``snapI"
+"n`` 或 ``selfScrew`` ——这样一来，凡是把这两个接口配成一对的连接都得到了说明；"
 
 #: ../../source/assy.rst:529
 msgid ""
 "the interfaces themselves, with a ``threadStep`` or ``selfScrew``: a "
 "thread is screwed in."
-msgstr ""
+msgstr "接口本身，带有 ``threadStep`` 或 ``selfScrew`` ：有螺纹就意味着拧入。"
 
 #: ../../source/assy.rst:532
 msgid ""
@@ -670,27 +783,30 @@ msgid ""
 "report. The IDE's Build vs Buy table shows an assembly with such steps as"
 " **Incomplete**, listing them, until they are fixed."
 msgstr ""
+"``manufacturability`` 测试会报告每一个这些都没有说明的步骤；而由 ``location:`` 放置的项，则交由 `"
+"`connectivity`` 测试来报告。在这些步骤被修正之前，IDE 的 Build vs Buy 表格会把含有此类步骤的装配体显示"
+"为 **Incomplete** ，并把它们逐一列出。"
 
 #: ../../source/assy.rst:540
 msgid "Holding an object"
-msgstr ""
+msgstr "握持对象"
 
 #: ../../source/assy.rst:542
 msgid ""
 "The defaults for the `how` fields above are declared once, next to the "
 "part or the assembly itself, in `partcad.yaml`:"
-msgstr ""
+msgstr "上述 `how` 字段的默认值，只需在 `partcad.yaml` 中、紧挨着零件或装配体本身声明一次："
 
 #: ../../source/assy.rst:563
 msgid ""
 "Everything an object contributes to every connection it takes part in "
 "lives in that one `connect` section, rather than among the fields that "
 "describe the object itself."
-msgstr ""
+msgstr "一个对象为它所参与的每一个连接所贡献的全部内容，都放在那一个 `connect` 一节里，而不是混在描述该对象本身的那些字段之中。"
 
 #: ../../source/assy.rst:571
 msgid "Scenes"
-msgstr ""
+msgstr "场景"
 
 #: ../../source/assy.rst:573
 msgid ""
@@ -701,6 +817,9 @@ msgid ""
 ":ref:`scenes`); there is no assembly object in between, and nothing about"
 " the file itself says which it is."
 msgstr ""
+"同一种文件格式也用来定义 **场景** ：一组摆放好的对象，比如一个工作单元、一张摆放着零件的桌子，或者一个仿真世界。包通过从它的 ``"
+"scenes:`` 一节、而不是 ``assemblies:`` 一节指向该文件来声明一个场景（参见 :ref:`scenes` ）；中"
+"间不存在装配体对象，并且文件本身没有任何地方说明它究竟是哪一种。"
 
 #: ../../source/assy.rst:585
 msgid ""
@@ -711,6 +830,9 @@ msgid ""
 "to say about the assembling. Declaring ``how`` in a scene is an error, "
 "both while the scene is being built and in the editor."
 msgstr ""
+"上面的一切都同样适用，只有一个例外： **场景不得使用** ``how`` 。装配体是一件产品，它说明自己是如何装配起来的，装配说明书正"
+"是据此生成的。而场景只陈述一个最终状态，其中没有任何东西是被装配出来的，因此也就无从谈起装配过程。在场景中声明 ``how`` 是一个错"
+"误，构建场景时和在编辑器中都是如此。"
 
 #: ../../source/assy.rst:592
 msgid ""
@@ -719,10 +841,12 @@ msgid ""
 "are, and saying it with the ports the two objects declare is better than "
 "saying it with coordinates somebody worked out by hand."
 msgstr ""
+"``connect`` 和 ``connectPorts`` 这两节本身仍然保留。把夹爪放到它所夹持的夹具上，陈述的是各物体所处的位置，"
+"而用这两个对象所声明的端口来表述它，要好过用某个人手工算出来的坐标。"
 
 #: ../../source/assy.rst:615
 msgid "Part of an assembly"
-msgstr ""
+msgstr "装配体的一部分"
 
 #: ../../source/assy.rst:617
 msgid ""
@@ -730,30 +854,32 @@ msgid ""
 "own: the head of the logo, one bay of a rack, the parts that arrive in "
 "one box. A **filter** names the links to keep and leaves the rest out."
 msgstr ""
+"值得单独查看的子装配体，往往并不是一个独立的对象：标志的头部、机架的某一格、装在同一个箱子里送来的那些零件。 **过滤器** 指名要保留"
+"哪些链接，并把其余的排除在外。"
 
 #: ../../source/assy.rst:621
 msgid ""
 "A filter is a tree of link names mirroring the tree the ASSY file already"
 " is:"
-msgstr ""
+msgstr "过滤器是一棵由链接名称构成的树，它与 ASSY 文件本身的那棵树相对应："
 
 #: ../../source/assy.rst:629
 msgid "Three rules, and nothing else:"
-msgstr ""
+msgstr "只有三条规则，再无其他："
 
 #: ../../source/assy.rst:631
 msgid "a link the filter names is kept, and a link it does not name is dropped;"
-msgstr ""
+msgstr "过滤器指名的链接予以保留，它未指名的链接则被丢弃；"
 
 #: ../../source/assy.rst:632
 msgid "a link named with nothing under it keeps everything under it;"
-msgstr ""
+msgstr "被指名、但其下没有写任何内容的链接，保留它下面的全部内容；"
 
 #: ../../source/assy.rst:633
 msgid ""
 "a link named with at least one child under it keeps those children and "
 "drops its other ones."
-msgstr ""
+msgstr "被指名、且其下至少写了一个子节点的链接，保留这些子节点，并丢弃它的其他子节点。"
 
 #: ../../source/assy.rst:636
 msgid ""
@@ -762,20 +888,22 @@ msgid ""
 "position in its ``links:`` list. So there is no link a filter cannot "
 "name."
 msgstr ""
+"链接的指名方式与 :ref:`其他各处指名它的方式 <assy-link-names>` 相同：它的 ``name:`` 、它所放置的零"
+"件或装配体，或者它在所属 ``links:`` 列表中的位置。因此，不存在过滤器无法指名的链接。"
 
 #: ../../source/assy.rst:640
 msgid ""
 "A filter may equally be written as a list, which is the convenient form "
 "when nothing below the names matters:"
-msgstr ""
+msgstr "过滤器同样可以写成一个列表；当名称之下的内容都无关紧要时，这是更方便的写法："
 
 #: ../../source/assy.rst:648
 msgid "There are three ways to use one, and they do different things."
-msgstr ""
+msgstr "过滤器有三种用法，它们所做的事情各不相同。"
 
 #: ../../source/assy.rst:651
 msgid "Filtering for one picture"
-msgstr ""
+msgstr "为某一张图进行过滤"
 
 #: ../../source/assy.rst:653
 msgid ""
@@ -783,6 +911,8 @@ msgid ""
 " the package: the assembly is built as it always is and the filter is "
 "applied to the result, for this one file."
 msgstr ""
+"``pc render`` 和 ``pc export`` 接受 ``--filter`` ，并且不会向包中写入任何内容：装配体照常构建"
+"，过滤器只作用于构建结果，且仅针对这一个文件。"
 
 #: ../../source/assy.rst:663
 msgid ""
@@ -793,6 +923,9 @@ msgid ""
 "refused, naming both things that went wrong, so a mistyped filename is "
 "not quietly read as a link name."
 msgstr ""
+"该参数 **首先被当作文件名** ：一个有人保存在包旁边并加以编辑的文件。只有在不存在这样的文件时，这段文本才会被当作过滤器本身、按 J"
+"SON 或 YAML 来读取——对于只有一个链接的情形，以及脚本临时拼出来的内容，这是更方便的写法。两者都不是的名称会被拒绝，并同时指出"
+"两方面的问题，这样拼错的文件名就不会被悄悄当成链接名称。"
 
 #: ../../source/assy.rst:670
 msgid ""
@@ -802,6 +935,9 @@ msgid ""
 "built rather than written, a filter here may also select *inside* a link "
 "that places an assembly of another package."
 msgstr ""
+"保留下来的一切都停留在整个装配体为它安排的位置上。过滤器绝不会重新解析 ``connect:`` ——对于工作台上的实物而言，这是“这个"
+"装配体的一部分”唯一成立的理解方式。由于这里的结果是构建出来的、而不是写出来的，因此这里的过滤器也可以在放置了另一个包的装配体的那个链接"
+" *内部* 进行选择。"
 
 #: ../../source/assy.rst:676
 msgid ""
@@ -816,10 +952,16 @@ msgid ""
 "selection, so what is ticked on the 3D view is what the 2D and Draft tabs"
 " draw, and a box cleared on one is cleared on the others."
 msgstr ""
+"`面向 VS Code 的 PartCAD 扩展 <https://marketplace.visualstudio.com/items"
+"?itemName=PartCAD.partcad-official>`_ 中也提供了同样的选项：查看器的 **2D** 和 **Dra"
+"ft** 标签页会在图形旁边列出该对象由什么构成，每一项都带一个复选框，被勾选的内容就是本次渲染所使用的过滤器。在 2D 标签页上，该列"
+"表还包含每个节点的端口和接口，勾选其中之一就会把那个端口画到投影上——这与 ``--with-ports`` 、 ``--with-in"
+"terfaces`` 和 ``--port`` 所要求的是同一件事。三个 Design 标签页共享同一份选择，因此在 3D 视图上勾选的"
+"内容，就是 2D 和 Draft 标签页所绘制的内容，在其中一个上取消勾选，另外两个上也随之取消。"
 
 #: ../../source/assy.rst:687
 msgid "Filtering every time the file is written"
-msgstr ""
+msgstr "每次写出文件时都进行过滤"
 
 #: ../../source/assy.rst:689
 msgid ""
@@ -829,6 +971,8 @@ msgid ""
 " type, in either place a file type is configured -- the package's own "
 "section, and the object's:"
 msgstr ""
+"在 ``render:`` 或 ``export:`` 文件类型上写一个 ``filter:`` ，就把同样的意思永久地固定下来，于是一"
+"个包可以在整体图形旁边同时签入某个子装配体的图片。它按文件类型声明，可以写在配置文件类型的任一处——包自己的那一节，以及对象的那一节："
 
 #: ../../source/assy.rst:712
 msgid ""
@@ -837,10 +981,12 @@ msgid ""
 "sketch have no links, so a filter over one of them is reported rather "
 "than ignored."
 msgstr ""
+"``pc render --filter`` 和 ``pc export --filter`` 会在单次运行中覆盖它，就像 ``--vi"
+"ew`` 覆盖已配置的视口那样。零件和草图没有链接，因此对它们使用过滤器会被报告出来，而不是被忽略。"
 
 #: ../../source/assy.rst:717
 msgid "Filtering into a new object"
-msgstr ""
+msgstr "过滤成一个新对象"
 
 #: ../../source/assy.rst:719
 msgid ""
@@ -848,6 +994,8 @@ msgid ""
 " everything the filter drops taken out of it, as ``DST.assy``, declared "
 "beside ``SRC``."
 msgstr ""
+"``pc filter`` 则是写出一份声明：把 ``SRC`` 的 ASSY 文件中被过滤器丢弃的内容全部去掉，写成 ``DST.as"
+"sy`` ，并声明在 ``SRC`` 旁边。"
 
 #: ../../source/assy.rst:728
 msgid ""
@@ -859,6 +1007,10 @@ msgid ""
 "is left alone when it already points at the same file, so whatever file "
 "types were configured for it survive a re-run."
 msgstr ""
+"此后 ``DST`` 就是一个与其他对象别无二致的对象：它可以渲染、可以导出、有物料清单、供应商可以为它报价，而且它是一个可供人以差异形"
+"式审阅的文件。如果 ``SRC`` 是装配体，那么 ``DST`` 也是装配体；如果 ``SRC`` 是场景，那么 ``DST`` 也是"
+"场景——类别随源而定。已存在的 ``DST`` 会被覆盖；当它的声明已经指向同一个文件时，该声明保持不变，因此为它配置过的文件类型在重新"
+"运行后依然存在。"
 
 #: ../../source/assy.rst:735
 msgid ""
@@ -871,6 +1023,11 @@ msgid ""
 "thing it cannot do is select inside a link that places a part or another "
 "package's assembly; it says so and keeps that link whole."
 msgstr ""
+"被过滤的是 **文件** ，而不是构建出来的装配体，正是这一点使得结果仍然是一个有人能够实际装配出来的装配体：保留下来的每个链接都保留了"
+"它的 ``connect:`` 、 ``how:`` 、参数和注释。（这也是 ``pc filter`` 需要有一个 Assembly "
+"YAML 文件可供处理的原因。 ``step`` 或 ``urdf`` 类型的装配体没有自己的链接，而 ``pc convert ass"
+"embly -t assy`` 正是把这样的装配体转换成带链接的文件的办法。）它唯一做不到的，是在放置了零件、或放置了另一个包的装配体的"
+"链接内部进行选择；它会说明这一点，并把该链接整体保留。"
 
 #: ../../source/assy.rst:743
 msgid ""
@@ -879,6 +1036,8 @@ msgid ""
 "first of two once the one above it has gone -- so a position would "
 "otherwise rename it, and anything that named it would point at nothing."
 msgstr ""
+"名称原本就是其位置的链接，该位置会作为 ``name:`` **写入** 副本之中。过滤会使链接发生移动——五个之中的第二个，在它上面那"
+"个被去掉之后就成了两个之中的第一个——否则位置就会改变它的名称，而任何指名它的地方都将指向不存在的东西。"
 
 #: ../../source/assy.rst:748
 msgid ""
@@ -887,16 +1046,18 @@ msgid ""
 "filter`` reports every one of them, naming the line, and so does :ref:`pc"
 " lint <assy-lint>` over the file afterwards."
 msgstr ""
+"过滤可能破坏的恰恰只有一件事，而且这件事是会被检查的： **保留下来的链接可能连接到了被丢弃的链接上** 。 ``pc filter``"
+" 会逐一报告这类情况并指出所在行，事后对该文件运行 :ref:`pc lint <assy-lint>` 也会如此。"
 
 #: ../../source/assy.rst:757
 msgid ""
 "Name those links in the filter too, or place the kept ones with "
 "``location:``."
-msgstr ""
+msgstr "要么在过滤器中把那些链接也一并指名，要么用 ``location:`` 来放置保留下来的链接。"
 
 #: ../../source/assy.rst:763
 msgid "Validation"
-msgstr ""
+msgstr "校验"
 
 #: ../../source/assy.rst:765
 msgid ""
@@ -907,6 +1068,10 @@ msgid ""
 "``connect`` -- or ``part``, ``assembly`` and ``links`` -- exclude one "
 "another."
 msgstr ""
+"ASSY 文件会依据一份 JSON 模式（ ``src/partcad_utils/schema/assy.json`` ）进行检查，该"
+"模式描述的是 Jinja2 渲染 *之后* 的文档：上文列出的那些节点键、OCCT 位置的形式，以及 ``location`` 、 ``"
+"connectPorts`` 和 ``connect`` ——或者 ``part`` 、 ``assembly`` 和 ``links`"
+"` ——彼此互斥这一事实。"
 
 #: ../../source/assy.rst:771
 msgid ""
@@ -918,6 +1083,10 @@ msgid ""
 "that is wrong would otherwise be answered, much later, with \"Target part"
 " not found\" and a part at the origin."
 msgstr ""
+"除该模式之外还有一项检查，因为没有任何模式能够描述它： ``connect:`` / ``connectPorts:`` 指名的必须是 "
+"**同一个** ``links:`` 列表中、写在本节点 **上方** 的链接，因为在构建装配体时 PartCAD 正是到那里去寻找它的"
+"。连接的 ``interferes:`` 中的每一个名称也同样如此，只不过它们可以位于文件中的任何地方。否则，一个写错的名称要等到很久以"
+"后，才会以“Target part not found”和一个位于原点的零件作为回应。"
 
 #: ../../source/assy.rst:778
 msgid ""
@@ -926,6 +1095,8 @@ msgid ""
 "than kept beside it, so the two cannot drift apart; only the one rule "
 "differs."
 msgstr ""
+"被当作 **场景** 读取的文件，会依据同一份模式进行检查，只是其中禁用了 ``how`` 。场景模式是由上述模式派生出来的，而不是与它"
+"并列单独维护的另一份，因此两者不会逐渐走样；差别只有这一条规则。"
 
 #: ../../source/assy.rst:782
 #, python-brace-format, python-format
@@ -940,14 +1111,18 @@ msgid ""
 "expression evaluates to, which branch of an ``{% if %}`` is taken -- is "
 "left unreported rather than guessed at."
 msgstr ""
+"由于磁盘上的文件是一个模板、而不是它所渲染出的 YAML，检查器会在解析之前把每一处 Jinja2 结构都遮蔽掉： ``{{ expr "
+"}}`` 变成一个占位值， ``{% tag %}`` 变成同样长度的空白。遮蔽后的文档保持与原文件完全一致的行列布局，因此模板错误、Y"
+"AML 错误和模式违规都会在它们所出自的那个字符位置上被报告出来，而循环体或条件体只检查一次。凡是遮蔽之后无从得知的东西——表达式求值的"
+"结果、 ``{% if %}`` 走的是哪一个分支——都不予报告，而不是去猜测。"
 
 #: ../../source/assy.rst:791
 msgid "Run the checks over a package from the command line with:"
-msgstr ""
+msgstr "在命令行中对整个包运行这些检查："
 
 #: ../../source/assy.rst:797
 msgid "or narrow it to ASSY files only:"
-msgstr ""
+msgstr "或者把范围收窄到只检查 ASSY 文件："
 
 #: ../../source/assy.rst:803
 msgid ""
@@ -955,6 +1130,8 @@ msgid ""
 "process itself -- no daemon, no package to load -- so it answers even "
 "when the package does not:"
 msgstr ""
+"若要改为检查单个文件，把它们的名字写出来即可。这会在 ``pc`` 进程自身中运行——不需要守护进程，也不需要加载包——因此即便包本身给"
+"不出答案，它也依然能够作答："
 
 #: ../../source/assy.rst:811
 msgid ""
@@ -962,6 +1139,8 @@ msgid ""
 "numbers), and ``--stdin`` to check content that has not been saved, which"
 " is how an editor checks the buffer on screen:"
 msgstr ""
+"加上 ``--json`` 可得到机器可读的检查结果（行号和列号从 0 开始计数），加上 ``--stdin`` 可检查尚未保存的内容—"
+"—编辑器正是以这种方式检查屏幕上的缓冲区："
 
 #: ../../source/assy.rst:819
 msgid ""
@@ -970,6 +1149,9 @@ msgid ""
 "``partcad.yaml`` files around it: a file at least one scene declares and "
 "no assembly declares is a scene. Say so outright with ``--schema``:"
 msgstr ""
+"单个文件究竟按装配体还是按场景来检查，文件本身并没有说明，因此 ``pc lint --file`` 会从它周围的 ``partcad."
+"yaml`` 文件推断出来：如果至少有一个场景声明了某个文件、并且没有任何装配体声明它，那么它就是场景。用 ``--schema`` 可"
+"以直接把话说明白："
 
 #: ../../source/assy.rst:828
 msgid ""
@@ -982,6 +1164,10 @@ msgid ""
 " a file no loaded package mentions. Set ``partcad.lint.enabled`` to "
 "``false`` to turn that off."
 msgstr ""
+"`面向 VS Code 的 PartCAD 扩展 <https://marketplace.visualstudio.com/items"
+"?itemName=PartCAD.partcad-official>`_ 在 ASSY 文件打开时运行的正是这项检查，并把检查结果显示"
+"在 Problems 视图中。它根据自己已经加载的包内容来回答同一个问题，那就是声明本身、而不是对声明的猜测；对于没有任何已加载的包提及"
+"的文件，它会回退到该命令自己给出的答案。把 ``partcad.lint.enabled`` 设为 ``false`` 即可关闭这项功能。"
 
 #: ../../source/assy.rst:835
 msgid ""
@@ -992,6 +1178,9 @@ msgid ""
 "flavor: nothing points at a package configuration, so ``--schema`` does "
 "not apply to one."
 msgstr ""
+"``partcad.yaml`` 由同一个检查器以同样的方式、依据配置模式（ ``src/partcad_utils/schema/pa"
+"rtcad.json`` ）进行检查——参见 :doc:`configuration` 。它同样是一个 Jinja2 模板，因此在解析之"
+"前会像 ASSY 文件一样被遮蔽；而且它没有装配体／场景之分：没有任何东西会指向一份包配置，所以 ``--schema`` 对它并不适用。"
 
 #~ msgid ""
 #~ "The top-level node of an ASSY "

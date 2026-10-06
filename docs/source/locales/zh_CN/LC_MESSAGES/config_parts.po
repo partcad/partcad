@@ -42,6 +42,9 @@ msgid ""
 "the joints that are not made once - a shaft carrying several parts along its "
 "length, a rail, a bus bar:"
 msgstr ""
+"``multiConnect`` 说明一个接口实例是否可以接受多个对象。它默认为 ``false`` ，因为大多数连接只做一次：一个凸起"
+"容纳一块积木，一个螺栓孔容纳一颗螺栓，两个对象连接到同一个实例是 ``pc test`` 会报告的错误。请在那些并非只做一次的连接上设置"
+"它——沿轴长承载多个零件的轴、导轨、汇流排："
 
 #: ../../source/config_parts.rst:92
 msgid ""
@@ -50,6 +53,8 @@ msgid ""
 "connections made through it. Two interfaces that are connected have to agree "
 "on their thread unless one of them cuts its own. See :doc:`assy`."
 msgstr ""
+"接口的 ``threadStep`` 、 ``selfScrew`` 和 ``multiConnect`` 字段会被继承它的接口以及通过"
+"它建立的连接所继承。两个相互连接的接口必须在螺纹上保持一致，除非其中一个自攻出螺纹。请参见 :doc:`assy` 。"
 
 #: ../../source/config_parts.rst:97
 msgid ""
@@ -57,6 +62,8 @@ msgid ""
 "and ``holdTo*`` fields of the ``how`` section of an Assembly YAML "
 "``connect``/``connectPorts`` node. See :doc:`assy`."
 msgstr ""
+"``connect`` 小节中的字段，是装配体 YAML 中 ``connect``/``connectPorts`` 节点的 ``ho"
+"w`` 小节里 ``holdWith*`` 和 ``holdTo*`` 字段的默认值。请参见 :doc:`assy` 。"
 
 #: ../../source/config_parts.rst:101
 msgid ""
@@ -68,6 +75,9 @@ msgid ""
 "says nothing about how the object is built: nothing reads these images but "
 "the README."
 msgstr ""
+"``images`` 以相对于包的路径列出建模该零件时所依据的图片——工程图、照片或草图。 ``pc render -t readme`"
+"` 会把它们放在零件旁边、紧挨着零件自身的渲染图像，这样 README 的读者就能看到模型当初是照着什么做出来的。装配体、草图和接口也接"
+"受同一个字段，而它完全不说明对象是如何构建的：除了 README 之外，没有任何东西会读取这些图片。"
 
 #: ../../source/config_parts.rst:108
 msgid ""
@@ -75,6 +85,8 @@ msgid ""
 "opposed to ``parameters``, which say what is asked of the type that produces "
 "it. See :ref:`properties` below."
 msgstr ""
+"``properties`` 小节说明这个零件产出的形状是什么；与之相对， ``parameters`` 说明的是对产出它的类型提出了什"
+"么要求。请参见下面的 :ref:`properties` 。"
 
 #: ../../source/config_parts.rst:112
 msgid "See :ref:`location` for more information on the OCCT Location object."
@@ -125,13 +137,15 @@ msgstr "位于 ``cube.scad``"
 
 #: ../../source/config_parts.rst:160
 msgid "Chili3D scripts"
-msgstr ""
+msgstr "Chili3D 脚本"
 
 #: ../../source/config_parts.rst:162
 msgid ""
 "`Chili3D <https://github.com/xiangechen/chili3d>`_ scripts are JavaScript, "
 "not Python, and live in ``.chili`` files:"
 msgstr ""
+"`Chili3D <https://github.com/xiangechen/chili3d>`_ 脚本用 JavaScript 而不"
+"是 Python 编写，保存在 ``.chili`` 文件中："
 
 #: ../../source/config_parts.rst:171
 msgid ""
@@ -139,6 +153,8 @@ msgid ""
 "with the Chili3D API already loaded, and takes whatever the script hands "
 "back as the part. These are available as globals:"
 msgstr ""
+"``.chili`` 文件是一个 ES 模块。PartCAD 会在已经加载好 Chili3D API 的 Node.js 沙箱中运行它，"
+"并把脚本交回的任何内容作为该零件。以下内容可作为全局变量使用："
 
 #: ../../source/config_parts.rst:175
 msgid "``chili3d``"
@@ -146,7 +162,7 @@ msgstr ""
 
 #: ../../source/config_parts.rst:176
 msgid "the Chili3D module namespace (``Plane``, ``XYZ``, ...)"
-msgstr ""
+msgstr "Chili3D 模块的命名空间（ ``Plane`` 、 ``XYZ`` ……）"
 
 #: ../../source/config_parts.rst:178
 msgid "``shapeFactory``"
@@ -154,7 +170,7 @@ msgstr ""
 
 #: ../../source/config_parts.rst:179
 msgid "a ready-made ``new chili3d.ShapeFactory()``"
-msgstr ""
+msgstr "一个现成的 ``new chili3d.ShapeFactory()``"
 
 #: ../../source/config_parts.rst:181
 msgid "``wasm``"
@@ -162,7 +178,7 @@ msgstr ""
 
 #: ../../source/config_parts.rst:182
 msgid "the OCCT WebAssembly kernel, for what the high-level API does not cover"
-msgstr ""
+msgstr "OCCT WebAssembly 内核，用于高层 API 未覆盖的部分"
 
 #: ../../source/config_parts.rst:184
 msgid "``show(...)``"
@@ -170,7 +186,7 @@ msgstr ""
 
 #: ../../source/config_parts.rst:185
 msgid "declare a shape (or an array of them) to be the part's result"
-msgstr ""
+msgstr "声明某个形状（或一组形状）作为该零件的结果"
 
 #: ../../source/config_parts.rst:187
 msgid "``show_object(...)``"
@@ -178,7 +194,7 @@ msgstr ""
 
 #: ../../source/config_parts.rst:188
 msgid "an alias of ``show``, so a script reads like its CadQuery counterpart"
-msgstr ""
+msgstr "``show`` 的别名，这样脚本读起来就和对应的 CadQuery 脚本一样"
 
 #: ../../source/config_parts.rst:190
 msgid "``parameters``"
@@ -186,7 +202,7 @@ msgstr ""
 
 #: ../../source/config_parts.rst:191
 msgid "the part's build parameters, also injected as globals by name"
-msgstr ""
+msgstr "该零件的构建参数，同时也按名称注入为全局变量"
 
 #: ../../source/config_parts.rst:202
 msgid ""
@@ -196,6 +212,10 @@ msgid ""
 "``IShape`` inside it - PartCAD unwraps all of them, and reports the error a "
 "failed ``Result`` carries rather than producing an empty part."
 msgstr ""
+"没有调用 ``show()`` 的脚本，也可以把结果导出为 ``default`` 、 ``shape`` 、 ``result`` 或"
+" ``part`` 。无论采用哪种方式，形状都可以是原始的 ``TopoDS_Shape`` 、Chili3D API 返回的 ``Re"
+"sult`` ，或者其中包含的 ``IShape`` ——PartCAD 会把它们全部拆包；当 ``Result`` 表示失败时，它会报"
+"告其中携带的错误，而不是产出一个空零件。"
 
 #: ../../source/config_parts.rst:208
 msgid ""
@@ -204,10 +224,12 @@ msgid ""
 "declares under ``javascriptRequirements``, and relative for a file next to "
 "the script."
 msgstr ""
+"脚本在 PartCAD 沙箱内求值，因此 ``import`` 的行为与在任何 Node.js 项目中一样：对包在 ``javascri"
+"ptRequirements`` 下声明的内容按名称导入，对脚本旁边的文件按相对路径导入。"
 
 #: ../../source/config_parts.rst:218
 msgid "Choosing versions"
-msgstr ""
+msgstr "选择版本"
 
 #: ../../source/config_parts.rst:220
 msgid ""
@@ -215,6 +237,8 @@ msgid ""
 "``chili3dVersion`` the version of Chili3D to render with. Both may be set on "
 "the package and overridden on an individual part:"
 msgstr ""
+"``javascriptVersion`` 指定渲染所用的 Node.js 主版本号， ``chili3dVersion`` 指定渲染所"
+"用的 Chili3D 版本。两者都可以在包上设置，并在单个零件上覆盖："
 
 #: ../../source/config_parts.rst:236
 msgid ""
@@ -225,6 +249,10 @@ msgid ""
 "that not every Chili3D release publishes the WebAssembly kernel PartCAD "
 "needs - one that does not fails with a message naming the version."
 msgstr ""
+"``chili3dVersion`` 接受精确版本，也接受 npm 认可的任何版本范围或标签（ ``\"^1.1\"`` 、 ``\"late"
+"st\"`` ）。在 ``javascriptRequirements`` 下写出 ``chili3d`` 的作用是一样的；两者同时给出时"
+"以专用选项为准，而零件的选择优先于其所属包的选择。注意并非每个 Chili3D 发布版本都会发布 PartCAD 所需的 WebAsse"
+"mbly 内核——没有发布的版本会失败，并给出一条指明该版本的消息。"
 
 #: ../../source/config_parts.rst:243
 msgid ""
@@ -235,10 +263,13 @@ msgid ""
 "of its own and changes nothing for any other package - or for another part "
 "of the same one."
 msgstr ""
+"在 Python 脚本类型中，PartCAD 会固定 CadQuery 和 build123d 的版本，并覆盖包提出的其他版本要求；这里"
+"则不同，版本确实由包自己决定。Node.js 沙箱是由它所持有的依赖集合来标识的，因此使用自有 Chili3D 版本的包会得到属于自己的"
+"环境，不会改变任何其他包——也不会改变同一个包中的其他零件。"
 
 #: ../../source/config_parts.rst:249
 msgid "Two notes on how this differs from the Python script types:"
-msgstr ""
+msgstr "与 Python 脚本类型相比，有两点差异值得注意："
 
 #: ../../source/config_parts.rst:251
 msgid ""
@@ -247,6 +278,8 @@ msgid ""
 "JavaScript's rules: a capture group is referenced as ``$1`` where Python "
 "would write ``\\1``, and a literal dollar sign is written ``$$``."
 msgstr ""
+"``patch`` 表达式是 JavaScript 正则表达式，而不是 Python 正则表达式。语法几乎相同，但替换遵循 JavaSc"
+"ript 的规则：捕获组用 ``$1`` 引用，而 Python 中写作 ``\\1`` ；字面的美元符号写作 ``$$`` 。"
 
 #: ../../source/config_parts.rst:255
 msgid ""
@@ -254,6 +287,8 @@ msgid ""
 "script and then exported to STEP, STL, 3MF and everything else PartCAD "
 "writes, but no exporter produces a ``.chili`` file."
 msgstr ""
+"Chili3D 只是一种输入格式。零件可以由 ``.chili`` 脚本 *定义* ，然后导出为 STEP、STL、3MF 以及 Par"
+"tCAD 能写出的其他所有格式，但没有任何导出器会产出 ``.chili`` 文件。"
 
 #: ../../source/config_parts.rst:260
 msgid "CAD Files"
@@ -269,6 +304,7 @@ msgid ""
 "have to be committed to the package: see :ref:`files` for how to have "
 "PartCAD download it on demand."
 msgstr ""
+"在别处发布的 CAD 文件（例如在某个供应商的目录中）不必提交到包里：关于如何让 PartCAD 按需下载它，请参见 :ref:`files` 。"
 
 #: ../../source/config_parts.rst:0
 msgid "CAD file"
@@ -409,6 +445,9 @@ msgid ""
 "serves every enrich, in any package, that asks for the same values. An "
 "``alias`` resolves to the object itself."
 msgstr ""
+"两者都是引用，而不是各自独立的零件。 ``enrich`` 解析到它所指向的对象中、带有它所要求取值的那个 *实例* ——也就是 Par"
+"tCAD 为 ``<name>;<param>=<value>`` 产出的那个对象——因此该实例属于声明源对象的那个包，而且一个实例可以"
+"服务于任何包中要求相同取值的每一个 enrich。 ``alias`` 则解析到对象本身。"
 
 #: ../../source/config_parts.rst:379
 msgid ""
@@ -418,6 +457,8 @@ msgid ""
 "what it points at hands back different geometry and so keys differently -- "
 "on the source's key, plus what it adds."
 msgstr ""
+"形状缓存也是按同样的方式取键的：引用采用它所指向对象的键，因此无论有多少个引用指向它，几何体都只存储一次，而不是每个引用存一份。会平移或"
+"缩放其所指对象的引用，交回的是不同的几何体，因此取键方式也不同——取源对象的键，再加上它自己添加的内容。"
 
 #: ../../source/config_parts.rst:385
 msgid ""
@@ -427,6 +468,9 @@ msgid ""
 "holds for what a parameter declares as its ``default:`` or offers in its "
 "``enum:``."
 msgstr ""
+"由于请求某个取值就是请求带有该取值的实例，而实例的名称形如 ``<name>;<param>=<value>,...`` ，因此 ``w"
+"ith:`` 的取值不能包含 ``,`` 、 ``;`` 或 ``=`` ：这样的取值无法命名。参数在 ``default:`` 中声明"
+"的取值、以及在 ``enum:`` 中提供的取值，同样如此。"
 
 #: ../../source/config_parts.rst:390
 msgid ""
@@ -437,16 +481,19 @@ msgid ""
 "itself. Declaring one of them on an enrich is reported as ignored, and the "
 "object it produces is the one it would have produced without it."
 msgstr ""
+"enrich 只说明它想要哪些取值，完全不涉及对象是如何构建的。 ``path`` 、各项依赖要求、沙箱版本、那些由一个对象构建出另一个"
+"对象的类型所需的输入——以及 ``parameters:`` ，它应当通过 ``with:`` 来表述——都属于对象自身的声明。在 en"
+"rich 上声明其中任何一项都会被报告为已忽略，它产出的对象与不写这些时产出的对象相同。"
 
 #: ../../source/config_parts.rst:397
 msgid ""
 "Both are available for :ref:`sketches` and :ref:`assemblies` too, spelled "
 "the same way."
-msgstr ""
+msgstr "两者同样可用于 :ref:`sketches` 和 :ref:`assemblies` ，写法完全相同。"
 
 #: ../../source/config_parts.rst:403
 msgid "Part types the package defines itself"
-msgstr ""
+msgstr "包自行定义的零件类型"
 
 #: ../../source/config_parts.rst:405
 msgid ""
@@ -457,6 +504,9 @@ msgid ""
 "modelling helper the package already has -- and the difference between them "
 "is a handful of parameters rather than a script each."
 msgstr ""
+"上面这些类型是 PartCAD 自身实现的。包也可以在 ``partTypes`` 小节中声明属于自己的类型，然后用它来构建零件。当一族"
+"零件每次都以相同方式产出——从表格生成、从目录获取、由包中已有的建模辅助工具构建——而它们之间的差别只是少数几个参数、而不是各写一份脚本"
+"时，这样做是值得的。"
 
 #: ../../source/config_parts.rst:427
 msgid ""
@@ -466,6 +516,9 @@ msgid ""
 "globals -- the resolved ``parameters`` among them -- and which leaves the "
 "geometry in a global ``output``:"
 msgstr ""
+"``kind`` 的取值是 ``wrapper`` ，这是默认值，也是目前唯一的取值。它的 ``path`` （省略时为 ``<name"
+">.py`` ）是一个 Python 脚本，PartCAD 会在沙箱中为每个零件运行它一次，并把该零件的 ``request`` 放入脚"
+"本的全局变量中——其中包括解析后的 ``parameters`` ——而脚本则把几何体留在全局变量 ``output`` 中："
 
 #: ../../source/config_parts.rst:441
 msgid ""
@@ -475,6 +528,9 @@ msgid ""
 "custom output implementation (see :ref:`output-files`), pointed at building "
 "a shape rather than writing a file."
 msgstr ""
+"由于脚本在沙箱中运行，它可以导入 OCP、build123d 或 CadQuery； ``partType`` 上的 ``pythonR"
+"equirements`` 说明该沙箱需要什么，与它在包上的作用完全一样。这与自定义输出实现（参见 :ref:`output-files"
+"` ）是同一套机制，只不过指向的是构建形状而不是写出文件。"
 
 #: ../../source/config_parts.rst:447
 msgid ""
@@ -486,11 +542,15 @@ msgid ""
 "listed like any other object but is never a shape in its own right -- it is "
 "how parts are made, not one of them."
 msgstr ""
+"以 ``:`` 开头的 ``type`` 指向该零件所在包自身的某个 ``partType`` ，在包被加载时会展开为 ``<packa"
+"ge path>:<name>`` 。要使用另一个包的类型，就把包路径完整写出来，这正是这些类型可以共享的原因：声明了 ``partTy"
+"pe`` 的包，就是别人可以导入并用来构建零件的包。 ``partType`` 会像其他对象一样被列出，但它本身从来不是一个形状——它是"
+"零件的制造方式，而不是零件之一。"
 
 #: ../../source/config_parts.rst:454
 msgid ""
 "See ``examples/produce_part_wrapper`` for the whole of the example above."
-msgstr ""
+msgstr "上面这个示例的完整内容请参见 ``examples/produce_part_wrapper`` 。"
 
 #: ../../source/config_parts.rst:456
 msgid ""
@@ -498,6 +558,8 @@ msgid ""
 "again and again, please file an issue on GitHub or write to `support@partcad."
 "org <mailto:support@partcad.org>`_."
 msgstr ""
+"如果你发现自己反复在写同一种类型，希望 PartCAD 原生实现它，请在 GitHub 上提交 issue，或写信至 `support@"
+"partcad.org <mailto:support@partcad.org>`_ 。"
 
 #: ../../source/config_parts.rst:463
 msgid "Parameters"
@@ -511,6 +573,8 @@ msgid ""
 "type accepts them. Two parts that differ in a parameter are different "
 "shapes, so a parameter is part of what the shape cache is keyed on."
 msgstr ""
+"参数是 **输入** 。它们是向产出该零件的对象类型提出的请求——CadQuery 脚本拉伸到的 ``width`` 、网格据以做网格化"
+"的 ``tolerance`` ——只有该类型接受它们，它们才有意义。两个在某个参数上不同的零件是不同的形状，因此参数是形状缓存取键所依据的一部分。"
 
 #: ../../source/config_parts.rst:471
 msgid ""
@@ -519,6 +583,8 @@ msgid ""
 "made of something, and ``properties.material`` states what the part that "
 "came out is made of."
 msgstr ""
+"与之相对，产出来的那一侧是 :ref:`properties` ；即使两者同名也不是一回事： ``parameters.material"
+"`` 要求零件用某种材料制造，而 ``properties.material`` 陈述产出的零件是用什么做成的。"
 
 #: ../../source/config_parts.rst:476
 msgid ""
@@ -530,6 +596,9 @@ msgid ""
 "the types that can honour them. Today there are three - ``material``, "
 "``color`` and ``tolerance``."
 msgstr ""
+"大多数参数是零件自己发明的。脚本可以给参数起任意名字，而该脚本之外没有任何东西知道它的含义，因此 PartCAD 允许零件声明它想要的任"
+"何名称。少数几个则是 **对象类型参数** ：它们由零件 *类型* 贡献，而不是凭空声明出来，并且带有 PartCAD 自身会据以行动的"
+"含义。因此它们只在能够兑现它们的类型上可用。目前共有三个—— ``material`` 、 ``color`` 和 ``tolerance`` 。"
 
 #: ../../source/config_parts.rst:484
 msgid ""
@@ -542,6 +611,11 @@ msgid ""
 "from a single sketch. ``stl``, ``cadquery``, ``build123d``, ``sdf``, "
 "``scad`` and ``extrude`` accept all three."
 msgstr ""
+"决定哪些类型接受它们的，是这个零件是否为单一均质体——一个实体，由一种东西构成——因为只有这样，单一的 ``material:`` 、单"
+"一的 ``color:`` 或单一的 ``tolerance:`` 才能对整个零件成立。网格就是单一体：STL 文件是一张曲面，内部没有"
+"任何可变化的东西，它要有材料，唯一的途径就是有人把它说出来。由脚本构建的实体同样如此，由单个草图拉伸出来的实体也同样如此。 ``stl`"
+"` 、 ``cadquery`` 、 ``build123d`` 、 ``sdf`` 、 ``scad`` 和 ``extrude`` "
+"这三个参数全都接受。"
 
 #: ../../source/config_parts.rst:493
 msgid ""
@@ -554,6 +628,10 @@ msgid ""
 "be made is a separate question and has an answer of its own, below: see :ref:"
 "`tolerance-field`."
 msgstr ""
+"STEP 文件不是单一体。它可以承载多个实体，每个实体都已经陈述了自己的材料和颜色，而为整个文件指定一种材料，等于对一个文件本身描述得更"
+"好的零件下断言。 ``step`` 会拒绝它们， ``kicad`` 也一样——它本质上是封装图形背后的一个 STEP 文件。这样的零件"
+"是用什么做成的，属于 :ref:`properties` 的范畴，在那里形状陈述的是它最终是什么，而不是别人对它提出了什么要求。它必须做"
+"到多精确则是另一个问题，下文另有答案：参见 :ref:`tolerance-field` 。"
 
 #: ../../source/config_parts.rst:502
 msgid ""
@@ -562,6 +640,8 @@ msgid ""
 "somebody decides leaves the question open rather than settling it by "
 "accident."
 msgstr ""
+"其他每一种零件类型同样会拒绝它们，但原因不同：它是否应当接受它们还没有定论，而在有人作出决定之前一律回答“否”，这是把问题留着，而不是在"
+"无意之中把它定死。"
 
 #: ../../source/config_parts.rst:506
 msgid ""
@@ -575,6 +655,10 @@ msgid ""
 "``material:`` fields of its own describing what one of its values looks "
 "like, whatever the part type."
 msgstr ""
+"在不接受某个参数的类型的 ``parameters:`` 下声明它，是错误而不是警告。这会让包损失那一个零件——包的其余部分照常加载和构"
+"建——并且发现它的那条命令会报告失败。其他参数名称在任何地方都不受限制：受管的只是 PartCAD 赋予了含义的那少数几个名称，而不是声"
+"明参数的权利。受管的也只是参数的 *名称* ，而不是其声明的形态——无论零件类型是什么，任何参数都可以带有自己的 ``color:`` "
+"和 ``material:`` 字段，用来描述它的某个取值看起来是什么样子。"
 
 #: ../../source/config_parts.rst:516
 msgid ""
@@ -587,6 +671,10 @@ msgid ""
 "tolerance somebody did declare keys the cache like any other input, because "
 "it is one."
 msgstr ""
+"``tolerance`` 是这三个中唯一带默认值的那个，默认值为 ``0.0`` ：在任何接受它的类型上，无论零件是否声明过，读回来的"
+"都是这个值。默认值是在读取取值时才套用的，绝不会被写入零件的 ``parameters:`` 小节，因为该小节是形状缓存取键所依据的一部"
+"分——把默认值写进去，会让每一个从未提到过公差的零件的缓存键发生变化，而这个值根本没有人设置过。有人确实声明过的公差，则会像其他任何输入"
+"一样参与缓存取键，因为它本来就是一个输入。"
 
 #: ../../source/config_parts.rst:524
 msgid ""
@@ -596,6 +684,9 @@ msgid ""
 "- including a part reached through an assembly in the package. A part that "
 "is bought rather than made is not asked: it comes as it comes."
 msgstr ""
+"``0.0`` 的公差意味着没有人说过。它会被解读为对完美精度的要求，而这是不能向制造方提出的，因此 :doc:`pc test <cl"
+"i>` 会让将要被 *制造* 、却没有公差的零件失败——包括通过包中某个装配体才触及到的零件。对于采购而非制造的零件则不作此要求：它来的"
+"时候是什么样就是什么样。"
 
 #: ../../source/config_parts.rst:530
 msgid ""
@@ -610,6 +701,10 @@ msgid ""
 "forgiven. An SDF script takes its parameters differently - they are "
 "prepended to it as assignments - so this never arose there."
 msgstr ""
+"CadQuery 或 build123d 脚本会收到零件声明的每一个参数，各自作为同名变量；而脚本必须在自己的顶层对该名称赋值，取值才会"
+"落到某个地方——脚本从未提到过的参数，是没有人会读取的参数，所以声明这样一个参数是错误，而且通常是笔误。对象类型参数是唯一的例外，因为零"
+"件可能被要求声明一个脚本用不上的参数：对 ``material`` 赋值的脚本仍会收到声明的材料，而没有提到它的脚本会被放过，而不是被拒"
+"绝。除此之外一概不予通融。SDF 脚本接收参数的方式不同——参数会以赋值语句的形式前置到脚本中——所以那里从来没有出现过这个问题。"
 
 #: ../../source/config_parts.rst:541
 msgid ""
@@ -647,6 +742,10 @@ msgid ""
 "right material is on the implementation of the manufacturing API (the "
 "``provider`` object in PartCAD)."
 msgstr ""
+"必须指向一个类型为 ``material`` 的对象，写作 ``<package>:<name>`` 。其中一些定义在 ``//pub/"
+"std/manufacturing/material`` 中；关于如何声明自己的材料，请参见 :ref:`materials` 。这是一"
+"个对象类型参数，因此只能在上面列出的零件类型上声明。当向制造 API 发出请求时，会从制造方提供的材料中选出一种足够接近的材料。选择正确"
+"材料的责任在制造 API 的实现方（在 PartCAD 中即 ``provider`` 对象）。"
 
 #: ../../source/config_parts.rst:575
 msgid "``color``"
@@ -654,7 +753,7 @@ msgstr "``color``"
 
 #: ../../source/config_parts.rst:577
 msgid "This one is an object-type parameter too, with the same restriction."
-msgstr ""
+msgstr "这同样是一个对象类型参数，受同样的限制。"
 
 #: ../../source/config_parts.rst:579
 msgid "**Not implemented yet. Use color names for now.**"
@@ -691,6 +790,8 @@ msgid ""
 "what ``pc test`` rejects on a part that is to be manufactured. Give it a "
 "real value on anything you intend to have made."
 msgstr ""
+"这也是一个对象类型参数，而且是唯一带默认值的那个：省略它等同于写成 ``0.0`` ，而这是对完美精度的宣称，正是 ``pc test`"
+"` 在将要被制造的零件上会拒绝的情形。凡是打算让人制造的东西，都请给它一个真实的取值。"
 
 #: ../../source/config_parts.rst:600
 msgid ""
@@ -698,6 +799,8 @@ msgid ""
 "as a parameter, and their file may state it for them; see :ref:`tolerance-"
 "field`."
 msgstr ""
+"``step`` 和 ``kicad`` 零件以 ``tolerance:`` 字段而不是参数来陈述这一点，而且它们的文件也可能代为陈述"
+"；参见 :ref:`tolerance-field` 。"
 
 #: ../../source/config_parts.rst:604
 msgid ""
@@ -731,10 +834,13 @@ msgid ""
 "and the answer is not what an exporter writes into a file. That is :ref:"
 "`properties`, below."
 msgstr ""
+"MCFTT 参数是一种请求，而且是制造方面的请求：它们面向将要制造该零件的提供方，说明零件应当用什么做成、做到多好。它们不是对一个已存在"
+"形状的陈述。从一个已经陈述了材料的 STEP 文件读入的零件并不回答它们，导出器写入文件的内容也不是它们的答案。那是下面的 :ref:`"
+"properties` 。"
 
 #: ../../source/config_parts.rst:624
 msgid "Tolerance on the types that state it in the file"
-msgstr ""
+msgstr "由文件陈述公差的类型"
 
 #: ../../source/config_parts.rst:626
 msgid ""
@@ -745,6 +851,9 @@ msgid ""
 "whole of GD&T - a plus/minus tolerance on a dimension, a flatness or a "
 "position tolerance on a feature - so PartCAD reads the file."
 msgstr ""
+"出于上面的原因， ``step`` 和 ``kicad`` 会拒绝 ``tolerance`` *参数* ，这样一来它们就没有办法说明零"
+"件必须做到多精确，也无从回应 :doc:`pc test <cli>` 。但它们是有办法的，因为 STEP 文件本身就有地方可以陈述它："
+"AP242 承载了完整的 GD&T——尺寸上的正负公差、特征上的平面度或位置度公差——所以 PartCAD 会去读取该文件。"
 
 #: ../../source/config_parts.rst:633
 msgid ""
@@ -752,6 +861,8 @@ msgid ""
 "whose file could have carried it - the part declaration takes a ``tolerance:"
 "`` **field** of its own:"
 msgstr ""
+"有大量 STEP 文件完全不带这些内容。对于它们——并且只在其文件本来可以承载这些内容的类型上——零件声明可以带有自己的 ``toler"
+"ance:`` **字段** ："
 
 #: ../../source/config_parts.rst:644
 msgid ""
@@ -764,12 +875,16 @@ msgid ""
 "``enrich`` may carry it and ignores it, like everything else it carries that "
 "describes how its source is built."
 msgstr ""
+"它是字段而不是参数，因为它对产出形状的类型没有提出任何要求：无论它在不在，文件的读取方式都一样，也不会因为它而构建出不同的东西。它只在接"
+"受它的类型上被接受；在别处声明它，与声明一个被拒绝的参数一样，都是针对单个对象的同一种错误，并且报错时写的是 ``field`` 而不是"
+" ``parameter`` ，以免两者混淆。 ``alias`` 或 ``enrich`` 可以带上它，但会忽略它，就像它所带的其他描"
+"述源对象如何构建的内容一样。"
 
 #: ../../source/config_parts.rst:653
 msgid ""
 "There are then three places a part's tolerance can come from, and PartCAD "
 "reads them in this order:"
-msgstr ""
+msgstr "这样一来，零件的公差可以来自三个地方，PartCAD 按以下顺序读取它们："
 
 #: ../../source/config_parts.rst:656
 msgid ""
@@ -778,18 +893,20 @@ msgid ""
 "starts saying something else is a change to look at rather than one to adopt "
 "silently."
 msgstr ""
+"``tolerance:`` 字段，用于接受该字段的类型。它的优先级高于文件：之所以要写它，正是因为文件没有说；而文件后来开始说出别的内"
+"容，这是一处需要查看的变化，而不是应当被悄悄采纳的变化。"
 
 #: ../../source/config_parts.rst:660
 msgid ""
 "What the file itself states. A file that states one tolerance answers with "
 "it, whatever unit it is written in - a file in inches is read as inches."
-msgstr ""
+msgstr "文件自身陈述的内容。陈述了单一公差的文件就以该公差作答，无论它用什么单位书写——以英寸书写的文件就按英寸读取。"
 
 #: ../../source/config_parts.rst:662
 msgid ""
 "The ``tolerance`` parameter, for the homogeneous types that accept it, with "
 "its default of ``0.0``."
-msgstr ""
+msgstr "``tolerance`` 参数，用于接受它的均质类型，其默认值为 ``0.0`` 。"
 
 #: ../../source/config_parts.rst:665
 msgid ""
@@ -801,6 +918,9 @@ msgid ""
 "does say how precisely it has to be made, in more detail than one number "
 "holds, and the file is what goes to the manufacturer."
 msgstr ""
+"对多个特征给出不同公差的文件没有单一的公差，PartCAD 也不会凭空造出一个：取最紧的会夸大零件大部分地方的需要，取最松的会低估其中某"
+"个特征的需要，而取平均值则对任何地方都不成立。它读回来的是 ``NaN`` ，意思是 *逐个特征已给出公差* ——而 ``pc test"
+"`` 接受这种情况。这样的零件确实说明了它必须做到多精确，而且比一个数字所能承载的更详细，送到制造方手里的正是这个文件。"
 
 #: ../../source/config_parts.rst:673
 msgid ""
@@ -810,6 +930,8 @@ msgid ""
 "again, naming the type - that is a fact about the part type rather than "
 "about the declaration."
 msgstr ""
+"``pc test`` 拒绝的始终只是那种本可以说却没有说的零件：在接受该字段或该参数的类型上写成 ``0.0`` 。如果某个零件的类型"
+"两者都不接受、其文件又没有任何陈述，报告方式又会不同，会指明该类型——那是关于零件类型的事实，而不是关于这份声明的事实。"
 
 #: ../../source/config_parts.rst:678
 msgid ""
@@ -819,10 +941,13 @@ msgid ""
 "anybody is being held to, and reading it would give every STEP file ever "
 "exported a manufacturing tolerance no shop can work to."
 msgstr ""
+"每个 STEP 文件都带有的几何不确定度（ ``UNCERTAINTY_MEASURE_WITH_UNIT`` ，通常为 ``1e-07"
+"`` mm）是刻意不去读取的。它是写出几何体时所用的精度，而不是要求任何人遵守的公差；读取它会让每一个曾经导出过的 STEP 文件都带上"
+"一个没有哪家工厂做得到的制造公差。"
 
 #: ../../source/config_parts.rst:687
 msgid "Properties"
-msgstr ""
+msgstr "属性"
 
 #: ../../source/config_parts.rst:689
 msgid ""
@@ -832,6 +957,8 @@ msgid ""
 "mass, so the only way a part read from an STL has either is to say so; a "
 "URDF import fills this section in from what the file already stated."
 msgstr ""
+"属性是 **输出** 。它们是实例化该对象所产出的结果——也就是最终形状对自身的陈述——并且在形状无法自行陈述时由声明给出。网格既没有材"
+"料也没有质量，因此从 STL 读入的零件要具备其中任何一项，唯一的办法就是把它写出来；URDF 导入则会根据文件中已有的陈述来填写这一小节。"
 
 #: ../../source/config_parts.rst:707
 msgid ""
@@ -848,6 +975,11 @@ msgid ""
 "than renaming a part does. ``pc system reset``, or a change to something the "
 "assembly does hash, is what picks them up."
 msgstr ""
+"装配体也接受同一个小节。其中的任何内容都不参与形状缓存——它完全不涉及几何体——这也意味着当对 CAD 的修改使它失效时，没有任何东西会"
+"察觉。它确实会随形状一同传递：在零件上声明的属性会被带到该零件产出的形状上，穿过缓存，也穿过每一个嵌入它的装配体，因此导出整个机器人时，"
+"可以在每根连杆上找到该连杆的属性。属性也正是在这里沿用了名称和放置位置已有的缓存方式：对象自身的属性在每次读取时都会从它的配置中重新打上"
+"，但缓存过的装配体 *内部* 零件上的属性，属于该装配体缓存树的一部分，修改它们不会使缓存失效，正如重命名一个零件也不会一样。要让它们生"
+"效，靠的是 ``pc system reset`` ，或者改动装配体确实会参与哈希的内容。"
 
 #: ../../source/config_parts.rst:719
 msgid ""
@@ -862,6 +994,12 @@ msgid ""
 "import instead of being carried opaquely, and a property PartCAD holds that "
 "URDF cannot state is reported when it is exported. See :doc:`simulation`."
 msgstr ""
+"每个 ``physics`` 属性都有一个 PartCAD 名称和一个 PartCAD 单位，而且这组属性是封闭的。长度单位是毫米，角度"
+"单位是度，与 PartCAD 中其他地方一致；其余一律采用国际单位制，因此质量以千克计，惯性张量以 kg·m² 计。任何内容都不会以它所"
+"来源格式中的名称存储：URDF 导入会把 ``<inertial>`` 以及 ``<gazebo>`` 块中的摩擦和接触设置逐个取值读入"
+"这些属性，而 URDF 导出则会把它们各自写回陈述它的那个元素中。如果 URDF 中说了某件 PartCAD 没有对应属性的事，导入会中"
+"止，而不是把它当作不透明内容原样带着；而 PartCAD 持有、URDF 却无法陈述的属性，会在导出时被报告出来。请参见 :doc:`s"
+"imulation` 。"
 
 #: ../../source/config_parts.rst:730
 msgid ""
@@ -869,3 +1007,5 @@ msgid ""
 "its ``export:`` section, and is handed them keyed by the full name of the "
 "shape they belong to. URDF is the one built-in format that does."
 msgstr ""
+"有办法陈述这些内容的文件类型，会在它的 ``export:`` 小节中声明 ``properties: true`` ，并以这些属性所属"
+"形状的完整名称为键接收它们。URDF 是唯一具备这种能力的内置格式。"

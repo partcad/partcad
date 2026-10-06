@@ -25,7 +25,7 @@ msgstr "安装"
 
 #: ../../source/installation.rst:9
 msgid "Plugin for Claude Code"
-msgstr ""
+msgstr "Claude Code 插件"
 
 #: ../../source/installation.rst:11
 msgid ""
@@ -34,6 +34,8 @@ msgid ""
 "sketches, describe and search what a package already has, and install the"
 " command line tools below for you."
 msgstr ""
+"如果你使用 `Claude Code <https://claude.com/claude-code>`_ ，那就从这里开始： ``pc"
+"`` 插件提供了一组技能，可以生成零件、装配体和 2D 草图，描述和搜索某个包中已有的内容，并替你安装下文介绍的命令行工具。"
 
 #: ../../source/installation.rst:20
 msgid ""
@@ -45,6 +47,11 @@ msgid ""
 "was asked. The skills run the same commands documented in :doc:`cli`, so "
 "nothing they produce depends on the agent that produced it."
 msgstr ""
+"随后， ``/pc:setup`` 会把 ``pc`` 装到本机上——如果它是在 Visual Studio Code 或 VSCodi"
+"um 的终端中运行的，还会把 :ref:`扩展 <vscode-extension>` 装进该编辑器—— ``/pc:init`` 会新"
+"建一个包，而 ``/pc:gen a mounting bracket with four M4 holes`` 则会编写 CAD 脚本"
+"、渲染出结果的四个视图，并对照要求逐一检查。这些技能运行的就是 :doc:`cli` 中记录的那些命令，因此它们产出的任何东西都不依赖于"
+"产出它的那个智能体。"
 
 #: ../../source/installation.rst:28
 msgid ""
@@ -53,10 +60,12 @@ msgid ""
 " release and contains no symlinks, which is what makes it install "
 "identically on Windows."
 msgstr ""
+"这个仓库本身就是插件市场——并不存在某个托管的目录供你在其中搜索 PartCAD。 ``plugin-dist`` 分支会在每次发布时重"
+"新发布，其中不含任何符号链接，正是这一点让它在 Windows 上也能以完全相同的方式安装。"
 
 #: ../../source/installation.rst:32
 msgid "Two other ways to install the same plugin:"
-msgstr ""
+msgstr "安装同一个插件的另外两种方式："
 
 #: ../../source/installation.rst:34
 msgid ""
@@ -65,6 +74,9 @@ msgid ""
 "through a symlink, so it needs a checkout where git created one -- on "
 "Windows, ``git config core.symlinks true`` before cloning."
 msgstr ""
+"``/plugin marketplace add partcad/partcad`` 会直接从源码树中读取该目录。这份副本通过符号链接"
+"与厂商无关的技能库共享技能，因此它要求检出时 git 确实创建了符号链接——在 Windows 上，请在克隆之前执行 ``git con"
+"fig core.symlinks true``。"
 
 #: ../../source/installation.rst:37
 msgid ""
@@ -72,6 +84,9 @@ msgid ""
 "``pc-<version>.zip``, and ``claude --plugin-url <url>`` loads one for a "
 "single session. That is how to try a version without installing it."
 msgstr ""
+"每个 `发布版本 <https://github.com/partcad/partcad/releases>`_ 都带有一个 ``pc-"
+"<version>.zip``，而 ``claude --plugin-url <url>`` 可以为单次会话加载它。想试用某个版本而不"
+"安装它，就用这种办法。"
 
 #: ../../source/installation.rst:41
 msgid ""
@@ -79,6 +94,7 @@ msgid ""
 "publishes it, so the plugin and the ``pc`` command line tool state the "
 "same version when they came from the same release."
 msgstr ""
+"插件与发布它的那个版本中的其他所有内容共用同一个版本号，因此只要来自同一个发布版本，插件和 ``pc`` 命令行工具报告的版本就是一致的。"
 
 #: ../../source/installation.rst:46
 msgid ""
@@ -91,6 +107,11 @@ msgid ""
 " creates a package in -- so there is nothing to install here if you have "
 "PartCAD already."
 msgstr ""
+"这些技能就是普通的 `Agent Skills <https://code.claude.com/docs/en/skills>`_ —"
+"—一个装着 ``SKILL.md`` 文件的目录——而插件只是把它们送到 Claude Code 的一层薄封装。任何其他能读取 ``SK"
+"ILL.md`` 的智能体都可以使用同一个技能库，位置在仓库中的 ``ai-agents/common/skills``。它同样随 ``"
+"partcad`` wheel 包一起发布，并且 ``pc init`` 会把它安装到它创建包的那个仓库里——所以如果你已经装好了 Pa"
+"rtCAD，这里就没有什么需要安装的了。"
 
 #: ../../source/installation.rst:54
 msgid "Command line tools"
@@ -113,9 +134,11 @@ msgid ""
 "that just pulls ``partcad`` in, so ``pip install partcad-cli`` still "
 "works if you have it written down somewhere."
 msgstr ""
+"一个包就是全部： ``pc`` 命令行工具、Python 模块，以及编辑器扩展所连接的 ``partcad-json-rpc`` 服务。"
+" ``partcad-cli`` 过去是一个独立的包，现在则是一个只负责把 ``partcad`` 拉进来的薄包，因此如果你在什么地方记"
+"下的是 ``pip install partcad-cli``，它依然可用。"
 
 #: ../../source/installation.rst:74
-#, fuzzy
 msgid ""
 "No Python on the machine, or no interest in maintaining a Python "
 "environment? Install the :ref:`standalone command line tools <standalone-"
@@ -123,8 +146,9 @@ msgid ""
 "interpreter. There is also a :ref:`snap package <snap-package>` for "
 "Linux, not published yet."
 msgstr ""
-"机器上没有 Python，或者不想维护一套 Python 环境？那就改为安装 :ref:`独立命令行工具 <standalone-cli>` "
-"。它们是完全相同的工具，只是随附了自带的解释器。"
+"机器上没有 Python，或者不想维护一套 Python 环境？那就改为安装 :ref:`独立命令行工具 <standalone-cli"
+">` 。它们是完全相同的工具，只是随附了自带的解释器。此外还有面向 Linux 的 :ref:`snap 包 <snap-package"
+">` ，不过尚未发布。"
 
 #: ../../source/installation.rst:81
 msgid ""
@@ -141,6 +165,8 @@ msgid ""
 "<standalone-cli>`, the :ref:`snap <snap-package>` and the :ref:`PartCAD "
 "IDE <partcad-ide>` carry a conda of their own and need none installed."
 msgstr ""
+"这适用于 wheel 包。 :ref:`独立命令行工具 <standalone-cli>` 、 :ref:`snap 包 <snap-p"
+"ackage>` 和 :ref:`PartCAD IDE <partcad-ide>` 都自带了一份 conda，无需另行安装。"
 
 #: ../../source/installation.rst:91
 msgid ""
@@ -242,16 +268,19 @@ msgid ""
 "when there is no conda (see :ref:`python-sandbox`). ``pc healthcheck`` "
 "reports what this machine is missing."
 msgstr ""
+"打包件的大部分体积来自它携带的 OpenSCAD，因此它的大小也随之而定：不携带 OpenSCAD 的 Linux arm64 构建，体"
+"积大约只有其他构建的一半。它不携带任何 CAD 内核：PartCAD 会在自己准备的沙箱中构建每一个形状——而它携带了用于准备该沙箱的 "
+"conda，因此无需预先安装任何东西，得到的也是 ``conda`` 沙箱，而不是 wheel 包在没有 conda 时所用的 ``ve"
+"nv`` 回退方案（参见 :ref:`python-sandbox` ）。 ``pc healthcheck`` 会报告本机还缺少什么。"
 
 #: ../../source/installation.rst:198
-#, fuzzy
 msgid ""
 "Supported platforms are Linux on x86_64 and arm64, and macOS on Apple "
 "silicon and on Intel. Windows is covered by the ``.zip`` archives under "
 ":ref:`manual installation <standalone-manual>`."
 msgstr ""
-"受支持的平台为 x86_64 架构上的 Linux，以及 Apple 芯片上的 macOS。Windows 则由 :ref:`手动安装 "
-"<standalone-manual>` 一节中的 ``.zip`` 归档文件来覆盖。"
+"受支持的平台包括 x86_64 和 arm64 架构上的 Linux，以及 Apple 芯片和 Intel 芯片上的 macOS。Win"
+"dows 则由 :ref:`手动安装 <standalone-manual>` 一节中的 ``.zip`` 归档文件来覆盖。"
 
 #: ../../source/installation.rst:203
 msgid ""
@@ -264,6 +293,10 @@ msgid ""
 "carries; the installer reads it, works out which of them this machine can"
 " run, and downloads that:"
 msgstr ""
+"每个受支持的 *操作系统版本* 都有一个对应的构建，而不是每个操作系统一个。冻结的打包件链接的是构建它的那台机器上的 C 库和系统框架，"
+"因此它能在那台机器以及任何更新的系统上运行，却无法在更旧的系统上运行——单独一个“Linux”构建，实际上只会悄悄地意味着“构建机恰好是"
+"哪个 Linux”。每个发布版本都会发布一份清单 ``platforms.json``，说明它携带了哪些构建；安装程序会读取这份清单，判"
+"断本机能运行其中的哪一个，然后下载它："
 
 #: ../../source/installation.rst:216
 msgid ""
@@ -273,6 +306,9 @@ msgid ""
 "offered the 22.04 build, which has the lower floor. Pass ``--platform`` "
 "to install a specific one."
 msgstr ""
+"名字里的 Ubuntu 并不意味着必须运行 Ubuntu。任何 Linux 发行版都可以运行这些打包件；两者之间的区别只在于所需的最低 "
+"glibc 版本，而对于安装程序无法识别为 Ubuntu 的机器，会提供 22.04 构建，因为它的下限更低。传入 ``--platfo"
+"rm`` 可以安装指定的那一个。"
 
 #: ../../source/installation.rst:220
 msgid ""
@@ -282,6 +318,9 @@ msgid ""
 "publish. On Apple silicon that is the ``arm64`` archive; on an Intel Mac,"
 " the ``x86_64`` one."
 msgstr ""
+"macOS 是每种架构一个构建，而不是每个 macOS 版本一个，因为在 macOS 15 上构建出来的打包件在 macOS 15 和 "
+"macOS 26 上同样可以运行——每次发布之前，两者都会在这两个系统版本上构建并做安装测试。在 Apple 芯片上用的是 ``arm6"
+"4`` 归档文件；在 Intel 芯片的 Mac 上则是 ``x86_64`` 的那个。"
 
 #: ../../source/installation.rst:224
 msgid ""
@@ -291,6 +330,8 @@ msgid ""
 "glibc-style floor that would make one matter. It runs on Windows 10 and "
 "later."
 msgstr ""
+"Windows 只有一个构建，而不是每个 Windows 版本一个，因为根本没有可供选择的对象：划分多个构建是为了让机器能与之比对，而 "
+"Windows 并不提供这样的比对依据——也没有 glibc 那种会让比对变得有意义的版本下限。它可以在 Windows 10 及更高版本上运行。"
 
 #: ../../source/installation.rst:228
 msgid ""
@@ -299,6 +340,8 @@ msgid ""
 "release carries. Install the latest release, or name the build with "
 "``--platform``."
 msgstr ""
+"在 ``platforms.json`` 出现之前发布的版本无法用这种方式解析：从本机无从得知这样的发布版本携带了哪些构建。请安装最新的"
+"发布版本，或者用 ``--platform`` 指明构建。"
 
 #: ../../source/installation.rst:233
 msgid "Options"
@@ -386,43 +429,39 @@ msgid "``--platform <id>``"
 msgstr ""
 
 #: ../../source/installation.rst:257
-#, fuzzy
 msgid "``PARTCAD_PLATFORM``"
-msgstr "``PARTCAD_REPOSITORY``"
+msgstr ""
 
 #: ../../source/installation.rst:257
 msgid "detected from this machine"
-msgstr ""
+msgstr "由本机自动检测"
 
 #: ../../source/installation.rst:258
 msgid "``--ide``"
 msgstr ""
 
 #: ../../source/installation.rst:258
-#, fuzzy
 msgid "``PARTCAD_IDE``"
-msgstr "``PARTCAD_BIN_DIR``"
+msgstr ""
 
 #: ../../source/installation.rst:258
-#, fuzzy
 msgid "off, the command line tools alone"
-msgstr "命令行工具"
+msgstr "关闭，仅安装命令行工具"
 
 #: ../../source/installation.rst:259
-#, fuzzy
 msgid "``--app-dir <dir>``"
-msgstr "``--bin-dir <dir>``"
+msgstr ""
 
 #: ../../source/installation.rst:259
-#, fuzzy
 msgid "``PARTCAD_APP_DIR``"
-msgstr "``PARTCAD_BIN_DIR``"
+msgstr ""
 
 #: ../../source/installation.rst:259
 msgid ""
 "macOS, with ``--ide``: ``/Applications`` when it is writable, "
 "``~/Applications`` otherwise"
 msgstr ""
+"在 macOS 上配合 ``--ide`` 使用时：若 ``/Applications`` 可写则用它，否则用 ``~/Applications``"
 
 #: ../../source/installation.rst:264
 msgid ""
@@ -469,7 +508,6 @@ msgid "For a pull request, use the branch it comes from, or its head commit:"
 msgstr "对于 pull request，请使用它所来自的分支，或其头部提交（head commit）："
 
 #: ../../source/installation.rst:298
-#, fuzzy
 msgid ""
 "The URL only decides which *installer* runs. By default that installer "
 "still downloads the bundle of the latest release, because bundles are "
@@ -482,11 +520,11 @@ msgid ""
 "``platforms.json``, so there is no manifest there for the installer to "
 "resolve this machine against."
 msgstr ""
-"URL 只决定运行的是哪个 *安装程序* "
-"。默认情况下，该安装程序仍会下载最新发布版本的捆绑包，因为捆绑包是按发布版本发布的，而不是按每次提交发布的。要安装某个分支或 pull "
-"request 实际构建出的捆绑包，请从该分支或 pull request 的 ``Standalone`` 工作流运行中获取它：在 GitHub"
-" 上打开该次运行，下载 ``partcad-standalone-<platform>`` "
-"制品，将其解压，然后让安装程序指向存放该归档文件的目录。"
+"URL 只决定运行的是哪个 *安装程序*。默认情况下，该安装程序仍会下载最新发布版本的打包件，因为打包件是按发布版本发布的，而不是按每次"
+"提交发布的。要安装某个分支或拉取请求实际构建出的打包件，请从该分支或拉取请求的 ``Standalone`` 工作流运行中获取：在 Gi"
+"tHub 上打开该次运行，下载 ``partcad-standalone-<platform>`` 制品，将其解压，然后让安装程序指向存"
+"放该归档文件的目录。此时要用 ``--platform`` 指明是哪个构建：一个制品只包含它名字所对应的那一个构建，并且不含 ``pla"
+"tforms.json``，因此那里没有清单可供安装程序据以判定本机该用哪个构建。"
 
 #: ../../source/installation.rst:313
 msgid ""
@@ -521,16 +559,14 @@ msgid ""
 msgstr ""
 
 #: ../../source/installation.rst:326
-#, fuzzy
 msgid ""
 "``partcad-<version>-macos-15-arm64.tar.xz``, "
 "``partcad-<version>-macos-15-x86_64.tar.xz``"
-msgstr "``partcad-<version>-macos-arm64.tar.gz``"
+msgstr ""
 
 #: ../../source/installation.rst:327
-#, fuzzy
 msgid "``partcad-<version>-windows-2022-x86_64.zip``"
-msgstr "``partcad-<version>-windows-x86_64.zip``"
+msgstr ""
 
 #: ../../source/installation.rst:329
 msgid ""
@@ -539,6 +575,8 @@ msgid ""
 "doubt, the oldest build of your operating system runs everywhere the "
 "newer one does."
 msgstr ""
+"请挑选你的机器不比其更旧的那个最新构建——关于为什么会有多个构建，参见 :ref:`上面的说明 <standalone-os-versi"
+"ons>` 。拿不准时就选你所用操作系统的最旧构建：凡是较新构建能运行的地方，它都能运行。"
 
 #: ../../source/installation.rst:333
 msgid ""
@@ -560,6 +598,9 @@ msgid ""
 "(``xz-utils`` on Debian and Ubuntu, ``xz`` on Fedora and Alpine); "
 "``install.sh`` says so by name if it is missing."
 msgstr ""
+"macOS 以及各个 Linux 发行版上的 ``tar`` 无需显式指定就能读取 xz 格式，这就是下面的命令没有传入压缩标志的原因。"
+"非常精简的 Linux 系统可能需要为此安装 ``xz`` 工具（在 Debian 和 Ubuntu 上是 ``xz-utils``，在"
+" Fedora 和 Alpine 上是 ``xz`` ）；如果缺少它， ``install.sh`` 会指名道姓地说明。"
 
 #: ../../source/installation.rst:349
 msgid ""
@@ -577,14 +618,13 @@ msgid "What is included, and what is not"
 msgstr "包含哪些内容，不包含哪些内容"
 
 #: ../../source/installation.rst:356
-#, fuzzy
 msgid ""
 "The bundle carries the optional extras that the wheels leave to the user,"
 " because a frozen bundle cannot be extended afterwards: the Python linter"
 " (``lint``) is in it, ready to run."
 msgstr ""
-"该捆绑包携带了 wheel 包会安装的一切内容，包括那些 wheel 包留给用户自行选择的可选附加项（extras）：Python 代码检查器（ "
-"``lint`` ）。冻结的捆绑包在事后无法再扩展，因此它以完整的形式发布。"
+"该打包件携带了 wheel 包留给用户自行选择的可选附加项，因为冻结的打包件事后无法再扩展：Python 代码检查器（ ``lint``"
+" ）已包含在内，开箱即用。"
 
 #: ../../source/installation.rst:359
 msgid ""
@@ -595,6 +635,9 @@ msgid ""
 " Leaving OpenCASCADE out of the bundle is most of why it is around 200MB "
 "rather than around 1GB."
 msgstr ""
+"它 **不** 携带的是 CAD 内核。这个打包件是三个控制台程序，而不是一个供导入的库；这些程序所构建、渲染、导出或网格化的每一个形状"
+"，都是在 PartCAD 自行准备的沙箱中生成的，再以几何数据的形式返回，命令本身从不直接打开它们。把 OpenCASCADE 排除在打"
+"包件之外，正是它只有约 200MB 而不是约 1GB 的主要原因。"
 
 #: ../../source/installation.rst:364
 msgid ""
@@ -607,6 +650,11 @@ msgid ""
 "contained executable of about 12-22MB, and PartCAD uses it when the "
 "machine has no conda of its own."
 msgstr ""
+"它确实携带了用来构建该沙箱的 **conda**。在其他场合，conda 是可选的——没有它时，PartCAD 会改为构建一个普通的虚拟"
+"环境（参见 :ref:`python-sandbox` ）——但虚拟环境必须 *基于* 某个解释器来构建，而这个打包件所面向的，恰恰是没"
+"有 Python 可供构建虚拟环境的机器。因此，在每个平台上，每个打包件都附带了 `micromamba <https://mamba."
+"readthedocs.io/>`_ ，这是一个约 12-22MB 的自包含可执行文件；当机器上没有自己的 conda 时，PartCA"
+"D 就会使用它。"
 
 #: ../../source/installation.rst:370
 msgid ""
@@ -617,6 +665,9 @@ msgid ""
 "all of it again. Nothing needs to be configured either way; ``pc "
 "healthcheck`` says which conda was found."
 msgstr ""
+"如果你已经有 ``conda`` 或 ``mamba``，那就会使用你的那一份，打包件中自带的副本会被忽略。这是有意为之：你的 cond"
+"a 带着你配置好的通道，以及一个缓存了构建 CAD 沙箱所需数 GB 内容的包缓存，改用我们这一份会让那个缓存被闲置，并把这些内容重新下"
+"载一遍。无论哪种情况都不需要做任何配置； ``pc healthcheck`` 会说明找到的是哪个 conda。"
 
 #: ../../source/installation.rst:375
 msgid ""
@@ -626,6 +677,9 @@ msgid ""
 " status`` reports their size and ``pc system reset`` clears them, and the"
 " next command rebuilds them."
 msgstr ""
+"默认情况下，打包件自带的 conda 会把包缓存放在 ``~/.partcad/conda``，与它在 ``~/.partcad/san"
+"dbox`` 中创建的沙箱相邻。删除 ``~/.partcad`` 会把两者一并清除； ``pc system status`` 会报告"
+"它们的大小， ``pc system reset`` 会将其清空，而下一条命令会重新构建它们。"
 
 #: ../../source/installation.rst:379
 msgid ""
@@ -635,9 +689,10 @@ msgid ""
 "sentence above applies to it. It is your cache, in your location, and "
 "PartCAD neither reports nor deletes it."
 msgstr ""
+"例外是 ``MAMBA_ROOT_PREFIX``：如果你已经设置了它——因为你自己就在使用 micromamba——那么打包件中的副本"
+"会使用你的前缀，而不会另建一份自己的缓存，于是上面那段话对它全不适用。那是你的缓存，放在你指定的位置，PartCAD 既不会报告它，也不会删除它。"
 
 #: ../../source/installation.rst:383
-#, fuzzy
 msgid ""
 "Every bundle but Linux arm64 also carries **OpenSCAD**, which PartCAD "
 "runs as an external program to build ``.scad`` parts. The bundled copy is"
@@ -645,9 +700,9 @@ msgid ""
 " bundle behaves the same everywhere rather than depending on which "
 "version a given host happens to have. Three consequences worth knowing:"
 msgstr ""
-"在 Linux 和 Windows 上，它还携带了 **OpenSCAD** ，PartCAD 会将其作为外部程序来运行，以构建 "
-"``.scad`` 零件。相比机器上已安装的任何 "
-"OpenSCAD，会优先使用捆绑的这一份，这样捆绑包在任何地方的行为都保持一致，而不取决于某台主机恰好安装了哪个版本。有两点后果值得了解："
+"除 Linux arm64 之外，每个打包件还携带了 **OpenSCAD**，PartCAD 会把它作为外部程序来运行，以构建 ``."
+"scad`` 零件。相比机器上已安装的任何 OpenSCAD，都会优先使用打包件中的这一份，这样打包件在任何地方的行为都保持一致，而不取"
+"决于某台主机恰好装了哪个版本。有三点后果值得了解："
 
 #: ../../source/installation.rst:388
 msgid ""
@@ -687,21 +742,29 @@ msgid ""
 "is a considerably newer OpenSCAD than 2021.01, so a part may render "
 "differently than it did with a 2021.01 you had installed."
 msgstr ""
+"打包件中自带的 OpenSCAD 是一个开发快照，而不是最后一个正式发布版本，并且在每个平台上都是 *同一个* 快照，因此一个 ``.s"
+"cad`` 零件无论在哪里运行 ``pc`` 都会渲染出相同的结果。最后一个发布版本 2021.01 无法充当这个共用版本：它早于 Ap"
+"ple 芯片出现，只提供 Intel 构建，会悄悄地要求 Rosetta 2；而且 Homebrew 已于 2026 年 9 月因其无法"
+"通过 macOS Gatekeeper 检查而将其停用。这个快照比 2021.01 新得多，因此某个零件的渲染结果可能与你此前安装的 2"
+"021.01 有所不同。"
 
 #: ../../source/installation.rst:403
 msgid ""
 "The Linux arm64 bundles carry no OpenSCAD: upstream builds no current "
 "arm64 snapshot. Install OpenSCAD yourself there and PartCAD will use it."
 msgstr ""
+"Linux arm64 打包件不携带 OpenSCAD：上游没有构建当前的 arm64 快照。在这类机器上请自行安装 OpenSCAD，"
+"PartCAD 会使用它。"
 
 #: ../../source/installation.rst:406
-#, fuzzy
 msgid ""
 "One thing is deliberately not in the bundle, because PartCAD runs it as "
 "an external program rather than importing it, exactly as the wheels do: "
 "**git**, used for your git configuration when packages are fetched from "
 "git repositories. Packages are cloned either way, through ``libgit2``."
-msgstr "还有另外两样东西是故意不放进捆绑包的，因为 PartCAD 是将它们作为外部程序来运行、而不是导入它们，这与 wheel 包的做法完全相同："
+msgstr ""
+"有一样东西是故意不放进打包件的，因为 PartCAD 是把它作为外部程序来运行、而不是导入它，这与 wheel 包的做法完全相同： **"
+"git**，它用于在从 git 仓库获取包时读取你的 git 配置。无论有没有它，包都会通过 ``libgit2`` 克隆下来。"
 
 #: ../../source/installation.rst:410
 msgid "Run ``pc healthcheck`` to see what is missing on the current machine."
@@ -718,7 +781,7 @@ msgstr ""
 
 #: ../../source/installation.rst:420
 msgid "Snap (Linux)"
-msgstr ""
+msgstr "Snap（Linux）"
 
 #: ../../source/installation.rst:422
 msgid ""
@@ -729,6 +792,10 @@ msgid ""
 " machine, the bundled OpenSCAD. What the snap adds is the packaging: "
 "snapd installs it, keeps it up to date, and removes it cleanly."
 msgstr ""
+"在 Linux 上，独立工具还被打包为 `snap <https://snapcraft.io/docs>`_ ，提供 x86_64 和"
+" arm64 两种架构。它与上面的 ``ubuntu-24.04`` 归档文件是同一个打包件，因此关于后者的一切说明在这里同样适用——它"
+"携带了什么、它仍然对机器有哪些要求，以及自带的 OpenSCAD。snap 额外带来的只是打包形式：由 snapd 负责安装、保持更新，"
+"并干净地卸载。"
 
 #: ../../source/installation.rst:429
 msgid ""
@@ -738,6 +805,9 @@ msgid ""
 "credentials and, because the snap is classic, a manual store review; both"
 " are still to come."
 msgstr ""
+"**该 snap 尚未发布。** 它由 CI 构建，但既不在 Snap Store 上，也没有附加到 GitHub 发布版本中，因此 `"
+"`snap install partcad`` 目前并不可用。发布需要 Snap Store 凭据，而且由于该 snap 采用 clas"
+"sic 限制级别，还需要人工的商店审核；这两件事都还没有完成。"
 
 #: ../../source/installation.rst:433
 msgid ""
@@ -745,10 +815,12 @@ msgid ""
 "arm64``) artifact from a run of the ``Standalone`` workflow on GitHub, "
 "unzip it, and install the ``.snap`` inside as below."
 msgstr ""
+"若想现在就试用，请从 GitHub 上 ``Standalone`` 工作流的某次运行中下载 ``partcad-snap-amd64`"
+"` （或 ``partcad-snap-arm64`` ）制品，将其解压，然后按下面的方式安装其中的 ``.snap`` 文件。"
 
 #: ../../source/installation.rst:442
 msgid "Two flags need explaining:"
-msgstr ""
+msgstr "有两个标志需要解释："
 
 #: ../../source/installation.rst:444
 msgid ""
@@ -758,6 +830,9 @@ msgid ""
 " socket that the Visual Studio Code extension connects to. A strictly "
 "confined snap could do none of that."
 msgstr ""
+"``--classic`` 指定的是限制级别。PartCAD 处理的是你自己的文件——它会读写磁盘上任意位置的 CAD 项目、克隆 gi"
+"t 仓库、构建沙箱并在其中运行 CAD 脚本，还会通过套接字提供一个供 Visual Studio Code 扩展连接的守护进程。严格限"
+"制（strict）的 snap 做不到这里的任何一件事。"
 
 #: ../../source/installation.rst:448
 msgid ""
@@ -765,6 +840,8 @@ msgid ""
 " downloaded file is not. It stops being necessary once the snap is "
 "published."
 msgstr ""
+"``--dangerous`` 表示该软件包没有经过 Snap Store 签名，而自行下载的文件正是如此。等到该 snap 正式发布之"
+"后，就不再需要它了。"
 
 #: ../../source/installation.rst:451
 msgid ""
@@ -772,10 +849,12 @@ msgid ""
 "to the app named after the snap itself. Without it, the commands are "
 "``partcad``, ``partcad.pc`` and ``partcad.json-rpc``."
 msgstr ""
+"需要 ``snap alias``，是因为 snap 只会把不带前缀的命令名给与 snap 同名的那个应用。没有它时，这些命令分别是 `"
+"`partcad``、 ``partcad.pc`` 和 ``partcad.json-rpc``。"
 
 #: ../../source/installation.rst:455
 msgid "Where it keeps its state"
-msgstr ""
+msgstr "它把状态保存在哪里"
 
 #: ../../source/installation.rst:457
 msgid ""
@@ -785,6 +864,10 @@ msgid ""
 "all of that lives in ``~/snap/partcad/common`` instead, and ``sudo snap "
 "remove --purge partcad`` takes it away with the snap."
 msgstr ""
+"在其他所有安装方式下，PartCAD 都把缓存、沙箱和 git 克隆保存在 ``~/.partcad`` 中。snap 不会往那里写。它"
+"会把 ``PC_INTERNAL_STATE_DIR`` 设为 snapd 分配给它的按用户隔离的目录，于是这些内容都改放在 ``~/s"
+"nap/partcad/common`` 下，而 ``sudo snap remove --purge partcad`` 会把它们连同"
+" snap 一起删除。"
 
 #: ../../source/installation.rst:462
 msgid ""
@@ -793,17 +876,19 @@ msgid ""
 "one configuration keeps applying whether you installed PartCAD from the "
 "snap, the standalone bundle, or a wheel."
 msgstr ""
+"你的配置文件是有意保留的例外： ``~/.partcad/config.yaml`` 仍照常从主目录读取，因此无论你是通过 snap、独"
+"立打包件还是 wheel 包安装的 PartCAD，同一份配置都始终生效。"
 
 #: ../../source/installation.rst:466
 msgid ""
 "The telemetry id is kept next to it, for the same reason in reverse: it "
 "identifies you, and an id that moved with the state directory would count"
 " one machine as several."
-msgstr ""
+msgstr "遥测 id 也保存在它旁边，理由相同但方向相反：它用于标识你，而一个随状态目录一起迁移的 id，会把同一台机器统计成好几台。"
 
 #: ../../source/installation.rst:470
 msgid "conda and git"
-msgstr ""
+msgstr "conda 与 git"
 
 #: ../../source/installation.rst:472
 msgid ""
@@ -811,6 +896,8 @@ msgid ""
 "your home directory -- the usual place -- is not visible to it, and "
 "neither is a git outside the standard system prefixes."
 msgstr ""
+"snap 不会带上你的 shell 环境，因此安装在你主目录下的 conda——也就是通常的位置——对它是不可见的，位于标准系统前缀之外"
+"的 git 同样如此。"
 
 #: ../../source/installation.rst:475
 msgid ""
@@ -822,6 +909,9 @@ msgid ""
 " not pick up is *your* conda, and with it your package cache: the snap "
 "builds its sandbox from scratch the first time."
 msgstr ""
+"conda 已经不再要紧，而这正是这里唯一需要知道的变化。snap 包装的是独立打包件，打包件自带了一份 conda；snap 内部的载"
+"荷无论你的 shell 怎么设置都对它可见——因此 snap 得到的是 ``conda`` 沙箱（参见 :ref:`python-san"
+"dbox` ），而不会退回到虚拟环境。它拿不到的是 *你的* conda，以及随之而来的你的包缓存：snap 第一次会从零开始构建自己的沙箱。"
 
 #: ../../source/installation.rst:481
 msgid ""
@@ -830,6 +920,8 @@ msgid ""
 "everywhere else; what the snap cannot see is your git *configuration* "
 "(see :ref:`git-configuration`)."
 msgstr ""
+"对 git 则仍然是照常期待并接受，而不是绕开它。从 git 仓库导入的包依然会被克隆下来，和其他场合一样通过 ``libgit2`` "
+"进行；snap 看不到的是你的 git *配置* （参见 :ref:`git-configuration` ）。"
 
 #: ../../source/installation.rst:489
 msgid ""
@@ -837,14 +929,16 @@ msgid ""
 "conda package cache you already have, use the :ref:`standalone bundle "
 "<standalone-cli>` or the wheels, which run with your own environment."
 msgstr ""
+"如果你需要使用自己的 git 配置，或者希望共享你已有的 conda 包缓存，请改用 :ref:`独立打包件 <standalone-c"
+"li>` 或 wheel 包，它们运行在你自己的环境中。"
 
 #: ../../source/installation.rst:492
 msgid "To remove the snap, including its data:"
-msgstr ""
+msgstr "要卸载该 snap 并一并删除其数据："
 
 #: ../../source/installation.rst:503
 msgid "PartCAD IDE (no Python, no editor)"
-msgstr ""
+msgstr "PartCAD IDE（无需 Python，无需编辑器）"
 
 #: ../../source/installation.rst:505
 msgid ""
@@ -854,6 +948,8 @@ msgid ""
 " to install, no list of extensions to work through. It opens in the "
 "PartCAD workbench."
 msgstr ""
+"PartCAD IDE 是一个把这一切都装在里面的应用程序：编辑器、PartCAD 扩展、与之配套的各个扩展，以及与上面独立构建相同的命"
+"令行工具。无需配置，无需安装 Python，也不必逐个去装一长串扩展。它启动后直接进入 PartCAD 工作台。"
 
 #: ../../source/installation.rst:510
 msgid ""
@@ -862,6 +958,8 @@ msgid ""
 "Studio Code, install :ref:`the extension <vscode-extension>` there "
 "instead."
 msgstr ""
+"如果你想做的就是 PartCAD 本身，而不是往已有的编辑器里再加点东西，那就用它。如果你本来就在 Visual Studio Code"
+" 中工作，请改为在其中安装 :ref:`该扩展 <vscode-extension>` 。"
 
 #: ../../source/installation.rst:523
 msgid ""
@@ -876,6 +974,12 @@ msgid ""
 "inside the IDE -- so the command line tools are installed too, without a "
 "second download."
 msgstr ""
+"与命令行工具使用同一个安装程序，选项也完全相同：针对 :ref:`独立命令行工具 <standalone-cli>` 所描述的一切在这里"
+"同样适用。在 Linux 上，它会解包到 ``~/.local/share/partcad/<version>-ide``，并在应用程序"
+"菜单中添加一个条目。在 macOS 上，它会把 ``PartCAD IDE.app`` 放进 ``/Applications``，若该目"
+"录不可写则放进 ``~/Applications``；具体由 ``--app-dir`` 决定。无论哪种情况， ``partcad-id"
+"e`` 都会被链接到 ``~/.local/bin``，连同 IDE 内部那份副本中的 ``pc`` 和 ``partcad`` ——也"
+"就是说命令行工具也一并装好了，无需第二次下载。"
 
 #: ../../source/installation.rst:531
 msgid ""
@@ -888,12 +992,17 @@ msgid ""
 "your ``PATH``. Uninstall it from \"Apps & features\" like any other "
 "application."
 msgstr ""
+"在 Windows 上，请从 `GitHub 发布版本 <https://github.com/partcad/partcad/rele"
+"ases>`_ 下载 ``partcad-ide-<version>-windows-x86_64-setup.exe`` 并运行它。它"
+"会为当前用户安装，不需要管理员权限，安装位置是 ``%LOCALAPPDATA%\\Programs\\PartCAD IDE``，同时也提"
+"供“for all users”这一选项。它会添加一个开始菜单项，并且——除非你关掉该选项——会把 ``partcad-ide`` 和 "
+"``pc`` 加入你的 ``PATH``。可以像卸载其他应用程序一样，在“Apps & features”中卸载它。"
 
 #: ../../source/installation.rst:538
 msgid ""
 "The installer is not signed, so SmartScreen shows a warning: choose "
 "\"More info\", then \"Run anyway\"."
-msgstr ""
+msgstr "该安装程序未经签名，因此 SmartScreen 会显示一条警告：请选择“More info”，再选择“Run anyway”。"
 
 #: ../../source/installation.rst:540
 msgid ""
@@ -901,6 +1010,8 @@ msgid ""
 " unpacking somewhere and running ``partcad-ide.exe`` without installing "
 "anything."
 msgstr ""
+"在它旁边还发布了 ``partcad-ide-<version>-windows-x86_64.zip``，可以把它解包到任意位置并直接"
+"运行 ``partcad-ide.exe``，无需安装任何东西。"
 
 #: ../../source/installation.rst:543
 msgid ""
@@ -912,10 +1023,13 @@ msgid ""
 "bundle carries a conda, so there is nothing to install alongside the IDE "
 "either (see :ref:`python-sandbox`)."
 msgstr ""
+"解包后大约 500MB：一个编辑器、一个 Python 解释器、命令行工具和各个扩展，全都在同一个归档文件里。和它内部的独立打包件一样，"
+"它不携带任何 CAD 内核——形状是在 PartCAD 于本机准备的沙箱中构建的。准备该沙箱的 conda 也来自同一处：IDE 中带有"
+"独立打包件，而打包件自带了一份 conda，因此在 IDE 之外同样没有什么需要另行安装（参见 :ref:`python-sandbox` ）。"
 
 #: ../../source/installation.rst:550
 msgid "The first start"
-msgstr ""
+msgstr "首次启动"
 
 #: ../../source/installation.rst:552
 msgid ""
@@ -928,6 +1042,10 @@ msgid ""
 "of your own, look at it in 3D, render the package, use ``pc`` in the "
 "terminal -- each with a link to the page here that explains it."
 msgstr ""
+"安装之后无需任何设置。IDE 首次启动时，会在 ``~/.partcad/projects/start`` ——在 Windows 上是"
+" ``%USERPROFILE%\\.partcad\\projects\\start`` ——中运行 ``pc init``，并把该文件夹作"
+"为工作区打开，于是你看到的窗口里已经有一个包，而不是一个空编辑器。旁边还会打开一个欢迎窗口，列出最值得先做的几件事：打开一个现成可用的示"
+"例、添加你自己的零件、以 3D 方式查看它、渲染整个包、在终端里使用 ``pc`` ——每一项都附有指向本文档中相应页面的链接。"
 
 #: ../../source/installation.rst:559
 msgid ""
@@ -937,6 +1055,9 @@ msgid ""
 "take it with it. Move it, put it in git, or leave it and make your own "
 "with ``pc init`` somewhere else."
 msgstr ""
+"这个包就是一个普通文件夹中的普通包。它位于 ``~/.partcad`` 之下，而不是应用程序内部，因此在任何终端里运行的 ``pc``"
+" 都作用于同一个包，卸载 IDE 也不会把它一并带走。你可以移动它、把它放进 git，也可以就让它待着，另外用 ``pc init`` "
+"在别处创建自己的包。"
 
 #: ../../source/installation.rst:563
 msgid ""
@@ -949,16 +1070,20 @@ msgid ""
 "Studio Code, which does ask, :ref:`the extension <vscode-extension>` "
 "waits for the answer."
 msgstr ""
+"PartCAD IDE 在 PartCAD 打开某个文件夹之前，不会询问你是否信任它。PartCAD 会运行你所打开的包中的代码——从脚"
+"本构建零件本来就意味着这一点——而 IDE 正是为此而生，所以其中的工作区信任机制是关闭的，对所有文件夹、对整个编辑器都是如此（包括任务"
+"和调试，这正是包里的“Render”命令得以运行的前提）。因此，只打开那些你愿意运行其代码的包。在确实会询问的 Visual Studi"
+"o Code 中， :ref:`该扩展 <vscode-extension>` 会等待你的回答。"
 
 #: ../../source/installation.rst:570
 msgid "Start from an example"
-msgstr ""
+msgstr "从示例开始"
 
 #: ../../source/installation.rst:572
 msgid ""
 "The welcome window's second step, and ``PartCAD IDE: Open an example`` in"
 " the Command Palette, offer packages that already work:"
-msgstr ""
+msgstr "欢迎窗口的第二步，以及命令面板中的 ``PartCAD IDE: Open an example``，都会提供一些现成可用的包："
 
 #: ../../source/installation.rst:575
 msgid ""
@@ -966,12 +1091,14 @@ msgid ""
 "cube declared again at other dimensions, which is how a package reuses a "
 "shape instead of copying it."
 msgstr ""
+"**用 CadQuery 编写的零件** ——以脚本形式给出的一个立方体和一个圆柱体，以及用另一组尺寸再次声明的同一个立方体，这正是一个"
+"包复用形状而不是复制形状的做法。"
 
 #: ../../source/installation.rst:577
 msgid ""
 "**A part in build123d** -- the smallest package there is: one script, one"
 " entry under ``parts:``."
-msgstr ""
+msgstr "**用 build123d 编写的零件** ——最小的一个包：一个脚本， ``parts:`` 下的一个条目。"
 
 #: ../../source/installation.rst:578
 msgid ""
@@ -979,12 +1106,14 @@ msgid ""
 "parameterized module PartCAD instantiates with arguments from "
 "``partcad.yaml``."
 msgstr ""
+"**用 OpenSCAD 编写的零件** ——一个按原样使用的 ``.scad`` 文件，以及一个由 PartCAD 使用 ``part"
+"cad.yaml`` 中的参数来实例化的参数化模块。"
 
 #: ../../source/installation.rst:580
 msgid ""
 "**An assembly** -- parts placed relative to each other in an ``.assy`` "
 "file, taken from *other* packages, which come with it."
-msgstr ""
+msgstr "**一个装配体** ——在 ``.assy`` 文件中彼此相对放置的零件，它们取自 *其他* 包，而那些包会随之一起提供。"
 
 #: ../../source/installation.rst:583
 msgid ""
@@ -994,32 +1123,36 @@ msgid ""
 " they show up in the PartCAD Explorer and are yours to change. A copy you"
 " have already edited is never overwritten."
 msgstr ""
+"它们就是本项目发布的那些示例——即 `examples/ <https://github.com/partcad/partcad/tre"
+"e/main/examples>`_ 下的那些包——被复制到 ``~/.partcad/projects/start`` 中，与你自己的"
+"包并列；它们会出现在 PartCAD Explorer 里，你可以随意修改。已经被你编辑过的副本永远不会被覆盖。"
 
 #: ../../source/installation.rst:588
 msgid ""
 "Every step of the welcome window also links to the page of this "
 "documentation that explains it, and the last one lists them all."
-msgstr ""
+msgstr "欢迎窗口的每一步也都链接到本文档中对其进行说明的页面，而最后一步会把它们全部列出来。"
 
 #: ../../source/installation.rst:591
 msgid ""
 "This happens once. Afterwards the IDE opens where you left it, like any "
 "editor:"
-msgstr ""
+msgstr "这只会发生一次。此后，IDE 会像任何编辑器那样，从你上次离开的地方打开："
 
 #: ../../source/installation.rst:593
 msgid ""
 "``PartCAD IDE: Open the starter package`` in the Command Palette opens "
 "the package again, and creates it if it is not there."
 msgstr ""
+"命令面板中的 ``PartCAD IDE: Open the starter package`` 会重新打开该包；如果它不存在，则会创建它。"
 
 #: ../../source/installation.rst:595
 msgid "``PartCAD IDE: Open an example`` copies another example in beside it."
-msgstr ""
+msgstr "``PartCAD IDE: Open an example`` 会在它旁边再复制进来一个示例。"
 
 #: ../../source/installation.rst:596
 msgid "``PartCAD IDE: Welcome`` opens the welcome window again."
-msgstr ""
+msgstr "``PartCAD IDE: Welcome`` 会重新打开欢迎窗口。"
 
 #: ../../source/installation.rst:597
 msgid ""
@@ -1027,6 +1160,7 @@ msgid ""
 "thing off for a fresh installation: the IDE then starts in an empty "
 "window."
 msgstr ""
+"设置中的 ``partcadIde.createStarterPackage`` 可以为全新安装彻底关闭上述整个行为：此时 IDE 会以空窗口启动。"
 
 #: ../../source/installation.rst:600
 msgid ""
@@ -1034,10 +1168,12 @@ msgid ""
 "IDE\", or by starting it with a path -- skips it too. It never takes over"
 " a window that already has something in it."
 msgstr ""
+"如果你是在自己的文件夹上打开 IDE——通过“Open with PartCAD IDE”，或者启动时带上一个路径——同样会跳过这一步。"
+"它绝不会去接管一个已经有内容的窗口。"
 
 #: ../../source/installation.rst:604
 msgid "What is inside"
-msgstr ""
+msgstr "里面有什么"
 
 #: ../../source/installation.rst:606
 msgid ""
@@ -1045,6 +1181,8 @@ msgid ""
 "build of the same source Visual Studio Code is built from, with its "
 "extensions coming from `Open VSX <https://open-vsx.org/>`_."
 msgstr ""
+"编辑器： `VSCodium <https://vscodium.com/>`_ ，它是用与 Visual Studio Code 相同"
+"的源码构建、采用自由许可证的版本，其扩展来自 `Open VSX <https://open-vsx.org/>`_ 。"
 
 #: ../../source/installation.rst:608
 msgid ""
@@ -1052,6 +1190,8 @@ msgid ""
 "the extensions PartCAD works with: Python, YAML and the rest of the list "
 "in ``.vscode/extensions.json``."
 msgstr ""
+"PartCAD 扩展——PartCAD Viewer 本身就包含在其中——以及 PartCAD 配合使用的那些扩展：Python、YAM"
+"L，还有 ``.vscode/extensions.json`` 中列出的其余扩展。"
 
 #: ../../source/installation.rst:610
 msgid ""
@@ -1060,6 +1200,8 @@ msgid ""
 " ships for, since the one build that carries none is Linux arm64 and "
 "there is no Linux arm64 IDE."
 msgstr ""
+"PartCAD 命令行工具，与独立打包件所安装的完全相同，包括它们附带的 OpenSCAD——在 IDE 所发布的每一个平台上都是如此，"
+"因为唯一不携带 OpenSCAD 的构建是 Linux arm64，而并不存在 Linux arm64 版的 IDE。"
 
 #: ../../source/installation.rst:614
 msgid ""
@@ -1067,6 +1209,7 @@ msgid ""
 "with Microsoft's products. Open-source type checking for Python is "
 "included in its place."
 msgstr ""
+"Pylance 不在其中：它是专有软件，其许可条款规定只能与微软自家的产品一起使用。作为替代，这里包含的是开源的 Python 类型检查工具。"
 
 #: ../../source/installation.rst:617
 msgid ""
@@ -1076,6 +1219,9 @@ msgid ""
 "in ``~/.partcad``, shared with the command line tools, so a package "
 "installed in a terminal is there in the IDE."
 msgstr ""
+"IDE 会把它的设置、状态以及你安装的任何扩展都保存在 ``~/.partcad-ide`` 中，因此它与同一台机器上的 Visual "
+"Studio Code 或 VSCodium 不共享任何内容。而 PartCAD 自身的缓存和配置仍放在 ``~/.partcad`` "
+"中，与命令行工具共享，因此在终端里安装的包在 IDE 里同样存在。"
 
 #: ../../source/installation.rst:622
 msgid ""
@@ -1084,6 +1230,9 @@ msgid ""
 "ide-<version>-macos-x86_64.dmg`` for Intel: open it and drag the "
 "application to Applications, the usual way."
 msgstr ""
+"在 macOS 上还会发布 ``.dmg`` ——Apple 芯片用 ``partcad-ide-<version>-macos-arm"
+"64.dmg``，Intel 芯片用 ``partcad-ide-<version>-macos-x86_64.dmg``：打开它，再按"
+"通常的方式把应用程序拖到 Applications 中即可。"
 
 #: ../../source/installation.rst:628
 msgid ""
@@ -1093,13 +1242,16 @@ msgid ""
 "do the same: ``xattr -dr com.apple.quarantine \"/Applications/PartCAD "
 "IDE.app\"``."
 msgstr ""
+"macOS 应用程序采用的是 ad-hoc 签名，而不是经过公证（notarization）。 ``install.sh`` 会清除它所"
+"安装的那份副本上的隔离（quarantine）标记；如果你改为手动解包归档文件，那么在你自己做同样的事情之前，macOS 会拒绝打开它："
+" ``xattr -dr com.apple.quarantine \"/Applications/PartCAD IDE.app\"``。"
 
 #: ../../source/installation.rst:636
 msgid ""
 "Upgrading is installing again. Uninstalling is the same command as for "
 "the command line tools, and removes the application, the links and the "
 "menu entry:"
-msgstr ""
+msgstr "升级就是再安装一次。卸载所用的命令与命令行工具相同，它会删除应用程序、各个链接以及菜单项："
 
 #: ../../source/installation.rst:643
 msgid ""
@@ -1108,57 +1260,54 @@ msgid ""
 "self-update would replace the PartCAD extension and tools inside it with "
 "a plain editor."
 msgstr ""
+"IDE 不会自我更新。它是基于某个 VSCodium 发布版本构建出来的，而本身并不是一个 VSCodium 发布版本，并且它有意不配置"
+"更新服务器——自我更新会把它内部的 PartCAD 扩展和工具替换成一个普通的编辑器。"
 
 #: ../../source/installation.rst:650
 msgid "Latest Development Version of PartCAD"
 msgstr "PartCAD 的最新开发版本"
 
 #: ../../source/installation.rst:652
-#, fuzzy
 msgid ""
 "You can install the latest development version of PartCAD from the "
 "``devel`` branch on `PartCAD <https://github.com/partcad/partcad>`_. "
 "First, create an isolated Python environment and ensure ``pip``, "
 "``setuptools``, and ``wheel`` are upgraded, then:"
 msgstr ""
-"你可以从 `PartCAD <https://github.com/partcad/partcad>`_ 上的 ``devel`` 分支安装 "
-"PartCAD 的最新开发版本。首先，创建一个隔离的 Python 环境，并确保 ``pip`` 、 ``setuptools`` 和 "
-"``wheel`` 均已升级，然后按照下面的说明安装核心模块和 CLI 工具。"
+"你可以从 `PartCAD <https://github.com/partcad/partcad>`_ 上的 ``devel`` 分支"
+"安装 PartCAD 的最新开发版本。首先，创建一个隔离的 Python 环境，并确保 ``pip``、 ``setuptools`` "
+"和 ``wheel`` 均已升级，然后："
 
 #: ../../source/installation.rst:660
 msgid ""
 "That is the whole thing. It used to be two commands naming two "
 "subdirectories, in the right order, because the repository shipped "
 "several packages that pinned each other; it ships one now."
-msgstr ""
+msgstr "这就是全部。过去需要按正确的顺序执行两条分别指向两个子目录的命令，因为当时该仓库发布了多个互相锁定版本的包；现在它只发布一个包。"
 
 #: ../../source/installation.rst:666
 msgid "Python module"
 msgstr "Python 模块"
 
 #: ../../source/installation.rst:668
-#, fuzzy
 msgid ""
 "PartCAD provides Python modules that can be used in CAD as code scripts "
 "(such as ``CadQuery``, ``build123d`` and ``sdf``). They come with the "
 "same package as the command line tools, so there is nothing extra to "
 "install."
 msgstr ""
-"PartCAD 提供了可在代码化 CAD 脚本（例如 ``CadQuery`` 、 ``build123d`` 和 ``sdf`` ）中使用的 "
-"Python 模块。它是 ``partcad-cli`` 的一个依赖，因此通常不需要单独安装。"
+"PartCAD 提供了可在代码即 CAD 脚本（例如 ``CadQuery``、 ``build123d`` 和 ``sdf`` ）中使"
+"用的 Python 模块。它们与命令行工具同属一个包，因此无需额外安装任何东西。"
 
 #: ../../source/installation.rst:682
 msgid "Linting"
 msgstr "代码检查（Linting）"
 
 #: ../../source/installation.rst:684
-#, fuzzy
 msgid ""
 "The linter used by ``pc lint`` to check Python files is optional. Install"
 " the ``lint`` extra to enable it:"
-msgstr ""
-"``pc lint`` 用于检查 Python 文件的代码检查器是可选的。请安装 ``lint`` 附加项来启用它，既可以安装到 "
-"``partcad-cli`` 上："
+msgstr "``pc lint`` 用于检查 Python 文件的代码检查器是可选的。安装 ``lint`` 附加项即可启用它："
 
 #: ../../source/installation.rst:691
 msgid ""
@@ -1171,7 +1320,7 @@ msgstr ""
 
 #: ../../source/installation.rst:697
 msgid "Shared caching tiers"
-msgstr ""
+msgstr "共享缓存层"
 
 #: ../../source/installation.rst:699
 msgid ""
@@ -1180,24 +1329,29 @@ msgid ""
 "(``cacheRemote``), and in an S3 bucket that outlives both (``cacheS3``). "
 "Both clients are imported only when their tier is switched on."
 msgstr ""
+"除了内存和本地文件系统之外，PartCAD 还可以把已构建几何体的缓存保存在由团队或 CI 集群共享的 memcached 服务器上（ "
+"``cacheRemote`` ），以及保存在比两者都更持久的 S3 存储桶中（ ``cacheS3`` ）。这两个客户端只有在相应的缓"
+"存层被启用时才会被导入。"
 
 #: ../../source/installation.rst:704
 msgid ""
 "``cacheRemote`` needs nothing installed: its client (``aiomcache``) is an"
 " ordinary dependency, so switching the tier on is all there is to it."
 msgstr ""
+"``cacheRemote`` 无需安装任何东西：它的客户端（ ``aiomcache`` ）是一个普通依赖，因此只要启用该缓存层就够了。"
 
 #: ../../source/installation.rst:707
 msgid ""
 "``cacheS3`` is an extra, because its client pulls in ``botocore``, which "
 "is larger than the rest of PartCAD put together:"
 msgstr ""
+"``cacheS3`` 是一个可选附加项，因为它的客户端会引入 ``botocore``，而后者比 PartCAD 的其余部分加起来还要大："
 
 #: ../../source/installation.rst:714
 msgid ""
 "Enabling ``cacheS3`` without it reports an error naming the package to "
 "install and leaves the remaining tiers working."
-msgstr ""
+msgstr "在未安装它的情况下启用 ``cacheS3`` 会报错，并指明需要安装哪个包，同时其余缓存层仍然正常工作。"
 
 #: ../../source/installation.rst:721
 msgid "Visual Studio Code extension"
@@ -1208,6 +1362,7 @@ msgid ""
 "For an editor you already have. To get the extension, the tools and an "
 "editor in one download instead, see :ref:`the PartCAD IDE <partcad-ide>`."
 msgstr ""
+"适用于你已经拥有的编辑器。如果你想一次下载就同时获得扩展、工具和编辑器，请参见 :ref:`PartCAD IDE <partcad-ide>` 。"
 
 #: ../../source/installation.rst:726
 msgid ""
@@ -1215,9 +1370,10 @@ msgid ""
 "VSCodium installs this extension along with the command line tools. The "
 "rest of this section is how to do it by hand."
 msgstr ""
+"在 Visual Studio Code 或 VSCodium 内部的终端中运行 ``/pc:setup``，会把该扩展连同命令行工具一"
+"起装好。本节余下的内容讲的是如何手动完成这件事。"
 
 #: ../../source/installation.rst:729
-#, fuzzy
 msgid ""
 "This extension is available through the VS Code marketplace. The "
 "corresponding marketplace page is `here "
@@ -1225,9 +1381,8 @@ msgid ""
 "official>`_. Install it from the Extensions view, or by id from a "
 "terminal:"
 msgstr ""
-"此扩展可通过 VS Code 市场获取。对应的市场页面在 `此处 "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
-"official>`_ 。"
+"此扩展可通过 VS Code 市场获取，对应的市场页面在 `此处 <https://marketplace.visualstudio.c"
+"om/items?itemName=PartCAD.partcad-official>`_ 。可以在扩展视图中安装，也可以在终端里按 id 安装："
 
 #: ../../source/installation.rst:737
 msgid ""
@@ -1236,6 +1391,9 @@ msgid ""
 "to the wheels and the bundles. Install it from the command line, or with "
 "\"Install from VSIX...\" in the Extensions view:"
 msgstr ""
+"每个 `GitHub 发布版本 <https://github.com/partcad/partcad/releases>`_ 中还带有"
+"打包好的扩展 ``partcad-<version>.vsix``，与 wheel 包和独立打包件放在一起。可以在命令行中安装它，也可以"
+"在扩展视图中使用“Install from VSIX...”："
 
 #: ../../source/installation.rst:745
 msgid ""
@@ -1244,6 +1402,8 @@ msgid ""
 "package serves every platform: the extension is a JSON-RPC client with no"
 " Python and nothing compiled in it."
 msgstr ""
+"在需要锁定某个特定版本、在访问不到市场的环境中安装，或者想在市场上架之前先试用某个发布版本时，就用它。一个包适用于所有平台：该扩展是一个"
+" JSON-RPC 客户端，其中既没有 Python，也没有任何编译产物。"
 
 #: ../../source/installation.rst:751
 msgid ""
@@ -1256,10 +1416,15 @@ msgid ""
 ":ref:`PartCAD IDE <partcad-ide>` needs neither gallery -- it ships the "
 "extension inside the application."
 msgstr ""
+"**VSCodium** 会从 `Open VSX <https://open-vsx.org/>`_ 安装它——那是 VSCodium"
+" 默认配置的扩展库，PartCAD 也在那里为它发布该扩展。它并不指向 Visual Studio Marketplace，因为后者的条"
+"款限制其只能用于微软自家的产品。请在扩展视图中搜索 ``PartCAD``，或者运行 ``codium --install-extens"
+"ion PartCAD.partcad-official``；上面的 ``.vsix`` 在那里同样可用。 :ref:`PartCAD "
+"IDE <partcad-ide>` 这两个扩展库都不需要——它把该扩展直接打包在应用程序里。"
 
 #: ../../source/installation.rst:758
 msgid "If you installed the extension before it moved"
-msgstr ""
+msgstr "如果你在该扩展迁移之前就已安装它"
 
 #: ../../source/installation.rst:760
 msgid ""
@@ -1270,6 +1435,9 @@ msgid ""
 "the marketplace treats the result as a separate extension rather than as "
 "a rename."
 msgstr ""
+"该扩展过去以 ``OpenVMP.partcad`` 的名义发布，现在则是 ``PartCAD.partcad-official`` —"
+"—发布者不同，名称也不同，因为市场不允许两个发布者共用同一个扩展名，而 ``partcad`` 这个名字仍归旧条目所有。无论如何，市场都"
+"会把结果视为另一个独立的扩展，而不是一次重命名。"
 
 #: ../../source/installation.rst:765
 msgid ""
@@ -1280,10 +1448,13 @@ msgid ""
 "can remove ``PartCAD (moved)`` from the Extensions view once it has done "
 "its job."
 msgstr ""
+"你什么都不用做。旧条目依然存在，并且现在依赖于新条目，因此它会像其他扩展一样更新，并顺带把位于新位置的扩展一起装上。你的设置仍以同样的 "
+"``partcad.*`` 名称保存在 ``settings.json`` 中，不会受到任何影响。等它完成使命之后，你可以在扩展视图中移"
+"除 ``PartCAD (moved)``。"
 
 #: ../../source/installation.rst:774
 msgid "FreeCAD add-on"
-msgstr ""
+msgstr "FreeCAD 附加组件"
 
 #: ../../source/installation.rst:776
 msgid ""
@@ -1292,6 +1463,9 @@ msgid ""
 "``cad/freecad`` directory of the repository; copy or link that directory "
 "into FreeCAD's ``Mod`` folder as ``PartCAD`` and restart FreeCAD:"
 msgstr ""
+"``PartCAD`` 工作台可以在 FreeCAD 内部浏览包、零件和装配体，并把它们导入到当前打开的文档中。它位于该仓库的 ``ca"
+"d/freecad`` 目录下；请把该目录复制或链接到 FreeCAD 的 ``Mod`` 文件夹中并命名为 ``PartCAD``，然"
+"后重启 FreeCAD："
 
 #: ../../source/installation.rst:785
 msgid ""
@@ -1302,6 +1476,10 @@ msgid ""
 " a bundle if there is not. See ``cad/freecad/README.md`` for what it does"
 " and which environment variables it reads."
 msgstr ""
+"``Mod`` 文件夹在 macOS 上是 ``~/Library/Preferences/FreeCAD/Mod/``，在 Windo"
+"ws 上是 ``%APPDATA%\\FreeCAD\\Mod\\``。无需任何 Python 设置：该附加组件驱动的是独立版 ``partc"
+"ad-json-rpc`` 服务；如果已有独立安装就直接使用，没有的话则会提示下载一份打包件。关于它的功能以及它读取哪些环境变量，请参见"
+" ``cad/freecad/README.md``。"
 
 #: ../../source/installation.rst:792
 msgid "Public PartCAD repository"

@@ -21,15 +21,15 @@ msgstr ""
 
 #: ../../source/config_making.rst:3
 msgid "Making and buying"
-msgstr ""
+msgstr "Herstellen und Kaufen"
 
 #: ../../source/config_making.rst:7
 msgid "Manufacturing methods"
-msgstr ""
+msgstr "Fertigungsmethoden"
 
 #: ../../source/config_making.rst:9
 msgid "The ``manufacturing.method`` field says how a part is made:"
-msgstr ""
+msgstr "Das Feld ``manufacturing.method`` sagt, wie ein Teil hergestellt wird:"
 
 #: ../../source/config_making.rst:12
 msgid "Method"
@@ -37,47 +37,47 @@ msgstr "Methode"
 
 #: ../../source/config_making.rst:12
 msgid "Meaning"
-msgstr ""
+msgstr "Bedeutung"
 
 #: ../../source/config_making.rst:14
 msgid "``additive``"
-msgstr ""
+msgstr "``additive``"
 
 #: ../../source/config_making.rst:14
 msgid "Built up, e.g. 3D printed"
-msgstr ""
+msgstr "Aufgebaut, zum Beispiel 3D-gedruckt"
 
 #: ../../source/config_making.rst:16
 msgid "``subtractive``"
-msgstr ""
+msgstr "``subtractive``"
 
 #: ../../source/config_making.rst:16
 msgid "Cut away from stock -- see :ref:`subtractive`"
-msgstr ""
+msgstr "Aus Rohmaterial herausgeschnitten -- siehe :ref:`subtractive`"
 
 #: ../../source/config_making.rst:18
 msgid "``forming``"
-msgstr ""
+msgstr "``forming``"
 
 #: ../../source/config_making.rst:18
 msgid "Shaped without adding or removing material"
-msgstr ""
+msgstr "Umgeformt, ohne Material hinzuzufügen oder abzutragen"
 
 #: ../../source/config_making.rst:20
 msgid "``sheet_metal``"
-msgstr ""
+msgstr "``sheet_metal``"
 
 #: ../../source/config_making.rst:20
 msgid "A flat piece bent to shape -- see :ref:`sheet-metal`"
-msgstr ""
+msgstr "Ein flaches Stück, in Form gebogen -- siehe :ref:`sheet-metal`"
 
 #: ../../source/config_making.rst:22
 msgid "``pcbBasic``"
-msgstr ""
+msgstr "``pcbBasic``"
 
 #: ../../source/config_making.rst:22
 msgid "A printed circuit board (**not implemented yet**)"
-msgstr ""
+msgstr "Eine Leiterplatte (**noch nicht implementiert**)"
 
 #: ../../source/config_making.rst:25
 msgid ""
@@ -85,16 +85,22 @@ msgid ""
 "put together rather than made, and has a single method of its own -- see :"
 "ref:`manufacturing an assembly <assembly-manufacturing>` below."
 msgstr ""
+"Dies sind Arten, ein **Teil** herzustellen, und sie gelten nur für Teile. "
+"Eine Baugruppe wird zusammengesetzt statt hergestellt und hat eine einzige "
+"eigene Methode -- siehe :ref:`eine Baugruppe fertigen "
+"<assembly-manufacturing>` weiter unten."
 
 #: ../../source/config_making.rst:29
 msgid ""
 "A part that is bought rather than made carries ``vendor`` and ``sku`` "
 "instead of a method."
 msgstr ""
+"Ein Teil, das gekauft statt hergestellt wird, trägt ``vendor`` und ``sku`` "
+"statt einer Methode."
 
 #: ../../source/config_making.rst:35
 msgid "Subtractive"
-msgstr ""
+msgstr "Subtraktiv"
 
 #: ../../source/config_making.rst:37
 msgid ""
@@ -104,14 +110,21 @@ msgid ""
 "relation between the part and what it is made *from*, and between the part "
 "and the machine that makes it. Both can be declared, and both are checked."
 msgstr ""
+"``subtractive`` ist die Methode, die Material abträgt: eine Fräse, ein "
+"Laser, eine Säge, ein Bohrer. Was sie über ein Teil aussagt, ist keine "
+"Eigenschaft der Form des Teils selbst -- fast jeder Festkörper lässt sich "
+"aus einem genügend großen Block herausarbeiten --, sondern eine Beziehung "
+"zwischen dem Teil und dem, *woraus* es hergestellt wird, und zwischen dem "
+"Teil und der Maschine, die es herstellt. Beides kann deklariert werden, "
+"und beides wird geprüft."
 
 #: ../../source/config_making.rst:44
 msgid "The stock it is cut from"
-msgstr ""
+msgstr "Das Rohmaterial, aus dem es geschnitten wird"
 
 #: ../../source/config_making.rst:46
 msgid "``source`` names the piece the part is cut out of:"
-msgstr ""
+msgstr "``source`` benennt das Stück, aus dem das Teil herausgeschnitten wird:"
 
 #: ../../source/config_making.rst:62
 msgid ""
@@ -119,6 +132,9 @@ msgid ""
 "the stock. ``pc test`` asks both halves of that, because each catches a "
 "different mistake and neither implies the other:"
 msgstr ""
+"Schneiden kann immer nur Material abtragen, also muss das Teil das sein, "
+"was vom Rohmaterial übrig bleibt. ``pc test`` fragt beide Hälften davon, "
+"denn jede fängt einen anderen Fehler ab und keine folgt aus der anderen:"
 
 #: ../../source/config_making.rst:66
 msgid ""
@@ -126,6 +142,10 @@ msgid ""
 "it is cut from cannot be made from it however good the machine is -- most "
 "often the stock is simply too small, or the part is positioned off it."
 msgstr ""
+"**Nichts vom Teil liegt außerhalb des Rohmaterials.** Ein Teil, das aus "
+"dem herausragt, woraus es geschnitten wird, kann daraus nicht hergestellt "
+"werden, wie gut die Maschine auch ist -- meist ist das Rohmaterial "
+"schlicht zu klein, oder das Teil liegt daneben."
 
 #: ../../source/config_making.rst:69
 msgid ""
@@ -133,6 +153,10 @@ msgid ""
 "exactly is one whose ``source`` names itself, or a copy of itself, which is "
 "the mistake a reader of the YAML cannot see."
 msgstr ""
+"**Das Rohmaterial ist irgendwo größer als das Teil.** Ein Teil, das sein "
+"Rohmaterial genau ausfüllt, ist eines, dessen ``source`` auf es selbst "
+"oder auf eine Kopie seiner selbst zeigt, und das ist der Fehler, den ein "
+"Leser des YAML nicht sehen kann."
 
 #: ../../source/config_making.rst:73
 msgid ""
@@ -142,16 +166,26 @@ msgid ""
 "it is what is left of a piece that existed first -- so a declaration naming "
 "no stock has not said what the method means."
 msgstr ""
+"``source`` ist **erforderlich**, so wie es die beiden Felder von "
+":ref:`sheet-metal` sind, und aus demselben Grund: Subtraktion ist dadurch "
+"definiert, wovon sie ausgeht. Eine Form, bei der jemand angekommen ist, "
+"ist kein subtraktives Teil -- was sie dazu macht, ist, dass sie das ist, "
+"was von einem zuvor vorhandenen Stück übrig bleibt --, sodass eine "
+"Deklaration, die kein Rohmaterial benennt, nicht gesagt hat, was die "
+"Methode bedeutet."
 
 #: ../../source/config_making.rst:79
 msgid ""
 "A part genuinely made from no stock is a part made some other way: bought "
 "(``vendor``/``sku``), ``additive``, or ``forming``."
 msgstr ""
+"Ein Teil, das wirklich aus keinem Rohmaterial hergestellt wird, ist ein "
+"Teil, das anders hergestellt wird: gekauft (``vendor``/``sku``), "
+"``additive`` oder ``forming``."
 
 #: ../../source/config_making.rst:85
 msgid "The machine it is cut on"
-msgstr ""
+msgstr "Die Maschine, auf der es geschnitten wird"
 
 #: ../../source/config_making.rst:87
 msgid ""
@@ -159,56 +193,66 @@ msgid ""
 "interchangeable, and what they **cannot** do is the useful thing to know. A "
 "machine is named by adding its own subsection:"
 msgstr ""
+"Subtraktion ist eine Idee, aber die Maschinen, die sie ausführen, sind "
+"nicht austauschbar, und das Nützliche ist zu wissen, was sie **nicht** "
+"können. Eine Maschine wird benannt, indem ihr eigener Unterabschnitt "
+"hinzugefügt wird:"
 
 #: ../../source/config_making.rst:101
 msgid "Subsection"
-msgstr ""
+msgstr "Unterabschnitt"
 
 #: ../../source/config_making.rst:101
 msgid "The machine, and what it cannot do"
-msgstr ""
+msgstr "Die Maschine, und was sie nicht kann"
 
 #: ../../source/config_making.rst:103
 msgid "*(none)*"
-msgstr ""
+msgstr "*(keiner)*"
 
 #: ../../source/config_making.rst:103
 msgid ""
 "A CNC router or mill. It follows any 2.5D path, so there is nothing it is "
 "held to beyond fitting its stock."
 msgstr ""
+"Eine CNC-Fräse. Sie folgt jedem 2,5D-Pfad, sodass sie an nichts gebunden "
+"ist außer daran, in ihr Rohmaterial zu passen."
 
 #: ../../source/config_making.rst:106
 msgid "``cnc:``"
-msgstr ""
+msgstr "``cnc:``"
 
 #: ../../source/config_making.rst:106
 msgid "The same machine, said out loud."
-msgstr ""
+msgstr "Dieselbe Maschine, ausdrücklich benannt."
 
 #: ../../source/config_making.rst:108
 msgid "``laser:``"
-msgstr ""
+msgstr "``laser:``"
 
 #: ../../source/config_making.rst:108
 msgid ""
 "A laser cutter. Its beam does not tilt, so every wall it makes is parallel "
 "to the axis it fires along."
 msgstr ""
+"Ein Laserschneider. Sein Strahl neigt sich nicht, sodass jede Wand, die er "
+"erzeugt, parallel zu der Achse ist, entlang derer er schießt."
 
 #: ../../source/config_making.rst:111
 msgid "``drill:``"
-msgstr ""
+msgstr "``drill:``"
 
 #: ../../source/config_making.rst:111
 msgid ""
 "A drilling machine. It goes in and comes out, so the only thing it makes is "
 "a **round** hole along its own axis."
 msgstr ""
+"Eine Bohrmaschine. Sie fährt hinein und wieder heraus, sodass sie nur ein "
+"**rundes** Loch entlang ihrer eigenen Achse erzeugt."
 
 #: ../../source/config_making.rst:114
 msgid "``cut:``"
-msgstr ""
+msgstr "``cut:``"
 
 #: ../../source/config_making.rst:114
 msgid ""
@@ -216,6 +260,10 @@ msgid ""
 "makes **nothing but the stock with its ends cut off**, where its cuts say. "
 "See :ref:`subtractive-cut`."
 msgstr ""
+"Eine Säge, die das Rohmaterial quer durchtrennt -- ein Brett auf Länge, "
+"eine Platte auf Maß. Sie erzeugt **nichts als das Rohmaterial mit "
+"abgeschnittenen Enden**, und zwar dort, wo ihre Schnitte es angeben. Siehe "
+":ref:`subtractive-cut`."
 
 #: ../../source/config_making.rst:120
 msgid ""
@@ -224,6 +272,10 @@ msgid ""
 "every ``subtractive`` part written before machines could be named already "
 "meant."
 msgstr ""
+"Keine von ihnen zu benennen bedeutet CNC. Das ist die Maschine, die alles "
+"kann, was die anderen beiden können, und daher die Antwort, die nie falsch "
+"ist -- und sie ist das, was jedes ``subtractive``-Teil, das vor der "
+"Benennbarkeit von Maschinen geschrieben wurde, ohnehin schon meinte."
 
 #: ../../source/config_making.rst:124
 msgid ""
@@ -237,6 +289,17 @@ msgid ""
 "is machined in *stages* is not this: it is a chain of parts, each naming the "
 "previous one as its ``source``."
 msgstr ""
+"**Es dürfen mehrere benannt werden, und sie sind Alternativen und keine "
+"Stufen.** Ein Teil, das sowohl ``laser:`` als auch ``cnc:`` deklariert, "
+"behauptet, es könnte auf beide Arten hergestellt werden, und ``pc test`` "
+"beantwortet beide Behauptungen. ``pc cam`` muss dann gesagt bekommen, für "
+"welche geschrieben werden soll -- ``pc cam -m laser :gasket`` --, denn "
+"eine Voreinstellung, die niemand gewählt hat, ist ein Programm für die "
+"falsche Maschine; die geschriebene Datei wird nach der Maschine benannt "
+"(``gasket.laser.nc``), sodass die Alternativen nebeneinander landen, statt "
+"dass eine die andere überschreibt. Ein Teil, das wirklich in *Stufen* "
+"bearbeitet wird, ist nicht das: es ist eine Kette von Teilen, von denen "
+"jedes das vorherige als seine ``source`` benennt."
 
 #: ../../source/config_making.rst:134
 msgid ""
@@ -250,6 +313,18 @@ msgid ""
 "the one section with no ``method:`` in it: a drawing is not made out of "
 "anything, so it names the machine and the job and nothing else."
 msgstr ""
+"**Nur ``subtractive`` hat überhaupt eine Maschine**, und die Schlüssel, "
+"die einen Schnitt beschreiben, werden überall sonst zurückgewiesen, statt "
+"angenommen und nie gelesen zu werden. Ein ``diameter:`` an einem Teil, das "
+"``method: additive`` sagt, ist eine Zahl, die jemand gewählt hat und auf "
+"die nichts reagiert, und genau deshalb ist der Arbeitsgang aus einem "
+"eigenen Abschnitt herausgewandert -- auch ein Drucker hat Vorschübe und "
+"Geschwindigkeiten, und an dem Tag, an dem PartCAD ein Programm für einen "
+"schreibt, werden sie die Schlüssel eines Druckers unter dem Unterabschnitt "
+"eines Druckers sein, statt die einer Fräse, die versehentlich gelesen "
+"werden. Eine *Skizze* ist der eine Abschnitt ohne ``method:`` darin: eine "
+"Zeichnung wird aus nichts hergestellt, sie benennt also die Maschine und "
+"den Arbeitsgang und sonst nichts."
 
 #: ../../source/config_making.rst:144
 msgid ""
@@ -266,16 +341,32 @@ msgid ""
 "material rather than of the job -- which is why it is a property of the "
 "machine rather than of the cut."
 msgstr ""
+"Jede Maschine nimmt eine ``toolAxis``, also die Achse, entlang derer das "
+"Werkzeug, der Strahl, der Bohrer oder die Säge anfährt, geschrieben als "
+"eines von ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z`` oder ``-Z``. Standardwert "
+"ist ``-Z``: das Teil liegt auf dem Tisch und das Werkzeug kommt von oben. "
+"Jede Maschine nimmt sie außerdem als ``along:`` -- derselbe Schlüssel, so "
+"wie man es üblicherweise sagt („der Laser schneidet entlang -Z“) --, und "
+"ein Unterabschnitt schreibt das eine oder das andere, nie beides. Es ist "
+"**nicht** ``direction:``, das sagt, in welchem Umlaufsinn eine Kontur "
+"geschnitten wird (Gleich- oder Gegenlauf) -- die beiden erreichen eine "
+"Implementierung in einer Anfrage, weshalb sie sich keinen Namen teilen. "
+"Ein Laser nimmt außerdem einen ``kerf``, also die Breite, die der Strahl "
+"selbst abträgt, und das ist eine Eigenschaft dieser Maschine und dieses "
+"Materials statt des Arbeitsgangs -- weshalb es eine Eigenschaft der "
+"Maschine ist und nicht des Schnitts."
 
 #: ../../source/config_making.rst:156 ../../source/config_making.rst:356
 msgid "What ``pc test`` checks"
-msgstr ""
+msgstr "Was ``pc test`` prüft"
 
 #: ../../source/config_making.rst:158
 msgid ""
 "Beyond the stock, one question per limited machine, and each applies **only "
 "to a part that named that machine**:"
 msgstr ""
+"Über das Rohmaterial hinaus eine Frage je eingeschränkter Maschine, und "
+"jede gilt **nur für ein Teil, das diese Maschine benannt hat**:"
 
 #: ../../source/config_making.rst:161
 msgid ""
@@ -284,6 +375,11 @@ msgid ""
 "over an edge is none of those, and there is no orientation of a beam that "
 "produces a surface at an angle to itself."
 msgstr ""
+"``manufacturability-laser`` -- jede Fläche des Teils ist entweder eine "
+"Wand entlang des Strahls oder eine Fläche quer dazu. Eine Fase, eine "
+"Schräge, eine Kuppel oder eine über eine Kante laufende Verrundung ist "
+"nichts davon, und es gibt keine Ausrichtung eines Strahls, die eine Fläche "
+"schräg zu sich selbst erzeugt."
 
 #: ../../source/config_making.rst:165
 msgid ""
@@ -293,12 +389,21 @@ msgid ""
 "stock, and asking the part's own walls would fail every plate for having "
 "them."
 msgstr ""
+"``manufacturability-drill`` -- dasselbe, und jede Wand ist rund. Diese "
+"Frage wird an das gestellt, was die Maschine **abgetragen** hat, statt an "
+"das Teil, sofern das Teil eine ``source`` benennt: die geraden Seiten "
+"einer gebohrten Platte kamen mit dem Rohmaterial, und die Wände des Teils "
+"selbst zu prüfen würde jede Platte dafür durchfallen lassen, dass sie "
+"welche hat."
 
 #: ../../source/config_making.rst:169
 msgid ""
 "``manufacturability-cut`` -- the stock, cut where every declared cut says, "
 "**is** the part. See :ref:`subtractive-cut`."
 msgstr ""
+"``manufacturability-cut`` -- das Rohmaterial, geschnitten dort, wo jeder "
+"deklarierte Schnitt es angibt, **ist** das Teil. Siehe "
+":ref:`subtractive-cut`."
 
 #: ../../source/config_making.rst:172
 msgid ""
@@ -308,6 +413,12 @@ msgid ""
 "and a surface extruded along the axis is a perfectly good wall whatever it "
 "is made of."
 msgstr ""
+"Beides wird gemessen, indem die eigene Normale jeder Fläche gegen die "
+"Achse abgetastet wird, und nicht, indem ihr Flächentyp gelesen wird. Der "
+"Typ ist nicht die Frage: ein Zylinder ist eine Wand, wenn er koaxial zur "
+"Achse liegt, und ein Defekt, wenn er quer dazu liegt, und eine entlang der "
+"Achse extrudierte Fläche ist eine völlig taugliche Wand, woraus auch immer "
+"sie besteht."
 
 #: ../../source/config_making.rst:177
 msgid ""
@@ -318,10 +429,17 @@ msgid ""
 "geometry, and a check that guessed would refuse parts the shop next door "
 "cuts every day."
 msgstr ""
+"Was absichtlich **nicht** geprüft wird, sind Dicke, Material oder "
+"Leistung. Ein Laser schneidet eine 20-mm-Platte genauso bereitwillig wie "
+"ein 1-mm-Blech, sofern er genug davon hat, und wie viel genug ist, ist "
+"eine Eigenschaft der Maschine und des Materials statt des Entwurfs -- es "
+"ist also nichts, was PartCAD aus der Geometrie beantworten kann, und eine "
+"Prüfung, die rät, würde Teile zurückweisen, die die Werkstatt nebenan "
+"jeden Tag schneidet."
 
 #: ../../source/config_making.rst:184
 msgid "What ``pc cam`` writes"
-msgstr ""
+msgstr "Was ``pc cam`` schreibt"
 
 #: ../../source/config_making.rst:186
 msgid ""
@@ -330,28 +448,36 @@ msgid ""
 "parameter -- what a part is made on is a property of the part, and a re-"
 "tunable key for it would be a route written for a machine nobody owns."
 msgstr ""
+"Derselbe Dateityp ``gcode`` erzeugt für jede Maschine ein anderes "
+"Programm, und für welche geschrieben wird, ist die eigene Angabe des Teils "
+"und kein Parameter des Arbeitsgangs -- worauf ein Teil hergestellt wird, "
+"ist eine Eigenschaft des Teils, und ein dafür nachstellbarer Schlüssel "
+"wäre eine Bahn, die für eine Maschine geschrieben wurde, die niemand "
+"besitzt."
 
 #: ../../source/config_making.rst:192
 msgid "Machine"
-msgstr ""
+msgstr "Maschine"
 
 #: ../../source/config_making.rst:192
 msgid "The program"
-msgstr ""
+msgstr "Das Programm"
 
 #: ../../source/config_making.rst:194
 msgid "CNC"
-msgstr ""
+msgstr "CNC"
 
 #: ../../source/config_making.rst:194
 msgid ""
 "Contours offset by the cutter's radius, cut at stepped depths. ``M3``/``M5`` "
 "where a ``speed`` is named."
 msgstr ""
+"Konturen, versetzt um den Werkzeugradius, geschnitten in gestuften Tiefen. "
+"``M3``/``M5``, wo eine ``speed`` benannt ist."
 
 #: ../../source/config_making.rst:197
 msgid "Laser"
-msgstr ""
+msgstr "Laser"
 
 #: ../../source/config_making.rst:197
 msgid ""
@@ -359,16 +485,21 @@ msgid ""
 "``M5`` around each contour and no Z motion at all. Reads no ``tool`` and no "
 "``depth_per_pass``."
 msgstr ""
+"Ein Durchgang, versetzt um den halben ``kerf``, wobei der Strahl mit ``M3 "
+"S<power>``/``M5`` um jede Kontur herum geschaltet wird, und ganz ohne "
+"Z-Bewegung. Liest weder ``tool`` noch ``depth_per_pass``."
 
 #: ../../source/config_making.rst:201
 msgid "Drilling"
-msgstr ""
+msgstr "Bohren"
 
 #: ../../source/config_making.rst:201
 msgid ""
 "A rapid to each round feature's centre, a plunge and a retract, broken into "
 "steps where ``peck:`` says."
 msgstr ""
+"Ein Eilgang zum Mittelpunkt jedes runden Merkmals, ein Eintauchen und ein "
+"Rückzug, aufgeteilt in Schritte, wo ``peck:`` es angibt."
 
 #: ../../source/config_making.rst:205
 msgid ""
@@ -376,6 +507,10 @@ msgid ""
 "and nothing else, and the part's declaration already says that. ``pc cam`` "
 "passes over a part that is only cut, and refuses ``-m cut``."
 msgstr ""
+"Ein ``cut:`` bekommt kein Programm: einer Säge, die Rohmaterial auf Maß "
+"schneidet, wird gesagt, wo zu schneiden ist, und sonst nichts, und die "
+"Deklaration des Teils sagt das bereits. ``pc cam`` übergeht ein Teil, das "
+"nur gesägt wird, und lehnt ``-m cut`` ab."
 
 #: ../../source/config_making.rst:209
 msgid ""
@@ -385,6 +520,12 @@ msgid ""
 "frame before the route is written, so the program is in the coordinates the "
 "part is fixtured in."
 msgstr ""
+"``power`` (das S-Wort eines Lasers) und ``peck`` (wie tief ein Bohrer "
+"geht, bevor er die Späne räumt) kommen zu den übrigen "
+":ref:`CAM-Arbeitsgangschlüsseln <cam-section>` hinzu. Ein Teil, das eine "
+"andere ``toolAxis`` als ``-Z`` deklariert, wird in das Koordinatensystem "
+"der Maschine gedreht, bevor die Bahn geschrieben wird, sodass das Programm "
+"in den Koordinaten vorliegt, in denen das Teil gespannt ist."
 
 #: ../../source/config_making.rst:214
 msgid ""
@@ -395,10 +536,18 @@ msgid ""
 "The desk in ``//pub/furniture/workspace/basic`` is cut, every piece of it, "
 "with ``cut:``."
 msgstr ""
+"``examples/produce_part_subtractive`` ist das Ganze des Obigen in einem "
+"Paket: zwei Rohmaterialien, ein lasergeschnittener Zuschnitt und eine "
+"Dichtung, ein gefräster Block, dessen Fase das eine Merkmal ist, das nur "
+"eine Fräse erzeugen kann, eine gebohrte Platte und eine Schiene, die von "
+"einem Brett auf Länge geschnitten wird. Der Zuschnitt ist das, was "
+":ref:`sheet-metal` biegt. Der Schreibtisch in "
+"``//pub/furniture/workspace/basic`` ist in jedem Stück mit ``cut:`` "
+"geschnitten."
 
 #: ../../source/config_making.rst:223
 msgid "Cutting stock to size"
-msgstr ""
+msgstr "Rohmaterial auf Maß schneiden"
 
 #: ../../source/config_making.rst:225
 msgid ""
@@ -407,6 +556,12 @@ msgid ""
 "It follows no outline, so it is described by **where** it cuts, in the "
 "part's own coordinates, which are also its stock's:"
 msgstr ""
+"``cut:`` ist die Maschine, auf der die meisten Teile geschnitten werden, "
+"die überhaupt geschnitten werden: eine Säge, die einen Ständer von einem "
+"acht Fuß langen 2x4 abnimmt, oder ein Regalbrett aus einer "
+"Sperrholzplatte. Sie folgt keinem Umriss, sie wird also dadurch "
+"beschrieben, **wo** sie schneidet, und zwar in den eigenen Koordinaten des "
+"Teils, die zugleich die seines Rohmaterials sind:"
 
 #: ../../source/config_making.rst:251
 msgid ""
@@ -416,10 +571,17 @@ msgid ""
 "it, and cuts across; everything further along the axis is cut off, and what "
 "is behind the saw is the part. So ``toolAxis: -Y`` counts from the other end."
 msgstr ""
+"Eine Säge wird so geschrieben wie jede andere Maschine: über ihre "
+"``toolAxis``, die auf den **Verschnitt** zeigt. Jeder Schnitt beginnt "
+"dort, wo das Rohmaterial entlang dieser Achse beginnt -- so wie ein Brett "
+"von seinem Ende her gemessen wird --, läuft ``length:`` weit hinein und "
+"schneidet quer; alles, was weiter entlang der Achse liegt, wird "
+"abgeschnitten, und was hinter der Säge liegt, ist das Teil. ``toolAxis: "
+"-Y`` zählt also vom anderen Ende."
 
 #: ../../source/config_making.rst:257
 msgid "``length:`` is always there: it is the whole of *where*."
-msgstr ""
+msgstr "``length:`` ist immer vorhanden: es ist das Ganze des *Wo*."
 
 #: ../../source/config_making.rst:258
 msgid ""
@@ -427,6 +589,10 @@ msgid ""
 "cut is usually said; one or the other -- is the axis that cut travels along, "
 "as an axis (``+Y``) or a vector (``[0, 1, 0]``)."
 msgstr ""
+"``toolAxis:`` an einem Schnitt, oder ``along:`` -- das dasselbe sagt, so "
+"wie ein Sägeschnitt üblicherweise beschrieben wird; das eine oder das "
+"andere -- ist die Achse, entlang derer dieser Schnitt verläuft, als Achse "
+"(``+Y``) oder als Vektor (``[0, 1, 0]``)."
 
 #: ../../source/config_making.rst:261
 msgid ""
@@ -434,6 +600,9 @@ msgid ""
 "``along:``), and a machine that names none has the default every machine "
 "has, ``-Z``."
 msgstr ""
+"Ein Schnitt, der weder das eine noch das andere benennt, verläuft entlang "
+"der ``toolAxis:`` (oder ``along:``) der Maschine, und eine Maschine, die "
+"keine benennt, hat den Standardwert, den jede Maschine hat, ``-Z``."
 
 #: ../../source/config_making.rst:265
 msgid ""
@@ -442,6 +611,11 @@ msgid ""
 "in``). A part cut to length is nearly always parametric, and a cut written "
 "as a number would be right for one instance and wrong for every other."
 msgstr ""
+"Jede Zahl in einem Schnitt darf als ``$name`` geschrieben werden -- der "
+"Wert des gleichnamigen Parameters des Teils, mit einer Einheit dahinter, "
+"falls eine nötig ist (``$length in``). Ein auf Länge geschnittenes Teil "
+"ist fast immer parametrisch, und ein als Zahl geschriebener Schnitt wäre "
+"für eine Instanz richtig und für jede andere falsch."
 
 #: ../../source/config_making.rst:270
 msgid ""
@@ -453,10 +627,20 @@ msgid ""
 "usually a length longer than the board, or an axis pointing the wrong way. "
 "Each of the three is a failure that says which plane it was about."
 msgstr ""
+"``pc test`` führt darüber ``manufacturability-cut`` aus, das jeden Schnitt "
+"der Reihe nach im Rohmaterial ausführt und das Übriggebliebene mit dem "
+"Teil vergleicht. Was das Teil hat und das geschnittene Rohmaterial nicht, "
+"ist ein Merkmal, das keine Säge erzeugt hat; was das geschnittene "
+"Rohmaterial hat und das Teil nicht, ist eine Kerbe, ein Loch oder ein "
+"Schnitt an der falschen Stelle; und ein Schnitt, der nichts vom "
+"Rohmaterial abnimmt, ist einer, der es verfehlt -- meist eine Länge, die "
+"größer ist als das Brett, oder eine Achse, die in die falsche Richtung "
+"zeigt. Jeder der drei Fälle ist ein Fehlschlag, der sagt, um welche Ebene "
+"es ging."
 
 #: ../../source/config_making.rst:281
 msgid "Sheet metal"
-msgstr ""
+msgstr "Blech"
 
 #: ../../source/config_making.rst:283
 msgid ""
@@ -464,6 +648,10 @@ msgid ""
 "The others say how a shape is produced from stock; this one says that an "
 "existing flat piece was put through a brake, so it names two things instead:"
 msgstr ""
+"``sheet_metal`` ist die eine Methode, die nicht durch das Teil allein "
+"beschrieben wird. Die anderen sagen, wie eine Form aus Rohmaterial "
+"entsteht; diese sagt, dass ein vorhandenes flaches Stück durch eine "
+"Abkantpresse gelaufen ist, und benennt daher stattdessen zwei Dinge:"
 
 #: ../../source/config_making.rst:298
 msgid ""
@@ -473,6 +661,11 @@ msgid ""
 "because it is one. It has a thickness, a material, a tolerance, and a "
 "manufacturing method of its own."
 msgstr ""
+"``source`` -- **erforderlich.** Das Teil, das in die Abkantpresse geht: "
+"der flache Zuschnitt. Es ist eine Referenz, die wie jede andere Referenz "
+"eines Teils gegen dieses Paket aufgelöst wird, und sie zeigt auf ein "
+"**Teil** statt auf eine Zeichnung, weil es eines ist. Es hat eine Dicke, "
+"ein Material, eine Toleranz und eine eigene Fertigungsmethode."
 
 #: ../../source/config_making.rst:304
 msgid ""
@@ -482,10 +675,16 @@ msgid ""
 "lines is read as bends alone with ``;include=BEND_UP,BEND_DOWN``, which is "
 "what the DXF layer parameters are for."
 msgstr ""
+"``instructions`` -- **erforderlich.** Die Skizze, die sagt, wo die "
+"Biegungen liegen und was jede von ihnen ist. Es ist eine Referenz auf eine "
+":ref:`Skizze <sketches>`, darf also Parameter tragen: eine Zeichnung, die "
+"den Umriss *und* die Biegelinien enthält, wird mit "
+"``;include=BEND_UP,BEND_DOWN`` allein als Biegungen gelesen, und dafür "
+"sind die DXF-Layer-Parameter da."
 
 #: ../../source/config_making.rst:311
 msgid "The outline belongs to the blank"
-msgstr ""
+msgstr "Der Umriss gehört zum Zuschnitt"
 
 #: ../../source/config_making.rst:313
 msgid ""
@@ -494,6 +693,11 @@ msgid ""
 "They belong to the blank, which is usually cut flat -- laser, waterjet, "
 "punch, router -- and so is usually an ordinary ``subtractive`` part:"
 msgstr ""
+"Der Umriss des Teils, seine Löcher, seine Langlöcher und seine Ausschnitte "
+"sind **nicht** Sache des Blechumformprozesses und dürfen nicht als Teil "
+"davon beschrieben werden. Sie gehören zum Zuschnitt, der üblicherweise "
+"flach geschnitten wird -- Laser, Wasserstrahl, Stanze, Fräse -- und daher "
+"üblicherweise ein gewöhnliches ``subtractive``-Teil ist:"
 
 #: ../../source/config_making.rst:341
 msgid ""
@@ -504,6 +708,13 @@ msgid ""
 "bending step would put it on the process that cannot make it, and would "
 "leave the part with no declaration of the process that can."
 msgstr ""
+"So wird es hergestellt, und so wird es daher aufgeschrieben. Eine "
+"Werkstatt schneidet die Abwicklung auf der einen Maschine und biegt sie "
+"auf einer anderen, sie werden getrennt kalkuliert, toleriert und "
+"eingeplant, und die Abwicklung ist ein Ding, das existiert -- sie ist das, "
+"was an der Abkantpresse ankommt. Ein Loch als Teil des Biegeschritts zu "
+"beschreiben würde es dem Prozess zuordnen, der es nicht erzeugen kann, und "
+"das Teil ohne Deklaration des Prozesses zurücklassen, der es kann."
 
 #: ../../source/config_making.rst:348
 msgid ""
@@ -514,10 +725,17 @@ msgid ""
 "``alias`` or an ``enrich`` of a part declared elsewhere carries whatever "
 "that one says. All of them are blanks, and the check takes them."
 msgstr ""
+"``subtractive`` ist die übliche und keine vorgeschriebene Antwort: von "
+"einer ``source`` muss gelten, dass sie flach ist, und genau das fragt ``pc "
+"test`` von ihr. Ein Zuschnitt, der zugekauft statt hergestellt wird, hat "
+"keine Fertigungsmethode zu deklarieren, einer, der auf Umriss geschert "
+"oder gestanzt wird, ist ``forming``, und ein ``alias`` oder ein ``enrich`` "
+"eines anderswo deklarierten Teils trägt das, was jenes sagt. Alle davon "
+"sind Zuschnitte, und die Prüfung nimmt sie an."
 
 #: ../../source/config_making.rst:358
 msgid "Two questions, one about each half of the declaration:"
-msgstr ""
+msgstr "Zwei Fragen, je eine zu jeder Hälfte der Deklaration:"
 
 #: ../../source/config_making.rst:360
 msgid ""
@@ -527,46 +745,56 @@ msgid ""
 "``source`` that fails this is not a blank -- most often it is the bent part "
 "itself, named by mistake."
 msgstr ""
+"**Der Zuschnitt ist flach, oben und unten.** Was in eine Abkantpresse "
+"geht, ist ein Stück Blech, sodass die waagerechte Ebene durch seinen "
+"höchsten Punkt und die durch seinen tiefsten es jeweils in einer Fläche "
+"treffen, statt es in einem Punkt zu berühren. Eine ``source``, die daran "
+"scheitert, ist kein Zuschnitt -- meist ist es das gebogene Teil selbst, "
+"versehentlich benannt."
 
 #: ../../source/config_making.rst:366
 msgid ""
 "**Every bend line says what kind of bend it is.** Each line of the "
 "instructions sketch carries three annotations:"
 msgstr ""
+"**Jede Biegelinie sagt, welche Art von Biegung sie ist.** Jede Linie der "
+"Anweisungsskizze trägt drei Annotationen:"
 
 #: ../../source/config_making.rst:370
 msgid "Annotation"
-msgstr ""
+msgstr "Annotation"
 
 #: ../../source/config_making.rst:370
 msgid "What it has to be"
-msgstr ""
+msgstr "Was sie sein muss"
 
 #: ../../source/config_making.rst:372
 msgid "``angle``"
-msgstr ""
+msgstr "``angle``"
 
 #: ../../source/config_making.rst:372
 msgid "How far the metal is turned, in degrees. Positive."
-msgstr ""
+msgstr "Wie weit das Blech gedreht wird, in Grad. Positiv."
 
 #: ../../source/config_making.rst:374
 msgid "``radius``"
-msgstr ""
+msgstr "``radius``"
 
 #: ../../source/config_making.rst:374
 msgid ""
 "The **inner** radius of the bend, in millimetres. More than zero -- zero is "
 "a fold, not a bend."
 msgstr ""
+"Der **innere** Radius der Biegung, in Millimetern. Größer als null -- null "
+"ist ein Falz und keine Biegung."
 
 #: ../../source/config_making.rst:377
 msgid "``direction``"
-msgstr ""
+msgstr "``direction``"
 
 #: ../../source/config_making.rst:377
 msgid "``up`` or ``down``, in either case."
-msgstr ""
+msgstr "``up`` oder ``down``, in beliebiger Groß- und Kleinschreibung."
 
 #: ../../source/config_making.rst:380
 msgid ""
@@ -574,6 +802,10 @@ msgid ""
 "states them as :ref:`extended data <sketch-annotations>`, and the check "
 "reads what the sketch reports rather than the file it was read from."
 msgstr ""
+"Woher sie kommen, ist Sache der Skizze und nicht dieser Prüfung: ein DXF "
+"gibt sie als :ref:`erweiterte Daten <sketch-annotations>` an, und die "
+"Prüfung liest, was die Skizze meldet, und nicht die Datei, aus der sie "
+"gelesen wurde."
 
 #: ../../source/config_making.rst:384
 msgid ""
@@ -583,6 +815,11 @@ msgid ""
 "until then the part is what its own type built, and these are the "
 "manufacturing inputs beside it."
 msgstr ""
+"Was *nicht* geprüft wird, ist die Geometrie des Teils gegen diese "
+"Anweisungen. Ob das Biegen des Zuschnitts wie beschrieben die Form ergibt, "
+"die das Teil deklariert, ist eine Frage für den Tag, an dem PartCAD den "
+"Zuschnitt selbst biegt; bis dahin ist das Teil das, was sein eigener Typ "
+"gebaut hat, und dies sind die Fertigungseingaben daneben."
 
 #: ../../source/config_making.rst:389
 msgid ""
@@ -593,34 +830,47 @@ msgid ""
 "which layers their ``instructions`` select, which is the case the layer "
 "parameters exist for."
 msgstr ""
+"``examples/produce_part_sheet_metal`` ist das Ganze des Obigen in einem "
+"Paket: ein DXF, das die Abwicklung und zwei Biegelinien enthält, ein aus "
+"dem Umriss-Layer extrudierter Zuschnitt und drei Teile, die aus diesem "
+"einen Zuschnitt gefaltet werden -- an der einen Biegelinie, an der anderen "
+"und an beiden. Sie unterscheiden sich in nichts außer darin, welche Layer "
+"ihre ``instructions`` auswählen, und das ist der Fall, für den die "
+"Layer-Parameter da sind."
 
 #: ../../source/config_making.rst:399
 msgid "Procurement"
-msgstr ""
+msgstr "Beschaffung"
 
 #: ../../source/config_making.rst:401
 msgid ""
 "A part that can be bought off the shelf instead of being manufactured is "
 "declared using the following syntax:"
 msgstr ""
+"Ein Teil, das von der Stange gekauft werden kann, statt gefertigt zu "
+"werden, wird mit folgender Syntax deklariert:"
 
 #: ../../source/config_making.rst:414
 msgid "``vendor``"
-msgstr ""
+msgstr "``vendor``"
 
 #: ../../source/config_making.rst:416
 msgid "Optional. The vendor that sells the part."
 msgstr ""
+"Optional. Der Hersteller beziehungsweise Händler, der das Teil verkauft."
 
 #: ../../source/config_making.rst:418
 msgid "``sku``"
-msgstr ""
+msgstr "``sku``"
 
 #: ../../source/config_making.rst:420
 msgid ""
 "Optional. The vendor's `stock keeping unit <https://en.wikipedia.org/wiki/"
 "Stock_keeping_unit>`_ identifying what is ordered from that vendor."
 msgstr ""
+"Optional. Die `Artikelnummer "
+"<https://en.wikipedia.org/wiki/Stock_keeping_unit>`_ des Händlers, die "
+"angibt, was bei diesem Händler bestellt wird."
 
 #: ../../source/config_making.rst:424
 msgid ""
@@ -628,14 +878,17 @@ msgid ""
 "purchasable. If either is missing, the part has to be manufactured instead, "
 "which relies on the MCFTT parameters described above."
 msgstr ""
+"Sowohl ``vendor`` als auch ``sku`` müssen gesetzt sein, damit das Teil als "
+"käuflich gilt. Fehlt eines von beiden, muss das Teil stattdessen gefertigt "
+"werden, was auf den oben beschriebenen MCFTT-Parametern beruht."
 
 #: ../../source/config_making.rst:428
 msgid "``count_per_sku``"
-msgstr ""
+msgstr "``count_per_sku``"
 
 #: ../../source/config_making.rst:430
 msgid "Optional. Defaults to ``1``. Must be a positive integer."
-msgstr ""
+msgstr "Optional. Standardwert ``1``. Muss eine positive ganze Zahl sein."
 
 #: ../../source/config_making.rst:432
 msgid ""
@@ -645,10 +898,16 @@ msgid ""
 "and the number of SKUs a store has in stock into the number of parts it can "
 "supply."
 msgstr ""
+"Die Anzahl der Teile, die in einer einzelnen Artikelnummer stecken, für "
+"die Teile, die im Gebinde verkauft werden: ein Beutel mit 25 Muttern ist "
+"eine Artikelnummer, die 25 Teile ergibt. Anbieter verwenden sie, um die "
+"Anzahl der angefragten Teile in die Anzahl der zu bestellenden "
+"Artikelnummern umzurechnen und die Anzahl der Artikelnummern, die ein "
+"Händler vorrätig hat, in die Anzahl der Teile, die er liefern kann."
 
 #: ../../source/config_making.rst:438
 msgid "``item_in_sku``"
-msgstr ""
+msgstr "``item_in_sku``"
 
 #: ../../source/config_making.rst:440
 msgid ""
@@ -659,6 +918,14 @@ msgid ""
 "later -- so each is declared as a part of its own. Each names the set's "
 "``vendor`` and ``sku``, and says which item of the set it is:"
 msgstr ""
+"Optional. Welcher Artikel das ist, wenn eine Artikelnummer ein *Satz* "
+"verschiedener Dinge statt eines Gebindes gleicher Dinge ist: eine Welle, "
+"die mit dem dazugehörigen Clip verkauft wird, ein Winkel, der mit seinen "
+"Schrauben kommt. Jedes davon ist ein eigenes Objekt -- für sich verwendet, "
+"für sich montiert, möglicherweise zerlegt und später wieder "
+"zusammengesetzt --, sodass jedes als eigenes Teil deklariert wird. Jedes "
+"benennt ``vendor`` und ``sku`` des Satzes und sagt, welcher Artikel des "
+"Satzes es ist:"
 
 #: ../../source/config_making.rst:461
 msgid ""
@@ -668,6 +935,12 @@ msgid ""
 "name an ``item_in_sku`` are one kind with each other, which is what a SKU of "
 "one kind of thing is."
 msgstr ""
+"``count_per_sku`` ist dann, wie viele dieser einen Sorte in einem Satz "
+"stecken. Bestellt wird der Satz, und zwar so oft, wie die anspruchsvollste "
+"Sorte es verlangt: zwei Wellen und zwei Clips sind zwei Sätze, nicht vier. "
+"Objekte einer Artikelnummer, die kein ``item_in_sku`` benennen, sind "
+"untereinander eine Sorte, und das ist es, was eine Artikelnummer einer "
+"Sorte von Dingen ist."
 
 #: ../../source/config_making.rst:467
 msgid ""
@@ -675,6 +948,10 @@ msgid ""
 "of shaft -- is declared once for the geometry, with an ``alias`` of it for "
 "each set it comes in, the way a part sold by several vendors is (below)."
 msgstr ""
+"Ein Objekt, das in mehr als einem Satz verkauft wird -- derselbe Clip "
+"kommt mit jeder Wellenlänge --, wird einmal für die Geometrie deklariert, "
+"mit je einem ``alias`` davon für jeden Satz, in dem es vorkommt, so wie "
+"bei einem Teil, das mehrere Händler verkaufen (siehe unten)."
 
 #: ../../source/config_making.rst:471
 msgid ""
@@ -684,10 +961,16 @@ msgid ""
 "`providers`). A cart also says what to order, one line per SKU, in "
 "``request[\"cart\"][\"skus\"]``."
 msgstr ""
+"Diese Werte werden an Anbieter vom Typ ``store`` als "
+"``request[\"vendor\"]``, ``request[\"sku\"]``, "
+"``request[\"count_per_sku\"]`` und ``request[\"item_in_sku\"]`` "
+"weitergereicht (siehe :ref:`providers`). Ein Warenkorb sagt außerdem, was "
+"zu bestellen ist, eine Zeile je Artikelnummer, in "
+"``request[\"cart\"][\"skus\"]``."
 
 #: ../../source/config_making.rst:479
 msgid "Parts that are made"
-msgstr ""
+msgstr "Teile, die hergestellt werden"
 
 #: ../../source/config_making.rst:481
 msgid ""
@@ -701,6 +984,18 @@ msgid ""
 "sheet. A part made from nothing it names (``additive``, ``forming``) needs "
 "nothing procured at all."
 msgstr ""
+"Ein Teil mit Fertigungsanweisungen -- einem Abschnitt ``manufacturing:``, "
+"der eine Methode benennt -- wird **hergestellt**, und wer auch immer die "
+"Baugruppe baut, wird beim Wort genommen, dass er es herstellen kann: "
+"PartCAD hat die Anweisungen und geht vorerst davon aus, dass die "
+"Fähigkeiten vorhanden sind, ihnen zu folgen. Niemand wird also gebeten, "
+"ein solches Teil zu liefern. Beschafft werden muss das, *woraus* es "
+"hergestellt wird: die ``source:`` seines Abschnitts ``manufacturing:``, "
+"die ihrerseits nach derselben Regel beschafft wird -- ein Winkel, der aus "
+"einem Zuschnitt gebogen wird, der aus einer Platte geschnitten wird, wird "
+"als die Platte beschafft. Ein Teil, das aus nichts hergestellt wird, was "
+"es benennt (``additive``, ``forming``), braucht überhaupt keine "
+"Beschaffung."
 
 #: ../../source/config_making.rst:491
 msgid ""
@@ -714,6 +1009,17 @@ msgid ""
 "there but the stock it is made from, of kind ``stock``, with the vendor and "
 "the SKU to order it by."
 msgstr ""
+"**Die Stücklisten** führen jedes Teil auf, das in die Baugruppe eingeht, "
+"und daneben einen Abschnitt **Stock**: woraus die hergestellten Teile "
+"bestehen, ein Stück für jedes daraus hergestellte Teil, und für welche "
+"Teile es jeweils ist. Mehrere Teile aus einem Stück zu schneiden ist eine "
+"Frage der Schachtelung, die PartCAD noch nicht beantwortet, sodass die "
+"Anzahl das ist, was ein Einkauf für jedes Teil einzeln kosten würde -- "
+"eine obere Schranke, nie zu wenig. Die detaillierte Stückliste (``pc "
+"bom``) führt auf, was beschafft werden muss: ein hergestelltes Teil ist "
+"dort keine eigene Position, sondern das Rohmaterial, aus dem es besteht, "
+"von der Art ``stock``, mit dem Händler und der Artikelnummer, unter der zu "
+"bestellen ist."
 
 #: ../../source/config_making.rst:500
 msgid ""
@@ -721,10 +1027,13 @@ msgid ""
 "parts to manufacture: each one, how many of it, what it is made from, and "
 "its manufacturing instructions written out in full."
 msgstr ""
+"**Die Montageanleitung** beginnt nach der Stückliste mit den zu "
+"fertigenden Teilen: jedes einzelne, wie viele davon, woraus es besteht und "
+"seine vollständig ausgeschriebenen Fertigungsanweisungen."
 
 #: ../../source/config_making.rst:503
 msgid "**pc supply** puts the stock in the cart instead of the part."
-msgstr ""
+msgstr "**pc supply** legt statt des Teils das Rohmaterial in den Warenkorb."
 
 #: ../../source/config_making.rst:504
 msgid ""
@@ -733,6 +1042,10 @@ msgid ""
 "running the same tests over the stock, which for a bought one is a supplier "
 "that carries it."
 msgstr ""
+"**pc test** sucht keinen Lieferanten für ein hergestelltes Teil. Es prüft, "
+"dass seine Anweisungen vollständig sind (eine Toleranz) und dass sein "
+"Rohmaterial beschaffbar ist -- indem dieselben Tests über das Rohmaterial "
+"laufen, was bei einem gekauften ein Lieferant ist, der es führt."
 
 #: ../../source/config_making.rst:509
 msgid ""
@@ -742,6 +1055,11 @@ msgid ""
 "part can be made instead. The bills of materials and the cart list it as "
 "bought."
 msgstr ""
+"Ein Teil, das Fertigungsanweisungen **und** einen ``vendor`` und eine "
+"``sku`` hat, lässt sich auf beide Arten beschaffen. Es wird zuerst als "
+"gekauft versucht: ``pc test`` fragt nach einem Lieferanten, und nur wenn "
+"kein Lieferant es bestätigt, prüft es, ob das Teil stattdessen hergestellt "
+"werden kann. Die Stücklisten und der Warenkorb führen es als gekauft."
 
 #: ../../source/config_making.rst:514
 msgid ""
@@ -750,6 +1068,11 @@ msgid ""
 "different pack sizes, declare one part per (vendor, SKU) pair, for example "
 "using ``alias``."
 msgstr ""
+"Beachten Sie, dass ``count_per_sku`` eine Eigenschaft der "
+"Verkaufsverpackung des Teils ist und nicht des CAD-Modells. Wenn dasselbe "
+"Teil von mehreren Händlern in unterschiedlichen Gebindegrößen verkauft "
+"wird, deklarieren Sie ein Teil je Paar aus (Händler, Artikelnummer), zum "
+"Beispiel mit ``alias``."
 
 #: ../../source/config_making.rst:537
 msgid ""
@@ -764,6 +1087,18 @@ msgid ""
 "thing, so the record stands -- and a ``count_per_sku`` on its own corrects "
 "how many of that same SKU arrive in one."
 msgstr ""
+"Als was ein Objekt gekauft wird, ist das Einzige, was ein ``alias`` oder "
+"ein ``enrich`` eigenständig angeben darf: alles andere, was es meldet -- "
+"wo die Datei liegt, womit es gebaut wird, welche Parameterwerte es hat --, "
+"gehört zu der Deklaration, auf die es auflöst. Eine Referenz, die einen "
+"``vendor`` oder eine ``sku`` benennt, ersetzt den gesamten Datensatz, "
+"``count_per_sku`` eingeschlossen, denn eine für eine Artikelnummer "
+"geschriebene Gebindegröße sagt nichts über eine andere; ein fehlendes "
+"``count_per_sku`` liest sich daher als ``1``, genau wie an einem "
+"unmittelbar deklarierten Teil. Eine Referenz, die weder das eine noch das "
+"andere benennt, bestellt dasselbe, sodass der Datensatz stehen bleibt -- "
+"und ein ``count_per_sku`` für sich allein korrigiert, wie viele derselben "
+"Artikelnummer in einer stecken."
 
 #: ../../source/config_making.rst:547
 msgid ""
@@ -771,10 +1106,13 @@ msgid ""
 "report what the reference in the middle declared rather than only what is at "
 "the end of the chain."
 msgstr ""
+"Das wandert eine Kette hinab: ein Alias eines Alias und ein Enrich eines "
+"Enrich melden das, was die Referenz in der Mitte deklariert hat, und nicht "
+"nur das, was am Ende der Kette steht."
 
 #: ../../source/config_making.rst:555
 msgid "Materials"
-msgstr ""
+msgstr "Materialien"
 
 #: ../../source/config_making.rst:557
 msgid ""
@@ -784,6 +1122,12 @@ msgid ""
 "thing PartCAD can ask questions of rather than repeating a string every "
 "reader has to interpret for themselves."
 msgstr ""
+"Ein Teil besteht aus etwas, und ``materials`` ist der Ort, an dem ein "
+"Paket sagt, was dieses Etwas ist. Es ist das Objekt, auf das der Parameter "
+"``material`` eines Teils zeigt (siehe :ref:`parameters`), sodass einen "
+"Stoff zu benennen bedeutet, ein Ding zu benennen, an das PartCAD Fragen "
+"stellen kann, statt eine Zeichenkette zu wiederholen, die jeder Leser für "
+"sich selbst deuten muss."
 
 #: ../../source/config_making.rst:563
 msgid ""
@@ -792,10 +1136,14 @@ msgid ""
 "`assemblies` can do applies to it. What it is, is a set of facts about a "
 "substance:"
 msgstr ""
+"Ein Material ist **keine** Form. PLA hat keine Geometrie: es gibt nichts "
+"zu rendern, zu exportieren oder zu tessellieren, und nichts von dem, was "
+":ref:`parts` und :ref:`assemblies` können, gilt dafür. Was es ist, ist "
+"eine Menge von Tatsachen über einen Stoff:"
 
 #: ../../source/config_making.rst:579
 msgid "The short form gives the full name and nothing else:"
-msgstr ""
+msgstr "Die Kurzform gibt den vollständigen Namen an und sonst nichts:"
 
 #: ../../source/config_making.rst:586
 msgid ""
@@ -806,6 +1154,13 @@ msgid ""
 "reports no mass, rather than a mass of zero -- nothing downstream could tell "
 "an invented figure apart from a stated one."
 msgstr ""
+"Die Dichte steht in ``g/mm^3``, also in den Einheiten, in denen jede Länge "
+"in PartCAD ohnehin schon steht, sodass sich aus einem Volumen eine Masse "
+"ergibt, ohne dass jemand an eine Umrechnung denken muss. Datenblätter "
+"geben ``g/cm^3`` an, was 1000-mal größer ist: PLA mit 1,32 g/cm^3 wird als "
+"``0.00132`` deklariert. Ein Material, das keine Dichte angibt, meldet "
+"keine Masse statt einer Masse von null -- nachgelagert könnte nichts eine "
+"erfundene Zahl von einer angegebenen unterscheiden."
 
 #: ../../source/config_making.rst:593
 msgid ""
@@ -813,28 +1168,40 @@ msgid ""
 "material properties that survives contact with real catalogues, and imposing "
 "one would only mean packages could not say what they mean."
 msgstr ""
+"``tags`` ist mit Absicht frei formulierbar. Es gibt kein kontrolliertes "
+"Vokabular für Materialeigenschaften, das den Kontakt mit echten Katalogen "
+"überlebt, und eines vorzuschreiben würde nur bedeuten, dass Pakete nicht "
+"sagen könnten, was sie meinen."
 
 #: ../../source/config_making.rst:597
 msgid ""
 "Materials are addressed like every other object, as ``<package>:<name>``, so "
 "a part in one package names a material catalogued in another:"
 msgstr ""
+"Materialien werden wie jedes andere Objekt adressiert, als "
+"``<package>:<name>``, sodass ein Teil in einem Paket ein Material benennt, "
+"das in einem anderen katalogisiert ist:"
 
 #: ../../source/config_making.rst:610
 msgid ""
 "List what a package catalogues with ``pc list materials`` (and ``pc list "
 "materials //...`` to walk the packages it imports)."
 msgstr ""
+"Listen Sie mit ``pc list materials`` auf, was ein Paket katalogisiert (und "
+"mit ``pc list materials //...``, um auch die Pakete zu durchlaufen, die es "
+"importiert)."
 
 #: ../../source/config_making.rst:614
 msgid "Standard catalogues"
-msgstr ""
+msgstr "Standardkataloge"
 
 #: ../../source/config_making.rst:616
 msgid ""
 "The PartCAD index publishes two families of standard materials, so that a "
 "part made of something ordinary need not restate any of the above:"
 msgstr ""
+"Der PartCAD-Index veröffentlicht zwei Familien von Standardmaterialien, "
+"damit ein Teil aus etwas Gewöhnlichem nichts vom Obigen wiederholen muss:"
 
 #: ../../source/config_making.rst:619
 msgid ""
@@ -845,6 +1212,12 @@ msgid ""
 "polymer-matrix composites (``cfrp``, ``gfrp``) and the elastomers (``tpu``, "
 "``nr``, ``nbr``, ``epdm``, ``fkm``, ``silicone``)."
 msgstr ""
+"``//pub/std/manufacturing/material/plastic`` -- Polymere: die Massen- und "
+"druckbaren Thermoplaste (``pla``, ``abs``, ``asa``, ``petg``, ``pc``), die "
+"technischen (``nylon``, ``pa12``, ``pa66-gf30``, ``pom``, ``uhmwpe``), die "
+"Hochleistungskunststoffe (``ptfe``, ``peek``, ``pei``, ``pps``), die "
+"polymermatrixbasierten Verbundwerkstoffe (``cfrp``, ``gfrp``) und die "
+"Elastomere (``tpu``, ``nr``, ``nbr``, ``epdm``, ``fkm``, ``silicone``)."
 
 #: ../../source/config_making.rst:626
 msgid ""
@@ -853,6 +1226,11 @@ msgid ""
 "``al-7075-t6``, ``steel-4130``, ``ss-316l``, ``ti-6al-4v``, ``inconel-718`` "
 "and the rest of what robotics, aviation and automotive parts are made of."
 msgstr ""
+"``//pub/std/manufacturing/material/metal`` -- Metalle und Legierungen, "
+"benannt nach ihrer Normbezeichnung und ihrem Zustand: ``al-5052-h32``, "
+"``al-6061-t6``, ``al-7075-t6``, ``steel-4130``, ``ss-316l``, "
+"``ti-6al-4v``, ``inconel-718`` und der Rest dessen, woraus Teile für "
+"Robotik, Luftfahrt und Fahrzeugbau bestehen."
 
 #: ../../source/config_making.rst:631
 msgid ""
@@ -861,10 +1239,15 @@ msgid ""
 "than a name, and a temper is part of what was ordered -- 6061-T6 and 6061-O "
 "are one alloy and not one material to build out of."
 msgstr ""
+"Eine Legierung heißt ``<metal>-<designation>-<temper>`` statt nur nach der "
+"bloßen Bezeichnung, und zwar aus zwei Gründen: ``5052:`` ist in YAML die "
+"*Zahl* 5052 und kein Name, und ein Zustand ist Teil dessen, was bestellt "
+"wurde -- 6061-T6 und 6061-O sind eine Legierung und nicht ein Material, "
+"aus dem gebaut wird."
 
 #: ../../source/config_making.rst:640
 msgid "Software"
-msgstr ""
+msgstr "Software"
 
 #: ../../source/config_making.rst:642
 msgid ""
@@ -873,6 +1256,11 @@ msgid ""
 "the host. ``software`` declares those as objects of the package, beside its "
 "parts and its assemblies."
 msgstr ""
+"Ein Produkt ist selten nur Hardware: die Platine darin führt ein "
+"Firmware-Image aus, die Steuerung bootet ein Festplatten-Image, das "
+"Werkzeug, das mit ihr spricht, ist eine Binärdatei auf dem Host. "
+"``software`` deklariert diese als Objekte des Pakets, neben seinen Teilen "
+"und seinen Baugruppen."
 
 #: ../../source/config_making.rst:647
 msgid ""
@@ -880,10 +1268,13 @@ msgid ""
 "measure, and none of what :ref:`parts` and :ref:`assemblies` can do applies "
 "to it. What it is, always, is a *file*:"
 msgstr ""
+"Software ist **keine** Form. Es gibt keine Geometrie zu rendern, zu "
+"exportieren oder zu messen, und nichts von dem, was :ref:`parts` und "
+":ref:`assemblies` können, gilt dafür. Was sie ist, ist immer eine *Datei*:"
 
 #: ../../source/config_making.rst:664
 msgid "The short form declares nothing but the path:"
-msgstr ""
+msgstr "Die Kurzform deklariert nichts als den Pfad:"
 
 #: ../../source/config_making.rst:671
 msgid ""
@@ -893,6 +1284,12 @@ msgid ""
 "carries no extension, because a firmware image is as likely to be a ``."
 "img``, a ``.uf2`` or nothing at all as it is a ``.bin``."
 msgstr ""
+"``path`` verhält sich wie überall sonst (siehe :ref:`files`): ohne ihn ist "
+"die Datei der eigene Name des Objekts, und eine Datei, die das Paket nicht "
+"mitführt, wird mit ``fileFrom``/``fileUrl`` deklariert und verzögert "
+"geholt. Der Standardpfad trägt keine Endung, denn ein Firmware-Image ist "
+"genauso wahrscheinlich eine ``.img``, eine ``.uf2`` oder gar nichts wie "
+"eine ``.bin``."
 
 #: ../../source/config_making.rst:677
 msgid ""
@@ -903,10 +1300,17 @@ msgid ""
 "associating a specific firmware flashing procedure (which tool, which "
 "bootloader, which reset dance) with the image."
 msgstr ""
+"``raw`` ist die Datei, so wie sie übergeben wird: PartCAD führt sie mit, "
+"sagt, welche es ist, und was damit zu tun ist, ist Sache des Lesers. Jeder "
+"Typ ist eine Datei, und das wird sich nicht ändern -- die Typen nach "
+"``raw`` benennen das *Verfahren*, das die Datei durchläuft, statt einer "
+"anderen Art von Objekt, und verknüpfen ein bestimmtes "
+"Firmware-Flash-Verfahren (welches Werkzeug, welcher Bootloader, welche "
+"Reset-Prozedur) mit dem Image."
 
 #: ../../source/config_making.rst:685
 msgid "Which software an object ships with"
-msgstr ""
+msgstr "Welche Software ein Objekt mitbringt"
 
 #: ../../source/config_making.rst:687
 msgid ""
@@ -914,6 +1318,9 @@ msgid ""
 "A bare name is software of the same package; a qualified one is software of "
 "another:"
 msgstr ""
+"Ein Teil oder eine Baugruppe sagt in ihrer eigenen ``software``-Liste, was "
+"sie mitbringt. Ein bloßer Name ist Software desselben Pakets; ein "
+"qualifizierter ist Software eines anderen:"
 
 #: ../../source/config_making.rst:707
 msgid ""
@@ -923,6 +1330,12 @@ msgid ""
 "assembly the part ends up in, and what makes ``pc test`` insist the file be "
 "obtainable (see `Manufacturability`_ below)."
 msgstr ""
+"``software`` ist optional, und die meisten Teile deklarieren keine. Eine "
+"einzelne darf statt als Liste für sich allein geschrieben werden "
+"(``software: controller-firmware``). Sie zu deklarieren ist das, was die "
+"Datei in die Stückliste jeder Baugruppe bringt, in der das Teil landet, "
+"und was ``pc test`` darauf bestehen lässt, dass die Datei beschaffbar ist "
+"(siehe `Manufacturability`_ weiter unten)."
 
 #: ../../source/config_making.rst:713
 msgid ""
@@ -930,16 +1343,22 @@ msgid ""
 "``alias`` or an ``enrich`` of that part in another package still points at "
 "the same file."
 msgstr ""
+"Die Referenz wird gegen das Paket aufgelöst, das sie *geschrieben* hat, "
+"sodass ein ``alias`` oder ein ``enrich`` dieses Teils in einem anderen "
+"Paket weiterhin auf dieselbe Datei zeigt."
 
 #: ../../source/config_making.rst:717
 msgid "In the bill of materials"
-msgstr ""
+msgstr "In der Stückliste"
 
 #: ../../source/config_making.rst:719
 msgid ""
 "Every assembly's bill of materials lists the software of the parts and sub-"
 "assemblies it is made of, and its own, under a heading of its own:"
 msgstr ""
+"Die Stückliste jeder Baugruppe führt die Software der Teile und "
+"Unterbaugruppen auf, aus denen sie besteht, sowie ihre eigene, unter einer "
+"eigenen Überschrift:"
 
 #: ../../source/config_making.rst:733
 msgid ""
@@ -950,6 +1369,13 @@ msgid ""
 "something. A package that is not in a git repository has no revision, and "
 "the line says so rather than inventing one."
 msgstr ""
+"Jede Softwarezeile benennt das Paket, aus dem sie stammt, **und die "
+"Revision dieses Pakets** -- den Commit, auf dem seine Dateien gelesen "
+"wurden. Ein Winkel ist derselbe Winkel, wann immer er geholt wird; ein "
+"Firmware-Image ist eine andere Datei, sobald sein Paket erneut "
+"veröffentlicht, sodass die Revision das ist, was die Zeile bedeutungsvoll "
+"macht. Ein Paket, das nicht in einem git-Repository liegt, hat keine "
+"Revision, und die Zeile sagt das, statt eine zu erfinden."
 
 #: ../../source/config_making.rst:740
 msgid ""
@@ -959,16 +1385,24 @@ msgid ""
 "and a supplier has it available -- is not expanded, so its firmware is no "
 "more a line item than its screws are."
 msgstr ""
+"Die Anzahl ist, wie oft etwas in der Baugruppe sie braucht: drei Platinen, "
+"die ein Image ausführen, ergeben eine Anzahl von drei, genauso wie drei "
+"von irgendetwas anderem. Eine Unterbaugruppe, die als Ganzes gekauft wird "
+"-- sie deklariert einen Händler und eine Artikelnummer, und ein Lieferant "
+"hat sie verfügbar --, wird nicht aufgelöst, sodass ihre Firmware ebenso "
+"wenig eine Position ist wie ihre Schrauben."
 
 #: ../../source/config_making.rst:746
 msgid ""
 "Software is not procured: ``pc supply`` and the manufacturability tests walk "
 "the hardware only, because nobody sells a firmware image."
 msgstr ""
+"Software wird nicht beschafft: ``pc supply`` und die Fertigbarkeitstests "
+"durchlaufen nur die Hardware, denn ein Firmware-Image verkauft niemand."
 
 #: ../../source/config_making.rst:750
 msgid "In the package's README"
-msgstr ""
+msgstr "In der README des Pakets"
 
 #: ../../source/config_making.rst:752
 msgid ""
@@ -977,10 +1411,15 @@ msgid ""
 "is pinned to. The file is linked where the package carries it; where it is "
 "fetched, the URL it comes from is shown instead."
 msgstr ""
+"``pc render -t readme`` führt die Software eines Pakets in einer eigenen "
+"Tabelle auf und gibt an, welche Datei jede davon ist, welche Version sie "
+"deklariert und auf welchen Hash sie festgeschrieben ist. Die Datei ist "
+"dort verlinkt, wo das Paket sie mitführt; wo sie geholt wird, wird "
+"stattdessen die URL angezeigt, aus der sie stammt."
 
 #: ../../source/config_making.rst:758
 msgid "Which file is it?"
-msgstr ""
+msgstr "Welche Datei ist es?"
 
 #: ../../source/config_making.rst:760
 msgid ""
@@ -988,12 +1427,19 @@ msgid ""
 "which file went into a product. There are two ways a package can be that "
 "specific, and ``pc lint`` requires one of them (the ``Software`` check):"
 msgstr ""
+"Der ganze Sinn davon, Software neben der Hardware aufzuführen, ist, sagen "
+"zu können, welche Datei in ein Produkt eingegangen ist. Es gibt zwei Wege, "
+"auf denen ein Paket so genau sein kann, und ``pc lint`` verlangt einen "
+"davon (die Prüfung ``Software``):"
 
 #: ../../source/config_making.rst:764
 msgid ""
 "The package **carries the file**. It is content of the repository, so the "
 "revision recorded beside every software line item identifies it exactly."
 msgstr ""
+"Das Paket **führt die Datei mit**. Sie ist Inhalt des Repositorys, sodass "
+"die neben jeder Softwareposition festgehaltene Revision sie eindeutig "
+"identifiziert."
 
 #: ../../source/config_making.rst:766
 msgid ""
@@ -1002,6 +1448,10 @@ msgid ""
 "it serves at the moment it is fetched, and the same package revision "
 "produces a different image tomorrow."
 msgstr ""
+"Das Paket **holt sie** mit ``fileFrom`` und schreibt sie mit ``fileHash`` "
+"fest. Ohne Hash identifiziert sie nichts: die URL liefert aus, was sie im "
+"Moment des Abrufs ausliefert, und dieselbe Paketrevision ergibt morgen ein "
+"anderes Image."
 
 #: ../../source/config_making.rst:784
 msgid ""
@@ -1012,6 +1462,12 @@ msgid ""
 "the one kind where a missing one is reported by ``pc lint`` as well, before "
 "anything is built."
 msgstr ""
+"``fileHash`` ist keine softwarespezifische Idee: es schreibt die Bytes "
+"jeder Datei fest, die ein Paket holt statt mitführt, und der Download wird "
+"abgelehnt, sofern sie nicht übereinstimmen (siehe :ref:`file-hash` für die "
+"Schreibweise und die Einzelheiten). Überall ist es erforderlich, damit das "
+"Objekt fertigbar ist; Software ist die eine Art, bei der ein fehlender "
+"auch von ``pc lint`` gemeldet wird, bevor überhaupt etwas gebaut wird."
 
 #: ../../source/config_making.rst:790
 msgid ""
@@ -1019,10 +1475,13 @@ msgid ""
 "``examples/produce_part_kicad`` for a board that pulls its host-side tool "
 "from a public URL."
 msgstr ""
+"Siehe ``examples/produce_software`` für ein Paket, das beides tut, und "
+"``examples/produce_part_kicad`` für eine Platine, die ihr hostseitiges "
+"Werkzeug von einer öffentlichen URL holt."
 
 #: ../../source/config_making.rst:795
 msgid "Manufacturability"
-msgstr ""
+msgstr "Fertigbarkeit"
 
 #: ../../source/config_making.rst:797
 msgid ""
@@ -1031,18 +1490,25 @@ msgid ""
 "same question of a part's ``software`` that it asks of everything else the "
 "part needs, and the part fails unless all of it holds:"
 msgstr ""
+"Eine Platine, die niemand flashen kann, ist keine Platine, die "
+"irgendjemand herstellen kann. Der Fertigungstest (``pc test``, die Prüfung "
+"``manufacturability``) stellt an die ``software`` eines Teils daher "
+"dieselbe Frage, die er an alles andere stellt, was das Teil braucht, und "
+"das Teil fällt durch, sofern nicht alles davon gilt:"
 
 #: ../../source/config_making.rst:802
 msgid "every reference resolves to a software object;"
-msgstr ""
+msgstr "jede Referenz löst sich auf ein Software-Objekt auf;"
 
 #: ../../source/config_making.rst:803
 msgid "the file is there -- carried by the package, or fetched successfully;"
 msgstr ""
+"die Datei ist vorhanden -- vom Paket mitgeführt oder erfolgreich geholt;"
 
 #: ../../source/config_making.rst:804
 msgid "it matches its ``fileHash``, where one is declared;"
 msgstr ""
+"sie stimmt mit ihrem ``fileHash`` überein, sofern einer deklariert ist;"
 
 #: ../../source/config_making.rst:805
 msgid ""
@@ -1050,6 +1516,9 @@ msgid ""
 "needs-a-``fileHash`` rule the part's own file is held to (:ref:"
 "`reproducibility`)."
 msgstr ""
+"und die Deklaration ist überhaupt reproduzierbar, was dieselbe Regel "
+"„``fileFrom`` braucht einen ``fileHash``“ ist, an die auch die eigene "
+"Datei des Teils gebunden ist (:ref:`reproducibility`)."
 
 #: ../../source/config_making.rst:809
 msgid ""
@@ -1058,12 +1527,18 @@ msgid ""
 "software of its own is held to the same rule; its parts' software is checked "
 "by their own run of the test."
 msgstr ""
+"Das gilt, ob das Teil gekauft oder hergestellt wird: die Platine zu kaufen "
+"beantwortet nicht die Frage, welches Image darauf gehört. Eine Baugruppe, "
+"die eigene Software deklariert, ist an dieselbe Regel gebunden; die "
+"Software ihrer Teile wird beim eigenen Lauf des Tests für diese geprüft."
 
 #: ../../source/config_making.rst:814
 msgid ""
 "Software is otherwise absent from procurement -- ``pc supply`` walks the "
 "hardware only, because nobody sells a firmware image."
 msgstr ""
+"Software kommt in der Beschaffung ansonsten nicht vor -- ``pc supply`` "
+"durchläuft nur die Hardware, denn ein Firmware-Image verkauft niemand."
 
 #: ../../source/config_making.rst:821
 msgid "Providers"
@@ -1082,6 +1557,14 @@ msgid ""
 "``=``. ``currency`` is also read by PartCAD itself, as what the provider's "
 "quotes are in, so it has to be a name such as ``USD``."
 msgstr ""
+"``enrich``-Anbieter sind lediglich Referenzen auf andere Anbieter, bei "
+"denen einige Parameter auf bestimmte Werte geändert sind. ``with:`` setzt "
+"beliebige der Parameter, die der Quell-Anbieter deklariert, auf dieselbe "
+"Weise wie das ``with:`` eines ``enrich``-Teils und nach derselben Regel: "
+"ein Wert darf weder ``,`` noch ``;`` noch ``=`` enthalten. ``currency`` "
+"wird außerdem von PartCAD selbst gelesen, nämlich als die Währung, in der "
+"die Angebote des Anbieters stehen, und muss daher ein Name wie ``USD`` "
+"sein."
 
 #: ../../source/config_making.rst:851
 msgid ""
@@ -1165,6 +1648,9 @@ msgid ""
 "`request[\"item_in_sku\"]`: which item of the SKU this is, where the SKU is "
 "a set of several kinds of items, or `None`"
 msgstr ""
+"`request[\"item_in_sku\"]`: welcher Artikel der Artikelnummer das ist, "
+"wenn die Artikelnummer ein Satz mehrerer Arten von Artikeln ist, oder "
+"`None`"
 
 #: ../../source/config_making.rst:884
 msgid "`output[\"available\"]`: boolean, whether it is available in this store"
@@ -1220,15 +1706,22 @@ msgid ""
 "the part is, where the SKU is a set of several kinds of items (absent "
 "otherwise)"
 msgstr ""
+"`request[\"cart\"][\"parts\"][<id>][\"item_in_sku\"]`: welcher Artikel der "
+"Artikelnummer das Teil ist, wenn die Artikelnummer ein Satz mehrerer Arten "
+"von Artikeln ist (sonst nicht vorhanden)"
 
 #: ../../source/config_making.rst:899
 msgid ""
 "`request[\"cart\"][\"skus\"]`: what to order, a list with one entry per SKU"
 msgstr ""
+"`request[\"cart\"][\"skus\"]`: was zu bestellen ist, eine Liste mit einem "
+"Eintrag je Artikelnummer"
 
 #: ../../source/config_making.rst:900
 msgid "`request[\"cart\"][\"skus\"][<n>][\"vendor\"]`, `[\"sku\"]`: the SKU"
 msgstr ""
+"`request[\"cart\"][\"skus\"][<n>][\"vendor\"]`, `[\"sku\"]`: die "
+"Artikelnummer"
 
 #: ../../source/config_making.rst:901
 msgid ""
@@ -1237,11 +1730,18 @@ msgid ""
 "Order from here rather than once per part: a SKU that is a set of several "
 "parts would otherwise be bought once for each of them."
 msgstr ""
+"`request[\"cart\"][\"skus\"][<n>][\"count\"]`: wie viele dieser "
+"Artikelnummer zu bestellen sind, was bereits aus `count_per_sku` und "
+"`item_in_sku` errechnet ist. Bestellen Sie von hier aus statt einmal je "
+"Teil: eine Artikelnummer, die ein Satz mehrerer Teile ist, würde sonst für "
+"jedes davon einmal gekauft."
 
 #: ../../source/config_making.rst:905
 msgid ""
 "`request[\"cart\"][\"skus\"][<n>][\"parts\"]`: the parts that SKU is for"
 msgstr ""
+"`request[\"cart\"][\"skus\"][<n>][\"parts\"]`: die Teile, für die diese "
+"Artikelnummer ist"
 
 #: ../../source/config_making.rst:906 ../../source/config_making.rst:950
 msgid "`output[\"price\"]`: the total price of the cart"

@@ -79,14 +79,13 @@ msgid "Basic shapes"
 msgstr "Базовые фигуры"
 
 #: ../../source/design.rst:33
-#, fuzzy
 msgid "Outer shape: `circle`, `rectangle`, `square`, `slot`"
-msgstr "Внешняя фигура: `circle`, `rectangle`, `square`"
+msgstr "Внешняя фигура: `circle`, `rectangle`, `square`, `slot`"
 
 #: ../../source/design.rst:34
-#, fuzzy
 msgid "Optional inner shape: `circle`, `rectangle`, `square`, `slot`"
-msgstr "Необязательная внутренняя фигура: `circle`, `rectangle`, `square`"
+msgstr ""
+"Необязательная внутренняя фигура: `circle`, `rectangle`, `square`, `slot`"
 
 #: ../../source/design.rst:36 ../../source/design.rst:65
 msgid "Files"
@@ -196,41 +195,40 @@ msgstr ""
 "другие сборки вместе."
 
 #: ../../source/design.rst:86
-#, fuzzy
 msgid ""
 "PartCAD is expected to have an ever-growing list of ways to define "
 "assemblies using existing parts."
-msgstr "PartCAD имеет постоянно растущий список способов задания модели детали:"
+msgstr ""
+"Ожидается, что PartCAD будет иметь постоянно растущий список способов "
+"задания сборок с использованием существующих деталей."
 
 #: ../../source/design.rst:89
 msgid "ASSY: assembly YAML"
-msgstr ""
+msgstr "ASSY: assembly YAML"
 
 #: ../../source/design.rst:91
-#, fuzzy
 msgid ""
 "The native format. The idea behind ASSY is to create a simplistic way to "
 "enumerate parts, define their parameters and define how parts connect."
 msgstr ""
-"Ожидается, что PartCAD будет иметь постоянно растущий список способов "
-"задания сборок с использованием существующих деталей. Однако на данный "
-"момент поддерживается только один способ. Он называется ASSY: assembly "
-"YAML. Идея ASSY — создать простой способ перечисления деталей, задания их"
-" параметров и описания того, как детали соединяются."
+"Собственный формат. Идея ASSY — создать простой способ перечисления "
+"деталей, задания их параметров и описания того, как детали соединяются."
 
 #: ../../source/design.rst:94
 msgid "STEP"
-msgstr ""
+msgstr "STEP"
 
 #: ../../source/design.rst:96
 msgid ""
 "A STEP file that carries an assembly structure, used as an assembly "
 "directly, with its components becoming parts of the package."
 msgstr ""
+"Файл STEP, несущий структуру сборки, используемый непосредственно как "
+"сборка, при этом его компоненты становятся деталями пакета."
 
 #: ../../source/design.rst:99
 msgid "URDF"
-msgstr ""
+msgstr "URDF"
 
 #: ../../source/design.rst:101
 msgid ""
@@ -239,6 +237,11 @@ msgid ""
 " file produces, evaluated with every joint at its zero position. PartCAD "
 "can also write a URDF (plus the meshes it references) from any assembly."
 msgstr ""
+"Описание робота `URDF <https://wiki.ros.org/urdf>`_, используемое "
+"непосредственно как сборка. Его звенья превращаются в то же дерево "
+"размещённых деталей, какое даёт файл ASSY, вычисленное при нулевом "
+"положении каждого шарнира. PartCAD умеет и записывать URDF (вместе с "
+"сетками, на которые он ссылается) из любой сборки."
 
 #: ../../source/design.rst:106
 msgid ""
@@ -250,6 +253,14 @@ msgid ""
 "transmissions - is dropped, and reported. :doc:`simulation` describes "
 "that gap and what closing it would take."
 msgstr ""
+"URDF — это описание *симулируемого* робота. То, что он говорит о самом "
+"звене, — масса, инерция, трение и контакт, материал и цвет — становится "
+"именованными свойствами PartCAD у той детали, в которую превращается "
+"звено, и уходит обратно при экспорте. То, чему в сборке из жёстких "
+"размещений нет места, — кинематика шарниров, геометрия столкновений, "
+"датчики, трансмиссии — отбрасывается, и об этом сообщается. В "
+":doc:`simulation` описан этот разрыв и то, что потребуется для его "
+"закрытия."
 
 #: ../../source/design.rst:113
 msgid ""
@@ -257,23 +268,25 @@ msgid ""
 "the URDF above - nothing is copied into the package, so the file stays "
 "the source of truth."
 msgstr ""
+"Для сборки, заданной файлом, который создал другой инструмент, — STEP и "
+"URDF выше — в пакет ничего не копируется, поэтому источником истины "
+"остаётся файл."
 
 #: ../../source/design.rst:118
 msgid "Scenes"
 msgstr "Сцены"
 
 #: ../../source/design.rst:120
-#, fuzzy
 msgid ""
 "PartCAD does not yet implement scenes. But the idea is to be able to "
 "reproduce the same features as worlds in Gazebo to the extent that "
 "PartCAD scenes can be exported to and simulated in Gazebo, but without "
 "using XML while creating the scene. See :doc:`simulation`."
 msgstr ""
-"PartCAD пока не реализует сцены. Но идея в том, чтобы воспроизвести те же"
-" возможности, что и миры в Gazebo, в такой степени, чтобы сцены PartCAD "
+"PartCAD пока не реализует сцены. Но идея в том, чтобы воспроизвести те же "
+"возможности, что и миры в Gazebo, в такой степени, чтобы сцены PartCAD "
 "можно было экспортировать в Gazebo и симулировать в нём, но без "
-"использования XML при создании сцены."
+"использования XML при создании сцены. См. :doc:`simulation`."
 
 #: ../../source/design.rst:126
 msgid "Monorepos"
@@ -376,15 +389,15 @@ msgid "Object IDs"
 msgstr "Идентификаторы объектов"
 
 #: ../../source/design.rst:169
-#, fuzzy
 msgid ""
 "PartCAD packages contain objects of different types: *sketches*, *parts*,"
 " *assemblies*, *scenes*, *interfaces*, *mates*, *materials*, *providers*,"
 " *software* and *partTypes*. All of them need to get referenced."
 msgstr ""
 "Пакеты PartCAD содержат объекты разных типов: *эскизы*, *детали*, "
-"*сборки*, *сцены*, *интерфейсы*, *поставщики* и так далее. На все из них "
-"нужно уметь ссылаться."
+"*сборки*, *сцены*, *интерфейсы*, *сопряжения*, *материалы*, *поставщики*, "
+"*программное обеспечение* и *partTypes*. На все из них нужно уметь "
+"ссылаться."
 
 #: ../../source/design.rst:175
 msgid "Single object"
@@ -511,7 +524,6 @@ msgid "Command line tools"
 msgstr "Инструменты командной строки"
 
 #: ../../source/design.rst:253
-#, fuzzy
 msgid ""
 "PartCAD CLI tools get installed using the PyPI package ``partcad``, which"
 " also carries the Python module and the JSON-RPC service. The main tool "
@@ -519,14 +531,14 @@ msgid ""
 "of PartCAD features."
 msgstr ""
 "Инструменты командной строки PartCAD устанавливаются с помощью "
-"PyPI-модуля ``partcad-cli``. Основной инструмент называется ``pc``. "
-"Предполагается, что инструменты CLI предоставляют полный набор "
-"возможностей PartCAD."
+"PyPI-пакета ``partcad``, который также содержит Python-модуль и "
+"JSON-RPC-сервис. Основной инструмент называется ``pc``. Предполагается, "
+"что инструменты командной строки предоставляют полный набор возможностей "
+"PartCAD."
 
 #: ../../source/design.rst:258
-#, fuzzy
 msgid "Graphical interfaces"
-msgstr "Интерфейсы"
+msgstr "Графические интерфейсы"
 
 #: ../../source/design.rst:260
 msgid ""
@@ -536,6 +548,12 @@ msgid ""
 " nor an editor set up. A **FreeCAD** add-on browses the same packages "
 "inside FreeCAD and imports objects into the open document."
 msgstr ""
+"Расширение PartCAD для ``vscode`` задумано как основной графический "
+"инструмент. **PartCAD IDE** — это то же расширение, редактор и "
+"инструменты командной строки в одном приложении, для машины, на которой "
+"не настроены ни Python, ни редактор. Надстройка для **FreeCAD** позволяет "
+"просматривать те же пакеты внутри FreeCAD и импортировать объекты в "
+"открытый документ."
 
 #: ../../source/design.rst:266
 msgid ""
@@ -544,6 +562,11 @@ msgid ""
 "sandboxes, so they all see the same packages and the same cache as ``pc``"
 " does on the same machine. See :doc:`installation` for all three."
 msgstr ""
+"Ни один из этих трёх инструментов не несёт в себе сам PartCAD. Каждый из "
+"них является клиентом сервиса ``partcad-json-rpc``, которому принадлежат "
+"прогретый контекст и песочницы, поэтому все они видят те же пакеты и тот "
+"же кэш, что и ``pc`` на той же машине. О всех трёх см. "
+":doc:`installation`."
 
 #: ../../source/design.rst:274
 msgid "Libraries and frameworks"

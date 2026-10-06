@@ -21,7 +21,7 @@ msgstr ""
 
 #: ../../source/simulation.rst:2
 msgid "Simulation, URDF, SDFormat and MJCF"
-msgstr ""
+msgstr "Simulación, URDF, SDFormat y MJCF"
 
 #: ../../source/simulation.rst:4
 msgid ""
@@ -32,6 +32,12 @@ msgid ""
 "itself, because it describes a robot rather than any one engine's world "
 "and ROS, MuJoCo, PyBullet and Isaac all read it."
 msgstr ""
+"PartCAD puede leer un archivo `URDF <https://wiki.ros.org/urdf>`_ como un "
+"ensamblaje (``type: urdf``), volver a escribir uno (``pc export -t "
+"urdf``), y convertir un ensamblaje entre URDF y ASSY en ambas direcciones "
+"(``pc convert assembly``). URDF es el único de estos tres que implementa "
+"el propio PartCAD, porque describe un robot y no el mundo de un motor "
+"concreto, y ROS, MuJoCo, PyBullet e Isaac lo leen todos."
 
 #: ../../source/simulation.rst:11
 msgid ""
@@ -44,6 +50,15 @@ msgid ""
 "and named through it (``sim-gazebo:world``, ``sim-mujoco:mjcf``). See `An"
 " engine's own scene format is its plugin's`_ below."
 msgstr ""
+"La misma maquinaria lee y escribe `SDFormat <http://sdformat.org/>`_ -- "
+"aquello en lo que Gazebo describe un *mundo* de simulación -- contra una "
+":ref:`escena <scenes>` en lugar de un ensamblaje, y `MJCF "
+"<https://mujoco.readthedocs.io/en/stable/XMLreference.html>`_, aquello en "
+"lo que `MuJoCo <https://mujoco.org/>`_ describe un modelo, como "
+"cualquiera de los dos. Ninguno de los dos está en este wheel: cada uno lo "
+"declara el paquete de plugin de su motor y se nombra a través de él "
+"(``sim-gazebo:world``, ``sim-mujoco:mjcf``). Consulte `An engine's own "
+"scene format is its plugin's`_ más abajo."
 
 #: ../../source/simulation.rst:20
 msgid ""
@@ -54,20 +69,29 @@ msgid ""
 "the conversions actually preserve, what they cannot, and what it would "
 "take for PartCAD to hold everything a physical simulation needs."
 msgstr ""
+"También puede **ejecutar** una. ``simulate:`` es donde una pieza o un "
+"ensamblaje dicen qué se supone que deben hacer -- o no hacer -- una vez "
+"colocados en un mundo y encendido ese mundo, y ``pc sim`` lo coloca, lo "
+"ejecuta y comprueba la afirmación. Esta página es el registro de diseño "
+"de todo eso: qué preservan realmente las conversiones, qué no pueden "
+"preservar, y qué haría falta para que PartCAD contuviera todo lo que "
+"necesita una simulación física."
 
 #: ../../source/simulation.rst:27
 msgid ""
 "The \"What exists today\" section describes what is built. Everything "
 "after it is a proposal, and none of it is implemented."
 msgstr ""
+"La sección \"What exists today\" describe lo que está construido. Todo lo "
+"que viene después es una propuesta, y nada de ello está implementado."
 
 #: ../../source/simulation.rst:36
 msgid "What exists today"
-msgstr ""
+msgstr "Lo que existe hoy"
 
 #: ../../source/simulation.rst:39
 msgid "Reading a URDF"
-msgstr ""
+msgstr "Leer un URDF"
 
 #: ../../source/simulation.rst:41
 msgid ""
@@ -82,6 +106,17 @@ msgid ""
 "for the length of it - which is what lets the source file sit anywhere, "
 "the way a STEP file being imported does."
 msgstr ""
+"Un URDF llega a un paquete por los mismos dos comandos que cualquier otro "
+"archivo ajeno, y significan las mismas dos cosas que significan para un "
+"archivo STEP. ``pc add assembly urdf <path>`` lo *declara*: el paquete "
+"apunta al archivo, el archivo sigue siendo un URDF, y sus enlaces se "
+"convierten en piezas a medida que se lee. ``pc import assembly <path>`` "
+"lo *convierte*: el paquete gana una pieza ``stl`` por enlace, un par de "
+"interfaces por articulación y un ``.assy``, y después nada apunta al "
+"URDF. La importación es la conversión descrita en `Converting between the "
+"two`_, ejecutada contra una declaración que vive solo lo que dura -- que "
+"es lo que permite que el archivo de origen esté en cualquier sitio, igual "
+"que ocurre con un archivo STEP que se importa."
 
 #: ../../source/simulation.rst:51
 msgid ""
@@ -94,6 +129,15 @@ msgid ""
 "that is several - and builds the very same ``Assembly``/``AssemblyChild``"
 " tree an ASSY file produces."
 msgstr ""
+"``AssemblyFactoryUrdf`` controla ``wrapper_import_urdf`` en un sandbox de "
+"Python. El sandbox analiza el archivo con el propio ``urdf_parser_py`` de "
+"ROS, recorre el árbol de articulaciones desde el enlace raíz con todas "
+"las articulaciones en su posición cero, resuelve la geometría de cada "
+"enlace, y devuelve datos simples. El núcleo registra una pieza por forma "
+"-- ``<assembly>/<link>`` para un enlace que es una sola, y "
+"``<assembly>/<link>/<n>`` bajo un subensamblaje para un enlace que son "
+"varias -- y construye exactamente el mismo árbol "
+"``Assembly``/``AssemblyChild`` que produce un archivo ASSY."
 
 #: ../../source/simulation.rst:59
 msgid ""
@@ -104,6 +148,13 @@ msgid ""
 "relative placements are recorded in a link table instead, which is what "
 "the ASSY conversion turns into joints."
 msgstr ""
+"Los enlaces van a **una lista plana**, cada uno en su colocación "
+"absoluta. El árbol de articulaciones es la cinemática del robot; un "
+"ensamblaje es una configuración estática de ella, así que anidar un "
+"subensamblaje por articulación haría que un brazo fuera tan profundo como "
+"articulaciones tiene y no diría nada que la colocación no diga. Las "
+"colocaciones relativas se registran en su lugar en una tabla de enlaces, "
+"que es lo que la conversión a ASSY convierte en articulaciones."
 
 #: ../../source/simulation.rst:65
 msgid ""
@@ -113,6 +164,12 @@ msgid ""
 " the geometry. Only ``<box>``/``<cylinder>``/``<sphere>`` are generated, "
 "because there is no file to point at."
 msgstr ""
+"No se reescribe nada que no haya que reescribir: una ``<mesh>`` se "
+"convierte en una pieza que lee el mismísimo archivo que nombró el URDF, y "
+"el ``<origin>`` que la coloca se convierte en una ubicación y no en una "
+"transformación horneada en una copia de la geometría. Solo se generan "
+"``<box>``/``<cylinder>``/``<sphere>``, porque no hay ningún archivo al "
+"que apuntar."
 
 #: ../../source/simulation.rst:71
 msgid ""
@@ -123,6 +180,12 @@ msgid ""
 "``<assembly>/<link>/<visual|collision>``, defined and exportable but not "
 "placed in the assembly."
 msgstr ""
+"Un enlace se construye a partir de su geometría de **colisión** cuando "
+"indica ambas, ya que esa es la forma contra la que un simulador resuelve "
+"el contacto; ``ignoreCollision`` lo invierte por enlace o en bloque. La "
+"geometría que no se usó no se descarta: se convierte en la pieza "
+"``<assembly>/<link>/<visual|collision>``, definida y exportable pero no "
+"colocada en el ensamblaje."
 
 #: ../../source/simulation.rst:77
 msgid ""
@@ -136,6 +199,16 @@ msgid ""
 "``physics`` sections of the interface it turns into. Nothing is nested "
 "under the name of the format it came from, and nothing is opaque."
 msgstr ""
+"Lo que el enlace dice sobre su física se **copia campo a campo a "
+"propiedades de PartCAD con nombre**, en las unidades propias de PartCAD. "
+"``<inertial>`` se convierte en ``mass``, ``centerOfMass`` e ``inertia``; "
+"los ajustes de fricción y contacto de un bloque ``<gazebo>`` se "
+"convierten en ``friction``, ``contactStiffness`` y los demás; "
+"``<material>`` se convierte en ``material`` y ``color``. El ``<limit>``, "
+"el ``<dynamics>``, el ``<safety_controller>`` y el ``<mimic>`` de una "
+"articulación se convierten en las secciones ``motion`` y ``physics`` de "
+"la interfaz en la que se convierte. Nada se anida bajo el nombre del "
+"formato del que provino, y nada es opaco."
 
 #: ../../source/simulation.rst:86
 msgid ""
@@ -148,6 +221,15 @@ msgid ""
 " The export mirrors it: a PartCAD property URDF cannot state is reported "
 "at info level rather than dropped in silence."
 msgstr ""
+"Esa elección tiene un coste y es deliberado: el URDF que ninguna "
+"propiedad cubre detiene la importación, nombrando lo que encontró. El "
+"URDF básico es un vocabulario cerrado, así que un elemento desconocido "
+"ahí significa que PartCAD está desactualizado y el remedio es ampliar las "
+"tablas de ``wrapper_import_urdf.py``. ``<gazebo>`` es un punto de "
+"extensión abierto, así que un ajuste desconocido ahí se informa en lugar "
+"de ser fatal, salvo que el ensamblaje pida ``strict: true``. La "
+"exportación lo refleja: de una propiedad de PartCAD que URDF no puede "
+"expresar se informa a nivel info en lugar de descartarse en silencio."
 
 #: ../../source/simulation.rst:94
 msgid ""
@@ -157,10 +239,15 @@ msgid ""
 "sections of the ASSY. A second copy in a properties section would only be"
 " a second thing to keep right."
 msgstr ""
+"Tampoco hay nada que registre el nombre del enlace ni el de su padre. La "
+"pieza *lleva* el nombre del enlace, y el árbol de articulaciones es el "
+"archivo URDF -- que sigue en disco y se lee de nuevo -- o, una vez "
+"convertido, las secciones ``connect:`` del ASSY. Una segunda copia en una "
+"sección de propiedades sería solo una segunda cosa que mantener correcta."
 
 #: ../../source/simulation.rst:100
 msgid "Writing a URDF"
-msgstr ""
+msgstr "Escribir un URDF"
 
 #: ../../source/simulation.rst:102
 msgid ""
@@ -172,6 +259,14 @@ msgid ""
 "URDF. A shape that appears more than once is written once and referenced "
 "by every link that uses it."
 msgstr ""
+"Al exportador de URDF (el ``export_urdf.py`` de ``//builtin/export``) se "
+"le entrega el *árbol* del ensamblaje en lugar del compuesto al que se "
+"decodifica -- que es lo que pide el ``decode: false`` de su declaración. "
+"Cada nodo se convierte en un enlace, cada relación padre/hijo en una "
+"articulación fija que lleva la colocación de ese hijo, y cada nodo con "
+"geometría obtiene un STL escrito junto al URDF. Una forma que aparece más "
+"de una vez se escribe una sola vez y la referencian todos los enlaces que "
+"la usan."
 
 #: ../../source/simulation.rst:109
 msgid ""
@@ -183,6 +278,14 @@ msgid ""
 "needs nothing recorded anywhere: it is the same convention the import "
 "uses to name those parts in the first place."
 msgstr ""
+"Un subensamblaje cuyos hijos se nombran *bajo* él -- ``wrist`` "
+"conteniendo ``wrist/1`` y ``wrist/2`` -- sale de vuelta como un solo "
+"enlace con un ``<visual>`` por forma, en el desplazamiento en el que se "
+"colocó cada una, en lugar de como un enlace de referencia con un enlace "
+"por forma. Así que un enlace de varios visuales sobrevive al viaje de ida "
+"y vuelta siendo él mismo. La barra es toda la regla, y no necesita que se "
+"registre nada en ninguna parte: es la misma convención que usa la "
+"importación para nombrar esas piezas desde el principio."
 
 #: ../../source/simulation.rst:116
 msgid ""
@@ -195,6 +298,14 @@ msgid ""
 "would read it back from there rather than from anything stashed on the "
 "parts."
 msgstr ""
+"El *árbol* de articulaciones no sobrevive: la exportación refleja el "
+"ensamblaje, y un ensamblaje URDF es plano, así que lo que sale es un "
+"sistema de referencia raíz con todos los enlaces fijados directamente a "
+"él. Esa es una lectura honesta -- las articulaciones exportadas son todas "
+"fijas porque PartCAD contiene una configuración estática, y una estrella "
+"de articulaciones fijas es lo que eso es. La cadena se preserva donde "
+"significa algo, en ``pc convert assembly -t assy``, y una reexportación "
+"fiel la volvería a leer de ahí y no de nada guardado en las piezas."
 
 #: ../../source/simulation.rst:124
 msgid ""
@@ -208,6 +319,16 @@ msgid ""
 " that density is a parameter of the export with a default rather than a "
 "property of the part - the first gap this page proposes to close."
 msgstr ""
+"Lo que una pieza dice sobre sí misma se escribe en el elemento URDF que "
+"lo expresa: la masa, el centro de masas y la inercia en ``<inertial>``, "
+"la fricción y los parámetros de contacto en un bloque ``<gazebo>``, "
+"``material``/``color`` en ``<material>``. Solo a una pieza que no dice "
+"nada se le calculan las propiedades inerciales: OCCT da el volumen, el "
+"centro de masas y el tensor de inercia respecto de él, y una densidad "
+"convierte eso en una masa. Como PartCAD todavía no tiene dónde registrar "
+"de qué está *hecha* una pieza, esa densidad es un parámetro de la "
+"exportación con un valor predeterminado y no una propiedad de la pieza -- "
+"la primera laguna que esta página propone cerrar."
 
 #: ../../source/simulation.rst:133
 msgid ""
@@ -224,6 +345,20 @@ msgid ""
 "payload from the asking object's own configuration every time an entry is"
 " read, so parts that share geometry each get themselves back."
 msgstr ""
+"El nombre de un enlace, y las propiedades escritas bajo él, provienen de "
+"la forma que se le entrega al exportador, y ambos viajan juntos en esa "
+"forma. Este solía ser el único sitio donde la caché de formas se "
+"transparentaba: la caché se indexa por geometría, deliberadamente, para "
+"que dos piezas que leen el mismo archivo de malla no la calculen dos "
+"veces, y la entrada llevaba el nombre de la pieza que la hubiera escrito "
+"-- así que la otra pieza volvía llevando un nombre que no era el suyo, y "
+"las propiedades buscadas bajo ese nombre eran las de la pieza equivocada "
+"o las de nadie. La entrada ya no almacena en absoluto esa capa exterior. "
+"Lo que identifica la forma que se pide -- su nombre, su etiqueta, su "
+"colocación y lo que informa sobre sí misma -- se estampa en la carga útil "
+"a partir de la configuración propia del objeto que pregunta cada vez que "
+"se lee una entrada, de modo que las piezas que comparten geometría se "
+"recuperan cada una a sí misma."
 
 #: ../../source/simulation.rst:145
 msgid ""
@@ -236,6 +371,15 @@ msgid ""
 "when the tree was cached, and it takes a change the assembly actually "
 "hashes, or ``pc system reset``, to build it again."
 msgstr ""
+"El estampado llega a la forma que se pidió y no más allá. Dentro de un "
+"ensamblaje en caché, los hijos están en la entrada con los nombres, las "
+"etiquetas y las propiedades con los que se construyeron, porque ahí abajo "
+"no son quienes preguntan -- son de lo que está hecho el árbol, tan parte "
+"de la respuesta como la geometría. Así que un enlace exportado de una "
+"pieza es esa pieza; un enlace exportado de un hijo de un ensamblaje en "
+"caché es lo que fuera ese hijo cuando se guardó el árbol en caché, y hace "
+"falta un cambio en algo que el ensamblaje realmente incluya en su hash, o "
+"``pc system reset``, para volver a construirlo."
 
 #: ../../source/simulation.rst:153
 msgid ""
@@ -250,10 +394,22 @@ msgid ""
 "property (item 2 below) would land. What the object asking reports is its"
 " own ``properties:`` section, and only that."
 msgstr ""
+"Lo que una forma informa sobre sí misma también se guarda en caché, en "
+"una entrada propia junto a la geometría -- la clave de la geometría con "
+"``-props`` añadido. Ambas las rellena la única ejecución que realmente "
+"instancia la forma, y se leen por separado: un consumidor que busca el "
+"material de una pieza no necesita sacar su BREP de la caché, y una caché "
+"escrita antes de que existiera esa entrada es un fallo para las "
+"propiedades y no para la geometría. No es, sin embargo, de lo que está "
+"hecho el estampado anterior: esa entrada se indexa por la geometría, así "
+"que lo que hay en ella pertenece a la geometría -- que es donde "
+"aterrizaría una propiedad *derivada* (el punto 2 más abajo). Lo que "
+"informa el objeto que pregunta es su propia sección ``properties:``, y "
+"solo eso."
 
 #: ../../source/simulation.rst:164
 msgid "Converting between the two"
-msgstr ""
+msgstr "Convertir entre los dos"
 
 #: ../../source/simulation.rst:166
 msgid ""
@@ -265,10 +421,18 @@ msgid ""
 " one, not a transcription of coordinates. How the joints become "
 "interfaces is `URDF joints as PartCAD interfaces`_ below."
 msgstr ""
+"``pc convert assembly`` reescribe el paquete en lugar de limitarse a "
+"producir un archivo. A URDF escribe el ``.urdf`` y sus mallas y cambia la "
+"declaración. A ASSY escribe una pieza ``stl`` por cada enlace, un par de "
+"interfaces por cada articulación, y un ``.assy`` cuyos nodos usan "
+"``connect:`` -- de modo que el resultado es un ensamblaje expresado como "
+"PartCAD expresa uno, no una transcripción de coordenadas. Cómo se "
+"convierten las articulaciones en interfaces está en `URDF joints as "
+"PartCAD interfaces`_ más abajo."
 
 #: ../../source/simulation.rst:174
 msgid "What the round trip preserves"
-msgstr ""
+msgstr "Qué preserva el viaje de ida y vuelta"
 
 #: ../../source/simulation.rst:176
 msgid ""
@@ -278,54 +442,66 @@ msgid ""
 "way to say \"these parts belong together\" other than by joining them. "
 "That is the whole of what survives."
 msgstr ""
+"``examples/produce_assembly_assy:logo`` exportado a URDF y leído de nuevo "
+"como un ensamblaje ``urdf`` vuelve a poner cada forma donde estaba, con "
+"el nombre que tenía, construida a partir de la misma geometría -- "
+"aplanado, porque un URDF no tiene forma de decir \"estas piezas van "
+"juntas\" salvo uniéndolas. Eso es todo lo que sobrevive."
 
 #: ../../source/simulation.rst:186
 msgid "Preserved"
-msgstr ""
+msgstr "Preservado"
 
 #: ../../source/simulation.rst:187
 msgid "Lost"
-msgstr ""
+msgstr "Perdido"
 
 #: ../../source/simulation.rst:188
 msgid "Every shape, at the placement it had"
-msgstr ""
+msgstr "Todas las formas, en la colocación que tenían"
 
 #: ../../source/simulation.rst:189
 msgid "Every name (PartCAD names carry package paths; ROS names cannot)"
 msgstr ""
+"Todos los nombres (los nombres de PartCAD llevan rutas de paquete; los de "
+"ROS no pueden)"
 
 #: ../../source/simulation.rst:190
 msgid "Placements, to full double precision"
-msgstr ""
+msgstr "Las colocaciones, con precisión doble completa"
 
 #: ../../source/simulation.rst:191
 msgid "Nesting: an ASSY may group its parts, a URDF's grouping is its joint tree"
 msgstr ""
+"El anidamiento: un ASSY puede agrupar sus piezas, la agrupación de un "
+"URDF es su árbol de articulaciones"
 
 #: ../../source/simulation.rst:192
 msgid "Names of the assembly's own children"
-msgstr ""
+msgstr "Los nombres de los hijos propios del ensamblaje"
 
 #: ../../source/simulation.rst:193
 msgid "Parametrization: an ASSY parameter, an enrich, an alias"
-msgstr ""
+msgstr "La parametrización: un parámetro de ASSY, un enrich, un alias"
 
 #: ../../source/simulation.rst:194
 msgid "Geometry, as a triangle mesh"
-msgstr ""
+msgstr "La geometría, como malla de triángulos"
 
 #: ../../source/simulation.rst:195
 msgid "Exact B-rep geometry; the mesh is a tessellation at a chosen tolerance"
 msgstr ""
+"La geometría B-rep exacta; la malla es una teselación con una tolerancia "
+"elegida"
 
 #: ../../source/simulation.rst:196
 msgid "Shape sharing (one mesh, many links)"
-msgstr ""
+msgstr "La compartición de formas (una malla, muchos enlaces)"
 
 #: ../../source/simulation.rst:197
 msgid "Which part in which package a link came from - the digital thread itself"
 msgstr ""
+"De qué pieza de qué paquete provino un enlace -- el propio hilo digital"
 
 #: ../../source/simulation.rst:199
 msgid ""
@@ -342,16 +518,33 @@ msgid ""
 "the count of each rather than passing over them in silence, so the loss "
 "is visible at import time and in ``pc info``."
 msgstr ""
+"En la otra dirección, leer un URDF pierde menos de lo que perdía, pero "
+"sigue perdiendo. La masa, la inercia, la fricción, los parámetros de "
+"contacto y la apariencia se convierten en propiedades con nombre de la "
+"pieza y se vuelven a escribir al exportar; los tipos de articulación, los "
+"ejes, los límites y la dinámica se convierten en el ``motion`` y el "
+"``physics`` de las interfaces generadas cuando el ensamblaje se convierte "
+"a ASSY; la geometría a partir de la cual no se construyó un enlace se "
+"convierte en una pieza propia. Lo que sí se pierde de verdad es el "
+"*efecto* de una articulación -- el ensamblaje es una configuración, así "
+"que una articulación móvil es una colocación y no un grado de libertad "
+"--, junto con las transmisiones, los sensores y los bloques "
+"``ros2_control``, y el ``<origin>`` de la geometría que acaba sin "
+"colocar. PartCAD informa del recuento de cada cosa en lugar de pasarlas "
+"por alto en silencio, de modo que la pérdida es visible en el momento de "
+"la importación y en ``pc info``."
 
 #: ../../source/simulation.rst:212
 msgid "What it took to implement"
-msgstr ""
+msgstr "Lo que costó implementarlo"
 
 #: ../../source/simulation.rst:214
 msgid ""
 "Worth recording, because the shape of the work says something about where"
 " the gap is:"
 msgstr ""
+"Merece la pena dejarlo registrado, porque la forma del trabajo dice algo "
+"sobre dónde está la laguna:"
 
 #: ../../source/simulation.rst:217
 msgid ""
@@ -361,6 +554,11 @@ msgid ""
 "the representation is exactly rich enough for shapes and placements, and "
 "has no place at all for anything else."
 msgstr ""
+"**No hizo falta ningún cambio en la representación del ensamblaje.** "
+"``Assembly``, ``AssemblyChild`` y ``Part`` expresaban todo lo que "
+"necesita la mitad *geométrica* de URDF, al primer intento. Esa es la "
+"buena noticia y la mala: la representación es exactamente lo bastante "
+"rica para formas y colocaciones, y no tiene sitio alguno para nada más."
 
 #: ../../source/simulation.rst:222
 msgid ""
@@ -370,6 +568,11 @@ msgid ""
 "for this one - URDF *is* the tree. Hence "
 "``wrapper_common.handle_input(decode=False)``."
 msgstr ""
+"**El protocolo de wrappers tuvo que ganar un modo en bruto.** "
+"``ocp_serialize.decode()`` convierte una envoltura de ensamblaje en un "
+"único ``TopoDS_Compound``, lo que es correcto para todos los demás "
+"exportadores y fatal para este -- URDF *es* el árbol. De ahí "
+"``wrapper_common.handle_input(decode=False)``."
 
 #: ../../source/simulation.rst:226
 msgid ""
@@ -378,6 +581,11 @@ msgid ""
 "angle. ``wrappers/urdf_common.py`` exists to keep that conversion in one "
 "tested place rather than spread across two wrappers."
 msgstr ""
+"**Las unidades y los convenios costaron un módulo.** URDF usa metros, "
+"radianes y roll-pitch-yaw de eje fijo; PartCAD usa milímetros, grados y "
+"eje-ángulo. ``wrappers/urdf_common.py`` existe para mantener esa "
+"conversión en un único sitio probado en lugar de repartida por dos "
+"wrappers."
 
 #: ../../source/simulation.rst:230
 msgid ""
@@ -389,6 +597,13 @@ msgid ""
 "right one: those parts are ordinary parts, inspectable and exportable, "
 "not an internal detail."
 msgstr ""
+"**Las piezas a las que apunta un URDF no tienen declaración.** Son lo que "
+"nombre el URDF, así que se materializan en el paquete en memoria como "
+"``<assembly>/<link>`` y el paquete resuelve un nombre así construyendo el "
+"ensamblaje que lo contiene. El concepto de \"una pieza que existe porque "
+"la produjo un ensamblaje\" no existía antes, y resulta ser el correcto: "
+"esas piezas son piezas ordinarias, inspeccionables y exportables, no un "
+"detalle interno."
 
 #: ../../source/simulation.rst:236
 msgid ""
@@ -402,6 +617,17 @@ msgid ""
 "every link fixed to it, which reads back as the same four placed links; "
 "the round trip is stable, just one honest link longer."
 msgstr ""
+"**Mapear el enlace raíz del robot al propio ensamblaje también fue un "
+"error.** Hacía que una exportación saliera con un enlace menos, lo que "
+"parecía fidelidad, pero solo funcionaba porque cada pieza registraba qué "
+"enlace *era*: la exportación comparaba el nodo del ensamblaje con un "
+"nombre de enlace almacenado. Una vez que ese nombre almacenado "
+"desapareció -- y tenía que desaparecer, ya que la pieza ya lleva el "
+"nombre del enlace --, el ensamblaje volvió a ser lo que es, un "
+"contenedor. Ahora una exportación escribe un sistema de referencia raíz "
+"sin geometría y todos los enlaces fijados a él, que se vuelve a leer como "
+"los mismos cuatro enlaces colocados; el viaje de ida y vuelta es estable, "
+"solo un enlace honesto más largo."
 
 #: ../../source/simulation.rst:245
 msgid ""
@@ -416,6 +642,18 @@ msgid ""
 "link's item sits relative to the link frame. That is the right trade: a "
 "digital thread that rewrites what it was handed is not one."
 msgstr ""
+"**Un enlace de varias formas es un subensamblaje, y combinarlas fue un "
+"error.** Fusionar los visuales de un enlace en una sola forma generada "
+"hacía que el álgebra de las articulaciones saliera limpia -- el origen de "
+"cada pieza era el sistema de referencia del enlace --, pero lo conseguía "
+"reescribiendo el modelo: los archivos de malla a los que apuntaba el URDF "
+"se reemplazaban por un compuesto generado y el ``<origin>`` que colocaba "
+"cada uno desaparecía dentro de la geometría. Mantenerlos como piezas de "
+"un subensamblaje, cada una leyendo su propio archivo en su propio "
+"desplazamiento, cuesta un término más en el álgebra de las articulaciones "
+"(más abajo) y una tabla de dónde está el elemento de cada enlace respecto "
+"del sistema de referencia del enlace. Ese es el compromiso correcto: un "
+"hilo digital que reescribe lo que se le entregó no es un hilo digital."
 
 #: ../../source/simulation.rst:255
 msgid ""
@@ -429,6 +667,16 @@ msgid ""
 "tree is what let the ASSY conversion keep the kinematics *and* the "
 "assembly stay shallow."
 msgstr ""
+"**Anidar un subensamblaje por articulación también fue un error, por la "
+"razón contraria.** Preservaba fielmente el árbol del URDF y le costaba a "
+"un brazo un nivel de profundidad por articulación, en una representación "
+"que no tiene articulaciones dentro. Un mismo mecanismo expresaba dos "
+"cosas distintas -- \"estas formas son un enlace\", que es agrupación, y "
+"\"este enlace cuelga de aquel\", que es cinemática -- y solo la primera "
+"es estructura. Aplanar la segunda y registrar las colocaciones relativas "
+"en una tabla junto al árbol es lo que permitió que la conversión a ASSY "
+"conservara la cinemática *y* que el ensamblaje siguiera siendo poco "
+"profundo."
 
 #: ../../source/simulation.rst:263
 #, python-brace-format
@@ -446,6 +694,19 @@ msgid ""
 "URDF cannot state - is what keeps the list honest, because the "
 "alternative to a loud failure is a quiet loss."
 msgstr ""
+"**Una sección de propiedades opaca fue un error, y el menos evidente.** "
+"La primera versión llevaba lo que decía un URDF bajo ``physics: {urdf: "
+"...}``, conservando la estructura propia del formato de origen para que "
+"una exportación pudiera devolverla tal cual. Hacía un viaje de ida y "
+"vuelta perfecto y no le decía nada a PartCAD: una masa era una masa solo "
+"para el exportador de URDF, y ninguna otra parte del sistema podía "
+"leerla, comprobarla ni expresar una propia. Copiar cada valor a una "
+"propiedad de PartCAD con nombre y con una unidad de PartCAD es más código "
+"y una lista cerrada que mantener, y es lo que hace que la propiedad sea "
+"*de PartCAD* y no un recuerdo de dónde vino. La regla que se deriva de "
+"ello -- rechazar el URDF que nada mapea, informar de las propiedades de "
+"PartCAD que URDF no puede expresar -- es lo que mantiene honesta la "
+"lista, porque la alternativa a un fallo ruidoso es una pérdida silenciosa."
 
 #: ../../source/simulation.rst:274
 msgid ""
@@ -458,6 +719,14 @@ msgid ""
 "already means containment; relations between two things belong in the "
 "connection between them."
 msgstr ""
+"**Lo mismo valió para la identidad del enlace.** Registrar de qué enlace "
+"provenía una pieza, y de qué enlace colgaba ese enlace, parecía un seguro "
+"barato. Eran dos cosas más que mantener coherentes con los nombres y las "
+"conexiones que ya lo decían, y permitían que el exportador tomara un "
+"atajo que dejó de funcionar en cuanto se eliminó el registro. La "
+"jerarquía que hay que preservar pertenece al *nombre*, donde una barra ya "
+"significa contención; las relaciones entre dos cosas pertenecen a la "
+"conexión entre ellas."
 
 #: ../../source/simulation.rst:281
 msgid ""
@@ -468,6 +737,13 @@ msgid ""
 "names its links from them. Restamping on the way out of the cache, "
 "exactly as the write path stamps on the way in, was the fix."
 msgstr ""
+"**Una entrada de caché se indexa por geometría, y llevaba una identidad "
+"que no debería haber llevado.** Dos piezas que leen el mismo archivo de "
+"malla tienen el mismo hash, así que la segunda volvía llevando el nombre "
+"y la etiqueta de la primera. Nadie se había dado cuenta, porque nada "
+"había dependido de ellos; el exportador de URDF nombra sus enlaces a "
+"partir de ellos. Volver a estampar a la salida de la caché, exactamente "
+"igual que la ruta de escritura estampa a la entrada, fue la solución."
 
 #: ../../source/simulation.rst:287
 #, python-brace-format
@@ -478,22 +754,31 @@ msgid ""
 "nothing had generated interfaces programmatically. Generating them found "
 "it at once."
 msgstr ""
+"**Afloraron dos lagunas antiguas del código de interfaces.** El esquema "
+"siempre ha permitido ``ports: {name:}`` e ``implements: {iface:}`` sin "
+"valor, y ambos provocaban un fallo -- nada los había escrito antes, "
+"porque nada había generado interfaces de forma programática. Generarlas "
+"lo encontró de inmediato."
 
 #: ../../source/simulation.rst:292
 msgid ""
 "None of that was hard. The hard part is everything the geometry does not "
 "cover, which is the rest of this page."
 msgstr ""
+"Nada de eso fue difícil. La parte difícil es todo lo que la geometría no "
+"cubre, que es el resto de esta página."
 
 #: ../../source/simulation.rst:298
 msgid "URDF joints as PartCAD interfaces"
-msgstr ""
+msgstr "Las articulaciones de URDF como interfaces de PartCAD"
 
 #: ../../source/simulation.rst:300
 msgid ""
 "This is the part worth dwelling on, because it is where the two models "
 "actually have to be reconciled rather than translated."
 msgstr ""
+"Esta es la parte en la que merece la pena detenerse, porque es donde los "
+"dos modelos realmente tienen que reconciliarse en lugar de traducirse."
 
 #: ../../source/simulation.rst:303
 msgid ""
@@ -505,51 +790,66 @@ msgid ""
 "placement, the target port, a half turn, the freedom-of-movement offsets,"
 " and the inverse of the source port."
 msgstr ""
+"Una articulación de URDF relaciona los *sistemas de referencia* de dos "
+"enlaces: en la configuración cero, el sistema del enlace hijo está en el "
+"``origin`` de la articulación dentro del sistema del enlace padre, y el "
+"``axis`` de la articulación dice cómo puede moverse desde ahí. PartCAD no "
+"relaciona sistemas de referencia; relaciona **puertos**, y su regla es "
+"que dos puertos conectados *se miran de frente*: la conexión compone la "
+"colocación del destino, el puerto de destino, media vuelta, los "
+"desplazamientos de libertad de movimiento, y la inversa del puerto de "
+"origen."
 
 #: ../../source/simulation.rst:310
 msgid "So one side has to carry the flip. The mapping is:"
 msgstr ""
+"Así que un lado tiene que llevar la inversión. La correspondencia es:"
 
 #: ../../source/simulation.rst:316 ../../source/simulation.rst:659
 #: ../../source/simulation.rst:1104
 msgid "URDF"
-msgstr ""
+msgstr "URDF"
 
 #: ../../source/simulation.rst:317 ../../source/simulation.rst:657
 msgid "PartCAD"
-msgstr ""
+msgstr "PartCAD"
 
 #: ../../source/simulation.rst:318
 msgid "joint (parent side)"
-msgstr ""
+msgstr "articulación (lado del padre)"
 
 #: ../../source/simulation.rst:319
 msgid ""
 "a **socket** interface with one port at its origin, which the parent part"
 " implements at the joint origin, under an instance named after the joint"
 msgstr ""
+"una interfaz **socket** con un puerto en su origen, que la pieza padre "
+"implementa en el origen de la articulación, bajo una instancia con el "
+"nombre de la articulación"
 
 #: ../../source/simulation.rst:321
 msgid "joint (child side)"
-msgstr ""
+msgstr "articulación (lado del hijo)"
 
 #: ../../source/simulation.rst:322
 msgid ""
 "a **plug** interface whose one port sits at the half turn, which the "
 "child part implements once, at its own origin"
 msgstr ""
+"una interfaz **plug** cuyo único puerto está en la media vuelta, que la "
+"pieza hija implementa una vez, en su propio origen"
 
 #: ../../source/simulation.rst:324
 msgid "the two are the same joint"
-msgstr ""
+msgstr "las dos son la misma articulación"
 
 #: ../../source/simulation.rst:325
 msgid "``mates:`` on the plug, naming the socket"
-msgstr ""
+msgstr "``mates:`` en el plug, nombrando el socket"
 
 #: ../../source/simulation.rst:326
 msgid "``axis``, ``limit`` lower/upper"
-msgstr ""
+msgstr "``axis``, ``limit`` lower/upper"
 
 #: ../../source/simulation.rst:327
 #, python-brace-format
@@ -558,10 +858,13 @@ msgid ""
 "``parameter`` (``angle`` for a revolute joint, ``offset`` for a prismatic"
 " one) that makes it move"
 msgstr ""
+"``motion: {axis, limits}``, en grados o milímetros, más un ``parameter`` "
+"de interfaz (``angle`` para una articulación de revolución, ``offset`` "
+"para una prismática) que la hace moverse"
 
 #: ../../source/simulation.rst:330
 msgid "``safety_controller``, ``mimic``"
-msgstr ""
+msgstr "``safety_controller``, ``mimic``"
 
 #: ../../source/simulation.rst:331
 #, python-brace-format
@@ -569,10 +872,12 @@ msgid ""
 "``motion: {softLimits, mimic}`` - both bound the movement, so both are "
 "kinematics"
 msgstr ""
+"``motion: {softLimits, mimic}`` -- ambos acotan el movimiento, así que "
+"ambos son cinemática"
 
 #: ../../source/simulation.rst:333
 msgid "``limit`` effort/velocity, ``dynamics``"
-msgstr ""
+msgstr "``limit`` effort/velocity, ``dynamics``"
 
 #: ../../source/simulation.rst:334
 #, python-brace-format
@@ -580,29 +885,33 @@ msgid ""
 "``physics: {maxEffort, maxVelocity, damping, friction}`` - what the "
 "movement costs"
 msgstr ""
+"``physics: {maxEffort, maxVelocity, damping, friction}`` -- lo que cuesta "
+"el movimiento"
 
 #: ../../source/simulation.rst:336
 msgid "a joint's ``<gazebo>`` block"
-msgstr ""
+msgstr "el bloque ``<gazebo>`` de una articulación"
 
 #: ../../source/simulation.rst:337
 #, python-brace-format
 msgid "``physics: {springStiffness, springReference, stopCfm, ...}``"
-msgstr ""
+msgstr "``physics: {springStiffness, springReference, stopCfm, ...}``"
 
 #: ../../source/simulation.rst:338
 msgid "``calibration``"
-msgstr ""
+msgstr "``calibration``"
 
 #: ../../source/simulation.rst:339
 msgid ""
 "nothing: a limit-switch reference used when a real robot is commissioned,"
 " which says nothing about the model. Counted and reported"
 msgstr ""
+"nada: una referencia de final de carrera que se usa al poner en marcha un "
+"robot real, que no dice nada sobre el modelo. Se cuenta y se informa"
 
 #: ../../source/simulation.rst:341
 msgid "a link's attachment"
-msgstr ""
+msgstr "la fijación de un enlace"
 
 #: ../../source/simulation.rst:342
 #, python-brace-format
@@ -610,6 +919,8 @@ msgid ""
 "``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: "
 "<joint>}``"
 msgstr ""
+"``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: "
+"<joint>}``"
 
 #: ../../source/simulation.rst:344
 msgid ""
@@ -623,6 +934,17 @@ msgid ""
 "Folding that term into the interface instances instead would have worked "
 "too, and would have spread it across every socket and plug in the file."
 msgstr ""
+"Todo esto se expresa en el sistema de referencia del *enlace*, que no es "
+"necesariamente donde está la geometría del enlace: un enlace que es una "
+"forma colocada en un ``<origin>`` tiene el sistema de referencia de su "
+"pieza en ese desplazamiento, y un enlace de varias es un subensamblaje "
+"cuyo sistema es el del enlace. Así que la conversión vuelve a expresar "
+"cada enlace en el sistema del enlace antes de escribir su malla -- un "
+"término, registrado por enlace por el importador y aplicado en un solo "
+"sitio -- y todo lo que viene después puede entonces dar por supuesto que "
+"el origen de la pieza *es* el del enlace. Incorporar ese término en las "
+"instancias de interfaz también habría funcionado, y lo habría repartido "
+"por todos los sockets y plugs del archivo."
 
 #: ../../source/simulation.rst:353
 msgid ""
@@ -636,6 +958,17 @@ msgid ""
 " is also the socket port's own frame, since that port sits at the joint "
 "origin. The record stays readable; the executable half stays correct."
 msgstr ""
+"Poner la inversión en el plug es lo que mantiene legible el *socket*: el "
+"padre lo implementa exactamente en el origen de la articulación, que es "
+"un número que un lector puede contrastar con el URDF. Cuesta una pequeña "
+"arruga, en el eje. La media vuelta ``T`` es una rotación de 180 grados "
+"alrededor de ``(1, 1, 0)``, y una rotación conjugada por ella es la misma "
+"rotación alrededor del eje transformado, ``(x, y, z) -> (y, x, -z)``. Así "
+"que la ``dir`` del parámetro es el eje de la articulación bajo esa "
+"transformación, mientras que ``motion.axis`` lo conserva tal como lo "
+"expresó URDF -- que es también el sistema de referencia propio del puerto "
+"del socket, ya que ese puerto está en el origen de la articulación. El "
+"registro sigue siendo legible; la mitad ejecutable sigue siendo correcta."
 
 #: ../../source/simulation.rst:363
 msgid ""
@@ -647,10 +980,19 @@ msgid ""
 "downstream - the generated parameter, the schema, a person reading the "
 "file - sees one convention."
 msgstr ""
+"Las unidades cambian en la frontera y solo ahí. Un límite de URDF va en "
+"radianes para una articulación de revolución y en metros para una "
+"prismática; lo que aterriza en ``motion.limits`` son grados y milímetros, "
+"porque esas son las unidades de PartCAD y una propiedad que conserva la "
+"unidad de su formato de origen es una propiedad que nada más puede usar. "
+"El lector convierte una vez, y todos los consumidores posteriores -- el "
+"parámetro generado, el esquema, una persona que lea el archivo -- ven un "
+"único convenio."
 
 #: ../../source/simulation.rst:370
 msgid "Two things fall out of this that are worth more than the mapping itself."
 msgstr ""
+"De esto se derivan dos cosas que valen más que la propia correspondencia."
 
 #: ../../source/simulation.rst:372
 msgid ""
@@ -667,6 +1009,19 @@ msgid ""
 "invention. Custom interfaces per joint kind, reused where they agree, is "
 "the honest reading."
 msgstr ""
+"**Las interfaces son reutilizables; las instancias, no.** Lo que varía "
+"entre dos articulaciones del mismo tipo es *dónde* están, y eso reside en "
+"la ubicación de la instancia de ``implements:``, no en la interfaz. Así "
+"que todas las articulaciones fijas de un robot son la misma interfaz, y "
+"lo mismo vale para todas las articulaciones de revolución con el mismo "
+"eje y los mismos límites. El conversor deduplica exactamente por eso -- "
+"el tipo de la articulación, su eje, sus límites, su dinámica y su mimic "
+"-- y un robot de cuatro ruedas sale con un solo par de interfaces para "
+"sus ruedas en lugar de cuatro. Deliberadamente no se intenta emparejarlas "
+"con la biblioteca de interfaces existente: una articulación de URDF no "
+"dice nada sobre el *hardware* que la implementa, así que afirmar que es "
+"un ``m3-screw-6mm`` sería una invención. Interfaces propias por tipo de "
+"articulación, reutilizadas donde coinciden, es la lectura honesta."
 
 #: ../../source/simulation.rst:384
 #, python-brace-format
@@ -680,10 +1035,18 @@ msgid ""
 " assembly rather than a value written into one connection - which is item"
 " 5 below."
 msgstr ""
+"**Una pose pasa a ser expresable.** El parámetro que genera el conversor "
+"no es decoración: ``connect: {toParams: {angle: 90}}`` en el ASSY "
+"generado coloca al hijo exactamente donde lo colocaría la articulación de "
+"URDF a 90 grados, y todo lo que hay por debajo le sigue. Eso es un "
+"ensamblaje estático ganando la primera mitad de uno cinemático, usando "
+"maquinaria que PartCAD ya tenía. Lo que sigue faltando es la otra mitad "
+"-- una *configuración con nombre* de todo el ensamblaje en lugar de un "
+"valor escrito en una conexión --, que es el punto 5 más abajo."
 
 #: ../../source/simulation.rst:393
 msgid "An engine's own scene format is its plugin's"
-msgstr ""
+msgstr "El formato de escena propio de un motor es de su plugin"
 
 #: ../../source/simulation.rst:395
 msgid ""
@@ -693,54 +1056,61 @@ msgid ""
 "``dropped`` counters -- but the entries are **not in this wheel**. Each "
 "belongs to the plugin package for its engine:"
 msgstr ""
+"SDFormat y MJCF se leen y se escriben exactamente igual que URDF -- una "
+"entrada de una sección ``import:`` para el lector, una de una sección "
+"``export:`` para el escritor, el mismo sandbox, las mismas envolturas, "
+"los mismos contadores de ``dropped`` --, pero las entradas **no están en "
+"este wheel**. Cada una pertenece al paquete de plugin de su motor:"
 
 #: ../../source/simulation.rst:405
 msgid "Engine"
-msgstr ""
+msgstr "Motor"
 
 #: ../../source/simulation.rst:406
 msgid "Package"
-msgstr ""
+msgstr "Paquete"
 
 #: ../../source/simulation.rst:407
 msgid "Scene type"
-msgstr ""
+msgstr "Tipo de escena"
 
 #: ../../source/simulation.rst:408
 msgid "Export"
-msgstr ""
+msgstr "Exportación"
 
 #: ../../source/simulation.rst:409
 msgid "Gazebo"
-msgstr ""
+msgstr "Gazebo"
 
 #: ../../source/simulation.rst:410
 msgid "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
 msgstr ""
+"`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
 
 #: ../../source/simulation.rst:411
 msgid "``sim-gazebo:world``"
-msgstr ""
+msgstr "``sim-gazebo:world``"
 
 #: ../../source/simulation.rst:412
 msgid "``pc export -S -t sim-gazebo:world``"
-msgstr ""
+msgstr "``pc export -S -t sim-gazebo:world``"
 
 #: ../../source/simulation.rst:413
 msgid "MuJoCo"
-msgstr ""
+msgstr "MuJoCo"
 
 #: ../../source/simulation.rst:414
 msgid "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
 msgstr ""
+"`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
 
 #: ../../source/simulation.rst:415
 msgid "``sim-mujoco:mjcf``"
-msgstr ""
+msgstr "``sim-mujoco:mjcf``"
 
 #: ../../source/simulation.rst:416
 msgid "``pc export -S -t sim-mujoco:mjcf``"
-msgstr ""
+msgstr "``pc export -S -t sim-mujoco:mjcf``"
 
 #: ../../source/simulation.rst:418
 msgid ""
@@ -754,10 +1124,21 @@ msgid ""
 "what makes the type, the exporter, ``pc sim`` and ``pc open --with`` all "
 "work at once."
 msgstr ""
+"Esa es la misma regla que sigue el propio simulador, y por la misma "
+"razón. Leer un formato, escribirlo, lanzar la aplicación sobre él y "
+"ejecutar un paso de física con él son un mismo cuerpo de conocimiento "
+"sobre un mismo motor; PartCAD distribuye el *concepto* -- las secciones "
+"``import:`` y ``export:``, el sandbox, el protocolo de plugin "
+"``simulation:``, la entrada ``open:`` -- y el paquete del motor aporta el "
+"conocimiento. Cada uno de esos dos paquetes declara las cuatro cosas para "
+"su propio formato, de modo que importarlo es lo que hace que el tipo, el "
+"exportador, ``pc sim`` y ``pc open --with`` funcionen todos a la vez."
 
 #: ../../source/simulation.rst:427
 msgid "A package that uses one imports it and names the type through it:"
 msgstr ""
+"Un paquete que usa uno de ellos lo importa y nombra el tipo a través de "
+"él:"
 
 #: ../../source/simulation.rst:441
 msgid ""
@@ -765,6 +1146,10 @@ msgid ""
 "export -t mjcf``: nothing in ``//builtin/export`` writes either format, "
 "and the qualified spelling is what reaches the package that does."
 msgstr ""
+"Un simple ``type: world`` no se resuelve a nada y lo indica. Lo mismo "
+"ocurre con ``pc export -t mjcf``: nada en ``//builtin/export`` escribe "
+"ninguno de los dos formatos, y la grafía cualificada es la que alcanza el "
+"paquete que sí lo hace."
 
 #: ../../source/simulation.rst:445
 msgid ""
@@ -778,6 +1163,16 @@ msgid ""
 "arrangement cannot hold is counted and reported rather than passed over, "
 "and ``pc info`` lists it."
 msgstr ""
+"Qué preservan los lectores y qué no pueden preservar está documentado en "
+"esos repositorios, junto al código -- incluidas las partes de MJCF que es "
+"fácil equivocar (los ángulos van en grados de forma predeterminada, una "
+"orientación tiene cinco grafías, y el ``size`` de una caja son sus "
+"semiextensiones), y los parámetros de exportación que necesita una "
+"simulación y que una escena nunca indica (``static``, ``flatten``, "
+"``light``, ``ground_plane``, ``sun``). Los dos lectores son de mejor "
+"esfuerzo exactamente igual que lo es el lector de URDF anterior: lo que "
+"una disposición estática no puede contener se cuenta y se informa en "
+"lugar de pasarse por alto, y ``pc info`` lo enumera."
 
 #: ../../source/simulation.rst:454
 msgid ""
@@ -789,10 +1184,18 @@ msgid ""
 "throwaway package around the file and no dependency on either plugin, so "
 "it cannot run the exporter that would be needed; see :doc:`cli`."
 msgstr ""
+"Merece la pena enunciar una consecuencia porque es un cambio y no un "
+"descuido: ``pc open --with mujoco`` ya no convierte una escena a MJCF. "
+"Abre un archivo que ya lo es -- la entrada ``open:`` de la aplicación "
+"nombra las extensiones en las que se almacena su formato -- y rechaza "
+"cualquier otra cosa indicando la exportación que sí funciona. Una "
+"conversión ad-hoc tiene un paquete desechable alrededor del archivo y "
+"ninguna dependencia de ninguno de los dos plugins, así que no puede "
+"ejecutar el exportador que haría falta; consulte :doc:`cli`."
 
 #: ../../source/simulation.rst:463
 msgid "Every description is a Jinja2 template"
-msgstr ""
+msgstr "Toda descripción es una plantilla Jinja2"
 
 #: ../../source/simulation.rst:465
 msgid ""
@@ -805,6 +1208,15 @@ msgid ""
 "reach every one of them under the same names: ``param_<name>`` for each "
 "declared parameter, and ``name`` for the object's own."
 msgstr ""
+"Un archivo ASSY siempre se ha renderizado como plantilla `Jinja2 "
+"<https://jinja.palletsprojects.com/>`_ antes de analizarse, que es lo que "
+"permite que un archivo describa una familia de ensamblajes. Un URDF, un "
+"``.world`` y un modelo MJCF se declaran exactamente de la misma manera y "
+"no se renderizaban así, de modo que un paquete podía parametrizar un tipo "
+"de disposición y no los otros tres. Los cuatro comparten ahora una "
+"implementación, y los parámetros llegan a todos ellos con los mismos "
+"nombres: ``param_<name>`` para cada parámetro declarado, y ``name`` para "
+"el del propio objeto."
 
 #: ../../source/simulation.rst:488
 msgid ""
@@ -817,20 +1229,32 @@ msgid ""
 "directory separately, which is what keeps a ``package://`` mesh, a "
 "``model://`` include and an ``<asset>`` file working in a template."
 msgstr ""
+"El archivo renderizado se escribe dentro del directorio de estado propio "
+"de PartCAD y no junto al original -- renderizar produce datos derivados, "
+"e instanciar un objeto no debe dejar archivos en el árbol de fuentes del "
+"usuario -- y el archivo se deja exactamente como está cuando el "
+"renderizado no cambia nada, que es el caso habitual. Aquello a lo que el "
+"archivo *hace referencia* se sigue resolviendo contra el directorio en el "
+"que el paquete lo declaró: a cada lector se le entrega ese directorio por "
+"separado, que es lo que hace que una malla ``package://``, un include "
+"``model://`` y un archivo de ``<asset>`` sigan funcionando en una "
+"plantilla."
 
 #: ../../source/simulation.rst:498
 msgid "Running a simulation"
-msgstr ""
+msgstr "Ejecutar una simulación"
 
 #: ../../source/simulation.rst:500
 msgid ""
 "``simulate:`` is an optional section of a part or an assembly. Each entry"
 " in it is one simulation, and states four things:"
 msgstr ""
+"``simulate:`` es una sección opcional de una pieza o de un ensamblaje. "
+"Cada entrada de ella es una simulación, e indica cuatro cosas:"
 
 #: ../../source/simulation.rst:503
 msgid "``scene:``"
-msgstr ""
+msgstr "``scene:``"
 
 #: ../../source/simulation.rst:504
 msgid ""
@@ -841,6 +1265,13 @@ msgid ""
 "for it: a simulation scene is an ordinary scene with an ordinary "
 "parameter, and a Jinja2 template is what places the subject."
 msgstr ""
+"La escena en la que se coloca el objeto, por su ruta completa. La ruta "
+"completa propia del objeto se asigna al parámetro ``subject`` de esa "
+"escena -- incondicionalmente, y diga lo que diga el resto de la entrada "
+"--, que es lo que permite que una escena sirva a todos los objetos que la "
+"nombran. No se declara nada especial para ello: una escena de simulación "
+"es una escena ordinaria con un parámetro ordinario, y una plantilla "
+"Jinja2 es lo que coloca al sujeto."
 
 #: ../../source/simulation.rst:511
 msgid ""
@@ -848,10 +1279,14 @@ msgid ""
 "subject and nothing else. A package that needs more -- a fixture to drop "
 "the part onto, a conveyor to push it along -- writes a scene of its own."
 msgstr ""
+"El valor predeterminado es ``//builtin/scene:subject``, un mundo vacío "
+"que contiene al sujeto y nada más. Un paquete que necesita más -- un "
+"utillaje sobre el que dejar caer la pieza, una cinta transportadora que "
+"la empuje -- escribe una escena propia."
 
 #: ../../source/simulation.rst:515
 msgid "``offset:``"
-msgstr ""
+msgstr "``offset:``"
 
 #: ../../source/simulation.rst:516
 msgid ""
@@ -860,10 +1295,14 @@ msgid ""
 " where its origin sits relative to the floor it is meant to stand on -- "
 "and the scene is shared."
 msgstr ""
+"Dónde va el objeto dentro de esa escena, en el sistema de referencia de "
+"la escena. Se indica aquí y no en la escena porque es un hecho sobre "
+"*este* objeto -- dónde está su origen respecto del suelo sobre el que se "
+"supone que se apoya -- y la escena es compartida."
 
 #: ../../source/simulation.rst:521
 msgid "``simulation:``"
-msgstr ""
+msgstr "``simulation:``"
 
 #: ../../source/simulation.rst:522
 msgid ""
@@ -876,16 +1315,27 @@ msgid ""
 "because those are one piece of knowledge and the simulator is what "
 "decides what the file has to say."
 msgstr ""
+"El plugin de simulación que la ejecuta, por su ruta completa. No hay "
+"valor predeterminado: PartCAD no implementa ningún simulador, así que un "
+"paquete importa uno y dice cuál. `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_ es el de MuJoCo y "
+"`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ el "
+"de Gazebo. Cada uno declara además el lector, el escritor y la entrada "
+"``open:`` del formato de escena propio de ese motor, porque esas cosas "
+"son un mismo conocimiento y el simulador es lo que decide qué tiene que "
+"decir el archivo."
 
 #: ../../source/simulation.rst:531
 msgid "``validation:``"
-msgstr ""
+msgstr "``validation:``"
 
 #: ../../source/simulation.rst:532
 msgid ""
 "A Python expression over ``before`` and ``after`` that says whether what "
 "happened is what was supposed to happen."
 msgstr ""
+"Una expresión de Python sobre ``before`` y ``after`` que dice si lo que "
+"ocurrió es lo que se suponía que debía ocurrir."
 
 #: ../../source/simulation.rst:556
 msgid ""
@@ -897,10 +1347,17 @@ msgid ""
 "two identical but for the material. All three simulations pass, and no "
 "two of them end the same way."
 msgstr ""
+"``pc sim`` las ejecuta -- un objeto, o todo lo que declara un paquete, o "
+"todo lo que declara un árbol de paquetes con ``-P <package>...`` -- y "
+"termina con un código distinto de cero cuando una validación no se "
+"cumple. ``--json`` imprime todo lo que informó cada plugin. "
+"``examples/feature_simulate`` tiene tres ensamblajes de dos bloques cada "
+"uno: dos idénticos salvo por 18 milímetros, y dos idénticos salvo por el "
+"material. Las tres simulaciones pasan, y no hay dos que terminen igual."
 
 #: ../../source/simulation.rst:564
 msgid "Simulation plugins"
-msgstr ""
+msgstr "Plugins de simulación"
 
 #: ../../source/simulation.rst:566
 msgid ""
@@ -910,12 +1367,19 @@ msgid ""
 "and its parameters. What differs is what it does with them. The contract "
 "is deliberately narrow:"
 msgstr ""
+"Un plugin de simulación es el tercer tipo de implementación que un "
+"paquete puede declarar, junto a las de exportación y renderizado, y se "
+"declara exactamente de la misma forma: una ``path`` a un script, el "
+"sandbox que ese script necesita, y sus parámetros. Lo que difiere es qué "
+"hace con ellos. El contrato es deliberadamente estrecho:"
 
 #: ../../source/simulation.rst:571
 msgid ""
 "**a scene with the subject in it goes in, JSON carrying ``before`` and "
 "``after`` comes out.**"
 msgstr ""
+"**entra una escena con el sujeto dentro, sale JSON que lleva ``before`` y "
+"``after``.**"
 
 #: ../../source/simulation.rst:587
 msgid ""
@@ -925,6 +1389,12 @@ msgid ""
 " where a physics plugin says that it wants every body free to move. That "
 "also keeps a plugin free of OCP: it is handed a path."
 msgstr ""
+"La escena llega como un **archivo**, en el formato que nombra "
+"``format:``, porque un simulador lee su propio formato de modelo y "
+"PartCAD ya sabe escribir varios; ``formatOptions:`` es la forma de pedir "
+"esa exportación, y es donde un plugin de física dice que quiere que todos "
+"los cuerpos puedan moverse libremente. Eso mantiene además al plugin "
+"libre de OCP: lo que se le entrega es una ruta."
 
 #: ../../source/simulation.rst:593
 msgid ""
@@ -937,6 +1407,15 @@ msgid ""
 "package supplies the physics, the same way "
 "``//pub/feature/render/draftwright`` supplies technical drawings."
 msgstr ""
+"**PartCAD no implementa ninguno de estos**, y esa es la idea de la "
+"sección. Un simulador es el programa de alguien con un ciclo de "
+"publicación propio; distribuir uno dentro del wheel haría que cada "
+"release de PartCAD fuera una afirmación sobre qué versión de él se "
+"obtiene, y fijaría una dependencia grande a todos los usuarios que nunca "
+"simulan nada. Así que PartCAD distribuye el concepto -- la sección, el "
+"wrapper del sandbox, el ejecutor -- y un paquete aporta la física, de la "
+"misma manera que ``//pub/feature/render/draftwright`` aporta planos "
+"técnicos."
 
 #: ../../source/simulation.rst:601
 msgid ""
@@ -946,6 +1425,11 @@ msgid ""
 "each plugin declares the ``export:`` that writes it beside the "
 "``simulation:`` that reads it."
 msgstr ""
+"``format:`` se resuelve primero en el paquete propio del plugin, que es "
+"lo que permite que un plugin nombre el formato que él mismo implementa. "
+"El formato de escena de un motor es exactamente eso: MJCF es de MuJoCo y "
+"SDFormat es de Gazebo, así que cada plugin declara el ``export:`` que lo "
+"escribe junto al ``simulation:`` que lo lee."
 
 #: ../../source/simulation.rst:606
 msgid ""
@@ -957,6 +1441,14 @@ msgid ""
 "somebody else wrote is a scene you can place parts in, and a scene you "
 "built out of parts is a model the engine can run."
 msgstr ""
+"Hay dos, y son deliberadamente parecidos: `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_ y `partcad-sim-gazebo "
+"<https://github.com/partcad/partcad-sim-gazebo>`_. Cada uno declara "
+"cuatro cosas sobre un formato -- ``import:`` para leerlo, ``export:`` "
+"para escribirlo, ``simulation:`` para ejecutarlo y ``open:`` para mirarlo "
+"--, de modo que un mundo que escribió otra persona es una escena en la "
+"que usted puede colocar piezas, y una escena que usted construyó con "
+"piezas es un modelo que el motor puede ejecutar."
 
 #: ../../source/simulation.rst:614
 msgid ""
@@ -967,6 +1459,12 @@ msgid ""
 "an image under ``dockerImage`` and looks for a local ``gz`` first -- the "
 "same two places ``pc open --with gazebo`` looks."
 msgstr ""
+"De dónde viene el simulador es lo único en lo que difieren, y no es una "
+"diferencia en la sección. MuJoCo es un wheel, así que el plugin lo "
+"enumera bajo ``pythonRequirements`` y una máquina sin MuJoCo simula "
+"igual. Gazebo no es un wheel y no lo hay, así que ese plugin nombra una "
+"imagen bajo ``dockerImage`` y busca primero un ``gz`` local -- los mismos "
+"dos sitios en los que busca ``pc open --with gazebo``."
 
 #: ../../source/simulation.rst:621
 msgid ""
@@ -978,6 +1476,13 @@ msgid ""
 "``validation:`` expression the package wrote and reports what that says. "
 "Every judgement in that sentence belongs to the package."
 msgstr ""
+"``before`` y ``after`` son todo lo que PartCAD sabe sobre un resultado. "
+"Lo que hay *dentro* de ellos, y cualquier otra cosa que los acompañe, es "
+"vocabulario propio del plugin -- el plugin de MuJoCo indica dónde acabó "
+"cada cuerpo, en milímetros; otro podría indicar un campo de temperatura "
+"-- y PartCAD ni lo lee ni lo valida. Lleva los dos objetos a la expresión "
+"``validation:`` que escribió el paquete e informa de lo que esta diga. "
+"Todos los juicios de esa frase pertenecen al paquete."
 
 #: ../../source/simulation.rst:628
 msgid ""
@@ -986,10 +1491,14 @@ msgid ""
 "and after. Running it needs no MuJoCo on the machine: the plugin runs in "
 "a PartCAD sandbox that installs one."
 msgstr ""
+"El plugin de MuJoCo carga el MJCF, lo hace avanzar durante ``duration`` "
+"segundos de tiempo simulado, e informa de la posición y la orientación de "
+"cada cuerpo antes y después. Ejecutarlo no requiere tener MuJoCo en la "
+"máquina: el plugin se ejecuta en un sandbox de PartCAD que lo instala."
 
 #: ../../source/simulation.rst:634
 msgid "Friction, and why it is a material property"
-msgstr ""
+msgstr "La fricción, y por qué es una propiedad del material"
 
 #: ../../source/simulation.rst:636
 msgid ""
@@ -997,46 +1506,49 @@ msgid ""
 "Two 20 mm cubes squarely stacked, ten seconds under gravity, nothing else"
 " changed:"
 msgstr ""
+"Que una pila de bloques se sostenga no es una propiedad de su geometría. "
+"Dos cubos de 20 mm apilados a escuadra, diez segundos bajo gravedad, sin "
+"cambiar nada más:"
 
 #: ../../source/simulation.rst:640
 msgid "sliding friction"
-msgstr ""
+msgstr "fricción de deslizamiento"
 
 #: ../../source/simulation.rst:640
 msgid "what happens"
-msgstr ""
+msgstr "qué ocurre"
 
 #: ../../source/simulation.rst:642
 msgid "0.04"
-msgstr ""
+msgstr "0.04"
 
 #: ../../source/simulation.rst:642
 msgid "the top block slides off -- 35 mm, and it ends up on the floor"
-msgstr ""
+msgstr "el bloque de arriba se desliza -- 35 mm, y acaba en el suelo"
 
 #: ../../source/simulation.rst:643
 msgid "0.4"
-msgstr ""
+msgstr "0.4"
 
 #: ../../source/simulation.rst:643
 msgid "the same"
-msgstr ""
+msgstr "lo mismo"
 
 #: ../../source/simulation.rst:644
 msgid "0.5"
-msgstr ""
+msgstr "0.5"
 
 #: ../../source/simulation.rst:644
 msgid "it stays -- 3 mm of settling"
-msgstr ""
+msgstr "se queda -- 3 mm de asentamiento"
 
 #: ../../source/simulation.rst:645
 msgid "1.05"
-msgstr ""
+msgstr "1.05"
 
 #: ../../source/simulation.rst:645
 msgid "it stays -- 1 mm"
-msgstr ""
+msgstr "se queda -- 1 mm"
 
 #: ../../source/simulation.rst:648
 msgid ""
@@ -1046,38 +1558,43 @@ msgid ""
 "that material gets that coefficient; and the coefficient is written into "
 "whichever format the object is exported to:"
 msgstr ""
+"Así que la respuesta a \"¿se sostendrá esto?\" es un hecho sobre el "
+"*material*, y ``materials:`` es donde un paquete ya dice de qué están "
+"hechas sus piezas. Un material indica ``mu`` junto a su ``density``; una "
+"pieza que nombra ese material obtiene ese coeficiente; y el coeficiente "
+"se escribe en el formato al que se exporte el objeto:"
 
 #: ../../source/simulation.rst:655
 msgid "format"
-msgstr ""
+msgstr "formato"
 
 #: ../../source/simulation.rst:655
 msgid "where it is written"
-msgstr ""
+msgstr "dónde se escribe"
 
 #: ../../source/simulation.rst:657
 msgid "the ``friction`` property of a shape"
-msgstr ""
+msgstr "la propiedad ``friction`` de una forma"
 
 #: ../../source/simulation.rst:658
 msgid "SDFormat (``.world``)"
-msgstr ""
+msgstr "SDFormat (``.world``)"
 
 #: ../../source/simulation.rst:658
 msgid "``<collision><surface><friction><ode><mu>``"
-msgstr ""
+msgstr "``<collision><surface><friction><ode><mu>``"
 
 #: ../../source/simulation.rst:659
 msgid "``<gazebo reference=\"...\"><mu1>``"
-msgstr ""
+msgstr "``<gazebo reference=\"...\"><mu1>``"
 
 #: ../../source/simulation.rst:660 ../../source/simulation.rst:1110
 msgid "MJCF"
-msgstr ""
+msgstr "MJCF"
 
 #: ../../source/simulation.rst:660
 msgid "the first component of a geom's ``friction``"
-msgstr ""
+msgstr "el primer componente del ``friction`` de un geom"
 
 #: ../../source/simulation.rst:663
 msgid ""
@@ -1085,6 +1602,10 @@ msgid ""
 "them is the identity -- which is the whole reason it is worth carrying, "
 "and why a material states one coefficient rather than one per format."
 msgstr ""
+"Los cuatro son el mismo número adimensional, así que la conversión entre "
+"ellos es la identidad -- que es toda la razón por la que merece la pena "
+"llevarlo, y por la que un material indica un coeficiente en lugar de uno "
+"por formato."
 
 #: ../../source/simulation.rst:667
 msgid ""
@@ -1098,6 +1619,16 @@ msgid ""
 "turned into a PartCAD property that does not exist. Both are the same "
 "rule the URDF and SDFormat readers already follow."
 msgstr ""
+"``friction2`` -- el coeficiente en la *segunda* dirección de fricción, "
+"que SDFormat y URDF escriben ambos ``mu2`` -- viaja entre esos dos sin "
+"cambios. MJCF no tiene segunda dirección en absoluto: sus otros dos "
+"componentes de ``friction`` son un coeficiente torsional y uno de "
+"rodadura, que son magnitudes distintas. Así que de un ``friction2`` se "
+"informa como algo que MJCF no puede expresar, en lugar de escribirse en "
+"una ranura que significa otra cosa, y la torsión y la rodadura en el "
+"sentido de entrada se cuentan como descartadas en lugar de convertirse en "
+"una propiedad de PartCAD que no existe. Ambas cosas son la misma regla "
+"que ya siguen los lectores de URDF y de SDFormat."
 
 #: ../../source/simulation.rst:676
 msgid ""
@@ -1110,6 +1641,14 @@ msgid ""
 " of a contact, because they do not agree about it: that is the "
 "simulator's model, not the part's."
 msgstr ""
+"Dos cosas deliberadamente no se hacen aquí. La **densidad** de un "
+"material no se conecta de la misma manera: ya tiene un sitio "
+"(``Material.mass()``), y hacer que cada pieza que nombra un material pese "
+"lo que pesa ese material cambia el ``<inertial>`` de todas las "
+"exportaciones existentes -- una mejora real, y un cambio en sí mismo. Y "
+"PartCAD escribe el coeficiente de cada *cuerpo* y no dice nada sobre cómo "
+"combina un simulador los dos lados de un contacto, porque no se ponen de "
+"acuerdo en ello: ese es el modelo del simulador, no el de la pieza."
 
 #: ../../source/simulation.rst:684
 msgid ""
@@ -1117,10 +1656,14 @@ msgid ""
 "beats the substance it is made of -- and a part that states neither gets "
 "whatever the simulator defaults to, which is a number nobody chose."
 msgstr ""
+"Una pieza que indica una ``friction`` propia la conserva -- una pieza "
+"medida gana a la sustancia de la que está hecha -- y una pieza que no "
+"indica ninguna de las dos cosas obtiene el valor predeterminado del "
+"simulador, que es un número que nadie eligió."
 
 #: ../../source/simulation.rst:689
 msgid "Opening a scene in a simulator"
-msgstr ""
+msgstr "Abrir una escena en un simulador"
 
 #: ../../source/simulation.rst:691
 msgid ""
@@ -1129,6 +1672,10 @@ msgid ""
 " the machine the command was run on, never through the daemon -- see "
 "``partcad_client.external`` for why."
 msgstr ""
+"``pc open --with gazebo`` entrega un archivo ``.world`` a Gazebo, y ``pc "
+"open --with mujoco`` entrega un modelo MJCF a MuJoCo. Ambos abren una "
+"ventana en la máquina en la que se ejecutó el comando, nunca a través del "
+"daemon -- consulte ``partcad_client.external`` para ver por qué."
 
 #: ../../source/simulation.rst:696
 msgid ""
@@ -1141,10 +1688,19 @@ msgid ""
 "converted -- it is nothing but references to the parts of a package, and "
 "an ad-hoc conversion has no package to resolve them against."
 msgstr ""
+"MuJoCo lee MJCF y ningún otro formato de modelo, así que un mundo de "
+"Gazebo al que se le apunte no es una forma lenta de abrir una escena, es "
+"un archivo que no puede leer. PartCAD lo escribe antes como MJCF. Esa "
+"conversión es lo único aquí que sí cruza el cable, por la misma razón por "
+"la que lo hace convertir un sólido en una malla para Blender: controla un "
+"wrapper CAD, cuyo entorno de ejecución reside en el del daemon. Una "
+"escena ASSY se rechaza en lugar de convertirse -- no es más que "
+"referencias a las piezas de un paquete, y una conversión ad-hoc no tiene "
+"ningún paquete contra el que resolverlas."
 
 #: ../../source/simulation.rst:707
 msgid "What a physical simulation actually needs"
-msgstr ""
+msgstr "Lo que necesita realmente una simulación física"
 
 #: ../../source/simulation.rst:709
 msgid ""
@@ -1155,10 +1711,16 @@ msgid ""
 "union of them, a simulation needs the following, and PartCAD today has "
 "none of it."
 msgstr ""
+"URDF es la mitad menor de la historia. Gazebo no simula URDF: lo "
+"convierte a `SDF <http://sdformat.org/>`_ al cargarlo, y SDF es lo que "
+"expresa un mundo simulable. El MJCF de MuJoCo y los esquemas de física "
+"USD de Isaac Sim difieren en la grafía pero piden la misma información. "
+"Tomando la unión de todos ellos, una simulación necesita lo siguiente, y "
+"PartCAD no tiene hoy nada de ello."
 
 #: ../../source/simulation.rst:716
 msgid "Mass properties"
-msgstr ""
+msgstr "Propiedades másicas"
 
 #: ../../source/simulation.rst:718
 msgid ""
@@ -1167,6 +1729,11 @@ msgid ""
 "which makes a model load and then behave nonsensically - a zero-mass link"
 " is the single most common defect in published URDFs."
 msgstr ""
+"La masa, el centro de masas y el tensor de inercia respecto del centro de "
+"masas, en un sistema de referencia indicado. URDF los exige por enlace y "
+"los pone a cero por defecto, lo que hace que un modelo se cargue y luego "
+"se comporte sin sentido -- un enlace de masa cero es, con diferencia, el "
+"defecto más común en los URDF publicados."
 
 #: ../../source/simulation.rst:723
 msgid ""
@@ -1174,10 +1741,13 @@ msgid ""
 "the exporter does today. What is missing is the density, and behind it "
 "the notion of what a part is made of."
 msgstr ""
+"Estos son *derivables* a partir de un sólido más una densidad, que es "
+"exactamente lo que hace hoy el exportador. Lo que falta es la densidad y, "
+"detrás de ella, la noción de de qué está hecha una pieza."
 
 #: ../../source/simulation.rst:728
 msgid "Collision geometry"
-msgstr ""
+msgstr "Geometría de colisión"
 
 #: ../../source/simulation.rst:730
 msgid ""
@@ -1188,16 +1758,25 @@ msgid ""
 "decomposition (V-HACD and friends). MuJoCo goes further and *only* "
 "collides convex shapes, silently taking the hull of anything else."
 msgstr ""
+"Los simuladores separan la forma que se dibuja de la forma que colisiona, "
+"porque resolver el contacto contra una malla visual de cien mil "
+"triángulos es a la vez lento y numéricamente delicado. Las respuestas "
+"habituales son una primitiva (caja/cilindro/esfera/cápsula), una "
+"envolvente convexa, o una descomposición convexa (V-HACD y similares). "
+"MuJoCo va más lejos y *solo* colisiona formas convexas, tomando en "
+"silencio la envolvente de cualquier otra cosa."
 
 #: ../../source/simulation.rst:737
 msgid ""
 "PartCAD has one shape per part. A part has no way to say \"collide me as "
 "this simpler thing\"."
 msgstr ""
+"PartCAD tiene una forma por pieza. Una pieza no tiene forma de decir "
+"\"colisióname como esta cosa más sencilla\"."
 
 #: ../../source/simulation.rst:741
 msgid "Contact and surface properties"
-msgstr ""
+msgstr "Propiedades de contacto y de superficie"
 
 #: ../../source/simulation.rst:743
 msgid ""
@@ -1208,10 +1787,17 @@ msgid ""
 "``soft_erp``). These are properties of a surface pairing, approximated "
 "per-body by every engine in use."
 msgstr ""
+"La fricción (isótropa y anisótropa -- los ``mu``/``mu2`` de SDF con una "
+"dirección ``fdir1``, más la fricción torsional), la restitución, la "
+"rigidez y el amortiguamiento de contacto, la complianza de deslizamiento, "
+"y los parámetros del solver que las acompañan (``kp``, ``kd``, "
+"``min_depth``, ``max_vel``, ``soft_cfm``, ``soft_erp``). Estas son "
+"propiedades de un emparejamiento de superficies, aproximadas por cuerpo "
+"por todos los motores en uso."
 
 #: ../../source/simulation.rst:750
 msgid "Kinematics"
-msgstr ""
+msgstr "Cinemática"
 
 #: ../../source/simulation.rst:752
 msgid ""
@@ -1221,6 +1807,12 @@ msgid ""
 "(damping, Coulomb friction, spring stiffness and reference), and "
 "relations between joints (``mimic``, gear ratios)."
 msgstr ""
+"La articulación: su tipo (fija, de revolución, continua, prismática, "
+"esférica, plana, flotante, helicoidal, universal), su eje, los sistemas "
+"de referencia de los dos cuerpos que relaciona, sus límites de "
+"posición/velocidad/esfuerzo, su dinámica (amortiguamiento, fricción de "
+"Coulomb, rigidez y referencia del muelle), y las relaciones entre "
+"articulaciones (``mimic``, relaciones de transmisión)."
 
 #: ../../source/simulation.rst:758
 msgid ""
@@ -1228,10 +1820,14 @@ msgid ""
 "loop, which is why four-bar linkages and parallel manipulators are "
 "written in SDF or with an explicit loop-closing constraint. SDF can."
 msgstr ""
+"URDF está restringido a un *árbol*: no puede expresar un bucle cinemático "
+"cerrado, que es la razón por la que los cuadriláteros articulados y los "
+"manipuladores paralelos se escriben en SDF o con una restricción "
+"explícita de cierre de bucle. SDF sí puede."
 
 #: ../../source/simulation.rst:763
 msgid "Actuation and control"
-msgstr ""
+msgstr "Actuación y control"
 
 #: ../../source/simulation.rst:765
 msgid ""
@@ -1241,10 +1837,16 @@ msgid ""
 "interfaces and state interfaces. Simulators additionally want actuator "
 "limits and often a motor model."
 msgstr ""
+"Qué articulaciones están accionadas, por qué, a través de qué reducción, "
+"y qué interfaces ve un controlador. ROS 1 escribía esto como "
+"``<transmission>``; ROS 2 lo escribe como ``<ros2_control>`` con "
+"componentes de hardware, interfaces de comando e interfaces de estado. "
+"Los simuladores quieren además los límites de los actuadores y a menudo "
+"un modelo de motor."
 
 #: ../../source/simulation.rst:772
 msgid "Sensors"
-msgstr ""
+msgstr "Sensores"
 
 #: ../../source/simulation.rst:774
 msgid ""
@@ -1256,10 +1858,18 @@ msgid ""
 "that URDF is not a simulation format so much as a kinematics format with "
 "a simulation format bolted on."
 msgstr ""
+"Cámaras (con parámetros intrínsecos, resolución, recorte, distorsión), "
+"cámaras de profundidad, lidares (con patrones de rayos y alcances), IMU, "
+"sensores de contacto, sensores de fuerza-par -- cada uno fijado a un "
+"*sistema de referencia*, cada uno con una frecuencia de actualización y "
+"un modelo de ruido. URDF no tiene elemento de sensor en absoluto; llegan "
+"a través de bloques de extensión ``<gazebo>``, que es la prueba más clara "
+"de que URDF no es tanto un formato de simulación como un formato de "
+"cinemática con un formato de simulación atornillado encima."
 
 #: ../../source/simulation.rst:782
 msgid "Appearance"
-msgstr ""
+msgstr "Apariencia"
 
 #: ../../source/simulation.rst:784
 msgid ""
@@ -1269,10 +1879,16 @@ msgid ""
 "carry a PBR material description; URDF carries an RGBA color and a "
 "texture filename."
 msgstr ""
+"Los colores y los materiales importan para la simulación en cuanto hay "
+"una cámara en el bucle: una pila de percepción entrenada en simulación es "
+"sensible al albedo, la rugosidad, el carácter metálico, los mapas "
+"normales y la transparencia. SDF y USD llevan ambos una descripción de "
+"material PBR; URDF lleva un color RGBA y el nombre de un archivo de "
+"textura."
 
 #: ../../source/simulation.rst:790
 msgid "The world"
-msgstr ""
+msgstr "El mundo"
 
 #: ../../source/simulation.rst:792
 msgid ""
@@ -1281,10 +1897,15 @@ msgid ""
 "type and iteration count, contact parameters). This is SDF's ``<world>``,"
 " and it is exactly the \"scenes\" PartCAD has always intended to have."
 msgstr ""
+"La gravedad, el suelo, la iluminación, la pose inicial de cada modelo, el "
+"viento, la atmósfera, y los parámetros propios del motor de física "
+"(tamaño de paso, tipo de solver y número de iteraciones, parámetros de "
+"contacto). Esto es el ``<world>`` de SDF, y es exactamente las "
+"\"escenas\" que PartCAD siempre ha pretendido tener."
 
 #: ../../source/simulation.rst:798
 msgid "Frames"
-msgstr ""
+msgstr "Sistemas de referencia"
 
 #: ../../source/simulation.rst:800
 msgid ""
@@ -1293,14 +1914,20 @@ msgid ""
 "explicit ``<frame>`` elements and poses stated ``relative_to`` them. "
 "PartCAD has locations, but no named frames to state them against."
 msgstr ""
+"Todo lo anterior cuelga de sistemas de coordenadas con nombre: el sistema "
+"del enlace, el de la articulación, un punto central de herramienta, un "
+"soporte de sensor, una pose de agarre. SDF tiene elementos ``<frame>`` "
+"explícitos y poses indicadas ``relative_to`` ellos. PartCAD tiene "
+"ubicaciones, pero ningún sistema de referencia con nombre contra el que "
+"expresarlas."
 
 #: ../../source/simulation.rst:807
 msgid "Proposal"
-msgstr ""
+msgstr "Propuesta"
 
 #: ../../source/simulation.rst:810
 msgid "Principles"
-msgstr ""
+msgstr "Principios"
 
 #: ../../source/simulation.rst:812
 msgid ""
@@ -1311,6 +1938,13 @@ msgid ""
 "override that says why it exists (a measurement, a vendor datasheet, a "
 "stand-in for content PartCAD does not model)."
 msgstr ""
+"**Derivar lo que se pueda derivar; almacenar solo lo que no.** La ventaja "
+"de PartCAD frente a un URDF escrito a mano es que contiene la geometría "
+"real. La masa, el centro de masas y la inercia deberían calcularse a "
+"partir del sólido y de un material, no escribirse a mano -- y un valor "
+"escrito a mano debería ser una sustitución explícita que diga por qué "
+"existe (una medida, una hoja de datos de fabricante, un sustituto de "
+"contenido que PartCAD no modela)."
 
 #: ../../source/simulation.rst:818
 msgid ""
@@ -1320,6 +1954,11 @@ msgid ""
 "changing the CAD invalidates them. This is what the digital thread means "
 "here."
 msgstr ""
+"**Mantener el CAD como fuente de verdad.** Los artefactos de simulación "
+"-- mallas teseladas, envolventes convexas, inercia calculada -- son datos "
+"derivados. Pertenecen a la caché de formas, indexados por el hash de su "
+"contenido como cualquier otra forma derivada, de modo que cambiar el CAD "
+"los invalide. Esto es lo que significa aquí el hilo digital."
 
 #: ../../source/simulation.rst:823
 msgid ""
@@ -1328,6 +1967,10 @@ msgid ""
 "it. The formats disagree on almost everything except what they are trying"
 " to describe."
 msgstr ""
+"**Modelar el concepto, no el formato.** ``mu``/``mu2`` es la forma de ODE "
+"de escribir la fricción. PartCAD debería almacenar la fricción y dejar "
+"que cada exportador la escriba a su manera. Los formatos discrepan en "
+"casi todo salvo en lo que intentan describir."
 
 #: ../../source/simulation.rst:827
 msgid ""
@@ -1345,16 +1988,34 @@ msgid ""
 " the rest of the system. Everything below extends that list; none of it "
 "reopens the passthrough."
 msgstr ""
+"**Perder ruidosamente, nunca en silencio.** La versión tentadora de este "
+"principio es \"no perder nada\": llevar lo que PartCAD no modela como "
+"contenido opaco etiquetado por formato, para que un viaje de ida y vuelta "
+"sea sin pérdidas mucho antes de entenderse. Eso es lo que era "
+"``physics:`` al principio, y fue el compromiso equivocado. Un valor "
+"almacenado bajo el nombre del formato del que vino lo puede leer "
+"exactamente un exportador; no es una propiedad de la pieza, es un "
+"recuerdo. La versión que sobrevivió copia cada valor a una propiedad de "
+"PartCAD con nombre y con una unidad de PartCAD, mantiene cerrada su "
+"lista, y hace ruidosos los dos modos de fallo: una entrada que nada mapea "
+"detiene la importación, y de una propiedad que el formato de destino no "
+"puede expresar se informa al escribirla. Un viaje de ida y vuelta es "
+"entonces sin pérdidas *y* los valores significan algo para el resto del "
+"sistema. Todo lo que sigue amplía esa lista; nada de ello reabre el "
+"contenido opaco."
 
 #: ../../source/simulation.rst:841
 msgid "1. Materials as first-class objects"
-msgstr ""
+msgstr "1. Los materiales como objetos de primera clase"
 
 #: ../../source/simulation.rst:843
 msgid ""
 "A new object kind alongside parts and sketches, so that materials are "
 "packaged, versioned and shared the way parts already are:"
 msgstr ""
+"Un nuevo tipo de objeto junto a las piezas y los bocetos, para que los "
+"materiales se empaqueten, se versionen y se compartan como ya se hace con "
+"las piezas:"
 
 #: ../../source/simulation.rst:859
 msgid ""
@@ -1363,10 +2024,14 @@ msgid ""
 "drives rendering, the manufacturing cost estimate that ``partcad`` "
 "already reasons about, and the simulation."
 msgstr ""
+"Esta sola adición es lo que convierte el parámetro de densidad del "
+"exportador en una propiedad del modelo, y sirve para dos cosas: el mismo "
+"material impulsa el renderizado, la estimación de coste de fabricación "
+"sobre la que ``partcad`` ya razona, y la simulación."
 
 #: ../../source/simulation.rst:865
 msgid "2. Physical properties a part does not have to state"
-msgstr ""
+msgstr "2. Propiedades físicas que una pieza no tiene por qué indicar"
 
 #: ../../source/simulation.rst:867
 msgid ""
@@ -1377,6 +2042,12 @@ msgid ""
 "measured value from a guess. Three additions, in increasing order of how "
 "much they are worth:"
 msgstr ""
+"La sección ``physics:`` de una pieza ya contiene las propiedades "
+"modeladas -- ``mass``, ``centerOfMass``, ``inertia``, ``friction``, los "
+"parámetros de contacto --, cada una con un nombre de PartCAD y una unidad "
+"de PartCAD. Lo que no hace es *derivar* ninguna de ellas, comprobar "
+"ninguna, ni distinguir un valor medido de una conjetura. Tres adiciones, "
+"en orden creciente de valor:"
 
 #: ../../source/simulation.rst:873
 msgid ""
@@ -1388,6 +2059,14 @@ msgid ""
 "parameter of its ``export:`` configuration, and throws it away afterwards"
 " - it should be a property of the part that every consumer sees."
 msgstr ""
+"**Derivación.** Con un material detrás (punto 1), una pieza que no indica "
+"``mass`` tiene una: el volumen del sólido por la densidad del material, "
+"guardada en caché como cualquier otro valor derivado e invalidada cuando "
+"cambia el CAD. Lo mismo para ``centerOfMass``, ``inertia`` y las "
+"propiedades de superficie. Hoy el exportador de URDF calcula exactamente "
+"esto, a partir del parámetro ``density`` de su configuración de "
+"``export:``, y luego lo tira -- debería ser una propiedad de la pieza que "
+"vieran todos los consumidores."
 
 #: ../../source/simulation.rst:880
 msgid ""
@@ -1395,6 +2074,9 @@ msgid ""
 "\"measured on the bench\" and \"copied from a vendor datasheet\" and "
 "\"invented so the simulation would load\" are not the same claim:"
 msgstr ""
+"**Procedencia.** Un valor declarado debería decir por qué existe, ya que "
+"\"medido en el banco\", \"copiado de la hoja de datos de un fabricante\" "
+"e \"inventado para que la simulación cargara\" no son la misma afirmación:"
 
 #: ../../source/simulation.rst:890
 msgid ""
@@ -1404,6 +2086,11 @@ msgid ""
 "violates the triangle inequality, and a declared mass that disagrees with"
 " volume times density by more than a tolerance."
 msgstr ""
+"**Comprobación.** ``pc lint`` debería señalar los defectos clásicos, "
+"todos los cuales son comunes en los URDF publicados y todos los cuales "
+"cargan sin queja: masa cero, un tensor de inercia que no es definido "
+"positivo, uno que viola la desigualdad triangular, y una masa declarada "
+"que discrepa del volumen por la densidad en más de una tolerancia."
 
 #: ../../source/simulation.rst:896
 msgid ""
@@ -1413,10 +2100,15 @@ msgid ""
 "would be a static and a dynamic coefficient with an optional anisotropy, "
 "and the URDF exporter would flatten it on the way out."
 msgstr ""
+"La fricción anisótropa es la única propiedad que necesita más estructura "
+"de la que tiene hoy: ``friction``/``friction2``/``frictionDirection`` es "
+"la forma que le da ODE, conservada porque es lo que expresa URDF. Una "
+"versión modelada sería un coeficiente estático y uno dinámico con una "
+"anisotropía opcional, y el exportador de URDF la aplanaría al salir."
 
 #: ../../source/simulation.rst:903
 msgid "3. Collision geometry"
-msgstr ""
+msgstr "3. Geometría de colisión"
 
 #: ../../source/simulation.rst:905
 msgid ""
@@ -1426,6 +2118,12 @@ msgid ""
 "that happen to be named alike, and nothing says one is the simplified "
 "stand-in for the other. A part should be able to say it:"
 msgstr ""
+"La geometría de colisión de un URDF hoy no se pierde -- un enlace que "
+"indica ambas formas se construye a partir de la de colisión y la visual "
+"se convierte en una pieza propia --, pero la *relación* entre las dos sí: "
+"son dos piezas que resultan llamarse de forma parecida, y nada dice que "
+"una es el sustituto simplificado de la otra. Una pieza debería poder "
+"decirlo:"
 
 #: ../../source/simulation.rst:921
 msgid ""
@@ -1436,10 +2134,17 @@ msgid ""
 "produce instead of a part with a suggestive name; ``primitive`` fits a "
 "box/cylinder/sphere/capsule to the geometry."
 msgstr ""
+"``convexHull`` y ``convexDecomposition`` se calculan en un sandbox y se "
+"guardan en caché como cualquier forma derivada; ``part`` apunta a otra "
+"pieza de PartCAD, que es la forma en que una forma de colisión "
+"simplificada a mano queda bajo control de versiones junto a la real -- y "
+"es exactamente lo que produciría entonces una importación de URDF en "
+"lugar de una pieza con un nombre sugerente; ``primitive`` ajusta una "
+"caja/cilindro/esfera/cápsula a la geometría."
 
 #: ../../source/simulation.rst:929
 msgid "4. Named frames"
-msgstr ""
+msgstr "4. Sistemas de referencia con nombre"
 
 #: ../../source/simulation.rst:940
 msgid ""
@@ -1449,10 +2154,16 @@ msgid ""
 "named, located features on a part; frames should be the same mechanism, "
 "not a parallel one."
 msgstr ""
+"Los sistemas de referencia son los puntos de fijación de los sensores, "
+"las articulaciones y las poses de agarre, y son lo que un exportador "
+"necesita para escribir un ``<frame>`` o el ``<origin>`` de un sensor. Las "
+"``interfaces`` y los ``ports`` de PartCAD ya describen características "
+"con nombre y ubicadas en una pieza; los sistemas de referencia deberían "
+"ser el mismo mecanismo, no uno paralelo."
 
 #: ../../source/simulation.rst:946
 msgid "5. Kinematics: a configuration, not a joint section"
-msgstr ""
+msgstr "5. Cinemática: una configuración, no una sección de articulaciones"
 
 #: ../../source/simulation.rst:948
 msgid ""
@@ -1466,18 +2177,32 @@ msgid ""
 " the interface's own description at every use site, which is the "
 "duplication the rest of PartCAD exists to remove."
 msgstr ""
+"La propuesta evidente aquí solía ser una forma ``joint:`` para un nodo "
+"ASSY, junto a ``location:`` y ``connect:``. Construir la correspondencia "
+"con URDF anterior argumenta en su contra. Una articulación no es una "
+"tercera forma de colocar una pieza: es lo que un ``connect:`` *ya es*, "
+"más un valor. Una interfaz dice qué libertad de movimiento permite "
+"(``motion:``, ``parameters:``); una conexión dice qué dos cosas se unen "
+"y, opcionalmente, con qué valor (``toParams:``). Añadir una sección "
+"``joint:`` paralela repetiría la descripción propia de la interfaz en "
+"cada sitio donde se usa, que es precisamente la duplicación que el resto "
+"de PartCAD existe para eliminar."
 
 #: ../../source/simulation.rst:957
 msgid ""
 "What is actually missing is one level up: the assembly has no way to name"
 " a *configuration*."
 msgstr ""
+"Lo que realmente falta está un nivel más arriba: el ensamblaje no tiene "
+"forma de nombrar una *configuración*."
 
 #: ../../source/simulation.rst:970
 msgid ""
 "with the connections referring to the configuration rather than carrying "
 "a literal:"
 msgstr ""
+"con las conexiones refiriéndose a la configuración en lugar de llevar un "
+"literal:"
 
 #: ../../source/simulation.rst:980
 msgid ""
@@ -1487,10 +2212,18 @@ msgid ""
 "meaningful through the parameter machinery ASSY files already have, and "
 "an exporter gains something to write a joint *state* from."
 msgstr ""
+"Todo lo que existe hoy -- un árbol de colocaciones rígidas -- es lo que "
+"se obtiene al evaluar una configuración, así que ningún consumidor de la "
+"representación tiene que cambiar. Pero ``pc inspect "
+"'robot;configuration=stowed'`` pasa a tener sentido a través de la "
+"maquinaria de parámetros que los archivos ASSY ya tienen, y un exportador "
+"gana algo a partir de lo cual escribir un *estado* de articulación."
 
 #: ../../source/simulation.rst:986
 msgid "Two things this still needs, which the URDF work did not:"
 msgstr ""
+"Dos cosas que esto todavía necesita, y que el trabajo con URDF no "
+"necesitó:"
 
 #: ../../source/simulation.rst:988
 msgid ""
@@ -1498,6 +2231,10 @@ msgid ""
 "only by convention. A configuration has to address it, so the instance "
 "name has to become the joint's name in earnest."
 msgstr ""
+"**Una identidad de articulación.** ``toInstance: shoulder_pan`` hoy "
+"nombra la articulación solo por convención. Una configuración tiene que "
+"direccionarla, así que el nombre de la instancia tiene que pasar a ser el "
+"nombre de la articulación en serio."
 
 #: ../../source/simulation.rst:991
 msgid ""
@@ -1505,6 +2242,9 @@ msgid ""
 "placed. PartCAD's tree cannot express it and neither can URDF; SDF can. "
 "Until then the honest behaviour is to detect it and say so."
 msgstr ""
+"**Bucles.** Un cuadrilátero articulado es una conexión cuyo hijo ya está "
+"colocado. El árbol de PartCAD no puede expresarlo, y URDF tampoco; SDF "
+"sí. Hasta entonces, el comportamiento honesto es detectarlo e indicarlo."
 
 #: ../../source/simulation.rst:995
 msgid ""
@@ -1516,14 +2256,23 @@ msgid ""
 "authored interfaces instead of generated ones - which is why ``motion:`` "
 "belongs on the interface and not on the connection."
 msgstr ""
+"Queda un caso genuinamente atractivo para *derivar* articulaciones de la "
+"biblioteca de interfaces existente: el agujero de un rodamiento es de "
+"revolución alrededor de su propio eje y un raíl lineal es prismático a lo "
+"largo del suyo, de modo que una interfaz que lo diga una vez le da gratis "
+"una articulación a cada ``connect:`` que la use. Esa es la misma sección "
+"``motion:`` que escribe la conversión de URDF, aplicada a interfaces "
+"escritas a mano en lugar de generadas -- que es la razón por la que "
+"``motion:`` pertenece a la interfaz y no a la conexión."
 
 #: ../../source/simulation.rst:1004
 msgid "6. Internal representation"
-msgstr ""
+msgstr "6. Representación interna"
 
 #: ../../source/simulation.rst:1006
 msgid "The corresponding change in ``partcad.assembly`` is small and additive:"
 msgstr ""
+"El cambio correspondiente en ``partcad.assembly`` es pequeño y aditivo:"
 
 #: ../../source/simulation.rst:1008
 msgid ""
@@ -1533,12 +2282,20 @@ msgid ""
 "``Assembly._get_shape_real()``, the BREP envelope, the cache and every "
 "exporter keep working unchanged."
 msgstr ""
+"``AssemblyChild`` gana ``joint`` (la relación cinemática con su padre, o "
+"con un hermano con nombre) y ``frames``. ``location`` sigue siendo lo que "
+"es -- la colocación resuelta con los estados de articulación actuales --, "
+"así que ``Assembly._get_shape_real()``, la envoltura BREP, la caché y "
+"todos los exportadores siguen funcionando sin cambios."
 
 #: ../../source/simulation.rst:1012
 msgid ""
 "``Assembly`` gains a ``configuration``: the map of joint name to value it"
 " was evaluated at, hashed into the cache key like any other parameter."
 msgstr ""
+"``Assembly`` gana una ``configuration``: el mapa de nombre de "
+"articulación a valor con el que se evaluó, incluido en el hash de la "
+"clave de caché como cualquier otro parámetro."
 
 #: ../../source/simulation.rst:1014
 msgid ""
@@ -1546,6 +2303,9 @@ msgid ""
 "declared values against derived ones, computing the derived ones in a "
 "sandbox on demand and caching them."
 msgstr ""
+"``Part`` gana los accesores ``physical`` y ``collision``, que resuelven "
+"los valores declarados frente a los derivados, calculando los derivados "
+"en un sandbox bajo demanda y guardándolos en caché."
 
 #: ../../source/simulation.rst:1017
 msgid ""
@@ -1553,10 +2313,13 @@ msgid ""
 "wrapper can be handed the physical properties without a second round "
 "trip."
 msgstr ""
+"La envoltura BREP gana un canal hermano para datos no geométricos, de "
+"modo que a un wrapper se le puedan entregar las propiedades físicas sin "
+"un segundo viaje de ida y vuelta."
 
 #: ../../source/simulation.rst:1021
 msgid "7. Sensors, actuators and plugins"
-msgstr ""
+msgstr "7. Sensores, actuadores y plugins"
 
 #: ../../source/simulation.rst:1036
 msgid ""
@@ -1564,10 +2327,13 @@ msgid ""
 "agrees on (camera, depth, lidar, imu, contact, force-torque) and treat "
 "the rest as passthrough."
 msgstr ""
+"PartCAD debería modelar el puñado de tipos de dispositivo en los que "
+"coinciden todos los simuladores (cámara, profundidad, lidar, imu, "
+"contacto, fuerza-par) y tratar el resto como contenido de paso."
 
 #: ../../source/simulation.rst:1041
 msgid "8. Scenes as worlds"
-msgstr ""
+msgstr "8. Las escenas como mundos"
 
 #: ../../source/simulation.rst:1043
 msgid ""
@@ -1576,10 +2342,15 @@ msgid ""
 "A scene is also where a *fixed to the world* joint belongs, which is the "
 "piece a single assembly cannot express."
 msgstr ""
+"Las escenas que PartCAD siempre ha planeado son mundos SDF: gravedad, "
+"suelo, luces, instancias de modelos con poses iniciales, y ajustes del "
+"motor de física. Una escena es además donde pertenece una articulación "
+"*fijada al mundo*, que es la pieza que un único ensamblaje no puede "
+"expresar."
 
 #: ../../source/simulation.rst:1049
 msgid "9. The property tables, and keeping them honest (in place)"
-msgstr ""
+msgstr "9. Las tablas de propiedades, y mantenerlas honestas (en su sitio)"
 
 #: ../../source/simulation.rst:1051
 msgid ""
@@ -1588,6 +2359,11 @@ msgid ""
 "being designed, and it is the difference between PartCAD being usable in "
 "a robotics workflow and being a one-way trip out of one."
 msgstr ""
+"Este es el punto que está construido, y hacerlo primero fue lo correcto: "
+"hace que un viaje de ida y vuelta de URDF sea casi sin pérdidas mientras "
+"el resto de la propuesta todavía se está diseñando, y es la diferencia "
+"entre que PartCAD sea utilizable en un flujo de trabajo de robótica y que "
+"sea un billete de ida fuera de uno."
 
 #: ../../source/simulation.rst:1056
 msgid ""
@@ -1600,10 +2376,19 @@ msgid ""
 " URDF that no property covers stops the import, and a property URDF "
 "cannot state is reported when the file is written."
 msgstr ""
+"Una pieza lleva una sección ``properties:`` que contiene ``material``, "
+"``color`` y ``physics``; una interfaz lleva ``motion:`` y ``physics:``. "
+"Todas las propiedades de ellas son propiedades de PartCAD con una unidad "
+"de PartCAD y una definición cerrada en el esquema. Una importación de "
+"URDF lee sus valores dentro de ellas de uno en uno y la exportación a "
+"URDF escribe cada uno de vuelta en el elemento que lo expresa. Las dos "
+"reglas que mantienen honesta la lista son los fallos ruidosos: el URDF "
+"que ninguna propiedad cubre detiene la importación, y de una propiedad "
+"que URDF no puede expresar se informa al escribir el archivo."
 
 #: ../../source/simulation.rst:1065
 msgid "What is still missing:"
-msgstr ""
+msgstr "Lo que sigue faltando:"
 
 #: ../../source/simulation.rst:1067
 msgid ""
@@ -1613,6 +2398,12 @@ msgid ""
 "``properties:`` section a part does, but nothing yet reads one there, "
 "because every property so far belongs to something inside the container."
 msgstr ""
+"**``<ros2_control>`` y ``<transmission>``**, que son de nivel de robot y "
+"no de nivel de enlace, y por eso todavía no tienen dónde fijarse. El "
+"ensamblaje necesita un sitio donde fijar física de nivel de robot -- un "
+"ensamblaje admite la misma sección ``properties:`` que una pieza, pero "
+"todavía nada la lee ahí, porque hasta ahora todas las propiedades "
+"pertenecen a algo que está dentro del contenedor."
 
 #: ../../source/simulation.rst:1072
 msgid ""
@@ -1620,6 +2411,10 @@ msgid ""
 "blocks also carry sensors and simulator plugins, which items 7 and 8 "
 "cover; until then they are counted and reported, not carried."
 msgstr ""
+"**Propiedades que no son de un enlace ni de una articulación.** Los "
+"bloques ``<gazebo>`` de un URDF llevan además sensores y plugins de "
+"simulador, que cubren los puntos 7 y 8; hasta entonces se cuentan y se "
+"informan, no se llevan."
 
 #: ../../source/simulation.rst:1075
 msgid ""
@@ -1631,10 +2426,17 @@ msgid ""
 "lint`` is where that belongs, and it needs item 2 to have something to "
 "compare against."
 msgstr ""
+"**Cualquier comprobación de que una propiedad declarada siga siendo "
+"aplicable.** ``properties:`` no participa en la *clave* de la caché de "
+"formas, lo cual es correcto -- no dice nada sobre la geometría --, pero "
+"también significa que nada se entera cuando la geometría cambia por "
+"debajo de ella. Una masa leída de un URDF sobrevive, en silencio, a una "
+"edición del CAD que la invalida. ``pc lint`` es donde eso corresponde, y "
+"necesita el punto 2 para tener algo con lo que comparar."
 
 #: ../../source/simulation.rst:1083
 msgid "10. Units"
-msgstr ""
+msgstr "10. Unidades"
 
 #: ../../source/simulation.rst:1085
 msgid ""
@@ -1646,80 +2448,98 @@ msgid ""
 "item on the list and the one that prevents the largest class of silent "
 "errors."
 msgstr ""
+"La simulación es SI; PartCAD usa milímetros y grados. La notación usada a "
+"lo largo de esta página -- ``12 N*m``, ``2 rad/s``, ``2700 kg/m^3``, "
+"``180deg`` -- debería ser real: un tipo escalar con conciencia de "
+"unidades, almacenado de forma canónica, para que ningún exportador tenga "
+"que adivinar y ningún usuario tenga que recordar en cuál de los dos "
+"convenios está un campo dado. Este es el punto más pequeño de la lista y "
+"el que previene la mayor clase de errores silenciosos."
 
 #: ../../source/simulation.rst:1093
 msgid "11. Export targets"
-msgstr ""
+msgstr "11. Destinos de exportación"
 
 #: ../../source/simulation.rst:1095
 msgid "With the above in place, the export matrix is:"
-msgstr ""
+msgstr "Con lo anterior en su sitio, la matriz de exportación es:"
 
 #: ../../source/simulation.rst:1101
 msgid "Target"
-msgstr ""
+msgstr "Destino"
 
 #: ../../source/simulation.rst:1102
 msgid "Priority"
-msgstr ""
+msgstr "Prioridad"
 
 #: ../../source/simulation.rst:1103
 msgid "Notes"
-msgstr ""
+msgstr "Notas"
 
 #: ../../source/simulation.rst:1105
 msgid "Done (geometry only)"
-msgstr ""
+msgstr "Hecho (solo geometría)"
 
 #: ../../source/simulation.rst:1106
 msgid "The common denominator. Tree-only kinematics, sensors only via extensions."
 msgstr ""
+"El denominador común. Cinemática solo de árbol, sensores únicamente "
+"mediante extensiones."
 
 #: ../../source/simulation.rst:1107
 msgid "SDF"
-msgstr ""
+msgstr "SDF"
 
 #: ../../source/simulation.rst:1108
 msgid "Next"
-msgstr ""
+msgstr "Siguiente"
 
 #: ../../source/simulation.rst:1109
 msgid ""
 "What Gazebo actually simulates. Expresses everything in this proposal, "
 "worlds included, and is where a PartCAD *scene* maps naturally."
 msgstr ""
+"Lo que Gazebo simula realmente. Expresa todo lo de esta propuesta, mundos "
+"incluidos, y es donde una *escena* de PartCAD encaja de forma natural."
 
 #: ../../source/simulation.rst:1111 ../../source/simulation.rst:1114
 msgid "Later"
-msgstr ""
+msgstr "Más adelante"
 
 #: ../../source/simulation.rst:1112
 msgid "MuJoCo. Needs convex collision geometry, which item 3 provides."
 msgstr ""
+"MuJoCo. Necesita geometría de colisión convexa, que aporta el punto 3."
 
 #: ../../source/simulation.rst:1113
 msgid "USD"
-msgstr ""
+msgstr "USD"
 
 #: ../../source/simulation.rst:1115
 msgid "Isaac Sim and the wider DCC ecosystem, through the UsdPhysics schemas."
 msgstr ""
+"Isaac Sim y el ecosistema DCC más amplio, a través de los esquemas "
+"UsdPhysics."
 
 #: ../../source/simulation.rst:1118
 msgid "Suggested order of work"
-msgstr ""
+msgstr "Orden de trabajo sugerido"
 
 #: ../../source/simulation.rst:1120
 msgid ""
 "Each step is useful on its own, which is the test of whether the "
 "decomposition is right:"
 msgstr ""
+"Cada paso es útil por sí solo, que es la prueba de si la descomposición "
+"es correcta:"
 
 #: ../../source/simulation.rst:1123
 msgid ""
 "**Passthrough** (item 9) - *done*. The URDF round trip carries what "
 "PartCAD does not model instead of dropping it."
 msgstr ""
+"**Contenido de paso** (punto 9) -- *hecho*. El viaje de ida y vuelta de "
+"URDF lleva lo que PartCAD no modela en lugar de descartarlo."
 
 #: ../../source/simulation.rst:1125
 msgid ""
@@ -1728,6 +2548,10 @@ msgid ""
 "state ``units: rad`` in prose because there is no way to state it in the "
 "value."
 msgstr ""
+"**Unidades** (punto 10). Todo lo posterior depende de ello y se vuelve "
+"más difícil de añadir después -- las secciones ``motion:`` generadas ya "
+"tienen que indicar ``units: rad`` en prosa porque no hay forma de "
+"indicarlo en el valor."
 
 #: ../../source/simulation.rst:1128
 msgid ""
@@ -1736,6 +2560,10 @@ msgid ""
 "trustworthy, so that carrying one becomes the exception rather than the "
 "rule."
 msgstr ""
+"**Materiales y propiedades físicas** (puntos 1 y 2). Convierte el "
+"parámetro de densidad del exportador en una propiedad del modelo y hace "
+"fiable una inercia calculada, de modo que llevar una escrita a mano pase "
+"a ser la excepción y no la regla."
 
 #: ../../source/simulation.rst:1131
 msgid ""
@@ -1744,34 +2572,48 @@ msgid ""
 "the collision/visual choice ``ignoreCollision`` makes today become \"keep"
 " both\"."
 msgstr ""
+"**Geometría de colisión** (punto 3). Valiosa de forma independiente -- "
+"también abarata el renderizado y la comprobación de interferencias -- y "
+"es lo que permitiría que la elección entre colisión y visual que hoy hace "
+"``ignoreCollision`` pasara a ser \"conservar ambas\"."
 
 #: ../../source/simulation.rst:1134
 msgid "**Frames** (item 4), folded into the existing ports/interfaces mechanism."
 msgstr ""
+"**Sistemas de referencia** (punto 4), integrados en el mecanismo "
+"existente de puertos e interfaces."
 
 #: ../../source/simulation.rst:1135
 msgid ""
 "**Configurations** (items 5-6). The largest change, and the one that "
 "turns an assembly into a mechanism rather than a photograph of one."
 msgstr ""
+"**Configuraciones** (puntos 5 y 6). El cambio más grande, y el que "
+"convierte un ensamblaje en un mecanismo en lugar de en una fotografía de "
+"uno."
 
 #: ../../source/simulation.rst:1137
 msgid "**SDF export**, which is the first target able to carry all of the above."
 msgstr ""
+"**Exportación a SDF**, que es el primer destino capaz de llevar todo lo "
+"anterior."
 
 #: ../../source/simulation.rst:1138
 msgid "**Sensors** (item 7) and **scenes** (item 8)."
-msgstr ""
+msgstr "**Sensores** (punto 7) y **escenas** (punto 8)."
 
 #: ../../source/simulation.rst:1141
 msgid "Non-goals"
-msgstr ""
+msgstr "Lo que no se persigue"
 
 #: ../../source/simulation.rst:1143
 msgid ""
 "PartCAD should not become a simulator, or wrap one. It should describe a "
 "product well enough that a simulator can be handed it."
 msgstr ""
+"PartCAD no debería convertirse en un simulador, ni envolver uno. Debería "
+"describir un producto lo bastante bien como para que se le pueda entregar "
+"a un simulador."
 
 #: ../../source/simulation.rst:1145
 msgid ""
@@ -1780,6 +2622,10 @@ msgid ""
 "it is to leave them out and say so when one is seen, which is what the "
 "import does for an unknown ``<gazebo>`` setting."
 msgstr ""
+"PartCAD no debería modelar como concepto de primera clase cada parámetro "
+"de solver específico de un motor. Pero la alternativa no es un contenedor "
+"de contenido opaco: es dejarlos fuera e indicarlo cuando se ve uno, que "
+"es lo que hace la importación con un ajuste ``<gazebo>`` desconocido."
 
 #: ../../source/simulation.rst:1149
 msgid ""
@@ -1787,3 +2633,6 @@ msgid ""
 "copy of URDF's. The point is a model that URDF, SDF, MJCF and USD are all"
 " views of."
 msgstr ""
+"Leer un URDF no debería volverse sin pérdidas haciendo que el modelo de "
+"PartCAD sea una copia del de URDF. La idea es un modelo del que URDF, "
+"SDF, MJCF y USD sean todos vistas."

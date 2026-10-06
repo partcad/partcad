@@ -54,6 +54,13 @@ msgid ""
 "An existing ``launch.json``, with commands and comments of your own in "
 "it, is added to rather than replaced."
 msgstr ""
+"``pc init`` также добавляет команду **Render** в ``.vscode/launch.json`` "
+"— в корне того git-репозитория, в котором она запущена (или рядом с "
+"пакетом, если репозитория нет). Она появляется в представлении «Run and "
+"Debug» в :ref:`PartCAD IDE <partcad-ide>` и в Visual Studio Code, и её "
+"запуск отрисовывает пакет так же, как это делает ``pc render`` из "
+"терминала. Существующий ``launch.json`` с вашими собственными командами и "
+"комментариями дополняется, а не заменяется."
 
 #: ../../source/tutorial.rst:27
 msgid ""
@@ -68,6 +75,16 @@ msgid ""
 "install them into a package you created before this version -- that "
 "touches nothing else."
 msgstr ""
+"В тот же каталог устанавливаются **навыки ИИ-агентов** — то, что учит "
+"кодирующего агента работать с PartCAD, а не гадать о нём. Claude Code "
+"получает плагин ``pc`` в ``.claude/skills/``, поэтому навыки называются "
+"``/pc:gen-part``, ``/pc:render`` и так далее; Cursor, у которого нет "
+"плагина, чтобы поместить их в пространство имён, получает те же навыки в "
+"``.cursor/skills/`` под именами ``pc-gen-part``, ``pc-render`` и так "
+"далее. Они берутся из установленного у вас PartCAD, поэтому всегда ему "
+"соответствуют. Передайте ``--no-skills``, если они вам не нужны, и ``pc "
+"init --skills-only``, чтобы установить их в пакет, созданный до этой "
+"версии, — это больше ничего не затрагивает."
 
 #: ../../source/tutorial.rst:35
 msgid ""
@@ -174,9 +191,8 @@ msgid "Inspect the part"
 msgstr "Просмотр детали"
 
 #: ../../source/tutorial.rst:130
-#, fuzzy
 msgid "Once a part is created, it can be inspected in ``PartCAD Viewer``."
-msgstr "После создания детали её можно просмотреть в ``OCP CAD Viewer``."
+msgstr "После создания детали её можно просмотреть в ``PartCAD Viewer``."
 
 #: ../../source/tutorial.rst:137
 msgid "Export the part"
@@ -423,15 +439,14 @@ msgid "Browse"
 msgstr "Обзор"
 
 #: ../../source/tutorial.rst:305
-#, fuzzy
 msgid ""
 "Browse the imported packages in the Explorer view. Click on the parts and"
 " assemblies to see them in the ``PartCAD Viewer`` view that will appear "
 "on the right."
 msgstr ""
-"Просматривайте импортированные пакеты в представлении Explorer. Нажимайте"
-" на детали и сборки, чтобы увидеть их в представлении ``OCP CAD Viewer``,"
-" которое появится справа."
+"Просматривайте импортированные пакеты в представлении Explorer. Нажимайте "
+"на детали и сборки, чтобы увидеть их в представлении ``PartCAD Viewer``, "
+"которое появится справа."
 
 #: ../../source/tutorial.rst:309
 msgid ""
@@ -463,7 +478,6 @@ msgstr ""
 "представление редактора с только что созданным скриптом."
 
 #: ../../source/tutorial.rst:325
-#, fuzzy
 msgid ""
 "When you edit Python or OpenSCAD files that are used in the current "
 "PartCAD package, saving the file makes it displayed automatically. Press "
@@ -474,7 +488,7 @@ msgstr ""
 "Когда вы редактируете файлы Python или OpenSCAD, используемые в текущем "
 "пакете PartCAD, сохранение файла приводит к его автоматическому "
 "отображению. Нажмите ``Save`` (Ctrl-S или Cmd-S), чтобы сохранить скрипт "
-"и запустить автоматический просмотр детали. Представление ``OCP CAD "
+"и запустить автоматический просмотр детали. Представление ``PartCAD "
 "Viewer`` появится справа."
 
 #: ../../source/tutorial.rst:331
@@ -523,6 +537,8 @@ msgid ""
 "The ``pc import assembly`` command allows you to import an assembly from "
 "a STEP or URDF file. The format is taken from the file's extension."
 msgstr ""
+"Команда ``pc import assembly`` позволяет импортировать сборку из файла "
+"STEP или URDF. Формат определяется по расширению файла."
 
 #: ../../source/tutorial.rst:366
 msgid ""
@@ -533,6 +549,12 @@ msgid ""
 "connects the parts through them rather than placing them by coordinates -"
 " see :doc:`configuration`."
 msgstr ""
+"Из файла STEP она извлекает отдельные детали и создаёт файл assembly "
+"YAML, в котором записана каждая деталь вместе с её размещением. Из URDF "
+"она создаёт по детали ``stl`` на каждое звено, несущей те физические "
+"свойства, которые указал URDF, по паре интерфейсов на каждый шарнир и "
+"сборку, которая соединяет детали через них, а не размещает их по "
+"координатам, — см. :doc:`configuration`."
 
 #: ../../source/tutorial.rst:372
 msgid ""
@@ -542,6 +564,11 @@ msgid ""
 " when you want the latter: it declares a file where it lies, and the URDF"
 " stays a URDF."
 msgstr ""
+"После импорта в пакете оказываются собственные объекты PartCAD — детали, "
+"которые он может отрисовывать сами по себе, и сборка, которая их "
+"размещает, — а не объявление, указывающее обратно на чужой файл. Если "
+"нужно именно последнее, используйте ``pc add assembly``: она объявляет "
+"файл там, где он лежит, и URDF остаётся URDF."
 
 #: ../../source/tutorial.rst:378
 msgid "Usage"
@@ -552,16 +579,16 @@ msgid "Functionality"
 msgstr "Функциональность"
 
 #: ../../source/tutorial.rst:394
-#, fuzzy
 msgid ""
 "**File Parsing:** For a STEP file, the command first attempts to parse it"
 " using an XDE-based approach. If no parts are found via XDE, it falls "
 "back to a classic STEP parsing method. A URDF is parsed with ROS's own "
 "``urdf_parser_py``."
 msgstr ""
-"**Разбор файла:** сначала команда пытается разобрать файл STEP с помощью "
-"подхода на основе XDE. Если через XDE детали не найдены, она возвращается"
-" к классическому методу разбора STEP."
+"**Разбор файла:** для файла STEP команда сначала пытается разобрать его с "
+"помощью подхода на основе XDE. Если через XDE детали не найдены, она "
+"возвращается к классическому методу разбора STEP. URDF разбирается с "
+"помощью собственного ``urdf_parser_py`` из ROS."
 
 #: ../../source/tutorial.rst:399
 msgid ""
@@ -636,6 +663,11 @@ msgid ""
 "joints rather than placing them by coordinates. See :doc:`simulation` for"
 " what survives the conversion and what does not."
 msgstr ""
+"Импорт URDF даёт по одной детали ``stl`` на звено, несущей массу, "
+"инерцию, трение и цвет, указанные в URDF, и по одной паре интерфейсов на "
+"шарнир, — поэтому созданная сборка соединяет свои детали через шарниры, а "
+"не размещает их по координатам. О том, что переживает преобразование, а "
+"что нет, см. :doc:`simulation`."
 
 #: ../../source/tutorial.rst:436
 msgid "Create an assembly"
@@ -694,7 +726,6 @@ msgid "Inspect the assembly"
 msgstr "Просмотр сборки"
 
 #: ../../source/tutorial.rst:471
-#, fuzzy
 msgid ""
 "When you edit ASSY files in the current PartCAD package, the assembly is "
 "displayed automatically on save. Press ``Save`` (Ctrl-S or Cmd-S) to save"
@@ -705,8 +736,8 @@ msgstr ""
 "Когда вы редактируете файлы ASSY в текущем пакете PartCAD, сборка "
 "отображается автоматически при сохранении. Нажмите ``Save`` (Ctrl-S или "
 "Cmd-S), чтобы сохранить файл сборки и запустить автоматический просмотр "
-"сборки. Представление ``OCP CAD Viewer`` появится справа, если оно ещё не"
-" открыто."
+"сборки. Представление ``PartCAD Viewer`` появится справа, если оно ещё не "
+"открыто."
 
 #~ msgid ""
 #~ "The ``pc import assembly`` command "

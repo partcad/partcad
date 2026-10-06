@@ -78,14 +78,12 @@ msgid "Basic shapes"
 msgstr "Grundformen"
 
 #: ../../source/design.rst:33
-#, fuzzy
 msgid "Outer shape: `circle`, `rectangle`, `square`, `slot`"
-msgstr "Äußere Form: `circle`, `rectangle`, `square`"
+msgstr "Äußere Form: `circle`, `rectangle`, `square`, `slot`"
 
 #: ../../source/design.rst:34
-#, fuzzy
 msgid "Optional inner shape: `circle`, `rectangle`, `square`, `slot`"
-msgstr "Optionale innere Form: `circle`, `rectangle`, `square`"
+msgstr "Optionale innere Form: `circle`, `rectangle`, `square`, `slot`"
 
 #: ../../source/design.rst:36 ../../source/design.rst:65
 msgid "Files"
@@ -196,44 +194,42 @@ msgstr ""
 "Baugruppen zusammengesetzt werden."
 
 #: ../../source/design.rst:86
-#, fuzzy
 msgid ""
 "PartCAD is expected to have an ever-growing list of ways to define "
 "assemblies using existing parts."
 msgstr ""
-"PartCAD verfügt über eine stetig wachsende Liste von Möglichkeiten, das "
-"Teilemodell zu definieren:"
+"Es wird erwartet, dass PartCAD eine stetig wachsende Liste von "
+"Möglichkeiten erhält, Baugruppen aus vorhandenen Teilen zu definieren."
 
 #: ../../source/design.rst:89
 msgid "ASSY: assembly YAML"
-msgstr ""
+msgstr "ASSY: Assembly YAML"
 
 #: ../../source/design.rst:91
-#, fuzzy
 msgid ""
 "The native format. The idea behind ASSY is to create a simplistic way to "
 "enumerate parts, define their parameters and define how parts connect."
 msgstr ""
-"Es wird erwartet, dass PartCAD eine stetig wachsende Liste von "
-"Möglichkeiten erhält, Baugruppen aus vorhandenen Teilen zu definieren. "
-"Derzeit wird jedoch nur eine Methode unterstützt. Sie heißt ASSY: "
-"Assembly-YAML. Die Idee hinter ASSY ist es, eine einfache Möglichkeit zu "
-"schaffen, Teile aufzulisten, ihre Parameter festzulegen und zu "
+"Das native Format. Die Idee hinter ASSY ist es, eine einfache Möglichkeit "
+"zu schaffen, Teile aufzulisten, ihre Parameter festzulegen und zu "
 "definieren, wie die Teile verbunden werden."
 
 #: ../../source/design.rst:94
 msgid "STEP"
-msgstr ""
+msgstr "STEP"
 
 #: ../../source/design.rst:96
 msgid ""
 "A STEP file that carries an assembly structure, used as an assembly "
 "directly, with its components becoming parts of the package."
 msgstr ""
+"Eine STEP-Datei, die eine Baugruppenstruktur enthält und direkt als "
+"Baugruppe verwendet wird, wobei ihre Komponenten zu Teilen des Pakets "
+"werden."
 
 #: ../../source/design.rst:99
 msgid "URDF"
-msgstr ""
+msgstr "URDF"
 
 #: ../../source/design.rst:101
 msgid ""
@@ -242,6 +238,11 @@ msgid ""
 " file produces, evaluated with every joint at its zero position. PartCAD "
 "can also write a URDF (plus the meshes it references) from any assembly."
 msgstr ""
+"Eine `URDF <https://wiki.ros.org/urdf>`_-Roboterbeschreibung, die direkt "
+"als Baugruppe verwendet wird. Ihre Links werden zu demselben Baum "
+"platzierter Teile, den eine ASSY-Datei erzeugt, ausgewertet mit jedem "
+"Gelenk in seiner Nullstellung. PartCAD kann aus jeder Baugruppe auch eine "
+"URDF schreiben (samt der Meshes, die sie referenziert)."
 
 #: ../../source/design.rst:106
 msgid ""
@@ -253,6 +254,14 @@ msgid ""
 "transmissions - is dropped, and reported. :doc:`simulation` describes "
 "that gap and what closing it would take."
 msgstr ""
+"Eine URDF ist die Beschreibung eines *simulierbaren* Roboters. Was sie "
+"über einen Link selbst sagt - Masse, Trägheit, Reibung und Kontakt, "
+"Material und Farbe - wird zu benannten PartCAD-Eigenschaften des Teils, zu "
+"dem dieser Link wird, und geht beim Export wieder hinaus. Was eine aus "
+"starren Platzierungen gebaute Baugruppe nirgends unterbringen kann - "
+"Gelenkkinematik, Kollisionsgeometrie, Sensoren, Getriebe -, wird verworfen "
+"und gemeldet. :doc:`simulation` beschreibt diese Lücke und was es "
+"bräuchte, sie zu schließen."
 
 #: ../../source/design.rst:113
 msgid ""
@@ -260,13 +269,15 @@ msgid ""
 "the URDF above - nothing is copied into the package, so the file stays "
 "the source of truth."
 msgstr ""
+"Bei einer Baugruppe, die durch eine von einem anderen Werkzeug erzeugte "
+"Datei definiert ist - die obigen STEP und URDF -, wird nichts in das Paket "
+"kopiert, sodass die Datei die maßgebliche Quelle bleibt."
 
 #: ../../source/design.rst:118
 msgid "Scenes"
 msgstr "Szenen"
 
 #: ../../source/design.rst:120
-#, fuzzy
 msgid ""
 "PartCAD does not yet implement scenes. But the idea is to be able to "
 "reproduce the same features as worlds in Gazebo to the extent that "
@@ -274,9 +285,10 @@ msgid ""
 "using XML while creating the scene. See :doc:`simulation`."
 msgstr ""
 "PartCAD implementiert Szenen noch nicht. Die Idee ist jedoch, dieselben "
-"Funktionen wie „Welten“ (worlds) in Gazebo nachzubilden, sodass PartCAD-"
-"Szenen nach Gazebo exportiert und dort simuliert werden können, ohne bei "
-"der Erstellung der Szene XML verwenden zu müssen."
+"Funktionen wie „Welten“ (worlds) in Gazebo nachzubilden, sodass "
+"PartCAD-Szenen nach Gazebo exportiert und dort simuliert werden können, "
+"ohne bei der Erstellung der Szene XML verwenden zu müssen. Siehe "
+":doc:`simulation`."
 
 #: ../../source/design.rst:126
 msgid "Monorepos"
@@ -381,15 +393,14 @@ msgid "Object IDs"
 msgstr "Objekt-IDs"
 
 #: ../../source/design.rst:169
-#, fuzzy
 msgid ""
 "PartCAD packages contain objects of different types: *sketches*, *parts*,"
 " *assemblies*, *scenes*, *interfaces*, *mates*, *materials*, *providers*,"
 " *software* and *partTypes*. All of them need to get referenced."
 msgstr ""
-"PartCAD-Pakete enthalten Objekte verschiedener Typen: *sketches*, "
-"*parts*, *assemblies*, *scenes*, *interfaces*, *providers* und so weiter."
-" Alle müssen referenziert werden können."
+"PartCAD-Pakete enthalten Objekte verschiedener Typen: *sketches*, *parts*, "
+"*assemblies*, *scenes*, *interfaces*, *mates*, *materials*, *providers*, "
+"*software* und *partTypes*. Alle müssen referenziert werden können."
 
 #: ../../source/design.rst:175
 msgid "Single object"
@@ -519,21 +530,20 @@ msgid "Command line tools"
 msgstr "Befehlszeilenwerkzeuge"
 
 #: ../../source/design.rst:253
-#, fuzzy
 msgid ""
 "PartCAD CLI tools get installed using the PyPI package ``partcad``, which"
 " also carries the Python module and the JSON-RPC service. The main tool "
 "is called ``pc``. The CLI tools are supposed to provide the complete set "
 "of PartCAD features."
 msgstr ""
-"PartCAD-CLI-Werkzeuge werden über das PyPI-Modul ``partcad-cli`` "
-"installiert. Das Hauptwerkzeug heißt ``pc``. Die CLI-Werkzeuge sollen den"
-" vollständigen Funktionsumfang von PartCAD bereitstellen."
+"PartCAD-CLI-Werkzeuge werden über das PyPI-Paket ``partcad`` installiert, "
+"das auch das Python-Modul und den JSON-RPC-Dienst enthält. Das "
+"Hauptwerkzeug heißt ``pc``. Die CLI-Werkzeuge sollen den vollständigen "
+"Funktionsumfang von PartCAD bereitstellen."
 
 #: ../../source/design.rst:258
-#, fuzzy
 msgid "Graphical interfaces"
-msgstr "Interfaces"
+msgstr "Grafische Benutzeroberflächen"
 
 #: ../../source/design.rst:260
 msgid ""
@@ -543,6 +553,12 @@ msgid ""
 " nor an editor set up. A **FreeCAD** add-on browses the same packages "
 "inside FreeCAD and imports objects into the open document."
 msgstr ""
+"Die PartCAD-Erweiterung für ``vscode`` ist als wichtigstes grafisches "
+"Werkzeug gedacht. Die **PartCAD IDE** ist diese Erweiterung, der Editor "
+"und die Befehlszeilenwerkzeuge in einer Anwendung, für einen Rechner, auf "
+"dem weder Python noch ein Editor eingerichtet ist. Ein **FreeCAD**-Add-on "
+"durchsucht dieselben Pakete innerhalb von FreeCAD und importiert Objekte "
+"in das geöffnete Dokument."
 
 #: ../../source/design.rst:266
 msgid ""
@@ -551,6 +567,10 @@ msgid ""
 "sandboxes, so they all see the same packages and the same cache as ``pc``"
 " does on the same machine. See :doc:`installation` for all three."
 msgstr ""
+"Keines der drei enthält PartCAD selbst. Jedes ist ein Client des Dienstes "
+"``partcad-json-rpc``, dem der warme Kontext und die Sandboxes gehören, "
+"sodass sie alle dieselben Pakete und denselben Cache sehen wie ``pc`` auf "
+"demselben Rechner. Siehe :doc:`installation` für alle drei."
 
 #: ../../source/design.rst:274
 msgid "Libraries and frameworks"

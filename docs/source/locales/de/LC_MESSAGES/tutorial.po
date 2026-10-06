@@ -55,6 +55,14 @@ msgid ""
 "An existing ``launch.json``, with commands and comments of your own in "
 "it, is added to rather than replaced."
 msgstr ""
+"``pc init`` fügt außerdem einen **Render**-Befehl zu "
+"``.vscode/launch.json`` hinzu, und zwar an der Wurzel des git-Repositorys, "
+"in dem es ausgeführt wird (neben dem Paket, wenn es kein Repository gibt). "
+"Er taucht in der Ansicht „Run and Debug“ der :ref:`PartCAD IDE "
+"<partcad-ide>` und von Visual Studio Code auf, und ihn auszuführen rendert "
+"das Paket genauso, wie ``pc render`` es aus einem Terminal tut. Eine "
+"vorhandene ``launch.json`` mit eigenen Befehlen und Kommentaren darin wird "
+"ergänzt statt ersetzt."
 
 #: ../../source/tutorial.rst:27
 msgid ""
@@ -69,6 +77,17 @@ msgid ""
 "install them into a package you created before this version -- that "
 "touches nothing else."
 msgstr ""
+"In dasselbe Verzeichnis installiert es die **KI-Agenten-Skills** -- also "
+"das, was einem Coding-Agenten beibringt, PartCAD zu bedienen, statt es zu "
+"erraten. Claude Code bekommt das ``pc``-Plugin in ``.claude/skills/``, "
+"sodass die Skills ``/pc:gen-part``, ``/pc:render`` und der Rest heißen; "
+"Cursor, das kein Plugin hat, um sie in einem Namensraum zu halten, bekommt "
+"dieselben Skills in ``.cursor/skills/``, benannt ``pc-gen-part``, "
+"``pc-render`` und so weiter. Sie stammen aus dem PartCAD, das Sie "
+"installiert haben, und passen daher immer dazu. Übergeben Sie "
+"``--no-skills``, wenn Sie sie lieber nicht haben möchten, und ``pc init "
+"--skills-only``, um sie in ein Paket zu installieren, das Sie vor dieser "
+"Version erstellt haben -- das rührt sonst nichts an."
 
 #: ../../source/tutorial.rst:35
 msgid ""
@@ -178,10 +197,9 @@ msgid "Inspect the part"
 msgstr "Das Teil inspizieren"
 
 #: ../../source/tutorial.rst:130
-#, fuzzy
 msgid "Once a part is created, it can be inspected in ``PartCAD Viewer``."
 msgstr ""
-"Sobald ein Teil erstellt ist, kann es in ``OCP CAD Viewer`` inspiziert "
+"Sobald ein Teil erstellt ist, kann es im ``PartCAD Viewer`` inspiziert "
 "werden."
 
 #: ../../source/tutorial.rst:137
@@ -432,15 +450,14 @@ msgid "Browse"
 msgstr "Durchsuchen"
 
 #: ../../source/tutorial.rst:305
-#, fuzzy
 msgid ""
 "Browse the imported packages in the Explorer view. Click on the parts and"
 " assemblies to see them in the ``PartCAD Viewer`` view that will appear "
 "on the right."
 msgstr ""
 "Durchsuchen Sie die importierten Pakete in der Explorer-Ansicht. Klicken "
-"Sie auf die Teile und Baugruppen, um sie in der ``OCP CAD "
-"Viewer``-Ansicht zu sehen, die rechts erscheint."
+"Sie auf die Teile und Baugruppen, um sie in der Ansicht ``PartCAD Viewer`` "
+"zu sehen, die rechts erscheint."
 
 #: ../../source/tutorial.rst:309
 msgid ""
@@ -472,7 +489,6 @@ msgstr ""
 "Ansicht mit dem neu erstellten Skript angezeigt."
 
 #: ../../source/tutorial.rst:325
-#, fuzzy
 msgid ""
 "When you edit Python or OpenSCAD files that are used in the current "
 "PartCAD package, saving the file makes it displayed automatically. Press "
@@ -481,10 +497,10 @@ msgid ""
 "right."
 msgstr ""
 "Wenn Sie Python- oder OpenSCAD-Dateien bearbeiten, die im aktuellen "
-"PartCAD-Paket verwendet werden, wird die Datei beim Speichern automatisch"
-" angezeigt. Drücken Sie ``Save`` (Strg-S oder Cmd-S), um das Skript zu "
+"PartCAD-Paket verwendet werden, wird die Datei beim Speichern automatisch "
+"angezeigt. Drücken Sie ``Save`` (Strg-S oder Cmd-S), um das Skript zu "
 "speichern und eine automatische Inspektion des Teils auszulösen. Die "
-"``OCP CAD Viewer``-Ansicht erscheint rechts."
+"Ansicht ``PartCAD Viewer`` erscheint rechts."
 
 #: ../../source/tutorial.rst:331
 msgid "Import parts"
@@ -534,6 +550,9 @@ msgid ""
 "The ``pc import assembly`` command allows you to import an assembly from "
 "a STEP or URDF file. The format is taken from the file's extension."
 msgstr ""
+"Mit dem Befehl ``pc import assembly`` können Sie eine Baugruppe aus einer "
+"STEP- oder URDF-Datei importieren. Das Format wird aus der Dateiendung "
+"abgeleitet."
 
 #: ../../source/tutorial.rst:366
 msgid ""
@@ -544,6 +563,12 @@ msgid ""
 "connects the parts through them rather than placing them by coordinates -"
 " see :doc:`configuration`."
 msgstr ""
+"Aus einer STEP-Datei extrahiert es die einzelnen Teile und erstellt eine "
+"Assembly-YAML-Datei, die jedes Teil samt seiner Platzierung festhält. Aus "
+"einer URDF erstellt es je ein ``stl``-Teil pro Link, das die von der URDF "
+"angegebenen physikalischen Eigenschaften trägt, ein Interface-Paar pro "
+"Gelenk und eine Baugruppe, die die Teile darüber verbindet, statt sie über "
+"Koordinaten zu platzieren - siehe :doc:`configuration`."
 
 #: ../../source/tutorial.rst:372
 msgid ""
@@ -553,6 +578,12 @@ msgid ""
 " when you want the latter: it declares a file where it lies, and the URDF"
 " stays a URDF."
 msgstr ""
+"Ein Import hinterlässt das Paket mit PartCADs eigenen Objekten - Teilen, "
+"die es für sich allein rendern kann, und einer Baugruppe, die sie "
+"platziert - statt mit einer Deklaration, die auf die fremde Datei "
+"zurückzeigt. Verwenden Sie ``pc add assembly``, wenn Sie Letzteres "
+"möchten: es deklariert eine Datei dort, wo sie liegt, und die URDF bleibt "
+"eine URDF."
 
 #: ../../source/tutorial.rst:378
 msgid "Usage"
@@ -563,16 +594,16 @@ msgid "Functionality"
 msgstr "Funktionsweise"
 
 #: ../../source/tutorial.rst:394
-#, fuzzy
 msgid ""
 "**File Parsing:** For a STEP file, the command first attempts to parse it"
 " using an XDE-based approach. If no parts are found via XDE, it falls "
 "back to a classic STEP parsing method. A URDF is parsed with ROS's own "
 "``urdf_parser_py``."
 msgstr ""
-"**Datei-Parsing:** Der Befehl versucht zunächst, die STEP-Datei mit einem"
-" XDE-basierten Ansatz zu parsen. Werden über XDE keine Teile gefunden, "
-"wird auf eine klassische STEP-Parsing-Methode zurückgegriffen."
+"**Datei-Parsing:** Bei einer STEP-Datei versucht der Befehl zunächst, sie "
+"mit einem XDE-basierten Ansatz zu parsen. Werden über XDE keine Teile "
+"gefunden, wird auf eine klassische STEP-Parsing-Methode zurückgegriffen. "
+"Eine URDF wird mit ROS’ eigenem ``urdf_parser_py`` geparst."
 
 #: ../../source/tutorial.rst:399
 msgid ""
@@ -650,6 +681,11 @@ msgid ""
 "joints rather than placing them by coordinates. See :doc:`simulation` for"
 " what survives the conversion and what does not."
 msgstr ""
+"Der Import einer URDF erzeugt je ein ``stl``-Teil pro Link, das die von "
+"der URDF angegebene Masse, Trägheit, Reibung und Farbe trägt, sowie ein "
+"Interface-Paar pro Gelenk - sodass die erzeugte Baugruppe ihre Teile über "
+"die Gelenke verbindet, statt sie über Koordinaten zu platzieren. Siehe "
+":doc:`simulation` dazu, was die Konvertierung überlebt und was nicht."
 
 #: ../../source/tutorial.rst:436
 msgid "Create an assembly"
@@ -712,7 +748,6 @@ msgid "Inspect the assembly"
 msgstr "Die Baugruppe inspizieren"
 
 #: ../../source/tutorial.rst:471
-#, fuzzy
 msgid ""
 "When you edit ASSY files in the current PartCAD package, the assembly is "
 "displayed automatically on save. Press ``Save`` (Ctrl-S or Cmd-S) to save"
@@ -722,9 +757,9 @@ msgid ""
 msgstr ""
 "Wenn Sie ASSY-Dateien im aktuellen PartCAD-Paket bearbeiten, wird die "
 "Baugruppe beim Speichern automatisch angezeigt. Drücken Sie ``Save`` "
-"(Strg-S oder Cmd-S), um die Assembly-Datei zu speichern und eine "
-"automatische Inspektion der Baugruppe auszulösen. Die ``OCP CAD "
-"Viewer``-Ansicht erscheint rechts, falls sie noch nicht geöffnet ist."
+"(Strg-S oder Cmd-S), um die Baugruppendatei zu speichern und eine "
+"automatische Inspektion der Baugruppe auszulösen. Die Ansicht ``PartCAD "
+"Viewer`` erscheint rechts, falls sie noch nicht geöffnet ist."
 
 #~ msgid ""
 #~ "The ``pc import assembly`` command "

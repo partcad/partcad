@@ -60,6 +60,8 @@ msgid ""
 "A container node is a node that holds other nodes rather than placing an "
 "object. The container nodes have the following syntax:"
 msgstr ""
+"Ein Container-Knoten ist ein Knoten, der andere Knoten enthält, statt ein "
+"Objekt zu platzieren. Container-Knoten haben folgende Syntax:"
 
 #: ../../source/assy.rst:36
 msgid ""
@@ -71,28 +73,40 @@ msgid ""
 "instead. A `links:` list *inside* the file is a node like any other: it "
 "is addressable by `name` from a `map:`, and what it holds belongs to it."
 msgstr ""
+"Der Knoten auf oberster Ebene einer ASSY-Datei ist ein solcher Knoten, und "
+"er **ist die Baugruppe**: was er enthält, wird unmittelbar von der "
+"Baugruppe gehalten und nicht von etwas dazwischen. Eine Baugruppe, die aus "
+"einer Datei deklariert wird, deren Wurzel drei Teile auflistet, hat also "
+"drei Knoten und nicht einen, und `location` an dieser Wurzel bewegt alle "
+"drei - es gibt keinen eigenen Knoten, den es stattdessen bewegen könnte. "
+"Eine `links:`-Liste *innerhalb* der Datei ist ein Knoten wie jeder andere: "
+"sie ist über `name` aus einem `map:` adressierbar, und was sie enthält, "
+"gehört ihr."
 
 #: ../../source/assy.rst:46
 msgid "What a link is called"
-msgstr ""
+msgstr "Wie ein Link heißt"
 
 #: ../../source/assy.rst:48
 msgid "Every link of an ASSY file has a name, and one rule gives it:"
 msgstr ""
+"Jeder Link einer ASSY-Datei hat einen Namen, und eine Regel vergibt ihn:"
 
 #: ../../source/assy.rst:50
 msgid "its own ``name:``, where it gives one;"
-msgstr ""
+msgstr "sein eigenes ``name:``, sofern er eines angibt;"
 
 #: ../../source/assy.rst:51
 msgid "otherwise the part or the assembly it places;"
-msgstr ""
+msgstr "sonst das Teil oder die Baugruppe, die er platziert;"
 
 #: ../../source/assy.rst:52
 msgid ""
 "otherwise its position in the ``links:`` list it is written in, one-"
 "based, as ``link#2``."
 msgstr ""
+"sonst seine Position in der ``links:``-Liste, in der er steht, "
+"einsbasiert, als ``link#2``."
 
 #: ../../source/assy.rst:55
 msgid ""
@@ -106,6 +120,16 @@ msgid ""
 "VS Code <https://marketplace.visualstudio.com/items?itemName=PartCAD"
 ".partcad-official>`_ shows as the row for that link in the viewer."
 msgstr ""
+"Nur ein ``links:``-Container erreicht die dritte Regel -- ein Knoten, der "
+"etwas platziert, wird danach benannt --, und es gibt sie, damit es so "
+"etwas wie einen nicht benennbaren Link nicht gibt. Dieser eine Name ist "
+"das, was alles verwendet: das, was ein ``connect:`` als den Link benennt, "
+"mit dem verbunden wird, das, was ein ``map:`` als Knoten benennt (mit "
+"``/`` zu einem Pfad davon verbunden, ``head/head_half_1``), das, was das "
+"``interferes:`` einer Verbindung benennt, das, was ein :ref:`Filter "
+"<assy-filter>` auswählt, und das, was die `PartCAD-Erweiterung für VS Code "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
+"als Zeile für diesen Link im Viewer anzeigt."
 
 #: ../../source/assy.rst:64
 msgid ""
@@ -116,6 +140,12 @@ msgid ""
 " name where there is nothing else -- a name shared by a hundred rows "
 "would say nothing about any of them."
 msgstr ""
+"Es ist nicht dasselbe wie das *Objekt*, das ein Link platziert, und der "
+"Viewer zeigt beides: eine Baugruppe, die dieselbe Schraube hundertmal "
+"platziert, enthält ein Objekt unter hundert Link-Namen, und es ist der "
+"Link-Name, der sagt, welche davon diese hier ist. Eine Position wird daher "
+"dort verwendet, wo es nichts anderes gibt -- ein Name, auf den hundert "
+"Zeilen hören, würde über keine davon etwas sagen."
 
 #: ../../source/assy.rst:71
 msgid ""
@@ -126,12 +156,22 @@ msgid ""
 "called -- the IDE's 2D and Draft panels name a link that way exactly when"
 " its name is shared with another link beside it."
 msgstr ""
+"Namen müssen allerdings nicht eindeutig sein. Eine Datei, die vier Beine "
+"in einer Schleife platziert, darf jedes davon ``leg`` nennen, und ein "
+"Name, auf den jedes Bein hört, kann keines davon herausgreifen. Ein "
+":ref:`Filter <assy-filter>` darf daher **jeden** Link auch über seine "
+"Position benennen, ``link#3``, wie er sonst auch heißt -- die Panels 2D "
+"und Draft der IDE benennen einen Link genau dann so, wenn er sich seinen "
+"Namen mit einem anderen Link daneben teilt."
 
 #: ../../source/assy.rst:90
 msgid ""
 "A positional name is relative to the list it is written in, so adding a "
 "link above one renames it. Name a container you intend to refer to."
 msgstr ""
+"Ein Positionsname ist relativ zu der Liste, in der er steht, sodass das "
+"Einfügen eines Links darüber ihn umbenennt. Benennen Sie einen Container, "
+"auf den Sie sich beziehen wollen."
 
 #: ../../source/assy.rst:94
 msgid "Parts"
@@ -155,6 +195,14 @@ msgid ""
 " of the part or assembly it places, which is enough until the same one is"
 " placed twice."
 msgstr ""
+"Der `name`, den ein Knoten erhält, ist das, womit alles andere in und um "
+"diese Baugruppe auf ihn verweist: der `name` eines "
+"`connect`/`connectPorts` benennt einen Knoten, und ebenso das erste "
+"Element des Abschnitts `map:`, der entscheidet, welche der Ports innerhalb "
+"dieser Baugruppe die Baugruppe selbst hat (siehe :ref:`assembly-ports`). "
+"Ein Knoten ohne eigenen `name` ist unter dem Namen des Teils oder der "
+"Baugruppe bekannt, die er platziert, und das genügt, bis dasselbe zweimal "
+"platziert wird."
 
 #: ../../source/assy.rst:131
 msgid ""
@@ -196,10 +244,15 @@ msgid ""
 "Without it, the two are spaced by half of the largest dimension of the "
 "two."
 msgstr ""
+"Das Feld `exploded` betrifft die Baugruppe selbst nicht: es ist der "
+"Abstand, in dem die beiden Teile in der Explosionsdarstellung dieses "
+"Schritts im Montageanleitungsbuch gezeichnet werden (`pc render -t pdf` "
+"und `pc render -t html`). Ohne es werden die beiden um die Hälfte der "
+"größten Abmessung der beiden auseinandergezogen."
 
 #: ../../source/assy.rst:148
 msgid "Expected overlaps"
-msgstr ""
+msgstr "Erwartete Überschneidungen"
 
 #: ../../source/assy.rst:150
 msgid ""
@@ -210,6 +263,12 @@ msgid ""
 " and all three are read from the joint, never declared against a pair of "
 "parts:"
 msgstr ""
+"`pc test` prüft, dass sich die Teile einer Baugruppe keinen Raum teilen - "
+"außer dort, wo eine Verbindung es verlangt. Ein in sein Loch eingerasteter "
+"Stift, eine Schraube, die ihr eigenes Gewinde schneidet: die Verbindung "
+"entsteht dadurch, dass das Material belegt wird, und ein Modell, das keine "
+"Federn kennt, hält es überlappend. Drei Dinge sagen das, und alle drei "
+"werden aus der Verbindung gelesen, nie gegen ein Teilepaar deklariert:"
 
 #: ../../source/assy.rst:156
 msgid ""
@@ -219,6 +278,11 @@ msgid ""
 "followed through any `map:` of a sub-assembly to the part inside it that "
 "provides the port;"
 msgstr ""
+"die Paarung oder das `how` der Verbindung sagt `snapIn` oder `selfScrew`, "
+"oder ein Interface, das sie fügt, schneidet sein eigenes Gewinde "
+"(`selfScrew`). Die erwartete Überschneidung besteht zwischen den beiden "
+"Teilen, die die gefügten Ports bereitstellen - über jedes `map:` einer "
+"Unterbaugruppe hinweg bis zu dem Teil darin, das den Port bereitstellt;"
 
 #: ../../source/assy.rst:160
 msgid ""
@@ -227,6 +291,11 @@ msgid ""
 "ones underneath as well, and a sub-assembly fitted by one of its pins "
 "drives its other pins into the same neighbour."
 msgstr ""
+"`interferes` führt die weiteren Knoten auf, in die derselbe Fügevorgang "
+"hineintreibt: eine Schraube, die mit dem Teil verbunden ist, auf dem ihr "
+"Kopf aufliegt, schneidet ihr Gewinde auch in die darunterliegenden, und "
+"eine Unterbaugruppe, die über einen ihrer Stifte gefügt wird, treibt ihre "
+"übrigen Stifte in denselben Nachbarn."
 
 #: ../../source/assy.rst:165
 msgid ""
@@ -240,6 +309,16 @@ msgid ""
 "than the part inside it that provides the port, since it is the sub-"
 "assembly that is fitted."
 msgstr ""
+"`interferes` benennt Knoten derselben `links:`-Liste wie die Verbindung, "
+"über den :ref:`Namen des Links <assy-link-names>`, den jeder Link hat: ein "
+"Knoten innerhalb eines `links:`-Containers ist `container/name`, und ein "
+"Container, der sich keinen Namen gegeben hat, ist eine Ebene dieses Pfades "
+"wie jede andere (`link#2/bracket`). Ein Knoten darf ein Teil oder eine "
+"Baugruppe sein. Eine Baugruppe zu benennen entschuldigt jede "
+"Überschneidung zwischen den beiden, was so genau ist, wie die Deklaration "
+"es ist: eine Unterbaugruppe mit einem abgebildeten Port wird benannt statt "
+"des Teils darin, das den Port bereitstellt, denn gefügt wird die "
+"Unterbaugruppe."
 
 #: ../../source/assy.rst:174
 msgid ""
@@ -250,6 +329,12 @@ msgid ""
 "`links:` container - is first compared by the box around everything in "
 "it."
 msgstr ""
+"Eine Baugruppe steht nur für das ein, was sie zusammensetzt. Eine in "
+"`partcad.yaml` deklarierte und darin platzierte Unterbaugruppe hat ein "
+"eigenes Urteil, das die Baugruppe übernimmt statt es zu wiederholen: dort "
+"werden nur die Überschneidungen zwischen dem betrachtet, was sie "
+"platziert, und jede Baugruppe - deklariert oder ein `links:`-Container - "
+"wird zuerst über die Box um alles in ihr verglichen."
 
 #: ../../source/assy.rst:181
 msgid "Assemblies"
@@ -265,7 +350,7 @@ msgstr ""
 
 #: ../../source/assy.rst:191
 msgid "Description"
-msgstr ""
+msgstr "Beschreibung"
 
 #: ../../source/assy.rst:193
 msgid ""
@@ -273,6 +358,9 @@ msgid ""
 "the part or the assembly it places, or - on a container node - the sub-"
 "assembly it declares."
 msgstr ""
+"Das Feld `description` eines beliebigen Knotens ist frei formulierter Text "
+"über diesen Knoten: das Teil oder die Baugruppe, die er platziert, oder - "
+"bei einem Container-Knoten - die Unterbaugruppe, die er deklariert."
 
 #: ../../source/assy.rst:205
 msgid ""
@@ -284,16 +372,26 @@ msgid ""
 "assembly; and the description of a part or assembly node is shown with "
 "the step that adds it. Nothing else in PartCAD parses it or acts upon it."
 msgstr ""
+"Es wird verwendet, wenn die Baugruppe dokumentiert wird (`pc render -t "
+"pdf` und `pc render -t html`): die Beschreibung des Wurzelknotens der "
+"Datei ist das, was das Montageanleitungsbuch über die Baugruppe als Ganzes "
+"sagt, sofern das Paket, das die Baugruppe deklariert, ihr nicht ein "
+"eigenes `desc` gibt; die Beschreibung eines Container-Knotens ist das, was "
+"das Buch über diese Unterbaugruppe sagt; und die Beschreibung eines Teile- "
+"oder Baugruppenknotens wird bei dem Schritt gezeigt, der ihn hinzufügt. "
+"Sonst parst oder verarbeitet nichts in PartCAD sie."
 
 #: ../../source/assy.rst:214
 msgid "Comment"
-msgstr ""
+msgstr "Kommentar"
 
 #: ../../source/assy.rst:216
 msgid ""
 "The `comment` field of a `connect` or `connectPorts` section is free form"
 " text."
 msgstr ""
+"Das Feld `comment` eines `connect`- oder `connectPorts`-Abschnitts ist "
+"frei formulierter Text."
 
 #: ../../source/assy.rst:225
 msgid ""
@@ -302,6 +400,10 @@ msgid ""
 " as a note beside the step this connection makes in the assembly "
 "instruction book, and reported by `pc info`."
 msgstr ""
+"Es ist ergänzender Kontext für einen Menschen oder für ein LLM, das die "
+"Baugruppe liest. PartCAD parst ihn nie und verarbeitet ihn nie; er wird "
+"als Notiz neben dem Schritt angezeigt, den diese Verbindung ausmacht, und "
+"zwar im Montageanleitungsbuch, und von `pc info` gemeldet."
 
 #: ../../source/assy.rst:232
 msgid ""
@@ -311,10 +413,15 @@ msgid ""
 "people reading it - have the complete picture. Anything stated only in "
 "`comment` is invisible to them."
 msgstr ""
+"`comment` ist **kein** Ort für Montageanweisungen. Alles, was zur "
+"Durchführung der Montage nötig ist, muss in den anderen ASSY-Feldern "
+"festgehalten werden, damit die Werkzeuge, die die Baugruppe verarbeiten - "
+"und nicht nur die Menschen, die sie lesen -, das vollständige Bild haben. "
+"Alles, was nur in `comment` steht, ist für sie unsichtbar."
 
 #: ../../source/assy.rst:239
 msgid "How"
-msgstr ""
+msgstr "How"
 
 #: ../../source/assy.rst:241
 msgid ""
@@ -323,68 +430,74 @@ msgid ""
 "optional, and so is the section itself: an omitted field means the "
 "default below."
 msgstr ""
+"Das Feld `how` eines `connect`- oder `connectPorts`-Abschnitts beschreibt, "
+"wie das Objekt erwartungsgemäß an seinen Platz gebracht wird. Alle seine "
+"Felder sind optional, und der Abschnitt selbst ebenfalls: ein "
+"weggelassenes Feld bedeutet den unten angegebenen Standardwert."
 
 #: ../../source/assy.rst:267
 msgid ""
 "The units are SI, with the exception of lengths, which are in millimetres"
 " like everywhere else in PartCAD:"
 msgstr ""
+"Die Einheiten sind SI, mit Ausnahme der Längen, die wie überall sonst in "
+"PartCAD in Millimetern angegeben werden:"
 
 #: ../../source/assy.rst:271
 msgid "Field"
-msgstr ""
+msgstr "Feld"
 
 #: ../../source/assy.rst:271
 msgid "Quantity"
-msgstr ""
+msgstr "Größe"
 
 #: ../../source/assy.rst:271
 msgid "Unit"
-msgstr ""
+msgstr "Einheit"
 
 #: ../../source/assy.rst:273
 msgid "``pushForceMax``"
-msgstr ""
+msgstr "``pushForceMax``"
 
 #: ../../source/assy.rst:273 ../../source/assy.rst:281
 msgid "force"
-msgstr ""
+msgstr "Kraft"
 
 #: ../../source/assy.rst:273 ../../source/assy.rst:281
 msgid "``N`` (newton)"
-msgstr ""
+msgstr "``N`` (Newton)"
 
 #: ../../source/assy.rst:275
 msgid "``pushDistance``"
-msgstr ""
+msgstr "``pushDistance``"
 
 #: ../../source/assy.rst:275 ../../source/assy.rst:279
 msgid "length"
-msgstr ""
+msgstr "Länge"
 
 #: ../../source/assy.rst:275 ../../source/assy.rst:279
 msgid "``mm`` (millimetre)"
-msgstr ""
+msgstr "``mm`` (Millimeter)"
 
 #: ../../source/assy.rst:277
 msgid "``turnTorqueMax``"
-msgstr ""
+msgstr "``turnTorqueMax``"
 
 #: ../../source/assy.rst:277
 msgid "torque"
-msgstr ""
+msgstr "Drehmoment"
 
 #: ../../source/assy.rst:277
 msgid "``N*m`` (newton-metre)"
-msgstr ""
+msgstr "``N*m`` (Newtonmeter)"
 
 #: ../../source/assy.rst:279
 msgid "``threadStep``"
-msgstr ""
+msgstr "``threadStep``"
 
 #: ../../source/assy.rst:281
 msgid "``hold*Force`` ``hold*ForceMin`` ``hold*ForceMax``"
-msgstr ""
+msgstr "``hold*Force`` ``hold*ForceMin`` ``hold*ForceMax``"
 
 #: ../../source/assy.rst:286
 msgid ""
@@ -392,6 +505,10 @@ msgid ""
 "bounds a **force** in newtons. Turning it is a rotation, so "
 "``turnTorqueMax`` bounds a **torque** in newton-metres."
 msgstr ""
+"Ein Objekt an seinen Platz zu schieben ist eine lineare Bewegung, daher "
+"begrenzt ``pushForceMax`` eine **Kraft** in Newton. Es zu drehen ist eine "
+"Rotation, daher begrenzt ``turnTorqueMax`` ein **Drehmoment** in "
+"Newtonmetern."
 
 #: ../../source/assy.rst:292
 msgid ""
@@ -399,6 +516,9 @@ msgid ""
 "section. The old spelling is still accepted, with a warning, and means "
 "the same thing."
 msgstr ""
+"``pushForceMax`` hieß im ersten Entwurf dieses Abschnitts "
+"``pushTorqueMax``. Die alte Schreibweise wird weiterhin akzeptiert, mit "
+"einer Warnung, und bedeutet dasselbe."
 
 #: ../../source/assy.rst:296
 msgid ""
@@ -411,6 +531,15 @@ msgid ""
 "`turnTorqueMax`. The default of `0.00` means a straight push with no "
 "turning."
 msgstr ""
+"`threadStep` ist die **Steigung** im Sinne des Vorschubs: der axiale Weg, "
+"den das Objekt je voller Umdrehung zurücklegt. Bei einem mehrgängigen "
+"Gewinde ist das die Gewindesteigung multipliziert mit der Anzahl der "
+"Gänge, nicht die Gewindesteigung selbst. Ist sie von null verschieden, "
+"steuert der Monteur Schubkraft und Drehmoment gemeinsam, sodass die "
+"resultierende Bewegung das angegebene Gewinde- (oder allgemeiner "
+"Rotations-)Muster nachbildet und dabei innerhalb von `pushForceMax` und "
+"`turnTorqueMax` bleibt. Der Standardwert `0.00` bedeutet ein geradliniges "
+"Schieben ohne Drehen."
 
 #: ../../source/assy.rst:304
 msgid ""
@@ -419,6 +548,11 @@ msgid ""
 "thread` below. Given on a connection, it overrides what the interfaces "
 "say for that one step."
 msgstr ""
+"Ein Gewinde gehört zu den Interfaces und nicht zu einer einzelnen "
+"Verbindung, wird daher normalerweise dort deklariert und hier weggelassen "
+"- siehe :ref:`interface-thread` weiter unten. An einer Verbindung "
+"angegeben, überschreibt es für diesen einen Schritt, was die Interfaces "
+"sagen."
 
 #: ../../source/assy.rst:308
 msgid ""
@@ -427,6 +561,11 @@ msgid ""
 "coordinates, that the object travels while it is pushed into place - so "
 "the object starts at `pushDistance` back along it."
 msgstr ""
+"`pushDirection` ist kein Feld: es wird aus der Verbindung selbst "
+"abgeleitet und zusammen mit dem Rest gemeldet. Es ist die Richtung, in den "
+"Koordinaten der Baugruppe, in die sich das Objekt bewegt, während es an "
+"seinen Platz geschoben wird - das Objekt beginnt also `pushDistance` weit "
+"entgegen dieser Richtung."
 
 #: ../../source/assy.rst:313
 msgid ""
@@ -441,6 +580,17 @@ msgid ""
 "direction points from the screw through the bracket towards the motor - "
 "reversing, as it must, when the motor is placed on the other side."
 msgstr ""
+"Abgeleitet wird es aus den Interfaces. Die positive Z-Achse eines "
+"Interfaces zeigt **in** das Objekt hinein, zu dem das Interface gehört, "
+"und genau so muss ein Teil reisen, das ihm entgegenkommt. "
+"`examples/feature_interface` zeigt das unmittelbar: beide Flächen "
+"desselben 3-mm-Winkels sind Instanzen eines Interfaces, die "
+"``outer``-Instanz bei ``z=0`` unverdreht und die ``inner``-Instanz bei "
+"``z=3`` umgedreht, sodass die beiden Achsen durch das Material aufeinander "
+"zeigen. Jede der vier M3-Schrauben in diesem Beispiel ist mit einer dieser "
+"Flächen verbunden, und ihre abgeleitete Richtung zeigt von der Schraube "
+"durch den Winkel zum Motor - und kehrt sich, wie es sein muss, um, wenn "
+"der Motor auf der anderen Seite platziert wird."
 
 #: ../../source/assy.rst:323
 msgid ""
@@ -455,6 +605,18 @@ msgid ""
 "while the assembly is merely being instantiated. If the geometry cannot "
 "be built at all, the distance is reported as unset rather than guessed."
 msgstr ""
+"`pushDistance` ist, wie weit entfernt von seinem endgültigen Platz das "
+"Objekt beginnt: der Abstand entlang `pushDirection` zwischen der "
+"Bereitstellungspose und der Pose, in der seine `with`-Ports mit den "
+"`to`-Ports des Ziels zusammenfallen. Wird es weggelassen, wird es aus dem "
+"zu verbindenden Objekt abgeleitet, und zwar als **das 1,5-Fache der "
+"eigenen Länge dieses Objekts entlang der Z-Achse der Interface-Lage**, "
+"über die es verbunden wird - weit genug, damit das Objekt das Ziel "
+"freigängig passiert, bevor die Fügebewegung beginnt. Diese Messung braucht "
+"die Geometrie des Objekts und wird daher nur dann vorgenommen, wenn etwas "
+"danach fragt, nie während die Baugruppe lediglich instanziiert wird. Lässt "
+"sich die Geometrie gar nicht bauen, wird der Abstand als nicht gesetzt "
+"gemeldet statt geraten."
 
 #: ../../source/assy.rst:334
 msgid ""
@@ -465,6 +627,14 @@ msgid ""
 "and then resumes is reported, since the steps it names are then not "
 "consecutive and will not be performed together."
 msgstr ""
+"`stage` benennt eine Gruppe von Schritten, von denen erwartet wird, dass "
+"sie **gleichzeitig** verbunden werden statt nacheinander: "
+"aufeinanderfolgende Knoten mit demselben `stage` bilden eine solche "
+"Gruppe. Es ist eine frei formulierbare Bezeichnung und kann daher sagen, "
+"wozu die Gruppe dient. Ein `stage`, das von einem anderen unterbrochen "
+"wird und dann wieder aufgenommen wird, wird gemeldet, denn die Schritte, "
+"die es benennt, sind dann nicht aufeinanderfolgend und werden nicht "
+"gemeinsam ausgeführt."
 
 #: ../../source/assy.rst:362
 msgid ""
@@ -474,6 +644,11 @@ msgid ""
 " is held the same way. Either may be a single interface name or a list of"
 " them."
 msgstr ""
+"`holdWith` benennt das Interface des Objekts, das der Baugruppe "
+"hinzugefügt wird, über das dieses Objekt während des Verbindens gehalten "
+"werden soll. `holdTo` benennt das Interface des Objekts, das bereits in "
+"der Baugruppe ist und das auf dieselbe Weise gehalten wird. Jedes von "
+"beiden darf ein einzelner Interface-Name oder eine Liste davon sein."
 
 #: ../../source/assy.rst:383
 msgid ""
@@ -483,6 +658,12 @@ msgid ""
 "of the object being connected to. When neither is set, the assembler is "
 "free to hold the object however it sees fit."
 msgstr ""
+"Wird `holdWith` weggelassen, ist der Standardwert das Feld `hold` des "
+"Abschnitts `connect` des Teils oder der Baugruppe, die hinzugefügt wird "
+"(siehe :ref:`hold`). Wird `holdTo` weggelassen, ist der Standardwert das "
+"Feld `hold` des Objekts, mit dem verbunden wird. Ist keines von beiden "
+"gesetzt, steht es dem Monteur frei, das Objekt so zu halten, wie er es für "
+"richtig hält."
 
 #: ../../source/assy.rst:388
 msgid ""
@@ -493,6 +674,12 @@ msgid ""
 "field of that same section, and, failing that, to the first instance of "
 "the interface."
 msgstr ""
+"`holdWithInstance` und `holdToInstance` wählen, über welche Instanz des "
+"Interfaces gehalten wird, für die Fälle, in denen das Objekt mehr als eine "
+"Instanz davon implementiert. Sie werden positionell gegen `holdWith` und "
+"`holdTo` zugeordnet. Werden sie weggelassen, ist der Standardwert das Feld "
+"`holdInstance` desselben Abschnitts und, wenn auch das fehlt, die erste "
+"Instanz des Interfaces."
 
 #: ../../source/assy.rst:394
 msgid ""
@@ -502,44 +689,59 @@ msgid ""
 "`holdToForce*` are the same for the object being connected to. Each bound"
 " is resolved on its own, from the first of these that gives it:"
 msgstr ""
+"`holdWithForceMin` und `holdWithForceMax` begrenzen die Kraft, mit der "
+"jedes Ende gehalten wird, in Newton - genug, damit sich das Objekt nicht "
+"bewegt, aber nicht so viel, dass es beschädigt wird. `holdWithForce` setzt "
+"beide auf einmal, und `holdToForce*` sind dasselbe für das Objekt, mit dem "
+"verbunden wird. Jede Schranke wird für sich aufgelöst, und zwar aus der "
+"ersten der folgenden Angaben, die sie liefert:"
 
 #: ../../source/assy.rst:400
 msgid "the bound itself, `holdWithForceMin` or `holdWithForceMax`;"
-msgstr ""
+msgstr "die Schranke selbst, `holdWithForceMin` oder `holdWithForceMax`;"
 
 #: ../../source/assy.rst:401
 msgid "`holdWithForce`, which sets both;"
-msgstr ""
+msgstr "`holdWithForce`, das beide setzt;"
 
 #: ../../source/assy.rst:402
 msgid ""
 "the `holdForceMin`/`holdForceMax` field of the `connect` section of the "
 "part or the assembly (see :ref:`hold`);"
 msgstr ""
+"das Feld `holdForceMin`/`holdForceMax` des Abschnitts `connect` des Teils "
+"oder der Baugruppe (siehe :ref:`hold`);"
 
 #: ../../source/assy.rst:404
 msgid "the `holdForce` field of that same section, which sets both;"
-msgstr ""
+msgstr "das Feld `holdForce` desselben Abschnitts, das beide setzt;"
 
 #: ../../source/assy.rst:405
 msgid "the defaults, **3 N** for the minimum and **7 N** for the maximum."
 msgstr ""
+"die Standardwerte, **3 N** für das Minimum und **7 N** für das Maximum."
 
 #: ../../source/assy.rst:407
 msgid ""
 "A minimum that ends up above its maximum is a contradiction rather than a"
 " range: it is reported, and both bounds fall back to the defaults."
 msgstr ""
+"Ein Minimum, das am Ende über seinem Maximum liegt, ist ein Widerspruch "
+"und kein Bereich: es wird gemeldet, und beide Schranken fallen auf die "
+"Standardwerte zurück."
 
 #: ../../source/assy.rst:413
 msgid "The thread of an interface"
-msgstr ""
+msgstr "Das Gewinde eines Interfaces"
 
 #: ../../source/assy.rst:415
 msgid ""
 "An interface may declare the thread that connections made through it "
 "advance along, and whether it cuts its own:"
 msgstr ""
+"Ein Interface darf das Gewinde deklarieren, entlang dessen über es "
+"hergestellte Verbindungen vorwärtskommen, und ob es sein eigenes "
+"schneidet:"
 
 #: ../../source/assy.rst:426
 msgid ""
@@ -550,6 +752,13 @@ msgid ""
 "and every opening, screw and hole pattern derived from them connects with"
 " the right thread without repeating it."
 msgstr ""
+"Beides wird von den Interfaces geerbt, die dieses erben, sodass ein "
+"Gewinde einmal ausgeschrieben wird, nämlich an dem Interface, das es "
+"einführt. In `examples/feature_interface` trägt das abstrakte Interface "
+"`m3` den Wert `0.5` und das abstrakte `m4` den Wert `0.7` - die "
+"tatsächlichen Steigungen dieser Schrauben -, und jede daraus abgeleitete "
+"Öffnung, Schraube und jedes Lochbild verbindet mit dem richtigen Gewinde, "
+"ohne es zu wiederholen."
 
 #: ../../source/assy.rst:433
 msgid ""
@@ -561,10 +770,18 @@ msgid ""
 "have to match one is the thread that gets cut, and failing that the one "
 "the self-tapping end brings with it."
 msgstr ""
+"Eine Verbindung erbt `threadStep` von den beiden Interfaces, die sie "
+"paart. Sie müssen sich darüber einig sein: zwei verschiedene Gewinde "
+"lassen sich nicht zusammenschrauben, und eine Verbindung, deren Enden sich "
+"uneinig sind, wird gemeldet und lässt ``pc test`` fehlschlagen. Es sei "
+"denn, eines von ihnen deklariert `selfScrew` - eine selbstschneidende "
+"Schraube oder das einfache Loch, in das eine solche geht. Dann ist das "
+"Gewinde des Endes, das zu einem passen muss, das Gewinde, das geschnitten "
+"wird, und ersatzweise dasjenige, das das selbstschneidende Ende mitbringt."
 
 #: ../../source/assy.rst:442
 msgid "How a mating goes together"
-msgstr ""
+msgstr "Wie eine Paarung zusammengeht"
 
 #: ../../source/assy.rst:444
 msgid ""
@@ -572,6 +789,10 @@ msgid ""
 " into an M3 tapped hole, a clip onto its rail - says so once, in a "
 "``how`` section of its mating, instead of on every connection:"
 msgstr ""
+"Ein Interface-Paar, das immer auf dieselbe Weise zusammengeht - eine "
+"M3-Schraube in ein M3-Gewindeloch, ein Clip auf seine Schiene -, sagt das "
+"einmal, in einem Abschnitt ``how`` seiner Paarung, statt an jeder "
+"Verbindung:"
 
 #: ../../source/assy.rst:465
 msgid ""
@@ -582,6 +803,12 @@ msgid ""
 "assembly's to say - and nor are the ``hold*`` fields, which belong to the"
 " objects (see :ref:`hold`)."
 msgstr ""
+"Es nimmt die Felder des ``how`` einer Verbindung, die sagen, wie das "
+"Objekt hineingeht: ``pushForceMax``, ``pushDistance``, ``turnDirection``, "
+"``turnTorqueMax``, ``threadStep``, ``selfScrew`` und ``snapIn``. ``stage`` "
+"gehört nicht dazu - welche Schritte zusammen ausgeführt werden, sagt die "
+"Baugruppe - und auch nicht die ``hold*``-Felder, die zu den Objekten "
+"gehören (siehe :ref:`hold`)."
 
 #: ../../source/assy.rst:471
 msgid ""
@@ -592,16 +819,26 @@ msgid ""
 "the mating's own ``selfScrew`` and ``snapIn``, the interfaces' "
 "``threadStep`` and ``selfScrew``, and the defaults."
 msgstr ""
+"Jede über das Paar hergestellte Verbindung bekommt sie, und eine "
+"ASSY-Datei überschreibt sie **Feld für Feld**: ein Schritt, dessen eigenes "
+"``how`` nur ``turnTorqueMax`` angibt, behält Gewinde und Richtung der "
+"Paarung. Die Reihenfolge, das Spezifischste zuerst, ist das ``how`` der "
+"Verbindung, das ``how`` der Paarung, die eigenen ``selfScrew`` und "
+"``snapIn`` der Paarung, die ``threadStep`` und ``selfScrew`` der "
+"Interfaces und die Standardwerte."
 
 #: ../../source/assy.rst:478
 msgid "Reading the instructions back"
-msgstr ""
+msgstr "Die Anweisungen zurücklesen"
 
 #: ../../source/assy.rst:480
 msgid ""
 "Everything resolved from the sections above - the inherited threads, the "
 "deduced push direction, the forces each end is held with - is reported by"
 msgstr ""
+"Alles, was sich aus den obigen Abschnitten auflöst - die geerbten Gewinde, "
+"die abgeleitete Schubrichtung, die Kräfte, mit denen jedes Ende gehalten "
+"wird -, wird gemeldet von"
 
 #: ../../source/assy.rst:487
 msgid ""
@@ -609,10 +846,13 @@ msgid ""
 "assembly's own account of how it is built, for a person or for whatever "
 "performs it."
 msgstr ""
+"unter ``Connections``, ein Eintrag je verbundenem Objekt. Das ist die "
+"eigene Darstellung der Baugruppe davon, wie sie gebaut wird, für einen "
+"Menschen oder für das, was sie ausführt."
 
 #: ../../source/assy.rst:491
 msgid "Testing the instructions"
-msgstr ""
+msgstr "Die Anweisungen prüfen"
 
 #: ../../source/assy.rst:493
 msgid ""
@@ -624,10 +864,18 @@ msgid ""
 "sound - **including one that says nothing at all** and takes every "
 "default."
 msgstr ""
+"Alles Obige wird nachsichtig aufgelöst: ein fehlendes Feld nimmt seinen "
+"Standardwert, und eines, das sich selbst widerspricht, wird gemeldet und "
+"durch einen Standardwert ersetzt, sodass eine Baugruppe immer baut. ``pc "
+"test`` ist das, was hinter diese Nachsicht blickt. Seine Prüfung "
+"``connect`` lässt eine Baugruppe durchfallen, deren Anweisungen repariert "
+"werden mussten, um brauchbar zu sein, und lässt eine bestehen, die stimmig "
+"ist -- **einschließlich einer, die überhaupt nichts sagt** und jeden "
+"Standardwert nimmt."
 
 #: ../../source/assy.rst:500
 msgid "What it rejects today:"
-msgstr ""
+msgstr "Was es heute zurückweist:"
 
 #: ../../source/assy.rst:502
 msgid ""
@@ -635,16 +883,21 @@ msgid ""
 "``holdWithForceMax``, or ``holdToForceMin`` above ``holdToForceMax``. A "
 "minimum above a maximum is a contradiction rather than a range."
 msgstr ""
+"ein ``*Min`` über seinem zugehörigen ``*Max`` - ``holdWithForceMin`` über "
+"``holdWithForceMax`` oder ``holdToForceMin`` über ``holdToForceMax``. Ein "
+"Minimum über einem Maximum ist ein Widerspruch und kein Bereich."
 
 #: ../../source/assy.rst:505
 msgid ""
 "two interfaces that disagree about their `threadStep` with neither "
 "declaring `selfScrew`."
 msgstr ""
+"zwei Interfaces, die sich über ihren `threadStep` uneinig sind, ohne dass "
+"eines `selfScrew` deklariert."
 
 #: ../../source/assy.rst:513
 msgid "Steps that can be followed"
-msgstr ""
+msgstr "Schritte, denen man folgen kann"
 
 #: ../../source/assy.rst:515
 msgid ""
@@ -655,6 +908,13 @@ msgid ""
 " ``connectPorts``), and something has to say **how** it goes into place -"
 " pushed, snapped or screwed in. That is said by any of:"
 msgstr ""
+"Standardwerte genügen, damit eine Baugruppe baut, und sie genügen nicht, "
+"damit ein Mensch sie zusammensetzen kann. Eine Baugruppe, die hergestellt "
+"werden soll (``manufacturable: true``), wird von ``pc test`` daher an mehr "
+"gemessen: jedes Element nach dem ersten jeder Link-Liste muss verbunden "
+"sein (``connect`` oder ``connectPorts``), und irgendetwas muss sagen, "
+"**wie** es an seinen Platz kommt -- geschoben, eingerastet oder "
+"eingeschraubt. Das sagt eines der folgenden:"
 
 #: ../../source/assy.rst:522
 msgid ""
@@ -663,6 +923,10 @@ msgid ""
 "``selfScrew`` or ``snapIn`` (``stage`` and the ``hold*`` fields say when "
 "and by what, not how);"
 msgstr ""
+"das eigene ``how`` der Verbindung, mit mindestens einem von "
+"``pushForceMax``, ``pushDistance``, ``turnDirection``, ``turnTorqueMax``, "
+"``threadStep``, ``selfScrew`` oder ``snapIn`` (``stage`` und die "
+"``hold*``-Felder sagen wann und womit, nicht wie);"
 
 #: ../../source/assy.rst:526
 msgid ""
@@ -671,12 +935,18 @@ msgid ""
 " or ``selfScrew``, which then says it for every connection that pairs "
 "them;"
 msgstr ""
+"die Paarung der beiden Interfaces, über die sie verbindet: ein beliebiges "
+"Feld ihres ``how`` (siehe „How a mating goes together“ oben) oder ihr "
+"eigenes ``snapIn`` beziehungsweise ``selfScrew``, das es dann für jede "
+"Verbindung sagt, die die beiden paart;"
 
 #: ../../source/assy.rst:529
 msgid ""
 "the interfaces themselves, with a ``threadStep`` or ``selfScrew``: a "
 "thread is screwed in."
 msgstr ""
+"die Interfaces selbst, mit einem ``threadStep`` oder ``selfScrew``: ein "
+"Gewinde wird eingeschraubt."
 
 #: ../../source/assy.rst:532
 msgid ""
@@ -685,16 +955,23 @@ msgid ""
 "report. The IDE's Build vs Buy table shows an assembly with such steps as"
 " **Incomplete**, listing them, until they are fixed."
 msgstr ""
+"Die Prüfung ``manufacturability`` meldet jeden Schritt, der nichts davon "
+"sagt; ein mit ``location:`` platziertes Element zu melden ist Sache der "
+"Prüfung ``connectivity``. Die Tabelle Build vs Buy der IDE zeigt eine "
+"Baugruppe mit solchen Schritten als **Incomplete** und führt sie auf, bis "
+"sie behoben sind."
 
 #: ../../source/assy.rst:540
 msgid "Holding an object"
-msgstr ""
+msgstr "Ein Objekt halten"
 
 #: ../../source/assy.rst:542
 msgid ""
 "The defaults for the `how` fields above are declared once, next to the "
 "part or the assembly itself, in `partcad.yaml`:"
 msgstr ""
+"Die Standardwerte für die obigen `how`-Felder werden einmal deklariert, "
+"neben dem Teil oder der Baugruppe selbst, in `partcad.yaml`:"
 
 #: ../../source/assy.rst:563
 msgid ""
@@ -702,10 +979,13 @@ msgid ""
 "lives in that one `connect` section, rather than among the fields that "
 "describe the object itself."
 msgstr ""
+"Alles, was ein Objekt zu jeder Verbindung beiträgt, an der es teilnimmt, "
+"steht in diesem einen `connect`-Abschnitt und nicht zwischen den Feldern, "
+"die das Objekt selbst beschreiben."
 
 #: ../../source/assy.rst:571
 msgid "Scenes"
-msgstr ""
+msgstr "Szenen"
 
 #: ../../source/assy.rst:573
 msgid ""
@@ -716,6 +996,13 @@ msgid ""
 ":ref:`scenes`); there is no assembly object in between, and nothing about"
 " the file itself says which it is."
 msgstr ""
+"Dasselbe Dateiformat definiert eine **Szene**: eine platzierte Anordnung "
+"von Objekten, etwa eine Fertigungszelle, ein Tisch mit darauf ausgelegten "
+"Teilen oder eine Simulationswelt. Ein Paket deklariert eine, indem es aus "
+"seinem Abschnitt ``scenes:`` statt aus seinem Abschnitt ``assemblies:`` "
+"auf die Datei zeigt (siehe :ref:`scenes`); dazwischen steht kein "
+"Baugruppenobjekt, und nichts an der Datei selbst sagt, welches von beidem "
+"es ist."
 
 #: ../../source/assy.rst:585
 msgid ""
@@ -726,6 +1013,13 @@ msgid ""
 "to say about the assembling. Declaring ``how`` in a scene is an error, "
 "both while the scene is being built and in the editor."
 msgstr ""
+"Alles Obige gilt, mit einer Ausnahme: **eine Szene darf** ``how`` **nicht "
+"verwenden**. Eine Baugruppe ist ein Produkt und sagt, wie sie "
+"zusammengesetzt wird, und daraus wird das Montageanleitungsbuch erzeugt. "
+"Eine Szene gibt nur einen Endzustand an, und nichts darin wurde montiert, "
+"es gibt also nichts über das Montieren zu sagen. ``how`` in einer Szene zu "
+"deklarieren ist ein Fehler, sowohl beim Bauen der Szene als auch im "
+"Editor."
 
 #: ../../source/assy.rst:592
 msgid ""
@@ -734,10 +1028,15 @@ msgid ""
 "are, and saying it with the ports the two objects declare is better than "
 "saying it with coordinates somebody worked out by hand."
 msgstr ""
+"Die Abschnitte ``connect`` und ``connectPorts`` selbst bleiben. Einen "
+"Greifer gegen die Vorrichtung zu platzieren, die er hält, ist eine Aussage "
+"darüber, wo die Dinge sind, und sie mit den Ports zu treffen, die die "
+"beiden Objekte deklarieren, ist besser, als sie mit von Hand "
+"ausgerechneten Koordinaten zu treffen."
 
 #: ../../source/assy.rst:615
 msgid "Part of an assembly"
-msgstr ""
+msgstr "Ein Teil einer Baugruppe"
 
 #: ../../source/assy.rst:617
 msgid ""
@@ -745,30 +1044,40 @@ msgid ""
 "own: the head of the logo, one bay of a rack, the parts that arrive in "
 "one box. A **filter** names the links to keep and leaves the rest out."
 msgstr ""
+"Eine Unterbaugruppe, die es wert ist, für sich betrachtet zu werden, ist "
+"oft kein eigenes Objekt: der Kopf des Logos, ein Fach eines Racks, die "
+"Teile, die in einer Schachtel ankommen. Ein **Filter** benennt die zu "
+"behaltenden Links und lässt den Rest weg."
 
 #: ../../source/assy.rst:621
 msgid ""
 "A filter is a tree of link names mirroring the tree the ASSY file already"
 " is:"
 msgstr ""
+"Ein Filter ist ein Baum von Link-Namen, der den Baum spiegelt, der die "
+"ASSY-Datei ohnehin schon ist:"
 
 #: ../../source/assy.rst:629
 msgid "Three rules, and nothing else:"
-msgstr ""
+msgstr "Drei Regeln, und sonst nichts:"
 
 #: ../../source/assy.rst:631
 msgid "a link the filter names is kept, and a link it does not name is dropped;"
 msgstr ""
+"ein Link, den der Filter benennt, bleibt erhalten, und ein Link, den er "
+"nicht benennt, wird verworfen;"
 
 #: ../../source/assy.rst:632
 msgid "a link named with nothing under it keeps everything under it;"
-msgstr ""
+msgstr "ein Link, der ohne etwas darunter benannt wird, behält alles darunter;"
 
 #: ../../source/assy.rst:633
 msgid ""
 "a link named with at least one child under it keeps those children and "
 "drops its other ones."
 msgstr ""
+"ein Link, der mit mindestens einem Kind darunter benannt wird, behält "
+"diese Kinder und verwirft seine übrigen."
 
 #: ../../source/assy.rst:636
 msgid ""
@@ -777,20 +1086,27 @@ msgid ""
 "position in its ``links:`` list. So there is no link a filter cannot "
 "name."
 msgstr ""
+"Ein Link wird so benannt, wie :ref:`alles andere ihn benennt "
+"<assy-link-names>`: über sein ``name:``, über das Teil oder die Baugruppe, "
+"die er platziert, oder über seine Position in seiner ``links:``-Liste. Es "
+"gibt also keinen Link, den ein Filter nicht benennen kann."
 
 #: ../../source/assy.rst:640
 msgid ""
 "A filter may equally be written as a list, which is the convenient form "
 "when nothing below the names matters:"
 msgstr ""
+"Ein Filter darf ebenso gut als Liste geschrieben werden, und das ist die "
+"praktische Form, wenn nichts unterhalb der Namen zählt:"
 
 #: ../../source/assy.rst:648
 msgid "There are three ways to use one, and they do different things."
 msgstr ""
+"Es gibt drei Arten, einen zu verwenden, und sie bewirken Verschiedenes."
 
 #: ../../source/assy.rst:651
 msgid "Filtering for one picture"
-msgstr ""
+msgstr "Für ein Bild filtern"
 
 #: ../../source/assy.rst:653
 msgid ""
@@ -798,6 +1114,9 @@ msgid ""
 " the package: the assembly is built as it always is and the filter is "
 "applied to the result, for this one file."
 msgstr ""
+"``pc render`` und ``pc export`` nehmen ``--filter`` und schreiben nichts "
+"in das Paket: die Baugruppe wird gebaut wie immer, und der Filter wird auf "
+"das Ergebnis angewendet, für diese eine Datei."
 
 #: ../../source/assy.rst:663
 msgid ""
@@ -808,6 +1127,13 @@ msgid ""
 "refused, naming both things that went wrong, so a mistyped filename is "
 "not quietly read as a link name."
 msgstr ""
+"Das Argument ist **zuerst ein Dateiname**: eine Datei, die jemand neben "
+"dem Paket aufbewahrt und bearbeitet. Nur wenn es keine solche Datei gibt, "
+"wird der Text als der Filter selbst gelesen, als JSON oder YAML -- und das "
+"ist die praktische Form für einen einzelnen Link und für das, was ein "
+"Skript zusammensetzt. Ein Name, der weder das eine noch das andere ist, "
+"wird abgelehnt, unter Nennung beider Dinge, die schiefgingen, sodass ein "
+"vertippter Dateiname nicht stillschweigend als Link-Name gelesen wird."
 
 #: ../../source/assy.rst:670
 msgid ""
@@ -817,6 +1143,12 @@ msgid ""
 "built rather than written, a filter here may also select *inside* a link "
 "that places an assembly of another package."
 msgstr ""
+"Alles Erhaltene bleibt dort, wo die ganze Baugruppe es platziert hat. Ein "
+"Filter löst ein ``connect:`` nie neu auf, und das ist die einzige Lesart "
+"von „Teil dieser Baugruppe“, die auf das Ding auf der Werkbank zutrifft. "
+"Da das Ergebnis gebaut und nicht geschrieben wird, darf ein Filter hier "
+"auch *innerhalb* eines Links auswählen, der eine Baugruppe eines anderen "
+"Pakets platziert."
 
 #: ../../source/assy.rst:676
 msgid ""
@@ -831,10 +1163,22 @@ msgid ""
 "selection, so what is ticked on the 3D view is what the 2D and Draft tabs"
 " draw, and a box cleared on one is cleared on the others."
 msgstr ""
+"Dieselben Möglichkeiten stehen in der `PartCAD-Erweiterung für VS Code "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
+"zur Verfügung: die Tabs **2D** und **Draft** des Viewers führen neben der "
+"Zeichnung auf, woraus das Objekt besteht, mit einem Kontrollkästchen bei "
+"jedem Eintrag, und was angehakt ist, ist der Filter, mit dem das Rendering "
+"erzeugt wird. Im Tab 2D enthält die Liste außerdem die Ports und "
+"Interfaces jedes Knotens, und eines anzuhaken zeichnet diesen Port auf die "
+"Projektion -- genau das, was ``--with-ports``, ``--with-interfaces`` und "
+"``--port`` anfordern. Alle drei Design-Tabs teilen sich eine Auswahl, "
+"sodass das, was in der 3D-Ansicht angehakt ist, das ist, was die Tabs 2D "
+"und Draft zeichnen, und ein in einem abgewähltes Kästchen ist auch in den "
+"anderen abgewählt."
 
 #: ../../source/assy.rst:687
 msgid "Filtering every time the file is written"
-msgstr ""
+msgstr "Bei jedem Schreiben der Datei filtern"
 
 #: ../../source/assy.rst:689
 msgid ""
@@ -844,6 +1188,12 @@ msgid ""
 " type, in either place a file type is configured -- the package's own "
 "section, and the object's:"
 msgstr ""
+"Ein ``filter:`` an einem ``render:``- oder ``export:``-Dateityp sagt "
+"dasselbe dauerhaft, sodass ein Paket ein Bild einer Unterbaugruppe neben "
+"der Zeichnung des Ganzen eingecheckt halten kann. Es wird je Dateityp "
+"deklariert, an jeder der beiden Stellen, an denen ein Dateityp "
+"konfiguriert wird -- im eigenen Abschnitt des Pakets und in dem des "
+"Objekts:"
 
 #: ../../source/assy.rst:712
 msgid ""
@@ -852,10 +1202,14 @@ msgid ""
 "sketch have no links, so a filter over one of them is reported rather "
 "than ignored."
 msgstr ""
+"``pc render --filter`` und ``pc export --filter`` überschreiben es für "
+"einen Lauf, so wie ``--view`` einen konfigurierten Viewport überschreibt. "
+"Ein Teil und eine Skizze haben keine Links, sodass ein Filter über eines "
+"von beiden gemeldet statt ignoriert wird."
 
 #: ../../source/assy.rst:717
 msgid "Filtering into a new object"
-msgstr ""
+msgstr "In ein neues Objekt filtern"
 
 #: ../../source/assy.rst:719
 msgid ""
@@ -863,6 +1217,9 @@ msgid ""
 " everything the filter drops taken out of it, as ``DST.assy``, declared "
 "beside ``SRC``."
 msgstr ""
+"``pc filter`` schreibt stattdessen eine Deklaration: die ASSY-Datei von "
+"``SRC``, aus der alles herausgenommen ist, was der Filter verwirft, als "
+"``DST.assy``, deklariert neben ``SRC``."
 
 #: ../../source/assy.rst:728
 msgid ""
@@ -874,6 +1231,14 @@ msgid ""
 "is left alone when it already points at the same file, so whatever file "
 "types were configured for it survive a re-run."
 msgstr ""
+"``DST`` ist dann ein Objekt wie jedes andere: es rendert, es exportiert, "
+"es hat eine Stückliste, Lieferanten machen Angebote dafür, und es ist eine "
+"Datei, die jemand als Diff durchsehen kann. Ist ``SRC`` eine Baugruppe, "
+"dann ist ``DST`` eine Baugruppe, und ist ``SRC`` eine Szene, dann ist "
+"``DST`` eine Szene -- die Art folgt der Quelle. Ein vorhandenes ``DST`` "
+"wird überschrieben; seine Deklaration bleibt unangetastet, wenn sie "
+"bereits auf dieselbe Datei zeigt, sodass die für es konfigurierten "
+"Dateitypen einen erneuten Lauf überleben."
 
 #: ../../source/assy.rst:735
 msgid ""
@@ -886,6 +1251,16 @@ msgid ""
 "thing it cannot do is select inside a link that places a part or another "
 "package's assembly; it says so and keeps that link whole."
 msgstr ""
+"Gefiltert wird die **Datei** und nicht die gebaute Baugruppe, und das "
+"macht das Ergebnis zu einer Baugruppe, die jemand bauen kann: jeder "
+"erhaltene Link behält sein ``connect:``, sein ``how:``, seine Parameter "
+"und seine Kommentare. (Deshalb braucht ``pc filter`` auch eine "
+"Assembly-YAML-Datei, mit der es arbeiten kann. Eine ``step``- oder "
+"``urdf``-Baugruppe hat keine eigenen Links, und ``pc convert assembly -t "
+"assy`` ist das, was eine solche in eine Datei verwandelt, die welche hat.) "
+"Das Einzige, was es nicht kann, ist, innerhalb eines Links auszuwählen, "
+"der ein Teil oder die Baugruppe eines anderen Pakets platziert; es sagt "
+"das und behält diesen Link als Ganzes."
 
 #: ../../source/assy.rst:743
 msgid ""
@@ -894,6 +1269,11 @@ msgid ""
 "first of two once the one above it has gone -- so a position would "
 "otherwise rename it, and anything that named it would point at nothing."
 msgstr ""
+"Ein Link, dessen Name seine Position war, bekommt diese Position als "
+"``name:`` **in die Kopie geschrieben**. Filtern verschiebt Links -- der "
+"zweite von fünf ist der erste von zweien, sobald der darüber weg ist --, "
+"sodass eine Position ihn sonst umbenennen würde und alles, was ihn benannt "
+"hat, ins Leere zeigen würde."
 
 #: ../../source/assy.rst:748
 msgid ""
@@ -902,16 +1282,22 @@ msgid ""
 "filter`` reports every one of them, naming the line, and so does :ref:`pc"
 " lint <assy-lint>` over the file afterwards."
 msgstr ""
+"Was Filtern kaputt machen kann, ist genau eine Sache, und sie wird "
+"geprüft: **ein erhaltener Link kann mit einem verworfenen Link verbunden "
+"sein**. ``pc filter`` meldet jeden einzelnen davon, unter Angabe der "
+"Zeile, und ebenso anschließend :ref:`pc lint <assy-lint>` über die Datei."
 
 #: ../../source/assy.rst:757
 msgid ""
 "Name those links in the filter too, or place the kept ones with "
 "``location:``."
 msgstr ""
+"Benennen Sie diese Links ebenfalls im Filter, oder platzieren Sie die "
+"erhaltenen mit ``location:``."
 
 #: ../../source/assy.rst:763
 msgid "Validation"
-msgstr ""
+msgstr "Validierung"
 
 #: ../../source/assy.rst:765
 msgid ""
@@ -922,6 +1308,12 @@ msgid ""
 "``connect`` -- or ``part``, ``assembly`` and ``links`` -- exclude one "
 "another."
 msgstr ""
+"ASSY-Dateien werden gegen ein JSON-Schema geprüft "
+"(``src/partcad_utils/schema/assy.json``), das das Dokument *nach* dem "
+"Jinja2-Rendern beschreibt: die obigen Knotenschlüssel, die Gestalt einer "
+"OCCT-Location und die Tatsache, dass ``location``, ``connectPorts`` und "
+"``connect`` -- beziehungsweise ``part``, ``assembly`` und ``links`` -- "
+"einander ausschließen."
 
 #: ../../source/assy.rst:771
 msgid ""
@@ -933,6 +1325,13 @@ msgid ""
 "that is wrong would otherwise be answered, much later, with \"Target part"
 " not found\" and a part at the origin."
 msgstr ""
+"Eine Sache wird neben dem Schema geprüft, weil kein Schema sie beschreiben "
+"kann: ein ``connect:``/``connectPorts:`` benennt einen Link **derselben** "
+"``links:``-Liste, der **oberhalb** dieses Knotens steht, denn dort sucht "
+"PartCAD ihn, während die Baugruppe gebaut wird. Ebenso jeder Name im "
+"``interferes:`` einer Verbindung, der irgendwo in der Datei stehen darf. "
+"Ein falscher Name würde sonst viel später mit „Target part not found“ und "
+"einem Teil im Ursprung beantwortet."
 
 #: ../../source/assy.rst:778
 msgid ""
@@ -941,6 +1340,10 @@ msgid ""
 "than kept beside it, so the two cannot drift apart; only the one rule "
 "differs."
 msgstr ""
+"Eine als **Szene** gelesene Datei wird gegen dasselbe Schema geprüft, mit "
+"verbotenem ``how``. Das Szenen-Schema wird aus dem obigen abgeleitet statt "
+"daneben gepflegt, sodass die beiden nicht auseinanderlaufen können; nur "
+"die eine Regel unterscheidet sich."
 
 #: ../../source/assy.rst:782
 #, python-brace-format, python-format
@@ -955,14 +1358,25 @@ msgid ""
 "expression evaluates to, which branch of an ``{% if %}`` is taken -- is "
 "left unreported rather than guessed at."
 msgstr ""
+"Da die Datei auf der Festplatte ein Template ist und nicht das YAML, zu "
+"dem sie rendert, maskiert der Prüfer vor dem Parsen jedes "
+"Jinja2-Konstrukt: ``{{ expr }}`` wird zu einem Platzhalterwert und ``{% "
+"tag %}`` zu Leerzeichen derselben Größe. Das maskierte Dokument behält "
+"Zeilen- und Spaltenaufbau der Datei exakt bei, sodass ein Template-Fehler, "
+"ein YAML-Fehler und ein Schemaverstoß allesamt an dem Zeichen gemeldet "
+"werden, aus dem sie stammen, und der Rumpf einer Schleife oder Bedingung "
+"einmal geprüft wird. Alles, was die Maskierung unerkennbar macht -- wozu "
+"ein Ausdruck auswertet, welcher Zweig eines ``{% if %}`` genommen wird --, "
+"bleibt ungemeldet statt geraten."
 
 #: ../../source/assy.rst:791
 msgid "Run the checks over a package from the command line with:"
 msgstr ""
+"Führen Sie die Prüfungen von der Befehlszeile aus über ein Paket aus mit:"
 
 #: ../../source/assy.rst:797
 msgid "or narrow it to ASSY files only:"
-msgstr ""
+msgstr "oder grenzen Sie sie auf ASSY-Dateien ein:"
 
 #: ../../source/assy.rst:803
 msgid ""
@@ -970,6 +1384,9 @@ msgid ""
 "process itself -- no daemon, no package to load -- so it answers even "
 "when the package does not:"
 msgstr ""
+"Um stattdessen einzelne Dateien zu prüfen, benennen Sie sie. Das läuft im "
+"``pc``-Prozess selbst -- kein Daemon, kein zu ladendes Paket --, sodass es "
+"auch dann antwortet, wenn das Paket es nicht tut:"
 
 #: ../../source/assy.rst:811
 msgid ""
@@ -977,6 +1394,9 @@ msgid ""
 "numbers), and ``--stdin`` to check content that has not been saved, which"
 " is how an editor checks the buffer on screen:"
 msgstr ""
+"Ergänzen Sie ``--json`` für maschinenlesbare Befunde (nullbasierte Zeilen- "
+"und Spaltennummern) und ``--stdin``, um Inhalte zu prüfen, die nicht "
+"gespeichert wurden, und so prüft ein Editor den Puffer auf dem Bildschirm:"
 
 #: ../../source/assy.rst:819
 msgid ""
@@ -985,6 +1405,11 @@ msgid ""
 "``partcad.yaml`` files around it: a file at least one scene declares and "
 "no assembly declares is a scene. Say so outright with ``--schema``:"
 msgstr ""
+"Ob eine einzelne Datei als Baugruppe oder als Szene geprüft wird, sagt die "
+"Datei nicht, daher ermittelt ``pc lint --file`` es aus den "
+"``partcad.yaml``-Dateien in der Umgebung: eine Datei, die mindestens eine "
+"Szene deklariert und keine Baugruppe deklariert, ist eine Szene. Sagen Sie "
+"es ausdrücklich mit ``--schema``:"
 
 #: ../../source/assy.rst:828
 msgid ""
@@ -997,6 +1422,14 @@ msgid ""
 " a file no loaded package mentions. Set ``partcad.lint.enabled`` to "
 "``false`` to turn that off."
 msgstr ""
+"Die `PartCAD-Erweiterung für VS Code "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
+"führt genau das aus, während eine ASSY-Datei geöffnet ist, und zeigt die "
+"Befunde in der Ansicht „Problems“. Sie beantwortet dieselbe Frage aus den "
+"Paketinhalten, die sie ohnehin schon geladen hat, also aus der Deklaration "
+"selbst statt aus einer Vermutung darüber, und fällt für eine Datei, die "
+"kein geladenes Paket erwähnt, auf die eigene Antwort des Befehls zurück. "
+"Setzen Sie ``partcad.lint.enabled`` auf ``false``, um das abzuschalten."
 
 #: ../../source/assy.rst:835
 msgid ""
@@ -1007,6 +1440,12 @@ msgid ""
 "flavor: nothing points at a package configuration, so ``--schema`` does "
 "not apply to one."
 msgstr ""
+"``partcad.yaml`` wird auf dieselbe Weise und vom selben Prüfer gegen das "
+"Konfigurationsschema (``src/partcad_utils/schema/partcad.json``) geprüft "
+"-- siehe :doc:`configuration`. Es ist ebenfalls ein Jinja2-Template und "
+"wird daher vor dem Parsen genauso maskiert wie eine ASSY-Datei, und es hat "
+"keine Baugruppen-/Szenen-Ausprägung: nichts zeigt auf eine "
+"Paketkonfiguration, sodass ``--schema`` für eine solche nicht gilt."
 
 #~ msgid ""
 #~ "The top-level node of an ASSY "

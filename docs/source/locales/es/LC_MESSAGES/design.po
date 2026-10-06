@@ -78,14 +78,12 @@ msgid "Basic shapes"
 msgstr "Formas básicas"
 
 #: ../../source/design.rst:33
-#, fuzzy
 msgid "Outer shape: `circle`, `rectangle`, `square`, `slot`"
-msgstr "Forma exterior: `circle`, `rectangle`, `square`"
+msgstr "Forma exterior: `circle`, `rectangle`, `square`, `slot`"
 
 #: ../../source/design.rst:34
-#, fuzzy
 msgid "Optional inner shape: `circle`, `rectangle`, `square`, `slot`"
-msgstr "Forma interior opcional: `circle`, `rectangle`, `square`"
+msgstr "Forma interior opcional: `circle`, `rectangle`, `square`, `slot`"
 
 #: ../../source/design.rst:36 ../../source/design.rst:65
 msgid "Files"
@@ -197,43 +195,42 @@ msgstr ""
 " otros ensamblajes."
 
 #: ../../source/design.rst:86
-#, fuzzy
 msgid ""
 "PartCAD is expected to have an ever-growing list of ways to define "
 "assemblies using existing parts."
 msgstr ""
-"PartCAD tiene una lista en constante crecimiento de formas de definir el "
-"modelo de una pieza:"
+"Se espera que PartCAD tenga una lista en constante crecimiento de formas "
+"de definir ensamblajes usando piezas existentes."
 
 #: ../../source/design.rst:89
 msgid "ASSY: assembly YAML"
-msgstr ""
+msgstr "ASSY: assembly YAML"
 
 #: ../../source/design.rst:91
-#, fuzzy
 msgid ""
 "The native format. The idea behind ASSY is to create a simplistic way to "
 "enumerate parts, define their parameters and define how parts connect."
 msgstr ""
-"Se espera que PartCAD tenga una lista en constante crecimiento de formas "
-"de definir ensamblajes usando piezas existentes. Sin embargo, por el "
-"momento solo se admite una forma. Se llama ASSY: assembly YAML. La idea "
-"detrás de ASSY es crear una forma simplificada de enumerar piezas, "
-"definir sus parámetros y definir cómo se conectan las piezas."
+"El formato nativo. La idea detrás de ASSY es crear una forma simplificada "
+"de enumerar piezas, definir sus parámetros y definir cómo se conectan las "
+"piezas."
 
 #: ../../source/design.rst:94
 msgid "STEP"
-msgstr ""
+msgstr "STEP"
 
 #: ../../source/design.rst:96
 msgid ""
 "A STEP file that carries an assembly structure, used as an assembly "
 "directly, with its components becoming parts of the package."
 msgstr ""
+"Un archivo STEP que lleva una estructura de ensamblaje, usado "
+"directamente como ensamblaje, y cuyos componentes se convierten en piezas "
+"del paquete."
 
 #: ../../source/design.rst:99
 msgid "URDF"
-msgstr ""
+msgstr "URDF"
 
 #: ../../source/design.rst:101
 msgid ""
@@ -242,6 +239,12 @@ msgid ""
 " file produces, evaluated with every joint at its zero position. PartCAD "
 "can also write a URDF (plus the meshes it references) from any assembly."
 msgstr ""
+"Una descripción de robot `URDF <https://wiki.ros.org/urdf>`_ usada "
+"directamente como ensamblaje. Sus enlaces se convierten en el mismo árbol "
+"de piezas colocadas que produce un archivo ASSY, evaluado con todas las "
+"articulaciones en su posición cero. PartCAD también puede escribir un "
+"URDF (más las mallas a las que hace referencia) a partir de cualquier "
+"ensamblaje."
 
 #: ../../source/design.rst:106
 msgid ""
@@ -253,6 +256,14 @@ msgid ""
 "transmissions - is dropped, and reported. :doc:`simulation` describes "
 "that gap and what closing it would take."
 msgstr ""
+"Un URDF es la descripción de un robot *simulable*. Lo que dice sobre el "
+"enlace en sí -- masa, inercia, fricción y contacto, material y color -- "
+"se convierte en propiedades de PartCAD con nombre de la pieza en la que "
+"se convierte ese enlace, y vuelve a salir al exportar. Lo que un "
+"ensamblaje construido a partir de colocaciones rígidas no tiene dónde "
+"poner -- la cinemática de las articulaciones, la geometría de colisión, "
+"los sensores, las transmisiones -- se descarta, y se informa. "
+":doc:`simulation` describe esa laguna y lo que costaría cerrarla."
 
 #: ../../source/design.rst:113
 msgid ""
@@ -260,13 +271,15 @@ msgid ""
 "the URDF above - nothing is copied into the package, so the file stays "
 "the source of truth."
 msgstr ""
+"Para un ensamblaje definido por un archivo que produjo otra herramienta "
+"-- el STEP y el URDF anteriores --, no se copia nada al paquete, de modo "
+"que el archivo sigue siendo la fuente de verdad."
 
 #: ../../source/design.rst:118
 msgid "Scenes"
 msgstr "Escenas"
 
 #: ../../source/design.rst:120
-#, fuzzy
 msgid ""
 "PartCAD does not yet implement scenes. But the idea is to be able to "
 "reproduce the same features as worlds in Gazebo to the extent that "
@@ -274,9 +287,9 @@ msgid ""
 "using XML while creating the scene. See :doc:`simulation`."
 msgstr ""
 "PartCAD todavía no implementa escenas. Pero la idea es poder reproducir "
-"las mismas características que los mundos (\"worlds\") en Gazebo, de modo"
-" que las escenas de PartCAD se puedan exportar y simular en Gazebo, pero "
-"sin usar XML al crear la escena."
+"las mismas características que los mundos (\"worlds\") en Gazebo, de modo "
+"que las escenas de PartCAD se puedan exportar y simular en Gazebo, pero "
+"sin usar XML al crear la escena. Consulte :doc:`simulation`."
 
 #: ../../source/design.rst:126
 msgid "Monorepos"
@@ -380,15 +393,15 @@ msgid "Object IDs"
 msgstr "IDs de objeto"
 
 #: ../../source/design.rst:169
-#, fuzzy
 msgid ""
 "PartCAD packages contain objects of different types: *sketches*, *parts*,"
 " *assemblies*, *scenes*, *interfaces*, *mates*, *materials*, *providers*,"
 " *software* and *partTypes*. All of them need to get referenced."
 msgstr ""
 "Los paquetes de PartCAD contienen objetos de diferentes tipos: "
-"*sketches*, *parts*, *assemblies*, *scenes*, *interfaces*, *providers*, "
-"etc. Todos ellos deben ser referenciados."
+"*sketches*, *parts*, *assemblies*, *scenes*, *interfaces*, *mates*, "
+"*materials*, *providers*, *software* y *partTypes*. Todos ellos deben "
+"poder referenciarse."
 
 #: ../../source/design.rst:175
 msgid "Single object"
@@ -517,22 +530,21 @@ msgid "Command line tools"
 msgstr "Herramientas de línea de comandos"
 
 #: ../../source/design.rst:253
-#, fuzzy
 msgid ""
 "PartCAD CLI tools get installed using the PyPI package ``partcad``, which"
 " also carries the Python module and the JSON-RPC service. The main tool "
 "is called ``pc``. The CLI tools are supposed to provide the complete set "
 "of PartCAD features."
 msgstr ""
-"Las herramientas de la CLI de PartCAD se instalan usando el módulo de "
-"PyPI ``partcad-cli``. La herramienta principal se llama ``pc``. Se espera"
-" que las herramientas de la CLI proporcionen el conjunto completo de "
+"Las herramientas de la CLI de PartCAD se instalan usando el paquete de "
+"PyPI ``partcad``, que lleva además el módulo de Python y el servicio "
+"JSON-RPC. La herramienta principal se llama ``pc``. Se espera que las "
+"herramientas de la CLI proporcionen el conjunto completo de "
 "funcionalidades de PartCAD."
 
 #: ../../source/design.rst:258
-#, fuzzy
 msgid "Graphical interfaces"
-msgstr "Interfaces"
+msgstr "Interfaces gráficas"
 
 #: ../../source/design.rst:260
 msgid ""
@@ -542,6 +554,12 @@ msgid ""
 " nor an editor set up. A **FreeCAD** add-on browses the same packages "
 "inside FreeCAD and imports objects into the open document."
 msgstr ""
+"La extensión de PartCAD para ``vscode`` está pensada para ser la "
+"herramienta gráfica principal. El **PartCAD IDE** es esa extensión, el "
+"editor y las herramientas de línea de comandos en una sola aplicación, "
+"para una máquina que no tiene ni Python ni un editor configurado. Un "
+"complemento para **FreeCAD** permite navegar por los mismos paquetes "
+"dentro de FreeCAD e importar objetos al documento abierto."
 
 #: ../../source/design.rst:266
 msgid ""
@@ -550,6 +568,11 @@ msgid ""
 "sandboxes, so they all see the same packages and the same cache as ``pc``"
 " does on the same machine. See :doc:`installation` for all three."
 msgstr ""
+"Ninguno de los tres lleva PartCAD dentro. Cada uno es un cliente del "
+"servicio ``partcad-json-rpc``, que es el dueño del contexto caliente y de "
+"los sandboxes, de modo que todos ven los mismos paquetes y la misma caché "
+"que ve ``pc`` en la misma máquina. Consulte :doc:`installation` para los "
+"tres."
 
 #: ../../source/design.rst:274
 msgid "Libraries and frameworks"

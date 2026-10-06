@@ -25,7 +25,7 @@ msgstr "Instalación"
 
 #: ../../source/installation.rst:9
 msgid "Plugin for Claude Code"
-msgstr ""
+msgstr "Plugin para Claude Code"
 
 #: ../../source/installation.rst:11
 msgid ""
@@ -34,6 +34,10 @@ msgid ""
 "sketches, describe and search what a package already has, and install the"
 " command line tools below for you."
 msgstr ""
+"Si usa `Claude Code <https://claude.com/claude-code>`_, empiece aquí: el "
+"plugin ``pc`` añade skills que generan piezas, ensamblajes y bocetos 2D, "
+"describen y buscan lo que un paquete ya contiene, e instalan por usted "
+"las herramientas de línea de comandos descritas más abajo."
 
 #: ../../source/installation.rst:20
 msgid ""
@@ -45,6 +49,14 @@ msgid ""
 "was asked. The skills run the same commands documented in :doc:`cli`, so "
 "nothing they produce depends on the agent that produced it."
 msgstr ""
+"Después, ``/pc:setup`` instala ``pc`` en esta máquina -- y, cuando se "
+"ejecuta desde una terminal de Visual Studio Code o VSCodium, :ref:`la "
+"extensión <vscode-extension>` en ese editor --, ``/pc:init`` crea un "
+"paquete, y ``/pc:gen a mounting bracket with four M4 holes`` escribe el "
+"script CAD, renderiza cuatro vistas del resultado y las compara con lo "
+"solicitado. Las skills ejecutan los mismos comandos documentados en "
+":doc:`cli`, por lo que nada de lo que producen depende del agente que lo "
+"produjo."
 
 #: ../../source/installation.rst:28
 msgid ""
@@ -53,10 +65,14 @@ msgid ""
 " release and contains no symlinks, which is what makes it install "
 "identically on Windows."
 msgstr ""
+"Este repositorio es el marketplace -- no hay un catálogo alojado donde "
+"buscar PartCAD. La rama ``plugin-dist`` se vuelve a publicar con cada "
+"release y no contiene enlaces simbólicos, que es lo que hace que se "
+"instale de forma idéntica en Windows."
 
 #: ../../source/installation.rst:32
 msgid "Two other ways to install the same plugin:"
-msgstr ""
+msgstr "Otras dos formas de instalar el mismo plugin:"
 
 #: ../../source/installation.rst:34
 msgid ""
@@ -65,6 +81,11 @@ msgid ""
 "through a symlink, so it needs a checkout where git created one -- on "
 "Windows, ``git config core.symlinks true`` before cloning."
 msgstr ""
+"``/plugin marketplace add partcad/partcad`` lee el catálogo del árbol de "
+"fuentes. Esa copia comparte sus skills con la biblioteca independiente de "
+"proveedor mediante un enlace simbólico, por lo que necesita un checkout "
+"en el que git lo haya creado -- en Windows, ``git config core.symlinks "
+"true`` antes de clonar."
 
 #: ../../source/installation.rst:37
 msgid ""
@@ -72,6 +93,9 @@ msgid ""
 "``pc-<version>.zip``, and ``claude --plugin-url <url>`` loads one for a "
 "single session. That is how to try a version without installing it."
 msgstr ""
+"Cada `release <https://github.com/partcad/partcad/releases>`_ incluye un "
+"``pc-<version>.zip``, y ``claude --plugin-url <url>`` carga uno para una "
+"sola sesión. Así se puede probar una versión sin instalarla."
 
 #: ../../source/installation.rst:41
 msgid ""
@@ -79,6 +103,9 @@ msgid ""
 "publishes it, so the plugin and the ``pc`` command line tool state the "
 "same version when they came from the same release."
 msgstr ""
+"El plugin se versiona junto con todo lo demás en el release que lo "
+"publica, de modo que el plugin y la herramienta de línea de comandos "
+"``pc`` indican la misma versión cuando provienen del mismo release."
 
 #: ../../source/installation.rst:46
 msgid ""
@@ -91,6 +118,14 @@ msgid ""
 " creates a package in -- so there is nothing to install here if you have "
 "PartCAD already."
 msgstr ""
+"Las skills son simplemente `Agent Skills "
+"<https://code.claude.com/docs/en/skills>`_ -- un directorio de archivos "
+"``SKILL.md`` -- y el plugin es una envoltura ligera que las entrega a "
+"Claude Code. Cualquier otro agente que lea ``SKILL.md`` puede usar la "
+"misma biblioteca, desde ``ai-agents/common/skills`` en el repositorio. "
+"También se distribuye dentro del wheel de ``partcad``, y ``pc init`` la "
+"instala en el repositorio donde crea un paquete -- por lo que aquí no hay "
+"nada que instalar si ya tiene PartCAD."
 
 #: ../../source/installation.rst:54
 msgid "Command line tools"
@@ -115,9 +150,14 @@ msgid ""
 "that just pulls ``partcad`` in, so ``pip install partcad-cli`` still "
 "works if you have it written down somewhere."
 msgstr ""
+"Un solo paquete lo contiene todo: la herramienta de línea de comandos "
+"``pc``, el módulo de Python y el servicio ``partcad-json-rpc`` con el que "
+"hablan las extensiones de los editores. ``partcad-cli`` era antes un "
+"paquete aparte y ahora es un paquete mínimo que simplemente instala "
+"``partcad``, por lo que ``pip install partcad-cli`` sigue funcionando si "
+"lo tiene apuntado en algún sitio."
 
 #: ../../source/installation.rst:74
-#, fuzzy
 msgid ""
 "No Python on the machine, or no interest in maintaining a Python "
 "environment? Install the :ref:`standalone command line tools <standalone-"
@@ -128,7 +168,8 @@ msgstr ""
 "¿No tiene Python en la máquina, o no le interesa mantener un entorno "
 "Python? Instale en su lugar las :ref:`herramientas de línea de comandos "
 "independientes <standalone-cli>`. Son las mismas herramientas, "
-"distribuidas con su propio intérprete."
+"distribuidas con su propio intérprete. También existe un :ref:`paquete "
+"snap <snap-package>` para Linux, que aún no se ha publicado."
 
 #: ../../source/installation.rst:81
 msgid ""
@@ -147,6 +188,10 @@ msgid ""
 "<standalone-cli>`, the :ref:`snap <snap-package>` and the :ref:`PartCAD "
 "IDE <partcad-ide>` carry a conda of their own and need none installed."
 msgstr ""
+"Esto se aplica a los wheels. Las :ref:`herramientas de línea de comandos "
+"independientes <standalone-cli>`, el :ref:`snap <snap-package>` y el "
+":ref:`PartCAD IDE <partcad-ide>` incluyen su propio conda y no necesitan "
+"que se instale ninguno."
 
 #: ../../source/installation.rst:91
 msgid ""
@@ -262,17 +307,25 @@ msgid ""
 "when there is no conda (see :ref:`python-sandbox`). ``pc healthcheck`` "
 "reports what this machine is missing."
 msgstr ""
+"La mayor parte del paquete es el OpenSCAD que incluye, así que su tamaño "
+"depende de eso: la compilación para Linux arm64, que no lo incluye, ocupa "
+"aproximadamente la mitad que las demás. No incluye ningún núcleo CAD: "
+"PartCAD construye cada forma en un sandbox que aprovisiona él mismo -- e "
+"incluye el conda que lo aprovisiona, de modo que no hay que instalar nada "
+"antes, y lo que obtiene es el sandbox ``conda`` en lugar del ``venv`` al "
+"que recurren los wheels cuando no hay conda (consulte "
+":ref:`python-sandbox`). ``pc healthcheck`` informa de lo que falta en "
+"esta máquina."
 
 #: ../../source/installation.rst:198
-#, fuzzy
 msgid ""
 "Supported platforms are Linux on x86_64 and arm64, and macOS on Apple "
 "silicon and on Intel. Windows is covered by the ``.zip`` archives under "
 ":ref:`manual installation <standalone-manual>`."
 msgstr ""
-"Las plataformas admitidas son Linux en x86_64, y macOS en Apple silicon. "
-"Windows está cubierto por el archivo ``.zip`` en :ref:`instalación manual"
-" <standalone-manual>`."
+"Las plataformas admitidas son Linux en x86_64 y arm64, y macOS en Apple "
+"silicon y en Intel. Windows está cubierto por los archivos ``.zip`` en "
+":ref:`instalación manual <standalone-manual>`."
 
 #: ../../source/installation.rst:203
 msgid ""
@@ -285,6 +338,15 @@ msgid ""
 "carries; the installer reads it, works out which of them this machine can"
 " run, and downloads that:"
 msgstr ""
+"Hay una compilación por cada *versión de sistema operativo* admitida, no "
+"una por sistema operativo. Un paquete congelado se enlaza con la "
+"biblioteca de C y los frameworks del sistema de la máquina que lo "
+"compiló, por lo que funciona en ella y en cualquiera más nueva, y en "
+"ninguna más antigua -- una única compilación de \"Linux\" significaría, "
+"sin decirlo, \"el Linux que resultara ser el de quien compiló\". Cada "
+"release publica un manifiesto, ``platforms.json``, que indica qué "
+"compilaciones incluye; el instalador lo lee, determina cuáles de ellas "
+"puede ejecutar esta máquina y descarga esa:"
 
 #: ../../source/installation.rst:216
 msgid ""
@@ -294,6 +356,12 @@ msgid ""
 "offered the 22.04 build, which has the lower floor. Pass ``--platform`` "
 "to install a specific one."
 msgstr ""
+"Los nombres de Ubuntu no implican el requisito de usar Ubuntu. Cualquier "
+"distribución de Linux puede ejecutar estos paquetes; lo que difiere entre "
+"los dos es la versión mínima de glibc, y a una máquina que el instalador "
+"no puede identificar como Ubuntu se le ofrece la compilación de 22.04, "
+"que tiene el límite más bajo. Pase ``--platform`` para instalar una "
+"concreta."
 
 #: ../../source/installation.rst:220
 msgid ""
@@ -303,6 +371,11 @@ msgid ""
 "publish. On Apple silicon that is the ``arm64`` archive; on an Intel Mac,"
 " the ``x86_64`` one."
 msgstr ""
+"macOS tiene una compilación por arquitectura en lugar de una por versión "
+"de macOS, porque un paquete compilado en macOS 15 funciona igual en macOS "
+"15 y en macOS 26 -- ambos se compilan y se prueban en instalación en las "
+"dos versiones antes de cada publicación. En Apple silicon es el archivo "
+"``arm64``; en un Mac con Intel, el ``x86_64``."
 
 #: ../../source/installation.rst:224
 msgid ""
@@ -312,6 +385,11 @@ msgid ""
 "glibc-style floor that would make one matter. It runs on Windows 10 and "
 "later."
 msgstr ""
+"Windows es una sola compilación en lugar de una por versión de Windows, "
+"porque no hay nada entre lo que elegir: la división existe para que una "
+"máquina pueda compararse con ella, y Windows no ofrece tal comparación -- "
+"ni el límite al estilo de glibc que haría que importara. Funciona en "
+"Windows 10 y posteriores."
 
 #: ../../source/installation.rst:228
 msgid ""
@@ -320,6 +398,10 @@ msgid ""
 "release carries. Install the latest release, or name the build with "
 "``--platform``."
 msgstr ""
+"Los releases hechos antes de que existiera ``platforms.json`` no se "
+"pueden resolver de esta manera: desde esta máquina no hay forma de saber "
+"qué compilaciones incluye uno de esos releases. Instale el último "
+"release, o indique la compilación con ``--platform``."
 
 #: ../../source/installation.rst:233
 msgid "Options"
@@ -404,46 +486,43 @@ msgstr "``partcad/partcad``"
 
 #: ../../source/installation.rst:257
 msgid "``--platform <id>``"
-msgstr ""
+msgstr "``--platform <id>``"
 
 #: ../../source/installation.rst:257
-#, fuzzy
 msgid "``PARTCAD_PLATFORM``"
-msgstr "``PARTCAD_REPOSITORY``"
+msgstr "``PARTCAD_PLATFORM``"
 
 #: ../../source/installation.rst:257
 msgid "detected from this machine"
-msgstr ""
+msgstr "detectada en esta máquina"
 
 #: ../../source/installation.rst:258
 msgid "``--ide``"
-msgstr ""
+msgstr "``--ide``"
 
 #: ../../source/installation.rst:258
-#, fuzzy
 msgid "``PARTCAD_IDE``"
-msgstr "``PARTCAD_BIN_DIR``"
+msgstr "``PARTCAD_IDE``"
 
 #: ../../source/installation.rst:258
-#, fuzzy
 msgid "off, the command line tools alone"
-msgstr "Herramientas de línea de comandos"
+msgstr "desactivado; solo las herramientas de línea de comandos"
 
 #: ../../source/installation.rst:259
-#, fuzzy
 msgid "``--app-dir <dir>``"
-msgstr "``--bin-dir <dir>``"
+msgstr "``--app-dir <dir>``"
 
 #: ../../source/installation.rst:259
-#, fuzzy
 msgid "``PARTCAD_APP_DIR``"
-msgstr "``PARTCAD_BIN_DIR``"
+msgstr "``PARTCAD_APP_DIR``"
 
 #: ../../source/installation.rst:259
 msgid ""
 "macOS, with ``--ide``: ``/Applications`` when it is writable, "
 "``~/Applications`` otherwise"
 msgstr ""
+"macOS, con ``--ide``: ``/Applications`` cuando se puede escribir en él, "
+"``~/Applications`` en caso contrario"
 
 #: ../../source/installation.rst:264
 msgid ""
@@ -498,7 +577,6 @@ msgstr ""
 "reciente:"
 
 #: ../../source/installation.rst:298
-#, fuzzy
 msgid ""
 "The URL only decides which *installer* runs. By default that installer "
 "still downloads the bundle of the latest release, because bundles are "
@@ -515,10 +593,13 @@ msgstr ""
 "ese instalador sigue descargando el paquete del último release, porque "
 "los paquetes se publican por release, no por commit. Para instalar el "
 "paquete que realmente compiló una rama o pull request, tómelo de la "
-"ejecución del flujo de trabajo ``Standalone`` de esa rama o pull request:"
-" abra la ejecución en GitHub, descargue el artefacto ``partcad-"
-"standalone-<platform>``, descomprímalo, y apunte el instalador al "
-"directorio que contiene el archivo."
+"ejecución del flujo de trabajo ``Standalone`` de esa rama o pull request: "
+"abra la ejecución en GitHub, descargue el artefacto "
+"``partcad-standalone-<platform>``, descomprímalo y apunte el instalador "
+"al directorio que contiene el archivo. Indique esa compilación con "
+"``--platform``: un artefacto contiene la única compilación que le da "
+"nombre y ningún ``platforms.json``, por lo que allí no hay un manifiesto "
+"con el que el instalador pueda resolver esta máquina."
 
 #: ../../source/installation.rst:313
 msgid ""
@@ -548,24 +629,28 @@ msgid ""
 "``partcad-<version>-ubuntu-22.04-x86_64.tar.xz``, "
 "``partcad-<version>-ubuntu-22.04-arm64.tar.xz``"
 msgstr ""
+"``partcad-<version>-ubuntu-22.04-x86_64.tar.xz``, "
+"``partcad-<version>-ubuntu-22.04-arm64.tar.xz``"
 
 #: ../../source/installation.rst:325
 msgid ""
 "``partcad-<version>-ubuntu-24.04-x86_64.tar.xz``, "
 "``partcad-<version>-ubuntu-24.04-arm64.tar.xz``"
 msgstr ""
+"``partcad-<version>-ubuntu-24.04-x86_64.tar.xz``, "
+"``partcad-<version>-ubuntu-24.04-arm64.tar.xz``"
 
 #: ../../source/installation.rst:326
-#, fuzzy
 msgid ""
 "``partcad-<version>-macos-15-arm64.tar.xz``, "
 "``partcad-<version>-macos-15-x86_64.tar.xz``"
-msgstr "``partcad-<version>-macos-arm64.tar.gz``"
+msgstr ""
+"``partcad-<version>-macos-15-arm64.tar.xz``, "
+"``partcad-<version>-macos-15-x86_64.tar.xz``"
 
 #: ../../source/installation.rst:327
-#, fuzzy
 msgid "``partcad-<version>-windows-2022-x86_64.zip``"
-msgstr "``partcad-<version>-windows-x86_64.zip``"
+msgstr "``partcad-<version>-windows-2022-x86_64.zip``"
 
 #: ../../source/installation.rst:329
 msgid ""
@@ -574,6 +659,10 @@ msgid ""
 "doubt, the oldest build of your operating system runs everywhere the "
 "newer one does."
 msgstr ""
+"Elija la más reciente respecto a la que su máquina no sea más antigua -- "
+"consulte :ref:`la nota anterior <standalone-os-versions>` sobre por qué "
+"hay más de una. En caso de duda, la compilación más antigua de su sistema "
+"operativo funciona en todos los sitios donde funciona la más nueva."
 
 #: ../../source/installation.rst:333
 msgid ""
@@ -597,6 +686,12 @@ msgid ""
 "(``xz-utils`` on Debian and Ubuntu, ``xz`` on Fedora and Alpine); "
 "``install.sh`` says so by name if it is missing."
 msgstr ""
+"El ``tar`` de macOS y de todas las distribuciones de Linux lee xz sin que "
+"haya que indicárselo, razón por la cual el comando siguiente no pasa "
+"ninguna opción de compresión. Un sistema Linux muy reducido puede "
+"necesitar que se instale la utilidad ``xz`` para ello (``xz-utils`` en "
+"Debian y Ubuntu, ``xz`` en Fedora y Alpine); ``install.sh`` lo indica por "
+"su nombre si falta."
 
 #: ../../source/installation.rst:349
 msgid ""
@@ -616,16 +711,14 @@ msgid "What is included, and what is not"
 msgstr "Qué se incluye y qué no"
 
 #: ../../source/installation.rst:356
-#, fuzzy
 msgid ""
 "The bundle carries the optional extras that the wheels leave to the user,"
 " because a frozen bundle cannot be extended afterwards: the Python linter"
 " (``lint``) is in it, ready to run."
 msgstr ""
-"El paquete incluye todo lo que instalarían los wheels, incluyendo los "
-"extras opcionales que los wheels dejan a criterio del usuario: el linter "
-"de Python (``lint``). Un paquete congelado no se puede extender después, "
-"por lo que se distribuye completo."
+"El paquete incluye los extras opcionales que los wheels dejan a criterio "
+"del usuario, porque un paquete congelado no se puede extender después: el "
+"linter de Python (``lint``) está dentro, listo para ejecutarse."
 
 #: ../../source/installation.rst:359
 msgid ""
@@ -636,6 +729,12 @@ msgid ""
 " Leaving OpenCASCADE out of the bundle is most of why it is around 200MB "
 "rather than around 1GB."
 msgstr ""
+"Lo que **no** incluye es un núcleo CAD. El paquete son tres programas de "
+"consola, no una biblioteca que importar, y cada forma que esos programas "
+"construyen, renderizan, exportan o teselan se produce en el sandbox que "
+"PartCAD aprovisiona y vuelve como geometría que los comandos nunca abren "
+"por sí mismos. Dejar OpenCASCADE fuera del paquete es la mayor parte de "
+"la razón por la que ocupa unos 200MB en lugar de alrededor de 1GB."
 
 #: ../../source/installation.rst:364
 msgid ""
@@ -648,6 +747,15 @@ msgid ""
 "contained executable of about 12-22MB, and PartCAD uses it when the "
 "machine has no conda of its own."
 msgstr ""
+"Sí incluye el **conda** que construye ese sandbox. En otros casos conda "
+"es opcional -- sin él PartCAD construye en su lugar un entorno virtual "
+"simple (consulte :ref:`python-sandbox`) --, pero un entorno virtual se "
+"construye *a partir de* un intérprete, y la máquina para la que existe "
+"este paquete es precisamente la que no tiene Python del que construirlo. "
+"Así que todos los paquetes, en todas las plataformas, incluyen "
+"`micromamba <https://mamba.readthedocs.io/>`_, un único ejecutable "
+"autocontenido de unos 12-22MB, y PartCAD lo usa cuando la máquina no "
+"tiene su propio conda."
 
 #: ../../source/installation.rst:370
 msgid ""
@@ -658,6 +766,13 @@ msgid ""
 "all of it again. Nothing needs to be configured either way; ``pc "
 "healthcheck`` says which conda was found."
 msgstr ""
+"Si ya tiene ``conda`` o ``mamba``, se usa el suyo y se ignora la copia "
+"incluida. Esto es deliberado: su conda tiene los canales que usted "
+"configuró y una caché de paquetes con los gigabytes a partir de los "
+"cuales se construye un sandbox CAD, y tomar el nuestro en su lugar "
+"dejaría esa caché inservible y lo descargaría todo de nuevo. En ninguno "
+"de los dos casos hay que configurar nada; ``pc healthcheck`` indica qué "
+"conda se encontró."
 
 #: ../../source/installation.rst:375
 msgid ""
@@ -667,6 +782,11 @@ msgid ""
 " status`` reports their size and ``pc system reset`` clears them, and the"
 " next command rebuilds them."
 msgstr ""
+"De forma predeterminada, el conda incluido mantiene su caché de paquetes "
+"en ``~/.partcad/conda``, junto a los sandboxes que crea en "
+"``~/.partcad/sandbox``. Eliminar ``~/.partcad`` borra ambos, ``pc system "
+"status`` informa de su tamaño y ``pc system reset`` los vacía, y el "
+"siguiente comando los reconstruye."
 
 #: ../../source/installation.rst:379
 msgid ""
@@ -676,9 +796,13 @@ msgid ""
 "sentence above applies to it. It is your cache, in your location, and "
 "PartCAD neither reports nor deletes it."
 msgstr ""
+"La excepción es ``MAMBA_ROOT_PREFIX``: si ya lo tiene definido -- porque "
+"usa micromamba por su cuenta --, la copia incluida usa su prefijo en "
+"lugar de crear una segunda caché propia, y entonces nada de la frase "
+"anterior se le aplica. Es su caché, en su ubicación, y PartCAD no informa "
+"de ella ni la elimina."
 
 #: ../../source/installation.rst:383
-#, fuzzy
 msgid ""
 "Every bundle but Linux arm64 also carries **OpenSCAD**, which PartCAD "
 "runs as an external program to build ``.scad`` parts. The bundled copy is"
@@ -686,12 +810,12 @@ msgid ""
 " bundle behaves the same everywhere rather than depending on which "
 "version a given host happens to have. Three consequences worth knowing:"
 msgstr ""
-"En Linux y Windows también incluye **OpenSCAD**, que PartCAD ejecuta como"
-" un programa externo para construir piezas ``.scad``. La copia incluida "
-"se usa con preferencia sobre cualquier OpenSCAD instalado en la máquina, "
-"de modo que el paquete se comporte igual en todas partes en lugar de "
-"depender de qué versión tenga un host determinado. Dos consecuencias que "
-"vale la pena conocer:"
+"Todos los paquetes excepto el de Linux arm64 incluyen también "
+"**OpenSCAD**, que PartCAD ejecuta como un programa externo para construir "
+"piezas ``.scad``. La copia incluida se usa con preferencia sobre "
+"cualquier OpenSCAD instalado en la máquina, de modo que el paquete se "
+"comporte igual en todas partes en lugar de depender de qué versión tenga "
+"un host determinado. Tres consecuencias que vale la pena conocer:"
 
 #: ../../source/installation.rst:388
 msgid ""
@@ -737,24 +861,38 @@ msgid ""
 "is a considerably newer OpenSCAD than 2021.01, so a part may render "
 "differently than it did with a 2021.01 you had installed."
 msgstr ""
+"El OpenSCAD incluido es una instantánea de desarrollo en lugar de la "
+"última versión publicada, y es la *misma* instantánea en todas las "
+"plataformas, de modo que una pieza ``.scad`` se renderiza igual donde sea "
+"que ejecute ``pc``. La última versión publicada, 2021.01, no podía ser "
+"esa versión compartida: es anterior a Apple silicon y se distribuye como "
+"una compilación solo para Intel que requeriría Rosetta 2 sin decirlo, y "
+"Homebrew la deshabilitó en septiembre de 2026 por no pasar la "
+"comprobación de Gatekeeper de macOS. Es un OpenSCAD considerablemente más "
+"nuevo que 2021.01, por lo que una pieza puede renderizarse de forma "
+"distinta a como lo hacía con un 2021.01 que tuviera instalado."
 
 #: ../../source/installation.rst:403
 msgid ""
 "The Linux arm64 bundles carry no OpenSCAD: upstream builds no current "
 "arm64 snapshot. Install OpenSCAD yourself there and PartCAD will use it."
 msgstr ""
+"Los paquetes de Linux arm64 no incluyen OpenSCAD: el proyecto original no "
+"compila ninguna instantánea actual para arm64. Instale OpenSCAD usted "
+"mismo allí y PartCAD lo usará."
 
 #: ../../source/installation.rst:406
-#, fuzzy
 msgid ""
 "One thing is deliberately not in the bundle, because PartCAD runs it as "
 "an external program rather than importing it, exactly as the wheels do: "
 "**git**, used for your git configuration when packages are fetched from "
 "git repositories. Packages are cloned either way, through ``libgit2``."
 msgstr ""
-"Otras dos cosas están deliberadamente fuera del paquete, porque PartCAD "
-"las ejecuta como programas externos en lugar de importarlas, exactamente "
-"como hacen los wheels:"
+"Una cosa está deliberadamente fuera del paquete, porque PartCAD la "
+"ejecuta como un programa externo en lugar de importarla, exactamente como "
+"hacen los wheels: **git**, usado para su configuración de git cuando los "
+"paquetes se obtienen de repositorios git. Los paquetes se clonan en "
+"cualquier caso, mediante ``libgit2``."
 
 #: ../../source/installation.rst:410
 msgid "Run ``pc healthcheck`` to see what is missing on the current machine."
@@ -772,7 +910,7 @@ msgstr ""
 
 #: ../../source/installation.rst:420
 msgid "Snap (Linux)"
-msgstr ""
+msgstr "Snap (Linux)"
 
 #: ../../source/installation.rst:422
 msgid ""
@@ -783,6 +921,13 @@ msgid ""
 " machine, the bundled OpenSCAD. What the snap adds is the packaging: "
 "snapd installs it, keeps it up to date, and removes it cleanly."
 msgstr ""
+"En Linux, las herramientas independientes también se empaquetan como un "
+"`snap <https://snapcraft.io/docs>`_, para x86_64 y arm64. Es el mismo "
+"paquete que los archivos ``ubuntu-24.04`` anteriores, por lo que todo lo "
+"dicho sobre ellos se aplica aquí también -- lo que incluye, lo que sigue "
+"esperando de la máquina, el OpenSCAD incluido. Lo que añade el snap es el "
+"empaquetado: snapd lo instala, lo mantiene actualizado y lo elimina "
+"limpiamente."
 
 #: ../../source/installation.rst:429
 msgid ""
@@ -792,6 +937,11 @@ msgid ""
 "credentials and, because the snap is classic, a manual store review; both"
 " are still to come."
 msgstr ""
+"**El snap aún no se ha publicado.** Lo compila CI, pero no está en la "
+"Snap Store ni se adjunta a los releases de GitHub, por lo que hoy ``snap "
+"install partcad`` no funciona. Publicarlo requiere credenciales de la "
+"Snap Store y, al ser un snap classic, una revisión manual de la tienda; "
+"ambas cosas están todavía pendientes."
 
 #: ../../source/installation.rst:433
 msgid ""
@@ -799,10 +949,14 @@ msgid ""
 "arm64``) artifact from a run of the ``Standalone`` workflow on GitHub, "
 "unzip it, and install the ``.snap`` inside as below."
 msgstr ""
+"Para probarlo ahora, descargue el artefacto ``partcad-snap-amd64`` (o "
+"``partcad-snap-arm64``) de una ejecución del flujo de trabajo "
+"``Standalone`` en GitHub, descomprímalo e instale el ``.snap`` que "
+"contiene como se indica a continuación."
 
 #: ../../source/installation.rst:442
 msgid "Two flags need explaining:"
-msgstr ""
+msgstr "Dos opciones requieren explicación:"
 
 #: ../../source/installation.rst:444
 msgid ""
@@ -812,6 +966,12 @@ msgid ""
 " socket that the Visual Studio Code extension connects to. A strictly "
 "confined snap could do none of that."
 msgstr ""
+"``--classic`` es el confinamiento. PartCAD trabaja con sus propios "
+"archivos: lee y escribe proyectos CAD en cualquier parte del disco, clona "
+"repositorios git, construye sandboxes y ejecuta scripts CAD en ellos, y "
+"sirve un daemon a través de un socket al que se conecta la extensión de "
+"Visual Studio Code. Un snap con confinamiento estricto no podría hacer "
+"nada de eso."
 
 #: ../../source/installation.rst:448
 msgid ""
@@ -819,6 +979,9 @@ msgid ""
 " downloaded file is not. It stops being necessary once the snap is "
 "published."
 msgstr ""
+"``--dangerous`` indica que el paquete no está firmado por la Snap Store, "
+"lo que ocurre con un archivo descargado. Deja de ser necesario una vez "
+"que el snap se publique."
 
 #: ../../source/installation.rst:451
 msgid ""
@@ -826,10 +989,13 @@ msgid ""
 "to the app named after the snap itself. Without it, the commands are "
 "``partcad``, ``partcad.pc`` and ``partcad.json-rpc``."
 msgstr ""
+"``snap alias`` está ahí porque un snap solo da el nombre de comando "
+"simple a la aplicación que lleva el nombre del propio snap. Sin él, los "
+"comandos son ``partcad``, ``partcad.pc`` y ``partcad.json-rpc``."
 
 #: ../../source/installation.rst:455
 msgid "Where it keeps its state"
-msgstr ""
+msgstr "Dónde guarda su estado"
 
 #: ../../source/installation.rst:457
 msgid ""
@@ -839,6 +1005,11 @@ msgid ""
 "all of that lives in ``~/snap/partcad/common`` instead, and ``sudo snap "
 "remove --purge partcad`` takes it away with the snap."
 msgstr ""
+"En todos los demás casos, PartCAD guarda su caché, sus sandboxes y sus "
+"clones de git en ``~/.partcad``. El snap no los escribe allí. Define "
+"``PC_INTERNAL_STATE_DIR`` apuntando al directorio por usuario que le da "
+"snapd, de modo que todo eso reside en ``~/snap/partcad/common``, y ``sudo "
+"snap remove --purge partcad`` se lo lleva junto con el snap."
 
 #: ../../source/installation.rst:462
 msgid ""
@@ -847,6 +1018,11 @@ msgid ""
 "one configuration keeps applying whether you installed PartCAD from the "
 "snap, the standalone bundle, or a wheel."
 msgstr ""
+"Su archivo de configuración es la excepción, a propósito: "
+"``~/.partcad/config.yaml`` se lee desde el directorio de inicio como "
+"siempre, de modo que una misma configuración sigue aplicándose tanto si "
+"instaló PartCAD desde el snap, desde el paquete independiente o desde un "
+"wheel."
 
 #: ../../source/installation.rst:466
 msgid ""
@@ -854,10 +1030,13 @@ msgid ""
 "identifies you, and an id that moved with the state directory would count"
 " one machine as several."
 msgstr ""
+"El identificador de telemetría se guarda junto a él, por la misma razón "
+"pero a la inversa: lo identifica a usted, y un identificador que se "
+"moviera con el directorio de estado contaría una máquina como varias."
 
 #: ../../source/installation.rst:470
 msgid "conda and git"
-msgstr ""
+msgstr "conda y git"
 
 #: ../../source/installation.rst:472
 msgid ""
@@ -865,6 +1044,10 @@ msgid ""
 "your home directory -- the usual place -- is not visible to it, and "
 "neither is a git outside the standard system prefixes."
 msgstr ""
+"Un snap no lleva consigo el entorno de su shell, por lo que un conda "
+"instalado dentro de su directorio de inicio -- el lugar habitual -- no es "
+"visible para él, como tampoco lo es un git fuera de los prefijos estándar "
+"del sistema."
 
 #: ../../source/installation.rst:475
 msgid ""
@@ -876,6 +1059,13 @@ msgid ""
 " not pick up is *your* conda, and with it your package cache: the snap "
 "builds its sandbox from scratch the first time."
 msgstr ""
+"conda ya no importa, y eso es lo único que ha cambiado y conviene saber "
+"aquí. El snap envuelve el paquete independiente, el paquete incluye su "
+"propio conda, y una carga útil dentro del snap es visible para él diga lo "
+"que diga su shell -- así que el snap obtiene el sandbox ``conda`` "
+"(consulte :ref:`python-sandbox`) en lugar de recurrir a un entorno "
+"virtual. Lo que no detectará es *su* conda, y con él su caché de "
+"paquetes: el snap construye su sandbox desde cero la primera vez."
 
 #: ../../source/installation.rst:481
 msgid ""
@@ -884,6 +1074,10 @@ msgid ""
 "everywhere else; what the snap cannot see is your git *configuration* "
 "(see :ref:`git-configuration`)."
 msgstr ""
+"git sigue siendo esperado y aceptado en lugar de evitado. Los paquetes "
+"importados de repositorios git se siguen clonando, mediante ``libgit2`` "
+"como en todas partes; lo que el snap no puede ver es su *configuración* "
+"de git (consulte :ref:`git-configuration`)."
 
 #: ../../source/installation.rst:489
 msgid ""
@@ -891,14 +1085,18 @@ msgid ""
 "conda package cache you already have, use the :ref:`standalone bundle "
 "<standalone-cli>` or the wheels, which run with your own environment."
 msgstr ""
+"Si necesita su propia configuración de git, o quiere que el snap comparta "
+"la caché de paquetes de conda que ya tiene, use el :ref:`paquete "
+"independiente <standalone-cli>` o los wheels, que se ejecutan con su "
+"propio entorno."
 
 #: ../../source/installation.rst:492
 msgid "To remove the snap, including its data:"
-msgstr ""
+msgstr "Para eliminar el snap, incluidos sus datos:"
 
 #: ../../source/installation.rst:503
 msgid "PartCAD IDE (no Python, no editor)"
-msgstr ""
+msgstr "PartCAD IDE (sin Python, sin editor)"
 
 #: ../../source/installation.rst:505
 msgid ""
@@ -908,6 +1106,11 @@ msgid ""
 " to install, no list of extensions to work through. It opens in the "
 "PartCAD workbench."
 msgstr ""
+"El PartCAD IDE es una sola aplicación que lo contiene todo: el editor, la "
+"extensión de PartCAD, las extensiones que la acompañan y las mismas "
+"herramientas de línea de comandos que la compilación independiente "
+"anterior. Nada que configurar, ningún Python que instalar, ninguna lista "
+"de extensiones que recorrer. Se abre en el workbench de PartCAD."
 
 #: ../../source/installation.rst:510
 msgid ""
@@ -916,6 +1119,9 @@ msgid ""
 "Studio Code, install :ref:`the extension <vscode-extension>` there "
 "instead."
 msgstr ""
+"Úselo si PartCAD es lo que quiere hacer, en lugar de algo que quiere "
+"añadir a un editor que ya tiene. Si ya trabaja en Visual Studio Code, "
+"instale allí :ref:`la extensión <vscode-extension>` en su lugar."
 
 #: ../../source/installation.rst:523
 msgid ""
@@ -930,6 +1136,16 @@ msgid ""
 "inside the IDE -- so the command line tools are installed too, without a "
 "second download."
 msgstr ""
+"El mismo instalador que las herramientas de línea de comandos, con las "
+"mismas opciones: todo lo descrito para las :ref:`herramientas de línea de "
+"comandos independientes <standalone-cli>` se aplica aquí también. En "
+"Linux se descomprime en ``~/.local/share/partcad/<version>-ide`` y añade "
+"una entrada al menú de aplicaciones. En macOS coloca ``PartCAD IDE.app`` "
+"en ``/Applications``, o en ``~/Applications`` cuando no se puede escribir "
+"en el primero; ``--app-dir`` lo elige. En cualquier caso, ``partcad-ide`` "
+"se enlaza en ``~/.local/bin``, junto con ``pc`` y ``partcad`` de la copia "
+"que hay dentro del IDE -- de modo que las herramientas de línea de "
+"comandos también quedan instaladas, sin una segunda descarga."
 
 #: ../../source/installation.rst:531
 msgid ""
@@ -942,12 +1158,23 @@ msgid ""
 "your ``PATH``. Uninstall it from \"Apps & features\" like any other "
 "application."
 msgstr ""
+"En Windows, descargue ``partcad-ide-<version>-windows-x86_64-setup.exe`` "
+"del `release de GitHub <https://github.com/partcad/partcad/releases>`_ y "
+"ejecútelo. Se instala para el usuario actual sin pedir permisos de "
+"administrador, en ``%LOCALAPPDATA%\\Programs\\PartCAD IDE``, y ofrece "
+"\"para todos los usuarios\" como opción. Añade una entrada al menú Inicio "
+"y -- a menos que desactive la opción -- coloca ``partcad-ide`` y ``pc`` "
+"en su ``PATH``. Desinstálelo desde \"Aplicaciones y características\" "
+"como cualquier otra aplicación."
 
 #: ../../source/installation.rst:538
 msgid ""
 "The installer is not signed, so SmartScreen shows a warning: choose "
 "\"More info\", then \"Run anyway\"."
 msgstr ""
+"El instalador no está firmado, por lo que SmartScreen muestra una "
+"advertencia: elija \"Más información\" y luego \"Ejecutar de todas "
+"formas\"."
 
 #: ../../source/installation.rst:540
 msgid ""
@@ -955,6 +1182,9 @@ msgid ""
 " unpacking somewhere and running ``partcad-ide.exe`` without installing "
 "anything."
 msgstr ""
+"``partcad-ide-<version>-windows-x86_64.zip`` se publica junto a él, para "
+"descomprimirlo en algún sitio y ejecutar ``partcad-ide.exe`` sin instalar "
+"nada."
 
 #: ../../source/installation.rst:543
 msgid ""
@@ -966,10 +1196,18 @@ msgid ""
 "bundle carries a conda, so there is nothing to install alongside the IDE "
 "either (see :ref:`python-sandbox`)."
 msgstr ""
+"Se descomprime en unos 500MB: un editor, un intérprete de Python, las "
+"herramientas de línea de comandos y las extensiones, todo en un archivo. "
+"Igual que el paquete independiente que lleva dentro, no incluye ningún "
+"núcleo CAD -- las formas se construyen en un sandbox que PartCAD "
+"aprovisiona en la máquina. El conda que lo aprovisiona viene del mismo "
+"sitio: el IDE distribuye el paquete independiente, y el paquete incluye "
+"un conda, así que tampoco hay nada que instalar junto al IDE (consulte "
+":ref:`python-sandbox`)."
 
 #: ../../source/installation.rst:550
 msgid "The first start"
-msgstr ""
+msgstr "El primer arranque"
 
 #: ../../source/installation.rst:552
 msgid ""
@@ -982,6 +1220,15 @@ msgid ""
 "of your own, look at it in 3D, render the package, use ``pc`` in the "
 "terminal -- each with a link to the page here that explains it."
 msgstr ""
+"No hay nada que configurar después de instalarlo. La primera vez que "
+"arranca el IDE, ejecuta ``pc init`` en ``~/.partcad/projects/start`` -- "
+"``%USERPROFILE%\\.partcad\\projects\\start`` en Windows -- y abre esa "
+"carpeta como espacio de trabajo, de modo que la ventana que obtiene tiene "
+"un paquete dentro en lugar de un editor vacío. Junto a ella se abre una "
+"ventana de bienvenida con lo que conviene hacer primero: abrir un ejemplo "
+"que ya funciona, añadir una pieza propia, verla en 3D, renderizar el "
+"paquete, usar ``pc`` en la terminal -- cada cosa con un enlace a la "
+"página de aquí que la explica."
 
 #: ../../source/installation.rst:559
 msgid ""
@@ -991,6 +1238,11 @@ msgid ""
 "take it with it. Move it, put it in git, or leave it and make your own "
 "with ``pc init`` somewhere else."
 msgstr ""
+"El paquete es uno ordinario en una carpeta ordinaria. Está bajo "
+"``~/.partcad`` en lugar de dentro de la aplicación, de modo que ``pc`` en "
+"cualquier terminal trabaja con el mismo paquete, y desinstalar el IDE no "
+"se lo lleva consigo. Muévalo, póngalo en git, o déjelo y cree el suyo con "
+"``pc init`` en otro sitio."
 
 #: ../../source/installation.rst:563
 msgid ""
@@ -1003,16 +1255,27 @@ msgid ""
 "Studio Code, which does ask, :ref:`the extension <vscode-extension>` "
 "waits for the answer."
 msgstr ""
+"El PartCAD IDE no pregunta si confía en una carpeta antes de que PartCAD "
+"la abra. PartCAD ejecuta el código de los paquetes que abre -- eso es lo "
+"que significa construir una pieza a partir de un script -- y el IDE "
+"existe para eso, así que la confianza del espacio de trabajo está "
+"desactivada en él, para todas las carpetas y para todo el editor "
+"(incluidas las tareas y la depuración, que es lo que permite ejecutar el "
+"comando \"Render\" del paquete). Abra solo paquetes que estaría dispuesto "
+"a ejecutar. En Visual Studio Code, que sí pregunta, :ref:`la extensión "
+"<vscode-extension>` espera la respuesta."
 
 #: ../../source/installation.rst:570
 msgid "Start from an example"
-msgstr ""
+msgstr "Empiece desde un ejemplo"
 
 #: ../../source/installation.rst:572
 msgid ""
 "The welcome window's second step, and ``PartCAD IDE: Open an example`` in"
 " the Command Palette, offer packages that already work:"
 msgstr ""
+"El segundo paso de la ventana de bienvenida, y ``PartCAD IDE: Open an "
+"example`` en la Paleta de comandos, ofrecen paquetes que ya funcionan:"
 
 #: ../../source/installation.rst:575
 msgid ""
@@ -1020,12 +1283,17 @@ msgid ""
 "cube declared again at other dimensions, which is how a package reuses a "
 "shape instead of copying it."
 msgstr ""
+"**Una pieza en CadQuery** -- un cubo y un cilindro como scripts, y el "
+"mismo cubo declarado de nuevo con otras dimensiones, que es la forma en "
+"que un paquete reutiliza una forma en lugar de copiarla."
 
 #: ../../source/installation.rst:577
 msgid ""
 "**A part in build123d** -- the smallest package there is: one script, one"
 " entry under ``parts:``."
 msgstr ""
+"**Una pieza en build123d** -- el paquete más pequeño que existe: un "
+"script, una entrada bajo ``parts:``."
 
 #: ../../source/installation.rst:578
 msgid ""
@@ -1033,12 +1301,17 @@ msgid ""
 "parameterized module PartCAD instantiates with arguments from "
 "``partcad.yaml``."
 msgstr ""
+"**Una pieza en OpenSCAD** -- un archivo ``.scad`` usado tal cual, y un "
+"módulo parametrizado que PartCAD instancia con argumentos de "
+"``partcad.yaml``."
 
 #: ../../source/installation.rst:580
 msgid ""
 "**An assembly** -- parts placed relative to each other in an ``.assy`` "
 "file, taken from *other* packages, which come with it."
 msgstr ""
+"**Un ensamblaje** -- piezas colocadas unas respecto a otras en un archivo "
+"``.assy``, tomadas de *otros* paquetes, que vienen con él."
 
 #: ../../source/installation.rst:583
 msgid ""
@@ -1048,32 +1321,43 @@ msgid ""
 " they show up in the PartCAD Explorer and are yours to change. A copy you"
 " have already edited is never overwritten."
 msgstr ""
+"Son los ejemplos que publica este proyecto -- los paquetes de `examples/ "
+"<https://github.com/partcad/partcad/tree/main/examples>`_ -- copiados en "
+"``~/.partcad/projects/start`` junto a su propio paquete, donde aparecen "
+"en el PartCAD Explorer y son suyos para modificarlos. Una copia que ya "
+"haya editado nunca se sobrescribe."
 
 #: ../../source/installation.rst:588
 msgid ""
 "Every step of the welcome window also links to the page of this "
 "documentation that explains it, and the last one lists them all."
 msgstr ""
+"Cada paso de la ventana de bienvenida enlaza también con la página de "
+"esta documentación que lo explica, y el último las enumera todas."
 
 #: ../../source/installation.rst:591
 msgid ""
 "This happens once. Afterwards the IDE opens where you left it, like any "
 "editor:"
 msgstr ""
+"Esto ocurre una sola vez. Después, el IDE se abre donde lo dejó, como "
+"cualquier editor:"
 
 #: ../../source/installation.rst:593
 msgid ""
 "``PartCAD IDE: Open the starter package`` in the Command Palette opens "
 "the package again, and creates it if it is not there."
 msgstr ""
+"``PartCAD IDE: Open the starter package`` en la Paleta de comandos vuelve "
+"a abrir el paquete, y lo crea si no está."
 
 #: ../../source/installation.rst:595
 msgid "``PartCAD IDE: Open an example`` copies another example in beside it."
-msgstr ""
+msgstr "``PartCAD IDE: Open an example`` copia otro ejemplo al lado."
 
 #: ../../source/installation.rst:596
 msgid "``PartCAD IDE: Welcome`` opens the welcome window again."
-msgstr ""
+msgstr "``PartCAD IDE: Welcome`` vuelve a abrir la ventana de bienvenida."
 
 #: ../../source/installation.rst:597
 msgid ""
@@ -1081,6 +1365,9 @@ msgid ""
 "thing off for a fresh installation: the IDE then starts in an empty "
 "window."
 msgstr ""
+"``partcadIde.createStarterPackage``, en la configuración, desactiva todo "
+"esto para una instalación nueva: el IDE arranca entonces con una ventana "
+"vacía."
 
 #: ../../source/installation.rst:600
 msgid ""
@@ -1088,10 +1375,13 @@ msgid ""
 "IDE\", or by starting it with a path -- skips it too. It never takes over"
 " a window that already has something in it."
 msgstr ""
+"Abrir el IDE sobre una carpeta propia -- desde \"Open with PartCAD IDE\", "
+"o arrancándolo con una ruta -- también lo omite. Nunca se apropia de una "
+"ventana que ya tiene algo dentro."
 
 #: ../../source/installation.rst:604
 msgid "What is inside"
-msgstr ""
+msgstr "Qué hay dentro"
 
 #: ../../source/installation.rst:606
 msgid ""
@@ -1099,6 +1389,10 @@ msgid ""
 "build of the same source Visual Studio Code is built from, with its "
 "extensions coming from `Open VSX <https://open-vsx.org/>`_."
 msgstr ""
+"El editor: `VSCodium <https://vscodium.com/>`_, la compilación con "
+"licencia libre del mismo código fuente con el que se compila Visual "
+"Studio Code, cuyas extensiones provienen de `Open VSX "
+"<https://open-vsx.org/>`_."
 
 #: ../../source/installation.rst:608
 msgid ""
@@ -1106,6 +1400,9 @@ msgid ""
 "the extensions PartCAD works with: Python, YAML and the rest of the list "
 "in ``.vscode/extensions.json``."
 msgstr ""
+"La extensión de PartCAD -- que incluye el propio PartCAD Viewer -- y las "
+"extensiones con las que trabaja PartCAD: Python, YAML y el resto de la "
+"lista en ``.vscode/extensions.json``."
 
 #: ../../source/installation.rst:610
 msgid ""
@@ -1114,6 +1411,11 @@ msgid ""
 " ships for, since the one build that carries none is Linux arm64 and "
 "there is no Linux arm64 IDE."
 msgstr ""
+"Las herramientas de línea de comandos de PartCAD, las mismas que instala "
+"el paquete independiente, incluido el OpenSCAD que incluyen -- en todas "
+"las plataformas para las que se distribuye el IDE, ya que la única "
+"compilación que no lo lleva es la de Linux arm64 y no hay un IDE para "
+"Linux arm64."
 
 #: ../../source/installation.rst:614
 msgid ""
@@ -1121,6 +1423,9 @@ msgid ""
 "with Microsoft's products. Open-source type checking for Python is "
 "included in its place."
 msgstr ""
+"Pylance no está entre ellas: es propietaria y su licencia solo permite "
+"usarla con los productos de Microsoft. En su lugar se incluye una "
+"comprobación de tipos de Python de código abierto."
 
 #: ../../source/installation.rst:617
 msgid ""
@@ -1130,6 +1435,12 @@ msgid ""
 "in ``~/.partcad``, shared with the command line tools, so a package "
 "installed in a terminal is there in the IDE."
 msgstr ""
+"El IDE guarda su configuración, su estado y cualquier extensión que "
+"instale en ``~/.partcad-ide``, por lo que no comparte nada con un Visual "
+"Studio Code o un VSCodium de la misma máquina. La caché y la "
+"configuración propias de PartCAD permanecen en ``~/.partcad``, "
+"compartidas con las herramientas de línea de comandos, de modo que un "
+"paquete instalado en una terminal está también en el IDE."
 
 #: ../../source/installation.rst:622
 msgid ""
@@ -1138,6 +1449,10 @@ msgid ""
 "ide-<version>-macos-x86_64.dmg`` for Intel: open it and drag the "
 "application to Applications, the usual way."
 msgstr ""
+"En macOS se publica además un ``.dmg`` -- "
+"``partcad-ide-<version>-macos-arm64.dmg`` para Apple silicon y "
+"``partcad-ide-<version>-macos-x86_64.dmg`` para Intel: ábralo y arrastre "
+"la aplicación a Applications, de la forma habitual."
 
 #: ../../source/installation.rst:628
 msgid ""
@@ -1147,6 +1462,11 @@ msgid ""
 "do the same: ``xattr -dr com.apple.quarantine \"/Applications/PartCAD "
 "IDE.app\"``."
 msgstr ""
+"La aplicación de macOS está firmada de forma ad-hoc en lugar de estar "
+"notarizada. ``install.sh`` limpia el indicador de cuarentena de la copia "
+"que instala; si en cambio descomprime el archivo a mano, macOS se niega a "
+"abrirla hasta que haga lo mismo: ``xattr -dr com.apple.quarantine "
+"\"/Applications/PartCAD IDE.app\"``."
 
 #: ../../source/installation.rst:636
 msgid ""
@@ -1154,6 +1474,9 @@ msgid ""
 "the command line tools, and removes the application, the links and the "
 "menu entry:"
 msgstr ""
+"Actualizar es volver a instalar. Desinstalar es el mismo comando que para "
+"las herramientas de línea de comandos, y elimina la aplicación, los "
+"enlaces y la entrada del menú:"
 
 #: ../../source/installation.rst:643
 msgid ""
@@ -1162,13 +1485,16 @@ msgid ""
 "self-update would replace the PartCAD extension and tools inside it with "
 "a plain editor."
 msgstr ""
+"El IDE no se actualiza a sí mismo. Está compilado a partir de un release "
+"de VSCodium en lugar de ser uno, y su servidor de actualizaciones está "
+"deliberadamente ausente: una autoactualización reemplazaría la extensión "
+"y las herramientas de PartCAD que lleva dentro por un editor sin más."
 
 #: ../../source/installation.rst:650
 msgid "Latest Development Version of PartCAD"
 msgstr "Última versión de desarrollo de PartCAD"
 
 #: ../../source/installation.rst:652
-#, fuzzy
 msgid ""
 "You can install the latest development version of PartCAD from the "
 "``devel`` branch on `PartCAD <https://github.com/partcad/partcad>`_. "
@@ -1177,10 +1503,8 @@ msgid ""
 msgstr ""
 "Puede instalar la última versión de desarrollo de PartCAD desde la rama "
 "``devel`` en `PartCAD <https://github.com/partcad/partcad>`_. Primero, "
-"cree un entorno Python aislado, y asegúrese de que ``pip``, "
-"``setuptools`` y ``wheel`` estén actualizados; luego siga las "
-"instrucciones a continuación para instalar el módulo central y la "
-"herramienta de la CLI."
+"cree un entorno Python aislado y asegúrese de que ``pip``, ``setuptools`` "
+"y ``wheel`` estén actualizados; luego:"
 
 #: ../../source/installation.rst:660
 msgid ""
@@ -1188,13 +1512,15 @@ msgid ""
 "subdirectories, in the right order, because the repository shipped "
 "several packages that pinned each other; it ships one now."
 msgstr ""
+"Eso es todo. Antes eran dos comandos que nombraban dos subdirectorios, en "
+"el orden correcto, porque el repositorio distribuía varios paquetes que "
+"se fijaban mutuamente; ahora distribuye uno."
 
 #: ../../source/installation.rst:666
 msgid "Python module"
 msgstr "Módulo Python"
 
 #: ../../source/installation.rst:668
-#, fuzzy
 msgid ""
 "PartCAD provides Python modules that can be used in CAD as code scripts "
 "(such as ``CadQuery``, ``build123d`` and ``sdf``). They come with the "
@@ -1202,23 +1528,21 @@ msgid ""
 "install."
 msgstr ""
 "PartCAD proporciona módulos Python que se pueden usar en scripts CAD as "
-"code (como ``CadQuery``, ``build123d`` y ``sdf``). Es una dependencia de "
-"``partcad-cli``, por lo que normalmente no es necesario instalarlo por "
-"separado."
+"code (como ``CadQuery``, ``build123d`` y ``sdf``). Vienen en el mismo "
+"paquete que las herramientas de línea de comandos, así que no hay nada "
+"más que instalar."
 
 #: ../../source/installation.rst:682
 msgid "Linting"
 msgstr "Linting"
 
 #: ../../source/installation.rst:684
-#, fuzzy
 msgid ""
 "The linter used by ``pc lint`` to check Python files is optional. Install"
 " the ``lint`` extra to enable it:"
 msgstr ""
 "El linter usado por ``pc lint`` para comprobar archivos Python es "
-"opcional. Instale el extra ``lint`` para habilitarlo, ya sea en "
-"``partcad-cli``:"
+"opcional. Instale el extra ``lint`` para habilitarlo:"
 
 #: ../../source/installation.rst:691
 msgid ""
@@ -1232,7 +1556,7 @@ msgstr ""
 
 #: ../../source/installation.rst:697
 msgid "Shared caching tiers"
-msgstr ""
+msgstr "Niveles de caché compartida"
 
 #: ../../source/installation.rst:699
 msgid ""
@@ -1241,24 +1565,36 @@ msgid ""
 "(``cacheRemote``), and in an S3 bucket that outlives both (``cacheS3``). "
 "Both clients are imported only when their tier is switched on."
 msgstr ""
+"Más allá de la memoria y del sistema de archivos local, PartCAD puede "
+"mantener su caché de geometría construida en un servidor memcached "
+"compartido por un equipo o una flota de CI (``cacheRemote``), y en un "
+"bucket de S3 que sobrevive a ambos (``cacheS3``). Ambos clientes se "
+"importan solo cuando su nivel está activado."
 
 #: ../../source/installation.rst:704
 msgid ""
 "``cacheRemote`` needs nothing installed: its client (``aiomcache``) is an"
 " ordinary dependency, so switching the tier on is all there is to it."
 msgstr ""
+"``cacheRemote`` no necesita instalar nada: su cliente (``aiomcache``) es "
+"una dependencia ordinaria, así que activar el nivel es todo lo que hay "
+"que hacer."
 
 #: ../../source/installation.rst:707
 msgid ""
 "``cacheS3`` is an extra, because its client pulls in ``botocore``, which "
 "is larger than the rest of PartCAD put together:"
 msgstr ""
+"``cacheS3`` es un extra, porque su cliente arrastra ``botocore``, que es "
+"más grande que todo el resto de PartCAD junto:"
 
 #: ../../source/installation.rst:714
 msgid ""
 "Enabling ``cacheS3`` without it reports an error naming the package to "
 "install and leaves the remaining tiers working."
 msgstr ""
+"Activar ``cacheS3`` sin él informa de un error que nombra el paquete a "
+"instalar y deja funcionando los demás niveles."
 
 #: ../../source/installation.rst:721
 msgid "Visual Studio Code extension"
@@ -1269,6 +1605,9 @@ msgid ""
 "For an editor you already have. To get the extension, the tools and an "
 "editor in one download instead, see :ref:`the PartCAD IDE <partcad-ide>`."
 msgstr ""
+"Para un editor que ya tiene. Para obtener la extensión, las herramientas "
+"y un editor en una sola descarga, consulte :ref:`el PartCAD IDE "
+"<partcad-ide>`."
 
 #: ../../source/installation.rst:726
 msgid ""
@@ -1276,9 +1615,11 @@ msgid ""
 "VSCodium installs this extension along with the command line tools. The "
 "rest of this section is how to do it by hand."
 msgstr ""
+"Ejecutar ``/pc:setup`` desde una terminal dentro de Visual Studio Code o "
+"VSCodium instala esta extensión junto con las herramientas de línea de "
+"comandos. El resto de esta sección explica cómo hacerlo a mano."
 
 #: ../../source/installation.rst:729
-#, fuzzy
 msgid ""
 "This extension is available through the VS Code marketplace. The "
 "corresponding marketplace page is `here "
@@ -1286,10 +1627,11 @@ msgid ""
 "official>`_. Install it from the Extensions view, or by id from a "
 "terminal:"
 msgstr ""
-"Esta extensión está disponible a través del mercado de VS Code. La página"
-" correspondiente del mercado está `aquí "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
-"official>`_."
+"Esta extensión está disponible a través del mercado de VS Code. La página "
+"correspondiente del mercado está `aquí "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_. "
+"Instálela desde la vista Extensions, o por identificador desde una "
+"terminal:"
 
 #: ../../source/installation.rst:737
 msgid ""
@@ -1298,6 +1640,10 @@ msgid ""
 "to the wheels and the bundles. Install it from the command line, or with "
 "\"Install from VSIX...\" in the Extensions view:"
 msgstr ""
+"Cada `release de GitHub <https://github.com/partcad/partcad/releases>`_ "
+"incluye también la extensión empaquetada como ``partcad-<version>.vsix``, "
+"junto a los wheels y los paquetes independientes. Instálela desde la "
+"línea de comandos, o con \"Install from VSIX...\" en la vista Extensions:"
 
 #: ../../source/installation.rst:745
 msgid ""
@@ -1306,6 +1652,10 @@ msgid ""
 "package serves every platform: the extension is a JSON-RPC client with no"
 " Python and nothing compiled in it."
 msgstr ""
+"Úselo para fijar una versión concreta, para instalarla donde el mercado "
+"no es accesible, o para probar un release antes de que el mercado lo "
+"tenga. Un mismo paquete sirve para todas las plataformas: la extensión es "
+"un cliente JSON-RPC sin Python y sin nada compilado dentro."
 
 #: ../../source/installation.rst:751
 msgid ""
@@ -1318,10 +1668,19 @@ msgid ""
 ":ref:`PartCAD IDE <partcad-ide>` needs neither gallery -- it ships the "
 "extension inside the application."
 msgstr ""
+"**VSCodium** la instala desde `Open VSX <https://open-vsx.org/>`_, la "
+"galería con la que VSCodium viene configurado y donde PartCAD publica la "
+"extensión para él. No apunta al Visual Studio Marketplace, cuyos términos "
+"restringen su uso a los propios productos de Microsoft. Busque "
+"``PartCAD`` en la vista Extensions, o ejecute ``codium "
+"--install-extension PartCAD.partcad-official``; el ``.vsix`` anterior "
+"también funciona allí. El :ref:`PartCAD IDE <partcad-ide>` no necesita "
+"ninguna de las dos galerías: distribuye la extensión dentro de la "
+"aplicación."
 
 #: ../../source/installation.rst:758
 msgid "If you installed the extension before it moved"
-msgstr ""
+msgstr "Si instaló la extensión antes de que se moviera"
 
 #: ../../source/installation.rst:760
 msgid ""
@@ -1332,6 +1691,12 @@ msgid ""
 "the marketplace treats the result as a separate extension rather than as "
 "a rename."
 msgstr ""
+"La extensión se publicaba antes como ``OpenVMP.partcad``. Ahora es "
+"``PartCAD.partcad-official`` -- un publicador distinto, y un nombre "
+"distinto porque el mercado no permite que dos publicadores compartan un "
+"nombre de extensión y ``partcad`` se queda con la entrada antigua. En "
+"cualquier caso, el mercado trata el resultado como una extensión aparte y "
+"no como un cambio de nombre."
 
 #: ../../source/installation.rst:765
 msgid ""
@@ -1342,10 +1707,16 @@ msgid ""
 "can remove ``PartCAD (moved)`` from the Extensions view once it has done "
 "its job."
 msgstr ""
+"No hay nada que hacer. La entrada antigua sigue existiendo y ahora "
+"depende de la nueva, por lo que se actualiza como cualquier otra "
+"extensión y trae consigo la extensión en su nueva ubicación. Su "
+"configuración, que reside en su ``settings.json`` con los mismos nombres "
+"``partcad.*``, queda intacta. Puede eliminar ``PartCAD (moved)`` desde la "
+"vista Extensions una vez que haya hecho su trabajo."
 
 #: ../../source/installation.rst:774
 msgid "FreeCAD add-on"
-msgstr ""
+msgstr "Complemento para FreeCAD"
 
 #: ../../source/installation.rst:776
 msgid ""
@@ -1354,6 +1725,11 @@ msgid ""
 "``cad/freecad`` directory of the repository; copy or link that directory "
 "into FreeCAD's ``Mod`` folder as ``PartCAD`` and restart FreeCAD:"
 msgstr ""
+"El workbench ``PartCAD`` permite navegar por paquetes, piezas y "
+"ensamblajes dentro de FreeCAD e importarlos al documento abierto. Reside "
+"en el directorio ``cad/freecad`` del repositorio; copie o enlace ese "
+"directorio en la carpeta ``Mod`` de FreeCAD con el nombre ``PartCAD`` y "
+"reinicie FreeCAD:"
 
 #: ../../source/installation.rst:785
 msgid ""
@@ -1364,6 +1740,13 @@ msgid ""
 " a bundle if there is not. See ``cad/freecad/README.md`` for what it does"
 " and which environment variables it reads."
 msgstr ""
+"La carpeta ``Mod`` es ``~/Library/Preferences/FreeCAD/Mod/`` en macOS y "
+"``%APPDATA%\\FreeCAD\\Mod\\`` en Windows. No se necesita configurar "
+"Python: el complemento controla el servicio independiente "
+"``partcad-json-rpc``, usando una instalación independiente existente si "
+"la hay y ofreciéndose a descargar un paquete si no la hay. Consulte "
+"``cad/freecad/README.md`` para saber qué hace y qué variables de entorno "
+"lee."
 
 #: ../../source/installation.rst:792
 msgid "Public PartCAD repository"

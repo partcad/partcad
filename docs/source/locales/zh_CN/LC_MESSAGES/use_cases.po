@@ -104,16 +104,15 @@ msgid "The command line tools are the easiest way to browse parts:"
 msgstr "命令行工具是浏览零件的最简便方式："
 
 #: ../../source/use_cases.rst:87
-#, fuzzy
 msgid ""
 "The last command displays the chosen part in ``PartCAD Viewer`` view in "
 "Visual Studio Code. There is currently no support for ``cq-server``. "
 "Please, let `support@partcad.org <mailto:support@partcad.org>`_ know if "
 "there is any other tool we should support."
 msgstr ""
-"最后一条命令会在 Visual Studio Code 的 ``OCP CAD Viewer`` 视图中显示所选的零件。目前尚不支持 ``cq-"
-"server`` 。如果还有其他我们应当支持的工具，请告知 `support@partcad.org "
-"<mailto:support@partcad.org>`_ 。"
+"最后一条命令会在 Visual Studio Code 的 ``PartCAD Viewer`` 视图中显示所选的零件。目前尚不支持 `"
+"`cq-server`` 。如果还有其他我们应当支持的工具，请告知 `support@partcad.org <mailto:suppo"
+"rt@partcad.org>`_ 。"
 
 #: ../../source/use_cases.rst:95
 msgid "Render projections"
@@ -153,6 +152,8 @@ msgid ""
 "its aspect ratio. JPEG accepts a few more options, since it is a lossy "
 "format without an alpha channel:"
 msgstr ""
+"两种光栅格式都接受 ``width`` 和 ``height`` （以像素为单位，默认为 ``512`` ）；投影会在保持宽高比的前提下"
+"缩放，以便正好放入这一尺寸之内。JPEG 还接受另外几个选项，因为它是一种没有 alpha 通道的有损格式："
 
 #: ../../source/use_cases.rst:127
 msgid ""
@@ -161,12 +162,14 @@ msgid ""
 "pixel-wide edges; switch to ``4:2:0`` when a smaller file matters more "
 "than the edges."
 msgstr ""
+"默认的 ``4:4:4`` 子采样会保留完整的色度分辨率。投影属于线条图，更粗糙的模式会让颜色在它那些只有一像素宽的边线上晕开；只有当文"
+"件体积比边线更重要时，才改用 ``4:2:0`` 。"
 
 #: ../../source/use_cases.rst:131
 msgid ""
 "The rendered file is named after the object with the format's own "
 "extension, so ``jpeg`` produces ``<name>.jpg``."
-msgstr ""
+msgstr "渲染出的文件以对象命名，并使用该格式自身的扩展名，因此 ``jpeg`` 生成的是 ``<name>.jpg`` 。"
 
 #: ../../source/use_cases.rst:134
 msgid ""
@@ -175,6 +178,8 @@ msgid ""
 "accepted by every projection above (and by ``dxf``), on the package or on"
 " a single object:"
 msgstr ""
+"从哪个方向观察对象由 ``viewport_origin`` 决定，而所得图像中哪个方向朝上由 ``viewport_up`` 决定。上"
+"面的每一种投影（以及 ``dxf`` ）都接受这两者，既可以设置在包上，也可以设置在单个对象上："
 
 #: ../../source/use_cases.rst:153
 msgid ""
@@ -185,6 +190,8 @@ msgid ""
 "direction, and the projection is scaled to fit whatever it is written "
 "into."
 msgstr ""
+"若不设置，零件会从右前上方的角落绘制（正是这一点让它看上去有立体感），草图则正对着绘制。PartCAD 采用 Z 轴朝上的约定， ``+"
+"Y`` 指向远离前视图的方向，这也正是 ``+X`` 位于其右侧的原因。距离并不重要——这一对数值只指明一个方向，投影会被缩放以适应写入目标的尺寸。"
 
 #: ../../source/use_cases.rst:159
 msgid ""
@@ -193,6 +200,9 @@ msgid ""
 "``back``, ``left``, ``right``, ``top``, ``bottom``, ``iso``), for a view "
 "that belongs to one command rather than to the package:"
 msgstr ""
+"``pc render`` 以 ``--viewport-origin``/``--viewport-up`` 的形式接受同样的这两者，"
+"并用 ``--view`` 来指明常用方向（ ``front`` 、 ``back`` 、 ``left`` 、 ``right`` 、"
+" ``top`` 、 ``bottom`` 、 ``iso`` ），适用于只属于某一次命令、而不属于整个包的视图："
 
 #: ../../source/use_cases.rst:169
 msgid ""
@@ -201,6 +211,8 @@ msgid ""
 "aim one, there being no ``partcad.yaml`` to configure a viewport in; left"
 " off, the projection comes out the way the renderer draws one by default:"
 msgstr ""
+"完全不属于任何包的文件由 ``pc adhoc render`` 渲染，它接受同样的这三个选项。由于没有 ``partcad.yaml`"
+"` 可用来配置视口，这些选项是为这类渲染指明方向的唯一途径；若不给出，投影就按渲染器默认的画法输出："
 
 #: ../../source/use_cases.rst:182
 msgid "Export models"
@@ -262,7 +274,7 @@ msgstr "CAD 设计图形界面"
 msgid ""
 "You can use models from the public PartCAD repository in a CAD Design "
 "GUI, such as FreeCAD or its paid alternatives."
-msgstr ""
+msgstr "你可以在 CAD 设计图形界面（例如 FreeCAD 或其付费替代品）中使用来自公共 PartCAD 仓库的模型。"
 
 #: ../../source/use_cases.rst:215
 msgid ""
@@ -274,16 +286,17 @@ msgid ""
 " its own. See :ref:`FreeCAD add-on <freecad-addon>` for how to install "
 "it."
 msgstr ""
+"FreeCAD 有一个 PartCAD 插件。 ``PartCAD`` 工作台会以层级结构列出 PartCAD 所能访问到的包、零件和装"
+"配体，根据你所选零件或装配体的参数生成一个对话框，并把结果作为 STEP 文件导入到当前打开的文档中。它驱动的是独立打包的 PartCA"
+"D 服务，因此 FreeCAD 自身不需要 Python 环境。安装方法请参见 :ref:`FreeCAD 插件 <freecad-ad"
+"don>` 。"
 
 #: ../../source/use_cases.rst:222
-#, fuzzy
 msgid ""
 "For the other apps, no add-on is available yet. Export the models to STEP"
 " or 3MF files and import those files into the CAD Design GUI of your "
 "choice."
-msgstr ""
-"你可以在 CAD 设计图形界面（例如 FreeCAD 或其付费替代品）中使用来自公共 PartCAD 仓库的模型。针对这些应用的 PartCAD "
-"插件目前尚不可用。就目前而言，请先将模型导出为 STEP 或 3MF 文件，再将这些文件导入到你所选择的 CAD 设计图形界面中。"
+msgstr "对于其他应用，目前还没有可用的插件。请先将模型导出为 STEP 或 3MF 文件，再将这些文件导入到你所选择的 CAD 设计图形界面中。"
 
 #: ../../source/use_cases.rst:232
 msgid "Python: CadQuery"

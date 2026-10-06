@@ -21,11 +21,11 @@ msgstr ""
 
 #: ../../source/config_plugins.rst:3
 msgid "Importers, applications and simulations"
-msgstr ""
+msgstr "导入器、应用程序与仿真"
 
 #: ../../source/config_plugins.rst:9
 msgid "Importers"
-msgstr ""
+msgstr "导入器"
 
 #: ../../source/config_plugins.rst:11
 msgid ""
@@ -37,6 +37,10 @@ msgid ""
 "only one of the three PartCAD ships, and the other two are entries of "
 "exactly this kind in the plugin package for their engine."
 msgstr ""
+"``urdf``、 ``sim-mujoco:mjcf`` 和 ``sim-gazebo:world`` 并不是 PartCAD 硬编码"
+"的对象类型。它们各自都是 ``import:`` 小节中的一个条目——一条声明，说明哪个脚本读取该格式、它的沙箱需要什么、以及它可以产生"
+"哪些对象种类——包只要写下一个这样的条目，就能把自己的格式教给 PartCAD。这并非假设：这三者之中 PartCAD 只自带 ``ur"
+"df``，另外两个正是各自引擎的插件包里这种类型的条目。"
 
 #: ../../source/config_plugins.rst:34
 msgid ""
@@ -45,6 +49,8 @@ msgid ""
 "path, exactly as a :ref:`partType <part-types>` or a ``simulation:`` plugin "
 "is:"
 msgstr ""
+"此后对象就像指名任何对象类型那样指名它。同一个包中的读取器直接指名；位于另一个包中的则用完整路径指名，与 :ref:`partType "
+"<part-types>` 或 ``simulation:`` 插件完全一样："
 
 #: ../../source/config_plugins.rst:45
 msgid ""
@@ -56,6 +62,9 @@ msgid ""
 "sphere) have no file to name, and the reader writes those out itself. See "
 "``wrappers/wrapper_import.py`` for the contract in full."
 msgstr ""
+"读取器本身拿到的是文件及其参数，返回的则是一棵已摆放形状的树，以纯数据表示——每个节点指明其几何读自哪个 *文件*，而不是直接携带几何。"
+"随后由该文件自身格式的零件工厂去读取它，因此场景引用的网格永远不会被复制或改写。只有格式自身定义的基本体（长方体、圆柱、球）没有文件可供"
+"指明，这些由读取器自己写出。完整的约定见 ``wrappers/wrapper_import.py``。"
 
 #: ../../source/config_plugins.rst:53
 msgid ""
@@ -68,6 +77,9 @@ msgid ""
 "that the *reader* counts what it had to drop and the *declaration* says what "
 "to call it."
 msgstr ""
+"有两个字段值得细说。``kinds:`` 是核心会据以约束该声明的一项主张：描述单个机器人的格式是装配体，把它声明在 ``scenes:"
+"`` 下就是错误；而两者兼用的格式——MJCF 就经常如此——则两种都写上，交由小节来决定。``dropped:`` 为读取器所统计的东"
+"西提供措辞：这些格式无一例外都描述了静态树容纳不下的内容，而分工是：由 *读取器* 统计它不得不丢弃了什么，由 *声明* 来说明该怎么称呼它。"
 
 #: ../../source/config_plugins.rst:61
 msgid ""
@@ -78,6 +90,10 @@ msgid ""
 "``revision``, ...), is told to rename the section, and those entries are "
 "dropped instead of being fetched as packages. Nothing is migrated for it."
 msgstr ""
+"这个小节的名字与 ``dependencies:`` 过去的叫法相同，而如今这种写法会被报告出来，而不是被悄悄迁移：如果某个包的 ``i"
+"mport:`` 条目带有 ``git`` / ``tar`` / ``local`` / ``external`` 之类的 ``typ"
+"e:``，或者带有任何仅用于传输的键（``url``、 ``relPath``、 ``revision`` 等），它会被提示重命名该小节"
+"，而这些条目会被丢弃，不再作为包去获取。不会为它迁移任何东西。"
 
 #: ../../source/config_plugins.rst:68
 msgid ""
@@ -90,6 +106,9 @@ msgid ""
 "that merely walks past it. That package goes on providing everything else it "
 "declares; what is lost is exactly what the section named."
 msgstr ""
+"提示有多严厉取决于那是谁的包。在你所处的包里，这是一个错误，而且包是坏的——命令以非零状态退出，不会从中加载任何东西，因为那正是你能修改"
+"的文件。在导入的包里，这是一条警告，指出包、条目和修复办法：这类包往往是别人的，位于你所写内容之下好几层，而索引中任何一处出现这种情况，"
+"都不应该让每一条仅仅路过它的命令失败。那个包会继续提供它声明的其余一切；丢失的恰好就是那个小节所指明的内容。"
 
 #: ../../source/config_plugins.rst:77
 msgid ""
@@ -103,6 +122,12 @@ msgid ""
 "of knowledge, and this is what lets the pair travel together and be "
 "versioned together."
 msgstr ""
+"PartCAD 只自带其中 **一个**，位于 ``//builtin/import`` 中：``urdf``。它留在那里，是因为 UR"
+"DF 描述的是机器人而不是某一个引擎的世界，而 ROS、MuJoCo、PyBullet 和 Isaac 都会读取它。``mjcf`` 和"
+" ``world`` 则分别属于 `partcad-sim-mujoco <https://github.com/partcad/par"
+"tcad-sim-mujoco>`_ 和 `partcad-sim-gazebo <https://github.com/partcad"
+"/partcad-sim-gazebo>`_，与同样掌握该格式知识的导出器和仿真器放在一起：读取一种格式和写出这种格式是同一份知识，这正"
+"是让这一对能够结伴同行、一同版本化的原因。"
 
 #: ../../source/config_plugins.rst:86
 msgid ""
@@ -112,10 +137,13 @@ msgid ""
 "that resolve, in a package that imports the plugin; a bare ``type: world`` "
 "resolves to nothing and says which package to name."
 msgstr ""
+"这些包各自为自己的格式声明读取器、写入器、仿真器以及 ``open:`` 条目，而 wheel 中一个都不包含。因此，在导入了相应插件的"
+"包里，能够解析的写法是 ``type: sim-gazebo:world`` 和 ``type: sim-mujoco:mjcf``；裸"
+"写的 ``type: world`` 解析不到任何东西，并会提示应当指名哪个包。"
 
 #: ../../source/config_plugins.rst:96
 msgid "Applications"
-msgstr ""
+msgstr "应用程序"
 
 #: ../../source/config_plugins.rst:98
 msgid ""
@@ -128,6 +156,10 @@ msgid ""
 "file the application cannot read is the same for every tool and happens "
 "once, in ``partcad_client.external``."
 msgstr ""
+"``pc open`` 会针对交给它的文件启动一个第三方应用程序。它认识哪些应用程序，由一个 ``open:`` 小节来决定——每个应用"
+"程序一个条目，而且自上而下全是数据：应用程序在每种操作系统上位于何处、以什么方式运行它、它没有安装时回退到哪个容器，以及它能读什么。其中"
+"没有任何逻辑。查找可执行文件、创建容器、转发 X 显示，以及转换应用程序读不了的文件，对每个工具都是一样的，并且只在 ``partcad"
+"_client.external`` 中实现一次。"
 
 #: ../../source/config_plugins.rst:118
 msgid ""
@@ -140,6 +172,11 @@ msgid ""
 "partcad-sim-mujoco>`_ declare theirs, so a workspace that imports either "
 "already gets the entry from there."
 msgstr ""
+"这样，在其各个包导入了该包的工作区中，``pc open --with democad ./cell.demo`` 就能工作。PartC"
+"AD 在 ``//builtin/open`` 中自带三个这样的条目——FreeCAD、KiCad 和 Blender。包中的条目会替换"
+"同名的内置条目，仿真引擎的插件正是这样接管了对应的应用程序：`partcad-sim-gazebo <https://github.co"
+"m/partcad/partcad-sim-gazebo>`_ 和 `partcad-sim-mujoco <https://githu"
+"b.com/partcad/partcad-sim-mujoco>`_ 都声明了自己的条目，因此导入了其中任何一个的工作区，已经从那里获得了该条目。"
 
 #: ../../source/config_plugins.rst:126
 msgid ""
@@ -154,6 +191,11 @@ msgid ""
 "rather than geometry: MuJoCo reads MJCF, so a Gazebo world it is pointed at "
 "is written out as MJCF first."
 msgstr ""
+"有三个字段值得细说，因为读不了所交付内容的应用程序，正是靠它们才得以打开些什么。``companions:`` 指明应用程序真正打开的扩"
+"展名，用于位于 PartCAD 所指文件旁边的另一个文件——一个 ``kicad`` 零件 *就是* KiCad 的命令行工具写出的那个"
+" STEP 文件，而电路板则是它旁边的工程。``meshVia:`` 说明不是网格的文件要先转换成什么，用于只会读三角形的应用程序。``"
+"sceneType:`` 说明应用程序读哪种描述语言，用于读取布置方式而非几何的应用程序：MuJoCo 读 MJCF，因此指给它的 Ga"
+"zebo world 会先被写成 MJCF。"
 
 #: ../../source/config_plugins.rst:136
 msgid ""
@@ -165,10 +207,13 @@ msgid ""
 "asked of the daemon (``open.tools``). It answers which applications exist; "
 "it never opens one, and there is no method for opening a file."
 msgstr ""
+"除此之外，``pc open`` 是一条 **客户端** 命令，而且会一直如此：交给它的是一个路径，文件已经在磁盘上，而窗口属于运行该命"
+"令的人——守护进程则可能在远端。因此内置条目直接从客户端所运行的 wheel 中读取，既不需要上下文也不需要守护进程；只有 *包* 所声"
+"明的应用程序才会去问守护进程（``open.tools``）。它回答存在哪些应用程序；它从不打开应用程序，也没有用于打开文件的方法。"
 
 #: ../../source/config_plugins.rst:148
 msgid "Simulations"
-msgstr ""
+msgstr "仿真"
 
 #: ../../source/config_plugins.rst:150
 msgid ""
@@ -178,6 +223,8 @@ msgid ""
 "not to do: not fall over, not slide off, not come apart. ``pc sim`` runs "
 "them."
 msgstr ""
+"零件说明自己 *是什么*。``simulate:`` 是零件或装配体的一个可选小节，在那里它说明一旦被放进一个世界、而这个世界被启动之后"
+"，它应当 **做什么**——或者更常见的是，它不应当做什么：不翻倒、不滑落、不散架。运行它们的是 ``pc sim``。"
 
 #: ../../source/config_plugins.rst:168
 msgid ""
@@ -188,6 +235,9 @@ msgid ""
 "the Jinja2 template its file is read as (see :doc:`assy`) is what places the "
 "subject."
 msgstr ""
+"对象自身的完整路径会被赋给场景的 ``subject`` 参数——无条件地赋值，无论该条目还说了什么。正是这一点让一个场景可以服务于指名"
+"它的每一个对象，而且为此不需要声明任何特殊的东西：仿真场景就是一个带有普通参数的普通场景，而把被测对象摆放到位的，是它的文件被当作 Ji"
+"nja2 模板读取时的那套模板（见 :doc:`assy`）。"
 
 #: ../../source/config_plugins.rst:174
 msgid ""
@@ -197,6 +247,9 @@ msgid ""
 "be given -- PartCAD implements no simulator, so a package imports one and "
 "says which:"
 msgstr ""
+"``scene:`` 不是必须给出的：默认是 ``//builtin/scene:subject``，一个只装着被测对象、别无他物的空世"
+"界，这正是“这东西能不能自己立住”的含义。``simulation:`` 则必须给出——PartCAD 没有实现任何仿真器，所以包要导入"
+"一个并说明用的是哪一个："
 
 #: ../../source/config_plugins.rst:201
 msgid ""
@@ -204,6 +257,8 @@ msgid ""
 "about *this* object -- where its origin sits relative to the floor it is "
 "meant to stand on -- and the scene is shared."
 msgstr ""
+"``offset:`` 写在这里而不是写在场景里，因为它是关于 *这个* 对象的事实——它的原点相对于它要立在其上的地面处于什么位置——"
+"而场景是共享的。"
 
 #: ../../source/config_plugins.rst:205
 msgid ""
@@ -214,10 +269,13 @@ msgid ""
 "written by whoever knows both the object and the plugin. An entry that "
 "states none runs and reports, and passes nothing."
 msgstr ""
+"``validation:`` 是一个 Python 表达式，在 ``before`` 和 ``after`` （插件产生的那两个对象）"
+"以及 ``result`` （它返回的全部内容）之上求值。它是 PartCAD 唯一会从结果中读取的东西：这些对象 *内部* 的内容属于"
+"插件自己的词汇，而表达式由同时了解该对象和该插件的人来写。没有给出表达式的条目会运行并报告，但不会通过任何检查。"
 
 #: ../../source/config_plugins.rst:213
 msgid "Simulation plugins"
-msgstr ""
+msgstr "仿真插件"
 
 #: ../../source/config_plugins.rst:215
 msgid ""
@@ -226,6 +284,8 @@ msgid ""
 "declared in exactly the same form -- a ``path`` to a script, the sandbox "
 "that script needs, and the parameters it is handed:"
 msgstr ""
+"仿真插件是包可以声明的第三类实现，另外两类是 :ref:`output-files` 中的导出实现和渲染实现；它的声明形式与那两类完全相"
+"同——指向脚本的 ``path``、该脚本所需的沙箱，以及交给它的参数："
 
 #: ../../source/config_plugins.rst:233
 msgid ""
@@ -236,6 +296,9 @@ msgid ""
 "to write several -- which is also what keeps a plugin free of any CAD "
 "dependency."
 msgstr ""
+"这份约定是有意定得很窄的：**进去的是一个装有被测对象的场景，以** ``format:`` **所指明格式的文件形式进入；出来的是带有"
+"** ``before`` **和** ``after`` **的 JSON。** 场景以文件形式送达，是因为仿真器读的是它自己的模型格"
+"式，而 PartCAD 已经知道如何写出好几种——这也正是插件得以不依赖任何 CAD 的原因。"
 
 #: ../../source/config_plugins.rst:239
 msgid ""
@@ -249,10 +312,15 @@ msgid ""
 "after. Running it needs no MuJoCo on the machine, since the plugin runs in a "
 "PartCAD sandbox that installs one."
 msgstr ""
+"**PartCAD 一个都不自带。** 仿真器是别人的程序，有自己的发布周期，所以 PartCAD 提供的是这套概念——本小节、插件运行"
+"其中的沙箱，以及场景借以送达插件的那次导出——而物理由包来提供。`partcad-sim-mujoco <https://github."
+"com/partcad/partcad-sim-mujoco>`_ 就是对应 MuJoCo 的那个：它拿到以 MJCF 表示的场景，在重"
+"力下推进 ``duration`` 秒的仿真时间，并报告每个物体在前后的位置（以毫米计）和姿态。运行它不需要机器上装有 MuJoCo，因"
+"为插件运行在一个会自行安装 MuJoCo 的 PartCAD 沙箱中。"
 
 #: ../../source/config_plugins.rst:250
 msgid "Friction is a material property"
-msgstr ""
+msgstr "摩擦是材料的属性"
 
 #: ../../source/config_plugins.rst:252
 msgid ""
@@ -261,6 +329,8 @@ msgid ""
 "-- dry aluminium galls) and the top one slides off when they are PTFE (``mu: "
 "0.04``), and nothing about the arrangement changes in between."
 msgstr ""
+"一摞方块能不能立住，并不是它几何的属性。两个 20 mm 的方块端正地摞在一起：如果是铝（``mu: 1.05`` ——干燥的铝会咬合）"
+"，它们纹丝不动；如果是聚四氟乙烯（``mu: 0.04``），上面那个就会滑落；而这两种情形之间，布置方式没有任何变化。"
 
 #: ../../source/config_plugins.rst:257
 msgid ""
@@ -270,6 +340,9 @@ msgid ""
 "`parameters`) -- and the factory records the answer as the shape's "
 "``material`` property, which is what reads it from there on:"
 msgstr ""
+"所以它被写在它该在的地方，即 :ref:`材料 <materials>` 上，而指名了某种材料的零件就会获得它。零件指名材料的方式一如既"
+"往——在接受该参数的零件类型上使用 ``material`` 参数（见 :ref:`parameters`）——而工厂会把这个结果记录为"
+"形状的 ``material`` 属性，此后读取它的正是这个属性："
 
 #: ../../source/config_plugins.rst:274
 msgid ""
@@ -279,6 +352,9 @@ msgid ""
 "MJCF's first ``friction`` component. A part that says nothing gets whatever "
 "the simulator defaults to, which is a number nobody chose."
 msgstr ""
+"除非形状自己给出了 ``friction``，否则 ``mu`` 随后会成为该形状的 ``friction`` 属性，而每种格式都用自己"
+"的写法把它写出来——SDFormat 的 ``<friction><ode><mu>``、URDF 的 ``<gazebo><mu1>`"
+"`、MJCF 的第一个 ``friction`` 分量。什么都没有说明的零件，拿到的是仿真器的默认值，那是一个谁也没有选过的数字。"
 
 #: ../../source/config_plugins.rst:280
 msgid ""
@@ -289,7 +365,10 @@ msgid ""
 "finding one in the file, or the part factory recording what its type was "
 "asked for. A package does not write ``properties:`` by hand."
 msgstr ""
+"请注意这指的是哪个小节。``parameters:`` 是 *向* 产生该形状的类型 *提出的要求*，是包写下自己想要什么的地方；``p"
+"roperties:`` 则是形状 *最终成了什么样*，由构建它的东西填入——URDF 读取器指明某个连杆的材料，STEP 读取器在文件"
+"中找到材料，或者零件工厂记录下它的类型被要求了什么。包不会手工书写 ``properties:``。"
 
 #: ../../source/config_plugins.rst:287
 msgid "See :doc:`simulation` and ``examples/feature_simulate``."
-msgstr ""
+msgstr "参见 :doc:`simulation` 和 ``examples/feature_simulate``。"

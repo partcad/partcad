@@ -121,17 +121,16 @@ msgstr ""
 "explorar piezas:"
 
 #: ../../source/use_cases.rst:87
-#, fuzzy
 msgid ""
 "The last command displays the chosen part in ``PartCAD Viewer`` view in "
 "Visual Studio Code. There is currently no support for ``cq-server``. "
 "Please, let `support@partcad.org <mailto:support@partcad.org>`_ know if "
 "there is any other tool we should support."
 msgstr ""
-"El último comando muestra la pieza elegida en la vista ``OCP CAD Viewer``"
-" de Visual Studio Code. Actualmente no hay soporte para ``cq-server``. "
-"Por favor, informe a `support@partcad.org <mailto:support@partcad.org>`_ "
-"si hay alguna otra herramienta que deberíamos admitir."
+"El último comando muestra la pieza elegida en la vista ``PartCAD Viewer`` "
+"de Visual Studio Code. Actualmente no hay soporte para ``cq-server``. Por "
+"favor, informe a `support@partcad.org <mailto:support@partcad.org>`_ si "
+"hay alguna otra herramienta que deberíamos admitir."
 
 #: ../../source/use_cases.rst:95
 msgid "Render projections"
@@ -165,7 +164,7 @@ msgstr "PNG"
 
 #: ../../source/use_cases.rst:107
 msgid "JPEG"
-msgstr ""
+msgstr "JPEG"
 
 #: ../../source/use_cases.rst:109
 msgid ""
@@ -174,6 +173,10 @@ msgid ""
 "its aspect ratio. JPEG accepts a few more options, since it is a lossy "
 "format without an alpha channel:"
 msgstr ""
+"Ambos formatos de mapa de bits admiten ``width`` y ``height`` (en "
+"píxeles, ``512`` de forma predeterminada); la proyección se escala para "
+"caber dentro de ellos manteniendo su relación de aspecto. JPEG admite "
+"algunas opciones más, al ser un formato con pérdidas y sin canal alfa:"
 
 #: ../../source/use_cases.rst:127
 msgid ""
@@ -182,12 +185,18 @@ msgid ""
 "pixel-wide edges; switch to ``4:2:0`` when a smaller file matters more "
 "than the edges."
 msgstr ""
+"El submuestreo ``4:4:4`` predeterminado conserva la resolución de croma "
+"completa. Una proyección es arte lineal, y los modos más gruesos "
+"emborronan el color a lo largo de sus bordes de un píxel de ancho; cambie "
+"a ``4:2:0`` cuando un archivo más pequeño importe más que los bordes."
 
 #: ../../source/use_cases.rst:131
 msgid ""
 "The rendered file is named after the object with the format's own "
 "extension, so ``jpeg`` produces ``<name>.jpg``."
 msgstr ""
+"El archivo renderizado lleva el nombre del objeto con la extensión propia "
+"del formato, así que ``jpeg`` produce ``<name>.jpg``."
 
 #: ../../source/use_cases.rst:134
 msgid ""
@@ -196,6 +205,10 @@ msgid ""
 "accepted by every projection above (and by ``dxf``), on the package or on"
 " a single object:"
 msgstr ""
+"Desde qué dirección se mira el objeto es ``viewport_origin``, y qué "
+"dirección es hacia arriba en la imagen resultante es ``viewport_up``. "
+"Ambos los admiten todas las proyecciones anteriores (y ``dxf``), en el "
+"paquete o en un objeto concreto:"
 
 #: ../../source/use_cases.rst:153
 msgid ""
@@ -206,6 +219,12 @@ msgid ""
 "direction, and the projection is scaled to fit whatever it is written "
 "into."
 msgstr ""
+"Si no se establecen, una pieza se dibuja desde la esquina "
+"frontal-derecha-superior (que es lo que hace que se lea como 3D) y un "
+"boceto de frente. PartCAD usa Z hacia arriba con ``+Y`` apuntando en "
+"sentido contrario a la vista frontal, que es lo que coloca ``+X`` a la "
+"derecha de esta. La distancia no importa — el par nombra una dirección, y "
+"la proyección se escala para caber en aquello en lo que se escriba."
 
 #: ../../source/use_cases.rst:159
 msgid ""
@@ -214,6 +233,11 @@ msgid ""
 "``back``, ``left``, ``right``, ``top``, ``bottom``, ``iso``), for a view "
 "that belongs to one command rather than to the package:"
 msgstr ""
+"``pc render`` admite los mismos dos como "
+"``--viewport-origin``/``--viewport-up``, y nombra las direcciones comunes "
+"con ``--view`` (``front``, ``back``, ``left``, ``right``, ``top``, "
+"``bottom``, ``iso``), para una vista que pertenece a un comando y no al "
+"paquete:"
 
 #: ../../source/use_cases.rst:169
 msgid ""
@@ -222,6 +246,11 @@ msgid ""
 "aim one, there being no ``partcad.yaml`` to configure a viewport in; left"
 " off, the projection comes out the way the renderer draws one by default:"
 msgstr ""
+"Un archivo que no está en ningún paquete lo renderiza ``pc adhoc "
+"render``, que admite las mismas tres opciones. Son la única forma de "
+"apuntar una, al no haber ningún ``partcad.yaml`` en el que configurar un "
+"viewport; si se omiten, la proyección sale tal como la dibuja el "
+"renderizador de forma predeterminada:"
 
 #: ../../source/use_cases.rst:182
 msgid "Export models"
@@ -288,6 +317,8 @@ msgid ""
 "You can use models from the public PartCAD repository in a CAD Design "
 "GUI, such as FreeCAD or its paid alternatives."
 msgstr ""
+"Puede usar modelos del repositorio público de PartCAD en una interfaz "
+"gráfica de diseño CAD, como FreeCAD o sus alternativas de pago."
 
 #: ../../source/use_cases.rst:215
 msgid ""
@@ -299,19 +330,23 @@ msgid ""
 " its own. See :ref:`FreeCAD add-on <freecad-addon>` for how to install "
 "it."
 msgstr ""
+"FreeCAD tiene un complemento de PartCAD. El workbench ``PartCAD`` enumera "
+"como una jerarquía los paquetes, piezas y ensamblajes que PartCAD puede "
+"alcanzar, genera un diálogo a partir de los parámetros de la pieza o del "
+"ensamblaje que elija, e importa el resultado al documento abierto como un "
+"archivo STEP. Controla el servicio independiente de PartCAD, así que "
+"FreeCAD no necesita un entorno Python propio. Consulte :ref:`Complemento "
+"para FreeCAD <freecad-addon>` para saber cómo instalarlo."
 
 #: ../../source/use_cases.rst:222
-#, fuzzy
 msgid ""
 "For the other apps, no add-on is available yet. Export the models to STEP"
 " or 3MF files and import those files into the CAD Design GUI of your "
 "choice."
 msgstr ""
-"Puede usar modelos del repositorio público de PartCAD en una interfaz "
-"gráfica de diseño CAD, como FreeCAD o sus alternativas de pago. Los "
-"complementos de PartCAD para estas aplicaciones aún no están disponibles."
-" Por ahora, exporte los modelos a archivos STEP o 3MF e impórtelos en la "
-"interfaz gráfica de diseño CAD que prefiera."
+"Para las demás aplicaciones todavía no hay ningún complemento disponible. "
+"Exporte los modelos a archivos STEP o 3MF e impórtelos en la interfaz "
+"gráfica de diseño CAD que prefiera."
 
 #: ../../source/use_cases.rst:232
 msgid "Python: CadQuery"

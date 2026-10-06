@@ -21,7 +21,7 @@ msgstr ""
 
 #: ../../source/config_package.rst:3
 msgid "Packages and dependencies"
-msgstr ""
+msgstr "Pakete und Abhängigkeiten"
 
 #: ../../source/config_package.rst:9
 msgid "Packages"
@@ -127,7 +127,7 @@ msgstr ""
 
 #: ../../source/config_package.rst:94
 msgid "Templates"
-msgstr ""
+msgstr "Templates"
 
 #: ../../source/config_package.rst:96
 msgid ""
@@ -135,44 +135,51 @@ msgid ""
 "parsed, so a package can generate declarations rather than write every "
 "one out. These names are available while it is being rendered:"
 msgstr ""
+"``partcad.yaml`` ist ein Jinja2-Template, das vor dem Parsen zu YAML "
+"gerendert wird, sodass ein Paket Deklarationen erzeugen kann, statt jede "
+"einzelne auszuschreiben. Beim Rendern stehen diese Namen zur Verfügung:"
 
 #: ../../source/config_package.rst:104
 msgid "Name"
-msgstr ""
+msgstr "Name"
 
 #: ../../source/config_package.rst:105
 msgid "What it is"
-msgstr ""
+msgstr "Was es ist"
 
 #: ../../source/config_package.rst:106
 msgid "``package_name``"
-msgstr ""
+msgstr "``package_name``"
 
 #: ../../source/config_package.rst:107
 msgid "The package path this package is being loaded at."
-msgstr ""
+msgstr "Der Paketpfad, unter dem dieses Paket geladen wird."
 
 #: ../../source/config_package.rst:108
 msgid "``partcad_version``"
-msgstr ""
+msgstr "``partcad_version``"
 
 #: ../../source/config_package.rst:109
 msgid "The version of PartCAD doing the rendering, whole: ``\"0.8.77\"``."
 msgstr ""
+"Die Version von PartCAD, die das Rendern durchführt, als Ganzes: "
+"``\"0.8.77\"``."
 
 #: ../../source/config_package.rst:110
 msgid ""
 "``partcad_version_major``, ``partcad_version_minor``, "
 "``partcad_version_build``"
 msgstr ""
+"``partcad_version_major``, ``partcad_version_minor``, "
+"``partcad_version_build``"
 
 #: ../../source/config_package.rst:111
 msgid "The same version as its three numbers."
-msgstr ""
+msgstr "Dieselbe Version als ihre drei Zahlen."
 
 #: ../../source/config_package.rst:112
 msgid "``partcad_version_at_least(...)``"
-msgstr ""
+msgstr "``partcad_version_at_least(...)``"
 
 #: ../../source/config_package.rst:113
 msgid ""
@@ -180,22 +187,25 @@ msgid ""
 "``partcad_version_at_least(\"0.8.77\")``, or the numbers themselves, "
 "``partcad_version_at_least(0, 8, 77)``."
 msgstr ""
+"Ob diese Version die angegebene oder eine neuere ist. Nimmt eine "
+"Zeichenkette, ``partcad_version_at_least(\"0.8.77\")``, oder die Zahlen "
+"selbst, ``partcad_version_at_least(0, 8, 77)``."
 
 #: ../../source/config_package.rst:116
 msgid "``PI``/``M_PI``, ``E``/``M_E``, ``SQRT_2``, ``SQRT_3``, ``SQRT_5``"
-msgstr ""
+msgstr "``PI``/``M_PI``, ``E``/``M_E``, ``SQRT_2``, ``SQRT_3``, ``SQRT_5``"
 
 #: ../../source/config_package.rst:117
 msgid "The constants a CAD file keeps reaching for."
-msgstr ""
+msgstr "Die Konstanten, nach denen eine CAD-Datei immer wieder greift."
 
 #: ../../source/config_package.rst:118
 msgid "``INCH``/``INCHES``, ``FOOT``/``FEET``"
-msgstr ""
+msgstr "``INCH``/``INCHES``, ``FOOT``/``FEET``"
 
 #: ../../source/config_package.rst:119
 msgid "Millimetres per imperial unit: 25.4 and 304.8."
-msgstr ""
+msgstr "Millimeter je imperialer Einheit: 25,4 und 304,8."
 
 #: ../../source/config_package.rst:121
 msgid ""
@@ -203,6 +213,10 @@ msgid ""
 "can use (see :ref:`expressions`): one table serves both, so a name that "
 "works in ``{{ ... }}`` works in ``%...%`` too."
 msgstr ""
+"Die Konstanten in den letzten beiden Zeilen sind zugleich das, was ein "
+"``%...%``-Ausdruck verwenden kann (siehe :ref:`expressions`): eine Tabelle "
+"dient beidem, sodass ein Name, der in ``{{ ... }}`` funktioniert, auch in "
+"``%...%`` funktioniert."
 
 #: ../../source/config_package.rst:125
 msgid ""
@@ -211,10 +225,15 @@ msgid ""
 "expression is a function (``sqrt``, ``sin``) or a parameter, and a "
 "parameter is as likely to be called ``e`` as a constant is."
 msgstr ""
+"Eine Konstante wird in Großbuchstaben benannt. Das ist die Konvention für "
+"jeden Namen in dieser Tabelle und für jeden, der ihr hinzugefügt wird: was "
+"in einem Ausdruck kleingeschrieben ist, ist eine Funktion (``sqrt``, "
+"``sin``) oder ein Parameter, und ein Parameter heißt genauso "
+"wahrscheinlich ``e`` wie eine Konstante."
 
 #: ../../source/config_package.rst:131
 msgid "Serving two PartCADs at once"
-msgstr ""
+msgstr "Zwei PartCAD-Versionen zugleich bedienen"
 
 #: ../../source/config_package.rst:133
 msgid ""
@@ -223,6 +242,10 @@ msgid ""
 " away from everyone who has not updated, or write both forms and pick "
 "between them."
 msgstr ""
+"Ein Paket, das eine Funktion möchte, die dieses Release hat und das vorige "
+"nicht, hat die Wahl: seine ``partcad:``-Anforderung anzuheben, was das "
+"Paket allen entzieht, die nicht aktualisiert haben, oder beide Formen zu "
+"schreiben und zwischen ihnen zu wählen."
 
 #: ../../source/config_package.rst:145
 msgid ""
@@ -231,6 +254,11 @@ msgid ""
 "work on those asks first -- Jinja2's ``and`` short-circuits, so the call "
 "is never made where the name is absent:"
 msgstr ""
+"Ein PartCAD, das älter ist als diese Namen, definiert keinen von ihnen, "
+"und ein Template, das dort einen benennt, lässt sich überhaupt nicht "
+"rendern. Ein Paket, das auf solchen Versionen funktionieren muss, fragt "
+"daher zuerst -- Jinja2s ``and`` wertet verkürzt aus, sodass der Aufruf "
+"dort nie erfolgt, wo der Name fehlt:"
 
 #: ../../source/config_package.rst:154
 msgid ""
@@ -238,6 +266,9 @@ msgid ""
 "having it: ``0.8.9`` is *older* than ``0.8.77``, and every comparison of "
 "the strings says the opposite."
 msgstr ""
+"Der Vergleich erfolgt Zahl für Zahl, und genau darum geht es dabei: "
+"``0.8.9`` ist *älter* als ``0.8.77``, und jeder Vergleich der "
+"Zeichenketten sagt das Gegenteil."
 
 #: ../../source/config_package.rst:160
 #, python-brace-format, python-format
@@ -248,10 +279,15 @@ msgid ""
 " not empty, and so is true to ``{% if %}``. A comparison that reads as "
 "its own opposite is not a thing to leave lying in a template."
 msgstr ""
+"``partcad_version_at_least`` ist eine Funktion und kein Jinja2-Makro, "
+"wonach es aussieht. Ein Makro rendert immer zu *Text*, sodass ein falsches "
+"als die Zeichenkette ``\"False\"`` zurückkommt -- die nicht leer und damit "
+"für ``{% if %}`` wahr ist. Ein Vergleich, der sich als sein eigenes "
+"Gegenteil liest, ist nichts, was man in einem Template herumliegen lässt."
 
 #: ../../source/config_package.rst:168
 msgid "Validation"
-msgstr ""
+msgstr "Validierung"
 
 #: ../../source/config_package.rst:170
 msgid ""
@@ -260,10 +296,14 @@ msgid ""
 "below: which sections exist, which fields each kind of declaration takes,"
 " and which of them exclude or require one another."
 msgstr ""
+"``partcad.yaml`` wird gegen ein JSON-Schema geprüft "
+"(``src/partcad_utils/schema/partcad.json``), das alles Folgende "
+"beschreibt: welche Abschnitte es gibt, welche Felder jede Art von "
+"Deklaration nimmt und welche davon einander ausschließen oder bedingen."
 
 #: ../../source/config_package.rst:175
 msgid "Run the check over a package, or over the file alone:"
-msgstr ""
+msgstr "Führen Sie die Prüfung über ein Paket oder über die Datei allein aus:"
 
 #: ../../source/config_package.rst:183
 msgid ""
@@ -279,6 +319,18 @@ msgid ""
 "package from loading at all. Set ``partcad.lint.enabled`` to ``false`` to"
 " turn that off."
 msgstr ""
+"Jeder Befund benennt Zeile und Spalte, aus denen er stammt. "
+"``partcad.yaml`` ist ein Jinja2-Template, das vor dem Parsen zu YAML "
+"gerendert wird (siehe ``includePaths`` weiter unten), weshalb der Prüfer "
+"jedes Template-Konstrukt vor dem Parsen maskiert, statt die Datei zu "
+"rendern, wofür die Werte nötig wären, auf die das Template wartet. Es ist "
+"derselbe Prüfer, den :doc:`ASSY-Dateien <assy>` durchlaufen, und die "
+"`PartCAD-Erweiterung für VS Code "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
+"führt ihn auf dem geöffneten Dokument aus -- sodass ein falsch "
+"geschriebener Abschnitt schon beim Tippen unterstrichen wird, auch in der "
+"Datei, die das Paket überhaupt am Laden hindert. Setzen Sie "
+"``partcad.lint.enabled`` auf ``false``, um das abzuschalten."
 
 #: ../../source/config_package.rst:196
 msgid "Dependencies"
@@ -395,6 +447,14 @@ msgid ""
 "files are materialized into, and a file already there is served without "
 "asking the plugin again."
 msgstr ""
+"Antworten eines Plugins, die nicht null sind, werden auf der Festplatte "
+"zwischengespeichert, mit der Plugin-Referenz und der Anfrage als "
+"Schlüssel; eine Anfrage, auf die das Plugin keine Antwort hat, wird nur "
+"für den Lauf gemerkt, der sie gestellt hat, und nach einem Neustart erneut "
+"an das Plugin gerichtet. Derselbe Schlüssel benennt außerdem das "
+"Verzeichnis, in das die eigenen Dateien des Plugins materialisiert werden, "
+"und eine dort bereits vorhandene Datei wird ausgeliefert, ohne das Plugin "
+"erneut zu fragen."
 
 #: ../../source/config_package.rst:267
 msgid ""
@@ -404,6 +464,11 @@ msgid ""
 "pre-change entries. The plugin says so itself, with a module-level "
 "constant in its script::"
 msgstr ""
+"Der Cache weiß nicht, wann sich der Code des Plugins ändert, sodass ein "
+"Plugin, das anders zu antworten beginnt - ein neues Feld an jedem Teil, "
+"das es ausliefert, oder dieselben Teile anders gemessen -, weiterhin mit "
+"den veralteten Einträgen von vor der Änderung bedient würde. Das Plugin "
+"sagt es selbst, mit einer Konstanten auf Modulebene in seinem Skript::"
 
 #: ../../source/config_package.rst:277
 msgid ""
@@ -413,6 +478,12 @@ msgid ""
 "repository with no script of its own - an ``enrich`` one, which rewrites "
 "another repository's answers - has no code to version and stays at ``0``."
 msgstr ""
+"Sie fließt in den Cache-Ort ein, sodass ihre Erhöhung das gesamte "
+"Repository (und jedes Kind in seiner Hierarchie) auf einen Schlag in einen "
+"frischen Cache-Namensraum verschiebt. Sie ist ``0``, wenn das Skript keine "
+"benennt, und ein Repository ohne eigenes Skript - ein "
+"``enrich``-Repository, das die Antworten eines anderen Repositorys "
+"umschreibt - hat keinen Code zu versionieren und bleibt bei ``0``."
 
 #: ../../source/config_package.rst:283
 msgid ""
@@ -425,6 +496,15 @@ msgid ""
 "script rather than asking for it - the answer is needed before the first "
 "question can be asked. The script is parsed, never executed."
 msgstr ""
+"Die Zahl steht im Plugin, weil sie die Sache des Plugins ist. Ein Paket, "
+"das eine plugin-gestützte Bibliothek importiert, kann unmöglich wissen, "
+"dass die Bibliothek ihre Teile jetzt anders misst, und sollte es auch "
+"nicht erfahren müssen: es müsste in jedem Paket, das sie importiert, "
+"erneut gesagt werden, und jedes davon wäre eine Stelle zum Vergessen. Dies "
+"ist daher kein Feld der Abhängigkeit, die das Plugin importiert, und "
+"PartCAD liest es aus dem Skript, statt danach zu fragen - die Antwort wird "
+"gebraucht, bevor die erste Frage gestellt werden kann. Das Skript wird "
+"geparst, nie ausgeführt."
 
 #: ../../source/config_package.rst:292
 msgid ""
@@ -509,6 +589,10 @@ msgid ""
 "``interface``, ``sketch``, ``part``, ``assembly``, ``scene``, "
 "``provider``, ``repository``, ``software``, ``partType``"
 msgstr ""
+"``objects/<kind>`` -- alle Objekte einer Art, als ``{name: config, ...}``. "
+"Die Arten sind die zehn in ``Project.OBJECT_KINDS``: ``material``, "
+"``interface``, ``sketch``, ``part``, ``assembly``, ``scene``, "
+"``provider``, ``repository``, ``software``, ``partType``"
 
 #: ../../source/config_package.rst:339
 msgid ""
@@ -527,6 +611,8 @@ msgid ""
 "``meta`` -- package-level properties (``desc``, ``render``, "
 "``manufacturable``, ``suppliers``, ...), and ``objectKinds`` (see below)"
 msgstr ""
+"``meta`` -- Eigenschaften auf Paketebene (``desc``, ``render``, "
+"``manufacturable``, ``suppliers``, ...) und ``objectKinds`` (siehe unten)"
 
 #: ../../source/config_package.rst:344
 msgid ""
@@ -554,7 +640,7 @@ msgstr ""
 
 #: ../../source/config_package.rst:354
 msgid "Say which kinds a package has"
-msgstr ""
+msgstr "Angeben, welche Arten ein Paket hat"
 
 #: ../../source/config_package.rst:356
 msgid ""
@@ -564,12 +650,19 @@ msgid ""
 "a hundred packages that is four hundred runs -- most of them to be told "
 "\"none\"."
 msgstr ""
+"Jeder Schlüssel ist ein eigener Lauf des Skripts, und ein Paket hat zehn "
+"Arten von Objekten. Etwas so Gewöhnliches wie das Auflisten der Pakete, "
+"die überhaupt etwas Sehenswertes enthalten, fragt nach vieren davon, pro "
+"Paket, und das sind bei einer Hierarchie aus hundert Paketen vierhundert "
+"Läufe -- die meisten davon, um „keine“ zu hören."
 
 #: ../../source/config_package.rst:361
 msgid ""
 "A package's ``meta`` may therefore carry ``objectKinds``, the kinds that "
 "package holds at all:"
 msgstr ""
+"Das ``meta`` eines Pakets darf daher ``objectKinds`` tragen, also die "
+"Arten, die dieses Paket überhaupt enthält:"
 
 #: ../../source/config_package.rst:368
 msgid ""
@@ -582,6 +675,15 @@ msgid ""
 " its own -- rather than through a traversal, which reads ``meta`` for "
 "every package as it goes -- is queried exactly as it was."
 msgstr ""
+"PartCAD antwortet dann für jede andere Art „keine“, ohne zu fragen. Das "
+"grenzt ein, wonach gefragt wird, und nie, was ausgeliefert werden darf: "
+"ein Plugin, das eine Art auflistet, von der es dann doch keine gibt, "
+"bekommt schlicht eine Frage gestellt, die es leer beantwortet, und ein "
+"Plugin, das nichts sagt, wird nach allem gefragt, wie bisher. Es wird aus "
+"den Metadaten gelesen, die PartCAD ohnehin schon geholt hat, und ist nie "
+"eine eigene Anfrage wert, sodass ein für sich allein erreichtes Paket -- "
+"statt über einen Durchlauf, der das ``meta`` jedes Pakets unterwegs liest "
+"-- genau so abgefragt wird wie zuvor."
 
 #: ../../source/config_package.rst:376
 msgid ""

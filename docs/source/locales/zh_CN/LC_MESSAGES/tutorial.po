@@ -51,6 +51,10 @@ msgid ""
 "An existing ``launch.json``, with commands and comments of your own in "
 "it, is added to rather than replaced."
 msgstr ""
+"``pc init`` 还会在它所运行的那个 git 仓库的根目录下，向 ``.vscode/launch.json`` 中添加一条 *"
+"*Render** 命令（如果没有仓库，则放在包的旁边）。它会出现在 :ref:`PartCAD IDE <partcad-ide>` "
+"和 Visual Studio Code 的“Run and Debug”视图中，运行它渲染包的方式与在终端中运行 ``pc rende"
+"r`` 完全一致。如果已经存在 ``launch.json`` ，并且其中有你自己的命令和注释，那么只会向其中追加内容，而不会将其替换。"
 
 #: ../../source/tutorial.rst:27
 msgid ""
@@ -65,6 +69,12 @@ msgid ""
 "install them into a package you created before this version -- that "
 "touches nothing else."
 msgstr ""
+"它还会把 **AI 代理技能** 安装到同一个目录中——正是这些技能教会编码代理如何驱动 PartCAD，而不是让它去猜。Claude "
+"Code 得到的是 ``.claude/skills/`` 中的 ``pc`` 插件，因此这些技能名为 ``/pc:gen-part``"
+" 、 ``/pc:render`` 等等；Cursor 没有可用来划分命名空间的插件，于是在 ``.cursor/skills/`` 中"
+"得到同样的技能，名称为 ``pc-gen-part`` 、 ``pc-render`` 等等。它们来自你已安装的那个 PartCAD，因"
+"此始终与之匹配。如果不想要这些技能，请传入 ``--no-skills`` ；要把它们安装到此版本之前创建的包中，请使用 ``pc in"
+"it --skills-only`` ——它不会改动其他任何内容。"
 
 #: ../../source/tutorial.rst:35
 msgid ""
@@ -158,9 +168,8 @@ msgid "Inspect the part"
 msgstr "检视零件"
 
 #: ../../source/tutorial.rst:130
-#, fuzzy
 msgid "Once a part is created, it can be inspected in ``PartCAD Viewer``."
-msgstr "零件一旦创建完成，就可以在 ``OCP CAD Viewer`` 中对其进行检视。"
+msgstr "零件一旦创建完成，就可以在 ``PartCAD Viewer`` 中对其进行检视。"
 
 #: ../../source/tutorial.rst:137
 msgid "Export the part"
@@ -381,12 +390,11 @@ msgid "Browse"
 msgstr "浏览"
 
 #: ../../source/tutorial.rst:305
-#, fuzzy
 msgid ""
 "Browse the imported packages in the Explorer view. Click on the parts and"
 " assemblies to see them in the ``PartCAD Viewer`` view that will appear "
 "on the right."
-msgstr "在 Explorer 视图中浏览已导入的包。点击零件和装配体，即可在右侧出现的 ``OCP CAD Viewer`` 视图中查看它们。"
+msgstr "在 Explorer 视图中浏览已导入的包。点击零件和装配体，即可在右侧出现的 ``PartCAD Viewer`` 视图中查看它们。"
 
 #: ../../source/tutorial.rst:309
 msgid ""
@@ -414,7 +422,6 @@ msgstr ""
 "``Example 3: Bead`` 作为要使用的模板。随后会显示一个包含新创建脚本的编辑器视图。"
 
 #: ../../source/tutorial.rst:325
-#, fuzzy
 msgid ""
 "When you edit Python or OpenSCAD files that are used in the current "
 "PartCAD package, saving the file makes it displayed automatically. Press "
@@ -422,8 +429,8 @@ msgid ""
 "inspection of the part. The ``PartCAD Viewer`` view will appear on the "
 "right."
 msgstr ""
-"当你编辑当前 PartCAD 包中使用的 Python 或 OpenSCAD 文件时，保存文件会使其自动显示。按 ``Save`` （Ctrl-S"
-" 或 Cmd-S）保存脚本，并触发对该零件的自动检视。 ``OCP CAD Viewer`` 视图会出现在右侧。"
+"当你编辑当前 PartCAD 包中使用的 Python 或 OpenSCAD 文件时，保存文件会使其自动显示。按 ``Save`` （C"
+"trl-S 或 Cmd-S）保存脚本，并触发对该零件的自动检视。 ``PartCAD Viewer`` 视图会出现在右侧。"
 
 #: ../../source/tutorial.rst:331
 msgid "Import parts"
@@ -465,7 +472,7 @@ msgstr "导入一个装配体"
 msgid ""
 "The ``pc import assembly`` command allows you to import an assembly from "
 "a STEP or URDF file. The format is taken from the file's extension."
-msgstr ""
+msgstr "``pc import assembly`` 命令允许你从 STEP 或 URDF 文件导入装配体。格式取自文件的扩展名。"
 
 #: ../../source/tutorial.rst:366
 msgid ""
@@ -476,6 +483,9 @@ msgid ""
 "connects the parts through them rather than placing them by coordinates -"
 " see :doc:`configuration`."
 msgstr ""
+"对于 STEP 文件，它会提取出各个零件，并创建一个装配体 YAML 文件，在其中记录每个零件及其位置。对于 URDF，它会为每个连杆创"
+"建一个 ``stl`` 零件，并带上 URDF 中声明的物理属性，为每个关节创建一对接口，再创建一个装配体——该装配体通过这些接口把零件"
+"连接起来，而不是按坐标摆放它们，参见 :doc:`configuration` 。"
 
 #: ../../source/tutorial.rst:372
 msgid ""
@@ -485,6 +495,8 @@ msgid ""
 " when you want the latter: it declares a file where it lies, and the URDF"
 " stays a URDF."
 msgstr ""
+"导入之后，包中保存的是 PartCAD 自己的对象——可以独立渲染的零件，以及摆放它们的装配体——而不是一条指回外部文件的声明。如果你想"
+"要后者，请使用 ``pc add assembly`` ：它就地声明该文件，而 URDF 仍然是 URDF。"
 
 #: ../../source/tutorial.rst:378
 msgid "Usage"
@@ -495,15 +507,14 @@ msgid "Functionality"
 msgstr "功能"
 
 #: ../../source/tutorial.rst:394
-#, fuzzy
 msgid ""
 "**File Parsing:** For a STEP file, the command first attempts to parse it"
 " using an XDE-based approach. If no parts are found via XDE, it falls "
 "back to a classic STEP parsing method. A URDF is parsed with ROS's own "
 "``urdf_parser_py``."
 msgstr ""
-"**文件解析：** 该命令首先尝试使用基于 XDE 的方法来解析 STEP 文件。如果通过 XDE 未找到任何零件，它会回退到经典的 STEP "
-"解析方法。"
+"**文件解析：** 该命令首先尝试使用基于 XDE 的方法来解析 STEP 文件。如果通过 XDE 未找到任何零件，它会回退到经典的 S"
+"TEP 解析方法。URDF 则使用 ROS 自带的 ``urdf_parser_py`` 来解析。"
 
 #: ../../source/tutorial.rst:399
 msgid ""
@@ -566,6 +577,9 @@ msgid ""
 "joints rather than placing them by coordinates. See :doc:`simulation` for"
 " what survives the conversion and what does not."
 msgstr ""
+"导入 URDF 会为每个连杆生成一个 ``stl`` 零件，并带上 URDF 中声明的质量、惯量、摩擦和颜色，同时为每个关节生成一对接口"
+"——因此生成的装配体是通过关节把零件连接起来的，而不是按坐标摆放它们。关于转换过程中哪些内容会被保留、哪些不会，请参见 :doc:`si"
+"mulation` 。"
 
 #: ../../source/tutorial.rst:436
 msgid "Create an assembly"
@@ -618,7 +632,6 @@ msgid "Inspect the assembly"
 msgstr "检视装配体"
 
 #: ../../source/tutorial.rst:471
-#, fuzzy
 msgid ""
 "When you edit ASSY files in the current PartCAD package, the assembly is "
 "displayed automatically on save. Press ``Save`` (Ctrl-S or Cmd-S) to save"
@@ -626,8 +639,8 @@ msgid ""
 "The ``PartCAD Viewer`` view will appear on the right if it's not open "
 "yet."
 msgstr ""
-"当你编辑当前 PartCAD 包中的 ASSY 文件时，保存时装配体会自动显示。按 ``Save`` （Ctrl-S 或 "
-"Cmd-S）保存装配体文件，并触发对该装配体的自动检视。如果 ``OCP CAD Viewer`` 视图尚未打开，它会出现在右侧。"
+"当你编辑当前 PartCAD 包中的 ASSY 文件时，保存时装配体会自动显示。按 ``Save`` （Ctrl-S 或 Cmd-S）保"
+"存装配体文件，并触发对该装配体的自动检视。如果 ``PartCAD Viewer`` 视图尚未打开，它会出现在右侧。"
 
 #~ msgid ""
 #~ "The ``pc import assembly`` command "

@@ -64,6 +64,9 @@ msgid ""
 " turn out to be the answer -- what the configuration actually resolved "
 "to, and what the environment actually said:"
 msgstr ""
+"У этой же команды есть ещё два отчёта — о двух вещах, которые чаще всего "
+"и оказываются ответом: во что в действительности разрешилась конфигурация "
+"и что в действительности сообщило окружение:"
 
 #: ../../source/troubleshooting.rst:33
 msgid ""
@@ -76,12 +79,23 @@ msgid ""
 "a credential are listed but printed as ``<scrubbed>``, so the output is "
 "something you can attach to a bug report."
 msgstr ""
+"Их стоит читать вместе. Первый показывает, во что разрешился параметр "
+"после того, как были применены файл конфигурации, окружение ``PC_*`` и "
+"командная строка; второй — чего требовало окружение. Они расходятся "
+"всякий раз, когда победил параметр командной строки, когда имя переменной "
+"было написано с ошибкой или когда значение было отклонено, а это и есть "
+"большинство случаев, в которых кто-либо запускает любой из них. "
+"Переменные, по именам которых видно, что они содержат учётные данные, "
+"перечисляются, но выводятся как ``<scrubbed>``, так что вывод можно "
+"приложить к отчёту об ошибке."
 
 #: ../../source/troubleshooting.rst:41
 msgid ""
 "If the work is being done by a daemon -- which it is for most commands --"
 " ask the daemon the same two questions:"
 msgstr ""
+"Если работу выполняет демон — а для большинства команд это так, — задайте "
+"демону те же два вопроса:"
 
 #: ../../source/troubleshooting.rst:50
 msgid ""
@@ -93,6 +107,14 @@ msgid ""
 "what it falls back on, and the environment it inherited is not something "
 "this side can reconstruct any other way."
 msgstr ""
+"Демон остаётся прогретым и общим для рабочей области, поэтому "
+"конфигурация и окружение, о которых он сообщает, — это то, что "
+"содержалось в его собственном окружении в момент, когда его впервые "
+"что-то запустило, возможно, несколько дней назад и возможно из окна VS "
+"Code. Ваша команда работает не под ними: каждая команда передаёт демону "
+"свою собственную разрешённую конфигурацию. Но именно на свою копию демон "
+"опирается как на резервную, а унаследованное им окружение эта сторона не "
+"может восстановить никаким другим способом."
 
 #: ../../source/troubleshooting.rst:58
 msgid "Health Check"
@@ -144,10 +166,14 @@ msgid ""
 "command still succeeds, because most of it is a machine missing something"
 " it can do without. There is one exception, and it is about sandboxes."
 msgstr ""
+"Большая часть того, что обнаруживает ``healthcheck``, сообщается как "
+"предупреждение, и команда всё равно завершается успешно, поскольку в "
+"основном речь о машине, на которой не хватает чего-то, без чего она может "
+"обойтись. Есть одно исключение, и оно касается песочниц."
 
 #: ../../source/troubleshooting.rst:94
 msgid "Can this machine render anything?"
-msgstr ""
+msgstr "Может ли эта машина что-нибудь отрисовать?"
 
 #: ../../source/troubleshooting.rst:96
 msgid ""
@@ -158,6 +184,13 @@ msgid ""
 "carries both already. Three checks report on this, and they share the "
 "``sandbox`` tag:"
 msgstr ""
+"PartCAD не импортирует собственного геометрического ядра. Каждая деталь "
+"создаётся скриптом, который выполняется в песочнице, и есть два "
+"механизма, способных предоставить такую песочницу на машине, где "
+"изначально нет ничего: conda, которая устанавливает интерпретатор и рядом "
+"с ним CAD-стек, и контейнерная среда выполнения, в которой уже есть и то "
+"и другое. Об этом сообщают три проверки, и все они помечены тегом "
+"``sandbox``:"
 
 #: ../../source/troubleshooting.rst:106
 msgid ""
@@ -165,6 +198,9 @@ msgid ""
 "PartCAD builds a virtual environment instead, which works wherever the "
 "host has a usable Python."
 msgstr ""
+"``CondaAvailable`` — предупреждение, когда не удаётся найти conda или "
+"mamba. Вместо этого PartCAD создаёт виртуальное окружение, что работает "
+"везде, где на хосте есть пригодный Python."
 
 #: ../../source/troubleshooting.rst:109
 msgid ""
@@ -174,12 +210,20 @@ msgid ""
 "``PC_USE_DOCKER=false``) on a machine that has a daemon and should not "
 "use it, and the check stops looking."
 msgstr ""
+"``DockerAvailable`` — предупреждение, когда ни одна контейнерная среда "
+"выполнения не отвечает. Обратите внимание, что демон Docker, работающий с "
+"контейнерами *Windows*, считается здесь отсутствующим: все образы, "
+"которые использует PartCAD, — образы Linux. Задайте ``useDocker: false`` "
+"(или ``PC_USE_DOCKER=false``) на машине, где демон есть, но использовать "
+"его не следует, и проверка перестанет его искать."
 
 #: ../../source/troubleshooting.rst:114
 msgid ""
 "``SandboxAvailable`` -- an **error**, and the only check that makes ``pc "
 "healthcheck`` exit non-zero."
 msgstr ""
+"``SandboxAvailable`` — **ошибка** и единственная проверка, из-за которой "
+"``pc healthcheck`` завершается с ненулевым кодом."
 
 #: ../../source/troubleshooting.rst:117
 msgid ""
@@ -192,6 +236,14 @@ msgid ""
 "image with no conda in it -- nothing is misconfigured, and the check "
 "passes:"
 msgstr ""
+"Явно указанный ``pythonSandbox`` соблюдается, и в этом состоит большая "
+"часть работы ``SandboxAvailable``. Вопрос «есть ли conda или контейнер» "
+"уместен только тогда, когда никто не указал, какую песочницу "
+"использовать, потому что именно тогда выбор между ними делает PartCAD. "
+"Если вы написали ``pythonSandbox: venv`` — задание CI, которое создаёт "
+"виртуальное окружение из уже имеющегося у него интерпретатора, машина без "
+"доступа к сети, образ контейнера без conda внутри, — то ничего не "
+"настроено неправильно, и проверка проходит:"
 
 #: ../../source/troubleshooting.rst:130
 msgid ""
@@ -203,6 +255,14 @@ msgid ""
 "``conda`` on a machine that has none is a failure -- being unable to do "
 "what was asked is not a reason to quietly do something else."
 msgstr ""
+"Объявленная песочница проверяется затем только на то, что нужно *ей*, и "
+"ни на что другое: ``conda`` требует conda, ``docker`` требует "
+"контейнерной среды выполнения, а ``venv``, ``pypy`` и ``none`` требуют "
+"лишь того Python, под которым работает PartCAD. (Для ``remote`` нужен "
+"доступный ``partcad-service-remote-docker``, то есть сетевой адрес, "
+"который эта проверка не опрашивает.) Запрос ``conda`` на машине, где её "
+"нет, — это отказ: невозможность сделать то, о чём попросили, не повод "
+"молча сделать что-то другое."
 
 #: ../../source/troubleshooting.rst:138
 msgid ""
@@ -215,6 +275,14 @@ msgid ""
 "names -- for KiCad that is installing KiCad on this machine and setting "
 "``useDockerKicad: false``."
 msgstr ""
+"Три вещи требуют именно контейнера и сообщают об этом в момент, когда до "
+"них доходит дело, а не заранее: реализация, пакет которой объявляет "
+"``container:``, импорт печатной платы KiCad (``useDockerKicad``) и "
+"песочница Python ``docker``, когда она запрошена по имени. Если ``pc "
+"render``, ``pc export`` или ``pc inspect`` сообщает, что контейнерная "
+"среда выполнения недоступна, запустите Docker или воспользуйтесь другим "
+"путём, который назван в сообщении: для KiCad это установка KiCad на этой "
+"машине и ``useDockerKicad: false``."
 
 #: ../../source/troubleshooting.rst:147 ../../source/troubleshooting.rst:185
 #: ../../source/troubleshooting.rst:243
@@ -268,6 +336,8 @@ msgstr ""
 #: ../../source/troubleshooting.rst:162
 msgid "Imports hang, or time out reaching a repository the browser can open:"
 msgstr ""
+"Импорты зависают или завершаются по таймауту при обращении к репозиторию, "
+"который открывается в браузере:"
 
 #: ../../source/troubleshooting.rst:164
 msgid ""
@@ -277,6 +347,11 @@ msgid ""
 "url`` files alike -- so exporting them is usually the whole fix. See :ref"
 ":`proxy-configuration`."
 msgstr ""
+"Скорее всего, это сеть, где единственный путь наружу — через прокси. "
+"PartCAD читает ``HTTPS_PROXY``, ``HTTP_PROXY`` и ``NO_PROXY`` для всего, "
+"что загружает, — и для git-репозиториев, и для tar-архивов, и для файлов "
+"``fileFrom: url``, — поэтому обычно достаточно экспортировать эти "
+"переменные. См. :ref:`proxy-configuration`."
 
 #: ../../source/troubleshooting.rst:168
 msgid ""
@@ -284,6 +359,10 @@ msgid ""
 "is re-terminating TLS and its CA is not trusted here. Point "
 "``SSL_CERT_FILE`` and ``REQUESTS_CA_BUNDLE`` at the proxy's CA bundle."
 msgstr ""
+"Если загрузка не зависает, а не может проверить сертификат, значит, "
+"прокси заново терминирует TLS, а его удостоверяющий центр здесь не "
+"является доверенным. Укажите в ``SSL_CERT_FILE`` и ``REQUESTS_CA_BUNDLE`` "
+"путь к набору сертификатов удостоверяющего центра прокси."
 
 #: ../../source/troubleshooting.rst:173
 msgid "PartCAD VSCode Extension"
@@ -313,9 +392,8 @@ msgstr ""
 "представлении ``Output``."
 
 #: ../../source/troubleshooting.rst:187
-#, fuzzy
 msgid "Message in \"Explorer\" left panel: \"PartCAD ... is not found\""
-msgstr "Сообщение в левой панели \"Explorer\": \"No Python (>= 3.10) installed\""
+msgstr "Сообщение в левой панели \"Explorer\": \"PartCAD ... is not found\""
 
 #: ../../source/troubleshooting.rst:189
 msgid ""
@@ -323,6 +401,8 @@ msgid ""
 "the extension downloads a standalone PartCAD for you. No Python is "
 "needed."
 msgstr ""
+"Нажмите \"Install or update PartCAD\" в левой панели \"Explorer\", и "
+"расширение загрузит для вас автономный PartCAD. Python при этом не нужен."
 
 #: ../../source/troubleshooting.rst:191
 msgid ""
@@ -330,6 +410,10 @@ msgid ""
 "install partcad`` in it: the extension finds the ``partcad-json-rpc`` "
 "that puts on your ``PATH`` and uses that instead of downloading anything."
 msgstr ""
+"Либо, если вы предпочитаете использовать собственное окружение Python, "
+"выполните в нём ``pip install partcad``: расширение найдёт "
+"``partcad-json-rpc``, который при этом появляется в вашем ``PATH``, и "
+"воспользуется им вместо того, чтобы что-либо загружать."
 
 #: ../../source/troubleshooting.rst:194
 msgid ""
@@ -359,18 +443,16 @@ msgstr ""
 "found\""
 
 #: ../../source/troubleshooting.rst:202
-#, fuzzy
 msgid ""
 "Make sure that the extension version matches the PartCAD version in ``pc "
 "version`` command output"
 msgstr ""
-"Убедитесь, что версия расширения совпадает с версией Python-модуля "
-"PartCAD в выводе команды `pc version`"
+"Убедитесь, что версия расширения совпадает с версией PartCAD в выводе "
+"команды ``pc version``"
 
 #: ../../source/troubleshooting.rst:206
-#, fuzzy
 msgid "PartCAD Viewer"
-msgstr "OCP CAD Viewer"
+msgstr "PartCAD Viewer"
 
 #: ../../source/troubleshooting.rst:208
 msgid ""
@@ -382,6 +464,14 @@ msgid ""
 "inside ``partcad`` itself -- so ``pip install partcad`` is all that is "
 "needed, and there is nothing separate to install."
 msgstr ""
+"``PartCAD Viewer`` — это вкладка, которую расширение открывает при "
+"просмотре детали, сборки, сцены, эскиза или интерфейса. PartCAD "
+"триангулирует форму в изолированной среде выполнения и отправляет "
+"результат расширению в виде сжатого glTF через сокет на "
+"``127.0.0.1:9137``. Python-сторона этого соединения — пакет "
+"``partcad_ide_client``, который поставляется внутри самого ``partcad``, "
+"так что достаточно ``pip install partcad`` и устанавливать отдельно "
+"ничего не нужно."
 
 #: ../../source/troubleshooting.rst:216
 msgid ""
@@ -395,6 +485,16 @@ msgid ""
 " the tab is opened, so a failure in one of them is a daemon problem and "
 "says so in the tab, while the 3D view keeps working."
 msgstr ""
+"Рядом с трёхмерным видом панель содержит вкладки для вопросов, которые "
+"относятся к самому объекту, а не к его форме: **FEA** и **CFD** в разделе "
+"**Analysis**, а также **Bill of Materials**, **Instructions** и "
+"**Procurement** в разделе **Supply Chain** — каждая включена там, где "
+"применима, — и, рядом с трёхмерным видом на вкладке **Design**, вкладки "
+"**2D** и **Draft**, которые отрисовывают объект в файл. Они приходят не "
+"через упомянутый выше сокет: ответы на них даёт демон PartCAD, и они "
+"запрашиваются при первом открытии вкладки, поэтому сбой в одной из них — "
+"это проблема демона, о чём она и сообщает на самой вкладке, тогда как "
+"трёхмерный вид продолжает работать."
 
 #: ../../source/troubleshooting.rst:225
 msgid ""
@@ -405,10 +505,19 @@ msgid ""
 "that window, so ``pc`` is there without any further setup "
 "(``partcad.addToolsToTerminalPath`` turns that off):"
 msgstr ""
+"Всё, у чего есть ``partcad`` и доступ к этому порту, может выводить "
+"изображение в тот же просмотрщик — включая ``pc``, запущенный в обычном "
+"терминале, пока открыто окно с расширением. Пока расширение активно, оно "
+"добавляет инструменты командной строки PartCAD в ``PATH`` терминалов, "
+"открываемых в этом окне, поэтому ``pc`` там доступен без какой-либо "
+"дополнительной настройки (``partcad.addToolsToTerminalPath`` это "
+"отключает):"
 
 #: ../../source/troubleshooting.rst:245
 msgid "``Failed to load \"partcad_ide_client\"`` in the PartCAD terminal view"
 msgstr ""
+"``Failed to load \"partcad_ide_client\"`` в представлении терминала "
+"PartCAD"
 
 #: ../../source/troubleshooting.rst:247
 msgid ""
@@ -417,22 +526,31 @@ msgid ""
 "reinstall partcad``, or press \"Update PartCAD\" in the \"Context\" left "
 "panel."
 msgstr ""
+"Пакет поставляется внутри ``partcad``, поэтому это означает, что "
+"установка повреждена, а не неполна. Переустановите его командой ``pip "
+"install --force-reinstall partcad`` или нажмите \"Update PartCAD\" в "
+"левой панели \"Context\"."
 
 #: ../../source/troubleshooting.rst:251
 msgid ""
 "On a PartCAD older than 0.8.0 it was a separate ``partcad-ide-client`` "
 "distribution that was never published; upgrading is the fix."
 msgstr ""
+"В версиях PartCAD старше 0.8.0 это был отдельный дистрибутив "
+"``partcad-ide-client``, который так и не был опубликован; решение — "
+"обновиться."
 
 #: ../../source/troubleshooting.rst:254
 msgid "``No PartCAD IDE with an open PartCAD Viewer detected``"
-msgstr ""
+msgstr "``No PartCAD IDE with an open PartCAD Viewer detected``"
 
 #: ../../source/troubleshooting.rst:256
 msgid ""
 "Nothing is listening on the viewer port. Open a window with the PartCAD "
 "extension active; the extension starts listening when it activates."
 msgstr ""
+"Никто не слушает порт просмотрщика. Откройте окно с активным расширением "
+"PartCAD; расширение начинает слушать порт при активации."
 
 #: ../../source/troubleshooting.rst:258
 msgid ""
@@ -440,16 +558,22 @@ msgid ""
 "without ``SO_REUSEPORT``. The \"PartCAD Viewer port ... is already in "
 "use\" message in the ``PartCAD`` output view says which case this is."
 msgstr ""
+"Если открыто два окна, на платформах без ``SO_REUSEPORT`` владеть портом "
+"может только одно из них. Сообщение \"PartCAD Viewer port ... is already "
+"in use\" в представлении вывода ``PartCAD`` говорит, что это именно такой "
+"случай."
 
 #: ../../source/troubleshooting.rst:261
 msgid ""
 "Set ``PARTCAD_IDE_PORT`` to move a ``partcad`` process to a different "
 "port if 9137 is taken by something else on the machine."
 msgstr ""
+"Задайте ``PARTCAD_IDE_PORT``, чтобы перевести процесс ``partcad`` на "
+"другой порт, если 9137 занят на этой машине чем-то другим."
 
 #: ../../source/troubleshooting.rst:264
 msgid "\"Drawn without a graphics card\" in the corner of the 3D view"
-msgstr ""
+msgstr "\"Drawn without a graphics card\" в углу трёхмерного вида"
 
 #: ../../source/troubleshooting.rst:266
 msgid ""
@@ -461,10 +585,18 @@ msgid ""
 "and how to make its icon do that every time. The PartCAD IDE does this "
 "already."
 msgstr ""
+"Visual Studio Code не смог воспользоваться графической картой, поэтому в "
+"окне нет WebGL, и трёхмерный вид отрисовывает модель на процессоре: с "
+"плоской заливкой и медленнее для большой модели, которая во время "
+"вращения рисуется прямоугольными блоками. Наведите указатель на эту "
+"надпись, чтобы узнать, как запустить Visual Studio Code так, чтобы WebGL "
+"снова был доступен (программная отрисовка силами самого Chromium, которая "
+"выглядит как обычный вид), и как сделать, чтобы его ярлык делал это "
+"каждый раз. В PartCAD IDE это уже сделано."
 
 #: ../../source/troubleshooting.rst:273
 msgid "The **Draft** tab says a package is not found"
-msgstr ""
+msgstr "Вкладка **Draft** сообщает, что пакет не найден"
 
 #: ../../source/troubleshooting.rst:275
 msgid ""
@@ -473,6 +605,10 @@ msgid ""
 "such package; ``pc init`` adds that import, and "
 "``examples/feature_render_custom`` shows it written out."
 msgstr ""
+"Пакет для чертежей, ``//pub/feature/render/draftwright``, поступает из "
+"публичного индекса PartCAD. В рабочей области, которая не импортирует "
+"``pub``, такого пакета нет; ``pc init`` добавляет этот импорт, а в "
+"``examples/feature_render_custom`` он выписан явно."
 
 #~ msgid ""
 #~ "Install Conda environment into the "
