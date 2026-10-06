@@ -25,6 +25,8 @@ Nothing here is specific to the IDE viewer. The viewer is the one caller today
 a drawable tree asks the shape for one: 'shape.get_representation(ctx, "gltf")'.
 """
 
+import math
+
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, wrapper
 from .process_crash import describe_exit_code
@@ -58,6 +60,16 @@ SCREEN_DIVISOR = SCREEN_PIXELS / PIXEL_BUDGET
 MIN_TOLERANCE = 0.001
 MAX_TOLERANCE = 10.0
 
+# What to assume when a tree records no size at all. Every shape a wrapper returned
+# carries the box it was measured in as it was built, so this is for the tree that
+# carries none: one whose metadata was stripped, or one with no geometry in it,
+# where the tolerance decides nothing because there is nothing to tessellate.
+#
+# A stated nominal size rather than the floor, because the floor is the finest
+# setting there is and a tree of unknown size is the last one to spend that on.
+# Palm-sized, which is what a part usually is.
+NOMINAL_SIZE = 100.0
+
 # The angular cap, in radians, and the one number here that is *not* a function of
 # the object's size - which is exactly why it is the one that matters most on a
 # large assembly. A curve is tessellated to whichever is the finer of the linear
@@ -80,6 +92,80 @@ DEFAULT_ANGULAR_TOLERANCE = 0.4
 _DEPENDENCIES = (sandbox_versions.BUILD123D, sandbox_versions.CADQUERY_OCP)
 
 
+def size_of(tree):
+    """The diagonal of what 'tree' occupies, in mm, or None if it records none.
+
+    Arithmetic over numbers already in hand: every shape a wrapper returned carries
+    the box it was measured in when it was built, because building it is what
+    measured it (`ocp_serialize.encode_shape` -> `metadata.measurements.bbox`). So
+    the size of a whole tree costs no kernel, no sandbox and no second opinion - it
+    is the same box `Shape.get_bounding_box_async()` hands every other caller that
+    needs a size, composed down the tree.
+
+    The placements are composed on the way down, because that is what decides how
+    big the thing on the screen is: eight parts 50 mm across are 50 mm if they sit
+    on top of each other and 2 m if they are spread out. A node's box is in its own
+    coordinates, so its eight corners are placed and re-bounded rather than its two
+    extremes moved - a rotated box's extremes are not the extremes of the rotated
+    box. Re-bounding a rotated box over-states it, never the reverse, so a tree of
+    rotated parts is sized a little large and tessellated a little coarse: the safe
+    direction for a budget whose other end is the cost of drawing.
+
+    Only the nodes. The sketches a port is drawn with sit at a port, which is inside
+    the object whose port it is, so they cannot make a tree bigger than its nodes
+    already make it.
+    """
+    from .geom import Location
+
+    low = [None, None, None]
+    high = [None, None, None]
+
+    def corners(box):
+        x0, y0, z0, x1, y1, z1 = box
+        return [(x, y, z) for x in (x0, x1) for y in (y0, y1) for z in (z0, z1)]
+
+    def walk(node, location):
+        if not isinstance(node, dict):
+            return
+        own = node.get(shape_envelope.KEY_LOCATION)
+        if own is not None:
+            placement = own if isinstance(own, Location) else Location(own)
+            location = placement if location is None else location * placement
+        box = (
+            shape_envelope.metadata_section(node.get(shape_envelope.KEY_METADATA), shape_envelope.METADATA_MEASUREMENTS)
+            or {}
+        ).get(shape_envelope.METADATA_BBOX)
+        if box and len(box) == 6:
+            for point in corners(box):
+                placed = point if location is None else location.transform_point(point)
+                for axis in range(3):
+                    value = placed[axis]
+                    if low[axis] is None or value < low[axis]:
+                        low[axis] = value
+                    if high[axis] is None or value > high[axis]:
+                        high[axis] = value
+        for child in node.get(shape_envelope.KEY_ASSEMBLY) or []:
+            walk(child, location)
+
+    walk(tree, None)
+    if low[0] is None:
+        return None
+    return math.sqrt(sum((high[axis] - low[axis]) ** 2 for axis in range(3)))
+
+
+def tolerance_for(tree):
+    """The linear deflection to tessellate 'tree' at, in mm: the budget, applied.
+
+    The one place that turns "half a pixel of a thousand" into millimetres, so that
+    the viewer, a test and anything else asking the same question get the same
+    number.
+    """
+    size = size_of(tree)
+    if not size:
+        size = NOMINAL_SIZE
+    return min(max(size / SCREEN_DIVISOR, MIN_TOLERANCE), MAX_TOLERANCE)
+
+
 async def in_form_async(ctx, tree, form):
     """'tree' with its geometry in 'form', whatever form it arrived in.
 
@@ -99,11 +185,9 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None):
     """'tree' with its geometry tessellated into glTF, one copy per distinct shape.
 
     'tolerance' is the linear deflection in mm. Left at None - which is how the
-    viewer asks - it is derived in the sandbox from the overall size of this tree,
-    because that is where the geometry is and so where the size can be measured
-    without a second round trip; see the budget above and 'wrapper_gltf._budget'.
-    Passing one overrides that outright, for a caller that knows what it wants in
-    millimetres.
+    viewer asks - it is worked out here from what the tree records about its own
+    size (see 'tolerance_for'). Passing one overrides that outright, for a caller
+    that knows what it wants in millimetres.
 
     What comes back carries the geometry on the root, in KEY_GEOMETRY, with every
     node naming its entry: a hundred instances of one bolt are one entry named a
@@ -126,16 +210,14 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None):
     for dep in _DEPENDENCIES:
         await runtime.ensure_async(dep)
 
+    # Decided here and sent as millimetres. The sandbox is handed a number rather
+    # than a policy because the size it would be worked out from is already known
+    # here: asking the geometry again, in the one process that has a kernel, would
+    # be a second answer to "how big is it" (see 'size_of').
     request = {
         "tree": tree,
-        # None means "work it out from the tree", which is the ordinary case; the
-        # policy travels with it so that the sandbox applies this module's numbers
-        # rather than a second copy of them.
-        "tolerance": tolerance,
+        "tolerance": tolerance_for(tree) if tolerance is None else float(tolerance),
         "angularTolerance": DEFAULT_ANGULAR_TOLERANCE if angular_tolerance is None else angular_tolerance,
-        "screenDivisor": SCREEN_DIVISOR,
-        "minTolerance": MIN_TOLERANCE,
-        "maxTolerance": MAX_TOLERANCE,
     }
 
     # argv[1] is mandatory for every wrapper (wrapper_common.handle_input reads
@@ -156,6 +238,16 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None):
         raise Exception(result.get("exception") or "Failed to tessellate the shape tree")
     for reason in result.get("errors") or []:
         pc_logging.warning("Nothing to draw for %s" % reason)
+
+    # A preview whose faces were not merged is one with a draw call per face rather
+    # than per shape, which is the difference between an assembly that can be
+    # orbited and one that cannot. It still draws, so this is a warning and not a
+    # failure - but it is not something to discover by watching the frame rate.
+    if result.get("mergedFaces") is False:
+        pc_logging.warning(
+            "Tessellated without merging faces, so this preview has one draw call per face: %s"
+            % (result.get("mergeFacesReason") or "the exporter did not support it")
+        )
     converted = result.get("tree")
     if not shape_envelope.is_node(converted):
         raise Exception("The tessellation produced no shape tree")
@@ -168,7 +260,9 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None):
         % (
             tree.get("name") or "a shape tree",
             ", ".join(
-                "%s=%s" % (key, result[key]) for key in ("tolerance", "angularTolerance", "size") if key in result
+                "%s=%s" % (key, result[key])
+                for key in ("tolerance", "angularTolerance", "mergedFaces")
+                if key in result
             ),
         )
     )
