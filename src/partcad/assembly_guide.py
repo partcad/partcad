@@ -199,10 +199,16 @@ class RenderedImages(ImageSource):
     needed while one page was drawn after another.
     """
 
-    def __init__(self, ctx, project, directory):
+    def __init__(self, ctx, project, directory, reproducible=False):
         self.ctx = ctx
         self.project = project
         self.directory = directory
+        # Whether these projections have to be the same on any machine. A book
+        # that is checked in is made of them, so a picture that drifts is a
+        # document that drifts -- which is what 'reproducible' on the PDF file
+        # type could not settle on its own: it fixes reportlab's clock and
+        # leaves the pages it draws alone. See 'Shape.render_svg_somewhere_async'.
+        self.reproducible = bool(reproducible)
         self.rendered = {}
         # One lock per illustration, not one over all of them: two pages showing
         # different things have nothing to wait for from each other. What it
@@ -237,6 +243,10 @@ class RenderedImages(ImageSource):
                         project=self.project,
                         filepath=path,
                         annotations=annotations,
+                        # True or nothing: an explicit 'False' is this caller
+                        # insisting, and would turn the flag off for a package
+                        # that had asked for it on its 'svg:' file type.
+                        reproducible=True if self.reproducible else None,
                     )
                 if not os.path.exists(path):
                     pc_logging.warning("Failed to render the illustration of %s" % key)
@@ -979,7 +989,9 @@ async def build_part_plan_async(ctx, project, part, images: ImageSource, choices
 
 
 @asynccontextmanager
-async def guide_document_async(ctx, project, assembly, label, dir_path=None, ignore_manufacturability=False, **options):
+async def guide_document_async(
+    ctx, project, assembly, label, dir_path=None, ignore_manufacturability=False, reproducible=False, **options
+):
     """The instruction book of an assembly, for as long as its pictures exist.
 
     A context manager rather than a plain call because the illustrations are
@@ -996,21 +1008,27 @@ async def guide_document_async(ctx, project, assembly, label, dir_path=None, ign
     positional argument raises IndexError before the document is ever built.
 
     'options' are those of 'build_guide_async': 'recursive', 'build_parts' and
-    'choices'.
+    'choices'. 'reproducible' is not one of them: it is spelled out here and
+    passed on by name, because what it reaches is the illustrations rather than
+    the plan -- see 'RenderedImages'.
     """
-    async with guide_async(ctx, project, assembly, label, dir_path, ignore_manufacturability, **options) as guide:
+    async with guide_async(
+        ctx, project, assembly, label, dir_path, ignore_manufacturability, reproducible=reproducible, **options
+    ) as guide:
         yield guide.document
 
 
 @asynccontextmanager
-async def guide_async(ctx, project, assembly, label, dir_path=None, ignore_manufacturability=False, **options):
+async def guide_async(
+    ctx, project, assembly, label, dir_path=None, ignore_manufacturability=False, reproducible=False, **options
+):
     """'guide_document_async', yielding the plan and its pages with the document."""
     assembly = resolve_alias(ctx, assembly)
     check_source(assembly, ignore_manufacturability)
 
     with pc_logging.Action("Guide%s" % label, project.name, assembly.name):
         with tempfile.TemporaryDirectory() as assets_dir:
-            images = RenderedImages(ctx, project, assets_dir)
+            images = RenderedImages(ctx, project, assets_dir, reproducible=reproducible)
             yield await build_guide_async(
                 ctx, project, assembly, images, dir_path, force_manufacturing=ignore_manufacturability, **options
             )
@@ -1021,6 +1039,8 @@ async def part_plan_async(ctx, project, part, choices=None):
     """'build_part_plan_async', for as long as its pictures exist."""
     with pc_logging.Action("PlanData", project.name, part.name):
         with tempfile.TemporaryDirectory() as assets_dir:
+            # Nothing asks for these to be reproducible: a plan is read on a
+            # screen rather than checked in, so it gets the fast projection.
             images = RenderedImages(ctx, project, assets_dir)
             yield await build_part_plan_async(ctx, project, part, images, choices)
 
