@@ -216,8 +216,8 @@ install.
 
 Beside the 3D view the panel carries tabs for the questions that are about the
 object rather than its shape -- **FEA** and **CFD** under **Analysis**, and
-**Bill of Materials**, **Instructions** and **Procurement** under **Supply Chain**,
-each enabled where it applies -- and, beside the 3D view on the **Design** tab,
+**Build vs Buy**, **Build**, **Buy**, **Bill of Materials** and **Assembly** under
+**Manufacturing**, each enabled where it applies -- and, beside the 3D view on the **Design** tab,
 **2D** and **Draft**, which render the object to a file. Those
 do not come over the socket above: they are answered by the PartCAD daemon and
 fetched the first time the tab is opened, so a failure in one of them is a
