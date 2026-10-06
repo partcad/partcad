@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 14:45+0000\n"
+"POT-Creation-Date: 2026-10-06 14:39+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ru\n"
@@ -170,7 +170,8 @@ msgid ""
 "info`` has none), and the rest of this page is written with ``...``. Note"
 " that ``pc supply find -r`` and ``pc supply quote -r`` mean something "
 "else entirely — break every assembly down to its parts — and take no "
-"``...``."
+"``...``, and so does ``pc instructions -r``, which puts the steps of the "
+"sub-assemblies into the instructions."
 msgstr ""
 
 #: ../../source/cli.rst:98
@@ -1594,23 +1595,32 @@ msgstr ""
 msgid ""
 "``-t pdf`` and ``-t html`` generate the assembly instruction book of the "
 "assembly named by ``-a``: a title page, the same bill of materials, then "
-"— sub-assemblies first, since they have to exist before the assembly that"
-" uses them — a page showing each (sub-)assembly as it should look once it"
-" is together, followed by one page per assembly step. A step page shows "
-"the two items being joined, and below them an exploded view of the joint "
-"with a line drawn across the gap it opens. That gap is half of the "
-"largest dimension of the two items, unless the step sets ``exploded:`` in"
-" its ``connect:`` or ``connectPorts:`` section (see :doc:`assy`). The "
-"last page collects links: to this assembly and its package, to every "
-"other package that supplies at least three of its parts, and to PartCAD. "
-"The HTML is one self-contained file that shows a single page at a time, "
-"with arrows on either side (and the arrow keys) to flip through it. As "
-"with ``readme``, an assembly can ask for either document in the package "
-"configuration, by declaring ``pdf`` or ``html`` in its ``render`` "
-"section."
+"a page per assembly step, in the order the Assembly YAML file lists the "
+"links. Whatever has to be made before a step can be done is explained "
+"just before it: a sub-assembly gets a page showing it as it should look "
+"once it is together, followed by its own steps, and a part that is "
+"manufactured rather than bought gets a page saying what it is made from, "
+"its manufacturing instructions written out, and — where it declares a job"
+" a route can be produced for (see ``pc cam``) — the route drawn from "
+"above. Something used in several places is explained once, with how many "
+"to make, in the lowest-level assembly that holds every place it is used, "
+"so it is made before the first step that needs it. ``pc render`` writes "
+"the complete book — every sub-assembly that is built and every part that "
+"is — and ``pc instructions`` below writes as much of it as is asked for. "
+"A step page shows the two items being joined, and below them an exploded "
+"view of the joint with a line drawn across the gap it opens. That gap is "
+"half of the largest dimension of the two items, unless the step sets "
+"``exploded:`` in its ``connect:`` or ``connectPorts:`` section (see "
+":doc:`assy`). The last page collects links: to this assembly and its "
+"package, to every other package that supplies at least three of its "
+"parts, and to PartCAD. The HTML is one self-contained file that shows a "
+"single page at a time, with arrows on either side (and the arrow keys) to"
+" flip through it. As with ``readme``, an assembly can ask for either "
+"document in the package configuration, by declaring ``pdf`` or ``html`` "
+"in its ``render`` section."
 msgstr ""
 
-#: ../../source/cli.rst:914
+#: ../../source/cli.rst:920
 msgid ""
 "Declaring one with a ``path`` says the opposite: that this ``pdf`` is a "
 "file of the package's own — a drawing, a datasheet — written by that "
@@ -1618,7 +1628,7 @@ msgid ""
 "generated over it (see :ref:`output-files`)."
 msgstr ""
 
-#: ../../source/cli.rst:918
+#: ../../source/cli.rst:924
 msgid ""
 "Both formats are only defined for an assembly declared as ``type: assy``:"
 " the steps come from the Assembly YAML file, and an assembly that has "
@@ -1628,35 +1638,86 @@ msgid ""
 "``--ignore-manufacturability`` to generate the document anyway."
 msgstr ""
 
-#: ../../source/cli.rst:925
+#: ../../source/cli.rst:929
+#, fuzzy
+msgid "``pc instructions``"
+msgstr "``pc inspect``"
+
+#: ../../source/cli.rst:930
+msgid ""
+"Write the assembly instructions of the assembly named, as ``-t pdf`` (the"
+" default) or ``-t html``, into the current directory or the one ``-O`` "
+"names. It is the book ``pc render -t pdf`` writes, and the one the IDE's "
+"**Assembly** tab shows and saves; what differs is that it asks how much "
+"of it to write:"
+msgstr ""
+
+#: ../../source/cli.rst:934
+msgid ""
+"on its own, this assembly's own steps, in the order of its links, with a "
+"sub-assembly added as the finished thing it is;"
+msgstr ""
+
+#: ../../source/cli.rst:936
+msgid ""
+"``-r``/``--recursive`` puts in the steps of every sub-assembly that is "
+"built, each just before the step that adds it;"
+msgstr ""
+
+#: ../../source/cli.rst:938
+msgid ""
+"``-b``/``--build-parts`` puts in how to make every part that is built, "
+"each just before the step that first needs it. Primitive for now: the "
+"manufacturing instructions written out, and the route drawn where a part "
+"declares one."
+msgstr ""
+
+#: ../../source/cli.rst:942
+msgid ""
+"What is built and what is bought is what was chosen in the IDE's **Build "
+"vs Buy** tab for this assembly, which keeps the choices on the machine "
+"they were made on, in ``~/.partcad/garage/default/bvb/<assembly, "
+"escaped>.json``. Where nothing was chosen, a line item that can be either"
+" is bought, as the bill of materials assumes. The steps and pages come in"
+" the very order the IDE's **Build** tab lists them in, so a step selected"
+" there and a page of the file are the same step."
+msgstr ""
+
+#: ../../source/cli.rst:948
+msgid ""
+"The file is written by ``pc`` itself, on the machine it runs on, "
+"whichever machine the daemon is on."
+msgstr ""
+
+#: ../../source/cli.rst:957
 msgid "Workflow commands"
 msgstr "Команды рабочих процессов"
 
-#: ../../source/cli.rst:927
+#: ../../source/cli.rst:959
 msgid "``pc supply``"
 msgstr "``pc supply``"
 
-#: ../../source/cli.rst:928
+#: ../../source/cli.rst:960
 msgid "Manage the supply chain of the current project:"
 msgstr "Управление цепочкой поставок текущего проекта:"
 
-#: ../../source/cli.rst:930
+#: ../../source/cli.rst:962
 msgid "``pc supply caps`` — Show the capabilities of a provider."
 msgstr "``pc supply caps`` — показать возможности поставщика."
 
-#: ../../source/cli.rst:931
+#: ../../source/cli.rst:963
 msgid "``pc supply find`` — Find suppliers."
 msgstr "``pc supply find`` — найти поставщиков."
 
-#: ../../source/cli.rst:932
+#: ../../source/cli.rst:964
 msgid "``pc supply quote`` — Get a quote from suppliers."
 msgstr "``pc supply quote`` — получить расценки от поставщиков."
 
-#: ../../source/cli.rst:933
+#: ../../source/cli.rst:965
 msgid "``pc supply order`` — Place an order with suppliers."
 msgstr "``pc supply order`` — разместить заказ у поставщиков."
 
-#: ../../source/cli.rst:935
+#: ../../source/cli.rst:967
 msgid ""
 "``find`` and ``quote`` take parts and assemblies alike. A requested "
 "assembly that is sold assembled (one with ``vendor`` and ``sku`` set, see"
@@ -1667,15 +1728,15 @@ msgid ""
 "all the way down to the parts regardless, and order those."
 msgstr ""
 
-#: ../../source/cli.rst:943
+#: ../../source/cli.rst:975
 msgid "Other commands"
 msgstr "Прочие команды"
 
-#: ../../source/cli.rst:945
+#: ../../source/cli.rst:977
 msgid "``pc adhoc``"
 msgstr "``pc adhoc``"
 
-#: ../../source/cli.rst:946
+#: ../../source/cli.rst:978
 msgid ""
 "Ad-hoc operations that run on the fly, on a file that belongs to no "
 "package: PartCAD declares the file in a throwaway package of its own, "
@@ -1684,20 +1745,20 @@ msgid ""
 "``sketch``:"
 msgstr ""
 
-#: ../../source/cli.rst:950
+#: ../../source/cli.rst:982
 msgid ""
 "``pc adhoc convert`` — write the file back out as another format (``pc "
 "adhoc convert part bracket.step bracket.stl``)."
 msgstr ""
 
-#: ../../source/cli.rst:952
+#: ../../source/cli.rst:984
 msgid ""
 "``pc adhoc render`` — write a 2D projection of it: ``svg``, ``png``, "
 "``jpeg`` or ``dxf`` (``pc adhoc render part --view top bracket.step "
 "bracket.png``)."
 msgstr ""
 
-#: ../../source/cli.rst:955
+#: ../../source/cli.rst:987
 msgid ""
 "Both infer the types from the file names, and take "
 "``--input``/``--output`` to say them outright. ``pc adhoc render`` takes "
@@ -1707,7 +1768,7 @@ msgid ""
 "``--output`` names the type: the file is then named after the input."
 msgstr ""
 
-#: ../../source/cli.rst:960
+#: ../../source/cli.rst:992
 msgid ""
 "Which of the two to use is which kind of file is wanted, and it is the "
 "same distinction as between ``pc export`` and ``pc render``: geometry "
@@ -1716,7 +1777,7 @@ msgid ""
 "package here to declare it in."
 msgstr ""
 
-#: ../../source/cli.rst:964
+#: ../../source/cli.rst:996
 msgid ""
 "The assembly formats ``assy`` and ``urdf`` are refused by both: an ASSY "
 "file is a set of references to the parts of a package and a URDF becomes "
@@ -1725,11 +1786,11 @@ msgid ""
 "instead."
 msgstr ""
 
-#: ../../source/cli.rst:968
+#: ../../source/cli.rst:1000
 msgid "``pc healthcheck``"
 msgstr "``pc healthcheck``"
 
-#: ../../source/cli.rst:969
+#: ../../source/cli.rst:1001
 msgid ""
 "Check the host system for known issues. Use ``--dry-run`` to list the "
 "available checks, ``--filters`` to run only checks with the given tags, "
@@ -1740,7 +1801,7 @@ msgstr ""
 "только проверок с заданными тегами и ``--fix`` для попытки "
 "автоматического исправления."
 
-#: ../../source/cli.rst:972
+#: ../../source/cli.rst:1004
 msgid ""
 "One of them is about this repository rather than the host: "
 "``AgentSkills`` compares the AI agent skills installed here against the "
@@ -1751,11 +1812,11 @@ msgid ""
 " reinstalls them, for the agents that had them and no others."
 msgstr ""
 
-#: ../../source/cli.rst:978
+#: ../../source/cli.rst:1010
 msgid "``pc search``"
 msgstr "``pc search``"
 
-#: ../../source/cli.rst:979
+#: ../../source/cli.rst:1011
 #, fuzzy
 msgid ""
 "Search for objects by keyword. Subcommands: ``all``, ``parts``, "
@@ -1767,7 +1828,7 @@ msgstr ""
 "Поиск объектов по ключевому слову. Подкоманды: ``all``, ``parts``, "
 "``sketches``, ``assemblies``, ``interfaces`` и ``packages``."
 
-#: ../../source/cli.rst:983
+#: ../../source/cli.rst:1015
 msgid ""
 "``pc search parts`` and ``pc search assemblies`` also take "
 "``-i``/``--interface``, which searches by what an object *connects by* "
@@ -1780,7 +1841,7 @@ msgid ""
 "interface this package declares, and ``//package:name`` is any other."
 msgstr ""
 
-#: ../../source/cli.rst:990
+#: ../../source/cli.rst:1022
 msgid ""
 "The answer comes from the declarations -- ``implements:``, and an "
 "assembly's ``map:`` -- so nothing is built and nothing is instantiated to"
@@ -1882,3 +1943,54 @@ msgstr ""
 #~ "Подкоманда: ``convert`` (преобразовать деталь "
 #~ "или эскиз в другой формат без "
 #~ "обновления его типа)."
+
+#~ msgid ""
+#~ "``-r``/``--recursive`` is the older spelling"
+#~ " of a ``...`` on the package "
+#~ "name and still works everywhere it "
+#~ "did. It cannot say where the walk"
+#~ " starts, it is not available on "
+#~ "every command that could use one "
+#~ "(``pc info`` has none), and the "
+#~ "rest of this page is written with"
+#~ " ``...``. Note that ``pc supply find"
+#~ " -r`` and ``pc supply quote -r`` "
+#~ "mean something else entirely — break "
+#~ "every assembly down to its parts —"
+#~ " and take no ``...``."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "``-t pdf`` and ``-t html`` generate "
+#~ "the assembly instruction book of the "
+#~ "assembly named by ``-a``: a title "
+#~ "page, the same bill of materials, "
+#~ "then — sub-assemblies first, since "
+#~ "they have to exist before the "
+#~ "assembly that uses them — a page"
+#~ " showing each (sub-)assembly as it "
+#~ "should look once it is together, "
+#~ "followed by one page per assembly "
+#~ "step. A step page shows the two"
+#~ " items being joined, and below them"
+#~ " an exploded view of the joint "
+#~ "with a line drawn across the gap"
+#~ " it opens. That gap is half of"
+#~ " the largest dimension of the two "
+#~ "items, unless the step sets "
+#~ "``exploded:`` in its ``connect:`` or "
+#~ "``connectPorts:`` section (see :doc:`assy`). "
+#~ "The last page collects links: to "
+#~ "this assembly and its package, to "
+#~ "every other package that supplies at "
+#~ "least three of its parts, and to"
+#~ " PartCAD. The HTML is one self-"
+#~ "contained file that shows a single "
+#~ "page at a time, with arrows on "
+#~ "either side (and the arrow keys) "
+#~ "to flip through it. As with "
+#~ "``readme``, an assembly can ask for "
+#~ "either document in the package "
+#~ "configuration, by declaring ``pdf`` or "
+#~ "``html`` in its ``render`` section."
+#~ msgstr ""

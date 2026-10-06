@@ -183,6 +183,12 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
         series of depths — the 2.5D program a CNC router or a mill runs
   - [x] A made part is procured as the **stock it is made from**, so the bill of materials orders sheet and
         bar rather than a part nobody sells
+  - [x] **Build vs Buy**: a switch per line item deciding whether it is made or bought, with the lines that
+        can be neither marked `Incomplete`; the choice is what the bill of materials and the instructions
+        below are then written against
+  - [x] `pc instructions` writes the assembly instructions as `PDF` or `HTML` — this assembly's own steps,
+        or with `-r`/`-b` the steps of every sub-assembly built and how to make every part built, each put
+        in just before the step that first needs it
 - Part models (3D)
   - Using scripting languages
     - [x] [CadQuery]
@@ -218,8 +224,10 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] Free-form `comment:` context in `Assembly YAML`, written for whoever reads the assembly next
 - Other features
   - Object-Oriented Programming approach to maintaining part interfaces and mating information
-  - Live preview of 3D models while working in Visual Studio Code, with 2D renders, dimensioned drawings, the
-    bill of materials, the assembly instructions and supplier quotes on tabs beside the 3D view
+  - Live preview of 3D models while working in Visual Studio Code, with 2D renders, dimensioned drawings,
+    engineering analysis, the build-or-buy decision, the bill of materials, the assembly instructions and
+    supplier quotes on tabs beside the 3D view — and a software fallback that still draws the model in a
+    window with no `WebGL`, such as a virtual machine or a remote desktop
   - Open an object in the application that made it (`pc open`): `FreeCAD`, `Blender`, `KiCad` — and
     `Gazebo` or `MuJoCo` from the plugin package for that engine —
     installed locally, or run in a container when it is not; an object `Blender` cannot read is converted to

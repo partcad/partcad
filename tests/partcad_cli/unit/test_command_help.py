@@ -221,8 +221,12 @@ def _transcript_panels():
             panel = "%s commands" % heading.group(1)
             panels[panel] = []
             continue
-        # '    name         description', and not a wrapped continuation line
-        entry = re.fullmatch(r"    ([a-z][a-z-]*) {2,}\S.*", line)
+        # '    name         description'. One space is enough: the description
+        # column is as wide as the longest name, so `instructions` leaves a
+        # single space where `render` leaves seven. A wrapped continuation line
+        # is indented to that column, so it has no name in the first position
+        # and cannot match.
+        entry = re.fullmatch(r"    ([a-z][a-z-]*) +\S.*", line)
         if entry and panel:
             panels[panel].append(entry.group(1))
     return panels

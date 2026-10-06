@@ -142,6 +142,7 @@ The commands and options supported by PartCAD CLI:
     filter       Declare an assembly or a scene holding only some of another's links
     export       Export a 3D view of parts, assemblies, or scenes
     render       Render a 2D projection of parts, assemblies, or scenes onto a plane
+    instructions Write the assembly instructions of an assembly, as PDF or HTML
     cae          Run an engineering analysis on a part
     cam          Produce the route files of the objects that declare a 'cam:' section
 
