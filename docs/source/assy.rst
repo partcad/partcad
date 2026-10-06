@@ -524,7 +524,7 @@ snapped or screwed in. That is said by any of:
 
 The ``manufacturability`` test reports each step that says none of these; an
 item placed by ``location:`` is the ``connectivity`` test's to report. The IDE's
-Build vs Buy table shows an assembly with such steps as **Missing**, listing
+Build vs Buy table shows an assembly with such steps as **Incomplete**, listing
 them, until they are fixed.
 
 .. _hold:

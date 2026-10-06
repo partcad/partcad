@@ -120,7 +120,7 @@ export class AssemblyView {
 
     public show(data: GuideData): void {
         this.clear();
-        this.document = new DocumentView(this.body, data.document);
+        this.document = new DocumentView(this.body, data.document, { headless: true, navigationOnTop: true });
         if (data.manufacturable !== undefined) {
             this.setManufacturable(data.manufacturable);
         }

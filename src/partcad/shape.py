@@ -1260,7 +1260,9 @@ class Shape(ShapeConfiguration):
                     return candidate
         return output.EXPORT
 
-    def _output_getopts(self, ctx, format_name, section, project=None, options_project=None, impl_project=None):
+    def _output_getopts(
+        self, ctx, format_name, section, project=None, options_project=None, impl_project=None, defaults_only=False
+    ):
         """Layer every configuration of a file type, lowest priority first.
 
         The built-in package is the bottom layer, so a package that re-tunes a
@@ -1280,15 +1282,23 @@ class Shape(ShapeConfiguration):
 
         Returns the merged configuration and the output directory the sections
         asked for, if any.
+
+        'defaults_only' keeps the built-in layer and nothing above it: what
+        PartCAD itself draws a file type with, whatever the package and the
+        shape configure. For a picture PartCAD composes for its own document - an
+        assembly instruction book chooses each view for the step it shows (see
+        'assembly_guide.RenderedImages') - where a package's 'viewport_origin',
+        or a 'with_ports:' it declared for its own drawings, would be wrong.
         """
         layers = []
         builtin = output.builtin_project(ctx, section)
         if builtin is not None:
             layers.append((builtin.name, builtin.config_obj))
-        for source in (impl_project, options_project, project):
-            if source is not None:
-                layers.append((source.name, source.config_obj))
-        layers.append((self.project_name, self.config))
+        if not defaults_only:
+            for source in (impl_project, options_project, project):
+                if source is not None:
+                    layers.append((source.name, source.config_obj))
+            layers.append((self.project_name, self.config))
 
         opts = {}
         output_dir = None
@@ -1340,7 +1350,9 @@ class Shape(ShapeConfiguration):
             filepath = os.path.join(filepath, output.name_to_path(self.name, stem_suffix + extension))
         return filepath
 
-    def output_getopts(self, ctx, format_name, project=None, filepath=None, options_project=None, output_dir=None):
+    def output_getopts(
+        self, ctx, format_name, project=None, filepath=None, options_project=None, output_dir=None, defaults_only=False
+    ):
         """Resolve one output file type: its implementation, options and path.
 
         This is the whole of what a format's configuration means, in one place:
@@ -1351,7 +1363,7 @@ class Shape(ShapeConfiguration):
         format_name, impl_project = self._output_implementor(ctx, format_name)
         section = self._output_section(ctx, format_name, project, options_project, impl_project)
         opts, configured_output_dir = self._output_getopts(
-            ctx, format_name, section, project, options_project, impl_project
+            ctx, format_name, section, project, options_project, impl_project, defaults_only=defaults_only
         )
         # An explicitly requested output directory (e.g. 'pc export -O') beats
         # whatever the configuration asked for.
@@ -1659,9 +1671,12 @@ class Shape(ShapeConfiguration):
         ports_cache=None,
         link_filter=None,
         views=None,
+        defaults_only=False,
     ):
         """Produce one output file, whatever its type."""
-        impl, final_filepath = self.output_getopts(ctx, format_name, project, filepath, options_project, output_dir)
+        impl, final_filepath = self.output_getopts(
+            ctx, format_name, project, filepath, options_project, output_dir, defaults_only=defaults_only
+        )
         # What the file type is called from here on. The caller may have named
         # it by its full path ('sim-mujoco:mjcf'), which said where to resolve it
         # and has no business in a log line about the file.
@@ -1744,6 +1759,7 @@ class Shape(ShapeConfiguration):
         output_dir=None,
         overlay=None,
         link_filter=None,
+        defaults_only: bool = False,
         **kwargs,
     ) -> None:
         """Write this shape out as one output file type, or as all of them.
@@ -1818,6 +1834,7 @@ class Shape(ShapeConfiguration):
                     ports_cache=ports_cache,
                     link_filter=link_filter,
                     views=views,
+                    defaults_only=defaults_only,
                 )
 
     def render(
@@ -2724,8 +2741,13 @@ class Shape(ShapeConfiguration):
         viewport_origin=None,
         annotations=None,
         reproducible=None,
+        viewport_up=None,
+        defaults_only=False,
     ):
         """Renders an SVG file somewhere, ignoring where the project wants it.
+
+        'defaults_only' draws it with PartCAD's own SVG options rather than the
+        package's and the shape's (see '_output_getopts').
 
         'annotations' are 3D line segments - each a pair of points in the shape's
         own coordinate system - to draw on top of the projection. An assembly
@@ -2757,10 +2779,12 @@ class Shape(ShapeConfiguration):
             filepath=filepath,
             line_weight=line_weight,
             viewport_origin=viewport_origin,
+            viewport_up=viewport_up,
             annotations=annotations,
             reproducible=reproducible,
+            defaults_only=defaults_only,
         )
-        if not annotations and os.path.exists(filepath):
+        if not annotations and not defaults_only and os.path.exists(filepath):
             # An annotated projection is a one-off illustration, not this shape's
             # picture: remembering it here would hand it to every later caller
             # that asks for the shape's SVG.

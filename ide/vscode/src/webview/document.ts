@@ -20,6 +20,21 @@
 import { el, empty, link } from './dom';
 import { DocumentBlock, DocumentData, DocumentImage, DocumentPage } from './messages';
 
+/**
+ * How a document is shown in a pane rather than as a document.
+ *
+ * 'headless' leaves out the heading a page opens with: in the book it is the
+ * title of the step, and in a pane it repeats what is already on screen - the
+ * item selected on the Build tab, or the page counter of the Assembly tab.
+ * 'navigationOnTop' puts the arrows and the counter above the page rather than
+ * under it, where they take the place of that heading. Neither changes the
+ * document: what is saved is the book as written.
+ */
+export interface DocumentOptions {
+    headless?: boolean;
+    navigationOnTop?: boolean;
+}
+
 /** A rendered document, with the paging its reader flips through. */
 export class DocumentView {
     private readonly pages: HTMLElement[] = [];
@@ -31,12 +46,12 @@ export class DocumentView {
     private readonly body = el('div', 'document-pages');
     private current = 0;
 
-    constructor(root: HTMLElement, data: DocumentData) {
+    constructor(root: HTMLElement, data: DocumentData, options: DocumentOptions = {}) {
         empty(root);
 
         const body = this.body;
         for (const page of data.pages) {
-            const rendered = renderPage(page, data.footer);
+            const rendered = renderPage(page, data.footer, options);
             this.pages.push(rendered);
             this.titles.push(page.title ?? '');
             body.appendChild(rendered);
@@ -51,7 +66,12 @@ export class DocumentView {
         bar.append(this.previous, this.counter, this.next);
 
         root.classList.add('document');
-        root.append(body, bar);
+        if (options.navigationOnTop) {
+            bar.classList.add('top');
+            root.append(bar, body);
+        } else {
+            root.append(body, bar);
+        }
         this.show(0);
     }
 
@@ -99,9 +119,16 @@ export class DocumentView {
  * very book the Assembly tab pages through, so that a step reads the same in
  * both.
  */
-export function renderPage(page: DocumentPage, footer: string | null | undefined): HTMLElement {
+export function renderPage(
+    page: DocumentPage,
+    footer: string | null | undefined,
+    options: DocumentOptions = {},
+): HTMLElement {
     const section = el('section', 'page');
-    for (const block of page.blocks) {
+    const first = page.blocks[0];
+    const blocks =
+        options.headless && first?.type === 'heading' && (first.level ?? 1) === 1 ? page.blocks.slice(1) : page.blocks;
+    for (const block of blocks) {
         const node = renderBlock(block);
         if (node !== undefined) {
             section.appendChild(node);

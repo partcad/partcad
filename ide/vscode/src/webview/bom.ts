@@ -21,8 +21,8 @@ export function renderBom(root: HTMLElement, data: BomData): void {
     empty(root);
     root.classList.add('sheet');
 
-    root.appendChild(el('h1', undefined, 'Bill of Materials'));
-    root.appendChild(el('p', 'subtitle', data.assembly));
+    // No title: the tab says what this is and the panel says what it is of, so
+    // a heading would only repeat the two of them over the table.
 
     if (data.items.length === 0) {
         root.appendChild(placeholder('This assembly has nothing in it.'));

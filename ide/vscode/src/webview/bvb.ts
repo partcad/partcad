@@ -411,8 +411,8 @@ export class BvbView {
         }
         const root = this.reset();
         root.classList.add('sheet', 'bvb');
-        root.appendChild(el('h1', undefined, 'Build vs Buy'));
-        root.appendChild(el('p', 'subtitle', data.object));
+        // No title, as on the Bill of Materials: the tab and the panel already
+        // say what this is and what it is of.
 
         const table = el('table', 'grid bvb-table');
         const head = el('tr');
@@ -507,7 +507,7 @@ export class BvbView {
 
 /** What stands in for the switch of a part that can be neither bought nor built. */
 function drawMissing(node: TreeNode): HTMLElement {
-    const label = el('span', 'bvb-missing', 'Missing');
+    const label = el('span', 'bvb-missing', 'Incomplete');
     label.title = `${MISSING_HINT}\n${missingReason(node)}`;
     return label;
 }
