@@ -1,0 +1,6 @@
+links:
+  - part: plate
+    name: bottom
+  - part: plate
+    name: top
+    location: [[0, 0, {{ param_gap + 3 }}], [0, 0, 1], 0]

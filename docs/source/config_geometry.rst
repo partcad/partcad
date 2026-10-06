@@ -715,6 +715,29 @@ thickness implements the through-hole of that thickness:
 Nothing else in a shape's declaration is touched: ``desc`` is prose and
 ``fileUrl`` is a URL that may be percent-encoded, and neither is an expression.
 
+An ``enrich`` (or an ``alias``) declares no ``parameters:`` -- it asks for an
+instance of what it points at -- so its expressions read the values in its
+``with:`` instead, part or assembly alike. A leg cut to length from a post has
+its top end wherever that length says, for the leg as declared and for
+``leg;length=20`` alike:
+
+.. code-block:: yaml
+
+  parts:
+    leg:
+      type: enrich
+      source: //pub/std/imperial/dimensional-lumber:lumber
+      with:
+        width: 4
+        height: 4
+        length: 29.25
+      ports:
+        top: [[44.45, "%length * 25.4%", 44.45], [1, 0, 0], -90]
+
+A value that reaches it from a parametrized name is the text it was written as
+and is read as the number it spells; the types are declared by what the
+reference points at, which need not be loaded yet.
+
 .. _interface_alias:
 
 The same opening, drawn differently

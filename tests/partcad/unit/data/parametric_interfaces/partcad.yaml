@@ -183,3 +183,31 @@ parts:
     desc: An M3 screw
     implements:
       "m-screw;size=3,length=6": [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], 180.0]
+
+  # An instance of the plate at a thickness of its own. An enrich declares no
+  # parameters - it asks for them in 'with' - so its ports are written in terms
+  # of those.
+  thick-plate:
+    type: enrich
+    source: plate
+    with:
+      thickness: 5.0
+    ports:
+      face: [[0, 0, "%thickness%"], [0, 1, 0], 180]
+
+assemblies:
+  # Two plates a gap apart. The assembly declares its own parameter.
+  stack:
+    type: assy
+    parameters:
+      gap: 10.0
+
+  # An instance of it with a gap of its own, and a port where the top plate
+  # is: an enrich assembly writes its ports in terms of its 'with' as well.
+  wide-stack:
+    type: enrich
+    source: stack
+    with:
+      gap: 20.0
+    ports:
+      top: [[0, 0, "%gap + 3%"], [0, 0, 1], 0]
