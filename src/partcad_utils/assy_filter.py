@@ -46,6 +46,14 @@ no such thing as a link a filter cannot address, and no second rule for the ones
 that used to have none. It is positional rather than invented from the content
 so that a reader can count the entries of the file and arrive at the same name.
 
+A filter may also name **any** link by its position, ``link#3``, whatever it is
+called otherwise. Names need not be unique - an ASSY file that generates four
+legs in a loop may well call every one of them ``leg`` - and a filter that can
+only say ``leg`` keeps all four or none. The position is what tells them apart,
+so it is accepted for every link and not only for the ones that have no other
+name (`Filter.select_link`). The IDE's panel names a link that way exactly when
+its label is not unique among its siblings.
+
 This module is pure data: it reads the mask, and it filters an ASSY *document*
 (the parsed YAML). Filtering an assembly that has already been built is
 ``partcad.assembly_filter``, which needs the objects; it lives there and reads
@@ -117,6 +125,24 @@ class Filter:
         if name is None:
             return None
         return self.children.get(name)
+
+    def select_link(self, name, index=None):
+        """The mask for one link of a list, and which key selected it: ``(key, mask)``.
+
+        By the link's name, and failing that by its position (``link#N``),
+        which any link answers to - see the module docstring. ``(None, None)``
+        when neither is named, which means the link is dropped. A mask that
+        keeps everything answers ``(name, self)``.
+        """
+        if self.children is None:
+            return name, self
+        if name is not None and name in self.children:
+            return name, self.children[name]
+        if index is not None:
+            positional = synthetic_link_name(index)
+            if positional in self.children:
+                return positional, self.children[positional]
+        return None, None
 
     def names(self) -> list:
         """The link names this level mentions, in the order they were written."""
@@ -414,7 +440,7 @@ def _refuse_ambiguous(links, mask: Filter, where: str) -> None:
     for index, node in enumerate(links):
         if not isinstance(node, dict) or not is_container(node):
             continue
-        sub = mask.select(link_name(node, index))
+        _key, sub = mask.select_link(link_name(node, index), index)
         if sub is not None:
             _refuse_ambiguous(node[LINKS], sub, "%s: '%s'" % (where, link_name(node, index)))
 
@@ -438,10 +464,10 @@ def _filter_links(links, mask: Filter, where: str, problems: list) -> list:
             continue
 
         name = link_name(node, index)
-        sub = mask.select(name)
+        key, sub = mask.select_link(name, index)
         if sub is None:
             continue
-        used.add(name)
+        used.add(key)
         if link_name(node) is None:
             # Its name was its position, and filtering moves it: the second link
             # of five is the first of two once the one above it has gone. So the

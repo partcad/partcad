@@ -11,7 +11,7 @@
 // panel is a strip of tabs over one object rather than a canvas:
 //
 //     Design           |  Analysis   |  Manufacturing                                                    |  Validation  |  Operations
-//       3D | 2D | Draft     FEA | CFD    Build vs Buy | Build | Bill of Materials | Buy | Assembly
+//       3D | 2D | Draft     FEA | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly
 //
 // Three groups, each a strip of its own. Design is the object itself: turned in
 // 3D, rendered to a picture, drawn as a dimensioned drawing. Analysis is what
@@ -163,6 +163,12 @@ const sceneLoaded: Promise<Scene | undefined> = import(/* webpackMode: "eager" *
     (module) => {
         scene = module;
         scene.setShowMetadata(metadataCheckbox?.checked ?? true);
+        if (module.software && animateCheckbox) {
+            // Drawn without a GPU, the model does not turn on its own: a frame
+            // every 16 ms is what the software renderer cannot afford. The box
+            // says so, and ticking it turns it on regardless.
+            animateCheckbox.checked = false;
+        }
         return module;
     },
     (error: unknown) => {
@@ -535,17 +541,17 @@ function manufacturingTabsFor(message: ShowMessage | undefined): TabSpec[] {
                   : 'Nothing is built: everything here is bought (see Build vs Buy)',
         },
         {
-            id: 'bom',
-            label: 'Bill of Materials',
-            pane: panes.bom,
-            disabled: !made,
-        },
-        {
             id: 'supply',
             label: 'Buy',
             pane: panes.supply,
             disabled: !made || pending || (result !== undefined && !result.anyBuy),
             hint: pending ? working : 'Nothing is bought: everything here is built (see Build vs Buy)',
+        },
+        {
+            id: 'bom',
+            label: 'Bill of Materials',
+            pane: panes.bom,
+            disabled: !made,
         },
         {
             id: 'assembly',

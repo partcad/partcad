@@ -72,15 +72,21 @@ is always the first:
 - **Analysis** — what engineering analysis says about the object:
 
   - **FEA** and **CFD** — for a part: the analysis :ref:`pc cae <cae>` runs, and what it found.
-- **Supply Chain** — what making it takes:
+- **Manufacturing** — what making it takes:
 
+  - **Build vs Buy** — for a part or an assembly: every part, piece of stock and sub-assembly it is made of,
+    with a picture, a count, its size, weight and material, and a switch saying whether it is built or bought.
+    A line that can be only one of the two has its switch fixed, and one that can be neither is marked
+    **Incomplete**. The choices are kept on your machine, and ``pc instructions`` reads them too.
+  - **Build** — for whatever is built: the order to make it in, with the instructions for the selected step.
+  - **Buy** — for whatever is bought: what it can be bought from, and a quote per supplier.
   - **Bill of Materials** — for a part or an assembly: what has to be procured to have it, as ``pc bom``
     lists it. A made part is the stock it is made from, and a sub-assembly that declares a vendor and an SKU
     is one item ordered whole.
-  - **Instructions** — for an assembly: the assembly guide, step by step.
-  - **Procurement** — what the objects in view can be bought from, and a quote per supplier.
+  - **Assembly** — for an assembly: the assembly instructions, as PDF or HTML, to read and save
+    (``pc instructions``).
 
-  Supply Chain is for a part or an assembly; for a scene, a sketch or an interface it is disabled.
+  Manufacturing is for a part or an assembly; for a scene, a sketch or an interface it is disabled.
 
 Every group always shows all of its tabs and disables the ones that do not apply, and a group none of whose
 tabs apply is disabled itself, and says why when the mouse is over it. Design and its 3D tab are always enabled,
@@ -91,8 +97,10 @@ The 3D view arrives over the viewer protocol from whichever ``partcad`` asked fo
 other tabs are questions put to the PartCAD daemon, fetched the first time the tab is looked at and cached
 until the next object is shown. An object that belongs to no package gets the 3D view alone.
 
-The 3D view needs WebGL. In a window that has none, the 3D tab says what to do about it and every other tab
-works as usual -- including 2D, which is rendered by PartCAD rather than by the window.
+The 3D view uses the graphics card where the window can (WebGL). In a window that cannot -- a virtual machine,
+a remote desktop, a graphics driver the editor could not use -- it draws the model without it instead:
+flat-shaded and slower, and a big model is drawn as boxes while it is being turned. A note in the corner of
+the view says so, and hovering over it says how to have the graphics card back.
 
 Down the left of the 3D view is a list of **what is on screen**, with a checkbox on every line: unticking one
 hides that line and everything under it, and ticking it again brings back exactly what was showing before.

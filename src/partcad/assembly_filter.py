@@ -150,10 +150,13 @@ async def _filter_children(assembly, mask, where: str, problems: list) -> list:
     used = set()
     for index, child in enumerate(assembly.children):
         name = assembly.link_name(index)
-        sub = mask.select(name)
+        # By its name, or by its position where the filter names that instead:
+        # the one way to tell apart children that share a name (see
+        # 'assy_filter.Filter.select_link').
+        key, sub = mask.select_link(name, index)
         if sub is None:
             continue
-        used.add(name)
+        used.add(key)
         if sub.keeps_all:
             kept.append(_recast(child, child.item, name))
             continue

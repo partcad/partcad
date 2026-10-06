@@ -228,6 +228,23 @@ Four things about it are load-bearing:
   handler registered, no `ready` posted, nothing logged. `host.ts` traps `error`/`unhandledrejection` and puts
   the reason in the overlay; it lives there because every webview module imports it, and a module's
   dependencies are evaluated before its own body, so it is installed before anything can throw.
+- **No WebGL is not no 3D view.** `scene.ts` draws with the first of three backends the window can give
+  (`Surface`): WebGL; else WebGPU, through three's `WebGPURenderer` (loaded from `three/webgpu` only then, which
+  shares `three.core.js` with the `three` build the scene is made of, so the same meshes and materials draw);
+  else the **canvas painter** (`painter.ts`), which projects the scene on the CPU with three's `Projector` and
+  fills its triangles into a 2D canvas, far to near. The painter is 2.5-3.5x faster than three's
+  `SVGRenderer` on the same scene (one DOM element per triangle is what that costs), which is why it is ours
+  rather than theirs. It is a different renderer with different limits, and the code says where it differs:
+  it draws only when something changed (`invalidate`), not every frame; the model does not turn on its own
+  until asked; the light rig is replaced by a light that moves with the camera, because it lights with
+  ambient and directional lights only and has no environment map; a solid is drawn front-side only, because
+  it orders whole triangles by depth and a far face would stripe the near one; it converts colours to sRGB
+  itself, as the GPU renderers do on the way out; and a model over `SOFTWARE_TRIANGLE_BUDGET` triangles is
+  drawn as boxes while the camera moves. The advice for getting the GPU back (`host.ts` `noWebGL`) is its
+  notice's tooltip. A WebGPU adapter is asked for before three is, because `WebGPURenderer` falls back to
+  WebGL 2 by itself, and there is none. Where WebGL fails because the GPU process did, WebGPU usually fails
+  with it - Chromium then offers the API and no adapter, not even the software fallback one - so the painter
+  is what such a window ends up with; WebGPU is for a GPU WebGL could not use and WebGPU can.
 - **Nothing is escaped on its way into a pane.** What the tabs display is text out of a package's
   configuration -- a description, a part name, a supplier's answer, the name of a port -- so every pane builds
   its DOM node by node through `src/webview/dom.ts` rather than assigning `innerHTML`. `textContent` cannot be

@@ -23,7 +23,7 @@ import type { SpaceMouseSettings } from './spacemouse';
  * 'manufacturing', what making it takes; and 'validation' and 'operations',
  * which have nothing in them yet and are shown disabled. Each group is a strip of its own: the
  * object as '3d' (first, always), '2d' and 'draft'; 'fea' and 'cfd'; 'bvb'
- * (Build vs Buy), 'build', 'bom', 'supply' (labelled Buy) and 'assembly'.
+ * (Build vs Buy), 'build', 'supply' (labelled Buy), 'bom' and 'assembly'.
  */
 export type TabId =
     | 'design'

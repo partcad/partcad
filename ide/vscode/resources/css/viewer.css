@@ -327,6 +327,21 @@ body {
     height: 100%;
 }
 
+/* The 3D view drawn without a GPU (see 'painter.ts'): said in a
+   corner, with how to have the GPU back in its tooltip. */
+.software-notice {
+    position: absolute;
+    right: 0.5rem;
+    bottom: 0.5rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 3px;
+    background: var(--vscode-editorWidget-background, rgba(0, 0, 0, 0.4));
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.85em;
+    white-space: nowrap;
+    cursor: help;
+}
+
 /* The loading readout, centered over the canvas the way drei's <Html center> is. */
 .overlay {
     position: absolute;

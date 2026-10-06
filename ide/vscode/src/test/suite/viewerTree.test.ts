@@ -650,6 +650,27 @@ suite('The control tree of the 2D and Draft tabs', () => {
         assert.deepStrictEqual(tree.filter(), { base: {}, tower: {} });
     });
 
+    test('links that share a name are named by their position', () => {
+        // Four legs placed in a loop and all called 'leg': a mask saying 'leg'
+        // would keep all four however many were cleared.
+        const desk: ShowNode = {
+            name: '//pkg:desk',
+            label: 'desk',
+            assembly: [
+                { name: '//pkg:leg', label: 'leg', gltf: 'Z2xURg==' },
+                { name: '//pkg:leg', label: 'leg', gltf: 'Z2xURg==' },
+                { name: '//pkg:top', label: 'top', gltf: 'Z2xURg==' },
+            ],
+        };
+        const [pane, tree] = draft(desk);
+        const legs = descendants(pane, 'input').filter(
+            (box) => box !== boxOf(pane, 'desk') && box !== boxOf(pane, 'top'),
+        );
+        set(legs[1], false);
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        assert.deepStrictEqual(tree.filter(), { 'link#1': {}, top: {} });
+    });
+
     test('every part cleared is a filter that keeps nothing, which is not a mask', () => {
         // An empty mask reads as "everything" at the other end, so the caller has
         // to tell this case apart and say there is nothing to render.
