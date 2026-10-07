@@ -344,6 +344,11 @@ export class PartcadTerminals implements vscode.Disposable, vscode.TerminalProfi
             this.shell = shell;
             this.watchForRestoredShell(shell);
         }
+        return this.openBeside(shell);
+    }
+
+    /** A new view, split to the right of `shell`. */
+    private openBeside(shell: vscode.Terminal): View {
         const view = this.addView(shell);
         view.terminal = vscode.window.createTerminal({
             name: this.viewName,
@@ -385,10 +390,18 @@ export class PartcadTerminals implements vscode.Disposable, vscode.TerminalProfi
         return view.terminal;
     }
 
+    /**
+     * By either of its names. `name` is the tab's title, and a shell's tab shows
+     * its process's own title (`pwsh`, `bash`) until the process is ready: only
+     * then does VS Code apply a name an extension gave it, or give a restored
+     * terminal its old one back. `creationOptions.name` is what an extension
+     * asked for and never changes, but a restored terminal may not have one.
+     */
     private isShell(terminal: vscode.Terminal): boolean {
+        const options = terminal.creationOptions as vscode.TerminalOptions;
         return (
-            terminal.name === this.shellName &&
-            !('pty' in terminal.creationOptions) &&
+            (terminal.name === this.shellName || options.name === this.shellName) &&
+            !('pty' in options) &&
             terminal.exitStatus === undefined
         );
     }
@@ -402,8 +415,8 @@ export class PartcadTerminals implements vscode.Disposable, vscode.TerminalProfi
     }
 
     /**
-     * Polled, not an event: a restored terminal is announced before its name is,
-     * and nothing tells an extension when the name arrives.
+     * Polled, not an event: a restored terminal is announced before its name is
+     * (see `isShell`), and nothing tells an extension when the name arrives.
      */
     private watchForRestoredShell(ours: vscode.Terminal): void {
         this.stopWatching();
@@ -438,8 +451,10 @@ export class PartcadTerminals implements vscode.Disposable, vscode.TerminalProfi
             this.forget(view);
         }
         ours.dispose();
+        // Not `ensureView()`, which would settle for a view from the "+" menu
+        // if one is open -- and that one was never beside a shell.
         if (beside.length > 0) {
-            this.ensureView();
+            this.openBeside(restored);
         }
     }
 

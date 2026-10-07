@@ -8,7 +8,9 @@
 //
 // The activated extension has views and a shell of its own in this window, so
 // every test here names its shell and its views differently and looks only for
-// those.
+// those -- by `creationOptions.name`, not `name`: a shell's `name` is its
+// process's title until the process is ready, which on a Windows runner is long
+// enough for a lookup by `name` to miss it.
 //
 
 import * as assert from 'assert';
@@ -78,12 +80,23 @@ suite('PartCAD terminal: the shell banner', () => {
     });
 });
 
+/** Every terminal in the window, for a failure message: CI has nothing else to show. */
+function describeTerminals(): string {
+    return vscode.window.terminals
+        .map((t) => {
+            const options = t.creationOptions as vscode.TerminalOptions;
+            const exit = t.exitStatus ? ` exited ${t.exitStatus.code}` : '';
+            return `"${t.name}" (asked for "${options.name}"${'pty' in options ? ', pty' : ''}${exit})`;
+        })
+        .join(', ');
+}
+
 /** Until `condition` holds, or fail after `ms`. */
 async function waitFor(condition: () => boolean, what: string, ms = 15000): Promise<void> {
     const until = Date.now() + ms;
     while (!condition()) {
         if (Date.now() > until) {
-            assert.fail(`timed out waiting for ${what}`);
+            assert.fail(`timed out waiting for ${what}; terminals: ${describeTerminals()}`);
         }
         await new Promise((resolve) => setTimeout(resolve, 50));
     }
@@ -130,8 +143,9 @@ suite('PartCAD terminal: views', () => {
         return terminals;
     }
 
-    const shells = () => vscode.window.terminals.filter((t) => t.name === shellName && !isPty(t));
-    const views = () => vscode.window.terminals.filter((t) => t.name === viewName && isPty(t));
+    const named = (t: vscode.Terminal, name: string) => (t.creationOptions as vscode.TerminalOptions).name === name;
+    const shells = () => vscode.window.terminals.filter((t) => named(t, shellName) && !isPty(t));
+    const views = () => vscode.window.terminals.filter((t) => named(t, viewName) && isPty(t));
 
     setup(() => {
         count += 1;
@@ -174,7 +188,7 @@ suite('PartCAD terminal: views', () => {
         const second = vscode.window.createTerminal(profile.options as vscode.ExtensionTerminalOptions);
         const secondOutput = new Output(second);
         await waitFor(() => secondOutput.text.includes('INFO: first'), 'the history, in a view opened later');
-        assert.strictEqual(shells().length, 1, 'the "+" menu opens a view, not another shell');
+        assert.strictEqual(shells().length, 1, `the "+" menu opens a view, not another shell: ${describeTerminals()}`);
 
         partcad.write('INFO: second\r\n');
         await waitFor(
@@ -260,6 +274,21 @@ suite('PartCAD terminal: views', () => {
         assert.deepStrictEqual(shells(), [restored]);
         const output = new Output(views()[0]);
         await waitFor(() => output.text.includes('INFO: before the shell came back'), 'the history, replayed');
+    });
+
+    test('a view from the "+" menu does not stand in for the one beside a restored shell', async () => {
+        const partcad = make();
+        partcad.write('INFO: hello\r\n');
+        const [made] = shells();
+        const [first] = views();
+        const plus = vscode.window.createTerminal(
+            partcad.provideTerminalProfile().options as vscode.ExtensionTerminalOptions,
+        );
+
+        vscode.window.createTerminal({ name: shellName });
+        await waitFor(() => !isAlive(made) && !vscode.window.terminals.includes(first), 'the new pair to close');
+        await waitFor(() => views().length === 2, 'a view beside the restored shell, besides the "+" one');
+        assert.ok(views().includes(plus), 'the "+" view is left alone');
     });
 
     test('a shell restored after the window is left beside the one that was made', async () => {
