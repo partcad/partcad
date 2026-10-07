@@ -29,7 +29,7 @@ parts:
 
 ## How PartCAD runs it
 
-Like every container PartCAD starts, through `partcad_utils.containers`: the image is
+Through `partcad_utils.containers`, like the Python sandbox and a plugin's `container:`: the image is
 `ghcr.io/partcad/partcad-container-kicad:<release>` -- the release of the PartCAD running, never `latest` -- and the
 container is named `partcad-kicad-<release>-<identity>`, the identity a digest of everything it was created with. A
 container from another release, or created differently, is a different name, so an import never runs in a container

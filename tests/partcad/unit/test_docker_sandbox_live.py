@@ -366,8 +366,9 @@ def test_two_processes_provisioning_one_fresh_volume_both_get_a_working_stack(tm
     client.images.get(IMAGE).tag(repository, "race")
     image = repository + ":race"
     (tmp_path / "pkg").mkdir()
+    racers = []
     try:
-        racers = [
+        racers += [
             subprocess.Popen(
                 [sys.executable, "-c", _RACER, image, str(tmp_path / ("state-%d" % i)), str(tmp_path / "pkg")],
                 stdout=subprocess.PIPE,
@@ -381,6 +382,13 @@ def test_two_processes_provisioning_one_fresh_volume_both_get_a_working_stack(tm
             assert code == 0, stderr[-3000:]
             assert "imported" in stdout
     finally:
+        # Before anything is removed: a racer still running -- the other one
+        # timed out, or an assertion failed first -- would make the containers
+        # and the volume again behind the cleanup.
+        for racer in racers:
+            if racer.poll() is None:
+                racer.kill()
+                racer.wait()
         for container in client.containers.list(all=True, filters={"label": containers.LABEL_CONTAINER}):
             if container.attrs["Config"]["Image"] == image:
                 container.remove(force=True)
