@@ -148,7 +148,7 @@ files** -- ``DOCKER_HOST`` names another machine, or the daemon is reached
 through a socket from inside a container it does not share a filesystem with --
 then nothing can be mounted into a container, and the answer is to send the
 files instead: set ``useDockerRemote: true`` (``PC_USE_DOCKER_REMOTE=true``).
-See :ref:`use-docker-remote`, including what it does not protect yet.
+See :ref:`useDockerRemote <use-docker-remote>`, including what it does not protect yet.
 
 Containers made by a PartCAD older than 0.8.161 were not all labelled, so
 ``pc system prune`` cannot see them: remove ``integration-kicad`` (KiCad) by
