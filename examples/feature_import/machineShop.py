@@ -39,7 +39,7 @@ if __name__ == "caps":
     # strength of the process rather than matched against the table below.
     output = {
         "materials": {
-            "//pub/examples/partcad/feature_import:al6061": {
+            "//pub/std/manufacturing/material/metal:al-6061-t6": {
                 "colors": [{"name": "natural"}],
                 "finishes": [{"name": "none"}, {"name": "anodized"}],
             },
