@@ -178,7 +178,8 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] Reported by `pc info`, carried into the bill of materials, and used by simulation (`mu`) and
         by analysis
 - Manufacturing — how it gets made, and the program that makes it
-  - [x] Manufacturing methods: `additive`, `subtractive`, `sheet_metal`, `forming`, `pcbBasic`
+  - [x] Manufacturing methods: `additive`, `subtractive`, `sheet_metal` and `forming`
+  - [ ] `pcbBasic` _(the schema accepts it; the manufacturability test is not implemented yet)_
   - [x] `pc cam` produces the route files: the object's outline offset by the cutter radius and cut at a
         series of depths — the 2.5D program a CNC router or a mill runs
   - [x] A made part is procured as the **stock it is made from**, so the bill of materials orders sheet and

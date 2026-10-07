@@ -189,9 +189,12 @@ Message in "Explorer" left panel: "PartCAD ... is not found"
  - Press "Install or update PartCAD" in the "Explorer" left panel and the
    extension downloads a standalone PartCAD for you. No Python is needed.
  - Or, if you would rather use your own Python environment, run
-   ``pip install partcad`` in it: the extension finds the ``partcad-json-rpc``
-   that ``pip`` puts on your ``PATH`` and uses that instead of downloading
-   anything.
+   ``pip install partcad`` in it. The extension looks for ``partcad-json-rpc``
+   on the ``PATH`` **Visual Studio Code itself was started with**, which is not
+   the interpreter you selected in the editor and does not include a virtual
+   environment unless Visual Studio Code was launched from it. So either start
+   the editor from the activated environment, or run **Find installed PartCAD**,
+   or set ``partcad.servicePath`` to the executable by hand.
  - Reload PartCAD extension (by pressing "Reload" button in "Context" left panel)
 
 "The PartCAD extension is being initialized..." in "Explorer" gets into infinite loop (and nothing happens in the corresponding terminal window)

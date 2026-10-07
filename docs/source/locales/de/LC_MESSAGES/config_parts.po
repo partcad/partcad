@@ -1177,6 +1177,7 @@ msgid ""
 "in its ``export:`` section, and is handed them keyed by the full name of "
 "the shape they belong to. URDF is the one built-in format that does."
 msgstr ""
+"Ein Dateityp, der eine Möglichkeit hat, diese anzugeben, deklariert ``properties: true`` in seinem ``export:``-Abschnitt und bekommt sie, verschlüsselt nach dem vollständigen Namen der Form, zu der sie gehören. URDF ist das eine eingebaute Format, das dies tut."
 
 #~ msgid "Create a shallow"
 #~ msgstr "Erstellt einen flachen"

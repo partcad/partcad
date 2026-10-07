@@ -1086,6 +1086,7 @@ msgid ""
 "``pc open --with mujoco`` expects a file to already be in; see "
 ":ref:`simulate`."
 msgstr ""
+"Es ist auch das Format, in dem ``pc sim`` eine Szene an MuJoCo übergibt, und dasjenige, in dem ``pc open --with mujoco`` eine Datei bereits erwartet; siehe :ref:`simulate`."
 
 #~ msgid "Create a shallow"
 #~ msgstr "Erstellt einen flachen"

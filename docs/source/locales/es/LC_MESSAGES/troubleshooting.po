@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-06 16:15+0000\n"
+"POT-Creation-Date: 2026-10-07 13:48+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -285,7 +285,7 @@ msgstr ""
 "KiCad en esta máquina y establecer ``useDockerKicad: false``."
 
 #: ../../source/troubleshooting.rst:147 ../../source/troubleshooting.rst:185
-#: ../../source/troubleshooting.rst:244
+#: ../../source/troubleshooting.rst:247
 msgid "Typical problems"
 msgstr "Problemas típicos"
 
@@ -409,13 +409,17 @@ msgstr ""
 #: ../../source/troubleshooting.rst:191
 msgid ""
 "Or, if you would rather use your own Python environment, run ``pip "
-"install partcad`` in it: the extension finds the ``partcad-json-rpc`` "
-"that ``pip`` puts on your ``PATH`` and uses that instead of downloading "
-"anything."
+"install partcad`` in it. The extension looks for ``partcad-json-rpc`` on "
+"the ``PATH`` **Visual Studio Code itself was started with**, which is not"
+" the interpreter you selected in the editor and does not include a "
+"virtual environment unless Visual Studio Code was launched from it. So "
+"either start the editor from the activated environment, or run **Find "
+"installed PartCAD**, or set ``partcad.servicePath`` to the executable by "
+"hand."
 msgstr ""
-"O, si prefiere usar su propio entorno Python, ejecute ``pip install partcad`` en él: la extensión encuentra el ``partcad-json-rpc`` que ``pip`` coloca en su ``PATH`` y lo usa en lugar de descargar nada."
+"O, si prefiere usar su propio entorno Python, ejecute ``pip install partcad`` en él. La extensión busca ``partcad-json-rpc`` en el ``PATH`` **con el que se inició el propio Visual Studio Code**, que no es el intérprete que seleccionó en el editor y que no incluye un entorno virtual a menos que Visual Studio Code se haya lanzado desde él. Así que inicie el editor desde el entorno activado, o ejecute **Find installed PartCAD**, o establezca ``partcad.servicePath`` a mano apuntando al ejecutable."
 
-#: ../../source/troubleshooting.rst:195
+#: ../../source/troubleshooting.rst:198
 msgid ""
 "Reload PartCAD extension (by pressing \"Reload\" button in \"Context\" "
 "left panel)"
@@ -423,7 +427,7 @@ msgstr ""
 "Recargue la extensión PartCAD (presionando el botón \"Reload\" en el "
 "panel izquierdo \"Context\")"
 
-#: ../../source/troubleshooting.rst:197
+#: ../../source/troubleshooting.rst:200
 msgid ""
 "\"The PartCAD extension is being initialized...\" in \"Explorer\" gets "
 "into infinite loop (and nothing happens in the corresponding terminal "
@@ -433,15 +437,15 @@ msgstr ""
 "en un bucle infinito (y no ocurre nada en la ventana de terminal "
 "correspondiente)"
 
-#: ../../source/troubleshooting.rst:199
+#: ../../source/troubleshooting.rst:202
 msgid "Close and reopen VSCode"
 msgstr "Cierre y vuelva a abrir VSCode"
 
-#: ../../source/troubleshooting.rst:201
+#: ../../source/troubleshooting.rst:204
 msgid "Error while loading part or assembly view: \"Module ... not found\""
 msgstr "Error al cargar la vista de pieza o ensamblaje: \"Module ... not found\""
 
-#: ../../source/troubleshooting.rst:203
+#: ../../source/troubleshooting.rst:206
 msgid ""
 "Make sure that the extension version matches the PartCAD version in ``pc "
 "version`` command output"
@@ -449,11 +453,11 @@ msgstr ""
 "Asegúrese de que la versión de la extensión coincida con la versión de "
 "PartCAD que aparece en la salida del comando ``pc version``"
 
-#: ../../source/troubleshooting.rst:207
+#: ../../source/troubleshooting.rst:210
 msgid "PartCAD Viewer"
 msgstr "PartCAD Viewer"
 
-#: ../../source/troubleshooting.rst:209
+#: ../../source/troubleshooting.rst:212
 msgid ""
 "The ``PartCAD Viewer`` is a tab the extension opens when a part, "
 "assembly, scene, sketch or interface is inspected. PartCAD tessellates "
@@ -472,7 +476,7 @@ msgstr ""
 "-- así que ``pip install partcad`` es todo lo que hace falta, y no hay "
 "nada aparte que instalar."
 
-#: ../../source/troubleshooting.rst:217
+#: ../../source/troubleshooting.rst:220
 msgid ""
 "Beside the 3D view the panel carries tabs for the questions that are "
 "about the object rather than its shape -- **FEA** and **CFD** under "
@@ -484,9 +488,18 @@ msgid ""
 "first time the tab is opened, so a failure in one of them is a daemon "
 "problem and says so in the tab, while the 3D view keeps working."
 msgstr ""
-"Junto a la vista 3D, el panel incluye pestañas para las preguntas que tratan sobre el objeto en lugar de sobre su forma -- **FEA** y **CFD** bajo **Analysis**, y **Build vs Buy**, **Build**, **Buy**, **Bill of Materials** y **Assembly** bajo **Manufacturing**, cada una habilitada donde corresponde -- y, junto a la vista 3D de la pestaña **Design**, **2D** y **Draft**, que renderizan el objeto a un archivo. Estas no llegan por el socket anterior: las responde el daemon de PartCAD y se obtienen la primera vez que se abre la pestaña, de modo que un fallo en alguna de ellas es un problema del daemon y así lo indica la pestaña, mientras la vista 3D sigue funcionando."
+"Junto a la vista 3D, el panel incluye pestañas para las preguntas que "
+"tratan sobre el objeto en lugar de sobre su forma -- **FEA** y **CFD** "
+"bajo **Analysis**, y **Build vs Buy**, **Build**, **Buy**, **Bill of "
+"Materials** y **Assembly** bajo **Manufacturing**, cada una habilitada "
+"donde corresponde -- y, junto a la vista 3D de la pestaña **Design**, "
+"**2D** y **Draft**, que renderizan el objeto a un archivo. Estas no "
+"llegan por el socket anterior: las responde el daemon de PartCAD y se "
+"obtienen la primera vez que se abre la pestaña, de modo que un fallo en "
+"alguna de ellas es un problema del daemon y así lo indica la pestaña, "
+"mientras la vista 3D sigue funcionando."
 
-#: ../../source/troubleshooting.rst:226
+#: ../../source/troubleshooting.rst:229
 msgid ""
 "Anything with a ``partcad`` that can reach that port can display into the"
 " same viewer -- including a ``pc`` run in a plain terminal, as long as a "
@@ -503,13 +516,13 @@ msgstr ""
 " esa ventana, de modo que ``pc`` está ahí sin ninguna configuración "
 "adicional (``partcad.addToolsToTerminalPath`` lo desactiva):"
 
-#: ../../source/troubleshooting.rst:246
+#: ../../source/troubleshooting.rst:249
 msgid "``Failed to load \"partcad_ide_client\"`` in the PartCAD terminal view"
 msgstr ""
 "``Failed to load \"partcad_ide_client\"`` en la vista de terminal de "
 "PartCAD"
 
-#: ../../source/troubleshooting.rst:248
+#: ../../source/troubleshooting.rst:251
 msgid ""
 "The package ships inside ``partcad``, so this means the installation is "
 "damaged rather than incomplete. Reinstall with ``pip install --force-"
@@ -521,7 +534,7 @@ msgstr ""
 "install --force-reinstall partcad``, o pulse \"Update PartCAD\" en el "
 "panel izquierdo \"Context\"."
 
-#: ../../source/troubleshooting.rst:252
+#: ../../source/troubleshooting.rst:255
 msgid ""
 "On a PartCAD older than 0.8.0 it was a separate ``partcad-ide-client`` "
 "distribution that was never published; upgrading is the fix."
@@ -529,11 +542,11 @@ msgstr ""
 "En un PartCAD anterior a 0.8.0 era una distribución ``partcad-ide-"
 "client`` aparte que nunca se publicó; actualizar es la solución."
 
-#: ../../source/troubleshooting.rst:255
+#: ../../source/troubleshooting.rst:258
 msgid "``No PartCAD IDE with an open PartCAD Viewer detected``"
 msgstr "``No PartCAD IDE with an open PartCAD Viewer detected``"
 
-#: ../../source/troubleshooting.rst:257
+#: ../../source/troubleshooting.rst:260
 msgid ""
 "Nothing is listening on the viewer port. Open a window with the PartCAD "
 "extension active; the extension starts listening when it activates."
@@ -542,7 +555,7 @@ msgstr ""
 "extensión de PartCAD activa; la extensión empieza a escuchar cuando se "
 "activa."
 
-#: ../../source/troubleshooting.rst:259
+#: ../../source/troubleshooting.rst:262
 msgid ""
 "If two windows are open, only one of them may own the port on platforms "
 "without ``SO_REUSEPORT``. The \"PartCAD Viewer port ... is already in "
@@ -553,7 +566,7 @@ msgstr ""
 "... is already in use\" en la vista de salida ``PartCAD`` indica cuál de "
 "los dos casos es."
 
-#: ../../source/troubleshooting.rst:262
+#: ../../source/troubleshooting.rst:265
 msgid ""
 "Set ``PARTCAD_IDE_PORT`` to move a ``partcad`` process to a different "
 "port if 9137 is taken by something else on the machine."
@@ -561,11 +574,11 @@ msgstr ""
 "Establezca ``PARTCAD_IDE_PORT`` para mover un proceso ``partcad`` a otro "
 "puerto si el 9137 está ocupado por otra cosa en la máquina."
 
-#: ../../source/troubleshooting.rst:265
+#: ../../source/troubleshooting.rst:268
 msgid "\"Drawn without a graphics card\" in the corner of the 3D view"
 msgstr "\"Drawn without a graphics card\" en la esquina de la vista 3D"
 
-#: ../../source/troubleshooting.rst:267
+#: ../../source/troubleshooting.rst:270
 msgid ""
 "VS Code could not use the graphics card, so the window has no WebGL, and "
 "the 3D view draws the model on the processor instead: flat-shaded, and "
@@ -583,11 +596,11 @@ msgstr ""
 "propio Chromium, que se ve como la vista habitual), y cómo hacer que su "
 "icono lo haga siempre. El PartCAD IDE ya lo hace."
 
-#: ../../source/troubleshooting.rst:274
+#: ../../source/troubleshooting.rst:277
 msgid "The **Draft** tab says a package is not found"
 msgstr "La pestaña **Draft** dice que no se encuentra un paquete"
 
-#: ../../source/troubleshooting.rst:276
+#: ../../source/troubleshooting.rst:279
 msgid ""
 "The drawing package, ``//pub/feature/render/draftwright``, comes from the"
 " public PartCAD index. A workspace that does not import ``pub`` has no "
@@ -692,3 +705,19 @@ msgstr ""
 #~ "tab shows a picture of the object"
 #~ " meanwhile."
 #~ msgstr ""
+
+#~ msgid ""
+#~ "Or, if you would rather use your"
+#~ " own Python environment, run ``pip "
+#~ "install partcad`` in it: the extension"
+#~ " finds the ``partcad-json-rpc`` that"
+#~ " ``pip`` puts on your ``PATH`` and"
+#~ " uses that instead of downloading "
+#~ "anything."
+#~ msgstr ""
+#~ "O, si prefiere usar su propio "
+#~ "entorno Python, ejecute ``pip install "
+#~ "partcad`` en él: la extensión encuentra"
+#~ " el ``partcad-json-rpc`` que ``pip``"
+#~ " coloca en su ``PATH`` y lo usa"
+#~ " en lugar de descargar nada."
