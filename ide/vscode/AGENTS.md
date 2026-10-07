@@ -97,9 +97,13 @@ Three things about it are load-bearing:
 **A backend that never starts reports itself in the `PartCAD` terminal view**, not only in the output channel.
 Everything else in that view arrives over the backend's own `?/partcad/terminal` and `?/partcad/log`
 notifications, which is precisely what a missing backend cannot send, so `terminal.ts` carries a
-`setTerminalWriter`/`writeTerminal` pair: `extension.ts` registers the writer (it owns the terminal, the
+`setTerminalWriter`/`writeTerminal` pair: `extension.ts` registers the writer (it creates the views, with the
 reopen/popup settings and the context) and `common/backend.ts` calls it without importing `extension.ts`, which
 would be an import cycle. Before that, no backend meant a silent, inert window.
+
+Those reports -- no service, a service that would not start, one that kept dying -- pass an `alert`. An alert
+opens a view even when the user has closed every one, and says itself in an error popup when none was open:
+nothing else on screen would say why PartCAD stopped. See "The `PartCAD` terminal views" below.
 
 **Daemon handling is the CLI's, not the extension's.** Which socket serves which workspace, whether anything
 is answering on it, and how to stop it and wait are `partcad_client`, reached by running `pc`. A second copy of
@@ -329,7 +333,9 @@ What the untrusted window shows, and why each is there:
   an unresolved webview view is an empty pane forever.
 - **A stand-in for every contributed command.** The palette and the view menus list them whether or not they
   are registered, and running an unregistered one is "command not found". The stand-ins explain and offer the
-  trust editor, and are disposed before `activateTrusted` registers the real ones under the same ids.
+  trust editor, and are disposed before `activateTrusted` registers the real ones under the same ids. The
+  terminal panel's "+" menu is the same for the `PartCAD` profile it lists, so that has a stand-in too: a view
+  saying why it shows nothing.
 
 **A failure to start after trust is granted is reported** (`reportTrustedActivationFailure`: the log, an error
 message, `partcad.failed`). On the trusted path the editor reports a rejected `activate`; this one happens in
@@ -427,8 +433,47 @@ thing for the tools bundled in the application. Both prepend, and `bootstrap` po
 the bundled service, which `resolveServicePath` honours first -- so the two agree on the directory and the only
 effect is that it appears on `PATH` twice.
 
-This has nothing to do with `src/terminal.ts`, which creates the `PartCAD` output pseudoterminal: that is a log
-surface with a no-op `handleInput`, not a shell, and has no environment to inherit.
+The `PartCAD` views `src/terminal.ts` creates are not touched by any of this: they are pseudoterminals, log
+surfaces with a no-op `handleInput` and no environment to inherit. The shell it opens to their left is an
+ordinary terminal and gets the tools like any other.
+
+## The `PartCAD` terminal views
+
+`src/terminal.ts`, `PartcadTerminals`. What the user sees, and why each part is built the way it is:
+
+- **Nothing opens until there is output.** The first write in a window opens a view, split to the right of a
+  shell named `Shell`: one already open, or a new one running the user's default profile with `SHELL_BANNER` at
+  the top (`TerminalOptions.message` is written into the view, not sent to the shell). Activation runs the health
+  checks as a logged process, which ends in a `DONE:` line at the least, so the pair appears at every start, as
+  the single terminal used to.
+- **Closing a view keeps it closed.** `partcad.reopenTerminal` defaults to `false` now; it used to reopen the
+  view on the next log line, which is fighting the user. "PartCAD: Show Terminal" and the `PartCAD` entry in the
+  terminal panel's "+" menu (`contributes.terminal.profiles`, `partcad.terminal`) open one again. In Restricted
+  Mode that entry is a stand-in from `trust.ts`, for the same reason the commands have one.
+- **Any number of views, all written to, each with its own pseudoterminal.** `open()` writes the greeting and
+  the history into the view it opens, so a shared emitter would write them into every view at once.
+- **A replay buffer** (`ReplayBuffer`) is what makes closing harmless: a view opened later starts with the
+  history. It is needed for the very first view as well, because VS Code subscribes to `onDidWrite` only just
+  before it calls `open()` -- anything sent earlier is dropped. It keeps the renderer's output in the chunks it
+  arrives in, one per log event, laid out as [erase the last footer][log lines][footer], and relies on that
+  layout twice: the oldest chunks are dropped whole, and the first one kept loses its erase run, which would
+  otherwise eat into the history above it; and a footer-only chunk following another is merged into it, so a
+  long build does not push the history out with progress ticks. A change to how
+  `partcad_utils.logging_ansi_terminal` frames its output is a change to `ReplayBuffer`.
+- **`isTransient` decides nothing for a view.** The editor sets it on every extension pseudoterminal itself,
+  and never saves one across a reload in any case. The shell *is* saved and restored, so after a reload the
+  view is created again beside it.
+- **A shell restored late replaces the one made in its place.** The view can need a shell before VS Code has
+  restored the old one, and then a second one is made. For `REVIVE_WINDOW_MS` (5s) after making a shell, a
+  restored one replaces it: the new shell and its view are closed and a view opens beside the restored shell,
+  filled from the replay -- unless a command has already been run in the new shell, which is then kept. That is
+  `window.onDidStartTerminalShellExecution`, looked up at run time because it is newer than `engines.vscode`;
+  not `Terminal.state.isInteractedWith`, which any input sets, including the terminal's own answers to a
+  starting shell's queries -- on Windows (conpty) every new shell had it set before its first prompt. It is
+  polled, not an event: a restored terminal is announced to extensions before its name is set again, and
+  nothing tells them when that happens.
+- **The shell is the user's.** Nothing disposes it with the views or on deactivation; the case above is the
+  only one in which the extension closes a shell.
 
 ## YAML diagnostics
 

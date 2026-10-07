@@ -305,15 +305,15 @@
             "type": "string"
           },
           "partcad.reopenTerminal": {
-            "default": "true",
-            "description": "Whether to re-open PartCAD terminal tab on new PartCAD events or not.",
+            "default": "false",
+            "description": "Whether to re-open the PartCAD terminal on new PartCAD output after it was closed. It opens on the first output either way, and \"PartCAD: Show Terminal\" or the PartCAD entry in the terminal panel's \"+\" menu opens it again, with what it missed. It also opens, whatever this says, when PartCAD stops working in the window.",
             "enum": [
               "true",
               "false"
             ],
             "enumDescriptions": [
-              "Re-open PartCAD terminal on new events, if it was closed.",
-              "Do not re-open PartCAD terminal if closed once."
+              "Re-open the PartCAD terminal on new output, if it was closed.",
+              "Leave the PartCAD terminal closed once it is closed, until it is opened again."
             ],
             "scope": "machine",
             "type": "string"
@@ -387,6 +387,12 @@
         "category": "PartCAD",
         "command": "partcad.update",
         "icon": "$(cloud-download)"
+      },
+      {
+        "title": "Show Terminal",
+        "category": "PartCAD",
+        "command": "partcad.showTerminal",
+        "icon": "$(terminal)"
       },
       {
         "command": "partcad.promptInitPackage",
@@ -952,6 +958,15 @@
         {
           "command": "partcad.openInBlender",
           "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf"
+        }
+      ]
+    },
+    "terminal": {
+      "profiles": [
+        {
+          "id": "partcad.terminal",
+          "title": "PartCAD",
+          "icon": "output"
         }
       ]
     },

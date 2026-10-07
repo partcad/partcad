@@ -28,6 +28,7 @@ Packages
 - **Reload the package** and **Restart PartCAD** — Refresh the view or restart the PartCAD backend after a
   change.
 - **Update PartCAD** — Update the PartCAD installation used by the extension.
+- **Show Terminal** — Open the ``PartCAD`` terminal again after it was closed (see :ref:`partcad-terminal`).
 
 Objects
 -------
@@ -149,6 +150,22 @@ model names which implementation runs it — pre-filled with the configured defa
 whose solver is elsewhere is one line away from an answer rather than stuck on an error. The model is drawn
 according to the format the implementation chose: a 3D result is turned and zoomed, a 2D one is panned and
 zoomed as a picture. Any findings are listed under it; a part with nothing to report gets the whole pane.
+
+.. _partcad-terminal:
+
+The PartCAD terminal
+--------------------
+
+What PartCAD is busy with -- its log and the progress of a long operation -- appears in the ``PartCAD``
+terminal. It opens the first time there is something to show, to the right of a shell named ``Shell``: a
+terminal running your default shell, with the PartCAD command line tools on its ``PATH``, for starting a coding
+agent side by side with what PartCAD is doing.
+
+Close it whenever you like. It stays closed until you run **PartCAD: Show Terminal** or pick **PartCAD** from the
+terminal panel's **+** menu, and then it opens with everything it missed. Set ``partcad.reopenTerminal`` to
+``true`` to have new output reopen it instead, and ``partcad.popupTerminal`` to bring it to the front on every
+new line. If PartCAD stops working in the window -- no PartCAD service, or one that will not start or keeps
+stopping -- it opens on its own and says why, with a popup as well if it was closed.
 
 Export
 ------

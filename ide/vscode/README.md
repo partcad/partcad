@@ -62,6 +62,19 @@ running (`sudo apt install spacenavd`, for example). Only the viewer in the focu
 `partcad.spaceMouse.sensitivity` sets the speed, `partcad.spaceMouse.invert` reverses individual axes, and
 `partcad.spaceMouse.enabled` turns it off.
 
+## The PartCAD terminal
+
+What PartCAD is busy with -- its log and the progress of a long operation -- appears in the `PartCAD` terminal.
+It opens the first time there is something to show, to the right of a shell named `Shell`: a terminal running
+your default shell, with the PartCAD command line tools on its `PATH`, for starting a coding agent side by side
+with what PartCAD is doing.
+
+Close it whenever you like. It stays closed until you run **PartCAD: Show Terminal** or pick **PartCAD** from the
+terminal panel's **+** menu, and then it opens with everything it missed. Set `partcad.reopenTerminal` to `true`
+to have new output reopen it instead, and `partcad.popupTerminal` to bring it to the front on every new line. If
+PartCAD stops working in the window -- no PartCAD service, or one that will not start or keeps stopping -- it
+opens on its own and says why, with a popup if it was closed.
+
 ## The command line in the integrated terminal
 
 While the extension is active, terminals opened in the window get the PartCAD command line tools on their
