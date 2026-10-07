@@ -114,6 +114,17 @@ class RuntimeJsonRpcClient:
             pc_logging.error("Error during RPC call to %s: %s" % (self.url, e))
             return None
 
+    def which(self, names: list, timeout: float = 30) -> Optional[Dict[str, Optional[str]]]:
+        """Where each of ``names`` resolves in the container, or None for each that does not."""
+        request = {"jsonrpc": "2.0", "method": "which", "params": {"names": list(names)}, "id": self.get_request_id()}
+        try:
+            response = requests.post(self.url + "/jsonrpc", json=request, headers=self._headers(), timeout=timeout)
+            answer = json.loads(response.content)
+        except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
+            pc_logging.error("Error during RPC call to %s: %s" % (self.url, e))
+            return None
+        return answer.get("result") if isinstance(answer, dict) else None
+
     async def execute_async(
         self, command: list, params: Dict[str, Any] = None, timeout: float = None
     ) -> Union[Dict, None]:

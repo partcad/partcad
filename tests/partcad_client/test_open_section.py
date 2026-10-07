@@ -44,8 +44,10 @@ def test_a_package_adds_an_application_partcad_never_heard_of():
 
     assert tools["democad"].display_name == "DemoCAD"
     assert tools["democad"].binaries == ("democad",)
-    # ...and it gets a container of its own, named the way every other one is.
-    assert tools["democad"].container_name == "partcad-democad"
+    # ...and a container of its own, named the way every other one is: by its
+    # role, through `partcad_utils.containers`.
+    assert tools["democad"].image == "example/democad:latest"
+    assert tools["democad"].role == "open-democad"
     # The built-ins are still there.
     assert "freecad" in tools
 
@@ -81,18 +83,21 @@ def test_the_version_placeholder_pins_an_image_partcad_publishes(external_at_rel
 
 
 def test_an_applications_own_file_is_opened_and_anything_else_imported():
-    """What the 'fileArgs' templates and 'ownFormats' are between them.
+    """What the 'fileArgs' templates and 'formats' are between them.
 
     Blender is the case: 'blender <file>' opens a '.blend' and nothing else, so
-    every other file reaches it through the expression the declaration carries.
+    every other file reaches it through the script the declaration carries --
+    with the path as an argument of its own after '--', not pasted into the
+    script, so that it can be rewritten for a container like any other path.
     """
     blender = external.TOOLS["blender"]
 
     assert blender.file_arguments("/tmp/x.blend") == ("/tmp/x.blend",)
     args = blender.file_arguments("/tmp/x.stl")
     assert args[0] == "--python-expr"
-    # The path is embedded as a Python literal, not pasted in raw.
-    assert repr("/tmp/x.stl") in args[1]
+    assert "/tmp/x.stl" not in args[1]
+    assert args[-2:] == ("--", "/tmp/x.stl")
+    assert not blender.embeds_path()
 
 
 def test_an_application_with_no_templates_just_takes_the_file():

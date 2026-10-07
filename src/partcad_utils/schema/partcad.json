@@ -319,7 +319,28 @@
       "properties": {
         "desc": { "type": "string", "maxLength": 1000 },
         "displayName": { "type": "string", "minLength": 1, "description": "What the application is called in a message" },
-        "image": { "type": "string", "minLength": 1, "description": "The container it runs in when the machine has no local copy. '{version}' is substituted with the running PartCAD's version" },
+        "formats": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "What the application reads, best first: its own formats ('fcstd', 'blend', 'kicad_pcb') and PartCAD's part and scene types ('step', 'stl', 'mjcf'). An object in none of them is converted to the first one PartCAD can write, and converted back into the object's own format when the application changed it"
+        },
+        "container": {
+          "description": "The container it runs in when the machine has no local copy, declared the way a plugin's implementation declares one. The image alone, or a mapping",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            {
+              "type": "object",
+              "properties": {
+                "image": { "type": "string", "minLength": 1, "description": "'{version}' is substituted with the running PartCAD's version" },
+                "python": { "type": "string", "minLength": 1, "description": "The image's python3, when it is not on the PATH. PartCAD's container service runs on it" }
+              },
+              "required": ["image"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "image": { "type": "string", "minLength": 1, "deprecated": true, "description": "Deprecated: 'container:'. The container it runs in when the machine has no local copy" },
         "binaries": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Executables to look for, on PATH and in the container, in order; the first found wins" },
         "args": { "type": "array", "items": { "type": "string" }, "description": "Arguments that go before the file name" },
         "binaryArgs": {
@@ -332,10 +353,10 @@
         "windowsGlobs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Install locations as globs, so a versioned directory still matches" },
         "flatpakId": { "type": "string", "minLength": 1 },
         "companions": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Extensions this application really opens, when the file it was handed is not one and one of these sits beside it" },
-        "fileArgs": { "type": "array", "items": { "type": "string" }, "description": "How the file reaches the application when being the last argument is not it. '{path}' is the file name, '{path_repr}' it quoted as a Python string" },
-        "ownFormats": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Extensions this application opens whatever they hold, because they are its own" },
-        "imports": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "The mesh formats it can read, for one that reads meshes" },
-        "meshVia": { "type": "string", "minLength": 1, "description": "What a file that is not a mesh is converted to first" },
+        "fileArgs": { "type": "array", "items": { "type": "string" }, "description": "How the file reaches the application when being the last argument is not it. '{path}' is the file name, as an argument of its own. '{path_repr}' is it quoted as a Python string, which works only where the file is shared with the application, so not with 'useDockerRemote'" },
+        "ownFormats": { "type": "array", "items": { "type": "string", "minLength": 1 }, "deprecated": true, "description": "Deprecated: 'formats:'. Extensions this application opens whatever they hold, because they are its own" },
+        "imports": { "type": "array", "items": { "type": "string", "minLength": 1 }, "deprecated": true, "description": "Deprecated: 'formats:'. The mesh formats it can read, for one that reads meshes" },
+        "meshVia": { "type": "string", "minLength": 1, "deprecated": true, "description": "Deprecated: 'formats:'. What a file that is not a mesh is converted to first" },
         "sceneType": { "type": "string", "minLength": 1, "description": "The PartCAD scene type it reads, for one that reads a description of an arrangement rather than geometry" },
         "sceneExtensions": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true, "description": "The file extensions 'sceneType' is stored in, with the dot ('.xml'). Declared rather than looked up: an engine's scene format is implemented by the same package this entry comes from, so that package is what says what the format is called on disk" }
       },

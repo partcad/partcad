@@ -102,7 +102,9 @@ may not exist on the client at all. So `pc open --with blender` and `pc open --w
 `adhoc.convert`, the same method
 `pc adhoc convert` sends, on the same absolute paths, with `kind` saying whether a part or a scene is being
 converted: file in, file out, `needs_context=False`, nothing left on
-the daemon to go stale, and no new method in the registry. The window still opens here. Which types are meshes,
+the daemon to go stale, and no new method in the registry. The same call runs the other way when the
+application closes and the converted copy was edited -- back into the object's own format, over its source.
+The window still opens here. Which types are meshes,
 and which are scene descriptions,
 is `partcad_client.object_types` -- an inlined copy of PartCAD's tables, so the client stays cheap to import,
 with `tests/partcad/unit/test_client_object_types.py` failing when the copy drifts.

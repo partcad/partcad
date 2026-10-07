@@ -248,15 +248,30 @@ Host commands
   ``Program Files`` on Windows, and for a flatpak on Linux. Gazebo is looked for under all three of the names
   it has had (``gz sim``, ``ign gazebo``, ``gazebo``), and whichever the machine has is the one used.
 
-  Blender reads meshes and nothing else, so a file that is not one is converted to STL and Blender is given
-  that instead: an STL, an OBJ or a glTF is imported as it is, while a STEP file, a CadQuery script or a mesh
-  in a format Blender ships no importer for (3MF) is converted first. This is the one thing ``pc open`` asks
-  the PartCAD daemon for, because turning a solid into a mesh is CAD work; the window still opens on the
-  machine the command was run on. The converted copy is written under this workspace's own directory (never
-  beside your file), named after the object it came from, and reused until that object changes. ``--type``
-  says what the file holds when its name does not -- a ``.py`` is a CadQuery script, a build123d one or an SDF
-  one -- and the VS Code extension passes the declared type of the object you clicked. A ``.blend`` is
-  Blender's own file and is opened, not converted.
+  **``pc open`` waits for the application to close**, and then brings back what was done in it. Each application
+  declares what it opens, best first (``formats:`` in its ``open:`` entry -- FreeCAD's is ``fcstd``, ``step``,
+  ``brep``, ``iges``, ``stl``, ``obj``; Blender's is ``blend`` and the meshes it imports). A file already in one of
+  them is opened as it is. Any other is converted to the first one PartCAD can write, and the application is
+  given that: a STEP file, a CadQuery script or a 3MF mesh reaches Blender as STL, and a build123d script
+  reaches FreeCAD as STEP. Converting is the one thing ``pc open`` asks the PartCAD daemon for, because turning
+  a solid into a mesh is CAD work; the window still opens on the machine the command was run on. The converted
+  copy is written under this workspace's own directory (never beside your file), named after the object it
+  came from, and reused until that object changes. ``--type`` says what the file holds when its name does not
+  -- a ``.py`` is a CadQuery script, a build123d one or an SDF one -- and the VS Code extension passes the
+  declared type of the object you clicked.
+
+  When the application closes, the file it was given is compared with what it was before:
+
+  * **Unchanged** -- nothing happens, and ``No changes.`` says so.
+  * **Changed, and opened as it is** -- the edit is already in your file.
+  * **Changed, and converted first** -- the edited copy is converted back into the object's own format and
+    written over its source, when that source is a file PartCAD can write (``step``, ``brep``, ``stl``, ``3mf``,
+    ``obj``, ``iges``, ``gltf``). A script is not: its edit is kept where it was made and the path is printed,
+    because overwriting the program that generates a part with its output would destroy the program.
+
+  An application that saves beside what it opened -- KiCad -- has its whole directory compared rather than
+  the one file. Interrupting ``pc open`` (``Ctrl+C``) stops the wait and leaves the application open; what is
+  saved in it from then on is not brought back.
 
   MuJoCo reads MJCF and no other model format, and a scene that is not already one is **not** converted here.
   That is not an omission: MJCF is written by ``partcad-sim-mujoco``'s exporter and a Gazebo world is read by
@@ -275,23 +290,28 @@ Host commands
   rendered -- a file with no board beside it is handed over as it is. Every application but Blender is given
   the file it was pointed at, whatever it holds.
 
-  With ``--use-docker``, a machine that has no local installation runs the application in a container instead
-  — one container per application, named after it (``partcad-freecad``, ``partcad-blender``,
-  ``partcad-gazebo``, ``partcad-mujoco``, ``partcad-kicad``), created from the application's image
-  (``--docker-image`` overrides it; FreeCAD's is ``linuxserver/freecad:latest``, since the FreeCAD project
-  publishes no image of its own, Blender's is ``linuxserver/blender:latest`` for the same reason, KiCad's is
-  the ``ghcr.io/partcad/partcad-container-kicad`` image PartCAD already builds for ``kicad`` parts, and an
-  engine's is whatever its plugin package declares) the first
-  time and reused afterwards, so a container you have prepared
-  keeps being the one that is used. Without ``--use-docker``, a machine with neither the application nor
-  Docker is told so rather than being left with a command that quietly did nothing. Remove the application's
-  own container (``docker rm -f partcad-freecad``, ``partcad-blender``,
-  ``partcad-gazebo``, ``partcad-mujoco``, ``partcad-kicad``) to have the next ``pc open``
-  create a fresh one. The workspace and the directory holding this workspace's daemon socket are mounted **at
-  the paths they have on the host**, which is what lets one path mean the same thing on both sides. A file
-  that is not in this workspace gets its own workspace mounted instead, so that whatever is mounted always
-  contains the file the application is handed; a container created for one workspace and then used from
-  another says so, and says to remove it, rather than opening a name the container cannot resolve.
+  With ``--use-docker``, a machine that has no local installation runs the application in a container instead,
+  started the way PartCAD starts every container (see :ref:`use-docker-remote`): named
+  ``partcad-open-<application>-<tag>-<identity>``, labelled so that ``pc system prune`` removes it, replaced
+  rather than reused when what it was created from has changed, and running PartCAD's own container service,
+  through which the application is launched. The image is the one the application's ``open:`` entry declares
+  under ``container:`` (``--docker-image`` overrides it): FreeCAD's is ``linuxserver/freecad:latest``, since the
+  FreeCAD project publishes no image of its own, Blender's is ``linuxserver/blender:latest`` for the same
+  reason, KiCad's is the ``ghcr.io/partcad/partcad-container-kicad`` image PartCAD already builds for
+  ``kicad`` parts, and an engine's is whatever its plugin package declares. The application's own settings
+  live in a volume of their own (``partcad-open-<application>-home``), so they outlast the container. Without
+  ``--use-docker``, a machine with neither the application nor Docker is told so rather than being left with a
+  command that quietly did nothing.
+
+  The file reaches the container one of two ways, and ``useDockerRemote`` chooses:
+
+  * **mount** (the default) -- the directory holding the file is mounted at the path it has on the host, so one
+    path means the same thing on both sides, and the application saves straight into it.
+  * **upload** (``useDockerRemote: true``, or ``PC_USE_DOCKER_REMOTE=true``) -- nothing is mounted. The file (or,
+    for KiCad, its directory) is sent with the request that launches the application, and what it is when the
+    application closes is sent back and written here. This is what a Docker daemon on another machine needs.
+    A ``fileArgs`` template that quotes the path inside a script (``{path_repr}``) cannot be sent this way and is
+    refused; ``{path}``, the path as an argument of its own, can.
 
   A containerised application draws on the host's X display. On Linux that display is usually a socket, which
   is shared with the container along with its authority cookie, and nothing needs configuring; a display

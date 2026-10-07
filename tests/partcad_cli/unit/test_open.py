@@ -119,7 +119,37 @@ def test_json_reports_what_happened_in_full(click_runner: Iterator[CliRunner], o
         "source": None,
         "command": ["/usr/bin/freecad", "/w/cube.step"],
         "detail": "FreeCAD is installed on this machine.",
+        "changed": False,
+        "writtenBack": None,
+        "edited": None,
     }
+
+
+def test_json_says_where_an_edit_went(click_runner: Iterator[CliRunner], opened) -> None:
+    # What the editor turns into its one sentence when the application closes.
+    opened.result.changed = True
+    opened.result.written_back = "/w/cube.step"
+    reported = json.loads(_invoke(click_runner, "--json", "x.step").output)
+    assert (reported["changed"], reported["writtenBack"], reported["edited"]) == (True, "/w/cube.step", None)
+
+
+def test_nothing_changed_is_said(click_runner: Iterator[CliRunner], opened) -> None:
+    assert "No changes." in _invoke(click_runner, "x.step").output
+
+
+def test_an_edit_written_back_is_said(click_runner: Iterator[CliRunner], opened) -> None:
+    opened.result.changed = True
+    opened.result.written_back = "/w/cube.step"
+    assert "Saved your changes to /w/cube.step." in _invoke(click_runner, "x.step").output
+
+
+def test_an_edit_that_had_nowhere_to_go_says_where_it_is(click_runner: Iterator[CliRunner], opened) -> None:
+    # A script's output, edited: the script is not overwritten with it.
+    opened.result.changed = True
+    opened.result.edited = "/w/.partcad/open/cube-1.step"
+    output = _invoke(click_runner, "cube.py").output
+    assert "Your changes are in /w/.partcad/open/cube-1.step." in output
+    assert "cube.py" in output
 
 
 def test_json_stays_silent_about_progress(click_runner: Iterator[CliRunner], opened) -> None:
@@ -250,7 +280,7 @@ def installed_blender(monkeypatch):
     """A machine with Blender on it, and nothing actually started."""
     started = []
     monkeypatch.setattr(external, "native_command", lambda _spec: ["/usr/bin/blender"])
-    monkeypatch.setattr(external, "_spawn", lambda args: started.append(list(args)))
+    monkeypatch.setattr(external, "_launch", lambda args: started.append(list(args)) or 0)
     return started
 
 
@@ -296,7 +326,7 @@ def test_an_application_that_takes_what_it_is_given_never_connects(click_runner,
     """FreeCAD, Gazebo and KiCad read what they are handed; there is nothing to ask."""
     started = []
     monkeypatch.setattr(external, "native_command", lambda _spec: ["/usr/bin/freecad"])
-    monkeypatch.setattr(external, "_spawn", lambda args: started.append(list(args)))
+    monkeypatch.setattr(external, "_launch", lambda args: started.append(list(args)) or 0)
 
     result = _invoke(click_runner, "--json", "--with", "freecad", str(mesh))
 

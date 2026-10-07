@@ -634,8 +634,12 @@ at all).
   each front end takes, and what the application can read. The logic is the same for every tool and stays in
   `partcad_client.external`, which now *builds* its `Tool` table from those declarations instead of holding
   five literals. Blender's argument builder was the one callable in that table and is now `fileArgs:`
-  templates (`{path}`, `{path_repr}`) plus `ownFormats:` — a package cannot ship a Python function into a
-  frozen client.
+  templates plus `formats:` — a package cannot ship a Python function into a frozen client. `formats:` is an
+  ordered list: an object in none of them is converted to the first one PartCAD can write, and the edit is
+  converted back over the source when the source is a file (`WRITABLE_PART_TYPES`), which is why `pc open`
+  blocks until the application closes. An entry's `container:` goes through `partcad_utils.containers` like
+  every other container, so it supports both transfer modes; `{path_repr}` (a path quoted inside a script) is
+  the one template upload mode cannot honour, and Blender's own entry uses `{path}` after `--` instead.
 
   The subtlety is where the table is read. `pc open` deliberately needs **no package graph** (it is handed a
   path; the window belongs to whoever ran the command; a daemon can be remote), so the built-in entries are

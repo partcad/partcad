@@ -40,6 +40,7 @@ __all__ = [
     "PART_TYPE_EXTENSION",
     "PART_TYPE_IS_MESH",
     "SCENE_TYPE_EXTENSION",
+    "WRITABLE_PART_TYPES",
     "is_mesh",
     "is_mesh_file",
     "is_mesh_type",
@@ -134,6 +135,14 @@ EXTENSION_ALIASES: Dict[str, str] = {
 # The extension of an ASSY file. 'assy' is an assembly type rather than a part
 # type, so it is in neither table above -- but it is very much a file `pc open`
 # is handed, and saying what it is beats reporting it as an unknown name.
+# The part formats PartCAD can *write* as a file: what `//builtin/export`
+# implements, minus what only means anything inside a package. Two questions are
+# answered with it, and both are `pc open`'s: which of the formats an
+# application lists PartCAD can convert an object into, and whether an edit to
+# such a copy can be converted back into the object's own source -- which needs
+# that source to be a file of one of these.
+WRITABLE_PART_TYPES = frozenset({"step", "brep", "stl", "3mf", "obj", "iges", "gltf", "threejs"})
+
 ASSY_EXTENSION = "assy"
 
 # The scene types that are file formats, and the extension each is stored in,

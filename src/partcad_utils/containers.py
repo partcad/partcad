@@ -136,6 +136,15 @@ class ContainerSpec:
     user: Optional[str] = None
     # The interpreter the service is started with.
     service_python: str = "python3"
+    # Binds that are this machine's plumbing rather than its files -- the X
+    # server's socket and cookie an application window needs. Kept in either
+    # transfer mode, because they are not how files arrive; dropped when the
+    # daemon is another machine, where they would bind *its* sockets.
+    local_binds: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    # {hostname: address} added to the container's /etc/hosts:
+    # "host.docker.internal": "host-gateway" is how a container on Linux reaches
+    # a display served over TCP on this machine.
+    extra_hosts: Dict[str, str] = field(default_factory=dict)
 
     def mounted(self) -> Dict[str, Dict[str, str]]:
         return dict(self.mounts) if self.mode == MOUNT else {}
@@ -187,6 +196,10 @@ def identity(spec: ContainerSpec) -> str:
         "sandbox_root": spec.sandbox_root or "",
         "user": spec.user or "",
         "service_python": spec.service_python,
+        "local_binds": sorted(
+            (source, value["bind"], value.get("mode", "rw")) for source, value in spec.local_binds.items()
+        ),
+        "extra_hosts": sorted(spec.extra_hosts.items()),
         "service": hashlib.sha256(_service_source()).hexdigest(),
     }
     return hashlib.sha256(json.dumps(described, sort_keys=True).encode("utf-8")).hexdigest()
@@ -368,6 +381,10 @@ class Endpoint:
     def client(self) -> RuntimeJsonRpcClient:
         return RuntimeJsonRpcClient(self.host, self.port, token=self.token)
 
+    def which(self, names) -> Dict[str, Optional[str]]:
+        """Where each allowed name resolves in this container; None for each that does not."""
+        return self.client().which(list(names)) or {}
+
     # ------------------------------------------------------------- running --
 
     def params(
@@ -378,6 +395,7 @@ class Endpoint:
         output_files=None,
         input_dirs=None,
         output_dirs=None,
+        env=None,
     ) -> dict:
         """The request parameters for one command, as this container's transfer mode needs them.
 
@@ -390,6 +408,8 @@ class Endpoint:
             "stdin": base64.b64encode(stdin.encode("utf-8")).decode("utf-8") if stdin else None,
             "cwd": cwd,
         }
+        if env:
+            params["env"] = dict(env)
         if self.spec.mode != UPLOAD:
             return params
         files = {}
@@ -453,8 +473,9 @@ class Endpoint:
         input_dirs=None,
         output_dirs=None,
         timeout: Optional[float] = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> Tuple[int, str, str]:
-        params = self.params(stdin, cwd, input_files, output_files, input_dirs, output_dirs)
+        params = self.params(stdin, cwd, input_files, output_files, input_dirs, output_dirs, env)
         response = self.client().execute(list(command), params, timeout=timeout)
         return self.result(response, output_files, output_dirs)
 
@@ -468,8 +489,9 @@ class Endpoint:
         input_dirs=None,
         output_dirs=None,
         timeout: Optional[float] = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> Tuple[int, str, str]:
-        params = self.params(stdin, cwd, input_files, output_files, input_dirs, output_dirs)
+        params = self.params(stdin, cwd, input_files, output_files, input_dirs, output_dirs, env)
         response = await self.client().execute_async(list(command), params, timeout=timeout)
         return self.result(response, output_files, output_dirs)
 
@@ -644,6 +666,8 @@ def _create(client, name, spec, digest, reference, image_obj, remote_host):
         environment["PC_CONTAINER_SANDBOX_ROOT"] = spec.sandbox_root
     volumes = dict(spec.mounted())
     volumes.update(spec.volumes)
+    if remote_host is None:
+        volumes.update(spec.local_binds)
     labels = {
         LABEL_CONTAINER: "1",
         LABEL_VERSION: __version__,
@@ -666,6 +690,7 @@ def _create(client, name, spec, digest, reference, image_obj, remote_host):
             # it is another machine, since that is the only way to reach it --
             # and the token is what stands between it and the network.
             ports={"%d/tcp" % SERVICE_PORT: ("0.0.0.0" if remote_host else "127.0.0.1", None)},
+            extra_hosts=dict(spec.extra_hosts) or None,
             detach=True,
         )
         # Before the first start, so the command exists when it runs. A

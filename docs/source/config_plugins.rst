@@ -108,12 +108,13 @@ the same for every tool and happens once, in ``partcad_client.external``.
   open:
     democad:
       displayName: DemoCAD
-      image: example/democad:latest      # when it is not installed here
+      formats: [demo, step, stl]         # what it opens, best first
+      container:                         # when it is not installed here
+        image: example/democad:latest
       binaries: [democad, democad-bin]   # on PATH and in the container
       macosApps: [DemoCAD.app]
       windowsGlobs: ["DemoCAD*/bin/democad.exe"]
       flatpakId: org.example.DemoCAD
-      sceneType: demo                    # it reads this scene type and no other
 
 ``pc open --with democad ./cell.demo`` then works, in a workspace whose packages
 import that one. PartCAD ships three of these in ``//builtin/open`` -- FreeCAD,
@@ -123,15 +124,29 @@ is how the plugin for a simulation engine comes to own the application for it: b
 `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ declare
 theirs, so a workspace that imports either already gets the entry from there.
 
-Three fields are worth dwelling on, because they are how an application that
-cannot read what it was handed still gets to open something. ``companions:``
-names the extensions the application really opens, for a file that sits beside
-the one PartCAD was pointed at -- a ``kicad`` part *is* the STEP file KiCad's CLI
-writes, and the board is the project next to it. ``meshVia:`` says what a file
-that is not a mesh is converted to first, for an application that reads
-triangles and nothing else. ``sceneType:`` says which description language an
-application reads, for one that reads an arrangement rather than geometry: MuJoCo
-reads MJCF, so a Gazebo world it is pointed at is written out as MJCF first.
+``formats:`` is the one that decides most: what the application opens, **best
+first** -- its own formats (``fcstd``, ``blend``, ``kicad_pcb``) and PartCAD's
+part types (``step``, ``stl``). An object in one of them is handed over as it is.
+Any other is converted to the first one on the list that PartCAD can write, and
+``pc open`` then waits for the application to close: when the converted copy was
+changed, it is converted back into the object's own format and written over its
+source, where that source is a file (a STEP, an STL...) rather than a script.
+
+Two more are how an application that cannot read what it was handed still gets
+to open something. ``companions:`` names the extensions the application really
+opens, for a file that sits beside the one PartCAD was pointed at -- a ``kicad``
+part *is* the STEP file KiCad's CLI writes, and the board is the project next to
+it. ``sceneType:`` says which description language an application reads, for
+one that reads an arrangement rather than geometry: MuJoCo reads MJCF, so a
+Gazebo world it is pointed at is written out as MJCF first.
+
+``container:`` has the shape a plugin's implementation gives it -- ``image``, and
+``python`` for an image whose ``python3`` is not on ``PATH`` -- and the container
+is started the way every other PartCAD container is (see
+:ref:`use-docker-remote`), with the file mounted or, under ``useDockerRemote``,
+uploaded. ``image:``, ``ownFormats:``, ``meshVia:`` and ``imports:`` are what an
+entry said before ``container:`` and ``formats:``; they are still read, into
+those, and ``pc open`` says once that they are deprecated.
 
 ``pc open`` is otherwise a **client-side** command and stays one: it is handed a
 path, the file is already on disk, and the window belongs to whoever ran the

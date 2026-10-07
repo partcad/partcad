@@ -20,7 +20,7 @@ happens to have -- PartCAD's own images, KiCad's, and the community images the
 an image without pip cannot satisfy. The web framework this used to be written
 against was the whole of its requirements file.
 
-The protocol is JSON-RPC 2.0 over HTTP, one method, `execute`::
+The protocol is JSON-RPC 2.0 over HTTP. One method, `execute`, does the work::
 
     POST /jsonrpc
     {"jsonrpc": "2.0", "id": 1, "method": "execute", "params": {
@@ -54,6 +54,14 @@ service put it before the command runs:
   the way ``input_dirs`` are. One that was also sent comes back with whatever
   the command changed in it; one that was not is created empty first, for a
   command that writes a directory of results.
+* ``env`` sets variables for this one command, over the container's own. Only
+  the names in `ENV_ALLOWED` -- the display an application opens a window on,
+  and the like; anything else is refused.
+
+The other, `which`, runs nothing: ``{"names": ["freecad", "FreeCAD"]}`` answers
+with where each allowed name resolves in this container, or null -- so a caller
+looking for an application under one of several names can find out which this
+image has, on a daemon it cannot ``docker exec`` into.
 
 What can be run is the allowlist: ``PC_CONTAINER_ALLOWED_COMMANDS``, a JSON object
 mapping a name to an absolute path -- or to ``null``, meaning "whatever that name
@@ -91,8 +99,30 @@ from socketserver import ThreadingMixIn
 # What `GET /` reports, and what a client may ask of a server before relying on
 # one of the additions below. 1 is the service as it was before them; 2 sends
 # in-place edits back, sends `output_dirs`, resolves a null allowlist entry on
-# PATH and rewrites `cwd`; 3 holds a `lock` around a command.
-PROTOCOL = 3
+# PATH and rewrites `cwd`; 3 holds a `lock` around a command; 4 takes `env` and
+# answers `which`.
+PROTOCOL = 4
+
+# The variables a request may set for its command, and no others. An application
+# opened for editing needs the display the user is sitting at *now* -- which is
+# not something fixed when the container was created, weeks ago, on another
+# display -- and that is what this is for. Not a free-for-all: the allowlist is
+# the whole of what a caller may run, and LD_PRELOAD or PYTHONPATH in a request
+# would be a way round it.
+ENV_ALLOWED = frozenset(
+    {
+        "DISPLAY",
+        "XAUTHORITY",
+        "WAYLAND_DISPLAY",
+        "XDG_RUNTIME_DIR",
+        "QT_X11_NO_MITSHM",
+        "LIBGL_ALWAYS_SOFTWARE",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "TZ",
+    }
+)
 
 # Where the service listens unless told otherwise. Not a request parameter: what
 # answers inside a container is part of the container's identity, and a request
@@ -356,19 +386,29 @@ def handle_execute_command(
     output_dirs=None,
     allowed=None,
     lock=None,
+    env=None,
 ):
     """Run one command, with whatever files the caller sent, and answer with what it produced.
 
     ``lock`` is ``{"path": ..., "exclusive": bool}``: a file under the sandbox
-    root held around the command (see `_held`).
+    root held around the command (see `_held`). ``env`` sets variables for this
+    one command, from `ENV_ALLOWED` only.
     """
+    env = env or {}
+    if not isinstance(env, dict):
+        raise ExecuteError(-32602, "env must be an object")
+    refused = sorted(key for key in env if key not in ENV_ALLOWED)
+    if refused:
+        raise ExecuteError(
+            -32602, "env may not set %s; it may set: %s" % (", ".join(refused), ", ".join(sorted(ENV_ALLOWED)))
+        )
     if lock is not None:
         _lock_path(lock)
     with _held(lock):
-        return _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_dirs, allowed)
+        return _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_dirs, allowed, env)
 
 
-def _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_dirs, allowed):
+def _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_dirs, allowed, env):
     input_files = input_files or {}
     output_files = list(output_files or [])
     input_dirs = input_dirs or {}
@@ -451,6 +491,10 @@ def _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_
                 cwd = exchange
 
         stdin_bytes = base64.b64decode(stdin) if stdin else None
+        environment = None
+        if env:
+            environment = dict(os.environ)
+            environment.update({str(key): str(value) for key, value in env.items()})
         try:
             process = subprocess.Popen(
                 [executable] + command[1:],
@@ -458,6 +502,7 @@ def _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=cwd,
+                env=environment,
             )
         except OSError as e:
             raise ExecuteError(-32000, "Execution error: %s" % e)
@@ -500,12 +545,20 @@ def _authorized(header, token):
     return hmac.compare_digest((header or "").encode("utf-8"), expected.encode("utf-8"))
 
 
+def handle_which(names, allowed=None):
+    """Where each allowed name resolves here, or None: for a caller choosing between several."""
+    if not isinstance(names, list) or not all(isinstance(name, str) for name in names):
+        raise ExecuteError(-32602, "names must be a list of strings")
+    allowed = ALLOWED_COMMANDS if allowed is None else allowed
+    return {name: (resolve_command(name, allowed) if name in allowed else None) for name in names}
+
+
 def dispatch(payload):
     """One JSON-RPC request object, answered as one JSON-RPC response object."""
     request_id = payload.get("id") if isinstance(payload, dict) else None
     if not isinstance(payload, dict) or payload.get("method") is None:
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32600, "message": "Invalid request"}}
-    if payload["method"] != "execute":
+    if payload["method"] not in ("execute", "which"):
         return {
             "jsonrpc": "2.0",
             "id": request_id,
@@ -514,9 +567,12 @@ def dispatch(payload):
     params = payload.get("params") or {}
     if not isinstance(params, dict):
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "Params must be an object"}}
-    known = ("command", "stdin", "cwd", "input_files", "output_files", "input_dirs", "output_dirs", "lock")
+    known = ("command", "stdin", "cwd", "input_files", "output_files", "input_dirs", "output_dirs", "lock", "env")
     try:
-        result = handle_execute_command(**{key: params[key] for key in known if key in params})
+        if payload["method"] == "which":
+            result = handle_which(params.get("names"))
+        else:
+            result = handle_execute_command(**{key: params[key] for key in known if key in params})
     except ExecuteError as e:
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": e.code, "message": e.message}}
     except Exception as e:  # pragma: no cover - reported, not crashed on

@@ -44,7 +44,10 @@ Objects
   the workspace imports the package that declares the engine. This runs
   on your machine rather than on the daemon: the extension runs ``pc open`` (see :doc:`cli`), which starts an
   application installed here, or runs one in a container when there is none and ``partcad.open.useDocker``
-  is on, which it is by default. Blender reads meshes, so an object that is not one is converted on the way.
+  is on, which it is by default. An object in a format the application does not open is converted on the
+  way -- a script to STEP for FreeCAD, a solid to STL for Blender. The editor then waits, behind a banner
+  saying so and with every PartCAD command paused, until the application is closed; what was saved in it is
+  brought back into the object's own file, converted back when it had been converted.
 
 The Explorer also lists the ``software`` a package ships. Selecting one shows its path and its ``fileHash``
 in the Inspector and leaves the ``PartCAD Viewer`` as it is: software is a file, not geometry, so there is
@@ -558,8 +561,9 @@ machine, shared by a team -- is what ``useDockerRemote`` is for:
 then. Every file a command reads is sent to the container with the command, and
 every file it writes is sent back with the answer; a sandbox's environment lives
 in a Docker volume on the daemon's side, built once and reused. It applies to
-the containers PartCAD starts for a package -- the ``docker`` sandbox, KiCad
-imports and a plugin's ``container:`` -- and off by default, because sending a package
+every container PartCAD starts -- the ``docker`` sandbox, KiCad imports, a
+plugin's ``container:`` and an application ``pc open`` runs in a container
+alike -- and off by default, because sending a package
 with every command costs time that a shared filesystem does not. It needs no
 service in between: that is the difference from the ``remote`` sandbox below,
 which reaches containers through ``partcad-service-remote-docker`` and never

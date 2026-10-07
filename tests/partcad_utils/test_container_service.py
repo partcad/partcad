@@ -602,3 +602,73 @@ def test_paths_on_two_drives_are_not_one_inside_the_other(monkeypatch):
     assert service._under("C:\\\\sandbox", "D:\\\\x.lock") is False
     with pytest.raises(service.ExecuteError):
         service._lock_path({"path": "/pc-sandbox/v-env-3.11.lock"})
+
+
+# A command's own environment                                                  #
+# --------------------------------------------------------------------------- #
+
+
+def test_a_command_gets_the_display_it_was_sent(allowed):
+    """The display a window opens on is the user's now, not the one the container was made on."""
+    result = service.handle_execute_command(
+        ["python", "-c", "import os; print(os.environ['DISPLAY'])"], env={"DISPLAY": ":7"}, allowed=allowed
+    )
+    assert unb64(result["stdout"]).strip() == b":7"
+
+
+@pytest.mark.parametrize("name", ["LD_PRELOAD", "PYTHONPATH", "PATH", "PC_CONTAINER_TOKEN"])
+def test_a_variable_that_could_get_round_the_allowlist_is_refused(allowed, name):
+    with pytest.raises(service.ExecuteError, match=name):
+        service.handle_execute_command(["python", "-c", "1"], env={name: "x"}, allowed=allowed)
+
+
+def test_without_env_the_container_environment_is_inherited(allowed, monkeypatch):
+    monkeypatch.setenv("PC_SERVICE_TEST", "inherited")
+    result = service.handle_execute_command(
+        ["python", "-c", "import os; print(os.environ['PC_SERVICE_TEST'])"], allowed=allowed
+    )
+    assert unb64(result["stdout"]).strip() == b"inherited"
+
+
+def test_env_travels_over_http(http):
+    url = http()
+    body = _call(
+        url,
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "execute",
+            "params": {"command": ["python", "-c", "import os; print(os.environ['LANG'])"], "env": {"LANG": "C.UTF-8"}},
+        },
+    ).json()
+    assert unb64(body["result"]["stdout"]).strip() == b"C.UTF-8"
+
+
+# --------------------------------------------------------------------------- #
+# Which of several names an image has                                          #
+# --------------------------------------------------------------------------- #
+
+
+def test_which_answers_for_each_allowed_name(tmp_path, monkeypatch):
+    if os.name == "nt":
+        pytest.skip("a shebang script is not an executable on Windows")
+    tool = tmp_path / "bin" / "freecad"
+    tool.parent.mkdir()
+    tool.write_text("#!/bin/sh\n")
+    tool.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tool.parent))
+    answer = service.handle_which(
+        ["freecad", "FreeCAD", "rm"], allowed={"freecad": None, "FreeCAD": None, "python": sys.executable}
+    )
+    assert answer == {"freecad": str(tool), "FreeCAD": None, "rm": None}
+
+
+def test_which_runs_nothing_and_reveals_nothing_unallowed(allowed):
+    """A name off the allowlist is None whatever the image has: `which` is not a way to look around."""
+    assert service.handle_which(["sh"], allowed=allowed) == {"sh": None}
+
+
+def test_which_over_http(http):
+    url = http()
+    body = _call(url, {"jsonrpc": "2.0", "id": 2, "method": "which", "params": {"names": ["python"]}}).json()
+    assert body["result"] == {"python": sys.executable}

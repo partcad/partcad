@@ -3,7 +3,14 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""`pc open` -- open a file in a third-party application.
+"""`pc open` -- open a file in a third-party application, and bring back what was done in it.
+
+It waits. The application is an `open:` plugin that lists the formats it opens;
+an object in one of them is handed over as it is, any other is converted to the
+first of them PartCAD can write, and when the application closes an edit is
+brought back -- converted back into the object's own format and written over its
+source where that source is a file PartCAD can write, and otherwise kept and its
+path printed. See `partcad_client.external`.
 
 Opening the file happens here, in the client process, and deliberately so.
 Opening a file in FreeCAD is not work the daemon can do on anyone's behalf: a
@@ -58,7 +65,12 @@ from partcad_utils.workspace import determine_root_path
 from ..service import run
 
 
-@click.command(help="Open a file in a third-party application, on this machine.")
+@click.command(
+    help="Open a file in a third-party application on this machine, wait for it to close, and bring "
+    "back what was done in it: an object the application cannot open is converted to a format it can, "
+    "and an edit to that copy is converted back over the object's source when that source is a file "
+    "PartCAD can write."
+)
 @click.option(
     "--with",
     "tool",
@@ -156,6 +168,14 @@ def cli(click_ctx, tool: str, object_type: str, use_docker: bool, docker_image: 
             if not as_json:
                 click.echo("Could not ask the daemon which applications packages declare: %s" % e, err=True)
 
+    spec = external.TOOLS.get(tool)
+    if spec is not None and spec.deprecated and not as_json:
+        click.echo(
+            "Note: the '%s' application is declared with %s; '%s' are what to declare now."
+            % (tool, ", ".join(spec.deprecated), "formats"),
+            err=True,
+        )
+
     try:
         result = external.open_file(
             path,
@@ -191,6 +211,15 @@ def cli(click_ctx, tool: str, object_type: str, use_docker: bool, docker_image: 
         return
     if result.source is not None:
         # What was actually handed over, when it is not what was asked for: the
-        # board beside a KiCad part's STEP, or the mesh made out of a solid.
+        # board beside a KiCad part's STEP, or the copy converted out of a solid.
         click.echo("Opened %s (from %s)." % (os.path.basename(result.path), os.path.basename(result.source)))
     click.echo(result.detail)
+    if not result.changed:
+        click.echo("No changes.")
+    elif result.written_back is not None:
+        click.echo("Saved your changes to %s." % result.written_back)
+    elif result.edited is not None:
+        click.echo(
+            "Your changes are in %s. %s has no file they could be written back into -- it is not a format "
+            "PartCAD can write -- so it was left as it was." % (result.edited, os.path.basename(path))
+        )

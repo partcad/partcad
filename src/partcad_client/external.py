@@ -3,69 +3,61 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Opening a file in a third-party application, on the machine the client runs on.
+"""Opening an object in a third-party application, on the machine the client runs on.
 
 This is a client's job by construction, and it is why the code sits here rather
 than behind an RPC method. A daemon can be remote: "open this in FreeCAD" sent to
 one would start a window on somebody else's desk, on a machine that may have no
 display at all -- and the file named on the command line is the client's own,
-found by a path that means nothing on the other side of the wire. So `pc open`
-never speaks to a daemon, the way `pc lint --file` and `pc upgrade` do not, and
-the VS Code extension reaches this code by running `pc open` rather than by
-reimplementing it in TypeScript.
+found by a path that means nothing on the other side of the wire. So the opening
+is done here, and the VS Code extension reaches this code by running `pc open`
+rather than by reimplementing it in TypeScript.
 
-Two ways to run a tool, tried in this order:
+**An application is an `open:` plugin.** Each entry of an `open:` section -- the
+ones PartCAD ships in `//builtin/open`, and any a package declares -- says where
+the application is installed on each operating system, what to run it as, an
+optional ``container:`` to run it in where it is not installed (the same shape a
+plugin's implementation declares), and an ordered list of the ``formats:`` it
+opens. Nothing in it is code; what is code is here, once, for every application.
 
-* **Natively**, when the machine has the application installed. Nothing is
-  containerised, nothing is downloaded, and the application sees the file at the
-  path the user typed.
-* **In a container**, when it does not, Docker is available, and the caller
-  passed ``use_docker``. One long-lived container per tool, named
-  ``partcad-<tool>`` -- a *container* name, not an image name, so a user can
-  create, inspect, customise or `docker rm` theirs, and the next `pc open` finds
-  and reuses whatever is there.
+**The formats decide what the application is handed.** An object whose own
+format is on the list is opened as it is. One that is not is converted to the
+first format on the list PartCAD can write -- a CadQuery script into STEP for
+FreeCAD, a STEP into STL for Blender -- and the application is handed that.
+Conversion is CAD work, so it is not done here: the caller passes a
+``transcode`` callback, and `pc open` implements it as the daemon's
+`adhoc.convert`. The copy is written under the workspace's own state directory,
+never beside the source.
 
-The container mounts the workspace root **at the same absolute path** it has on
-the host, along with the directory holding the workspace's daemon socket. Same
-path on both sides is what keeps the arrangement honest: the file argument, an
-error message, and anything the application writes back all name one path that
-means the same thing inside the container, on the host, and to the daemon.
+**And `pc open` waits.** It returns when the application does, so that what
+somebody did in it can be brought back: an object opened as it is was edited
+where it lives; one that was converted is converted back into its own format and
+written over its source -- when its source is a file PartCAD can write. A script,
+an alias, an extrude has no file a STEP could be written back into, so the edited
+copy is kept and its path reported instead. Nothing is written when nothing
+changed.
 
-Some applications read triangles and nothing else. Blender is the one PartCAD
-knows about: its command line takes a `.blend` to open, and any other geometry
-has to be *imported*, which only a mesh format can be. So a file that is not
-already a mesh is converted to STL first, and the application is handed that
-instead. Which types are meshes is `partcad_client.object_types`; making one out
-of a solid is CAD work, so it is not done here -- the caller passes a
-``transcode`` callback, and `pc open` implements it as the same `adhoc.convert`
-the daemon serves `pc adhoc convert` with. The converted copy is written under
-the workspace's own state directory, which is already mounted into the container
-at the path it has here, so one name means the same thing on both sides.
+Two ways to run an application, tried in this order:
 
-Some read a *scene* and only their own description of one. MuJoCo is that one:
-it reads MJCF, and a Gazebo world handed to it is not a slow way of opening a
-scene, it is a file it cannot read. What has to be decided there is a different
-question -- which description language the file is written in, rather than
-whether it holds triangles -- and it is answered by the tool's own declaration:
-an `open:` entry that names a `sceneType` also names the `sceneExtensions` it is
-stored in, so a file that already is what the application reads goes straight
-over.
-
-One that is not cannot be converted here, and the reason is worth stating
-plainly: an engine's scene format is implemented by that engine's plugin package
--- MJCF by `partcad/partcad-sim-mujoco`, SDFormat by
-`partcad/partcad-sim-gazebo`, which are also where those `open:` entries come
-from -- and a file handed to `pc open` has no package around it to reach that
-implementation through. So `_transcode_scene` refuses, and says which export
-does work. Only the mesh conversion above still runs, and only for parts.
+* **Natively**, when the machine has it installed. Nothing is containerised, and
+  the application sees the file at the path the user typed.
+* **In a container**, when it is not, Docker is available, and the caller passed
+  ``use_docker``. Started by `partcad_utils.containers`, like every container
+  PartCAD starts -- named after the application, its image and how it is set
+  up, labelled for `pc system prune`, and replaced rather than reused when it no
+  longer matches. Its home directory is a volume of its own, so the preferences
+  and add-ons somebody gave it survive the container being replaced. Files reach
+  it by mount -- the workspace at the path it has here -- or, with
+  ``useDockerRemote``, by upload: the file goes with the command and comes back
+  when the application exits.
 
 A containerised GUI needs an X server on the host, which is the one place where
 this cannot paper over the difference between platforms. On Linux the display is
-usually a socket that can simply be shared, cookie and all, and nothing has to be
-set up; on macOS and Windows -- and on Linux over a forwarded display -- it is a
-TCP connection to an X server the user has to install and allow. There is no way
-to do that for them, so when it is missing they get told which one to install and
-what to run, rather than a container that starts and silently never shows a window.
+usually a socket that can simply be shared, cookie and all; on macOS and Windows
+-- and on Linux over a forwarded display -- it is a TCP connection to an X server
+the user has to install and allow. When it is missing they are told which one to
+install and what to run, rather than given a container that silently never shows
+a window.
 """
 
 import contextlib
@@ -76,9 +68,11 @@ import os
 import platform
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
+from partcad_utils import containers
 from partcad_utils.container_image import image_name, image_tag
 from partcad_utils.workspace import determine_root_path, socket_path
 
@@ -99,16 +93,20 @@ __all__ = [
     "use_tools",
 ]
 
-# How long to wait for the `docker` commands that only ask a question. Generous
-# enough for a busy daemon, short enough that a wedged one is reported rather
-# than hanging an editor's context menu.
+# How long to wait for a question to the container runtime. Generous enough for
+# a busy daemon, short enough that a wedged one is reported rather than hanging
+# an editor.
 DOCKER_TIMEOUT = 60.0
 
-# The container's name is derived from the tool's, so `pc open --with freecad`
-# uses `partcad-freecad`. Deliberately a fixed name rather than a fresh
-# container each time: the user can prepare theirs (install add-ons, keep
-# preferences) and PartCAD will keep using it.
-CONTAINER_PREFIX = "partcad-"
+# An application that returns sooner than this, having changed nothing, most
+# likely handed the file to a copy of itself that was already running and
+# exited -- which leaves nothing here to wait for. Said, rather than reported as
+# "no changes", because the edits will happen and will not be brought back.
+HANDOFF_SECONDS = 3.0
+
+# Where an application's home directory is inside its container: a volume per
+# application, so that what somebody configured outlives the container.
+CONTAINER_HOME = "/partcad-home"
 
 
 class ExternalToolError(Exception):
@@ -154,9 +152,14 @@ def _bare_type(object_type: Optional[str]) -> Optional[str]:
     return object_type.rsplit(":", 1)[-1].lower()
 
 
+def _format_name(value: str) -> str:
+    """A format as a declaration spells it -- 'STEP', '.stl', 'kicad_pro' -- as one comparable name."""
+    return str(value).strip().lower().lstrip(".")
+
+
 @dataclass(frozen=True)
 class Tool:
-    """A third-party application PartCAD knows how to launch.
+    """A third-party application PartCAD knows how to launch: one `open:` entry.
 
     Everything platform-specific about finding one is data, so that adding the
     second tool is a table entry rather than another copy of the logic below.
@@ -164,21 +167,28 @@ class Tool:
 
     name: str
     display_name: str
-    # The image a container is created from when the machine has no local copy.
-    # Empty for an application whose declaration names none: a package may know
-    # where a tool is installed without there being a container to fall back to,
-    # and `--use-docker` says so rather than trying to create one from nothing.
+    # The image the application's container is created from when the machine
+    # has no local copy -- `container: {image: ...}` in a declaration, or the
+    # older `image:`. Empty for an application whose declaration names none: a
+    # package may know where a tool is installed without there being a
+    # container to fall back to.
     image: str = ""
+    # The interpreter PartCAD's service runs on inside that container. An image
+    # whose `python3` is not on PATH says where its is.
+    container_python: str = "python3"
+    # What the application opens, most preferred first: PartCAD types ('step',
+    # 'stl', 'mjcf') and the extensions of the application's own formats
+    # ('blend', 'kicad_pro'). An object whose format is on the list is opened as
+    # it is; one that is not is converted to the first entry PartCAD can write.
+    # Empty means the application is handed whatever it is asked to open.
+    formats: Tuple[str, ...] = ()
     # Executable names to look for, both on this machine's PATH and inside the
     # container. Ordered: the first one found wins.
     binaries: Tuple[str, ...] = ()
     # macOS application bundles, looked for under /Applications and ~/Applications.
     macos_apps: Tuple[str, ...] = ()
     # The executable inside the macOS bundle, relative to it, for an application
-    # that is handed arguments rather than a document. `open -a` is how macOS
-    # launches one and is used everywhere else, but it hands a *running* copy
-    # nothing at all -- so an application whose file arrives as an argument (see
-    # `file_args`) would silently open nothing the second time.
+    # that is handed arguments rather than a document.
     macos_executable: Optional[str] = None
     # Windows install locations, as globs relative to the directories in
     # `windows_roots`, so a versioned directory name still matches.
@@ -186,69 +196,42 @@ class Tool:
     flatpak_id: Optional[str] = None
     # Extra arguments the application needs before the file name, if any.
     args: Tuple[str, ...] = field(default_factory=tuple)
-    # The same, for one executable in particular. An application with more than
-    # one front end needs it: Gazebo's world file is `gz sim <world>` through
-    # the current command and a bare `gazebo <world>` through the old one, and
-    # which of the two is on the machine decides.
+    # The same, for one executable in particular. Gazebo's world file is
+    # `gz sim <world>` through the current command and a bare `gazebo <world>`
+    # through the old one, and which of the two is on the machine decides.
     binary_args: Dict[str, Tuple[str, ...]] = field(default_factory=dict)
     # Extensions this application actually opens, when the file it is handed is
     # not one of them and one of these sits beside it. A PartCAD `kicad` part
     # *is* the STEP file KiCad's CLI writes out of the board; the board itself --
-    # what somebody opening KiCad means -- is the project file next to it, and
-    # the tree has no other name for it.
+    # what somebody opening KiCad means -- is the project file next to it.
     companions: Tuple[str, ...] = ()
     # How the file reaches the application, when being the last argument is not
-    # it. Blender's command line takes a `.blend` to open and imports anything
-    # else through a line of Python, which is a fact about Blender and lives
-    # with the rest of them -- in its declaration, as templates: `{path}` is
-    # substituted with the file name and `{path_repr}` with it quoted as a
-    # Python string, for a template that embeds the name in code.
-    #
-    # Templates rather than a callable because this table is read out of
-    # `open:` declarations now, and a package that teaches PartCAD an
-    # application cannot ship a Python function into a frozen client.
+    # it, as templates: `{path}` is the file name. Blender imports anything but
+    # its own `.blend` through a line of Python, and reads the name from after
+    # `--` on its command line -- so the name is still an argument of its own,
+    # which is what lets it be sent to a container on another machine.
+    # `{path_repr}`, the name quoted inside another argument, still works where
+    # the file is shared, and cannot be sent.
     file_args: Tuple[str, ...] = ()
-    # The format a file that is not already a mesh is converted to before this
-    # application sees it, for an application that reads meshes and nothing
-    # else. None -- every other tool in the table -- means the file is handed
-    # over as it is, whatever it holds.
-    mesh_via: Optional[str] = None
-    # Extensions this application opens whatever they contain, because they are
-    # its own: a `.blend` is not a mesh and must not be converted into one.
-    own_formats: Tuple[str, ...] = ()
-    # The mesh formats this application imports, for one that reads meshes only.
-    # A second question from `mesh_via`, and a different one: PartCAD's tables
-    # say whether a file holds triangles, and this says whether *this*
-    # application can read the file that holds them. 3MF is the case that makes
-    # it two questions -- it is a mesh, and Blender ships no importer for it, so
-    # it takes the STL route like a solid does.
-    imports: Tuple[str, ...] = ()
-    # The PartCAD *scene* type this application reads, for one that reads a
-    # description of an arrangement rather than geometry. MuJoCo is the one
-    # PartCAD knows about: it reads MJCF and no other model format, so a Gazebo
-    # world it is pointed at is written out as MJCF first.
-    #
-    # Deliberately a separate field from `mesh_via` rather than a generalization
-    # of it, because the two ask different questions of the file. `mesh_via`
-    # asks whether it holds triangles, which is a property of what is in it;
-    # this asks which description language it is written in, which is a property
-    # of the file itself. One tool sets one of the two.
+    # The PartCAD *scene* type this application reads, and the extensions a file
+    # of it is stored in -- from the older `sceneType`/`sceneExtensions`, which
+    # are also how a format two engines store under one extension (MJCF and
+    # SDFormat both in `.xml`) is told apart by its declared type.
     scene_type: Optional[str] = None
-    # The extensions a file of `scene_type` is stored in, declared here rather
-    # than looked up.
-    #
-    # `partcad_client.object_types` knows the scene formats *PartCAD* has, and an
-    # engine's own is not one of them -- MJCF belongs to
-    # `partcad/partcad-sim-mujoco` and SDFormat to `partcad/partcad-sim-gazebo`,
-    # which is also where the `open:` entry that names it comes from. So the
-    # declaration carries the answer with it: the package that knows the format
-    # is the package that says what it is called on disk, and a client needs no
-    # table of formats it has never heard of to recognise one.
     scene_extensions: Tuple[str, ...] = ()
+    # Which of the older format fields the declaration used. They still work --
+    # a package published against an older PartCAD must not stop opening -- and
+    # `pc open` says once that `formats:` is how to say it now.
+    deprecated: Tuple[str, ...] = ()
 
     @property
-    def container_name(self) -> str:
-        return CONTAINER_PREFIX + self.name
+    def role(self) -> str:
+        """What its container is for, in the container's name: ``open-<tool>``."""
+        return "open-" + self.name
+
+    @property
+    def format_set(self) -> frozenset:
+        return frozenset(_format_name(f) for f in self.formats)
 
     def launch_args(self, executable: str) -> Tuple[str, ...]:
         """The arguments that go before the file name for this executable.
@@ -265,92 +248,88 @@ class Tool:
     def file_arguments(self, path: str) -> Tuple[str, ...]:
         """The arguments that name ``path`` to this application.
 
-        The path itself for every application that takes a file name, which is
-        all of them but Blender; see `file_args`. An application's own file is
+        The path itself for every application that takes a file name; see
+        `file_args` for the one that does not. An application's own file is
         named that way too even when it declares templates: what those are for
         is the *import* of something that is not one, and a `.blend` is opened
         rather than imported.
         """
         if not self.file_args:
             return (path,)
-        if os.path.splitext(path)[1].lower() in self.own_formats:
+        if _extension_of(path).lstrip(".") in self._own_extensions():
             return (path,)
         return tuple(template.replace("{path_repr}", repr(path)).replace("{path}", path) for template in self.file_args)
 
-    def needs_mesh(self, path: str, object_type: Optional[str] = None) -> bool:
-        """Whether ``path`` has to be converted before this application sees it.
+    def embeds_path(self) -> bool:
+        """Whether the file name is quoted *inside* an argument, where only a shared file can be named."""
+        return any("{path_repr}" in template for template in self.file_args)
 
-        False for every application that takes what it is given, and false for
-        one that reads meshes when the file already is a mesh it can read -- or
-        is the application's own project format, which is not a mesh and is not
-        to be converted into one. A mesh in a format it has no importer for is
-        converted like a solid: the point is a file the application opens.
-        """
-        if self.mesh_via is None:
-            return False
-        extension = os.path.splitext(path)[1].lower()
-        if extension in self.own_formats:
-            return False
-        if object_types.is_mesh(path, object_type) is not True:
-            return True
-        # A mesh this application has no importer for is no better off than a
-        # solid: it is converted too, to the one format that always works.
-        return extension not in self.imports
+    def _own_extensions(self) -> frozenset:
+        """The formats on the list that are not PartCAD's: the application's own, opened rather than imported."""
+        known = set(object_types.PART_TYPE_IS_MESH) | set(object_types.SCENE_TYPE_EXTENSION)
+        own = {f for f in self.format_set if f not in known and f not in object_types.EXTENSION_ALIASES}
+        # The mesh extensions an importer reads are not the application's own,
+        # whatever PartCAD calls them: 'ply', 'fbx', 'glb' are imported.
+        return frozenset(f for f in own if f not in _IMPORTED_EXTENSIONS)
 
-    def reads_scene(self, path: str, object_type: Optional[str] = None) -> bool:
-        """Whether ``path`` already is the scene description this application reads.
+    def formats_of(self, path: str, object_type: Optional[str] = None) -> List[str]:
+        """Every name the format of ``path`` goes by, as this application's list would spell it.
 
-        Asked of the tool's own declaration first, because the format is very
-        likely the tool's package's own and not one PartCAD has a table for: a
-        declared type that names it settles it, and so does one of the
-        extensions the declaration lists.
-
-        The declared type is compared by its last segment, so that the `mjcf` a
-        plugin's `open:` entry names and the `sim-mujoco:mjcf` the object
-        declaring it is written as are the one format they are.
-
-        A declared type that names *another* format ends it there, and does not
-        fall through to the extension: two scene formats can share one, and a
-        Gazebo world in a `.xml` is exactly the file this application cannot
-        read. What may fall through is a declared type that says nothing about
-        the file -- an `alias`, a part type, a type this release has never heard
-        of -- which is how `readable_scene_type` treats one too.
+        A declared type that names a *scene format* decides it alone and the
+        extension is not consulted: two scene formats can share one -- a Gazebo
+        world and a MuJoCo model are both '.xml' -- and the declaration is the
+        only thing that tells them apart. Any other declared type, or none,
+        defers to the file: its extension, the PartCAD type that extension (or
+        the declaration) makes it, and this application's scene type where the
+        extension is one it stores that in.
         """
         if object_type:
-            if _bare_type(object_type) == _bare_type(self.scene_type):
-                return True
-            # Whether the declaration named a *format* at all. A qualified name
-            # did by construction: some package declared it. A bare one did when
-            # PartCAD itself has it, which today means 'assy'.
-            if ":" in object_type or object_type.lower() in object_types.SCENE_TYPE_EXTENSION:
-                return False
-        if _extension_of(path) in self.scene_extensions:
+            bare = _bare_type(object_type)
+            if ":" in object_type or bare in object_types.SCENE_TYPE_EXTENSION:
+                return [bare]
+        found = []
+        extension = _extension_of(path).lstrip(".")
+        if extension:
+            found.append(extension)
+            alias = object_types.EXTENSION_ALIASES.get(extension)
+            if alias:
+                found.append(alias)
+        part = object_types.readable_type(path, object_type)
+        if part:
+            found.append(part)
+        scene = object_types.readable_scene_type(path, object_type)
+        if scene:
+            found.append(scene)
+        if self.scene_type and extension and "." + extension in self.scene_extensions:
+            found.append(_bare_type(self.scene_type))
+        return list(dict.fromkeys(_format_name(f) for f in found))
+
+    def opens(self, path: str, object_type: Optional[str] = None) -> bool:
+        """Whether ``path`` can be handed to this application as it is."""
+        if not self.formats:
             return True
-        # A format PartCAD itself has -- today that is 'assy', which no tool
-        # reads, but a table entry is still the right answer when there is one.
-        return object_types.readable_scene_type(path, object_type) == self.scene_type
+        return any(name in self.format_set for name in self.formats_of(path, object_type))
 
-    def needs_scene(self, path: str, object_type: Optional[str] = None) -> bool:
-        """Whether ``path`` has to be converted into this application's own format.
+    def reads_scenes(self) -> bool:
+        """Whether this application reads a description of an arrangement rather than geometry.
 
-        False for every application that takes what it is given, and false for
-        one that reads a scene description when the file already is one it
-        reads. A file that is no scene at all comes back True and is refused
-        with the reason by `_transcode_scene`, which is better than handing a
-        simulator a STEP file and letting it say something of its own.
+        Said by its `sceneType`, not guessed from its formats: KiCad's are all
+        its own and it reads no scene.
         """
-        if self.scene_type is None:
-            return False
-        return not self.reads_scene(path, object_type)
+        return bool(self.scene_type)
+
+    def conversion_target(self) -> Optional[str]:
+        """The first format on the list PartCAD can write a part into, or None."""
+        for name in self.formats:
+            if _format_name(name) in object_types.WRITABLE_PART_TYPES:
+                return _format_name(name)
+        return None
 
     def file_for(self, path: str) -> str:
         """The file this application is really given, from the one it was handed.
 
         Unchanged unless the tool declares `companions` and the path is not one
-        of them: then the first companion that exists beside it wins. Nothing is
-        created and nothing is converted -- `pc open` renders nothing -- so a
-        file with no companion is handed over as it is and the application says
-        what it thinks of it.
+        of them: then the first companion that exists beside it wins.
         """
         if not self.companions:
             return path
@@ -364,6 +343,11 @@ class Tool:
         return path
 
 
+# Mesh extensions applications import that PartCAD does not write: they count as
+# formats the application reads, never as its own project files.
+_IMPORTED_EXTENSIONS = frozenset({"ply", "fbx", "x3d", "glb", "dae", "abc", "usd", "usdz"})
+
+
 # Where the built-in declarations live inside the wheel. Found without importing
 # `partcad`: this module is a client's and has to stay cheap to import, and the
 # file is data -- the same reason `object_types` holds a copy of PartCAD's tables
@@ -374,7 +358,7 @@ BUILTIN_OPEN_PACKAGE = ("partcad", "builtin", "open", "partcad.yaml")
 # every other declaration PartCAD reads, and snake_case here.
 DECLARATION_FIELDS = {
     "displayName": "display_name",
-    "image": "image",
+    "formats": "formats",
     "binaries": "binaries",
     "args": "args",
     "binaryArgs": "binary_args",
@@ -384,9 +368,6 @@ DECLARATION_FIELDS = {
     "flatpakId": "flatpak_id",
     "companions": "companions",
     "fileArgs": "file_args",
-    "ownFormats": "own_formats",
-    "imports": "imports",
-    "meshVia": "mesh_via",
     "sceneType": "scene_type",
     "sceneExtensions": "scene_extensions",
 }
@@ -394,18 +375,30 @@ DECLARATION_FIELDS = {
 # The fields that are a sequence, so a declaration's list becomes the tuple the
 # frozen dataclass wants.
 _TUPLE_FIELDS = frozenset(
-    {
-        "binaries",
-        "args",
-        "macos_apps",
-        "windows_globs",
-        "companions",
-        "file_args",
-        "own_formats",
-        "imports",
-        "scene_extensions",
-    }
+    {"formats", "binaries", "args", "macos_apps", "windows_globs", "companions", "file_args", "scene_extensions"}
 )
+
+# The fields a declaration used to say what an application opens with, before
+# `formats:`. Read into `formats` when a declaration names no `formats` of its
+# own, in an order that keeps what each meant: an application's own files first,
+# then the format a solid was converted to, then the mesh formats it imports,
+# then the scene type it reads. `sceneType` is not deprecated -- it is still what
+# says an application reads scenes -- the other three are.
+LEGACY_FORMAT_FIELDS = ("ownFormats", "meshVia", "imports", "sceneType")
+DEPRECATED_FIELDS = ("ownFormats", "meshVia", "imports")
+
+
+def _image_of(value: str) -> str:
+    """An image reference as a declaration wrote it, pinned to this release where it says so.
+
+    `{version}` pins an image PartCAD publishes to this release without the
+    number being written down twice. Through `image_tag()`, not the bare
+    version: a CI run that rebuilt the images has to reach *those*. And through
+    `image_name()` for the owner, which is the same redirection one segment to
+    the left; it only ever rewrites images in PartCAD's own namespace, so a
+    tool a user declared keeps the image it named.
+    """
+    return image_name(str(value).replace("{version}", image_tag(__version__)))
 
 
 def tool_from_declaration(name: str, config: dict) -> Tool:
@@ -424,27 +417,33 @@ def tool_from_declaration(name: str, config: dict) -> Tool:
             value = tuple(value) if isinstance(value, (list, tuple)) else (value,)
         elif field_name == "binary_args":
             value = {key: tuple(args) for key, args in (value or {}).items()}
-        elif field_name == "image":
-            # `{version}` pins an image PartCAD publishes to this release
-            # without the number being written down twice. Through
-            # `image_tag()`, not the bare version: a CI run that rebuilt the
-            # images has to reach *those* rather than the ones the last release
-            # published, and that is the one variable which says so.
-            #
-            # And `image_name()` for the owner, which is the same redirection
-            # one segment to the left. `container-kicad.yml` publishes
-            # `<this repository>-container-kicad`, so in a fork the image is the
-            # fork's -- and `partcad.part_factory_kicad` already follows it. Two
-            # readers of one image, one following the owner and one not, is the
-            # asymmetry that leaves `pc open --with kicad` reaching for a tag
-            # nobody published. Raised by CodeRabbit on #646.
-            #
-            # `image_name()` only ever rewrites images in PartCAD's own
-            # namespace, which is what makes this safe here: this function also
-            # builds tools a *user* declared, and their image is not CI's to
-            # move.
-            value = image_name(str(value).replace("{version}", image_tag(__version__)))
         values[field_name] = value
+
+    # The container, the way a plugin's implementation declares one: a mapping
+    # with an image, or the image alone. `image:` at the top is how an entry
+    # said it before there was a `container:`.
+    container = config.get("container")
+    if isinstance(container, str):
+        container = {"image": container}
+    if isinstance(container, dict) and container.get("image"):
+        values["image"] = _image_of(container["image"])
+        if container.get("python"):
+            values["container_python"] = str(container["python"])
+    elif config.get("image"):
+        values["image"] = _image_of(config["image"])
+
+    if "formats" not in values:
+        legacy = []
+        used = []
+        for key in LEGACY_FORMAT_FIELDS:
+            value = config.get(key)
+            if not value:
+                continue
+            used.append(key)
+            legacy += list(value) if isinstance(value, (list, tuple)) else [value]
+        if legacy:
+            values["formats"] = tuple(dict.fromkeys(_format_name(v) for v in legacy))
+            values["deprecated"] = tuple(key for key in used if key in DEPRECATED_FIELDS)
     return Tool(**values)
 
 
@@ -536,7 +535,7 @@ def tool_names() -> List[str]:
 
 @dataclass
 class OpenResult:
-    """What was opened, and how -- so a caller can say so rather than guess."""
+    """What was opened, how, and what became of what was done in it."""
 
     tool: str
     # "native" or "docker": which of the two routes below actually ran.
@@ -545,10 +544,17 @@ class OpenResult:
     command: List[str]
     detail: str
     # The file the caller named, when the application was given another one --
-    # the board beside a KiCad part's STEP, the mesh made out of a solid. None
-    # when it was handed exactly what it was asked about, which is the usual
-    # case; a caller that reports "opened <path>" then needs no special case.
+    # the board beside a KiCad part's STEP, the copy converted out of a solid.
     source: Optional[str] = None
+    # Whether the file the application was given is different now.
+    changed: bool = False
+    # Where the edit went, when it went where the object lives: the source
+    # itself, edited in place or converted back into its own format.
+    written_back: Optional[str] = None
+    # Where the edit is, when it could not go there: a converted copy of an
+    # object whose source is a script, an alias, an extrude -- nothing a STEP
+    # could be written back into.
+    edited: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
@@ -559,7 +565,33 @@ class OpenResult:
             "source": self.source,
             "command": list(self.command),
             "detail": self.detail,
+            "changed": self.changed,
+            "writtenBack": self.written_back,
+            "edited": self.edited,
         }
+
+
+def _digest(path: str) -> Optional[str]:
+    """What a file holds, as a digest -- None when it is not there."""
+    try:
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def _tree_digest(directory: str) -> Optional[str]:
+    """What a directory holds, as one digest: names and contents, nothing about times."""
+    if not os.path.isdir(directory):
+        return None
+    digest = hashlib.sha256()
+    for top, dirs, files in os.walk(directory):
+        dirs[:] = sorted(d for d in dirs if d not in (".git", "__pycache__"))
+        for name in sorted(files):
+            path = os.path.join(top, name)
+            digest.update(os.path.relpath(path, directory).encode("utf-8"))
+            digest.update((_digest(path) or "").encode("utf-8"))
+    return digest.hexdigest()
 
 
 def open_file(
@@ -570,29 +602,26 @@ def open_file(
     log: Optional[Callable[[str], None]] = None,
     object_type: Optional[str] = None,
     transcode: Optional[Callable[..., None]] = None,
+    mode: Optional[str] = None,
 ) -> OpenResult:
-    """Open ``path`` in ``tool``, natively if it is installed, else in a container.
+    """Open ``path`` in ``tool``, wait for it to close, and bring back what was done in it.
 
     ``use_docker`` is the caller's permission to fall back to a container, not a
     demand for one: a machine with the application installed uses it either way.
-    Without that permission, and without a local installation, this raises rather
-    than pulling an image nobody asked for.
 
     ``object_type`` is the PartCAD type the object was declared with, when the
-    caller knows it -- the VS Code tree does, and a file name does not always say
-    (a '.py' is three different script types). It decides nothing on its own; it
-    is one of the two things `object_types.is_mesh` reads.
+    caller knows it -- the VS Code tree does, and a file name does not always
+    say (a '.py' is three different script types).
 
-    ``transcode`` is how a file this application cannot read becomes one it can:
-    a mesh for an application that reads nothing else, an MJCF model for one that
-    reads only its own scene description. Called as
-    ``transcode(source, source_type, target, target_type, kind)`` -- where
-    ``kind`` is "part" or "scene" -- and expected to leave ``target`` on disk. It
-    is a callback rather than something done here because both conversions are
-    CAD work: they belong to the daemon, and this module is the half that must
-    keep running without one. A caller that passes none can still open a mesh in
-    Blender and an MJCF model in MuJoCo; anything needing a conversion is refused
-    with the reason.
+    ``transcode`` is how a file this application cannot open becomes one it can,
+    and how an edit to that copy goes back into the object's own format. Called
+    as ``transcode(source, source_type, target, target_type, kind)`` -- ``kind``
+    is "part" or "scene" -- and expected to leave ``target`` on disk. It is CAD
+    work, so it belongs to the daemon; a caller that passes none can still open
+    anything the application reads as it is.
+
+    ``mode`` is the transfer mode for a container (see
+    `partcad_utils.containers`); the configuration's when it is None.
     """
     say = log or (lambda _message: None)
 
@@ -612,34 +641,82 @@ def open_file(
     # directory, and asking which workspace *it* is in would answer with the
     # state directory itself.
     root = _workspace_for(resolved)
+    kind = "scene" if spec.reads_scenes() else "part"
+    target_type = None
     opened = resolved
-    if spec.needs_mesh(resolved, object_type):
-        opened = _transcode(spec, resolved, root, object_type, transcode, say)
-    elif spec.needs_scene(resolved, object_type):
-        opened = _transcode_scene(spec, resolved, root, object_type, transcode, say)
+    if not spec.opens(resolved, object_type):
+        if kind == "scene":
+            opened, target_type = _transcode_scene(spec, resolved, root, object_type, transcode, say)
+        else:
+            opened, target_type = _transcode(spec, resolved, root, object_type, transcode, say)
+
+    # The whole directory where the application opens a project rather than a
+    # file: KiCad saves the board beside the project it was handed.
+    watched = os.path.dirname(opened) if spec.companions else None
+    before = _tree_digest(watched) if watched else _digest(opened)
 
     native = native_command(spec)
     if native is not None:
         command = list(native) + list(spec.launch_args(native[-1])) + list(spec.file_arguments(opened))
-        say("Opening %s in %s..." % (opened, spec.display_name))
-        _spawn(command)
-        return OpenResult(
-            tool=spec.name,
-            method="native",
-            path=opened,
-            source=None if opened == named else named,
-            command=command,
-            detail="%s is installed on this machine." % spec.display_name,
-        )
+        say("Opening %s in %s. Close %s to continue." % (opened, spec.display_name, spec.display_name))
+        started = time.monotonic()
+        _launch(command)
+        elapsed = time.monotonic() - started
+        method, detail = "native", "%s is installed on this machine." % spec.display_name
+    else:
+        if not use_docker:
+            raise ExternalToolError(
+                "%s was not found on this machine.\n"
+                "Install it, or let PartCAD run it in a container: pass --use-docker to `pc open` "
+                "(the 'partcad.open.useDocker' setting in the VS Code extension)." % spec.display_name
+            )
+        started = time.monotonic()
+        command, detail = _open_in_container(spec, opened, root, image, say, mode)
+        elapsed = time.monotonic() - started
+        method = "docker"
 
-    if not use_docker:
-        raise ExternalToolError(
-            "%s was not found on this machine.\n"
-            "Install it, or let PartCAD run it in a container: pass --use-docker to `pc open` "
-            "(the 'partcad.open.useDocker' setting in the VS Code extension)." % spec.display_name
-        )
+    after = _tree_digest(watched) if watched else _digest(opened)
+    result = OpenResult(
+        tool=spec.name,
+        method=method,
+        path=opened,
+        source=None if opened == named else named,
+        command=command,
+        detail=detail,
+        changed=after != before,
+    )
+    if not result.changed:
+        if method == "native" and elapsed < HANDOFF_SECONDS:
+            result.detail += (
+                "\n%s returned at once. If it handed the file to a copy of itself that was already "
+                "running, close that copy too -- PartCAD cannot see edits made there." % spec.display_name
+            )
+        return result
 
-    return _open_in_container(spec, opened, root, image, say, source=None if opened == named else named)
+    if target_type is None:
+        # Opened as it is: the edit is already where the object lives.
+        result.written_back = watched or opened
+        return result
+    _bring_back(spec, result, resolved, opened, target_type, object_type, kind, transcode, say)
+    return result
+
+
+def _bring_back(spec, result, source, edited, edited_type, object_type, kind, transcode, say) -> None:
+    """Convert an edited copy back into the object's own format, over its source -- where there is one."""
+    original_type = object_types.readable_type(source, object_type) if kind == "part" else None
+    if kind != "part" or original_type not in object_types.WRITABLE_PART_TYPES or transcode is None:
+        # A script, an alias, an extrude: nothing a converted file can be
+        # written back into. The edit is kept where it was made and said so.
+        result.edited = edited
+        return
+    say("Writing your changes back into %s..." % source)
+    try:
+        transcode(edited, edited_type, source, original_type, kind)
+    except Exception as e:
+        result.edited = edited
+        result.detail += "\nYour changes are in %s; writing them back into %s failed: %s" % (edited, source, e)
+        return
+    result.written_back = source
 
 
 # ---------------------------------------------------------------------------
@@ -651,21 +728,21 @@ def transcode_path(root: str, source: str, output_type: str) -> str:
     """Where the converted copy of ``source`` goes.
 
     Under the workspace's own directory on this machine -- the one that holds
-    its daemon socket -- rather than beside the file. Two reasons, and both are
-    the reason it is not a temporary directory either:
-
-    * nothing PartCAD generates belongs in the user's source tree, where it
-      would turn up in `git status` after opening a part; and
-    * that directory is mounted into the container, at the path it has here, so
-      the converted file has one name that means the same thing on both sides.
+    its daemon socket -- rather than beside the file, so nothing PartCAD
+    generates turns up in `git status`, and so that it is inside what a
+    container is given.
 
     The name carries a digest of the source path, so two parts called `cube` in
-    different packages do not overwrite each other's mesh, and is otherwise
+    different packages do not overwrite each other's copy, and is otherwise
     stable, so opening the same part twice reuses the same file.
     """
     digest = hashlib.sha256(os.path.realpath(source).encode("utf-8")).hexdigest()[:16]
     stem = os.path.splitext(os.path.basename(source))[0]
     return os.path.join(_state_dir(root), "open", "%s-%s.%s" % (stem, digest, output_type))
+
+
+def _formats_named(spec: Tool) -> str:
+    return ", ".join(f.upper() for f in spec.formats)
 
 
 def _transcode(
@@ -675,39 +752,43 @@ def _transcode(
     object_type: Optional[str],
     transcode: Optional[Callable[..., None]],
     say: Callable[[str], None],
-) -> str:
-    """Convert ``source`` to the mesh format ``spec`` reads, and return that file."""
+) -> Tuple[str, str]:
+    """Convert ``source`` to the first format ``spec`` opens that PartCAD writes: (file, its type)."""
     source_type = object_types.readable_type(source, object_type)
     reason = object_types.PACKAGE_ONLY_TYPES.get((source_type or "").lower())
     if reason is not None:
         raise ExternalToolError(
             "%s cannot open %s: %s, so it only means anything inside a package and there is "
             "nothing here to convert.\n"
-            "Export the object to a mesh first, and open that: pc export -t stl -O <file> <object>"
-            % (spec.display_name, source, reason)
+            "Export the object to a format %s opens first, and open that: pc export -t %s -O <file> <object>"
+            % (spec.display_name, source, reason, spec.display_name, spec.conversion_target() or "<type>")
+        )
+    target = spec.conversion_target()
+    if target is None:
+        raise ExternalToolError(
+            "%s opens %s, and %s is none of them -- nor anything PartCAD can convert into one of them."
+            % (spec.display_name, _formats_named(spec), source)
         )
     if source_type is None:
         candidates = object_types.types_of_extension(os.path.splitext(source)[1])
         raise ExternalToolError(
-            "%s reads meshes, and PartCAD cannot tell from its name what %s holds%s.\n"
+            "%s opens %s, and PartCAD cannot tell from its name what %s holds%s.\n"
             "Say so with --type ('pc open --type ...'); the VS Code extension passes the "
             "declared type of the object you clicked."
             % (
                 spec.display_name,
+                _formats_named(spec),
                 source,
                 (" (it could be: %s)" % ", ".join(candidates)) if candidates else "",
             )
         )
     if transcode is None:
-        # A caller inside `pc open` always passes one. Anything else reaching
-        # here is a caller that cannot convert, and saying so beats opening an
-        # application on a file it will refuse.
         raise ExternalToolError(
-            "%s reads meshes, and %s is not one. Converting it needs the PartCAD daemon; "
-            "run `pc open` rather than calling this directly." % (spec.display_name, source)
+            "%s opens %s, and %s is not one. Converting it needs the PartCAD daemon; "
+            "run `pc open` rather than calling this directly." % (spec.display_name, _formats_named(spec), source)
         )
-
-    return _produce(spec, source, source_type, root, spec.mesh_via, spec.mesh_via, "part", transcode, say)
+    extension = object_types.PART_TYPE_EXTENSION.get(target, target)
+    return _produce(spec, source, source_type, root, target, extension, "part", transcode, say), target
 
 
 def _transcode_scene(
@@ -717,8 +798,8 @@ def _transcode_scene(
     object_type: Optional[str],
     transcode: Optional[Callable[..., None]],
     say: Callable[[str], None],
-) -> str:
-    """Convert ``source`` into the scene description ``spec`` reads, and return it.
+) -> Tuple[str, str]:
+    """Convert ``source`` into the scene description ``spec`` reads: (file, its type).
 
     The counterpart of `_transcode` for an application that reads an arrangement
     rather than geometry, and it refuses far more often, for a reason that is
@@ -787,7 +868,10 @@ def _transcode_scene(
             "run `pc open` rather than calling this directly." % (spec.display_name, spec.scene_type.upper(), source)
         )
 
-    return _produce(spec, source, source_type, root, spec.scene_type, extension, "scene", transcode, say)
+    return (
+        _produce(spec, source, source_type, root, spec.scene_type, extension, "scene", transcode, say),
+        spec.scene_type,
+    )
 
 
 def _produce(
@@ -860,9 +944,11 @@ def native_command(spec: Tool) -> Optional[List[str]]:
                         return [executable]
                     continue
                 # Through `open`, not the executable inside the bundle: it is
-                # how macOS launches an application, and it reuses a running
-                # instance instead of starting a second one.
-                return ["open", "-a", bundle]
+                # how macOS launches an application. '-W' waits until it quits,
+                # which is what lets an edit be brought back, and '-n' makes it
+                # a copy of its own -- waiting on one that was already running
+                # would wait for that, not for this file.
+                return ["open", "-W", "-n", "-a", bundle]
     elif system == "Windows":  # pragma: no cover - exercised only on Windows
         for root in _windows_roots():
             for pattern in spec.windows_globs:
@@ -898,20 +984,57 @@ def _windows_roots() -> List[str]:  # pragma: no cover - exercised only on Windo
 # ---------------------------------------------------------------------------
 
 
+def _docker_available() -> bool:
+    """True when a container runtime answers -- and runs Linux containers, which every image here is."""
+    try:
+        import docker
+
+        client = docker.from_env(timeout=DOCKER_TIMEOUT)
+        client.ping()
+        return str(client.info().get("OSType", "")).lower() in ("", "linux")
+    except Exception:
+        return False
+
+
+def _host_user() -> Optional[str]:
+    """This user, for a container on Linux: what it saves into the workspace stays this user's to edit."""
+    if platform.system() == "Linux" and hasattr(os, "getuid"):
+        return "%d:%d" % (os.getuid(), os.getgid())
+    return None
+
+
+def _home_volume(spec: Tool) -> str:
+    """The volume an application's home directory is kept in, so its settings outlive its container."""
+    return "partcad-open-%s-home" % "".join(c if c.isalnum() or c in "_.-" else "-" for c in spec.name)
+
+
+def _shared_directories(root: str, path: str) -> List[str]:
+    """What a container in 'mount' mode is given: the workspace, its state directory, and wherever the file is."""
+    wanted = [root, _state_dir(root)]
+    directory = os.path.dirname(path)
+    if not any(_is_within(directory, d) for d in wanted):
+        wanted.append(directory)
+    kept = []
+    for directory in sorted(dict.fromkeys(wanted), key=len):
+        if not any(_is_within(directory, outer) for outer in kept):
+            kept.append(directory)
+    return kept
+
+
 def _open_in_container(
     spec: Tool,
     path: str,
     root: str,
     image: Optional[str],
     say: Callable[[str], None],
-    source: Optional[str] = None,
-) -> OpenResult:
-    """Run ``spec`` in its container, creating and starting one as needed.
+    mode: Optional[str] = None,
+) -> Tuple[List[str], str]:
+    """Run ``spec`` on ``path`` in its container, until it is closed: (command, what to tell the user).
 
     ``root`` is the workspace to mount, worked out by the caller from the file
     it was asked about rather than from ``path``: the two differ when ``path``
-    is a mesh PartCAD made, which lives under that workspace's state directory
-    and is not in a workspace of its own.
+    is a copy PartCAD converted, which lives under that workspace's state
+    directory and is not in a workspace of its own.
     """
     if not _docker_available():
         raise ExternalToolError(
@@ -920,71 +1043,111 @@ def _open_in_container(
             % (spec.display_name, spec.display_name)
         )
 
-    # Worked out before anything is created or started: a container that cannot
-    # show a window is not worth starting, and the message below is the whole
-    # point of the check.
-    x11_env, x11_mounts, x11_advice = _x11_forwarding(spec)
-    display = x11_env["DISPLAY"]
+    # Worked out before anything is started: a container that cannot show a
+    # window is not worth starting, and the message is the point of the check.
+    env, local_binds, extra_hosts, advice = _x11_forwarding(spec)
+    display = env["DISPLAY"]
 
-    if not (image or spec.image):
+    reference = image or spec.image
+    if not reference:
         raise ExternalToolError(
             "%s is not installed here and declares no container image, so there is nothing to run it in.\n"
             "Install it, or name an image with --docker-image." % spec.display_name
         )
 
-    state = _container_state(spec.container_name)
-    if state is None:
-        say("Creating the '%s' container from %s..." % (spec.container_name, image or spec.image))
-        _create_container(spec, image or spec.image, root, x11_mounts, x11_env)
-    else:
-        _check_container_mounts(spec, root)
-        if state != "running":
-            say("Starting the '%s' container..." % spec.container_name)
-            _start_container(spec.container_name)
-
-    binary = _container_binary(spec)
-    # The display travels on the exec rather than being left to what the
-    # container was created with: the container outlives the session, and the
-    # display the user is on now is the one the window has to come out on.
-    command = [
-        "docker",
-        "exec",
-        "--detach",
-        *_env_args(x11_env),
-        "--workdir",
-        root,
-        spec.container_name,
-        binary,
-        *spec.launch_args(binary),
-        *spec.file_arguments(path),
-    ]
-    say("Opening %s in %s (container '%s', DISPLAY=%s)..." % (path, spec.display_name, spec.container_name, display))
-    result = _run(command)
-    if result.returncode != 0:
+    mode = mode or containers.transfer_mode()
+    if mode == containers.UPLOAD and spec.embeds_path():
         raise ExternalToolError(
-            "Failed to start %s in the '%s' container: %s"
-            % (spec.display_name, spec.container_name, _message(result) or "docker exec failed")
+            "%s's declaration names the file inside another argument ('{path_repr}'), and with "
+            "'useDockerRemote' the file is sent to the container rather than shared with it -- so that "
+            "name would be one the container does not have. Its 'fileArgs' have to name the file as an "
+            "argument of its own ('{path}')." % spec.display_name
+        )
+    mounts = {}
+    user = None
+    if mode == containers.MOUNT:
+        # The workspace's state directory, made now if it is not there yet: it
+        # holds the daemon's socket, so that a PartCAD inside the container talks
+        # to this workspace's daemon -- and the mounts are fixed when the
+        # container is created, which may be long before that daemon starts.
+        with contextlib.suppress(OSError):
+            os.makedirs(_state_dir(root), exist_ok=True)
+        mounts = {d: {"bind": d, "mode": "rw"} for d in _shared_directories(root, path)}
+        user = _host_user()
+
+    endpoint_spec = containers.ContainerSpec(
+        role=spec.role,
+        image=reference,
+        mode=mode,
+        mounts=mounts,
+        volumes={_home_volume(spec): {"bind": CONTAINER_HOME, "mode": "rw"}},
+        environment={"HOME": CONTAINER_HOME},
+        allowed_commands={binary: None for binary in spec.binaries},
+        user=user,
+        service_python=spec.container_python,
+        local_binds=local_binds,
+        extra_hosts=extra_hosts,
+    )
+    say("Starting the container for %s (%s)..." % (spec.display_name, reference))
+    try:
+        endpoint = containers.acquire(endpoint_spec)
+    except containers.ContainerUnavailable as e:
+        raise ExternalToolError(str(e))
+
+    binary = _container_binary(spec, endpoint, reference)
+    command = [binary, *spec.launch_args(binary), *spec.file_arguments(path)]
+    transfers = {}
+    if mode == containers.UPLOAD:
+        # The file goes with the command and comes back when the application
+        # closes. A project application saves beside what it opened, so its
+        # whole directory travels both ways.
+        if spec.companions:
+            directory = os.path.dirname(path)
+            transfers = {"input_dirs": [directory], "output_dirs": [directory]}
+        else:
+            transfers = {"input_files": [path], "output_files": [path]}
+
+    say(
+        "Opening %s in %s (container '%s', DISPLAY=%s). Close %s to continue."
+        % (path, spec.display_name, endpoint.name, display, spec.display_name)
+    )
+    # The display travels with the command rather than being fixed when the
+    # container was made: the container outlives the session, and the display
+    # the user is on now is the one the window has to come out on.
+    code, _stdout, stderr = endpoint.run(command, cwd=os.path.dirname(path), env=env, timeout=None, **transfers)
+    if code != 0 and ("refused the command" in stderr or "returned no response" in stderr):
+        raise ExternalToolError(
+            "Failed to run %s in the '%s' container: %s" % (spec.display_name, endpoint.name, stderr)
         )
 
-    detail = "%s runs in the '%s' container, displaying on %s." % (spec.display_name, spec.container_name, display)
-    if x11_advice:
-        detail += "\n" + x11_advice
-    return OpenResult(tool=spec.name, method="docker", path=path, source=source, command=command, detail=detail)
+    detail = "%s ran in the '%s' container, displaying on %s." % (spec.display_name, endpoint.name, display)
+    if advice:
+        detail += "\n" + advice
+    return command, detail
 
 
-def _env_args(env: Dict[str, str]) -> List[str]:
-    """``--env K=V`` for each entry, in a fixed order so a command line is stable."""
-    args = []
-    for key in sorted(env):
-        args += ["--env", "%s=%s" % (key, env[key])]
-    return args
+def _container_binary(spec: Tool, endpoint, image: str) -> str:
+    """Which of the application's names its container has, or an error naming why not.
+
+    Asked of the service in the container rather than with `docker exec`: on a
+    daemon somewhere else there is nothing to exec through but the service.
+    """
+    found = endpoint.which(spec.binaries)
+    for binary in spec.binaries:
+        if found.get(binary):
+            return binary
+    raise ExternalToolError(
+        "The container for %s, from %s, has no %s executable on its PATH (looked for: %s).\n"
+        "Name an image that has one with --docker-image."
+        % (spec.display_name, image, spec.display_name, ", ".join(spec.binaries))
+    )
 
 
 def _state_dir(root: str) -> str:
     """The workspace's own directory on this machine, holding its daemon socket.
 
     Derived from `socket_path` rather than named again, because this is the
-    directory `_create_container` mounts: a converted mesh is written into it
+    directory `_open_in_container` mounts: a converted mesh is written into it
     (see `transcode_path`) precisely so that it arrives inside the container,
     and two ways of spelling one directory is how that would quietly stop being
     true.
@@ -1005,150 +1168,6 @@ def _workspace_for(path: str) -> str:
     if _is_within(path, root):
         return root
     return determine_root_path(os.path.dirname(path))
-
-
-def _docker_available() -> bool:
-    """True when there is a `docker` that answers -- not merely one on the PATH.
-
-    A CLI with no daemon behind it is the common case (Docker Desktop not
-    started), and it fails several seconds later inside `docker run`, where the
-    error says nothing useful.
-    """
-    if shutil.which("docker") is None:
-        return False
-    return _run(["docker", "info"]).returncode == 0
-
-
-def _container_state(name: str) -> Optional[str]:
-    """The state of the container named ``name`` ("running", "exited", ...), or None.
-
-    The filter narrows the listing; the name is then compared exactly, because
-    `--filter name=` is a substring pattern -- a user's `partcad-freecad-test`
-    must not be mistaken for the container PartCAD manages.
-    """
-    result = _run(
-        [
-            "docker",
-            "ps",
-            "--all",
-            "--filter",
-            "name=" + name,
-            "--format",
-            "{{.Names}}\t{{.State}}",
-        ]
-    )
-    if result.returncode != 0:
-        raise ExternalToolError("Failed to look for the '%s' container: %s" % (name, _message(result)))
-    for line in (result.stdout or "").splitlines():
-        fields = line.strip().split("\t")
-        if len(fields) == 2 and fields[0] == name:
-            return fields[1]
-    return None
-
-
-def _create_container(spec: Tool, image: str, root: str, x11_mounts: List[str], x11_env: Dict[str, str]) -> None:
-    """Create the tool's container, mounting the workspace and the daemon socket.
-
-    The container is created idle (it sleeps) and the application is started in
-    it with `docker exec`, rather than being the container's own command. One
-    container then serves every `pc open`: the first one does not have to be
-    treated differently from the next, and closing the application's window does
-    not throw away a container the user may have customised.
-    """
-    mounts = ["--volume", "%s:%s" % (root, root)]
-
-    # The daemon's socket, so that a PartCAD running inside the container talks
-    # to the same daemon this workspace already has, instead of starting a
-    # second one against a directory only it can see. The directory is mounted
-    # rather than the socket file: a restarted daemon creates a new socket, and
-    # a bind mount of the old file would keep pointing at something that is gone.
-    #
-    # Created here if it does not exist yet, because the mounts are fixed when
-    # the container is created and this container outlives the daemon several
-    # times over. Waiting for a daemon that has not started would mean a
-    # container that can never see the one that eventually does -- and the
-    # directory is PartCAD's own, which the daemon would create the same way.
-    socket_dir = _state_dir(root)
-    with contextlib.suppress(OSError):
-        os.makedirs(socket_dir, exist_ok=True)
-    if os.path.isdir(socket_dir):
-        mounts += ["--volume", "%s:%s" % (socket_dir, socket_dir)]
-
-    command = [
-        "docker",
-        "run",
-        "--detach",
-        "--name",
-        spec.container_name,
-        "--workdir",
-        root,
-        *_env_args(x11_env),
-        *mounts,
-        *x11_mounts,
-        # The image's own entrypoint is the application; it has to be replaced
-        # for the container to stay up and wait for `docker exec`.
-        "--entrypoint",
-        "sh",
-        image,
-        "-c",
-        "while true; do sleep 3600; done",
-    ]
-    result = _run(command, timeout=None)
-    if result.returncode != 0:
-        raise ExternalToolError(
-            "Failed to create the '%s' container from %s: %s" % (spec.container_name, image, _message(result))
-        )
-
-
-def _start_container(name: str) -> None:
-    result = _run(["docker", "start", name])
-    if result.returncode != 0:
-        raise ExternalToolError("Failed to start the '%s' container: %s" % (name, _message(result)))
-
-
-def _check_container_mounts(spec: Tool, root: str) -> None:
-    """Refuse an existing container that cannot see this workspace.
-
-    A container outlives the workspace it was created for, and the mounts are
-    fixed when it is created. Without this check the application starts, reports
-    that the file does not exist, and the user has no way to know why.
-    """
-    result = _run(
-        ["docker", "inspect", "--format", "{{range .Mounts}}{{println .Destination}}{{end}}", spec.container_name]
-    )
-    if result.returncode != 0:
-        # Not fatal: an old Docker that formats this differently must not stop
-        # a container that is very probably fine.
-        return
-    mounted = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
-    if not mounted:
-        return
-    if any(_is_within(root, destination) for destination in mounted):
-        return
-    raise ExternalToolError(
-        "The '%s' container does not have this workspace (%s) mounted; it was created for a different one.\n"
-        "Remove it and PartCAD will create one for this workspace: docker rm -f %s"
-        % (spec.container_name, root, spec.container_name)
-    )
-
-
-def _container_binary(spec: Tool) -> str:
-    """The application's executable inside the container, or an error naming why not."""
-    for binary in spec.binaries:
-        result = _run(["docker", "exec", spec.container_name, "sh", "-c", "command -v " + binary])
-        if result.returncode == 0 and (result.stdout or "").strip():
-            return (result.stdout or "").strip().splitlines()[0]
-    raise ExternalToolError(
-        "The '%s' container has no %s executable (looked for: %s).\n"
-        "Remove it so that PartCAD recreates it from %s: docker rm -f %s"
-        % (
-            spec.container_name,
-            spec.display_name,
-            ", ".join(spec.binaries),
-            spec.image,
-            spec.container_name,
-        )
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -1187,8 +1206,12 @@ _LINUX_TCP_ADVICE = (
 )
 
 
-def _x11_forwarding(spec: Tool) -> Tuple[Dict[str, str], List[str], str]:
-    """How the container reaches the user's screen: (environment, mounts, advice).
+def _x11_forwarding(spec: Tool) -> Tuple[Dict[str, str], Dict[str, Dict[str, str]], Dict[str, str], str]:
+    """How the container reaches the user's screen: (environment, binds, extra hosts, advice).
+
+    The binds are the X server's socket and cookie: this machine's plumbing
+    rather than its files, so they are given in either transfer mode -- and
+    dropped by `containers.acquire` when the daemon is another machine.
 
     Raises with instructions when there is nothing to reach. That message is the
     reason this runs before the container is created: an unusable container that
@@ -1203,12 +1226,12 @@ def _x11_forwarding(spec: Tool) -> Tuple[Dict[str, str], List[str], str]:
         # Always over TCP: the container has no access to the launchd socket
         # macOS puts in DISPLAY, and host.docker.internal is how Docker Desktop
         # exposes the host to it.
-        return {"DISPLAY": _host_display(display)}, [], _MACOS_ADVICE
+        return {"DISPLAY": _host_display(display)}, {}, {}, _MACOS_ADVICE
 
     if system == "Windows":  # pragma: no cover - exercised only on Windows
         if not display:
             raise ExternalToolError(_WINDOWS_NO_DISPLAY.format(name=spec.display_name))
-        return {"DISPLAY": _host_display(display)}, [], _WINDOWS_ADVICE
+        return {"DISPLAY": _host_display(display)}, {}, {}, _WINDOWS_ADVICE
 
     if not display:
         raise ExternalToolError(_LINUX_NO_DISPLAY.format(name=spec.display_name))
@@ -1221,24 +1244,25 @@ def _x11_forwarding(spec: Tool) -> Tuple[Dict[str, str], List[str], str]:
         # resolvable from inside a container on Linux.
         return (
             {"DISPLAY": _host_display(display)},
-            ["--add-host", "host.docker.internal:host-gateway"],
+            {},
+            {"host.docker.internal": "host-gateway"},
             _LINUX_TCP_ADVICE,
         )
 
     env = {"DISPLAY": display}
-    mounts = []
+    binds = {}
     if os.path.isdir("/tmp/.X11-unix"):
         # The display is a socket on this machine, so it can simply be shared --
         # no TCP, no listening X server, nothing for the user to configure.
-        mounts += ["--volume", "/tmp/.X11-unix:/tmp/.X11-unix:rw"]
+        binds["/tmp/.X11-unix"] = {"bind": "/tmp/.X11-unix", "mode": "rw"}
     xauthority = os.environ.get("XAUTHORITY")
     if xauthority and os.path.isfile(xauthority):
         # Both the file and the variable naming it: an X client that cannot find
         # the cookie is refused by the server, and the container's idea of a home
         # directory is not the user's.
-        mounts += ["--volume", "%s:%s:ro" % (xauthority, xauthority)]
+        binds[xauthority] = {"bind": xauthority, "mode": "ro"}
         env["XAUTHORITY"] = xauthority
-    return env, mounts, _LINUX_ADVICE
+    return env, binds, {}, _LINUX_ADVICE
 
 
 def _xquartz_installed() -> bool:
@@ -1307,25 +1331,26 @@ def _run(args: List[str], timeout: Optional[float] = DOCKER_TIMEOUT) -> subproce
         return subprocess.CompletedProcess(args, 1, "", str(e))
 
 
-def _spawn(args: List[str]) -> None:
-    """Start a GUI application and leave it running once this process exits.
+def _launch(args: List[str]) -> int:
+    """Run a GUI application here and wait for it to close; its exit code.
 
-    Detached on purpose: `pc open` is done the moment the window belongs to the
-    user, and an editor's context menu must not stay busy for as long as the
-    application is open.
+    In a session of its own, so that it is not this process's to take down:
+    stopping `pc open` -- Ctrl-C at a terminal, Cancel in an editor -- stops the
+    waiting, and must never close somebody's application on unsaved work.
     """
-    kwargs = {
-        "stdin": subprocess.DEVNULL,
-        "stdout": subprocess.DEVNULL,
-        "stderr": subprocess.DEVNULL,
-    }
+    kwargs = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
     if os.name == "nt":  # pragma: no cover - exercised only on Windows
-        kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
-            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
-        )
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     else:
         kwargs["start_new_session"] = True
     try:
-        subprocess.Popen(args, **kwargs)
+        process = subprocess.Popen(args, **kwargs)
     except OSError as e:
         raise ExternalToolError("Failed to run %s: %s" % (" ".join(args), e))
+    try:
+        return process.wait()
+    except KeyboardInterrupt:
+        raise ExternalToolError(
+            "Stopped waiting. The application is still open; what is done in it from now on will not be "
+            "brought back into the package."
+        )

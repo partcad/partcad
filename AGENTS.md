@@ -95,13 +95,16 @@ a CAD addon, or documentation.
   extension's per-part "Open in..." menu, by running it) starts FreeCAD on the screen of whoever ran the
   command — on this machine, with this machine's file, and never over the wire; there is no RPC method for
   opening a file and none may be added. A machine with no local installation can run the application in a
-  container PartCAD keeps for it, named after the tool (`partcad-freecad`), with the workspace and the
-  daemon's socket mounted at the paths they have here and the host's X display forwarded into it.
+  container its `open:` entry declares, started through `partcad_utils.containers` like every other one
+  (`partcad-open-<tool>-...`), with the file mounted at the path it has here — or, under `useDockerRemote`,
+  uploaded and sent back — and the host's X display forwarded into it.
 
-  One application in that table reads meshes and nothing else — Blender — so an object that is not already one
-  is converted to STL before it is handed over. That conversion is the single thing `pc open` asks the daemon
-  for, because a CAD wrapper is what does it; the window still opens here, and the registry still has no
-  `open` method. Which object types are meshes is `object_types`, an inlined copy of PartCAD's own tables (a
+  Each `open:` entry lists the formats its application opens, best first, and an object in none of them is
+  converted to the first one PartCAD can write before it is handed over (a script to STEP for FreeCAD, a solid
+  to STL for Blender). `pc open` then **blocks until the application closes**, and an edit to a converted copy
+  is converted back over the object's source when that source is a file. Converting, either way, is the single
+  thing `pc open` asks the daemon for, because a CAD wrapper is what does it; the window still opens here, and
+  the registry still has no `open` method. Which object types are meshes is `object_types`, an inlined copy of PartCAD's own tables (a
   client must stay cheap to import) that a completeness test keeps honest.
 
 * [src/partcad_ide_client](./src/partcad_ide_client/AGENTS.md):
@@ -458,8 +461,8 @@ the reason in the failure. It is one probe per process; see the docstring for wh
 direction.
 
 **Every container PartCAD starts goes through `partcad_utils.containers`, and nothing else may start one.**
-That is the `docker` Python sandbox, KiCad, a plugin's `container:` and the `partcad-service-remote-docker`
-pool (`pc open` is next). There used to be five spawn paths, and they disagreed: KiCad reused whatever answered
+That is the `docker` Python sandbox, KiCad, a plugin's `container:`, the `partcad-service-remote-docker`
+pool, and an `open:` plugin's `container:` for `pc open`. There used to be five spawn paths, and they disagreed: KiCad reused whatever answered
 to the name `integration-kicad`, so imports for one release ran in a container another had made, unlabelled,
 where `pc system prune` could not see it. Now a container is *described* -- a `ContainerSpec` -- and named
 `partcad-<role>-<tag>-<identity>` from that description (the digest covers the image, mounts, environment,

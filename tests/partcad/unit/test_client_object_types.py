@@ -85,3 +85,16 @@ def test_the_scene_formats_are_the_ones_partcad_stores_a_scene_in():
     drift, so both are checked here.
     """
     assert object_types.SCENE_TYPE_EXTENSION == SCENE_EXTENSION_MAPPING
+
+
+def test_the_writable_formats_are_the_ones_partcad_exports_outside_a_package():
+    """Mirrors '//builtin/export': a format added there and not here is one `pc open` cannot convert into."""
+    import os
+
+    import yaml
+
+    from partcad import output
+
+    with open(os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.EXPORT]], "partcad.yaml")) as f:
+        exported = set((yaml.safe_load(f) or {}).get("export") or {})
+    assert object_types.WRITABLE_PART_TYPES == exported - set(object_types.PACKAGE_ONLY_TYPES)

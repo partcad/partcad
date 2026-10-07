@@ -395,11 +395,13 @@ class JsonRpcBackend implements PartcadBackend {
      * rather than an opening: the window still belongs to the machine the
      * command ran on.
      */
-    private async openExternal(arg: {
-        path?: string;
-        tool?: string;
-        type?: string;
-    }): Promise<{ detail: string; method: string }> {
+    private async openExternal(arg: { path?: string; tool?: string; type?: string; signal?: AbortSignal }): Promise<{
+        detail: string;
+        method: string;
+        changed?: boolean;
+        writtenBack?: string | null;
+        edited?: string | null;
+    }> {
         const config = vscode.workspace.getConfiguration('partcad');
         const image = (config.get<string>('open.dockerImage') ?? '').trim();
         const args = [
@@ -422,6 +424,7 @@ class JsonRpcBackend implements PartcadBackend {
             // Rejecting on the exit code would throw it away and leave the user
             // with "the command failed".
             allowFailure: true,
+            signal: arg?.signal,
         });
         let parsed: any;
         try {
@@ -435,7 +438,13 @@ class JsonRpcBackend implements PartcadBackend {
         if (!parsed?.ok) {
             throw new Error(parsed?.error ?? 'PartCAD could not open the file.');
         }
-        return { detail: parsed.detail ?? '', method: parsed.method ?? '' };
+        return {
+            detail: parsed.detail ?? '',
+            method: parsed.method ?? '',
+            changed: parsed.changed,
+            writtenBack: parsed.writtenBack,
+            edited: parsed.edited,
+        };
     }
 
     /**
@@ -695,23 +704,35 @@ function runCli(
     cwd: string,
     outputChannel: vscode.LogOutputChannel,
     env?: NodeJS.ProcessEnv,
-    options?: { stdin?: string; allowFailure?: boolean },
+    options?: { stdin?: string; allowFailure?: boolean; signal?: AbortSignal },
 ): Promise<string> {
     return new Promise((resolve, reject) => {
         if (!cliPath) {
             reject(new Error('no `pc` executable beside the PartCAD service'));
             return;
         }
-        const proc = cp.execFile(cliPath, ['--no-ansi', ...args], { cwd, env: utf8Env(env) }, (err, stdout, stderr) => {
-            if (stderr) {
-                outputChannel.append(stderr);
-            }
-            if (err && !options?.allowFailure) {
-                reject(new Error(`pc ${args.join(' ')} failed: ${err.message}: ${stderr}`));
-                return;
-            }
-            resolve(stdout);
-        });
+        // No timeout: `pc open` runs for as long as somebody is editing. The
+        // signal is what stops it -- which stops the waiting and leaves the
+        // application open, since `pc open` starts it in a session of its own.
+        const proc = cp.execFile(
+            cliPath,
+            ['--no-ansi', ...args],
+            { cwd, env: utf8Env(env), signal: options?.signal, maxBuffer: 16 * 1024 * 1024 },
+            (err, stdout, stderr) => {
+                if (stderr) {
+                    outputChannel.append(stderr);
+                }
+                if (options?.signal?.aborted) {
+                    reject(new Error('stopped waiting'));
+                    return;
+                }
+                if (err && !options?.allowFailure) {
+                    reject(new Error(`pc ${args.join(' ')} failed: ${err.message}: ${stderr}`));
+                    return;
+                }
+                resolve(stdout);
+            },
+        );
         // Always closed, with the content when there is any. `pc` never prompts,
         // so a child left holding an open stdin would only ever be one that
         // cannot tell "nothing yet" from "nothing at all".

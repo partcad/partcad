@@ -673,6 +673,17 @@ than being worked out anywhere in Python: PartCAD decides *how* to run the appli
 say what it is allowed to do. Adding a second application is a command, a menu entry and a row in
 `external.TOOLS` -- no new branch in this extension.
 
+**The editor waits while the application is open** (`src/editingBanner.ts`). `pc open` blocks until the
+application closes and then brings the edit back into the package, so until it returns the package is in two
+places at once. `openWith` therefore shows a banner over the editor area, sets the `partcad.editingExternally`
+context key, and every command in `package.json` carries `"enablement": "!partcad.editingExternally"` --
+`editingBanner.test.ts` fails for a command added without it. Only one application at a time: a second "Open
+in..." is refused while one is open. "Stop waiting" (in the banner, or Cancel on the progress notification)
+aborts the `pc open` child through an `AbortController` and leaves the application running -- it was started
+in a session of its own -- and says that what is saved from then on is not brought back. What `pc open --json`
+reports (`changed`, `writtenBack`, `edited`) is turned into one sentence by `outcomeMessage`, which is pure so
+it is tested without a window. There is no timeout on that call, deliberately: somebody may edit for an hour.
+
 ## Setup
 
 ```bash
