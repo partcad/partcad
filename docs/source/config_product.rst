@@ -462,25 +462,33 @@ already defined elsewhere. Both methods work the same way they do for
 with other values is another instance of the same assembly, and that is what an
 ``enrich`` of it asks for.
 
-+---------+--------------------------------------------+----------------------------+
-| Method  | Configuration                              | Description                |
-+=========+============================================+============================+
-| Alias   | .. code-block:: yaml                       || Create a shallow          |
-|         |                                            || clone of the              |
-|         |   assemblies:                              || existing assembly.        |
-|         |     <alias-name>:                          || For example, to           |
-|         |       type: alias                          || make it easier to         |
-|         |       source: </path/to:existing-assembly> || reference it locally.     |
-+---------+--------------------------------------------+----------------------------+
-| Enrich  | .. code-block:: yaml                       || Create an opinionated     |
-|         |                                            || alternative to the        |
-|         |   assemblies:                              || existing assembly by      |
-|         |     <enriched-assembly-name>:              || setting some of its       |
-|         |       type: enrich                         || parameters, the same      |
-|         |       source: </path/to:existing-assembly> || way a part is             |
-|         |       with:                                || enriched.                 |
-|         |         <param1>: <value1>                 |                            |
-+---------+--------------------------------------------+----------------------------+
+.. list-table::
+  :header-rows: 1
+  :widths: 10 50 40
+
+  * - Method
+    - Configuration
+    - Description
+  * - Alias
+    - .. code-block:: yaml
+
+        assemblies:
+          <alias-name>:
+            type: alias
+            source: </path/to:existing-assembly>
+    - Create a shallow clone of the existing assembly. For example, to make it
+      easier to reference it locally.
+  * - Enrich
+    - .. code-block:: yaml
+
+        assemblies:
+          <enriched-assembly-name>:
+            type: enrich
+            source: </path/to:existing-assembly>
+            with:
+              <param1>: <value1>
+    - Create an opinionated alternative to the existing assembly by setting
+      some of its parameters, the same way a part is enriched.
 
 Procurement
 -----------

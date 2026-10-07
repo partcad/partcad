@@ -347,27 +347,36 @@ References
 It is also possible to declare new parts by referencing other parts that are
 already defined elsewhere.
 
-+---------+----------------------------------------+----------------------------+
-| Method  | Configuration                          | Description                |
-+=========+========================================+============================+
-| Alias   | .. code-block:: yaml                   || Create a shallow          |
-|         |                                        || clone of the              |
-|         |   parts:                               || existing part.            |
-|         |     <alias-name>:                      || For example, to           |
-|         |       type: alias                      || make it easier to         |
-|         |       source: </path/to:existing-part> || reference it locally.     |
-+---------+----------------------------------------+----------------------------+
-| Enrich  | .. code-block:: yaml                   || Create an opinionated     |
-|         |                                        || alternative to the        |
-|         |   parts:                               || existing part by          |
-|         |     <enriched-part-name>:              || initializing some of      |
-|         |       type: enrich                     || its parameters, and       |
-|         |       source: </path/to:existing-part> || overriding any of its     |
-|         |       with:                            || properties. For           |
-|         |         <param1>: <value1>             || example, to avoid         |
-|         |         <param2>: <value2>             || passing the same set      |
-|         |       offset: <OCCT-Location-obj>      || of parameters many times. |
-+---------+----------------------------------------+----------------------------+
+.. list-table::
+  :header-rows: 1
+  :widths: 10 50 40
+
+  * - Method
+    - Configuration
+    - Description
+  * - Alias
+    - .. code-block:: yaml
+
+        parts:
+          <alias-name>:
+            type: alias
+            source: </path/to:existing-part>
+    - Create a shallow clone of the existing part. For example, to make it
+      easier to reference it locally.
+  * - Enrich
+    - .. code-block:: yaml
+
+        parts:
+          <enriched-part-name>:
+            type: enrich
+            source: </path/to:existing-part>
+            with:
+              <param1>: <value1>
+              <param2>: <value2>
+            offset: <OCCT-Location-obj>
+    - Create an opinionated alternative to the existing part by initializing
+      some of its parameters, and overriding any of its properties. For
+      example, to avoid passing the same set of parameters many times.
 
 Both are references rather than parts of their own. An ``enrich`` resolves to
 the *instance* of the object it points at that has the values it asks for --

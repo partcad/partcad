@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-06 16:15+0000\n"
+"POT-Creation-Date: 2026-10-07 05:45+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -107,7 +107,7 @@ msgid "Example"
 msgstr "示例"
 
 #: ../../source/config_parts.rst:143 ../../source/config_parts.rst:276
-#: ../../source/config_parts.rst:351
+#: ../../source/config_parts.rst:355
 msgid "Configuration"
 msgstr "配置"
 
@@ -354,87 +354,38 @@ msgid ""
 "are already defined elsewhere."
 msgstr "也可以通过引用在别处已经定义的其他零件来声明新的零件。"
 
-#: ../../source/config_parts.rst:351
+#: ../../source/config_parts.rst:354
 msgid "Method"
 msgstr "方式"
 
-#: ../../source/config_parts.rst:351
+#: ../../source/config_parts.rst:356
 msgid "Description"
 msgstr "说明"
 
-#: ../../source/config_parts.rst:353
+#: ../../source/config_parts.rst:357
 msgid "Alias"
 msgstr "Alias"
 
-#: ../../source/config_parts.rst
-msgid "Create a shallow"
-msgstr "创建现有零件的"
+#: ../../source/config_parts.rst:364
+msgid ""
+"Create a shallow clone of the existing part. For example, to make it "
+"easier to reference it locally."
+msgstr ""
+"创建现有零件的一个浅层克隆。例如，为了更方便地在本地引用它。"
 
-#: ../../source/config_parts.rst
-msgid "clone of the"
-msgstr "一个浅层"
-
-#: ../../source/config_parts.rst
-msgid "existing part."
-msgstr "克隆。"
-
-#: ../../source/config_parts.rst
-msgid "For example, to"
-msgstr "例如，为了"
-
-#: ../../source/config_parts.rst
-msgid "make it easier to"
-msgstr "更方便地"
-
-#: ../../source/config_parts.rst
-msgid "reference it locally."
-msgstr "在本地引用它。"
-
-#: ../../source/config_parts.rst:360
+#: ../../source/config_parts.rst:366
 msgid "Enrich"
 msgstr "Enrich"
 
-#: ../../source/config_parts.rst
-msgid "Create an opinionated"
-msgstr "创建一个现有零件的、"
+#: ../../source/config_parts.rst:377
+msgid ""
+"Create an opinionated alternative to the existing part by initializing "
+"some of its parameters, and overriding any of its properties. For "
+"example, to avoid passing the same set of parameters many times."
+msgstr ""
+"创建一个现有零件的、带有既定倾向的替代版本，方式是初始化其部分参数，并覆盖其任意属性。例如，为了避免多次传入同一组参数。"
 
-#: ../../source/config_parts.rst
-msgid "alternative to the"
-msgstr "带有既定倾向的"
-
-#: ../../source/config_parts.rst
-msgid "existing part by"
-msgstr "替代版本，方式是"
-
-#: ../../source/config_parts.rst
-msgid "initializing some of"
-msgstr "初始化其部分"
-
-#: ../../source/config_parts.rst
-msgid "its parameters, and"
-msgstr "参数，并"
-
-#: ../../source/config_parts.rst
-msgid "overriding any of its"
-msgstr "覆盖其任意"
-
-#: ../../source/config_parts.rst
-msgid "properties. For"
-msgstr "属性。例如，"
-
-#: ../../source/config_parts.rst
-msgid "example, to avoid"
-msgstr "为了避免"
-
-#: ../../source/config_parts.rst
-msgid "passing the same set"
-msgstr "多次传入"
-
-#: ../../source/config_parts.rst
-msgid "of parameters many times."
-msgstr "同一组参数。"
-
-#: ../../source/config_parts.rst:372
+#: ../../source/config_parts.rst:381
 msgid ""
 "Both are references rather than parts of their own. An ``enrich`` "
 "resolves to the *instance* of the object it points at that has the values"
@@ -449,7 +400,7 @@ msgstr ""
 "产出的那个对象——因此该实例属于声明源对象的那个包，而且一个实例可以服务于任何包中要求相同取值的每一个 enrich。 ``alias`` "
 "则解析到对象本身。"
 
-#: ../../source/config_parts.rst:379
+#: ../../source/config_parts.rst:388
 msgid ""
 "That is also what the shape cache is keyed on: a reference takes the key "
 "of what it points at, so the geometry is stored once however many "
@@ -458,7 +409,7 @@ msgid ""
 "keys differently -- on the source's key, plus what it adds."
 msgstr "形状缓存也是按同样的方式取键的：引用采用它所指向对象的键，因此无论有多少个引用指向它，几何体都只存储一次，而不是每个引用存一份。会平移或缩放其所指对象的引用，交回的是不同的几何体，因此取键方式也不同——取源对象的键，再加上它自己添加的内容。"
 
-#: ../../source/config_parts.rst:385
+#: ../../source/config_parts.rst:394
 msgid ""
 "Because asking for a value is asking for the instance that has it, and an"
 " instance is named ``<name>;<param>=<value>,...``, a ``with:`` value may "
@@ -470,7 +421,7 @@ msgstr ""
 "``with:`` 的取值不能包含 ``,`` 、 ``;`` 或 ``=`` ：这样的取值无法命名。参数在 ``default:`` "
 "中声明的取值、以及在 ``enum:`` 中提供的取值，同样如此。"
 
-#: ../../source/config_parts.rst:390
+#: ../../source/config_parts.rst:399
 msgid ""
 "An enrich says which values it wants, and nothing about how the object is"
 " built. ``path``, the requirements, the sandbox versions, the inputs of "
@@ -483,17 +434,17 @@ msgstr ""
 "、各项依赖要求、沙箱版本、那些由一个对象构建出另一个对象的类型所需的输入——以及 ``parameters:`` ，它应当通过 ``with:``"
 " 来表述——都属于对象自身的声明。在 enrich 上声明其中任何一项都会被报告为已忽略，它产出的对象与不写这些时产出的对象相同。"
 
-#: ../../source/config_parts.rst:397
+#: ../../source/config_parts.rst:406
 msgid ""
 "Both are available for :ref:`sketches` and :ref:`assemblies` too, spelled"
 " the same way."
 msgstr "两者同样可用于 :ref:`sketches` 和 :ref:`assemblies` ，写法完全相同。"
 
-#: ../../source/config_parts.rst:403
+#: ../../source/config_parts.rst:412
 msgid "Part types the package defines itself"
 msgstr "包自行定义的零件类型"
 
-#: ../../source/config_parts.rst:405
+#: ../../source/config_parts.rst:414
 msgid ""
 "The types above are the ones PartCAD implements. A package can also "
 "declare a type of its own, in a ``partTypes`` section, and then build "
@@ -506,7 +457,7 @@ msgstr ""
 "上面这些类型是 PartCAD 自身实现的。包也可以在 ``partTypes`` "
 "小节中声明属于自己的类型，然后用它来构建零件。当一族零件每次都以相同方式产出——从表格生成、从目录获取、由包中已有的建模辅助工具构建——而它们之间的差别只是少数几个参数、而不是各写一份脚本时，这样做是值得的。"
 
-#: ../../source/config_parts.rst:427
+#: ../../source/config_parts.rst:436
 msgid ""
 "``kind`` is ``wrapper``, which is the default and currently the only "
 "kind. Its ``path`` (``<name>.py`` if left out) is a Python script that "
@@ -518,7 +469,7 @@ msgstr ""
 "``<name>.py`` ）是一个 Python 脚本，PartCAD 会在沙箱中为每个零件运行它一次，并把该零件的 ``request`` "
 "放入脚本的全局变量中——其中包括解析后的 ``parameters`` ——而脚本则把几何体留在全局变量 ``output`` 中："
 
-#: ../../source/config_parts.rst:441
+#: ../../source/config_parts.rst:450
 msgid ""
 "Because the script runs in a sandbox it may import OCP, build123d or "
 "CadQuery; ``pythonRequirements`` on the ``partType`` says what that "
@@ -530,7 +481,7 @@ msgstr ""
 "``pythonRequirements`` 说明该沙箱需要什么，与它在包上的作用完全一样。这与自定义输出实现（参见 :ref:`output-"
 "files` ）是同一套机制，只不过指向的是构建形状而不是写出文件。"
 
-#: ../../source/config_parts.rst:447
+#: ../../source/config_parts.rst:456
 msgid ""
 "A ``type`` beginning with ``:`` names a ``partType`` of the part's own "
 "package and is expanded to ``<package path>:<name>`` when the package is "
@@ -545,11 +496,11 @@ msgstr ""
 "的包，就是别人可以导入并用来构建零件的包。 ``partType`` "
 "会像其他对象一样被列出，但它本身从来不是一个形状——它是零件的制造方式，而不是零件之一。"
 
-#: ../../source/config_parts.rst:454
+#: ../../source/config_parts.rst:463
 msgid "See ``examples/produce_part_wrapper`` for the whole of the example above."
 msgstr "上面这个示例的完整内容请参见 ``examples/produce_part_wrapper`` 。"
 
-#: ../../source/config_parts.rst:456
+#: ../../source/config_parts.rst:465
 msgid ""
 "Should PartCAD implement a type natively that you find yourself writing "
 "again and again, please file an issue on GitHub or write to "
@@ -558,11 +509,11 @@ msgstr ""
 "如果你发现自己反复在写同一种类型，希望 PartCAD 原生实现它，请在 GitHub 上提交 issue，或写信至 "
 "`support@partcad.org <mailto:support@partcad.org>`_ 。"
 
-#: ../../source/config_parts.rst:463
+#: ../../source/config_parts.rst:472
 msgid "Parameters"
 msgstr "参数"
 
-#: ../../source/config_parts.rst:465
+#: ../../source/config_parts.rst:474
 msgid ""
 "Parameters are **inputs**. They are a request made of the object type "
 "that produces the part - the ``width`` a CadQuery script extrudes to, the"
@@ -573,7 +524,7 @@ msgstr ""
 "参数是 **输入** 。它们是向产出该零件的对象类型提出的请求——CadQuery 脚本拉伸到的 ``width`` 、网格据以做网格化的 "
 "``tolerance`` ——只有该类型接受它们，它们才有意义。两个在某个参数上不同的零件是不同的形状，因此参数是形状缓存取键所依据的一部分。"
 
-#: ../../source/config_parts.rst:471
+#: ../../source/config_parts.rst:480
 msgid ""
 "What comes back out is :ref:`properties`, and the two are not the same "
 "thing even where they share a name: ``parameters.material`` asks for a "
@@ -583,7 +534,7 @@ msgstr ""
 "与之相对，产出来的那一侧是 :ref:`properties` ；即使两者同名也不是一回事： ``parameters.material`` "
 "要求零件用某种材料制造，而 ``properties.material`` 陈述产出的零件是用什么做成的。"
 
-#: ../../source/config_parts.rst:476
+#: ../../source/config_parts.rst:485
 msgid ""
 "Most parameters are the part's own invention. A script may call one "
 "whatever it likes, and nothing outside that script knows what it means, "
@@ -598,7 +549,7 @@ msgstr ""
 "自身会据以行动的含义。因此它们只在能够兑现它们的类型上可用。目前共有三个—— ``material`` 、 ``color`` 和 "
 "``tolerance`` 。"
 
-#: ../../source/config_parts.rst:484
+#: ../../source/config_parts.rst:493
 msgid ""
 "What decides which types accept them is whether the part is a single "
 "homogeneous body - one solid, made of one thing - because that is what "
@@ -616,7 +567,7 @@ msgstr ""
 " ``stl`` 、 ``cadquery`` 、 ``build123d`` 、 ``sdf`` 、 ``scad`` 和 "
 "``extrude`` 这三个参数全都接受。"
 
-#: ../../source/config_parts.rst:493
+#: ../../source/config_parts.rst:502
 msgid ""
 "A STEP file is not one body. It can carry many solids, each already "
 "stating a material and a colour of its own, and naming one for the file "
@@ -634,7 +585,7 @@ msgstr ""
 "的范畴，在那里形状陈述的是它最终是什么，而不是别人对它提出了什么要求。它必须做到多精确则是另一个问题，下文另有答案：参见 :ref"
 ":`tolerance-field` 。"
 
-#: ../../source/config_parts.rst:502
+#: ../../source/config_parts.rst:511
 msgid ""
 "Every other part type rejects them too, but for a different reason: "
 "whether it should accept them has not been decided yet, and answering "
@@ -642,7 +593,7 @@ msgid ""
 "settling it by accident."
 msgstr "其他每一种零件类型同样会拒绝它们，但原因不同：它是否应当接受它们还没有定论，而在有人作出决定之前一律回答“否”，这是把问题留着，而不是在无意之中把它定死。"
 
-#: ../../source/config_parts.rst:506
+#: ../../source/config_parts.rst:515
 msgid ""
 "Declaring one of these under ``parameters:`` of a type that does not "
 "accept it is an error, not a warning. It costs the package that one part "
@@ -660,7 +611,7 @@ msgstr ""
 "，而不是其声明的形态——无论零件类型是什么，任何参数都可以带有自己的 ``color:`` 和 ``material:`` "
 "字段，用来描述它的某个取值看起来是什么样子。"
 
-#: ../../source/config_parts.rst:516
+#: ../../source/config_parts.rst:525
 msgid ""
 "``tolerance`` is the one of the three that has a default, ``0.0``: it "
 "reads back as that on any type that accepts it, whether or not a part "
@@ -675,7 +626,7 @@ msgstr ""
 "：在任何接受它的类型上，无论零件是否声明过，读回来的都是这个值。默认值是在读取取值时才套用的，绝不会被写入零件的 ``parameters:`` "
 "小节，因为该小节是形状缓存取键所依据的一部分——把默认值写进去，会让每一个从未提到过公差的零件的缓存键发生变化，而这个值根本没有人设置过。有人确实声明过的公差，则会像其他任何输入一样参与缓存取键，因为它本来就是一个输入。"
 
-#: ../../source/config_parts.rst:524
+#: ../../source/config_parts.rst:533
 msgid ""
 "A tolerance of ``0.0`` means nobody said. It reads as a demand for "
 "perfect precision, which is not something a manufacturer can be asked "
@@ -688,7 +639,7 @@ msgstr ""
 "会让将要被 *制造* "
 "、却没有公差的零件失败——包括通过包中某个装配体才触及到的零件。对于采购而非制造的零件则不作此要求：它来的时候是什么样就是什么样。"
 
-#: ../../source/config_parts.rst:530
+#: ../../source/config_parts.rst:539
 msgid ""
 "A CadQuery or build123d script is handed every parameter the part "
 "declares, each as a variable of the same name, and the script has to "
@@ -707,7 +658,7 @@ msgstr ""
 " ``material`` 赋值的脚本仍会收到声明的材料，而没有提到它的脚本会被放过，而不是被拒绝。除此之外一概不予通融。SDF "
 "脚本接收参数的方式不同——参数会以赋值语句的形式前置到脚本中——所以那里从来没有出现过这个问题。"
 
-#: ../../source/config_parts.rst:541
+#: ../../source/config_parts.rst:550
 msgid ""
 "Each part may have a list of parameters that are passed into the scripts "
 "to modify the part. The parameters can be of types ``string``, ``float``,"
@@ -718,19 +669,18 @@ msgstr ""
 "每个零件都可以有一份参数列表，这些参数会被传入脚本以修改该零件。参数的类型可以是 ``string`` 、 ``float`` 、 ``int``"
 " 和 ``bool`` 。可以通过在 ``enum`` 中指定可能取值的列表来限制参数值。参数的初始值使用 ``default`` 来设置。"
 
-#: ../../source/config_parts.rst:559
+#: ../../source/config_parts.rst:568
 msgid ""
 "There are several parameter names that are reserved for values used in "
 "visualization, simulation calculations and, if applicable, manufacturing "
 "(also referred to as **MCFTT parameters** using their first letters):"
-msgstr ""
-"有几个参数名称是保留的，用于可视化、仿真计算以及（如适用）制造中所使用的值（取其首字母，也被称为 **MCFTT parameters** ）："
+msgstr "有几个参数名称是保留的，用于可视化、仿真计算以及（如适用）制造中所使用的值（取其首字母，也被称为 **MCFTT parameters** ）："
 
-#: ../../source/config_parts.rst:563
+#: ../../source/config_parts.rst:572
 msgid "``material``"
 msgstr "``material``"
 
-#: ../../source/config_parts.rst:565
+#: ../../source/config_parts.rst:574
 msgid ""
 "Must point at an object of type ``material``, as ``<package>:<name>``. "
 "Some of them are defined in ``//pub/std/manufacturing/material``; see "
@@ -747,43 +697,43 @@ msgstr ""
 "发出请求时，会从制造方提供的材料中选出一种足够接近的材料。选择正确材料的责任在制造 API 的实现方（在 PartCAD 中即 "
 "``provider`` 对象）。"
 
-#: ../../source/config_parts.rst:575
+#: ../../source/config_parts.rst:584
 msgid "``color``"
 msgstr "``color``"
 
-#: ../../source/config_parts.rst:577
+#: ../../source/config_parts.rst:586
 msgid "This one is an object-type parameter too, with the same restriction."
 msgstr "这同样是一个对象类型参数，受同样的限制。"
 
-#: ../../source/config_parts.rst:579
+#: ../../source/config_parts.rst:588
 msgid "**Not implemented yet. Use color names for now.**"
 msgstr "**尚未实现。目前请使用颜色名称。**"
 
-#: ../../source/config_parts.rst:581
+#: ../../source/config_parts.rst:590
 msgid "``finish``"
 msgstr "``finish``"
 
-#: ../../source/config_parts.rst:583
+#: ../../source/config_parts.rst:592
 msgid "Optional. Can be omitted for no finish."
 msgstr "可选。如果不需要表面处理，可以省略。"
 
-#: ../../source/config_parts.rst:585 ../../source/config_parts.rst:591
+#: ../../source/config_parts.rst:594 ../../source/config_parts.rst:600
 msgid "**Not implemented yet.**"
 msgstr "**尚未实现。**"
 
-#: ../../source/config_parts.rst:587
+#: ../../source/config_parts.rst:596
 msgid "``texture``"
 msgstr "``texture``"
 
-#: ../../source/config_parts.rst:589
+#: ../../source/config_parts.rst:598
 msgid "Optional. Can be omitted for no texture."
 msgstr "可选。如果不需要纹理，可以省略。"
 
-#: ../../source/config_parts.rst:593
+#: ../../source/config_parts.rst:602
 msgid "``tolerance``"
 msgstr "``tolerance``"
 
-#: ../../source/config_parts.rst:595
+#: ../../source/config_parts.rst:604
 msgid ""
 "An object-type parameter as well, and the one with a default: omitting it"
 " is the same as writing ``0.0``, which is a claim to perfect precision "
@@ -793,7 +743,7 @@ msgstr ""
 "这也是一个对象类型参数，而且是唯一带默认值的那个：省略它等同于写成 ``0.0`` ，而这是对完美精度的宣称，正是 ``pc test`` "
 "在将要被制造的零件上会拒绝的情形。凡是打算让人制造的东西，都请给它一个真实的取值。"
 
-#: ../../source/config_parts.rst:600
+#: ../../source/config_parts.rst:609
 msgid ""
 "``step`` and ``kicad`` parts state this as a ``tolerance:`` field instead"
 " of as a parameter, and their file may state it for them; see :ref"
@@ -802,7 +752,7 @@ msgstr ""
 "``step`` 和 ``kicad`` 零件以 ``tolerance:`` 字段而不是参数来陈述这一点，而且它们的文件也可能代为陈述；参见 "
 ":ref:`tolerance-field` 。"
 
-#: ../../source/config_parts.rst:604
+#: ../../source/config_parts.rst:613
 msgid ""
 "If the part has variable MCFTT parameters depending on the surface, then "
 "either this part must be broken down into multiple parts, or the values "
@@ -815,7 +765,7 @@ msgstr ""
 "如果某个零件因表面不同而具有可变的 MCFTT 参数，那么要么必须将该零件拆分成多个零件，要么这些值必须从 CAD "
 "文件/脚本中推导得出（尚未实现）。在后一种情况下，该零件将无法使用制造相关的功能，除非某个特定的制造服务提供方能够识别（vendor,SKU）值，并已通过带外方式收到了相应的制造说明。"
 
-#: ../../source/config_parts.rst:611
+#: ../../source/config_parts.rst:620
 msgid ""
 "The MCFTT parameters are not required and have no impact on parts that "
 "have ``vendor`` and ``sku`` set and that are procured using providers of "
@@ -824,7 +774,7 @@ msgstr ""
 "对于已设置 ``vendor`` 和 ``sku`` 、并使用 ``store`` 类型提供方进行采购的零件，MCFTT "
 "参数不是必需的，也不会对其产生任何影响。"
 
-#: ../../source/config_parts.rst:615
+#: ../../source/config_parts.rst:624
 msgid ""
 "The MCFTT parameters are a request, and the request is a manufacturing "
 "one: they say what the part should be made of, and how well, for the "
@@ -837,11 +787,11 @@ msgstr ""
 "参数是一种请求，而且是制造方面的请求：它们面向将要制造该零件的提供方，说明零件应当用什么做成、做到多好。它们不是对一个已存在形状的陈述。从一个已经陈述了材料的"
 " STEP 文件读入的零件并不回答它们，导出器写入文件的内容也不是它们的答案。那是下面的 :ref:`properties` 。"
 
-#: ../../source/config_parts.rst:624
+#: ../../source/config_parts.rst:633
 msgid "Tolerance on the types that state it in the file"
 msgstr "由文件陈述公差的类型"
 
-#: ../../source/config_parts.rst:626
+#: ../../source/config_parts.rst:635
 msgid ""
 "``step`` and ``kicad`` reject the ``tolerance`` *parameter*, for the "
 "reason above, which would leave them with no way to say how precisely a "
@@ -856,7 +806,7 @@ msgstr ""
 "文件本身就有地方可以陈述它：AP242 承载了完整的 GD&T——尺寸上的正负公差、特征上的平面度或位置度公差——所以 PartCAD "
 "会去读取该文件。"
 
-#: ../../source/config_parts.rst:633
+#: ../../source/config_parts.rst:642
 msgid ""
 "Plenty of STEP files carry none of it. For them - and only on the types "
 "whose file could have carried it - the part declaration takes a "
@@ -865,7 +815,7 @@ msgstr ""
 "有大量 STEP 文件完全不带这些内容。对于它们——并且只在其文件本来可以承载这些内容的类型上——零件声明可以带有自己的 "
 "``tolerance:`` **字段** ："
 
-#: ../../source/config_parts.rst:644
+#: ../../source/config_parts.rst:653
 msgid ""
 "It is a field rather than a parameter because it asks nothing of the type"
 " that produces the shape: the file is read the same way whether or not it"
@@ -880,13 +830,13 @@ msgstr ""
 " ``field`` 而不是 ``parameter`` ，以免两者混淆。 ``alias`` 或 ``enrich`` "
 "可以带上它，但会忽略它，就像它所带的其他描述源对象如何构建的内容一样。"
 
-#: ../../source/config_parts.rst:653
+#: ../../source/config_parts.rst:662
 msgid ""
 "There are then three places a part's tolerance can come from, and PartCAD"
 " reads them in this order:"
 msgstr "这样一来，零件的公差可以来自三个地方，PartCAD 按以下顺序读取它们："
 
-#: ../../source/config_parts.rst:656
+#: ../../source/config_parts.rst:665
 msgid ""
 "The ``tolerance:`` field, where the type takes one. It outranks the file:"
 " it is written precisely because the file did not say, and a file that "
@@ -896,20 +846,20 @@ msgstr ""
 "``tolerance:`` "
 "字段，用于接受该字段的类型。它的优先级高于文件：之所以要写它，正是因为文件没有说；而文件后来开始说出别的内容，这是一处需要查看的变化，而不是应当被悄悄采纳的变化。"
 
-#: ../../source/config_parts.rst:660
+#: ../../source/config_parts.rst:669
 msgid ""
 "What the file itself states. A file that states one tolerance answers "
 "with it, whatever unit it is written in - a file in inches is read as "
 "inches."
 msgstr "文件自身陈述的内容。陈述了单一公差的文件就以该公差作答，无论它用什么单位书写——以英寸书写的文件就按英寸读取。"
 
-#: ../../source/config_parts.rst:662
+#: ../../source/config_parts.rst:671
 msgid ""
 "The ``tolerance`` parameter, for the homogeneous types that accept it, "
 "with its default of ``0.0``."
 msgstr "``tolerance`` 参数，用于接受它的均质类型，其默认值为 ``0.0`` 。"
 
-#: ../../source/config_parts.rst:665
+#: ../../source/config_parts.rst:674
 msgid ""
 "A file that tolerances several features differently has no single "
 "tolerance, and PartCAD does not invent one: the tightest overstates what "
@@ -925,7 +875,7 @@ msgstr ""
 "``NaN`` ，意思是 *逐个特征已给出公差* ——而 ``pc test`` "
 "接受这种情况。这样的零件确实说明了它必须做到多精确，而且比一个数字所能承载的更详细，送到制造方手里的正是这个文件。"
 
-#: ../../source/config_parts.rst:673
+#: ../../source/config_parts.rst:682
 msgid ""
 "What ``pc test`` rejects is still only a part that could have said and "
 "did not: ``0.0`` on a type that takes the field or the parameter. A part "
@@ -936,7 +886,7 @@ msgstr ""
 "``pc test`` 拒绝的始终只是那种本可以说却没有说的零件：在接受该字段或该参数的类型上写成 ``0.0`` "
 "。如果某个零件的类型两者都不接受、其文件又没有任何陈述，报告方式又会不同，会指明该类型——那是关于零件类型的事实，而不是关于这份声明的事实。"
 
-#: ../../source/config_parts.rst:678
+#: ../../source/config_parts.rst:687
 msgid ""
 "The geometric uncertainty every STEP file carries "
 "(``UNCERTAINTY_MEASURE_WITH_UNIT``, typically ``1e-07`` mm) is "
@@ -948,11 +898,11 @@ msgstr ""
 "mm）是刻意不去读取的。它是写出几何体时所用的精度，而不是要求任何人遵守的公差；读取它会让每一个曾经导出过的 STEP "
 "文件都带上一个没有哪家工厂做得到的制造公差。"
 
-#: ../../source/config_parts.rst:687
+#: ../../source/config_parts.rst:696
 msgid "Properties"
 msgstr "属性"
 
-#: ../../source/config_parts.rst:689
+#: ../../source/config_parts.rst:698
 msgid ""
 "Properties are **outputs**. They are what instantiating the object "
 "produced - what the resulting shape reports about itself - and they are "
@@ -965,7 +915,7 @@ msgstr ""
 "。它们是实例化该对象所产出的结果——也就是最终形状对自身的陈述——并且在形状无法自行陈述时由声明给出。网格既没有材料也没有质量，因此从 STL "
 "读入的零件要具备其中任何一项，唯一的办法就是把它写出来；URDF 导入则会根据文件中已有的陈述来填写这一小节。"
 
-#: ../../source/config_parts.rst:707
+#: ../../source/config_parts.rst:716
 msgid ""
 "Assemblies take the same section. Nothing in it takes part in the shape "
 "cache - it says nothing about the geometry - which also means nothing "
@@ -986,7 +936,7 @@ msgstr ""
 " *内部* 零件上的属性，属于该装配体缓存树的一部分，修改它们不会使缓存失效，正如重命名一个零件也不会一样。要让它们生效，靠的是 ``pc "
 "system reset`` ，或者改动装配体确实会参与哈希的内容。"
 
-#: ../../source/config_parts.rst:719
+#: ../../source/config_parts.rst:728
 msgid ""
 "Every ``physics`` property has a PartCAD name and a PartCAD unit, and the"
 " set of them is closed. Lengths are millimetres and angles degrees, as "
@@ -1007,7 +957,7 @@ msgstr ""
 "没有对应属性的事，导入会中止，而不是把它当作不透明内容原样带着；而 PartCAD 持有、URDF 却无法陈述的属性，会在导出时被报告出来。请参见"
 " :doc:`simulation` 。"
 
-#: ../../source/config_parts.rst:730
+#: ../../source/config_parts.rst:739
 msgid ""
 "A file type that has a way to state these declares ``properties: true`` "
 "in its ``export:`` section, and is handed them keyed by the full name of "
@@ -1015,3 +965,51 @@ msgid ""
 msgstr ""
 "有办法陈述这些内容的文件类型，会在它的 ``export:`` 小节中声明 ``properties: true`` "
 "，并以这些属性所属形状的完整名称为键接收它们。URDF 是唯一具备这种能力的内置格式。"
+
+#~ msgid "Create a shallow"
+#~ msgstr "创建现有零件的"
+
+#~ msgid "clone of the"
+#~ msgstr "一个浅层"
+
+#~ msgid "existing part."
+#~ msgstr "克隆。"
+
+#~ msgid "For example, to"
+#~ msgstr "例如，为了"
+
+#~ msgid "make it easier to"
+#~ msgstr "更方便地"
+
+#~ msgid "reference it locally."
+#~ msgstr "在本地引用它。"
+
+#~ msgid "Create an opinionated"
+#~ msgstr "创建一个现有零件的、"
+
+#~ msgid "alternative to the"
+#~ msgstr "带有既定倾向的"
+
+#~ msgid "existing part by"
+#~ msgstr "替代版本，方式是"
+
+#~ msgid "initializing some of"
+#~ msgstr "初始化其部分"
+
+#~ msgid "its parameters, and"
+#~ msgstr "参数，并"
+
+#~ msgid "overriding any of its"
+#~ msgstr "覆盖其任意"
+
+#~ msgid "properties. For"
+#~ msgstr "属性。例如，"
+
+#~ msgid "example, to avoid"
+#~ msgstr "为了避免"
+
+#~ msgid "passing the same set"
+#~ msgstr "多次传入"
+
+#~ msgid "of parameters many times."
+#~ msgstr "同一组参数。"

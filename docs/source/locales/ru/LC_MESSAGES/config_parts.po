@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-06 16:15+0000\n"
+"POT-Creation-Date: 2026-10-07 05:45+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ru\n"
@@ -121,7 +121,7 @@ msgid "Example"
 msgstr "Пример"
 
 #: ../../source/config_parts.rst:143 ../../source/config_parts.rst:276
-#: ../../source/config_parts.rst:351
+#: ../../source/config_parts.rst:355
 msgid "Configuration"
 msgstr "Конфигурация"
 
@@ -395,87 +395,38 @@ msgstr ""
 "Также можно объявлять новые детали, ссылаясь на другие детали, уже "
 "определённые в другом месте."
 
-#: ../../source/config_parts.rst:351
+#: ../../source/config_parts.rst:354
 msgid "Method"
 msgstr "Метод"
 
-#: ../../source/config_parts.rst:351
+#: ../../source/config_parts.rst:356
 msgid "Description"
 msgstr "Описание"
 
-#: ../../source/config_parts.rst:353
+#: ../../source/config_parts.rst:357
 msgid "Alias"
 msgstr "Alias"
 
-#: ../../source/config_parts.rst
-msgid "Create a shallow"
-msgstr "Создать поверхностный"
+#: ../../source/config_parts.rst:364
+msgid ""
+"Create a shallow clone of the existing part. For example, to make it "
+"easier to reference it locally."
+msgstr ""
+"Создать поверхностный клон существующей детали. Например, чтобы было проще ссылаться на неё локально."
 
-#: ../../source/config_parts.rst
-msgid "clone of the"
-msgstr "клон"
-
-#: ../../source/config_parts.rst
-msgid "existing part."
-msgstr "существующей детали."
-
-#: ../../source/config_parts.rst
-msgid "For example, to"
-msgstr "Например, чтобы было"
-
-#: ../../source/config_parts.rst
-msgid "make it easier to"
-msgstr "проще"
-
-#: ../../source/config_parts.rst
-msgid "reference it locally."
-msgstr "ссылаться на неё локально."
-
-#: ../../source/config_parts.rst:360
+#: ../../source/config_parts.rst:366
 msgid "Enrich"
 msgstr "Enrich"
 
-#: ../../source/config_parts.rst
-msgid "Create an opinionated"
-msgstr "Создать продуманную"
+#: ../../source/config_parts.rst:377
+msgid ""
+"Create an opinionated alternative to the existing part by initializing "
+"some of its parameters, and overriding any of its properties. For "
+"example, to avoid passing the same set of parameters many times."
+msgstr ""
+"Создать продуманную альтернативу существующей детали, инициализировав некоторые из её параметров и переопределив любые её свойства. Например, чтобы избежать передачи одного и того же набора параметров много раз."
 
-#: ../../source/config_parts.rst
-msgid "alternative to the"
-msgstr "альтернативу"
-
-#: ../../source/config_parts.rst
-msgid "existing part by"
-msgstr "существующей детали,"
-
-#: ../../source/config_parts.rst
-msgid "initializing some of"
-msgstr "инициализировав некоторые из"
-
-#: ../../source/config_parts.rst
-msgid "its parameters, and"
-msgstr "её параметров и"
-
-#: ../../source/config_parts.rst
-msgid "overriding any of its"
-msgstr "переопределив любые её"
-
-#: ../../source/config_parts.rst
-msgid "properties. For"
-msgstr "свойства. Например,"
-
-#: ../../source/config_parts.rst
-msgid "example, to avoid"
-msgstr "чтобы избежать"
-
-#: ../../source/config_parts.rst
-msgid "passing the same set"
-msgstr "передачи одного и того же набора"
-
-#: ../../source/config_parts.rst
-msgid "of parameters many times."
-msgstr "параметров много раз."
-
-#: ../../source/config_parts.rst:372
+#: ../../source/config_parts.rst:381
 msgid ""
 "Both are references rather than parts of their own. An ``enrich`` "
 "resolves to the *instance* of the object it points at that has the values"
@@ -493,7 +444,7 @@ msgstr ""
 "любой enrich в любом пакете, запрашивающий те же значения. ``alias`` "
 "разрешается в сам объект."
 
-#: ../../source/config_parts.rst:379
+#: ../../source/config_parts.rst:388
 msgid ""
 "That is also what the shape cache is keyed on: a reference takes the key "
 "of what it points at, so the geometry is stored once however many "
@@ -507,7 +458,7 @@ msgstr ""
 "масштабирует то, на что указывает, возвращает другую геометрию и потому "
 "получает другой ключ — ключ источника плюс то, что она добавляет."
 
-#: ../../source/config_parts.rst:385
+#: ../../source/config_parts.rst:394
 msgid ""
 "Because asking for a value is asking for the instance that has it, and an"
 " instance is named ``<name>;<param>=<value>,...``, a ``with:`` value may "
@@ -521,7 +472,7 @@ msgstr ""
 "невозможно было бы назвать. То же верно и для того, что параметр "
 "объявляет своим ``default:`` или предлагает в своём ``enum:``."
 
-#: ../../source/config_parts.rst:390
+#: ../../source/config_parts.rst:399
 msgid ""
 "An enrich says which values it wants, and nothing about how the object is"
 " built. ``path``, the requirements, the sandbox versions, the inputs of "
@@ -538,7 +489,7 @@ msgstr ""
 "проигнорированное, и объект получается тем же, каким он получился бы без "
 "него."
 
-#: ../../source/config_parts.rst:397
+#: ../../source/config_parts.rst:406
 msgid ""
 "Both are available for :ref:`sketches` and :ref:`assemblies` too, spelled"
 " the same way."
@@ -546,11 +497,11 @@ msgstr ""
 "Оба доступны и для :ref:`эскизов <sketches>`, и для :ref:`сборок "
 "<assemblies>`, и записываются так же."
 
-#: ../../source/config_parts.rst:403
+#: ../../source/config_parts.rst:412
 msgid "Part types the package defines itself"
 msgstr "Типы деталей, которые пакет определяет сам"
 
-#: ../../source/config_parts.rst:405
+#: ../../source/config_parts.rst:414
 msgid ""
 "The types above are the ones PartCAD implements. A package can also "
 "declare a type of its own, in a ``partTypes`` section, and then build "
@@ -568,7 +519,7 @@ msgstr ""
 "пакете, — и различаются они горстью параметров, а не отдельным скриптом у"
 " каждой."
 
-#: ../../source/config_parts.rst:427
+#: ../../source/config_parts.rst:436
 msgid ""
 "``kind`` is ``wrapper``, which is the default and currently the only "
 "kind. Its ``path`` (``<name>.py`` if left out) is a Python script that "
@@ -583,7 +534,7 @@ msgstr ""
 "том числе разрешённые ``parameters``, и который оставляет геометрию в "
 "глобальной переменной ``output``:"
 
-#: ../../source/config_parts.rst:441
+#: ../../source/config_parts.rst:450
 msgid ""
 "Because the script runs in a sandbox it may import OCP, build123d or "
 "CadQuery; ``pythonRequirements`` on the ``partType`` says what that "
@@ -598,7 +549,7 @@ msgstr ""
 ":`output-files`), только нацеленный на построение формы, а не на запись "
 "файла."
 
-#: ../../source/config_parts.rst:447
+#: ../../source/config_parts.rst:456
 msgid ""
 "A ``type`` beginning with ``:`` names a ``partType`` of the part's own "
 "package and is expanded to ``<package path>:<name>`` when the package is "
@@ -617,11 +568,11 @@ msgstr ""
 " объект, но сам по себе никогда не является формой: это то, как делаются "
 "детали, а не одна из них."
 
-#: ../../source/config_parts.rst:454
+#: ../../source/config_parts.rst:463
 msgid "See ``examples/produce_part_wrapper`` for the whole of the example above."
 msgstr "Пример выше целиком приведён в ``examples/produce_part_wrapper``."
 
-#: ../../source/config_parts.rst:456
+#: ../../source/config_parts.rst:465
 msgid ""
 "Should PartCAD implement a type natively that you find yourself writing "
 "again and again, please file an issue on GitHub or write to "
@@ -631,11 +582,11 @@ msgstr ""
 "бы реализовать нативно, пожалуйста, заведите issue на GitHub или напишите"
 " по адресу `support@partcad.org <mailto:support@partcad.org>`_."
 
-#: ../../source/config_parts.rst:463
+#: ../../source/config_parts.rst:472
 msgid "Parameters"
 msgstr "Параметры"
 
-#: ../../source/config_parts.rst:465
+#: ../../source/config_parts.rst:474
 msgid ""
 "Parameters are **inputs**. They are a request made of the object type "
 "that produces the part - the ``width`` a CadQuery script extrudes to, the"
@@ -650,7 +601,7 @@ msgstr ""
 "различающиеся параметром, — это разные формы, поэтому параметр входит в "
 "состав ключа кэша форм."
 
-#: ../../source/config_parts.rst:471
+#: ../../source/config_parts.rst:480
 msgid ""
 "What comes back out is :ref:`properties`, and the two are not the same "
 "thing even where they share a name: ``parameters.material`` asks for a "
@@ -662,7 +613,7 @@ msgstr ""
 "деталь из чего-то, а ``properties.material`` сообщает, из чего сделана "
 "получившаяся деталь."
 
-#: ../../source/config_parts.rst:476
+#: ../../source/config_parts.rst:485
 msgid ""
 "Most parameters are the part's own invention. A script may call one "
 "whatever it likes, and nothing outside that script knows what it means, "
@@ -681,7 +632,7 @@ msgstr ""
 "могут их соблюсти. Сегодня их три — ``material``, ``color`` и "
 "``tolerance``."
 
-#: ../../source/config_parts.rst:484
+#: ../../source/config_parts.rst:493
 msgid ""
 "What decides which types accept them is whether the part is a single "
 "homogeneous body - one solid, made of one thing - because that is what "
@@ -703,7 +654,7 @@ msgstr ""
 "таким же — выдавленное из единственного эскиза. ``stl``, ``cadquery``, "
 "``build123d``, ``sdf``, ``scad`` и ``extrude`` принимают все три."
 
-#: ../../source/config_parts.rst:493
+#: ../../source/config_parts.rst:502
 msgid ""
 "A STEP file is not one body. It can carry many solids, each already "
 "stating a material and a colour of its own, and naming one for the file "
@@ -724,7 +675,7 @@ msgstr ""
 "изготовить — отдельный вопрос, у которого есть собственный ответ ниже: "
 "см. :ref:`tolerance-field`."
 
-#: ../../source/config_parts.rst:502
+#: ../../source/config_parts.rst:511
 msgid ""
 "Every other part type rejects them too, but for a different reason: "
 "whether it should accept them has not been decided yet, and answering "
@@ -736,7 +687,7 @@ msgstr ""
 "тех пор, пока кто-нибудь не решит, оставляет вопрос открытым, а не "
 "закрывает его случайно."
 
-#: ../../source/config_parts.rst:506
+#: ../../source/config_parts.rst:515
 msgid ""
 "Declaring one of these under ``parameters:`` of a type that does not "
 "accept it is an error, not a warning. It costs the package that one part "
@@ -758,7 +709,7 @@ msgstr ""
 "нести собственные поля ``color:`` и ``material:``, описывающие, как "
 "выглядит одно из его значений, независимо от типа детали."
 
-#: ../../source/config_parts.rst:516
+#: ../../source/config_parts.rst:525
 msgid ""
 "``tolerance`` is the one of the three that has a default, ``0.0``: it "
 "reads back as that on any type that accepts it, whether or not a part "
@@ -779,7 +730,7 @@ msgstr ""
 "задавал. Допуск, который кто-то действительно объявил, участвует в ключе "
 "кэша, как и любой другой вход, — потому что он и есть вход."
 
-#: ../../source/config_parts.rst:524
+#: ../../source/config_parts.rst:533
 msgid ""
 "A tolerance of ``0.0`` means nobody said. It reads as a demand for "
 "perfect precision, which is not something a manufacturer can be asked "
@@ -795,7 +746,7 @@ msgstr ""
 "добираются через сборку в пакете. У детали, которая покупается, а не "
 "изготавливается, ничего не спрашивают: она приходит такой, какая есть."
 
-#: ../../source/config_parts.rst:530
+#: ../../source/config_parts.rst:539
 msgid ""
 "A CadQuery or build123d script is handed every parameter the part "
 "declares, each as a variable of the same name, and the script has to "
@@ -822,7 +773,7 @@ msgstr ""
 "свои параметры иначе — они дописываются перед ним в виде присваиваний, — "
 "поэтому там такого вопроса никогда не возникало."
 
-#: ../../source/config_parts.rst:541
+#: ../../source/config_parts.rst:550
 msgid ""
 "Each part may have a list of parameters that are passed into the scripts "
 "to modify the part. The parameters can be of types ``string``, ``float``,"
@@ -836,19 +787,22 @@ msgstr ""
 "возможных значений в ``enum``. Начальное значение параметра задаётся с "
 "помощью ``default``."
 
-#: ../../source/config_parts.rst:559
+#: ../../source/config_parts.rst:568
 msgid ""
 "There are several parameter names that are reserved for values used in "
 "visualization, simulation calculations and, if applicable, manufacturing "
 "(also referred to as **MCFTT parameters** using their first letters):"
 msgstr ""
-"Есть несколько имён параметров, зарезервированных для значений, используемых в визуализации, расчётах симуляции и, если применимо, в производстве (их также называют **MCFTT parameters** по их первым буквам):"
+"Есть несколько имён параметров, зарезервированных для значений, "
+"используемых в визуализации, расчётах симуляции и, если применимо, в "
+"производстве (их также называют **MCFTT parameters** по их первым "
+"буквам):"
 
-#: ../../source/config_parts.rst:563
+#: ../../source/config_parts.rst:572
 msgid "``material``"
 msgstr "``material``"
 
-#: ../../source/config_parts.rst:565
+#: ../../source/config_parts.rst:574
 msgid ""
 "Must point at an object of type ``material``, as ``<package>:<name>``. "
 "Some of them are defined in ``//pub/std/manufacturing/material``; see "
@@ -869,43 +823,43 @@ msgstr ""
 "правильного материала лежит на реализации производственного API (на "
 "объекте ``provider`` в PartCAD)."
 
-#: ../../source/config_parts.rst:575
+#: ../../source/config_parts.rst:584
 msgid "``color``"
 msgstr "``color``"
 
-#: ../../source/config_parts.rst:577
+#: ../../source/config_parts.rst:586
 msgid "This one is an object-type parameter too, with the same restriction."
 msgstr "Это тоже параметр типа объекта, с тем же ограничением."
 
-#: ../../source/config_parts.rst:579
+#: ../../source/config_parts.rst:588
 msgid "**Not implemented yet. Use color names for now.**"
 msgstr "**Пока не реализовано. Пока используйте названия цветов.**"
 
-#: ../../source/config_parts.rst:581
+#: ../../source/config_parts.rst:590
 msgid "``finish``"
 msgstr "``finish``"
 
-#: ../../source/config_parts.rst:583
+#: ../../source/config_parts.rst:592
 msgid "Optional. Can be omitted for no finish."
 msgstr "Необязательный. Можно опустить, если отделка не нужна."
 
-#: ../../source/config_parts.rst:585 ../../source/config_parts.rst:591
+#: ../../source/config_parts.rst:594 ../../source/config_parts.rst:600
 msgid "**Not implemented yet.**"
 msgstr "**Пока не реализовано.**"
 
-#: ../../source/config_parts.rst:587
+#: ../../source/config_parts.rst:596
 msgid "``texture``"
 msgstr "``texture``"
 
-#: ../../source/config_parts.rst:589
+#: ../../source/config_parts.rst:598
 msgid "Optional. Can be omitted for no texture."
 msgstr "Необязательный. Можно опустить, если текстура не нужна."
 
-#: ../../source/config_parts.rst:593
+#: ../../source/config_parts.rst:602
 msgid "``tolerance``"
 msgstr "``tolerance``"
 
-#: ../../source/config_parts.rst:595
+#: ../../source/config_parts.rst:604
 msgid ""
 "An object-type parameter as well, and the one with a default: omitting it"
 " is the same as writing ``0.0``, which is a claim to perfect precision "
@@ -918,7 +872,7 @@ msgstr ""
 "предназначенной к изготовлению. Задавайте ему настоящее значение для "
 "всего, что вы собираетесь изготавливать."
 
-#: ../../source/config_parts.rst:600
+#: ../../source/config_parts.rst:609
 msgid ""
 "``step`` and ``kicad`` parts state this as a ``tolerance:`` field instead"
 " of as a parameter, and their file may state it for them; see :ref"
@@ -928,7 +882,7 @@ msgstr ""
 "параметром, и их файл может указать это за них; см. :ref:`tolerance-"
 "field`."
 
-#: ../../source/config_parts.rst:604
+#: ../../source/config_parts.rst:613
 msgid ""
 "If the part has variable MCFTT parameters depending on the surface, then "
 "either this part must be broken down into multiple parts, or the values "
@@ -946,7 +900,7 @@ msgstr ""
 "(vendor,SKU) и не получил соответствующие производственные инструкции вне"
 " основного канала."
 
-#: ../../source/config_parts.rst:611
+#: ../../source/config_parts.rst:620
 msgid ""
 "The MCFTT parameters are not required and have no impact on parts that "
 "have ``vendor`` and ``sku`` set and that are procured using providers of "
@@ -956,7 +910,7 @@ msgstr ""
 "которых заданы ``vendor`` и ``sku`` и которые закупаются через "
 "поставщиков типа ``store``."
 
-#: ../../source/config_parts.rst:615
+#: ../../source/config_parts.rst:624
 msgid ""
 "The MCFTT parameters are a request, and the request is a manufacturing "
 "one: they say what the part should be made of, and how well, for the "
@@ -972,11 +926,11 @@ msgstr ""
 "указан материал, на них не отвечает, и ответ — не то, что экспортёр "
 "записывает в файл. Этим занимается :ref:`properties` ниже."
 
-#: ../../source/config_parts.rst:624
+#: ../../source/config_parts.rst:633
 msgid "Tolerance on the types that state it in the file"
 msgstr "Допуск у типов, которые указывают его в файле"
 
-#: ../../source/config_parts.rst:626
+#: ../../source/config_parts.rst:635
 msgid ""
 "``step`` and ``kicad`` reject the ``tolerance`` *parameter*, for the "
 "reason above, which would leave them with no way to say how precisely a "
@@ -994,7 +948,7 @@ msgstr ""
 "GD&T — допуск «плюс-минус» на размер, допуск плоскостности или "
 "позиционный допуск на элемент, — поэтому PartCAD читает файл."
 
-#: ../../source/config_parts.rst:633
+#: ../../source/config_parts.rst:642
 msgid ""
 "Plenty of STEP files carry none of it. For them - and only on the types "
 "whose file could have carried it - the part declaration takes a "
@@ -1004,7 +958,7 @@ msgstr ""
 "чей файл мог бы это нести, — объявление детали принимает собственное "
 "**поле** ``tolerance:``:"
 
-#: ../../source/config_parts.rst:644
+#: ../../source/config_parts.rst:653
 msgid ""
 "It is a field rather than a parameter because it asks nothing of the type"
 " that produces the shape: the file is read the same way whether or not it"
@@ -1024,7 +978,7 @@ msgstr ""
 "``alias`` или ``enrich`` может его нести и игнорирует его, как и всё "
 "прочее, что он несёт и что описывает, как строится его источник."
 
-#: ../../source/config_parts.rst:653
+#: ../../source/config_parts.rst:662
 msgid ""
 "There are then three places a part's tolerance can come from, and PartCAD"
 " reads them in this order:"
@@ -1032,7 +986,7 @@ msgstr ""
 "Таким образом, допуск детали может прийти из трёх мест, и PartCAD читает "
 "их в таком порядке:"
 
-#: ../../source/config_parts.rst:656
+#: ../../source/config_parts.rst:665
 msgid ""
 "The ``tolerance:`` field, where the type takes one. It outranks the file:"
 " it is written precisely because the file did not say, and a file that "
@@ -1044,7 +998,7 @@ msgstr ""
 "начинает говорить что-то другое, — это изменение, на которое надо "
 "посмотреть, а не принять молча."
 
-#: ../../source/config_parts.rst:660
+#: ../../source/config_parts.rst:669
 msgid ""
 "What the file itself states. A file that states one tolerance answers "
 "with it, whatever unit it is written in - a file in inches is read as "
@@ -1053,7 +1007,7 @@ msgstr ""
 "То, что указывает сам файл. Файл, указывающий один допуск, им и отвечает,"
 " в каких бы единицах он ни был записан: файл в дюймах читается как дюймы."
 
-#: ../../source/config_parts.rst:662
+#: ../../source/config_parts.rst:671
 msgid ""
 "The ``tolerance`` parameter, for the homogeneous types that accept it, "
 "with its default of ``0.0``."
@@ -1061,7 +1015,7 @@ msgstr ""
 "Параметр ``tolerance`` — для однородных типов, которые его принимают, со "
 "значением по умолчанию ``0.0``."
 
-#: ../../source/config_parts.rst:665
+#: ../../source/config_parts.rst:674
 msgid ""
 "A file that tolerances several features differently has no single "
 "tolerance, and PartCAD does not invent one: the tightest overstates what "
@@ -1081,7 +1035,7 @@ msgstr ""
 "изготовить, причём подробнее, чем вмещает одно число, и к изготовителю "
 "отправляется именно файл."
 
-#: ../../source/config_parts.rst:673
+#: ../../source/config_parts.rst:682
 msgid ""
 "What ``pc test`` rejects is still only a part that could have said and "
 "did not: ``0.0`` on a type that takes the field or the parameter. A part "
@@ -1095,7 +1049,7 @@ msgstr ""
 "указывает, сообщается иначе, с указанием типа: это факт о типе детали, а "
 "не об объявлении."
 
-#: ../../source/config_parts.rst:678
+#: ../../source/config_parts.rst:687
 msgid ""
 "The geometric uncertainty every STEP file carries "
 "(``UNCERTAINTY_MEASURE_WITH_UNIT``, typically ``1e-07`` mm) is "
@@ -1110,11 +1064,11 @@ msgstr ""
 "экспортированному файлу STEP производственный допуск, который не выдержит"
 " ни одна мастерская."
 
-#: ../../source/config_parts.rst:687
+#: ../../source/config_parts.rst:696
 msgid "Properties"
 msgstr "Свойства"
 
-#: ../../source/config_parts.rst:689
+#: ../../source/config_parts.rst:698
 msgid ""
 "Properties are **outputs**. They are what instantiating the object "
 "produced - what the resulting shape reports about itself - and they are "
@@ -1130,7 +1084,7 @@ msgstr ""
 "прочитанная из STL, может их иметь, — это объявить их; при импорте URDF "
 "этот раздел заполняется тем, что уже указано в файле."
 
-#: ../../source/config_parts.rst:707
+#: ../../source/config_parts.rst:716
 msgid ""
 "Assemblies take the same section. Nothing in it takes part in the shape "
 "cache - it says nothing about the geometry - which also means nothing "
@@ -1160,7 +1114,7 @@ msgstr ""
 "чем переименование детали. Подхватывает их ``pc system reset`` или "
 "изменение того, что сборка действительно хеширует."
 
-#: ../../source/config_parts.rst:719
+#: ../../source/config_parts.rst:728
 msgid ""
 "Every ``physics`` property has a PartCAD name and a PartCAD unit, and the"
 " set of them is closed. Lengths are millimetres and angles degrees, as "
@@ -1186,7 +1140,7 @@ msgstr ""
 "а о свойстве, которое есть у PartCAD и которое URDF не может выразить, "
 "сообщается при экспорте. См. :doc:`simulation`."
 
-#: ../../source/config_parts.rst:730
+#: ../../source/config_parts.rst:739
 msgid ""
 "A file type that has a way to state these declares ``properties: true`` "
 "in its ``export:`` section, and is handed them keyed by the full name of "
@@ -1196,3 +1150,51 @@ msgstr ""
 "true`` в своём разделе ``export:``, и ему передаются свойства, ключами "
 "которых служат полные имена форм, которым они принадлежат. Из встроенных "
 "форматов так делает URDF."
+
+#~ msgid "Create a shallow"
+#~ msgstr "Создать поверхностный"
+
+#~ msgid "clone of the"
+#~ msgstr "клон"
+
+#~ msgid "existing part."
+#~ msgstr "существующей детали."
+
+#~ msgid "For example, to"
+#~ msgstr "Например, чтобы было"
+
+#~ msgid "make it easier to"
+#~ msgstr "проще"
+
+#~ msgid "reference it locally."
+#~ msgstr "ссылаться на неё локально."
+
+#~ msgid "Create an opinionated"
+#~ msgstr "Создать продуманную"
+
+#~ msgid "alternative to the"
+#~ msgstr "альтернативу"
+
+#~ msgid "existing part by"
+#~ msgstr "существующей детали,"
+
+#~ msgid "initializing some of"
+#~ msgstr "инициализировав некоторые из"
+
+#~ msgid "its parameters, and"
+#~ msgstr "её параметров и"
+
+#~ msgid "overriding any of its"
+#~ msgstr "переопределив любые её"
+
+#~ msgid "properties. For"
+#~ msgstr "свойства. Например,"
+
+#~ msgid "example, to avoid"
+#~ msgstr "чтобы избежать"
+
+#~ msgid "passing the same set"
+#~ msgstr "передачи одного и того же набора"
+
+#~ msgid "of parameters many times."
+#~ msgstr "параметров много раз."
