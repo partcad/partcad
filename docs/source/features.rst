@@ -143,6 +143,11 @@ the viewer open for the editor to notice it. On Linux it reads it through
 two open windows do not fight. ``partcad.spaceMouse.sensitivity`` sets the speed,
 ``partcad.spaceMouse.invert`` reverses individual axes, and ``partcad.spaceMouse.enabled`` turns it off.
 
+What the Viewer is showing can be asked of it from outside: ``pc ide state`` (see :doc:`cli`) reports the tab and
+sub-tab on screen, the filter and the selections of each sub-tab, and a screenshot of the one on screen -- together
+with the Explorer's selection and the Inspector's parameters. It is what an AI agent working beside you reads to
+see what you are looking at.
+
 An object's own ports start out drawn. The ports of everything inside it do not: an assembly of forty parts has
 a frame at every hole of every one of them, and all of it at once shows nothing. A line whose tick is grey
 rather than solid is one that is showing while something under it is hidden — which is how a folded-up line says

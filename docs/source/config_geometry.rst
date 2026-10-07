@@ -526,7 +526,7 @@ Parametric interfaces
 
 An interface can be declared once and asked for with values, exactly as a part
 or a sketch is: the values go in ``parameters:``, and a reference names them
-with the same ``;<name>=<value>`` suffix ``pc inspect cube;width=20`` uses.
+with the same ``;<name>=<value>`` suffix ``pc ide view cube;width=20`` uses.
 
 .. code-block:: yaml
 

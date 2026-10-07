@@ -220,9 +220,11 @@ def _transcript_panels():
     end = text.index("\nCommon options apply", start)
     panels, panel = {}, None
     for line in text[start:end].split("\n"):
-        heading = re.fullmatch(r"  ([A-Z][a-z]+) commands:", line)
+        # A panel is a two-space-indented line ending in a colon, named as
+        # command_groups names it: "Host commands", "Interacting with IDE".
+        heading = re.fullmatch(r"  ([A-Z][A-Za-z ]+):", line)
         if heading:
-            panel = "%s commands" % heading.group(1)
+            panel = heading.group(1)
             panels[panel] = []
             continue
         # '    name         description'. One space is enough: the description

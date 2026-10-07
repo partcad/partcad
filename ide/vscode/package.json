@@ -478,7 +478,8 @@
         "title": "Show Terminal",
         "category": "PartCAD",
         "command": "partcad.showTerminal",
-        "icon": "$(terminal)"
+        "icon": "$(terminal)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.promptInitPackage",

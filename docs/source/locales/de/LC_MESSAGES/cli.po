@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-06 14:39+0000\n"
+"POT-Creation-Date: 2026-10-07 09:01-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -672,235 +672,15 @@ msgstr ""
 "weiterhin einen eigenen Dienst aus --, sodass ein Daemon unter Windows "
 "heute vor allem den warmen Kontext der Editor-Erweiterung einbringt."
 
-#: ../../source/cli.rst:230
-msgid "``pc open``"
-msgstr "``pc open``"
-
-#: ../../source/cli.rst:231
-msgid "Open a file in a third-party application, on this machine::"
-msgstr "Öffnet eine Datei in einer Drittanwendung, auf diesem Rechner::"
-
-#: ../../source/cli.rst:241
-msgid ""
-"``--with`` names the application: ``freecad`` (the default), ``blender`` "
-"and ``kicad`` for a board are the ones PartCAD itself ships. ``gazebo`` "
-"and ``mujoco`` come from the plugin package for that engine (`partcad-"
-"sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_, `partcad-"
-"sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_), beside the"
-" reader, the exporter and the simulator for its scene format, so they are"
-" offered in a workspace that imports one and are an unknown application "
-"anywhere else. A locally installed one is always used when there is one: "
-"the command looks on the ``PATH``, in ``/Applications`` on macOS, under "
-"``Program Files`` on Windows, and for a flatpak on Linux. Gazebo is "
-"looked for under all three of the names it has had (``gz sim``, ``ign "
-"gazebo``, ``gazebo``), and whichever the machine has is the one used."
-msgstr ""
-"``--with`` benennt die Anwendung: ``freecad`` (die Voreinstellung), "
-"``blender`` und ``kicad`` für eine Platine sind diejenigen, die PartCAD "
-"selbst mitliefert. ``gazebo`` und ``mujoco`` kommen aus dem Plugin-Paket "
-"für die jeweilige Engine (`partcad-sim-gazebo "
-"<https://github.com/partcad/partcad-sim-gazebo>`_, `partcad-sim-mujoco "
-"<https://github.com/partcad/partcad-sim-mujoco>`_), neben dem Leser, dem "
-"Exporter und dem Simulator für deren Szenenformat, sodass sie in einem "
-"Workspace angeboten werden, der eines davon importiert, und überall sonst "
-"eine unbekannte Anwendung sind. Eine lokal installierte wird immer "
-"verwendet, wenn es eine gibt: der Befehl sucht im ``PATH``, unter macOS in "
-"``/Applications``, unter Windows unter ``Program Files`` und unter Linux "
-"nach einem Flatpak. Nach Gazebo wird unter allen drei Namen gesucht, die "
-"es hatte (``gz sim``, ``ign gazebo``, ``gazebo``), und der auf dem Rechner "
-"vorhandene wird verwendet."
-
-#: ../../source/cli.rst:251
-msgid ""
-"Blender reads meshes and nothing else, so a file that is not one is "
-"converted to STL and Blender is given that instead: an STL, an OBJ or a "
-"glTF is imported as it is, while a STEP file, a CadQuery script or a mesh"
-" in a format Blender ships no importer for (3MF) is converted first. This"
-" is the one thing ``pc open`` asks the PartCAD daemon for, because "
-"turning a solid into a mesh is CAD work; the window still opens on the "
-"machine the command was run on. The converted copy is written under this "
-"workspace's own directory (never beside your file), named after the "
-"object it came from, and reused until that object changes. ``--type`` "
-"says what the file holds when its name does not -- a ``.py`` is a "
-"CadQuery script, a build123d one or an SDF one -- and the VS Code "
-"extension passes the declared type of the object you clicked. A "
-"``.blend`` is Blender's own file and is opened, not converted."
-msgstr ""
-"Blender liest Meshes und sonst nichts, daher wird eine Datei, die keines "
-"ist, nach STL konvertiert und Blender bekommt diese stattdessen: ein STL, "
-"ein OBJ oder ein glTF wird so importiert, wie es ist, während eine "
-"STEP-Datei, ein CadQuery-Skript oder ein Mesh in einem Format, für das "
-"Blender keinen Importer mitbringt (3MF), zuerst konvertiert wird. Das ist "
-"das Einzige, wofür ``pc open`` den PartCAD-Daemon fragt, denn einen Körper "
-"in ein Mesh zu verwandeln ist CAD-Arbeit; das Fenster öffnet sich "
-"weiterhin auf dem Rechner, auf dem der Befehl ausgeführt wurde. Die "
-"konvertierte Kopie wird im eigenen Verzeichnis dieses Workspace abgelegt "
-"(nie neben Ihrer Datei), benannt nach dem Objekt, aus dem sie stammt, und "
-"wiederverwendet, bis sich dieses Objekt ändert. ``--type`` sagt, was die "
-"Datei enthält, wenn ihr Name es nicht tut -- eine ``.py`` ist ein "
-"CadQuery-, ein build123d- oder ein SDF-Skript --, und die "
-"VS-Code-Erweiterung übergibt den deklarierten Typ des angeklickten "
-"Objekts. Eine ``.blend`` ist Blenders eigene Datei und wird geöffnet, "
-"nicht konvertiert."
-
-#: ../../source/cli.rst:261
-msgid ""
-"MuJoCo reads MJCF and no other model format, and a scene that is not "
-"already one is **not** converted here. That is not an omission: MJCF is "
-"written by ``partcad-sim-mujoco``'s exporter and a Gazebo world is read "
-"by ``partcad-sim-gazebo``'s reader, and a file handed to ``pc open`` has "
-"no package around it to reach either through. So such a file is refused "
-"with the export that does work rather than converted wrongly. An "
-"application's ``open:`` entry names the extensions its own format is "
-"stored in (``sceneExtensions``), which is how a file that already is one "
-"goes straight over without any conversion at all."
-msgstr ""
-"MuJoCo liest MJCF und kein anderes Modellformat, und eine Szene, die noch "
-"keines ist, wird hier **nicht** konvertiert. Das ist kein Versäumnis: MJCF "
-"wird vom Exporter von ``partcad-sim-mujoco`` geschrieben und eine "
-"Gazebo-Welt vom Leser von ``partcad-sim-gazebo`` gelesen, und eine Datei, "
-"die ``pc open`` übergeben wird, hat kein Paket um sich, über das eines von "
-"beidem erreichbar wäre. Eine solche Datei wird daher mit dem Hinweis auf "
-"den Export, der funktioniert, abgelehnt, statt falsch konvertiert zu "
-"werden. Der Eintrag ``open:`` einer Anwendung benennt die Erweiterungen, "
-"in denen ihr eigenes Format gespeichert wird (``sceneExtensions``), und so "
-"geht eine Datei, die bereits eines ist, ganz ohne Konvertierung direkt "
-"hinüber."
-
-#: ../../source/cli.rst:268
-msgid ""
-"An object that only means something inside a package -- an ASSY file, a "
-"URDF -- has nothing to convert ad-hoc, and is refused with that for the "
-"same reason: export it to a mesh first (``pc export -t stl``), or a scene"
-" to its engine's format (``pc export -S -t sim-mujoco:mjcf``), and open "
-"that."
-msgstr ""
-"Ein Objekt, das nur innerhalb eines Pakets etwas bedeutet -- eine "
-"ASSY-Datei, eine URDF --, hat nichts, was sich ad hoc konvertieren ließe, "
-"und wird aus demselben Grund mit diesem Hinweis abgelehnt: exportieren Sie "
-"es zuerst in ein Mesh (``pc export -t stl``) oder eine Szene in das Format "
-"ihrer Engine (``pc export -S -t sim-mujoco:mjcf``) und öffnen Sie das."
-
-#: ../../source/cli.rst:272
-msgid ""
-"KiCad is handed the board rather than the file named, when the two are "
-"not the same: a ``kicad`` part *is* the STEP file KiCad's command line "
-"writes out of the board, so ``pc open --with kicad`` on it opens the "
-"``.kicad_pro`` (or ``.kicad_pcb``, or ``.kicad_sch``) beside it. Nothing "
-"is created here and nothing is rendered -- a file with no board beside it"
-" is handed over as it is. Every application but Blender is given the file"
-" it was pointed at, whatever it holds."
-msgstr ""
-"KiCad bekommt die Platine statt der benannten Datei, wenn die beiden nicht "
-"dasselbe sind: ein ``kicad``-Teil *ist* die STEP-Datei, die KiCads "
-"Befehlszeile aus der Platine schreibt, sodass ``pc open --with kicad`` "
-"darauf die danebenliegende ``.kicad_pro`` (oder ``.kicad_pcb`` oder "
-"``.kicad_sch``) öffnet. Hier wird nichts erzeugt und nichts gerendert -- "
-"eine Datei ohne Platine daneben wird so übergeben, wie sie ist. Jede "
-"Anwendung außer Blender bekommt die Datei, auf die sie gezeigt wurde, was "
-"auch immer darin steht."
-
-#: ../../source/cli.rst:278
-msgid ""
-"With ``--use-docker``, a machine that has no local installation runs the "
-"application in a container instead — one container per application, named"
-" after it (``partcad-freecad``, ``partcad-blender``, ``partcad-gazebo``, "
-"``partcad-mujoco``, ``partcad-kicad``), created from the application's "
-"image (``--docker-image`` overrides it; FreeCAD's is "
-"``linuxserver/freecad:latest``, since the FreeCAD project publishes no "
-"image of its own, Blender's is ``linuxserver/blender:latest`` for the "
-"same reason, KiCad's is the ``ghcr.io/partcad/partcad-container-kicad`` "
-"image PartCAD already builds for ``kicad`` parts, and an engine's is "
-"whatever its plugin package declares) the first time and reused "
-"afterwards, so a container you have prepared keeps being the one that is "
-"used. Without ``--use-docker``, a machine with neither the application "
-"nor Docker is told so rather than being left with a command that quietly "
-"did nothing. Remove the application's own container (``docker rm -f "
-"partcad-freecad``, ``partcad-blender``, ``partcad-gazebo``, ``partcad-"
-"mujoco``, ``partcad-kicad``) to have the next ``pc open`` create a fresh "
-"one. The workspace and the directory holding this workspace's daemon "
-"socket are mounted **at the paths they have on the host**, which is what "
-"lets one path mean the same thing on both sides. A file that is not in "
-"this workspace gets its own workspace mounted instead, so that whatever "
-"is mounted always contains the file the application is handed; a "
-"container created for one workspace and then used from another says so, "
-"and says to remove it, rather than opening a name the container cannot "
-"resolve."
-msgstr ""
-"Mit ``--use-docker`` führt ein Rechner ohne lokale Installation die "
-"Anwendung stattdessen in einem Container aus — ein Container pro "
-"Anwendung, nach ihr benannt (``partcad-freecad``, ``partcad-blender``, "
-"``partcad-gazebo``, ``partcad-mujoco``, ``partcad-kicad``), beim ersten "
-"Mal aus dem Image der Anwendung erzeugt (``--docker-image`` überschreibt "
-"es; FreeCADs ist ``linuxserver/freecad:latest``, da das FreeCAD-Projekt "
-"kein eigenes Image veröffentlicht, Blenders ist aus demselben Grund "
-"``linuxserver/blender:latest``, KiCads ist das Image "
-"``ghcr.io/partcad/partcad-container-kicad``, das PartCAD ohnehin für "
-"``kicad``-Teile baut, und das einer Engine ist das, was ihr Plugin-Paket "
-"deklariert) und danach wiederverwendet, sodass ein von Ihnen vorbereiteter "
-"Container weiterhin der verwendete bleibt. Ohne ``--use-docker`` bekommt "
-"ein Rechner, der weder die Anwendung noch Docker hat, das gesagt, statt "
-"mit einem Befehl zurückzubleiben, der stillschweigend nichts getan hat. "
-"Entfernen Sie den eigenen Container der Anwendung (``docker rm -f "
-"partcad-freecad``, ``partcad-blender``, ``partcad-gazebo``, "
-"``partcad-mujoco``, ``partcad-kicad``), damit das nächste ``pc open`` "
-"einen frischen erzeugt. Der Workspace und das Verzeichnis, das den "
-"Daemon-Socket dieses Workspace enthält, werden **unter den Pfaden "
-"eingehängt, die sie auf dem Host haben**, und genau das lässt einen Pfad "
-"auf beiden Seiten dasselbe bedeuten. Eine Datei, die nicht in diesem "
-"Workspace liegt, bekommt ihren eigenen Workspace eingehängt, sodass das "
-"Eingehängte immer die Datei enthält, die der Anwendung übergeben wird; ein "
-"Container, der für einen Workspace erzeugt und dann aus einem anderen "
-"verwendet wurde, sagt das und sagt, dass er zu entfernen ist, statt einen "
-"Namen zu öffnen, den der Container nicht auflösen kann."
-
-#: ../../source/cli.rst:296
-msgid ""
-"A containerised application draws on the host's X display. On Linux that "
-"display is usually a socket, which is shared with the container along "
-"with its authority cookie, and nothing needs configuring; a display "
-"reached over TCP — a forwarded one, or an X server on macOS or Windows "
-"(XQuartz, VcXsrv) — has to be installed and allowed to accept the "
-"connection. When there is none, the command says which one to install and"
-" what to run rather than starting a container whose window never appears."
-msgstr ""
-"Eine containerisierte Anwendung zeichnet auf dem X-Display des Hosts. "
-"Unter Linux ist dieses Display meist ein Socket, der zusammen mit seinem "
-"Authority-Cookie mit dem Container geteilt wird, und es ist nichts zu "
-"konfigurieren; ein über TCP erreichtes Display — ein weitergeleitetes oder "
-"ein X-Server unter macOS oder Windows (XQuartz, VcXsrv) — muss installiert "
-"sein und die Verbindung zulassen. Wenn es keines gibt, sagt der Befehl, "
-"welches zu installieren und was auszuführen ist, statt einen Container zu "
-"starten, dessen Fenster nie erscheint."
-
-#: ../../source/cli.rst:302
-msgid ""
-"Like ``pc lint --file`` and ``pc upgrade``, this never talks to the "
-"daemon — a daemon can be remote, where the window would open on somebody "
-"else's screen. That is also why it takes a path rather than a "
-"``<package>:<part>`` name: resolving a name is a package-graph question, "
-"which is the round trip this command does not make. ``--json`` prints "
-"what happened (or the reason it did not) as one object, which is what the"
-" VS Code extension's \"Open in...\" context menu reads."
-msgstr ""
-"Wie ``pc lint --file`` und ``pc upgrade`` spricht dies nie mit dem Daemon "
-"— ein Daemon kann entfernt sein, und das Fenster würde sich dann auf dem "
-"Bildschirm eines anderen öffnen. Deshalb nimmt es auch einen Pfad statt "
-"eines ``<package>:<part>``-Namens: einen Namen aufzulösen ist eine Frage "
-"an den Paketgraphen, also genau der Rundlauf, den dieser Befehl nicht "
-"macht. ``--json`` gibt als ein Objekt aus, was geschehen ist (oder warum "
-"nicht), und das liest das Kontextmenü „Open in...“ der "
-"VS-Code-Erweiterung."
-
-#: ../../source/cli.rst:310
+#: ../../source/cli.rst:232
 msgid "Package commands"
 msgstr "Paketbefehle"
 
-#: ../../source/cli.rst:312
+#: ../../source/cli.rst:234
 msgid "``pc init``"
 msgstr "``pc init``"
 
-#: ../../source/cli.rst:313
+#: ../../source/cli.rst:235
 msgid ""
 "Create a new PartCAD package (a ``partcad.yaml`` file) in the current "
 "directory. Use ``-i`` for interactive mode, and options such as "
@@ -912,7 +692,7 @@ msgstr ""
 "sowie Optionen wie ``--desc``, ``--url`` und ``--manufacturable``, um "
 "Paket-Metadaten vorab auszufüllen."
 
-#: ../../source/cli.rst:316
+#: ../../source/cli.rst:238
 msgid ""
 "It also sets up the repository the package is in: a **Render** command in"
 " ``.vscode/launch.json``, and the AI agent skills that teach a coding "
@@ -930,7 +710,7 @@ msgstr ""
 "sie geschrieben hat. Keines von beiden ist ein Grund, den Befehl scheitern "
 "zu lassen."
 
-#: ../../source/cli.rst:322
+#: ../../source/cli.rst:244
 msgid ""
 "``--no-skills`` skips the skills. ``--skills-only`` installs *just* them "
 "and touches no package at all, which is how a repository that has a "
@@ -951,7 +731,7 @@ msgstr ""
 "Fehler, denn ein Tippfehler, der nichts installiert, sieht genauso aus wie "
 "ein Agent, der noch nicht unterstützt wird."
 
-#: ../../source/cli.rst:329
+#: ../../source/cli.rst:251
 msgid ""
 "Installing again updates what is there and **removes the skills PartCAD "
 "has stopped shipping**: a retired skill left behind describes a CLI that "
@@ -969,11 +749,11 @@ msgstr ""
 "hat, und ein ``pc-``-Skill ohne einen solchen gehört jemand anderem und "
 "bleibt unangetastet."
 
-#: ../../source/cli.rst:334
+#: ../../source/cli.rst:256
 msgid "``pc install``"
 msgstr "``pc install``"
 
-#: ../../source/cli.rst:335
+#: ../../source/cli.rst:257
 msgid ""
 "Download everything the current package needs to be built - the PartCAD "
 "counterpart of ``npm install``. It fetches all imported packages, then "
@@ -1000,11 +780,11 @@ msgstr ""
 "<package>...``, um auch die Objekte der Pakete darunter vorzubereiten "
 "(siehe :ref:`recursive-names`)."
 
-#: ../../source/cli.rst:344
+#: ../../source/cli.rst:266
 msgid "``pc update``"
 msgstr "``pc update``"
 
-#: ../../source/cli.rst:345
+#: ../../source/cli.rst:267
 msgid ""
 "Force update all imported packages to their latest versions. This updates"
 " the packages a package imports; to upgrade the PartCAD installation "
@@ -1015,11 +795,11 @@ msgstr ""
 "PartCAD-Installation selbst zu aktualisieren, verwenden Sie ``pc "
 "upgrade``."
 
-#: ../../source/cli.rst:348
+#: ../../source/cli.rst:270
 msgid "``pc lint``"
 msgstr "``pc lint``"
 
-#: ../../source/cli.rst:349
+#: ../../source/cli.rst:271
 msgid ""
 "Run linting checks on the files within packages. Name the package as ``-P"
 " <package>...`` to check the packages below it too (see :ref:`recursive-"
@@ -1044,15 +824,15 @@ msgstr ""
 "verbotenem ``how:``) oder ``auto``, die Voreinstellung, die die "
 "Deklaration aus dem Paket liest, das die Datei benennt."
 
-#: ../../source/cli.rst:359
+#: ../../source/cli.rst:281
 msgid "Object commands"
 msgstr "Objektbefehle"
 
-#: ../../source/cli.rst:361
+#: ../../source/cli.rst:283
 msgid "``pc list``"
 msgstr "``pc list``"
 
-#: ../../source/cli.rst:362
+#: ../../source/cli.rst:284
 msgid ""
 "List components. Subcommands select what to list: ``all``, ``parts``, "
 "``sketches``, ``assemblies``, ``scenes``, ``interfaces``, ``mates``, "
@@ -1062,7 +842,7 @@ msgstr ""
 "``all``, ``parts``, ``sketches``, ``assemblies``, ``scenes``, "
 "``interfaces``, ``mates``, ``providers``, ``software`` und ``packages``."
 
-#: ../../source/cli.rst:365
+#: ../../source/cli.rst:287
 msgid ""
 "Each takes the package to list as its argument, the current one by "
 "default. Name it as ``<package>...`` to list the packages below it too — "
@@ -1073,11 +853,11 @@ msgstr ""
 "darunter aufzulisten — ``pc list parts //pub/examples...`` (siehe "
 ":ref:`recursive-names`)."
 
-#: ../../source/cli.rst:368
+#: ../../source/cli.rst:290
 msgid "``pc add``"
 msgstr "``pc add``"
 
-#: ../../source/cli.rst:369
+#: ../../source/cli.rst:291
 msgid ""
 "Add an object to a package. Subcommands: ``dep`` (a dependency), "
 "``sketch``, ``part``, ``assembly``, ``scene``, and ``software``."
@@ -1086,7 +866,7 @@ msgstr ""
 "Abhängigkeit), ``sketch``, ``part``, ``assembly``, ``scene`` und "
 "``software``."
 
-#: ../../source/cli.rst:372
+#: ../../source/cli.rst:294
 msgid ""
 "Each object subcommand takes a file the package already has, **or an "
 "http(s) URL**. Given a URL, the file is fetched once so that the "
@@ -1109,11 +889,11 @@ msgstr ""
 "denn eine ohne den Hash geschriebene Deklaration ist genau die nicht "
 "festgeschriebene, zu deren Vermeidung dies existiert."
 
-#: ../../source/cli.rst:379
+#: ../../source/cli.rst:301
 msgid "``pc import``"
 msgstr "``pc import``"
 
-#: ../../source/cli.rst:380
+#: ../../source/cli.rst:302
 msgid ""
 "Import an existing object into a package. Subcommands: ``part`` (import "
 "an existing part and optionally convert its format), ``assembly`` (import"
@@ -1141,11 +921,11 @@ msgstr ""
 "Szene vom Typ dieses Lesers (siehe :ref:`assembly_step` und "
 ":ref:`scenes`)."
 
-#: ../../source/cli.rst:390
+#: ../../source/cli.rst:312
 msgid "``pc test``"
 msgstr "``pc test``"
 
-#: ../../source/cli.rst:391
+#: ../../source/cli.rst:313
 msgid ""
 "Run tests on a part, assembly, or scene. Name the package as ``-P "
 "<package>...`` to test the packages below it too, or the object as "
@@ -1175,7 +955,7 @@ msgstr ""
 "ein Teil anfordert, ohne Befund zurückkommen (``fea`` und ``cfd``; siehe "
 ":ref:`pc cae <cae>`)."
 
-#: ../../source/cli.rst:401
+#: ../../source/cli.rst:323
 msgid ""
 "``manufacturability`` answered to the name ``cam`` until :ref:`pc cam "
 "<cam>` existed, at which point one word was answering two questions -- "
@@ -1192,7 +972,7 @@ msgstr ""
 "methodenspezifischen Geschwister, und ``-f cam`` wählt allein die "
 "Bahnprüfung."
 
-#: ../../source/cli.rst:406
+#: ../../source/cli.rst:328
 msgid ""
 "Three of them ask something else: not whether the object built, but "
 "whether what was built is what somebody meant. ``shell`` fails a part "
@@ -1229,7 +1009,7 @@ msgstr ""
 "Geometrie gelesen, die das Objekt bereits erzeugt hat, und wird daher bei "
 "jedem Teil gestellt."
 
-#: ../../source/cli.rst:417
+#: ../../source/cli.rst:339
 msgid ""
 "None of the three can be turned off on an object. A part that is a "
 "surface, or has collapsed in one direction, or is inside out, is a part "
@@ -1249,7 +1029,7 @@ msgstr ""
 "Skizze wird nicht daraufhin gemessen, ob sie in jeder Richtung Ausdehnung "
 "hat, und eine Baugruppe wird über ihre Teile geprüft."
 
-#: ../../source/cli.rst:423
+#: ../../source/cli.rst:345
 msgid ""
 "The manufacturability test asks for exactly what ``pc supply`` would "
 "order. An assembly that is sold assembled (see :ref:`procurement`) passes"
@@ -1266,7 +1046,7 @@ msgstr ""
 "woraus sie beschafft wird -- ihre Teile und die Unterbaugruppen, die "
 "montiert bestellt werden --, muss für sich allein beschaffbar sein."
 
-#: ../../source/cli.rst:429
+#: ../../source/cli.rst:351
 msgid ""
 "It also requires what is to be made to be *reproducible*: an object read "
 "from a file the package fetches rather than carries has to pin it with "
@@ -1288,11 +1068,11 @@ msgstr ""
 "Platine, die niemand flashen kann, ist keine Platine, die irgendjemand "
 "herstellen kann."
 
-#: ../../source/cli.rst:435
+#: ../../source/cli.rst:357
 msgid "``pc sim``"
 msgstr "``pc sim``"
 
-#: ../../source/cli.rst:436
+#: ../../source/cli.rst:358
 msgid ""
 "Run the simulations a part or an assembly declares in its ``simulate:`` "
 "section, and check the ``validation:`` condition each of them states. Use"
@@ -1312,7 +1092,7 @@ msgstr ""
 "Simulations-Plugin gemeldet hat. Eine Validierung, die nicht hält, endet "
 "mit einem Wert ungleich null."
 
-#: ../../source/cli.rst:443
+#: ../../source/cli.rst:365
 msgid ""
 "Where ``pc test`` asks whether a part can be *made*, this asks whether it"
 " *works*: it places the object in the scene the declaration names, at the"
@@ -1331,48 +1111,34 @@ msgstr ""
 "installiert werden -- das Plugin läuft in einer PartCAD-Sandbox, die "
 "installiert, was es braucht."
 
-#: ../../source/cli.rst:449
+#: ../../source/cli.rst:371
 msgid ""
 "PartCAD implements no simulator: a package imports one and names it in "
 "``simulation:`` (`partcad-sim-mujoco <https://github.com/partcad/partcad-"
 "sim-mujoco>`_ is the MuJoCo one and `partcad-sim-gazebo "
 "<https://github.com/partcad/partcad-sim-gazebo>`_ the Gazebo one; each "
-"also declares the reader, the writer and the ``pc open`` entry for that "
-"engine's own scene format). The *scene* does have a built-in default -- "
-"an empty world holding the object -- so a simulation of a part standing "
-"on its own is a few lines. See :doc:`simulation` and "
+"also declares the reader, the writer and the ``pc ide open`` entry for "
+"that engine's own scene format). The *scene* does have a built-in default"
+" -- an empty world holding the object -- so a simulation of a part "
+"standing on its own is a few lines. See :doc:`simulation` and "
 "``examples/feature_simulate``."
 msgstr ""
 "PartCAD implementiert keinen Simulator: ein Paket importiert einen und "
 "benennt ihn in ``simulation:`` (`partcad-sim-mujoco "
 "<https://github.com/partcad/partcad-sim-mujoco>`_ ist der für MuJoCo und "
-"`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ der "
-"für Gazebo; jedes deklariert außerdem den Leser, den Schreiber und den "
-"``pc open``-Eintrag für das Szenenformat der jeweiligen Engine). Die "
+"`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ der"
+" für Gazebo; jedes deklariert außerdem den Leser, den Schreiber und den "
+"``pc ide open``-Eintrag für das Szenenformat der jeweiligen Engine). Die "
 "*Szene* hat durchaus eine eingebaute Voreinstellung -- eine leere Welt, "
-"die das Objekt enthält --, sodass die Simulation eines für sich stehenden "
-"Teils ein paar Zeilen lang ist. Siehe :doc:`simulation` und "
+"die das Objekt enthält --, sodass die Simulation eines für sich stehenden"
+" Teils ein paar Zeilen lang ist. Siehe :doc:`simulation` und "
 "``examples/feature_simulate``."
 
-#: ../../source/cli.rst:456
-msgid "``pc inspect``"
-msgstr "``pc inspect``"
-
-#: ../../source/cli.rst:457
-msgid ""
-"View a part, assembly, or scene visually. Use ``-V`` for a verbal (text) "
-"description instead of a visual one, and ``-p <name>=<value>`` to set "
-"parameters."
-msgstr ""
-"Zeigt ein Teil, eine Baugruppe oder eine Szene visuell an. Verwenden Sie "
-"``-V`` für eine verbale (textuelle) statt einer visuellen Beschreibung, "
-"und ``-p <name>=<value>``, um Parameter festzulegen."
-
-#: ../../source/cli.rst:460
+#: ../../source/cli.rst:378
 msgid "``pc info``"
 msgstr "``pc info``"
 
-#: ../../source/cli.rst:461
+#: ../../source/cli.rst:379
 msgid ""
 "Show detailed information about a part, assembly, scene, or software, "
 "including its parameters. Name the object as ``...:<name>`` to report "
@@ -1387,7 +1153,7 @@ msgstr ""
 "ohne Objekt, um über jedes Paket eines Teilbaums zu berichten (siehe "
 ":ref:`recursive-names`)."
 
-#: ../../source/cli.rst:465
+#: ../../source/cli.rst:383
 msgid ""
 "Where the object says what it is made of, the material it names is "
 "resolved and reported as ``Material`` — the formal and full names, the "
@@ -1405,7 +1171,7 @@ msgstr ""
 "antwortet, wird so berichtet, wie sie geschrieben wurde, mit dem Fehler, "
 "weshalb keine Masse und keine Reibung daraus kam. Siehe :ref:`materials`."
 
-#: ../../source/cli.rst:471
+#: ../../source/cli.rst:389
 msgid ""
 "For anything with geometry it also reports what PartCAD **measured** when"
 " it built it: ``BoundingBox`` as ``min``, ``max`` and ``size`` in "
@@ -1429,7 +1195,7 @@ msgstr ""
 "dass die Flächen nach innen ausgerichtet sind, und wird so berichtet, wie "
 "es ist."
 
-#: ../../source/cli.rst:478
+#: ../../source/cli.rst:396
 msgid ""
 "For an object read from a **file**, it also reports what the file itself "
 "states -- a STEP part or assembly (and a ``kicad`` part, which produces "
@@ -1453,7 +1219,7 @@ msgstr ""
 "sodass das, was sie liest, nicht wissen muss, welches Format geantwortet "
 "hat."
 
-#: ../../source/cli.rst:485
+#: ../../source/cli.rst:403
 msgid ""
 "Reporting every layer rather than only the ones a sketch reads is "
 "deliberate: a layer filter that matched nothing and a layer that is not "
@@ -1465,11 +1231,11 @@ msgstr ""
 "in der Datei ist, erzeugen beide eine Skizze ohne Inhalt, und das hier ist "
 "es, was die beiden unterscheidet."
 
-#: ../../source/cli.rst:489
+#: ../../source/cli.rst:407
 msgid "``pc bom``"
 msgstr "``pc bom``"
 
-#: ../../source/cli.rst:490
+#: ../../source/cli.rst:408
 msgid ""
 "Print the bill of materials of a part, an assembly or a scene: what has "
 "to be procured to have it, with how many of each are needed and, where "
@@ -1480,7 +1246,7 @@ msgstr ""
 "Stückzahl und, wo das Objekt es angibt, dem Hersteller und der "
 "Artikelnummer, unter der zu bestellen ist."
 
-#: ../../source/cli.rst:493
+#: ../../source/cli.rst:411
 msgid ""
 "A part is what one of it is procured as: the part itself when it declares"
 " a ``vendor`` and an ``sku``, or says neither how it is bought nor how it"
@@ -1498,7 +1264,7 @@ msgstr ""
 "überhaupt nichts, wenn es aus nichts hergestellt wird, was es benennt "
 "(gedruckt, umgeformt)."
 
-#: ../../source/cli.rst:497
+#: ../../source/cli.rst:415
 msgid ""
 "A sub-assembly that declares a ``vendor`` and an ``sku`` is one line "
 "item, ordered whole, and its own contents are left out. Any other sub-"
@@ -1509,7 +1275,7 @@ msgstr ""
 "außen vor. Jede andere Unterbaugruppe wird nach denselben Regeln in ihre "
 "eigene Stückliste aufgelöst."
 
-#: ../../source/cli.rst:501
+#: ../../source/cli.rst:419
 msgid ""
 "This is the rule ``pc supply`` fills its cart by, so the two agree on "
 "every count. Whether a supplier has something today is the supply quote's"
@@ -1531,7 +1297,7 @@ msgstr ""
 "nichts: eine Unterbaugruppe, die einen Hersteller und eine Artikelnummer "
 "deklariert, wird jetzt immer als Ganzes bestellt."
 
-#: ../../source/cli.rst:508
+#: ../../source/cli.rst:426
 msgid ""
 "The :ref:`software` the parts and the assembly ship with is listed under "
 "a heading of its own, counted apart from the hardware. Each software line"
@@ -1545,11 +1311,11 @@ msgstr ""
 "Revision dieses Pakets, denn ein Firmware-Image ist -- anders als ein "
 "Winkel -- eine andere Datei, sobald sein Paket erneut veröffentlicht."
 
-#: ../../source/cli.rst:515
+#: ../../source/cli.rst:433
 msgid "``pc cae``"
 msgstr "``pc cae``"
 
-#: ../../source/cli.rst:516
+#: ../../source/cli.rst:434
 msgid ""
 "Run an engineering analysis on a part and report what it found. "
 "Subcommands: ``fea`` (finite element analysis) and ``cfd`` (computational"
@@ -1559,7 +1325,7 @@ msgstr ""
 "gefunden hat. Unterbefehle: ``fea`` (Finite-Elemente-Analyse) und ``cfd`` "
 "(numerische Strömungsmechanik). Beide nehmen ein Teil::"
 
-#: ../../source/cli.rst:522
+#: ../../source/cli.rst:440
 msgid ""
 "The part says what it is held by and what it carries, in a section named "
 "after the analysis. ``fix:`` names what is held still — a list of "
@@ -1576,7 +1342,7 @@ msgstr ""
 "alle seine Instanzen oder eine verschachtelte Abbildung, die die Instanz "
 "benennt::"
 
-#: ../../source/cli.rst:540
+#: ../../source/cli.rst:458
 msgid ""
 "A ``load`` value is a **force**. It may be written as a number and a unit"
 " — ``n``, ``nm``, ``mn``, ``kn`` or ``newton`` for force, ``mg``, ``g``, "
@@ -1599,7 +1365,7 @@ msgstr ""
 "nimmt dieselben beiden Schlüssel mit derselben Bedeutung: was festgehalten "
 "wird und welche Kraft die Strömung darauf ausübt."
 
-#: ../../source/cli.rst:547
+#: ../../source/cli.rst:465
 msgid ""
 "The model the analysis produces is written to "
 "``<part>.<analysis>.<extension>`` and saved as it stands. Which format "
@@ -1618,7 +1384,7 @@ msgstr ""
 "Array selbst. ``pc cae`` endet mit einem Wert ungleich null, wenn es "
 "mindestens einen gibt, und kann so als Gate verwendet werden."
 
-#: ../../source/cli.rst:553
+#: ../../source/cli.rst:471
 msgid ""
 "Who runs the analysis is ``<package>:<file type>``. It defaults to the "
 "``caeFeaImplementation`` / ``caeCfdImplementation`` :doc:`user "
@@ -1640,7 +1406,7 @@ msgstr ""
 "Export- oder Render-Implementierung in ihrem eigenen deklariert wird "
 "(siehe :ref:`output-files`), und als Abhängigkeit installiert."
 
-#: ../../source/cli.rst:560
+#: ../../source/cli.rst:478
 msgid ""
 "An analysis that produces no answer is reported the same way by ``pc "
 "cae`` and by ``pc test``: which implementation was asked, what it said, "
@@ -1661,7 +1427,7 @@ msgstr ""
 "identisch: wer den einen und dann die andere ausgeführt hat, darf nicht "
 "zwei verschiedene Dinge über denselben Rechner erfahren."
 
-#: ../../source/cli.rst:566
+#: ../../source/cli.rst:484
 msgid ""
 "``pc test`` runs the same analyses. Its ``fea`` and ``cfd`` tests apply "
 "to a part that declares the matching section — and to nothing else, so a "
@@ -1703,7 +1469,7 @@ msgstr ""
 "Urteil würde ein Teil weiter durchfallen lassen, das sich jetzt "
 "einwandfrei analysieren lässt."
 
-#: ../../source/cli.rst:579
+#: ../../source/cli.rst:497
 msgid ""
 "**A machine with no container runtime is the one excuse.** An "
 "implementation naming a ``container:`` or a ``dockerImage`` (see "
@@ -1737,11 +1503,11 @@ msgstr ""
 "ausführt, ist keine dieser Laufzeitumgebungen: jedes Image, das PartCAD "
 "verwendet, ist ein Linux-Image."
 
-#: ../../source/cli.rst:591
+#: ../../source/cli.rst:509
 msgid "``pc cam``"
 msgstr "``pc cam``"
 
-#: ../../source/cli.rst:592
+#: ../../source/cli.rst:510
 msgid ""
 "Produce the route files of the objects that declare one: the program a "
 "machine cuts them with. It takes the object's own outline, offsets it by "
@@ -1755,7 +1521,7 @@ msgstr ""
 "einer Reihe von Tiefen -- eine 2,5D-Bahn, also das, was eine CNC-Fräse mit "
 "Plattenmaterial und eine Fräsmaschine mit einer Platte macht::"
 
-#: ../../source/cli.rst:603
+#: ../../source/cli.rst:521
 msgid ""
 "Unlike ``pc cae``, this is a **package-level** command. An analysis is "
 "asked of one part; a route is what a package's cut list is made of, so "
@@ -1784,7 +1550,7 @@ msgstr ""
 "-- eine Baugruppe wird zusammengesetzt statt geschnitten, und eine Szene "
 "ist eine Anordnung von Dingen, die jedes für sich geschnitten wurden."
 
-#: ../../source/cli.rst:612
+#: ../../source/cli.rst:530
 msgid ""
 "The object says what is cut out of it, and how, in the ``manufacturing:``"
 " section that already says how it is made -- beside the machine it "
@@ -1794,7 +1560,7 @@ msgstr ""
 "sagt, wie es hergestellt wird, was aus ihm geschnitten wird und wie -- "
 "neben der Maschine, zu der es gehört::"
 
-#: ../../source/cli.rst:633
+#: ../../source/cli.rst:551
 msgid ""
 "A key written directly under ``manufacturing:`` is shared by every "
 "machine the part names; one written inside a machine's own subsection is "
@@ -1816,7 +1582,7 @@ msgstr ""
 "bearbeitet wird, ist eine Kette von Teilen, von denen jedes das vorherige "
 "als seine ``source`` benennt."
 
-#: ../../source/cli.rst:642
+#: ../../source/cli.rst:560
 msgid ""
 "A *sketch* has one of these sections too, with no ``method:`` in it: a "
 "drawing is not made from anything, it is a path a machine follows."
@@ -1825,7 +1591,7 @@ msgstr ""
 "darin: eine Zeichnung wird aus nichts hergestellt, sie ist ein Pfad, dem "
 "eine Maschine folgt."
 
-#: ../../source/cli.rst:645
+#: ../../source/cli.rst:563
 msgid ""
 "``operation:`` says which side of the outline the tool runs on. "
 "``profile`` goes around the outside of the material and around the inside"
@@ -1851,7 +1617,7 @@ msgstr ""
 "selbst, ohne Versatz, und das ist es, was ein V-Fräser oder ein "
 "Schleppmesser braucht."
 
-#: ../../source/cli.rst:653
+#: ../../source/cli.rst:571
 msgid ""
 "A length may be written as a number and a unit -- ``mm``, ``cm``, ``m``, "
 "``um``, ``in``, ``inch``, ``\"``, ``ft``, ``mil`` or ``thou`` -- matched "
@@ -1876,7 +1642,7 @@ msgstr ""
 "18 mm dickes Teil wird 18 mm tief geschnitten, egal ob im Programm ``G21`` "
 "oder ``G20`` steht."
 
-#: ../../source/cli.rst:661
+#: ../../source/cli.rst:579
 msgid ""
 "``safe_z:`` is a **clearance above the top of the object** rather than an"
 " absolute height, so it means the same thing wherever the object sits in "
@@ -1886,7 +1652,7 @@ msgstr ""
 "absolute Höhe, bedeutet also dasselbe, wo auch immer das Objekt in Z "
 "liegt."
 
-#: ../../source/cli.rst:664
+#: ../../source/cli.rst:582
 msgid ""
 "``depth:`` is the one key with a conditional default. An object that does"
 " not say is cut **through**, from the top of its bounding box to the "
@@ -1908,7 +1674,7 @@ msgstr ""
 "gegen einen Durchmesser erzeugt wurde, den niemand gewählt hat, ist genau "
 "um den Betrag falsch, den niemand bemerkt hat."
 
-#: ../../source/cli.rst:671
+#: ../../source/cli.rst:589
 msgid ""
 "Every key of that section is also a parameter of the ``cam:`` file type "
 "that produces the route, which is what makes it three layers of one "
@@ -1929,7 +1695,7 @@ msgstr ""
 "Paket geschriebenes ``mm/min`` wird genauso sicher verstanden wie eines, "
 "das am Objekt steht."
 
-#: ../../source/cli.rst:677
+#: ../../source/cli.rst:595
 msgid ""
 "The route is written to ``<object>.<extension>`` -- ``panel.nc`` -- "
 "beside the package, or wherever ``-O`` says. ``--json`` prints what was "
@@ -1950,7 +1716,7 @@ msgstr ""
 "Bahn ist eine Datei, und ein Objekt mit einem fehlerhaften Abschnitt darf "
 "die anderen neunzehn nicht ihre kosten."
 
-#: ../../source/cli.rst:683
+#: ../../source/cli.rst:601
 msgid ""
 "Who produces it is ``<package>:<file type>``. Unlike an analysis, PartCAD"
 " **ships one** -- a route is arithmetic on the object's own outline "
@@ -1978,7 +1744,7 @@ msgstr ""
 "oder durch ``-i`` für einen Lauf -- in dieser Rangfolge, das Engste "
 "zuletzt."
 
-#: ../../source/cli.rst:692
+#: ../../source/cli.rst:610
 msgid ""
 "What the built-in one writes is plain RS-274 with every curve linearized "
 "to within ``tolerance:`` of the true curve: an arc word is only an arc "
@@ -1997,7 +1763,7 @@ msgstr ""
 "Version, sodass dasselbe Objekt mit denselben Parametern auf jedem Rechner "
 "dieselben Bytes erzeugt."
 
-#: ../../source/cli.rst:698
+#: ../../source/cli.rst:616
 msgid ""
 "``pc test`` runs this as its ``cam`` check, and it is the same code: the "
 "check produces the route and passes the object only if one came back. It "
@@ -2027,7 +1793,7 @@ msgstr ""
 "was sie dem Objekt nicht anlastet: dort wurde nie etwas gefragt, also "
 "überspringt sie, laut, und merkt sich das Überspringen nicht."
 
-#: ../../source/cli.rst:707
+#: ../../source/cli.rst:625
 msgid ""
 "Unlike the analyses, the check does **not** keep what it produced. An "
 "analysis writes its model beside the package because the model is the "
@@ -2045,7 +1811,7 @@ msgstr ""
 "eingecheckt oder als aktuell gelesen, lange nachdem das Teil weitergezogen "
 "ist. Die Prüfung fräst daher in ein temporäres Verzeichnis und löscht es."
 
-#: ../../source/cli.rst:713
+#: ../../source/cli.rst:631
 msgid ""
 "**The check that used to be called ``cam`` is ``manufacturability`` "
 "now.** It asks whether an object *can* be made or bought at all -- "
@@ -2064,7 +1830,7 @@ msgstr ""
 "computergestützte Fertigung, weshalb ein Wort für beides stand, bis es "
 "diesen Befehl gab."
 
-#: ../../source/cli.rst:719
+#: ../../source/cli.rst:637
 msgid ""
 "**The outline is a section taken at the bottom of the cut**, and that is "
 "the limit worth knowing. For a prismatic object -- a panel, a plate, a "
@@ -2090,11 +1856,11 @@ msgstr ""
 "keine Rampe -- das Werkzeug taucht am Anfang jeder Kontur ein, und das "
 "Teil ist am Ende des letzten Durchgangs frei."
 
-#: ../../source/cli.rst:727
+#: ../../source/cli.rst:645
 msgid "``pc convert``"
 msgstr "``pc convert``"
 
-#: ../../source/cli.rst:728
+#: ../../source/cli.rst:646
 msgid ""
 "Convert parts, sketches, assemblies or scenes to another format and "
 "update their type in the package. Subcommands: ``part``, ``sketch``, "
@@ -2129,11 +1895,11 @@ msgstr ""
 "unter seinen ``kinds`` deklariert --, sodass ein Paket, das PartCAD ein "
 "Anordnungsformat beibringt, auch in dieses und aus diesem konvertiert."
 
-#: ../../source/cli.rst:739
+#: ../../source/cli.rst:657
 msgid "``pc filter``"
 msgstr "``pc filter``"
 
-#: ../../source/cli.rst:740
+#: ../../source/cli.rst:658
 msgid ""
 "Declare a second assembly (or scene) made of some of the links of an "
 "existing one::"
@@ -2141,7 +1907,7 @@ msgstr ""
 "Deklariert eine zweite Baugruppe (oder Szene), die aus einigen der Links "
 "einer vorhandenen besteht::"
 
-#: ../../source/cli.rst:744
+#: ../../source/cli.rst:662
 msgid ""
 "``FILTER`` names the links to keep -- a JSON or YAML file, or the same "
 "written out on the command line -- and ``DST`` is the new object: the "
@@ -2162,7 +1928,7 @@ msgstr ""
 "Namen deklariert. Ein vorhandenes ``DST`` wird überschrieben, und "
 "``--dry-run`` sagt, was geschrieben würde, ohne es zu schreiben."
 
-#: ../../source/cli.rst:757
+#: ../../source/cli.rst:675
 msgid ""
 "What a filter is, and what naming a link with and without children means,"
 " is the same everywhere it is accepted -- see :ref:`assy-filter`, which "
@@ -2179,7 +1945,7 @@ msgstr ""
 "verworfen, und ein Link, der mit Kindern darunter benannt wird, behält nur "
 "diese Kinder."
 
-#: ../../source/cli.rst:762
+#: ../../source/cli.rst:680
 msgid ""
 "The **file** is filtered rather than the built assembly, so every link "
 "kept keeps its ``connect:``, its ``how:``, its parameters and its "
@@ -2196,7 +1962,7 @@ msgstr ""
 "Links, und ``pc convert assembly -t assy`` ist das, was eine solche in "
 "eine Datei verwandelt, die welche hat."
 
-#: ../../source/cli.rst:767
+#: ../../source/cli.rst:685
 msgid ""
 "Dropping a link that another link was connected to is the one thing "
 "filtering can break, and it is checked: every ``connect:`` left pointing "
@@ -2208,11 +1974,11 @@ msgstr ""
 "``connect:``, das danach ins Leere zeigt, wird gemeldet, mit Angabe der "
 "Zeile, von diesem Befehl und anschließend von ``pc lint``."
 
-#: ../../source/cli.rst:771
+#: ../../source/cli.rst:689
 msgid "``pc export``"
 msgstr "``pc export``"
 
-#: ../../source/cli.rst:772
+#: ../../source/cli.rst:690
 msgid ""
 "Export a 3D view of parts, assemblies, or scenes. Use ``-a`` for an "
 "assembly and ``-S`` for a scene. Choose the format with ``-t``: ``step``,"
@@ -2234,7 +2000,7 @@ msgstr ""
 "``.urdf``-Datei sowie ein Verzeichnis mit den Mesh-Dateien, die sie "
 "referenziert."
 
-#: ../../source/cli.rst:780
+#: ../../source/cli.rst:698
 msgid ""
 "``--filter`` exports a *part* of one assembly or scene: the links it "
 "names, where the assembly put them, without writing anything into the "
@@ -2252,7 +2018,7 @@ msgstr ""
 "Ein ``filter:`` an einem ``export:``-Dateityp fordert dasselbe dauerhaft "
 "und pro Dateityp an, und dies überschreibt es für einen Lauf."
 
-#: ../../source/cli.rst:786
+#: ../../source/cli.rst:704
 msgid ""
 "``-t`` also takes a full path, ``-t sim-gazebo:world``, which names the "
 "package the implementation lives in. That is how a format PartCAD ships "
@@ -2286,11 +2052,11 @@ msgstr ""
 "alle Dateitypen auf einmal, wo ``-t <package>:<type>`` die Antwort für "
 "einen ist."
 
-#: ../../source/cli.rst:798
+#: ../../source/cli.rst:716
 msgid "``pc render``"
 msgstr "``pc render``"
 
-#: ../../source/cli.rst:799
+#: ../../source/cli.rst:717
 msgid ""
 "Render a 2D projection of parts, assemblies, or scenes onto a plane. "
 "Choose the format with ``-t``: ``svg``, ``png``, ``jpeg``, ``dxf``, "
@@ -2309,7 +2075,7 @@ msgstr ""
 "``...:<name>`` rendern einen ganzen Teilbaum, genauso wie bei ``pc "
 "export`` (siehe :ref:`recursive-names`)."
 
-#: ../../source/cli.rst:805
+#: ../../source/cli.rst:723
 msgid ""
 "``--filter`` renders a *part* of one assembly or scene, exactly as it "
 "does for ``pc export`` above:"
@@ -2317,7 +2083,7 @@ msgstr ""
 "``--filter`` rendert einen *Teil* einer Baugruppe oder Szene, genau wie "
 "bei ``pc export`` oben:"
 
-#: ../../source/cli.rst:812
+#: ../../source/cli.rst:730
 msgid ""
 "The file it writes is the one an unfiltered render would have written, "
 "under the object's own name, so two filters of one object overwrite each "
@@ -2334,7 +2100,7 @@ msgstr ""
 "Baugruppe eines anderen Pakets platziert, denn gefiltert wird die gebaute "
 "Baugruppe und nicht irgendeine Datei."
 
-#: ../../source/cli.rst:817
+#: ../../source/cli.rst:735
 msgid ""
 "A ``filter:`` on a ``render:`` file type says the same thing permanently "
 "and **per file type**, so one object can have a picture of one sub-"
@@ -2352,7 +2118,7 @@ msgstr ""
 "überschreibt es für einen Lauf, so wie ``--view`` einen konfigurierten "
 "Viewport überschreibt. Siehe :ref:`assy-filter`."
 
-#: ../../source/cli.rst:823
+#: ../../source/cli.rst:741
 msgid ""
 "``--port`` draws one named port rather than every one of them, and is "
 "repeated for several. A port is named the way the log names it -- its own"
@@ -2371,7 +2137,7 @@ msgstr ""
 "Ports gezeichnet werden, nicht dass überhaupt welche gezeichnet werden, "
 "und gehört daher mit einer der drei folgenden Optionen zusammen:"
 
-#: ../../source/cli.rst:833
+#: ../../source/cli.rst:751
 msgid ""
 "``--with-ports`` draws every port of the object on the projection: a "
 "coordinate frame at each, with the long arrow along ``+Z`` — the "
@@ -2394,7 +2160,7 @@ msgstr ""
 "außerdem im Log aufgeführt, mit dem genauen Namen, der in eine "
 "Assembly-YAML-Datei zu schreiben ist."
 
-#: ../../source/cli.rst:840
+#: ../../source/cli.rst:758
 msgid ""
 "The names are written around the object rather than on it: spread evenly "
 "around it, each on the side its port is on, and with its line made as "
@@ -2405,7 +2171,7 @@ msgstr ""
 "einer Linie, die so lang gemacht wird, wie es nötig ist, damit kein Name "
 "auf dem Objekt oder auf einem anderen Namen landet."
 
-#: ../../source/cli.rst:843
+#: ../../source/cli.rst:761
 msgid ""
 "An assembly is taken at its word: what is drawn is what it says its ports"
 " are -- the ones its ``map:`` externalizes and the ones it declares (see "
@@ -2429,7 +2195,7 @@ msgstr ""
 "sollen und es nicht getan haben. Für sich allein fordert es nichts an; es "
 "sagt, wie tief die drei obigen Optionen reichen."
 
-#: ../../source/cli.rst:851
+#: ../../source/cli.rst:769
 msgid ""
 "The options apply to whichever format is being written — the projection "
 "is the same one underneath ``svg``, ``png``, ``jpeg`` and ``dxf`` — and a"
@@ -2449,7 +2215,7 @@ msgstr ""
 "``port_label_size`` legen fest, wie groß die Markierungen und die Namen "
 "sind, als Bruchteil der größten Abmessung der Projektion."
 
-#: ../../source/cli.rst:859
+#: ../../source/cli.rst:777
 msgid ""
 "A port is a coordinate frame rather than geometry, but it is projected "
 "like everything else: the axis it is offset along is the one a given "
@@ -2466,7 +2232,7 @@ msgstr ""
 "mehrdeutig herauskommt, ist dieselbe zweite und dritte ``--view`` unten "
 "wert wie ein mehrdeutiges Merkmal."
 
-#: ../../source/cli.rst:864
+#: ../../source/cli.rst:782
 msgid ""
 "``--view`` picks the direction the object is looked at from for this one "
 "run: ``front``, ``back``, ``left``, ``right``, ``top``, ``bottom`` or "
@@ -2486,7 +2252,7 @@ msgstr ""
 "Vektor, auf den der Name aufgelöst hat, sodass ``--view top --viewport-up "
 "0,1,0.5`` die Draufsicht neigt, ohne den Rest auszuschreiben:"
 
-#: ../../source/cli.rst:876
+#: ../../source/cli.rst:794
 msgid ""
 "All three are the ``viewport_origin`` and ``viewport_up`` of a render "
 "file type in ``partcad.yaml`` (see :ref:`output-files`), passed for one "
@@ -2504,7 +2270,7 @@ msgstr ""
 "liest sie nie. PartCAD ist Z-nach-oben, wobei ``+Y`` von der Vorderansicht "
 "weg zeigt, was ``+X`` auf deren rechte Seite bringt."
 
-#: ../../source/cli.rst:882
+#: ../../source/cli.rst:800
 msgid ""
 "A rendered file is named after the object, so several views of one object"
 " go into directories of their own rather than over each other:"
@@ -2512,7 +2278,7 @@ msgstr ""
 "Eine gerenderte Datei wird nach dem Objekt benannt, sodass mehrere "
 "Ansichten eines Objekts in eigene Verzeichnisse statt übereinander gehen:"
 
-#: ../../source/cli.rst:892
+#: ../../source/cli.rst:810
 msgid ""
 "``-t readme`` generates a markdown document instead of a projection: the "
 "package document (``README.md``, listing what the package declares) or, "
@@ -2531,7 +2297,7 @@ msgstr ""
 "eigenes Dokument auch in der Paketkonfiguration anfordern, indem sie "
 "``readme`` in ihrem Abschnitt ``render`` deklariert."
 
-#: ../../source/cli.rst:898
+#: ../../source/cli.rst:816
 msgid ""
 "Only assemblies that a package declares are listed as sub-assemblies. An "
 "assembly embedded in an Assembly YAML file's nested ``links:`` section "
@@ -2544,7 +2310,7 @@ msgstr ""
 "Paket und wird daher nicht eigenständig aufgeführt: die Teile, die sie "
 "enthält, werden der Baugruppe zugerechnet, die sie einbettet."
 
-#: ../../source/cli.rst:902
+#: ../../source/cli.rst:820
 msgid ""
 "``-t pdf`` and ``-t html`` generate the assembly instruction book of the "
 "assembly named by ``-a``: a title page, the same bill of materials, then "
@@ -2602,7 +2368,7 @@ msgstr ""
 "Paketkonfiguration anfordern, indem sie ``pdf`` oder ``html`` in ihrem "
 "Abschnitt ``render`` deklariert."
 
-#: ../../source/cli.rst:920
+#: ../../source/cli.rst:838
 msgid ""
 "Declaring one with a ``path`` says the opposite: that this ``pdf`` is a "
 "file of the package's own — a drawing, a datasheet — written by that "
@@ -2614,7 +2380,7 @@ msgstr ""
 "—, von dieser Implementierung geschrieben wie jeder andere Dateityp, und "
 "dass darüber kein Anleitungsbuch erzeugt wird (siehe :ref:`output-files`)."
 
-#: ../../source/cli.rst:924
+#: ../../source/cli.rst:842
 msgid ""
 "Both formats are only defined for an assembly declared as ``type: assy``:"
 " the steps come from the Assembly YAML file, and an assembly that has "
@@ -2631,11 +2397,11 @@ msgstr ""
 "oder von ihrem Paket geerbt), wird ebenfalls abgelehnt; übergeben Sie "
 "``--ignore-manufacturability``, um das Dokument trotzdem zu erzeugen."
 
-#: ../../source/cli.rst:929
+#: ../../source/cli.rst:847
 msgid "``pc instructions``"
 msgstr "``pc instructions``"
 
-#: ../../source/cli.rst:930
+#: ../../source/cli.rst:848
 msgid ""
 "Write the assembly instructions of the assembly named, as ``-t pdf`` (the"
 " default) or ``-t html``, into the current directory or the one ``-O`` "
@@ -2649,7 +2415,7 @@ msgstr ""
 "und dasselbe, das der Tab **Assembly** der IDE anzeigt und speichert; der "
 "Unterschied ist, dass es fragt, wie viel davon geschrieben werden soll:"
 
-#: ../../source/cli.rst:934
+#: ../../source/cli.rst:852
 msgid ""
 "on its own, this assembly's own steps, in the order of its links, with a "
 "sub-assembly added as the finished thing it is;"
@@ -2658,7 +2424,7 @@ msgstr ""
 "ihrer Links, wobei eine Unterbaugruppe als das fertige Ding aufgenommen "
 "wird, das sie ist;"
 
-#: ../../source/cli.rst:936
+#: ../../source/cli.rst:854
 msgid ""
 "``-r``/``--recursive`` puts in the steps of every sub-assembly that is "
 "built, each just before the step that adds it;"
@@ -2666,7 +2432,7 @@ msgstr ""
 "``-r``/``--recursive`` nimmt die Schritte jeder Unterbaugruppe auf, die "
 "gebaut wird, jeweils unmittelbar vor dem Schritt, der sie hinzufügt;"
 
-#: ../../source/cli.rst:938
+#: ../../source/cli.rst:856
 msgid ""
 "``-b``/``--build-parts`` puts in how to make every part that is built, "
 "each just before the step that first needs it. Primitive for now: the "
@@ -2678,7 +2444,7 @@ msgstr ""
 "Vorerst einfach gehalten: die ausgeschriebenen Fertigungsanweisungen und "
 "die gezeichnete Bahn, wo ein Teil eine deklariert."
 
-#: ../../source/cli.rst:942
+#: ../../source/cli.rst:860
 msgid ""
 "What is built and what is bought is what was chosen in the IDE's **Build "
 "vs Buy** tab for this assembly, which keeps the choices on the machine "
@@ -2697,7 +2463,7 @@ msgstr ""
 "Reihenfolge, in der der Tab **Build** der IDE sie auflistet, sodass ein "
 "dort gewählter Schritt und eine Seite der Datei derselbe Schritt sind."
 
-#: ../../source/cli.rst:948
+#: ../../source/cli.rst:866
 msgid ""
 "The file is written by ``pc`` itself, on the machine it runs on, "
 "whichever machine the daemon is on."
@@ -2705,35 +2471,481 @@ msgstr ""
 "Die Datei wird von ``pc`` selbst geschrieben, auf dem Rechner, auf dem es "
 "läuft, ganz gleich, auf welchem Rechner der Daemon ist."
 
-#: ../../source/cli.rst:957
+#: ../../source/cli.rst:875
+msgid "Interacting with IDE"
+msgstr "Interaktion mit der IDE"
+
+#: ../../source/cli.rst:877
+msgid ""
+"Putting an object in front of a person, in one of two windows -- the "
+"IDE's own **PartCAD Viewer** (``pc ide view``), or **another "
+"application** on this machine (``pc ide open``, which is also what the "
+"editor extension's \"Open in...\" menu runs) -- and asking the IDE what "
+"it is showing (``pc ide state``). None of them leaves anything new in the"
+" package: that is what ``pc export`` and ``pc render`` are for. They used"
+" to be ``pc inspect`` and ``pc open``. Those names still work, are left "
+"out of ``pc --help``, and print a note on stderr saying what to type "
+"instead."
+msgstr ""
+"Ein Objekt einem Menschen vor Augen führen, in einem von zwei Fenstern --"
+" dem eigenen **PartCAD Viewer** der IDE (``pc ide view``) oder **einer "
+"anderen Anwendung** auf diesem Rechner (``pc ide open``, das auch das "
+"Menü „Open in...“ der Editor-Erweiterung ausführt) -- und die IDE fragen,"
+" was sie gerade zeigt (``pc ide state``). Keiner dieser Befehle "
+"hinterlässt etwas Neues im Paket: dafür sind ``pc export`` und ``pc "
+"render`` da. Früher hießen sie ``pc inspect`` und ``pc open``. Diese "
+"Namen funktionieren weiterhin, fehlen in ``pc --help`` und geben auf "
+"stderr einen Hinweis aus, was stattdessen einzugeben ist."
+
+#: ../../source/cli.rst:883
+msgid "``pc ide view``"
+msgstr "``pc ide view``"
+
+#: ../../source/cli.rst:884
+msgid ""
+"View a part, assembly, or scene in the PartCAD Viewer. Use ``-V`` for a "
+"verbal (text) description instead of a visual one, and ``-p "
+"<name>=<value>`` to set parameters."
+msgstr ""
+"Zeigt ein Teil, eine Baugruppe oder eine Szene im PartCAD Viewer an. "
+"Verwenden Sie ``-V`` für eine verbale (textuelle) statt einer visuellen "
+"Beschreibung, und ``-p <name>=<value>``, um Parameter festzulegen."
+
+#: ../../source/cli.rst:887
+msgid "``pc ide state``"
+msgstr "``pc ide state``"
+
+#: ../../source/cli.rst:888
+msgid ""
+"Print what the PartCAD IDE on this machine is showing, as YAML (the "
+"default) or ``--json``::"
+msgstr ""
+"Gibt aus, was die PartCAD-IDE auf diesem Rechner gerade zeigt, als YAML "
+"(Standard) oder mit ``--json``::"
+
+#: ../../source/cli.rst:893
+msgid "One document, one entry per view:"
+msgstr "Ein Dokument, ein Eintrag pro Ansicht:"
+
+#: ../../source/cli.rst:895
+msgid ""
+"``explorer`` -- what is selected in the PartCAD Explorer: each row's "
+"``kind`` (``part``, ``assembly``, ``package``, ...), its full ``path`` "
+"(``//pub/examples:cube``, or a package's own path), what it is declared "
+"as and the file it is read from."
+msgstr ""
+"``explorer`` -- was im PartCAD Explorer ausgewählt ist: die ``kind`` "
+"jeder Zeile (``part``, ``assembly``, ``package``, ...), ihr vollständiger"
+" ``path`` (``//pub/examples:cube`` oder der eigene Pfad eines Pakets), "
+"als was sie deklariert ist und die Datei, aus der sie gelesen wird."
+
+#: ../../source/cli.rst:898
+msgid ""
+"``inspector`` -- the object the PartCAD Inspector shows: its properties, "
+"every parameter it declares with what the field holds **now** "
+"(``value``), and what the object was last shown with (``applied``). The "
+"two differ when a value has been typed and Update not pressed. ``live: "
+"false`` says the Inspector's panel could not be asked -- it is collapsed "
+"-- and the values are the applied ones."
+msgstr ""
+"``inspector`` -- das Objekt, das der PartCAD Inspector zeigt: seine "
+"Eigenschaften, jeden Parameter, den es deklariert, mit dem, was das Feld "
+"**jetzt** enthält (``value``), und dem, womit das Objekt zuletzt "
+"angezeigt wurde (``applied``). Beides unterscheidet sich, wenn ein Wert "
+"eingetippt, aber Update nicht gedrückt wurde. ``live: false`` besagt, "
+"dass das Inspector-Panel nicht gefragt werden konnte -- es ist "
+"eingeklappt -- und die Werte die angewendeten sind."
+
+#: ../../source/cli.rst:902
+msgid ""
+"``viewer`` -- the PartCAD Viewer: the ``tab`` and ``subTab`` on screen "
+"(``design``/``2d``), what every tab strip offers and which tabs are "
+"disabled, and for **each sub-tab** its ``filters`` -- what it would send "
+"``pc render --filter``, or ``null`` for the whole object -- and its "
+"``selections``: the boxes ticked in its tree, the port overlays on the 2D"
+" tab, and the value of every control in its pane (format, drawing "
+"package, switches). They differ by sub-tab, which is why each has its own"
+" entry. ``screenshot`` is the path of a PNG of the sub-tab on screen, "
+"written by the IDE into its temporary directory (``/tmp/partcad-viewer-"
+"design-2d-<time>.png`` on Linux); when one cannot be taken -- the panel "
+"is closed, or hidden behind another editor -- ``screenshotError`` says "
+"why."
+msgstr ""
+"``viewer`` -- der PartCAD Viewer: der angezeigte ``tab`` und ``subTab`` "
+"(``design``/``2d``), was jede Reiterleiste anbietet und welche Reiter "
+"deaktiviert sind, und für **jeden Unterreiter** seine ``filters`` -- was "
+"er an ``pc render --filter`` schicken würde, oder ``null`` für das ganze "
+"Objekt -- und seine ``selections``: die in seinem Baum angehakten "
+"Kästchen, die Port-Overlays im 2D-Reiter und den Wert jedes "
+"Bedienelements in seinem Bereich (Format, Zeichenpaket, Schalter). Sie "
+"unterscheiden sich je Unterreiter, darum hat jeder seinen eigenen "
+"Eintrag. ``screenshot`` ist der Pfad eines PNG des angezeigten "
+"Unterreiters, von der IDE in ihr temporäres Verzeichnis geschrieben "
+"(``/tmp/partcad-viewer-design-2d-<time>.png`` unter Linux); kann keiner "
+"aufgenommen werden -- das Panel ist geschlossen oder hinter einem anderen"
+" Editor verborgen --, sagt ``screenshotError``, warum."
+
+#: ../../source/cli.rst:911
+msgid ""
+"The IDE is asked over the socket ``pc ide view`` shows things on, so this"
+" needs no daemon and no workspace, and runs where the IDE does. The 3D "
+"view's text callouts are drawn over the canvas rather than in it, so they"
+" are not in its screenshot. With two VS Code windows open on Linux, the "
+"kernel hands the question to one of them; ``window.workspaceFolders`` "
+"says which one answered."
+msgstr ""
+"Die IDE wird über den Socket gefragt, auf dem ``pc ide view`` Dinge "
+"anzeigt; daher braucht dies weder einen Daemon noch einen Arbeitsbereich "
+"und läuft dort, wo die IDE läuft. Die Text-Callouts der 3D-Ansicht werden"
+" über die Zeichenfläche gelegt statt in sie gezeichnet und sind daher "
+"nicht im Screenshot. Sind unter Linux zwei VS-Code-Fenster geöffnet, gibt"
+" der Kernel die Frage an eines von ihnen; ``window.workspaceFolders`` "
+"sagt, welches geantwortet hat."
+
+#: ../../source/cli.rst:916
+msgid "``pc ide open``"
+msgstr "``pc ide open``"
+
+#: ../../source/cli.rst:917
+msgid "Open a file in a third-party application, on this machine::"
+msgstr "Öffnet eine Datei in einer Drittanwendung, auf diesem Rechner::"
+
+#: ../../source/cli.rst:927
+msgid ""
+"``--with`` names the application: ``freecad`` (the default), ``blender`` "
+"and ``kicad`` for a board are the ones PartCAD itself ships. ``gazebo`` "
+"and ``mujoco`` come from the plugin package for that engine (`partcad-"
+"sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_, `partcad-"
+"sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_), beside the"
+" reader, the exporter and the simulator for its scene format, so they are"
+" offered in a workspace that imports one and are an unknown application "
+"anywhere else. A locally installed one is always used when there is one: "
+"the command looks on the ``PATH``, in ``/Applications`` on macOS, under "
+"``Program Files`` on Windows, and for a flatpak on Linux. Gazebo is "
+"looked for under all three of the names it has had (``gz sim``, ``ign "
+"gazebo``, ``gazebo``), and whichever the machine has is the one used."
+msgstr ""
+"``--with`` benennt die Anwendung: ``freecad`` (die Voreinstellung), "
+"``blender`` und ``kicad`` für eine Platine sind diejenigen, die PartCAD "
+"selbst mitliefert. ``gazebo`` und ``mujoco`` kommen aus dem Plugin-Paket "
+"für die jeweilige Engine (`partcad-sim-gazebo "
+"<https://github.com/partcad/partcad-sim-gazebo>`_, `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_), neben dem Leser, dem "
+"Exporter und dem Simulator für deren Szenenformat, sodass sie in einem "
+"Workspace angeboten werden, der eines davon importiert, und überall sonst "
+"eine unbekannte Anwendung sind. Eine lokal installierte wird immer "
+"verwendet, wenn es eine gibt: der Befehl sucht im ``PATH``, unter macOS in "
+"``/Applications``, unter Windows unter ``Program Files`` und unter Linux "
+"nach einem Flatpak. Nach Gazebo wird unter allen drei Namen gesucht, die "
+"es hatte (``gz sim``, ``ign gazebo``, ``gazebo``), und der auf dem Rechner "
+"vorhandene wird verwendet."
+
+#: ../../source/cli.rst:937
+msgid ""
+"**``pc ide open`` waits for the application to close**, and then brings "
+"back what was done in it. Each application declares what it opens, best "
+"first (``formats:`` in its ``open:`` entry -- FreeCAD's is ``fcstd``, "
+"``step``, ``brep``, ``iges``, ``stl``, ``obj``; Blender's is ``blend`` "
+"and the meshes it imports). A file already in one of them is opened as it"
+" is. Any other is converted to the first one PartCAD can write, and the "
+"application is given that: a STEP file, a CadQuery script or a 3MF mesh "
+"reaches Blender as STL, and a build123d script reaches FreeCAD as STEP. "
+"Converting is the one thing ``pc ide open`` asks the PartCAD daemon for, "
+"because turning a solid into a mesh is CAD work; the window still opens "
+"on the machine the command was run on. The converted copy is written "
+"under this workspace's own directory (never beside your file), named "
+"after the object it came from, and reused until that object changes. "
+"``--type`` says what the file holds when its name does not -- a ``.py`` "
+"is a CadQuery script, a build123d one or an SDF one -- and the VS Code "
+"extension passes the declared type of the object you clicked."
+msgstr ""
+"**``pc ide open`` wartet, bis die Anwendung geschlossen wird**, und holt "
+"dann zurück, was darin getan wurde. Jede Anwendung deklariert, was sie "
+"öffnet, das Beste zuerst (``formats:`` in ihrem ``open:``-Eintrag -- bei "
+"FreeCAD ``fcstd``, ``step``, ``brep``, ``iges``, ``stl``, ``obj``; bei "
+"Blender ``blend`` und die Meshes, die es importiert). Eine Datei, die "
+"schon in einem davon vorliegt, wird so geöffnet, wie sie ist. Jede andere"
+" wird in das erste Format konvertiert, das PartCAD schreiben kann, und "
+"die Anwendung bekommt diese: eine STEP-Datei, ein CadQuery-Skript oder "
+"ein 3MF-Mesh erreicht Blender als STL, und ein build123d-Skript erreicht "
+"FreeCAD als STEP. Das Konvertieren ist das Einzige, worum ``pc ide open``"
+" den PartCAD-Daemon bittet, denn einen Volumenkörper in ein Mesh zu "
+"verwandeln ist CAD-Arbeit; das Fenster öffnet sich trotzdem auf dem "
+"Rechner, auf dem der Befehl ausgeführt wurde. Die konvertierte Kopie wird"
+" unter dem eigenen Verzeichnis dieses Arbeitsbereichs abgelegt (nie neben"
+" Ihrer Datei), nach dem Objekt benannt, aus dem sie stammt, und "
+"wiederverwendet, bis sich dieses Objekt ändert. ``--type`` sagt, was die "
+"Datei enthält, wenn ihr Name es nicht sagt -- eine ``.py`` ist ein "
+"CadQuery-Skript, ein build123d-Skript oder ein SDF-Skript --, und die VS-"
+"Code-Erweiterung übergibt den deklarierten Typ des angeklickten Objekts."
+
+#: ../../source/cli.rst:949
+msgid ""
+"When the application closes, the file it was given is compared with what "
+"it was before:"
+msgstr ""
+"Wenn die Anwendung geschlossen wird, wird die Datei, die sie bekommen "
+"hat, mit ihrem vorherigen Stand verglichen:"
+
+#: ../../source/cli.rst:951
+msgid "**Unchanged** -- nothing happens, and ``No changes.`` says so."
+msgstr "**Unverändert** -- nichts geschieht, und ``No changes.`` sagt das."
+
+#: ../../source/cli.rst:952
+msgid "**Changed, and opened as it is** -- the edit is already in your file."
+msgstr ""
+"**Geändert und so geöffnet, wie sie war** -- die Änderung steht bereits "
+"in Ihrer Datei."
+
+#: ../../source/cli.rst:953
+msgid ""
+"**Changed, and converted first** -- the edited copy is converted back "
+"into the object's own format and written over its source, when that "
+"source is a file PartCAD can write (``step``, ``brep``, ``stl``, ``3mf``,"
+" ``obj``, ``iges``, ``gltf``). A script is not: its edit is kept where it"
+" was made and the path is printed, because overwriting the program that "
+"generates a part with its output would destroy the program."
+msgstr ""
+"**Geändert und zuvor konvertiert** -- die bearbeitete Kopie wird zurück "
+"in das eigene Format des Objekts konvertiert und über seine Quelle "
+"geschrieben, wenn diese Quelle eine Datei ist, die PartCAD schreiben kann"
+" (``step``, ``brep``, ``stl``, ``3mf``, ``obj``, ``iges``, ``gltf``). Ein"
+" Skript ist das nicht: seine Änderung bleibt, wo sie gemacht wurde, und "
+"der Pfad wird ausgegeben, denn das Programm, das ein Teil erzeugt, mit "
+"seiner Ausgabe zu überschreiben, würde das Programm zerstören."
+
+#: ../../source/cli.rst:958
+msgid ""
+"An application that saves beside what it opened -- KiCad -- has its whole"
+" directory compared rather than the one file. Interrupting ``pc ide "
+"open`` (``Ctrl+C``) stops the wait and leaves the application open; what "
+"is saved in it from then on is not brought back."
+msgstr ""
+"Bei einer Anwendung, die neben dem speichert, was sie geöffnet hat -- "
+"KiCad --, wird ihr ganzes Verzeichnis verglichen statt der einen Datei. "
+"Ein Unterbrechen von ``pc ide open`` (``Ctrl+C``) beendet das Warten und "
+"lässt die Anwendung offen; was von da an in ihr gespeichert wird, wird "
+"nicht zurückgeholt."
+
+#: ../../source/cli.rst:962
+msgid ""
+"MuJoCo reads MJCF and no other model format, and a scene that is not "
+"already one is **not** converted here. That is not an omission: MJCF is "
+"written by ``partcad-sim-mujoco``'s exporter and a Gazebo world is read "
+"by ``partcad-sim-gazebo``'s reader, and a file handed to ``pc ide open`` "
+"has no package around it to reach either through. So such a file is "
+"refused with the export that does work rather than converted wrongly. An "
+"application's ``open:`` entry names the extensions its own format is "
+"stored in (``sceneExtensions``), which is how a file that already is one "
+"goes straight over without any conversion at all."
+msgstr ""
+"MuJoCo liest MJCF und kein anderes Modellformat, und eine Szene, die noch"
+" keines ist, wird hier **nicht** konvertiert. Das ist kein Versäumnis: "
+"MJCF wird vom Exporter von ``partcad-sim-mujoco`` geschrieben und eine "
+"Gazebo-Welt vom Leser von ``partcad-sim-gazebo`` gelesen, und eine Datei,"
+" die ``pc ide open`` übergeben wird, hat kein Paket um sich, über das "
+"eines von beidem erreichbar wäre. Eine solche Datei wird daher mit dem "
+"Hinweis auf den Export, der funktioniert, abgelehnt, statt falsch "
+"konvertiert zu werden. Der Eintrag ``open:`` einer Anwendung benennt die "
+"Erweiterungen, in denen ihr eigenes Format gespeichert wird "
+"(``sceneExtensions``), und so geht eine Datei, die bereits eines ist, "
+"ganz ohne Konvertierung direkt hinüber."
+
+#: ../../source/cli.rst:969
+msgid ""
+"An object that only means something inside a package -- an ASSY file, a "
+"URDF -- has nothing to convert ad-hoc, and is refused with that for the "
+"same reason: export it to a mesh first (``pc export -t stl``), or a scene"
+" to its engine's format (``pc export -S -t sim-mujoco:mjcf``), and open "
+"that."
+msgstr ""
+"Ein Objekt, das nur innerhalb eines Pakets etwas bedeutet -- eine "
+"ASSY-Datei, eine URDF --, hat nichts, was sich ad hoc konvertieren ließe, "
+"und wird aus demselben Grund mit diesem Hinweis abgelehnt: exportieren Sie "
+"es zuerst in ein Mesh (``pc export -t stl``) oder eine Szene in das Format "
+"ihrer Engine (``pc export -S -t sim-mujoco:mjcf``) und öffnen Sie das."
+
+#: ../../source/cli.rst:973
+msgid ""
+"KiCad is handed the board rather than the file named, when the two are "
+"not the same: a ``kicad`` part *is* the STEP file KiCad's command line "
+"writes out of the board, so ``pc ide open --with kicad`` on it opens the "
+"``.kicad_pro`` (or ``.kicad_pcb``, or ``.kicad_sch``) beside it. Nothing "
+"is created here and nothing is rendered -- a file with no board beside it"
+" is handed over as it is. Every application but Blender is given the file"
+" it was pointed at, whatever it holds."
+msgstr ""
+"KiCad bekommt die Platine statt der benannten Datei, wenn die beiden "
+"nicht dasselbe sind: ein ``kicad``-Teil *ist* die STEP-Datei, die KiCads "
+"Befehlszeile aus der Platine schreibt, sodass ``pc ide open --with "
+"kicad`` darauf die danebenliegende ``.kicad_pro`` (oder ``.kicad_pcb`` "
+"oder ``.kicad_sch``) öffnet. Hier wird nichts erzeugt und nichts "
+"gerendert -- eine Datei ohne Platine daneben wird so übergeben, wie sie "
+"ist. Jede Anwendung außer Blender bekommt die Datei, auf die sie gezeigt "
+"wurde, was auch immer darin steht."
+
+#: ../../source/cli.rst:979
+msgid ""
+"With ``--use-docker``, a machine that has no local installation runs the "
+"application in a container instead, started the way PartCAD starts every "
+"container (see :ref:`useDockerRemote <use-docker-remote>`): named "
+"``partcad-open-<application>-<tag>-<identity>``, labelled so that ``pc "
+"system prune`` removes it, replaced rather than reused when what it was "
+"created from has changed, and running PartCAD's own container service, "
+"through which the application is launched. The image is the one the "
+"application's ``open:`` entry declares under ``container:`` (``--docker-"
+"image`` overrides it): FreeCAD's is ``linuxserver/freecad:latest``, since"
+" the FreeCAD project publishes no image of its own, Blender's is "
+"``linuxserver/blender:latest`` for the same reason, KiCad's is the "
+"``ghcr.io/partcad/partcad-container-kicad`` image PartCAD already builds "
+"for ``kicad`` parts, and an engine's is whatever its plugin package "
+"declares. The application's own settings live in a volume of their own "
+"(``partcad-open-<application>-home``), so they outlast the container. "
+"Without ``--use-docker``, a machine with neither the application nor "
+"Docker is told so rather than being left with a command that quietly did "
+"nothing."
+msgstr ""
+"Mit ``--use-docker`` führt ein Rechner ohne lokale Installation die "
+"Anwendung stattdessen in einem Container aus, gestartet so, wie PartCAD "
+"jeden Container startet (siehe :ref:`useDockerRemote <use-docker-"
+"remote>`): benannt ``partcad-open-<application>-<tag>-<identity>``, mit "
+"Labels versehen, damit ``pc system prune`` ihn entfernt, ersetzt statt "
+"wiederverwendet, wenn sich das geändert hat, woraus er erstellt wurde, "
+"und mit PartCADs eigenem Container-Dienst, über den die Anwendung "
+"gestartet wird. Das Image ist das, welches der ``open:``-Eintrag der "
+"Anwendung unter ``container:`` deklariert (``--docker-image`` "
+"überschreibt es): bei FreeCAD ist es ``linuxserver/freecad:latest``, da "
+"das FreeCAD-Projekt kein eigenes Image veröffentlicht, bei Blender aus "
+"demselben Grund ``linuxserver/blender:latest``, bei KiCad das Image "
+"``ghcr.io/partcad/partcad-container-kicad``, das PartCAD ohnehin für "
+"``kicad``-Teile baut, und bei einer Engine das, was ihr Plugin-Paket "
+"deklariert. Die eigenen Einstellungen der Anwendung liegen in einem "
+"eigenen Volume (``partcad-open-<application>-home``) und überdauern so "
+"den Container. Ohne ``--use-docker`` wird ein Rechner, der weder die "
+"Anwendung noch Docker hat, darauf hingewiesen, statt mit einem Befehl "
+"zurückzubleiben, der stillschweigend nichts getan hat."
+
+#: ../../source/cli.rst:992
+msgid ""
+"The file reaches the container one of two ways, and ``useDockerRemote`` "
+"chooses:"
+msgstr ""
+"Die Datei gelangt auf einem von zwei Wegen in den Container, und "
+"``useDockerRemote`` entscheidet:"
+
+#: ../../source/cli.rst:994
+msgid ""
+"**mount** (the default) -- the directory holding the file is mounted at "
+"the path it has on the host, so one path means the same thing on both "
+"sides, and the application saves straight into it. In a dev container "
+"holding the host's Docker socket, each directory is bound from where the "
+"host's daemon keeps it -- the workspace's bind, ``/tmp``'s volume -- at "
+"the path it has in the dev container, which is how the ``docker`` Python "
+"sandbox binds them too. A file on none of the dev container's mounts is "
+"refused with the ways out (mount it, ``PC_DOCKER_MOUNT_SOURCES``, or "
+"``useDockerRemote``). Outside any workspace, only the file's own "
+"directory is mounted -- not the directory the command was run from."
+msgstr ""
+"**mount** (Standard) -- das Verzeichnis mit der Datei wird unter dem Pfad"
+" eingebunden, den es auf dem Host hat, sodass ein Pfad auf beiden Seiten "
+"dasselbe bedeutet und die Anwendung direkt dorthin speichert. In einem "
+"Dev-Container, der den Docker-Socket des Hosts hält, wird jedes "
+"Verzeichnis von dort eingebunden, wo der Daemon des Hosts es aufbewahrt "
+"-- der Bind des Arbeitsbereichs, das Volume von ``/tmp`` --, unter dem "
+"Pfad, den es im Dev-Container hat; so bindet auch die ``docker``-Python-"
+"Sandbox sie ein. Eine Datei, die auf keinem der Mounts des Dev-Containers"
+" liegt, wird mit den Auswegen abgelehnt (sie einbinden, "
+"``PC_DOCKER_MOUNT_SOURCES`` oder ``useDockerRemote``). Außerhalb jedes "
+"Arbeitsbereichs wird nur das eigene Verzeichnis der Datei eingebunden -- "
+"nicht das Verzeichnis, in dem der Befehl ausgeführt wurde."
+
+#: ../../source/cli.rst:1001
+#, python-brace-format
+msgid ""
+"**upload** (``useDockerRemote: true``, or ``PC_USE_DOCKER_REMOTE=true``) "
+"-- nothing is mounted. The file (or, for KiCad, its directory) is sent "
+"with the request that launches the application, and what it is when the "
+"application closes is sent back and written here. This is what a Docker "
+"daemon on another machine needs. A ``fileArgs`` template that quotes the "
+"path inside a script (``{path_repr}``) cannot be sent this way and is "
+"refused; ``{path}``, the path as an argument of its own, can."
+msgstr ""
+"**upload** (``useDockerRemote: true`` oder ``PC_USE_DOCKER_REMOTE=true``)"
+" -- nichts wird eingebunden. Die Datei (oder bei KiCad ihr Verzeichnis) "
+"wird mit der Anfrage geschickt, die die Anwendung startet, und was sie "
+"beim Schließen der Anwendung ist, wird zurückgeschickt und hier "
+"geschrieben. Das braucht ein Docker-Daemon auf einem anderen Rechner. "
+"Eine ``fileArgs``-Vorlage, die den Pfad in einem Skript zitiert "
+"(``{path_repr}``), lässt sich so nicht senden und wird abgelehnt; "
+"``{path}``, der Pfad als eigenes Argument, schon."
+
+#: ../../source/cli.rst:1007
+msgid ""
+"A containerised application draws on the host's X display. On Linux that "
+"display is usually a socket, which is shared with the container along "
+"with its authority cookie, and nothing needs configuring; a display "
+"reached over TCP — a forwarded one, or an X server on macOS or Windows "
+"(XQuartz, VcXsrv) — has to be installed and allowed to accept the "
+"connection. When there is none, the command says which one to install and"
+" what to run rather than starting a container whose window never appears."
+msgstr ""
+"Eine containerisierte Anwendung zeichnet auf dem X-Display des Hosts. "
+"Unter Linux ist dieses Display meist ein Socket, der zusammen mit seinem "
+"Authority-Cookie mit dem Container geteilt wird, und es ist nichts zu "
+"konfigurieren; ein über TCP erreichtes Display — ein weitergeleitetes oder "
+"ein X-Server unter macOS oder Windows (XQuartz, VcXsrv) — muss installiert "
+"sein und die Verbindung zulassen. Wenn es keines gibt, sagt der Befehl, "
+"welches zu installieren und was auszuführen ist, statt einen Container zu "
+"starten, dessen Fenster nie erscheint."
+
+#: ../../source/cli.rst:1013
+msgid ""
+"Like ``pc lint --file`` and ``pc upgrade``, this never talks to the "
+"daemon — a daemon can be remote, where the window would open on somebody "
+"else's screen. That is also why it takes a path rather than a "
+"``<package>:<part>`` name: resolving a name is a package-graph question, "
+"which is the round trip this command does not make. ``--json`` prints "
+"what happened (or the reason it did not) as one object, which is what the"
+" VS Code extension's \"Open in...\" context menu reads."
+msgstr ""
+"Wie ``pc lint --file`` und ``pc upgrade`` spricht dies nie mit dem Daemon "
+"— ein Daemon kann entfernt sein, und das Fenster würde sich dann auf dem "
+"Bildschirm eines anderen öffnen. Deshalb nimmt es auch einen Pfad statt "
+"eines ``<package>:<part>``-Namens: einen Namen aufzulösen ist eine Frage "
+"an den Paketgraphen, also genau der Rundlauf, den dieser Befehl nicht "
+"macht. ``--json`` gibt als ein Objekt aus, was geschehen ist (oder warum "
+"nicht), und das liest das Kontextmenü „Open in...“ der "
+"VS-Code-Erweiterung."
+
+#: ../../source/cli.rst:1021
 msgid "Workflow commands"
 msgstr "Workflow-Befehle"
 
-#: ../../source/cli.rst:959
+#: ../../source/cli.rst:1023
 msgid "``pc supply``"
 msgstr "``pc supply``"
 
-#: ../../source/cli.rst:960
+#: ../../source/cli.rst:1024
 msgid "Manage the supply chain of the current project:"
 msgstr "Verwaltet die Lieferkette des aktuellen Projekts:"
 
-#: ../../source/cli.rst:962
+#: ../../source/cli.rst:1026
 msgid "``pc supply caps`` — Show the capabilities of a provider."
 msgstr "``pc supply caps`` — Zeigt die Fähigkeiten eines Anbieters an."
 
-#: ../../source/cli.rst:963
+#: ../../source/cli.rst:1027
 msgid "``pc supply find`` — Find suppliers."
 msgstr "``pc supply find`` — Sucht nach Lieferanten."
 
-#: ../../source/cli.rst:964
+#: ../../source/cli.rst:1028
 msgid "``pc supply quote`` — Get a quote from suppliers."
 msgstr "``pc supply quote`` — Holt ein Angebot von Lieferanten ein."
 
-#: ../../source/cli.rst:965
+#: ../../source/cli.rst:1029
 msgid "``pc supply order`` — Place an order with suppliers."
 msgstr "``pc supply order`` — Gibt eine Bestellung bei Lieferanten auf."
 
-#: ../../source/cli.rst:967
+#: ../../source/cli.rst:1031
 msgid ""
 "``find`` and ``quote`` take parts and assemblies alike. A requested "
 "assembly that is sold assembled (one with ``vendor`` and ``sku`` set, see"
@@ -2752,15 +2964,15 @@ msgstr ""
 "bestellt, statt zerlegt zu werden. Übergeben Sie ``--recursive`` (``-r``), "
 "um trotzdem bis zu den Teilen hinunterzugehen und diese zu bestellen."
 
-#: ../../source/cli.rst:975
+#: ../../source/cli.rst:1039
 msgid "Other commands"
 msgstr "Weitere Befehle"
 
-#: ../../source/cli.rst:977
+#: ../../source/cli.rst:1041
 msgid "``pc adhoc``"
 msgstr "``pc adhoc``"
 
-#: ../../source/cli.rst:978
+#: ../../source/cli.rst:1042
 msgid ""
 "Ad-hoc operations that run on the fly, on a file that belongs to no "
 "package: PartCAD declares the file in a throwaway package of its own, "
@@ -2774,7 +2986,7 @@ msgstr ""
 "wird nichts erzeugt und nichts konfiguriert. Unterbefehle, die jeweils "
 "``part`` oder ``sketch`` nehmen:"
 
-#: ../../source/cli.rst:982
+#: ../../source/cli.rst:1046
 msgid ""
 "``pc adhoc convert`` — write the file back out as another format (``pc "
 "adhoc convert part bracket.step bracket.stl``)."
@@ -2782,7 +2994,7 @@ msgstr ""
 "``pc adhoc convert`` — schreibt die Datei in einem anderen Format wieder "
 "heraus (``pc adhoc convert part bracket.step bracket.stl``)."
 
-#: ../../source/cli.rst:984
+#: ../../source/cli.rst:1048
 msgid ""
 "``pc adhoc render`` — write a 2D projection of it: ``svg``, ``png``, "
 "``jpeg`` or ``dxf`` (``pc adhoc render part --view top bracket.step "
@@ -2792,7 +3004,7 @@ msgstr ""
 "``jpeg`` oder ``dxf`` (``pc adhoc render part --view top bracket.step "
 "bracket.png``)."
 
-#: ../../source/cli.rst:987
+#: ../../source/cli.rst:1051
 msgid ""
 "Both infer the types from the file names, and take "
 "``--input``/``--output`` to say them outright. ``pc adhoc render`` takes "
@@ -2810,7 +3022,7 @@ msgstr ""
 "werden, wenn ``--output`` den Typ benennt: die Datei wird dann nach der "
 "Eingabe benannt."
 
-#: ../../source/cli.rst:992
+#: ../../source/cli.rst:1056
 msgid ""
 "Which of the two to use is which kind of file is wanted, and it is the "
 "same distinction as between ``pc export`` and ``pc render``: geometry "
@@ -2825,7 +3037,7 @@ msgstr ""
 "steht keinem von beiden zur Verfügung, da es hier kein Paket gibt, in dem "
 "er deklariert werden könnte."
 
-#: ../../source/cli.rst:996
+#: ../../source/cli.rst:1060
 msgid ""
 "The assembly formats ``assy`` and ``urdf`` are refused by both: an ASSY "
 "file is a set of references to the parts of a package and a URDF becomes "
@@ -2839,11 +3051,11 @@ msgstr ""
 "bedeutet. Deklarieren Sie es in einem Paket und verwenden Sie stattdessen "
 "``pc convert assembly``, ``pc export`` oder ``pc render``."
 
-#: ../../source/cli.rst:1000
+#: ../../source/cli.rst:1064
 msgid "``pc healthcheck``"
 msgstr "``pc healthcheck``"
 
-#: ../../source/cli.rst:1001
+#: ../../source/cli.rst:1065
 msgid ""
 "Check the host system for known issues. Use ``--dry-run`` to list the "
 "available checks, ``--filters`` to run only checks with the given tags, "
@@ -2854,7 +3066,7 @@ msgstr ""
 "Prüfungen mit den angegebenen Tags auszuführen, und ``--fix``, um "
 "automatische Korrekturen zu versuchen."
 
-#: ../../source/cli.rst:1004
+#: ../../source/cli.rst:1068
 msgid ""
 "One of them is about this repository rather than the host: "
 "``AgentSkills`` compares the AI agent skills installed here against the "
@@ -2873,11 +3085,11 @@ msgstr ""
 "aussieht wie ein aktueller. ``--fix`` installiert sie neu, und zwar für "
 "die Agenten, die sie hatten, und für keine anderen."
 
-#: ../../source/cli.rst:1010
+#: ../../source/cli.rst:1074
 msgid "``pc search``"
 msgstr "``pc search``"
 
-#: ../../source/cli.rst:1011
+#: ../../source/cli.rst:1075
 msgid ""
 "Search for objects by keyword. Subcommands: ``all``, ``parts``, "
 "``sketches``, ``assemblies``, ``scenes``, ``interfaces``, and "
@@ -2891,7 +3103,7 @@ msgstr ""
 "``-P <package>...`` durchsucht auch die Pakete unterhalb davon (siehe "
 ":ref:`recursive-names`)."
 
-#: ../../source/cli.rst:1015
+#: ../../source/cli.rst:1079
 msgid ""
 "``pc search parts`` and ``pc search assemblies`` also take "
 "``-i``/``--interface``, which searches by what an object *connects by* "
@@ -2915,7 +3127,7 @@ msgstr ""
 "ist das Interface, das dieses Paket deklariert, und ``//package:name`` ist "
 "jedes andere."
 
-#: ../../source/cli.rst:1022
+#: ../../source/cli.rst:1086
 msgid ""
 "The answer comes from the declarations -- ``implements:``, and an "
 "assembly's ``map:`` -- so nothing is built and nothing is instantiated to"
@@ -3083,3 +3295,103 @@ msgstr ""
 #~ "configuration, by declaring ``pdf`` or "
 #~ "``html`` in its ``render`` section."
 #~ msgstr ""
+
+#~ msgid ""
+#~ "With ``--use-docker``, a machine that"
+#~ " has no local installation runs the"
+#~ " application in a container instead —"
+#~ " one container per application, named "
+#~ "after it (``partcad-freecad``, ``partcad-"
+#~ "blender``, ``partcad-gazebo``, ``partcad-"
+#~ "mujoco``, ``partcad-kicad``), created from "
+#~ "the application's image (``--docker-image``"
+#~ " overrides it; FreeCAD's is "
+#~ "``linuxserver/freecad:latest``, since the FreeCAD"
+#~ " project publishes no image of its"
+#~ " own, Blender's is ``linuxserver/blender:latest``"
+#~ " for the same reason, KiCad's is "
+#~ "the ``ghcr.io/partcad/partcad-container-kicad`` "
+#~ "image PartCAD already builds for "
+#~ "``kicad`` parts, and an engine's is "
+#~ "whatever its plugin package declares) "
+#~ "the first time and reused afterwards,"
+#~ " so a container you have prepared "
+#~ "keeps being the one that is used."
+#~ " Without ``--use-docker``, a machine "
+#~ "with neither the application nor Docker"
+#~ " is told so rather than being "
+#~ "left with a command that quietly "
+#~ "did nothing. Remove the application's "
+#~ "own container (``docker rm -f "
+#~ "partcad-freecad``, ``partcad-blender``, "
+#~ "``partcad-gazebo``, ``partcad-mujoco``, "
+#~ "``partcad-kicad``) to have the next "
+#~ "``pc open`` create a fresh one. "
+#~ "The workspace and the directory holding"
+#~ " this workspace's daemon socket are "
+#~ "mounted **at the paths they have "
+#~ "on the host**, which is what lets"
+#~ " one path mean the same thing "
+#~ "on both sides. A file that is "
+#~ "not in this workspace gets its own"
+#~ " workspace mounted instead, so that "
+#~ "whatever is mounted always contains the"
+#~ " file the application is handed; a"
+#~ " container created for one workspace "
+#~ "and then used from another says "
+#~ "so, and says to remove it, rather"
+#~ " than opening a name the container"
+#~ " cannot resolve."
+#~ msgstr ""
+#~ "Mit ``--use-docker`` führt ein Rechner"
+#~ " ohne lokale Installation die Anwendung "
+#~ "stattdessen in einem Container aus — "
+#~ "ein Container pro Anwendung, nach ihr"
+#~ " benannt (``partcad-freecad``, ``partcad-"
+#~ "blender``, ``partcad-gazebo``, ``partcad-"
+#~ "mujoco``, ``partcad-kicad``), beim ersten "
+#~ "Mal aus dem Image der Anwendung "
+#~ "erzeugt (``--docker-image`` überschreibt es;"
+#~ " FreeCADs ist ``linuxserver/freecad:latest``, da"
+#~ " das FreeCAD-Projekt kein eigenes "
+#~ "Image veröffentlicht, Blenders ist aus "
+#~ "demselben Grund ``linuxserver/blender:latest``, "
+#~ "KiCads ist das Image ``ghcr.io/partcad"
+#~ "/partcad-container-kicad``, das PartCAD "
+#~ "ohnehin für ``kicad``-Teile baut, und "
+#~ "das einer Engine ist das, was ihr"
+#~ " Plugin-Paket deklariert) und danach "
+#~ "wiederverwendet, sodass ein von Ihnen "
+#~ "vorbereiteter Container weiterhin der "
+#~ "verwendete bleibt. Ohne ``--use-docker`` "
+#~ "bekommt ein Rechner, der weder die "
+#~ "Anwendung noch Docker hat, das gesagt,"
+#~ " statt mit einem Befehl zurückzubleiben,"
+#~ " der stillschweigend nichts getan hat. "
+#~ "Entfernen Sie den eigenen Container der"
+#~ " Anwendung (``docker rm -f partcad-"
+#~ "freecad``, ``partcad-blender``, ``partcad-"
+#~ "gazebo``, ``partcad-mujoco``, ``partcad-"
+#~ "kicad``), damit das nächste ``pc open``"
+#~ " einen frischen erzeugt. Der Workspace "
+#~ "und das Verzeichnis, das den Daemon-"
+#~ "Socket dieses Workspace enthält, werden "
+#~ "**unter den Pfaden eingehängt, die sie"
+#~ " auf dem Host haben**, und genau "
+#~ "das lässt einen Pfad auf beiden "
+#~ "Seiten dasselbe bedeuten. Eine Datei, "
+#~ "die nicht in diesem Workspace liegt, "
+#~ "bekommt ihren eigenen Workspace eingehängt,"
+#~ " sodass das Eingehängte immer die "
+#~ "Datei enthält, die der Anwendung "
+#~ "übergeben wird; ein Container, der für"
+#~ " einen Workspace erzeugt und dann aus"
+#~ " einem anderen verwendet wurde, sagt "
+#~ "das und sagt, dass er zu entfernen"
+#~ " ist, statt einen Namen zu öffnen,"
+#~ " den der Container nicht auflösen "
+#~ "kann."
+
+#~ msgid "``pc inspect``"
+#~ msgstr "``pc inspect``"
+

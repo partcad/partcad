@@ -8,16 +8,16 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 14:45+0000\n"
+"POT-Creation-Date: 2026-10-07 09:01-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: zh_CN <LL@li.org>\n"
 "Language: zh_CN\n"
-"MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
-"Content-Transfer-Encoding: 8bit\n"
+"Language-Team: zh_CN <LL@li.org>\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"Generated-By: Babel 2.17.0\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/config_plugins.rst:3
 msgid "Importers, applications and simulations"
@@ -147,75 +147,110 @@ msgstr "应用程序"
 
 #: ../../source/config_plugins.rst:98
 msgid ""
-"``pc open`` launches a third-party application on the file it is given. "
-"Which applications it knows is an ``open:`` section -- one entry per "
-"application, and data all the way down: where the application is on each "
-"operating system, what to run it as, which container to fall back to when it "
-"is not installed, and what it can read. None of it is logic. Finding the "
-"binary, creating the container, forwarding the X display and converting a "
-"file the application cannot read is the same for every tool and happens "
-"once, in ``partcad_client.external``."
+"``pc ide open`` launches a third-party application on the file it is "
+"given. Which applications it knows is an ``open:`` section -- one entry "
+"per application, and data all the way down: where the application is on "
+"each operating system, what to run it as, which container to fall back to"
+" when it is not installed, and what it can read. None of it is logic. "
+"Finding the binary, creating the container, forwarding the X display and "
+"converting a file the application cannot read is the same for every tool "
+"and happens once, in ``partcad_client.external``."
 msgstr ""
-"``pc open`` 会针对交给它的文件启动一个第三方应用程序。它认识哪些应用程序，由一个 ``open:`` 小节来决定——每个应用"
-"程序一个条目，而且自上而下全是数据：应用程序在每种操作系统上位于何处、以什么方式运行它、它没有安装时回退到哪个容器，以及它能读什么。其中"
-"没有任何逻辑。查找可执行文件、创建容器、转发 X 显示，以及转换应用程序读不了的文件，对每个工具都是一样的，并且只在 ``partcad"
-"_client.external`` 中实现一次。"
+"``pc ide open`` 会针对交给它的文件启动一个第三方应用程序。它认识哪些应用程序，由一个 ``open:`` "
+"小节来决定——每个应用程序一个条目，而且自上而下全是数据：应用程序在每种操作系统上位于何处、以什么方式运行它、它没有安装时回退到哪个容器，以及它能读什么。其中没有任何逻辑。查找可执行文件、创建容器、转发"
+" X 显示，以及转换应用程序读不了的文件，对每个工具都是一样的，并且只在 ``partcad_client.external`` 中实现一次。"
 
-#: ../../source/config_plugins.rst:118
+#: ../../source/config_plugins.rst:119
 msgid ""
-"``pc open --with democad ./cell.demo`` then works, in a workspace whose "
-"packages import that one. PartCAD ships three of these in ``//builtin/open`` "
-"-- FreeCAD, KiCad and Blender. A package's entry replaces a built-in of the "
-"same name, which is how the plugin for a simulation engine comes to own the "
-"application for it: both `partcad-sim-gazebo <https://github.com/partcad/"
-"partcad-sim-gazebo>`_ and `partcad-sim-mujoco <https://github.com/partcad/"
-"partcad-sim-mujoco>`_ declare theirs, so a workspace that imports either "
-"already gets the entry from there."
+"``pc ide open --with democad ./cell.demo`` then works, in a workspace "
+"whose packages import that one. PartCAD ships three of these in "
+"``//builtin/open`` -- FreeCAD, KiCad and Blender. A package's entry "
+"replaces a built-in of the same name, which is how the plugin for a "
+"simulation engine comes to own the application for it: both `partcad-sim-"
+"gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ and `partcad-"
+"sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ declare "
+"theirs, so a workspace that imports either already gets the entry from "
+"there."
 msgstr ""
-"这样，在其各个包导入了该包的工作区中，``pc open --with democad ./cell.demo`` 就能工作。PartC"
-"AD 在 ``//builtin/open`` 中自带三个这样的条目——FreeCAD、KiCad 和 Blender。包中的条目会替换"
-"同名的内置条目，仿真引擎的插件正是这样接管了对应的应用程序：`partcad-sim-gazebo <https://github.co"
-"m/partcad/partcad-sim-gazebo>`_ 和 `partcad-sim-mujoco <https://githu"
-"b.com/partcad/partcad-sim-mujoco>`_ 都声明了自己的条目，因此导入了其中任何一个的工作区，已经从那里获得了该条目。"
+"这样，在其各个包导入了该包的工作区中，``pc ide open --with democad ./cell.demo`` "
+"就能工作。PartCAD 在 ``//builtin/open`` 中自带三个这样的条目——FreeCAD、KiCad 和 "
+"Blender。包中的条目会替换同名的内置条目，仿真引擎的插件正是这样接管了对应的应用程序：`partcad-sim-gazebo "
+"<https://github.com/partcad/partcad-sim-gazebo>`_ 和 `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_ "
+"都声明了自己的条目，因此导入了其中任何一个的工作区，已经从那里获得了该条目。"
 
-#: ../../source/config_plugins.rst:126
+#: ../../source/config_plugins.rst:127
 msgid ""
-"Three fields are worth dwelling on, because they are how an application that "
-"cannot read what it was handed still gets to open something. ``companions:`` "
-"names the extensions the application really opens, for a file that sits "
-"beside the one PartCAD was pointed at -- a ``kicad`` part *is* the STEP file "
-"KiCad's CLI writes, and the board is the project next to it. ``meshVia:`` "
-"says what a file that is not a mesh is converted to first, for an "
-"application that reads triangles and nothing else. ``sceneType:`` says which "
-"description language an application reads, for one that reads an arrangement "
-"rather than geometry: MuJoCo reads MJCF, so a Gazebo world it is pointed at "
-"is written out as MJCF first."
+"``formats:`` is the one that decides most: what the application opens, "
+"**best first** -- its own formats (``fcstd``, ``blend``, ``kicad_pcb``) "
+"and PartCAD's part types (``step``, ``stl``). An object in one of them is"
+" handed over as it is. Any other is converted to the first one on the "
+"list that PartCAD can write, and ``pc ide open`` then waits for the "
+"application to close: when the converted copy was changed, it is "
+"converted back into the object's own format and written over its source, "
+"where that source is a file (a STEP, an STL...) rather than a script."
 msgstr ""
-"有三个字段值得细说，因为读不了所交付内容的应用程序，正是靠它们才得以打开些什么。``companions:`` 指明应用程序真正打开的扩"
-"展名，用于位于 PartCAD 所指文件旁边的另一个文件——一个 ``kicad`` 零件 *就是* KiCad 的命令行工具写出的那个"
-" STEP 文件，而电路板则是它旁边的工程。``meshVia:`` 说明不是网格的文件要先转换成什么，用于只会读三角形的应用程序。``"
-"sceneType:`` 说明应用程序读哪种描述语言，用于读取布置方式而非几何的应用程序：MuJoCo 读 MJCF，因此指给它的 Ga"
-"zebo world 会先被写成 MJCF。"
+"``formats:`` "
+"起的作用最大：应用程序能打开什么，**最佳的排在前面**——它自己的格式（``fcstd``、``blend``、``kicad_pcb``）以及"
+" PartCAD 的零件类型（``step``、``stl``）。属于其中之一的对象按原样交出。其他对象会转换为列表中 PartCAD "
+"能写出的第一种格式，然后 ``pc ide open`` "
+"等待应用程序关闭：如果转换后的副本被修改了，就把它转换回对象自己的格式并覆盖其来源——前提是来源是文件（STEP、STL 等），而不是脚本。"
 
-#: ../../source/config_plugins.rst:136
+#: ../../source/config_plugins.rst:135
 msgid ""
-"``pc open`` is otherwise a **client-side** command and stays one: it is "
-"handed a path, the file is already on disk, and the window belongs to "
-"whoever ran the command -- a daemon can be remote. So the built-in entries "
-"are read straight out of the wheel the client is running from, with no "
-"context and no daemon, and only the applications a *package* declares are "
-"asked of the daemon (``open.tools``). It answers which applications exist; "
-"it never opens one, and there is no method for opening a file."
+"Two more are how an application that cannot read what it was handed still"
+" gets to open something. ``companions:`` names the extensions the "
+"application really opens, for a file that sits beside the one PartCAD was"
+" pointed at -- a ``kicad`` part *is* the STEP file KiCad's CLI writes, "
+"and the board is the project next to it. ``sceneType:`` says which "
+"description language an application reads, for one that reads an "
+"arrangement rather than geometry: MuJoCo reads MJCF, so a Gazebo world it"
+" is pointed at is written out as MJCF first."
 msgstr ""
-"除此之外，``pc open`` 是一条 **客户端** 命令，而且会一直如此：交给它的是一个路径，文件已经在磁盘上，而窗口属于运行该命"
-"令的人——守护进程则可能在远端。因此内置条目直接从客户端所运行的 wheel 中读取，既不需要上下文也不需要守护进程；只有 *包* 所声"
-"明的应用程序才会去问守护进程（``open.tools``）。它回答存在哪些应用程序；它从不打开应用程序，也没有用于打开文件的方法。"
+"另外两个字段，决定了一个读不懂所交给它的内容的应用程序怎样仍能打开点什么。``companions:`` 列出应用程序真正能打开的扩展名，用于与 "
+"PartCAD 所指向文件并排存放的文件——``kicad`` 零件*本身就是* KiCad 的 CLI 写出的 STEP "
+"文件，而电路板是旁边的那个工程。``sceneType:`` 说明应用程序读取哪种描述语言，适用于读取布局而不是几何体的应用程序：MuJoCo "
+"读取 MJCF，所以指向它的 Gazebo 世界会先被写成 MJCF。"
 
-#: ../../source/config_plugins.rst:148
+#: ../../source/config_plugins.rst:143
+msgid ""
+"``container:`` has the shape a plugin's implementation gives it -- "
+"``image``, and ``python`` for an image whose ``python3`` is not on "
+"``PATH`` -- and the container is started the way every other PartCAD "
+"container is (see :ref:`useDockerRemote <use-docker-remote>`), with the "
+"file mounted or, under ``useDockerRemote``, uploaded. ``image:``, "
+"``ownFormats:``, ``meshVia:`` and ``imports:`` are what an entry said "
+"before ``container:`` and ``formats:``; they are still read, into those, "
+"and ``pc ide open`` says once that they are deprecated."
+msgstr ""
+"``container:`` 的形式与插件实现中的相同——``image``，以及当镜像的 ``python3`` 不在 ``PATH`` "
+"上时使用的 ``python``——容器的启动方式与 PartCAD 的其他容器一样（参见 :ref:`useDockerRemote <use-"
+"docker-remote>`），文件以挂载方式提供，或者在 ``useDockerRemote`` "
+"下以上传方式提供。``image:``、``ownFormats:``、``meshVia:`` 和 ``imports:`` 是在有 "
+"``container:`` 和 ``formats:`` 之前条目的写法；它们仍会被读取并转换为后者，``pc ide open`` "
+"会提示一次它们已被弃用。"
+
+#: ../../source/config_plugins.rst:151
+msgid ""
+"``pc ide open`` is otherwise a **client-side** command and stays one: it "
+"is handed a path, the file is already on disk, and the window belongs to "
+"whoever ran the command -- a daemon can be remote. So the built-in "
+"entries are read straight out of the wheel the client is running from, "
+"with no context and no daemon, and only the applications a *package* "
+"declares are asked of the daemon (``open.tools``). It answers which "
+"applications exist; it never opens one, and there is no method for "
+"opening a file."
+msgstr ""
+"除此之外，``pc ide open`` 是一条 **客户端** "
+"命令，而且会一直如此：交给它的是一个路径，文件已经在磁盘上，而窗口属于运行该命令的人——守护进程则可能在远端。因此内置条目直接从客户端所运行的 "
+"wheel 中读取，既不需要上下文也不需要守护进程；只有 *包* "
+"所声明的应用程序才会去问守护进程（``open.tools``）。它回答存在哪些应用程序；它从不打开应用程序，也没有用于打开文件的方法。"
+
+#: ../../source/config_plugins.rst:163
 msgid "Simulations"
 msgstr "仿真"
 
-#: ../../source/config_plugins.rst:150
+#: ../../source/config_plugins.rst:165
 msgid ""
 "A part says what it *is*. ``simulate:`` is an optional section of a part or "
 "an assembly where it says what it is supposed to **do** once it is placed in "
@@ -226,7 +261,7 @@ msgstr ""
 "零件说明自己 *是什么*。``simulate:`` 是零件或装配体的一个可选小节，在那里它说明一旦被放进一个世界、而这个世界被启动之后"
 "，它应当 **做什么**——或者更常见的是，它不应当做什么：不翻倒、不滑落、不散架。运行它们的是 ``pc sim``。"
 
-#: ../../source/config_plugins.rst:168
+#: ../../source/config_plugins.rst:183
 msgid ""
 "The object's own full path is assigned to the scene's ``subject`` parameter "
 "-- unconditionally, and whatever else the entry says. That is what lets one "
@@ -239,7 +274,7 @@ msgstr ""
 "它的每一个对象，而且为此不需要声明任何特殊的东西：仿真场景就是一个带有普通参数的普通场景，而把被测对象摆放到位的，是它的文件被当作 Ji"
 "nja2 模板读取时的那套模板（见 :doc:`assy`）。"
 
-#: ../../source/config_plugins.rst:174
+#: ../../source/config_plugins.rst:189
 msgid ""
 "``scene:`` does not have to be given: the default is ``//builtin/scene:"
 "subject``, an empty world holding the subject and nothing else, which is "
@@ -251,7 +286,7 @@ msgstr ""
 "界，这正是“这东西能不能自己立住”的含义。``simulation:`` 则必须给出——PartCAD 没有实现任何仿真器，所以包要导入"
 "一个并说明用的是哪一个："
 
-#: ../../source/config_plugins.rst:201
+#: ../../source/config_plugins.rst:216
 msgid ""
 "``offset:`` is stated here rather than in the scene because it is a fact "
 "about *this* object -- where its origin sits relative to the floor it is "
@@ -260,7 +295,7 @@ msgstr ""
 "``offset:`` 写在这里而不是写在场景里，因为它是关于 *这个* 对象的事实——它的原点相对于它要立在其上的地面处于什么位置——"
 "而场景是共享的。"
 
-#: ../../source/config_plugins.rst:205
+#: ../../source/config_plugins.rst:220
 msgid ""
 "``validation:`` is a Python expression evaluated over ``before`` and "
 "``after``, the two objects the plugin produced, and ``result``, the whole of "
@@ -273,11 +308,11 @@ msgstr ""
 "以及 ``result`` （它返回的全部内容）之上求值。它是 PartCAD 唯一会从结果中读取的东西：这些对象 *内部* 的内容属于"
 "插件自己的词汇，而表达式由同时了解该对象和该插件的人来写。没有给出表达式的条目会运行并报告，但不会通过任何检查。"
 
-#: ../../source/config_plugins.rst:213
+#: ../../source/config_plugins.rst:228
 msgid "Simulation plugins"
 msgstr "仿真插件"
 
-#: ../../source/config_plugins.rst:215
+#: ../../source/config_plugins.rst:230
 msgid ""
 "A simulation plugin is the third kind of implementation a package can "
 "declare, beside the export and render ones of :ref:`output-files`, and it is "
@@ -287,7 +322,7 @@ msgstr ""
 "仿真插件是包可以声明的第三类实现，另外两类是 :ref:`output-files` 中的导出实现和渲染实现；它的声明形式与那两类完全相"
 "同——指向脚本的 ``path``、该脚本所需的沙箱，以及交给它的参数："
 
-#: ../../source/config_plugins.rst:233
+#: ../../source/config_plugins.rst:248
 msgid ""
 "The contract is narrow on purpose: **a scene with the subject in it goes in, "
 "as a file in the format** ``format:`` **names, and JSON carrying** "
@@ -300,7 +335,7 @@ msgstr ""
 "** ``before`` **和** ``after`` **的 JSON。** 场景以文件形式送达，是因为仿真器读的是它自己的模型格"
 "式，而 PartCAD 已经知道如何写出好几种——这也正是插件得以不依赖任何 CAD 的原因。"
 
-#: ../../source/config_plugins.rst:239
+#: ../../source/config_plugins.rst:254
 msgid ""
 "**PartCAD ships none of these.** A simulator is somebody's program with a "
 "release cycle of its own, so PartCAD ships the concept -- this section, the "
@@ -318,11 +353,11 @@ msgstr ""
 "力下推进 ``duration`` 秒的仿真时间，并报告每个物体在前后的位置（以毫米计）和姿态。运行它不需要机器上装有 MuJoCo，因"
 "为插件运行在一个会自行安装 MuJoCo 的 PartCAD 沙箱中。"
 
-#: ../../source/config_plugins.rst:250
+#: ../../source/config_plugins.rst:265
 msgid "Friction is a material property"
 msgstr "摩擦是材料的属性"
 
-#: ../../source/config_plugins.rst:252
+#: ../../source/config_plugins.rst:267
 msgid ""
 "Whether a stack of blocks stands up is not a property of its geometry. Two "
 "20 mm blocks squarely stacked stay put when they are aluminium (``mu: 1.05`` "
@@ -332,7 +367,7 @@ msgstr ""
 "一摞方块能不能立住，并不是它几何的属性。两个 20 mm 的方块端正地摞在一起：如果是铝（``mu: 1.05`` ——干燥的铝会咬合）"
 "，它们纹丝不动；如果是聚四氟乙烯（``mu: 0.04``），上面那个就会滑落；而这两种情形之间，布置方式没有任何变化。"
 
-#: ../../source/config_plugins.rst:257
+#: ../../source/config_plugins.rst:272
 msgid ""
 "So it is stated where it belongs, on the :ref:`material <materials>`, and a "
 "part that names one gets it. A part names one the way it always has -- with "
@@ -344,7 +379,7 @@ msgstr ""
 "往——在接受该参数的零件类型上使用 ``material`` 参数（见 :ref:`parameters`）——而工厂会把这个结果记录为"
 "形状的 ``material`` 属性，此后读取它的正是这个属性："
 
-#: ../../source/config_plugins.rst:274
+#: ../../source/config_plugins.rst:289
 msgid ""
 "``mu`` then becomes the shape's ``friction`` property unless the shape "
 "states a ``friction`` of its own, and every format writes it in its own "
@@ -356,7 +391,7 @@ msgstr ""
 "的写法把它写出来——SDFormat 的 ``<friction><ode><mu>``、URDF 的 ``<gazebo><mu1>`"
 "`、MJCF 的第一个 ``friction`` 分量。什么都没有说明的零件，拿到的是仿真器的默认值，那是一个谁也没有选过的数字。"
 
-#: ../../source/config_plugins.rst:280
+#: ../../source/config_plugins.rst:295
 msgid ""
 "Note which section that is. ``parameters:`` is what is *asked of* the type "
 "that produces the shape and is where a package writes what it wants; "
@@ -369,6 +404,7 @@ msgstr ""
 "roperties:`` 则是形状 *最终成了什么样*，由构建它的东西填入——URDF 读取器指明某个连杆的材料，STEP 读取器在文件"
 "中找到材料，或者零件工厂记录下它的类型被要求了什么。包不会手工书写 ``properties:``。"
 
-#: ../../source/config_plugins.rst:287
+#: ../../source/config_plugins.rst:302
 msgid "See :doc:`simulation` and ``examples/feature_simulate``."
 msgstr "参见 :doc:`simulation` 和 ``examples/feature_simulate``。"
+

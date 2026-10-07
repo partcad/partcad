@@ -95,7 +95,7 @@ nothing and says which package to name.
 Applications
 ============
 
-``pc open`` launches a third-party application on the file it is given. Which
+``pc ide open`` launches a third-party application on the file it is given. Which
 applications it knows is an ``open:`` section -- one entry per application, and
 data all the way down: where the application is on each operating system, what
 to run it as, which container to fall back to when it is not installed, and what
@@ -116,7 +116,7 @@ the same for every tool and happens once, in ``partcad_client.external``.
       windowsGlobs: ["DemoCAD*/bin/democad.exe"]
       flatpakId: org.example.DemoCAD
 
-``pc open --with democad ./cell.demo`` then works, in a workspace whose packages
+``pc ide open --with democad ./cell.demo`` then works, in a workspace whose packages
 import that one. PartCAD ships three of these in ``//builtin/open`` -- FreeCAD,
 KiCad and Blender. A package's entry replaces a built-in of the same name, which
 is how the plugin for a simulation engine comes to own the application for it: both
@@ -128,7 +128,7 @@ theirs, so a workspace that imports either already gets the entry from there.
 first** -- its own formats (``fcstd``, ``blend``, ``kicad_pcb``) and PartCAD's
 part types (``step``, ``stl``). An object in one of them is handed over as it is.
 Any other is converted to the first one on the list that PartCAD can write, and
-``pc open`` then waits for the application to close: when the converted copy was
+``pc ide open`` then waits for the application to close: when the converted copy was
 changed, it is converted back into the object's own format and written over its
 source, where that source is a file (a STEP, an STL...) rather than a script.
 
@@ -146,9 +146,9 @@ is started the way every other PartCAD container is (see
 :ref:`useDockerRemote <use-docker-remote>`), with the file mounted or, under ``useDockerRemote``,
 uploaded. ``image:``, ``ownFormats:``, ``meshVia:`` and ``imports:`` are what an
 entry said before ``container:`` and ``formats:``; they are still read, into
-those, and ``pc open`` says once that they are deprecated.
+those, and ``pc ide open`` says once that they are deprecated.
 
-``pc open`` is otherwise a **client-side** command and stays one: it is handed a
+``pc ide open`` is otherwise a **client-side** command and stays one: it is handed a
 path, the file is already on disk, and the window belongs to whoever ran the
 command -- a daemon can be remote. So the built-in entries are read straight out
 of the wheel the client is running from, with no context and no daemon, and only

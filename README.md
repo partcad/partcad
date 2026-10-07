@@ -154,7 +154,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] Reading and writing an engine's own scene format through the package that implements it —
         [`partcad-sim-gazebo`](https://github.com/partcad/partcad-sim-gazebo) for a `Gazebo` world
         (SDFormat), [`partcad-sim-mujoco`](https://github.com/partcad/partcad-sim-mujoco) for `MJCF`, each
-        also declaring the reader, the exporter and the `pc open` entry for its engine
+        also declaring the reader, the exporter and the `pc ide open` entry for its engine
 - Simulation — what an object is supposed to do once the world is switched on
   - [x] `simulate:` on a part or an assembly: a scene, where in it the object goes, and the condition that
         says whether it went as it should
@@ -229,10 +229,12 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     engineering analysis, the build-or-buy decision, the bill of materials, the assembly instructions and
     supplier quotes on tabs beside the 3D view — and a software fallback that still draws the model in a
     window with no `WebGL`, such as a virtual machine or a remote desktop
-  - Open an object in the application that made it (`pc open`): `FreeCAD`, `Blender`, `KiCad` — and
+  - Open an object in the application that made it (`pc ide open`): `FreeCAD`, `Blender`, `KiCad` — and
     `Gazebo` or `MuJoCo` from the plugin package for that engine —
-    installed locally, or run in a container when it is not; an object `Blender` cannot read is converted to
-    a mesh on the way
+    installed locally, or run in a container when it is not; an object the application cannot read is
+    converted on the way, and what is edited there is brought back into the object's own file when it closes
+  - Ask the IDE what it is showing (`pc ide state`): the Explorer's selection, the Inspector's parameters, and
+    the Viewer's tab, filters and a screenshot — for an AI agent working beside you to look at what you see
   - Render 2D projections, from any viewing angle (`--view`, or an arbitrary one), with the connection
     ports and interfaces drawn on top if asked
     - [x] `SVG`
