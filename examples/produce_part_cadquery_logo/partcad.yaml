@@ -13,20 +13,6 @@ docs:
 suppliers:
   - //pub/examples/partcad/provider_manufacturer:my3dPrinter
 
-materials:
-  pla:
-    formal: PLA
-    full: Polylactic Acid
-    desc: >-
-      A semi-crystalline thermoplastic, and the usual material for a 3D printed
-      part.
-    url: https://en.wikipedia.org/wiki/Polylactic_acid
-    density: 0.001320 # g/mm^3
-    tags:
-      - 3d-printed
-      - low-cost
-      - biodegradable
-
 parts:
   # One plate, bored three ways, because the bolt meets each of them
   # differently: 9mm clearance where it passes through, 8mm and tapped where it
@@ -40,7 +26,7 @@ parts:
     type: cadquery
     desc: Bracket used as one side of the head on PartCAD logo
     properties:
-      material: pla
+      material: //pub/std/manufacturing/material/plastic:pla
       # The colour OCCT renders an uncoloured shape in - "goldenrod",
       # Quantity_NOC_GOLDENROD as sRGB - so a viewer that has been told the
       # material shows what it showed before being told. It also completes the
@@ -74,7 +60,7 @@ parts:
     path: head_half.py
     desc: The same bracket, tapped M8 so the bolt takes hold in it
     properties:
-      material: pla
+      material: //pub/std/manufacturing/material/plastic:pla
       # The colour OCCT renders an uncoloured shape in - "goldenrod",
       # Quantity_NOC_GOLDENROD as sRGB - so a viewer that has been told the
       # material shows what it showed before being told. It also completes the
@@ -102,7 +88,7 @@ parts:
     type: cadquery
     desc: Plate used as one of the bones on PartCAD logo
     properties:
-      material: pla
+      material: //pub/std/manufacturing/material/plastic:pla
       # The colour OCCT renders an uncoloured shape in - "goldenrod",
       # Quantity_NOC_GOLDENROD as sRGB - so a viewer that has been told the
       # material shows what it showed before being told. It also completes the
@@ -131,7 +117,7 @@ parts:
     path: bone.py
     desc: The same plate, tapped M8 so the bolt takes hold in it
     properties:
-      material: pla
+      material: //pub/std/manufacturing/material/plastic:pla
       # The colour OCCT renders an uncoloured shape in - "goldenrod",
       # Quantity_NOC_GOLDENROD as sRGB - so a viewer that has been told the
       # material shows what it showed before being told. It also completes the

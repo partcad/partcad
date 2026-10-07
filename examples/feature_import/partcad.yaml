@@ -150,22 +150,10 @@ providers:
       'pc test' asks of a supplier - can you make this - out of a table rather
       than over the wire.
 
-materials:
-  al6061:
-    formal: AA 6061-T6
-    full: Aluminium alloy 6061, T6 temper
-    desc: >-
-      The usual wrought aluminium for a milled bracket: stiff enough for a
-      frame, soft enough to cut quickly, and available as plate in the
-      thicknesses these parts are cut from. Named by every part and by every
-      billet below, because 'AeroAssembly.step' names none: what an AP214 file
-      carries is geometry, and what a part is made of is not geometry.
-    url: https://en.wikipedia.org/wiki/6061_aluminium_alloy
-    density: 0.0027 # g/mm^3
-    tags:
-      - milled
-      - formed
-      - aluminium
+# What every part and every billet below is made of is not declared here: 6061-T6
+# is in the public material catalogue, and each part names it there in full -
+# '//pub/std/manufacturing/material/metal:al-6061-t6' - which is also the name
+# the shop in 'machineShop.py' quotes against.
 
 sketches:
   # The footprint of one of the cap's feet: 6 x 10 mm, which is the whole of
@@ -281,7 +269,7 @@ parts:
       source: AeroAssembly_assy_example/AeroFrameAssembly_solid1_stock
     tolerance: 0.1 # mm; the STEP file states none, so the declaration does
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
     desc: The first frame half's rear foot
     implements:
       # 'strut-*' is the joint: where the bolt leaves this foot on its way up
@@ -301,7 +289,7 @@ parts:
       source: AeroAssembly_assy_example/AeroFrameAssembly_solid2_stock
     tolerance: 0.1 # mm; the STEP file states none, so the declaration does
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
     desc: The first frame half's front foot
     implements:
       # 'plate-*' bolts up under the plate's front flange; 'strut-*' is where
@@ -319,7 +307,7 @@ parts:
       source: AeroAssembly_assy_example/AeroFrameAssembly_solid3_stock
     tolerance: 0.1 # mm; the STEP file states none, so the declaration does
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
     desc: The first frame half's strut
     connect:
       hold: aero-strut-opening
@@ -344,7 +332,7 @@ parts:
       source: AeroAssembly_assy_example/AeroFrame_Plate_stock
     tolerance: 0.1 # mm; the STEP file states none, so the declaration does
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
     desc: The plate both frame halves bolt to and the cap stands on
     connect:
       # The fixture everything else is connected to, held by the one pattern
@@ -392,7 +380,7 @@ parts:
       method: forming
     tolerance: 0.1 # mm; the STEP file states none, so the declaration does
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
     desc: The cap, which stands on the plate on four feet - two of which touch
     connect:
       # Lifted by its own seat, and gently: it is only being set down.
@@ -413,7 +401,7 @@ parts:
       source: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1_stock
     tolerance: 0.1 # mm; the STEP file states none, so the declaration does
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
     desc: The mirrored half's rear foot
     implements:
       aero-foot-opening:
@@ -429,7 +417,7 @@ parts:
       source: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2_stock
     tolerance: 0.1 # mm; the STEP file states none, so the declaration does
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
     desc: The mirrored half's front foot
     implements:
       aero-foot-opening:
@@ -445,7 +433,7 @@ parts:
       source: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3_stock
     tolerance: 0.1 # mm; the STEP file states none, so the declaration does
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
     desc: The mirrored half's strut
     connect:
       hold: aero-strut-opening
@@ -490,7 +478,7 @@ parts:
     dependencies:
       - AeroAssembly_assy_example/AeroFrameAssembly_solid1.step
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
 
   AeroAssembly_assy_example/AeroFrameAssembly_solid2_stock:
     type: build123d
@@ -503,7 +491,7 @@ parts:
     dependencies:
       - AeroAssembly_assy_example/AeroFrameAssembly_solid2.step
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
 
   AeroAssembly_assy_example/AeroFrameAssembly_solid3_stock:
     type: build123d
@@ -516,7 +504,7 @@ parts:
     dependencies:
       - AeroAssembly_assy_example/AeroFrameAssembly_solid3.step
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
 
   AeroAssembly_assy_example/AeroFrame_Plate_stock:
     type: build123d
@@ -529,7 +517,7 @@ parts:
     dependencies:
       - AeroAssembly_assy_example/AeroFrame_Plate.step
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
 
   AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1_stock:
     type: build123d
@@ -542,7 +530,7 @@ parts:
     dependencies:
       - AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1.step
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
 
   AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2_stock:
     type: build123d
@@ -555,7 +543,7 @@ parts:
     dependencies:
       - AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2.step
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
 
   AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3_stock:
     type: build123d
@@ -568,7 +556,7 @@ parts:
     dependencies:
       - AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3.step
     properties:
-      material: al6061
+      material: //pub/std/manufacturing/material/metal:al-6061-t6
 
   cube:
     type: stl
