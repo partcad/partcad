@@ -180,8 +180,20 @@ jobs:
       # documentation lies about.
       - build-claude-plugin
     runs-on: ubuntu-24.04
+    # Two environments, because a required reviewer is a rule on an environment
+    # and not on a ref: every job that enters "pypi" waits for a maintainer,
+    # whatever triggered it. Only the release -- a push to "main" -- should
+    # wait. The tag the version bump on "devel" pushes uploads to TestPyPI and
+    # publishes nothing else (the release step below and "publish-plugin-dist"
+    # are both gated on "main"), and while it shared "pypi" every bump queued a
+    # run for an approval nobody gave, which sat there until it was cancelled.
+    #
+    # An environment's secrets reach only the jobs that enter it, so each one
+    # holds the token its runs upload with: PYPI_KEY in "pypi", TEST_PYPI_KEY
+    # in "testpypi". Moving a run to another environment without its secret
+    # leaves the upload below with an empty password.
     environment:
-      name: pypi
+      name: ${{ github.ref == 'refs/heads/main' && 'pypi' || 'testpypi' }}
 
     steps:
       # Before the downloads: "actions/checkout" cleans the workspace, and the
