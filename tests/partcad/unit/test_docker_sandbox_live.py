@@ -251,3 +251,77 @@ def test_what_the_sandbox_writes_is_readable_afterwards(made):
     assert exitcode == 0, stderr
     with open(written) as f:
         assert f.read() == "hello"
+
+
+# --------------------------------------------------------------------------- #
+# 'upload' mode: nothing mounted, everything sent                              #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture(scope="module")
+def uploaded(tmp_path_factory):
+    """The same sandbox with 'useDockerRemote' on: its environment over there, its files sent."""
+    if not runtime.docker_available():
+        pytest.skip("no container runtime is answering here")
+
+    root = tmp_path_factory.mktemp("upload")
+    ctx = types.SimpleNamespace(
+        user_config=types.SimpleNamespace(internal_state_dir=str(root / "state"), use_docker_remote=True),
+        root_path=str(root / "pkg"),
+    )
+    os.makedirs(ctx.root_path, exist_ok=True)
+    yield runtime_python_docker.DockerUploadPythonRuntime(ctx, "3.11", image=IMAGE), root
+
+
+def test_upload_mode_runs_in_the_container_with_nothing_mounted(uploaded):
+    sandbox, _ = uploaded
+    exitcode, stdout, stderr = sandbox.run(["-c", "import sys; print(sys.prefix)"])
+    assert exitcode == 0, stderr
+    # The environment the service built in the volume, not anything of this machine's.
+    assert stdout.strip().startswith("/pc-sandbox/"), stdout
+
+    import docker
+
+    from partcad_utils import containers
+
+    for container in docker.from_env().containers.list(filters={"label": containers.LABEL_MODE + "=upload"}):
+        if container.labels.get(containers.LABEL_ROLE) == "sandbox":
+            binds = [m for m in container.attrs.get("Mounts") or [] if m.get("Type") == "bind"]
+            assert binds == [], binds
+
+
+def test_upload_mode_sends_a_package_and_brings_its_output_back(uploaded):
+    """A script imports its siblings; what it writes is not in the command, so it is named."""
+    sandbox, root = uploaded
+    package = root / "pkg" / "widget"
+    package.mkdir(parents=True)
+    (package / "helper.py").write_text("SHAPE = 'a cube'\n")
+    (package / "make.py").write_text(
+        "import os, sys\n"
+        "sys.path.insert(0, os.path.dirname(__file__))\n"
+        "import helper\n"
+        "open(sys.argv[1], 'w').write(helper.SHAPE)\n"
+    )
+    target = root / "out" / "widget.txt"
+    target.parent.mkdir()
+    exitcode, _, stderr = sandbox.run([str(package / "make.py"), str(target)], output_files=[str(target)])
+    assert exitcode == 0, stderr
+    assert target.read_text() == "a cube"
+
+
+def test_upload_mode_has_the_cad_stack_every_wrapper_needs(uploaded):
+    """What the 'remote' sandbox never asked for until this, and every wrapper imports first."""
+    sandbox, _ = uploaded
+    exitcode, stdout, stderr = sandbox.run(["-c", "import OCP, build123d; print('ok')"])
+    assert exitcode == 0, stderr
+    assert stdout.strip().endswith("ok")
+
+
+def test_upload_mode_keeps_its_environment_for_the_next_process(uploaded, monkeypatch):
+    """The volume outlives what any one process knows about it."""
+    sandbox, _ = uploaded
+    monkeypatch.setattr(runtime_python_docker, "_LOCAL", None)
+    fresh = runtime_python_docker.DockerUploadPythonRuntime(sandbox.ctx, "3.11", image=IMAGE)
+    exitcode, stdout, stderr = fresh.run(["-c", "import OCP; print('still here')"])
+    assert exitcode == 0, stderr
+    assert "still here" in stdout

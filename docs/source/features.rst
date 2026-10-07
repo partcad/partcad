@@ -544,6 +544,32 @@ the container's mounts -- is the daemon one this sandbox cannot use, and PartCAD
 says so and uses conda or a virtual environment, both of which stay on this
 machine.
 
+.. _use-docker-remote:
+
+**A daemon that cannot see your files at all** -- ``DOCKER_HOST`` on another
+machine, shared by a team -- is what ``useDockerRemote`` is for:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    useDockerRemote: true
+
+(``PC_USE_DOCKER_REMOTE=true`` in the environment.) Nothing is bind-mounted
+then. Every file a command reads is sent to the container with the command, and
+every file it writes is sent back with the answer; a sandbox's environment lives
+in a Docker volume on the daemon's side, built once and reused. It applies to
+every container PartCAD starts -- the ``docker`` sandbox, KiCad imports and a
+plugin's ``container:`` alike -- and off by default, because sending a package
+with every command costs time that a shared filesystem does not. It needs no
+service in between: that is the difference from the ``remote`` sandbox below,
+which reaches containers through ``partcad-service-remote-docker`` and never
+talks to Docker itself.
+
+Containers on another machine are reached on a port that daemon publishes on
+every interface, protected by a token of each container's own. Treat a daemon
+shared this way as you would any Docker daemon on a network: anybody who can
+reach the daemon itself can do anything on that host.
+
 That fallback is only ever for a choice PartCAD made. Say ``pythonSandbox:
 docker`` yourself and it is obeyed: an image that cannot be had, or a daemon
 that cannot see your files, is then a failure, because being unable to do what

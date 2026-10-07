@@ -24,9 +24,12 @@ that per part. Two callers asking for different images get different containers,
 because an image is what a caller chose it for.
 """
 
+import logging
 import threading
 import time
 from typing import Callable, Optional
+
+_log = logging.getLogger("partcad.remote_docker")
 
 # How long a container may sit unused before the service retires it. Long
 # enough that a person moving between two commands does not pay the start
@@ -34,18 +37,19 @@ from typing import Callable, Optional
 # containers open.
 DEFAULT_IDLE_SECONDS = 30 * 60
 
-# What PartCAD's own cleanup recognises. The same labels the images carry, for
-# the same reason -- see 'partcad.docker_prune'.
-LABELS = {"partcad.container": "1", "partcad.remote": "1"}
-
 
 class Lease:
-    """A container the service is holding for an image."""
+    """A container the service is holding for an image.
 
-    def __init__(self, image: str, container, endpoint: str):
+    ``token`` is what the service inside it wants on every request: every
+    container PartCAD starts has one (see `partcad_utils.containers`).
+    """
+
+    def __init__(self, image: str, container, endpoint: str, token: Optional[str] = None):
         self.image = image
         self.container = container
         self.endpoint = endpoint
+        self.token = token
         self.used_at = time.monotonic()
         # How many requests are inside this container right now. Retirement
         # looks at it, so that a long analysis is not shut down underneath
@@ -161,3 +165,46 @@ class ContainerPool:
             except Exception:
                 pass
         return leases
+
+
+def start(image: str, role: str = "remote") -> Lease:
+    """The container for ``image``, started if need be and ready to answer.
+
+    ``role`` is the second word of its name: ``remote`` for the containers
+    `partcad-service-remote-docker` holds, ``sandbox`` for the ones the
+    ``docker`` sandbox holds in ``upload`` mode -- which is this same container,
+    asked for from the machine that needs it rather than through a service.
+
+    Through `partcad_utils.containers`, like every container PartCAD starts: the
+    name, the labels, the service inside and the wait for it to answer are that
+    module's, so a container this service holds is one `pc system prune` can
+    find and one an older release's container cannot impersonate.
+
+    ``upload`` mode, because nothing on this machine is the caller's: requests
+    arrive with their files and leave with their outputs. The environment lives
+    in a volume rather than in the container -- a container here is cattle,
+    retired when idle, removed by `pc system prune`, lost on a restart -- and an
+    environment that went with it would be rebuilt several times a day.
+    """
+    from partcad_utils import containers
+
+    from . import remote_sandbox
+
+    spec = containers.ContainerSpec(
+        role=role,
+        image=image,
+        mode=containers.UPLOAD,
+        volumes={remote_sandbox.volume_name(image): {"bind": remote_sandbox.SANDBOX_ROOT, "mode": "rw"}},
+        sandbox_root=remote_sandbox.SANDBOX_ROOT,
+        # The name the environments are built with, wherever the image put it.
+        # An image built on PartCAD's own pins it to a path, and that pin
+        # stands; see 'containers.acquire'.
+        allowed_commands={remote_sandbox.IMAGE_PYTHON: None},
+    )
+    try:
+        endpoint = containers.acquire(spec)
+    except containers.ContainerUnavailable as e:
+        raise RuntimeError(str(e))
+
+    _log.info("Serving %s from %s at %s:%d" % (image, endpoint.name, endpoint.host, endpoint.port))
+    return Lease(image, endpoint.container, "%s:%d" % (endpoint.host, endpoint.port), endpoint.token)

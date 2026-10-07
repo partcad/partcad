@@ -5,17 +5,18 @@
 #
 """An implementation run the way a container runs it, minus the container.
 
-`Runtime.run_async()` and `tools/containers/_common/pc-container-json-rpc.py`
-are two halves of one protocol, and until an implementation declared a
-`container:` nothing exercised the half that carries code: whole directories,
-a request on standard input, an output file coming back. What is checked here is
-that the two halves agree, by driving the *real* server function with what the
-*real* client sends and running a real wrapper under it.
+`Runtime.run_async()` and `partcad_utils.container_service` are two halves of one
+protocol, and until an implementation declared a `container:` nothing exercised
+the half that carries code: whole directories, a request on standard input, an
+output file coming back. What is checked here is that the two halves agree, by
+driving the *real* server function with what the *real* client sends -- through
+an `upload`-mode `Endpoint`, which is the mode where the files travel -- and
+running a real wrapper under it.
 
-The container itself is the one thing not here. Pulling an image needs a
-registry, and a unit test that needs one is a unit test that is skipped -- so
-what is stubbed is Docker and nothing else: the packing, the path rewriting, the
-allowlist, the base64 on both sides and the wrapper are all the shipping code.
+The container itself is the one thing not here; `test_containers_live.py` has
+one. What is stubbed is Docker and the HTTP hop and nothing else: the packing,
+the path rewriting, the allowlist, the base64 on both sides and the wrapper are
+all the shipping code.
 """
 
 import asyncio
@@ -30,18 +31,15 @@ import pytest
 
 from partcad import runtime as pc_runtime
 from partcad import wrapper as pc_wrapper
+from partcad_utils import container_service, containers
 
 # Where the wrappers are, asked the way the core asks: 'partcad.wrappers' is a
 # namespace package and has no '__file__', and in a frozen bundle the directory
 # is not beside the source at all.
 WRAPPERS = os.path.dirname(pc_wrapper.get("export.py"))
-SERVER = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
-    "tools",
-    "containers",
-    "_common",
-    "pc-container-json-rpc.py",
-)
+# The service every container runs, loaded from its file the way a container
+# runs it -- as a script, not as a module of the package it ships in.
+SERVER = container_service.__file__
 
 # An implementation, as small as one can be: it writes the file it was told to
 # write and answers with a finding, so that both halves of what an analysis
@@ -71,31 +69,7 @@ HELPER = "MODEL = 'a model, as bytes would be'\n"
 
 @pytest.fixture
 def server(monkeypatch, tmp_path):
-    """The container's RPC server, imported without Flask and without a container."""
-
-    def _module(name, **attributes):
-        module = types.ModuleType(name)
-        for key, value in attributes.items():
-            setattr(module, key, value)
-        return module
-
-    class _App:
-        def errorhandler(self, _exception):
-            return lambda handler: handler
-
-    class _JsonRpc:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def method(self, _name):
-            return lambda handler: handler
-
-    monkeypatch.setitem(
-        sys.modules,
-        "flask",
-        _module("flask", Flask=lambda _name: _App(), request=None, jsonify=lambda payload: payload),
-    )
-    monkeypatch.setitem(sys.modules, "flask_jsonrpc", _module("flask_jsonrpc", JSONRPC=_JsonRpc))
+    """The container's service, loaded from its file without a container."""
     # The allowlist is the whole of the server's isolation and is a property of
     # the image, read once at start-up -- so it is set before the import, the
     # way a Dockerfile sets it.
@@ -252,9 +226,27 @@ class _Wire:
         self.server = server
         self.sent = None
 
-    async def execute_async(self, command, params=None):
+    async def execute_async(self, command, params=None, timeout=None):
         self.sent = json.loads(json.dumps({"command": list(command), **(params or {})}))
         return {"result": self.server.handle_execute_command(**self.sent)}
+
+
+class _WiredEndpoint(containers.Endpoint):
+    """An `upload`-mode endpoint whose service is the function above rather than a port."""
+
+    def __init__(self, wire):
+        super().__init__(
+            name="partcad-test",
+            spec=containers.ContainerSpec(role="test", image="test:1", mode=containers.UPLOAD),
+            container=None,
+            host="127.0.0.1",
+            port=0,
+            token=None,
+        )
+        self.wire = wire
+
+    def client(self):
+        return self.wire
 
 
 @pytest.fixture
@@ -264,7 +256,7 @@ def runtime(server, monkeypatch, tmp_path):
 
     monkeypatch.setattr(user_config, "internal_state_dir", str(tmp_path / "state"))
     made = pc_runtime.Runtime(types.SimpleNamespace(user_config=user_config), "test-container")
-    made.rpc_client = _Wire(server)
+    made.use_container(_WiredEndpoint(_Wire(server)))
     return made
 
 
@@ -300,6 +292,23 @@ def test_the_client_and_the_server_agree(runtime, package, tmp_path):
     assert answer["findings"] == ["how thin is too thin"]
     # And the model is where the caller asked for it, not in the container.
     assert open(output).read() == "a model, as bytes would be"
+
+
+def test_the_command_went_through_the_container_and_carried_its_files(runtime, package, tmp_path):
+    """Not the host. A runtime that lost its container used to run the command here instead, and pass."""
+    output = str(tmp_path / "result.glb")
+    asyncio.run(
+        runtime.run_async(
+            ["python", os.path.join(WRAPPERS, "wrapper_export.py"), output, str(package), str(package / "solve.py")],
+            _serialize({"question": "q"}),
+            output_files=[output],
+            input_dirs=[WRAPPERS, str(package)],
+        )
+    )
+    sent = runtime.endpoint.wire.sent
+    assert sent is not None
+    assert set(sent["input_dirs"]) == {WRAPPERS, str(package)}
+    assert sent["output_files"] == [output]
 
 
 def test_what_the_implementation_printed_is_a_warning_and_not_a_failure(runtime, package, tmp_path):

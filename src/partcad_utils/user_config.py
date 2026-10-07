@@ -341,6 +341,7 @@ OPTION_KEYS = (
     "useDocker",
     "useDockerPython",
     "useDockerKicad",
+    "useDockerRemote",
     "caeFeaImplementation",
     "caeCfdImplementation",
     "camImplementation",
@@ -724,6 +725,7 @@ class UserConfig(vyper.Vyper):
         self.set_default("useDocker", True)
         self.set_default("useDockerPython", False)
         self.set_default("useDockerKicad", True)
+        self.set_default("useDockerRemote", False)
         self.set_default("tags", "")
 
         self.set_env_prefix("pc")
@@ -1112,6 +1114,20 @@ class UserConfig(vyper.Vyper):
         self.bind_env("useDockerKicad", "PC_USE_DOCKER_KICAD")
         self.use_docker_kicad_declared = self.get_bool("useDockerKicad")
         self.use_docker_kicad = self.use_docker and self.use_docker_kicad_declared
+
+        # option: useDockerRemote
+        # description: the Docker daemon PartCAD starts containers on cannot see
+        #              this machine's files -- it runs on another machine, or
+        #              behind DOCKER_HOST -- so files are sent to every container
+        #              with each command, and what it writes is sent back, rather
+        #              than being bind-mounted. Applies to every container
+        #              PartCAD starts: the 'docker' Python sandbox, KiCad, a
+        #              plugin's 'container:' and 'pc open'. See
+        #              'partcad_utils.containers'.
+        # values: [True | False]
+        # default: False
+        self.bind_env("useDockerRemote", "PC_USE_DOCKER_REMOTE")
+        self.use_docker_remote = self.get_bool("useDockerRemote")
 
         # option: tags
         # description: extra tags to add to the ones PartCAD works out about

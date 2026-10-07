@@ -1,2 +1,6 @@
-flask
-flask-jsonrpc
+# Nothing. The service every image runs (pc-container-json-rpc.py, a copy of
+# src/partcad_utils/container_service.py) imports only the standard library, so
+# it starts on any image that has a python3 -- which is what lets PartCAD put it
+# into images it did not build. This file stays so the Dockerfiles that
+# install it need no change, and so an image that does need something has
+# somewhere to say so.

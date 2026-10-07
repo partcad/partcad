@@ -15,9 +15,14 @@ import threading
 
 from partcad_utils import container_image
 
+from . import container_mounts
 from . import logging as pc_logging
 from . import runtime
 from .part_factory_step import PartFactoryStep
+
+# The image 'pc open --with kicad' runs as well (see '//builtin/open'): one KiCad
+# container image in the product, not two.
+KICAD_IMAGE = "ghcr.io/partcad/partcad-container-kicad"
 
 kicad_runtime_lock = threading.Lock()
 kicad_runtime = None
@@ -55,18 +60,31 @@ async def get_runtime(ctx):
                     "runtime is available here. Start Docker, or install KiCad on this machine and set "
                     "'useDockerKicad: false' so that PartCAD runs the 'kicad-cli' you installed."
                 )
-            await kicad_runtime.use_docker(
-                # The release, unless CI is running the images built out of
-                # this commit rather than the ones the release published -- the
-                # TODO that stood here asked for exactly that, and
-                # 'partcad_utils.container_image' is where it ended up.
-                container_image.image_name("ghcr.io/partcad/partcad-container-kicad")
+            # The release's image, unless CI is running the images built out of
+            # this commit rather than the ones the release published; see
+            # 'partcad_utils.container_image'.
+            image = (
+                container_image.image_name(KICAD_IMAGE)
                 + ":"
-                + container_image.image_tag(sys.modules["partcad"].__version__),
-                "integration-kicad",
-                5000,
-                "localhost",
+                + container_image.image_tag(sys.modules["partcad"].__version__)
             )
+            # The container is named after this image and everything else it is
+            # started with, and replaced when it no longer matches -- see
+            # 'partcad_utils.containers'. It used to be "integration-kicad",
+            # whatever had made it, so an import for one release ran in a
+            # container another release had started.
+            spec = container_mounts.spec_for(
+                ctx,
+                "kicad",
+                image,
+                "Importing a KiCad PCB",
+                allowed_commands={"kicad-cli": "/usr/bin/kicad-cli"},
+                # kicad-cli keeps its configuration under $HOME, and in 'mount'
+                # mode on Linux it runs as this machine's user, whom the image
+                # has no home directory for.
+                environment={"HOME": "/tmp"},
+            )
+            kicad_runtime.use_container(container_mounts.acquire(spec))
         return kicad_runtime, kicad_runtime_uses_docker
 
 
@@ -120,7 +138,12 @@ class PartFactoryKicad(PartFactoryStep):
                     part.path,
                     kicad_pcb_path,
                 ],
-                input_files=[kicad_pcb_path],
+                # The board's whole directory rather than the board alone: a
+                # board names its 3D models relative to the project
+                # (${KIPRJMOD}), and in 'upload' mode a file that did not
+                # travel is a model silently missing from the STEP. In 'mount'
+                # mode these are paths the container already sees.
+                input_dirs=[os.path.dirname(os.path.abspath(kicad_pcb_path))],
                 output_files=[part.path],
             )
 

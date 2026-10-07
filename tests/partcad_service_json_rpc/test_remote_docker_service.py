@@ -33,7 +33,7 @@ def pool():
         started.append(image)
         container = types.SimpleNamespace()
         container.remove = lambda force=False: None
-        return remote_docker.Lease(image, container, "127.0.0.1:5999")
+        return remote_docker.Lease(image, container, "127.0.0.1:5999", token="lease-token")
 
     made = remote_docker.ContainerPool(start)
     made.started = started
@@ -62,15 +62,16 @@ def upstream(monkeypatch):
     seen = {}
 
     class _Client:
-        def __init__(self, host, port):
+        def __init__(self, host, port, token=None):
             seen["endpoint"] = "%s:%d" % (host, port)
+            seen["token"] = token
 
-        def execute(self, command, params):
+        def execute(self, command, params, timeout=None):
             seen["command"] = command
             seen["params"] = params
             return {"jsonrpc": "2.0", "id": 1, "result": {"stdout": "ok", "stderr": "", "exit_code": 0}}
 
-    monkeypatch.setattr(service, "RuntimeJsonRpcClient", _Client)
+    monkeypatch.setattr(remote_sandbox, "RuntimeJsonRpcClient", _Client)
     return seen
 
 
@@ -127,13 +128,13 @@ def test_the_container_is_released_even_when_the_request_fails(pool, environment
     """Or a container that failed once would never be retired again."""
 
     class _Angry:
-        def __init__(self, host, port):
+        def __init__(self, host, port, token=None):
             pass
 
-        def execute(self, command, params):
+        def execute(self, command, params, timeout=None):
             raise RuntimeError("the container said no")
 
-    monkeypatch.setattr(service, "RuntimeJsonRpcClient", _Angry)
+    monkeypatch.setattr(remote_sandbox, "RuntimeJsonRpcClient", _Angry)
 
     with pytest.raises(RuntimeError, match="said no"):
         service.execute(
@@ -151,13 +152,13 @@ def _answers(monkeypatch, payload):
     """A container that replies with exactly ``payload``."""
 
     class _Client:
-        def __init__(self, host, port):
+        def __init__(self, host, port, token=None):
             pass
 
-        def execute(self, command, params):
+        def execute(self, command, params, timeout=None):
             return payload
 
-    monkeypatch.setattr(service, "RuntimeJsonRpcClient", _Client)
+    monkeypatch.setattr(remote_sandbox, "RuntimeJsonRpcClient", _Client)
 
 
 def test_what_a_command_wrote_is_decoded(pool, monkeypatch):
@@ -303,27 +304,6 @@ def test_a_failure_keeps_the_request_id(served):
 
 
 # --------------------------------------------------------------------------- #
-# Waiting for a container to be ready                                          #
-# --------------------------------------------------------------------------- #
-
-
-def test_a_service_that_answers_is_what_is_waited_for(served):
-    """Any JSON counts, an error included.
-
-    A published port is not an answer: Docker publishes it the moment the
-    container starts and the service behind it binds seconds later, so the
-    first request used to land in the gap and come back as "the container
-    returned no response".
-    """
-    assert service._answering(served.split("//")[1].split("/")[0]) is True
-
-
-def test_nothing_listening_is_not_an_answer():
-    # Port 1 on loopback: privileged, and nothing this test could have started.
-    assert service._answering("127.0.0.1:1") is False
-
-
-# --------------------------------------------------------------------------- #
 # Who may ask                                                                  #
 # --------------------------------------------------------------------------- #
 #
@@ -448,176 +428,61 @@ def test_a_token_that_is_not_ascii_is_refused_rather_than_raised(guarded, upstre
 # Starting the container a request needs                                       #
 # --------------------------------------------------------------------------- #
 #
-# '_docker_start' is the half of this service that does need Docker, so it is
-# pinned against a client that answers rather than against a daemon. What is
-# worth having is the waiting: a container publishes its port before the service
-# inside it binds one, and both of those gaps used to surface as "the container
-# returned no response", which reads like a broken image.
-
-
-class _Container:
-    def __init__(self, ports=None, logs=b""):
-        self._ports = ports
-        self._logs = logs
-        self.short_id = "c0ffee"
-        self.removed = False
-        self.attrs = {"NetworkSettings": {"Ports": {}}}
-
-    def reload(self):
-        if self._ports is not None:
-            self.attrs = {"NetworkSettings": {"Ports": self._ports}}
-
-    def logs(self, tail=20):
-        return self._logs
-
-    def remove(self, force=False):
-        self.removed = True
-
-
-class _Docker:
-    def __init__(self, local=(), pullable=(), container=None):
-        import docker as docker_sdk
-
-        self.local = set(local)
-        self.pullable = set(pullable)
-        self.pulled = []
-        self.ran = []
-        self.container = container or _Container()
-
-        def get(name):
-            if name not in self.local:
-                raise docker_sdk.errors.ImageNotFound(name)
-            return types.SimpleNamespace(tags=[name])
-
-        def pull(name):
-            if name not in self.pullable:
-                raise docker_sdk.errors.NotFound("no such image: %s" % name)
-            self.pulled.append(name)
-            self.local.add(name)
-
-        def run(image, **kwargs):
-            self.ran.append(image)
-            return self.container
-
-        self.images = types.SimpleNamespace(get=get, pull=pull)
-        self.containers = types.SimpleNamespace(run=run)
-
-
-def _published(host="127.0.0.1", port="49154"):
-    return {"%d/tcp" % service.CONTAINER_PORT: [{"HostIp": host, "HostPort": port}]}
+# `remote_docker.start` asks `partcad_utils.containers` for the container, which owns
+# the name, the labels, the injected service and the wait for it to answer (see
+# tests/partcad_utils/test_containers.py and test_containers_live.py). What is
+# left here is what this service decides about the container it asks for.
 
 
 @pytest.fixture
-def docker_daemon(monkeypatch):
-    """A container runtime that answers, with the waiting taken out."""
-    import docker as docker_sdk
+def acquired(monkeypatch):
+    from partcad_utils import containers
 
-    monkeypatch.setattr(service.time, "sleep", lambda _seconds: None)
+    asked = []
 
-    def install(answering=True, **kwargs):
-        made = _Docker(**kwargs)
-        monkeypatch.setattr(docker_sdk, "from_env", lambda *a, **k: made)
-        monkeypatch.setattr(service, "_answering", lambda _endpoint: answering)
-        return made
+    def acquire(spec, client=None):
+        asked.append(spec)
+        return containers.Endpoint(
+            name="partcad-remote-1-abc", spec=spec, container=object(), host="127.0.0.1", port=49154, token="t0k"
+        )
 
-    return install
+    monkeypatch.setattr(containers, "acquire", acquire)
+    return asked
 
 
-def test_a_container_is_started_and_leased(docker_daemon):
-    from partcad import docker_image
+def test_a_container_is_asked_for_in_upload_mode_with_the_environment_volume(acquired):
+    """Nothing on this machine is the caller's, and the environment outlives the container."""
+    from partcad_utils import containers
 
-    image = "ghcr.io/x/solver:1"
-    here = docker_image.candidates(image)[0]
-    made = docker_daemon(local=[here], container=_Container(ports=_published()))
+    remote_docker.start("ghcr.io/x/solver:1")
 
-    lease = service._docker_start(image)
+    spec = acquired[0]
+    assert spec.role == "remote"
+    assert spec.image == "ghcr.io/x/solver:1"
+    assert spec.mode == containers.UPLOAD
+    assert spec.sandbox_root == remote_sandbox.SANDBOX_ROOT
+    assert spec.volumes == {
+        remote_sandbox.volume_name("ghcr.io/x/solver:1"): {"bind": remote_sandbox.SANDBOX_ROOT, "mode": "rw"}
+    }
 
-    assert made.ran == [here]
+
+def test_the_lease_carries_where_and_how_to_reach_it(acquired):
+    lease = remote_docker.start("ghcr.io/x/solver:1")
     assert lease.endpoint == "127.0.0.1:49154"
-    assert made.pulled == []
+    assert lease.token == "t0k"
 
 
-def test_a_wildcard_bind_address_is_not_dialled(docker_daemon):
-    """'0.0.0.0' is where the port listens, not a routable destination."""
-    from partcad import docker_image
+def test_a_container_that_cannot_be_had_is_a_failure_the_pool_reports(monkeypatch):
+    from partcad_utils import containers
 
-    image = "ghcr.io/x/solver:1"
-    here = docker_image.candidates(image)[0]
-    docker_daemon(local=[here], container=_Container(ports=_published(host="0.0.0.0")))
+    def refuse(spec, client=None):
+        raise containers.ContainerUnavailable("Cannot get an image for 'ghcr.io/x/solver:1': nope")
 
-    assert service._docker_start(image).endpoint == "127.0.0.1:49154"
-
-
-def test_an_image_missing_here_is_pulled(docker_daemon):
-    from partcad import docker_image
-
-    image = "ghcr.io/x/solver:1"
-    here = docker_image.candidates(image)[0]
-    made = docker_daemon(pullable=[here], container=_Container(ports=_published()))
-
-    service._docker_start(image)
-
-    assert made.pulled == [here]
+    monkeypatch.setattr(containers, "acquire", refuse)
+    with pytest.raises(RuntimeError, match="Cannot get an image"):
+        remote_docker.start("ghcr.io/x/solver:1")
 
 
-def test_an_image_nobody_can_get_says_what_it_tried(docker_daemon):
-    """Naming every candidate is the only clue to what needs publishing."""
-    from partcad import docker_image
-
-    image = "ghcr.io/x/solver:1"
-    docker_daemon()
-
-    with pytest.raises(RuntimeError, match="Cannot get an image") as raised:
-        service._docker_start(image)
-
-    for candidate in docker_image.candidates(image):
-        assert candidate in str(raised.value)
-
-
-def test_a_container_that_never_publishes_a_port_is_removed(docker_daemon):
-    """Otherwise it is left running on the machine with nothing pointing at it."""
-    from partcad import docker_image
-
-    image = "ghcr.io/x/solver:1"
-    here = docker_image.candidates(image)[0]
-    container = _Container(ports={})
-    docker_daemon(local=[here], container=container)
-
-    with pytest.raises(RuntimeError, match="never published a port"):
-        service._docker_start(image)
-    assert container.removed is True
-
-
-def test_a_service_that_never_answers_is_removed_and_reports_the_log(docker_daemon):
-    """The container's own last words are the only clue to why it did not bind."""
-    from partcad import docker_image
-
-    image = "ghcr.io/x/solver:1"
-    here = docker_image.candidates(image)[0]
-    container = _Container(ports=_published(), logs=b"ModuleNotFoundError: flask")
-    docker_daemon(answering=False, local=[here], container=container)
-
-    with pytest.raises(RuntimeError, match="never answered") as raised:
-        service._docker_start(image)
-
-    assert container.removed is True
-    assert "ModuleNotFoundError: flask" in str(raised.value)
-
-
-def test_a_container_whose_log_cannot_be_read_still_reports_the_failure(docker_daemon):
-    """A best-effort extra must not replace the error it was decorating."""
-    from partcad import docker_image
-
-    image = "ghcr.io/x/solver:1"
-    here = docker_image.candidates(image)[0]
-
-    class _Mute(_Container):
-        def logs(self, tail=20):
-            raise RuntimeError("no log driver")
-
-    container = _Mute(ports=_published())
-    docker_daemon(answering=False, local=[here], container=container)
-
-    with pytest.raises(RuntimeError, match="never answered"):
-        service._docker_start(image)
-    assert container.removed is True
+def test_a_forwarded_request_carries_the_containers_token(pool, environments, upstream):
+    service.execute(pool, environments, {"image": "ghcr.io/x/solver:abc", "python_version": "3.11", "command": ["x"]})
+    assert upstream["token"] == "lease-token"

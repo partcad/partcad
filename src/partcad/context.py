@@ -8,7 +8,6 @@
 
 import asyncio
 import os
-import re
 import socket
 import sys
 import threading
@@ -1837,9 +1836,12 @@ class Context:
             # can still choose another sandbox -- rather than a failure when
             # the container starts.
             needed = [self.user_config.internal_state_dir, getattr(self, "root_path", None)]
+            from partcad_utils import containers
+
+            mode = containers.transfer_mode(self.user_config)
             self.docker_images_available[image] = runtime_python_docker.image_available(
-                image, version
-            ) and not runtime_python_docker.misses(image, [p for p in needed if p])
+                image, version, mode=mode
+            ) and not runtime_python_docker.misses(image, [p for p in needed if p], mode=mode)
         return self.docker_images_available[image]
 
     def _docker_or_next_best(self, version: str) -> str:
@@ -2026,13 +2028,20 @@ class Context:
                 package naming an image declares how to run without one too.
         """
         image = container["image"]
-        port = int(container.get("port") or 5000)
-        # A name derived from the image, so the container is recognisable in
-        # 'docker ps' and shared by everything that asked for that image.
-        name = container.get("name") or "pc-" + re.sub(r"[^A-Za-z0-9_.-]", "-", image)
+        # What the container is for, as the second word of its name. The name
+        # itself is derived from the image and everything the container is
+        # started with (see 'partcad_utils.containers'), so a declared 'name:'
+        # says whose container it is rather than choosing it outright: a name
+        # chosen outright is one an older release's container answers to.
+        role = "plugin-%s" % container["name"] if container.get("name") else "plugin"
+        # What the implementation runs as, allowed wherever the image's PATH
+        # has it. An image built on PartCAD's own pins 'python' to a path of its
+        # own, and that pin stands.
+        command = container.get("command") or "python"
+        key = (image, role, command)
 
         with self.runtimes_container_lock:
-            existing = self.runtimes_container.get(name)
+            existing = self.runtimes_container.get(key)
         if existing is not None:
             return existing
 
@@ -2042,14 +2051,27 @@ class Context:
                 "Install Docker and start it, or use an implementation that runs in a Python sandbox." % image
             )
 
-        created = runtime.Runtime(self, name)
-        await created.use_docker(image, name, port)
+        from . import container_mounts
+
+        loop = asyncio.get_running_loop()
+
+        def start():
+            spec = container_mounts.spec_for(
+                self, role, image, "This implementation (%s)" % image, allowed_commands={command: None}
+            )
+            return container_mounts.acquire(spec)
+
+        # Off the event loop: pulling and starting a container is seconds of
+        # blocking calls, and every other part in the tree is waiting on this
+        # loop meanwhile.
+        endpoint = await loop.run_in_executor(None, start)
+        created = runtime.Runtime(self, endpoint.name)
+        created.use_container(endpoint)
         with self.runtimes_container_lock:
             # Another task may have won the race while the container started.
-            # Whoever is already in the map wins; a second container for the
-            # same name would not have been created anyway, since 'use_docker'
-            # reuses one by name.
-            return self.runtimes_container.setdefault(name, created)
+            # Whoever is already in the map wins; both got the same container,
+            # since 'acquire' derives the name from what was asked for.
+            return self.runtimes_container.setdefault(key, created)
 
     def get_javascript_runtime(self, version=None, javascript_runtime=None):
         """The sandboxed Node.js of the given major version.
