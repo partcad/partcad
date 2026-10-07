@@ -201,6 +201,15 @@ class View {
     }
 }
 
+/**
+ * `window.onDidStartTerminalShellExecution`, which is newer than the oldest
+ * editor this extension supports (`engines.vscode`), so it is looked for
+ * rather than assumed.
+ */
+interface ShellExecutionEvents {
+    onDidStartTerminalShellExecution?: vscode.Event<{ readonly terminal: vscode.Terminal }>;
+}
+
 function isAlive(terminal: vscode.Terminal): boolean {
     return vscode.window.terminals.includes(terminal) && terminal.exitStatus === undefined;
 }
@@ -259,6 +268,8 @@ export class PartcadTerminals implements vscode.Disposable, vscode.TerminalProfi
     /** Whether a view has been opened in this window, by the extension or by the user. */
     private everOpened = false;
     private reviveWatch: ReturnType<typeof setInterval> | undefined;
+    /** Terminals a command has been run in, which is something only the user does in a shell this new. */
+    private readonly used = new WeakSet<vscode.Terminal>();
 
     constructor(private readonly options: PartcadTerminalsOptions) {
         this.shellName = options.shellName ?? SHELL_NAME;
@@ -280,6 +291,14 @@ export class PartcadTerminals implements vscode.Disposable, vscode.TerminalProfi
                 }
             }),
         );
+        // Not `Terminal.state.isInteractedWith`, which any input sets -- and a
+        // terminal sends some of its own as a shell starts, answering the
+        // shell's queries. On Windows (conpty) that comes before the first
+        // prompt, so every new shell there read as "typed into" at once.
+        const onExecution = (vscode.window as ShellExecutionEvents).onDidStartTerminalShellExecution;
+        if (onExecution) {
+            this.subscriptions.push(onExecution((execution) => this.used.add(execution.terminal)));
+        }
     }
 
     write(text: string, alert?: string): void {
@@ -440,8 +459,9 @@ export class PartcadTerminals implements vscode.Disposable, vscode.TerminalProfi
     }
 
     private replaceShell(ours: vscode.Terminal, restored: vscode.Terminal): void {
-        if (ours.state.isInteractedWith) {
-            // Typed into already: closing it would take that away. Two shells, then.
+        if (this.used.has(ours)) {
+            // A command has been run in it: closing it would take that away.
+            // Two shells, then.
             return;
         }
         const beside = [...this.views].filter((view) => view.parent === ours);

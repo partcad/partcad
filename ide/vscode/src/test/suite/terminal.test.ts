@@ -106,6 +106,21 @@ function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Whether `condition` came to hold within `ms`. */
+async function within(condition: () => boolean, ms: number): Promise<boolean> {
+    const until = Date.now() + ms;
+    while (!condition() && Date.now() < until) {
+        await sleep(50);
+    }
+    return condition();
+}
+
+/** The shell integration API, newer than the `@types/vscode` this extension builds against. */
+type WithShellIntegration = vscode.Terminal & { shellIntegration?: unknown };
+type ShellExecutionEvents = {
+    onDidStartTerminalShellExecution?: vscode.Event<{ readonly terminal: vscode.Terminal }>;
+};
+
 function isPty(terminal: vscode.Terminal): boolean {
     return 'pty' in terminal.creationOptions;
 }
@@ -289,6 +304,37 @@ suite('PartCAD terminal: views', () => {
         await waitFor(() => !isAlive(made) && !vscode.window.terminals.includes(first), 'the new pair to close');
         await waitFor(() => views().length === 2, 'a view beside the restored shell, besides the "+" one');
         assert.ok(views().includes(plus), 'the "+" view is left alone');
+    });
+
+    test('a shell a command has been run in is kept when a restored one turns up', async function () {
+        const onExecution = (vscode.window as ShellExecutionEvents).onDidStartTerminalShellExecution;
+        if (!onExecution) {
+            this.skip();
+        }
+        // A window long enough to wait for shell integration in, which is what
+        // reports a command having run.
+        const partcad = make({ reviveWindowMs: 50000 });
+        partcad.write('INFO: hello\r\n');
+        const [made] = shells();
+        if (!(await within(() => (made as WithShellIntegration).shellIntegration !== undefined, 20000))) {
+            // This is about the extension's guard, not about shell integration
+            // starting on this runner.
+            this.skip();
+        }
+        let ran = false;
+        const watching = onExecution!((execution) => (ran ||= execution.terminal === made));
+        try {
+            made.sendText('echo partcad');
+            await waitFor(() => ran, 'the command to be reported');
+        } finally {
+            watching.dispose();
+        }
+
+        vscode.window.createTerminal({ name: shellName });
+        await sleep(1000);
+        assert.ok(isAlive(made), 'the shell a command was run in stays');
+        assert.strictEqual(shells().length, 2);
+        assert.strictEqual(views().length, 1, 'and so does its view');
     });
 
     test('a shell restored after the window is left beside the one that was made', async () => {

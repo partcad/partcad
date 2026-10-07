@@ -466,9 +466,12 @@ ordinary terminal and gets the tools like any other.
 - **A shell restored late replaces the one made in its place.** The view can need a shell before VS Code has
   restored the old one, and then a second one is made. For `REVIVE_WINDOW_MS` (5s) after making a shell, a
   restored one replaces it: the new shell and its view are closed and a view opens beside the restored shell,
-  filled from the replay -- unless the user has already typed into the new shell (`state.isInteractedWith`),
-  which is then kept. It is polled, not an event: a restored terminal is announced to extensions before its
-  name is set again, and nothing tells them when that happens.
+  filled from the replay -- unless a command has already been run in the new shell, which is then kept. That is
+  `window.onDidStartTerminalShellExecution`, looked up at run time because it is newer than `engines.vscode`;
+  not `Terminal.state.isInteractedWith`, which any input sets, including the terminal's own answers to a
+  starting shell's queries -- on Windows (conpty) every new shell had it set before its first prompt. It is
+  polled, not an event: a restored terminal is announced to extensions before its name is set again, and
+  nothing tells them when that happens.
 - **The shell is the user's.** Nothing disposes it with the views or on deactivation; the case above is the
   only one in which the extension closes a shell.
 
