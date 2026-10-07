@@ -129,10 +129,9 @@ option_groups = [
 command_groups = [
     {
         # `version` and `upgrade` are about this installation of PartCAD;
-        # `config`, `system`, `daemon` and `open` about the host it runs on --
-        # `open` starts an application on the screen of whoever ran it.
+        # `config`, `system` and `daemon` about the host it runs on.
         "name": "Host commands",
-        "commands": ["version", "upgrade", "config", "system", "daemon", "open"],
+        "commands": ["version", "upgrade", "config", "system", "daemon"],
     },
     {
         "name": "Package commands",
@@ -151,7 +150,6 @@ command_groups = [
             "import",
             "test",
             "sim",
-            "inspect",
             "info",
             "bom",
             "convert",
@@ -174,6 +172,13 @@ command_groups = [
             "cae",
             "cam",
         ],
+    },
+    {
+        # Putting an object in front of a person: `pc ide view` in the PartCAD
+        # Viewer, `pc ide open` in another application on this machine. Neither
+        # makes anything a package keeps, which is what the panel above is for.
+        "name": "IDE commands",
+        "commands": ["ide"],
     },
     {
         "name": "Workflow commands",

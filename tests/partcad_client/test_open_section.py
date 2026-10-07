@@ -127,7 +127,7 @@ def test_a_front_end_gets_its_own_arguments():
 
 
 def test_nothing_declared_leaves_the_table_alone():
-    """A daemon that could not be reached must not empty 'pc open'."""
+    """A daemon that could not be reached must not empty 'pc ide open'."""
     before = dict(external.TOOLS)
     external.use_tools(None)
     external.use_tools({})

@@ -4,7 +4,7 @@ PartCAD example project to demonstrate parts defined using 3MF files
 
 ## Usage
 ```shell
-pc inspect cube
+pc ide view cube
 ```
 
 

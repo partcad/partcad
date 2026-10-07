@@ -4,10 +4,10 @@ Assembly YAML examples
 
 ## Usage
 ```shell
-pc inspect primitive
-pc inspect 'primitive_parametrized;offset=12'
-pc inspect logo
-pc inspect logo_embedded
+pc ide view primitive
+pc ide view 'primitive_parametrized;offset=12'
+pc ide view logo
+pc ide view logo_embedded
 ```
 
 

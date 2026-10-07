@@ -6,7 +6,7 @@
 """Every container PartCAD starts: how it is named, started, reused, and given files.
 
 There used to be five ways, one per thing that needed a container -- the `docker`
-Python sandbox, KiCad, a plugin's `container:`, `pc open`, and the
+Python sandbox, KiCad, a plugin's `container:`, `pc ide open`, and the
 `partcad-service-remote-docker` pool -- and they disagreed about everything that
 matters. One named its container after a constant and reused whatever answered
 to it, so a machine ran KiCad imports for 0.8.158 in a container 0.8.129 had

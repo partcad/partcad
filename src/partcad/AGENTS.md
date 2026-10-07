@@ -180,7 +180,7 @@ at all).
   every context as `//builtin/export`, `//builtin/render`, `//builtin/import`, `//builtin/open`,
   `//builtin/cam` and `//builtin/scene` (loaded
   on demand by `Context.get_project`, see `output.py`). All but the last declare implementations — the file
-  types `pc export`, `pc render`, `pc import`, `pc open` and `pc cam` write — in
+  types `pc export`, `pc render`, `pc import`, `pc ide open` and `pc cam` write — in
   exactly the form a user's package declares one: a `path` to a script, its `pythonRequirements`, and the
   parameters. So adding a
   format, changing its defaults or changing which dependencies it needs is an edit to `builtin/*/partcad.yaml`, not
@@ -630,18 +630,18 @@ at all).
   is that it does not know what is in it.
 
   **`open:` is the fifth, and the only one whose implementation is not a script.** It declares the
-  third-party applications `pc open` launches, as data: binaries per OS, a container image, the arguments
+  third-party applications `pc ide open` launches, as data: binaries per OS, a container image, the arguments
   each front end takes, and what the application can read. The logic is the same for every tool and stays in
   `partcad_client.external`, which now *builds* its `Tool` table from those declarations instead of holding
   five literals. Blender's argument builder was the one callable in that table and is now `fileArgs:`
   templates plus `formats:` — a package cannot ship a Python function into a frozen client. `formats:` is an
   ordered list: an object in none of them is converted to the first one PartCAD can write, and the edit is
-  converted back over the source when the source is a file (`WRITABLE_PART_TYPES`), which is why `pc open`
+  converted back over the source when the source is a file (`WRITABLE_PART_TYPES`), which is why `pc ide open`
   blocks until the application closes. An entry's `container:` goes through `partcad_utils.containers` like
   every other container, so it supports both transfer modes; `{path_repr}` (a path quoted inside a script) is
   the one template upload mode cannot honour, and Blender's own entry uses `{path}` after `--` instead.
 
-  The subtlety is where the table is read. `pc open` deliberately needs **no package graph** (it is handed a
+  The subtlety is where the table is read. `pc ide open` deliberately needs **no package graph** (it is handed a
   path; the window belongs to whoever ran the command; a daemon can be remote), so the built-in entries are
   read straight off disk out of the wheel — `partcad_client` locates them with `importlib.util.find_spec`
   without importing `partcad`, the same reason `object_types` holds its own copy of PartCAD's tables. Only a

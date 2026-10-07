@@ -439,8 +439,8 @@ jobs:
 
     # The KiCad image as well, on the same rule as "test.yml": no test job
     # starts before every container it might run in has been published.
-    # Nothing here starts that container today -- "features/open.feature"
-    # asks "pc open" what it would do rather than doing it -- and the wait
+    # Nothing here starts that container today -- "features/ide_open.feature"
+    # asks "pc ide open" what it would do rather than doing it -- and the wait
     # is free either way, the build running from "scope" while
     # "poetry-install" is still going.
     # "preflight" is named although "container-kicad" implies it: this job
@@ -702,8 +702,8 @@ jobs:
     timeout-minutes: 60
     # The KiCad image as well, on the same rule as "test.yml": no test job
     # starts before every container it might run in has been published.
-    # Nothing here starts that container today -- "features/open.feature"
-    # asks "pc open" what it would do rather than doing it -- and the wait
+    # Nothing here starts that container today -- "features/ide_open.feature"
+    # asks "pc ide open" what it would do rather than doing it -- and the wait
     # is free either way, the build running from "scope" while
     # "poetry-install" is still going.
     needs: [scope, poetry-install, container-kicad]

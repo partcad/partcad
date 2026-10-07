@@ -44,7 +44,7 @@ Feature: `pc render` command
     When I run command:
       """
       pc \
-        inspect \
+        ide view \
           -p length=30 \
           -p size=M4-0.7 \
           //pub/std/metric/cqwarehouse:fastener/hexhead-din931
@@ -54,7 +54,7 @@ Feature: `pc render` command
     When I run command:
       """
       pc \
-        inspect \
+        ide view \
           //pub/std/metric/cqwarehouse:fastener/hexhead-din931;length=30,size=M4-0.7
       """
     Then the command should exit with a status code of "0"
@@ -99,7 +99,7 @@ Feature: `pc render` command
   Scenario: Troubleshooting: Command Line
     When I run "pc init"
     Then the command should exit with a status code of "0"
-    When I run "pc inspect //pub/std/metric/cqwarehouse:fastener/hexhead-iso4014"
+    When I run "pc ide view //pub/std/metric/cqwarehouse:fastener/hexhead-iso4014"
     Then the command should exit with a status code of "0"
 
   @docs-use-cases
@@ -129,12 +129,12 @@ Feature: `pc render` command
     # TODO Failure to pip install from GH repo
     # When I run "pc info //pub/std/metric/cqwarehouse:fastener/hexhead-din931"
     # Then the command should exit with a status code of "0"
-    # When I run "pc inspect //pub/std/metric/cqwarehouse:fastener/hexhead-din931"
+    # When I run "pc ide view //pub/std/metric/cqwarehouse:fastener/hexhead-din931"
     # Then the command should exit with a status code of "0"
     # When I run command:
     #   """
     #   pc \
-    #     inspect \
+    #     ide view \
     #       -p length=30 \
     #       -p size=M4-0.7 \
     #       //pub/std/metric/cqwarehouse:fastener/hexhead-din931

@@ -6,7 +6,7 @@ URDF assembly examples
 A URDF file is used as an assembly directly, with no conversion step:
 
 ```shell
-pc inspect -a robot
+pc ide view -a robot
 ```
 
 This package declares it the way `pc add assembly` would. The other way in
@@ -24,9 +24,9 @@ can be inspected and exported like any other part. So does the geometry a
 link was not built from, as `<assembly>/<link>/<visual|collision>`:
 
 ```shell
-pc inspect robot/forearm
+pc ide view robot/forearm
 pc export -t step robot/wrist
-pc inspect robot/base_link/visual
+pc ide view robot/base_link/visual
 ```
 
 What each link says about its physics becomes named properties of its part -

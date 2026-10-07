@@ -58,7 +58,7 @@ def _parameter_values(config):
     A parameter is either a bare value or an object carrying a 'default' (see
     the 'shape-parameter' schema), matching how the CadQuery and build123d
     factories read 'parameters'. Reading 'default' also picks up values
-    overridden at runtime (e.g. 'pc inspect -p name=value').
+    overridden at runtime (e.g. 'pc ide view -p name=value').
     """
     values = {}
     for name, param in (config.get("parameters") or {}).items():

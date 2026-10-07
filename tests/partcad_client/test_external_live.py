@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""`pc open` in a real container, in both transfer modes.
+"""`pc ide open` in a real container, in both transfer modes.
 
 `test_external.py` pins the deciding against a fake endpoint; this pins that an
 edit made inside a real container really comes back -- shared through a mount,
@@ -63,7 +63,7 @@ def client():
 
 @pytest.fixture
 def in_container(monkeypatch, client):
-    """`pc open` with no local application and a display that is never looked at."""
+    """`pc ide open` with no local application and a display that is never looked at."""
     monkeypatch.setattr(external, "native_command", lambda _spec: None)
     monkeypatch.setattr(external, "_x11_forwarding", lambda _spec: ({"DISPLAY": ":99"}, {}, {}, ""))
 

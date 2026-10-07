@@ -38,7 +38,7 @@ Converting one is the counter-example, and it is why `external` takes a callback
 rather than doing it: making a mesh out of a solid so that Blender can open it
 drives a CAD wrapper, which is exactly the work a daemon exists for. So the
 decision -- is this already a mesh? -- is here, in tables cheap enough for a
-process with no CAD kernel in it, and the conversion is `pc open`'s to ask for.
+process with no CAD kernel in it, and the conversion is `pc ide open`'s to ask for.
 
 `partcad-utils` holds what both ends share (logging, telemetry, user config, and
 the client/daemon rendezvous: framing and workspace addressing). The CLI is the

@@ -14,7 +14,7 @@ into a stream nobody reads any more. What that looks like is a command that
 printed nothing at all.
 
 A user runs one command per process, which hides it completely. This suite is
-where many commands share a process, and it is what noticed: a `pc open` that
+where many commands share a process, and it is what noticed: a `pc ide open` that
 failed left the plain handler attached, and the very next `pc system status`
 reported an empty page -- on every platform and every interpreter, because
 nothing about it is environmental.

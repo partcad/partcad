@@ -15,7 +15,7 @@
     // },
     // {
     //   "name": "Debug: PartCAD Rendering",
-    //   "configurations": ["Debug: partcad inspect", "Debug: partcad render"]
+    //   "configurations": ["Debug: partcad ide view", "Debug: partcad render"]
     // },
     // {
     //   "name": "Debug: PartCAD Full Suite",
@@ -107,16 +107,17 @@
         "PYTHONPATH": "${env:PATH}"
       }
     },
-    // partcad -p examples inspect --package /produce_part_cadquery_primitive :cube
+    // partcad -p examples ide view --package /produce_part_cadquery_primitive :cube
     {
-      "name": "Debug: partcad inspect",
+      "name": "Debug: partcad ide view",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/src/partcad_cli/click/command.py",
       "args": [
         "-p",
         "examples",
-        "inspect",
+        "ide",
+        "view",
         "--package",
         "${workspaceFolder}/produce_part_cadquery_primitive",
         ":cube"

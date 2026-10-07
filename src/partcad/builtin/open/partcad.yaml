@@ -1,4 +1,4 @@
-# The applications `pc open` knows how to launch: `open:` plugins.
+# The applications `pc ide open` knows how to launch: `open:` plugins.
 #
 # Every subsection of `open:` below declares one of them. It is the same shape
 # as an `export:` or an `import:` entry and is read the same way, and it is data
@@ -52,13 +52,13 @@
 # `container` and `formats`; they are still read, into those.
 #
 # A package adds an application of its own by declaring it in its own `open:`
-# section. That is how `gazebo` and `mujoco` reach `pc open`: each belongs to
+# section. That is how `gazebo` and `mujoco` reach `pc ide open`: each belongs to
 # the plugin package for that engine, beside the exporter, the reader and the
 # simulator that share their knowledge of it.
 
 name: //builtin/open
 desc: |
-  The applications `pc open` can launch. A package adds one of its own, or
+  The applications `pc ide open` can launch. A package adds one of its own, or
   replaces one of these, by declaring it in its own `open:` section.
 
 open:

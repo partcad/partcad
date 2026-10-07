@@ -815,7 +815,7 @@ import sys
 # installs above, and the `excludes` in "partcad.spec" that keep one out even
 # when the build environment happens to have it.
 REQUIRED = {
-    "partcad_ide_client": "`pc inspect` displaying into the PartCAD IDE",
+    "partcad_ide_client": "`pc ide view` displaying into the PartCAD IDE",
     # pygit2's compiled cffi module loads this from C, so nothing in the import
     # graph names it -- see the note beside the hidden import in "partcad.spec".
     "_cffi_backend": "pygit2, and so every repository PartCAD clones",

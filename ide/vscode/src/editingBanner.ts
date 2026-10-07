@@ -7,7 +7,7 @@
 /**
  * The editor while an object is open in another application.
  *
- * `pc open` waits for the application to close, so that what was done in it
+ * `pc ide open` waits for the application to close, so that what was done in it
  * can be brought back into the package -- converted back into the object's own
  * format and written over its source. Until then the package is in two places at
  * once, and anything PartCAD did with it here (render it, rebuild it, edit its
@@ -17,17 +17,17 @@
  * context key, which each command's `enablement` names.
  *
  * Stopping the wait is allowed and is not the same as closing the application:
- * `pc open` stops, the application stays open (it is in a session of its own),
+ * `pc ide open` stops, the application stays open (it is in a session of its own),
  * and whatever is done in it from then on is not brought back. The banner says
  * that before anybody presses it.
  */
 
 import * as vscode from 'vscode';
 
-/** Set while an application opened by `pc open` is open; every PartCAD command is disabled while it is. */
+/** Set while an application opened by `pc ide open` is open; every PartCAD command is disabled while it is. */
 export const EDITING_CONTEXT = 'partcad.editingExternally';
 
-/** What `pc open --json` said about an open that worked. */
+/** What `pc ide open --json` said about an open that worked. */
 export interface OpenOutcome {
     detail: string;
     method: string;

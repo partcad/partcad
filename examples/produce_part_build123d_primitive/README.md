@@ -4,7 +4,7 @@ PartCAD example project which demonstrates parts defined using build123d.
 
 ## Usage
 ```shell
-pc inspect cube
+pc ide view cube
 ```
 
 

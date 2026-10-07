@@ -23,7 +23,7 @@ tessellates the shape in a sandboxed runtime and sends the result to this extens
 socket on `127.0.0.1:9137`, so the viewer needs no CAD library of its own. The Python side of that connection
 is the `partcad_ide_client` package, which ships inside `partcad` itself.
 
-Anything that can reach that port displays into the same viewer, including a `pc inspect` run in a plain
+Anything that can reach that port displays into the same viewer, including a `pc ide view` run in a plain
 terminal. Set `PARTCAD_IDE_PORT` to move both ends off the default port.
 
 The panel is a strip of tabs over the one object, not just a canvas: groups, **Design** (the object
@@ -186,7 +186,7 @@ in a tool that draws, next to what the extension does with it.
 * **KiCad**, for a part of type `kicad`. What is opened is the board (`.kicad_pro`) beside the STEP the part
   is, because that is the file KiCad has anything to say about.
 
-This runs on your machine and never goes anywhere near the PartCAD daemon: the extension runs `pc open`, which
+This runs on your machine and never goes anywhere near the PartCAD daemon: the extension runs `pc ide open`, which
 looks for the application installed here and starts it. If there is none, and `partcad.open.useDocker` is on (the default),
 PartCAD runs it in a Docker container instead -- one container per application, created from its image (or
 `partcad.open.dockerImage`) the first time and reused afterwards, with the file mounted at the path it has

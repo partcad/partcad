@@ -14,7 +14,7 @@ Measured seconds rather than a scenario count, because the two are barely
 related. A scenario that runs ``pc export`` builds geometry through a CAD kernel
 and takes a minute or more; a scenario that runs ``pc list`` takes under a
 second; and a feature tagged ``@wip`` is excluded by ``behave.ini`` and takes
-none at all. Counting scenarios made ``inspect.feature`` (36 scenarios, all
+none at all. Counting scenarios made ``ide_view.feature`` (36 scenarios, all
 ``@wip``, 0.1s) the single heaviest file in the suite and ``export.feature``
 (9 scenarios, 18 minutes) one of the lightest, so the shards came out balanced
 on paper and 3x apart in reality.

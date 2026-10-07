@@ -10,7 +10,7 @@ than behind an RPC method. A daemon can be remote: "open this in FreeCAD" sent t
 one would start a window on somebody else's desk, on a machine that may have no
 display at all -- and the file named on the command line is the client's own,
 found by a path that means nothing on the other side of the wire. So the opening
-is done here, and the VS Code extension reaches this code by running `pc open`
+is done here, and the VS Code extension reaches this code by running `pc ide open`
 rather than by reimplementing it in TypeScript.
 
 **An application is an `open:` plugin.** Each entry of an `open:` section -- the
@@ -25,11 +25,11 @@ format is on the list is opened as it is. One that is not is converted to the
 first format on the list PartCAD can write -- a CadQuery script into STEP for
 FreeCAD, a STEP into STL for Blender -- and the application is handed that.
 Conversion is CAD work, so it is not done here: the caller passes a
-``transcode`` callback, and `pc open` implements it as the daemon's
+``transcode`` callback, and `pc ide open` implements it as the daemon's
 `adhoc.convert`. The copy is written under the workspace's own state directory,
 never beside the source.
 
-**And `pc open` waits.** It returns when the application does, so that what
+**And `pc ide open` waits.** It returns when the application does, so that what
 somebody did in it can be brought back: an object opened as it is was edited
 where it lives; one that was converted is converted back into its own format and
 written over its source -- when its source is a file PartCAD can write. A script,
@@ -221,7 +221,7 @@ class Tool:
     scene_extensions: Tuple[str, ...] = ()
     # Which of the older format fields the declaration used. They still work --
     # a package published against an older PartCAD must not stop opening -- and
-    # `pc open` says once that `formats:` is how to say it now.
+    # `pc ide open` says once that `formats:` is how to say it now.
     deprecated: Tuple[str, ...] = ()
 
     @property
@@ -457,7 +457,7 @@ def tools_from_section(section: dict) -> Dict[str, Tool]:
 def _builtin_declarations() -> dict:
     """The `open:` section of the package that ships inside `partcad`.
 
-    Read off disk rather than through a context, because `pc open` has none and
+    Read off disk rather than through a context, because `pc ide open` has none and
     is not going to acquire one: it is handed a path, the file is already there,
     and needing the package graph to answer "where is FreeCAD" would make the
     command depend on a workspace it has nothing to do with. A tool a *package*
@@ -484,7 +484,7 @@ def builtin_tools() -> Dict[str, Tool]:
     """The applications PartCAD itself declares.
 
     Cached: the file is inside the installation and cannot change under a
-    running process, and `pc open` asks for it on a path where an editor's
+    running process, and `pc ide open` asks for it on a path where an editor's
     context menu is waiting.
     """
     return tools_from_section(_builtin_declarations())
@@ -503,12 +503,12 @@ def merge_tools(declared: Optional[dict] = None) -> Dict[str, Tool]:
     return tools
 
 
-# What `pc open` opens a file in when the user names no application. A string
+# What `pc ide open` opens a file in when the user names no application. A string
 # rather than a reference to one of the entries, because the entries are data
 # now and this is the one of them PartCAD treats as special.
 DEFAULT_TOOL = "freecad"
 
-# The tools `pc open --with` accepts. Each is a declaration, not a branch
+# The tools `pc ide open --with` accepts. Each is a declaration, not a branch
 # anywhere below. Replaced wholesale by `use_tools()` when a caller has asked
 # the daemon what the workspace's packages declare.
 TOOLS: Dict[str, Tool] = merge_tools()
@@ -517,7 +517,7 @@ TOOLS: Dict[str, Tool] = merge_tools()
 def use_tools(declared: Optional[dict]) -> None:
     """Add the applications a workspace's packages declare to this process.
 
-    Called by `pc open` once, before it looks a tool up, with whatever the
+    Called by `pc ide open` once, before it looks a tool up, with whatever the
     daemon reported. A no-op when nothing was declared or the daemon could not
     be reached, which is what keeps the command working with no daemon at all --
     for every tool PartCAD itself ships, which is the common case.
@@ -667,7 +667,7 @@ def open_file(
         if not use_docker:
             raise ExternalToolError(
                 "%s was not found on this machine.\n"
-                "Install it, or let PartCAD run it in a container: pass --use-docker to `pc open` "
+                "Install it, or let PartCAD run it in a container: pass --use-docker to `pc ide open` "
                 "(the 'partcad.open.useDocker' setting in the VS Code extension)." % spec.display_name
             )
         started = time.monotonic()
@@ -773,7 +773,7 @@ def _transcode(
         candidates = object_types.types_of_extension(os.path.splitext(source)[1])
         raise ExternalToolError(
             "%s opens %s, and PartCAD cannot tell from its name what %s holds%s.\n"
-            "Say so with --type ('pc open --type ...'); the VS Code extension passes the "
+            "Say so with --type ('pc ide open --type ...'); the VS Code extension passes the "
             "declared type of the object you clicked."
             % (
                 spec.display_name,
@@ -785,7 +785,7 @@ def _transcode(
     if transcode is None:
         raise ExternalToolError(
             "%s opens %s, and %s is not one. Converting it needs the PartCAD daemon; "
-            "run `pc open` rather than calling this directly." % (spec.display_name, _formats_named(spec), source)
+            "run `pc ide open` rather than calling this directly." % (spec.display_name, _formats_named(spec), source)
         )
     extension = object_types.PART_TYPE_EXTENSION.get(target, target)
     return _produce(spec, source, source_type, root, target, extension, "part", transcode, say), target
@@ -808,7 +808,7 @@ def _transcode_scene(
     `mjcf` is `partcad/partcad-sim-mujoco`'s and `world` is
     `partcad/partcad-sim-gazebo`'s -- the same packages the `open:` entries for
     MuJoCo and Gazebo come from -- so writing one means running that package's
-    exporter, which means a package that imports it. A file handed to `pc open`
+    exporter, which means a package that imports it. A file handed to `pc ide open`
     has no package around it at all.
 
     So this converts only between formats PartCAD itself has, refuses the rest
@@ -835,7 +835,7 @@ def _transcode_scene(
             "file opened on its own has no package to reach that from.\n"
             "Export the scene from a package that imports it, and open the result:\n"
             "  pc export -S -t %s -O <dir> <scene>\n"
-            "If %s already is %s, say so with --type ('pc open --type <package>:%s ...'); the VS Code "
+            "If %s already is %s, say so with --type ('pc ide open --type <package>:%s ...'); the VS Code "
             "extension passes the declared type of the object you clicked."
             % (
                 spec.display_name,
@@ -853,7 +853,7 @@ def _transcode_scene(
         raise ExternalToolError(
             "%s reads %s, and PartCAD cannot tell what %s holds -- it is not a scene file it knows "
             "(it reads: %s).\n"
-            "If it is one, say so with --type ('pc open --type ...'); the VS Code extension passes the "
+            "If it is one, say so with --type ('pc ide open --type ...'); the VS Code extension passes the "
             "declared type of the object you clicked."
             % (
                 spec.display_name,
@@ -865,7 +865,8 @@ def _transcode_scene(
     if transcode is None:
         raise ExternalToolError(
             "%s reads %s, and %s is not one. Converting it needs the PartCAD daemon; "
-            "run `pc open` rather than calling this directly." % (spec.display_name, spec.scene_type.upper(), source)
+            "run `pc ide open` rather than calling this directly."
+            % (spec.display_name, spec.scene_type.upper(), source)
         )
 
     return (
@@ -938,7 +939,7 @@ def native_command(spec: Tool) -> Optional[List[str]]:
                     # The executable inside the bundle, because this application
                     # is handed arguments and `open -a` drops them on a copy
                     # that is already running -- which would open nothing at
-                    # all, silently, from the second `pc open` onwards.
+                    # all, silently, from the second `pc ide open` onwards.
                     executable = os.path.join(bundle, spec.macos_executable)
                     if os.path.isfile(executable):
                         return [executable]
@@ -1160,7 +1161,7 @@ def _workspace_for(path: str) -> str:
 
     The one this command runs in, when it holds the file: that is the workspace
     whose daemon socket is worth mounting beside it, and the one the caller
-    means -- an editor runs `pc open` in the window's workspace folder. A file
+    means -- an editor runs `pc ide open` in the window's workspace folder. A file
     somewhere else gets its own workspace mounted instead, which still contains
     it; there is simply no daemon of this workspace's to offer it.
     """
@@ -1176,7 +1177,7 @@ def _workspace_for(path: str) -> str:
 
 _LINUX_NO_DISPLAY = (
     "There is no X display to show {name} on (DISPLAY is not set).\n"
-    "Run `pc open` from a graphical session, or set DISPLAY to the X server to use.\n"
+    "Run `pc ide open` from a graphical session, or set DISPLAY to the X server to use.\n"
     "Under Wayland, install XWayland so that X applications have a display."
 )
 
@@ -1335,7 +1336,7 @@ def _launch(args: List[str]) -> int:
     """Run a GUI application here and wait for it to close; its exit code.
 
     In a session of its own, so that it is not this process's to take down:
-    stopping `pc open` -- Ctrl-C at a terminal, Cancel in an editor -- stops the
+    stopping `pc ide open` -- Ctrl-C at a terminal, Cancel in an editor -- stops the
     waiting, and must never close somebody's application on unsaved work.
     """
     kwargs = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}

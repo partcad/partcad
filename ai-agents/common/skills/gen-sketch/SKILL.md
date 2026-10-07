@@ -68,4 +68,4 @@ Iterate until it is right.
 ## 6. Finalize
 
 Summarize what you drew — key dimensions and assumptions — and how to view it:
-`pc inspect -s <name>`.
+`pc ide view -s <name>`.

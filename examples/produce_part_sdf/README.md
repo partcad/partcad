@@ -4,9 +4,9 @@ PartCAD example project which demonstrates parts defined using SDF.
 
 ## Usage
 ```shell
-pc inspect gear
-pc inspect box
-pc inspect blobby
+pc ide view gear
+pc ide view box
+pc ide view blobby
 ```
 
 

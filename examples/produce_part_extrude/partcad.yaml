@@ -4,9 +4,9 @@ desc: >
 docs:
   usage: |
     ```shell
-    pc inspect dxf
-    pc inspect cylinder
-    pc inspect clock
+    pc ide view dxf
+    pc ide view cylinder
+    pc ide view clock
     ```
 
 parts:

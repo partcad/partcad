@@ -378,7 +378,7 @@ class JsonRpcBackend implements PartcadBackend {
     }
 
     /**
-     * Open one file in a third-party application with `pc open`.
+     * Open one file in a third-party application with `pc ide open`.
      *
      * Never over this connection, and there is no RPC method for it: the daemon
      * can be remote, where the window would open on somebody else's screen and
@@ -389,7 +389,7 @@ class JsonRpcBackend implements PartcadBackend {
      * something worked out here: PartCAD decides how to run the application, and
      * this only says what it is allowed to do.
      *
-     * `pc open` may make a daemon call of its own on the way -- an application
+     * `pc ide open` may make a daemon call of its own on the way -- an application
      * that reads meshes has to be handed one, and converting a solid into one is
      * CAD work. That is its connection, not this one, and it is a conversion
      * rather than an opening: the window still belongs to the machine the
@@ -405,13 +405,14 @@ class JsonRpcBackend implements PartcadBackend {
         const config = vscode.workspace.getConfiguration('partcad');
         const image = (config.get<string>('open.dockerImage') ?? '').trim();
         const args = [
+            'ide',
             'open',
             '--with',
             arg?.tool ?? 'freecad',
             // What the object was declared as. It matters for an application
             // that reads meshes only -- Blender -- where a file that is not one
             // has to be converted first, and a file name does not always say
-            // which type it holds. `pc open` decides what to do with it.
+            // which type it holds. `pc ide open` decides what to do with it.
             ...(arg?.type ? ['--type', arg.type] : []),
             ...((config.get<boolean>('open.useDocker') ?? true) ? ['--use-docker'] : []),
             ...(image ? ['--docker-image', image] : []),
@@ -711,9 +712,9 @@ function runCli(
             reject(new Error('no `pc` executable beside the PartCAD service'));
             return;
         }
-        // No timeout: `pc open` runs for as long as somebody is editing. The
+        // No timeout: `pc ide open` runs for as long as somebody is editing. The
         // signal is what stops it -- which stops the waiting and leaves the
-        // application open, since `pc open` starts it in a session of its own.
+        // application open, since `pc ide open` starts it in a session of its own.
         const proc = cp.execFile(
             cliPath,
             ['--no-ansi', ...args],

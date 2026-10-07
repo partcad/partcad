@@ -9,7 +9,7 @@ Two routes are pinned here, and the rule that decides between them: a locally
 installed application is used whenever there is one, and a container is only
 ever reached for when the caller has allowed it. Around both, what `open:`
 plugins add: an object is opened as it is when its format is on the
-application's list and converted when it is not, `pc open` waits for the
+application's list and converted when it is not, `pc ide open` waits for the
 application to close, and an edit is brought back -- into the source where the
 source is a file PartCAD can write, and reported where it is not.
 
@@ -277,7 +277,7 @@ def test_another_workspace_gets_a_container_of_its_own_rather_than_a_refusal(doc
         (workspace / "cube.step").write_text("ISO-10303-21;\n")
         paths.append(workspace / "cube.step")
     for path in paths:
-        # As an editor does: `pc open` runs in the window's own workspace.
+        # As an editor does: `pc ide open` runs in the window's own workspace.
         monkeypatch.chdir(path.parent)
         external.open_file(str(path), use_docker=True, mode="mount")
     assert containers.identity(docker.specs[0]) != containers.identity(docker.specs[1])
@@ -318,7 +318,7 @@ def test_the_application_is_run_in_the_container_on_the_host_file(part, docker):
 
 def test_a_file_outside_this_workspace_still_gets_a_mount_that_holds_it(tmp_path, docker, monkeypatch):
     # Whatever is mounted has to contain the file, or the application would be
-    # handed a name the container cannot resolve. The workspace `pc open` runs
+    # handed a name the container cannot resolve. The workspace `pc ide open` runs
     # in is preferred -- it is the one with a daemon -- but it is not imposed.
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -544,7 +544,7 @@ MUJOCO_DECLARATION = {
 def engines():
     """The two engine plugins' applications, declared into this process.
 
-    Exactly what `pc open` does with what the daemon reports a workspace's
+    Exactly what `pc ide open` does with what the daemon reports a workspace's
     packages declare, and undone afterwards so that a test which does not ask
     for them sees the wheel's own table.
     """
@@ -565,7 +565,7 @@ def test_every_tool_can_be_named_and_has_a_container_of_its_own():
 
 
 def test_an_application_a_package_declares_joins_the_ones_that_ship(engines):
-    """Which is how `pc open --with mujoco` works at all now."""
+    """Which is how `pc ide open --with mujoco` works at all now."""
     assert set(external.tool_names()) == {"freecad", "kicad", "blender", "gazebo", "mujoco"}
     assert external.TOOLS["mujoco"].role == "open-mujoco"
     assert external.TOOLS["gazebo"].role == "open-gazebo"
@@ -907,13 +907,13 @@ def test_an_assy_is_refused_by_name_rather_than_sent_to_be_refused(monkeypatch, 
 
 
 def test_without_a_converter_a_solid_says_so_instead_of_opening_nothing(monkeypatch, spawned, part):
-    """Nothing but `pc open` has a daemon to convert with, and it says which."""
+    """Nothing but `pc ide open` has a daemon to convert with, and it says which."""
     monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/blender" if name == "blender" else None)
 
     with pytest.raises(external.ExternalToolError) as caught:
         external.open_file(str(part), tool="blender")
 
-    assert "pc open" in str(caught.value)
+    assert "pc ide open" in str(caught.value)
     assert spawned == []
 
 
@@ -972,7 +972,7 @@ def test_macos_opens_the_bundle_for_an_application_that_takes_a_file(monkeypatch
     """The other half of that rule, and the one every other tool takes.
 
     FreeCAD is handed a document rather than arguments, so `open -a` is right
-    for it -- with '-W', so that `pc open` waits for it to close, and '-n', so
+    for it -- with '-W', so that `pc ide open` waits for it to close, and '-n', so
     that what it waits for is this copy and not one that was already running.
     """
     monkeypatch.setattr(external.platform, "system", lambda: "Darwin")
@@ -1252,8 +1252,8 @@ def test_pc_open_waits_for_the_application_to_close(monkeypatch, part):
     order = []
     monkeypatch.setattr(external, "_launch", lambda args: order.append("application closed") or 0)
     external.open_file(str(part), tool="freecad")
-    order.append("pc open returned")
-    assert order == ["application closed", "pc open returned"]
+    order.append("pc ide open returned")
+    assert order == ["application closed", "pc ide open returned"]
 
 
 def test_nothing_changed_is_nothing_written(monkeypatch, spawned, part, converter):
@@ -1340,7 +1340,7 @@ def test_an_application_that_returns_at_once_having_changed_nothing_is_said_to_h
 
 
 def test_an_edit_made_in_a_container_in_upload_mode_comes_back(part, docker):
-    """What `Endpoint.result` does with the file the service sent back, as far as `pc open` can tell."""
+    """What `Endpoint.result` does with the file the service sent back, as far as `pc ide open` can tell."""
     docker.edit = lambda command: open(command[-1], "a").write("\nedited in the container")
     result = external.open_file(str(part), use_docker=True, mode="upload")
     assert result.changed is True
@@ -1431,7 +1431,7 @@ def test_stopping_pc_open_stops_the_waiting_and_not_the_application(monkeypatch)
         external._launch(["freecad", "/w/a.step"])
     assert killed == []
     if os.name != "nt":
-        # A session of its own, so a signal to `pc open` is not a signal to it.
+        # A session of its own, so a signal to `pc ide open` is not a signal to it.
         assert seen["start_new_session"] is True
 
 

@@ -3,7 +3,7 @@ desc: PartCAD example project to demonstrate parts defined using SCAD files.
 docs:
   usage: |
     ```shell
-    pc inspect cube
+    pc ide view cube
     ```
 
 parts:

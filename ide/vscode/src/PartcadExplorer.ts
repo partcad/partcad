@@ -65,7 +65,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
 
     packages: { [name: string]: ItemMetadata };
     root: string;
-    // The object open in another application right now, if one is: `pc open`
+    // The object open in another application right now, if one is: `pc ide open`
     // waits for it to close, and a second one while it does is refused.
     editing: string | undefined = undefined;
 
@@ -169,7 +169,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
      *
      * It is the item's own source file that is handed over, not a rendering of
      * it: rendering is the daemon's work, and this deliberately has none in it.
-     * `pc open` runs on the machine the user is sitting at, finds a locally
+     * `pc ide open` runs on the machine the user is sitting at, finds a locally
      * installed application or (when the setting allows it) a container, and
      * says what to install when it can find neither -- which is why the failure
      * is shown as it comes back rather than summarised.
@@ -179,7 +179,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         // the types this editor can edit (scripts), and a STEP or BREP part --
         // exactly what another CAD application is for -- is not one of them.
         // A `kicad` part hands over the STEP KiCad's CLI writes; which file
-        // KiCad is actually pointed at is `pc open`'s to decide, because that
+        // KiCad is actually pointed at is `pc ide open`'s to decide, because that
         // is a fact about KiCad rather than about this tree.
         const path = item?.config?.item_path ?? item?.itemPath;
         if (path === undefined) {
@@ -199,7 +199,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         let banner: vscode.Disposable | undefined;
         this.editing = item.name;
         try {
-            // `pc open` waits for the application to close, so that what was
+            // `pc ide open` waits for the application to close, so that what was
             // done in it can be brought back -- and until it does, the banner
             // says so and every PartCAD command is paused (see editingBanner).
             banner = await showEditingBanner(item.name, application, () => stop.abort());
@@ -219,7 +219,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
                     // does not always say: a '.py' is a CadQuery script, a
                     // build123d one or an SDF one, and PartCAD has to know which
                     // before it can convert one. Everything that is decided from
-                    // it is decided in `pc open`, not here.
+                    // it is decided in `pc ide open`, not here.
                     return (await vscode.commands.executeCommand('partcad.openExternal', {
                         path: path,
                         tool: tool,

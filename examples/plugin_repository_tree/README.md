@@ -33,7 +33,7 @@ part's file forwards `files/<path>` with the same prefix.
 ```shell
 pc list packages example
 pc list parts -r example
-pc inspect example/motors:shaft
+pc ide view example/motors:shaft
 ```
 
 ## Files

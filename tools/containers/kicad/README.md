@@ -10,7 +10,7 @@ design files.
 NOTE: If you happen to have KiCad installed on your machine, set `useDockerKicad: false` in `~/.partcad/config.yaml`
 (`PC_USE_DOCKER_KICAD=false` in the environment) to run that `kicad-cli` instead of this image.
 
-The same image is what `pc open --with kicad` -- the "Open in KiCad" item in the VS Code extension's context menu for a
+The same image is what `pc ide open --with kicad` -- the "Open in KiCad" item in the VS Code extension's context menu for a
 `kicad` part -- falls back to when the machine has no KiCad of its own. It is the same image either way: `kicad/kicad` with
 PartCAD's environment on top, so it carries the GUI as well as `kicad-cli`, and there is one KiCad image in the
 product rather than two. A `kicad` part points at the STEP file `kicad-cli` writes out of the

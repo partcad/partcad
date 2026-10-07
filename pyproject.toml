@@ -116,7 +116,7 @@ aws = {file = ["requirements-aws.txt"]}
 "partcad.builtin.render" = ["*.py", "*.yaml"]
 "partcad.builtin.import" = ["*.py", "*.yaml"]
 "partcad.builtin.cam" = ["*.py", "*.yaml"]
-# No scripts: the applications `pc open` launches are declarations and nothing
+# No scripts: the applications `pc ide open` launches are declarations and nothing
 # else, read by `partcad_client.external` straight out of the wheel.
 "partcad.builtin.open" = ["*.yaml"]
 # The one built-in package that declares an object rather than an

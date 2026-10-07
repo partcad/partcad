@@ -9,7 +9,7 @@ One question is asked here, and `partcad_client.external` is what asks it. Some
 applications read triangles and nothing else -- Blender is the one PartCAD knows
 about -- so handing one a STEP file is not a slow way of opening it, it is a file
 the application cannot read at all. Such a file has to be turned into a mesh
-first, and that is CAD work: it belongs to the daemon (`pc open` sends the same
+first, and that is CAD work: it belongs to the daemon (`pc ide open` sends the same
 `adhoc.convert` a `pc adhoc convert` does), while deciding *whether* it is needed
 is a question about the type, which is what this module answers.
 
@@ -58,7 +58,7 @@ __all__ = [
 # what a package may declare) and the types the part extension mapping names
 # (`partcad.shape.PART_EXTENSION_MAPPING`, which adds the ones PartCAD only ever
 # writes -- there is no `threejs` factory, but `pc export -t threejs` produces
-# one and `pc open` may well be handed the result).
+# one and `pc ide open` may well be handed the result).
 #
 # Adding a part type to PartCAD means adding it here. The test says so by name
 # when it is forgotten, because the alternative is silent: a new mesh format
@@ -122,7 +122,7 @@ PART_TYPE_EXTENSION: Dict[str, str] = {
 }
 
 # Other spellings of the formats above. PartCAD names one extension per type,
-# because that is what it writes; a file a user points `pc open` at was written
+# because that is what it writes; a file a user points `pc ide open` at was written
 # by something else as often as not, and '.stp' and '.glb' are what that
 # something else calls these.
 EXTENSION_ALIASES: Dict[str, str] = {
@@ -133,11 +133,11 @@ EXTENSION_ALIASES: Dict[str, str] = {
 }
 
 # The extension of an ASSY file. 'assy' is an assembly type rather than a part
-# type, so it is in neither table above -- but it is very much a file `pc open`
+# type, so it is in neither table above -- but it is very much a file `pc ide open`
 # is handed, and saying what it is beats reporting it as an unknown name.
 # The part formats PartCAD can *write* as a file: what `//builtin/export`
 # implements, minus what only means anything inside a package. Two questions are
-# answered with it, and both are `pc open`'s: which of the formats an
+# answered with it, and both are `pc ide open`'s: which of the formats an
 # application lists PartCAD can convert an object into, and whether an edit to
 # such a copy can be converted back into the object's own source -- which needs
 # that source to be a file of one of these.
@@ -150,7 +150,7 @@ ASSY_EXTENSION = "assy"
 # other table here, and the same completeness test).
 #
 # A second question from the one above, for a second kind of application. Blender
-# reads triangles, so what `pc open` has to know about a file it is handed is
+# reads triangles, so what `pc ide open` has to know about a file it is handed is
 # whether the file holds any. MuJoCo reads a *scene description* and only its
 # own -- so what has to be known there is which description format the file is.
 #
@@ -215,7 +215,7 @@ def type_of_file(path: str) -> Optional[str]:
     None when the extension is unknown, and None when more than one type shares
     it: a '.py' is a CadQuery script, a build123d script or an SDF one, and which
     it is is a fact about the package that declares it. A caller that needs the
-    answer has to be told (`pc open --type`), because guessing wrong here means
+    answer has to be told (`pc ide open --type`), because guessing wrong here means
     running the file as the wrong kind of script.
     """
     names = types_of_extension(_extension_of(path))

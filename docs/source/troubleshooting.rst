@@ -138,7 +138,7 @@ to quietly do something else.
 Three things need a container specifically, and say so when they are reached
 rather than in advance: an implementation whose package declares ``container:``,
 importing a KiCad PCB (``useDockerKicad``), and the ``docker`` Python sandbox
-when it was asked for by name. If ``pc render``, ``pc export`` or ``pc inspect``
+when it was asked for by name. If ``pc render``, ``pc export`` or ``pc ide view``
 reports that no container runtime is available, start Docker or take the other
 route the message names -- for KiCad that is installing KiCad on this machine
 and setting ``useDockerKicad: false``.
@@ -257,7 +257,7 @@ without any further setup (``partcad.addToolsToTerminalPath`` turns that off):
     pc init
 
     # Display the part in the 'PartCAD Viewer'
-    pc inspect //pub/std/metric/cqwarehouse:fastener/hexhead-iso4014
+    pc ide view //pub/std/metric/cqwarehouse:fastener/hexhead-iso4014
 
 Typical problems
 ----------------

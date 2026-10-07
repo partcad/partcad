@@ -20,7 +20,7 @@ about STEP.
 
 ## Usage
 ```shell
-pc inspect bolt
+pc ide view bolt
 ```
 
 

@@ -199,13 +199,13 @@ of the object with the given parameters:
   .. code-block:: shell
 
     # Instead of:
-    pc inspect \
+    pc ide view \
         -p length=30 \
         -p size=M4-0.7 \
         //pub/std/metric/cqwarehouse:fastener/hexhead-din931
 
     # Use this:
-    pc inspect //pub/std/metric/cqwarehouse:fastener/hexhead-din931;length=30,size=M4-0.7
+    pc ide view //pub/std/metric/cqwarehouse:fastener/hexhead-din931;length=30,size=M4-0.7
 
 Objects in a cart
 -----------------

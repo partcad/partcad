@@ -57,18 +57,18 @@ docs:
   usage: |
     ```shell
     # placement == "outer"
-    pc inspect -a connect-ports
-    pc inspect -a connect-interfaces
-    pc inspect -a connect-mates
+    pc ide view -a connect-ports
+    pc ide view -a connect-interfaces
+    pc ide view -a connect-mates
 
     # the same mount, with the instructions needed to actually assemble it
     pc info -a connect-instructions
     pc test -a connect-instructions
 
     # placement == "inner"
-    pc inspect -a -p placement=inner connect-ports
-    pc inspect -a -p placement=inner connect-interfaces
-    pc inspect -a -p placement=inner connect-mates
+    pc ide view -a -p placement=inner connect-ports
+    pc ide view -a -p placement=inner connect-interfaces
+    pc ide view -a -p placement=inner connect-mates
 
     # where the ports are, and which interface each of them belongs to
     pc render -t png --with-ports example-bracket

@@ -1127,7 +1127,7 @@ class UserConfig(vyper.Vyper):
         #              with each command, and what it writes is sent back, rather
         #              than being bind-mounted. Applies to every container
         #              PartCAD starts: the 'docker' Python sandbox, KiCad, a
-        #              plugin's 'container:' and 'pc open'. See
+        #              plugin's 'container:' and 'pc ide open'. See
         #              'partcad_utils.containers'.
         # values: [True | False]
         # default: False

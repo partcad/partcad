@@ -615,7 +615,7 @@ npm run pretest && PARTCAD_TEST_WITH_CSPELL=streetsidesoftware.code-spell-checke
 ## Opening a file in a third-party application
 
 The Explorer's per-item **"Open in > ..."** menu hands the item's file to `partcad.openExternal`, which runs
-`pc --no-ansi open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Five
+`pc --no-ansi ide open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Five
 applications, each offered for the objects it can actually open:
 
 | Menu entry | Command | Shown for |
@@ -631,7 +631,7 @@ string compared exactly, so "a scene Gazebo can open" and "a part KiCad can open
 values. Each is then added back to every other clause that names their kind, because a world scene is a scene
 everywhere else and a KiCad part is a part.
 
-MuJoCo is offered for both scene formats and Gazebo for only one, which is not an oversight: `pc open`
+MuJoCo is offered for both scene formats and Gazebo for only one, which is not an oversight: `pc ide open`
 converts a world to MJCF on the way (a scene conversion, the counterpart of the mesh one it does for
 Blender) and nothing converts the other way yet.
 
@@ -641,7 +641,7 @@ somebody else's screen, on a machine that may have no display at all, and the pa
 client has. So the finding of the application, the container and the X forwarding are `partcad_client.external`
 and nothing here reimplements them; what stays in TypeScript is the menu, the setting, and showing the failure.
 
-The failure is the interesting half. `pc open` prints its reason as JSON *and* exits non-zero, so
+The failure is the interesting half. `pc ide open` prints its reason as JSON *and* exits non-zero, so
 `JsonRpcBackend.openExternal` reads the JSON with `allowFailure` and throws the message as it came --
 `PartcadExplorer.openWith` shows it verbatim in the error dialog's detail. That message is the answer the user
 needs (which X server to install and what to allow, or how to let PartCAD use a container); replacing it with
@@ -658,7 +658,7 @@ tree contributes. It is there because a file name does not always say what it ho
 script, a build123d one or an SDF one -- and Blender reads meshes and nothing else, so a part that is not
 already one is converted to STL before it is opened. Which types are meshes
 (`partcad_client.object_types`), whether this one needs converting, where the mesh goes and who does the
-converting are all decided by `pc open`; nothing here branches on the type, and nothing here knows that
+converting are all decided by `pc ide open`; nothing here branches on the type, and nothing here knows that
 Blender is the application it matters for.
 
 And no more than that is decided here. A `kicad` part's file is the STEP KiCad's command line writes out of
@@ -673,14 +673,14 @@ than being worked out anywhere in Python: PartCAD decides *how* to run the appli
 say what it is allowed to do. Adding a second application is a command, a menu entry and a row in
 `external.TOOLS` -- no new branch in this extension.
 
-**The editor waits while the application is open** (`src/editingBanner.ts`). `pc open` blocks until the
+**The editor waits while the application is open** (`src/editingBanner.ts`). `pc ide open` blocks until the
 application closes and then brings the edit back into the package, so until it returns the package is in two
 places at once. `openWith` therefore shows a banner over the editor area, sets the `partcad.editingExternally`
 context key, and every command in `package.json` carries `"enablement": "!partcad.editingExternally"` --
 `editingBanner.test.ts` fails for a command added without it. Only one application at a time: a second "Open
 in..." is refused while one is open. "Stop waiting" (in the banner, or Cancel on the progress notification)
-aborts the `pc open` child through an `AbortController` and leaves the application running -- it was started
-in a session of its own -- and says that what is saved from then on is not brought back. What `pc open --json`
+aborts the `pc ide open` child through an `AbortController` and leaves the application running -- it was started
+in a session of its own -- and says that what is saved from then on is not brought back. What `pc ide open --json`
 reports (`changed`, `writtenBack`, `edited`) is turned into one sentence by `outcomeMessage`, which is pure so
 it is tested without a window. There is no timeout on that call, deliberately: somebody may edit for an hour.
 

@@ -13,7 +13,7 @@ docs:
     ```
     # in one shell: python server.py
     pc list parts example
-    pc inspect example:cube
+    pc ide view example:cube
     ```
 
 dependencies:

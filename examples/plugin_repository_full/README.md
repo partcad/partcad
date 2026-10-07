@@ -32,7 +32,7 @@ no CAD-kernel dependency.
 
 ```shell
 pc list parts example
-pc inspect example:<part>
+pc ide view example:<part>
 ```
 
 ## Consumption (see partcad.yaml)

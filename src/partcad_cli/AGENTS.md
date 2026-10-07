@@ -83,7 +83,7 @@ so an editor and CI cannot disagree. The VS Code extension runs `pc lint --file`
 either. `--schema` picks the flavor of an ASSY file; a `partcad.yaml` has none — nothing points at a package
 configuration — so it is ignored for one, and the detection is not even run.
 
-**`pc open` is on the in-process side for a stronger version of the same reason.** Opening a file in a
+**`pc ide open` is on the in-process side for a stronger version of the same reason.** Opening a file in a
 third-party CAD application puts a window on a screen, and the only screen a command can put one on is the one
 in front of the user who ran it: a daemon can be remote, where that window would appear on somebody else's
 desk, on a machine that may have no display at all -- and the path on the command line names a file only the
@@ -92,13 +92,13 @@ method for *opening a file* and none may be added. The application, the containe
 not installed, and the X forwarding into it are `partcad_client.external`, so the command never imports the heavy
 `partcad`. Taking a path rather than a `<package>:<part>` name follows from the same rule: resolving a name is
 a package-graph question, which is exactly the round trip this command does not make. The VS Code extension's
-"Open in..." context menu runs `pc open --json`, so the two cannot drift apart.
+"Open in..." context menu runs `pc ide open --json`, so the two cannot drift apart.
 
 **One step inside it does cross the wire, and it is the exception that states the rule.** Two applications read
 one thing only: Blender reads meshes, and MuJoCo reads MJCF. A part that is not already a mesh, or a scene that
 is not already an MJCF model, has to be converted before it is handed over -- and both conversions drive a CAD
 wrapper, whose sandboxed Python runtime lives in the daemon's environment and
-may not exist on the client at all. So `pc open --with blender` and `pc open --with mujoco` send
+may not exist on the client at all. So `pc ide open --with blender` and `pc ide open --with mujoco` send
 `adhoc.convert`, the same method
 `pc adhoc convert` sends, on the same absolute paths, with `kind` saying whether a part or a scene is being
 converted: file in, file out, `needs_context=False`, nothing left on
@@ -109,10 +109,10 @@ and which are scene descriptions,
 is `partcad_client.object_types` -- an inlined copy of PartCAD's tables, so the client stays cheap to import,
 with `tests/partcad/unit/test_client_object_types.py` failing when the copy drifts.
 
-`pc open` makes one other daemon call, `open.tools`, and for the same kind of reason: **which** applications
+`pc ide open` makes one other daemon call, `open.tools`, and for the same kind of reason: **which** applications
 exist is a fact about the packages a workspace imports, and only the daemon has the package graph. PartCAD's
 own five are read straight off disk out of the wheel, so the call is made only where a `partcad.yaml` is
-actually found — a `pc open` outside a workspace starts no daemon and creates no context. The daemon says
+actually found — a `pc ide open` outside a workspace starts no daemon and creates no context. The daemon says
 which applications there are; it never opens one, and there is still no method that opens a file.
 
 Those two are the only daemon calls an in-process command makes, and `IN_PROCESS_DAEMON_CALLS` in

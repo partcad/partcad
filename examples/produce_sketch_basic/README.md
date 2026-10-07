@@ -4,11 +4,11 @@ This example demonstrates various syntax options how to define sketches using ba
 
 ## Usage
 ```shell
-pc inspect -s circle_01
-pc inspect -s circle_02
-pc inspect -s circle_03
-pc inspect -s square_01
-pc inspect -s rect_01
+pc ide view -s circle_01
+pc ide view -s circle_02
+pc ide view -s circle_03
+pc ide view -s square_01
+pc ide view -s rect_01
 ```
 
 

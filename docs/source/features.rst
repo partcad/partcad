@@ -42,7 +42,7 @@ Objects
   **Blender** for a part or an assembly, **KiCad** for a part of type ``kicad``, and **Gazebo** or
   **MuJoCo** for a scene held in that engine's own format (``sim-gazebo:world``, ``sim-mujoco:mjcf``) when
   the workspace imports the package that declares the engine. This runs
-  on your machine rather than on the daemon: the extension runs ``pc open`` (see :doc:`cli`), which starts an
+  on your machine rather than on the daemon: the extension runs ``pc ide open`` (see :doc:`cli`), which starts an
   application installed here, or runs one in a container when there is none and ``partcad.open.useDocker``
   is on, which it is by default. An object in a format the application does not open is converted on the
   way -- a script to STEP for FreeCAD, a solid to STL for Blender. The editor then waits, behind a banner
@@ -562,7 +562,7 @@ then. Every file a command reads is sent to the container with the command, and
 every file it writes is sent back with the answer; a sandbox's environment lives
 in a Docker volume on the daemon's side, built once and reused. It applies to
 every container PartCAD starts -- the ``docker`` sandbox, KiCad imports, a
-plugin's ``container:`` and an application ``pc open`` runs in a container
+plugin's ``container:`` and an application ``pc ide open`` runs in a container
 alike -- and off by default, because sending a package
 with every command costs time that a shared filesystem does not. It needs no
 service in between: that is the difference from the ``remote`` sandbox below,

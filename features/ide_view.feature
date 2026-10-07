@@ -1,13 +1,13 @@
 @cli @pc-render
-Feature: `pc inspect` command
+Feature: `pc ide view` command
 
   Background: Sandbox
     Given I am in "/tmp/sandbox/behave" directory
     Given I have temporary $HOME in "/tmp/sandbox/home"
     Given a file named "partcad.yaml" does not exist
 
-  @success @pc-inspect
-  Scenario: `pc inspect -P` looks the object up in the given package
+  @success @pc-ide-view
+  Scenario: `pc ide view -P` looks the object up in the given package
     Given a directory named "sub" exists
     And a file named "sub/test.scad" with content:
       """
@@ -26,17 +26,17 @@ Feature: `pc inspect` command
         sub:
           path: sub
       """
-    When I run "pc inspect --verbal -P //sub test"
+    When I run "pc ide view --verbal -P //sub test"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "the part that lives in the sub package"
 
   @wip
-  Scenario Outline: `pc inspect -i` command
+  Scenario Outline: `pc ide view -i` command
     Given steps for testing
 
   @wip
-  Scenario Outline: `pc inspect -a` command
-    When I run "partcad -p $PARTCAD_ROOT/examples inspect -a -V --package <package> <part>"
+  Scenario Outline: `pc ide view -a` command
+    When I run "partcad -p $PARTCAD_ROOT/examples ide view -a -V --package <package> <part>"
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "DONE: Inspect: this:"
     Then STDOUT should not contain "WARN:"
@@ -53,8 +53,8 @@ Feature: `pc inspect` command
     | /produce_assembly_assy | primitive |
 
   @wip
-  Scenario Outline: `pc inspect -s` command
-    When I run "partcad -p $PARTCAD_ROOT/examples inspect -s -V --package <package> <part>"
+  Scenario Outline: `pc ide view -s` command
+    When I run "partcad -p $PARTCAD_ROOT/examples ide view -s -V --package <package> <part>"
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "DONE: Inspect: this:"
     Then STDOUT should not contain "WARN:"
@@ -92,8 +92,8 @@ Feature: `pc inspect` command
     | /produce_sketch_svg | svg_01 |
 
   @wip
-  Scenario Outline: `pc inspect` command
-    When I run "partcad -p $PARTCAD_ROOT/examples inspect -V --package <package> <part>"
+  Scenario Outline: `pc ide view` command
+    When I run "partcad -p $PARTCAD_ROOT/examples ide view -V --package <package> <part>"
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "DONE: Inspect: this:"
     Then STDOUT should not contain "WARN:"

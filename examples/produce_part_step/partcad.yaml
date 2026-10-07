@@ -19,7 +19,7 @@ docs:
 
   usage: |
     ```shell
-    pc inspect bolt
+    pc ide view bolt
     ```
 
 # A standard fastener is bought, and the store example is where it is bought

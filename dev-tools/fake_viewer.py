@@ -9,7 +9,7 @@
 Listens where the PartCAD Viewer listens, acknowledges every frame, and prints
 the tree of each object shown - its nodes, their geometry, their placements and
 what each declares about connections (see 'partcad.shape_envelope'). Run it, then
-run 'pc inspect ...' in another shell.
+run 'pc ide view ...' in another shell.
 
 Not a test and not part of the build: an eyeball on the wire.
 """

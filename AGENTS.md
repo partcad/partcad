@@ -91,7 +91,7 @@ a CAD addon, or documentation.
   It also refuses: `pc upgrade` run inside a bundle the editor extension downloaded errors out and says to
   update the extension instead, since the extension owns that bundle.
 
-  `external` is the same rule applied to a window instead of an installation. `pc open` (and the VS Code
+  `external` is the same rule applied to a window instead of an installation. `pc ide open` (and the VS Code
   extension's per-part "Open in..." menu, by running it) starts FreeCAD on the screen of whoever ran the
   command — on this machine, with this machine's file, and never over the wire; there is no RPC method for
   opening a file and none may be added. A machine with no local installation can run the application in a
@@ -101,9 +101,9 @@ a CAD addon, or documentation.
 
   Each `open:` entry lists the formats its application opens, best first, and an object in none of them is
   converted to the first one PartCAD can write before it is handed over (a script to STEP for FreeCAD, a solid
-  to STL for Blender). `pc open` then **blocks until the application closes**, and an edit to a converted copy
+  to STL for Blender). `pc ide open` then **blocks until the application closes**, and an edit to a converted copy
   is converted back over the object's source when that source is a file. Converting, either way, is the single
-  thing `pc open` asks the daemon for, because a CAD wrapper is what does it; the window still opens here, and
+  thing `pc ide open` asks the daemon for, because a CAD wrapper is what does it; the window still opens here, and
   the registry still has no `open` method. Which object types are meshes is `object_types`, an inlined copy of PartCAD's own tables (a
   client must stay cheap to import) that a completeness test keeps honest.
 
@@ -462,7 +462,7 @@ direction.
 
 **Every container PartCAD starts goes through `partcad_utils.containers`, and nothing else may start one.**
 That is the `docker` Python sandbox, KiCad, a plugin's `container:`, the `partcad-service-remote-docker`
-pool, and an `open:` plugin's `container:` for `pc open`. There used to be five spawn paths, and they disagreed: KiCad reused whatever answered
+pool, and an `open:` plugin's `container:` for `pc ide open`. There used to be five spawn paths, and they disagreed: KiCad reused whatever answered
 to the name `integration-kicad`, so imports for one release ran in a container another had made, unlabelled,
 where `pc system prune` could not see it. Now a container is *described* -- a `ContainerSpec` -- and named
 `partcad-<role>-<tag>-<identity>` from that description (the digest covers the image, mounts, environment,
