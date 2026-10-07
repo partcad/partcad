@@ -143,7 +143,7 @@ Gazebo world it is pointed at is written out as MJCF first.
 ``container:`` has the shape a plugin's implementation gives it -- ``image``, and
 ``python`` for an image whose ``python3`` is not on ``PATH`` -- and the container
 is started the way every other PartCAD container is (see
-:ref:`use-docker-remote`), with the file mounted or, under ``useDockerRemote``,
+:ref:`useDockerRemote <use-docker-remote>`), with the file mounted or, under ``useDockerRemote``,
 uploaded. ``image:``, ``ownFormats:``, ``meshVia:`` and ``imports:`` are what an
 entry said before ``container:`` and ``formats:``; they are still read, into
 those, and ``pc open`` says once that they are deprecated.

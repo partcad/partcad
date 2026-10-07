@@ -870,7 +870,7 @@ Object commands
     pc instructions robot                         # robot.pdf: this assembly's own steps
     pc instructions -t html -r -b -O docs/ robot  # every step and every part made, as HTML
 
-*****************
+************
 IDE commands
 ************
 
@@ -948,7 +948,7 @@ of ``pc --help``, and print a note on stderr saying what to type instead.
   the file it was pointed at, whatever it holds.
 
   With ``--use-docker``, a machine that has no local installation runs the application in a container instead,
-  started the way PartCAD starts every container (see :ref:`use-docker-remote`): named
+  started the way PartCAD starts every container (see :ref:`useDockerRemote <use-docker-remote>`): named
   ``partcad-open-<application>-<tag>-<identity>``, labelled so that ``pc system prune`` removes it, replaced
   rather than reused when what it was created from has changed, and running PartCAD's own container service,
   through which the application is launched. The image is the one the application's ``open:`` entry declares
@@ -982,6 +982,7 @@ of ``pc --help``, and print a note on stderr saying what to type instead.
   command does not make. ``--json`` prints what happened (or the reason it did not) as one object, which is
   what the VS Code extension's "Open in..." context menu reads.
 
+*****************
 Workflow commands
 *****************
 
