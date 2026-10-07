@@ -18,8 +18,11 @@ import * as vscode from 'vscode';
 import {
     activateWhenTrusted,
     contributedCommands,
+    contributedTerminalProfiles,
     MANAGE_TRUST_COMMAND,
     registerUntrustedCommands,
+    UNTRUSTED_MESSAGE,
+    untrustedTerminalProfile,
 } from '../../common/trust';
 
 const EXTENSION_ID = 'partcad.partcad-official';
@@ -85,6 +88,28 @@ suite('Workspace trust', () => {
         assert.ok(commands.includes('partcad.restart'));
         assert.ok(commands.includes('partcad.addPart'));
         assert.deepStrictEqual(contributedCommands({}), []);
+    });
+
+    test('every contributed terminal profile is found', () => {
+        assert.deepStrictEqual(contributedTerminalProfiles(manifest()), ['partcad.terminal']);
+        assert.deepStrictEqual(contributedTerminalProfiles({}), []);
+    });
+
+    test('the "+" menu entry in an untrusted window opens a view that explains itself', () => {
+        let explained = 0;
+        const provider = untrustedTerminalProfile(async () => {
+            explained += 1;
+        });
+        const profile = provider.provideTerminalProfile(
+            new vscode.CancellationTokenSource().token,
+        ) as vscode.TerminalProfile;
+        const pty = (profile.options as vscode.ExtensionTerminalOptions).pty;
+        let written = '';
+        pty.onDidWrite((text) => (written += text));
+        pty.open(undefined);
+        assert.strictEqual(written, `${UNTRUSTED_MESSAGE}\r\n`);
+        assert.strictEqual(explained, 1);
+        pty.close();
     });
 
     test('a command run in an untrusted window explains itself', async () => {

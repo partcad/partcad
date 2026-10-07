@@ -37,6 +37,12 @@ export function contributedCommands(packageJSON: any): string[] {
     return Array.isArray(commands) ? commands.map((command: { command: string }) => command.command) : [];
 }
 
+/** The terminal profile ids a manifest contributes: the `PartCAD` entry in the terminal panel's "+" menu. */
+export function contributedTerminalProfiles(packageJSON: any): string[] {
+    const profiles = packageJSON?.contributes?.terminal?.profiles;
+    return Array.isArray(profiles) ? profiles.map((profile: { id: string }) => profile.id) : [];
+}
+
 /** Say why PartCAD is not doing anything, and offer the way out. */
 export async function explainUntrusted(): Promise<void> {
     const chosen = await vscode.window.showWarningMessage(UNTRUSTED_MESSAGE, MANAGE_TRUST_ACTION);
@@ -60,6 +66,43 @@ export function registerUntrustedCommands(
     explain: () => Promise<void> = explainUntrusted,
 ): vscode.Disposable {
     const registered = commands.map((command) => vscode.commands.registerCommand(command, () => explain()));
+    return vscode.Disposable.from(...registered);
+}
+
+/**
+ * A terminal profile that opens a view saying why it shows nothing, and asks.
+ *
+ * The same reason as the command stand-ins: the "+" menu lists a contributed
+ * profile whether or not anything provides it, and picking one that nothing
+ * provides is an error naming the profile's id.
+ */
+export function untrustedTerminalProfile(
+    explain: () => Promise<void> = explainUntrusted,
+): vscode.TerminalProfileProvider {
+    return {
+        provideTerminalProfile: () => {
+            explain().catch(() => undefined);
+            const write = new vscode.EventEmitter<string>();
+            return new vscode.TerminalProfile({
+                name: 'PartCAD',
+                pty: {
+                    onDidWrite: write.event,
+                    open: () => write.fire(`${UNTRUSTED_MESSAGE}\r\n`),
+                    close: () => write.dispose(),
+                },
+            });
+        },
+    };
+}
+
+/** Register `untrustedTerminalProfile` for each of `profiles`; disposed like the command stand-ins. */
+export function registerUntrustedTerminalProfiles(
+    profiles: string[],
+    explain: () => Promise<void> = explainUntrusted,
+): vscode.Disposable {
+    const registered = profiles.map((id) =>
+        vscode.window.registerTerminalProfileProvider(id, untrustedTerminalProfile(explain)),
+    );
     return vscode.Disposable.from(...registered);
 }
 
@@ -117,7 +160,11 @@ export async function activateWhenTrusted(
         return;
     }
 
-    const standIns = registerUntrustedCommands(contributedCommands(context.extension?.packageJSON), explain);
+    const manifest = context.extension?.packageJSON;
+    const standIns = vscode.Disposable.from(
+        registerUntrustedCommands(contributedCommands(manifest), explain),
+        registerUntrustedTerminalProfiles(contributedTerminalProfiles(manifest), explain),
+    );
     context.subscriptions.push(standIns);
     context.subscriptions.push(
         onDidGrantTrust(async () => {

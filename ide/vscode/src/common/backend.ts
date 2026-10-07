@@ -946,7 +946,10 @@ function reportNoService(context: vscode.ExtensionContext, serverId: string): vo
         `ERROR: activated terminal has. \`${locateCommand()} partcad-json-rpc\` in a terminal where PartCAD`,
         'ERROR: works prints the path to point at (or to put in the "partcad.servicePath" setting).',
     ];
-    writeTerminal(lines.map((line) => `${line}\r\n`).join(''));
+    writeTerminal(
+        lines.map((line) => `${line}\r\n`).join(''),
+        'No PartCAD service is available, so this window has no package tree, no viewer and no checking.',
+    );
 }
 
 /**
@@ -1112,6 +1115,7 @@ export async function restartBackend(
             `ERROR: Failed to start the PartCAD service at ${execPath}\r\n` +
                 `ERROR: ${e}\r\n` +
                 'ERROR: Run "Restart PartCAD" to try again.\r\n',
+            'The PartCAD service failed to start.',
         );
         return undefined;
     }

@@ -32,8 +32,9 @@ export function getInstallOnOpenFromSetting(namespace: string, scope?: Configura
 }
 
 export function getReopenTerminalFromSetting(namespace: string, scope?: ConfigurationScope) {
-    const config = getConfiguration(namespace, scope);
-    return config.get<string>('reopenTerminal');
+    // Agrees with the declared default in package.json, for the reason given
+    // for `installOnOpen` above.
+    return getConfiguration(namespace, scope).get<string>('reopenTerminal') ?? 'false';
 }
 
 export function getAddToolsToTerminalPathFromSetting(namespace: string, scope?: ConfigurationScope): boolean {
@@ -66,8 +67,8 @@ export function checkIfConfigurationChanged(e: ConfigurationChangeEvent, namespa
         // `${namespace}.args`,
         `${namespace}.path`,
         `${namespace}.showNotifications`,
-        `${namespace}.reopenTerminal`,
-        `${namespace}.popupTerminal`,
+        // Not `reopenTerminal` or `popupTerminal`: the terminal views read them
+        // on every write, so changing one needs no restart.
     ];
     const changed = settings.map((s) => e.affectsConfiguration(s));
     return changed.includes(true);

@@ -32,7 +32,7 @@ import { PartcadViewer } from './viewer/PartcadViewer';
 import { PartcadViewerServer } from './viewer/PartcadViewerServer';
 import * as PartcadItem from './PartcadItem';
 import { examples } from './examples';
-import { setTerminalWriter, terminalInit, writeTerminal } from './terminal';
+import { PartcadTerminals, setTerminalWriter, TERMINAL_PROFILE_ID, writeTerminal } from './terminal';
 import * as utils from './utils';
 
 let lsClient: PartcadBackend | undefined;
@@ -43,8 +43,6 @@ let partcadInspector: PartcadInspector | undefined;
 let partcadLint: PartcadLint | undefined;
 let partcadViewer: PartcadViewer | undefined;
 let partcadViewerServer: PartcadViewerServer | undefined;
-let partcadTerminal: vscode.Terminal | undefined;
-let terminalEmitter: vscode.EventEmitter<string> | undefined;
 
 let lastConfigPath: string | undefined = undefined;
 let lastRoot: string | undefined = undefined;
@@ -110,35 +108,24 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
     const serverName = serverInfo.name;
     const serverId = serverInfo.module;
 
-    /**
-     * Put text in the `PartCAD` terminal view, reopening it if the user closed
-     * it and raising it if they asked for that.
-     *
-     * Registered with `setTerminalWriter` below, so that code with no access to
-     * the terminal -- `restartBackend`, which reports a backend that never
-     * started -- can reach it too.
-     */
-    const showInTerminal = (text: string) => {
-        if (!terminalEmitter) {
-            // A precaution: the emitter exists from activation onwards.
-            return;
-        }
-        if (
-            getReopenTerminalFromSetting(serverId) === 'true' &&
-            partcadTerminal !== undefined &&
-            !vscode.window.terminals.includes(partcadTerminal)
-        ) {
-            // Reopen the terminal window if it was closed
-            // TODO(clairbee): is this the right way to dispose?
-            partcadTerminal.dispose();
-            partcadTerminal = terminalInit(context, terminalEmitter);
-        }
-        if (getPopupTerminalFromSetting(serverId) === 'true' && partcadTerminal !== undefined) {
-            // Show the terminal if it was hidden
-            partcadTerminal.show(true);
-        }
-        terminalEmitter.fire(text);
-    };
+    // The `PartCAD` terminal views. Nothing is opened until there is output to
+    // show; see `PartcadTerminals` for when one is opened and reopened.
+    const partcadTerminals = new PartcadTerminals({
+        reopen: () => getReopenTerminalFromSetting(serverId) === 'true',
+        popup: () => getPopupTerminalFromSetting(serverId) === 'true',
+        iconPath: vscode.Uri.joinPath(context.extensionUri, 'resources', 'logo.svg'),
+    });
+    context.subscriptions.push(
+        partcadTerminals,
+        registerCommand('partcad.showTerminal', () => partcadTerminals.show()),
+        vscode.window.registerTerminalProfileProvider(TERMINAL_PROFILE_ID, partcadTerminals),
+    );
+    const showInTerminal = (text: string) => partcadTerminals.write(text);
+    // Before `runServer()` below, so that code with no access to the views --
+    // `restartBackend`, which reports a backend that never started -- has
+    // somewhere to say so.
+    setTerminalWriter((text, alert) => partcadTerminals.write(text, alert));
+    context.subscriptions.push({ dispose: () => setTerminalWriter(undefined) });
 
     // Setup logging
     const outputChannel = createOutputChannel(serverName);
@@ -510,6 +497,7 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
             writeTerminal(
                 `ERROR: The PartCAD service ${why} ${RECONNECT_LIMIT + 1} times in a minute, so it is not being reconnected again.\r\n` +
                     'ERROR: Its log is in the PartCAD output channel. Run "Restart PartCAD" to try again.\r\n',
+                'The PartCAD service kept stopping, so it is not being reconnected again.',
             );
             // Nothing shown came from a backend that is still there, and the
             // view must say "failed" rather than go on saying "loading".
@@ -1307,14 +1295,6 @@ location: [[100, 0, 0], [0, 0, 1], 0]
         },
     });
     context.subscriptions.push(completionYaml);
-
-    terminalEmitter = new vscode.EventEmitter<string>();
-    partcadTerminal = terminalInit(context, terminalEmitter);
-    context.subscriptions.push(partcadTerminal);
-    // Before `runServer()` below, so that a backend which fails to start has
-    // somewhere to say so.
-    setTerminalWriter(showInTerminal);
-    context.subscriptions.push({ dispose: () => setTerminalWriter(undefined) });
 
     setImmediate(async () => {
         await runServer();
