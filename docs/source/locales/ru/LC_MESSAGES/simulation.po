@@ -1,0 +1,2595 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-06 16:15+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ru\n"
+"Language-Team: ru <LL@li.org>\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/simulation.rst:2
+msgid "Simulation, URDF, SDFormat and MJCF"
+msgstr "Симуляция, URDF, SDFormat и MJCF"
+
+#: ../../source/simulation.rst:4
+msgid ""
+"PartCAD can read a `URDF <https://wiki.ros.org/urdf>`_ file as an "
+"assembly (``type: urdf``), write one back out (``pc export -t urdf``), "
+"and convert an assembly between URDF and ASSY in either direction (``pc "
+"convert assembly``). URDF is the one of these three PartCAD implements "
+"itself, because it describes a robot rather than any one engine's world "
+"and ROS, MuJoCo, PyBullet and Isaac all read it."
+msgstr ""
+"PartCAD умеет читать файл `URDF <https://wiki.ros.org/urdf>`_ как сборку "
+"(``type: urdf``), записывать его обратно (``pc export -t urdf``) и "
+"преобразовывать сборку между URDF и ASSY в обе стороны (``pc convert "
+"assembly``). URDF — единственный из этих трёх форматов, который PartCAD "
+"реализует сам, потому что он описывает робота, а не мир какого-то одного "
+"движка, и его читают и ROS, и MuJoCo, и PyBullet, и Isaac."
+
+#: ../../source/simulation.rst:11
+msgid ""
+"The same machinery reads and writes `SDFormat <http://sdformat.org/>`_ --"
+" what Gazebo describes a simulation *world* in -- against a :ref:`scene "
+"<scenes>` rather than an assembly, and `MJCF "
+"<https://mujoco.readthedocs.io/en/stable/XMLreference.html>`_, what "
+"`MuJoCo <https://mujoco.org/>`_ describes a model in, as either. Neither "
+"is in this wheel: each is declared by the plugin package for its engine "
+"and named through it (``sim-gazebo:world``, ``sim-mujoco:mjcf``). See `An"
+" engine's own scene format is its plugin's`_ below."
+msgstr ""
+"Тот же механизм читает и пишет `SDFormat <http://sdformat.org/>`_ — то, "
+"чем Gazebo описывает *мир* симуляции, — применительно к :ref:`сцене "
+"<scenes>`, а не к сборке, и `MJCF "
+"<https://mujoco.readthedocs.io/en/stable/XMLreference.html>`_, то, чем "
+"описывает модель `MuJoCo <https://mujoco.org/>`_, — и как то, и как "
+"другое. Ни того ни другого нет в этом wheel-пакете: каждый объявляется "
+"пакетом-плагином своего движка и называется через него (``sim-"
+"gazebo:world``, ``sim-mujoco:mjcf``). См. `Собственный формат сцен движка"
+" принадлежит его плагину`_ ниже."
+
+#: ../../source/simulation.rst:20
+msgid ""
+"It can also **run** one. ``simulate:`` is where a part or an assembly "
+"says what it is supposed to do -- or not do -- once it is placed in a "
+"world and the world is switched on, and ``pc sim`` places it, runs it and"
+" checks the claim. This page is the design record for all of that: what "
+"the conversions actually preserve, what they cannot, and what it would "
+"take for PartCAD to hold everything a physical simulation needs."
+msgstr ""
+"Он умеет и **запускать** симуляцию. ``simulate:`` — это место, где деталь"
+" или сборка говорит, что она должна (или не должна) делать, оказавшись в "
+"мире, когда этот мир включат, а ``pc sim`` её размещает, запускает и "
+"проверяет это утверждение. Эта страница — проектная запись обо всём этом:"
+" что преобразования на самом деле сохраняют, чего они не могут и что "
+"потребуется, чтобы PartCAD хранил всё, что нужно физической симуляции."
+
+#: ../../source/simulation.rst:27
+msgid ""
+"The \"What exists today\" section describes what is built. Everything "
+"after it is a proposal, and none of it is implemented."
+msgstr ""
+"Раздел «Что есть сегодня» описывает то, что реализовано. Всё, что идёт "
+"после него, — предложение, и ничего из этого не реализовано."
+
+#: ../../source/simulation.rst:36
+msgid "What exists today"
+msgstr "Что есть сегодня"
+
+#: ../../source/simulation.rst:39
+msgid "Reading a URDF"
+msgstr "Чтение URDF"
+
+#: ../../source/simulation.rst:41
+msgid ""
+"A URDF reaches a package by the same two commands any other foreign file "
+"does, and they mean the same two things they mean for a STEP file. ``pc "
+"add assembly urdf <path>`` *declares* it: the package points at the file,"
+" the file stays a URDF, and its links become parts as it is read. ``pc "
+"import assembly <path>`` *converts* it: the package gains an ``stl`` part"
+" per link, an interface pair per joint and an ``.assy``, and nothing "
+"points at the URDF afterwards. The import is the conversion described in "
+"`Converting between the two`_, run against a declaration that lives only "
+"for the length of it - which is what lets the source file sit anywhere, "
+"the way a STEP file being imported does."
+msgstr ""
+"URDF попадает в пакет теми же двумя командами, что и любой другой чужой "
+"файл, и означают они то же, что и для файла STEP. ``pc add assembly urdf "
+"<path>`` его *объявляет*: пакет указывает на файл, файл остаётся URDF, а "
+"его звенья становятся деталями по мере чтения. ``pc import assembly "
+"<path>`` его *преобразует*: пакет получает по детали ``stl`` на звено, по"
+" паре интерфейсов на шарнир и файл ``.assy``, и после этого на URDF ничто"
+" не указывает. Импорт — это то преобразование, которое описано в разделе "
+"`Преобразование между двумя форматами`_, выполненное над объявлением, "
+"живущим только на время этого преобразования, — именно это позволяет "
+"исходному файлу лежать где угодно, как и при импорте файла STEP."
+
+#: ../../source/simulation.rst:51
+msgid ""
+"``AssemblyFactoryUrdf`` drives ``wrapper_import_urdf`` in a python "
+"sandbox. The sandbox parses the file with ROS's own ``urdf_parser_py``, "
+"walks the joint tree from the root link with every joint at its zero "
+"position, resolves each link's geometry, and hands back plain data. The "
+"core registers one part per shape - ``<assembly>/<link>`` for a link that"
+" is one, and ``<assembly>/<link>/<n>`` under a sub-assembly for a link "
+"that is several - and builds the very same ``Assembly``/``AssemblyChild``"
+" tree an ASSY file produces."
+msgstr ""
+"``AssemblyFactoryUrdf`` запускает ``wrapper_import_urdf`` в песочнице "
+"Python. Песочница разбирает файл собственным ``urdf_parser_py`` из ROS, "
+"обходит дерево шарниров от корневого звена при нулевом положении каждого "
+"шарнира, разрешает геометрию каждого звена и возвращает простые данные. "
+"Ядро регистрирует по одной детали на форму — ``<assembly>/<link>`` для "
+"звена с одной формой и ``<assembly>/<link>/<n>`` под подсборкой для звена"
+" с несколькими — и строит ровно то же дерево "
+"``Assembly``/``AssemblyChild``, какое даёт файл ASSY."
+
+#: ../../source/simulation.rst:59
+msgid ""
+"The links go into **one flat list**, each at its absolute placement. The "
+"joint tree is the robot's kinematics; an assembly is one static "
+"configuration of it, so nesting a sub-assembly per joint would make an "
+"arm as deep as it has joints and say nothing the placement does not. The "
+"relative placements are recorded in a link table instead, which is what "
+"the ASSY conversion turns into joints."
+msgstr ""
+"Звенья попадают в **один плоский список**, каждое по своему абсолютному "
+"размещению. Дерево шарниров — это кинематика робота; сборка же является "
+"одной статической её конфигурацией, поэтому вложение подсборки на каждый "
+"шарнир сделало бы руку настолько глубокой, сколько в ней шарниров, и не "
+"сказало бы ничего такого, чего не говорит размещение. Относительные "
+"размещения записываются вместо этого в таблицу звеньев, и именно её "
+"преобразование в ASSY превращает в шарниры."
+
+#: ../../source/simulation.rst:65
+msgid ""
+"Nothing is rewritten that does not have to be: a ``<mesh>`` becomes a "
+"part that reads the very file the URDF named, and the ``<origin>`` that "
+"places it becomes a location rather than a transform baked into a copy of"
+" the geometry. Only ``<box>``/``<cylinder>``/``<sphere>`` are generated, "
+"because there is no file to point at."
+msgstr ""
+"Не переписывается ничего, чего можно не переписывать: ``<mesh>`` "
+"становится деталью, которая читает тот самый файл, который назвал URDF, а"
+" ``<origin>``, который её размещает, становится расположением, а не "
+"преобразованием, запечённым в копию геометрии. Генерируются только "
+"``<box>``/``<cylinder>``/``<sphere>``, поскольку указывать там не на "
+"какой файл."
+
+#: ../../source/simulation.rst:71
+msgid ""
+"A link is built from its **collision** geometry when it states both, "
+"since that is the shape a simulator resolves contact against; "
+"``ignoreCollision`` reverses that per link or wholesale. The geometry "
+"that was not used is not discarded: it becomes the part "
+"``<assembly>/<link>/<visual|collision>``, defined and exportable but not "
+"placed in the assembly."
+msgstr ""
+"Звено строится из своей **коллизионной** геометрии, когда оно указывает "
+"обе, поскольку именно по этой форме симулятор разрешает контакт; "
+"``ignoreCollision`` меняет это для отдельного звена или для всех сразу. "
+"Неиспользованная геометрия не отбрасывается: она становится деталью "
+"``<assembly>/<link>/<visual|collision>``, определённой и пригодной к "
+"экспорту, но не размещённой в сборке."
+
+#: ../../source/simulation.rst:77
+msgid ""
+"What the link says about its physics is **copied field by field into "
+"named PartCAD properties**, in PartCAD's own units. ``<inertial>`` "
+"becomes ``mass``, ``centerOfMass`` and ``inertia``; the friction and "
+"contact settings of a ``<gazebo>`` block become ``friction``, "
+"``contactStiffness`` and the rest; ``<material>`` becomes ``material`` "
+"and ``color``. A joint's ``<limit>``, ``<dynamics>``, "
+"``<safety_controller>`` and ``<mimic>`` become the ``motion`` and "
+"``physics`` sections of the interface it turns into. Nothing is nested "
+"under the name of the format it came from, and nothing is opaque."
+msgstr ""
+"То, что звено сообщает о своей физике, **копируется поле за полем в "
+"именованные свойства PartCAD**, в собственных единицах PartCAD. "
+"``<inertial>`` становится ``mass``, ``centerOfMass`` и ``inertia``; "
+"настройки трения и контакта из блока ``<gazebo>`` становятся "
+"``friction``, ``contactStiffness`` и остальными; ``<material>`` "
+"становится ``material`` и ``color``. Элементы ``<limit>``, "
+"``<dynamics>``, ``<safety_controller>`` и ``<mimic>`` шарнира становятся "
+"разделами ``motion`` и ``physics`` того интерфейса, в который он "
+"превращается. Ничего не вкладывается под именем того формата, из которого"
+" оно пришло, и ничто не остаётся непрозрачным."
+
+#: ../../source/simulation.rst:86
+msgid ""
+"That choice has a cost and it is deliberate: URDF that no property covers"
+" stops the import, naming what it found. Core URDF is a closed "
+"vocabulary, so an unknown element there means PartCAD is out of date and "
+"the remedy is to extend the tables in ``wrapper_import_urdf.py``. "
+"``<gazebo>`` is an open extension point, so an unknown setting there is "
+"reported rather than fatal unless the assembly asks for ``strict: true``."
+" The export mirrors it: a PartCAD property URDF cannot state is reported "
+"at info level rather than dropped in silence."
+msgstr ""
+"У этого выбора есть цена, и она намеренная: URDF, которому не находится "
+"свойства, останавливает импорт с указанием найденного. Ядро URDF — "
+"закрытый словарь, поэтому неизвестный элемент там означает, что PartCAD "
+"устарел, и лечится это расширением таблиц в ``wrapper_import_urdf.py``. "
+"``<gazebo>`` — открытая точка расширения, поэтому неизвестная настройка "
+"там отмечается в отчёте, а не является фатальной, — если только сборка не"
+" требует ``strict: true``. Экспорт зеркалит это: о свойстве PartCAD, "
+"которое URDF не может выразить, сообщается на уровне info, а не молча "
+"отбрасывается."
+
+#: ../../source/simulation.rst:94
+msgid ""
+"Nor does anything record the link's name or its parent. The part *is* "
+"named after the link, and the joint tree is the URDF file - which is "
+"still on disk and is read afresh - or, once converted, the ``connect:`` "
+"sections of the ASSY. A second copy in a properties section would only be"
+" a second thing to keep right."
+msgstr ""
+"И ничто не записывает ни имя звена, ни его родителя. Деталь *и так* "
+"названа по звену, а дерево шарниров — это сам файл URDF, который "
+"по-прежнему лежит на диске и читается заново, или, после преобразования, "
+"разделы ``connect:`` файла ASSY. Вторая копия в разделе свойств была бы "
+"лишь второй вещью, которую нужно поддерживать в правильном состоянии."
+
+#: ../../source/simulation.rst:100
+msgid "Writing a URDF"
+msgstr "Запись URDF"
+
+#: ../../source/simulation.rst:102
+msgid ""
+"The URDF exporter (``//builtin/export``'s ``export_urdf.py``) is handed "
+"the assembly *tree* rather than the compound it decodes to - which is "
+"what ``decode: false`` on its declaration asks for. Each node becomes a "
+"link, each parent/child relation a fixed joint carrying that child's "
+"placement, and each node with geometry gets an STL written next to the "
+"URDF. A shape that appears more than once is written once and referenced "
+"by every link that uses it."
+msgstr ""
+"Экспортёру URDF (``export_urdf.py`` из ``//builtin/export``) передаётся "
+"само *дерево* сборки, а не тот компаунд, в который оно раскодируется, — "
+"именно это запрашивает ``decode: false`` в его объявлении. Каждый узел "
+"становится звеном, каждое отношение «родитель/потомок» — фиксированным "
+"шарниром, несущим размещение этого потомка, а для каждого узла с "
+"геометрией рядом с URDF записывается STL. Форма, встречающаяся более "
+"одного раза, записывается один раз, и на неё ссылается каждое "
+"использующее её звено."
+
+#: ../../source/simulation.rst:109
+msgid ""
+"A sub-assembly whose children are named *under* it - ``wrist`` holding "
+"``wrist/1`` and ``wrist/2`` - goes back out as one link with a "
+"``<visual>`` per shape, at the offset each was placed at, rather than as "
+"a frame link with a link per shape. So a link of several visuals survives"
+" the round trip as itself. The slash is the whole of the rule, and it "
+"needs nothing recorded anywhere: it is the same convention the import "
+"uses to name those parts in the first place."
+msgstr ""
+"Подсборка, потомки которой названы *под* ней — ``wrist``, содержащая "
+"``wrist/1`` и ``wrist/2``, — выходит обратно как одно звено с "
+"``<visual>`` на каждую форму, по тому смещению, с которым каждая была "
+"размещена, а не как звено-рамка со звеном на каждую форму. Поэтому звено "
+"из нескольких визуальных форм переживает круговой обход как оно само. "
+"Косая черта — это всё правило, и ничего нигде записывать для него не "
+"нужно: это то же соглашение, по которому импорт изначально и называет эти"
+" детали."
+
+#: ../../source/simulation.rst:116
+msgid ""
+"The joint *tree* does not survive: the export mirrors the assembly, and a"
+" URDF assembly is flat, so what comes out is a root frame with every link"
+" fixed to it directly. That is an honest reading - the exported joints "
+"are all fixed because PartCAD holds one static configuration, and a star "
+"of fixed joints is what that is. The chain is preserved where it means "
+"something, in ``pc convert assembly -t assy``, and a faithful re-export "
+"would read it back from there rather than from anything stashed on the "
+"parts."
+msgstr ""
+"*Дерево* шарниров не переживает обход: экспорт зеркалит сборку, а сборка "
+"из URDF плоская, поэтому получается корневая рамка, к которой каждое "
+"звено прикреплено напрямую. И это честное прочтение: экспортируемые "
+"шарниры все фиксированные, потому что PartCAD хранит одну статическую "
+"конфигурацию, а звезда из фиксированных шарниров — это именно она. "
+"Цепочка сохраняется там, где она что-то означает, — в ``pc convert "
+"assembly -t assy``, — и точный повторный экспорт читал бы её оттуда, а не"
+" из чего-либо припрятанного на деталях."
+
+#: ../../source/simulation.rst:124
+msgid ""
+"What a part states about itself is written into the URDF element that "
+"states it: mass, centre of mass and inertia into ``<inertial>``, friction"
+" and the contact parameters into a ``<gazebo>`` block, "
+"``material``/``color`` into ``<material>``. Only a part that says nothing"
+" gets computed inertial properties: OCCT gives the volume, the centre of "
+"mass and the inertia tensor about it, and a density turns those into a "
+"mass. Since PartCAD still has nowhere to record what a part is *made of*,"
+" that density is a parameter of the export with a default rather than a "
+"property of the part - the first gap this page proposes to close."
+msgstr ""
+"То, что деталь сообщает о себе, записывается в тот элемент URDF, который "
+"это выражает: масса, центр масс и инерция — в ``<inertial>``, трение и "
+"параметры контакта — в блок ``<gazebo>``, ``material``/``color`` — в "
+"``<material>``. Только для детали, которая ничего не говорит, инерционные"
+" свойства вычисляются: OCCT даёт объём, центр масс и тензор инерции "
+"относительно него, а плотность превращает это в массу. Поскольку PartCAD "
+"пока негде записать, *из чего* сделана деталь, эта плотность является "
+"параметром экспорта со значением по умолчанию, а не свойством детали, — "
+"первый пробел, который эта страница предлагает закрыть."
+
+#: ../../source/simulation.rst:133
+msgid ""
+"A link's name, and the properties written under it, come from the shape "
+"the exporter is handed, and both travel on that shape together. This used"
+" to be the one place the shape cache showed through: the cache is keyed "
+"by geometry, deliberately, so that two parts reading the same mesh file "
+"do not compute it twice, and the entry used to carry the name of "
+"whichever part wrote it - so the other part read back wearing a name that"
+" was not its own, and the properties looked up under that name were the "
+"wrong part's or nobody's. The entry no longer stores that outer layer at "
+"all. What identifies the shape being asked for - its name, its label, its"
+" placement, and what it reports about itself - is stamped onto the "
+"payload from the asking object's own configuration every time an entry is"
+" read, so parts that share geometry each get themselves back."
+msgstr ""
+"Имя звена и свойства, записываемые под ним, берутся из той формы, которая"
+" передана экспортёру, и оба путешествуют вместе с этой формой. Раньше это"
+" было единственным местом, где проступал кэш форм: кэш намеренно "
+"ключуется по геометрии, чтобы две детали, читающие один и тот же файл "
+"сетки, не считали её дважды, — и запись несла имя той детали, которая её "
+"записала, так что другая деталь считывалась обратно под чужим именем, а "
+"свойства, найденные под этим именем, принадлежали не той детали или "
+"никому. Теперь запись вообще не хранит этот внешний слой. То, что "
+"идентифицирует запрашиваемую форму, — её имя, её метка, её размещение и "
+"то, что она сообщает о себе, — проставляется на полезную нагрузку из "
+"собственной конфигурации запрашивающего объекта при каждом чтении записи,"
+" поэтому детали, разделяющие геометрию, получают обратно каждая себя."
+
+#: ../../source/simulation.rst:145
+msgid ""
+"The stamp reaches the shape that was asked for and no further. Inside a "
+"cached assembly the children sit in the entry with the names, labels and "
+"properties they were built with, because down there they are not who is "
+"asking - they are what the tree is made of, as much a part of the answer "
+"as the geometry. So a link exported from a part is that part; a link "
+"exported from a child of a cached assembly is whatever that child was "
+"when the tree was cached, and it takes a change the assembly actually "
+"hashes, or ``pc system reset``, to build it again."
+msgstr ""
+"Эта простановка доходит до запрошенной формы и не дальше. Внутри "
+"закэшированной сборки потомки лежат в записи с теми именами, метками и "
+"свойствами, с которыми они были построены, потому что там, внизу, они не "
+"являются спрашивающими — они являются тем, из чего сделано дерево, такой "
+"же частью ответа, как и геометрия. Поэтому звено, экспортированное из "
+"детали, — это та самая деталь; а звено, экспортированное из потомка "
+"закэшированной сборки, — это то, чем этот потомок был на момент "
+"кэширования дерева, и чтобы построить его заново, нужно изменение, "
+"которое сборка действительно хеширует, или ``pc system reset``."
+
+#: ../../source/simulation.rst:153
+msgid ""
+"What a shape reports about itself is cached too, in an entry of its own "
+"beside the geometry - the geometry's key with ``-props`` appended. Both "
+"are filled by the one run that actually instantiates the shape, and they "
+"are read apart: a consumer after a part's material need not pull its BREP"
+" back out of the cache, and a cache written before that entry existed is "
+"a miss for the properties and not for the geometry. It is not what the "
+"stamp above is made of, though: that entry is keyed on the geometry, so "
+"what sits in it belongs to the geometry - which is where a *derived* "
+"property (item 2 below) would land. What the object asking reports is its"
+" own ``properties:`` section, and only that."
+msgstr ""
+"То, что форма сообщает о себе, тоже кэшируется — в отдельной записи рядом"
+" с геометрией, с ключом геометрии и суффиксом ``-props``. Обе заполняются"
+" тем единственным прогоном, который действительно инстанцирует форму, и "
+"читаются по отдельности: потребителю, которому нужен материал детали, не "
+"придётся вытаскивать из кэша её BREP, а кэш, записанный до появления этой"
+" записи, даёт промах по свойствам и не даёт промаха по геометрии. При "
+"этом та простановка, о которой говорилось выше, состоит не из этого: эта "
+"запись ключуется по геометрии, поэтому то, что в ней лежит, принадлежит "
+"геометрии, — именно туда попало бы *производное* свойство (пункт 2 ниже)."
+" А то, что сообщает спрашивающий объект, — это его собственный раздел "
+"``properties:``, и только он."
+
+#: ../../source/simulation.rst:164
+msgid "Converting between the two"
+msgstr "Преобразование между двумя форматами"
+
+#: ../../source/simulation.rst:166
+msgid ""
+"``pc convert assembly`` rewrites the package rather than just producing a"
+" file. To URDF it writes the ``.urdf`` and its meshes and switches the "
+"declaration over. To ASSY it writes an ``stl`` part for every link, an "
+"interface pair for every joint, and an ``.assy`` whose nodes use "
+"``connect:`` - so the result is an assembly stated the way PartCAD states"
+" one, not a transcription of coordinates. How the joints become "
+"interfaces is `URDF joints as PartCAD interfaces`_ below."
+msgstr ""
+"``pc convert assembly`` переписывает пакет, а не просто создаёт файл. В "
+"URDF он записывает ``.urdf`` и его сетки и переключает объявление. В ASSY"
+" он записывает деталь ``stl`` для каждого звена, пару интерфейсов для "
+"каждого шарнира и файл ``.assy``, узлы которого используют ``connect:``, "
+"— так что результатом оказывается сборка, изложенная так, как её излагает"
+" PartCAD, а не переписанные координаты. Как шарниры становятся "
+"интерфейсами, описано в разделе `Шарниры URDF как интерфейсы PartCAD`_ "
+"ниже."
+
+#: ../../source/simulation.rst:174
+msgid "What the round trip preserves"
+msgstr "Что сохраняет круговой обход"
+
+#: ../../source/simulation.rst:176
+msgid ""
+"``examples/produce_assembly_assy:logo`` exported to URDF and read back as"
+" a ``urdf`` assembly puts every shape back where it was, under the name "
+"it had, built from the same geometry - flattened, because a URDF has no "
+"way to say \"these parts belong together\" other than by joining them. "
+"That is the whole of what survives."
+msgstr ""
+"``examples/produce_assembly_assy:logo``, экспортированный в URDF и "
+"прочитанный обратно как сборка ``urdf``, возвращает каждую форму на то "
+"место, где она была, под тем именем, которое у неё было, построенную из "
+"той же геометрии, — но плоско, потому что в URDF нет способа сказать «эти"
+" детали принадлежат друг другу», кроме как соединить их. Это всё, что "
+"выживает."
+
+#: ../../source/simulation.rst:186
+msgid "Preserved"
+msgstr "Сохраняется"
+
+#: ../../source/simulation.rst:187
+msgid "Lost"
+msgstr "Теряется"
+
+#: ../../source/simulation.rst:188
+msgid "Every shape, at the placement it had"
+msgstr "Каждая форма, на том месте, где она была"
+
+#: ../../source/simulation.rst:189
+msgid "Every name (PartCAD names carry package paths; ROS names cannot)"
+msgstr "Каждое имя (имена PartCAD несут пути пакетов; имена ROS этого не умеют)"
+
+#: ../../source/simulation.rst:190
+msgid "Placements, to full double precision"
+msgstr "Размещения, с полной двойной точностью"
+
+#: ../../source/simulation.rst:191
+msgid "Nesting: an ASSY may group its parts, a URDF's grouping is its joint tree"
+msgstr ""
+"Вложенность: ASSY может группировать свои детали, а группировка URDF — "
+"это его дерево шарниров"
+
+#: ../../source/simulation.rst:192
+msgid "Names of the assembly's own children"
+msgstr "Имена собственных потомков сборки"
+
+#: ../../source/simulation.rst:193
+msgid "Parametrization: an ASSY parameter, an enrich, an alias"
+msgstr "Параметризация: параметр ASSY, enrich, alias"
+
+#: ../../source/simulation.rst:194
+msgid "Geometry, as a triangle mesh"
+msgstr "Геометрия, в виде треугольной сетки"
+
+#: ../../source/simulation.rst:195
+msgid "Exact B-rep geometry; the mesh is a tessellation at a chosen tolerance"
+msgstr "Точная геометрия B-rep; сетка — это триангуляция с выбранным допуском"
+
+#: ../../source/simulation.rst:196
+msgid "Shape sharing (one mesh, many links)"
+msgstr "Разделение форм (одна сетка, много звеньев)"
+
+#: ../../source/simulation.rst:197
+msgid "Which part in which package a link came from - the digital thread itself"
+msgstr "То, из какой детали какого пакета пришло звено, — сама цифровая нить"
+
+#: ../../source/simulation.rst:199
+msgid ""
+"In the other direction, reading a URDF loses less than it used to but "
+"still loses. Mass, inertia, friction, contact parameters and appearance "
+"become named properties of the part and are written back on export; joint"
+" types, axes, limits and dynamics become the ``motion`` and ``physics`` "
+"of the generated interfaces when the assembly is converted to ASSY; the "
+"geometry a link was not built from becomes a part of its own. What is "
+"genuinely gone is the *effect* of a joint - the assembly is one "
+"configuration, so a movable joint is a placement and not a degree of "
+"freedom - along with transmissions, sensors and ``ros2_control`` blocks, "
+"and the ``<origin>`` of geometry that ends up unplaced. PartCAD reports "
+"the count of each rather than passing over them in silence, so the loss "
+"is visible at import time and in ``pc info``."
+msgstr ""
+"В другую сторону чтение URDF теряет меньше, чем раньше, но всё же теряет."
+" Масса, инерция, трение, параметры контакта и внешний вид становятся "
+"именованными свойствами детали и записываются обратно при экспорте; типы "
+"шарниров, оси, пределы и динамика становятся разделами ``motion`` и "
+"``physics`` порождаемых интерфейсов, когда сборка преобразуется в ASSY; "
+"геометрия, из которой звено не строилось, становится самостоятельной "
+"деталью. По-настоящему теряется *действие* шарнира — сборка является "
+"одной конфигурацией, поэтому подвижный шарнир превращается в размещение, "
+"а не в степень свободы, — а вместе с ним трансмиссии, датчики и блоки "
+"``ros2_control``, а также ``<origin>`` той геометрии, которая остаётся "
+"неразмещённой. PartCAD сообщает количество каждого вида, а не проходит "
+"мимо них молча, поэтому потеря видна и во время импорта, и в ``pc info``."
+
+#: ../../source/simulation.rst:212
+msgid "What it took to implement"
+msgstr "Чего стоило это реализовать"
+
+#: ../../source/simulation.rst:214
+msgid ""
+"Worth recording, because the shape of the work says something about where"
+" the gap is:"
+msgstr ""
+"Это стоит записать, потому что форма проделанной работы говорит кое-что о"
+" том, где находится пробел:"
+
+#: ../../source/simulation.rst:217
+msgid ""
+"**No change to the assembly representation was needed.** ``Assembly``, "
+"``AssemblyChild`` and ``Part`` expressed everything the *geometric* half "
+"of URDF needs, on the first try. That is the good news and the bad news: "
+"the representation is exactly rich enough for shapes and placements, and "
+"has no place at all for anything else."
+msgstr ""
+"**Менять представление сборки не потребовалось.** ``Assembly``, "
+"``AssemblyChild`` и ``Part`` с первой же попытки выразили всё, что нужно "
+"*геометрической* половине URDF. Это и хорошая новость, и плохая: "
+"представление ровно настолько богато, чтобы хватало на формы и "
+"размещения, и в нём вообще нет места ни для чего другого."
+
+#: ../../source/simulation.rst:222
+msgid ""
+"**The wrapper protocol had to grow a raw mode.** "
+"``ocp_serialize.decode()`` turns an assembly envelope into a single "
+"``TopoDS_Compound``, which is right for every other exporter and fatal "
+"for this one - URDF *is* the tree. Hence "
+"``wrapper_common.handle_input(decode=False)``."
+msgstr ""
+"**Протоколу обёрток пришлось обзавестись сырым режимом.** "
+"``ocp_serialize.decode()`` превращает оболочку сборки в единственный "
+"``TopoDS_Compound``, что верно для любого другого экспортёра и фатально "
+"для этого: URDF *и есть* дерево. Отсюда "
+"``wrapper_common.handle_input(decode=False)``."
+
+#: ../../source/simulation.rst:226
+msgid ""
+"**Units and conventions cost a module.** URDF is metres, radians and "
+"fixed-axis roll-pitch-yaw; PartCAD is millimetres, degrees and axis-"
+"angle. ``wrappers/urdf_common.py`` exists to keep that conversion in one "
+"tested place rather than spread across two wrappers."
+msgstr ""
+"**Единицы и соглашения стоили отдельного модуля.** URDF — это метры, "
+"радианы и углы крена-тангажа-рыскания вокруг фиксированных осей; PartCAD "
+"— это миллиметры, градусы и представление «ось — угол». "
+"``wrappers/urdf_common.py`` существует для того, чтобы это преобразование"
+" находилось в одном протестированном месте, а не было размазано по двум "
+"обёрткам."
+
+#: ../../source/simulation.rst:230
+msgid ""
+"**The parts a URDF points at have no declaration.** They are whatever the"
+" URDF names, so they are materialized into the package in memory as "
+"``<assembly>/<link>`` and the package resolves such a name by building "
+"the assembly that owns it. A concept of \"a part that exists because an "
+"assembly produced it\" did not exist before, and it turns out to be the "
+"right one: those parts are ordinary parts, inspectable and exportable, "
+"not an internal detail."
+msgstr ""
+"**У деталей, на которые указывает URDF, нет объявления.** Это то, что "
+"называет URDF, поэтому они материализуются в пакет в памяти как "
+"``<assembly>/<link>``, а пакет разрешает такое имя, построив ту сборку, "
+"которой оно принадлежит. Понятия «деталь, которая существует потому, что "
+"её породила сборка» раньше не было, и оно оказалось правильным: это "
+"обычные детали, которые можно просматривать и экспортировать, а не "
+"внутренняя подробность."
+
+#: ../../source/simulation.rst:236
+msgid ""
+"**Mapping the robot's root link to the assembly itself was a mistake "
+"too.** It made an export come out with one link fewer, which looked like "
+"fidelity, but it only worked because each part recorded which link it "
+"*was*: the export matched the assembly node against a stored link name. "
+"Once that stored name went away - and it had to, since the part is "
+"already named after the link - the assembly went back to being what it "
+"is, a container. An export now writes a root frame with no geometry and "
+"every link fixed to it, which reads back as the same four placed links; "
+"the round trip is stable, just one honest link longer."
+msgstr ""
+"**Отображение корневого звена робота на саму сборку тоже было ошибкой.** "
+"Из-за него экспорт получался на одно звено короче, что выглядело как "
+"точность, но работало только потому, что каждая деталь записывала, каким "
+"звеном она *была*: экспорт сопоставлял узел сборки с сохранённым именем "
+"звена. Как только это сохранённое имя исчезло — а исчезнуть оно было "
+"обязано, поскольку деталь и так названа по звену, — сборка снова стала "
+"тем, чем она является: контейнером. Теперь экспорт пишет корневую рамку "
+"без геометрии и каждое звено, фиксированно прикреплённое к ней, что "
+"читается обратно как те же четыре размещённых звена; круговой обход "
+"устойчив, просто на одно честное звено длиннее."
+
+#: ../../source/simulation.rst:245
+msgid ""
+"**A link of several shapes is a sub-assembly, and combining them was a "
+"mistake.** Merging a link's visuals into one generated shape made the "
+"joint algebra fall out neatly - every part's origin was the link frame - "
+"but it bought that by rewriting the model: the mesh files the URDF "
+"pointed at were replaced by a generated compound and the ``<origin>`` "
+"that placed each one disappeared into the geometry. Keeping them as parts"
+" of a sub-assembly, each reading its own file at its own offset, costs "
+"one extra term in the joint algebra (below) and a table of where each "
+"link's item sits relative to the link frame. That is the right trade: a "
+"digital thread that rewrites what it was handed is not one."
+msgstr ""
+"**Звено из нескольких форм — это подсборка, и объединять их было "
+"ошибкой.** Слияние визуальных форм звена в одну сгенерированную форму "
+"делало алгебру шарниров аккуратной — началом координат каждой детали была"
+" рамка звена, — но покупалось это переписыванием модели: файлы сеток, на "
+"которые указывал URDF, заменялись сгенерированным компаундом, а "
+"``<origin>``, размещавший каждый из них, исчезал в геометрии. Если "
+"сохранять их как детали подсборки, каждая из которых читает свой файл со "
+"своим смещением, это стоит одного лишнего слагаемого в алгебре шарниров "
+"(см. ниже) и таблицы того, где элемент каждого звена находится "
+"относительно рамки звена. Это правильный размен: цифровая нить, которая "
+"переписывает то, что ей передали, не является цифровой нитью."
+
+#: ../../source/simulation.rst:255
+msgid ""
+"**Nesting a sub-assembly per joint was also a mistake, for the opposite "
+"reason.** It preserved the URDF's tree faithfully and cost an arm one "
+"level of depth per joint, in a representation that has no joints in it. "
+"Two different things were being expressed by one mechanism - \"these "
+"shapes are one link\", which is grouping, and \"this link hangs off that "
+"one\", which is kinematics - and only the first is structure. Flattening "
+"the second and recording the relative placements in a table beside the "
+"tree is what let the ASSY conversion keep the kinematics *and* the "
+"assembly stay shallow."
+msgstr ""
+"**Вложение подсборки на каждый шарнир тоже было ошибкой, по "
+"противоположной причине.** Оно точно сохраняло дерево URDF и стоило руке "
+"по одному уровню глубины на шарнир — в представлении, в котором шарниров "
+"нет вообще. Одним механизмом выражались две разные вещи: «эти формы — "
+"одно звено», что является группировкой, и «это звено висит на том», что "
+"является кинематикой, — а структурой является только первая. Схлопывание "
+"второй и запись относительных размещений в таблицу рядом с деревом — это "
+"то, что позволило преобразованию в ASSY сохранить кинематику *и* оставить"
+" сборку неглубокой."
+
+#: ../../source/simulation.rst:263
+#, python-brace-format
+msgid ""
+"**An opaque properties section was a mistake, and the least obvious "
+"one.** The first version carried what a URDF said under ``physics: {urdf:"
+" ...}``, keeping the source format's own structure so that an export "
+"could hand it straight back. It round-tripped perfectly and told PartCAD "
+"nothing: a mass was a mass only to the URDF exporter, and no other part "
+"of the system could read it, check it, or state one of its own. Copying "
+"each value into a named PartCAD property with a PartCAD unit is more code"
+" and a closed list to maintain, and it is what makes the property "
+"*PartCAD's* rather than a souvenir of where it came from. The rule that "
+"falls out of it - refuse URDF nothing maps, report PartCAD properties "
+"URDF cannot state - is what keeps the list honest, because the "
+"alternative to a loud failure is a quiet loss."
+msgstr ""
+"**Непрозрачный раздел свойств был ошибкой, причём наименее очевидной.** "
+"Первая версия несла то, что сказал URDF, под ``physics: {urdf: ...}``, "
+"сохраняя собственную структуру исходного формата, чтобы экспорт мог "
+"вернуть её как есть. Круговой обход был идеальным, а PartCAD это не "
+"говорило ничего: масса была массой только для экспортёра URDF, и никакая "
+"другая часть системы не могла её прочитать, проверить или указать "
+"собственную. Копирование каждого значения в именованное свойство PartCAD "
+"с единицей измерения PartCAD — это больше кода и закрытый список, который"
+" нужно поддерживать, и именно это делает свойство *принадлежащим "
+"PartCAD*, а не сувениром оттуда, откуда оно пришло. Вытекающее отсюда "
+"правило — отвергать URDF, которому ничего не соответствует, и сообщать о "
+"свойствах PartCAD, которые URDF не может выразить, — и держит список "
+"честным, потому что альтернатива громкому отказу — тихая потеря."
+
+#: ../../source/simulation.rst:274
+msgid ""
+"**The same went for the link's identity.** Recording which link a part "
+"came from, and which link that link hung off, looked like cheap "
+"insurance. It was two more things to keep consistent with the names and "
+"the connections that already said it, and it let the exporter take a "
+"shortcut that stopped working the moment the record was removed. "
+"Hierarchy that has to be preserved belongs in the *name*, where a slash "
+"already means containment; relations between two things belong in the "
+"connection between them."
+msgstr ""
+"**То же относилось и к идентичности звена.** Запись того, из какого звена"
+" пришла деталь и на каком звене висело то звено, выглядела дешёвой "
+"страховкой. На деле это были ещё две вещи, которые нужно держать "
+"согласованными с именами и соединениями, уже говорившими то же самое, и "
+"это позволяло экспортёру срезать угол, который перестал работать в тот "
+"момент, когда запись убрали. Иерархия, которую нужно сохранять, относится"
+" к *имени*, где косая черта уже означает вложенность; отношения между "
+"двумя вещами относятся к соединению между ними."
+
+#: ../../source/simulation.rst:281
+msgid ""
+"**A cache entry is keyed by geometry, and carried an identity it should "
+"not have.** Two parts that read the same mesh file hash the same, so the "
+"second one came back wearing the first one's name and label. Nothing had "
+"noticed, because nothing had keyed anything off those; the URDF exporter "
+"names its links from them. Restamping on the way out of the cache, "
+"exactly as the write path stamps on the way in, was the fix."
+msgstr ""
+"**Запись кэша ключуется по геометрии и несла идентичность, которой не "
+"должна была нести.** Две детали, читающие один и тот же файл сетки, дают "
+"один и тот же хеш, поэтому вторая возвращалась с именем и меткой первой. "
+"Никто этого не замечал, потому что ни от чего из этого ничто не зависело;"
+" а экспортёр URDF именно по ним называет свои звенья. Исправлением стала "
+"повторная простановка при выходе из кэша — ровно так же, как путь записи "
+"проставляет её при входе."
+
+#: ../../source/simulation.rst:287
+#, python-brace-format
+msgid ""
+"**Two long-standing gaps in the interface code surfaced.** The schema has"
+" always allowed ``ports: {name:}`` and ``implements: {iface:}`` with no "
+"value, and both crashed - nothing had written them before, because "
+"nothing had generated interfaces programmatically. Generating them found "
+"it at once."
+msgstr ""
+"**Всплыли два давних пробела в коде интерфейсов.** Схема всегда допускала"
+" ``ports: {name:}`` и ``implements: {iface:}`` без значения, и то и "
+"другое падало — потому что раньше их никто не писал, ведь интерфейсы "
+"никто программно не порождал. Их порождение обнаружило это сразу."
+
+#: ../../source/simulation.rst:292
+msgid ""
+"None of that was hard. The hard part is everything the geometry does not "
+"cover, which is the rest of this page."
+msgstr ""
+"Ничего из этого не было трудным. Трудное — это всё, чего геометрия не "
+"покрывает, и этому посвящена остальная часть страницы."
+
+#: ../../source/simulation.rst:298
+msgid "URDF joints as PartCAD interfaces"
+msgstr "Шарниры URDF как интерфейсы PartCAD"
+
+#: ../../source/simulation.rst:300
+msgid ""
+"This is the part worth dwelling on, because it is where the two models "
+"actually have to be reconciled rather than translated."
+msgstr ""
+"На этом стоит остановиться, потому что именно здесь две модели приходится"
+" действительно примирять, а не переводить."
+
+#: ../../source/simulation.rst:303
+msgid ""
+"A URDF joint relates two link *frames*: at the zero configuration, the "
+"child link's frame sits at the joint's ``origin`` in the parent link's "
+"frame, and the joint's ``axis`` says how it may move from there. PartCAD "
+"does not relate frames; it relates **ports**, and its rule is that two "
+"connected ports *face* each other - the connection composes the target's "
+"placement, the target port, a half turn, the freedom-of-movement offsets,"
+" and the inverse of the source port."
+msgstr ""
+"Шарнир URDF связывает два *фрейма* звеньев: в нулевой конфигурации фрейм "
+"дочернего звена находится в точке ``origin`` шарнира во фрейме "
+"родительского звена, а ``axis`` шарнира говорит, как он может оттуда "
+"двигаться. PartCAD связывает не фреймы, а **порты**, и его правило "
+"состоит в том, что два соединённых порта *смотрят* друг на друга: "
+"соединение составляет размещение цели, порт цели, полуоборот, смещения "
+"свободы перемещения и обратное преобразование исходного порта."
+
+#: ../../source/simulation.rst:310
+msgid "So one side has to carry the flip. The mapping is:"
+msgstr "Поэтому разворот должен нести одна из сторон. Соответствие таково:"
+
+#: ../../source/simulation.rst:316 ../../source/simulation.rst:659
+#: ../../source/simulation.rst:1104
+msgid "URDF"
+msgstr "URDF"
+
+#: ../../source/simulation.rst:317 ../../source/simulation.rst:657
+msgid "PartCAD"
+msgstr "PartCAD"
+
+#: ../../source/simulation.rst:318
+msgid "joint (parent side)"
+msgstr "шарнир (сторона родителя)"
+
+#: ../../source/simulation.rst:319
+msgid ""
+"a **socket** interface with one port at its origin, which the parent part"
+" implements at the joint origin, under an instance named after the joint"
+msgstr ""
+"интерфейс-**гнездо** с одним портом в начале его координат, который "
+"родительская деталь реализует в начале координат шарнира, под "
+"экземпляром, названным по имени шарнира"
+
+#: ../../source/simulation.rst:321
+msgid "joint (child side)"
+msgstr "шарнир (сторона потомка)"
+
+#: ../../source/simulation.rst:322
+msgid ""
+"a **plug** interface whose one port sits at the half turn, which the "
+"child part implements once, at its own origin"
+msgstr ""
+"интерфейс-**штекер**, единственный порт которого находится в положении "
+"полуоборота и который дочерняя деталь реализует один раз, в собственном "
+"начале координат"
+
+#: ../../source/simulation.rst:324
+msgid "the two are the same joint"
+msgstr "это один и тот же шарнир с двух сторон"
+
+#: ../../source/simulation.rst:325
+msgid "``mates:`` on the plug, naming the socket"
+msgstr "``mates:`` у штекера, называющий гнездо"
+
+#: ../../source/simulation.rst:326
+msgid "``axis``, ``limit`` lower/upper"
+msgstr "``axis``, ``limit`` lower/upper"
+
+#: ../../source/simulation.rst:327
+#, python-brace-format
+msgid ""
+"``motion: {axis, limits}``, in degrees or millimetres, plus an interface "
+"``parameter`` (``angle`` for a revolute joint, ``offset`` for a prismatic"
+" one) that makes it move"
+msgstr ""
+"``motion: {axis, limits}``, в градусах или миллиметрах, плюс "
+"``parameter`` интерфейса (``angle`` для вращательного шарнира, ``offset``"
+" для поступательного), который приводит его в движение"
+
+#: ../../source/simulation.rst:330
+msgid "``safety_controller``, ``mimic``"
+msgstr "``safety_controller``, ``mimic``"
+
+#: ../../source/simulation.rst:331
+#, python-brace-format
+msgid ""
+"``motion: {softLimits, mimic}`` - both bound the movement, so both are "
+"kinematics"
+msgstr ""
+"``motion: {softLimits, mimic}`` — оба ограничивают движение, поэтому оба "
+"относятся к кинематике"
+
+#: ../../source/simulation.rst:333
+msgid "``limit`` effort/velocity, ``dynamics``"
+msgstr "``limit`` effort/velocity, ``dynamics``"
+
+#: ../../source/simulation.rst:334
+#, python-brace-format
+msgid ""
+"``physics: {maxEffort, maxVelocity, damping, friction}`` - what the "
+"movement costs"
+msgstr ""
+"``physics: {maxEffort, maxVelocity, damping, friction}`` — то, во что "
+"обходится движение"
+
+#: ../../source/simulation.rst:336
+msgid "a joint's ``<gazebo>`` block"
+msgstr "блок ``<gazebo>`` шарнира"
+
+#: ../../source/simulation.rst:337
+#, python-brace-format
+msgid "``physics: {springStiffness, springReference, stopCfm, ...}``"
+msgstr "``physics: {springStiffness, springReference, stopCfm, ...}``"
+
+#: ../../source/simulation.rst:338
+msgid "``calibration``"
+msgstr "``calibration``"
+
+#: ../../source/simulation.rst:339
+msgid ""
+"nothing: a limit-switch reference used when a real robot is commissioned,"
+" which says nothing about the model. Counted and reported"
+msgstr ""
+"ничего: опорная точка концевого выключателя, используемая при вводе в "
+"строй настоящего робота, которая ничего не говорит о модели. "
+"Подсчитывается и отмечается в отчёте"
+
+#: ../../source/simulation.rst:341
+msgid "a link's attachment"
+msgstr "прикрепление звена"
+
+#: ../../source/simulation.rst:342
+#, python-brace-format
+msgid ""
+"``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: "
+"<joint>}``"
+msgstr ""
+"``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: "
+"<joint>}``"
+
+#: ../../source/simulation.rst:344
+msgid ""
+"All of this is stated in the *link* frame, which is not necessarily where"
+" a link's geometry sits: a link that is one shape placed at an "
+"``<origin>`` has its part's frame at that offset, and a link of several "
+"is a sub-assembly whose frame is the link's. So the conversion re-"
+"expresses each link in the link frame before writing its mesh - one term,"
+" recorded per link by the importer and applied in one place - and "
+"everything downstream can then assume the part's origin *is* the link's. "
+"Folding that term into the interface instances instead would have worked "
+"too, and would have spread it across every socket and plug in the file."
+msgstr ""
+"Всё это указывается во фрейме *звена*, а он не обязательно совпадает с "
+"местом, где находится геометрия звена: у звена, представляющего собой "
+"одну форму, размещённую по ``<origin>``, фрейм его детали находится в "
+"этом смещении, а звено из нескольких форм является подсборкой, фрейм "
+"которой и есть фрейм звена. Поэтому преобразование заново выражает каждое"
+" звено во фрейме звена, прежде чем записать его сетку, — одно слагаемое, "
+"записываемое импортёром для каждого звена и применяемое в одном месте, — "
+"и всё, что ниже по потоку, может затем считать, что начало координат "
+"детали *и есть* начало координат звена. Свернуть это слагаемое в "
+"экземпляры интерфейсов тоже сработало бы и размазало бы его по каждому "
+"гнезду и каждому штекеру в файле."
+
+#: ../../source/simulation.rst:353
+msgid ""
+"Putting the flip on the plug is what keeps the *socket* readable: the "
+"parent implements it at exactly the joint origin, which is a number a "
+"reader can check against the URDF. It costs one wrinkle, in the axis. The"
+" half turn ``T`` is a 180 degree rotation about ``(1, 1, 0)``, and a "
+"rotation conjugated by it is the same rotation about the mapped axis, "
+"``(x, y, z) -> (y, x, -z)``. So the parameter's ``dir`` is the joint axis"
+" under that map, while ``motion.axis`` keeps it as URDF stated it - which"
+" is also the socket port's own frame, since that port sits at the joint "
+"origin. The record stays readable; the executable half stays correct."
+msgstr ""
+"Размещение разворота на штекере — это то, что сохраняет читаемость "
+"*гнезда*: родитель реализует его ровно в начале координат шарнира, а это "
+"число читатель может сверить с URDF. Стоит это одной складки — в оси. "
+"Полуоборот ``T`` — это поворот на 180 градусов вокруг ``(1, 1, 0)``, а "
+"поворот, сопряжённый им, — это тот же поворот вокруг отображённой оси, "
+"``(x, y, z) -> (y, x, -z)``. Поэтому ``dir`` параметра — это ось шарнира "
+"под этим отображением, тогда как ``motion.axis`` сохраняет её такой, "
+"какой её указал URDF, — а это также и собственный фрейм порта гнезда, "
+"поскольку этот порт находится в начале координат шарнира. Запись остаётся"
+" читаемой; исполняемая половина остаётся правильной."
+
+#: ../../source/simulation.rst:363
+msgid ""
+"The units change at the boundary and only there. A URDF limit is radians "
+"for a revolute joint and metres for a prismatic one; what lands in "
+"``motion.limits`` is degrees and millimetres, because those are PartCAD's"
+" units and a property that keeps its source format's unit is a property "
+"nothing else can use. The reader converts once, and every consumer "
+"downstream - the generated parameter, the schema, a person reading the "
+"file - sees one convention."
+msgstr ""
+"Единицы меняются на границе и только там. Предел URDF задаётся в радианах"
+" для вращательного шарнира и в метрах для поступательного; в "
+"``motion.limits`` попадают градусы и миллиметры, потому что это единицы "
+"PartCAD, а свойство, сохраняющее единицу своего исходного формата, — это "
+"свойство, которым никто другой не может воспользоваться. Читатель "
+"преобразует один раз, и каждый потребитель ниже по потоку — порождённый "
+"параметр, схема, человек, читающий файл — видит одно соглашение."
+
+#: ../../source/simulation.rst:370
+msgid "Two things fall out of this that are worth more than the mapping itself."
+msgstr "Отсюда вытекают две вещи, которые стоят больше, чем само соответствие."
+
+#: ../../source/simulation.rst:372
+msgid ""
+"**Interfaces are reusable, instances are not.** What varies between two "
+"joints of the same kind is *where* they are, and that lives in the "
+"``implements:`` instance location, not in the interface. So every fixed "
+"joint in a robot is the same interface, and so is every revolute joint "
+"with the same axis and limits. The converter deduplicates on exactly that"
+" - the joint's type, axis, limits, dynamics and mimic - and a four-"
+"wheeled robot comes out with one interface pair for its wheels rather "
+"than four. There is deliberately no attempt to match against the existing"
+" library of interfaces: a URDF joint says nothing about the *hardware* "
+"that implements it, so claiming it is an ``m3-screw-6mm`` would be an "
+"invention. Custom interfaces per joint kind, reused where they agree, is "
+"the honest reading."
+msgstr ""
+"**Интерфейсы переиспользуемы, экземпляры — нет.** Между двумя шарнирами "
+"одного вида различается то, *где* они находятся, а это живёт в "
+"расположении экземпляра ``implements:``, а не в интерфейсе. Поэтому "
+"каждый фиксированный шарнир робота — это один и тот же интерфейс, и то же"
+" верно для каждого вращательного шарнира с той же осью и теми же "
+"пределами. Преобразователь дедуплицирует ровно по этому — по типу "
+"шарнира, оси, пределам, динамике и mimic, — и четырёхколёсный робот "
+"получается с одной парой интерфейсов на свои колёса, а не с четырьмя. "
+"Намеренно не делается никакой попытки сопоставить это с существующей "
+"библиотекой интерфейсов: шарнир URDF ничего не говорит о том *железе*, "
+"которое его реализует, поэтому заявление, что это ``m3-screw-6mm``, было "
+"бы выдумкой. Собственные интерфейсы на каждый вид шарнира, "
+"переиспользуемые там, где они совпадают, — честное прочтение."
+
+#: ../../source/simulation.rst:384
+#, python-brace-format
+msgid ""
+"**A pose becomes expressible.** The parameter the converter generates is "
+"not decoration: ``connect: {toParams: {angle: 90}}`` in the generated "
+"ASSY places the child exactly where the URDF joint at 90 degrees would, "
+"and everything below it follows. That is a static assembly gaining the "
+"first half of a kinematic one, using machinery PartCAD already had. What "
+"is still missing is the other half - a *named configuration* of the whole"
+" assembly rather than a value written into one connection - which is item"
+" 5 below."
+msgstr ""
+"**Поза становится выразимой.** Параметр, который порождает "
+"преобразователь, — не украшение: ``connect: {toParams: {angle: 90}}`` в "
+"порождённом ASSY размещает потомка ровно там, где его разместил бы шарнир"
+" URDF на 90 градусах, и всё под ним следует за этим. Это статическая "
+"сборка, получающая первую половину кинематической, с помощью механизма, "
+"который у PartCAD уже был. Чего по-прежнему не хватает, так это второй "
+"половины — *именованной конфигурации* всей сборки, а не значения, "
+"записанного в одно соединение, — и это пункт 5 ниже."
+
+#: ../../source/simulation.rst:393
+msgid "An engine's own scene format is its plugin's"
+msgstr "Собственный формат сцен движка принадлежит его плагину"
+
+#: ../../source/simulation.rst:395
+msgid ""
+"SDFormat and MJCF are read and written exactly the way URDF is -- one "
+"entry of an ``import:`` section for the reader, one of an ``export:`` "
+"section for the writer, the same sandbox, the same envelopes, the same "
+"``dropped`` counters -- but the entries are **not in this wheel**. Each "
+"belongs to the plugin package for its engine:"
+msgstr ""
+"SDFormat и MJCF читаются и пишутся ровно так же, как URDF: одна запись "
+"раздела ``import:`` для читателя, одна запись раздела ``export:`` для "
+"писателя, та же песочница, те же оболочки, те же счётчики ``dropped``, — "
+"но этих записей **нет в этом wheel-пакете**. Каждая принадлежит "
+"пакету-плагину своего движка:"
+
+#: ../../source/simulation.rst:405
+msgid "Engine"
+msgstr "Движок"
+
+#: ../../source/simulation.rst:406
+msgid "Package"
+msgstr "Пакет"
+
+#: ../../source/simulation.rst:407
+msgid "Scene type"
+msgstr "Тип сцены"
+
+#: ../../source/simulation.rst:408
+msgid "Export"
+msgstr "Экспорт"
+
+#: ../../source/simulation.rst:409
+msgid "Gazebo"
+msgstr "Gazebo"
+
+#: ../../source/simulation.rst:410
+msgid "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
+msgstr "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
+
+#: ../../source/simulation.rst:411
+msgid "``sim-gazebo:world``"
+msgstr "``sim-gazebo:world``"
+
+#: ../../source/simulation.rst:412
+msgid "``pc export -S -t sim-gazebo:world``"
+msgstr "``pc export -S -t sim-gazebo:world``"
+
+#: ../../source/simulation.rst:413
+msgid "MuJoCo"
+msgstr "MuJoCo"
+
+#: ../../source/simulation.rst:414
+msgid "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
+msgstr "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
+
+#: ../../source/simulation.rst:415
+msgid "``sim-mujoco:mjcf``"
+msgstr "``sim-mujoco:mjcf``"
+
+#: ../../source/simulation.rst:416
+msgid "``pc export -S -t sim-mujoco:mjcf``"
+msgstr "``pc export -S -t sim-mujoco:mjcf``"
+
+#: ../../source/simulation.rst:418
+msgid ""
+"That is the same rule the simulator itself follows, and for the same "
+"reason. Reading a format, writing it, launching the application on it and"
+" running a physics step with it are one body of knowledge about one "
+"engine; PartCAD ships the *concept* -- the ``import:`` and ``export:`` "
+"sections, the sandbox, the ``simulation:`` plugin protocol, the ``open:``"
+" entry -- and the engine's package supplies the knowledge. Each of those "
+"two packages declares all four for its own format, so importing it is "
+"what makes the type, the exporter, ``pc sim`` and ``pc open --with`` all "
+"work at once."
+msgstr ""
+"Это то же правило, которому следует и сам симулятор, и по той же причине."
+" Чтение формата, его запись, запуск приложения на нём и выполнение шага "
+"физики с ним — это один массив знаний об одном движке; PartCAD поставляет"
+" *концепцию* — разделы ``import:`` и ``export:``, песочницу, протокол "
+"плагинов ``simulation:``, запись ``open:``, — а пакет движка "
+"предоставляет сами знания. Каждый из этих двух пакетов объявляет все "
+"четыре вещи для собственного формата, поэтому его импорт разом заставляет"
+" работать и тип, и экспортёр, и ``pc sim``, и ``pc open --with``."
+
+#: ../../source/simulation.rst:427
+msgid "A package that uses one imports it and names the type through it:"
+msgstr "Пакет, который им пользуется, импортирует его и называет тип через него:"
+
+#: ../../source/simulation.rst:441
+msgid ""
+"A bare ``type: world`` resolves to nothing and says so. So does ``pc "
+"export -t mjcf``: nothing in ``//builtin/export`` writes either format, "
+"and the qualified spelling is what reaches the package that does."
+msgstr ""
+"Голое ``type: world`` не разрешается ни во что и сообщает об этом. То же "
+"верно для ``pc export -t mjcf``: ничто в ``//builtin/export`` не пишет ни"
+" один из этих форматов, а квалифицированная запись — это то, что доходит "
+"до пакета, который их пишет."
+
+#: ../../source/simulation.rst:445
+msgid ""
+"What the readers preserve and what they cannot is documented in those "
+"repositories, beside the code -- including the parts of MJCF that are "
+"easy to get wrong (angles are degrees by default, an orientation has five"
+" spellings, and a box's ``size`` is its half-extents), and the export "
+"parameters a simulation needs that a scene never states (``static``, "
+"``flatten``, ``light``, ``ground_plane``, ``sun``). The two readers are "
+"best-effort in exactly the way the URDF reader above is: what a static "
+"arrangement cannot hold is counted and reported rather than passed over, "
+"and ``pc info`` lists it."
+msgstr ""
+"Что сохраняют читатели и чего они не могут, описано в этих репозиториях, "
+"рядом с кодом, — включая те части MJCF, в которых легко ошибиться (углы "
+"по умолчанию в градусах, у ориентации пять способов записи, а ``size`` "
+"параллелепипеда — это его полуразмеры), и те параметры экспорта, которые "
+"нужны симуляции и которые сцена никогда не указывает (``static``, "
+"``flatten``, ``light``, ``ground_plane``, ``sun``). Оба читателя работают"
+" по мере возможного ровно так же, как описанный выше читатель URDF: то, "
+"чего не может вместить статическая расстановка, подсчитывается и "
+"отмечается в отчёте, а не пропускается, и ``pc info`` это перечисляет."
+
+#: ../../source/simulation.rst:454
+msgid ""
+"One consequence is worth stating because it is a change and not an "
+"oversight: ``pc open --with mujoco`` no longer converts a scene into "
+"MJCF. It opens a file that already is one -- the application's ``open:`` "
+"entry names the extensions its format is stored in -- and refuses "
+"anything else with the export that does work. An ad-hoc conversion has a "
+"throwaway package around the file and no dependency on either plugin, so "
+"it cannot run the exporter that would be needed; see :doc:`cli`."
+msgstr ""
+"Одно следствие стоит назвать, потому что это изменение, а не упущение: "
+"``pc open --with mujoco`` больше не преобразует сцену в MJCF. Он "
+"открывает файл, который уже им является, — запись ``open:`` приложения "
+"называет расширения, в которых хранится его формат, — и отвергает всё "
+"остальное, указывая на тот экспорт, который работает. У разового "
+"преобразования вокруг файла есть одноразовый пакет и нет зависимости ни "
+"от одного из плагинов, поэтому запустить нужный экспортёр оно не может; "
+"см. :doc:`cli`."
+
+#: ../../source/simulation.rst:463
+msgid "Every description is a Jinja2 template"
+msgstr "Каждое описание — это шаблон Jinja2"
+
+#: ../../source/simulation.rst:465
+msgid ""
+"An ASSY file has always been rendered as a `Jinja2 "
+"<https://jinja.palletsprojects.com/>`_ template before it is parsed, "
+"which is what lets one file describe a family of assemblies. A URDF, a "
+"``.world`` and an MJCF model are declared exactly the same way and were "
+"not, so a package could parameterize one kind of arrangement and not the "
+"other three. All four share one implementation now, and the parameters "
+"reach every one of them under the same names: ``param_<name>`` for each "
+"declared parameter, and ``name`` for the object's own."
+msgstr ""
+"Файл ASSY всегда разворачивался как шаблон `Jinja2 "
+"<https://jinja.palletsprojects.com/>`_ перед разбором, и именно это "
+"позволяет одному файлу описывать целое семейство сборок. URDF, ``.world``"
+" и модель MJCF объявляются ровно так же и так не разворачивались, поэтому"
+" пакет мог параметризовать один вид расстановки и не мог три остальных. "
+"Теперь у всех четырёх одна реализация, и параметры доходят до каждого из "
+"них под одинаковыми именами: ``param_<name>`` для каждого объявленного "
+"параметра и ``name`` для собственного имени объекта."
+
+#: ../../source/simulation.rst:488
+msgid ""
+"The rendered file is written under PartCAD's own state directory rather "
+"than beside the original -- rendering is derived data, and instantiating "
+"an object must not drop files into the user's source tree -- and the file"
+" is left exactly as it is when rendering changes nothing, which is the "
+"usual case. What the file *references* keeps resolving against the "
+"directory the package declared it in: each reader is handed that "
+"directory separately, which is what keeps a ``package://`` mesh, a "
+"``model://`` include and an ``<asset>`` file working in a template."
+msgstr ""
+"Развёрнутый файл записывается в собственный каталог состояния PartCAD, а "
+"не рядом с исходным — разворачивание даёт производные данные, и "
+"инстанцирование объекта не должно сыпать файлами в дерево исходного кода "
+"пользователя, — а когда разворачивание ничего не меняет, что является "
+"обычным случаем, файл остаётся ровно таким, какой он есть. То, на что "
+"файл *ссылается*, по-прежнему разрешается относительно того каталога, в "
+"котором его объявил пакет: этот каталог передаётся каждому читателю "
+"отдельно, и именно это позволяет сетке ``package://``, включению "
+"``model://`` и файлу ``<asset>`` работать внутри шаблона."
+
+#: ../../source/simulation.rst:498
+msgid "Running a simulation"
+msgstr "Запуск симуляции"
+
+#: ../../source/simulation.rst:500
+msgid ""
+"``simulate:`` is an optional section of a part or an assembly. Each entry"
+" in it is one simulation, and states four things:"
+msgstr ""
+"``simulate:`` — необязательный раздел детали или сборки. Каждая запись в "
+"нём — это одна симуляция, и указывает она четыре вещи:"
+
+#: ../../source/simulation.rst:503
+msgid "``scene:``"
+msgstr "``scene:``"
+
+#: ../../source/simulation.rst:504
+msgid ""
+"The scene the object is placed in, by full path. The object's own full "
+"path is assigned to that scene's ``subject`` parameter -- "
+"unconditionally, and whatever else the entry says -- which is what lets "
+"one scene serve every object that names it. Nothing special is declared "
+"for it: a simulation scene is an ordinary scene with an ordinary "
+"parameter, and a Jinja2 template is what places the subject."
+msgstr ""
+"Сцена, в которую помещается объект, по полному пути. Собственный полный "
+"путь объекта присваивается параметру ``subject`` этой сцены — безусловно "
+"и что бы ни говорила запись, — и именно это позволяет одной сцене "
+"обслуживать каждый объект, который её называет. Ничего особенного для "
+"этого не объявляется: сцена для симуляции — это обычная сцена с обычным "
+"параметром, а размещает субъект шаблон Jinja2."
+
+#: ../../source/simulation.rst:511
+msgid ""
+"The default is ``//builtin/scene:subject``, an empty world holding the "
+"subject and nothing else. A package that needs more -- a fixture to drop "
+"the part onto, a conveyor to push it along -- writes a scene of its own."
+msgstr ""
+"По умолчанию это ``//builtin/scene:subject`` — пустой мир, в котором нет "
+"ничего, кроме субъекта. Пакет, которому нужно больше — приспособление, на"
+" которое роняется деталь, конвейер, который её толкает, — пишет "
+"собственную сцену."
+
+#: ../../source/simulation.rst:515
+msgid "``offset:``"
+msgstr "``offset:``"
+
+#: ../../source/simulation.rst:516
+msgid ""
+"Where in that scene the object goes, in the scene's frame. It is stated "
+"here rather than in the scene because it is a fact about *this* object --"
+" where its origin sits relative to the floor it is meant to stand on -- "
+"and the scene is shared."
+msgstr ""
+"Куда в этой сцене попадает объект, во фрейме сцены. Это указывается "
+"здесь, а не в сцене, потому что это факт об *этом* объекте — где "
+"находится его начало координат относительно пола, на котором он должен "
+"стоять, — а сцена является общей."
+
+#: ../../source/simulation.rst:521
+msgid "``simulation:``"
+msgstr "``simulation:``"
+
+#: ../../source/simulation.rst:522
+msgid ""
+"The simulation plugin that runs it, by full path. There is no default: "
+"PartCAD implements no simulator, so a package imports one and says which."
+" `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is"
+" the MuJoCo one and `partcad-sim-gazebo <https://github.com/partcad"
+"/partcad-sim-gazebo>`_ the Gazebo one. Each also declares the reader, the"
+" writer and the ``open:`` entry for that engine's own scene format, "
+"because those are one piece of knowledge and the simulator is what "
+"decides what the file has to say."
+msgstr ""
+"Плагин симуляции, который её выполняет, по полному пути. Значения по "
+"умолчанию нет: PartCAD не реализует ни одного симулятора, поэтому пакет "
+"импортирует его и говорит, какой именно. `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_ — плагин для MuJoCo, а "
+"`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ — "
+"для Gazebo. Каждый из них объявляет также читателя, писателя и запись "
+"``open:`` для собственного формата сцен соответствующего движка, потому "
+"что это одно знание, а что именно должен говорить файл, решает симулятор."
+
+#: ../../source/simulation.rst:531
+msgid "``validation:``"
+msgstr "``validation:``"
+
+#: ../../source/simulation.rst:532
+msgid ""
+"A Python expression over ``before`` and ``after`` that says whether what "
+"happened is what was supposed to happen."
+msgstr ""
+"Выражение на Python над ``before`` и ``after``, которое говорит, является"
+" ли произошедшее тем, что должно было произойти."
+
+#: ../../source/simulation.rst:556
+msgid ""
+"``pc sim`` runs them -- one object, or everything a package declares, or "
+"everything a package tree declares with ``-P <package>...`` -- and exits "
+"non-zero when a validation does not hold. ``--json`` prints the whole of "
+"what each plugin reported. ``examples/feature_simulate`` has three "
+"assemblies of two blocks each: two identical but for 18 millimetres, and "
+"two identical but for the material. All three simulations pass, and no "
+"two of them end the same way."
+msgstr ""
+"``pc sim`` их запускает — для одного объекта, для всего, что объявляет "
+"пакет, или для всего, что объявляет дерево пакетов, с ``-P <package>...``"
+" — и завершается с ненулевым кодом, когда проверка не выполняется. "
+"``--json`` выводит всё, что сообщил каждый плагин. В "
+"``examples/feature_simulate`` есть три сборки по два блока в каждой: две "
+"одинаковы с точностью до 18 миллиметров, а две — с точностью до "
+"материала. Все три симуляции проходят, и ни одна пара из них не "
+"заканчивается одинаково."
+
+#: ../../source/simulation.rst:564
+msgid "Simulation plugins"
+msgstr "Плагины симуляции"
+
+#: ../../source/simulation.rst:566
+msgid ""
+"A simulation plugin is the third kind of implementation a package can "
+"declare, beside the export and render ones, and it is declared in exactly"
+" the same form: a ``path`` to a script, the sandbox that script needs, "
+"and its parameters. What differs is what it does with them. The contract "
+"is deliberately narrow:"
+msgstr ""
+"Плагин симуляции — это третий вид реализации, который может объявить "
+"пакет, рядом с реализациями экспорта и отрисовки, и объявляется он в "
+"точности в такой же форме: ``path`` к скрипту, песочница, которая этому "
+"скрипту нужна, и его параметры. Различается то, что он с ними делает. "
+"Контракт намеренно узок:"
+
+#: ../../source/simulation.rst:571
+msgid ""
+"**a scene with the subject in it goes in, and JSON carrying** ``before`` "
+"**and** ``after`` **comes out.**"
+msgstr ""
+"**на вход подаётся сцена с субъектом в ней, а на выходе получается JSON, несущий** ``before`` **и** ``after``."
+
+#: ../../source/simulation.rst:587
+msgid ""
+"The scene arrives as a **file**, in the format ``format:`` names, because"
+" a simulator reads its own model format and PartCAD already knows how to "
+"write several; ``formatOptions:`` is how that export is asked for, and is"
+" where a physics plugin says that it wants every body free to move. That "
+"also keeps a plugin free of OCP: it is handed a path."
+msgstr ""
+"Сцена приходит в виде **файла**, в том формате, который называет "
+"``format:``, потому что симулятор читает собственный формат моделей, а "
+"PartCAD уже умеет записывать несколько; ``formatOptions:`` — это то, чем "
+"запрашивается такой экспорт, и именно там плагин физики говорит, что "
+"хочет, чтобы каждое тело было свободно двигаться. Это же избавляет плагин"
+" от OCP: ему передаётся путь."
+
+#: ../../source/simulation.rst:593
+msgid ""
+"**PartCAD implements none of these**, and that is the point of the "
+"section. A simulator is somebody's program with a release cycle of its "
+"own; shipping one inside the wheel would make every PartCAD release a "
+"statement about which version of it you get, and would pin a large "
+"dependency on every user who never simulates anything. So PartCAD ships "
+"the concept -- the section, the sandbox wrapper, the runner -- and a "
+"package supplies the physics, the same way "
+"``//pub/feature/render/draftwright`` supplies technical drawings."
+msgstr ""
+"**PartCAD не реализует ни одного из них**, и в этом весь смысл раздела. "
+"Симулятор — это чья-то программа со своим циклом выпусков; поставка "
+"одного из них внутри wheel-пакета превратила бы каждый релиз PartCAD в "
+"утверждение о том, какую его версию вы получаете, и навесила бы крупную "
+"зависимость на каждого пользователя, который никогда ничего не "
+"симулирует. Поэтому PartCAD поставляет концепцию — раздел, обёртку "
+"песочницы, исполнитель, — а физику предоставляет пакет, точно так же как "
+"``//pub/feature/render/draftwright`` предоставляет технические чертежи."
+
+#: ../../source/simulation.rst:601
+msgid ""
+"``format:`` resolves in the plugin's own package first, which is what "
+"lets a plugin name the format it implements itself. An engine's scene "
+"format is exactly that: MJCF is MuJoCo's and SDFormat is Gazebo's, so "
+"each plugin declares the ``export:`` that writes it beside the "
+"``simulation:`` that reads it."
+msgstr ""
+"``format:`` разрешается сначала в собственном пакете плагина, и именно "
+"это позволяет плагину назвать тот формат, который он реализует сам. "
+"Формат сцен движка — ровно такой случай: MJCF принадлежит MuJoCo, а "
+"SDFormat — Gazebo, поэтому каждый плагин объявляет пишущий его "
+"``export:`` рядом с читающим его ``simulation:``."
+
+#: ../../source/simulation.rst:606
+msgid ""
+"There are two, and they are deliberately alike: `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_ and `partcad-sim-gazebo"
+" <https://github.com/partcad/partcad-sim-gazebo>`_. Each declares four "
+"things about one format -- ``import:`` to read it, ``export:`` to write "
+"it, ``simulation:`` to run it and ``open:`` to look at it -- so a world "
+"somebody else wrote is a scene you can place parts in, and a scene you "
+"built out of parts is a model the engine can run."
+msgstr ""
+"Их два, и они намеренно похожи: `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_ и `partcad-sim-gazebo "
+"<https://github.com/partcad/partcad-sim-gazebo>`_. Каждый объявляет "
+"четыре вещи об одном формате — ``import:``, чтобы его читать, "
+"``export:``, чтобы его писать, ``simulation:``, чтобы его запускать, и "
+"``open:``, чтобы на него посмотреть, — так что мир, написанный кем-то "
+"другим, становится сценой, в которую можно помещать детали, а сцена, "
+"которую вы построили из деталей, становится моделью, которую может "
+"запустить движок."
+
+#: ../../source/simulation.rst:614
+msgid ""
+"Where the simulator comes from is the one way they differ, and it is not "
+"a difference in the section. MuJoCo is a wheel, so the plugin lists it "
+"under ``pythonRequirements`` and a machine with no MuJoCo simulates just "
+"the same. Gazebo is not a wheel and there is none, so that plugin names "
+"an image under ``dockerImage`` and looks for a local ``gz`` first -- the "
+"same two places ``pc open --with gazebo`` looks."
+msgstr ""
+"Единственное, чем они различаются, — откуда берётся симулятор, и это "
+"различие не в самом разделе. MuJoCo — это wheel-пакет, поэтому плагин "
+"перечисляет его в ``pythonRequirements``, и машина без MuJoCo симулирует "
+"точно так же. Gazebo не является wheel-пакетом, и такого пакета нет, "
+"поэтому этот плагин называет образ в ``dockerImage`` и сначала ищет "
+"локальный ``gz`` — те же два места, в которые смотрит ``pc open --with "
+"gazebo``."
+
+#: ../../source/simulation.rst:621
+msgid ""
+"``before`` and ``after`` are all PartCAD knows about a result. What is "
+"*inside* them, and anything else beside them, is the plugin's own "
+"vocabulary -- the MuJoCo plugin states where every body ended up, in "
+"millimetres; another might state a temperature field -- and PartCAD "
+"neither reads nor validates it. It carries the two objects to the "
+"``validation:`` expression the package wrote and reports what that says. "
+"Every judgement in that sentence belongs to the package."
+msgstr ""
+"``before`` и ``after`` — это всё, что PartCAD знает о результате. То, что"
+" *внутри* них, и всё остальное рядом с ними относится к собственному "
+"словарю плагина — плагин MuJoCo указывает, где оказалось каждое тело, в "
+"миллиметрах; другой мог бы указывать температурное поле, — и PartCAD его "
+"не читает и не проверяет. Он доносит эти два объекта до выражения "
+"``validation:``, которое написал пакет, и сообщает то, что оно скажет. "
+"Каждое суждение в этой фразе принадлежит пакету."
+
+#: ../../source/simulation.rst:628
+msgid ""
+"The MuJoCo plugin loads the MJCF, steps it for ``duration`` seconds of "
+"simulated time, and reports each body's position and orientation before "
+"and after. Running it needs no MuJoCo on the machine: the plugin runs in "
+"a PartCAD sandbox that installs one."
+msgstr ""
+"Плагин MuJoCo загружает MJCF, прогоняет его ``duration`` секунд "
+"модельного времени и сообщает положение и ориентацию каждого тела до и "
+"после. Для его запуска MuJoCo на машине не нужен: плагин работает в "
+"песочнице PartCAD, которая его устанавливает."
+
+#: ../../source/simulation.rst:634
+msgid "Friction, and why it is a material property"
+msgstr "Трение и почему это свойство материала"
+
+#: ../../source/simulation.rst:636
+msgid ""
+"Whether a stack of blocks stands up is not a property of its geometry. "
+"Two 20 mm cubes squarely stacked, ten seconds under gravity, nothing else"
+" changed:"
+msgstr ""
+"Устоит ли стопка блоков — не свойство её геометрии. Два куба 20 мм, "
+"аккуратно поставленные друг на друга, десять секунд под действием силы "
+"тяжести, больше ничего не меняется:"
+
+#: ../../source/simulation.rst:640
+msgid "sliding friction"
+msgstr "трение скольжения"
+
+#: ../../source/simulation.rst:640
+msgid "what happens"
+msgstr "что происходит"
+
+#: ../../source/simulation.rst:642
+msgid "0.04"
+msgstr "0.04"
+
+#: ../../source/simulation.rst:642
+msgid "the top block slides off -- 35 mm, and it ends up on the floor"
+msgstr "верхний блок соскальзывает — на 35 мм — и оказывается на полу"
+
+#: ../../source/simulation.rst:643
+msgid "0.4"
+msgstr "0.4"
+
+#: ../../source/simulation.rst:643
+msgid "the same"
+msgstr "то же самое"
+
+#: ../../source/simulation.rst:644
+msgid "0.5"
+msgstr "0.5"
+
+#: ../../source/simulation.rst:644
+msgid "it stays -- 3 mm of settling"
+msgstr "остаётся на месте — осадка 3 мм"
+
+#: ../../source/simulation.rst:645
+msgid "1.05"
+msgstr "1.05"
+
+#: ../../source/simulation.rst:645
+msgid "it stays -- 1 mm"
+msgstr "остаётся на месте — 1 мм"
+
+#: ../../source/simulation.rst:648
+msgid ""
+"So the answer to \"will this stand?\" is a fact about the *material*, and"
+" ``materials:`` is where a package already says what its parts are made "
+"of. A material states ``mu`` beside its ``density``; a part that names "
+"that material gets that coefficient; and the coefficient is written into "
+"whichever format the object is exported to:"
+msgstr ""
+"Поэтому ответ на вопрос «устоит ли это?» — факт о *материале*, а "
+"``materials:`` — это то место, где пакет уже говорит, из чего сделаны его"
+" детали. Материал указывает ``mu`` рядом со своей ``density``; деталь, "
+"которая называет этот материал, получает этот коэффициент; и этот "
+"коэффициент записывается в тот формат, в который экспортируется объект:"
+
+#: ../../source/simulation.rst:655
+msgid "format"
+msgstr "формат"
+
+#: ../../source/simulation.rst:655
+msgid "where it is written"
+msgstr "куда он записывается"
+
+#: ../../source/simulation.rst:657
+msgid "the ``friction`` property of a shape"
+msgstr "свойство ``friction`` формы"
+
+#: ../../source/simulation.rst:658
+msgid "SDFormat (``.world``)"
+msgstr "SDFormat (``.world``)"
+
+#: ../../source/simulation.rst:658
+msgid "``<collision><surface><friction><ode><mu>``"
+msgstr "``<collision><surface><friction><ode><mu>``"
+
+#: ../../source/simulation.rst:659
+msgid "``<gazebo reference=\"...\"><mu1>``"
+msgstr "``<gazebo reference=\"...\"><mu1>``"
+
+#: ../../source/simulation.rst:660 ../../source/simulation.rst:1110
+msgid "MJCF"
+msgstr "MJCF"
+
+#: ../../source/simulation.rst:660
+msgid "the first component of a geom's ``friction``"
+msgstr "первая компонента параметра ``friction`` у geom"
+
+#: ../../source/simulation.rst:663
+msgid ""
+"All four are the same dimensionless number, so the conversion between "
+"them is the identity -- which is the whole reason it is worth carrying, "
+"and why a material states one coefficient rather than one per format."
+msgstr ""
+"Все четыре — одно и то же безразмерное число, поэтому преобразование "
+"между ними тождественно, и именно ради этого его и стоит нести, и именно "
+"поэтому материал указывает один коэффициент, а не по одному на формат."
+
+#: ../../source/simulation.rst:667
+msgid ""
+"``friction2`` -- the coefficient in the *second* friction direction, "
+"which SDFormat and URDF both spell ``mu2`` -- travels between those two "
+"unchanged. MJCF has no second direction at all: its other two "
+"``friction`` components are a torsional and a rolling coefficient, which "
+"are different quantities. So a ``friction2`` is reported as one MJCF "
+"cannot state rather than written into a slot that means something else, "
+"and torsion and roll on the way in are counted as dropped rather than "
+"turned into a PartCAD property that does not exist. Both are the same "
+"rule the URDF and SDFormat readers already follow."
+msgstr ""
+"``friction2`` — коэффициент во *втором* направлении трения, который и "
+"SDFormat, и URDF записывают как ``mu2``, — переходит между этими двумя "
+"без изменений. У MJCF второго направления нет вовсе: две другие его "
+"компоненты ``friction`` — это коэффициенты трения верчения и качения, а "
+"это другие величины. Поэтому о ``friction2`` сообщается как о том, чего "
+"MJCF выразить не может, а не записывается в ячейку, означающую что-то "
+"другое, а трение верчения и качения на входе считаются отброшенными, а не"
+" превращаются в свойство PartCAD, которого не существует. И то и другое —"
+" то же правило, которому уже следуют читатели URDF и SDFormat."
+
+#: ../../source/simulation.rst:676
+msgid ""
+"Two things are deliberately not done here. A material's **density** is "
+"not wired in the same way: it already has a home (``Material.mass()``), "
+"and making every part that names a material weigh what that material "
+"weighs changes the ``<inertial>`` of every existing export -- a real "
+"improvement, and a change of its own. And PartCAD writes each *body's* "
+"coefficient and says nothing about how a simulator combines the two sides"
+" of a contact, because they do not agree about it: that is the "
+"simulator's model, not the part's."
+msgstr ""
+"Две вещи здесь намеренно не делаются. **Плотность** материала не "
+"подключена тем же образом: у неё уже есть своё место "
+"(``Material.mass()``), а если заставить каждую деталь, называющую "
+"материал, весить столько, сколько весит этот материал, изменится "
+"``<inertial>`` в каждом существующем экспорте — это настоящее улучшение и"
+" отдельное изменение. И PartCAD записывает коэффициент каждого *тела* и "
+"ничего не говорит о том, как симулятор комбинирует две стороны контакта, "
+"потому что в этом симуляторы не сходятся: это модель симулятора, а не "
+"детали."
+
+#: ../../source/simulation.rst:684
+msgid ""
+"A part that states a ``friction`` of its own keeps it -- a measured part "
+"beats the substance it is made of -- and a part that states neither gets "
+"whatever the simulator defaults to, which is a number nobody chose."
+msgstr ""
+"Деталь, указывающая собственное ``friction``, его сохраняет — измеренная "
+"деталь важнее того вещества, из которого она сделана, — а деталь, не "
+"указывающая ни того ни другого, получает то значение, которое у "
+"симулятора стоит по умолчанию, то есть число, которого никто не выбирал."
+
+#: ../../source/simulation.rst:689
+msgid "Opening a scene in a simulator"
+msgstr "Открытие сцены в симуляторе"
+
+#: ../../source/simulation.rst:691
+msgid ""
+"``pc open --with gazebo`` hands a ``.world`` file to Gazebo, and ``pc "
+"open --with mujoco`` hands an MJCF model to MuJoCo. Both open a window on"
+" the machine the command was run on, never through the daemon -- see "
+"``partcad_client.external`` for why."
+msgstr ""
+"``pc open --with gazebo`` передаёт Gazebo файл ``.world``, а ``pc open "
+"--with mujoco`` передаёт MuJoCo модель MJCF. Оба открывают окно на той "
+"машине, где была запущена команда, и никогда через демон — о причинах см."
+" ``partcad_client.external``."
+
+#: ../../source/simulation.rst:696
+msgid ""
+"MuJoCo reads MJCF and no other model format, so a Gazebo world it is "
+"pointed at is not a slow way of opening a scene, it is a file it cannot "
+"read. PartCAD writes it out as MJCF first. That conversion is the one "
+"thing here that does cross the wire, for the reason converting a solid "
+"into a mesh for Blender does: it drives a CAD wrapper, whose runtime "
+"lives in the daemon's environment. An ASSY scene is refused rather than "
+"converted -- it is nothing but references to the parts of a package, and "
+"an ad-hoc conversion has no package to resolve them against."
+msgstr ""
+"MuJoCo читает MJCF и никакой другой формат моделей, поэтому мир Gazebo, "
+"на который ему указали, — это не медленный способ открыть сцену, а файл, "
+"который он не может прочитать. PartCAD сначала выписывает его как MJCF. "
+"Это преобразование — единственное здесь, что действительно уходит по "
+"сети, по той же причине, что и преобразование тела в сетку для Blender: "
+"оно запускает обёртку CAD, среда выполнения которой живёт в окружении "
+"демона. Сцена ASSY отвергается, а не преобразуется: это одни только "
+"ссылки на детали пакета, а у разового преобразования нет пакета, "
+"относительно которого их можно было бы разрешить."
+
+#: ../../source/simulation.rst:707
+msgid "What a physical simulation actually needs"
+msgstr "Что на самом деле нужно физической симуляции"
+
+#: ../../source/simulation.rst:709
+msgid ""
+"URDF is the smaller half of the story. Gazebo does not simulate URDF: it "
+"converts it to `SDF <http://sdformat.org/>`_ on load, and SDF is what "
+"expresses a simulatable world. MuJoCo's MJCF and Isaac Sim's USD physics "
+"schemas differ in spelling but ask for the same information. Taking the "
+"union of them, a simulation needs the following, and PartCAD today has "
+"none of it."
+msgstr ""
+"URDF — меньшая половина истории. Gazebo не симулирует URDF: при загрузке "
+"он преобразует его в `SDF <http://sdformat.org/>`_, и именно SDF выражает"
+" симулируемый мир. MJCF у MuJoCo и схемы физики USD у Isaac Sim "
+"различаются записью, но запрашивают ту же информацию. Если взять их "
+"объединение, симуляции нужно следующее, и ничего из этого у PartCAD "
+"сегодня нет."
+
+#: ../../source/simulation.rst:716
+msgid "Mass properties"
+msgstr "Массово-инерционные характеристики"
+
+#: ../../source/simulation.rst:718
+msgid ""
+"Mass, centre of mass, and the inertia tensor about the centre of mass, in"
+" a stated frame. URDF requires them per link and defaults them to zero, "
+"which makes a model load and then behave nonsensically - a zero-mass link"
+" is the single most common defect in published URDFs."
+msgstr ""
+"Масса, центр масс и тензор инерции относительно центра масс, в указанном "
+"фрейме. URDF требует их для каждого звена и по умолчанию обнуляет, из-за "
+"чего модель загружается, а затем ведёт себя бессмысленно: звено с нулевой"
+" массой — самый распространённый дефект опубликованных URDF."
+
+#: ../../source/simulation.rst:723
+msgid ""
+"These are *derivable* from a solid plus a density, which is exactly what "
+"the exporter does today. What is missing is the density, and behind it "
+"the notion of what a part is made of."
+msgstr ""
+"Всё это *выводимо* из тела и плотности, что и делает сегодня экспортёр. "
+"Не хватает именно плотности, а за ней — понятия того, из чего сделана "
+"деталь."
+
+#: ../../source/simulation.rst:728
+msgid "Collision geometry"
+msgstr "Геометрия столкновений"
+
+#: ../../source/simulation.rst:730
+msgid ""
+"Simulators separate the shape that is drawn from the shape that collides,"
+" because contact resolution against a hundred-thousand-triangle visual "
+"mesh is both slow and numerically ill-behaved. The usual answers are a "
+"primitive (box/cylinder/sphere/capsule), a convex hull, or a convex "
+"decomposition (V-HACD and friends). MuJoCo goes further and *only* "
+"collides convex shapes, silently taking the hull of anything else."
+msgstr ""
+"Симуляторы отделяют ту форму, которая рисуется, от той, которая "
+"сталкивается, потому что разрешение контакта по визуальной сетке из сотни"
+" тысяч треугольников и медленно, и численно неустойчиво. Обычные ответы —"
+" примитив (параллелепипед/цилиндр/сфера/капсула), выпуклая оболочка или "
+"выпуклая декомпозиция (V-HACD и ему подобные). MuJoCo идёт дальше и "
+"сталкивает *только* выпуклые формы, молча беря оболочку от всего "
+"остального."
+
+#: ../../source/simulation.rst:737
+msgid ""
+"PartCAD has one shape per part. A part has no way to say \"collide me as "
+"this simpler thing\"."
+msgstr ""
+"У PartCAD одна форма на деталь. У детали нет способа сказать «сталкивай "
+"меня как вот эту упрощённую вещь»."
+
+#: ../../source/simulation.rst:741
+msgid "Contact and surface properties"
+msgstr "Свойства контакта и поверхности"
+
+#: ../../source/simulation.rst:743
+msgid ""
+"Friction (isotropic and anisotropic - SDF's ``mu``/``mu2`` with a "
+"direction ``fdir1``, plus torsional friction), restitution, contact "
+"stiffness and damping, slip compliance, and the solver knobs that go with"
+" them (``kp``, ``kd``, ``min_depth``, ``max_vel``, ``soft_cfm``, "
+"``soft_erp``). These are properties of a surface pairing, approximated "
+"per-body by every engine in use."
+msgstr ""
+"Трение (изотропное и анизотропное — ``mu``/``mu2`` в SDF с направлением "
+"``fdir1``, плюс трение верчения), восстановление, жёсткость и "
+"демпфирование контакта, податливость проскальзывания и сопутствующие им "
+"ручки решателя (``kp``, ``kd``, ``min_depth``, ``max_vel``, ``soft_cfm``,"
+" ``soft_erp``). Это свойства пары поверхностей, которые каждый "
+"используемый движок приближает отдельно для каждого тела."
+
+#: ../../source/simulation.rst:750
+msgid "Kinematics"
+msgstr "Кинематика"
+
+#: ../../source/simulation.rst:752
+msgid ""
+"The joint: its type (fixed, revolute, continuous, prismatic, ball, "
+"planar, floating, screw, universal), its axis, the frames on the two "
+"bodies it relates, its position/velocity/effort limits, its dynamics "
+"(damping, Coulomb friction, spring stiffness and reference), and "
+"relations between joints (``mimic``, gear ratios)."
+msgstr ""
+"Шарнир: его тип (фиксированный, вращательный, непрерывный, "
+"поступательный, шаровой, плоский, свободный, винтовой, карданный), его "
+"ось, фреймы на двух связываемых им телах, его пределы по положению, "
+"скорости и усилию, его динамика (демпфирование, кулоново трение, "
+"жёсткость и опорная точка пружины) и связи между шарнирами (``mimic``, "
+"передаточные отношения)."
+
+#: ../../source/simulation.rst:758
+msgid ""
+"URDF is restricted to a *tree*: it cannot express a closed kinematic "
+"loop, which is why four-bar linkages and parallel manipulators are "
+"written in SDF or with an explicit loop-closing constraint. SDF can."
+msgstr ""
+"URDF ограничен *деревом*: он не может выразить замкнутый кинематический "
+"контур, из-за чего четырёхзвенники и параллельные манипуляторы записывают"
+" в SDF или с явной связью, замыкающей контур. SDF это может."
+
+#: ../../source/simulation.rst:763
+msgid "Actuation and control"
+msgstr "Привод и управление"
+
+#: ../../source/simulation.rst:765
+msgid ""
+"Which joints are driven, by what, through which reduction, and what "
+"interfaces a controller sees. ROS 1 spelled this ``<transmission>``; ROS "
+"2 spells it ``<ros2_control>`` with hardware components, command "
+"interfaces and state interfaces. Simulators additionally want actuator "
+"limits and often a motor model."
+msgstr ""
+"Какие шарниры приводятся в движение, чем, через какой редуктор и какие "
+"интерфейсы видит контроллер. В ROS 1 это записывалось как "
+"``<transmission>``; в ROS 2 это ``<ros2_control>`` с аппаратными "
+"компонентами, командными интерфейсами и интерфейсами состояния. "
+"Симуляторам дополнительно нужны пределы приводов и зачастую модель "
+"двигателя."
+
+#: ../../source/simulation.rst:772
+msgid "Sensors"
+msgstr "Датчики"
+
+#: ../../source/simulation.rst:774
+msgid ""
+"Cameras (with intrinsics, resolution, clipping, distortion), depth "
+"cameras, lidars (with ray patterns and ranges), IMUs, contact sensors, "
+"force-torque sensors - each attached to a *frame*, each with an update "
+"rate and a noise model. URDF has no sensor element at all; they arrive "
+"through ``<gazebo>`` extension blocks, which is the clearest evidence "
+"that URDF is not a simulation format so much as a kinematics format with "
+"a simulation format bolted on."
+msgstr ""
+"Камеры (с внутренними параметрами, разрешением, плоскостями отсечения, "
+"дисторсией), камеры глубины, лидары (с рисунком лучей и дальностями), "
+"IMU, датчики контакта, датчики силы и момента — каждый прикреплён к "
+"*фрейму*, у каждого есть частота обновления и модель шума. В URDF "
+"элемента датчика нет вообще; они приходят через блоки расширения "
+"``<gazebo>``, а это яснее всего говорит о том, что URDF — не столько "
+"формат для симуляции, сколько формат кинематики с прикрученным к нему "
+"форматом для симуляции."
+
+#: ../../source/simulation.rst:782
+msgid "Appearance"
+msgstr "Внешний вид"
+
+#: ../../source/simulation.rst:784
+msgid ""
+"Colors and materials matter to simulation once a camera is in the loop: a"
+" perception stack trained in simulation is sensitive to albedo, "
+"roughness, metalness, normal maps and transparency. SDF and USD both "
+"carry a PBR material description; URDF carries an RGBA color and a "
+"texture filename."
+msgstr ""
+"Цвета и материалы важны для симуляции, как только в контуре появляется "
+"камера: стек восприятия, обученный в симуляции, чувствителен к альбедо, "
+"шероховатости, металличности, картам нормалей и прозрачности. И SDF, и "
+"USD несут описание PBR-материала; URDF несёт цвет RGBA и имя файла "
+"текстуры."
+
+#: ../../source/simulation.rst:790
+msgid "The world"
+msgstr "Мир"
+
+#: ../../source/simulation.rst:792
+msgid ""
+"Gravity, the ground, lighting, the initial pose of every model, wind, "
+"atmosphere, and the physics engine's own parameters (step size, solver "
+"type and iteration count, contact parameters). This is SDF's ``<world>``,"
+" and it is exactly the \"scenes\" PartCAD has always intended to have."
+msgstr ""
+"Сила тяжести, земля, освещение, начальная поза каждой модели, ветер, "
+"атмосфера и собственные параметры физического движка (шаг, тип решателя и"
+" число итераций, параметры контакта). Это ``<world>`` в SDF, и это ровно "
+"те «сцены», которые PartCAD всегда и собирался иметь."
+
+#: ../../source/simulation.rst:798
+msgid "Frames"
+msgstr "Фреймы"
+
+#: ../../source/simulation.rst:800
+msgid ""
+"Everything above hangs off named coordinate frames: the link frame, the "
+"joint frame, a tool centre point, a sensor mount, a grasp pose. SDF has "
+"explicit ``<frame>`` elements and poses stated ``relative_to`` them. "
+"PartCAD has locations, but no named frames to state them against."
+msgstr ""
+"Всё перечисленное выше висит на именованных системах координат: фрейм "
+"звена, фрейм шарнира, центр инструмента, место крепления датчика, поза "
+"захвата. В SDF есть явные элементы ``<frame>`` и позы, указываемые "
+"``relative_to`` них. У PartCAD есть расположения, но нет именованных "
+"фреймов, относительно которых их можно было бы указывать."
+
+#: ../../source/simulation.rst:807
+msgid "Proposal"
+msgstr "Предложение"
+
+#: ../../source/simulation.rst:810
+msgid "Principles"
+msgstr "Принципы"
+
+#: ../../source/simulation.rst:812
+msgid ""
+"**Derive what can be derived; store only what cannot.** PartCAD's "
+"advantage over a hand-written URDF is that it holds the actual geometry. "
+"Mass, centre of mass and inertia should be computed from the solid and a "
+"material, not typed in - and a typed-in value should be an explicit "
+"override that says why it exists (a measurement, a vendor datasheet, a "
+"stand-in for content PartCAD does not model)."
+msgstr ""
+"**Выводите то, что можно вывести; храните только то, что нельзя.** "
+"Преимущество PartCAD перед написанным вручную URDF в том, что он держит "
+"саму геометрию. Масса, центр масс и инерция должны вычисляться из тела и "
+"материала, а не вводиться вручную, — а введённое вручную значение должно "
+"быть явным переопределением, в котором сказано, зачем оно существует "
+"(измерение, техническое описание поставщика, подмена для содержимого, "
+"которое PartCAD не моделирует)."
+
+#: ../../source/simulation.rst:818
+msgid ""
+"**Keep the CAD the source of truth.** Simulation artifacts - tessellated "
+"meshes, convex hulls, computed inertia - are derived data. They belong in"
+" the shape cache, content-hashed like every other derived shape, so that "
+"changing the CAD invalidates them. This is what the digital thread means "
+"here."
+msgstr ""
+"**Оставляйте CAD источником истины.** Артефакты симуляции — "
+"триангулированные сетки, выпуклые оболочки, вычисленная инерция — "
+"являются производными данными. Им место в кэше форм, с хешированием по "
+"содержимому, как у любой другой производной формы, чтобы изменение CAD "
+"делало их недействительными. Именно это здесь и означает цифровая нить."
+
+#: ../../source/simulation.rst:823
+msgid ""
+"**Model the concept, not the format.** ``mu``/``mu2`` is ODE's spelling "
+"of friction. PartCAD should store friction and let each exporter spell "
+"it. The formats disagree on almost everything except what they are trying"
+" to describe."
+msgstr ""
+"**Моделируйте понятие, а не формат.** ``mu``/``mu2`` — это то, как трение"
+" записывает ODE. PartCAD должен хранить трение и позволять каждому "
+"экспортёру записывать его по-своему. Форматы расходятся почти во всём, "
+"кроме того, что они пытаются описать."
+
+#: ../../source/simulation.rst:827
+msgid ""
+"**Lose loudly, never quietly.** The tempting version of this principle is"
+" \"lose nothing\": carry whatever PartCAD does not model as opaque, "
+"format-tagged passthrough so that a round trip is lossless long before it"
+" is understood. That is what ``physics:`` was at first, and it was the "
+"wrong trade. A value stored under the name of the format it came from is "
+"readable by exactly one exporter; it is not a property of the part, it is"
+" a souvenir. The version that survived copies each value into a named "
+"PartCAD property with a PartCAD unit, keeps the list of them closed, and "
+"makes the two failure modes loud: input nothing maps stops the import, "
+"and a property the target format cannot state is reported when it is "
+"written. A round trip is then lossless *and* the values mean something to"
+" the rest of the system. Everything below extends that list; none of it "
+"reopens the passthrough."
+msgstr ""
+"**Терять громко, никогда не тихо.** Соблазнительный вариант этого "
+"принципа — «не терять ничего»: нести всё, чего PartCAD не моделирует, как"
+" непрозрачный, помеченный форматом транзит, чтобы круговой обход стал "
+"безошибочным задолго до того, как содержимое будет понято. Именно этим "
+"поначалу и был ``physics:``, и это был неверный размен. Значение, "
+"сохранённое под именем того формата, из которого оно пришло, читается "
+"ровно одним экспортёром; это не свойство детали, это сувенир. В уцелевшем"
+" варианте каждое значение копируется в именованное свойство PartCAD с "
+"единицей измерения PartCAD, список этих свойств остаётся закрытым, а два "
+"вида отказов делаются громкими: вход, которому ничего не соответствует, "
+"останавливает импорт, а о свойстве, которое целевой формат выразить не "
+"может, сообщается при записи. Тогда круговой обход и безошибочен, *и* "
+"значения что-то означают для остальной системы. Всё, что ниже, расширяет "
+"этот список; ничто из этого не возвращает транзит."
+
+#: ../../source/simulation.rst:841
+msgid "1. Materials as first-class objects"
+msgstr "1. Материалы как полноправные объекты"
+
+#: ../../source/simulation.rst:843
+msgid ""
+"A new object kind alongside parts and sketches, so that materials are "
+"packaged, versioned and shared the way parts already are:"
+msgstr ""
+"Новый вид объектов рядом с деталями и эскизами, чтобы материалы "
+"упаковывались, версионировались и разделялись так же, как уже делают "
+"детали:"
+
+#: ../../source/simulation.rst:859
+msgid ""
+"This single addition is what turns the exporter's density parameter into "
+"a property of the model, and it does double duty: the same material "
+"drives rendering, the manufacturing cost estimate that ``partcad`` "
+"already reasons about, and the simulation."
+msgstr ""
+"Это единственное добавление превращает параметр плотности у экспортёра в "
+"свойство модели и работает сразу в двух местах: тот же материал "
+"определяет отрисовку, оценку производственной стоимости, о которой "
+"``partcad`` уже рассуждает, и симуляцию."
+
+#: ../../source/simulation.rst:865
+msgid "2. Physical properties a part does not have to state"
+msgstr "2. Физические свойства, которые детали не обязательно указывать"
+
+#: ../../source/simulation.rst:867
+msgid ""
+"A part's ``physics:`` section already holds the modelled properties - "
+"``mass``, ``centerOfMass``, ``inertia``, ``friction``, the contact "
+"parameters - each with a PartCAD name and a PartCAD unit. What it does "
+"not do is *derive* any of them, check any of them, or distinguish a "
+"measured value from a guess. Three additions, in increasing order of how "
+"much they are worth:"
+msgstr ""
+"Раздел ``physics:`` детали уже содержит смоделированные свойства — "
+"``mass``, ``centerOfMass``, ``inertia``, ``friction``, параметры "
+"контакта, — у каждого из которых есть имя PartCAD и единица измерения "
+"PartCAD. Чего он не делает, так это не *выводит* ни одно из них, не "
+"проверяет ни одно из них и не отличает измеренное значение от "
+"предположения. Три добавления, в порядке возрастания их ценности:"
+
+#: ../../source/simulation.rst:873
+msgid ""
+"**Derivation.** With a material behind it (item 1), a part that states no"
+" ``mass`` has one: the solid's volume times the material's density, "
+"cached like any other derived value and invalidated when the CAD changes."
+" The same for ``centerOfMass``, ``inertia`` and the surface properties. "
+"Today the URDF exporter computes exactly this, from the ``density`` "
+"parameter of its ``export:`` configuration, and throws it away afterwards"
+" - it should be a property of the part that every consumer sees."
+msgstr ""
+"**Вывод.** При наличии материала за спиной (пункт 1) у детали, которая не"
+" указывает ``mass``, масса всё равно есть: объём тела, умноженный на "
+"плотность материала, кэшируемый как любое другое производное значение и "
+"обесцениваемый при изменении CAD. То же для ``centerOfMass``, ``inertia``"
+" и свойств поверхности. Сегодня экспортёр URDF вычисляет ровно это, из "
+"параметра ``density`` своей конфигурации ``export:``, и затем "
+"выбрасывает, — а это должно быть свойством детали, которое видит каждый "
+"потребитель."
+
+#: ../../source/simulation.rst:880
+msgid ""
+"**Provenance.** A declared value should say why it exists, since "
+"\"measured on the bench\" and \"copied from a vendor datasheet\" and "
+"\"invented so the simulation would load\" are not the same claim:"
+msgstr ""
+"**Происхождение.** Объявленное значение должно говорить, зачем оно "
+"существует, поскольку «измерено на стенде», «скопировано из технического "
+"описания поставщика» и «выдумано, чтобы симуляция загрузилась» — это не "
+"одно и то же утверждение:"
+
+#: ../../source/simulation.rst:890
+msgid ""
+"**Checking.** ``pc lint`` should flag the classic defects, all of which "
+"are common in published URDFs and all of which load without complaint: "
+"zero mass, an inertia tensor that is not positive definite, one that "
+"violates the triangle inequality, and a declared mass that disagrees with"
+" volume times density by more than a tolerance."
+msgstr ""
+"**Проверка.** ``pc lint`` должен отмечать классические дефекты, каждый из"
+" которых часто встречается в опубликованных URDF и каждый из которых "
+"загружается без единой жалобы: нулевая масса, тензор инерции, не "
+"являющийся положительно определённым, тензор, нарушающий неравенство "
+"треугольника, и объявленная масса, расходящаяся с произведением объёма на"
+" плотность больше, чем на величину допуска."
+
+#: ../../source/simulation.rst:896
+msgid ""
+"Anisotropic friction is the one property that needs more structure than "
+"it has today: ``friction``/``friction2``/``frictionDirection`` is ODE's "
+"shape of it, kept because it is what URDF states. A modelled version "
+"would be a static and a dynamic coefficient with an optional anisotropy, "
+"and the URDF exporter would flatten it on the way out."
+msgstr ""
+"Анизотропное трение — единственное свойство, которому нужна бо́льшая "
+"структура, чем у него есть сегодня: "
+"``friction``/``friction2``/``frictionDirection`` — это его форма у ODE, "
+"сохранённая потому, что именно так его указывает URDF. Смоделированная "
+"версия состояла бы из статического и динамического коэффициентов с "
+"необязательной анизотропией, а экспортёр URDF схлопывал бы её на выходе."
+
+#: ../../source/simulation.rst:903
+msgid "3. Collision geometry"
+msgstr "3. Геометрия столкновений"
+
+#: ../../source/simulation.rst:905
+msgid ""
+"A URDF's collision geometry is not lost today - a link that states both "
+"shapes is built from the collision one and the visual one becomes a part "
+"of its own - but the *relation* between the two is: they are two parts "
+"that happen to be named alike, and nothing says one is the simplified "
+"stand-in for the other. A part should be able to say it:"
+msgstr ""
+"Геометрия столкновений из URDF сегодня не теряется — звено, указывающее "
+"обе формы, строится из коллизионной, а визуальная становится "
+"самостоятельной деталью, — но теряется *отношение* между ними: это две "
+"детали, которые просто похоже названы, и ничто не говорит, что одна "
+"является упрощённой заменой другой. Деталь должна уметь это сказать:"
+
+#: ../../source/simulation.rst:921
+msgid ""
+"``convexHull`` and ``convexDecomposition`` are computed in a sandbox and "
+"cached like any derived shape; ``part`` points at another PartCAD part, "
+"which is how a hand-simplified collision shape gets version-controlled "
+"next to the real one - and is exactly what a URDF import would then "
+"produce instead of a part with a suggestive name; ``primitive`` fits a "
+"box/cylinder/sphere/capsule to the geometry."
+msgstr ""
+"``convexHull`` и ``convexDecomposition`` вычисляются в песочнице и "
+"кэшируются, как любая производная форма; ``part`` указывает на другую "
+"деталь PartCAD, и именно так упрощённая вручную форма столкновений "
+"попадает под контроль версий рядом с настоящей, — и именно это тогда "
+"порождал бы импорт URDF вместо детали с наводящим именем; ``primitive`` "
+"подгоняет к геометрии параллелепипед, цилиндр, сферу или капсулу."
+
+#: ../../source/simulation.rst:929
+msgid "4. Named frames"
+msgstr "4. Именованные фреймы"
+
+#: ../../source/simulation.rst:940
+msgid ""
+"Frames are the attachment points for sensors, joints and grasp poses, and"
+" they are what an exporter needs to write ``<frame>`` or a sensor's "
+"``<origin>``. PartCAD's ``interfaces`` and ``ports`` already describe "
+"named, located features on a part; frames should be the same mechanism, "
+"not a parallel one."
+msgstr ""
+"Фреймы — это точки крепления датчиков, шарниров и поз захвата, и именно "
+"они нужны экспортёру, чтобы записать ``<frame>`` или ``<origin>`` "
+"датчика. ``interfaces`` и ``ports`` в PartCAD уже описывают именованные "
+"расположенные элементы на детали; фреймы должны быть тем же механизмом, а"
+" не параллельным ему."
+
+#: ../../source/simulation.rst:946
+msgid "5. Kinematics: a configuration, not a joint section"
+msgstr "5. Кинематика: конфигурация, а не раздел шарниров"
+
+#: ../../source/simulation.rst:948
+msgid ""
+"The obvious proposal here used to be a ``joint:`` form for an ASSY node, "
+"next to ``location:`` and ``connect:``. Building the URDF mapping above "
+"argues against it. A joint is not a third way to place a part - it is "
+"what a ``connect:`` *already is*, plus a value. An interface says what "
+"freedom of movement it allows (``motion:``, ``parameters:``); a "
+"connection says which two things are joined and, optionally, at what "
+"value (``toParams:``). Adding a parallel ``joint:`` section would restate"
+" the interface's own description at every use site, which is the "
+"duplication the rest of PartCAD exists to remove."
+msgstr ""
+"Очевидным предложением здесь раньше была форма ``joint:`` для узла ASSY, "
+"рядом с ``location:`` и ``connect:``. Построение описанного выше "
+"соответствия с URDF говорит против неё. Шарнир — это не третий способ "
+"разместить деталь: это то, чем ``connect:`` *уже является*, плюс "
+"значение. Интерфейс говорит, какую свободу перемещения он допускает "
+"(``motion:``, ``parameters:``); соединение говорит, какие две вещи "
+"соединены и, по желанию, при каком значении (``toParams:``). Добавление "
+"параллельного раздела ``joint:`` означало бы повторение собственного "
+"описания интерфейса в каждом месте использования, а именно такое "
+"дублирование и существует, чтобы устранять, весь остальной PartCAD."
+
+#: ../../source/simulation.rst:957
+msgid ""
+"What is actually missing is one level up: the assembly has no way to name"
+" a *configuration*."
+msgstr ""
+"Чего на самом деле не хватает, так это уровнем выше: у сборки нет способа"
+" назвать *конфигурацию*."
+
+#: ../../source/simulation.rst:970
+msgid ""
+"with the connections referring to the configuration rather than carrying "
+"a literal:"
+msgstr "а соединения ссылаются на конфигурацию, а не несут литерал:"
+
+#: ../../source/simulation.rst:980
+msgid ""
+"Everything that exists today - a tree of rigid placements - is what you "
+"get by evaluating a configuration, so no consumer of the representation "
+"has to change. But ``pc inspect 'robot;configuration=stowed'`` becomes "
+"meaningful through the parameter machinery ASSY files already have, and "
+"an exporter gains something to write a joint *state* from."
+msgstr ""
+"Всё, что есть сегодня, — дерево жёстких размещений — это то, что "
+"получается при вычислении конфигурации, поэтому ни одному потребителю "
+"представления меняться не придётся. Зато ``pc inspect "
+"'robot;configuration=stowed'`` обретает смысл через тот механизм "
+"параметров, который у файлов ASSY уже есть, а экспортёр получает то, из "
+"чего можно записать *состояние* шарнира."
+
+#: ../../source/simulation.rst:986
+msgid "Two things this still needs, which the URDF work did not:"
+msgstr ""
+"Для этого по-прежнему нужны две вещи, которых работа с URDF не "
+"потребовала:"
+
+#: ../../source/simulation.rst:988
+msgid ""
+"**A joint identity.** ``toInstance: shoulder_pan`` names the joint today "
+"only by convention. A configuration has to address it, so the instance "
+"name has to become the joint's name in earnest."
+msgstr ""
+"**Идентичность шарнира.** ``toInstance: shoulder_pan`` сегодня называет "
+"шарнир только по соглашению. Конфигурации нужно к нему обращаться, "
+"поэтому имя экземпляра должно стать именем шарнира всерьёз."
+
+#: ../../source/simulation.rst:991
+msgid ""
+"**Loops.** A four-bar linkage is a connection whose child is already "
+"placed. PartCAD's tree cannot express it and neither can URDF; SDF can. "
+"Until then the honest behaviour is to detect it and say so."
+msgstr ""
+"**Контуры.** Четырёхзвенник — это соединение, потомок которого уже "
+"размещён. Дерево PartCAD выразить его не может, как и URDF; SDF может. А "
+"до тех пор честным поведением будет обнаружить это и сказать."
+
+#: ../../source/simulation.rst:995
+msgid ""
+"There remains a genuinely attractive case for *deriving* joints from the "
+"existing interface library: a bearing bore is revolute about its own axis"
+" and a linear rail is prismatic along its own, so an interface that says "
+"so once gives every ``connect:`` that uses it a joint for free. That is "
+"the same ``motion:`` section the URDF conversion writes, applied to hand-"
+"authored interfaces instead of generated ones - which is why ``motion:`` "
+"belongs on the interface and not on the connection."
+msgstr ""
+"Остаётся по-настоящему привлекательный случай *вывода* шарниров из "
+"существующей библиотеки интерфейсов: отверстие под подшипник является "
+"вращательным вокруг собственной оси, а линейный рельс — поступательным "
+"вдоль собственной, поэтому интерфейс, сказавший это один раз, бесплатно "
+"даёт шарнир каждому ``connect:``, который им пользуется. Это тот же "
+"раздел ``motion:``, который записывает преобразование URDF, только "
+"применённый к написанным вручную интерфейсам вместо порождённых, — именно"
+" поэтому ``motion:`` относится к интерфейсу, а не к соединению."
+
+#: ../../source/simulation.rst:1004
+msgid "6. Internal representation"
+msgstr "6. Внутреннее представление"
+
+#: ../../source/simulation.rst:1006
+msgid "The corresponding change in ``partcad.assembly`` is small and additive:"
+msgstr ""
+"Соответствующее изменение в ``partcad.assembly`` невелико и только "
+"добавляет:"
+
+#: ../../source/simulation.rst:1008
+msgid ""
+"``AssemblyChild`` gains ``joint`` (the kinematic relation to its parent, "
+"or to a named sibling) and ``frames``. ``location`` stays what it is - "
+"the resolved placement at the current joint states - so "
+"``Assembly._get_shape_real()``, the BREP envelope, the cache and every "
+"exporter keep working unchanged."
+msgstr ""
+"``AssemblyChild`` получает ``joint`` (кинематическое отношение к родителю"
+" или к именованному соседу) и ``frames``. ``location`` остаётся тем, чем "
+"является, — разрешённым размещением при текущих состояниях шарниров, — "
+"поэтому ``Assembly._get_shape_real()``, оболочка BREP, кэш и каждый "
+"экспортёр продолжают работать без изменений."
+
+#: ../../source/simulation.rst:1012
+msgid ""
+"``Assembly`` gains a ``configuration``: the map of joint name to value it"
+" was evaluated at, hashed into the cache key like any other parameter."
+msgstr ""
+"``Assembly`` получает ``configuration`` — отображение имени шарнира на "
+"значение, при котором она была вычислена, хешируемое в ключ кэша, как "
+"любой другой параметр."
+
+#: ../../source/simulation.rst:1014
+msgid ""
+"``Part`` gains ``physical`` and ``collision`` accessors that resolve "
+"declared values against derived ones, computing the derived ones in a "
+"sandbox on demand and caching them."
+msgstr ""
+"``Part`` получает методы доступа ``physical`` и ``collision``, которые "
+"разрешают объявленные значения относительно производных, вычисляя "
+"производные в песочнице по требованию и кэшируя их."
+
+#: ../../source/simulation.rst:1017
+msgid ""
+"The BREP envelope grows a sibling channel for non-geometric data, so a "
+"wrapper can be handed the physical properties without a second round "
+"trip."
+msgstr ""
+"У оболочки BREP появляется соседний канал для негеометрических данных, "
+"чтобы обёртке можно было передать физические свойства без второго "
+"обращения."
+
+#: ../../source/simulation.rst:1021
+msgid "7. Sensors, actuators and plugins"
+msgstr "7. Датчики, приводы и плагины"
+
+#: ../../source/simulation.rst:1036
+msgid ""
+"PartCAD should model the handful of device types that every simulator "
+"agrees on (camera, depth, lidar, imu, contact, force-torque) and treat "
+"the rest as passthrough."
+msgstr ""
+"PartCAD должен смоделировать ту горстку типов устройств, насчёт которых "
+"сходятся все симуляторы (камера, камера глубины, лидар, IMU, датчик "
+"контакта, датчик силы и момента), и обращаться с остальным как с "
+"транзитом."
+
+#: ../../source/simulation.rst:1041
+msgid "8. Scenes as worlds"
+msgstr "8. Сцены как миры"
+
+#: ../../source/simulation.rst:1043
+msgid ""
+"The scenes PartCAD has always planned are SDF worlds: gravity, ground, "
+"lights, model instances with initial poses, and physics engine settings. "
+"A scene is also where a *fixed to the world* joint belongs, which is the "
+"piece a single assembly cannot express."
+msgstr ""
+"Те сцены, которые PartCAD всегда планировал, — это миры SDF: сила "
+"тяжести, земля, источники света, экземпляры моделей с начальными позами и"
+" настройки физического движка. Сцена — это также то место, которому "
+"принадлежит шарнир *фиксации к миру*, а это та часть, которую одна сборка"
+" выразить не может."
+
+#: ../../source/simulation.rst:1049
+msgid "9. The property tables, and keeping them honest (in place)"
+msgstr "9. Таблицы свойств и поддержание их честности (реализовано)"
+
+#: ../../source/simulation.rst:1051
+msgid ""
+"This is the item that is built, and doing it first was right: it makes a "
+"URDF round trip nearly lossless while the rest of the proposal is still "
+"being designed, and it is the difference between PartCAD being usable in "
+"a robotics workflow and being a one-way trip out of one."
+msgstr ""
+"Это тот пункт, который построен, и сделать его первым было правильно: он "
+"делает круговой обход URDF почти безошибочным, пока остальная часть "
+"предложения ещё проектируется, и именно он отличает PartCAD, пригодный "
+"для работы в робототехнике, от PartCAD, который оказывается билетом в "
+"одну сторону оттуда."
+
+#: ../../source/simulation.rst:1056
+msgid ""
+"A part carries a ``properties:`` section holding ``material``, ``color`` "
+"and ``physics``; an interface carries ``motion:`` and ``physics:``. Every"
+" property in them is a PartCAD property with a PartCAD unit and a closed "
+"definition in the schema. A URDF import reads its values into them one at"
+" a time and the URDF export writes each one back into the element that "
+"states it. The two rules that keep the list honest are the loud failures:"
+" URDF that no property covers stops the import, and a property URDF "
+"cannot state is reported when the file is written."
+msgstr ""
+"Деталь несёт раздел ``properties:``, содержащий ``material``, ``color`` и"
+" ``physics``; интерфейс несёт ``motion:`` и ``physics:``. Каждое свойство"
+" в них — свойство PartCAD с единицей измерения PartCAD и закрытым "
+"определением в схеме. Импорт URDF считывает его значения в них по одному,"
+" а экспорт URDF записывает каждое обратно в тот элемент, который его "
+"выражает. Список держат честным два правила — громкие отказы: URDF, "
+"которому не находится свойства, останавливает импорт, а о свойстве, "
+"которое URDF выразить не может, сообщается при записи файла."
+
+#: ../../source/simulation.rst:1065
+msgid "What is still missing:"
+msgstr "Чего по-прежнему не хватает:"
+
+#: ../../source/simulation.rst:1067
+msgid ""
+"**``<ros2_control>`` and ``<transmission>``**, which are robot-level "
+"rather than link-level, and so have nowhere to attach yet. The assembly "
+"needs a place to attach robot-level physics - an assembly takes the same "
+"``properties:`` section a part does, but nothing yet reads one there, "
+"because every property so far belongs to something inside the container."
+msgstr ""
+"**``<ros2_control>`` и ``<transmission>``**, которые относятся к уровню "
+"робота, а не к уровню звена, и поэтому им пока некуда прикрепиться. "
+"Сборке нужно место для прикрепления физики уровня робота: сборка "
+"принимает тот же раздел ``properties:``, что и деталь, но там его пока "
+"никто не читает, потому что каждое свойство на сегодня принадлежит "
+"чему-то внутри контейнера."
+
+#: ../../source/simulation.rst:1072
+msgid ""
+"**Properties that are not a link's or a joint's.** A URDF's ``<gazebo>`` "
+"blocks also carry sensors and simulator plugins, which items 7 and 8 "
+"cover; until then they are counted and reported, not carried."
+msgstr ""
+"**Свойства, которые не принадлежат ни звену, ни шарниру.** Блоки "
+"``<gazebo>`` в URDF несут ещё и датчики и плагины симулятора, которые "
+"покрываются пунктами 7 и 8; а до тех пор они подсчитываются и отмечаются "
+"в отчёте, но не переносятся."
+
+#: ../../source/simulation.rst:1075
+msgid ""
+"**Any check at all that a declared property still applies.** "
+"``properties:`` does not take part in the shape cache *key*, which is "
+"right - it says nothing about the geometry - but it also means nothing "
+"notices when the geometry moves out from under it. A mass read from a "
+"URDF survives an edit to the CAD that invalidates it, silently. ``pc "
+"lint`` is where that belongs, and it needs item 2 to have something to "
+"compare against."
+msgstr ""
+"**Хоть какая-нибудь проверка того, что объявленное свойство всё ещё "
+"применимо.** ``properties:`` не участвует в *ключе* кэша форм, и это "
+"правильно — он ничего не говорит о геометрии, — но это также означает, "
+"что никто не замечает, когда геометрия из-под него уезжает. Масса, "
+"прочитанная из URDF, переживает такую правку CAD, которая делает её "
+"недействительной, причём молча. Этому место в ``pc lint``, и для этого "
+"ему нужен пункт 2, чтобы было с чем сравнивать."
+
+#: ../../source/simulation.rst:1083
+msgid "10. Units"
+msgstr "10. Единицы измерения"
+
+#: ../../source/simulation.rst:1085
+msgid ""
+"Simulation is SI; PartCAD is millimetres and degrees. The notation used "
+"throughout this page - ``12 N*m``, ``2 rad/s``, ``2700 kg/m^3``, "
+"``180deg`` - should be real: a unit-aware scalar type, stored "
+"canonically, so that no exporter has to guess and no user has to remember"
+" which of the two conventions a given field is in. This is the smallest "
+"item on the list and the one that prevents the largest class of silent "
+"errors."
+msgstr ""
+"Симуляция — это СИ; PartCAD — это миллиметры и градусы. Запись, "
+"используемая на всей этой странице, — ``12 N*m``, ``2 rad/s``, ``2700 "
+"kg/m^3``, ``180deg`` — должна стать настоящей: скалярный тип, знающий о "
+"единицах и хранимый в канонической форме, чтобы ни одному экспортёру не "
+"приходилось угадывать, а ни одному пользователю — помнить, в каком из "
+"двух соглашений записано данное поле. Это самый маленький пункт в списке "
+"и тот, который предотвращает самый большой класс тихих ошибок."
+
+#: ../../source/simulation.rst:1093
+msgid "11. Export targets"
+msgstr "11. Цели экспорта"
+
+#: ../../source/simulation.rst:1095
+msgid "With the above in place, the export matrix is:"
+msgstr "С учётом всего вышеизложенного матрица экспорта такова:"
+
+#: ../../source/simulation.rst:1101
+msgid "Target"
+msgstr "Цель"
+
+#: ../../source/simulation.rst:1102
+msgid "Priority"
+msgstr "Приоритет"
+
+#: ../../source/simulation.rst:1103
+msgid "Notes"
+msgstr "Примечания"
+
+#: ../../source/simulation.rst:1105
+msgid "Done (geometry only)"
+msgstr "Готово (только геометрия)"
+
+#: ../../source/simulation.rst:1106
+msgid "The common denominator. Tree-only kinematics, sensors only via extensions."
+msgstr ""
+"Общий знаменатель. Кинематика только в виде дерева, датчики только через "
+"расширения."
+
+#: ../../source/simulation.rst:1107
+msgid "SDF"
+msgstr "SDF"
+
+#: ../../source/simulation.rst:1108
+msgid "Next"
+msgstr "Следующий"
+
+#: ../../source/simulation.rst:1109
+msgid ""
+"What Gazebo actually simulates. Expresses everything in this proposal, "
+"worlds included, and is where a PartCAD *scene* maps naturally."
+msgstr ""
+"То, что на самом деле симулирует Gazebo. Выражает всё, что есть в этом "
+"предложении, включая миры, и именно туда естественно отображается *сцена*"
+" PartCAD."
+
+#: ../../source/simulation.rst:1111 ../../source/simulation.rst:1114
+msgid "Later"
+msgstr "Позже"
+
+#: ../../source/simulation.rst:1112
+msgid "MuJoCo. Needs convex collision geometry, which item 3 provides."
+msgstr "MuJoCo. Нужна выпуклая геометрия столкновений, которую даёт пункт 3."
+
+#: ../../source/simulation.rst:1113
+msgid "USD"
+msgstr "USD"
+
+#: ../../source/simulation.rst:1115
+msgid "Isaac Sim and the wider DCC ecosystem, through the UsdPhysics schemas."
+msgstr "Isaac Sim и более широкая экосистема DCC — через схемы UsdPhysics."
+
+#: ../../source/simulation.rst:1118
+msgid "Suggested order of work"
+msgstr "Предлагаемый порядок работ"
+
+#: ../../source/simulation.rst:1120
+msgid ""
+"Each step is useful on its own, which is the test of whether the "
+"decomposition is right:"
+msgstr ""
+"Каждый шаг полезен сам по себе, и это проверка того, верна ли "
+"декомпозиция:"
+
+#: ../../source/simulation.rst:1123
+msgid ""
+"**Passthrough** (item 9) - *done*. The URDF round trip carries what "
+"PartCAD does not model instead of dropping it."
+msgstr ""
+"**Транзит** (пункт 9) — *сделано*. Круговой обход URDF несёт то, чего "
+"PartCAD не моделирует, вместо того чтобы это отбрасывать."
+
+#: ../../source/simulation.rst:1125
+msgid ""
+"**Units** (item 10). Everything after this depends on it and it gets "
+"harder to add later - the generated ``motion:`` sections already have to "
+"state ``units: rad`` in prose because there is no way to state it in the "
+"value."
+msgstr ""
+"**Единицы измерения** (пункт 10). Всё, что идёт после, зависит от этого, "
+"а добавить это позже становится только труднее: порождаемым разделам "
+"``motion:`` уже приходится указывать ``units: rad`` прозой, потому что "
+"указать это в самом значении негде."
+
+#: ../../source/simulation.rst:1128
+msgid ""
+"**Materials and physical properties** (items 1-2). Turns the exporter's "
+"density parameter into a model property and makes a computed inertial "
+"trustworthy, so that carrying one becomes the exception rather than the "
+"rule."
+msgstr ""
+"**Материалы и физические свойства** (пункты 1–2). Превращает параметр "
+"плотности у экспортёра в свойство модели и делает вычисленные инерционные"
+" характеристики достойными доверия, так что их перенос становится "
+"исключением, а не правилом."
+
+#: ../../source/simulation.rst:1131
+msgid ""
+"**Collision geometry** (item 3). Independently valuable - it also makes "
+"rendering and interference checking cheaper - and it is what would let "
+"the collision/visual choice ``ignoreCollision`` makes today become \"keep"
+" both\"."
+msgstr ""
+"**Геометрия столкновений** (пункт 3). Ценна сама по себе — она также "
+"удешевляет отрисовку и проверку пересечений, — и именно она позволила бы "
+"выбору между коллизионной и визуальной формой, который сегодня делает "
+"``ignoreCollision``, превратиться в «сохранить обе»."
+
+#: ../../source/simulation.rst:1134
+msgid "**Frames** (item 4), folded into the existing ports/interfaces mechanism."
+msgstr ""
+"**Фреймы** (пункт 4), встроенные в существующий механизм портов и "
+"интерфейсов."
+
+#: ../../source/simulation.rst:1135
+msgid ""
+"**Configurations** (items 5-6). The largest change, and the one that "
+"turns an assembly into a mechanism rather than a photograph of one."
+msgstr ""
+"**Конфигурации** (пункты 5–6). Самое крупное изменение и то, которое "
+"превращает сборку в механизм, а не в его фотографию."
+
+#: ../../source/simulation.rst:1137
+msgid "**SDF export**, which is the first target able to carry all of the above."
+msgstr "**Экспорт в SDF** — первая цель, способная нести всё перечисленное выше."
+
+#: ../../source/simulation.rst:1138
+msgid "**Sensors** (item 7) and **scenes** (item 8)."
+msgstr "**Датчики** (пункт 7) и **сцены** (пункт 8)."
+
+#: ../../source/simulation.rst:1141
+msgid "Non-goals"
+msgstr "Чем это не должно стать"
+
+#: ../../source/simulation.rst:1143
+msgid ""
+"PartCAD should not become a simulator, or wrap one. It should describe a "
+"product well enough that a simulator can be handed it."
+msgstr ""
+"PartCAD не должен становиться симулятором или оборачивать его. Он должен "
+"описывать изделие достаточно хорошо, чтобы его можно было передать "
+"симулятору."
+
+#: ../../source/simulation.rst:1145
+msgid ""
+"PartCAD should not model every engine-specific solver parameter as a "
+"first-class concept. But the alternative is not a passthrough container: "
+"it is to leave them out and say so when one is seen, which is what the "
+"import does for an unknown ``<gazebo>`` setting."
+msgstr ""
+"PartCAD не должен моделировать каждый специфичный для движка параметр "
+"решателя как полноправное понятие. Но альтернатива — не транзитный "
+"контейнер: альтернатива — оставить их за бортом и сообщать, когда такой "
+"параметр встретился, — именно так импорт поступает с неизвестной "
+"настройкой ``<gazebo>``."
+
+#: ../../source/simulation.rst:1149
+msgid ""
+"Reading a URDF should not become lossless by making PartCAD's model a "
+"copy of URDF's. The point is a model that URDF, SDF, MJCF and USD are all"
+" views of."
+msgstr ""
+"Чтение URDF не должно становиться безошибочным за счёт превращения модели"
+" PartCAD в копию модели URDF. Смысл в том, чтобы модель была такой, "
+"видами которой являются и URDF, и SDF, и MJCF, и USD."

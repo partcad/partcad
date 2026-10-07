@@ -1,0 +1,1112 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/config_output.rst:3 ../../source/config_output.rst:9
+msgid "Output files"
+msgstr "输出文件"
+
+#: ../../source/config_output.rst:11
+msgid ""
+"``pc export`` writes 3D and CAD files; ``pc render`` writes 2D projections. "
+"Both are configured by a section of ``partcad.yaml`` named after the command "
+"-- ``export:`` and ``render:`` -- with one subsection per output file type:"
+msgstr ""
+"``pc export`` 写出 3D 和 CAD 文件，``pc render`` 写出 2D 投影。两者都由 ``partcad.y"
+"aml`` 中以命令命名的小节来配置—— ``export:`` 和 ``render:`` ——其中每种输出文件类型对应一个子小节："
+
+#: ../../source/config_output.rst:37
+msgid ""
+"The two sections behave identically. Which one a file type belongs to is "
+"decided by whichever built-in package implements it (see `Built-in "
+"implementations`_) -- ``step`` is an ``export:`` type wherever it is written "
+"down, ``svg`` is a ``render:`` one. For a file type no built-in package "
+"implements, the section it is declared in is what decides: declare a type of "
+"your own under ``export:`` and it is an export type, under ``render:`` and "
+"it is a render type."
+msgstr ""
+"这两个小节的行为完全相同。一个文件类型属于哪一个，取决于实现它的那个内置包（见 `Built-in implementations`_）"
+"—— ``step`` 无论写在哪里都是 ``export:`` 类型，而 ``svg`` 是 ``render:`` 类型。对于没有任"
+"何内置包实现的文件类型，由它被声明在哪个小节来决定：把自己的类型声明在 ``export:`` 下，它就是导出类型；声明在 ``rend"
+"er:`` 下，它就是渲染类型。"
+
+#: ../../source/config_output.rst:45
+msgid ""
+"Whichever section owns a file type, the other one is read first and acts as "
+"a fallback, so the owning section always wins where both set the same field."
+msgstr "无论一个文件类型归哪个小节所有，另一个小节都会被先读取并充当回退，因此在两者设置了同一字段的地方，始终是所属的那个小节胜出。"
+
+#: ../../source/config_output.rst:48
+msgid ""
+"For an ``export:`` type the fallback is history: a package that configured "
+"its STEP or STL output under ``render:`` before ``export:`` existed keeps "
+"working."
+msgstr ""
+"对 ``export:`` 类型而言，这种回退是历史遗留：在 ``export:`` 出现之前就把 STEP 或 STL 输出配置在 `"
+"`render:`` 下的包仍然可以正常工作。"
+
+#: ../../source/config_output.rst:51
+msgid ""
+"For a ``render:`` type the fallback is what an export implementation *is*. "
+"An export file is one a CAD tool can open as a part or a sketch, which is a "
+"stricter thing to be than an output file in general -- so it also serves "
+"wherever any output file would do, and a render request for a file type only "
+"``export:`` implements uses that implementation."
+msgstr ""
+"对 ``render:`` 类型而言，这种回退源于导出实现 *本身的性质*。导出文件是 CAD 工具能够作为零件或草图打开的文件，这比一"
+"般意义上的输出文件要求更严格——因此它在任何需要输出文件的场合同样适用，而针对只有 ``export:`` 才实现的文件类型发出的渲染请"
+"求，就会使用那个实现。"
+
+#: ../../source/config_output.rst:57
+msgid ""
+"Note that neither fallback has anything to do with which command was typed. "
+"``pc export`` and ``pc render`` differ in their defaults, not in the section "
+"they read: a file type declared only under ``render:`` is produced by ``pc "
+"export -t <type>`` just as well, because the section follows the declaration "
+"and not the command."
+msgstr ""
+"注意，这两种回退都与键入的是哪条命令无关。两条命令 ``pc export`` 和 ``pc render`` 的差别在于默认值，而不在"
+"于读取哪个小节：只声明在 ``render:`` 下的文件类型，用 ``pc export -t <type>`` 同样可以产生，因为小"
+"节跟随的是声明而不是命令。"
+
+#: ../../source/config_output.rst:63
+msgid ""
+"What the two sections do say is what a file type *is*, and that is worth "
+"getting right when publishing a package. Declare a type under ``export:`` "
+"and you are promising geometry another tool can go on working with; declare "
+"it under ``render:`` and you are promising an output file, nothing more. A "
+"drawing, a picture or a report is the latter -- so declare it under ``render:"
+"``, where it stays reachable from both commands, rather than under ``export:"
+"``, where it would promise a part it cannot deliver."
+msgstr ""
+"这两个小节真正表明的，是一个文件类型 *是什么*，发布包时这一点值得弄对。把类型声明在 ``export:`` 下，就是在承诺提供另一个"
+"工具可以继续处理的几何；声明在 ``render:`` 下，就只是在承诺一个输出文件，仅此而已。工程图、图片或报告属于后者——因此应把它"
+"声明在 ``render:`` 下，这样两条命令都仍然能够到达它，而不要声明在 ``export:`` 下，那会承诺一个它无法交付的零件。"
+
+#: ../../source/config_output.rst:71
+msgid ""
+"The short form ``<file type>: <path>`` is the same as ``prefix: <path>``."
+msgstr "简写形式 ``<file type>: <path>`` 等同于 ``prefix: <path>``。"
+
+#: ../../source/config_output.rst:74
+msgid "Where the file goes"
+msgstr "文件写到哪里"
+
+#: ../../source/config_output.rst:76
+msgid ""
+"``prefix`` is the directory the file goes in, relative to the output "
+"directory (``-O``) or, failing that, to the package. A ``prefix`` that "
+"carries an extension names the file itself, which is the one way to give an "
+"object's output a name of its own. Otherwise the file is named after the "
+"object, with the extension the file type declares."
+msgstr ""
+"``prefix`` 是文件所在的目录，相对于输出目录（``-O``）；没有输出目录时则相对于包。带扩展名的 ``prefix`` 指定"
+"的是文件本身，这是为某个对象的输出单独命名的唯一方式。否则文件以对象命名，并使用该文件类型声明的扩展名。"
+
+#: ../../source/config_output.rst:82
+msgid ""
+"An object whose name carries a ``/`` is written into a sub-directory of that "
+"name, and the directories are created on the way. A package may declare an "
+"object that way itself, and the objects another file materializes are named "
+"that way whether it did or not -- a STEP assembly's components are the parts "
+"``<assembly>/<component>``, a URDF's links ``<assembly>/<link>``:"
+msgstr ""
+"名称中带 ``/`` 的对象会写入同名的子目录，这些目录会在写入过程中一并创建。包可以自己这样声明对象；而由另一个文件实体化出来的对象，"
+"无论包是否这样声明，都会这样命名——STEP 装配体的组件就是零件 ``<assembly>/<component>``，URDF 的连"
+"杆就是 ``<assembly>/<link>``："
+
+#: ../../source/config_output.rst:93
+msgid ""
+"The separator in a *name* is always ``/``, whichever operating system reads "
+"it, so the same command produces the same tree on Linux, macOS and Windows."
+msgstr ""
+"*名称* 中的分隔符始终是 ``/``，无论由哪个操作系统读取，因此同一条命令在 Linux、macOS 和 Windows 上产生相同的目录树。"
+
+#: ../../source/config_output.rst:96
+msgid ""
+"Every directory an output file needs is created on the way to writing it: "
+"the sub-directories a name with a ``/`` in it asks for, and the directory "
+"around them that ``-O``, ``prefix`` or ``output_dir`` named and nobody has "
+"made. There is nothing to ask for -- the ``-p``/``--create-dirs`` flag that "
+"used to draw a line between those two halves of one path is gone, and both "
+"halves are made."
+msgstr ""
+"输出文件需要的每一个目录都会在写入过程中创建：既包括名称中的 ``/`` 所要求的子目录，也包括由 ``-O``、 ``prefix``"
+" 或 ``output_dir`` 指定而尚无人创建的外层目录。无需额外提出要求——曾经在同一路径的这两部分之间划出界线的 ``-p``"
+" / ``--create-dirs`` 标志已经取消，两部分都会被创建。"
+
+#: ../../source/config_output.rst:103
+msgid "Export parameters"
+msgstr "导出参数"
+
+#: ../../source/config_output.rst:105
+msgid ""
+"Every field that is not one of those listed above is a parameter of that "
+"file type, handed to whatever implements it. Which parameters exist is "
+"therefore up to the implementation, not to PartCAD. For example, the built-"
+"in STEP implementation accepts ``comment``, which it places into the STEP "
+"file's ``FILE_DESCRIPTION`` header entity:"
+msgstr ""
+"凡是不在上面所列之内的字段，都是该文件类型的参数，会被交给它的实现。因此存在哪些参数取决于实现，而不取决于 PartCAD。例如内置的 "
+"STEP 实现接受 ``comment``，并把它放进 STEP 文件的 ``FILE_DESCRIPTION`` 头实体中："
+
+#: ../../source/config_output.rst:117
+msgid ""
+"Every STEP file the package produces -- for any part or assembly in it -- "
+"then carries that text."
+msgstr "此后该包产生的每一个 STEP 文件——无论对应其中的哪个零件或装配体——都会带上这段文字。"
+
+#: ../../source/config_output.rst:120
+msgid ""
+"Parameters may be declared per package, as above, or per object, in which "
+"case the object's value wins:"
+msgstr "参数可以像上面那样按包声明，也可以按对象声明；按对象声明时以对象的取值为准："
+
+#: ../../source/config_output.rst:132
+msgid ""
+"A parameter can also be given for one command instead of written down. The "
+"two that aim a 2D projection -- ``viewport_origin``, which is where the "
+"shape is looked at from, and ``viewport_up``, which way is up in the picture "
+"-- are ``pc render --viewport-origin``/``--viewport-up``, with ``--view`` "
+"naming the common directions (see :doc:`cli`). Passed that way they layer on "
+"top of everything below, package and object alike, for that run only."
+msgstr ""
+"参数也可以只为一条命令给出，而不写进配置。用于确定 2D 投影方向的那两个参数—— ``viewport_origin`` 表示从什么位"
+"置观察形状， ``viewport_up`` 表示图中哪个方向朝上——对应 ``pc render --viewport-origin`"
+"` / ``--viewport-up``，而 ``--view`` 为常用的几个方向命名（见 :doc:`cli`）。以这种方式传入时"
+"，它们叠加在下面的一切之上，包和对象都一样，并且只对本次运行有效。"
+
+#: ../../source/config_output.rst:139
+msgid "Three names are not entirely the package's own."
+msgstr "有三个名字并不完全属于包自己。"
+
+#: ../../source/config_output.rst:141
+msgid ""
+"``decode`` is not a parameter at all. It is one of the fields PartCAD reads "
+"itself -- it says whether the sandbox rebuilds the shape and assembly "
+"envelopes into live geometry before the implementation sees them (see "
+"``urdf`` under `Built-in implementations`_) -- so no package can declare an "
+"export parameter named ``decode``: a ``decode:`` in a file type's "
+"configuration is always that flag."
+msgstr ""
+"``decode`` 根本不是参数。它是 PartCAD 自己读取的字段之一——它表示沙箱是否在实现看到形状封套和装配体封套之前，把它们"
+"重建为可用的几何（见 `Built-in implementations`_ 中的 ``urdf``）——因此没有任何包可以声明名为 `"
+"`decode`` 的导出参数：文件类型配置中的 ``decode:`` 永远是那个标志。"
+
+#: ../../source/config_output.rst:148
+msgid ""
+"``properties`` is the other way round, and it is a parameter -- with a "
+"caveat. A file type that declares ``properties: true`` is handed, in place "
+"of the flag, an index of what the shapes being written declare about "
+"themselves: their ``physics``, ``material`` and ``color``, keyed by the full "
+"``<package>:<name>`` of each shape, so an implementation given a whole "
+"assembly tree can look up the properties belonging to each node of it. Only "
+"shapes that declare at least one appear."
+msgstr ""
+"``properties`` 则正好相反，它是一个参数——但有一点需要注意。声明了 ``properties: true`` 的文件类型"
+"，收到的不是这个标志本身，而是一份索引，记录被写出的那些形状对自身的声明：它们的 ``physics``、 ``material`` 和"
+" ``color``，以每个形状完整的 ``<package>:<name>`` 为键，这样拿到整棵装配树的实现就能查到属于其中每个节点"
+"的属性。只有至少声明了其中一项的形状才会出现。"
+
+#: ../../source/config_output.rst:162
+msgid ""
+"It is opt-in because building the index instantiates the whole assembly "
+"tree, which defeats the shape cache for that subtree: an assembly whose "
+"geometry could have been served from the cache has to be built anyway, so "
+"that its children exist to be walked. An implementation with no use for the "
+"properties should not pay for that. ``urdf`` is the one built-in file type "
+"that asks."
+msgstr ""
+"它需要显式开启，因为构建这份索引会实例化整棵装配树，从而令该子树的形状缓存失效：本可以直接从缓存中取得几何的装配体，仍然必须被构建一遍，"
+"好让它的子节点存在以供遍历。用不到这些属性的实现不应该为此付出代价。在内置文件类型中，只有 ``urdf`` 会提出这个要求。"
+
+#: ../../source/config_output.rst:168
+msgid ""
+"The caveat is that ``properties``, unlike ``decode``, is *not* a reserved "
+"field name, and PartCAD intercepts it by value rather than by declaration: a "
+"package that declares an ordinary export parameter of its own named "
+"``properties`` and gives it the value ``true`` will find that value replaced "
+"by the index before its implementation sees it. Any other value is passed "
+"through untouched, but the name is best avoided for anything else."
+msgstr ""
+"需要注意的是，与 ``decode`` 不同， ``properties`` *不是* 保留字段名，PartCAD 是按取值而不是按声明"
+"来拦截它的：如果某个包自己声明了一个名为 ``properties`` 的普通导出参数，并把它的值设为 ``true``，那么在它的实现"
+"看到之前，这个值就会被索引替换掉。其他任何取值都会原样传递，但最好不要把这个名字用作别的用途。"
+
+#: ../../source/config_output.rst:177
+msgid ""
+"``reproducible`` is the third, and it is a field of the protocol rather than "
+"any one format's parameter. It is a boolean, it defaults to ``false``, and "
+"it says whether this file has to come out **byte-for-byte the same every "
+"time it is written**, from the same object:"
+msgstr ""
+"``reproducible`` 是第三个，它是协议的字段，而不是某一种格式的参数。它是布尔值，默认为 ``false``，表示由同一个"
+"对象写出这个文件时，是否必须 **每一次都得到逐字节相同的结果**："
+
+#: ../../source/config_output.rst:188
+msgid ""
+"Unlike every other parameter, it is handed to the implementation whether or "
+"not anybody declared it -- so an implementation reads "
+"``request[\"reproducible\"]`` without first checking that the key is there, "
+"and means by it what every other implementation means. That is the whole "
+"point of it being here rather than in each format's own list of options: a "
+"package that publishes a ``render:`` implementation of its own writes "
+"``reproducible`` and it already means this."
+msgstr ""
+"与其他所有参数不同，无论有没有人声明它，它都会被交给实现——因此实现可以直接读取 ``request[\"reproducible\"]``"
+" 而不必先检查这个键是否存在，而且它的含义与其他所有实现中的含义一致。这正是把它放在这里、而不是放进各个格式自己的选项列表里的意义所在："
+"发布自有 ``render:`` 实现的包只要写下 ``reproducible``，它就已经是这个含义。"
+
+#: ../../source/config_output.rst:195
+msgid ""
+"What it does depends on the file type, and on four of them it does something "
+"today:"
+msgstr "它具体起什么作用取决于文件类型；目前有四种文件类型会因它而有所不同："
+
+#: ../../source/config_output.rst:198
+msgid "``svg``, ``png``, ``jpeg``"
+msgstr ""
+
+#: ../../source/config_output.rst:199
+msgid ""
+"The projection goes through OpenCASCADE's **exact** hidden-line algorithm "
+"rather than the polygonal one. The exact algorithm works from the surfaces; "
+"the polygonal one works from a triangulation, which is floating point all "
+"the way down, so the same shape meshed to the same deflection comes out with "
+"a slightly different silhouette on a different architecture."
+msgstr ""
+"投影改走 OpenCASCADE 的 **精确** 消隐线算法，而不是多边形算法。精确算法基于曲面进行计算；多边形算法基于三角网格进行计"
+"算，而三角网格自始至终都是浮点运算，因此同一个形状按相同的偏差网格化之后，在不同体系结构上会得到略有差异的轮廓。"
+
+#: ../../source/config_output.rst:205
+msgid ""
+"Every number written into the drawing is also rounded to the ``precision`` "
+"the file type claims (ten decimal places by default), and a negative zero is "
+"written as zero. Below that precision what is in the file is the last bit of "
+"an arithmetic rather than a measurement -- a stroke width that differs in "
+"its sixteenth digit, an arc rotated by half a femtodegree -- and it is a "
+"diff every time the drawing is produced somewhere new."
+msgstr ""
+"写入工程图的每一个数字还会按该文件类型声明的 ``precision`` 取整（默认十位小数），负零写作零。在这个精度以下，文件里的内容"
+"是算术运算的最后一位，而不是测量的结果——第十六位数字才不同的线宽、旋转了半飞度的圆弧——而每当这张工程图在新的地方产生时，它们都会变成一处差异。"
+
+#: ../../source/config_output.rst:212
+msgid ""
+"For ``png`` and ``jpeg`` that settles the picture and not the encoding -- "
+"the bytes below the projection are svglib's, reportlab's and Pillow's."
+msgstr ""
+"对 ``png`` 和 ``jpeg`` 来说，这确定的是画面而不是编码——投影之下的字节来自 svglib、reportlab 和 Pillow。"
+
+#: ../../source/config_output.rst:215
+msgid "``dxf``"
+msgstr ""
+
+#: ../../source/config_output.rst:216
+msgid ""
+"The same, plus fixed header metadata: a DXF is otherwise stamped on every "
+"save with the time it was written and a fresh pair of GUIDs, and ezdxf "
+"derives the order of its ``CLASSES`` section from a ``set``, so it emits "
+"differently per process."
+msgstr ""
+"同上，另外还会固定头部元数据：否则 DXF 每次保存都会被打上写入时的时间戳和一对新的 GUID，而且 ezdxf 的 ``CLASSE"
+"S`` 小节顺序来自一个 ``set``，因而每个进程写出的内容都不一样。"
+
+#: ../../source/config_output.rst:221
+msgid ""
+"It is off by default because it is not free. The exact projection is the "
+"slower of the two by a wide margin on anything large, and it is the one that "
+"can take the sandbox down: every released OpenCASCADE reads past the end of "
+"an allocation in the rejection table that algorithm sorts its edge crossings "
+"in (`Open-Cascade-SAS/OCCT#1546 <https://github.com/Open-Cascade-SAS/OCCT/"
+"issues/1546>`_), which is a coin flip on an assembly with enough edges. A "
+"picture produced to be looked at should be the fastest correct one; a "
+"drawing that is *kept*, so that a diff answers whether it changed, is the "
+"case that says so. Every image under ``examples/`` in the PartCAD repository "
+"sets it."
+msgstr ""
+"它默认关闭，因为它并非没有代价。在任何较大的模型上，精确投影都要慢得多，而且正是它可能让沙箱崩溃：所有已发布的 OpenCASCADE "
+"在该算法用来排序边交点的剔除表中都会越界读取（`Open-Cascade-SAS/OCCT#1546 <https://github.c"
+"om/Open-Cascade-SAS/OCCT/issues/1546>`_），在边足够多的装配体上这就是一次抛硬币。为观看而产生的图"
+"片，应当是最快得到的那个正确结果；而 *被保留下来*、靠差异来回答它是否发生变化的工程图，才是需要开启它的场合。PartCAD 仓库中 "
+"``examples/`` 下的每一张图片都设置了它。"
+
+#: ../../source/config_output.rst:232
+msgid ""
+"The rest of the built-in file types accept it and write the same bytes "
+"either way. They declare it all the same, so that an implementation which "
+"starts reading it does not also have to start receiving it."
+msgstr ""
+"其余内置文件类型接受这个字段，但无论取值如何都写出相同的字节。它们仍然一律声明它，这样当某个实现开始读取它时，就不必同时还要解决如何收到它的问题。"
+
+#: ../../source/config_output.rst:236
+msgid ""
+"What it is not is a promise that two machines produce one file. It removes "
+"everything PartCAD chooses -- which algorithm, how a number is written, the "
+"clock, the GUIDs, the iteration order of a ``set`` -- and what is left is "
+"the CAD kernel's own arithmetic. Two platforms that disagree about a "
+"transcendental function in the last bit can still find one intersection more "
+"than each other along a curved silhouette, and no amount of rounding makes "
+"those two drawings the same file. So two renders on one machine are the same "
+"file, and two machines agree on everything but the hardest subjects. That is "
+"why PartCAD's own ``Examples (PartCAD)`` job compares the checked-in "
+"drawings on one cell of its matrix rather than on all of them."
+msgstr ""
+"它并不是在承诺两台机器会产生同一个文件。它消除的是一切由 PartCAD 决定的东西——用哪种算法、数字如何书写、时钟、GUID、``s"
+"et`` 的迭代顺序——剩下的则是 CAD 内核自己的算术。两个平台若对某个超越函数的最后一位有分歧，沿着弯曲的轮廓仍然可能比对方多找出"
+"一个交点，再怎么取整也无法让这两张工程图成为同一个文件。因此，同一台机器上的两次渲染会得到同一个文件，而两台机器则在除最棘手的对象之外的"
+"一切上保持一致。这就是为什么 PartCAD 自己的 ``Examples (PartCAD)`` 作业只在矩阵的一个单元上比对签入的工"
+"程图，而不是在所有单元上比对。"
+
+#: ../../source/config_output.rst:248
+msgid "Custom implementations"
+msgstr "自定义实现"
+
+#: ../../source/config_output.rst:250
+msgid ""
+"Declaring ``path`` for a file type replaces the implementation itself with a "
+"script the package supplies. This is the same mechanism as a ``partType`` "
+"wrapper: the script runs inside a PartCAD sandbox, so it may import OCP, "
+"build123d or CadQuery, and it is executed with two globals available --"
+msgstr ""
+"为某个文件类型声明 ``path``，会用包提供的脚本替换掉实现本身。这与 ``partType`` 包装器是同一套机制：脚本在 Par"
+"tCAD 沙箱中运行，因此可以导入 OCP、build123d 或 CadQuery，执行时有两个全局变量可用——"
+
+#: ../../source/config_output.rst:255
+msgid ""
+"``request`` -- the shape in ``request[\"wrapped\"]``, every export parameter "
+"the configuration resolved to, and ``shape_name``, ``shape_kind`` and "
+"``shape_type`` describing the object being written"
+msgstr ""
+"``request`` ——形状位于 ``request[\"wrapped\"]`` 中，还有配置解析得到的每一个导出参数，以及描述所写对"
+"象的 ``shape_name``、 ``shape_kind`` 和 ``shape_type``"
+
+#: ../../source/config_output.rst:258
+msgid "``path`` -- the absolute path of the file to write"
+msgstr "``path`` ——要写入的文件的绝对路径"
+
+#: ../../source/config_output.rst:260
+msgid "-- and reports what happened either by setting a global ``output``:"
+msgstr "——而它通过设置全局变量 ``output`` 来报告结果："
+
+#: ../../source/config_output.rst:268
+msgid ""
+"or by defining a function that returns the same thing, which is what lets "
+"one implementation reuse another:"
+msgstr "也可以定义一个返回同样内容的函数，这正是一个实现能够复用另一个实现的原因："
+
+#: ../../source/config_output.rst:286
+msgid ""
+"``path`` is resolved relative to the package that declared it. A file type "
+"that no built-in package implements may be declared this way too, and is "
+"then nameable with ``pc export -t`` / ``pc render -t`` like any other."
+msgstr ""
+"``path`` 相对于声明它的那个包解析。没有任何内置包实现的文件类型也可以这样声明，此后便能像其他类型一样用 ``pc export"
+" -t`` / ``pc render -t`` 指名使用。"
+
+#: ../../source/config_output.rst:290
+msgid "See ``examples/feature_export_custom`` for both halves of this."
+msgstr "这两方面的完整示例见 ``examples/feature_export_custom``。"
+
+#: ../../source/config_output.rst:293
+msgid "Using another package's implementation"
+msgstr "使用其他包的实现"
+
+#: ../../source/config_output.rst:295
+msgid ""
+"``pc export -e <package>`` (and ``pc render -e <package>``) reads the "
+"``export:``/``render:`` sections of a further package on top of the built-in "
+"ones, so an implementation declared in one package can be applied to the "
+"objects of another without that package knowing about it:"
+msgstr ""
+"``pc export -e <package>`` （以及 ``pc render -e <package>``）会在内置小节之上再读"
+"取另一个包的 ``export:`` / ``render:`` 小节，这样在某个包中声明的实现就可以用在另一个包的对象上，而后者对此一无所知："
+
+#: ../../source/config_output.rst:304
+msgid ""
+"That is one command's worth of it. To have a package's own output written "
+"that way every time, declare the file type and say where the implementation "
+"lives: ``package`` names the package, ``path`` the script inside it. The "
+"implementing package is fetched like any other dependency, and its "
+"``pythonRequirements`` are installed into the sandbox before its "
+"implementation runs, so nothing has to be installed by hand:"
+msgstr ""
+"这只够用在一条命令上。若要让包自己的输出每次都这样写出，就声明该文件类型并说明实现在哪里：``package`` 指明包，``path`"
+"` 指明包内的脚本。提供实现的包会像其他依赖一样被获取，它的 ``pythonRequirements`` 会在它的实现运行之前安装进沙"
+"箱，因此无需手工安装任何东西："
+
+#: ../../source/config_output.rst:325
+msgid ""
+"``examples/feature_render_custom`` is exactly this: three file types drawn "
+"by an implementation published in the public index."
+msgstr "``examples/feature_render_custom`` 正是如此：三种文件类型由公共索引中发布的一个实现来绘制。"
+
+#: ../../source/config_output.rst:328
+msgid ""
+"The sandbox comes with the implementation rather than from the package "
+"asking for the file. Both ``pythonVersion`` and ``pythonRequirements`` are "
+"read from the implementing package -- from the file type as *that* package "
+"declares it, or from the package itself -- and from nowhere else. It could "
+"not be otherwise: the caller may be a package of STEP files with no Python "
+"in it at all, and it has never heard of what that script imports. Where the "
+"implementing package declares no interpreter, it is a fixed default rather "
+"than whichever one PartCAD itself is running on, which would otherwise "
+"scatter the sandbox across versions depending on how PartCAD was installed."
+msgstr ""
+"沙箱随实现而来，而不是来自请求该文件的那个包。``pythonVersion`` 和 ``pythonRequirements`` 都只"
+"从提供实现的包读取——从 *那个* 包所声明的文件类型中读取，或者从该包本身读取——别无他处。只能如此：调用方可能是一个全是 STEP "
+"文件、里面完全没有 Python 的包，它根本不知道那个脚本导入了什么。当提供实现的包没有声明解释器时，用的是一个固定的默认值，而不是 "
+"PartCAD 自身正在运行的那个版本；否则沙箱就会随 PartCAD 的安装方式不同而散落在各个版本上。"
+
+#: ../../source/config_output.rst:338
+msgid ""
+"Both fields still parse anywhere -- every field of a file type layers the "
+"same way -- so setting them on a file type whose implementation lives "
+"elsewhere is not an error. It simply describes nothing: the environment "
+"being described belongs to the package that wrote the script."
+msgstr ""
+"这两个字段在任何地方仍然都能被解析——文件类型的每个字段都以同样的方式分层——因此在一个实现位于别处的文件类型上设置它们并不是错误。只不"
+"过它什么也没有描述：被描述的那个环境属于写出该脚本的包。"
+
+#: ../../source/config_output.rst:344
+msgid "Bringing dependencies pip cannot install"
+msgstr "引入 pip 无法安装的依赖"
+
+#: ../../source/config_output.rst:346
+msgid ""
+"A Python sandbox can bring whatever pip can install, which is not "
+"everything. A native executable is not a Python package at all, and some "
+"Python packages publish no wheel for some platforms -- gmsh publishes none "
+"for 64-bit ARM Linux and no source distribution either. A package that needs "
+"one of those names an image of its own, and PartCAD builds the ``docker`` "
+"sandbox from that image instead of from its own:"
+msgstr ""
+"Python 沙箱可以引入 pip 能安装的任何东西，但那并不是全部。原生可执行文件根本不是 Python 包，而有些 Python 包"
+"不为某些平台发布 wheel——gmsh 就不为 64 位 ARM Linux 发布 wheel，也不发布源码分发包。需要这类依赖的包可"
+"以指定自己的镜像，PartCAD 便会从该镜像而不是从自己的镜像构建 ``docker`` 沙箱："
+
+#: ../../source/config_output.rst:357
+msgid ""
+"``dockerImage`` is read wherever ``pythonVersion`` is -- on the package, on "
+"a part or sketch that runs a script, on a provider, and on a file type in "
+"``export:``, ``render:``, ``cam:`` or ``cae:``:"
+msgstr ""
+"凡是读取 ``pythonVersion`` 的地方都会读取 ``dockerImage`` ——包上、运行脚本的零件或草图上、提供方上"
+"，以及 ``export:``、 ``render:``、 ``cam:`` 或 ``cae:`` 中的文件类型上："
+
+#: ../../source/config_output.rst:369
+msgid ""
+"Like ``pythonVersion`` and ``pythonRequirements``, it is read from the "
+"*implementing* package and from nowhere else, for the same reason: which "
+"environment a script needs is known only to whoever wrote it."
+msgstr ""
+"与 ``pythonVersion`` 和 ``pythonRequirements`` 一样，它只从 *提供实现的* 那个包读取，别无"
+"他处，理由也相同：一个脚本需要什么环境，只有写它的人知道。"
+
+#: ../../source/config_output.rst:373
+msgid ""
+"The image is a **runtime, not a delivery mechanism**. PartCAD mounts the "
+"package tree into it at run time, so a user who fetches a newer version of "
+"your package gets that version and not one baked into an image months ago. "
+"An image that carries the package's own code will be serving stale code the "
+"first time anybody updates."
+msgstr ""
+"镜像是 **运行时，而不是交付手段**。PartCAD 会在运行时把包树挂载进去，因此获取了你的包的较新版本的用户拿到的就是那个版本，而"
+"不是几个月前烤进镜像里的版本。如果镜像里带着包自己的代码，那么任何人第一次更新之后，它提供的就是过时的代码。"
+
+#: ../../source/config_output.rst:379
+msgid ""
+"**Declaring an image does not excuse declaring requirements.** A "
+"``dockerImage`` says where this runs *best*; it does not say where this runs "
+"at all. Every package that names one still declares the complete "
+"``pythonRequirements`` (or a ``requirements.txt``), so that the same package "
+"works in a ``conda`` or ``venv`` sandbox on a host that already has the non-"
+"Python pieces installed -- a workstation with ``ccx`` on its ``PATH``, a CI "
+"runner where the job installed them. What the image is for is everything pip "
+"cannot supply. What happens where neither is satisfied is an ordinary "
+"failure, reported with whatever the implementation said was missing."
+msgstr ""
+"**声明了镜像并不能免除声明依赖。** ``dockerImage`` 说的是这东西在哪里运行得 *最好*，而不是它到底能在哪里运行。每"
+"个指定了镜像的包仍然要声明完整的 ``pythonRequirements`` （或一份 ``requirements.txt``），这"
+"样同一个包在已经装好非 Python 部分的主机上，也能在 ``conda`` 或 ``venv`` 沙箱中工作——比如 ``PATH`"
+"` 上有 ``ccx`` 的工作站，或者由作业装好了这些依赖的 CI 运行器。镜像的用途是提供 pip 无法提供的一切。两者都不满足时，"
+"就是一次普通的失败，并附上实现所报告的缺失内容。"
+
+#: ../../source/config_output.rst:389
+msgid ""
+"The same holds where the image simply cannot be pulled -- an offline "
+"machine, a firewall, a registry that has not been logged in to. PartCAD says "
+"so once and falls back to its own base image, because \"runs best here\" is "
+"not \"runs only here\"; the package's requirements are then the whole of "
+"what it gets, which is exactly the case the paragraph above is about."
+msgstr ""
+"镜像根本拉不下来时也是如此——离线的机器、防火墙、尚未登录的镜像仓库。PartCAD 会提示一次，然后回退到自己的基础镜像，因为“在这里"
+"运行得最好”不等于“只能在这里运行”；此时包声明的依赖就是它得到的全部，而这正是上一段所讲的情形。"
+
+#: ../../source/config_output.rst:395
+msgid ""
+"**The image is part of what a shape is cached under.** An image is named "
+"precisely for what pip cannot install, so two images carrying the same "
+"interpreter and the same wheels are still two different native stacks. "
+"Changing ``dockerImage`` therefore rebuilds the shapes that were produced in "
+"the old one rather than handing back what it built -- as does falling back "
+"to PartCAD's own image, since that is the image the shape was really "
+"produced in. A sandbox with no image keys exactly as it did before there was "
+"such a thing as an image, so nothing else is invalidated."
+msgstr ""
+"**镜像是形状缓存键的一部分。** 指定镜像恰恰是为了 pip 无法安装的那些东西，因此两个携带相同解释器和相同 wheel 的镜像，仍"
+"然是两套不同的原生依赖栈。所以修改 ``dockerImage`` 会重新构建此前在旧镜像中产生的那些形状，而不是把旧镜像构建的结果交回"
+"来——回退到 PartCAD 自己的镜像时同样如此，因为那才是形状真正产生于其中的镜像。没有镜像的沙箱，其缓存键与还不存在镜像这回事的时"
+"候完全一样，因此不会有别的东西被作废。"
+
+#: ../../source/config_output.rst:407
+msgid "Architecture, and the name PartCAD actually pulls"
+msgstr "体系结构，以及 PartCAD 实际拉取的名称"
+
+#: ../../source/config_output.rst:409
+msgid ""
+"PartCAD appends the architecture of the machine to the name before pulling "
+"it, so the name above is pulled as::"
+msgstr "PartCAD 在拉取之前会把机器的体系结构追加到名称后面，因此上面的名称实际按如下形式拉取： ::"
+
+#: ../../source/config_output.rst:414
+msgid ""
+"and falls back to the bare ``ghcr.io/example/solver:1a2b3c4d5e6f`` when "
+"there is no such tag. One line in ``partcad.yaml`` therefore covers every "
+"architecture your image is built for, and adding one later is a new tag "
+"rather than an edit to every package that uses it."
+msgstr ""
+"若不存在这样的标签，则回退到不带后缀的 ``ghcr.io/example/solver:1a2b3c4d5e6f``。因此 ``par"
+"tcad.yaml`` 中的一行就覆盖了你的镜像所构建的全部体系结构，日后新增一种体系结构只是多一个标签，而不需要修改每一个使用它的包。"
+
+#: ../../source/config_output.rst:419
+msgid ""
+"Build the suffixed tags. The bare name exists so that a first experiment "
+"works before its author has heard of any of this, and a package that only "
+"has one is a package that works on the machine it was written on -- which is "
+"why the public index does not accept them."
+msgstr ""
+"请构建带后缀的标签。不带后缀的名称之所以存在，是为了让第一次尝试在作者还没听说过这些规则时就能跑通；而只有这种名称的包，是一个只能在编写"
+"它的那台机器上工作的包——这正是公共索引不接受它们的原因。"
+
+#: ../../source/config_output.rst:425
+msgid "Pinning"
+msgstr "固定版本"
+
+#: ../../source/config_output.rst:427
+msgid ""
+"Pin an **immutable** tag, whose content cannot change under it -- a digest, "
+"or a tag derived from a hash of what the image was built from. An image that "
+"changes under a fixed name changes what a part renders as, with nothing in "
+"the package to say so, and nothing checked into a repository can be trusted "
+"to still mean what it did."
+msgstr ""
+"请固定一个 **不可变** 的标签，即其内容不会在这个名字底下发生变化——摘要值，或者由镜像构建来源的哈希派生出来的标签。在固定名称下发"
+"生变化的镜像会改变零件渲染出来的样子，而包里没有任何地方说明这一点，于是签入仓库的任何内容都无法再被信任仍是原来的含义。"
+
+#: ../../source/config_output.rst:433
+msgid ""
+"Test against a moving one as well. A package whose continuous integration "
+"also runs against, say, ``:latest`` finds out that a rebuilt base image "
+"broke it from its own test run, rather than from a user's bug report after "
+"it bumps the pin. The two uses do not conflict: what is pinned is what users "
+"get, what moves is what the maintainer watches. Anything whose output is "
+"compared byte for byte -- the images checked in under ``examples/`` -- pins "
+"the immutable tag, or the comparison fails for changes nobody made."
+msgstr ""
+"同时也要针对一个会移动的标签做测试。如果某个包的持续集成还会针对比如 ``:latest`` 运行，那么重新构建的基础镜像一旦把它弄坏，"
+"它会从自己的测试运行中发现，而不是等到提升固定版本之后才从用户的缺陷报告中得知。这两种用法并不冲突：固定下来的是用户拿到的东西，会移动的"
+"是维护者盯着的东西。凡是输出需要逐字节比对的——签入 ``examples/`` 下的那些图片——都要固定不可变标签，否则比对会因无人所"
+"作的改动而失败。"
+
+#: ../../source/config_output.rst:442
+msgid "Building on PartCAD's images"
+msgstr "基于 PartCAD 的镜像构建"
+
+#: ../../source/config_output.rst:444
+msgid ""
+"PartCAD publishes a base image per supported Python version and "
+"architecture, carrying the interpreter and the service that runs scripts "
+"inside it. Build on one of those, add what pip cannot install, and the "
+"result is an image PartCAD knows how to talk to:"
+msgstr ""
+"PartCAD 为每一个受支持的 Python 版本和体系结构发布一个基础镜像，其中带有解释器以及在镜像内运行脚本的服务。基于其中之一构"
+"建，补上 pip 无法安装的东西，得到的就是一个 PartCAD 知道如何与之通信的镜像："
+
+#: ../../source/config_output.rst:457
+msgid ""
+"``tools/containers/README.md`` in the ``partcad`` repository states what the "
+"base image guarantees, what a derived image may change, and how to check "
+"that yours still conforms. Carry the ``partcad.*`` labels it documents: they "
+"are what ``pc system prune`` recognises, and an image without them is one "
+"PartCAD will leave behind when it cleans up after itself."
+msgstr ""
+"``partcad`` 仓库中的 ``tools/containers/README.md`` 说明了基础镜像保证什么、派生镜像可以改变"
+"什么，以及如何检查你的镜像是否仍然符合要求。请带上其中记录的 ``partcad.*`` 标签：``pc system prune`` "
+"识别的就是它们，而没有这些标签的镜像，在 PartCAD 自我清理时会被遗留下来。"
+
+#: ../../source/config_output.rst:464
+msgid "What it costs"
+msgstr "代价是什么"
+
+#: ../../source/config_output.rst:466
+msgid ""
+"A container runtime, and the size of the image. On a machine with neither a "
+"container runtime nor the dependencies installed natively, the package "
+"cannot run -- and says which of the two would fix it."
+msgstr ""
+"一个容器运行时，以及镜像的体积。在既没有容器运行时、也没有原生安装这些依赖的机器上，该包无法运行——并且会说明补上两者中的哪一个可以解决问题。"
+
+#: ../../source/config_output.rst:471
+msgid "Built-in implementations"
+msgstr "内置实现"
+
+#: ../../source/config_output.rst:473
+msgid ""
+"The export and render formats PartCAD ships are not special-cased anywhere: "
+"they are declared in exactly the form above by two packages that live inside "
+"the ``partcad`` installation and that every context can reach, ``//builtin/"
+"export`` and ``//builtin/render``. They are the bottom layer of the "
+"configuration, so a package that sets a single parameter keeps the built-in "
+"implementation for everything else, and a package that sets ``path`` "
+"replaces it."
+msgstr ""
+"PartCAD 自带的导出格式和渲染格式在任何地方都没有被特殊处理：它们由两个包以上面完全相同的形式声明，这两个包位于 ``partca"
+"d`` 安装之内、任何上下文都能访问，即 ``//builtin/export`` 和 ``//builtin/render``。它们是"
+"配置的最底层，因此只设置了一个参数的包，其余一切仍然沿用内置实现；而设置了 ``path`` 的包则会把它替换掉。"
+
+#: ../../source/config_output.rst:480
+msgid ""
+"Two of the other sections ship one the same way: ``//builtin/cam`` declares "
+"the ``gcode`` file type ``pc cam`` writes (see :ref:`pc cam <cam>`), and ``//"
+"builtin/open`` declares the applications ``pc open`` starts. ``cae:`` is the "
+"one that ships nothing, because PartCAD implements no solver."
+msgstr ""
+"另外两个小节也以同样的方式各自带了一个包：``//builtin/cam`` 声明了 ``pc cam`` 写出的 ``gcode`` "
+"文件类型（见 :ref:`pc cam <cam>`），``//builtin/open`` 声明了 ``pc open`` 启动的应用"
+"程序。``cae:`` 是唯一什么都不自带的，因为 PartCAD 没有实现任何求解器。"
+
+#: ../../source/config_output.rst:485
+msgid ""
+"``//builtin/export`` implements ``step``, ``brep``, ``stl``, ``3mf``, "
+"``obj``, ``gltf``, ``iges``, ``threejs`` and ``urdf``. ``//builtin/render`` "
+"implements ``svg``, ``png``, ``jpeg`` and ``dxf``. Reading their ``partcad."
+"yaml`` is the most direct way to see what parameters each file type takes "
+"and what a package's own implementation should look like."
+msgstr ""
+"``//builtin/export`` 实现了 ``step``、 ``brep``、 ``stl``、 ``3mf``、 ``obj"
+"``、 ``gltf``、 ``iges``、 ``threejs`` 和 ``urdf``。``//builtin/render`` "
+"实现了 ``svg``、 ``png``、 ``jpeg`` 和 ``dxf``。阅读它们的 ``partcad.yaml`` 是了解每"
+"种文件类型接受哪些参数、以及包自己的实现应当长什么样的最直接方式。"
+
+#: ../../source/config_output.rst:491
+msgid ""
+"It carries neither ``world`` nor ``mjcf``: an engine's own scene format "
+"belongs to that engine's plugin package, beside the reader and the simulator "
+"that share its knowledge of the format. Write ``sim-gazebo:world`` and ``sim-"
+"mujoco:mjcf`` (see `Naming a file type elsewhere`_), which resolve through "
+"the plugin."
+msgstr ""
+"它既不包含 ``world`` 也不包含 ``mjcf``：某个引擎自己的场景格式属于该引擎的插件包，与同样掌握该格式知识的读取器和仿真"
+"器放在一起。请写 ``sim-gazebo:world`` 和 ``sim-mujoco:mjcf`` （见 `Naming a fil"
+"e type elsewhere`_），它们通过插件解析。"
+
+#: ../../source/config_output.rst:497
+msgid "Naming a file type elsewhere"
+msgstr "指名位于别处的文件类型"
+
+#: ../../source/config_output.rst:499
+msgid ""
+"A file type is ordinarily a bare name -- ``step``, ``png`` -- and every "
+"package with an opinion about it is layered on top of the built-in one. It "
+"may also be written as a full resource path, which names the package the "
+"implementation lives in:"
+msgstr ""
+"文件类型通常是一个裸名称—— ``step``、 ``png`` ——对它有意见的每个包都叠加在内置包之上。它也可以写成完整的资源路径，"
+"从而指明实现所在的包："
+
+#: ../../source/config_output.rst:515
+msgid ""
+"That is the spelling every other section resolved this way already takes -- "
+"``import:``, ``simulation:``, ``pc cae --implementation`` -- and it is here "
+"for the same reason: a format PartCAD ships no implementation of has no "
+"other way to be reached. Nothing in ``//builtin/export`` is going to write "
+"MJCF or SDFormat, so ``pc export -t mjcf`` on a package that never mentioned "
+"MJCF has nothing to resolve, and ``pc export -t sim-mujoco:mjcf`` has."
+msgstr ""
+"其他以同样方式解析的小节早已采用这种写法—— ``import:``、 ``simulation:``、 ``pc cae --impl"
+"ementation`` ——它出现在这里的理由也相同：PartCAD 不提供实现的格式没有别的办法可以被找到。``//builtin/"
+"export`` 中没有任何东西会写出 MJCF 或 SDFormat，所以在一个从未提到过 MJCF 的包上执行 ``pc expor"
+"t -t mjcf`` 无从解析，而 ``pc export -t sim-mujoco:mjcf`` 则可以。"
+
+#: ../../source/config_output.rst:522
+msgid ""
+"The named package goes in as a layer directly above the built-in one rather "
+"than replacing the lot, because this section also decides where the file "
+"goes: ``output_dir`` and ``prefix`` are the caller's business whoever writes "
+"the file. So a package that asks for somebody else's exporter still says "
+"where the result lands, and still re-tunes any parameter it wants to."
+msgstr ""
+"被指名的包是作为紧挨在内置层之上的一层加入的，而不是把整套取而代之，因为这个小节同时还决定文件写到哪里：不论由谁写出文件，``outpu"
+"t_dir`` 和 ``prefix`` 都是调用方的事。所以，请求使用他人导出器的包，仍然由自己说明结果落在哪里，也仍然可以重新调整它"
+"想调整的任何参数。"
+
+#: ../../source/config_output.rst:528
+msgid ""
+"``readme``, ``pdf`` and ``html`` are the outputs ``render:`` accepts that no "
+"implementation writes: PartCAD assembles them itself out of what the package "
+"declares and the images the other file types leave behind (see ``pc render`` "
+"in :doc:`cli`)."
+msgstr ""
+"``readme``、 ``pdf`` 和 ``html`` 是 ``render:`` 接受、却没有任何实现去写的输出：PartCAD"
+" 自己用包所声明的内容和其他文件类型留下的图片把它们组装出来（见 :doc:`cli` 中的 ``pc render``）。"
+
+#: ../../source/config_output.rst:533
+msgid ""
+"That holds for as long as nobody writes them. A ``pdf:`` or ``html:`` that "
+"names a ``path`` is a package saying that this file is one of its own -- a "
+"drawing, a datasheet -- and PartCAD produces it by running that "
+"implementation instead of assembling the assembly instruction book over it. "
+"``readme`` is the one that cannot be taken over in practice, not because it "
+"is held apart but because PartCAD ships no implementation of it to replace. "
+"See ``examples/feature_render_custom``, where ``pdf``, ``svg`` and ``dxf`` "
+"are all technical drawings produced by an implementation another package "
+"publishes."
+msgstr ""
+"这只在无人去写它们的时候成立。指定了 ``path`` 的 ``pdf:`` 或 ``html:``，意味着包声明这个文件是它自己的——"
+"一张工程图、一份数据手册——于是 PartCAD 会运行那个实现来产生它，而不是在它之上组装装配说明手册。``readme`` 是实际上"
+"无法被接管的那一个，并不是因为它被区别对待，而是因为 PartCAD 没有自带它的实现可供替换。参见 ``examples/featur"
+"e_render_custom``，其中 ``pdf``、 ``svg`` 和 ``dxf`` 都是由另一个包发布的实现所产生的工程图。"
+
+#: ../../source/config_output.rst:542
+msgid ""
+"The package's ``readme`` takes its text from the top-level ``docs:`` "
+"section, and its ``exclude`` also takes ``packages``, which leaves out the "
+"list of sub-packages -- where a package that depends on the public index "
+"would otherwise list the index:"
+msgstr ""
+"包的 ``readme`` 从顶层的 ``docs:`` 小节获取文字，而它的 ``exclude`` 还接受 ``packages``"
+"，用于略去子包列表——否则依赖公共索引的包就会在那里把整个索引列出来："
+
+#: ../../source/config_output.rst:557
+msgid ""
+"``docs.name`` is only the title. The top-level ``name`` is the one that says "
+"which package this is."
+msgstr "``docs.name`` 只是标题。说明这是哪个包的，是顶层的 ``name``。"
+
+#: ../../source/config_output.rst:560
+msgid ""
+"``urdf`` is the one built-in file type that is not a single file: it writes "
+"a ``.urdf`` plus the directory of mesh files it references, which is why "
+"``Shape.convert()`` refuses it (there is no single payload to hand back) and "
+"why it declares ``decode: false`` - it is handed the assembly *tree* itself, "
+"one URDF link per node, rather than the geometry the tree decodes to. "
+"Decoding keeps the shape of the tree but nothing else about it: every node's "
+"``name`` and ``label`` is dropped, and its placement is baked into the "
+"geometry instead of staying readable as the joint origin. See :doc:"
+"`simulation`."
+msgstr ""
+"``urdf`` 是唯一一个不止一个文件的内置文件类型：它写出一个 ``.urdf``，外加它所引用的网格文件所在的目录。这就是 ``S"
+"hape.convert()`` 拒绝它的原因（没有单一的数据可供交回），也是它声明 ``decode: false`` 的原因——交给"
+"它的是装配 *树* 本身，每个节点对应一个 URDF 连杆，而不是这棵树解码后得到的几何。解码会保留树的结构，但别的什么都不保留：每个节"
+"点的 ``name`` 和 ``label`` 都会丢失，其位置会被烤进几何之中，而不再能作为关节原点读出。参见 :doc:`simul"
+"ation`。"
+
+#: ../../source/config_output.rst:572
+msgid "Analyses"
+msgstr "分析"
+
+#: ../../source/config_output.rst:574
+msgid ""
+"``cae:`` is a third section of the same shape, and it is where an "
+"engineering analysis is implemented. Its file types are what :ref:`pc cae "
+"<cae>` runs, and every field means what it means above -- ``path`` and "
+"``package`` name the script, ``pythonRequirements`` and ``pythonVersion`` "
+"describe its sandbox, ``extension`` says what the model file is called, and "
+"everything else is a parameter handed to the script:"
+msgstr ""
+"``cae:`` 是形式相同的第三个小节，工程分析就在这里实现。它的文件类型正是 :ref:`pc cae <cae>` 所运行的东西，"
+"每个字段的含义都与上文相同—— ``path`` 和 ``package`` 指明脚本， ``pythonRequirements`` "
+"和 ``pythonVersion`` 描述它的沙箱， ``extension`` 说明模型文件叫什么，其余一切都是交给脚本的参数："
+
+#: ../../source/config_output.rst:591
+msgid ""
+"Three things are different from ``export:`` and ``render:``, and all three "
+"follow from an analysis not being a file type of the object:"
+msgstr "有三点与 ``export:`` 和 ``render:`` 不同，这三点都源于分析并不是对象的一种文件类型："
+
+#: ../../source/config_output.rst:594
+msgid ""
+"**There is no built-in package.** PartCAD ships no solver, so ``cae:`` has "
+"no bottom layer to fall back on and no fallback section either: an export "
+"implementation cannot stand in for one, and a ``fea`` declared under "
+"``export:`` is an export format that happens to be called ``fea``. Which "
+"implementation runs by default is the ``caeFeaImplementation`` / "
+"``caeCfdImplementation`` user configuration option, naming a package and a "
+"file type in it."
+msgstr ""
+"**没有内置包。** PartCAD 不自带任何求解器，所以 ``cae:`` 既没有可供回退的底层，也没有回退小节：导出实现无法代替它"
+"，而声明在 ``export:`` 下的 ``fea`` 只是一种碰巧叫作 ``fea`` 的导出格式。默认运行哪个实现，由 ``cae"
+"FeaImplementation`` / ``caeCfdImplementation`` 用户配置选项决定，它指明一个包以及其中的一种文件类型。"
+
+#: ../../source/config_output.rst:601
+msgid ""
+"**``extension`` is required.** Which model format an analysis writes -- a 3D "
+"field, a 2D plot -- is the implementation's decision, and guessing on its "
+"behalf would put a name on a file whose contents are something else."
+msgstr ""
+"**``extension`` 是必填的。** 分析写出哪种模型格式——3D 场、2D 图——是实现的决定，替它猜测只会给一个内容完全是"
+"别的东西的文件安上名字。"
+
+#: ../../source/config_output.rst:604
+msgid ""
+"**The implementation reports findings.** Beside ``success`` it returns "
+"``findings``, a JSON array of what it has to say about the part. An empty "
+"one is a pass, and is what the ``fea`` and ``cfd`` checks of ``pc test`` "
+"require."
+msgstr ""
+"**实现要报告发现项。** 除 ``success`` 之外，它还返回 ``findings``，这是一个 JSON 数组，记录它对该零"
+"件要说的话。空数组表示通过，这也是 ``pc test`` 的 ``fea`` 和 ``cfd`` 检查所要求的。"
+
+#: ../../source/config_output.rst:608
+msgid ""
+"The file it writes is named after the analysis as well as the object -- "
+"``bracket.fea.glb`` -- because a part has as many results as it has "
+"analyses. What the analysis is *given* is the part's own ``fea:``/``cfd:`` "
+"section, which is a property of the part rather than of whoever analyses it; "
+"see :ref:`pc cae <cae>` for how ``fix:`` and ``load:`` are written and what "
+"units they are in."
+msgstr ""
+"它写出的文件既以对象命名，也以分析命名—— ``bracket.fea.glb`` ——因为一个零件有多少种分析就有多少份结果。*交给*"
+" 分析的是零件自己的 ``fea:`` / ``cfd:`` 小节，那是零件的属性，而不是分析者的属性；``fix:`` 和 ``loa"
+"d:`` 如何书写、使用什么单位，见 :ref:`pc cae <cae>`。"
+
+#: ../../source/config_output.rst:618
+msgid "Routes"
+msgstr "加工路径"
+
+#: ../../source/config_output.rst:620
+msgid ""
+"``cam:`` is a fourth section of the same shape, and it is where a route -- "
+"the program a machine cuts an object with -- is implemented. Its file types "
+"are what :ref:`pc cam <cam>` produces, and every field means what it means "
+"above:"
+msgstr ""
+"``cam:`` 是形式相同的第四个小节，加工路径——机器用来切削对象的那段程序——就在这里实现。它的文件类型正是 :ref:`pc c"
+"am <cam>` 所产生的东西，每个字段的含义都与上文相同："
+
+#: ../../source/config_output.rst:633
+msgid ""
+"Two things are different from ``export:`` and ``render:``, and one thing is "
+"different from ``cae:``:"
+msgstr "有两点与 ``export:`` 和 ``render:`` 不同，还有一点与 ``cae:`` 不同："
+
+#: ../../source/config_output.rst:636
+msgid ""
+"**There is a built-in package**, unlike ``cae:``. A route is arithmetic on "
+"the object's own outline rather than somebody else's program with a release "
+"cycle of its own, which is the test ``export:`` and ``render:`` already pass "
+"and a solver does not -- so PartCAD ships ``//builtin/cam``, whose ``gcode`` "
+"file type is what ``camImplementation`` names by default. Nothing has to be "
+"installed for ``pc cam`` to work."
+msgstr ""
+"**有内置包**，这与 ``cae:`` 不同。加工路径是在对象自身的轮廓上做算术，而不是别人那套有自己发布周期的程序——这正是 ``e"
+"xport:`` 和 ``render:`` 已经通过、而求解器通不过的检验——所以 PartCAD 自带 ``//builtin/ca"
+"m``，它的 ``gcode`` 文件类型就是 ``camImplementation`` 默认指明的对象。``pc cam`` 无需安"
+"装任何东西即可工作。"
+
+#: ../../source/config_output.rst:642
+msgid ""
+"**There is no fallback section.** A route is not a file another CAD tool "
+"opens as a part, so a ``gcode`` declared under ``render:`` is a render "
+"format that happens to be called ``gcode``, and neither section stands in "
+"for the other."
+msgstr ""
+"**没有回退小节。** 加工路径不是另一个 CAD 工具可以作为零件打开的文件，所以声明在 ``render:`` 下的 ``gcode"
+"`` 只是一种碰巧叫作 ``gcode`` 的渲染格式，两个小节谁也不能代替谁。"
+
+#: ../../source/config_output.rst:645
+msgid ""
+"**``extension`` is required**, for the reason it is required of an analysis: "
+"what a controller reads is the implementation's decision."
+msgstr "**``extension`` 是必填的**，理由与它对分析而言必填相同：控制器读什么，是实现的决定。"
+
+#: ../../source/config_output.rst:648
+msgid ""
+"The file it writes is named after the object alone -- ``panel.nc`` -- "
+"because an object has one route at a time and the extension already says "
+"what the file is."
+msgstr "它写出的文件只以对象命名—— ``panel.nc`` ——因为一个对象同一时间只有一条加工路径，而扩展名已经说明了这个文件是什么。"
+
+#: ../../source/config_output.rst:651
+msgid ""
+"**The parameters PartCAD knows by name -- the job: the tool, the depth, the "
+"feed and the rest of the closed list below -- are also keys an object may "
+"set for itself.** Nothing else is: not the parameters that describe the file "
+"rather than the cut, and not a parameter a third-party implementation "
+"invented, however squarely it describes the cut. PartCAD cannot check a name "
+"it has never heard of against a list, which is why the list is closed and "
+"why the paragraphs after the example spell out what is on it. That shared "
+"job half is what makes this section and the object's own declaration layers "
+"of one namespace rather than two different things:"
+msgstr ""
+"**PartCAD 按名称认识的那些参数——加工任务：刀具、深度、进给，以及下面这个封闭列表中的其余各项——同时也是对象可以为自己设置的"
+"键。** 别的都不是：既不包括描述文件而非描述切削的参数，也不包括第三方实现自创的参数，无论它把切削描述得多么贴切。PartCAD 无法"
+"拿一个从未听说过的名字去对照列表检查，这就是列表是封闭的原因，也是示例之后的几段要逐一说明列表内容的原因。正是这共享的加工任务那一半，使"
+"本小节与对象自己的声明成为同一命名空间的两层，而不是两件不同的东西："
+
+#: ../../source/config_output.rst:687
+msgid ""
+"``//builtin/cam`` is underneath both. So a package cutting twenty parts from "
+"one sheet sets the feed once, and the one part that needs a smaller cutter "
+"says so for itself."
+msgstr ""
+"``//builtin/cam`` 位于两者之下。所以，要从一张板材上切出二十个零件的包只需设置一次进给，而那个需要更小刀具的零件自己说明即可。"
+
+#: ../../source/config_output.rst:691
+msgid ""
+"The object's half lives in ``manufacturing:`` and not in a ``cam:`` section "
+"of its own, and that is what makes the word mean one thing. It used to mean "
+"two -- the file types a package declares, and the job an object declared -- "
+"with the ambiguity managed by keeping the two key sets disjoint. Now ``cam:"
+"`` is the implementation registry and nothing else, and the job sits where "
+"the rest of \"how this is made\" already was."
+msgstr ""
+"对象的那一半位于 ``manufacturing:`` 中，而不在它自己的 ``cam:`` 小节里，这样这个词才只有一个含义。它曾经有"
+"两个含义——包所声明的文件类型，以及对象所声明的加工任务——靠保持两组键互不相交来控制这种歧义。如今 ``cam:`` 只是实现注册表，"
+"别无其他，而加工任务则落在“这东西是怎么做出来的”其余内容原本所在的地方。"
+
+#: ../../source/config_output.rst:698
+msgid ""
+"Within the object there are two scopes, and the difference is the point of "
+"having two. What is written directly under ``manufacturing:`` is shared by "
+"every machine the part names; what is written inside a machine's own "
+"subsection is that machine's, and outranks the shared value:"
+msgstr ""
+"在对象内部有两个作用域，而要有两个作用域，差别正是意义所在。直接写在 ``manufacturing:`` 下的内容，由该零件指明的每一"
+"台机器共享；写在某台机器自己的子小节里的内容则属于那台机器，并且优先于共享的取值："
+
+#: ../../source/config_output.rst:716
+msgid ""
+"**Each machine takes only the keys it reads.** A laser has no ``diameter:`` "
+"-- it has no cutter, and ``kerf:`` is what it removes -- and no ``depth:`` "
+"or ``safe_z:``, because it cuts through in one pass and never moves in Z. A "
+"drill has no ``depth:`` (how deep each hole goes is the geometry's to say), "
+"no ``feed:`` and no ``operation:``. Writing one of those inside that "
+"machine's own subsection is refused with a sentence naming what it does "
+"take; writing it in the shared scope is perfectly legal and simply not read "
+"by a machine that has no use for it."
+msgstr ""
+"**每台机器只接受它会读取的键。** 激光没有 ``diameter:`` ——它没有刀具，被它去除的是 ``kerf:`` ——也没有"
+" ``depth:`` 或 ``safe_z:``，因为它一次穿透，而且从不在 Z 方向移动。钻削没有 ``depth:`` （每个孔钻"
+"多深由几何说了算）、没有 ``feed:``，也没有 ``operation:``。把这些键之一写进那台机器自己的子小节会被拒绝，并给出"
+"一句说明它到底接受哪些键的提示；写在共享作用域里则完全合法，只是用不到它的机器不会去读。"
+
+#: ../../source/config_output.rst:725
+msgid ""
+"That distinction is the one a single flat list could not draw. ``tool:`` "
+"used to be one key meaning three things, and a cutter diameter written on a "
+"laser-cut part was a value silently ignored. It is ``diameter:`` now, it "
+"lives beside the machine it belongs to, and on a laser it is an error."
+msgstr ""
+"这种区分是单一的扁平列表画不出来的。``tool:`` 曾经是一个兼表三种含义的键，而写在激光切割零件上的刀具直径只会被悄悄忽略。现在它"
+"是 ``diameter:``，放在它所属的机器旁边，写在激光上则是错误。"
+
+#: ../../source/config_output.rst:730
+msgid ""
+"Those are the keys that describe the **cut**. A file type's other parameters "
+"describe the **file** -- ``//builtin/cam``'s ``units``, ``precision``, "
+"``tolerance`` and ``comments`` -- and are set here or by a package rather "
+"than by an object. The line is not tidiness: an object's section is checked "
+"against a list, a list can only hold what PartCAD knows the name of, and "
+"PartCAD cannot know the parameters of an implementation somebody else "
+"writes. So a package sets those for its objects, and the closed set is what "
+"buys the error message."
+msgstr ""
+"以上是描述 **切削** 的键。文件类型的其他参数描述的是 **文件**—— ``//builtin/cam`` 的 ``units``"
+"、 ``precision``、 ``tolerance`` 和 ``comments`` ——它们在这里设置或由包设置，而不是由对象设"
+"置。这条界线不是为了整洁：对象的小节会对照一个列表做检查，而列表只能容纳 PartCAD 知道名字的东西，PartCAD 又无法知道别人"
+"所写实现的参数。所以这些参数由包为它的对象设置，而封闭的集合换来的正是那条错误提示。"
+
+#: ../../source/config_output.rst:741
+msgid "Drawing the ports and the interfaces"
+msgstr "绘制端口和接口"
+
+#: ../../source/config_output.rst:743
+msgid ""
+"A port is a coordinate frame and an interface is a named set of them (see :"
+"ref:`interfaces`), so neither of them is geometry and neither shows up in a "
+"projection. The four projections ``//builtin/render`` implements draw them "
+"when the file type asks:"
+msgstr ""
+"端口是一个坐标系，接口是一组有名字的端口（见 :ref:`interfaces`），所以两者都不是几何，也都不会出现在投影中。当文件类型"
+"提出要求时，``//builtin/render`` 实现的那四种投影会把它们画出来："
+
+#: ../../source/config_output.rst:759
+msgid ""
+"``pc render --with-ports``, ``--with-interfaces``, ``--with-all`` and ``--"
+"with-internals`` ask for the same things for one invocation (see :doc:"
+"`cli`); declaring them on a file type asks for them permanently, which is "
+"how a package keeps a drawing of its connections checked in beside the plain "
+"one. The two add up rather than override: a file type declared with "
+"``with_ports: true`` draws them whether or not the option was given."
+msgstr ""
+"``pc render --with-ports``、 ``--with-interfaces``、 ``--with-all`` 和 "
+"``--with-internals`` 为单次调用提出同样的要求（见 :doc:`cli`）；而在文件类型上声明它们，则是永久地提出这"
+"些要求——包正是这样把一张连接关系图与普通图纸一起签入仓库的。两者是叠加而不是覆盖：声明了 ``with_ports: true`` 的"
+"文件类型，无论有没有给出该选项都会画出端口。"
+
+#: ../../source/config_output.rst:766
+msgid ""
+"On an assembly -- or a :ref:`scene <scenes>`, which is built the same way -- "
+"what is drawn is what the assembly says its ports are: the ones its ``map:`` "
+"externalizes and the ones it declares (see :ref:`assembly-ports`). Hiding "
+"the rest is the point of externalizing anything. ``with_internals`` walks "
+"everything inside it as well and places each child's ports where the "
+"assembly put the child, so a connection that went wrong is visible as two "
+"frames that should have met and did not."
+msgstr ""
+"在装配体上——或者在以同样方式构建的 :ref:`场景 <scenes>` 上——画出来的是装配体声明为自身端口的那些：由它的 ``ma"
+"p:`` 外化出来的，以及它自己声明的（见 :ref:`assembly-ports`）。隐藏其余部分正是外化的意义所在。``with_"
+"internals`` 还会遍历装配体内部的一切，并把每个子对象的端口放在装配体安置该子对象的位置上，这样出错的连接就表现为两个本应重合"
+"却没有重合的坐标系，一眼可见。"
+
+#: ../../source/config_output.rst:774
+msgid ""
+"The two flags reach every ``render:`` file type, this package's own and "
+"another's alike, along with the ports themselves; what an implementation "
+"makes of them is its own business, and one that ignores them draws nothing "
+"extra. Nothing at all is collected for a file type that asks for neither -- "
+"and never for an ``export:`` type, which is a file of geometry rather than a "
+"picture."
+msgstr ""
+"这两个标志会连同端口本身一起送达每一种 ``render:`` 文件类型，无论它属于本包还是别的包；实现拿它们做什么是实现自己的事，忽略"
+"它们的实现就什么额外内容都不画。对于两者都不要求的文件类型，则根本不会收集任何东西——对 ``export:`` 类型更是从不收集，因为"
+"那是几何文件而不是图片。"
+
+#: ../../source/config_output.rst:780
+msgid ""
+"``examples/feature_interface`` declares four such drawings: two of a part "
+"and two of the assembly it belongs to, each naming ``render_svg.py`` in ``//"
+"builtin/render`` as its implementation, in the manner of `Using another "
+"package's implementation`_."
+msgstr ""
+"``examples/feature_interface`` 声明了四张这样的图：两张是某个零件的，两张是它所属装配体的，每一张都按 `"
+"Using another package's implementation`_ 的方式，指名 ``//builtin/render``"
+" 中的 ``render_svg.py`` 作为自己的实现。"

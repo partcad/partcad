@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -17,11 +17,35 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/index.rst:22
-msgid "Contents:"
-msgstr "目录："
+msgid "Getting started"
+msgstr "入门"
+
+#: ../../source/index.rst:30
+msgid "Concepts"
+msgstr "概念"
+
+#: ../../source/index.rst:36
+msgid "Command line"
+msgstr "命令行"
+
+#: ../../source/index.rst:42
+msgid "Package configuration"
+msgstr "包配置"
+
+#: ../../source/index.rst:48
+msgid "Assemblies"
+msgstr "装配体"
+
+#: ../../source/index.rst:54
+msgid "Guides"
+msgstr "指南"
+
+#: ../../source/index.rst:62
+msgid "Help"
+msgstr "帮助"
 
 #: ../../source/index.rst:3
 msgid "PartCAD"
@@ -33,7 +57,9 @@ msgid ""
 "documenting manufacturable physical products. It comes with a set of "
 "tools to maintain product information and to facilitate efficient and "
 "effective workflows at all product lifecycle phases."
-msgstr "`PartCAD <https://github.com/partcad/partcad>`_ 是记录可制造实体产品的标准。它提供了一整套工具，用于维护产品信息，并在产品生命周期的各个阶段实现高效且有效的工作流程。"
+msgstr ""
+"`PartCAD <https://github.com/partcad/partcad>`_ "
+"是记录可制造实体产品的标准。它提供了一整套工具，用于维护产品信息，并在产品生命周期的各个阶段实现高效且有效的工作流程。"
 
 #: ../../source/index.rst:8
 msgid ""
@@ -47,7 +73,11 @@ msgid ""
 "that can turn a single visionary individual into a one person "
 "corporation, or make one future Product Manager as productive (**and much"
 " faster!**) as 10 corporate engineering departments of the past."
-msgstr "PartCAD 不仅仅是一款用于绘图的传统 CAD 工具。事实上，它**根本不是用来绘图的**。PartCAD 中的“CAD”三个字母代表更广义的“计算机辅助设计”，其中“设计”指的是借助计算机（包括使用 AI 模型）将一个创意转化为**一份清晰而确定的、可制造实体产品的规格说明**的过程。虽然 PartCAD 起初是**首个面向硬件的包管理器**，但如今它已成为**新一代 CAD**，能够让一位有远见的个人变身为一人公司，或让未来的一名产品经理拥有相当于过去 10 个企业工程部门的生产力（**而且快得多！**）。"
+msgstr ""
+"PartCAD 不仅仅是一款用于绘图的传统 CAD 工具。事实上，它 **根本不是用来绘图的**。PartCAD 中的“CAD”三个字母"
+"代表更广义的“计算机辅助设计”，其中“设计”指的是借助计算机（包括使用 AI 模型）将一个创意转化为 **一份清晰而确定的、可制造实体产"
+"品的规格说明** 的过程。虽然 PartCAD 起初是 **首个面向硬件的包管理器**，但如今它已成为 **新一代 CAD**，能够让一"
+"位有远见的个人变身为一人公司，或让未来的一名产品经理拥有相当于过去 10 个企业工程部门的生产力（**而且快得多！**）。"
 
 #: ../../source/index.rst:17
 msgid ""
@@ -55,4 +85,6 @@ msgid ""
 "added all the time. `Contact us <https://calendly.com/partcad-"
 "support/30min>`_ **to discuss how PartCAD can revolutionize your product "
 "development process.**"
-msgstr "PartCAD 在不断发展，新功能和新集成持续加入。 `联系我们 <https://calendly.com/partcad-support/30min>`_ **来探讨 PartCAD 如何彻底革新您的产品开发流程。**"
+msgstr ""
+"PartCAD 在不断发展，新功能和新集成持续加入。 `联系我们 <https://calendly.com/partcad-"
+"support/30min>`_ **来探讨 PartCAD 如何彻底革新您的产品开发流程。**"

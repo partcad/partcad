@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-03 15:22+0000\n"
+"POT-Creation-Date: 2026-10-06 16:15+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -17,7 +17,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/features.rst:2
 msgid "Additional Features"
@@ -33,89 +33,722 @@ msgid ""
 "interface to PartCAD. It adds a PartCAD workbench with an Explorer view "
 "for browsing packages and an Inspector view for viewing objects and "
 "editing their parameters. Install it from the `VS Code marketplace "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_. "
-"See the :doc:`tutorial <tutorial>` for a step-by-step walkthrough."
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_. See the :doc:`tutorial <tutorial>` for a step-by-step "
+"walkthrough."
 msgstr ""
 "面向 Visual Studio Code 的 PartCAD 扩展是 PartCAD 的主要图形界面。它添加了一个 PartCAD "
 "工作台，其中包含用于浏览包的 Explorer 视图，以及用于查看对象并编辑其参数的 Inspector 视图。可以从 `VS Code 市场 "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
-"安装它。详细的分步演练请参见 :doc:`教程 <tutorial>` 。"
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_ 安装它。详细的分步演练请参见 :doc:`教程 <tutorial>` 。"
 
 #: ../../source/features.rst:14
+msgid ""
+"Opening a package runs the code its parts are written in, so in a folder "
+"Visual Studio Code has not been told to trust (Restricted Mode) the "
+"extension starts nothing: it asks for trust, the Explorer says why it is "
+"empty, and every PartCAD command offers **Manage Workspace Trust** "
+"instead of running. PartCAD starts as soon as the folder is trusted, "
+"without reopening the window. The :ref:`PartCAD IDE <partcad-ide>` does "
+"not ask -- it exists to run PartCAD, and trusts every folder."
+msgstr ""
+"打开一个包会运行其零件所使用的代码，因此在一个尚未被 Visual Studio Code "
+"信任的文件夹中（受限模式），该扩展什么都不会启动：它会请求信任，Explorer 会说明它为什么是空的，而每个 PartCAD 命令都改为提供 "
+"**管理工作区信任** 而不是直接运行。一旦该文件夹被信任，PartCAD 就会立即启动，无需重新打开窗口。 :ref:`PartCAD IDE "
+"<partcad-ide>` 不会询问——它的存在就是为了运行 PartCAD，因此信任每一个文件夹。"
+
+#: ../../source/features.rst:20
 msgid ""
 "The extension exposes the following actions from the Explorer view and "
 "the command palette:"
 msgstr "该扩展从 Explorer 视图和命令面板中提供了以下操作："
 
-#: ../../source/features.rst:17
+#: ../../source/features.rst:23
 msgid "Packages"
 msgstr "包"
 
-#: ../../source/features.rst:19
+#: ../../source/features.rst:25
 msgid ""
 "**Initialize new package** — Create a ``partcad.yaml`` package in the "
 "current workspace (a custom-path variant is also available)."
 msgstr "**初始化新包** — 在当前工作区中创建一个 ``partcad.yaml`` 包（也提供了一个自定义路径的变体）。"
 
-#: ../../source/features.rst:21
+#: ../../source/features.rst:27
 msgid "**Open package** — Open an existing package."
 msgstr "**打开包** — 打开一个已有的包。"
 
-#: ../../source/features.rst:22
+#: ../../source/features.rst:28
 msgid ""
 "**Reload the package** and **Restart PartCAD** — Refresh the view or "
 "restart the PartCAD backend after a change."
 msgstr "**重新加载包** 和 **重启 PartCAD** — 在发生更改后刷新视图或重启 PartCAD 后端。"
 
-#: ../../source/features.rst:24
+#: ../../source/features.rst:30
 msgid ""
 "**Update PartCAD** — Update the PartCAD installation used by the "
 "extension."
 msgstr "**更新 PartCAD** — 更新该扩展所使用的 PartCAD 安装。"
 
-#: ../../source/features.rst:27
+#: ../../source/features.rst:33
 msgid "Objects"
 msgstr "对象"
 
-#: ../../source/features.rst:29
-msgid "**Add** a part, assembly, sketch, or interface."
-msgstr "**添加** 一个零件、装配体、草图或接口。"
+#: ../../source/features.rst:35
+msgid "**Add** a part, assembly, scene, sketch, or interface."
+msgstr "**添加** 一个零件、装配体、场景、草图或接口。"
 
-#: ../../source/features.rst:30
-msgid "**Import** a part, assembly, or sketch from an existing file."
-msgstr "**导入** 已有文件中的零件、装配体或草图。"
+#: ../../source/features.rst:36
+msgid "**Import** a part, assembly, scene, or sketch from an existing file."
+msgstr "从已有文件 **导入** 一个零件、装配体、场景或草图。"
 
-#: ../../source/features.rst:31
+#: ../../source/features.rst:37
 msgid ""
-"**Display** (inspect) a part, assembly, sketch, or interface in the ``OCP"
-" CAD Viewer``; parts can also be opened for display and editing together,"
-" or their source edited directly."
+"**Display** (inspect) a part, assembly, scene, sketch, or interface in "
+"the ``PartCAD Viewer``; parts can also be opened for display and editing "
+"together, or their source edited directly."
 msgstr ""
-"在 ``OCP CAD Viewer`` 中 **显示** "
-"（检视）零件、装配体、草图或接口；此外，零件还可以打开以同时进行显示和编辑，或者直接编辑其源代码。"
+"在 ``PartCAD Viewer`` 中 **显示** "
+"（查看）零件、装配体、场景、草图或接口；此外，零件还可以打开以同时进行显示和编辑，或者直接编辑其源代码。"
 
-#: ../../source/features.rst:33
+#: ../../source/features.rst:39
 msgid "**Test** a part, assembly, or scene."
 msgstr "**测试** 一个零件、装配体或场景。"
 
-#: ../../source/features.rst:36
+#: ../../source/features.rst:40
+msgid ""
+"**Open in >** — Open the object's own source file in the application that"
+" made it: **FreeCAD** or **Blender** for a part or an assembly, **KiCad**"
+" for a part of type ``kicad``, and **Gazebo** or **MuJoCo** for a scene "
+"held in that engine's own format (``sim-gazebo:world``, ``sim-"
+"mujoco:mjcf``) when the workspace imports the package that declares the "
+"engine. This runs on your machine rather than on the daemon: the "
+"extension runs ``pc open`` (see :doc:`cli`), which starts an application "
+"installed here, or runs one in a container when there is none and "
+"``partcad.open.useDocker`` is on, which it is by default. Blender reads "
+"meshes, so an object that is not one is converted on the way."
+msgstr ""
+"**在以下应用中打开 >** — 在创建该对象的应用中打开它自己的源文件：零件或装配体用 **FreeCAD** 或 **Blender** "
+"，类型为 ``kicad`` 的零件用 **KiCad** ；当工作区导入了声明该引擎的包时，以该引擎自有格式（ ``sim-"
+"gazebo:world`` 、 ``sim-mujoco:mjcf`` ）保存的场景则用 **Gazebo** 或 **MuJoCo** "
+"。这是在你的机器上运行，而不是在守护进程上运行：该扩展会运行 ``pc open`` （参见 :doc:`cli` "
+"），由它启动本机已安装的应用；若本机没有安装，而 ``partcad.open.useDocker`` "
+"处于开启状态（默认即为开启），则在容器中运行一个。Blender 读取的是网格，因此不是网格的对象会在传递途中被转换。"
+
+#: ../../source/features.rst:48
+msgid ""
+"The Explorer also lists the ``software`` a package ships. Selecting one "
+"shows its path and its ``fileHash`` in the Inspector and leaves the "
+"``PartCAD Viewer`` as it is: software is a file, not geometry, so there "
+"is nothing to render."
+msgstr ""
+"Explorer 还会列出包所附带的 ``software`` 。选中其中一项，Inspector 中会显示它的路径和 ``fileHash`` "
+"，而 ``PartCAD Viewer`` 保持原样：软件是文件而不是几何体，没有什么可渲染的。"
+
+#: ../../source/features.rst:53
+msgid "The PartCAD Viewer"
+msgstr "PartCAD Viewer"
+
+#: ../../source/features.rst:55
+msgid ""
+"Displaying an object opens the ``PartCAD Viewer``, which is a strip of "
+"tabs over that one object rather than a bare canvas: groups of tabs, each"
+" with tabs of its own -- **Design**, **Analysis** and **Manufacturing**, "
+"followed by **Validation** and **Operations**, which have nothing in them"
+" yet and are always disabled. Design is always the first:"
+msgstr ""
+"显示一个对象会打开 ``PartCAD Viewer`` 。它不是一块空白画布，而是围绕这一个对象铺开的一排标签：若干标签组，每组下面又有自己的标签—— **设计** 、 **分析** 和 **制造** ，其后是 **验证** 和 **运维** ，后两组目前还是空的，始终处于禁用状态。设计组永远排在第一位："
+
+#: ../../source/features.rst:60
+msgid "**Design** — the object itself, three ways, in tabs of its own:"
+msgstr "**设计** — 对象本身的三种呈现方式，各有自己的标签："
+
+#: ../../source/features.rst:62
+msgid ""
+"**3D** — the shape, tessellated by PartCAD and drawn here, to turn and "
+"zoom. Always present."
+msgstr "**3D** — 形状本身，由 PartCAD 完成网格化后绘制在这里，可以旋转和缩放。始终存在。"
+
+#: ../../source/features.rst:63
+msgid ""
+"**2D** — the object rendered to a picture, as ``pc render`` renders it: "
+"PNG, JPEG or SVG, chosen from a list. For a part, an assembly, a scene or"
+" a sketch."
+msgstr ""
+"**2D** — 渲染成图片的对象，渲染方式与 ``pc render`` 相同：PNG、JPEG 或 "
+"SVG，从一个列表中选择。适用于零件、装配体、场景或草图。"
+
+#: ../../source/features.rst:65
+msgid ""
+"**Draft** — a dimensioned technical drawing of a part or an assembly, "
+"made by a drawing package the way ``pc render -e`` uses one. "
+"``//pub/feature/render/draftwright`` is offered, and the formats are "
+"whatever it declares (PDF, SVG and DXF). The first drawing takes a few "
+"minutes while PartCAD installs draftwright."
+msgstr ""
+"**工程图** — 零件或装配体的带尺寸技术图纸，由工程图包绘制，用法与 ``pc render -e`` 使用它时相同。这里提供 "
+"``//pub/feature/render/draftwright`` ，可用格式就是它所声明的那些（PDF、SVG 和 "
+"DXF）。第一张图纸需要等上几分钟，因为 PartCAD 要先安装 draftwright。"
+
+#: ../../source/features.rst:69
+msgid ""
+"2D and Draft each have a **Save…** button that saves the file on screen "
+"wherever you choose. A picture is shown on the tab, and can be zoomed "
+"with the mouse wheel, dragged, and put back with a double-click; a PDF or"
+" a DXF cannot be shown there, and is saved and opened in another program "
+"instead."
+msgstr ""
+"2D 和工程图这两个标签各有一个 **保存…** "
+"按钮，可以把屏幕上的文件保存到你指定的任何位置。图片会直接显示在标签上，可以用鼠标滚轮缩放、拖动，双击即可还原；PDF 或 DXF "
+"无法在这里显示，而是会被保存下来并用其他程序打开。"
+
+#: ../../source/features.rst:72
+msgid "**Analysis** — what engineering analysis says about the object:"
+msgstr "**分析** — 工程分析对该对象的结论："
+
+#: ../../source/features.rst:74
+msgid ""
+"**FEA** and **CFD** — for a part: the analysis :ref:`pc cae <cae>` runs, "
+"and what it found."
+msgstr "**FEA** 和 **CFD** — 针对零件： :ref:`pc cae <cae>` 所运行的分析，以及它的发现。"
+
+#: ../../source/features.rst:75
+msgid "**Manufacturing** — what making it takes:"
+msgstr "**制造** — 把它做出来需要什么："
+
+#: ../../source/features.rst:77
+msgid ""
+"**Build vs Buy** — for a part or an assembly: every part, piece of stock "
+"and sub-assembly it is made of, with a picture, a count, its size, weight"
+" and material, and a switch saying whether it is built or bought. A line "
+"that can be only one of the two has its switch fixed, and one that can be"
+" neither is marked **Incomplete**. The choices are kept on your machine, "
+"and ``pc instructions`` reads them too."
+msgstr ""
+"**自制还是采购** — "
+"针对零件或装配体：列出构成它的每一个零件、每一块原材料和每一个子装配体，附带图片、数量、尺寸、重量和材料，以及一个表示它是自制还是采购的开关。只能二选一的条目，其开关是固定的；两者都做不到的条目会被标记为"
+" **不完整** 。这些选择保存在你自己的机器上， ``pc instructions`` 也会读取它们。"
+
+#: ../../source/features.rst:81
+msgid ""
+"**Build** — for whatever is built: the order to make it in, with the "
+"instructions for the selected step."
+msgstr "**自制** — 针对所有自制的部分：制造它们的先后顺序，以及所选步骤的说明。"
+
+#: ../../source/features.rst:82
+msgid ""
+"**Buy** — for whatever is bought: what it can be bought from, and a quote"
+" per supplier."
+msgstr "**采购** — 针对所有采购的部分：可以从哪里买到，以及每个供应商的报价。"
+
+#: ../../source/features.rst:83
+msgid ""
+"**Bill of Materials** — for a part or an assembly: what has to be "
+"procured to have it, as ``pc bom`` lists it. A made part is the stock it "
+"is made from, and a sub-assembly that declares a vendor and an SKU is one"
+" item ordered whole."
+msgstr ""
+"**物料清单** — 针对零件或装配体：要得到它需要采购些什么，与 ``pc bom`` 列出的内容一致。自制零件对应的是它所用的原材料，而声明了"
+" vendor 和 SKU 的子装配体则是整体订购的一个条目。"
+
+#: ../../source/features.rst:86
+msgid ""
+"**Assembly** — for an assembly: the assembly instructions, as PDF or "
+"HTML, to read and save (``pc instructions``)."
+msgstr "**装配** — 针对装配体：装配说明，以 PDF 或 HTML 形式呈现，可阅读也可保存（ ``pc instructions`` ）。"
+
+#: ../../source/features.rst:89
+msgid ""
+"Manufacturing is for a part or an assembly; for a scene, a sketch or an "
+"interface it is disabled."
+msgstr "制造组只适用于零件或装配体；对于场景、草图或接口，它处于禁用状态。"
+
+#: ../../source/features.rst:91
+msgid ""
+"Every group always shows all of its tabs and disables the ones that do "
+"not apply, and a group none of whose tabs apply is disabled itself, and "
+"says why when the mouse is over it. Design and its 3D tab are always "
+"enabled, and are what the Viewer shows before anything has been selected."
+" A group opens on the tab you last had open in it, if that one applies to"
+" the object, and on the first one that does otherwise."
+msgstr ""
+"每个组始终显示它的全部标签，并把其中不适用的那些禁用掉；如果一个组的标签全都不适用，这个组本身就会被禁用，鼠标悬停在上面时会说明原因。设计组及其 "
+"3D "
+"标签始终可用，也是在尚未选中任何对象时查看器所显示的内容。打开一个组时，会回到你上次在该组中打开的那个标签——前提是它适用于当前对象，否则就定位到第一个适用的标签。"
+
+#: ../../source/features.rst:96
+msgid ""
+"The 3D view arrives over the viewer protocol from whichever ``partcad`` "
+"asked for the shape to be shown; the other tabs are questions put to the "
+"PartCAD daemon, fetched the first time the tab is looked at and cached "
+"until the next object is shown. An object that belongs to no package gets"
+" the 3D view alone."
+msgstr ""
+"3D 视图由请求显示该形状的那个 ``partcad`` 通过查看器协议送来；其余标签则是向 PartCAD "
+"守护进程提出的问询，在该标签第一次被查看时获取，并一直缓存到下一个对象被显示为止。不属于任何包的对象只有 3D 视图。"
+
+#: ../../source/features.rst:100
+msgid ""
+"The 3D view uses the graphics card where the window can (WebGL). In a "
+"window that cannot -- a virtual machine, a remote desktop, a graphics "
+"driver the editor could not use -- it draws the model without it instead:"
+" flat-shaded and slower, and a big model is drawn as boxes while it is "
+"being turned. A note in the corner of the view says so, and hovering over"
+" it says how to have the graphics card back."
+msgstr ""
+"只要窗口支持，3D "
+"视图就会使用显卡（WebGL）。在不支持的窗口中——虚拟机、远程桌面、编辑器用不上的显卡驱动——它会改用不依赖显卡的方式绘制模型：平面着色，速度更慢，而且大模型在旋转过程中会以方块代替。视图角落里的一条提示会说明这一点，把鼠标悬停在上面会告诉你如何把显卡用回来。"
+
+#: ../../source/features.rst:105
+msgid ""
+"Down the left of the 3D view is a list of **what is on screen**, with a "
+"checkbox on every line: unticking one hides that line and everything "
+"under it, and ticking it again brings back exactly what was showing "
+"before. **Animate** and **Opacity** are at the bottom of the same pane."
+msgstr ""
+"3D 视图的左侧是一份 **屏幕上有什么** "
+"的清单，每一行都带有一个复选框：取消勾选某一行会隐藏该行及其下面的全部内容，再次勾选则会原样恢复之前显示的内容。 **动画** 和 "
+"**不透明度** 位于同一面板的底部。"
+
+#: ../../source/features.rst:109
+msgid ""
+"The list is the object itself. Every object PartCAD can show is a tree, "
+"and the pane is that tree:"
+msgstr "这份清单就是对象本身。PartCAD 能够显示的每一个对象都是一棵树，而这个面板就是那棵树："
+
+#: ../../source/features.rst:111
+msgid "a **part** or a **sketch** is one line — itself;"
+msgstr "一个 **零件** 或一个 **草图** 只有一行——它自己；"
+
+#: ../../source/features.rst:112
+msgid ""
+"an **assembly** or a **scene** is a line per thing it holds, named as the"
+" ``.assy`` file names it, as deeply as the file nests them;"
+msgstr "一个 **装配体** 或一个 **场景** ，它所包含的每一样东西各占一行，名称取自 ``.assy`` 文件中的命名，嵌套层级也与该文件中的一致；"
+
+#: ../../source/features.rst:114
+msgid ""
+"an **interface** is a line per port it is drawn with, with a line per "
+"interface it inherits holding the whole of that one (see :doc:`assy`)."
+msgstr "一个 **接口** ，绘制它时用到的每个端口各占一行；它所继承的每个接口也各占一行，其中装着那个接口的全部内容（参见 :doc:`assy` ）。"
+
+#: ../../source/features.rst:117
+msgid ""
+"Under each of those lines is what that object says about connections: a "
+"line per **interface** instance with the ports it is made of underneath "
+"it, and a ``ports`` line for the ports that belong to no interface. Every"
+" port is listed once and drawn as a coordinate frame — the same frames "
+"``pc render --with-ports`` draws on a projection (see :doc:`cli`). An "
+"assembly's own ports are the ones it declares and the ones its ``map:`` "
+"externalizes, so they are listed on the assembly's own line rather than "
+"on the things inside it."
+msgstr ""
+"这些行的下面是该对象关于连接的描述：每个 **接口** 实例各占一行，其下是组成它的各个端口；不属于任何接口的端口则归在一个 ``ports`` "
+"行下。每个端口只列出一次，并绘制成一个坐标系——与 ``pc render --with-ports`` 在投影上绘制的坐标系相同（参见 "
+":doc:`cli` ）。装配体自身的端口，既包括它所声明的端口，也包括它的 ``map:`` "
+"对外暴露的端口，因此这些端口列在装配体自己那一行上，而不是列在它内部的各个对象上。"
+
+#: ../../source/features.rst:123
+msgid ""
+"A port that is drawn with a sketch — the circle of a hole, the profile of"
+" a rail — shows that too, in the blue of the ``+Z`` line of its own "
+"frame: the shape the connection happens across, which is what makes an "
+"opening readable as one. It is half see-through, so the opening it covers"
+" still reads as one, and the **Opacity** slider leaves it alone — that "
+"slider is about the shape rather than about what is drawn on top of it. "
+"It is part of the port, so the port's checkbox draws or hides both."
+msgstr ""
+"如果一个端口带有草图——孔的圆形、导轨的轮廓——那么草图也会一并画出来，用的是该端口自身坐标系中 ``+Z`` "
+"轴的那种蓝色：它表示连接所跨越的那个形状，正是它让一个开口一看就是开口。草图是半透明的，因此它所覆盖的开口依然能被看成开口；而 **不透明度** "
+"滑块不会影响它——那个滑块针对的是形状本身，而不是画在形状之上的东西。草图是端口的一部分，所以端口的复选框会同时绘制或隐藏两者。"
+
+#: ../../source/features.rst:129
+msgid ""
+"The ``ports`` and ``interfaces`` lines start folded up — for an assembly "
+"they run to hundreds of rows, and unfolded they bury the hierarchy they "
+"hang off. Pointing at a part or a sub-assembly makes it **flicker** in "
+"the 3D view, which is how to tell which of the shapes on screen a line is"
+" without moving the camera."
+msgstr ""
+"``ports`` 和 ``interfaces`` "
+"这两行默认是折叠的——对于装配体，它们会展开成几百行，一旦展开就会把它们所依附的层次结构淹没掉。把鼠标指向某个零件或子装配体，会让它在 3D "
+"视图中 **闪烁** ，这样无需移动相机就能分辨出某一行对应的是屏幕上的哪个形状。"
+
+#: ../../source/features.rst:133
+msgid ""
+"The 3D view can also be navigated with a `3Dconnexion "
+"<https://3dconnexion.com/>`_ **SpaceMouse**: the cap moves the model the "
+"way it is pushed and twisted, and the device's **Fit** button (the right-"
+"hand one on a two-button model) frames the object again. On Windows and "
+"macOS the viewer reads the device itself -- move the cap once with the "
+"viewer open for the editor to notice it. On Linux it reads it through "
+"`spacenavd <https://spacenav.sourceforge.net/>`_, which has to be "
+"installed and running (``sudo apt install spacenavd``, for instance). "
+"Only the viewer in the focused window moves, so a SpaceMouse and two open"
+" windows do not fight. ``partcad.spaceMouse.sensitivity`` sets the speed,"
+" ``partcad.spaceMouse.invert`` reverses individual axes, and "
+"``partcad.spaceMouse.enabled`` turns it off."
+msgstr ""
+"3D 视图也可以用 `3Dconnexion <https://3dconnexion.com/>`_ 的 **SpaceMouse** "
+"来操控：推动和扭转手柄，模型就按同样的方式移动；设备上的 **Fit** 按钮（双按钮型号上右边的那个）会把对象重新框入视野。在 Windows "
+"和 macOS 上，查看器会直接读取设备——打开查看器后先动一下手柄，编辑器才会注意到它。在 Linux 上则通过 `spacenavd "
+"<https://spacenav.sourceforge.net/>`_ 读取，需要先安装并运行它（例如 ``sudo apt install "
+"spacenavd`` ）。只有处于焦点窗口中的查看器会随之移动，因此一个 SpaceMouse 配两个打开的窗口不会互相打架。 "
+"``partcad.spaceMouse.sensitivity`` 设置速度， ``partcad.spaceMouse.invert`` "
+"反转个别坐标轴， ``partcad.spaceMouse.enabled`` 则可以把它关掉。"
+
+#: ../../source/features.rst:142
+msgid ""
+"An object's own ports start out drawn. The ports of everything inside it "
+"do not: an assembly of forty parts has a frame at every hole of every one"
+" of them, and all of it at once shows nothing. A line whose tick is grey "
+"rather than solid is one that is showing while something under it is "
+"hidden — which is how a folded-up line says so."
+msgstr "对象自身的端口默认是画出来的，它内部各个对象的端口则不是：一个由四十个零件组成的装配体，每个零件的每个孔上都有一个坐标系，全部一起画出来等于什么也看不见。某一行的勾选标记是灰色而不是实心的，说明它本身在显示，但它下面有东西被隐藏了——折叠起来的行就是这样告诉你的。"
+
+#: ../../source/features.rst:147
+msgid ""
+"The two analysis tabs are the exception to \"questions\": looking at one "
+"*runs* the analysis. A field over the model names which implementation "
+"runs it — pre-filled with the configured default, and editable, so a "
+"machine whose solver is elsewhere is one line away from an answer rather "
+"than stuck on an error. The model is drawn according to the format the "
+"implementation chose: a 3D result is turned and zoomed, a 2D one is "
+"panned and zoomed as a picture. Any findings are listed under it; a part "
+"with nothing to report gets the whole pane."
+msgstr ""
+"两个分析标签是“问询”的例外：查看其中一个就会 *运行* "
+"分析。模型上方的一个字段指明由哪个实现来运行它——预填的是配置中的默认值，并且可以编辑，这样求解器在别处的机器只需改一行就能得到答案，而不是卡在一个错误上。模型按照该实现所选的格式绘制：3D"
+" 结果可以旋转和缩放，2D 结果则当作图片来平移和缩放。所有发现都列在模型下方；没有任何问题可报的零件，模型会占满整个面板。"
+
+#: ../../source/features.rst:154
 msgid "Export"
 msgstr "导出"
 
-#: ../../source/features.rst:38
+#: ../../source/features.rst:156
 msgid ""
 "Objects can be exported directly from the extension to any of the "
-"following formats: **SVG**, **PNG**, **STEP**, **STL**, **3MF**, "
-"**ThreeJS**, **OBJ**, **IGES**, and **glTF**."
+"following formats: **SVG**, **PNG**, **JPEG**, **STEP**, **STL**, "
+"**3MF**, **ThreeJS**, **OBJ**, **IGES**, and **glTF**. An engine's own "
+"scene format — a **Gazebo world** (SDFormat), a **MuJoCo model** (MJCF) —"
+" is written by the plugin package that implements it, so it is named "
+"through that package and exported from the command line: ``pc export -S "
+"-t sim-gazebo:world``."
 msgstr ""
-"可以直接从扩展中将对象导出为以下任意一种格式： **SVG** 、 **PNG** 、 **STEP** 、 **STL** 、 **3MF** "
-"、 **ThreeJS** 、 **OBJ** 、 **IGES** 和 **glTF** 。"
+"对象可以直接从该扩展导出为以下任意一种格式： **SVG** 、 **PNG** 、 **JPEG** 、 **STEP** 、 **STL** "
+"、 **3MF** 、 **ThreeJS** 、 **OBJ** 、 **IGES** 和 **glTF** 。引擎自有的场景格式—— "
+"**Gazebo world** （SDFormat）、 **MuJoCo model** "
+"（MJCF）——由实现它的插件包负责写出，因此需要通过那个包来指明，并从命令行导出： ``pc export -S -t sim-"
+"gazebo:world`` 。"
 
-#: ../../source/features.rst:43
+#: ../../source/features.rst:166
+msgid "Engineering analysis"
+msgstr "工程分析"
+
+#: ../../source/features.rst:168
+msgid ""
+"A part can say what holds it and what it carries, and PartCAD can put "
+"that question to a solver: ``pc cae fea`` for a finite element analysis, "
+"``pc cae cfd`` for computational fluid dynamics. The conditions live on "
+"the part, in a section named after the analysis, because they are a "
+"property of the part rather than of whoever analyses it -- a bracket is "
+"bolted down at the same holes whichever solver is asked about it:"
+msgstr ""
+"零件可以说明是什么固定住了它、它又承受着什么，而 PartCAD 能把这个问题交给求解器： ``pc cae fea`` 做有限元分析， ``pc"
+" cae cfd`` "
+"做计算流体力学。这些条件写在零件上，放在以分析名称命名的小节里，因为它们是零件的属性，而不是分析者的属性——无论问哪个求解器，支架总是用同样的那几个孔螺栓固定的："
+
+#: ../../source/features.rst:192
+msgid ""
+"``fix:`` and ``load:`` name :ref:`interfaces <interfaces>` the part "
+"implements, so the same declaration that says where a part connects also "
+"says where it is held and pulled. A ``load`` is a force: write a number "
+"and a unit, or a bare number for a mass in kilograms, which PartCAD "
+"weighs into newtons at 9.8 N/kg. ``cfd:`` takes the same two keys with "
+"the same meaning."
+msgstr ""
+"``fix:`` 和 ``load:`` 指定的是零件所实现的 :ref:`接口 <interfaces>` "
+"，因此同一份声明既说明了零件在哪里连接，也说明了它在哪里被固定、被拉扯。 ``load`` "
+"是一个力：写成一个数字加一个单位，或者只写一个数字表示以千克为单位的质量，PartCAD 会按 9.8 N/kg 把它换算成牛顿。 "
+"``cfd:`` 接受同样的两个键，含义也相同。"
+
+#: ../../source/features.rst:198
+msgid ""
+"PartCAD ships no solver. The analysis is run by an implementation "
+"package, declared in a ``cae:`` section exactly as an export or a render "
+"implementation is declared in its own (see :ref:`cae-section`), and named"
+" by the ``caeFeaImplementation`` / ``caeCfdImplementation`` user "
+"configuration options -- ``//pub/feature/cae/calculix:fea`` and "
+"``//pub/feature/cae/calculix:cfd`` by default, which are `CalculiX "
+"<https://www.calculix.de/>`_ (see `partcad-cae-calculix "
+"<https://github.com/partcad/partcad-cae-calculix>`_ for what it needs and"
+" what every parameter means -- it names a ``dockerImage`` carrying its "
+"solver and mesher, so a container runtime is all it asks of a host that "
+"has neither installed). ``pc cae fea --implementation`` overrides it for "
+"one run, and so does the field over the model in the IDE's FEA tab."
+msgstr ""
+"PartCAD 本身不附带求解器。分析由一个实现包来运行，它在 ``cae:`` "
+"小节中声明，方式与导出或渲染实现在各自小节中声明的方式完全一致（参见 :ref:`cae-section` ），并由 "
+"``caeFeaImplementation`` / ``caeCfdImplementation`` 这两个用户配置选项指定——默认分别是 "
+"``//pub/feature/cae/calculix:fea`` 和 ``//pub/feature/cae/calculix:cfd`` "
+"，也就是 `CalculiX <https://www.calculix.de/>`_ （关于它需要什么、以及每个参数的含义，请参见 "
+"`partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_"
+" ——它指定了一个携带求解器和网格器的 ``dockerImage`` ，因此对于两者都没有安装的主机，它只要求有一个容器运行时）。 ``pc "
+"cae fea --implementation`` 可以为单次运行覆盖这一设置，IDE 的 FEA 标签中模型上方的那个字段也可以。"
+
+#: ../../source/features.rst:210
+msgid "A part may also name its own, which is what it was written against:"
+msgstr "零件也可以指定它自己的实现，也就是它当初据以编写的那一个："
+
+#: ../../source/features.rst:219
+msgid ""
+"That sits between the other two: ``-i`` on the command line wins, then "
+"the part, then the user configuration. It is how a package ships an "
+"analysis that works for whoever opens it, without every reader first "
+"pointing their own configuration at the right place."
+msgstr ""
+"它的优先级介于另外两者之间：命令行上的 ``-i`` "
+"最高，其次是零件，最后才是用户配置。包正是借此把一份谁打开都能跑通的分析随包发布，而不必每个读者都先把自己的配置指向正确的地方。"
+
+#: ../../source/features.rst:224
+msgid ""
+"A **relative** package name here -- ``calculix:fea`` rather than "
+"``//pub/feature/cae/calculix:fea`` -- means the package this one imported"
+" under that name, and is resolved from the package the declaration is "
+"written in. That is not where a name a *user* types is resolved from: "
+"``pc cae fea -i calculix:fea`` means the ``calculix`` beside the user, "
+"like every other name a command line carries. The difference matters "
+"under ``pc test -P //...`` over a tree of packages, which runs with the "
+"tree's root current while every part in it sits one or more packages "
+"below."
+msgstr ""
+"这里的 **相对** 包名——比如 ``calculix:fea`` 而不是 ``//pub/feature/cae/calculix:fea``"
+" ——指的是本包以该名称导入的那个包，并从声明所在的那个包出发解析。 *用户* 输入的名称并不是从那里解析的： ``pc cae fea -i "
+"calculix:fea`` 指的是用户身边的那个 ``calculix`` ，就像命令行上携带的其他任何名称一样。这个区别在对一整棵包树执行 "
+"``pc test -P //...`` 时尤其要紧：此时当前包是整棵树的根，而其中的每个零件都位于下面一层或多层的包里。"
+
+#: ../../source/features.rst:233
+msgid ""
+"What comes back is two things: the model, written to "
+"``<part>.<analysis>.<extension>`` in whichever format the implementation "
+"chose, and the **findings** -- a JSON array of what the analysis has to "
+"say about the part. ``pc test`` gains an ``fea`` and a ``cfd`` check that"
+" fail a part whose analysis produced any finding, and they apply only to "
+"a part that declares the matching section, so a package of bolts pays "
+"nothing for them. There is one way to pass -- the analysis ran and "
+"reported nothing -- and everything else **fails**: a malformed section, a"
+" plugin that cannot be resolved (not a dependency, misspelt, declaring no"
+" such file type), a plugin that resolves and cannot run (no mesher, no "
+"solver, a sandbox that will not build, a crash), and an analysis that ran"
+" and found something."
+msgstr ""
+"返回的东西有两样：一是模型，以实现所选的格式写入 ``<part>.<analysis>.<extension>`` ；二是 **发现** "
+"——一个 JSON 数组，记录分析对该零件的结论。 ``pc test`` 由此多出 ``fea`` 和 ``cfd`` "
+"两项检查：只要分析产生了任何发现，对应的零件就不通过。它们只作用于声明了相应小节的零件，因此一个装满螺栓的包不会为此付出任何代价。通过只有一种情形——分析跑完了并且什么也没报告——其余一切都算"
+" **失败** "
+"：小节格式不正确；插件无法解析（不是依赖、拼写错误、没有声明相应的文件类型）；插件解析得到却跑不起来（没有网格器、没有求解器、沙箱构建不出来、崩溃）；以及分析跑完了并且发现了问题。"
+
+#: ../../source/features.rst:245
+msgid ""
+"Not running is deliberately not a skip. A skip says the question does not"
+" apply here; a part that declares ``fea:`` has asked, and a plugin that "
+"was asked and delivered nothing has failed. The consequence is the point:"
+" declaring ``fea:`` in a shared package makes ``pc test`` fail for "
+"everyone who has not installed what that implementation needs. A package "
+"that does not want that should not declare the section. What the failure "
+"carries is *why* -- the implementation's own sentence, plus which "
+"implementation was asked and which machine it did not work on, because "
+"\"gmsh is not installed\" is a puzzle and the same sentence under "
+"``//pub/feature/cae/calculix:fea on Linux-aarch64`` is an answer."
+msgstr ""
+"跑不起来被刻意地不算作跳过。跳过的含义是这个问题在这里不适用；而声明了 ``fea:`` "
+"的零件已经提出了问题，被问到却什么也没给出的插件就是失败了。这个后果正是要点所在：在一个共享的包里声明 ``fea:`` "
+"，会让所有没有安装该实现所需环境的人在 ``pc test`` 时失败。不希望如此的包就不应该声明这个小节。失败信息中携带的是 *原因* "
+"——实现自己给出的那句话，再加上被询问的是哪个实现、以及它在哪台机器上没能工作，因为“gmsh 未安装”是个谜，而同一句话加上 "
+"``//pub/feature/cae/calculix:fea on Linux-aarch64`` 就成了答案。"
+
+#: ../../source/features.rst:255
+msgid ""
+"There is **one** excuse, and it is the case where the implementation was "
+"never given the environment it says it needs. An implementation naming a "
+"``container:`` or a ``dockerImage`` is stating that a container is how "
+"what pip cannot install arrives; on a machine with no container runtime "
+"that statement has nowhere to land, nothing was ever asked, and the check"
+" skips with a ``WARNING`` carrying the whole report rather than failing. "
+"It is narrow in both directions. An implementation that names no image "
+"gets no excuse at all -- it said it runs in an ordinary sandbox, and a "
+"machine with a working sandbox is a machine it was supposed to work on. "
+"And a container runtime that *is* here removes the excuse entirely: a "
+"registry that cannot be reached, an image that will not start, a solver "
+"missing from the image are all things somebody can fix, and calling them "
+"\"unavailable\" would hide exactly the failures a plugin's own CI exists "
+"to catch."
+msgstr ""
+"只有 **一条** 可以开脱的理由，那就是实现从未获得它声称自己需要的环境。一个指定了 ``container:`` 或 "
+"``dockerImage`` 的实现，等于在声明 pip "
+"装不了的东西要靠容器来提供；在没有容器运行时的机器上，这个声明无处落地，也就从未真正问出过问题，于是该检查会以一条携带完整报告的 "
+"``WARNING`` "
+"跳过，而不是失败。这条理由在两个方向上都很窄。没有指定任何镜像的实现完全得不到开脱——它说过自己在普通沙箱里运行，而一台沙箱能正常工作的机器，本来就是它应当能工作的机器。而只要容器运行时"
+" *确实* "
+"在这里，这条理由就彻底不成立了：镜像仓库连不上、镜像启动不了、镜像里缺少求解器，这些都是有人能够修复的问题，把它们称作“不可用”，恰恰会掩盖插件自身的"
+" CI 本就是为了捕捉的那些失败。"
+
+#: ../../source/features.rst:268
+msgid ""
+"A Docker daemon running **Windows** containers does not count as a "
+"container runtime for this, or for choosing a sandbox. Every image "
+"PartCAD builds, pulls or documents is a Linux image, and such a daemon "
+"answers a ping and then fails every pull with ``no matching manifest for "
+"windows/amd64``."
+msgstr ""
+"运行 **Windows** 容器的 Docker 守护进程，在这里不算容器运行时，在选择沙箱时也不算。PartCAD "
+"构建、拉取或在文档中提到的每一个镜像都是 Linux 镜像，而这样的守护进程会正常响应 ping，然后对每一次拉取都报出 ``no "
+"matching manifest for windows/amd64`` 。"
+
+#: ../../source/features.rst:273
+msgid ""
+"``examples/feature_cae`` is the pair of cases to check an implementation "
+"against — a cantilever and a pipe, each with a closed-form answer to "
+"compare the solver with. Against CalculiX the cantilever reads 0.1655 mm "
+"where the model predicts 0.16-0.18 mm. The pipe declares no ``cfd:`` "
+"section: CalculiX's CFD solver diverges on it, a part that declares a "
+"section has asked a question, and an example that ships a check nothing "
+"can turn green is one readers learn to scroll past. The declaration is "
+"written out beside the part, and that example's ``README.md`` has the "
+"measurement."
+msgstr ""
+"``examples/feature_cae`` 是用来验证某个实现的一对算例——一根悬臂梁和一根管道，各自都有可与求解器对照的解析解。用 "
+"CalculiX 算出的悬臂梁读数是 0.1655 mm，而模型预测值为 0.16-0.18 mm。管道没有声明 ``cfd:`` "
+"小节：CalculiX 的 CFD "
+"求解器在它上面会发散，而声明了小节的零件就等于提出了问题，一个随附着永远变不绿的检查的示例，读者很快就会学会直接略过。这段声明被原样写在零件旁边，该示例的"
+" ``README.md`` 中记录了测量结果。"
+
+#: ../../source/features.rst:282
+msgid "See :ref:`pc cae <cae>` for the command and the units it accepts."
+msgstr "关于该命令及其接受的单位，请参见 :ref:`pc cae <cae>` 。"
+
+#: ../../source/features.rst:286
+msgid "Route files"
+msgstr "刀路文件"
+
+#: ../../source/features.rst:288
+msgid ""
+"An object can say what is cut out of it and how, and ``pc cam`` writes "
+"the program a machine does it with. The job lives on the object, in its "
+"``manufacturing:`` section, because it is a property of the object rather"
+" than of whoever cuts it -- a panel is 18 mm thick and has to be cut "
+"through whichever router is asked:"
+msgstr ""
+"对象可以说明要从它身上切掉什么、以及怎么切，而 ``pc cam`` 会写出机床据以执行的程序。这项加工任务写在对象上，放在它的 "
+"``manufacturing:`` 小节里，因为它是对象的属性，而不是加工者的属性——面板厚 18 mm，无论问哪台雕刻机都得把它切穿："
+
+#: ../../source/features.rst:312
+msgid ""
+"Saying something about being cut is the object's **opt-in**, and the "
+"whole of it. ``pc cam`` with nothing named produces a route for every "
+"sketch and part of the package that declares one and passes over every "
+"object that does not, silently -- most objects are never cut, and a "
+"package where three parts of forty are is the ordinary case rather than "
+"thirty-seven warnings. Naming an object that declares nothing is an "
+"error, because naming one is asking about it."
+msgstr ""
+"只要说了关于切削的事，就算是对象的 **选择加入** ，而且仅此而已。不指定任何名称运行 ``pc cam`` "
+"，会为包中每一个声明了该小节的草图和零件生成刀路，并静默跳过所有没有声明的对象——大多数对象从来不需要切削，四十个零件里有三个要切的包是常态，而不是三十七条警告。指名一个什么都没声明的对象则是错误，因为指名它就是在问它。"
+
+#: ../../source/features.rst:319
+msgid ""
+"Unlike a solver, PartCAD **ships an implementation**: ``//builtin/cam`` "
+"writes G-code, and ``camImplementation`` names it by default. A route is "
+"arithmetic on the object's own outline rather than somebody else's "
+"program with a release cycle of its own, which is the test ``export:`` "
+"and ``render:`` already pass and ``cae:`` does not -- so it ships here "
+"for the same reason DXF does. A controller that wants a dialect of its "
+"own is a package declaring a file type in its own ``cam:`` section (see "
+":ref:`cam-section`), named by that option, by the object's own "
+"``implementation:``, or by ``-i`` for one run."
+msgstr ""
+"与求解器不同，PartCAD **自带一个实现** ： ``//builtin/cam`` 会写出 G 代码，而 "
+"``camImplementation`` 默认就指向它。刀路是在对象自身轮廓上做的算术，而不是别人那套有自己发布周期的程序——这正是 "
+"``export:`` 和 ``render:`` 已经通过、而 ``cae:`` 没有通过的那项检验，所以它随 PartCAD 一起提供，理由和"
+" DXF 一样。想要自有方言的控制器，就是一个在自己的 ``cam:`` 小节中声明文件类型的包（参见 :ref:`cam-section` "
+"），可以由上面那个选项来指定，也可以由对象自己的 ``implementation:`` 指定，或者用 ``-i`` 为单次运行指定。"
+
+#: ../../source/features.rst:328
+msgid ""
+"Every key of the object's section is also a parameter of that file type, "
+"which makes the two of them three layers of one namespace: the built-in "
+"package underneath, the package's own ``cam:`` section, then the object's"
+" ``manufacturing:``. A package cutting twenty parts from one sheet sets "
+"the tool once; the one part that needs a smaller cutter says so for "
+"itself. Lengths, feeds and speeds may each carry a unit and are converted"
+" at every layer, so a ``mm/min`` written by the package is understood as "
+"surely as one written on the object."
+msgstr ""
+"对象小节中的每一个键同时也是该文件类型的一个参数，于是两者构成了同一个命名空间的三层：最底下是内置包，然后是包自己的 ``cam:`` "
+"小节，再然后是对象的 ``manufacturing:`` "
+"。一个要从同一张板材上切出二十个零件的包只需设置一次刀具；唯独那个需要更小刀具的零件自己说明一下即可。长度、进给和转速都可以各自带上单位，并在每一层都会做换算，因此包里写的"
+" ``mm/min`` 和写在对象上的一样能被准确理解。"
+
+#: ../../source/features.rst:337
+msgid ""
+"What comes back is a file beside the package -- ``panel.nc`` -- and what "
+"it counted: how many passes, how deep, how far the tool travels in the "
+"cut. The route is the object's outline **sectioned at the bottom of the "
+"cut**, offset by the radius of the cutter, and that is both what makes it"
+" right for a prismatic object and the limit worth knowing about every "
+"other one: where the cross-section changes over the cut, no single "
+"outline is right, and the route follows the bottom and says so as a "
+"warning naming how much the two ends differ by. A route produced from an "
+"outline nobody expected is the one failure that looks like a success all "
+"the way to the machine."
+msgstr ""
+"返回的是一个放在包旁边的文件—— ``panel.nc`` ——以及它统计出来的数据：走了多少刀、每刀多深、刀具在切削中走了多远。刀路是对象轮廓 "
+"**在切削底面处的剖面** "
+"，再按刀具半径做偏置，这既是它对棱柱形对象正确的原因，也是对其他所有对象都值得了解的局限：当横截面在切削深度范围内发生变化时，没有任何单一轮廓是正确的，刀路会沿着底面走，并以一条警告说明两端相差多少。由一条谁也没料到的轮廓生成的刀路，是那种一路到了机床跟前都还看着像成功的失败。"
+
+#: ../../source/features.rst:347
+msgid ""
+"``pc test`` runs the same thing as its ``cam`` check -- it produces the "
+"route and passes the object only if one came back -- and applies it to an"
+" object that declares the section and to nothing else, so a package of "
+"bolts pays nothing for it. Unlike the analyses it does not keep what it "
+"produced: a route a check wrote would be indistinguishable from the one "
+"``pc cam`` writes, so it routes into a temporary directory and deletes "
+"it."
+msgstr ""
+"``pc test`` 的 ``cam`` "
+"检查运行的正是同一套流程——生成刀路，只有确实生成出来了才让该对象通过——并且只作用于声明了该小节的对象，别的一概不管，因此一个装满螺栓的包不会为此付出任何代价。与各项分析不同，它不会保留生成的结果：检查写出的刀路与"
+" ``pc cam`` 写出的无从分辨，所以它把刀路生成到一个临时目录里，然后删掉。"
+
+#: ../../source/features.rst:354
+msgid ""
+"The check that used to be called ``cam`` is ``manufacturability``. It "
+"asks whether an object can be made or bought *at all* -- whether its "
+"geometry suits the method it declares, whether what it is made from is "
+"reproducible, whether a supplier could be found -- which is a different "
+"question from whether a post-processor can produce a program for it. One "
+"word answered both until ``pc cam`` existed. ``-f`` filters by name "
+"prefix, so ``-f manufacturability`` selects that check and its three "
+"method-specific siblings and ``-f cam`` selects the route check alone."
+msgstr ""
+"原先叫做 ``cam`` 的那项检查现在叫 ``manufacturability`` 。它问的是一个对象 *究竟* "
+"能不能被制造或采购——它的几何形状是否适合它所声明的工艺、它的用料是否可复现、是否找得到供应商——这与后处理器能否为它生成程序是两个不同的问题。在"
+" ``pc cam`` 出现之前，一个词同时回答了这两个问题。 ``-f`` 按名称前缀过滤，因此 ``-f "
+"manufacturability`` 会选中这项检查及其三个按工艺细分的同族检查，而 ``-f cam`` 只选中刀路检查。"
+
+#: ../../source/features.rst:363
+msgid ""
+"``examples/feature_cam`` is the three operations on three objects, and a "
+"fourth that declares no section and is passed over. See :ref:`pc cam "
+"<cam>` for the command and the units it accepts."
+msgstr ""
+"``examples/feature_cam`` "
+"是三个对象上的三种操作，外加第四个没有声明该小节、因而被跳过的对象。关于该命令及其接受的单位，请参见 :ref:`pc cam <cam>` 。"
+
+#: ../../source/features.rst:369
 msgid "Procurement and Manufacturing"
 msgstr "采购与制造"
 
-#: ../../source/features.rst:45
+#: ../../source/features.rst:371
 msgid ""
 "PartCAD currently supports two types of providers (entities that can "
 "provide parts and assemblies): ``store`` and ``manufacturer``. ``store`` "
@@ -127,13 +760,22 @@ msgstr ""
 "（制造商）。 ``store`` 可用于从已有的列表中按 ``vendor`` （供应商）和 ``SKU`` 来询价和订购零件。 "
 "``manufacturer`` 可用于通过零件的 3D 模型来询价和订购零件（例如通过 3D 打印来制造它们）。"
 
-#: ../../source/features.rst:69
+#: ../../source/features.rst:396
 msgid ""
-"See :ref:`providers` for more information about the providers and how "
-"PartCAD selects them."
-msgstr "有关提供方以及 PartCAD 如何选择它们的更多信息，请参见 :ref:`providers` 。"
+"Assemblies that are sold in an assembled state are declared the same way,"
+" using ``vendor`` and ``sku`` on the assembly itself."
+msgstr "以组装好的状态出售的装配体也用同样的方式声明：在装配体自身上使用 ``vendor`` 和 ``sku`` 。"
 
-#: ../../source/features.rst:71
+#: ../../source/features.rst:399
+msgid ""
+"See :ref:`procurement` for more information about declaring purchasable "
+"objects, and :ref:`providers` for more information about the providers "
+"and how PartCAD selects them."
+msgstr ""
+"有关声明可采购对象的更多信息，请参见 :ref:`procurement` ；有关提供方以及 PartCAD 如何选择它们的更多信息，请参见 "
+":ref:`providers` 。"
+
+#: ../../source/features.rst:403
 msgid ""
 "In the future, PartCAD will support ``assembler``, which is supposed to "
 "produce an assembly given assembly instructions and using parts ordered "
@@ -142,44 +784,715 @@ msgstr ""
 "未来，PartCAD 将支持 ``assembler`` （装配方），它会根据装配说明、并使用从 ``store`` 和 "
 "``manufacturer`` 订购的零件来生产装配体。"
 
-#: ../../source/features.rst:75
+#: ../../source/features.rst:407
 msgid ""
 "Currently, the provider has to be explicitly specified in the quote or "
 "order request, or explicitly specified as one of the suppliers in the "
-"package where the parts are declared. In the future PartCAD will be able "
-"to select providers based on the location and preferences of the "
-"requester, while leaving the possibility to enforce the use of a specific"
-" provider for corresponding parts (for example, for parts that are using "
-"a patented design)."
-msgstr ""
-"目前，提供方必须在询价或订购请求中显式指定，或者在声明这些零件的包中被显式指定为供应商之一。未来，PartCAD "
-"将能够根据请求方的位置和偏好来选择提供方，同时仍保留为相应零件强制使用特定提供方的可能性（例如，对于采用了专利设计的零件）。"
+"package where the parts are declared:"
+msgstr "目前，提供方必须在询价或订购请求中显式指定，或者在声明这些零件的包中被显式指定为供应商之一："
 
-#: ../../source/features.rst:86
+#: ../../source/features.rst:418
+msgid ""
+"A supplier is written from the point of view of the package that lists "
+"it, and is resolved against that package the way every other reference it"
+" makes is: a bare name is one of its own providers, while a qualified one"
+" lets it buy from a provider defined elsewhere instead of declaring one "
+"of its own."
+msgstr "供应商是从列出它的那个包的视角书写的，并像该包所做的其他任何引用一样，相对于该包来解析：裸名称指的是它自己的某个提供方，而带限定的名称则让它可以从别处定义的提供方那里采购，而不必自己声明一个。"
+
+#: ../../source/features.rst:423
+msgid ""
+"A package served by a repository plugin has no ``partcad.yaml`` to write "
+"this in, so its plugin states the same section in the package's ``meta``,"
+" and it is read the same way (see :ref:`repositories`):"
+msgstr ""
+"由仓库插件提供的包没有可供书写这些内容的 ``partcad.yaml`` ，因此它的插件会在包的 ``meta`` "
+"中给出同样的小节，读取方式也完全相同（参见 :ref:`repositories` ）："
+
+#: ../../source/features.rst:431
+msgid ""
+"In the future PartCAD will be able to select providers based on the "
+"location and preferences of the requester, while leaving the possibility "
+"to enforce the use of a specific provider for corresponding parts (for "
+"example, for parts that are using a patented design)."
+msgstr "未来，PartCAD 将能够根据请求方的位置和偏好来选择提供方，同时仍保留为相应零件强制使用特定提供方的可能性（例如，对于采用了专利设计的零件）。"
+
+#: ../../source/features.rst:440
+msgid "The Python sandbox"
+msgstr "Python 沙箱"
+
+#: ../../source/features.rst:442
+msgid ""
+"Every CAD script PartCAD runs -- a ``cadquery`` or ``build123d`` part, "
+"the importer that reads a ``STEP`` file, a ``render:`` or ``cam:`` "
+"implementation -- runs in a sandbox rather than in the interpreter "
+"PartCAD itself is running on. That is what lets one package render "
+"against build123d 0.11 while another wants 0.9, and what keeps a CAD "
+"stack out of the environment you work in."
+msgstr ""
+"PartCAD 运行的每一个 CAD 脚本—— ``cadquery`` 或 ``build123d`` 零件、读取 ``STEP`` "
+"文件的导入器、 ``render:`` 或 ``cam:`` 实现——都在沙箱中运行，而不是在 PartCAD "
+"自身所在的解释器中运行。正因如此，一个包可以针对 build123d 0.11 渲染，而另一个包可以要求 0.9；也正因如此，CAD "
+"技术栈不会侵入你自己工作的环境。"
+
+#: ../../source/features.rst:448
+msgid "``pythonSandbox`` chooses how that sandbox is built:"
+msgstr "``pythonSandbox`` 决定该沙箱如何构建："
+
+#: ../../source/features.rst:451
+msgid "``docker``"
+msgstr ""
+
+#: ../../source/features.rst:451
+msgid ""
+"A container, with your files mounted into it. The default wherever a "
+"container runtime answers, because it is the only one whose result does "
+"not depend on what the host happens to have: the interpreter, the "
+"compilers and the native libraries all come from an image somebody built "
+"once and published. It is also the only sandbox a package can bring "
+"**non-Python** dependencies to, by naming its own image -- see :ref"
+":`docker-sandbox` below."
+msgstr ""
+"一个容器，你的文件会被挂载进去。只要有容器运行时作出响应，它就是默认选项，因为只有它的结果不取决于主机碰巧装了什么：解释器、编译器和原生库全都来自某人一次性构建并发布的镜像。它也是唯一一种包能够通过指定自有镜像来引入"
+" **非 Python** 依赖的沙箱——参见下文的 :ref:`docker-sandbox` 。"
+
+#: ../../source/features.rst:458
+msgid "``conda``"
+msgstr ""
+
+#: ../../source/features.rst:458
+msgid ""
+"An environment conda provisions, **interpreter included**. The default "
+"where there is no container runtime and conda or mamba is installed -- "
+"and in the :ref:`standalone tools <standalone-cli>`, the :ref:`snap "
+"<snap-package>` and the :ref:`PartCAD IDE <partcad-ide>`, which carry a "
+"conda of their own and use yours in preference to it when you have one. "
+"What it provisions depends on your channels, your package cache and your "
+"platform, which is why it is no longer the first choice where a container"
+" is available."
+msgstr ""
+"由 conda 准备出来的环境， **连解释器一起** 。在没有容器运行时而装有 conda 或 mamba 的机器上，它是默认选项；在 "
+":ref:`独立工具 <standalone-cli>` 、 :ref:`snap <snap-package>` 和 :ref:`PartCAD"
+" IDE <partcad-ide>` 中也是默认——它们自带一份 conda，但只要你有自己的 "
+"conda，就优先使用你的。它准备出来的内容取决于你的 channel、你的包缓存和你的平台，这正是在有容器可用时它不再是首选的原因。"
+
+#: ../../source/features.rst:466
+msgid "``venv``"
+msgstr ""
+
+#: ../../source/features.rst:466
+msgid ""
+"A plain virtual environment of PartCAD's own, one per interpreter "
+"version, under the internal state directory. The default when neither a "
+"container runtime nor conda is installed. Built from whichever Python the"
+" host has, so a package asking for a version the host does not have is "
+"rendered on the host's and told so -- and so not something the standalone"
+" tools can fall back to, since the machine they exist for is the one with"
+" no Python."
+msgstr ""
+"PartCAD 自己的一个普通虚拟环境，每个解释器版本一个，位于内部状态目录之下。在既没有容器运行时、也没有安装 conda "
+"时，它是默认选项。它基于主机现有的那个 Python "
+"构建，因此一个要求主机没有的版本的包，会用主机上的版本来渲染，并被如实告知这一点——也正因如此，独立工具不能把它当作退路，毕竟独立工具存在的意义正是服务于那些没有"
+" Python 的机器。"
+
+#: ../../source/features.rst:473
+msgid "``remote``"
+msgstr ""
+
+#: ../../source/features.rst:473
+msgid ""
+"A container that does **not** share a filesystem with PartCAD: the inputs"
+" are sent to it and the outputs are sent back. This is what a sandbox on "
+"another machine needs. Chosen rather than fallen back to, and it needs "
+"``remoteSandbox`` to say where the service is. See :ref:`remote-sandbox` "
+"below."
+msgstr ""
+"一个与 PartCAD **不** "
+"共享文件系统的容器：输入被发送过去，输出再被送回来。在另一台机器上运行沙箱正需要这样。它只会被主动选择，而不会被当作退路，并且需要 "
+"``remoteSandbox`` 指明服务的位置。参见下文的 :ref:`remote-sandbox` 。"
+
+#: ../../source/features.rst:478
+msgid "``none``"
+msgstr ""
+
+#: ../../source/features.rst:478
+msgid ""
+"No environment at all: scripts run on the host's own interpreter and "
+"their dependencies are installed **into it**. Fast and shares whatever is"
+" already there, at the price of writing the CAD stack into the Python you"
+" work with -- and unusable where that Python is not writable."
+msgstr ""
+"完全没有环境：脚本在主机自己的解释器上运行，它们的依赖也直接安装 **到其中** 。速度快，而且能共享已有的一切，代价是把 CAD "
+"技术栈写进你日常使用的那个 Python——在那个 Python 不可写入的地方则根本无法使用。"
+
+#: ../../source/features.rst:482
+msgid "``pypy``"
+msgstr ""
+
+#: ../../source/features.rst:482
+msgid "A conda environment built around PyPy."
+msgstr "一个围绕 PyPy 构建的 conda 环境。"
+
+#: ../../source/features.rst:490
+msgid ""
+"The equivalents everywhere else are ``PC_PYTHON_SANDBOX`` in the "
+"environment and ``--python-sandbox`` on the command line, in the usual "
+"order of precedence."
+msgstr ""
+"在其他地方的等价设置是环境变量 ``PC_PYTHON_SANDBOX`` 和命令行上的 ``--python-sandbox`` "
+"，优先级顺序一如往常。"
+
+#: ../../source/features.rst:493
+msgid ""
+"Which one is chosen for you, when you have said nothing, is the first of "
+"``docker``, ``conda`` and ``venv`` that this machine can actually "
+"provide. A continuous integration runner with no container runtime "
+"therefore keeps provisioning with conda exactly as before, and needs no "
+"configuration to say so."
+msgstr ""
+"在你什么都没有指定时，为你选中的是 ``docker`` 、 ``conda`` 和 ``venv`` "
+"之中这台机器真正能够提供的第一个。因此，没有容器运行时的持续集成执行器会和从前完全一样继续用 conda 来准备环境，无需任何配置来说明这一点。"
+
+#: ../../source/features.rst:498
+msgid ""
+"\"Can actually provide\" includes the image. A container runtime "
+"answering says a container could be started; it says nothing about "
+"whether the image to start it from can be pulled, and on a machine that "
+"is offline, behind a firewall, or simply not permitted to reach the "
+"registry those are different answers. So PartCAD checks, once, and falls "
+"through to ``conda`` or ``venv`` with a warning rather than failing every"
+" part against a registry you never asked it to talk to."
+msgstr ""
+"“真正能够提供”也包括镜像。容器运行时作出响应，说明容器可以启动；但这完全没有说明启动它所需的镜像能否拉取下来，而在离线、处于防火墙之后、或者干脆不被允许访问镜像仓库的机器上，这是两个不同的答案。所以"
+" PartCAD 会检查一次，并带着一条警告退回到 ``conda`` 或 ``venv`` "
+"，而不是让每个零件都去撞一个你从未要求它联系的镜像仓库而告失败。"
+
+#: ../../source/features.rst:505
+msgid ""
+"\"Can actually provide\" also includes the **filesystem**. The container "
+"gets your directories bind-mounted into it, and that only means anything "
+"if the daemon being asked is on the same filesystem as PartCAD. Two "
+"ordinary arrangements where it is not: a dev container with the host's "
+"``/var/run/docker.sock`` bound into it, and ``DOCKER_HOST`` pointing at "
+"another machine. There the daemon resolves your paths against a "
+"filesystem of its own, Docker creates whatever is missing -- empty, and "
+"owned by root -- and the container starts perfectly well with directories"
+" that are not yours. Nothing announces that; the first symptom is a "
+"permission error on a directory you can write to. So PartCAD asks the "
+"daemon directly, once: it writes a file and has a throwaway container "
+"look for it. A daemon *inside* this container -- Docker in Docker -- "
+"shares the filesystem and is fine."
+msgstr ""
+"“真正能够提供”还包括 **文件系统** 。容器会把你的目录以绑定挂载的方式挂进去，而这只有在被询问的守护进程与 PartCAD "
+"处在同一个文件系统上时才有意义。两种常见的安排并非如此：把主机的 ``/var/run/docker.sock`` "
+"绑定进来的开发容器，以及指向另一台机器的 ``DOCKER_HOST`` 。此时守护进程会相对于它自己的文件系统来解析你的路径，缺什么 "
+"Docker 就创建什么——空的，而且归 root "
+"所有——于是容器带着一堆并不属于你的目录顺利启动了。没有任何东西会提示这一点；第一个症状是在一个你明明可写的目录上出现权限错误。因此 "
+"PartCAD 会直接问守护进程一次：它写下一个文件，再让一个用完即弃的容器去找这个文件。如果守护进程就在这个容器 *内部* ——Docker "
+"in Docker——那它共享同一个文件系统，没有问题。"
+
+#: ../../source/features.rst:518
+msgid ""
+"A dev container is usually fine too. When the file is not found and "
+"PartCAD is running in a container *of that daemon*, it reads that "
+"container's mounts -- the workspace bound in from the host, a volume -- "
+"and binds each directory from where the daemon keeps it, at the path it "
+"has inside, then asks again. This repository's own dev container keeps "
+"``~/.partcad`` and ``/tmp`` on volumes for exactly this reason. "
+"``PC_DOCKER_MOUNT_SOURCES`` (``here=there`` pairs, separated by ``;``) "
+"says the same by hand. Only when there is no such answer -- a "
+"``DOCKER_HOST`` on another machine, or a directory the sandbox needs on "
+"none of the container's mounts -- is the daemon one this sandbox cannot "
+"use, and PartCAD says so and uses conda or a virtual environment, both of"
+" which stay on this machine."
+msgstr ""
+"开发容器通常也没有问题。当文件没有被找到，而 PartCAD 正运行在 *属于该守护进程的* "
+"容器中时，它会读取该容器的挂载信息——从主机绑定进来的工作区、某个卷——并把每个目录从守护进程存放它的位置绑定到它在容器内的路径上，然后再问一次。本仓库自己的开发容器把"
+" ``~/.partcad`` 和 ``/tmp`` 放在卷上，正是出于这个原因。 ``PC_DOCKER_MOUNT_SOURCES`` （以 "
+"``;`` 分隔的 ``here=there`` 对）可以手工说明同样的事情。只有在得不到这样的答案时——比如 ``DOCKER_HOST`` "
+"指向另一台机器，或者沙箱需要的某个目录不在该容器的任何挂载之中——这个守护进程才是本沙箱无法使用的；此时 PartCAD 会如实说明，并改用 "
+"conda 或虚拟环境，这两者都留在本机上。"
+
+#: ../../source/features.rst:530
+msgid ""
+"That fallback is only ever for a choice PartCAD made. Say "
+"``pythonSandbox: docker`` yourself and it is obeyed: an image that cannot"
+" be had, or a daemon that cannot see your files, is then a failure, "
+"because being unable to do what was asked is not a reason to quietly do "
+"something else."
+msgstr ""
+"这种退回只适用于 PartCAD 自己做出的选择。如果是你自己写明了 ``pythonSandbox: docker`` "
+"，那就照办：此时镜像拿不到、或者守护进程看不到你的文件，都算失败，因为做不到被要求的事情，并不构成悄悄去做别的事情的理由。"
+
+#: ../../source/features.rst:538
+msgid "The ``docker`` sandbox"
+msgstr "``docker`` 沙箱"
+
+#: ../../source/features.rst:540
+msgid ""
+"The container is a place to run the interpreter, not a place to keep your"
+" work. What it can see is whatever PartCAD bind-mounts into it, and that "
+"list is kept as short as it can be -- on an ordinary machine, two "
+"directories:"
+msgstr ""
+"容器是运行解释器的地方，不是存放你工作成果的地方。它能看到的只有 PartCAD "
+"绑定挂载进去的那些内容，而这份清单被尽可能地压短——在一台普通机器上只有两个目录："
+
+#: ../../source/features.rst:544
+msgid "your **home directory**, which already contains most of the rest;"
+msgstr "你的 **主目录** ，其余大部分内容本就在它里面；"
+
+#: ../../source/features.rst:545
+msgid ""
+"the **temporary directory**, because things land there without asking to "
+"be mounted -- an ad-hoc command's generated package, a factory's "
+"intermediate -- and one fixed mount is simpler than arranging for nothing"
+" to be temporary;"
+msgstr "**临时目录** ，因为东西会不声不响地落到那里——临时命令生成的包、工厂产生的中间结果——而一个固定的挂载，比费力做到什么都不临时要简单；"
+
+#: ../../source/features.rst:548
+msgid "the **context root** -- the package tree the command is working on;"
+msgstr "**上下文根目录** ——命令正在处理的那棵包树；"
+
+#: ../../source/features.rst:549
+msgid ""
+"**the internal state directory** (``~/.partcad`` by default), which is "
+"where the sandbox environments, the caches and the fetched dependencies "
+"live;"
+msgstr "**内部状态目录** （默认是 ``~/.partcad`` ），沙箱环境、各级缓存和抓取到的依赖都放在这里；"
+
+#: ../../source/features.rst:551
+msgid ""
+"**PartCAD's own installation**, because the interpreter over there is "
+"handed PartCAD's scripts by path and has to be able to open them."
+msgstr "**PartCAD 自身的安装目录** ，因为那边的解释器是按路径拿到 PartCAD 的脚本的，必须能够打开它们。"
+
+#: ../../source/features.rst:554
+msgid ""
+"Nested directories are mounted once, by the outermost of them, since two "
+"views of one directory leave it undecided which a write lands in. So when"
+" the package, ``~/.partcad`` and the installation are all under your home"
+" directory -- which is the usual arrangement -- those three collapse into"
+" it, leaving the home directory and the temporary one. On Windows even "
+"that is a single mount, since the temporary directory lives inside the "
+"user profile; on Linux and macOS it does not, so there are two. The rest "
+"are still named because they are not always under either: a package on "
+"another volume, a system-wide installation, a file an ad-hoc command was "
+"pointed at somewhere else."
+msgstr ""
+"嵌套的目录只挂载一次，由其中最外层的那个代为挂载，因为同一个目录的两个视图会让人无从判断一次写入究竟落在哪一个上。所以当包、 "
+"``~/.partcad`` 和安装目录都在你的主目录之下时——这是通常的安排——这三项就并入了主目录，只剩下主目录和临时目录。在 Windows"
+" 上甚至连这也只是一个挂载，因为临时目录就位于用户配置文件之内；在 Linux 和 macOS "
+"上则不是，所以有两个。其余几项仍然要一一列出，因为它们并不总是在这两者之下：位于另一个卷上的包、系统级的安装、临时命令指向别处的某个文件。"
+
+#: ../../source/features.rst:564
+msgid ""
+"That is not tidiness. A mount set that does not vary from one context to "
+"the next is a container that never has to be replaced, which is what lets"
+" one container serve every package you work on and keep serving it after "
+"``pc`` exits."
+msgstr ""
+"这并不是为了整洁。一套不随上下文变化的挂载集合，意味着容器永远不必被替换，这正是一个容器就能服务于你所处理的每一个包，并在 ``pc`` "
+"退出之后继续服务的原因。"
+
+#: ../../source/features.rst:569
+msgid ""
+"Everything is mounted **writable**, your home directory included. "
+"Mounting the installation read-only was tried and taken back out: it "
+"bought little -- a wrapper is read and executed, and what it writes goes "
+"to the cache or back over its own protocol -- and cost one more thing "
+"that could differ between two containers of one image. The isolation "
+"worth having here is the container; the mounts exist so that a path a "
+"wrapper is handed means something on the other side, and that is a "
+"stopgap rather than a security boundary."
+msgstr ""
+"所有挂载都是 **可写** "
+"的，包括你的主目录。把安装目录以只读方式挂载的做法曾经试过，后来又撤掉了：它带来的好处很小——包装脚本只是被读取并执行，它写出的东西要么进入缓存，要么通过它自己的协议传回——而代价是多出了一个可能让同一镜像的两个容器产生差异的因素。这里值得拥有的隔离是容器本身；挂载的存在只是为了让交给包装脚本的路径在另一侧也有意义，这是一种权宜之计，而不是一道安全边界。"
+
+#: ../../source/features.rst:577
+msgid ""
+"On a POSIX host all of them are mounted **at the same paths they have "
+"outside**, so a path in a log, in an error, in a cached artifact or in a "
+"``.frd`` a solver wrote means the same thing on both sides and nothing "
+"has to be rewritten."
+msgstr ""
+"在 POSIX 主机上，所有这些目录都挂载 **在它们在外部原有的同一路径上** ，因此日志里、错误信息里、缓存产物里，或者求解器写出的 "
+"``.frd`` 文件里的路径，在两侧含义相同，什么都不必改写。"
+
+#: ../../source/features.rst:582
+msgid ""
+"That is not available on Windows and never was: "
+"``C:\\Users\\you\\.partcad`` is not a path a Linux container can have, so"
+" a drive letter is mapped the way Docker Desktop maps it "
+"(``C:\\Users\\you`` becomes ``/c/Users/you``) and PartCAD rewrites the "
+"command line on the way in. So identical paths are a property of POSIX "
+"hosts rather than of the design, and translating them is machinery "
+"PartCAD already has rather than a line it will not cross -- worth knowing"
+" before treating \"the paths must match\" as a constraint on some future "
+"change to how the mounts are chosen."
+msgstr ""
+"在 Windows 上做不到这一点，而且从来就做不到： ``C:\\Users\\you\\.partcad`` 不是 Linux "
+"容器能够拥有的路径，所以盘符会按 Docker Desktop 的方式映射（ ``C:\\Users\\you`` 变成 "
+"``/c/Users/you`` ），而 PartCAD 则在传入时改写命令行。因此，路径一致是 POSIX "
+"主机的属性，而不是设计本身的属性；路径转换是 PartCAD "
+"早已具备的机制，而不是一条它不肯逾越的界线——在把“路径必须一致”当作将来修改挂载选取方式的约束之前，这一点值得先弄清楚。"
+
+#: ../../source/features.rst:591
+msgid ""
+"The container is named after the **image** and nothing else, so it "
+"outlives the process that started it: the next ``pc`` command finds it "
+"warm rather than paying to start one, and only a new version or image tag"
+" makes it a different container. It carries PartCAD's labels, so ``pc "
+"system prune`` clears out the ones a machine has stopped needing."
+msgstr ""
+"容器仅以 **镜像** 命名，别无其他依据，因此它的寿命长于启动它的那个进程：下一条 ``pc`` "
+"命令会发现它仍是热的，而不必再付出启动的代价；只有新的版本或新的镜像标签才会让它变成另一个容器。它带着 PartCAD 的标签，因此 ``pc "
+"system prune`` 能清理掉机器上已经不再需要的那些容器。"
+
+#: ../../source/features.rst:597
+msgid ""
+"Because the state directory is mounted rather than copied, ``pip`` "
+"installs persist across container restarts and the environment locking, "
+"the install guards and the cache all work unchanged. Sandbox environments"
+" are named after the image that built them, so a package rendered against"
+" one image never reuses what another installed -- what ``pip`` resolves "
+"and compiles depends on the native libraries underneath it, and two "
+"images do not have the same ones."
+msgstr ""
+"由于状态目录是挂载进来而不是复制进来的， ``pip`` "
+"安装的内容能够在容器重启之间保留下来，环境锁定、安装守卫和缓存也都照常工作。沙箱环境以构建它们的镜像命名，因此针对某个镜像渲染的包绝不会复用另一个镜像装好的东西——"
+" ``pip`` 解析和编译出来的结果取决于底层的原生库，而两个镜像的原生库并不相同。"
+
+#: ../../source/features.rst:607
+msgid "The ``remote`` sandbox"
+msgstr "``remote`` 沙箱"
+
+#: ../../source/features.rst:609
+msgid ""
+"``remote`` makes no assumption that the container can see your disk. The "
+"directories a command needs are packed up and sent to it, and the files "
+"it wrote are sent back. That costs a copy per run, and it buys a sandbox "
+"that can be anywhere -- another machine, another architecture, a build "
+"farm."
+msgstr ""
+"``remote`` "
+"不假定容器能看到你的磁盘。命令所需的目录会被打包发送过去，它写出的文件再被送回来。这样每次运行都要付出一次复制的代价，换来的则是一个可以位于任何地方的沙箱——另一台机器、另一种体系结构、一个构建农场。"
+
+#: ../../source/features.rst:614
+msgid ""
+"It is served by ``partcad-service-remote-docker``, which accepts those "
+"requests, starts and reuses a container per image, multiplexes callers "
+"onto it and retires it when nobody is using it. That service exists; run "
+"it with ``--host`` and ``--port`` to say where."
+msgstr ""
+"提供这项服务的是 ``partcad-service-remote-docker`` "
+"，它接受这些请求，为每个镜像启动并复用一个容器，把多个调用方复用到同一个容器上，并在无人使用时将它退役。这个服务已经存在；用 ``--host``"
+" 和 ``--port`` 运行它来指明地址。"
+
+#: ../../source/features.rst:619
+msgid ""
+"**It runs commands, so who may reach it matters.** A request names the "
+"image, the requirements and the command, and the sandbox interpreter runs"
+" whatever Python it is handed -- on a reachable address that is a shell "
+"for anybody who can reach the port. So it binds loopback by default, and "
+"it **refuses to start** on any other address without ``--token`` (or "
+"``PC_REMOTE_SANDBOX_TOKEN``), which every request must then carry as "
+"``Authorization: Bearer <token>``. Refused at start-up rather than warned"
+" about: somebody who passed ``--host 0.0.0.0`` is not going to read the "
+"log of a service that came up and appeared to work. Prefer the "
+"environment variable to the flag, since process arguments are readable by"
+" anyone on the machine."
+msgstr ""
+"**它会运行命令，所以谁能访问到它非常重要。** 一个请求会指明镜像、依赖要求和命令，而沙箱解释器会运行交给它的任何 Python "
+"代码——放在一个外部可达的地址上，这就等于给所有能连上这个端口的人提供了一个 shell。因此它默认只绑定回环地址；若要绑定到其他任何地址，没有 "
+"``--token`` （或 ``PC_REMOTE_SANDBOX_TOKEN`` ）它就会 **拒绝启动** ，而此后每个请求都必须以 "
+"``Authorization: Bearer <token>`` 的形式携带该令牌。这里选择在启动时拒绝，而不是给出一条警告：一个传了 "
+"``--host 0.0.0.0`` "
+"的人，是不会去翻看一个已经起来、看上去也正常工作的服务的日志的。相比命令行标志，更推荐使用环境变量，因为进程参数在这台机器上人人可读。"
+
+#: ../../source/features.rst:630
+msgid ""
+"The service owns the environment, and that is the arrangement worth "
+"knowing. A sandbox is a virtual environment on a disk, and for ``remote``"
+" that disk cannot be the caller's -- so the service builds it in a Docker"
+" volume, installs into it, and prepends its interpreter to whatever was "
+"asked for. The client never learns where it is. Guards saying \"numpy is "
+"installed\" belong on the same disk as the numpy they describe."
+msgstr ""
+"环境归服务所有，这是值得了解的一点安排。沙箱就是磁盘上的一个虚拟环境，而对 ``remote`` "
+"来说，这块磁盘不可能是调用方的——于是服务会在一个 Docker "
+"卷中构建它、往里面安装，并把它的解释器前置到所要求的内容之前。客户端永远不会知道它在哪里。诸如“numpy "
+"已安装”之类的守卫信息，理应与它们所描述的那个 numpy 位于同一块磁盘上。"
+
+#: ../../source/features.rst:637
+msgid ""
+"Which directories a command needs are worked out from the command: any "
+"argument naming a file on this machine contributes the directory it is "
+"in, because a script needs the siblings it imports. What a command "
+"*writes* cannot be inferred that way, so a caller producing a file names "
+"it, exactly as it does for a container."
+msgstr ""
+"一条命令需要哪些目录，是从命令本身推断出来的：任何指向本机某个文件的参数，都会贡献出它所在的目录，因为脚本需要它所导入的那些同级文件。而一条命令会"
+" *写出* 什么，无法这样推断，所以产出文件的调用方要自行指明，这与面向容器时的做法完全一致。"
+
+#: ../../source/features.rst:643
+msgid ""
+"Point a client at it with ``remoteSandbox`` (or ``PC_REMOTE_SANDBOX``), "
+"as ``host:port``, and give it the service's token with "
+"``remoteSandboxToken`` (or ``PC_REMOTE_SANDBOX_TOKEN``) where the service"
+" was started with one. There is no default for either: guessing at a "
+"service that runs commands is not something to do on somebody's behalf."
+msgstr ""
+"用 ``remoteSandbox`` （或 ``PC_REMOTE_SANDBOX`` ）把客户端指向它，格式为 ``host:port`` "
+"；如果服务启动时带了令牌，再用 ``remoteSandboxToken`` （或 ``PC_REMOTE_SANDBOX_TOKEN`` "
+"）把服务的令牌交给它。两者都没有默认值：替别人去猜一个会运行命令的服务在哪里，这种事不该做。"
+
+#: ../../source/features.rst:649
+msgid ""
+"**Off this machine, that has to be encrypted.** Every request carries the"
+" token and the package's own source, so PartCAD refuses to send one to an"
+" address that is not loopback over plain HTTP. Two ways to satisfy it: "
+"put the service behind a TLS-terminating proxy and write "
+"``https://host:port``, or reach it through a tunnel -- SSH, WireGuard, "
+"whatever the network already has -- and point ``remoteSandbox`` at the "
+"near end, which is loopback and stays plain. A container PartCAD starts "
+"on this machine is loopback too, and a certificate between a process and "
+"its own container would secure nothing."
+msgstr ""
+"**一旦离开这台机器，这些内容就必须加密。** 每个请求都携带着令牌和包自身的源码，因此 PartCAD 拒绝通过明文 HTTP "
+"把请求发往非回环地址。有两种方式可以满足它：把服务放在一个终止 TLS 的代理之后，并写成 ``https://host:port`` "
+"；或者通过隧道访问它——SSH、WireGuard，网络里已有的任何一种——并把 ``remoteSandbox`` "
+"指向近端，近端是回环地址，可以保持明文。PartCAD 在本机启动的容器同样走回环地址，而在一个进程和它自己的容器之间架设证书并不能保护什么。"
+
+#: ../../source/features.rst:658
+msgid ""
+"Today the transfer is a whole directory at a time; the intent is to "
+"replace that with a filesystem the container mounts and pulls files "
+"through one at a time, at which point ``remote`` becomes as cheap as "
+"``docker`` and stops being a trade."
+msgstr ""
+"目前传输是以整个目录为单位进行的；计划是把它换成一个由容器挂载、按需逐个取回文件的文件系统，届时 ``remote`` 的开销将与 "
+"``docker`` 相当，不再是一笔取舍。"
+
+#: ../../source/features.rst:663
+msgid "Containers PartCAD manages"
+msgstr "PartCAD 管理的容器"
+
+#: ../../source/features.rst:665
+msgid ""
+"Every image PartCAD builds is labelled as its own, and ``pc system "
+"prune`` removes the images and containers carrying those labels -- never "
+"anything else on the machine. ``pc system prune --stale`` removes only "
+"what is out of date: images from PartCAD releases other than this one, "
+"and containers nothing is using."
+msgstr ""
+"PartCAD 构建的每一个镜像都被标注为它自己的，而 ``pc system prune`` "
+"只删除带有这些标签的镜像和容器——绝不会动机器上的其他任何东西。 ``pc system prune --stale`` "
+"只删除已经过时的内容：来自其他 PartCAD 发布版本（而非当前这个）的镜像，以及无人使用的容器。"
+
+#: ../../source/features.rst:671
+msgid ""
+"Third-party images are asked, by convention, to carry the same labels. An"
+" image that does not is still usable; it simply cannot be told apart from"
+" the rest of what you have installed, so ``pc system prune`` leaves it "
+"alone."
+msgstr ""
+"按照约定，第三方镜像也应当带上同样的标签。没有带标签的镜像照样可用，只是无法把它与你安装的其他东西区分开来，因此 ``pc system "
+"prune`` 不会去动它。"
+
+#: ../../source/features.rst:679
 msgid "Caching"
 msgstr "缓存"
 
-#: ../../source/features.rst:88
+#: ../../source/features.rst:681
 msgid ""
 "PartCAD is capable of caching intermediate and final results of all model"
 " compilations. This can be particularly useful when working with large "
-"models or when scripting languages (like OpenSCAD, CadQuery, build123d or"
-" sdf) are used."
+"models or when scripting languages (like OpenSCAD, CadQuery, build123d, "
+"Chili3D or sdf) are used."
 msgstr ""
 "PartCAD 能够缓存所有模型编译的中间结果和最终结果。在处理大型模型，或使用脚本语言（如 "
-"OpenSCAD、CadQuery、build123d 或 sdf）时，这一点尤其有用。"
+"OpenSCAD、CadQuery、build123d、Chili3D 或 sdf）时，这一点尤其有用。"
 
-#: ../../source/features.rst:92
+#: ../../source/features.rst:685
+msgid ""
+"Anything PartCAD produces in a sandbox is cached under the environment "
+"that produced it as well as under its own inputs: the interpreter version"
+" and the versions of the CAD libraries installed alongside it. That "
+"covers parts and sketches written as scripts, and equally parts read from"
+" CAD files, since the importer that turns a ``STEP`` file into geometry "
+"is itself a script in a sandbox. Moving a package to another Python or "
+"Node.js, or to another version of Chili3D, therefore re-renders rather "
+"than serving what the previous environment built. ``pc info`` reports "
+"that environment for the objects that have one; an assembly does not, "
+"because it is composed from objects that each carry theirs."
+msgstr ""
+"PartCAD 在沙箱中产生的任何东西，既按它自身的输入来缓存，也按产生它的那个环境来缓存：解释器的版本，以及与之一同安装的各个 CAD "
+"库的版本。这既涵盖以脚本形式编写的零件和草图，也同样涵盖从 CAD 文件读入的零件，因为把 ``STEP`` "
+"文件转成几何体的那个导入器本身就是沙箱中的一个脚本。因此，把一个包换到另一个 Python 或 Node.js 上、或者换到另一个版本的 "
+"Chili3D 上，都会触发重新渲染，而不是沿用上一个环境构建出来的结果。 ``pc info`` "
+"会为拥有环境的对象报告该环境；装配体没有环境，因为它是由各自携带环境的对象组合而成的。"
+
+#: ../../source/features.rst:695
 msgid ""
 "At the moment code-CAD caching is experimental and can be enabled by "
 "using the following configuration:"
 msgstr "目前，代码化 CAD 的缓存仍是实验性的，可以通过以下配置来启用："
 
-#: ../../source/features.rst:101
+#: ../../source/features.rst:703
+msgid "Cache tiers"
+msgstr "缓存层级"
+
+#: ../../source/features.rst:705
+msgid ""
+"The cache is a hierarchy of tiers, each with its own switch, because what"
+" is worth keeping in memory is not what is worth a file, and neither is "
+"what is worth a network round trip:"
+msgstr "缓存是一个分层的体系，每一层都有自己的开关，因为值得留在内存里的东西，和值得写成文件的东西并不相同，也不同于值得为之付出一次网络往返的东西："
+
+#: ../../source/features.rst:710
+msgid "Tier"
+msgstr "层级"
+
+#: ../../source/features.rst:710
+msgid "Where it keeps things"
+msgstr "它把东西放在哪里"
+
+#: ../../source/features.rst:710
+msgid "Default"
+msgstr "默认"
+
+#: ../../source/features.rst:712
+msgid "``cacheMem``"
+msgstr ""
+
+#: ../../source/features.rst:712
+msgid "This process's memory. Nearest, and lost on exit."
+msgstr "本进程的内存。距离最近，退出即丢失。"
+
+#: ../../source/features.rst:712 ../../source/features.rst:713
+msgid "on"
+msgstr "开"
+
+#: ../../source/features.rst:713
+msgid "``cacheFiles``"
+msgstr ""
+
+#: ../../source/features.rst:713
+msgid "A directory under the internal state directory. Local."
+msgstr "内部状态目录下的一个目录。位于本地。"
+
+#: ../../source/features.rst:714
+msgid "``cacheRemote``"
+msgstr ""
+
+#: ../../source/features.rst:714
+msgid "A memcached server, shared by a team or a CI fleet."
+msgstr "一台 memcached 服务器，供团队或 CI 机群共享。"
+
+#: ../../source/features.rst:714 ../../source/features.rst:715
+msgid "off"
+msgstr "关"
+
+#: ../../source/features.rst:715
+msgid "``cacheS3``"
+msgstr ""
+
+#: ../../source/features.rst:715
+msgid "An S3 bucket, which outlives all of the above."
+msgstr "一个 S3 存储桶，比上述所有层级都更持久。"
+
+#: ../../source/features.rst:718
+msgid ""
+"A read walks them in that order and stops at the first hit; a write "
+"offers the entry to every tier whose size window accepts it. The two "
+"shared tiers are off by default because they need an address that only a "
+"deployment can supply:"
+msgstr "读取会按这个顺序逐层查找，并在第一次命中处停止；写入则会把条目提供给每一个尺寸窗口接受它的层级。两个共享层级默认是关闭的，因为它们需要一个只有具体部署才能提供的地址："
+
+#: ../../source/features.rst:732
+msgid ""
+"Each tier also takes ``...MaxEntrySize`` and ``...MinEntrySize`` to set "
+"the window of object sizes it accepts, and the memcached tier takes "
+"``cacheRemoteNamespace`` and ``cacheRemoteExpiration``. ``cacheS3`` "
+"additionally accepts ``cacheS3Prefix`` and ``cacheS3EndpointUrl``, the "
+"latter for an S3-compatible store that is not AWS."
+msgstr ""
+"每一层还接受 ``...MaxEntrySize`` 和 ``...MinEntrySize`` "
+"，用来设定它所接受的对象尺寸窗口；memcached 层另外接受 ``cacheRemoteNamespace`` 和 "
+"``cacheRemoteExpiration`` 。 ``cacheS3`` 还额外接受 ``cacheS3Prefix`` 和 "
+"``cacheS3EndpointUrl`` ，后者用于非 AWS 的 S3 兼容存储。"
+
+#: ../../source/features.rst:738
+msgid ""
+"``cacheRemote`` needs nothing installed. ``cacheS3`` needs the ``aws`` "
+"extra (``pip install -U 'partcad[aws]'``); enabling it without that "
+"reports an error naming the package to install and leaves the remaining "
+"tiers working. See :doc:`installation` for both."
+msgstr ""
+"``cacheRemote`` 不需要安装任何东西。 ``cacheS3`` 需要 ``aws`` 这个 extra（ ``pip install"
+" -U 'partcad[aws]'`` ）；没有安装它就启用，会报出一个指明待装包名的错误，其余层级则照常工作。两者的说明都参见 "
+":doc:`installation` 。"
+
+#: ../../source/features.rst:744
+msgid "Cache keys"
+msgstr "缓存键"
+
+#: ../../source/features.rst:746
+msgid ""
+"An object is cached under a hash of what produces it: its configuration "
+"(less the keys that only describe it, such as ``desc``), the environment "
+"it is built in, and the files it is built from. A file contributes its "
+"size and its content -- all of it up to 1 MB, and the first and last 0.5 "
+"MB of a larger one -- but never its modification time, so a fresh clone "
+"on another machine produces the same keys and a shared tier is shared. An"
+" edit confined to the middle of a file over 1 MB that leaves its size "
+"unchanged is therefore not seen; run that command with ``--cache-"
+"bypass``."
+msgstr ""
+"对象是以产生它的那些内容的哈希值为键来缓存的：它的配置（不含仅用于描述它的那些键，例如 ``desc`` "
+"）、构建它时所处的环境，以及构建它所用的那些文件。文件贡献的是它的大小和内容——不超过 1 MB 时是全部内容，更大时则取开头和结尾各 0.5 "
+"MB——但绝不包含它的修改时间，因此在另一台机器上重新克隆一份会得出相同的键，共享层级也就真的共享得起来。所以，对一个大于 1 MB "
+"的文件只改动中间部分、且大小不变的编辑是察觉不到的；这时请给该命令加上 ``--cache-bypass`` 再运行。"
+
+#: ../../source/features.rst:755
+msgid ""
+"An object made out of others is keyed on theirs as well: an ``extrude`` "
+"or ``sweep`` on its sketch, a ``compound`` part on its assembly, an "
+"``assy`` assembly on everything it links to. Editing a part rebuilds "
+"every assembly that uses it, and an object with ``cache: false`` makes "
+"everything built out of it uncached too."
+msgstr ""
+"由其他对象构成的对象，也会把那些对象的键一并算进去： ``extrude`` 或 ``sweep`` 算上它的草图， ``compound`` "
+"零件算上它的装配体， ``assy`` 装配体算上它所链接的一切。编辑一个零件会重新构建每一个用到它的装配体；而带有 ``cache: "
+"false`` 的对象，也会让一切由它构建出来的东西都不被缓存。"
+
+#: ../../source/features.rst:761
+msgid ""
+"``pc --cache-bypass <command>`` (or ``PC_CACHE_BYPASS=1``, or "
+"``cacheBypass: True``) bypasses every tier for one run: nothing is read "
+"from a cache and nothing built is written to one."
+msgstr ""
+"``pc --cache-bypass <command>`` （或 ``PC_CACHE_BYPASS=1`` ，或 "
+"``cacheBypass: True`` ）会为单次运行绕过所有层级：不从任何缓存读取，构建出来的东西也不写入任何缓存。"
+
+#: ../../source/features.rst:765
+msgid ""
+"The daemon keeps packages loaded between commands. Before each command it"
+" compares the ``partcad.yaml`` of the packages the command is about, and "
+"of every package they declare as a dependency, with what it read, by "
+"modification time and size, and reloads a package that changed together "
+"with the packages underneath it. Each package is compared at most once "
+"every 15 seconds."
+msgstr ""
+"守护进程会在多条命令之间保持包的加载状态。每条命令执行之前，它会按修改时间和大小，把该命令所涉及的包、以及这些包声明为依赖的每一个包的 "
+"``partcad.yaml`` 与它先前读到的内容做比较，并把发生了变化的包连同它下面的那些包一起重新加载。每个包最多每 15 秒比较一次。"
+
+#: ../../source/features.rst:773
 msgid "Security"
 msgstr "安全性"
 
-#: ../../source/features.rst:103
+#: ../../source/features.rst:775
 msgid ""
 "As code-CAD is gaining popularity in the community, the topic of supply "
 "chain security and the risk of running arbitrary third-party code is not "
@@ -190,54 +1503,55 @@ msgstr ""
 "随着代码化 CAD 在社区中日益流行，供应链安全以及运行任意第三方代码所带来的风险这一话题尚未得到充分重视。PartCAD "
 "旨在为开源软件弥补这一空白，其方式超越了目前任何商业软件所能提供的水平。"
 
-#: ../../source/features.rst:108
+#: ../../source/features.rst:780
 msgid ""
-"PartCAD is capable of rendering scripted parts (``CadQuery``, "
-"``build123d`` and ``sdf`` use Python) in sandboxed environments."
+"PartCAD is capable of rendering scripted parts in sandboxed environments:"
+" ``CadQuery``, ``build123d`` and ``sdf`` use Python, and ``Chili3D`` uses"
+" JavaScript."
 msgstr ""
-"PartCAD 能够在沙箱环境中渲染脚本化的零件（ ``CadQuery`` 、 ``build123d`` 和 ``sdf`` 都使用 "
-"Python）。"
+"PartCAD 能够在沙箱环境中渲染脚本化的零件： ``CadQuery`` 、 ``build123d`` 和 ``sdf`` 使用 "
+"Python，而 ``Chili3D`` 使用 JavaScript。"
 
-#: ../../source/features.rst:111
+#: ../../source/features.rst:784
 msgid ""
 "At the moment it is only useful from a dependency management perspective "
-"(it allows third-party packages to bring their Python dependencies "
-"without polluting your own Python environment), in the future, PartCAD "
-"aims to achieve security isolation of the sandboxed environments. That "
-"will fundamentally change the security implications of using scripted "
-"models shared online."
+"(it allows third-party packages to bring their Python and npm "
+"dependencies without polluting your own environments), in the future, "
+"PartCAD aims to achieve security isolation of the sandboxed environments."
+" That will fundamentally change the security implications of using "
+"scripted models shared online."
 msgstr ""
-"目前，这仅从依赖管理的角度有用（它允许第三方包引入自己的 Python 依赖，而不会污染你自己的 Python 环境）；未来，PartCAD "
-"的目标是实现沙箱环境的安全隔离。这将从根本上改变使用在线共享的脚本化模型所涉及的安全影响。"
+"目前，这仅从依赖管理的角度有用（它允许第三方包引入自己的 Python 和 npm 依赖，而不会污染你自己的环境）；未来，PartCAD "
+"的目标是实现沙箱环境的安全隔离。这将从根本上改变使用在线共享的脚本化模型所带来的安全影响。"
 
-#: ../../source/features.rst:120
+#: ../../source/features.rst:793
 msgid "Telemetry"
 msgstr "遥测"
 
-#: ../../source/features.rst:123
+#: ../../source/features.rst:796
 msgid "Public Repositories"
 msgstr "公共仓库"
 
-#: ../../source/features.rst:125
+#: ../../source/features.rst:798
 msgid ""
 "By default PartCAD collects telemetry data to improve the user experience"
 " and to help understand how the tool is being used. The data collected "
 "includes the following:"
 msgstr "默认情况下，PartCAD 会收集遥测数据，以改善用户体验并帮助了解该工具的使用情况。所收集的数据包括以下内容："
 
-#: ../../source/features.rst:129
+#: ../../source/features.rst:802
 msgid "What commands are being run?"
 msgstr "正在运行哪些命令？"
 
-#: ../../source/features.rst:130
+#: ../../source/features.rst:803
 msgid "How much time is consumed by each step?"
 msgstr "每个步骤消耗了多少时间？"
 
-#: ../../source/features.rst:131
+#: ../../source/features.rst:804
 msgid "What errors and exceptions are being raised?"
 msgstr "抛出了哪些错误和异常？"
 
-#: ../../source/features.rst:133
+#: ../../source/features.rst:806
 msgid ""
 "PartCAD uses `OpenTelemetry <https://opentelemetry.io/>`_ to collect "
 "telemetry data. You can disable telemetry by setting the following "
@@ -246,21 +1560,47 @@ msgstr ""
 "PartCAD 使用 `OpenTelemetry <https://opentelemetry.io/>`_ "
 "来收集遥测数据。你可以通过设置以下配置来禁用遥测："
 
-#: ../../source/features.rst:142
+#: ../../source/features.rst:815
 msgid ""
 "Alternatively, you can disable telemetry by setting the following "
 "environment variable:"
 msgstr "或者，你也可以通过设置以下环境变量来禁用遥测："
 
-#: ../../source/features.rst:148
+#: ../../source/features.rst:821
 msgid "You can also change telemetry settings using CLI:"
 msgstr "你还可以使用 CLI 来更改遥测设置："
 
-#: ../../source/features.rst:159
+#: ../../source/features.rst:831
+msgid ""
+"How deep the traces go is a separate setting. By default PartCAD reports "
+"the operations it names for itself -- the process a command is, and the "
+"action each object it works on is -- and nothing below them:"
+msgstr ""
+"追踪深入到什么程度是一项单独的设置。默认情况下，PartCAD "
+"只报告它为自己命名的那些操作——一条命令所对应的过程，以及它所处理的每个对象所对应的动作——再往下的内容一概不报告："
+
+#: ../../source/features.rst:840
+msgid ""
+"``methods`` adds a span for every instrumented method underneath those, "
+"which is what a trace needs to answer \"where inside this did the time "
+"go\". It is expensive in a way that is easy to miss: creating one part "
+"passes through a dozen instrumented methods, so a package of eight "
+"thousand of them costs a quarter of a million spans to list. Turn it on "
+"while you are looking at something, not for good."
+msgstr ""
+"``methods`` 会为这些操作下面每一个被插桩的方法都添加一个 "
+"span，追踪要回答“时间究竟花在了它内部的哪里”正需要这些。它的开销大得很容易被忽视：创建一个零件要经过十来个被插桩的方法，因此光是列出一个有八千个零件的包就要付出二十五万个"
+" span 的代价。只在你正查看某个问题时打开它，不要一直开着。"
+
+#: ../../source/features.rst:847
+msgid "``pc system telemetry info`` reports both settings."
+msgstr "``pc system telemetry info`` 会报告这两项设置。"
+
+#: ../../source/features.rst:850
 msgid "Private Repositories"
 msgstr "私有仓库"
 
-#: ../../source/features.rst:161
+#: ../../source/features.rst:852
 msgid ""
 "If you are systemically using PartCAD in your organization then it makes "
 "sense to collect your own telemetry data to understand how the tool is "
@@ -268,7 +1608,7 @@ msgid ""
 "organization performance."
 msgstr "如果你在组织中系统性地使用 PartCAD，那么收集你自己的遥测数据是有意义的，这样可以了解该工具在你组织中的使用情况，并学习如何提升你组织的效能。"
 
-#: ../../source/features.rst:165
+#: ../../source/features.rst:856
 msgid ""
 "The only OpenTelemetry backend provider currently supported is `Sentry "
 "<https://sentry.io/>`_. Create an organization account on Sentry and "
@@ -277,15 +1617,15 @@ msgstr ""
 "目前唯一受支持的 OpenTelemetry 后端提供方是 `Sentry <https://sentry.io/>`_ 。请在 Sentry "
 "上创建一个组织账户并获取一个 DSN 密钥。"
 
-#: ../../source/features.rst:175
+#: ../../source/features.rst:866
 msgid "Other OpenTelemetry backend providers can be supported on request."
 msgstr "如有需要，也可以支持其他 OpenTelemetry 后端提供方。"
 
-#: ../../source/features.rst:179
+#: ../../source/features.rst:870
 msgid "Automation Support"
 msgstr "自动化支持"
 
-#: ../../source/features.rst:181
+#: ../../source/features.rst:872
 msgid ""
 "PartCAD allows you to set CLI options and override user configurations "
 "specified in ``~/.partcad/config.yaml`` using environment variables. This"
@@ -295,59 +1635,59 @@ msgstr ""
 "PartCAD 允许你通过环境变量来设置 CLI 选项，并覆盖在 ``~/.partcad/config.yaml`` "
 "中指定的用户配置。在需要动态设置配置、或在无法修改配置文件的环境中，这一点尤其有用。"
 
-#: ../../source/features.rst:186
+#: ../../source/features.rst:877
 msgid ""
 "Generally, all of PartCAD's environment variables are prefixed with "
 "``PC``."
 msgstr "一般来说，PartCAD 所有的环境变量都以 ``PC`` 为前缀。"
 
-#: ../../source/features.rst:188
+#: ../../source/features.rst:879
 msgid ""
 "For CLI options, the environment variable prefix depends on the command "
 "being used. You can use the `--help` option to determine the "
 "corresponding environment variable for each CLI option."
 msgstr "对于 CLI 选项，环境变量的前缀取决于所使用的命令。你可以使用 `--help` 选项来确定每个 CLI 选项对应的环境变量。"
 
-#: ../../source/features.rst:192
+#: ../../source/features.rst:883
 msgid "Here are some examples:"
 msgstr "下面是一些示例："
 
-#: ../../source/features.rst:199
+#: ../../source/features.rst:890
 msgid ""
 "Note that, these environment variables will be overridden if the CLI "
 "option is specified."
 msgstr "请注意，如果显式指定了对应的 CLI 选项，这些环境变量将被覆盖。"
 
-#: ../../source/features.rst:201
-#, fuzzy
+#: ../../source/features.rst:892
 msgid ""
 "For user configurations, the environment variables are of the format "
 "``PC_`` followed by the configuration option name in upper snake case "
-"(camelCase word boundaries become underscores). For example, to "
-"override the ``pythonSandbox`` configuration, you would set the "
-"environment variable ``PC_PYTHON_SANDBOX``."
+"(camelCase word boundaries become underscores). For example, to override "
+"the ``pythonSandbox`` configuration, you would set the environment "
+"variable ``PC_PYTHON_SANDBOX``."
 msgstr ""
-"对于用户配置，环境变量的格式为 ``PC`` 后接配置选项名称（大写）。例如，要覆盖 ``pythonSandbox`` 配置，你需要设置环境变量 "
-"``PC_PYTHONSANDBOX`` 。"
+"对于用户配置，环境变量的格式为 ``PC_`` 后接大写蛇形命名（upper snake case）的配置选项名称（camelCase "
+"中的单词边界会变成下划线）。例如，要覆盖 ``pythonSandbox`` 配置，你需要设置环境变量 ``PC_PYTHON_SANDBOX``"
+" 。"
 
-#: ../../source/features.rst:205
+#: ../../source/features.rst:897
 msgid ""
 "Note that environment variable names are case-sensitive. Always use "
 "uppercase letters for the ``PC`` prefix and the rest of the variable "
 "name, as shown in the examples above."
 msgstr "请注意，环境变量名称是区分大小写的。请始终对 ``PC`` 前缀以及变量名称的其余部分使用大写字母，如上面的示例所示。"
 
-#: ../../source/features.rst:208
+#: ../../source/features.rst:900
 msgid ""
 "In this case, these environment variables will take precedence over the "
 "values specified in ``~/.partcad/config.yaml``."
 msgstr "在这种情况下，这些环境变量将优先于 ``~/.partcad/config.yaml`` 中所指定的值。"
 
-#: ../../source/features.rst:215
+#: ../../source/features.rst:907
 msgid "Flexible Git Configuration"
 msgstr "灵活的 Git 配置"
 
-#: ../../source/features.rst:217
+#: ../../source/features.rst:909
 msgid ""
 "PartCAD imports packages from git repositories without the ``git`` "
 "command line tool: it speaks the git protocols itself, through the "
@@ -357,7 +1697,7 @@ msgstr ""
 "PartCAD 从 git 仓库导入包时并不需要 ``git`` 命令行工具：它通过随其依赖一起提供的 ``libgit2`` 库，自行实现了 "
 "git 协议。无需额外安装任何东西，导入功能即可正常工作。"
 
-#: ../../source/features.rst:221
+#: ../../source/features.rst:913
 msgid ""
 "By default, PartCAD uses the system's Git configuration when importing "
 "packages using git, which it reads from ``~/.gitconfig`` whether or not "
@@ -368,7 +1708,7 @@ msgstr ""
 "``~/.gitconfig`` 中读取该配置。如果你想覆盖这些配置，可以按如下所示在 ``~/.partcad/config.yaml`` "
 "中添加你的覆盖项："
 
-#: ../../source/features.rst:235
+#: ../../source/features.rst:927
 msgid ""
 "Cloning over SSH is faster and more reliable because it uses an efficient"
 " protocol with lower overhead, supports compression, and maintains stable"
@@ -379,7 +1719,7 @@ msgstr ""
 "通过 SSH 克隆更快也更可靠，因为它使用了一种开销更低的高效协议，支持压缩，并通过基于密钥的认证来保持稳定的连接。SSH 避免了 HTTPS "
 "的速率限制，能更好地应对防火墙，并省去了凭据提示，这使它非常适合大型仓库或频繁的交互。"
 
-#: ../../source/features.rst:241
+#: ../../source/features.rst:933
 msgid ""
 "Repositories reached over SSH are authenticated with the keys held by the"
 " running SSH agent, and then with the default key files "
@@ -393,17 +1733,66 @@ msgstr ""
 "）。受口令保护的密钥只能通过 agent 使用，因为 PartCAD "
 "从不会主动索要口令：对于无法完成认证的仓库，它会直接以错误告终，而不会一直等待一个无人应答的提示。"
 
-#: ../../source/features.rst:247
+#: ../../source/features.rst:939
 msgid ""
 "If you have SSH keys configured then you can add the following to the "
 "~/.partcad/config.yaml:"
 msgstr "如果你已经配置了 SSH 密钥，那么可以将以下内容添加到 ~/.partcad/config.yaml 中："
 
-#: ../../source/features.rst:260
+#: ../../source/features.rst:954
+msgid "Fetching via a Proxy"
+msgstr "通过代理抓取"
+
+#: ../../source/features.rst:956
+msgid ""
+"On many networks a proxy is not a preference but the only route out. "
+"PartCAD reads the usual environment variables, and everything it "
+"downloads goes through them: packages imported from a git repository, "
+"packages imported from a tarball, and the individual files an object "
+"pulls with ``fileFrom: url``."
+msgstr ""
+"在许多网络里，代理不是一种偏好，而是唯一的出口。PartCAD 会读取那几个常用的环境变量，它下载的一切都会经过它们：从 git 仓库导入的包、从"
+" tarball 导入的包，以及对象通过 ``fileFrom: url`` 拉取的单个文件。"
+
+#: ../../source/features.rst:968
+msgid ""
+"``HTTPS_PROXY`` covers ``https://`` remotes and ``HTTP_PROXY`` covers "
+"``http://`` ones; the lowercase spellings work equally. ``NO_PROXY`` "
+"exempts the hosts it names, which is what an internal git server "
+"reachable only *without* the proxy needs. A proxy that wants credentials "
+"takes them in the URL (``http://user:password@proxy.example.com:3128``)."
+msgstr ""
+"``HTTPS_PROXY`` 适用于 ``https://`` 远端， ``HTTP_PROXY`` 适用于 ``http://`` "
+"远端；小写写法同样有效。 ``NO_PROXY`` 会豁免它所列出的主机，这正是一台只有 *不* 走代理才能访问到的内部 git "
+"服务器所需要的。需要凭据的代理，凭据写在 URL 里（ "
+"``http://user:password@proxy.example.com:3128`` ）。"
+
+#: ../../source/features.rst:974
+msgid ""
+"Nothing has to be configured in PartCAD for any of this. A proxy that "
+"should apply to git imports alone -- rather than to everything this shell"
+" runs -- can be set as a git configuration option instead, and it takes "
+"precedence over the environment:"
+msgstr ""
+"这一切都不需要在 PartCAD 里做任何配置。如果某个代理只应作用于 git 导入——而不是这个 shell "
+"运行的所有东西——那么可以改为把它设置成一个 git 配置选项，而且它的优先级高于环境变量："
+
+#: ../../source/features.rst:986
+msgid ""
+"Note that a proxy re-terminating TLS presents its own certificate, which "
+"has to be trusted or every fetch fails to verify it. That is a property "
+"of the machine rather than of PartCAD: point ``SSL_CERT_FILE`` (and "
+"``REQUESTS_CA_BUNDLE``) at the proxy's CA bundle, or install it into the "
+"system trust store."
+msgstr ""
+"请注意，重新终止 TLS 的代理会出示它自己的证书，必须信任该证书，否则每一次抓取都会校验失败。这是机器的属性，而不是 PartCAD 的属性：把"
+" ``SSL_CERT_FILE`` （以及 ``REQUESTS_CA_BUNDLE`` ）指向代理的 CA 证书包，或者把它安装进系统信任库。"
+
+#: ../../source/features.rst:993
 msgid "Personally Identifiable Information"
 msgstr "个人身份信息"
 
-#: ../../source/features.rst:262
+#: ../../source/features.rst:995
 msgid ""
 "The user section in ``~/.partcad/config.yaml`` defines the default "
 "personal and contact details used throughout the system. These details "
@@ -413,78 +1802,78 @@ msgstr ""
 "``~/.partcad/config.yaml`` 中的 user "
 "部分定义了整个系统所使用的默认个人信息和联系方式。这些信息包括用户的姓名、电子邮件、电话号码、公司以及地址信息。"
 
-#: ../../source/features.rst:283
+#: ../../source/features.rst:1016
 msgid "Address Configuration"
 msgstr "地址配置"
 
-#: ../../source/features.rst:285
+#: ../../source/features.rst:1018
 msgid ""
 "Users can override any details from the user section by specifying "
 "shippingAddress and billingAddress separately."
 msgstr "用户可以通过分别指定 shippingAddress 和 billingAddress 来覆盖 user 部分中的任意信息。"
 
-#: ../../source/features.rst:317
+#: ../../source/features.rst:1050
 msgid "**Override Behavior**"
 msgstr "**覆盖行为**"
 
-#: ../../source/features.rst:319
+#: ../../source/features.rst:1052
 msgid ""
 "If shippingAddress is not specified, the system will use the user details"
 " for shipping."
 msgstr "如果未指定 shippingAddress，系统将使用 user 中的信息进行配送。"
 
-#: ../../source/features.rst:320
+#: ../../source/features.rst:1053
 msgid ""
 "If billingAddress is not specified, the system will use the user details "
 "for billing."
 msgstr "如果未指定 billingAddress，系统将使用 user 中的信息进行账单结算。"
 
-#: ../../source/features.rst:321
+#: ../../source/features.rst:1054
 msgid ""
 "If shippingAddress or billingAddress is provided, it completely replaces "
 "the corresponding fields from user."
 msgstr "如果提供了 shippingAddress 或 billingAddress，它将完全替换 user 中对应的字段。"
 
-#: ../../source/features.rst:323
+#: ../../source/features.rst:1056
 msgid ""
 "This setup allows full customization of shipping and billing details, "
 "supporting scenarios where items need to be sent to different recipients "
 "or addresses."
 msgstr "这样的设置允许对配送和账单信息进行完全自定义，从而支持需要将物品寄送给不同收件人或不同地址的场景。"
 
-#: ../../source/features.rst:329
+#: ../../source/features.rst:1062
 msgid "Parameter Configuration"
 msgstr "参数配置"
 
-#: ../../source/features.rst:331
+#: ../../source/features.rst:1064
 msgid ""
 "The configuration file (``~/.partcad/config.yaml``) allows users to "
 "define reusable parameters, which can be accessed dynamically within the "
 "provider configurations."
 msgstr "该配置文件（ ``~/.partcad/config.yaml`` ）允许用户定义可复用的参数，这些参数可以在提供方配置中被动态引用。"
 
-#: ../../source/features.rst:334
+#: ../../source/features.rst:1067
 msgid ""
 "In ``~/.partcad/config.yaml``, parameters are stored under a parameters "
 "section."
 msgstr "在 ``~/.partcad/config.yaml`` 中，参数存储在一个 parameters 部分之下。"
 
-#: ../../source/features.rst:336 ../../source/features.rst:359
+#: ../../source/features.rst:1069 ../../source/features.rst:1092
 msgid "Example:"
 msgstr "示例："
 
-#: ../../source/features.rst:346
+#: ../../source/features.rst:1079
 msgid ""
 "Object IDs are used to reference different types of objects within a "
 "package, such as sketches, parts, assemblies, scenes, interfaces, and "
 "providers."
 msgstr "对象 ID 用于引用包内不同类型的对象，例如草图、零件、装配体、场景、接口和提供方。"
 
-#: ../../source/features.rst:352
+#: ../../source/features.rst:1085
 msgid "Accessing Parameters in Providers"
 msgstr "在提供方中访问参数"
 
-#: ../../source/features.rst:354
+#: ../../source/features.rst:1087
 msgid ""
 "In the providers section, parameters can be referenced dynamically using "
 "a function ``get_from_config()``, ensuring that sensitive or reusable "
@@ -492,3 +1881,43 @@ msgid ""
 msgstr ""
 "在 providers 部分中，可以使用函数 ``get_from_config()`` 来动态引用参数，从而确保敏感或可复用的值（例如 API "
 "密钥、URL）无需多次硬编码。"
+
+#~ msgid ""
+#~ "Objects can be exported directly from"
+#~ " the extension to any of the "
+#~ "following formats: **SVG**, **PNG**, **STEP**,"
+#~ " **STL**, **3MF**, **ThreeJS**, **OBJ**, "
+#~ "**IGES**, and **glTF**."
+#~ msgstr ""
+#~ "可以直接从扩展中将对象导出为以下任意一种格式： **SVG** 、 **PNG** 、"
+#~ " **STEP** 、 **STL** 、 **3MF** 、 "
+#~ "**ThreeJS** 、 **OBJ** 、 **IGES** 和 "
+#~ "**glTF** 。"
+
+#~ msgid "**Supply Chain** — what making it takes:"
+#~ msgstr ""
+
+#~ msgid "**Instructions** — for an assembly: the assembly guide, step by step."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "**Procurement** — what the objects in"
+#~ " view can be bought from, and a"
+#~ " quote per supplier."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "Supply Chain is for a part or "
+#~ "an assembly; for a scene, a sketch"
+#~ " or an interface it is disabled."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "The 3D view needs WebGL. In a "
+#~ "window that has none, the 3D tab"
+#~ " says what to do about it and"
+#~ " every other tab works as usual "
+#~ "-- including 2D, which is rendered "
+#~ "by PartCAD rather than by the "
+#~ "window."
+#~ msgstr ""

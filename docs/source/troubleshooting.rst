@@ -189,8 +189,12 @@ Message in "Explorer" left panel: "PartCAD ... is not found"
  - Press "Install or update PartCAD" in the "Explorer" left panel and the
    extension downloads a standalone PartCAD for you. No Python is needed.
  - Or, if you would rather use your own Python environment, run
-   ``pip install partcad`` in it: the extension finds the ``partcad-json-rpc``
-   that puts on your ``PATH`` and uses that instead of downloading anything.
+   ``pip install partcad`` in it. The extension looks for ``partcad-json-rpc``
+   on the ``PATH`` **Visual Studio Code itself was started with**, which is not
+   the interpreter you selected in the editor and does not include a virtual
+   environment unless Visual Studio Code was launched from it. So either start
+   the editor from the activated environment, or run **Find installed PartCAD**,
+   or set ``partcad.servicePath`` to the executable by hand.
  - Reload PartCAD extension (by pressing "Reload" button in "Context" left panel)
 
 "The PartCAD extension is being initialized..." in "Explorer" gets into infinite loop (and nothing happens in the corresponding terminal window)
@@ -215,8 +219,8 @@ install.
 
 Beside the 3D view the panel carries tabs for the questions that are about the
 object rather than its shape -- **FEA** and **CFD** under **Analysis**, and
-**Bill of Materials**, **Instructions** and **Procurement** under **Supply Chain**,
-each enabled where it applies -- and, beside the 3D view on the **Design** tab,
+**Build vs Buy**, **Build**, **Buy**, **Bill of Materials** and **Assembly** under
+**Manufacturing**, each enabled where it applies -- and, beside the 3D view on the **Design** tab,
 **2D** and **Draft**, which render the object to a file. Those
 do not come over the socket above: they are answered by the PartCAD daemon and
 fetched the first time the tab is opened, so a failure in one of them is a

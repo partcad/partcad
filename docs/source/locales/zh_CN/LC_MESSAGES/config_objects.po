@@ -1,0 +1,558 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/config_objects.rst:3
+msgid "Objects and common metadata"
+msgstr "对象与通用元数据"
+
+#: ../../source/config_objects.rst:9
+msgid "Objects"
+msgstr "对象"
+
+#: ../../source/config_objects.rst:11
+msgid "PartCAD :ref:`packages` may contain the following objects:"
+msgstr "PartCAD :ref:`packages` 可以包含以下对象："
+
+#: ../../source/config_objects.rst:13
+msgid ""
+":ref:`sketches` are 2D objects that can be used to create 3D objects (e.g. "
+"using :ref:`extrude` or :ref:`sweep`), but can also be used to aid "
+"visualization of :ref:`interfaces` or to provide detailed instructions for "
+"AI actors."
+msgstr ""
+":ref:`sketches` 是二维对象，可用于创建三维对象（例如使用 :ref:`extrude` 或 :"
+"ref:`sweep` ），也可用于辅助 :ref:`interfaces` 的可视化，或为 AI 参与者提供详"
+"细的说明。"
+
+#: ../../source/config_objects.rst:16
+msgid ""
+":ref:`interfaces` are abstract objects that describe the endpoint of a "
+"connection between parts and provide sufficient information to automatically "
+"determine the mating of parts."
+msgstr ""
+":ref:`interfaces` 是抽象对象，用于描述零件之间连接的端点，并提供足够的信息以"
+"自动确定零件的配合。"
+
+#: ../../source/config_objects.rst:19
+msgid ""
+":ref:`parts` are 3D objects that are meant to be available for purchase or "
+"manufacturing."
+msgstr ":ref:`parts` 是三维对象，旨在可供购买或制造。"
+
+#: ../../source/config_objects.rst:21
+msgid ""
+":ref:`assemblies` are instructions how to put parts and other assemblies "
+"together to be used as a single object."
+msgstr ""
+":ref:`assemblies` 是关于如何将零件和其他装配体组合成一个整体对象来使用的说"
+"明。"
+
+#: ../../source/config_objects.rst:23
+msgid ""
+":ref:`scenes` are placed arrangements of objects - a workcell, a table, a "
+"simulation world - stating where things are and not how they got there."
+msgstr ""
+":ref:`scenes` 是对象的摆放布置——一个工作单元、一张工作台、一个仿真世界——它说明的是东西在哪里，而不是它们是怎么到那里的。"
+
+#: ../../source/config_objects.rst:26
+msgid ""
+":ref:`software` is what the product ships with that is not geometry: a "
+"firmware image, a binary, a disk image. It is always a file."
+msgstr ":ref:`software` 是产品随附的、并非几何体的那部分内容：固件镜像、二进制文件、磁盘镜像。它始终是一个文件。"
+
+#: ../../source/config_objects.rst:29
+msgid ""
+":ref:`providers` are implementations of a way to get parts and assemblies "
+"(to purchase them or to manufacture them)."
+msgstr ""
+":ref:`providers` 是获取零件和装配体（购买或制造它们）的某种方式的实现。"
+
+#: ../../source/config_objects.rst:33
+msgid "Common Metadata"
+msgstr "通用元数据"
+
+#: ../../source/config_objects.rst:35
+msgid "All :ref:`objects` in PartCAD may carry the following metadata:"
+msgstr "PartCAD 中的所有 :ref:`objects` 都可以携带以下元数据："
+
+#: ../../source/config_objects.rst:40
+msgid "Tags"
+msgstr "标签"
+
+#: ../../source/config_objects.rst:42
+msgid ""
+"Not everything a package can be built out of exists everywhere. The KiCad "
+"example is the case this was introduced for: KiCad publishes its official "
+"container images for ``linux/amd64`` only, so the sandbox PartCAD runs "
+"``kicad-cli`` in cannot be pulled on an Arm host at all. That is a property "
+"of the design, not a fault in it, and the package saying so is better than "
+"every consumer of it finding out at use."
+msgstr ""
+"构建一个包所需的一切，并非在任何地方都存在。KiCad 的例子正是引入这一机制的起因：KiCad 只为 ``linux/amd64`` "
+"发布官方容器镜像，因此 PartCAD 用来运行 ``kicad-cli`` 的沙箱在 Arm 主机上根本拉取不到。这是设计本身的属性，"
+"而不是设计的缺陷；由包自己把这一点说明出来，好过让它的每一个使用者在用到时才发现。"
+
+#: ../../source/config_objects.rst:49
+msgid ""
+"A **tag** is a short string naming something that is true of *here*. Every "
+"context carries the tags true of itself."
+msgstr "**标签** 是一个短字符串，用来指明在 *此处* 成立的某件事。每个上下文都携带对其自身成立的那些标签。"
+
+#: ../../source/config_objects.rst:52
+msgid "What the machine is:"
+msgstr "这台机器是什么："
+
+#: ../../source/config_objects.rst:54
+msgid ""
+"the CPU architecture -- ``x86_64`` and ``amd64`` on 64-bit Intel/AMD, "
+"``arm64``, ``aarch64`` and ``arm`` on 64-bit Arm (all of them, so that a "
+"package need not know which spelling the host happens to report);"
+msgstr ""
+"CPU 架构——在 64 位 Intel/AMD 上是 ``x86_64`` 和 ``amd64`` ，在 64 位 Arm 上是 ``"
+"arm64`` 、 ``aarch64`` 和 ``arm`` （这几种写法都会给出，这样包就不必知道主机恰好报告的是哪一种）；"
+
+#: ../../source/config_objects.rst:57
+msgid ""
+"the operating system -- ``linux``, ``macos`` (also ``darwin``), ``windows``;"
+msgstr "操作系统—— ``linux`` 、 ``macos`` （也包括 ``darwin`` ）、 ``windows`` ；"
+
+#: ../../source/config_objects.rst:58
+msgid ""
+"the operating system and its version, as ``<os>-<version>``. On Linux that "
+"is the distribution rather than the kernel, read from ``/etc/os-release``: "
+"``ubuntu`` and ``ubuntu-24.04``, plus whatever ``ID_LIKE`` names "
+"(``debian``). On macOS, ``macos-26`` and ``macos-26.1``. On Windows, "
+"``windows-11``."
+msgstr ""
+"操作系统及其版本，形式为 ``<os>-<version>`` 。在 Linux 上，这指的是发行版而不是内核，从 ``/etc/os-"
+"release`` 读取： ``ubuntu`` 和 ``ubuntu-24.04`` ，再加上 ``ID_LIKE`` 所指明的名称（"
+" ``debian`` ）。在 macOS 上是 ``macos-26`` 和 ``macos-26.1`` 。在 Windows 上是"
+" ``windows-11`` 。"
+
+#: ../../source/config_objects.rst:63
+msgid ""
+"How PartCAD is configured to work -- one tag per boolean option, carried in "
+"one of two spellings, the option's name when it is on and that name prefixed "
+"with ``!`` when it is off:"
+msgstr ""
+"PartCAD 被配置成如何工作——每个布尔选项对应一个标签，并以两种写法之一出现：选项打开时是选项名本身，关闭时则是在该名称前加上 ``!`` ："
+
+#: ../../source/config_objects.rst:67
+msgid ""
+"``useDocker`` / ``!useDocker`` -- whether PartCAD may use Docker at all;"
+msgstr "``useDocker`` / ``!useDocker`` ——PartCAD 是否可以使用 Docker；"
+
+#: ../../source/config_objects.rst:68
+msgid "``useDockerPython`` / ``!useDockerPython``;"
+msgstr ""
+
+#: ../../source/config_objects.rst:69
+msgid "``useDockerKicad`` / ``!useDockerKicad``."
+msgstr ""
+
+#: ../../source/config_objects.rst:71
+msgid ""
+"These report each option **as configured**, not as it ends up applying: "
+"``useDocker`` is a master switch over the other two, so ``useDockerKicad`` "
+"and ``!useDocker`` can hold at once. Both spellings exist so that either "
+"answer can be named -- a package that cares which way an option is set "
+"should not have to guess what an absent tag meant. Note that ``!`` is part "
+"of a tag's name, not an operator: a tag is matched, never evaluated, and ``!"
+"`` means nothing anywhere else."
+msgstr ""
+"它们报告的是每个选项 **配置时的取值** ，而不是它最终生效的结果： ``useDocker`` 是另外两个选项的总开关，因此 ``u"
+"seDockerKicad`` 和 ``!useDocker`` 可以同时成立。两种写法都存在，是为了让任何一种答案都能被指明——关心某"
+"个选项是怎么设置的包，不应该还要去猜测标签缺失意味着什么。注意 ``!`` 是标签名称的一部分，而不是运算符：标签只做匹配，从不求值，而"
+" ``!`` 在其他任何地方都没有含义。"
+
+#: ../../source/config_objects.rst:79
+msgid ""
+"Anything PartCAD cannot work out for itself -- that this is the build "
+"machine, that this host is behind a proxy -- is added by the user, through "
+"the ``tags`` user configuration option (``pc config`` shows it) or the "
+"``PC_TAGS`` environment variable. ``pc system status`` prints the whole "
+"resolved set:"
+msgstr ""
+"PartCAD 自己无法判断的信息——比如这是构建机器、这台主机位于代理之后——由用户添加，方式是使用 ``tags`` 用户配置选项（"
+" ``pc config`` 会显示它）或 ``PC_TAGS`` 环境变量。 ``pc system status`` 会打印出完整的解析结果："
+
+#: ../../source/config_objects.rst:89
+msgid ""
+"Tags are matched case-insensitively, and are shown in the spelling PartCAD "
+"names them by -- which is why ``useDocker`` is camelCase (it is an option "
+"name) and ``arm64`` is not."
+msgstr ""
+"标签匹配时不区分大小写，显示时则使用 PartCAD 为它们命名时所用的写法——这就是为什么 ``useDocker`` 是驼峰式（它是"
+"一个选项名），而 ``arm64`` 不是。"
+
+#: ../../source/config_objects.rst:93
+msgid ""
+"A package, or any object of a package, may then declare the conditions it "
+"does **not** work under, using ``unless``:"
+msgstr "于是，一个包或包中的任何对象，都可以用 ``unless`` 声明它 **不** 适用的条件："
+
+#: ../../source/config_objects.rst:108
+msgid ""
+"``unless`` is a list of **clauses**, and *any one* of them excluding is "
+"enough (OR). A clause is either a single tag, or a list of tags that must "
+"*all* hold together (AND). Either level may be written as a bare tag when "
+"there is only one, so all of these are valid:"
+msgstr ""
+"``unless`` 是一个 **子句** 列表，其中 *任意一个* 子句成立就足以排除（OR）。子句要么是单个标签，要么是一组必须 *"
+"全部* 同时成立的标签（AND）。某一层只有一项时可以直接写成一个裸标签，因此下面这些写法都是有效的："
+
+#: ../../source/config_objects.rst:119
+msgid ""
+"An empty clause is refused rather than ignored: it would hold everywhere."
+msgstr "空子句会被拒绝，而不是被忽略：因为它在任何地方都会成立。"
+
+#: ../../source/config_objects.rst:121
+msgid ""
+"Wherever a clause holds, the declaration is skipped -- it is not enumerated, "
+"not listed, and not instantiated -- and PartCAD says so once, at ``INFO``, "
+"naming the clause that did it:"
+msgstr ""
+"只要有子句成立，该声明就会被跳过——它不会被枚举、不会被列出，也不会被实例化——并且 PartCAD 会以 ``INFO`` 级别说明一"
+"次，指出是哪个子句造成的："
+
+#: ../../source/config_objects.rst:129
+msgid ""
+"Skipping a package skips what it brings in: its subfolders and its declared "
+"dependencies are not imported either."
+msgstr "跳过一个包，也会跳过它所引入的内容：它的子目录和它声明的依赖同样不会被导入。"
+
+#: ../../source/config_objects.rst:132
+msgid ""
+"Note that there is deliberately no inverse condition (\"only on\"). A "
+"declaration is expected to work everywhere; naming the exceptions keeps the "
+"common case unwritten, and keeps a platform that does not exist yet from "
+"silently excluding everything written before it."
+msgstr ""
+"注意，这里刻意没有提供相反的条件（“仅在……上”）。声明应当在任何地方都能工作；只指明例外情况，既能让常见情形无需书写，也能避免一个尚不"
+"存在的平台悄无声息地把在它之前写下的一切都排除掉。"
+
+#: ../../source/config_objects.rst:137
+msgid ""
+"A reference to an object that was skipped does not resolve. An alias or an "
+"``enrich`` built on an object excluded here has to carry the same "
+"``unless``, or it will be left pointing at nothing."
+msgstr ""
+"指向被跳过对象的引用无法解析。基于在此被排除的对象构建的别名或 ``enrich`` ，必须携带同样的 ``unless`` ，否则它将"
+"指向不存在的东西。"
+
+#: ../../source/config_objects.rst:144
+msgid "Requirements"
+msgstr "需求"
+
+#: ../../source/config_objects.rst:146
+msgid ""
+"Objects may contain a list of requirements in free form (any YAML syntax "
+"works). These requirements help describe the object in more detail. They are "
+"not used by PartCAD itself, but by AI or human actors to create, improve, or "
+"better understand the object."
+msgstr ""
+"对象可以包含一份自由格式的需求列表（任何 YAML 语法都可以）。这些需求有助于更"
+"详细地描述该对象。它们不会被 PartCAD 本身使用，而是供 AI 或人类参与者用来创"
+"建、改进或更好地理解该对象。"
+
+#: ../../source/config_objects.rst:151
+msgid ""
+"The requirements are from the user’s perspective and serve to guide the "
+"design. Once the design is complete, it may impose further requirements (for "
+"example, on manufacturing), but those are not part of this section. This "
+"section exclusively covers the requirements used to create the design."
+msgstr ""
+"这些需求是从用户的角度出发的，用于指导设计。一旦设计完成，它可能会带来进一步"
+"的需求（例如对制造的需求），但那些并不属于本部分的内容。本部分仅涵盖用于创建"
+"设计的需求。"
+
+#: ../../source/config_objects.rst:190
+msgid "Files"
+msgstr "文件"
+
+#: ../../source/config_objects.rst:192
+msgid ""
+"For objects that are defined using a source file, the default file path is "
+"the name of the object plus the extension of that file type."
+msgstr ""
+"对于使用源文件定义的对象，默认的文件路径是对象的名称加上该文件类型的扩展名。"
+
+#: ../../source/config_objects.rst:195
+msgid ""
+"An alternative file path (absolute or relative to the package path) can be "
+"defined explicitly using the `path` parameter:"
+msgstr ""
+"可以使用 `path` 参数显式定义一个替代的文件路径（绝对路径，或相对于包路径的相"
+"对路径）："
+
+#: ../../source/config_objects.rst:205
+msgid ""
+"When the source file is not kept in the package source repository but has to "
+"be pulled from a remote location (a STEP file published by the part vendor, "
+"for example), declare where to get it from using ``fileFrom`` and "
+"``fileUrl``:"
+msgstr ""
+"当源文件没有保存在包的源代码仓库中，而必须从远程位置拉取时（例如零件供应商发布的 STEP 文件），请用 ``fileFrom`` 和 "
+"``fileUrl`` 声明从哪里获取它："
+
+#: ../../source/config_objects.rst:218
+msgid ""
+"The file is fetched lazily: nothing is downloaded until the object is used "
+"for the first time, and the downloaded file is reused afterwards. Since the "
+"file is not expected to be a part of the package, PartCAD does not complain "
+"about it being missing while the package is loaded."
+msgstr ""
+"文件是惰性获取的：在对象第一次被使用之前不会下载任何内容，下载后的文件之后会被复用。由于该文件本就不应是包的一部分，PartCAD 在加"
+"载包时不会因为它缺失而报错。"
+
+#: ../../source/config_objects.rst:223
+msgid ""
+"``fileFrom`` and ``fileUrl`` must be declared together. They are recognized "
+"in :ref:`parts`, :ref:`sketches`, :ref:`assemblies` (an assembly's source "
+"file is pulled the same way, whether it is an ``.assy`` file or a CAD "
+"file), :ref:`scenes` and :ref:`software`."
+msgstr ""
+"``fileFrom`` 和 ``fileUrl`` 必须一起声明。它们在 :ref:`parts` 、 :ref:`sketches`"
+" 、 :ref:`assemblies` （装配体的源文件以同样的方式拉取，无论它是 ``.assy`` 文件还是 CAD 文件）、 :"
+"ref:`scenes` 和 :ref:`software` 中都会被识别。"
+
+#: ../../source/config_objects.rst:231
+msgid "Pinning what is downloaded"
+msgstr "固定下载到的内容"
+
+#: ../../source/config_objects.rst:233
+msgid ""
+"A URL serves whatever it serves at the moment it is fetched. The same "
+"declaration can produce a different file tomorrow -- the vendor revises the "
+"model, the branch moves, the host is not the one you thought. ``fileHash``, "
+"beside ``fileUrl``, pins the bytes:"
+msgstr ""
+"URL 在被获取的那一刻提供什么，就是什么。同一份声明明天可能产生不同的文件——供应商修订了模型、分支发生了移动、主机并不是你以为的那一"
+"台。写在 ``fileUrl`` 旁边的 ``fileHash`` 把字节内容固定下来："
+
+#: ../../source/config_objects.rst:247
+msgid ""
+"The download is refused unless the file hashes to this, and the bytes that "
+"were refused are deleted rather than left behind -- the next run skips the "
+"download when the file is already there, and would otherwise reuse the file "
+"the hash had just rejected."
+msgstr ""
+"除非文件的哈希值与之相符，否则下载会被拒绝；而被拒绝的字节会被删除，不会留在本地——因为下次运行时如果文件已经存在就会跳过下载，否则就会"
+"复用刚刚被哈希校验拒绝的那个文件。"
+
+#: ../../source/config_objects.rst:252
+msgid ""
+"Write it as ``<algorithm>:<digest>`` over ``md5``, ``sha1``, ``sha256`` or "
+"``sha512``. A bare digest works too, and the algorithm is read from its "
+"length, which is the form most vendors publish."
+msgstr ""
+"写成 ``<algorithm>:<digest>`` 的形式，算法可以是 ``md5`` 、 ``sha1`` 、 ``sha256`"
+"` 或 ``sha512`` 。也可以只写摘要本身，算法会根据其长度推断出来——大多数供应商发布的正是这种形式。"
+
+#: ../../source/config_objects.rst:256
+msgid ""
+"``fileHash`` is recognized wherever ``fileFrom`` is, and it is **optional "
+"but required for reproducibility**. The schema never demands one, of any "
+"kind of object, and nothing refuses to load, build or lint an object that "
+"omits it. What such an object cannot do is promise that the next run "
+"produces the same thing, and manufacturing is repetition -- so ``pc test`` "
+"refuses to call it manufacturable (see :ref:`reproducibility`). Pull a "
+"vendor's model down and never claim it can be made, and none of this touches "
+"you."
+msgstr ""
+"凡是能使用 ``fileFrom`` 的地方都能识别 ``fileHash`` ，它 **是可选的，但要做到可复现就必须提供** 。无论"
+"对哪一类对象，schema 都不会强制要求它，也没有任何环节会因为对象省略了它而拒绝加载、构建或检查该对象。这样的对象做不到的，是保证下"
+"一次运行产出同样的东西；而制造就是重复——所以 ``pc test`` 拒绝把它称为可制造的（参见 :ref:`reproducibil"
+"ity` ）。如果只是把供应商的模型下载下来，而从不声称它可以被制造出来，那么这一切都与你无关。"
+
+#: ../../source/config_objects.rst:264
+msgid ""
+"``pc add`` writes one for you. Given a URL instead of a path it fetches the "
+"file once and records the hash of what came back, so an object added that "
+"way is pinned from the moment it exists."
+msgstr ""
+"``pc add`` 会替你写好它。如果给出的是 URL 而不是路径，它会先获取一次文件，并记录下所得内容的哈希值，因此以这种方式添加的"
+"对象从诞生那一刻起就是被固定的。"
+
+#: ../../source/config_objects.rst:268
+msgid ""
+"A file served by a repository plugin -- what PartCAD uses for a package with "
+"no source tree of its own -- may carry a ``fileHash`` too, and it is "
+"verified the same way. It is not yet required, because nothing has been put "
+"in place for such a package to pin what its plugin serves."
+msgstr ""
+"由仓库插件提供的文件——PartCAD 对于没有自己源码树的包所采用的方式——同样可以带有 ``fileHash`` ，并且会以相同的方"
+"式校验。它目前还不是必需的，因为尚未为这类包准备好固定其插件所提供内容的手段。"
+
+#: ../../source/config_objects.rst:273
+msgid ""
+"This has nothing to do with the hashes PartCAD computes for itself -- a "
+"shape's cache key, or the commit a package was read at. Those identify "
+"something PartCAD built or fetched; ``fileHash`` states, in advance, which "
+"bytes a package is asking for."
+msgstr ""
+"这与 PartCAD 为自身计算的那些哈希值无关——例如形状的缓存键，或读取某个包时所处的提交。那些哈希值标识的是 PartCAD 已经"
+"构建或获取到的东西；而 ``fileHash`` 是预先声明一个包所要求的是哪些字节。"
+
+#: ../../source/config_objects.rst:281
+msgid "Reproducibility and manufacturability"
+msgstr "可复现性与可制造性"
+
+#: ../../source/config_objects.rst:283
+msgid ""
+"Manufacturing is repetition: the run after this one has to produce the same "
+"thing, so everything that goes into a product has to be gettable a second "
+"time and be the same thing. There are three ways an object can promise that, "
+"and the ``manufacturability`` check of ``pc test`` fails one that offers "
+"none of them:"
+msgstr ""
+"制造就是重复：下一次运行必须产出同样的东西，因此进入产品的每一项内容都必须能够第二次获取到，并且是同一个东西。对象有三种方式可以作出这样"
+"的保证，而 ``pc test`` 的 ``manufacturability`` 检查会让三者都不具备的对象失败："
+
+#: ../../source/config_objects.rst:288
+msgid ""
+"**It is bought.** A ``vendor`` and an ``sku`` name a thing to order, and "
+"ordering it again is what \"the same again\" means for it -- whatever file "
+"the declaration also carries is a drawing of what arrives rather than the "
+"identity of it. Only :ref:`parts` and :ref:`assemblies` can say this; the "
+"schema gives ``vendor``/``sku`` to those two alone."
+msgstr ""
+"**它是买来的。** ``vendor`` 和 ``sku`` 指明了要订购的东西，而再次订购它，就是“同样的东西”对它而言的含义——声"
+"明中附带的任何文件都只是对到货之物的图示，而不是它的身份标识。只有 :ref:`parts` 和 :ref:`assemblies` 可"
+"以这样声明；schema 只把 ``vendor``/``sku`` 给了这两者。"
+
+#: ../../source/config_objects.rst:293
+msgid ""
+"**The package carries the file.** Its revision identifies the file exactly."
+msgstr "**包中就带着这个文件。** 包的修订版本精确地标识了该文件。"
+
+#: ../../source/config_objects.rst:294
+msgid "**The file is pinned** with a ``fileHash``."
+msgstr "**文件被固定住了** ，用的是 ``fileHash`` 。"
+
+#: ../../source/config_objects.rst:296
+msgid ""
+"A :ref:`sketch <sketches>` cannot be bought, so for it the second and third "
+"are the whole of it -- nothing manufactures a drawing, but a part extruded "
+"from one is no more repeatable than the drawing was. :ref:`software` is the "
+"same case, and for the same reason: a firmware image nobody can identify "
+"makes the bill of materials that names it worthless."
+msgstr ""
+":ref:`草图 <sketches>` 无法购买，所以对它而言只有第二种和第三种方式——没有人会去制造一张图纸，但由图纸拉伸而成的零件"
+"，其可重复性不会超过图纸本身。 :ref:`software` 也是同样的情形，原因也相同：一个谁都无法确认身份的固件镜像，会让指名它的"
+"物料清单变得毫无价值。"
+
+#: ../../source/config_objects.rst:308
+msgid ""
+"The rule is about being *identified*, not about being available -- the file "
+"may download perfectly well and still be a different file than it was last "
+"month."
+msgstr "这条规则关心的是能否被 *确认身份* ，而不是能否获取到——文件完全可以正常下载，却仍然和上个月的那个文件不是同一个。"
+
+#: ../../source/config_objects.rst:311
+msgid ""
+"Software is the one kind of object where a missing ``fileHash`` is reported "
+"by ``pc lint`` as well, before anything is built or fetched at all."
+msgstr "软件是唯一一类对象：在还没有构建或获取任何东西之前，缺少 ``fileHash`` 就会被 ``pc lint`` 一并报告出来。"
+
+#: ../../source/config_objects.rst:314
+msgid ""
+"A file served by a repository plugin is exempt from all of this for now. A "
+"``fileHash`` given for one is verified like any other; it is simply not "
+"required yet, because nothing has been put in place for a plugin-backed "
+"package to pin what its plugin serves."
+msgstr ""
+"由仓库插件提供的文件目前不受这一切约束。为这类文件给出的 ``fileHash`` 会和其他文件一样被校验；只是它还不是必需的，因为尚未"
+"为插件支撑的包准备好固定其插件所提供内容的手段。"
+
+#: ../../source/config_objects.rst:320
+msgid "Parameters"
+msgstr "参数"
+
+#: ../../source/config_objects.rst:322
+msgid ""
+"Objects may declare parameters. Once parameters are declared, each use of "
+"such objects may be accompanied by a set of parameter values. The parameter "
+"values are resolved and applied to the object to create a parametrized "
+"variant of the object. The parametrized variant remains stored (e.g. at "
+"runtime) as a separate object in the same package where the original object "
+"is declared. This allows for the same parametrized object to be used "
+"multiple times."
+msgstr ""
+"对象可以声明参数。一旦声明了参数，每次使用这类对象时都可以附带一组参数值。这"
+"些参数值会被解析并应用到对象上，从而创建该对象的一个参数化变体。参数化变体会"
+"（例如在运行时）作为一个单独的对象，存储在声明原始对象的同一个包中。这使得同"
+"一个参数化对象可以被多次使用。"
+
+#: ../../source/config_objects.rst:337
+msgid ""
+"The short form ``<param name>: <default value>`` may be used whenever the "
+"type can be inferred from the value."
+msgstr ""
+"只要类型可以从值中推断出来，就可以使用简写形式 ``<param name>: <default "
+"value>`` 。"
+
+#: ../../source/config_objects.rst:340
+msgid ""
+"Assemblies declare parameters the same way. Their values are passed to the "
+"``.assy`` file as ``param_<param name>`` when its Jinja templates are "
+"resolved:"
+msgstr ""
+"装配体以同样的方式声明参数。当 ``.assy`` 文件的 Jinja 模板被解析时，这些参数"
+"的值会以 ``param_<param name>`` 的形式传入该文件："
+
+#: ../../source/config_objects.rst:358
+msgid "Other"
+msgstr "其他"
+
+#: ../../source/config_objects.rst:360
+msgid "There are other optional fields that are common to all objects:"
+msgstr "还有一些对所有对象都通用的其他可选字段："
+
+#: ../../source/config_objects.rst:362
+msgid "``desc``: <text>"
+msgstr "``desc``：<text>"
+
+#: ../../source/config_objects.rst:364
+msgid "Description of the object."
+msgstr "对象的描述。"
+
+#: ../../source/config_objects.rst:366
+msgid "``offset``: <OCCT Location object>"
+msgstr "``offset``：<OCCT Location 对象>"
+
+#: ../../source/config_objects.rst:368
+msgid "Defines the offset to apply to the CAD model when this object is used."
+msgstr "定义在使用该对象时要应用到 CAD 模型上的偏移量。"
+
+#: ../../source/config_objects.rst:370
+msgid "``cache``: <bool> (default: `True`)"
+msgstr "``cache``：<bool>（默认为 `True` ）"
+
+#: ../../source/config_objects.rst:372
+msgid ""
+"The value `false` indicates the intent to exclude this object from any "
+"caching behavior. It may be due to storage size or time considerations, or "
+"due to known issues with dependency tracking. It does not override any "
+"global caching settings."
+msgstr ""
+"值 `false` 表示希望将该对象排除在任何缓存行为之外。这可能是出于存储大小或时间"
+"方面的考虑，也可能是由于依赖跟踪存在已知问题。它不会覆盖任何全局缓存设置。"

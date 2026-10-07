@@ -1,0 +1,2140 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-06 16:15+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/simulation.rst:2
+msgid "Simulation, URDF, SDFormat and MJCF"
+msgstr "仿真、URDF、SDFormat 与 MJCF"
+
+#: ../../source/simulation.rst:4
+msgid ""
+"PartCAD can read a `URDF <https://wiki.ros.org/urdf>`_ file as an "
+"assembly (``type: urdf``), write one back out (``pc export -t urdf``), "
+"and convert an assembly between URDF and ASSY in either direction (``pc "
+"convert assembly``). URDF is the one of these three PartCAD implements "
+"itself, because it describes a robot rather than any one engine's world "
+"and ROS, MuJoCo, PyBullet and Isaac all read it."
+msgstr ""
+"PartCAD 可以把 `URDF <https://wiki.ros.org/urdf>`_ 文件当作装配体读取（ ``type: urdf``"
+" ），再把它写回出去（ ``pc export -t urdf`` ），并在 URDF 与 ASSY 之间双向转换装配体（ ``pc "
+"convert assembly`` ）。这三者之中只有 URDF 是 PartCAD "
+"自己实现的，因为它描述的是机器人，而不是某一个引擎的世界，而且 ROS、MuJoCo、PyBullet 和 Isaac 都能读取它。"
+
+#: ../../source/simulation.rst:11
+msgid ""
+"The same machinery reads and writes `SDFormat <http://sdformat.org/>`_ --"
+" what Gazebo describes a simulation *world* in -- against a :ref:`scene "
+"<scenes>` rather than an assembly, and `MJCF "
+"<https://mujoco.readthedocs.io/en/stable/XMLreference.html>`_, what "
+"`MuJoCo <https://mujoco.org/>`_ describes a model in, as either. Neither "
+"is in this wheel: each is declared by the plugin package for its engine "
+"and named through it (``sim-gazebo:world``, ``sim-mujoco:mjcf``). See `An"
+" engine's own scene format is its plugin's`_ below."
+msgstr ""
+"同一套机制也读写 `SDFormat <http://sdformat.org/>`_ ——Gazebo 用来描述仿真 *世界* "
+"的格式——只不过针对的是 :ref:`场景 <scenes>` 而不是装配体；它同样读写 `MJCF "
+"<https://mujoco.readthedocs.io/en/stable/XMLreference.html>`_ ，也就是 "
+"`MuJoCo <https://mujoco.org/>`_ 用来描述模型的格式，两者皆可。这两种格式都不在本 wheel "
+"中：各自由其引擎的插件包声明，并通过该包来命名（ ``sim-gazebo:world`` 、 ``sim-mujoco:mjcf`` "
+"）。参见下文 `An engine's own scene format is its plugin's`_ 。"
+
+#: ../../source/simulation.rst:20
+msgid ""
+"It can also **run** one. ``simulate:`` is where a part or an assembly "
+"says what it is supposed to do -- or not do -- once it is placed in a "
+"world and the world is switched on, and ``pc sim`` places it, runs it and"
+" checks the claim. This page is the design record for all of that: what "
+"the conversions actually preserve, what they cannot, and what it would "
+"take for PartCAD to hold everything a physical simulation needs."
+msgstr ""
+"它还能 **运行** 仿真。 ``simulate:`` "
+"是零件或装配体用来声明自己在被放进一个世界、而这个世界被启动之后应该做什么——或者不应该做什么——的地方，而 ``pc sim`` "
+"负责放置它、运行它并检验这一声明。本页是上述所有内容的设计记录：这些转换究竟保留了什么、不能保留什么，以及要让 PartCAD "
+"承载一次物理仿真所需的一切还需要什么。"
+
+#: ../../source/simulation.rst:27
+msgid ""
+"The \"What exists today\" section describes what is built. Everything "
+"after it is a proposal, and none of it is implemented."
+msgstr "“当前已实现的内容”一节描述的是已经构建完成的部分。其后的所有内容都只是提案，均未实现。"
+
+#: ../../source/simulation.rst:36
+msgid "What exists today"
+msgstr "当前已实现的内容"
+
+#: ../../source/simulation.rst:39
+msgid "Reading a URDF"
+msgstr "读取 URDF"
+
+#: ../../source/simulation.rst:41
+msgid ""
+"A URDF reaches a package by the same two commands any other foreign file "
+"does, and they mean the same two things they mean for a STEP file. ``pc "
+"add assembly urdf <path>`` *declares* it: the package points at the file,"
+" the file stays a URDF, and its links become parts as it is read. ``pc "
+"import assembly <path>`` *converts* it: the package gains an ``stl`` part"
+" per link, an interface pair per joint and an ``.assy``, and nothing "
+"points at the URDF afterwards. The import is the conversion described in "
+"`Converting between the two`_, run against a declaration that lives only "
+"for the length of it - which is what lets the source file sit anywhere, "
+"the way a STEP file being imported does."
+msgstr ""
+"URDF 通过与任何其他外来文件相同的两条命令进入包，而且它们的含义与对 STEP 文件时完全一样。 ``pc add assembly urdf"
+" <path>`` 是 *声明* ：包指向该文件，文件仍然是一个 URDF，它的连杆在被读取时成为零件。 ``pc import assembly"
+" <path>`` 是 *转换* ：包中为每个连杆新增一个 ``stl`` 零件，为每个关节新增一对接口，再加上一个 ``.assy`` "
+"，此后不再有任何东西指向该 URDF。这里的导入就是 `Converting between the two`_ "
+"中描述的那次转换，只是它作用于一份仅在转换期间存在的声明——正是这一点让源文件可以放在任何地方，就像导入 STEP 文件时那样。"
+
+#: ../../source/simulation.rst:51
+msgid ""
+"``AssemblyFactoryUrdf`` drives ``wrapper_import_urdf`` in a python "
+"sandbox. The sandbox parses the file with ROS's own ``urdf_parser_py``, "
+"walks the joint tree from the root link with every joint at its zero "
+"position, resolves each link's geometry, and hands back plain data. The "
+"core registers one part per shape - ``<assembly>/<link>`` for a link that"
+" is one, and ``<assembly>/<link>/<n>`` under a sub-assembly for a link "
+"that is several - and builds the very same ``Assembly``/``AssemblyChild``"
+" tree an ASSY file produces."
+msgstr ""
+"``AssemblyFactoryUrdf`` 在一个 python 沙箱中驱动 ``wrapper_import_urdf`` 。沙箱用 ROS"
+" 自己的 ``urdf_parser_py`` "
+"解析文件，从根连杆出发、在每个关节都处于零位的状态下遍历关节树，解析每个连杆的几何体，并返回纯数据。核心为每个形状注册一个零件——只有一个形状的连杆对应"
+" ``<assembly>/<link>`` ，有多个形状的连杆则在一个子装配体之下对应 ``<assembly>/<link>/<n>`` "
+"——并构建出与 ASSY 文件所产生的完全相同的 ``Assembly`` / ``AssemblyChild`` 树。"
+
+#: ../../source/simulation.rst:59
+msgid ""
+"The links go into **one flat list**, each at its absolute placement. The "
+"joint tree is the robot's kinematics; an assembly is one static "
+"configuration of it, so nesting a sub-assembly per joint would make an "
+"arm as deep as it has joints and say nothing the placement does not. The "
+"relative placements are recorded in a link table instead, which is what "
+"the ASSY conversion turns into joints."
+msgstr ""
+"这些连杆被放进 **一个扁平列表** "
+"，各自位于自己的绝对位置上。关节树是机器人的运动学；而装配体只是它的一个静态配置，所以为每个关节嵌套一个子装配体，只会让一条机械臂的层级深度等于它的关节数，却说不出任何位置本身没有说过的信息。相对位置改为记录在一张连杆表中，ASSY"
+" 转换正是把这张表变成关节的。"
+
+#: ../../source/simulation.rst:65
+msgid ""
+"Nothing is rewritten that does not have to be: a ``<mesh>`` becomes a "
+"part that reads the very file the URDF named, and the ``<origin>`` that "
+"places it becomes a location rather than a transform baked into a copy of"
+" the geometry. Only ``<box>``/``<cylinder>``/``<sphere>`` are generated, "
+"because there is no file to point at."
+msgstr ""
+"凡是不必重写的都不会被重写： ``<mesh>`` 会成为一个直接读取 URDF 所指定的那个文件的零件，而放置它的 ``<origin>`` "
+"会成为一个位置，而不是烘焙进几何体副本里的一次变换。只有 ``<box>`` / ``<cylinder>`` / ``<sphere>`` "
+"是生成出来的，因为没有文件可供指向。"
+
+#: ../../source/simulation.rst:71
+msgid ""
+"A link is built from its **collision** geometry when it states both, "
+"since that is the shape a simulator resolves contact against; "
+"``ignoreCollision`` reverses that per link or wholesale. The geometry "
+"that was not used is not discarded: it becomes the part "
+"``<assembly>/<link>/<visual|collision>``, defined and exportable but not "
+"placed in the assembly."
+msgstr ""
+"当一个连杆同时声明了两种几何体时，它由 **碰撞** 几何体构建，因为那才是仿真器用来求解接触的形状； ``ignoreCollision`` "
+"可以按连杆或整体地反转这一选择。未被使用的那份几何体不会被丢弃：它会成为零件 "
+"``<assembly>/<link>/<visual|collision>`` ，已定义且可导出，只是没有被放进装配体里。"
+
+#: ../../source/simulation.rst:77
+msgid ""
+"What the link says about its physics is **copied field by field into "
+"named PartCAD properties**, in PartCAD's own units. ``<inertial>`` "
+"becomes ``mass``, ``centerOfMass`` and ``inertia``; the friction and "
+"contact settings of a ``<gazebo>`` block become ``friction``, "
+"``contactStiffness`` and the rest; ``<material>`` becomes ``material`` "
+"and ``color``. A joint's ``<limit>``, ``<dynamics>``, "
+"``<safety_controller>`` and ``<mimic>`` become the ``motion`` and "
+"``physics`` sections of the interface it turns into. Nothing is nested "
+"under the name of the format it came from, and nothing is opaque."
+msgstr ""
+"连杆关于自身物理性质的描述会被 **逐字段复制成具名的 PartCAD 属性** ，并使用 PartCAD 自己的单位。 "
+"``<inertial>`` 变成 ``mass`` 、 ``centerOfMass`` 和 ``inertia`` ； "
+"``<gazebo>`` 块中的摩擦与接触设置变成 ``friction`` 、 ``contactStiffness`` 等等； "
+"``<material>`` 变成 ``material`` 和 ``color`` 。关节的 ``<limit>`` 、 "
+"``<dynamics>`` 、 ``<safety_controller>`` 和 ``<mimic>`` 变成它所转化成的那个接口的 "
+"``motion`` 与 ``physics`` 小节。没有任何内容被嵌套在它来源格式的名字之下，也没有任何内容是不透明的。"
+
+#: ../../source/simulation.rst:86
+msgid ""
+"That choice has a cost and it is deliberate: URDF that no property covers"
+" stops the import, naming what it found. Core URDF is a closed "
+"vocabulary, so an unknown element there means PartCAD is out of date and "
+"the remedy is to extend the tables in ``wrapper_import_urdf.py``. "
+"``<gazebo>`` is an open extension point, so an unknown setting there is "
+"reported rather than fatal unless the assembly asks for ``strict: true``."
+" The export mirrors it: a PartCAD property URDF cannot state is reported "
+"at info level rather than dropped in silence."
+msgstr ""
+"这个选择是有代价的，而且是有意为之：没有任何属性能够涵盖的 URDF 内容会中止导入，并指明它发现了什么。URDF "
+"核心是一套封闭的词汇表，因此其中出现未知元素就意味着 PartCAD 已经过时，补救办法是扩充 "
+"``wrapper_import_urdf.py`` 中的表。 ``<gazebo>`` "
+"则是一个开放的扩展点，因此其中出现未知设置只会被报告，而不会致命，除非装配体要求 ``strict: true`` 。导出与之对应：URDF "
+"无法表达的 PartCAD 属性会以 info 级别报告出来，而不是悄无声息地丢弃。"
+
+#: ../../source/simulation.rst:94
+msgid ""
+"Nor does anything record the link's name or its parent. The part *is* "
+"named after the link, and the joint tree is the URDF file - which is "
+"still on disk and is read afresh - or, once converted, the ``connect:`` "
+"sections of the ASSY. A second copy in a properties section would only be"
+" a second thing to keep right."
+msgstr ""
+"同样，没有任何地方记录连杆的名字或它的父节点。零件本身 *就是* 以连杆命名的，而关节树就是那个 URDF "
+"文件——它仍然在磁盘上，并且会被重新读取——或者在转换之后，就是 ASSY 的 ``connect:`` "
+"小节。在属性小节里再存一份副本，只会多出一样需要维护正确的东西。"
+
+#: ../../source/simulation.rst:100
+msgid "Writing a URDF"
+msgstr "写出 URDF"
+
+#: ../../source/simulation.rst:102
+msgid ""
+"The URDF exporter (``//builtin/export``'s ``export_urdf.py``) is handed "
+"the assembly *tree* rather than the compound it decodes to - which is "
+"what ``decode: false`` on its declaration asks for. Each node becomes a "
+"link, each parent/child relation a fixed joint carrying that child's "
+"placement, and each node with geometry gets an STL written next to the "
+"URDF. A shape that appears more than once is written once and referenced "
+"by every link that uses it."
+msgstr ""
+"URDF 导出器（ ``//builtin/export`` 的 ``export_urdf.py`` ）拿到的是装配体的 *树* "
+"，而不是它解码出来的复合体——这正是其声明上的 ``decode: false`` "
+"所要求的。每个节点成为一个连杆，每个父子关系成为一个承载该子节点位置的固定关节，而每个带几何体的节点都会在 URDF 旁边写出一个 "
+"STL。多次出现的形状只写一次，由用到它的每个连杆引用。"
+
+#: ../../source/simulation.rst:109
+msgid ""
+"A sub-assembly whose children are named *under* it - ``wrist`` holding "
+"``wrist/1`` and ``wrist/2`` - goes back out as one link with a "
+"``<visual>`` per shape, at the offset each was placed at, rather than as "
+"a frame link with a link per shape. So a link of several visuals survives"
+" the round trip as itself. The slash is the whole of the rule, and it "
+"needs nothing recorded anywhere: it is the same convention the import "
+"uses to name those parts in the first place."
+msgstr ""
+"子节点命名在它 *之下* 的子装配体——例如 ``wrist`` 持有 ``wrist/1`` 和 ``wrist/2`` "
+"——会作为一个连杆写出去，每个形状对应一个 ``<visual>`` "
+"，各自位于当初被放置的偏移处，而不是写成一个坐标系连杆外加每个形状一个连杆。于是，由多个视觉形状组成的连杆在往返转换中仍然是它自己。斜杠就是这条规则的全部，而且它不需要在任何地方记录什么：这正是导入时为那些零件命名所用的同一套约定。"
+
+#: ../../source/simulation.rst:116
+msgid ""
+"The joint *tree* does not survive: the export mirrors the assembly, and a"
+" URDF assembly is flat, so what comes out is a root frame with every link"
+" fixed to it directly. That is an honest reading - the exported joints "
+"are all fixed because PartCAD holds one static configuration, and a star "
+"of fixed joints is what that is. The chain is preserved where it means "
+"something, in ``pc convert assembly -t assy``, and a faithful re-export "
+"would read it back from there rather than from anything stashed on the "
+"parts."
+msgstr ""
+"关节 *树* 无法保留：导出镜像的是装配体，而 URDF "
+"装配体是扁平的，所以出来的结果是一个根坐标系，每个连杆都直接固定在它上面。这是一种诚实的读法——导出的关节全是固定关节，因为 PartCAD "
+"只持有一个静态配置，而一组呈星形排列的固定关节正是它的样子。链式结构在它真正有意义的地方得到保留，也就是在 ``pc convert "
+"assembly -t assy`` 之中；一次忠实的重新导出应当从那里把它读回来，而不是从零件上随手存下的任何东西。"
+
+#: ../../source/simulation.rst:124
+msgid ""
+"What a part states about itself is written into the URDF element that "
+"states it: mass, centre of mass and inertia into ``<inertial>``, friction"
+" and the contact parameters into a ``<gazebo>`` block, "
+"``material``/``color`` into ``<material>``. Only a part that says nothing"
+" gets computed inertial properties: OCCT gives the volume, the centre of "
+"mass and the inertia tensor about it, and a density turns those into a "
+"mass. Since PartCAD still has nowhere to record what a part is *made of*,"
+" that density is a parameter of the export with a default rather than a "
+"property of the part - the first gap this page proposes to close."
+msgstr ""
+"零件关于自身的声明会被写进 URDF 中表述该内容的元素里：质量、质心和惯性写进 ``<inertial>`` ，摩擦和接触参数写进 "
+"``<gazebo>`` 块， ``material`` / ``color`` 写进 ``<material>`` "
+"。只有什么都没说的零件才会得到计算出来的惯性属性：OCCT 给出体积、质心以及绕质心的惯性张量，再由一个密度把它们换算成质量。由于 PartCAD"
+" 至今仍无处记录零件 *由什么材料制成* ，那个密度是导出的一个带默认值的参数，而不是零件的属性——这正是本页提议要填补的第一个空缺。"
+
+#: ../../source/simulation.rst:133
+msgid ""
+"A link's name, and the properties written under it, come from the shape "
+"the exporter is handed, and both travel on that shape together. This used"
+" to be the one place the shape cache showed through: the cache is keyed "
+"by geometry, deliberately, so that two parts reading the same mesh file "
+"do not compute it twice, and the entry used to carry the name of "
+"whichever part wrote it - so the other part read back wearing a name that"
+" was not its own, and the properties looked up under that name were the "
+"wrong part's or nobody's. The entry no longer stores that outer layer at "
+"all. What identifies the shape being asked for - its name, its label, its"
+" placement, and what it reports about itself - is stamped onto the "
+"payload from the asking object's own configuration every time an entry is"
+" read, so parts that share geometry each get themselves back."
+msgstr "连杆的名字，以及写在这个名字之下的属性，都来自导出器拿到的那个形状，两者一起随该形状传递。这里曾经是形状缓存唯一会显露出来的地方：缓存有意按几何体做键，这样两个读取同一个网格文件的零件就不必重复计算；而缓存条目过去会携带写入它的那个零件的名字——于是另一个零件读回来时顶着一个并不属于自己的名字，按那个名字查到的属性要么是别的零件的，要么根本没有。现在条目已经完全不再存储那一外层了。标识所请求形状的信息——它的名字、它的标签、它的位置，以及它对自身的描述——会在每次读取条目时，从发起请求的对象自己的配置重新盖印到载荷上，于是共享几何体的零件各自拿回的都是自己。"
+
+#: ../../source/simulation.rst:145
+msgid ""
+"The stamp reaches the shape that was asked for and no further. Inside a "
+"cached assembly the children sit in the entry with the names, labels and "
+"properties they were built with, because down there they are not who is "
+"asking - they are what the tree is made of, as much a part of the answer "
+"as the geometry. So a link exported from a part is that part; a link "
+"exported from a child of a cached assembly is whatever that child was "
+"when the tree was cached, and it takes a change the assembly actually "
+"hashes, or ``pc system reset``, to build it again."
+msgstr ""
+"这个盖印只到达被请求的那个形状，再往下就不管了。在一个被缓存的装配体内部，子节点在条目里带着构建它们时的名字、标签和属性，因为在那一层，它们不是发起请求的人——它们是这棵树的组成部分，和几何体一样同属于答案本身。所以，从零件导出的连杆就是那个零件；而从被缓存装配体的某个子节点导出的连杆，是这棵树被缓存时那个子节点的样子，要让它重新构建，需要一处装配体真正会参与哈希的改动，或者执行"
+" ``pc system reset`` 。"
+
+#: ../../source/simulation.rst:153
+msgid ""
+"What a shape reports about itself is cached too, in an entry of its own "
+"beside the geometry - the geometry's key with ``-props`` appended. Both "
+"are filled by the one run that actually instantiates the shape, and they "
+"are read apart: a consumer after a part's material need not pull its BREP"
+" back out of the cache, and a cache written before that entry existed is "
+"a miss for the properties and not for the geometry. It is not what the "
+"stamp above is made of, though: that entry is keyed on the geometry, so "
+"what sits in it belongs to the geometry - which is where a *derived* "
+"property (item 2 below) would land. What the object asking reports is its"
+" own ``properties:`` section, and only that."
+msgstr ""
+"形状对自身的描述同样会被缓存，放在几何体旁边它自己的条目里——键就是几何体的键后面加上 ``-props`` "
+"。两者都由真正实例化该形状的那一次运行填充，而读取时是分开的：想要某个零件材料的消费方不必把它的 BREP "
+"从缓存里取出来；而在该条目出现之前写入的缓存，对属性是未命中，对几何体则不是。不过，上面说的那个盖印并不是由它构成的：那个条目按几何体做键，所以放在里面的东西属于几何体——*派生*"
+" 属性（下文第 2 项）将来正是落在那里。发起请求的对象所报告的，是它自己的 ``properties:`` 小节，仅此而已。"
+
+#: ../../source/simulation.rst:164
+msgid "Converting between the two"
+msgstr "两者之间的转换"
+
+#: ../../source/simulation.rst:166
+msgid ""
+"``pc convert assembly`` rewrites the package rather than just producing a"
+" file. To URDF it writes the ``.urdf`` and its meshes and switches the "
+"declaration over. To ASSY it writes an ``stl`` part for every link, an "
+"interface pair for every joint, and an ``.assy`` whose nodes use "
+"``connect:`` - so the result is an assembly stated the way PartCAD states"
+" one, not a transcription of coordinates. How the joints become "
+"interfaces is `URDF joints as PartCAD interfaces`_ below."
+msgstr ""
+"``pc convert assembly`` 会改写包，而不只是产出一个文件。转换到 URDF 时，它写出 ``.urdf`` "
+"及其网格文件，并把声明切换过去。转换到 ASSY 时，它为每个连杆写出一个 ``stl`` 零件，为每个关节写出一对接口，再写出一个各节点使用 "
+"``connect:`` 的 ``.assy`` ——于是结果是一个按 PartCAD "
+"自己的方式表述出来的装配体，而不是一份坐标的誊抄。关节如何变成接口，见下文 `URDF joints as PartCAD "
+"interfaces`_ 。"
+
+#: ../../source/simulation.rst:174
+msgid "What the round trip preserves"
+msgstr "往返转换保留了什么"
+
+#: ../../source/simulation.rst:176
+msgid ""
+"``examples/produce_assembly_assy:logo`` exported to URDF and read back as"
+" a ``urdf`` assembly puts every shape back where it was, under the name "
+"it had, built from the same geometry - flattened, because a URDF has no "
+"way to say \"these parts belong together\" other than by joining them. "
+"That is the whole of what survives."
+msgstr ""
+"把 ``examples/produce_assembly_assy:logo`` 导出为 URDF 再作为 ``urdf`` "
+"装配体读回来，每个形状都回到了原来的位置、带着原来的名字、由相同的几何体构建——只是被压平了，因为除了把零件连接起来，URDF "
+"没有办法表达“这些零件属于一组”。能够幸存下来的就是这些。"
+
+#: ../../source/simulation.rst:186
+msgid "Preserved"
+msgstr "保留下来的"
+
+#: ../../source/simulation.rst:187
+msgid "Lost"
+msgstr "丢失的"
+
+#: ../../source/simulation.rst:188
+msgid "Every shape, at the placement it had"
+msgstr "每一个形状，以及它原有的位置"
+
+#: ../../source/simulation.rst:189
+msgid "Every name (PartCAD names carry package paths; ROS names cannot)"
+msgstr "每一个名字（PartCAD 的名字携带包路径，ROS 的名字做不到）"
+
+#: ../../source/simulation.rst:190
+msgid "Placements, to full double precision"
+msgstr "位置，保留完整的双精度"
+
+#: ../../source/simulation.rst:191
+msgid "Nesting: an ASSY may group its parts, a URDF's grouping is its joint tree"
+msgstr "嵌套：ASSY 可以把零件分组，而 URDF 的分组就是它的关节树"
+
+#: ../../source/simulation.rst:192
+msgid "Names of the assembly's own children"
+msgstr "装配体自身子节点的名字"
+
+#: ../../source/simulation.rst:193
+msgid "Parametrization: an ASSY parameter, an enrich, an alias"
+msgstr "参数化：ASSY 参数、enrich、别名"
+
+#: ../../source/simulation.rst:194
+msgid "Geometry, as a triangle mesh"
+msgstr "几何体，以三角网格的形式"
+
+#: ../../source/simulation.rst:195
+msgid "Exact B-rep geometry; the mesh is a tessellation at a chosen tolerance"
+msgstr "精确的 B-rep 几何；网格只是按某个选定容差做出的网格化结果"
+
+#: ../../source/simulation.rst:196
+msgid "Shape sharing (one mesh, many links)"
+msgstr "形状共享（一个网格，多个连杆）"
+
+#: ../../source/simulation.rst:197
+msgid "Which part in which package a link came from - the digital thread itself"
+msgstr "连杆来自哪个包中的哪个零件——也就是数字主线本身"
+
+#: ../../source/simulation.rst:199
+msgid ""
+"In the other direction, reading a URDF loses less than it used to but "
+"still loses. Mass, inertia, friction, contact parameters and appearance "
+"become named properties of the part and are written back on export; joint"
+" types, axes, limits and dynamics become the ``motion`` and ``physics`` "
+"of the generated interfaces when the assembly is converted to ASSY; the "
+"geometry a link was not built from becomes a part of its own. What is "
+"genuinely gone is the *effect* of a joint - the assembly is one "
+"configuration, so a movable joint is a placement and not a degree of "
+"freedom - along with transmissions, sensors and ``ros2_control`` blocks, "
+"and the ``<origin>`` of geometry that ends up unplaced. PartCAD reports "
+"the count of each rather than passing over them in silence, so the loss "
+"is visible at import time and in ``pc info``."
+msgstr ""
+"反方向上，读取 URDF 的损失比过去少，但仍然有损失。质量、惯性、摩擦、接触参数和外观都会成为零件的具名属性，并在导出时写回；当装配体被转换为 "
+"ASSY 时，关节类型、轴、限位和动力学会成为所生成接口的 ``motion`` 与 ``physics`` "
+"；连杆没有用来构建自身的那份几何体会成为一个独立的零件。真正丢失的是关节的 *作用* "
+"——装配体只是一个配置，所以可动关节表现为一个位置，而不是一个自由度——此外还有传动装置、传感器和 ``ros2_control`` "
+"块，以及最终未被放置的那份几何体的 ``<origin>`` 。PartCAD "
+"会报告各类丢失项的数量，而不是默不作声地略过，因此这些损失在导入时以及 ``pc info`` 中都是可见的。"
+
+#: ../../source/simulation.rst:212
+msgid "What it took to implement"
+msgstr "实现它需要付出什么"
+
+#: ../../source/simulation.rst:214
+msgid ""
+"Worth recording, because the shape of the work says something about where"
+" the gap is:"
+msgstr "值得记录下来，因为这些工作的形态本身就说明了差距在哪里："
+
+#: ../../source/simulation.rst:217
+msgid ""
+"**No change to the assembly representation was needed.** ``Assembly``, "
+"``AssemblyChild`` and ``Part`` expressed everything the *geometric* half "
+"of URDF needs, on the first try. That is the good news and the bad news: "
+"the representation is exactly rich enough for shapes and placements, and "
+"has no place at all for anything else."
+msgstr ""
+"**装配体的表示形式完全不需要改动。** ``Assembly`` 、 ``AssemblyChild`` 和 ``Part`` 一次就表达出了 "
+"URDF 中 *几何* "
+"那一半所需要的全部内容。这既是好消息也是坏消息：这套表示形式对形状和位置来说恰好足够丰富，而对其他任何东西都完全没有容身之处。"
+
+#: ../../source/simulation.rst:222
+msgid ""
+"**The wrapper protocol had to grow a raw mode.** "
+"``ocp_serialize.decode()`` turns an assembly envelope into a single "
+"``TopoDS_Compound``, which is right for every other exporter and fatal "
+"for this one - URDF *is* the tree. Hence "
+"``wrapper_common.handle_input(decode=False)``."
+msgstr ""
+"**wrapper 协议必须增加一种原始模式。** ``ocp_serialize.decode()`` 会把装配体信封变成单个 "
+"``TopoDS_Compound`` ，这对其他所有导出器都是对的，对这一个却是致命的——URDF *就是* 那棵树。于是有了 "
+"``wrapper_common.handle_input(decode=False)`` 。"
+
+#: ../../source/simulation.rst:226
+msgid ""
+"**Units and conventions cost a module.** URDF is metres, radians and "
+"fixed-axis roll-pitch-yaw; PartCAD is millimetres, degrees and axis-"
+"angle. ``wrappers/urdf_common.py`` exists to keep that conversion in one "
+"tested place rather than spread across two wrappers."
+msgstr ""
+"**单位和约定花掉了一个模块。** URDF 用米、弧度和固定轴的滚转-俯仰-偏航；PartCAD 用毫米、角度和轴角表示。 "
+"``wrappers/urdf_common.py`` 的存在，就是为了把这项换算集中在一处经过测试的地方，而不是分散到两个 wrapper 里。"
+
+#: ../../source/simulation.rst:230
+msgid ""
+"**The parts a URDF points at have no declaration.** They are whatever the"
+" URDF names, so they are materialized into the package in memory as "
+"``<assembly>/<link>`` and the package resolves such a name by building "
+"the assembly that owns it. A concept of \"a part that exists because an "
+"assembly produced it\" did not exist before, and it turns out to be the "
+"right one: those parts are ordinary parts, inspectable and exportable, "
+"not an internal detail."
+msgstr ""
+"**URDF 所指向的零件没有声明。** 它们就是 URDF 所命名的那些东西，因此会以 ``<assembly>/<link>`` "
+"的形式在内存中具体化到包里，而包解析这样一个名字的方式，就是构建拥有它的那个装配体。“因为某个装配体产生了它才存在的零件”这一概念此前并不存在，而事实证明它是正确的：这些零件就是普通的零件，可以查看也可以导出，而不是什么内部细节。"
+
+#: ../../source/simulation.rst:236
+msgid ""
+"**Mapping the robot's root link to the assembly itself was a mistake "
+"too.** It made an export come out with one link fewer, which looked like "
+"fidelity, but it only worked because each part recorded which link it "
+"*was*: the export matched the assembly node against a stored link name. "
+"Once that stored name went away - and it had to, since the part is "
+"already named after the link - the assembly went back to being what it "
+"is, a container. An export now writes a root frame with no geometry and "
+"every link fixed to it, which reads back as the same four placed links; "
+"the round trip is stable, just one honest link longer."
+msgstr ""
+"**把机器人的根连杆映射到装配体本身同样是个错误。** "
+"这样做让导出结果少了一个连杆，看上去像是更忠实，但它之所以能成立，只是因为每个零件都记录了自己 *曾是* "
+"哪个连杆：导出时用一个存下来的连杆名去匹配装配体节点。一旦那个存下来的名字消失——而它必须消失，因为零件早已以连杆命名——装配体就回到了它本来的身份，一个容器。现在导出会写出一个不带几何体的根坐标系，并把每个连杆都固定到它上面，读回来仍然是同样的四个被放置的连杆；往返转换是稳定的，只是诚实地多出一个连杆。"
+
+#: ../../source/simulation.rst:245
+msgid ""
+"**A link of several shapes is a sub-assembly, and combining them was a "
+"mistake.** Merging a link's visuals into one generated shape made the "
+"joint algebra fall out neatly - every part's origin was the link frame - "
+"but it bought that by rewriting the model: the mesh files the URDF "
+"pointed at were replaced by a generated compound and the ``<origin>`` "
+"that placed each one disappeared into the geometry. Keeping them as parts"
+" of a sub-assembly, each reading its own file at its own offset, costs "
+"one extra term in the joint algebra (below) and a table of where each "
+"link's item sits relative to the link frame. That is the right trade: a "
+"digital thread that rewrites what it was handed is not one."
+msgstr ""
+"**由多个形状组成的连杆是一个子装配体，把它们合并是个错误。** "
+"把一个连杆的视觉形状合并成一个生成出来的形状，让关节代数变得很整齐——每个零件的原点都是连杆坐标系——但它是靠改写模型换来的：URDF "
+"所指向的网格文件被一个生成的复合体取代，而放置每个网格的 ``<origin>`` "
+"也消失进了几何体之中。把它们保留为一个子装配体的各个零件、各自按自己的偏移读取自己的文件，代价是关节代数中多出一项（见下文），以及一张记录每个连杆的各个条目相对连杆坐标系位置的表。这是正确的取舍：会改写自己所接收内容的数字主线，根本不算数字主线。"
+
+#: ../../source/simulation.rst:255
+msgid ""
+"**Nesting a sub-assembly per joint was also a mistake, for the opposite "
+"reason.** It preserved the URDF's tree faithfully and cost an arm one "
+"level of depth per joint, in a representation that has no joints in it. "
+"Two different things were being expressed by one mechanism - \"these "
+"shapes are one link\", which is grouping, and \"this link hangs off that "
+"one\", which is kinematics - and only the first is structure. Flattening "
+"the second and recording the relative placements in a table beside the "
+"tree is what let the ASSY conversion keep the kinematics *and* the "
+"assembly stay shallow."
+msgstr ""
+"**为每个关节嵌套一个子装配体同样是个错误，原因却正相反。** 它忠实地保留了 URDF "
+"的树，代价是机械臂每多一个关节就多一层深度，而这套表示形式里根本没有关节。一种机制被用来表达两件不同的事——“这些形状属于同一个连杆”，这是分组；以及“这个连杆挂在那个连杆上”，这是运动学——而只有前者才是结构。把后者压平、并把相对位置记录在树旁边的一张表里，正是这一点让"
+" ASSY 转换既保住了运动学， *同时* 让装配体保持扁平。"
+
+#: ../../source/simulation.rst:263
+#, python-brace-format
+msgid ""
+"**An opaque properties section was a mistake, and the least obvious "
+"one.** The first version carried what a URDF said under ``physics: {urdf:"
+" ...}``, keeping the source format's own structure so that an export "
+"could hand it straight back. It round-tripped perfectly and told PartCAD "
+"nothing: a mass was a mass only to the URDF exporter, and no other part "
+"of the system could read it, check it, or state one of its own. Copying "
+"each value into a named PartCAD property with a PartCAD unit is more code"
+" and a closed list to maintain, and it is what makes the property "
+"*PartCAD's* rather than a souvenir of where it came from. The rule that "
+"falls out of it - refuse URDF nothing maps, report PartCAD properties "
+"URDF cannot state - is what keeps the list honest, because the "
+"alternative to a loud failure is a quiet loss."
+msgstr ""
+"**一个不透明的属性小节是个错误，而且是最不显眼的那个。** 最初的版本把 URDF 所说的内容放在 ``physics: {urdf: "
+"...}`` 之下，保留源格式自己的结构，以便导出时能原样交还回去。它的往返转换完美无缺，却没有告诉 PartCAD 任何东西：一个质量只对 "
+"URDF 导出器而言才是质量，系统的其他任何部分都读不了它、校验不了它，也无法自己声明一个。把每个值复制成一个带 PartCAD 单位的具名 "
+"PartCAD 属性，意味着更多代码和一份需要维护的封闭清单，而这正是让该属性成为 *PartCAD 自己的* "
+"属性、而不是来源格式的一件纪念品的原因。由此得出的规则——拒绝任何无法映射的 URDF 内容，报告 URDF 无法表达的 PartCAD "
+"属性——正是让这份清单保持诚实的东西，因为响亮失败的替代方案是悄无声息的丢失。"
+
+#: ../../source/simulation.rst:274
+msgid ""
+"**The same went for the link's identity.** Recording which link a part "
+"came from, and which link that link hung off, looked like cheap "
+"insurance. It was two more things to keep consistent with the names and "
+"the connections that already said it, and it let the exporter take a "
+"shortcut that stopped working the moment the record was removed. "
+"Hierarchy that has to be preserved belongs in the *name*, where a slash "
+"already means containment; relations between two things belong in the "
+"connection between them."
+msgstr ""
+"**连杆的身份也是同样的情况。** "
+"记录一个零件来自哪个连杆、那个连杆又挂在哪个连杆上，看起来像是便宜的保险。实际上，它只是多出两样需要与早已说明同一件事的名字和连接保持一致的东西，并且让导出器走了一条捷径，而这条捷径在记录被移除的那一刻就失效了。必须保留的层级关系属于"
+" *名字* ，在那里斜杠本来就表示包含关系；两样东西之间的关系则属于它们之间的连接。"
+
+#: ../../source/simulation.rst:281
+msgid ""
+"**A cache entry is keyed by geometry, and carried an identity it should "
+"not have.** Two parts that read the same mesh file hash the same, so the "
+"second one came back wearing the first one's name and label. Nothing had "
+"noticed, because nothing had keyed anything off those; the URDF exporter "
+"names its links from them. Restamping on the way out of the cache, "
+"exactly as the write path stamps on the way in, was the fix."
+msgstr ""
+"**缓存条目按几何体做键，却携带了它不该携带的身份。** "
+"读取同一个网格文件的两个零件哈希值相同，于是第二个零件读回来时顶着第一个零件的名字和标签。此前没有人注意到，因为没有任何东西依赖这些信息；而 "
+"URDF 导出器正是用它们来命名连杆的。修复办法是在出缓存的路径上重新盖印，就像写入路径在入缓存时盖印那样。"
+
+#: ../../source/simulation.rst:287
+#, python-brace-format
+msgid ""
+"**Two long-standing gaps in the interface code surfaced.** The schema has"
+" always allowed ``ports: {name:}`` and ``implements: {iface:}`` with no "
+"value, and both crashed - nothing had written them before, because "
+"nothing had generated interfaces programmatically. Generating them found "
+"it at once."
+msgstr ""
+"**接口代码中两个长期存在的缺口浮出水面。** 模式一直允许写不带值的 ``ports: {name:}`` 和 ``implements: "
+"{iface:}`` ，而这两种写法都会崩溃——以前没有任何东西写过它们，因为没有任何东西以编程方式生成过接口。一开始生成接口，就立刻发现了它。"
+
+#: ../../source/simulation.rst:292
+msgid ""
+"None of that was hard. The hard part is everything the geometry does not "
+"cover, which is the rest of this page."
+msgstr "这些都不难。难的是几何体覆盖不到的那一切，也就是本页其余部分所讲的内容。"
+
+#: ../../source/simulation.rst:298
+msgid "URDF joints as PartCAD interfaces"
+msgstr "URDF 关节作为 PartCAD 接口"
+
+#: ../../source/simulation.rst:300
+msgid ""
+"This is the part worth dwelling on, because it is where the two models "
+"actually have to be reconciled rather than translated."
+msgstr "这部分值得细说，因为正是在这里，两种模型必须被真正地调和，而不只是被翻译。"
+
+#: ../../source/simulation.rst:303
+msgid ""
+"A URDF joint relates two link *frames*: at the zero configuration, the "
+"child link's frame sits at the joint's ``origin`` in the parent link's "
+"frame, and the joint's ``axis`` says how it may move from there. PartCAD "
+"does not relate frames; it relates **ports**, and its rule is that two "
+"connected ports *face* each other - the connection composes the target's "
+"placement, the target port, a half turn, the freedom-of-movement offsets,"
+" and the inverse of the source port."
+msgstr ""
+"一个 URDF 关节关联的是两个连杆 *坐标系* ：在零配置下，子连杆的坐标系位于父连杆坐标系中该关节的 ``origin`` 处，而关节的 "
+"``axis`` 说明它可以从那里如何运动。PartCAD 关联的不是坐标系，而是 **端口** ，并且它的规则是：两个相连的端口彼此 *面对面*"
+" ——该连接由目标的位置、目标端口、一次半圈旋转、运动自由度的偏移量，以及源端口的逆变换复合而成。"
+
+#: ../../source/simulation.rst:310
+msgid "So one side has to carry the flip. The mapping is:"
+msgstr "因此必须由其中一侧承担这次翻转。映射关系如下："
+
+#: ../../source/simulation.rst:316 ../../source/simulation.rst:659
+#: ../../source/simulation.rst:1104
+msgid "URDF"
+msgstr ""
+
+#: ../../source/simulation.rst:317 ../../source/simulation.rst:657
+msgid "PartCAD"
+msgstr ""
+
+#: ../../source/simulation.rst:318
+msgid "joint (parent side)"
+msgstr "关节（父侧）"
+
+#: ../../source/simulation.rst:319
+msgid ""
+"a **socket** interface with one port at its origin, which the parent part"
+" implements at the joint origin, under an instance named after the joint"
+msgstr "一个带有单个端口（位于其原点）的 **插座（socket）** 接口，由父零件在关节原点处实现，所在实例以该关节命名"
+
+#: ../../source/simulation.rst:321
+msgid "joint (child side)"
+msgstr "关节（子侧）"
+
+#: ../../source/simulation.rst:322
+msgid ""
+"a **plug** interface whose one port sits at the half turn, which the "
+"child part implements once, at its own origin"
+msgstr "一个唯一端口位于半圈旋转处的 **插头（plug）** 接口，由子零件在自己的原点处实现一次"
+
+#: ../../source/simulation.rst:324
+msgid "the two are the same joint"
+msgstr "两者是同一个关节"
+
+#: ../../source/simulation.rst:325
+msgid "``mates:`` on the plug, naming the socket"
+msgstr "插头上的 ``mates:`` ，指明对应的插座"
+
+#: ../../source/simulation.rst:326
+msgid "``axis``, ``limit`` lower/upper"
+msgstr "``axis`` ，以及 ``limit`` 的 lower/upper"
+
+#: ../../source/simulation.rst:327
+#, python-brace-format
+msgid ""
+"``motion: {axis, limits}``, in degrees or millimetres, plus an interface "
+"``parameter`` (``angle`` for a revolute joint, ``offset`` for a prismatic"
+" one) that makes it move"
+msgstr ""
+"``motion: {axis, limits}`` ，以角度或毫米为单位，外加一个让它能够运动的接口 ``parameter`` （旋转关节用 "
+"``angle`` ，移动关节用 ``offset`` ）"
+
+#: ../../source/simulation.rst:330
+msgid "``safety_controller``, ``mimic``"
+msgstr ""
+
+#: ../../source/simulation.rst:331
+#, python-brace-format
+msgid ""
+"``motion: {softLimits, mimic}`` - both bound the movement, so both are "
+"kinematics"
+msgstr "``motion: {softLimits, mimic}`` ——两者都对运动加以限制，所以两者都属于运动学"
+
+#: ../../source/simulation.rst:333
+msgid "``limit`` effort/velocity, ``dynamics``"
+msgstr "``limit`` 的 effort/velocity ，以及 ``dynamics``"
+
+#: ../../source/simulation.rst:334
+#, python-brace-format
+msgid ""
+"``physics: {maxEffort, maxVelocity, damping, friction}`` - what the "
+"movement costs"
+msgstr "``physics: {maxEffort, maxVelocity, damping, friction}`` ——运动所付出的代价"
+
+#: ../../source/simulation.rst:336
+msgid "a joint's ``<gazebo>`` block"
+msgstr "关节的 ``<gazebo>`` 块"
+
+#: ../../source/simulation.rst:337
+#, python-brace-format
+msgid "``physics: {springStiffness, springReference, stopCfm, ...}``"
+msgstr ""
+
+#: ../../source/simulation.rst:338
+msgid "``calibration``"
+msgstr ""
+
+#: ../../source/simulation.rst:339
+msgid ""
+"nothing: a limit-switch reference used when a real robot is commissioned,"
+" which says nothing about the model. Counted and reported"
+msgstr "没有对应物：这是真实机器人调试时使用的限位开关参考值，对模型本身没有任何说明。会被计数并报告"
+
+#: ../../source/simulation.rst:341
+msgid "a link's attachment"
+msgstr "连杆的附着关系"
+
+#: ../../source/simulation.rst:342
+#, python-brace-format
+msgid ""
+"``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: "
+"<joint>}``"
+msgstr ""
+
+#: ../../source/simulation.rst:344
+msgid ""
+"All of this is stated in the *link* frame, which is not necessarily where"
+" a link's geometry sits: a link that is one shape placed at an "
+"``<origin>`` has its part's frame at that offset, and a link of several "
+"is a sub-assembly whose frame is the link's. So the conversion re-"
+"expresses each link in the link frame before writing its mesh - one term,"
+" recorded per link by the importer and applied in one place - and "
+"everything downstream can then assume the part's origin *is* the link's. "
+"Folding that term into the interface instances instead would have worked "
+"too, and would have spread it across every socket and plug in the file."
+msgstr ""
+"以上这一切都是在 *连杆* 坐标系中表述的，而连杆的几何体不一定就位于那里：一个由单个形状、放置在某个 ``<origin>`` "
+"处构成的连杆，其零件坐标系就在那个偏移处；而由多个形状构成的连杆是一个子装配体，它的坐标系就是连杆坐标系。因此，转换会在写出每个连杆的网格之前，先把它在连杆坐标系中重新表述一遍——这是由导入器按连杆记录、并在一处统一应用的一项变换——此后下游的一切都可以假定零件的原点"
+" *就是* 连杆的原点。把这一项折进接口实例里原本也行得通，但那会把它摊到文件中的每一个插座和插头上。"
+
+#: ../../source/simulation.rst:353
+msgid ""
+"Putting the flip on the plug is what keeps the *socket* readable: the "
+"parent implements it at exactly the joint origin, which is a number a "
+"reader can check against the URDF. It costs one wrinkle, in the axis. The"
+" half turn ``T`` is a 180 degree rotation about ``(1, 1, 0)``, and a "
+"rotation conjugated by it is the same rotation about the mapped axis, "
+"``(x, y, z) -> (y, x, -z)``. So the parameter's ``dir`` is the joint axis"
+" under that map, while ``motion.axis`` keeps it as URDF stated it - which"
+" is also the socket port's own frame, since that port sits at the joint "
+"origin. The record stays readable; the executable half stays correct."
+msgstr ""
+"把翻转放在插头一侧，是为了让 *插座* 保持可读：父零件恰好在关节原点处实现它，而这是读者可以拿去与 URDF "
+"对照的一个数值。代价是在轴上多出一处小小的曲折。半圈旋转 ``T`` 是绕 ``(1, 1, 0)`` 的 180 "
+"度旋转，而被它共轭之后的旋转，就是绕映射后的轴的同一个旋转，映射为 ``(x, y, z) -> (y, x, -z)`` 。因此参数的 "
+"``dir`` 是经过该映射后的关节轴，而 ``motion.axis`` 仍保持 URDF "
+"所声明的样子——那同时也是插座端口自己的坐标系，因为该端口正位于关节原点。记录保持可读，可执行的那一半保持正确。"
+
+#: ../../source/simulation.rst:363
+msgid ""
+"The units change at the boundary and only there. A URDF limit is radians "
+"for a revolute joint and metres for a prismatic one; what lands in "
+"``motion.limits`` is degrees and millimetres, because those are PartCAD's"
+" units and a property that keeps its source format's unit is a property "
+"nothing else can use. The reader converts once, and every consumer "
+"downstream - the generated parameter, the schema, a person reading the "
+"file - sees one convention."
+msgstr ""
+"单位只在边界处改变，而且仅在那里改变。URDF 的限位对旋转关节是弧度，对移动关节是米；而落进 ``motion.limits`` "
+"的是角度和毫米，因为那才是 PartCAD "
+"的单位，而一个保留了源格式单位的属性，是其他任何东西都用不上的属性。读取器只转换一次，下游的每个消费方——生成出来的参数、模式、读这个文件的人——看到的都是同一套约定。"
+
+#: ../../source/simulation.rst:370
+msgid "Two things fall out of this that are worth more than the mapping itself."
+msgstr "由此引出的两点，比映射本身更有价值。"
+
+#: ../../source/simulation.rst:372
+msgid ""
+"**Interfaces are reusable, instances are not.** What varies between two "
+"joints of the same kind is *where* they are, and that lives in the "
+"``implements:`` instance location, not in the interface. So every fixed "
+"joint in a robot is the same interface, and so is every revolute joint "
+"with the same axis and limits. The converter deduplicates on exactly that"
+" - the joint's type, axis, limits, dynamics and mimic - and a four-"
+"wheeled robot comes out with one interface pair for its wheels rather "
+"than four. There is deliberately no attempt to match against the existing"
+" library of interfaces: a URDF joint says nothing about the *hardware* "
+"that implements it, so claiming it is an ``m3-screw-6mm`` would be an "
+"invention. Custom interfaces per joint kind, reused where they agree, is "
+"the honest reading."
+msgstr ""
+"**接口可以复用，实例不能。** 同一类型的两个关节之间不同的是它们 *在哪里* ，而这件事存在于 ``implements:`` "
+"实例的位置里，不在接口里。因此机器人中的每个固定关节都是同一个接口，轴和限位相同的每个旋转关节也是如此。转换器正是依据这些信息去重的——关节的类型、轴、限位、动力学和"
+" mimic——于是一台四轮机器人的车轮最终只得到一对接口，而不是四对。这里有意不去与现有的接口库做匹配：URDF 关节对实现它的 *硬件* "
+"只字未提，所以宣称它是某个 ``m3-screw-6mm`` 纯属杜撰。按关节种类定制接口、在它们一致时加以复用，才是诚实的读法。"
+
+#: ../../source/simulation.rst:384
+#, python-brace-format
+msgid ""
+"**A pose becomes expressible.** The parameter the converter generates is "
+"not decoration: ``connect: {toParams: {angle: 90}}`` in the generated "
+"ASSY places the child exactly where the URDF joint at 90 degrees would, "
+"and everything below it follows. That is a static assembly gaining the "
+"first half of a kinematic one, using machinery PartCAD already had. What "
+"is still missing is the other half - a *named configuration* of the whole"
+" assembly rather than a value written into one connection - which is item"
+" 5 below."
+msgstr ""
+"**位姿变得可以表达了。** 转换器生成的那个参数不是装饰：生成的 ASSY 中的 ``connect: {toParams: {angle: "
+"90}}`` 会把子节点准确地放到 URDF 关节处于 90 度时所对应的位置，其下的一切也随之跟进。这就是一个静态装配体借助 PartCAD "
+"早已具备的机制，获得了运动学装配体的前一半。仍然缺少的是另一半——整个装配体的一个 *具名配置* "
+"，而不是写进某一个连接里的一个值——也就是下文的第 5 项。"
+
+#: ../../source/simulation.rst:393
+msgid "An engine's own scene format is its plugin's"
+msgstr "引擎自己的场景格式归它的插件所有"
+
+#: ../../source/simulation.rst:395
+msgid ""
+"SDFormat and MJCF are read and written exactly the way URDF is -- one "
+"entry of an ``import:`` section for the reader, one of an ``export:`` "
+"section for the writer, the same sandbox, the same envelopes, the same "
+"``dropped`` counters -- but the entries are **not in this wheel**. Each "
+"belongs to the plugin package for its engine:"
+msgstr ""
+"SDFormat 和 MJCF 的读写方式与 URDF 完全相同——读取器对应 ``import:`` 小节中的一个条目，写入器对应 "
+"``export:`` 小节中的一个条目，同样的沙箱、同样的信封、同样的 ``dropped`` 计数器——但这些条目 **不在本 wheel "
+"中** 。它们各自属于相应引擎的插件包："
+
+#: ../../source/simulation.rst:405
+msgid "Engine"
+msgstr "引擎"
+
+#: ../../source/simulation.rst:406
+msgid "Package"
+msgstr "包"
+
+#: ../../source/simulation.rst:407
+msgid "Scene type"
+msgstr "场景类型"
+
+#: ../../source/simulation.rst:408
+msgid "Export"
+msgstr "导出"
+
+#: ../../source/simulation.rst:409
+msgid "Gazebo"
+msgstr ""
+
+#: ../../source/simulation.rst:410
+msgid "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
+msgstr ""
+
+#: ../../source/simulation.rst:411
+msgid "``sim-gazebo:world``"
+msgstr ""
+
+#: ../../source/simulation.rst:412
+msgid "``pc export -S -t sim-gazebo:world``"
+msgstr ""
+
+#: ../../source/simulation.rst:413
+msgid "MuJoCo"
+msgstr ""
+
+#: ../../source/simulation.rst:414
+msgid "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
+msgstr ""
+
+#: ../../source/simulation.rst:415
+msgid "``sim-mujoco:mjcf``"
+msgstr ""
+
+#: ../../source/simulation.rst:416
+msgid "``pc export -S -t sim-mujoco:mjcf``"
+msgstr ""
+
+#: ../../source/simulation.rst:418
+msgid ""
+"That is the same rule the simulator itself follows, and for the same "
+"reason. Reading a format, writing it, launching the application on it and"
+" running a physics step with it are one body of knowledge about one "
+"engine; PartCAD ships the *concept* -- the ``import:`` and ``export:`` "
+"sections, the sandbox, the ``simulation:`` plugin protocol, the ``open:``"
+" entry -- and the engine's package supplies the knowledge. Each of those "
+"two packages declares all four for its own format, so importing it is "
+"what makes the type, the exporter, ``pc sim`` and ``pc open --with`` all "
+"work at once."
+msgstr ""
+"这与仿真器本身所遵循的是同一条规则，理由也相同。读取一种格式、写出这种格式、用它启动应用程序、以及用它运行一步物理计算，属于关于同一个引擎的同一套知识；PartCAD"
+" 提供的是 *概念* —— ``import:`` 和 ``export:`` 小节、沙箱、 ``simulation:`` 插件协议、 "
+"``open:`` 条目——而知识由该引擎的包来提供。上述两个包各自为自己的格式声明了全部这四项，因此只要导入它，类型、导出器、 ``pc "
+"sim`` 和 ``pc open --with`` 就会同时可用。"
+
+#: ../../source/simulation.rst:427
+msgid "A package that uses one imports it and names the type through it:"
+msgstr "用到某种格式的包会导入对应的插件包，并通过它来命名该类型："
+
+#: ../../source/simulation.rst:441
+msgid ""
+"A bare ``type: world`` resolves to nothing and says so. So does ``pc "
+"export -t mjcf``: nothing in ``//builtin/export`` writes either format, "
+"and the qualified spelling is what reaches the package that does."
+msgstr ""
+"光写 ``type: world`` 什么也解析不到，而且它会明确说出来。 ``pc export -t mjcf`` 也一样： "
+"``//builtin/export`` 中没有任何东西能写出这两种格式，只有带限定前缀的写法才能到达真正能写的那个包。"
+
+#: ../../source/simulation.rst:445
+msgid ""
+"What the readers preserve and what they cannot is documented in those "
+"repositories, beside the code -- including the parts of MJCF that are "
+"easy to get wrong (angles are degrees by default, an orientation has five"
+" spellings, and a box's ``size`` is its half-extents), and the export "
+"parameters a simulation needs that a scene never states (``static``, "
+"``flatten``, ``light``, ``ground_plane``, ``sun``). The two readers are "
+"best-effort in exactly the way the URDF reader above is: what a static "
+"arrangement cannot hold is counted and reported rather than passed over, "
+"and ``pc info`` lists it."
+msgstr ""
+"这两个读取器保留了什么、不能保留什么，都记录在那两个仓库里、紧挨着代码——其中也包括 MJCF "
+"中容易弄错的部分（角度默认以度为单位，一个朝向有五种写法，而盒体的 ``size`` "
+"指的是它的半边长），以及仿真所需、而场景从不声明的那些导出参数（ ``static`` 、 ``flatten`` 、 ``light`` 、 "
+"``ground_plane`` 、 ``sun`` ）。这两个读取器都是尽力而为的，方式与上文的 URDF "
+"读取器完全一样：静态布置承载不了的内容会被计数并报告，而不是被略过，而且 ``pc info`` 会把它们列出来。"
+
+#: ../../source/simulation.rst:454
+msgid ""
+"One consequence is worth stating because it is a change and not an "
+"oversight: ``pc open --with mujoco`` no longer converts a scene into "
+"MJCF. It opens a file that already is one -- the application's ``open:`` "
+"entry names the extensions its format is stored in -- and refuses "
+"anything else with the export that does work. An ad-hoc conversion has a "
+"throwaway package around the file and no dependency on either plugin, so "
+"it cannot run the exporter that would be needed; see :doc:`cli`."
+msgstr ""
+"有一个后果值得说明，因为它是一处有意的改动而不是疏漏： ``pc open --with mujoco`` 不再把场景转换成 "
+"MJCF。它打开的是本身已经是 MJCF 的文件——应用程序的 ``open:`` "
+"条目列出了它的格式所使用的扩展名——而对其他任何文件都会拒绝，并指出真正可用的那种导出方式。临时转换在文件外面只套了一个一次性的包，对这两个插件都没有依赖，因此它无法运行所需要的那个导出器；参见"
+" :doc:`cli` 。"
+
+#: ../../source/simulation.rst:463
+msgid "Every description is a Jinja2 template"
+msgstr "每一份描述都是 Jinja2 模板"
+
+#: ../../source/simulation.rst:465
+msgid ""
+"An ASSY file has always been rendered as a `Jinja2 "
+"<https://jinja.palletsprojects.com/>`_ template before it is parsed, "
+"which is what lets one file describe a family of assemblies. A URDF, a "
+"``.world`` and an MJCF model are declared exactly the same way and were "
+"not, so a package could parameterize one kind of arrangement and not the "
+"other three. All four share one implementation now, and the parameters "
+"reach every one of them under the same names: ``param_<name>`` for each "
+"declared parameter, and ``name`` for the object's own."
+msgstr ""
+"ASSY 文件在被解析之前，一直都会先作为 `Jinja2 <https://jinja.palletsprojects.com/>`_ "
+"模板渲染，正是这一点让一个文件能够描述一族装配体。URDF、 ``.world`` 和 MJCF "
+"模型的声明方式完全相同，却没有这样处理，于是一个包能把其中一类布置参数化，对另外三类却无能为力。现在这四者共用同一套实现，参数也以相同的名字送达其中每一个："
+" ``param_<name>`` 对应每个已声明的参数， ``name`` 对应对象自身的名字。"
+
+#: ../../source/simulation.rst:488
+msgid ""
+"The rendered file is written under PartCAD's own state directory rather "
+"than beside the original -- rendering is derived data, and instantiating "
+"an object must not drop files into the user's source tree -- and the file"
+" is left exactly as it is when rendering changes nothing, which is the "
+"usual case. What the file *references* keeps resolving against the "
+"directory the package declared it in: each reader is handed that "
+"directory separately, which is what keeps a ``package://`` mesh, a "
+"``model://`` include and an ``<asset>`` file working in a template."
+msgstr ""
+"渲染后的文件写在 PartCAD "
+"自己的状态目录下，而不是放在原文件旁边——渲染产生的是派生数据，而实例化一个对象不应该把文件扔进用户的源码树里——并且当渲染没有改变任何内容时（这也是通常的情况），文件会原封不动地保留。文件所"
+" *引用* 的内容，仍然相对包声明它时所在的那个目录来解析：每个读取器都会单独收到那个目录，正是这一点让模板中的 ``package://`` "
+"网格、 ``model://`` 包含和 ``<asset>`` 文件都能继续正常工作。"
+
+#: ../../source/simulation.rst:498
+msgid "Running a simulation"
+msgstr "运行仿真"
+
+#: ../../source/simulation.rst:500
+msgid ""
+"``simulate:`` is an optional section of a part or an assembly. Each entry"
+" in it is one simulation, and states four things:"
+msgstr "``simulate:`` 是零件或装配体的一个可选小节。其中每个条目就是一次仿真，并声明四件事："
+
+#: ../../source/simulation.rst:503
+msgid "``scene:``"
+msgstr ""
+
+#: ../../source/simulation.rst:504
+msgid ""
+"The scene the object is placed in, by full path. The object's own full "
+"path is assigned to that scene's ``subject`` parameter -- "
+"unconditionally, and whatever else the entry says -- which is what lets "
+"one scene serve every object that names it. Nothing special is declared "
+"for it: a simulation scene is an ordinary scene with an ordinary "
+"parameter, and a Jinja2 template is what places the subject."
+msgstr ""
+"对象被放入的场景，用完整路径表示。对象自身的完整路径会被赋给该场景的 ``subject`` "
+"参数——无条件地，无论条目中还写了什么——正是这一点让一个场景可以服务于所有指名它的对象。为此不需要声明任何特殊的东西：仿真场景就是一个带普通参数的普通场景，而放置主体的则是一个"
+" Jinja2 模板。"
+
+#: ../../source/simulation.rst:511
+msgid ""
+"The default is ``//builtin/scene:subject``, an empty world holding the "
+"subject and nothing else. A package that needs more -- a fixture to drop "
+"the part onto, a conveyor to push it along -- writes a scene of its own."
+msgstr ""
+"默认值是 ``//builtin/scene:subject`` "
+"，一个只装着主体、别无他物的空世界。需要更多内容的包——比如一个用来让零件落下的夹具，或者一条把它推着走的传送带——会自己写一个场景。"
+
+#: ../../source/simulation.rst:515
+msgid "``offset:``"
+msgstr ""
+
+#: ../../source/simulation.rst:516
+msgid ""
+"Where in that scene the object goes, in the scene's frame. It is stated "
+"here rather than in the scene because it is a fact about *this* object --"
+" where its origin sits relative to the floor it is meant to stand on -- "
+"and the scene is shared."
+msgstr ""
+"对象在该场景中的位置，以场景坐标系表示。它写在这里而不是写在场景里，是因为这是关于 *这个* "
+"对象的事实——它的原点相对于它本应站立的地面在哪里——而场景是共享的。"
+
+#: ../../source/simulation.rst:521
+msgid "``simulation:``"
+msgstr ""
+
+#: ../../source/simulation.rst:522
+msgid ""
+"The simulation plugin that runs it, by full path. There is no default: "
+"PartCAD implements no simulator, so a package imports one and says which."
+" `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is"
+" the MuJoCo one and `partcad-sim-gazebo <https://github.com/partcad"
+"/partcad-sim-gazebo>`_ the Gazebo one. Each also declares the reader, the"
+" writer and the ``open:`` entry for that engine's own scene format, "
+"because those are one piece of knowledge and the simulator is what "
+"decides what the file has to say."
+msgstr ""
+"运行这次仿真的仿真插件，用完整路径表示。没有默认值：PartCAD 自己不实现任何仿真器，所以包需要导入一个并指明用哪一个。 `partcad-"
+"sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ 是 MuJoCo "
+"的那个， `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-"
+"gazebo>`_ 是 Gazebo 的那个。它们各自还会为相应引擎自己的场景格式声明读取器、写入器和 ``open:`` "
+"条目，因为这些本就是同一套知识，而文件里必须说些什么是由仿真器决定的。"
+
+#: ../../source/simulation.rst:531
+msgid "``validation:``"
+msgstr ""
+
+#: ../../source/simulation.rst:532
+msgid ""
+"A Python expression over ``before`` and ``after`` that says whether what "
+"happened is what was supposed to happen."
+msgstr "一个基于 ``before`` 和 ``after`` 的 Python 表达式，用来判断实际发生的是不是本应发生的。"
+
+#: ../../source/simulation.rst:556
+msgid ""
+"``pc sim`` runs them -- one object, or everything a package declares, or "
+"everything a package tree declares with ``-P <package>...`` -- and exits "
+"non-zero when a validation does not hold. ``--json`` prints the whole of "
+"what each plugin reported. ``examples/feature_simulate`` has three "
+"assemblies of two blocks each: two identical but for 18 millimetres, and "
+"two identical but for the material. All three simulations pass, and no "
+"two of them end the same way."
+msgstr ""
+"``pc sim`` 负责运行它们——可以是单个对象，也可以是一个包声明的全部内容，还可以用 ``-P <package>...`` "
+"运行整棵包树声明的全部内容——并在某项校验不成立时以非零状态退出。 ``--json`` 会把每个插件报告的全部内容打印出来。 "
+"``examples/feature_simulate`` 中有三个各由两个方块组成的装配体：其中两个只相差 18 "
+"毫米，另外两个只相差材料。三次仿真全部通过，而且没有任何两次是以相同方式结束的。"
+
+#: ../../source/simulation.rst:564
+msgid "Simulation plugins"
+msgstr "仿真插件"
+
+#: ../../source/simulation.rst:566
+msgid ""
+"A simulation plugin is the third kind of implementation a package can "
+"declare, beside the export and render ones, and it is declared in exactly"
+" the same form: a ``path`` to a script, the sandbox that script needs, "
+"and its parameters. What differs is what it does with them. The contract "
+"is deliberately narrow:"
+msgstr ""
+"仿真插件是包可以声明的第三类实现，与导出实现和渲染实现并列，而且声明形式完全相同：一个指向脚本的 ``path`` "
+"、该脚本所需的沙箱，以及它的参数。不同之处在于它拿这些东西做什么。这份契约是有意收窄的："
+
+#: ../../source/simulation.rst:571
+msgid ""
+"**a scene with the subject in it goes in, and JSON carrying** ``before`` "
+"**and** ``after`` **comes out.**"
+msgstr ""
+"**输入是一个装着主体的场景，输出是携带** ``before`` **和** ``after`` **的 JSON。**"
+
+#: ../../source/simulation.rst:587
+msgid ""
+"The scene arrives as a **file**, in the format ``format:`` names, because"
+" a simulator reads its own model format and PartCAD already knows how to "
+"write several; ``formatOptions:`` is how that export is asked for, and is"
+" where a physics plugin says that it wants every body free to move. That "
+"also keeps a plugin free of OCP: it is handed a path."
+msgstr ""
+"场景以 **文件** 的形式送达，格式由 ``format:`` 指定，因为仿真器读取的是它自己的模型格式，而 PartCAD "
+"本来就会写出好几种； ``formatOptions:`` "
+"是请求这次导出的方式，物理插件也正是在这里声明它希望每个刚体都能自由运动。这也让插件无需接触 OCP：交给它的只是一个路径。"
+
+#: ../../source/simulation.rst:593
+msgid ""
+"**PartCAD implements none of these**, and that is the point of the "
+"section. A simulator is somebody's program with a release cycle of its "
+"own; shipping one inside the wheel would make every PartCAD release a "
+"statement about which version of it you get, and would pin a large "
+"dependency on every user who never simulates anything. So PartCAD ships "
+"the concept -- the section, the sandbox wrapper, the runner -- and a "
+"package supplies the physics, the same way "
+"``//pub/feature/render/draftwright`` supplies technical drawings."
+msgstr ""
+"**这些 PartCAD 一个都不实现** ，而这正是本节的要点。仿真器是别人的程序，有它自己的发布周期；把其中一个装进 wheel 里，会让 "
+"PartCAD 的每个发布版本都变成一种关于你会拿到哪个版本的表态，还会给每一个从不做仿真的用户都钉上一个庞大的依赖。所以 PartCAD "
+"提供的是概念——这个小节、沙箱包装器、运行器——而物理部分由某个包提供，就像 "
+"``//pub/feature/render/draftwright`` 提供工程图那样。"
+
+#: ../../source/simulation.rst:601
+msgid ""
+"``format:`` resolves in the plugin's own package first, which is what "
+"lets a plugin name the format it implements itself. An engine's scene "
+"format is exactly that: MJCF is MuJoCo's and SDFormat is Gazebo's, so "
+"each plugin declares the ``export:`` that writes it beside the "
+"``simulation:`` that reads it."
+msgstr ""
+"``format:`` 会优先在插件自己的包中解析，正是这一点让插件可以指名它自己实现的格式。引擎的场景格式恰恰如此：MJCF 是 MuJoCo "
+"的，SDFormat 是 Gazebo 的，所以每个插件都会把写出该格式的 ``export:`` 和读取它的 ``simulation:`` "
+"声明在一起。"
+
+#: ../../source/simulation.rst:606
+msgid ""
+"There are two, and they are deliberately alike: `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_ and `partcad-sim-gazebo"
+" <https://github.com/partcad/partcad-sim-gazebo>`_. Each declares four "
+"things about one format -- ``import:`` to read it, ``export:`` to write "
+"it, ``simulation:`` to run it and ``open:`` to look at it -- so a world "
+"somebody else wrote is a scene you can place parts in, and a scene you "
+"built out of parts is a model the engine can run."
+msgstr ""
+"现有两个插件，而且它们被有意做得很相似： `partcad-sim-mujoco <https://github.com/partcad"
+"/partcad-sim-mujoco>`_ 和 `partcad-sim-gazebo <https://github.com/partcad"
+"/partcad-sim-gazebo>`_ 。每一个都围绕同一种格式声明四样东西—— ``import:`` 用来读取、 ``export:``"
+" 用来写出、 ``simulation:`` 用来运行、 ``open:`` "
+"用来查看——于是别人写的一个世界就成了你可以往里放零件的场景，而你用零件搭出来的场景就成了引擎可以运行的模型。"
+
+#: ../../source/simulation.rst:614
+msgid ""
+"Where the simulator comes from is the one way they differ, and it is not "
+"a difference in the section. MuJoCo is a wheel, so the plugin lists it "
+"under ``pythonRequirements`` and a machine with no MuJoCo simulates just "
+"the same. Gazebo is not a wheel and there is none, so that plugin names "
+"an image under ``dockerImage`` and looks for a local ``gz`` first -- the "
+"same two places ``pc open --with gazebo`` looks."
+msgstr ""
+"它们唯一的区别在于仿真器从哪里来，而这并不是这个小节本身的差别。MuJoCo 是一个 wheel，所以插件把它列在 "
+"``pythonRequirements`` 之下，没有装 MuJoCo 的机器照样能仿真。Gazebo 不是 wheel，也没有现成的 "
+"wheel，所以那个插件在 ``dockerImage`` 之下指定一个镜像，并先去找本地的 ``gz`` ——正是 ``pc open "
+"--with gazebo`` 会查找的同样两个地方。"
+
+#: ../../source/simulation.rst:621
+msgid ""
+"``before`` and ``after`` are all PartCAD knows about a result. What is "
+"*inside* them, and anything else beside them, is the plugin's own "
+"vocabulary -- the MuJoCo plugin states where every body ended up, in "
+"millimetres; another might state a temperature field -- and PartCAD "
+"neither reads nor validates it. It carries the two objects to the "
+"``validation:`` expression the package wrote and reports what that says. "
+"Every judgement in that sentence belongs to the package."
+msgstr ""
+"对于一次仿真结果，PartCAD 只知道 ``before`` 和 ``after`` 。它们 *内部* "
+"有什么，以及它们旁边还有别的什么，都属于插件自己的词汇——MuJoCo "
+"插件会以毫米为单位说明每个刚体最终停在哪里，另一个插件可能会给出一个温度场——PartCAD "
+"既不读取也不校验这些内容。它只是把这两个对象送到包所编写的 ``validation:`` "
+"表达式那里，并报告该表达式的结论。这句话里的每一次判断都归包所有。"
+
+#: ../../source/simulation.rst:628
+msgid ""
+"The MuJoCo plugin loads the MJCF, steps it for ``duration`` seconds of "
+"simulated time, and reports each body's position and orientation before "
+"and after. Running it needs no MuJoCo on the machine: the plugin runs in "
+"a PartCAD sandbox that installs one."
+msgstr ""
+"MuJoCo 插件会加载 MJCF，按仿真时间推进 ``duration`` "
+"秒，并报告每个刚体在前后两个时刻的位置和朝向。运行它并不需要机器上装有 MuJoCo：插件运行在一个会自行安装 MuJoCo 的 PartCAD "
+"沙箱里。"
+
+#: ../../source/simulation.rst:634
+msgid "Friction, and why it is a material property"
+msgstr "摩擦，以及它为什么是材料属性"
+
+#: ../../source/simulation.rst:636
+msgid ""
+"Whether a stack of blocks stands up is not a property of its geometry. "
+"Two 20 mm cubes squarely stacked, ten seconds under gravity, nothing else"
+" changed:"
+msgstr "一摞方块能不能立住，并不是它几何形状的属性。两个 20 毫米的立方体端端正正地叠在一起，在重力作用下放置十秒，其他条件都不变："
+
+#: ../../source/simulation.rst:640
+msgid "sliding friction"
+msgstr "滑动摩擦"
+
+#: ../../source/simulation.rst:640
+msgid "what happens"
+msgstr "结果如何"
+
+#: ../../source/simulation.rst:642
+msgid "0.04"
+msgstr ""
+
+#: ../../source/simulation.rst:642
+msgid "the top block slides off -- 35 mm, and it ends up on the floor"
+msgstr "上面的方块滑落——偏移 35 毫米，最后掉到地板上"
+
+#: ../../source/simulation.rst:643
+msgid "0.4"
+msgstr ""
+
+#: ../../source/simulation.rst:643
+msgid "the same"
+msgstr "同上"
+
+#: ../../source/simulation.rst:644
+msgid "0.5"
+msgstr ""
+
+#: ../../source/simulation.rst:644
+msgid "it stays -- 3 mm of settling"
+msgstr "它留在原处——有 3 毫米的沉降"
+
+#: ../../source/simulation.rst:645
+msgid "1.05"
+msgstr ""
+
+#: ../../source/simulation.rst:645
+msgid "it stays -- 1 mm"
+msgstr "它留在原处——1 毫米"
+
+#: ../../source/simulation.rst:648
+msgid ""
+"So the answer to \"will this stand?\" is a fact about the *material*, and"
+" ``materials:`` is where a package already says what its parts are made "
+"of. A material states ``mu`` beside its ``density``; a part that names "
+"that material gets that coefficient; and the coefficient is written into "
+"whichever format the object is exported to:"
+msgstr ""
+"所以“它立得住吗？”的答案是关于 *材料* 的事实，而 ``materials:`` 本来就是包用来说明零件由什么制成的地方。材料在 "
+"``density`` 旁边再声明一个 ``mu`` ；指名了该材料的零件就获得这个系数；而这个系数会被写进对象所导出的任何一种格式中："
+
+#: ../../source/simulation.rst:655
+msgid "format"
+msgstr "格式"
+
+#: ../../source/simulation.rst:655
+msgid "where it is written"
+msgstr "写在哪里"
+
+#: ../../source/simulation.rst:657
+msgid "the ``friction`` property of a shape"
+msgstr "形状的 ``friction`` 属性"
+
+#: ../../source/simulation.rst:658
+msgid "SDFormat (``.world``)"
+msgstr ""
+
+#: ../../source/simulation.rst:658
+msgid "``<collision><surface><friction><ode><mu>``"
+msgstr ""
+
+#: ../../source/simulation.rst:659
+msgid "``<gazebo reference=\"...\"><mu1>``"
+msgstr ""
+
+#: ../../source/simulation.rst:660 ../../source/simulation.rst:1110
+msgid "MJCF"
+msgstr ""
+
+#: ../../source/simulation.rst:660
+msgid "the first component of a geom's ``friction``"
+msgstr "geom 的 ``friction`` 的第一个分量"
+
+#: ../../source/simulation.rst:663
+msgid ""
+"All four are the same dimensionless number, so the conversion between "
+"them is the identity -- which is the whole reason it is worth carrying, "
+"and why a material states one coefficient rather than one per format."
+msgstr "这四者都是同一个无量纲数值，所以它们之间的换算就是恒等变换——这正是它值得被携带的全部理由，也是材料只声明一个系数、而不是每种格式各声明一个的原因。"
+
+#: ../../source/simulation.rst:667
+msgid ""
+"``friction2`` -- the coefficient in the *second* friction direction, "
+"which SDFormat and URDF both spell ``mu2`` -- travels between those two "
+"unchanged. MJCF has no second direction at all: its other two "
+"``friction`` components are a torsional and a rolling coefficient, which "
+"are different quantities. So a ``friction2`` is reported as one MJCF "
+"cannot state rather than written into a slot that means something else, "
+"and torsion and roll on the way in are counted as dropped rather than "
+"turned into a PartCAD property that does not exist. Both are the same "
+"rule the URDF and SDFormat readers already follow."
+msgstr ""
+"``friction2`` ——即 *第二* 个摩擦方向上的系数，SDFormat 和 URDF 都把它写作 ``mu2`` "
+"——在这两者之间原样传递。MJCF 根本没有第二个方向：它的另外两个 ``friction`` "
+"分量分别是扭转系数和滚动系数，属于不同的物理量。因此 ``friction2`` 会被报告为 MJCF "
+"无法表达的属性，而不是被写进一个含义不同的槽位里；反过来，读入时遇到的扭转和滚动系数会被计为丢弃，而不是被变成一个并不存在的 PartCAD "
+"属性。这两点遵循的都是 URDF 和 SDFormat 读取器早已采用的同一条规则。"
+
+#: ../../source/simulation.rst:676
+msgid ""
+"Two things are deliberately not done here. A material's **density** is "
+"not wired in the same way: it already has a home (``Material.mass()``), "
+"and making every part that names a material weigh what that material "
+"weighs changes the ``<inertial>`` of every existing export -- a real "
+"improvement, and a change of its own. And PartCAD writes each *body's* "
+"coefficient and says nothing about how a simulator combines the two sides"
+" of a contact, because they do not agree about it: that is the "
+"simulator's model, not the part's."
+msgstr ""
+"这里有两件事是有意不做的。材料的 **密度** 没有按同样的方式接进来：它已经有了自己的归属（ ``Material.mass()`` "
+"），而让每个指名了材料的零件都按该材料的重量计重，会改变现有每一次导出的 ``<inertial>`` "
+"——这确实是一项真正的改进，但它是一项独立的改动。另外，PartCAD 只写出每个 *刚体* "
+"自己的系数，对仿真器如何把一次接触的两侧合并起来只字不提，因为各家仿真器在这件事上并不一致：那是仿真器的模型，不是零件的。"
+
+#: ../../source/simulation.rst:684
+msgid ""
+"A part that states a ``friction`` of its own keeps it -- a measured part "
+"beats the substance it is made of -- and a part that states neither gets "
+"whatever the simulator defaults to, which is a number nobody chose."
+msgstr ""
+"自己声明了 ``friction`` "
+"的零件会保留它——实测过的零件优先于它所用的材料——而两者都没有声明的零件，就只能拿到仿真器的默认值，那是一个谁也没有选过的数。"
+
+#: ../../source/simulation.rst:689
+msgid "Opening a scene in a simulator"
+msgstr "在仿真器中打开场景"
+
+#: ../../source/simulation.rst:691
+msgid ""
+"``pc open --with gazebo`` hands a ``.world`` file to Gazebo, and ``pc "
+"open --with mujoco`` hands an MJCF model to MuJoCo. Both open a window on"
+" the machine the command was run on, never through the daemon -- see "
+"``partcad_client.external`` for why."
+msgstr ""
+"``pc open --with gazebo`` 会把一个 ``.world`` 文件交给 Gazebo，而 ``pc open --with "
+"mujoco`` 会把一个 MJCF 模型交给 MuJoCo。两者都在运行该命令的那台机器上打开窗口，绝不经由守护进程——原因参见 "
+"``partcad_client.external`` 。"
+
+#: ../../source/simulation.rst:696
+msgid ""
+"MuJoCo reads MJCF and no other model format, so a Gazebo world it is "
+"pointed at is not a slow way of opening a scene, it is a file it cannot "
+"read. PartCAD writes it out as MJCF first. That conversion is the one "
+"thing here that does cross the wire, for the reason converting a solid "
+"into a mesh for Blender does: it drives a CAD wrapper, whose runtime "
+"lives in the daemon's environment. An ASSY scene is refused rather than "
+"converted -- it is nothing but references to the parts of a package, and "
+"an ad-hoc conversion has no package to resolve them against."
+msgstr ""
+"MuJoCo 只读 MJCF，不读任何其他模型格式，所以把一个 Gazebo "
+"世界交给它，并不是一种比较慢的打开场景的方式，而是一个它根本读不了的文件。PartCAD 会先把它写成 "
+"MJCF。这次转换是这里唯一一件真的要跨网络进行的事情，理由与为 Blender 把实体转成网格时相同：它要驱动一个 CAD wrapper，而 "
+"wrapper 的运行时位于守护进程的环境中。ASSY "
+"场景会被拒绝而不是被转换——它无非是对某个包中零件的一堆引用，而临时转换没有包可以用来解析这些引用。"
+
+#: ../../source/simulation.rst:707
+msgid "What a physical simulation actually needs"
+msgstr "物理仿真真正需要什么"
+
+#: ../../source/simulation.rst:709
+msgid ""
+"URDF is the smaller half of the story. Gazebo does not simulate URDF: it "
+"converts it to `SDF <http://sdformat.org/>`_ on load, and SDF is what "
+"expresses a simulatable world. MuJoCo's MJCF and Isaac Sim's USD physics "
+"schemas differ in spelling but ask for the same information. Taking the "
+"union of them, a simulation needs the following, and PartCAD today has "
+"none of it."
+msgstr ""
+"URDF 只是故事中较小的那一半。Gazebo 并不仿真 URDF：它在加载时把 URDF 转换成 `SDF "
+"<http://sdformat.org/>`_ ，而能够表达一个可仿真世界的是 SDF。MuJoCo 的 MJCF 和 Isaac Sim 的 "
+"USD 物理模式在写法上各不相同，索取的却是同样的信息。把它们取并集，一次仿真需要下面这些东西，而 PartCAD 今天一样都没有。"
+
+#: ../../source/simulation.rst:716
+msgid "Mass properties"
+msgstr "质量属性"
+
+#: ../../source/simulation.rst:718
+msgid ""
+"Mass, centre of mass, and the inertia tensor about the centre of mass, in"
+" a stated frame. URDF requires them per link and defaults them to zero, "
+"which makes a model load and then behave nonsensically - a zero-mass link"
+" is the single most common defect in published URDFs."
+msgstr ""
+"质量、质心，以及在某个指明的坐标系中绕质心的惯性张量。URDF "
+"要求每个连杆都提供它们，并把默认值设为零，结果是模型能加载，随后却表现得毫无道理——零质量连杆是已发布的 URDF 中最常见的单一缺陷。"
+
+#: ../../source/simulation.rst:723
+msgid ""
+"These are *derivable* from a solid plus a density, which is exactly what "
+"the exporter does today. What is missing is the density, and behind it "
+"the notion of what a part is made of."
+msgstr "这些量都可以从一个实体加上一个密度 *推导* 出来，而这正是导出器今天所做的事情。缺的是密度，以及它背后“零件由什么制成”这一概念。"
+
+#: ../../source/simulation.rst:728
+msgid "Collision geometry"
+msgstr "碰撞几何体"
+
+#: ../../source/simulation.rst:730
+msgid ""
+"Simulators separate the shape that is drawn from the shape that collides,"
+" because contact resolution against a hundred-thousand-triangle visual "
+"mesh is both slow and numerically ill-behaved. The usual answers are a "
+"primitive (box/cylinder/sphere/capsule), a convex hull, or a convex "
+"decomposition (V-HACD and friends). MuJoCo goes further and *only* "
+"collides convex shapes, silently taking the hull of anything else."
+msgstr ""
+"仿真器会把用于绘制的形状和用于碰撞的形状区分开，因为针对一个十万三角面的视觉网格做接触求解既慢又在数值上表现不佳。常见的做法是使用基本体（盒/圆柱/球/胶囊）、凸包，或者凸分解（V-HACD"
+" 之类）。MuJoCo 走得更远，它 *只* 对凸形状做碰撞，对其他一切都会悄悄取其凸包。"
+
+#: ../../source/simulation.rst:737
+msgid ""
+"PartCAD has one shape per part. A part has no way to say \"collide me as "
+"this simpler thing\"."
+msgstr "PartCAD 中每个零件只有一个形状。零件没有办法声明“碰撞时请把我当作这个更简单的东西”。"
+
+#: ../../source/simulation.rst:741
+msgid "Contact and surface properties"
+msgstr "接触与表面属性"
+
+#: ../../source/simulation.rst:743
+msgid ""
+"Friction (isotropic and anisotropic - SDF's ``mu``/``mu2`` with a "
+"direction ``fdir1``, plus torsional friction), restitution, contact "
+"stiffness and damping, slip compliance, and the solver knobs that go with"
+" them (``kp``, ``kd``, ``min_depth``, ``max_vel``, ``soft_cfm``, "
+"``soft_erp``). These are properties of a surface pairing, approximated "
+"per-body by every engine in use."
+msgstr ""
+"摩擦（各向同性与各向异性——SDF 的 ``mu`` / ``mu2`` 加上一个方向 ``fdir1`` "
+"，再加上扭转摩擦）、恢复系数、接触刚度与阻尼、滑移柔度，以及与之配套的求解器旋钮（ ``kp`` 、 ``kd`` 、 ``min_depth``"
+" 、 ``max_vel`` 、 ``soft_cfm`` 、 ``soft_erp`` "
+"）。这些本来是一对接触表面的属性，但在用的每一款引擎都把它们近似成逐刚体的属性。"
+
+#: ../../source/simulation.rst:750
+msgid "Kinematics"
+msgstr "运动学"
+
+#: ../../source/simulation.rst:752
+msgid ""
+"The joint: its type (fixed, revolute, continuous, prismatic, ball, "
+"planar, floating, screw, universal), its axis, the frames on the two "
+"bodies it relates, its position/velocity/effort limits, its dynamics "
+"(damping, Coulomb friction, spring stiffness and reference), and "
+"relations between joints (``mimic``, gear ratios)."
+msgstr ""
+"关节本身：它的类型（固定 fixed、旋转 revolute、连续转动 continuous、移动 prismatic、球铰 ball、平面 "
+"planar、浮动 floating、螺旋 screw、万向 "
+"universal）、它的轴、它所关联的两个刚体上的坐标系、它的位置/速度/力矩限位、它的动力学（阻尼、库仑摩擦、弹簧刚度与参考位置），以及关节之间的关系（"
+" ``mimic`` 、传动比）。"
+
+#: ../../source/simulation.rst:758
+msgid ""
+"URDF is restricted to a *tree*: it cannot express a closed kinematic "
+"loop, which is why four-bar linkages and parallel manipulators are "
+"written in SDF or with an explicit loop-closing constraint. SDF can."
+msgstr ""
+"URDF 被限制为一棵 *树* ：它无法表达闭合的运动链，这就是四连杆机构和并联机械手要么写成 "
+"SDF、要么靠一个显式的闭环约束来表达的原因。SDF 则可以表达。"
+
+#: ../../source/simulation.rst:763
+msgid "Actuation and control"
+msgstr "驱动与控制"
+
+#: ../../source/simulation.rst:765
+msgid ""
+"Which joints are driven, by what, through which reduction, and what "
+"interfaces a controller sees. ROS 1 spelled this ``<transmission>``; ROS "
+"2 spells it ``<ros2_control>`` with hardware components, command "
+"interfaces and state interfaces. Simulators additionally want actuator "
+"limits and often a motor model."
+msgstr ""
+"哪些关节是被驱动的、由什么驱动、经过哪种减速，以及控制器能看到哪些接口。ROS 1 把这些写作 ``<transmission>`` ；ROS 2"
+" 则写作 ``<ros2_control>`` ，其中包含硬件组件、命令接口和状态接口。仿真器还额外需要执行器的限位，而且往往还要一个电机模型。"
+
+#: ../../source/simulation.rst:772
+msgid "Sensors"
+msgstr "传感器"
+
+#: ../../source/simulation.rst:774
+msgid ""
+"Cameras (with intrinsics, resolution, clipping, distortion), depth "
+"cameras, lidars (with ray patterns and ranges), IMUs, contact sensors, "
+"force-torque sensors - each attached to a *frame*, each with an update "
+"rate and a noise model. URDF has no sensor element at all; they arrive "
+"through ``<gazebo>`` extension blocks, which is the clearest evidence "
+"that URDF is not a simulation format so much as a kinematics format with "
+"a simulation format bolted on."
+msgstr ""
+"相机（带内参、分辨率、裁剪面、畸变）、深度相机、激光雷达（带射线分布和量程）、IMU、接触传感器、力/力矩传感器——每一个都附着在某个 *坐标系*"
+" 上，每一个都有更新频率和噪声模型。URDF 根本没有传感器元素；它们是通过 ``<gazebo>`` "
+"扩展块进来的，而这正是最清楚的证据：URDF 与其说是一种仿真格式，不如说是一种外挂了仿真格式的运动学格式。"
+
+#: ../../source/simulation.rst:782
+msgid "Appearance"
+msgstr "外观"
+
+#: ../../source/simulation.rst:784
+msgid ""
+"Colors and materials matter to simulation once a camera is in the loop: a"
+" perception stack trained in simulation is sensitive to albedo, "
+"roughness, metalness, normal maps and transparency. SDF and USD both "
+"carry a PBR material description; URDF carries an RGBA color and a "
+"texture filename."
+msgstr ""
+"一旦回路中出现了相机，颜色和材质对仿真就至关重要：在仿真中训练出来的感知栈对反照率、粗糙度、金属度、法线贴图和透明度都很敏感。SDF 和 USD "
+"都携带一份 PBR 材质描述；URDF 携带的则是一个 RGBA 颜色和一个纹理文件名。"
+
+#: ../../source/simulation.rst:790
+msgid "The world"
+msgstr "世界"
+
+#: ../../source/simulation.rst:792
+msgid ""
+"Gravity, the ground, lighting, the initial pose of every model, wind, "
+"atmosphere, and the physics engine's own parameters (step size, solver "
+"type and iteration count, contact parameters). This is SDF's ``<world>``,"
+" and it is exactly the \"scenes\" PartCAD has always intended to have."
+msgstr ""
+"重力、地面、光照、每个模型的初始位姿、风、大气，以及物理引擎自身的参数（步长、求解器类型与迭代次数、接触参数）。这就是 SDF 的 "
+"``<world>`` ，也正是 PartCAD 一直打算拥有的“场景”。"
+
+#: ../../source/simulation.rst:798
+msgid "Frames"
+msgstr "坐标系"
+
+#: ../../source/simulation.rst:800
+msgid ""
+"Everything above hangs off named coordinate frames: the link frame, the "
+"joint frame, a tool centre point, a sensor mount, a grasp pose. SDF has "
+"explicit ``<frame>`` elements and poses stated ``relative_to`` them. "
+"PartCAD has locations, but no named frames to state them against."
+msgstr ""
+"上面的一切都挂在具名的坐标系上：连杆坐标系、关节坐标系、工具中心点、传感器安装点、抓取位姿。SDF 有显式的 ``<frame>`` "
+"元素，位姿也可以用 ``relative_to`` 相对它们来表述。PartCAD 有位置，却没有可供其参照的具名坐标系。"
+
+#: ../../source/simulation.rst:807
+msgid "Proposal"
+msgstr "提案"
+
+#: ../../source/simulation.rst:810
+msgid "Principles"
+msgstr "原则"
+
+#: ../../source/simulation.rst:812
+msgid ""
+"**Derive what can be derived; store only what cannot.** PartCAD's "
+"advantage over a hand-written URDF is that it holds the actual geometry. "
+"Mass, centre of mass and inertia should be computed from the solid and a "
+"material, not typed in - and a typed-in value should be an explicit "
+"override that says why it exists (a measurement, a vendor datasheet, a "
+"stand-in for content PartCAD does not model)."
+msgstr ""
+"**能推导的就推导，只存储推导不出来的。** PartCAD 相对于手写 URDF "
+"的优势在于它持有真正的几何体。质量、质心和惯性应当由实体和材料计算得出，而不是手工填写——而手工填写的值应当是一次显式的覆盖，并说明它为什么存在（一次实测、一份供应商数据表，或者是对"
+" PartCAD 尚未建模内容的替代）。"
+
+#: ../../source/simulation.rst:818
+msgid ""
+"**Keep the CAD the source of truth.** Simulation artifacts - tessellated "
+"meshes, convex hulls, computed inertia - are derived data. They belong in"
+" the shape cache, content-hashed like every other derived shape, so that "
+"changing the CAD invalidates them. This is what the digital thread means "
+"here."
+msgstr ""
+"**让 CAD 保持为唯一可信来源。** "
+"仿真产物——网格化后的网格、凸包、计算出来的惯性——都是派生数据。它们属于形状缓存，像其他所有派生形状一样按内容做哈希，这样改动 CAD "
+"就会让它们失效。这就是数字主线在这里的含义。"
+
+#: ../../source/simulation.rst:823
+msgid ""
+"**Model the concept, not the format.** ``mu``/``mu2`` is ODE's spelling "
+"of friction. PartCAD should store friction and let each exporter spell "
+"it. The formats disagree on almost everything except what they are trying"
+" to describe."
+msgstr ""
+"**对概念建模，而不是对格式建模。** ``mu`` / ``mu2`` 只是 ODE 对摩擦的写法。PartCAD "
+"应当存储摩擦本身，再由各个导出器去写出各自的拼法。这些格式除了想要描述的东西之外，在几乎所有方面都互不一致。"
+
+#: ../../source/simulation.rst:827
+msgid ""
+"**Lose loudly, never quietly.** The tempting version of this principle is"
+" \"lose nothing\": carry whatever PartCAD does not model as opaque, "
+"format-tagged passthrough so that a round trip is lossless long before it"
+" is understood. That is what ``physics:`` was at first, and it was the "
+"wrong trade. A value stored under the name of the format it came from is "
+"readable by exactly one exporter; it is not a property of the part, it is"
+" a souvenir. The version that survived copies each value into a named "
+"PartCAD property with a PartCAD unit, keeps the list of them closed, and "
+"makes the two failure modes loud: input nothing maps stops the import, "
+"and a property the target format cannot state is reported when it is "
+"written. A round trip is then lossless *and* the values mean something to"
+" the rest of the system. Everything below extends that list; none of it "
+"reopens the passthrough."
+msgstr ""
+"**要丢就大声地丢，绝不悄悄地丢。** 这条原则有一个很诱人的版本叫“什么都不丢”：把 PartCAD "
+"没有建模的内容当作带格式标签的不透明透传携带起来，这样早在真正理解这些内容之前，往返转换就已经无损了。 ``physics:`` "
+"最初就是这么做的，而这是一笔错误的买卖。一个以其来源格式的名字存储下来的值，只有一个导出器读得懂；它不是零件的属性，而是一件纪念品。最终留存下来的版本，是把每个值复制成一个带"
+" PartCAD 单位的具名 PartCAD "
+"属性，把这份清单保持封闭，并让两种失败方式都变得响亮：无法映射的输入会中止导入，而目标格式无法表达的属性会在写出时被报告。这样一来，往返转换既是无损的，"
+" *同时* 这些值对系统的其他部分也有意义。下面的所有内容都是在扩充这份清单，没有一项会重新打开透传的口子。"
+
+#: ../../source/simulation.rst:841
+msgid "1. Materials as first-class objects"
+msgstr "1. 把材料作为一等对象"
+
+#: ../../source/simulation.rst:843
+msgid ""
+"A new object kind alongside parts and sketches, so that materials are "
+"packaged, versioned and shared the way parts already are:"
+msgstr "与零件和草图并列的一种新对象类型，这样材料就能像零件一样被打包、版本化和共享："
+
+#: ../../source/simulation.rst:859
+msgid ""
+"This single addition is what turns the exporter's density parameter into "
+"a property of the model, and it does double duty: the same material "
+"drives rendering, the manufacturing cost estimate that ``partcad`` "
+"already reasons about, and the simulation."
+msgstr ""
+"仅此一项补充，就能把导出器的密度参数变成模型自身的属性，而且它身兼数职：同一份材料同时驱动渲染、 ``partcad`` "
+"早已在推算的制造成本估算，以及仿真。"
+
+#: ../../source/simulation.rst:865
+msgid "2. Physical properties a part does not have to state"
+msgstr "2. 零件不必声明的物理属性"
+
+#: ../../source/simulation.rst:867
+msgid ""
+"A part's ``physics:`` section already holds the modelled properties - "
+"``mass``, ``centerOfMass``, ``inertia``, ``friction``, the contact "
+"parameters - each with a PartCAD name and a PartCAD unit. What it does "
+"not do is *derive* any of them, check any of them, or distinguish a "
+"measured value from a guess. Three additions, in increasing order of how "
+"much they are worth:"
+msgstr ""
+"零件的 ``physics:`` 小节已经持有建模后的各项属性—— ``mass`` 、 ``centerOfMass`` 、 "
+"``inertia`` 、 ``friction`` 以及接触参数——每一项都有 PartCAD 的名字和 PartCAD "
+"的单位。它没有做的是：*推导* 其中任何一项、校验其中任何一项，或者区分实测值与猜测值。下面三项补充，按价值从低到高排列："
+
+#: ../../source/simulation.rst:873
+msgid ""
+"**Derivation.** With a material behind it (item 1), a part that states no"
+" ``mass`` has one: the solid's volume times the material's density, "
+"cached like any other derived value and invalidated when the CAD changes."
+" The same for ``centerOfMass``, ``inertia`` and the surface properties. "
+"Today the URDF exporter computes exactly this, from the ``density`` "
+"parameter of its ``export:`` configuration, and throws it away afterwards"
+" - it should be a property of the part that every consumer sees."
+msgstr ""
+"**推导。** 有了背后的材料（第 1 项），没有声明 ``mass`` 的零件也会有质量：实体的体积乘以材料的密度，像其他派生值一样被缓存，并在"
+" CAD 改动时失效。 ``centerOfMass`` 、 ``inertia`` 和表面属性同理。今天的 URDF "
+"导出器算的正是这些，它用的是自己 ``export:`` 配置中的 ``density`` "
+"参数，算完之后就扔掉了——这本应是每个消费方都能看到的零件属性。"
+
+#: ../../source/simulation.rst:880
+msgid ""
+"**Provenance.** A declared value should say why it exists, since "
+"\"measured on the bench\" and \"copied from a vendor datasheet\" and "
+"\"invented so the simulation would load\" are not the same claim:"
+msgstr "**来源。** 声明出来的值应当说明它为什么存在，因为“在工作台上实测得到”“从供应商数据表上抄来”和“为了让仿真能加载而编出来”并不是同一种主张："
+
+#: ../../source/simulation.rst:890
+msgid ""
+"**Checking.** ``pc lint`` should flag the classic defects, all of which "
+"are common in published URDFs and all of which load without complaint: "
+"zero mass, an inertia tensor that is not positive definite, one that "
+"violates the triangle inequality, and a declared mass that disagrees with"
+" volume times density by more than a tolerance."
+msgstr ""
+"**校验。** ``pc lint`` 应当标出那些经典缺陷，它们在已发布的 URDF "
+"中都很常见，而且加载时都不会报错：零质量、非正定的惯性张量、违反三角不等式的惯性张量，以及与体积乘密度之差超出容差的已声明质量。"
+
+#: ../../source/simulation.rst:896
+msgid ""
+"Anisotropic friction is the one property that needs more structure than "
+"it has today: ``friction``/``friction2``/``frictionDirection`` is ODE's "
+"shape of it, kept because it is what URDF states. A modelled version "
+"would be a static and a dynamic coefficient with an optional anisotropy, "
+"and the URDF exporter would flatten it on the way out."
+msgstr ""
+"各向异性摩擦是唯一一项需要比现在更多结构的属性： ``friction`` / ``friction2`` / "
+"``frictionDirection`` 是 ODE 给它的形状，之所以保留下来，是因为 URDF "
+"就是这么表述的。建模之后的版本应当是一个静摩擦系数和一个动摩擦系数，外加可选的各向异性，而 URDF 导出器会在写出时把它压平。"
+
+#: ../../source/simulation.rst:903
+msgid "3. Collision geometry"
+msgstr "3. 碰撞几何体"
+
+#: ../../source/simulation.rst:905
+msgid ""
+"A URDF's collision geometry is not lost today - a link that states both "
+"shapes is built from the collision one and the visual one becomes a part "
+"of its own - but the *relation* between the two is: they are two parts "
+"that happen to be named alike, and nothing says one is the simplified "
+"stand-in for the other. A part should be able to say it:"
+msgstr ""
+"URDF 的碰撞几何体今天并没有丢失——同时声明了两种形状的连杆由碰撞形状构建，而视觉形状会成为一个独立的零件——丢失的是两者之间的 *关系* "
+"：它们只是恰好名字相似的两个零件，没有任何东西说明其中一个是另一个的简化替身。零件应当能够说出这一点："
+
+#: ../../source/simulation.rst:921
+msgid ""
+"``convexHull`` and ``convexDecomposition`` are computed in a sandbox and "
+"cached like any derived shape; ``part`` points at another PartCAD part, "
+"which is how a hand-simplified collision shape gets version-controlled "
+"next to the real one - and is exactly what a URDF import would then "
+"produce instead of a part with a suggestive name; ``primitive`` fits a "
+"box/cylinder/sphere/capsule to the geometry."
+msgstr ""
+"``convexHull`` 和 ``convexDecomposition`` 在沙箱中计算，并像其他派生形状一样被缓存； ``part`` "
+"指向另一个 PartCAD 零件，手工简化出来的碰撞形状正是靠它与真实形状并排接受版本管理——而届时 URDF "
+"导入产出的也正是这种关系，而不是一个只靠名字暗示的零件； ``primitive`` 则为几何体拟合一个盒/圆柱/球/胶囊。"
+
+#: ../../source/simulation.rst:929
+msgid "4. Named frames"
+msgstr "4. 具名坐标系"
+
+#: ../../source/simulation.rst:940
+msgid ""
+"Frames are the attachment points for sensors, joints and grasp poses, and"
+" they are what an exporter needs to write ``<frame>`` or a sensor's "
+"``<origin>``. PartCAD's ``interfaces`` and ``ports`` already describe "
+"named, located features on a part; frames should be the same mechanism, "
+"not a parallel one."
+msgstr ""
+"坐标系是传感器、关节和抓取位姿的附着点，导出器也正是靠它们才能写出 ``<frame>`` 或者传感器的 ``<origin>`` "
+"。PartCAD 的 ``interfaces`` 和 ``ports`` "
+"本来就在描述零件上具名且有确定位置的特征；坐标系应当复用同一套机制，而不是另起一套。"
+
+#: ../../source/simulation.rst:946
+msgid "5. Kinematics: a configuration, not a joint section"
+msgstr "5. 运动学：一个配置，而不是一个关节小节"
+
+#: ../../source/simulation.rst:948
+msgid ""
+"The obvious proposal here used to be a ``joint:`` form for an ASSY node, "
+"next to ``location:`` and ``connect:``. Building the URDF mapping above "
+"argues against it. A joint is not a third way to place a part - it is "
+"what a ``connect:`` *already is*, plus a value. An interface says what "
+"freedom of movement it allows (``motion:``, ``parameters:``); a "
+"connection says which two things are joined and, optionally, at what "
+"value (``toParams:``). Adding a parallel ``joint:`` section would restate"
+" the interface's own description at every use site, which is the "
+"duplication the rest of PartCAD exists to remove."
+msgstr ""
+"这里显而易见的提案曾经是：给 ASSY 节点加一种 ``joint:`` 形式，与 ``location:`` 和 ``connect:`` "
+"并列。而上面构建 URDF 映射的经历否定了这个想法。关节并不是放置零件的第三种方式——它就是 ``connect:`` *本来就是* "
+"的那个东西，再加上一个值。接口说明它允许哪些运动自由度（ ``motion:`` 、 ``parameters:`` "
+"）；连接说明哪两样东西被连在一起，以及可选地，连接在哪个值上（ ``toParams:`` ）。再加一个并行的 ``joint:`` "
+"小节，等于在每个使用处重复一遍接口自己的描述，而这正是 PartCAD 其余部分所要消除的那种重复。"
+
+#: ../../source/simulation.rst:957
+msgid ""
+"What is actually missing is one level up: the assembly has no way to name"
+" a *configuration*."
+msgstr "真正缺失的东西在上一层：装配体没有办法为一个 *配置* 命名。"
+
+#: ../../source/simulation.rst:970
+msgid ""
+"with the connections referring to the configuration rather than carrying "
+"a literal:"
+msgstr "各个连接引用这个配置，而不是直接携带一个字面值："
+
+#: ../../source/simulation.rst:980
+msgid ""
+"Everything that exists today - a tree of rigid placements - is what you "
+"get by evaluating a configuration, so no consumer of the representation "
+"has to change. But ``pc inspect 'robot;configuration=stowed'`` becomes "
+"meaningful through the parameter machinery ASSY files already have, and "
+"an exporter gains something to write a joint *state* from."
+msgstr ""
+"今天已有的一切——一棵刚性位置构成的树——正是对某个配置求值之后得到的结果，因此这套表示形式的消费方一个都不需要改动。但 ``pc inspect"
+" 'robot;configuration=stowed'`` 会借助 ASSY "
+"文件早已具备的参数机制变得有意义，而导出器也终于有东西可以用来写出关节的 *状态* 。"
+
+#: ../../source/simulation.rst:986
+msgid "Two things this still needs, which the URDF work did not:"
+msgstr "这件事还需要两样东西，而 URDF 的工作并不需要它们："
+
+#: ../../source/simulation.rst:988
+msgid ""
+"**A joint identity.** ``toInstance: shoulder_pan`` names the joint today "
+"only by convention. A configuration has to address it, so the instance "
+"name has to become the joint's name in earnest."
+msgstr ""
+"**关节的身份。** ``toInstance: shoulder_pan`` "
+"今天只是按约定给关节命名。配置必须能够寻址到它，所以实例名必须真正成为关节的名字。"
+
+#: ../../source/simulation.rst:991
+msgid ""
+"**Loops.** A four-bar linkage is a connection whose child is already "
+"placed. PartCAD's tree cannot express it and neither can URDF; SDF can. "
+"Until then the honest behaviour is to detect it and say so."
+msgstr ""
+"**闭环。** 四连杆机构是一种子节点已经被放置过的连接。PartCAD 的树无法表达它，URDF 也不行；SDF "
+"可以。在那之前，诚实的做法是检测出这种情况并明确指出来。"
+
+#: ../../source/simulation.rst:995
+msgid ""
+"There remains a genuinely attractive case for *deriving* joints from the "
+"existing interface library: a bearing bore is revolute about its own axis"
+" and a linear rail is prismatic along its own, so an interface that says "
+"so once gives every ``connect:`` that uses it a joint for free. That is "
+"the same ``motion:`` section the URDF conversion writes, applied to hand-"
+"authored interfaces instead of generated ones - which is why ``motion:`` "
+"belongs on the interface and not on the connection."
+msgstr ""
+"从现有的接口库中 *推导* "
+"出关节，仍然是一个确实很有吸引力的方向：轴承孔绕自己的轴是旋转关节，直线导轨沿自己的轴是移动关节，所以接口只要说明一次，用到它的每一个 "
+"``connect:`` 都能免费得到一个关节。这与 URDF 转换所写出的是同一个 ``motion:`` "
+"小节，只不过作用于手工编写的接口而不是生成出来的接口——这也正是 ``motion:`` 属于接口而不属于连接的原因。"
+
+#: ../../source/simulation.rst:1004
+msgid "6. Internal representation"
+msgstr "6. 内部表示"
+
+#: ../../source/simulation.rst:1006
+msgid "The corresponding change in ``partcad.assembly`` is small and additive:"
+msgstr "``partcad.assembly`` 中与之对应的改动很小，而且是纯增量式的："
+
+#: ../../source/simulation.rst:1008
+msgid ""
+"``AssemblyChild`` gains ``joint`` (the kinematic relation to its parent, "
+"or to a named sibling) and ``frames``. ``location`` stays what it is - "
+"the resolved placement at the current joint states - so "
+"``Assembly._get_shape_real()``, the BREP envelope, the cache and every "
+"exporter keep working unchanged."
+msgstr ""
+"``AssemblyChild`` 新增 ``joint`` （与其父节点、或与某个具名同级节点之间的运动学关系）和 ``frames`` 。 "
+"``location`` 保持原样——仍然是在当前关节状态下解析出来的位置——因此 ``Assembly._get_shape_real()`` "
+"、BREP 信封、缓存以及所有导出器都无需改动即可继续工作。"
+
+#: ../../source/simulation.rst:1012
+msgid ""
+"``Assembly`` gains a ``configuration``: the map of joint name to value it"
+" was evaluated at, hashed into the cache key like any other parameter."
+msgstr "``Assembly`` 新增一个 ``configuration`` ：它被求值时所用的“关节名到取值”的映射，像其他参数一样被哈希进缓存键。"
+
+#: ../../source/simulation.rst:1014
+msgid ""
+"``Part`` gains ``physical`` and ``collision`` accessors that resolve "
+"declared values against derived ones, computing the derived ones in a "
+"sandbox on demand and caching them."
+msgstr ""
+"``Part`` 新增 ``physical`` 和 ``collision`` "
+"两个访问器，用来在已声明值与派生值之间做解析，并按需在沙箱中计算派生值并加以缓存。"
+
+#: ../../source/simulation.rst:1017
+msgid ""
+"The BREP envelope grows a sibling channel for non-geometric data, so a "
+"wrapper can be handed the physical properties without a second round "
+"trip."
+msgstr "BREP 信封增加一条用于非几何数据的并行通道，这样就可以把物理属性一并交给 wrapper，而不必再往返一次。"
+
+#: ../../source/simulation.rst:1021
+msgid "7. Sensors, actuators and plugins"
+msgstr "7. 传感器、执行器与插件"
+
+#: ../../source/simulation.rst:1036
+msgid ""
+"PartCAD should model the handful of device types that every simulator "
+"agrees on (camera, depth, lidar, imu, contact, force-torque) and treat "
+"the rest as passthrough."
+msgstr ""
+"PartCAD 应当为所有仿真器都认可的那少数几种设备类型建模（相机 camera、深度 depth、激光雷达 lidar、惯性测量单元 "
+"imu、接触 contact、力/力矩 force-torque），其余的则按透传处理。"
+
+#: ../../source/simulation.rst:1041
+msgid "8. Scenes as worlds"
+msgstr "8. 把场景作为世界"
+
+#: ../../source/simulation.rst:1043
+msgid ""
+"The scenes PartCAD has always planned are SDF worlds: gravity, ground, "
+"lights, model instances with initial poses, and physics engine settings. "
+"A scene is also where a *fixed to the world* joint belongs, which is the "
+"piece a single assembly cannot express."
+msgstr ""
+"PartCAD 一直规划中的场景就是 SDF 的世界：重力、地面、灯光、带初始位姿的模型实例，以及物理引擎的设置。场景同时也是 *固定到世界* "
+"这类关节该待的地方，而这恰恰是单个装配体无法表达的那一块。"
+
+#: ../../source/simulation.rst:1049
+msgid "9. The property tables, and keeping them honest (in place)"
+msgstr "9. 属性表，以及如何让它们保持诚实（已实现）"
+
+#: ../../source/simulation.rst:1051
+msgid ""
+"This is the item that is built, and doing it first was right: it makes a "
+"URDF round trip nearly lossless while the rest of the proposal is still "
+"being designed, and it is the difference between PartCAD being usable in "
+"a robotics workflow and being a one-way trip out of one."
+msgstr ""
+"这是已经实现的那一项，而且先做它是对的：在提案的其余部分还在设计阶段时，它就让 URDF 的往返转换接近无损；而这正是“PartCAD "
+"能用在机器人工作流里”与“PartCAD 只是离开这种工作流的单程票”之间的区别。"
+
+#: ../../source/simulation.rst:1056
+msgid ""
+"A part carries a ``properties:`` section holding ``material``, ``color`` "
+"and ``physics``; an interface carries ``motion:`` and ``physics:``. Every"
+" property in them is a PartCAD property with a PartCAD unit and a closed "
+"definition in the schema. A URDF import reads its values into them one at"
+" a time and the URDF export writes each one back into the element that "
+"states it. The two rules that keep the list honest are the loud failures:"
+" URDF that no property covers stops the import, and a property URDF "
+"cannot state is reported when the file is written."
+msgstr ""
+"零件带有一个 ``properties:`` 小节，其中包含 ``material`` 、 ``color`` 和 ``physics`` "
+"；接口则带有 ``motion:`` 和 ``physics:`` 。它们中的每一项属性都是 PartCAD 属性，带有 PartCAD "
+"单位，并在模式中有封闭的定义。URDF 导入会把它的各个值一项一项地读进这些属性，而 URDF "
+"导出会把每一项写回到表述它的那个元素里。让这份清单保持诚实的两条规则就是那两种响亮的失败：没有任何属性能够涵盖的 URDF 内容会中止导入，而 "
+"URDF 无法表达的属性会在写出文件时被报告。"
+
+#: ../../source/simulation.rst:1065
+msgid "What is still missing:"
+msgstr "仍然缺少的是："
+
+#: ../../source/simulation.rst:1067
+msgid ""
+"**``<ros2_control>`` and ``<transmission>``**, which are robot-level "
+"rather than link-level, and so have nowhere to attach yet. The assembly "
+"needs a place to attach robot-level physics - an assembly takes the same "
+"``properties:`` section a part does, but nothing yet reads one there, "
+"because every property so far belongs to something inside the container."
+msgstr ""
+"**``<ros2_control>`` 和 ``<transmission>``** "
+"，它们属于机器人级别而不是连杆级别，因此目前还无处附着。装配体需要一个地方来挂载机器人级别的物理信息——装配体接受与零件相同的 "
+"``properties:`` 小节，但目前还没有任何东西会去读取那里的内容，因为到目前为止每一项属性都属于容器内部的某个东西。"
+
+#: ../../source/simulation.rst:1072
+msgid ""
+"**Properties that are not a link's or a joint's.** A URDF's ``<gazebo>`` "
+"blocks also carry sensors and simulator plugins, which items 7 and 8 "
+"cover; until then they are counted and reported, not carried."
+msgstr ""
+"**既不属于连杆、也不属于关节的属性。** URDF 的 ``<gazebo>`` 块里还带有传感器和仿真器插件，它们由第 7 项和第 8 "
+"项来覆盖；在那之前，这些内容只会被计数并报告，而不会被携带。"
+
+#: ../../source/simulation.rst:1075
+msgid ""
+"**Any check at all that a declared property still applies.** "
+"``properties:`` does not take part in the shape cache *key*, which is "
+"right - it says nothing about the geometry - but it also means nothing "
+"notices when the geometry moves out from under it. A mass read from a "
+"URDF survives an edit to the CAD that invalidates it, silently. ``pc "
+"lint`` is where that belongs, and it needs item 2 to have something to "
+"compare against."
+msgstr ""
+"**任何用来检查已声明属性是否依然成立的手段。** ``properties:`` 不参与形状缓存的 *键* "
+"，这是对的——它对几何体只字未提——但这同时也意味着，当几何体从它脚下换掉时，没有任何东西会察觉。从 URDF 读来的质量，会在一次使其失效的 "
+"CAD 改动之后悄无声息地留存下来。这件事该由 ``pc lint`` 来做，而它需要第 2 项才有东西可供比对。"
+
+#: ../../source/simulation.rst:1083
+msgid "10. Units"
+msgstr "10. 单位"
+
+#: ../../source/simulation.rst:1085
+msgid ""
+"Simulation is SI; PartCAD is millimetres and degrees. The notation used "
+"throughout this page - ``12 N*m``, ``2 rad/s``, ``2700 kg/m^3``, "
+"``180deg`` - should be real: a unit-aware scalar type, stored "
+"canonically, so that no exporter has to guess and no user has to remember"
+" which of the two conventions a given field is in. This is the smallest "
+"item on the list and the one that prevents the largest class of silent "
+"errors."
+msgstr ""
+"仿真使用国际单位制；PartCAD 使用毫米和角度。本页通篇使用的记法—— ``12 N*m`` 、 ``2 rad/s`` 、 ``2700 "
+"kg/m^3`` 、 ``180deg`` "
+"——应当是真实可用的：一种带单位的标量类型，以规范形式存储，这样导出器就不必猜，用户也不必记住某个字段用的是两套约定中的哪一套。这是清单上最小的一项，也是能够防止最大一类静默错误的一项。"
+
+#: ../../source/simulation.rst:1093
+msgid "11. Export targets"
+msgstr "11. 导出目标"
+
+#: ../../source/simulation.rst:1095
+msgid "With the above in place, the export matrix is:"
+msgstr "有了上述这些之后，导出矩阵如下："
+
+#: ../../source/simulation.rst:1101
+msgid "Target"
+msgstr "目标"
+
+#: ../../source/simulation.rst:1102
+msgid "Priority"
+msgstr "优先级"
+
+#: ../../source/simulation.rst:1103
+msgid "Notes"
+msgstr "说明"
+
+#: ../../source/simulation.rst:1105
+msgid "Done (geometry only)"
+msgstr "已完成（仅几何体）"
+
+#: ../../source/simulation.rst:1106
+msgid "The common denominator. Tree-only kinematics, sensors only via extensions."
+msgstr "最大公约数。只支持树形运动学，传感器只能通过扩展表达。"
+
+#: ../../source/simulation.rst:1107
+msgid "SDF"
+msgstr ""
+
+#: ../../source/simulation.rst:1108
+msgid "Next"
+msgstr "下一步"
+
+#: ../../source/simulation.rst:1109
+msgid ""
+"What Gazebo actually simulates. Expresses everything in this proposal, "
+"worlds included, and is where a PartCAD *scene* maps naturally."
+msgstr "Gazebo 真正仿真的东西。能表达本提案中的全部内容，包括世界在内，也是 PartCAD *场景* 能够自然映射过去的地方。"
+
+#: ../../source/simulation.rst:1111 ../../source/simulation.rst:1114
+msgid "Later"
+msgstr "以后"
+
+#: ../../source/simulation.rst:1112
+msgid "MuJoCo. Needs convex collision geometry, which item 3 provides."
+msgstr "MuJoCo。需要凸碰撞几何体，而第 3 项正好提供了它。"
+
+#: ../../source/simulation.rst:1113
+msgid "USD"
+msgstr ""
+
+#: ../../source/simulation.rst:1115
+msgid "Isaac Sim and the wider DCC ecosystem, through the UsdPhysics schemas."
+msgstr "面向 Isaac Sim 以及更广的 DCC 生态，通过 UsdPhysics 模式实现。"
+
+#: ../../source/simulation.rst:1118
+msgid "Suggested order of work"
+msgstr "建议的工作顺序"
+
+#: ../../source/simulation.rst:1120
+msgid ""
+"Each step is useful on its own, which is the test of whether the "
+"decomposition is right:"
+msgstr "每一步单独拿出来都有用，这正是检验拆分是否正确的标准："
+
+#: ../../source/simulation.rst:1123
+msgid ""
+"**Passthrough** (item 9) - *done*. The URDF round trip carries what "
+"PartCAD does not model instead of dropping it."
+msgstr "**透传** （第 9 项）—— *已完成* 。URDF 的往返转换会携带 PartCAD 尚未建模的内容，而不是把它丢掉。"
+
+#: ../../source/simulation.rst:1125
+msgid ""
+"**Units** (item 10). Everything after this depends on it and it gets "
+"harder to add later - the generated ``motion:`` sections already have to "
+"state ``units: rad`` in prose because there is no way to state it in the "
+"value."
+msgstr ""
+"**单位** （第 10 项）。此后的一切都依赖它，而且越往后越难加——生成出来的 ``motion:`` 小节已经不得不用文字写上 "
+"``units: rad`` ，因为没有办法把单位写进值里。"
+
+#: ../../source/simulation.rst:1128
+msgid ""
+"**Materials and physical properties** (items 1-2). Turns the exporter's "
+"density parameter into a model property and makes a computed inertial "
+"trustworthy, so that carrying one becomes the exception rather than the "
+"rule."
+msgstr ""
+"**材料与物理属性** （第 1—2 "
+"项）。把导出器的密度参数变成模型的属性，并让计算出来的惯性属性变得可信，于是手工携带惯性属性成为例外而不是惯例。"
+
+#: ../../source/simulation.rst:1131
+msgid ""
+"**Collision geometry** (item 3). Independently valuable - it also makes "
+"rendering and interference checking cheaper - and it is what would let "
+"the collision/visual choice ``ignoreCollision`` makes today become \"keep"
+" both\"."
+msgstr ""
+"**碰撞几何体** （第 3 项）。它本身就有独立价值——还能让渲染和干涉检查更省开销——并且正是它能让 ``ignoreCollision`` "
+"今天所做的“碰撞还是视觉”的取舍变成“两者都保留”。"
+
+#: ../../source/simulation.rst:1134
+msgid "**Frames** (item 4), folded into the existing ports/interfaces mechanism."
+msgstr "**坐标系** （第 4 项），并入现有的端口／接口机制。"
+
+#: ../../source/simulation.rst:1135
+msgid ""
+"**Configurations** (items 5-6). The largest change, and the one that "
+"turns an assembly into a mechanism rather than a photograph of one."
+msgstr "**配置** （第 5—6 项）。这是最大的一处改动，也是把装配体从一台机构的照片变成机构本身的那一处。"
+
+#: ../../source/simulation.rst:1137
+msgid "**SDF export**, which is the first target able to carry all of the above."
+msgstr "**SDF 导出** ，它是第一个能够承载上述全部内容的目标。"
+
+#: ../../source/simulation.rst:1138
+msgid "**Sensors** (item 7) and **scenes** (item 8)."
+msgstr "**传感器** （第 7 项）和 **场景** （第 8 项）。"
+
+#: ../../source/simulation.rst:1141
+msgid "Non-goals"
+msgstr "非目标"
+
+#: ../../source/simulation.rst:1143
+msgid ""
+"PartCAD should not become a simulator, or wrap one. It should describe a "
+"product well enough that a simulator can be handed it."
+msgstr "PartCAD 不应该变成仿真器，也不应该去包装一个仿真器。它应当把产品描述得足够好，好到可以直接把产品交给仿真器。"
+
+#: ../../source/simulation.rst:1145
+msgid ""
+"PartCAD should not model every engine-specific solver parameter as a "
+"first-class concept. But the alternative is not a passthrough container: "
+"it is to leave them out and say so when one is seen, which is what the "
+"import does for an unknown ``<gazebo>`` setting."
+msgstr ""
+"PartCAD "
+"不应该把每一个引擎专有的求解器参数都建模成一等概念。但替代方案不是弄一个透传容器：而是把它们排除在外，并在遇到其中之一时明确说出来——这正是导入面对未知的"
+" ``<gazebo>`` 设置时所做的。"
+
+#: ../../source/simulation.rst:1149
+msgid ""
+"Reading a URDF should not become lossless by making PartCAD's model a "
+"copy of URDF's. The point is a model that URDF, SDF, MJCF and USD are all"
+" views of."
+msgstr ""
+"读取 URDF 不应该靠把 PartCAD 的模型做成 URDF 模型的副本来实现无损。关键在于建立一个模型，让 URDF、SDF、MJCF 和 "
+"USD 都成为它的视图。"

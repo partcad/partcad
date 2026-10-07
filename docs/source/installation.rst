@@ -134,12 +134,17 @@ The commands and options supported by PartCAD CLI:
     add          Add a dependency, sketch, part, assembly, scene, or software
     import       Import a dependency, sketch, part, or assembly
     test         Run tests on a part, assembly, or scene
+    sim          Run the simulations declared by a part or an assembly
     inspect      View a part, assembly, or scene visually
     info         Show detailed information about a part, assembly, or scene
     bom          Print the bill of materials of a part, an assembly or a scene
     convert      Convert parts, sketches or assemblies to another format and update their type
+    filter       Declare an assembly or a scene holding only some of another's links
     export       Export a 3D view of parts, assemblies, or scenes
     render       Render a 2D projection of parts, assemblies, or scenes onto a plane
+    instructions Write the assembly instructions of an assembly, as PDF or HTML
+    cae          Run an engineering analysis on a part
+    cam          Produce the route files of the objects that declare a 'cam:' section
 
   Workflow commands:
     supply       Manage the supply chain of the current project

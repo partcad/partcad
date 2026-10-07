@@ -53,7 +53,7 @@ The PartCAD Viewer
 ------------------
 
 Displaying an object opens the ``PartCAD Viewer``, which is a strip of tabs over that one object rather than
-a bare canvas: groups of tabs, each with tabs of its own -- **Design**, **Analysis** and **Supply Chain**,
+a bare canvas: groups of tabs, each with tabs of its own -- **Design**, **Analysis** and **Manufacturing**,
 followed by **Validation** and **Operations**, which have nothing in them yet and are always disabled. Design
 is always the first:
 
@@ -129,6 +129,15 @@ port, so the port's checkbox draws or hides both.
 The ``ports`` and ``interfaces`` lines start folded up — for an assembly they run to hundreds of rows, and
 unfolded they bury the hierarchy they hang off. Pointing at a part or a sub-assembly makes it **flicker** in the
 3D view, which is how to tell which of the shapes on screen a line is without moving the camera.
+
+The 3D view can also be navigated with a `3Dconnexion <https://3dconnexion.com/>`_ **SpaceMouse**: the cap moves
+the model the way it is pushed and twisted, and the device's **Fit** button (the right-hand one on a two-button
+model) frames the object again. On Windows and macOS the viewer reads the device itself -- move the cap once with
+the viewer open for the editor to notice it. On Linux it reads it through
+`spacenavd <https://spacenav.sourceforge.net/>`_, which has to be installed and running
+(``sudo apt install spacenavd``, for instance). Only the viewer in the focused window moves, so a SpaceMouse and
+two open windows do not fight. ``partcad.spaceMouse.sensitivity`` sets the speed,
+``partcad.spaceMouse.invert`` reverses individual axes, and ``partcad.spaceMouse.enabled`` turns it off.
 
 An object's own ports start out drawn. The ports of everything inside it do not: an assembly of forty parts has
 a frame at every hole of every one of them, and all of it at once shows nothing. A line whose tick is grey

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 20:49+0000\n"
+"POT-Creation-Date: 2026-10-05 14:45+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -17,7 +17,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/contributing.rst:2
 msgid "Contributing"
@@ -712,14 +712,240 @@ msgstr ""
 "``~/.gnupg/`` ："
 
 #: ../../source/contributing.rst:400
+msgid "Without Docker: a native checkout"
+msgstr "不使用 Docker：原生检出"
+
+#: ../../source/contributing.rst:402
+msgid ""
+"Both routes above start a container, and a container needs a Docker "
+"daemon. Some machines have none and cannot be given one — the sandbox a "
+"cloud coding agent runs in, a CI runner with no privileged access. There "
+"the dev container is not a thing to insist on, so install into the "
+"checkout and run everything directly:"
+msgstr ""
+"上面两种方式都会启动一个容器，而容器需要 Docker 守护进程。有些机器既没有守护进程，也无法为它配备一个——云端编码代理所运行的沙箱"
+"，或是没有特权访问权限的 CI 运行器都属于这种情况。在这些机器上，开发容器不是非要坚持不可的东西，因此可以直接安装到检出目录中，并直接运行一切："
+
+#: ../../source/contributing.rst:410
+msgid ""
+"That installs git-lfs, runs ``poetry install``, installs OpenSCAD, checks"
+" for the one thing a parallel install can get wrong (below), and reports "
+"what else this machine has. Afterwards, every command in the rest of this"
+" page works with its ``devcontainer exec`` prefix dropped and its "
+"``poetry run`` kept."
+msgstr ""
+"该脚本会安装 git-lfs，运行 ``poetry install`` ，安装 OpenSCAD，检查并行安装可能出错的那一处（见下文"
+"），并报告这台机器上还有些什么。此后，本页其余部分的每一条命令都可以去掉 ``devcontainer exec`` 前缀、保留 ``p"
+"oetry run`` 来使用。"
+
+#: ../../source/contributing.rst:414
+msgid ""
+"git-lfs is installed first, and it is the one step whose absence costs "
+"something you cannot see. ``.gitattributes`` routes every ``.png``, "
+"``.jpg`` and ``.svg`` through the ``lfs`` filter, and git resolves a "
+"``filter=`` attribute naming a driver that no config defines by storing "
+"the file *verbatim* — no warning, no error, nothing in the commit to look"
+" at afterwards. So an image committed from a machine without git-lfs is "
+"raw bytes at a path declared to hold a pointer, and it surfaces on "
+"somebody else's machine as ``Encountered N files that should have been "
+"pointers, but weren't``, with N files that ``git checkout`` cannot clean:"
+" git keeps cleaning their real bytes into a pointer and comparing that "
+"against a raw blob. The four images under "
+"``examples/feature_render/images/`` were committed that way and have "
+"since been repaired. Repairing one is ``git add --renormalize <path>`` "
+"and a commit. The exceptions to the rule are listed in ``.gitattributes``"
+" with a reason beside each; read them before adding one."
+msgstr ""
+"git-lfs 会被最先安装，它也是唯一一个缺失后会带来你看不见的代价的步骤。 ``.gitattributes`` 把每一个 ``.p"
+"ng`` 、 ``.jpg`` 和 ``.svg`` 都交给 ``lfs`` 过滤器处理；而当 ``filter=`` 属性所指定的驱动"
+"没有被任何配置定义时，git 的处理方式是把文件 *原样* 存下来——没有警告，没有错误，提交里也没有任何事后可查的痕迹。于是，从一台没"
+"有 git-lfs 的机器上提交的图片，就是放在一个声明为保存指针的路径上的原始字节；它会在别人的机器上以 ``Encountered "
+"N files that should have been pointers, but weren't`` 的形式冒出来，而这 N 个文"
+"件是 ``git checkout`` 无法清理的：git 会不断把它们的真实字节清理成指针，再拿结果与原始 blob 比较。 ``ex"
+"amples/feature_render/images/`` 下的那四张图片就是这样提交的，现已修复。修复其中一个的办法是执行 ``g"
+"it add --renormalize <path>`` 并提交。该规则的例外都列在 ``.gitattributes`` 中，并在每"
+"一条旁边注明了原因；在新增例外之前请先读一读它们。"
+
+#: ../../source/contributing.rst:424
+msgid ""
+"OpenSCAD is installed rather than merely reported because PartCAD treats "
+"it as part of the toolchain and not as an optional extra: the standalone "
+"bundles carry one, ``pc healthcheck`` asks after it, and a ``.scad`` part"
+" raises \"OpenSCAD executable is not found\" rather than degrading. The "
+"script uses ``apt-get`` or Homebrew, and stops if it has neither — an "
+"environment without OpenSCAD is not set up, and finding that out from a "
+"test run half an hour later is the outcome this avoids."
+msgstr ""
+"安装 OpenSCAD 而不只是报告它是否存在，是因为 PartCAD 把它视为工具链的一部分，而不是可有可无的附加项：独立打包件中自带"
+"一份， ``pc healthcheck`` 会询问它，而 ``.scad`` 零件在缺少它时会抛出“OpenSCAD executab"
+"le is not found”，而不是降级处理。该脚本使用 ``apt-get`` 或 Homebrew，两者都没有时就会停下来——没"
+"有 OpenSCAD 的环境算不上配置完成，而半小时后才从一次测试运行中发现这一点，正是这样做所要避免的结果。"
+
+#: ../../source/contributing.rst:430
+msgid ""
+"This is still a fallback rather than a second supported environment, and "
+"it is worth being explicit about what it does not give you:"
+msgstr "这仍然只是一种兜底方案，而不是第二套受支持的环境，因此有必要明确说明它不能给你什么："
+
+#: ../../source/contributing.rst:433
+msgid ""
+"**The** ``pre-commit`` **hooks do not run.** ``pre-commit`` is installed "
+"by the dev container's image, not by ``poetry install``, and ``.git/hooks"
+"/pre-commit`` is written by ``pre-commit install`` running inside the "
+"container. So there is no hook to fail, and ``git commit`` runs no gate "
+"at all without saying so. Run ``pytest``, ``behave`` and the linters "
+"yourself before committing; CI runs them regardless. The linter that "
+"gates is ``isort``:"
+msgstr ""
+"``pre-commit`` **钩子不会运行。** ``pre-commit`` 是由开发容器的镜像安装的，而不是由 ``poetry"
+" install`` 安装的；并且 ``.git/hooks/pre-commit`` 是由在容器内运行的 ``pre-commit i"
+"nstall`` 写入的。因此这里根本没有钩子可供失败， ``git commit`` 不会执行任何把关，也不会就此作出任何提示。请在提"
+"交前自行运行 ``pytest`` 、 ``behave`` 和各项静态检查工具；无论如何 CI 都会运行它们。真正起到把关作用的静态检"
+"查工具是 ``isort`` ："
+
+#: ../../source/contributing.rst:442
+msgid ""
+"``--filter-files`` is what makes the ``extend_skip``/``extend_skip_glob``"
+" entries in ``pyproject.toml`` apply to files named on the command line, "
+"and those entries are not style preferences — they hold the import order "
+"that the CAD sandbox wrappers need in order to pin expat before OCP "
+"loads. ``black`` and ``flake8`` are configured but do not gate; the root "
+"``AGENTS.md`` says what each would take to turn on."
+msgstr ""
+"``--filter-files`` 的作用，是让 ``pyproject.toml`` 中的 ``extend_skip`` / ``"
+"extend_skip_glob`` 条目同样适用于在命令行上指定的文件；而这些条目并不是风格偏好——它们保存的是 CAD 沙箱包装器所"
+"需要的导入顺序，以便在 OCP 加载之前固定 expat。 ``black`` 和 ``flake8`` 已经配置好，但并不起把关作用；"
+"根目录的 ``AGENTS.md`` 说明了分别还需要做什么才能把它们启用。"
+
+#: ../../source/contributing.rst:446
+msgid ""
+"**A Docker daemon**, which only the KiCad example needs. Without one that"
+" example is skipped, whether the machine said so in advance — "
+"``PC_USE_DOCKER=false`` in the environment, or ``useDocker: false`` in "
+"the user configuration — or the daemon simply is not answering. Having no"
+" container runtime is the one thing that test passes over: an image it "
+"cannot pull, a ``kicad-cli`` that errors and a part that comes back empty"
+" all still fail it, because those are the KiCad path being broken rather "
+"than the machine lacking a feature."
+msgstr ""
+"**Docker 守护进程** ，只有 KiCad 示例需要它。没有它时该示例会被跳过——无论是机器事先就声明过（环境中的 ``PC_U"
+"SE_DOCKER=false`` ，或用户配置中的 ``useDocker: false`` ），还是守护进程干脆没有响应。没有容器运"
+"行时是该测试唯一会放过的情况：拉取不到镜像、 ``kicad-cli`` 报错、零件返回为空，这些仍然都会让它失败，因为那属于 KiCa"
+"d 这条路径本身出了问题，而不是这台机器缺少某项功能。"
+
+#: ../../source/contributing.rst:451
+msgid ""
+"**conda**, without which the ``pythonSandbox`` option falls back to "
+"``venv``. That builds a real virtual environment of PartCAD's own and "
+"runs the CAD wrappers in it; it just cannot provision an *interpreter "
+"version*, so a package asking for a Python this host does not have "
+"renders on the host's instead and says so."
+msgstr ""
+"**conda** ，缺了它， ``pythonSandbox`` 选项就会回退到 ``venv`` 。那样会构建一个 PartCAD "
+"自己的真实虚拟环境，并在其中运行 CAD 包装器；它只是无法准备出指定的 *解释器版本* ，因此一个要求使用本机没有的 Python 版"
+"本的包，会改用本机的 Python 来渲染，并给出相应说明。"
+
+#: ../../source/contributing.rst:457
+msgid ""
+"**Do not run the whole** ``behave`` **suite on such a machine — run the "
+"one feature your change touches.** Every scenario takes a throwaway "
+"``$HOME`` (the ``Given I have temporary $HOME`` in each feature's "
+"``Background``), so a scenario that renders anything builds a CAD sandbox"
+" of its own from nothing and deletes it again: roughly 2.7 GB and minutes"
+" of ``pip`` each, across 166 scenarios, and several of those on disk at "
+"once under ``behavex``'s parallel workers. That is hours and tens of "
+"gigabytes, and where the disk is a fixed allowance it ends in \"no space "
+"left on device\" rather than in a result."
+msgstr ""
+"**不要在这类机器上运行整个** ``behave`` **测试套件——只运行你的改动所涉及的那一个 feature。** 每个场景都会"
+"使用一个用完即弃的 ``$HOME`` （即每个 feature 的 ``Background`` 中的 ``Given I have "
+"temporary $HOME`` ），因此任何需要渲染的场景都会从零开始构建一个属于它自己的 CAD 沙箱，然后再把它删掉：每次大约 "
+"2.7 GB，并花上几分钟执行 ``pip`` ，一共 166 个场景；而在 ``behavex`` 的并行工作进程下，还会有好几个沙箱"
+"同时占着磁盘。这意味着数小时的时间和几十 GB 的空间；在磁盘配额固定的环境里，最后得到的是“no space left on devi"
+"ce”，而不是一个结果。"
+
+#: ../../source/contributing.rst:469
+msgid ""
+"A green whole-suite ``behave`` is not a prerequisite for opening a pull "
+"request from a machine like this: CI shards that suite and runs it there."
+" Say in the pull request which features you did run."
+msgstr ""
+"从这样一台机器上提交拉取请求，并不要求整个 ``behave`` 套件全绿：CI 会把该套件分片并在那里运行。请在拉取请求中说明你实际运"
+"行了哪些 feature。"
+
+#: ../../source/contributing.rst:474
+msgid ""
+"**Two wheels that install the same file can leave the checkout "
+"segfaulting, and nothing reports it.** Poetry installs in parallel, so on"
+" a machine slow enough to lose that race both workers write that one path"
+" at once and what lands is a blend of the two wheels. Both installs "
+"report success."
+msgstr ""
+"**两个 wheel 包安装同一个文件，可能让检出目录陷入段错误，而且没有任何东西会报告这件事。** Poetry 是并行安装的，因此在"
+"一台慢到会输掉这场竞争的机器上，两个工作进程会同时写入那一个路径，最终落盘的是两个 wheel 包混在一起的内容。而两次安装都会报告成功。"
+
+#: ../../source/contributing.rst:478
+msgid ""
+"What you see is much later and somewhere else: an ``import`` of a native "
+"module like that hands a corrupt ELF to the dynamic loader, and the "
+"interpreter dies with ``Fatal Python error: Segmentation fault`` — during"
+" pytest *collection*, if a test module imports it at import time, so no "
+"test has failed and there is nothing to point at."
+msgstr ""
+"你看到的现象要晚得多，而且出现在别处： ``import`` 这样一个原生模块，会把一个损坏的 ELF 交给动态加载器，于是解释器以 `"
+"`Fatal Python error: Segmentation fault`` 死掉——如果某个测试模块在导入时就导入了它，这会发生"
+"在 pytest 的 *收集* 阶段，因此没有任何测试失败，也没有任何东西可供指认。"
+
+#: ../../source/contributing.rst:487
+msgid ""
+"``setup-native.sh`` runs the second of those. The dev container's image "
+"installs from ``.devcontainer/requirements.txt`` with pip, one wheel at a"
+" time, which is why this is not the container's problem."
+msgstr ""
+"``setup-native.sh`` 运行的是上面两条命令中的第二条。开发容器的镜像是用 pip 从 ``.devcontainer/"
+"requirements.txt`` 逐个 wheel 包安装的，这正是为什么这不是容器那边的问题。"
+
+#: ../../source/contributing.rst:490
+msgid ""
+"The pair that did this was ``cadquery-ocp`` and ``cadquery-ocp-novtk``, "
+"which both ship one 160 MB ``OCP/OCP.cpython-*.so``. ``cadquery-ocp`` is "
+"no longer declared in ``pyproject.toml`` — nothing in this environment "
+"imports ``cadquery`` in process, and build123d pulls the novtk build in "
+"regardless — so one distribution owns that file and it can no longer be "
+"written twice. The checker stays for the next such pair, which will not "
+"announce itself either."
+msgstr ""
+"造成这一问题的那一对是 ``cadquery-ocp`` 和 ``cadquery-ocp-novtk`` ，它们都携带同一个 160 "
+"MB 的 ``OCP/OCP.cpython-*.so`` 。 ``cadquery-ocp`` 已经不再在 ``pyproject.t"
+"oml`` 中声明——这个环境中没有任何东西会在进程内导入 ``cadquery`` ，而 build123d 无论如何都会把 novt"
+"k 版本引进来——因此该文件由唯一一个发行包拥有，不可能再被写入两次。这个检查工具保留下来，是为了应对下一对这样的包，它同样不会主动声明自己。"
+
+#: ../../source/contributing.rst:496
+msgid ""
+"It also stays for the other half of the same problem, which **an existing"
+" checkout will hit exactly once**: uninstalling a distribution deletes "
+"the files its RECORD names, the ones a wheel beside it also installed "
+"included. So ``poetry sync`` removing ``cadquery-ocp`` takes ``OCP/`` "
+"away from ``cadquery-ocp-novtk``, which stays installed, and ``import "
+"OCP`` stops working with nothing in either command's output about it. The"
+" checker reports a distribution whose recorded files are gone, and "
+"``--fix`` puts them back."
+msgstr ""
+"它保留下来还为了同一问题的另一半，而 **一个已有的检出目录正好会碰上一次** ：卸载一个发行包时，会删除它的 RECORD 中列出的文"
+"件，其中也包括与它并存的另一个 wheel 包同样安装过的那些。于是， ``poetry sync`` 在移除 ``cadquery-o"
+"cp`` 时，把 ``OCP/`` 从仍然处于已安装状态的 ``cadquery-ocp-novtk`` 手里一并带走，于是 ``imp"
+"ort OCP`` 就此失效，而两条命令的输出里对此只字未提。该检查工具会报告哪个发行包记录在案的文件已经消失，而 ``--fix`` "
+"会把它们放回去。"
+
+#: ../../source/contributing.rst:503
 msgid "Install Dependencies"
 msgstr "安装依赖"
 
-#: ../../source/contributing.rst:402
+#: ../../source/contributing.rst:505
 msgid "We are using `Poetry`_ to manage dependencies and virtual environments."
 msgstr "我们使用 `Poetry`_ 来管理依赖和虚拟环境。"
 
-#: ../../source/contributing.rst:406
+#: ../../source/contributing.rst:509
 msgid ""
 "Poetry is a tool for dependency management and packaging in Python. It "
 "allows you to declare the libraries your project depends on and it will "
@@ -729,7 +955,7 @@ msgstr ""
 "Poetry 是一款用于 Python 依赖管理和打包的工具。它允许你声明项目所依赖的库，并会为你管理（安装/更新）这些库。Poetry "
 "提供了锁文件以确保可重复的安装，并且可以构建你的项目以供分发。"
 
-#: ../../source/contributing.rst:410
+#: ../../source/contributing.rst:513
 msgid ""
 "Once the Dev Container is started, open a shell session in the Terminal "
 "view of VS Code. The current working directory will be "
@@ -739,7 +965,7 @@ msgstr ""
 "Dev Container 启动后，在 VS Code 的终端视图中打开一个 shell 会话。当前工作目录会是包含源文件的 "
 "``/workspaces/partcad`` 。要安装 Python 软件包，请运行以下命令："
 
-#: ../../source/contributing.rst:417
+#: ../../source/contributing.rst:520
 msgid ""
 "It will create virtual environment in ``.venv/`` directory and download "
 "about 1.5 GB dependencies. Once all dependencies are downloaded Poetry "
@@ -749,59 +975,111 @@ msgstr ""
 "它会在 ``.venv/`` 目录中创建虚拟环境，并下载约 1.5 GB 的依赖。所有依赖下载完成后，Poetry "
 "还会以可编辑模式安装当前包，然后你会看到如下内容："
 
-#: ../../source/contributing.rst:425
+#: ../../source/contributing.rst:529
+msgid ""
+"**A checkout that predates the one-wheel layout needs cleaning out "
+"first.** This repository used to hold six Python distributions in six "
+"top-level directories -- ``partcad/``, ``partcad-cli/``, ``partcad-"
+"client/``, ``partcad-ide-client/``, ``partcad-service-json-rpc/``, "
+"``partcad-utils/`` -- and to install a seventh, ``partcad-dev``, as the "
+"root project. Switching to the branch that collapsed them into ``src/`` "
+"leaves both behind, and neither goes away on its own:"
+msgstr ""
+"**早于单 wheel 包布局的检出目录需要先清理干净。** 这个仓库过去在六个顶层目录中保存六个 Python 发行包—— ``par"
+"tcad/`` 、 ``partcad-cli/`` 、 ``partcad-client/`` 、 ``partcad-ide-cli"
+"ent/`` 、 ``partcad-service-json-rpc/`` 、 ``partcad-utils/`` ——并且还会把第"
+"七个发行包 ``partcad-dev`` 作为根项目安装。切换到把它们合并进 ``src/`` 的那个分支之后，这两样东西都会留下来，"
+"而且都不会自行消失："
+
+#: ../../source/contributing.rst:535
+msgid ""
+"``git`` does not remove the old directories, because the only files still"
+" in them are ignored ones (``__pycache__/``, ``*.egg-info/``). They look "
+"empty and are not."
+msgstr ""
+"``git`` 不会删除那些旧目录，因为其中仅剩的文件都是被忽略的文件（ ``__pycache__/`` 、 ``*.egg-info"
+"/`` ）。它们看上去是空的，其实不是。"
+
+#: ../../source/contributing.rst:537
+msgid ""
+"``.venv`` keeps the ``partcad-dev`` install. Its ``.pth`` still puts the "
+"six deleted ``*/src`` directories on ``sys.path`` and its ``pc`` still "
+"points at the pre-rename entry point, so ``pc`` fails with "
+"``ModuleNotFoundError: No module named 'partcad_cli.click.command'``. "
+"``poetry install`` does not replace it -- the distribution was renamed, "
+"so Poetry does not know it is there -- and ``pip uninstall partcad-dev`` "
+"refuses to remove it, with ``ValueError: ('Invalid group name', 'poetry-"
+"multiproject-plugin')``, because the metadata it left behind names an "
+"entry point group that is not valid."
+msgstr ""
+"``.venv`` 中保留着 ``partcad-dev`` 的安装。它的 ``.pth`` 仍然把那六个已被删除的 ``*/src``"
+" 目录放进 ``sys.path`` ，它的 ``pc`` 仍然指向改名之前的入口点，因此 ``pc`` 会以 ``ModuleNotF"
+"oundError: No module named 'partcad_cli.click.command'`` 失败。 ``poetr"
+"y install`` 不会替换它——该发行包已经改名，所以 Poetry 并不知道它的存在——而 ``pip uninstall pa"
+"rtcad-dev`` 也拒绝移除它，会报出 ``ValueError: ('Invalid group name', 'poetry-"
+"multiproject-plugin')`` ，因为它遗留下来的元数据指定了一个不合法的入口点组。"
+
+#: ../../source/contributing.rst:544
+msgid "Delete both from the repository root, then install again:"
+msgstr "从仓库根目录把这两样都删掉，然后重新安装："
+
+#: ../../source/contributing.rst:553
+msgid "A fresh clone needs none of this."
+msgstr "全新克隆的仓库不需要做这些。"
+
+#: ../../source/contributing.rst:556
 msgid "Activate Environment"
 msgstr "激活环境"
 
-#: ../../source/contributing.rst:427
+#: ../../source/contributing.rst:558
 msgid ""
 "In order to update your ``$PATH`` and be able to run commandline tools "
 "such as ``pytest`` you need to activate virtual environment:"
 msgstr "为了更新你的 ``$PATH`` 并能够运行诸如 ``pytest`` 之类的命令行工具，你需要激活虚拟环境："
 
-#: ../../source/contributing.rst:434
+#: ../../source/contributing.rst:565
 msgid "or"
 msgstr "或者"
 
-#: ../../source/contributing.rst:440
+#: ../../source/contributing.rst:571
 msgid ""
 "After that you will be able to run ``pc``, for example ``pc version``, "
 "which will output something along the lines:"
 msgstr "之后你就可以运行 ``pc`` 了，例如 ``pc version`` ，它会输出类似如下的内容："
 
-#: ../../source/contributing.rst:448
+#: ../../source/contributing.rst:579
 msgid "Make Changes"
 msgstr "进行更改"
 
-#: ../../source/contributing.rst:450
+#: ../../source/contributing.rst:581
 msgid ""
 "Make the changes through Visual Studio Code how you would do for any "
 "other project."
 msgstr "像对待任何其他项目一样，通过 Visual Studio Code 进行更改。"
 
-#: ../../source/contributing.rst:453
+#: ../../source/contributing.rst:584
 msgid "Manual Tests"
 msgstr "手动测试"
 
-#: ../../source/contributing.rst:455
+#: ../../source/contributing.rst:586
 msgid ""
 "To test functionality of the Python core module, use corresponding "
 "command line interface (CLI) commands."
 msgstr "要测试 Python 核心模块的功能，请使用相应的命令行界面（CLI）命令。"
 
-#: ../../source/contributing.rst:457
+#: ../../source/contributing.rst:588
 msgid ""
 "To test CLI functionality, simply type commands in a shell session in the"
 " Terminal view of the VSCode where the development takes place."
 msgstr "要测试 CLI 功能，只需在进行开发的 VSCode 终端视图的 shell 会话中输入命令即可。"
 
-#: ../../source/contributing.rst:459
+#: ../../source/contributing.rst:590
 msgid ""
 "To test VSCode plugin, run the following commands in a shell session in "
 "the Terminal view before restarting the VSCode:"
 msgstr "要测试 VSCode 插件，请在重启 VSCode 之前，在终端视图的 shell 会话中运行以下命令："
 
-#: ../../source/contributing.rst:468
+#: ../../source/contributing.rst:599
 msgid ""
 "To test the Python core module using the VSCode plugin, click the "
 "`Restart PartCAD` icon in the PartCAD's `Context` view after each change."
@@ -809,51 +1087,51 @@ msgstr ""
 "要使用 VSCode 插件测试 Python 核心模块，请在每次更改后，点击 PartCAD 的 `Context` 视图中的 `Restart "
 "PartCAD` 图标。"
 
-#: ../../source/contributing.rst:472
+#: ../../source/contributing.rst:603
 msgid ""
 "If you are developing inside the PartCAD Dev container using PartCAD "
 "VSCode extension, and are seeing this:"
 msgstr "如果你正在使用 PartCAD VSCode 扩展在 PartCAD Dev 容器内进行开发，并且看到了这样的情况："
 
-#: ../../source/contributing.rst:478
+#: ../../source/contributing.rst:609
 msgid ""
 "then you are likely to have Git configured to use SSH creds to access "
 "GitHub, while the SSH creds are not available in the Dev container."
 msgstr "那么你很可能把 Git 配置成了使用 SSH 凭据来访问 GitHub，而这些 SSH 凭据在 Dev 容器中并不可用。"
 
-#: ../../source/contributing.rst:481
+#: ../../source/contributing.rst:612
 msgid ""
 "This could be fixed by running ``ssh-add`` on the host and confirmed by "
 "running ``ssh-add -l`` inside the container."
 msgstr "可以通过在主机上运行 ``ssh-add`` 来解决这个问题，并通过在容器内运行 ``ssh-add -l`` 来确认。"
 
-#: ../../source/contributing.rst:484
+#: ../../source/contributing.rst:615
 msgid ""
 "To test documentation changes, run the following command before "
 "navigating your favorite VSCode browser extension to `./docs/build/html`:"
 msgstr "要测试文档方面的更改，请在用你惯用的 VSCode 浏览器扩展打开 `./docs/build/html` 之前，运行以下命令："
 
-#: ../../source/contributing.rst:490
+#: ../../source/contributing.rst:621
 msgid ""
 "Alternatively, run the following command before navigating your favorite "
 "VSCode browser extension to `127.0.0.1:8000`:"
 msgstr "或者，请在用你惯用的 VSCode 浏览器扩展打开 `127.0.0.1:8000` 之前，运行以下命令："
 
-#: ../../source/contributing.rst:497
+#: ../../source/contributing.rst:628
 msgid "Automated Tests"
 msgstr "自动化测试"
 
-#: ../../source/contributing.rst:500
+#: ../../source/contributing.rst:631
 msgid "Pytest"
 msgstr "Pytest"
 
-#: ../../source/contributing.rst:502
+#: ../../source/contributing.rst:633
 msgid ""
 "PartCAD uses ``pytest`` for unit testing, where a particular piece of "
 "code or feature is tested."
 msgstr "PartCAD 使用 ``pytest`` 进行单元测试，即对某一段特定的代码或功能进行测试。"
 
-#: ../../source/contributing.rst:504
+#: ../../source/contributing.rst:635
 msgid ""
 "If you `activated virtual environment`_ you can just run ``pytest`` from "
 "a bash session in the Terminal view of VSCode."
@@ -861,68 +1139,407 @@ msgstr ""
 "如果你已经 `activated virtual environment`_ ，那么只需在 VSCode 终端视图的 bash 会话中运行 "
 "``pytest`` 即可。"
 
-#: ../../source/contributing.rst:506
+#: ../../source/contributing.rst:637
 msgid ""
 "You can also use VS Code's built-in **Testing** integration to run and "
 "debug tests via the UI. To set this up:"
 msgstr "你也可以使用 VS Code 内置的 **Testing** 集成，通过界面来运行和调试测试。要进行如下设置："
 
-#: ../../source/contributing.rst:508
+#: ../../source/contributing.rst:639
 msgid "Open the Command Palette (``Ctrl+Shift+P`` or ``Cmd+Shift+P``)"
 msgstr "打开命令面板（ ``Ctrl+Shift+P`` 或 ``Cmd+Shift+P`` ）"
 
-#: ../../source/contributing.rst:509
+#: ../../source/contributing.rst:640
 msgid "Run ``Python: Select Interpreter``"
 msgstr "运行 ``Python: Select Interpreter``"
 
-#: ../../source/contributing.rst:510
+#: ../../source/contributing.rst:641
 msgid "Select ``('.venv': Poetry) .venv/bin/python`` from the list"
 msgstr "从列表中选择 ``('.venv': Poetry) .venv/bin/python``"
 
-#: ../../source/contributing.rst:512
+#: ../../source/contributing.rst:643
 msgid ""
 "You also can run ``pytest`` without activating environment via Poetry, "
 "for example:"
 msgstr "你也可以不激活环境，通过 Poetry 来运行 ``pytest`` ，例如："
 
-#: ../../source/contributing.rst:518
+#: ../../source/contributing.rst:649
 msgid ""
 "The tests for the core module are located in the ``./tests/partcad`` "
-"directory. The tests for the CLI module are located in the ``./partcad-"
-"cli/tests`` directory. The tests for the LSP server of VSCode plugin are "
-"located in the ``./ide/vscode/src/test/python_tests`` directory."
+"directory. The tests for the CLI module are located in the "
+"``./tests/partcad_cli`` directory. The tests for the IDE viewer client "
+"are located in the ``./tests/partcad_ide_client`` directory. The tests "
+"for the LSP server of VSCode plugin are located in the "
+"``./ide/vscode/src/test/python_tests`` directory."
 msgstr ""
-"核心模块的测试位于 ``./tests/partcad`` 目录中。CLI 模块的测试位于 ``./tests/partcad_cli`` "
-"目录中。VSCode 插件的 LSP 服务器的测试位于 ``./partcad-ide-"
-"vscode/src/test/python_tests`` 目录中。"
+"核心模块的测试位于 ``./tests/partcad`` 目录中。CLI 模块的测试位于 ``./tests/partcad_cli`"
+"` 目录中。IDE 查看器客户端的测试位于 ``./tests/partcad_ide_client`` 目录中。VSCode 插件的 "
+"LSP 服务器的测试位于 ``./ide/vscode/src/test/python_tests`` 目录中。"
 
-#: ../../source/contributing.rst:523
+#: ../../source/contributing.rst:654
+msgid ""
+"**The first run is slow, and that is the sandboxes rather than the "
+"tests.** A test whose part is scripted (build123d, CadQuery, SDF, "
+"OpenSCAD) runs in a Python environment PartCAD provisions on first use --"
+" a fresh interpreter plus a pip install of the CAD stack -- and whichever"
+" test is the first to need a given one pays for building it. Once built "
+"they are cached under ``~/.partcad`` and reused, so the same suite that "
+"took half an hour cold takes minutes warm. The ``pytest`` ``pre-commit`` "
+"hook allows 15 minutes per test for that reason (``PC_PYTEST_TIMEOUT`` "
+"overrides it); a test reported as timing out on a cold cache is worth "
+"simply running again before it is treated as a bug."
+msgstr ""
+"**第一次运行很慢，原因在于沙箱而不是测试本身。** 如果一个测试的零件是脚本化的（build123d、CadQuery、SDF、Ope"
+"nSCAD），它就会在 PartCAD 首次使用时现场准备的 Python 环境中运行——一个全新的解释器，加上用 pip 安装的整套 "
+"CAD 组件——而第一个用到某个环境的测试要为构建它付出代价。一旦构建完成，它们会被缓存在 ``~/.partcad`` 下并被复用，因"
+"此同一套测试冷启动时要花半小时，热启动时只需几分钟。正因如此， ``pytest`` 的 ``pre-commit`` 钩子为每个测试允"
+"许 15 分钟（可用 ``PC_PYTEST_TIMEOUT`` 覆盖）；缓存为空时被报告超时的测试，值得先直接重跑一次，再把它当作缺陷来对待。"
+
+#: ../../source/contributing.rst:662
+msgid ""
+"**A gate reads the session's verdict, not pytest's exit code.** The two "
+"disagree on Windows, in both directions: pytest has exited ``0`` with a "
+"test having failed, and it exits ``127`` after a session in which every "
+"test passed. So a caller that must not be wrong sets "
+"``PYTEST_RESULT_MARKER`` to a path, and the ``pytest_sessionfinish`` hook"
+" in the repository's root ``conftest.py`` writes ``success`` there only "
+"when pytest's *final* exit status is clean *and* it counted no failed "
+"tests, and ``failure`` otherwise -- a collection error included, which "
+"pytest reports as exit status 2. \"Final\" is load-bearing: pytest's "
+"terminal reporter can still raise the status after the inner session "
+"hooks have run (exceeding ``--max-warnings`` is how), so the hook is the "
+"outermost wrapper and reads ``session.exitstatus`` rather than the status"
+" it was handed. Both gates do this -- the ``pytest`` ``pre-commit`` hook "
+"and the ``Pytest`` job in CI -- and both fail unless they read "
+"``success``, so a run that never reaches the hook at all (a crash mid-"
+"suite, a runner that goes away) writes no marker and fails too. Nothing "
+"is written unless that variable is set, so an ordinary ``poetry run "
+"pytest`` is unaffected."
+msgstr ""
+"**把关看的是会话的结论，而不是 pytest 的退出码。** 两者在 Windows 上会出现分歧，而且是双向的：有测试失败时 pyt"
+"est 却以 ``0`` 退出，也出现过所有测试都通过的会话却以 ``127`` 退出。因此，不容出错的调用方会把 ``PYTEST_R"
+"ESULT_MARKER`` 设为某个路径，而仓库根目录 ``conftest.py`` 中的 ``pytest_sessionfini"
+"sh`` 钩子只有在 pytest 的 *最终* 退出状态干净 *并且* 统计到的失败测试数为零时，才会往那里写入 ``success`"
+"` ，否则写入 ``failure`` ——其中也包括收集阶段的错误，pytest 会把它报告为退出状态 2。“最终”二字至关重要：py"
+"test 的终端报告器在内层会话钩子运行之后仍可能提升退出状态（超过 ``--max-warnings`` 就是一种情形），因此该钩子是"
+"最外层的包装器，读取的是 ``session.exitstatus`` ，而不是传给它的那个状态。两道关卡都这样做—— ``pytest"
+"`` 的 ``pre-commit`` 钩子，以及 CI 中的 ``Pytest`` 作业——并且除非读到 ``success`` ，否"
+"则都会失败；因此，一次根本没有执行到该钩子的运行（套件中途崩溃、运行器失联）不会写入任何标记，同样会失败。只有设置了该变量才会写入任何内"
+"容，所以普通的 ``poetry run pytest`` 不受影响。"
+
+#: ../../source/contributing.rst:676
 msgid "Behave"
 msgstr "Behave"
 
-#: ../../source/contributing.rst:525
+#: ../../source/contributing.rst:678
 msgid ""
 "PartCAD uses ``behave`` for integration testing, where a part of the "
 "system is tested as a whole."
 msgstr "PartCAD 使用 ``behave`` 进行集成测试，即将系统的某个部分作为一个整体来测试。"
 
-#: ../../source/contributing.rst:527
+#: ../../source/contributing.rst:680
 msgid ""
 "To run tests using ``behave``, execute the following command in an "
 "activated environment:"
 msgstr "要使用 ``behave`` 运行测试，请在已激活的环境中执行以下命令："
 
-#: ../../source/contributing.rst:533
+#: ../../source/contributing.rst:686
 msgid ""
 "Feature definitions and step implementations are located in the "
 "``./features`` directory."
 msgstr "功能定义和步骤实现位于 ``./features`` 目录中。"
 
-#: ../../source/contributing.rst:536
+#: ../../source/contributing.rst:689
+msgid "Examples"
+msgstr "示例"
+
+#: ../../source/contributing.rst:691
+msgid ""
+"The packages under ``./examples`` are documentation, and they are also a "
+"regression test. Each one declares a ``render:`` section, and the images "
+"and ``README.md`` files that ``pc render`` produces from it are **checked"
+" in**. That is deliberate: a change in how PartCAD renders then shows up "
+"as a diff in those files, and whoever made the change gets to decide "
+"whether it is an improvement or a regression before it reaches a reader "
+"of the README."
+msgstr ""
+"``./examples`` 下的那些包既是文档，也是回归测试。每个包都声明了一个 ``render:`` 小节，而 ``pc rend"
+"er`` 由它生成的图片和 ``README.md`` 文件都 **已纳入版本控制** 。这是刻意为之：PartCAD 渲染方式的变化，"
+"于是会以这些文件的差异形式显现出来，做出该改动的人就能在它传到 README 读者手里之前，先判断这究竟是改进还是倒退。"
+
+#: ../../source/contributing.rst:698
+msgid ""
+"So if your change affects what a projection or a generated document looks"
+" like, re-render the examples and commit the result along with it:"
+msgstr "因此，如果你的改动会影响某个投影或某份生成文档的外观，请重新渲染这些示例，并把结果连同改动一起提交："
+
+#: ../../source/contributing.rst:705
+msgid ""
+"Two things guard the invariant. The ``example-images`` ``pre-commit`` "
+"hook is instant and checks only what is already on disk: every image an "
+"example's ``README.md`` points at has to exist and be checked in, and no "
+"``.gitignore`` may hide one. It exists because the mistake that costs is "
+"asymmetric -- a regenerated ``README.md`` is a tracked file and stages "
+"itself with ``git add -u``, while the images beside it are new and "
+"untracked and do not. The ``Examples (PartCAD)`` CI job then renders "
+"everything and fails if the working tree changed at all; that check runs "
+"on one cell of the matrix, because what is checked in is one rendering."
+msgstr ""
+"有两道机制守护着这个不变量。 ``example-images`` 这个 ``pre-commit`` 钩子是瞬时完成的，只检查磁盘上已"
+"有的内容：某个示例的 ``README.md`` 所指向的每一张图片都必须存在并已纳入版本控制，而且不允许任何 ``.gitignore"
+"`` 把它藏起来。它之所以存在，是因为代价高昂的那种错误是不对称的——重新生成的 ``README.md`` 是受跟踪的文件，会随 ``"
+"git add -u`` 自行进入暂存区，而它旁边的图片是新增且未被跟踪的，并不会。随后， ``Examples (PartCAD)``"
+" 这个 CI 作业会渲染全部内容，只要工作区有任何变化就判定失败；该检查只在测试矩阵的一个单元格上运行，因为纳入版本控制的只是一份渲染结果。"
+
+#: ../../source/contributing.rst:715
+msgid ""
+"Everything PartCAD implements itself can be a baseline, and what asks for"
+" one is ``reproducible: true`` on the file type -- the flag every "
+"``export:`` and ``render:`` file type takes (see :ref:`the reproducible "
+"flag <reproducible>`). Every drawing under ``examples/`` sets it, and a "
+"new example has to set it too, or what it checks in is a file that "
+"differs from itself on the next run."
+msgstr ""
+"凡是 PartCAD 自己实现的东西都可以作为基准，而提出这一要求的是文件类型上的 ``reproducible: true`` ——每"
+"种 ``export:`` 和 ``render:`` 文件类型都接受的那个标志（参见 :ref:`reproducible 标志 <r"
+"eproducible>` ）。 ``examples/`` 下的每一张工程图都设置了它，新增的示例也必须设置，否则它纳入版本控制的，就"
+"是一个下次运行时会与自身不一致的文件。"
+
+#: ../../source/contributing.rst:721
+msgid ""
+"It buys three things. The SVG projection goes through OpenCASCADE's exact"
+" hidden-line algorithm rather than the polygonal one, which projects a "
+"triangulation and so draws a slightly different silhouette on a different"
+" architecture. Every number written into the drawing is rounded to the "
+"``precision`` the file type claims, which is what stops a stroke width "
+"that differs in its sixteenth digit from being a diff. And a DXF -- which"
+" a CAD tool would otherwise stamp with the time it was written and a "
+"fresh pair of GUIDs -- gets fixed values for those and a pinned order for"
+" its ``CLASSES`` section, which ezdxf otherwise derives from a ``set`` "
+"and so emits differently per process."
+msgstr ""
+"它换来三样东西。SVG 投影会走 OpenCASCADE 精确的隐藏线算法，而不是多边形算法——后者投影的是三角网格，因此在不同架构上画"
+"出的轮廓会略有差别。写入工程图的每一个数字都会按文件类型所声明的 ``precision`` 取整，正是这一点让小数点后第十六位上的线宽"
+"差异不会变成一处 diff。而 DXF ——CAD 工具本来会在其中打上写入时间和一对新生成的 GUID——会为这些内容取得固定值，并为"
+"它的 ``CLASSES`` 小节固定顺序；否则 ezdxf 会从一个 ``set`` 推导出该顺序，于是每个进程输出的结果都不一样。"
+
+#: ../../source/contributing.rst:732
+msgid ""
+"It is ``false`` by default, because the exact projection is much the "
+"slower of the two on anything large and is the one that can take the "
+"sandbox down; a picture produced only to be looked at should be the "
+"fastest correct one. And it is a floor rather than a promise -- it "
+"settles everything PartCAD chooses, and what is left is the kernel's own "
+"arithmetic, on which two architectures can still disagree along a curved "
+"silhouette. That is the other reason this check runs on one cell of the "
+"matrix."
+msgstr ""
+"它默认为 ``false`` ，因为在任何较大的对象上，精确投影都是两者中慢得多的那个，而且正是它有可能把沙箱拖垮；一张只是用来看的图片"
+"，应该用最快的正确方式生成。而且它是一个下限，而不是一项承诺——它确定了所有由 PartCAD 决定的部分，剩下的是内核自身的算术，在这"
+"一点上两种架构沿着曲线轮廓仍然可能出现分歧。这也是该检查只在测试矩阵的一个单元格上运行的另一个原因。"
+
+#: ../../source/contributing.rst:740
+msgid ""
+"That cell is ``ubuntu-latest`` on x86_64, rendering in the ``docker`` "
+"Python sandbox -- so that is the machine the checked-in drawings belong "
+"to, and the one to re-render them on. A render from anywhere else is a "
+"true drawing of the same object and still not the file the check compares"
+" against: twenty-seven of them came back from an arm64 laptop differing "
+"along a curve, and the job stayed red for everybody until they were "
+"rendered again on Linux. A machine with a container runtime already picks"
+" that sandbox by itself; a configuration that has said otherwise is "
+"overruled for one run with ``PC_PYTHON_SANDBOX=docker``."
+msgstr ""
+"那个单元格是 x86_64 上的 ``ubuntu-latest`` ，在 ``docker`` Python 沙箱中渲染——因此那就是"
+"已纳入版本控制的工程图所属的机器，也是重新渲染它们时该用的机器。在其他任何地方渲染出来的结果，都是同一对象的真实工程图，但仍然不是该检查"
+"所比对的那个文件：曾经有二十七张图从一台 arm64 笔记本上渲染回来，沿着曲线存在差异，于是该作业对所有人都一直是红的，直到它们在 L"
+"inux 上被重新渲染为止。装有容器运行时的机器本来就会自行选用那个沙箱；若某份配置另有规定，可以用 ``PC_PYTHON_SANDB"
+"OX=docker`` 为这一次运行把它覆盖掉。"
+
+#: ../../source/contributing.rst:749
+msgid ""
+"An implementation another package supplies is not PartCAD's to fix, and "
+"one of them may well write a different file every time. Those files are "
+"named in the CI check's ``UNSTABLE`` list, which is deliberately short: "
+"every entry is a file nobody is watching any more, so it needs a reason "
+"there and the same reason where a reader of that package will meet it."
+msgstr ""
+"由其他包提供的实现不归 PartCAD 来修，其中某些实现很可能每次写出的文件都不一样。这些文件被列在 CI 检查的 ``UNSTABL"
+"E`` 名单中，而该名单刻意保持简短：其中每一项都是一个不再有人盯着的文件，因此它既需要在那里写明理由，也需要在该包的读者会遇到它的地方"
+"写明同样的理由。"
+
+#: ../../source/contributing.rst:755
+msgid ""
+"Four of the five entries today are the raster projections of "
+"``examples/feature_render``, and what they drift on is the encoding "
+"rather than the picture: PartCAD's own SVG goes into svglib, reportlab "
+"and Pillow, and that stack is resolved into the sandbox when it is "
+"provisioned. ``reproducible`` settles the projection they are drawn from "
+"and cannot settle what a new release of an encoder does with it."
+msgstr ""
+"今天这五项中有四项是 ``examples/feature_render`` 的栅格投影，它们漂移的是编码而不是图像本身：PartCAD"
+" 自己的 SVG 会交给 svglib、reportlab 和 Pillow，而这一整套依赖是在沙箱准备时才解析确定的。 ``repro"
+"ducible`` 能确定它们所依据的投影，却无法确定某个编码器的新版本会拿它做出什么来。"
+
+#: ../../source/contributing.rst:762
+msgid ""
+"The fifth is ``examples/feature_render_custom/bracket.svg``. Its PDF "
+"sibling was there too and came off once the implementation started "
+"passing ``reproducible`` through to draftwright's own flag of the same "
+"name; the SVG is still there because draftwright writes the x-axis "
+"rotation of an elliptical arc at whatever the float came out as, and two "
+"architectures disagree about it in the last bit. PartCAD rounds its own "
+"drawings to the precision the file type claims, which is what makes those"
+" comparable -- those bytes are not PartCAD's."
+msgstr ""
+"第五项是 ``examples/feature_render_custom/bracket.svg`` 。它的 PDF 同胞原本也在名单"
+"上，自从实现开始把 ``reproducible`` 透传给 draftwright 自己的同名标志之后，它就从名单上去掉了；SVG 之"
+"所以还在，是因为 draftwright 会把椭圆弧的 x 轴旋转按浮点数算出来的原样写出，而两种架构在最后一位上并不一致。PartCA"
+"D 会把自己的工程图按文件类型所声明的精度取整，正是这一点让那些图可以互相比较——而这些字节不属于 PartCAD。"
+
+#: ../../source/contributing.rst:771
+msgid "Coverage"
+msgstr "覆盖率"
+
+#: ../../source/contributing.rst:773
+msgid ""
+"Every suite above measures coverage, and no one of those measurements "
+"means much on its own: the ``Pytest`` job never starts a CAD sandbox, "
+"``Behave`` drives the installed ``pc`` and never imports a unit-test "
+"helper, and the example sweeps walk success paths only. CI merges them. "
+"The ``Coverage`` job runs after every suite, combines the raw "
+"``.coverage`` data each one uploaded, and publishes the result three "
+"ways:"
+msgstr ""
+"上面每一套测试都会测量覆盖率，而其中任何一次测量单独来看都说明不了多少问题： ``Pytest`` 作业从不启动 CAD 沙箱， ``B"
+"ehave`` 驱动的是已安装的 ``pc`` ，从不导入单元测试的辅助代码，而示例扫描只走成功路径。CI 会把它们合并起来。 ``Co"
+"verage`` 作业在每套测试之后运行，把各套测试上传的原始 ``.coverage`` 数据合并起来，并以三种方式发布结果："
+
+#: ../../source/contributing.rst:778
+msgid ""
+"the ``coverage-html-report`` artifact on the run -- download it, unpack "
+"it and open ``htmlcov/index.html``;"
+msgstr ""
+"本次运行上的 ``coverage-html-report`` 制品——下载它、解压并打开 ``htmlcov/index.html`` ；"
+
+#: ../../source/contributing.rst:779
+msgid ""
+"**one comment** on the pull request, edited in place on every push, with "
+"the project rate, the patch rate and the changed statements nothing "
+"exercised;"
+msgstr "拉取请求上的 **一条评论** ，每次推送时就地编辑，其中包含项目覆盖率、补丁覆盖率，以及没有被任何测试执行到的变更语句；"
+
+#: ../../source/contributing.rst:781
+msgid ""
+"the ``Coverage`` check itself, which is the only thing here that can fail"
+" your pull request."
+msgstr "``Coverage`` 检查本身，这是这里唯一一个能让你的拉取请求失败的东西。"
+
+#: ../../source/contributing.rst:783
+msgid ""
+"This replaced Codecov, and there is no third-party service in it any "
+"more. The merge is ``coverage combine`` over the data files, which is a "
+"**union of line numbers**, not an average of percentages: a line "
+"``Behave`` hit on Windows and ``Pytest`` missed on Linux is covered once."
+" What lets it see those as one file is the ``[paths]`` section of ``dev-"
+"tools/coverage.rc``, which maps the three roots the same file is recorded"
+" under -- the checkout, ``site-packages``, and either of those with "
+"Windows separators -- onto one."
+msgstr ""
+"它取代了 Codecov，其中不再有任何第三方服务。合并的方式是对各数据文件执行 ``coverage combine`` ，这是行号的"
+" **并集** ，而不是百分比的平均值：某一行若 ``Behave`` 在 Windows 上执行到了而 ``Pytest`` 在 Li"
+"nux 上没有，它就算被覆盖了一次。让它把这些视为同一个文件的，是 ``dev-tools/coverage.rc`` 的 ``[pat"
+"hs]`` 小节，它把同一个文件被记录时所用的三种根路径——检出目录、 ``site-packages`` ，以及这两者的 Window"
+"s 分隔符形式——映射为同一个。"
+
+#: ../../source/contributing.rst:789
+msgid ""
+"**The requirement is a floor under patch coverage.** \"Patch\" is the "
+"statements your pull request added or changed, and the floor is the "
+"project's own statement coverage *in the same run*: cover what you write "
+"at least as well as this repository is already covered. Nothing is stored"
+" between runs and nothing is compared against history, so there is no "
+"baseline to maintain and no way for the bar to drift. A change that "
+"touches no statement coverage measures -- documentation, workflows, a "
+"test -- has no patch to hold to it and passes with a notice saying so."
+msgstr ""
+"**这项要求是补丁覆盖率的一条下限。** “补丁”指的是你的拉取请求新增或修改的语句，而下限是项目自身在 *同一次运行* 中的语句覆盖率"
+"：你写下的代码，至少要被覆盖到这个仓库现有的水平。两次运行之间不保存任何数据，也不与历史作比较，因此既没有需要维护的基线，门槛也不可能漂"
+"移。一个完全不触及语句覆盖率所测内容的改动——文档、工作流、测试——没有补丁需要守住这条线，会带着一条说明通过。"
+
+#: ../../source/contributing.rst:796
+msgid ""
+"Lines that are not statements are in neither half of that fraction: a "
+"comment, a blank line, or a file the ``include`` list in ``dev-"
+"tools/coverage.rc`` does not name. The figure answers \"is the new code "
+"exercised\", not \"how much did you type\"."
+msgstr ""
+"不属于语句的行在这个分数的两边都不出现：注释、空行，或者 ``dev-tools/coverage.rc`` 中 ``include``"
+" 名单没有列出的文件。这个数字回答的是“新代码有没有被执行到”，而不是“你敲了多少字”。"
+
+#: ../../source/contributing.rst:800
+msgid ""
+"Every suite measures through the same ``dev-tools/coverage.rc``, and that"
+" is load-bearing rather than tidy: it sets ``branch = True``, and "
+"``coverage combine`` will not mix branch data with statement-only data. "
+"The suites that drive ``coverage run`` pass the file on the command line;"
+" ``pytest`` measures through pytest-cov, which finds no configuration on "
+"its own here, so ``addopts`` names ``--cov-config=dev-"
+"tools/coverage.rc``. Drop that and the merge does not degrade, it fails "
+"outright."
+msgstr ""
+"每一套测试都通过同一个 ``dev-tools/coverage.rc`` 来测量，而这不是为了整洁，它起着关键作用：它设置了 ``br"
+"anch = True`` ，而 ``coverage combine`` 不会把分支数据和仅含语句的数据混在一起。那些驱动 ``cov"
+"erage run`` 的套件会在命令行上指定该文件； ``pytest`` 则通过 pytest-cov 来测量，而后者在这里无法自行"
+"找到配置，因此 ``addopts`` 中写明了 ``--cov-config=dev-tools/coverage.rc`` 。去掉它"
+"，合并不会退化，而是直接失败。"
+
+#: ../../source/contributing.rst:806
+msgid ""
+"A file **no job imported at all** does count, and it takes a step to make"
+" it. coverage.py reports the files it saw, so a module nothing exercises "
+"is absent from the merged data rather than zero in it -- which would be a"
+" hole in precisely the shape of the change worth catching, since a brand-"
+"new untested module would contribute no statements at all and the "
+"requirement would find nothing to hold. The merge therefore walks the "
+"packages in scope and records every file it did not find, at nought "
+"percent, before writing any report. This is also why the project rate "
+"here is lower than the one Codecov used to show: it was never that high."
+msgstr ""
+"一个 **根本没有被任何作业导入过** 的文件同样计入其中，而要做到这一点需要额外一步。coverage.py 报告的是它见到过的文件，"
+"因此一个没有任何测试执行到的模块，是从合并后的数据中缺席，而不是在其中记为零——那恰恰会在最值得捕捉的那类改动的形状上留下一个空洞，因为"
+"一个全新的、未被测试的模块根本不会贡献任何语句，这项要求也就找不到任何东西可以约束。因此，合并过程会遍历范围内的各个包，在写出任何报告之"
+"前，把每一个它没有找到的文件都按零记录下来。这也是为什么这里的项目覆盖率比 Codecov 过去显示的要低：它从来就没有那么高过。"
+
+#: ../../source/contributing.rst:813
+msgid ""
+"To see the same numbers locally, run whichever suites your change touches"
+" and then merge what they wrote:"
+msgstr "要在本地看到同样的数字，请运行你的改动所涉及的那些套件，然后把它们写出的数据合并起来："
+
+#: ../../source/contributing.rst:822
+msgid ""
+"Two notes on the comment. It is posted by the run itself, so on a pull "
+"request **from a fork** it does not appear: GitHub gives such a run a "
+"read-only token, on purpose, and no setting here changes that. The report"
+" is in the ``Coverage`` job's summary instead, and the requirement still "
+"gates. And ``CI-Dev`` measures coverage too but does not feed this report"
+" -- a ``needs:`` does not reach across workflows, so there is no moment "
+"at which ``CI`` knows that run has finished. Its suites are the same "
+"suites run in the dev container; it keeps publishing its own "
+"``coverage.xml`` inside its test-results artifact."
+msgstr ""
+"关于这条评论有两点需要说明。它是由运行本身发布的，因此在 **来自复刻仓库** 的拉取请求上不会出现：GitHub 会特意给这类运行一个"
+"只读令牌，而这里的任何设置都改变不了这一点。此时报告会放在 ``Coverage`` 作业的摘要里，而这项要求仍然起把关作用。另外， `"
+"`CI-Dev`` 也会测量覆盖率，但不会汇入这份报告—— ``needs:`` 无法跨越工作流，因此不存在某个时刻能让 ``CI`` "
+"知道那次运行已经结束。它跑的是同样的套件，只不过是在开发容器里跑的；它会继续在自己的 test-results 制品中发布自己的 ``c"
+"overage.xml`` 。"
+
+#: ../../source/contributing.rst:830
 msgid "Commit & Push Changes"
 msgstr "提交并推送更改"
 
-#: ../../source/contributing.rst:538
+#: ../../source/contributing.rst:832
 msgid ""
 "You can commit changes from either terminal or VS Code UI which will "
 "trigger local git hooks managed by ``pre-commit`` to enforce coding "
@@ -931,41 +1548,41 @@ msgstr ""
 "你可以从终端或 VS Code 界面提交更改，这会触发由 ``pre-commit`` 管理的本地 git "
 "钩子，以强制执行编码规范并尽早发现一些问题。"
 
-#: ../../source/contributing.rst:542
+#: ../../source/contributing.rst:836
 msgid "pre-commit"
 msgstr "pre-commit"
 
-#: ../../source/contributing.rst:546
+#: ../../source/contributing.rst:840
 msgid ""
 "`pre-commit`_ is a framework for managing and maintaining multi-language "
 "pre-commit hooks."
 msgstr "`pre-commit`_ 是一个用于管理和维护多语言 pre-commit 钩子的框架。"
 
-#: ../../source/contributing.rst:548
+#: ../../source/contributing.rst:842
 msgid ""
-"Configuration file is located at ``dev-tools/pre-commit-config.yaml`` where "
-"you can see all supported hooks."
+"Configuration file is located at ``dev-tools/pre-commit-config.yaml`` "
+"where you can see all supported hooks."
 msgstr "配置文件位于 ``dev-tools/pre-commit-config.yaml`` ，你可以在其中看到所有受支持的钩子。"
 
-#: ../../source/contributing.rst:550
+#: ../../source/contributing.rst:844
 msgid ""
 "In rare cases, you might need to temporarily disable hooks. There are two"
 " options:"
 msgstr "在少数情况下，你可能需要临时禁用钩子。有两种选择："
 
-#: ../../source/contributing.rst:552
+#: ../../source/contributing.rst:846
 msgid "Use `temporarily disable hooks`_ to skip specific individual hooks"
 msgstr "使用 `temporarily disable hooks`_ 来跳过特定的单个钩子"
 
-#: ../../source/contributing.rst:553
+#: ../../source/contributing.rst:847
 msgid "Use `git commit --no-verify`_ to skip all hooks at once"
 msgstr "使用 `git commit --no-verify`_ 来一次性跳过所有钩子"
 
-#: ../../source/contributing.rst:555
+#: ../../source/contributing.rst:849
 msgid "Remember: These hooks are required to pass in CI before PR merge."
 msgstr "请记住：在 PR 合并之前，这些钩子必须在 CI 中通过。"
 
-#: ../../source/contributing.rst:559
+#: ../../source/contributing.rst:853
 msgid ""
 "While you can remove local git hooks completely, be aware that: 1. Your "
 "PR will be blocked from merging until all hook checks pass in CI 2. "
@@ -976,92 +1593,957 @@ msgstr ""
 "虽然你可以完全移除本地的 git 钩子，但请注意：1. 在所有钩子检查于 CI 中通过之前，你的 PR 将被阻止合并；2. 你会错过本可以避免 "
 "CI 失败的早期反馈；3. 你可能需要额外提交若干次来修复那些钩子原本会在本地捕获的问题。"
 
-#: ../../source/contributing.rst:564
+#: ../../source/contributing.rst:858
 msgid "Option 1: Using pre-commit (recommended)"
 msgstr "选项 1：使用 pre-commit（推荐）"
 
-#: ../../source/contributing.rst:573
+#: ../../source/contributing.rst:867
 msgid "Option 2: Manual removal (use with caution):"
 msgstr "选项 2：手动移除（请谨慎使用）："
 
-#: ../../source/contributing.rst:588
+#: ../../source/contributing.rst:882
 msgid "Open Pull Request"
 msgstr "创建 Pull Request"
 
-#: ../../source/contributing.rst:590
+#: ../../source/contributing.rst:884
 msgid ""
 "There are multiple options how PR could be opened, please refer to the "
 "following to choose option which works best for you."
 msgstr "创建 PR 有多种方式，请参考下面的内容来选择最适合你的方式。"
 
-#: ../../source/contributing.rst:593
+#: ../../source/contributing.rst:887
 msgid "`Creating a pull request`_"
 msgstr "`Creating a pull request`_"
 
-#: ../../source/contributing.rst:594
+#: ../../source/contributing.rst:888
 msgid "`GitHub Pull Requests in Visual Studio Code`_"
 msgstr "`GitHub Pull Requests in Visual Studio Code`_"
 
-#: ../../source/contributing.rst:597
+#: ../../source/contributing.rst:891
 msgid "Meet PR Merge Criteria"
 msgstr "满足 PR 合并标准"
 
-#: ../../source/contributing.rst:599
+#: ../../source/contributing.rst:893
 msgid ""
 "Depending on files changed in PR you might need to get required checks to"
 " pass first and get reviews from owners or maintainers, following are "
 "related GH docs:"
 msgstr "根据 PR 中所更改的文件，你可能需要先让必需的检查通过，并获得所有者或维护者的评审，下面是相关的 GitHub 文档："
 
-#: ../../source/contributing.rst:602
+#: ../../source/contributing.rst:896
 msgid "`About Status Checks`_"
 msgstr "`About Status Checks`_"
 
-#: ../../source/contributing.rst:603
+#: ../../source/contributing.rst:897
 msgid "`Required reviews`_"
 msgstr "`Required reviews`_"
 
-#: ../../source/contributing.rst:606
+#: ../../source/contributing.rst:902
+msgid "How much CI a change runs"
+msgstr "一次改动会运行多少 CI"
+
+#: ../../source/contributing.rst:904
+msgid ""
+"Two questions decide it, and they are asked separately: **how deep** the "
+"matrix goes, and **which jobs** the change can say anything about at all."
+msgstr "有两个问题决定了这一点，而且它们是分开提出的：测试矩阵 **铺得多深** ，以及这次改动究竟 **能对哪些作业有所说明** 。"
+
+#: ../../source/contributing.rst:907
+msgid "Depth: three tiers"
+msgstr "深度：三个档位"
+
+#: ../../source/contributing.rst:910
+msgid ""
+"CI fans out over operating systems, and a pull request does not pay for "
+"all of them."
+msgstr "CI 会在各个操作系统上展开，而一个拉取请求不会为它们全部买单。"
+
+#: ../../source/contributing.rst:912 ../../source/contributing.rst:1030
+msgid "``pr``"
+msgstr ""
+
+#: ../../source/contributing.rst:913
+msgid ""
+"What a pull request runs on every push to it. The oldest and the newest "
+"supported Python, with nothing in between, and every image except macOS "
+"-- whose runners bill at ten times the Linux rate, and which no "
+"standalone bundle or IDE is built for here either. **Both Windows images "
+"stay.** Windows is not a second macOS to economise on: its path "
+"separator, drive letters and line endings are a standing source of "
+"breakage in code written on Linux, so it is the platform a pull request "
+"most needs."
+msgstr ""
+"拉取请求每次被推送时所运行的内容。最旧和最新的受支持 Python 版本，中间的一概不取；以及除 macOS 之外的每一种镜像——mac"
+"OS 运行器的计费是 Linux 的十倍，而且这里也不为它构建任何独立打包件或 IDE。 **两种 Windows 镜像都保留。** W"
+"indows 不是第二个可以省掉的 macOS：它的路径分隔符、盘符和换行符，一直是在 Linux 上写出的代码出问题的固定来源，因此它"
+"恰恰是拉取请求最需要的平台。"
+
+#: ../../source/contributing.rst:919 ../../source/contributing.rst:1031
+msgid "``queue``"
+msgstr ""
+
+#: ../../source/contributing.rst:920
+msgid ""
+"What the merge queue runs, which is what a pull request used to: every "
+"current image, macOS included, and the full Python range. Nothing reaches"
+" ``devel`` without having passed this, so the coverage a pull request "
+"drops is coverage the commit still has to earn -- one run per merge "
+"instead of one per push."
+msgstr ""
+"合并队列所运行的内容，也就是拉取请求过去所运行的：所有当前镜像（包括 macOS），以及完整的 Python 版本范围。不经过这一关，任"
+"何东西都进不了 ``devel`` ，因此拉取请求省下的那部分覆盖，提交仍然要挣回来——只是每次合并运行一次，而不是每次推送运行一次。"
+
+#: ../../source/contributing.rst:924 ../../source/contributing.rst:1032
+msgid "``deep``"
+msgstr ""
+
+#: ../../source/contributing.rst:925
+msgid ""
+"Everything, the older OS versions included: the nightly schedule, a "
+"manual workflow run, and any push, which includes the release. On a pull "
+"request, put ``#deepTest`` anywhere in the title or the description and "
+"re-run the checks. Worth doing when the change touches packaging, "
+"dependencies, the standalone bundle or the snap, or anything else where "
+"an older OS version could behave differently. It runs exactly what it "
+"always ran -- it is unaffected by everything on this page."
+msgstr ""
+"全部内容，包括较旧的操作系统版本：每夜定时任务、手动触发的工作流运行，以及任何推送（其中包括发布）。在拉取请求上，把 ``#deepTe"
+"st`` 放在标题或描述中的任何位置，然后重新运行各项检查。当改动涉及打包、依赖、独立打包件或 snap，或任何在较旧操作系统版本上行为"
+"可能不同的内容时，这样做是值得的。它运行的内容与以往完全一致——不受本页上任何内容的影响。"
+
+#: ../../source/contributing.rst:933
+msgid ""
+"The marker is matched as a plain substring, so a pull request that merely"
+" *mentions* it -- one editing this page, say -- opts itself in and runs "
+"the full matrix. That is deliberate: a matcher clever enough to tell a "
+"marker from a mention is a rule you would have to know before your opt-in"
+" worked, and over-running is the safe direction. If a description has to "
+"name the marker without asking for it, write it split across two code "
+"spans."
+msgstr ""
+"该标记是按纯子串匹配的，因此一个只是 *提到* 了它的拉取请求——比如正在编辑本页的那种——就会把自己纳入进来，并运行完整的测试矩阵。这"
+"是刻意为之：一个聪明到能分辨“标记”与“提及”的匹配器，意味着一条你必须先知道、你的选择才会生效的规则，而宁可多跑也是更安全的方向。如果"
+"某份描述必须写出该标记却又不想启用它，就把它拆成两个代码段来写。"
+
+#: ../../source/contributing.rst:942
+msgid "Running CI in your own fork"
+msgstr "在你自己的复刻仓库中运行 CI"
+
+#: ../../source/contributing.rst:944
+msgid ""
+"A pull request **against this repository whose branch lives in your "
+"fork** runs with a read-only token and no repository secrets. That is "
+"GitHub's rule, not a setting either side can change, and it holds whether"
+" or not you have write access here -- what decides it is that the head is"
+" somewhere else. Most of CI does not care: the tests, the linters, the "
+"extension and the bundles all run on a fork exactly as they run here."
+msgstr ""
+"一个 **针对本仓库、而分支位于你的复刻仓库中** 的拉取请求，会以只读令牌运行，并且拿不到仓库的任何密钥。这是 GitHub 的规则，"
+"不是任何一方能改的设置，而且无论你在这里是否有写权限都一样——决定它的是源分支位于别处。CI 的绝大部分并不在意这一点：测试、静态检查工"
+"具、扩展和各个打包件在复刻仓库上的运行方式，与在这里完全一致。"
+
+#: ../../source/contributing.rst:949
+msgid ""
+"A pull request **inside your fork** -- branch to branch, both in your "
+"copy -- is a different thing and gets the full run: a writable token, "
+"your own secrets, your own container images. Nothing is held back there, "
+"because nothing about it is untrusted from your fork's point of view. "
+"That is the run to open when you want CI to behave exactly as it does on "
+"a pull request here, and it is worth knowing that the test for it is the "
+"head being in *another* repository and not the head repository being a "
+"fork of something -- the two differ for precisely this case, and reading "
+"the wrong one used to leave a fork unable to test its own work."
+msgstr ""
+"一个 **在你的复刻仓库内部** 的拉取请求——分支对分支，两端都在你自己的副本里——则是另一回事，它会得到完整的运行：可写的令牌、你自"
+"己的密钥、你自己的容器镜像。那里什么都不会被保留，因为从你的复刻仓库的角度看，其中没有任何不可信的东西。当你希望 CI 的行为与在这里的"
+"拉取请求上完全一致时，就该开这样一次运行。另外值得知道的是，判断依据是源分支位于 *另一个* 仓库，而不是源仓库本身是否是某个仓库的复刻"
+"——这两者恰恰在这种情况下不同，而过去读错了其中一个，曾让复刻仓库无法测试自己的工作。"
+
+#: ../../source/contributing.rst:956
+msgid ""
+"One thing does. A change under ``tools/containers/`` (or a ``#images`` "
+"marker) means the run has to *build* PartCAD's container images and push "
+"them somewhere its own test jobs can pull them from, and a fork's pull "
+"request cannot push anywhere. Such a run falls back to the release's "
+"images, so the change you made to them goes untested -- which used to be "
+"a ``::warning::`` somewhere inside a green run."
+msgstr ""
+"有一件事确实会受影响。 ``tools/containers/`` 下的改动（或者一个 ``#images`` 标记）意味着这次运行必须"
+" *构建* PartCAD 的容器镜像，并把它们推送到自己的测试作业能够拉取的地方，而复刻仓库的拉取请求无法推送到任何地方。这样的运行会"
+"回退到使用发布版本的镜像，于是你对镜像所做的改动根本得不到测试——而这件事过去只是某次绿色运行里某个角落的一条 ``::warning::`` 。"
+
+#: ../../source/contributing.rst:961
+msgid ""
+"The ``Prerequisites`` job now says so before the run instead, and says "
+"where to go:"
+msgstr "现在 ``Prerequisites`` 作业会在运行之前就把这一点说明白，并指出该去哪里："
+
+#: ../../source/contributing.rst:971
+msgid ""
+"That job asks the registry what it grants the token, and it treats the "
+"answer as confirmation only. A granted ``push`` proves the write works; a"
+" withheld one proves nothing, because ghcr answers ``pull`` and no "
+"``push`` on ``partcad/partcad`` itself -- the repository that publishes "
+"every one of these images. So the job never stops a run over that answer."
+" What it costs is the case it was added for: a fork whose **Workflow "
+"permissions** are read-only is not caught before its push, only at it."
+msgstr ""
+"该作业会向镜像仓库询问它给这个令牌授予了什么，并且只把答案当作确认来用。被授予的 ``push`` 证明写入可行；被拒绝的则什么也证明不"
+"了，因为 ghcr 对 ``partcad/partcad`` 本身——也就是发布所有这些镜像的那个仓库——的回答就是只有 ``pull"
+"`` 而没有 ``push`` 。因此该作业绝不会因为这个答案而中止一次运行。为此付出的代价，正是它当初被加入所针对的那种情况：一个 *"
+"*工作流权限** 为只读的复刻仓库，不会在推送之前被发现，而只会在推送的那一刻被发现。"
+
+#: ../../source/contributing.rst:977
+msgid ""
+"**Run CI in your fork to get that coverage.** Push the branch to your "
+"fork and start *CI* from its **Actions** tab with \"Run workflow\". There"
+" the token writes to ``ghcr.io/<you>/partcad-container-*``, the run "
+"builds your images, and its test jobs pull what it built rather than "
+"upstream's -- ``PC_CONTAINER_IMAGE_OWNER`` is what redirects them, beside"
+" the ``PC_CONTAINER_IMAGE_TAG`` that redirects the tag. Link the run on "
+"your pull request and a reviewer can see it went green."
+msgstr ""
+"**在你的复刻仓库中运行 CI，把这部分覆盖补上。** 把分支推送到你的复刻仓库，然后在它的 **Actions** 标签页中用“Run"
+" workflow”启动 *CI* 。在那里，令牌可以写入 ``ghcr.io/<you>/partcad-container-*`` "
+"，该次运行会构建你自己的镜像，而它的测试作业拉取的是它刚构建出来的镜像，而不是上游的—— ``PC_CONTAINER_IMAGE_OW"
+"NER`` 负责把它们重定向过去，旁边的 ``PC_CONTAINER_IMAGE_TAG`` 则负责重定向标签。把该次运行的链接贴在你"
+"的拉取请求上，审阅者就能看到它是绿的。"
+
+#: ../../source/contributing.rst:983
+msgid ""
+"Two things a fork needs once, and ``Prerequisites`` fails with both if "
+"they are missing:"
+msgstr "复刻仓库需要一次性准备好两件事，缺少其中任何一件， ``Prerequisites`` 都会失败："
+
+#: ../../source/contributing.rst:985
+msgid ""
+"**Actions enabled.** A fork's **Actions** tab starts with \"I understand "
+"my workflows, go ahead and enable them\"."
+msgstr ""
+"**启用 Actions。** 复刻仓库的 **Actions** 标签页一开始会显示“I understand my workflow"
+"s, go ahead and enable them”。"
+
+#: ../../source/contributing.rst:986
+msgid ""
+"**Read and write workflow permissions**, under **Settings -> Actions -> "
+"General**. Nothing else: the ``ghcr.io/<you>/partcad-container-*`` "
+"package is created on the first push, and no secret of your own is "
+"needed."
+msgstr ""
+"**读写工作流权限** ，位于 **Settings -> Actions -> General** 。除此之外别无他求： ``ghcr"
+".io/<you>/partcad-container-*`` 这个软件包会在第一次推送时自动创建，也不需要你自己的任何密钥。"
+
+#: ../../source/contributing.rst:989
+msgid ""
+"Note that a fork's default branch is called ``devel`` too, and a push to "
+"it used to run a matrix in which every single job was skipped -- the "
+"``Version updated`` rule below is about *this* repository, where a bump "
+"follows every merge within minutes, and a fork has no bump coming. It no "
+"longer applies to a fork."
+msgstr ""
+"注意，复刻仓库的默认分支也叫 ``devel`` ，而向它推送过去会触发一次所有作业无一例外全被跳过的测试矩阵——下面那条 ``Vers"
+"ion updated`` 规则说的是 *本* 仓库，这里每次合并之后几分钟内就会有一次版本号提升，而复刻仓库并不会有这样的提升。现在该"
+"规则不再适用于复刻仓库。"
+
+#: ../../source/contributing.rst:993
+msgid ""
+"``SSH_PRIVATE_KEY_RO`` is the other secret this repository holds, and "
+"what it is for is a dependency that is not public. These suites drive "
+"``pc install``, and a PartCAD package may declare a ``git`` dependency on"
+" any repository -- so a **private** fork testing its own packages clones "
+"its own private repositories in CI, and this is the credential that lets "
+"it. The public upstream needs none: its own dependencies are public and "
+"clone over https."
+msgstr ""
+"``SSH_PRIVATE_KEY_RO`` 是本仓库持有的另一个密钥，它所针对的是非公开的依赖。这些测试套件会驱动 ``pc inst"
+"all`` ，而一个 PartCAD 包可以声明对任意仓库的 ``git`` 依赖——因此一个 **私有的** 复刻仓库在测试它自己的包"
+"时，会在 CI 中克隆它自己的私有仓库，而这正是让它能够这样做的凭据。公开的上游仓库不需要它：它自己的依赖都是公开的，通过 https 克隆。"
+
+#: ../../source/contributing.rst:998
+msgid ""
+"So ``Prerequisites`` asks for it where the repository is private and "
+"reports it as *not needed* where it is public, and the behave jobs start "
+"no agent where there is no key -- unconditional, the agent action is "
+"handed an empty string and fails the whole job with \"The ssh-private-key"
+" argument is empty\". The privacy of the repository is a heuristic for "
+"\"its dependencies are private too\", not a fact: if your fork is private"
+" but everything it installs is public, set ``needs-ssh: \"false\"`` on "
+"the ``Prerequisites`` job in your copy of ``test.yml`` and ``test-"
+"dev.yml``."
+msgstr ""
+"因此，在仓库是私有的情况下 ``Prerequisites`` 会要求提供它，而在仓库是公开的情况下把它报告为 *不需要* ；并且在没有"
+"密钥时，behave 作业不会启动任何 agent——这一点是无条件的，否则 agent 动作会收到一个空字符串，并以“The ssh-"
+"private-key argument is empty”让整个作业失败。仓库是否私有，只是“它的依赖也是私有的”这一判断的启发式依据"
+"，而不是事实：如果你的复刻仓库是私有的，但它安装的一切都是公开的，就在你那份 ``test.yml`` 和 ``test-dev.yml"
+"`` 的 ``Prerequisites`` 作业上设置 ``needs-ssh: \"false\"`` 。"
+
+#: ../../source/contributing.rst:1004
+msgid ""
+"A push to ``devel`` **in this repository** is the exception to all three:"
+" it runs no matrix at all unless its head commit message starts with "
+"``Version updated``, which is the release commit. (A fork is exempt -- "
+"see `Running CI in your own fork`_ above. The reasoning below is about "
+"the bump that follows every merge here, and a fork has no bump coming, so"
+" the rule would leave it with a run in which every job is skipped.) Every"
+" push to ``devel`` is followed by one of those within minutes and it "
+"carries the same tree, so what a merge costs is one build of that tree "
+"rather than two -- and the artifacts it produces are stamped with the "
+"version they will be released under rather than with the one the merge "
+"replaced. ``Standalone`` and ``IDE`` are gated on this too; they used to "
+"run on the merge as well, which is where the second build and the stale "
+"version number came from. Neither has a ``paths:`` filter on its push "
+"trigger any more: the gate is what decides, and a filter in front of it "
+"could only ever hide it -- a version bump happens to touch "
+"``pyproject.toml`` and ``ide/vscode/package.json`` today, and the day "
+"``dev-tools/bumpversion.toml`` stops naming such a file nothing would be "
+"built on ``devel`` again with nothing to say so."
+msgstr ""
+"**在本仓库中** 向 ``devel`` 推送是上述三者的例外：除非它的头部提交信息以 ``Version updated`` 开头—"
+"—那正是发布提交——否则它根本不会运行任何测试矩阵。（复刻仓库不受此限，参见上文的 `Running CI in your own fo"
+"rk`_ 。下面的理由说的是这里每次合并之后都会有的那次版本号提升，而复刻仓库并不会有这样的提升，所以该规则只会让它得到一次所有作业全被"
+"跳过的运行。）每一次向 ``devel`` 的推送，几分钟之内都会跟上这样一次提升，而且两者携带的是同一棵代码树，因此一次合并的代价是把"
+"这棵树构建一次而不是两次——并且它产出的制品所标注的，是它们将要以之发布的版本号，而不是被这次合并取代掉的那个版本号。 ``Standa"
+"lone`` 和 ``IDE`` 也受这道关卡约束；它们过去在合并时也会运行，第二次构建和过时的版本号正是由此而来。现在两者的推送触发器"
+"上都不再有 ``paths:`` 过滤器：决定权在这道关卡手里，而放在它前面的过滤器只可能把它遮住——今天一次版本号提升碰巧会改动 ``"
+"pyproject.toml`` 和 ``ide/vscode/package.json`` ，而一旦 ``dev-tools/bump"
+"version.toml`` 不再指名这样的文件，那么 ``devel`` 上就会什么都不再构建，却没有任何东西会提示这一点。"
+
+#: ../../source/contributing.rst:1016
+msgid ""
+"That exception applies to pushes and to nothing else -- the nightly run "
+"has no head commit to read a message from, so the guard leads with the "
+"event name and lets every other trigger through. It did not, from the day"
+" the guard was written until 0.8.32, and the nightly was skipped every "
+"night in between: if you change that condition, keep the event-name "
+"clause first. The two workflows that can also be *called* -- "
+"``Standalone`` and ``IDE``, both of which ``Deployment`` calls to build "
+"what a release carries -- lead with their ``inputs`` marker before that, "
+"because inside a called workflow the whole ``github`` context is the "
+"caller's and there is no other way to recognise one."
+msgstr ""
+"该例外只适用于推送，别无其他——每夜运行没有头部提交可供读取提交信息，因此这道守卫以事件名称打头，放行其他所有触发方式。从这道守卫写下的"
+"那天起直到 0.8.32，它并不是这样做的，期间每夜运行每晚都被跳过：如果你要改动那个条件，请把事件名称那一项保持在最前面。另外两个还可"
+"以被 *调用* 的工作流—— ``Standalone`` 和 ``IDE`` ，发布时 ``Deployment`` 会调用它们来构建"
+"发布版本所携带的内容——会在此之前先放上它们的 ``inputs`` 标记，因为在被调用的工作流内部，整个 ``github`` 上下文"
+"都属于调用方，没有别的办法能识别出这种情形。"
+
+#: ../../source/contributing.rst:1023
+msgid "The ``Standalone`` workflow reads the same tiers, job by job:"
+msgstr "``Standalone`` 工作流按作业逐一沿用同样的档位："
+
+#: ../../source/contributing.rst:1029
+msgid "Job"
+msgstr "作业"
+
+#: ../../source/contributing.rst:1033
+msgid "``Build``"
+msgstr ""
+
+#: ../../source/contributing.rst:1034
+msgid "3 bundles (no macOS)"
+msgstr "3 个打包件（不含 macOS）"
+
+#: ../../source/contributing.rst:1035
+msgid "4 bundles"
+msgstr "4 个打包件"
+
+#: ../../source/contributing.rst:1036
+msgid "all 7"
+msgstr "全部 7 个"
+
+#: ../../source/contributing.rst:1037
+msgid "``Install``"
+msgstr "``Install``"
+
+#: ../../source/contributing.rst:1038
+msgid "2 (every bundle ``install.sh`` can install)"
+msgstr "2 个（ ``install.sh`` 能够安装的每一个打包件）"
+
+#: ../../source/contributing.rst:1039
+msgid "4 (adds the macOS bundle on the *next* macOS)"
+msgstr "4 个（在 *更新的* 那个 macOS 上追加 macOS 打包件）"
+
+#: ../../source/contributing.rst:1040
+msgid "8"
+msgstr ""
+
+#: ../../source/contributing.rst:1041
+msgid "``Snap``"
+msgstr ""
+
+#: ../../source/contributing.rst:1042
+msgid "1 (amd64)"
+msgstr "1 个（amd64）"
+
+#: ../../source/contributing.rst:1043 ../../source/contributing.rst:1047
+msgid "not run"
+msgstr "不运行"
+
+#: ../../source/contributing.rst:1044
+msgid "2, on a ``devel`` push or a dispatch"
+msgstr "2 个，在向 ``devel`` 推送或手动触发时"
+
+#: ../../source/contributing.rst:1045
+msgid "``Examples via bundle``"
+msgstr ""
+
+#: ../../source/contributing.rst:1046
+msgid "2 (the ``PartCAD`` suite only)"
+msgstr "2 个（仅 ``PartCAD`` 套件）"
+
+#: ../../source/contributing.rst:1048
+msgid "6"
+msgstr ""
+
+#: ../../source/contributing.rst:1050
+msgid ""
+"``Snap`` and ``Examples`` have always been skipped in the merge queue and"
+" on the release path -- nothing downstream consumes a snap, and the "
+"deterministic ``Build`` and ``Install`` jobs are what gate a release. "
+"What is new is that a pull request packs one snap rather than two (the "
+"recipe is one file and the two jobs run it over payloads ``Build`` and "
+"``Install`` have already exercised, at ~45 minutes of squashing each), "
+"and that the ``All`` example suite -- ``continue-on-error``, because the "
+"public index carries packages this repository cannot fix -- is left to "
+"deep runs."
+msgstr ""
+"``Snap`` 和 ``Examples`` 在合并队列中以及发布路径上一直都是被跳过的——下游没有任何东西会消费 snap，而真正为"
+"发布把关的是确定性的 ``Build`` 和 ``Install`` 作业。新的变化是：一个拉取请求现在只打一个 snap 而不是两个（"
+"配方只有一个文件，而这两个作业是在 ``Build`` 和 ``Install`` 已经验证过的载荷上运行它的，每次压缩约需 45 分钟"
+"）；以及 ``All`` 示例套件——它是 ``continue-on-error`` 的，因为公共索引中有一些本仓库无法修复的包——被"
+"留给了深度运行。"
+
+#: ../../source/contributing.rst:1057
+msgid ""
+"The ``IDE`` workflow follows the same tiers, because each IDE carries a "
+"bundle: no macOS IDE on a pull request, the Intel macOS one on a deep run"
+" only. A release always builds all seven bundles and all four IDEs, and "
+"refuses to publish if any is missing."
+msgstr ""
+"``IDE`` 工作流沿用同样的档位，因为每个 IDE 都携带一个打包件：拉取请求上不构建 macOS 版 IDE，Intel 版 ma"
+"cOS 的只在深度运行中构建。发布时总是会构建全部七个打包件和全部四个 IDE，只要缺少任何一个就拒绝发布。"
+
+#: ../../source/contributing.rst:1061
+msgid "Scope: what the change touches"
+msgstr "范围：改动涉及了什么"
+
+#: ../../source/contributing.rst:1064
+msgid ""
+"Depth decides how wide a job fans out. Scope decides whether it runs at "
+"all, and it applies to the merge queue exactly as it does to a pull "
+"request. ``.github/actions/changed-scopes`` sorts the changed files into "
+"buckets and turns each subject on or off:"
+msgstr ""
+"深度决定一个作业铺开多宽。范围决定它是否运行，而且它对合并队列的适用方式与对拉取请求完全一致。 ``.github/actions/ch"
+"anged-scopes`` 会把改动的文件归入各个分类，并据此开启或关闭每一个主题："
+
+#: ../../source/contributing.rst:1072
+msgid "A change touching only..."
+msgstr "仅涉及以下内容的改动……"
+
+#: ../../source/contributing.rst:1073
+msgid "runs"
+msgstr "运行"
+
+#: ../../source/contributing.rst:1074
+msgid ""
+"``docs/``, ``.claude/``, ``openspec/``, and any ``*.md`` or ``*.rst`` no "
+"row below claims"
+msgstr ""
+"``docs/`` 、 ``.claude/`` 、 ``openspec/`` ，以及下面各行都未认领的任何 ``*.md`` 或 `"
+"`*.rst``"
+
+#: ../../source/contributing.rst:1075
+msgid "``Documentation``"
+msgstr ""
+
+#: ../../source/contributing.rst:1076
+msgid "``ai-agents/``, ``.claude-plugin/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1077
+msgid "``Claude Code plugin``"
+msgstr ""
+
+#: ../../source/contributing.rst:1078
+msgid "``ai-agents/common/``, ``ai-agents/claude/.claude-plugin/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1079
+msgid ""
+"``Claude Code plugin``, **and** the tests and the wheel -- the wheel "
+"ships the skills too"
+msgstr "``Claude Code plugin`` ， **以及** 测试和 wheel 包——wheel 包里也装着这些技能"
+
+#: ../../source/contributing.rst:1080
+msgid "``.devcontainer/``"
+msgstr "``.devcontainer/``"
+
+#: ../../source/contributing.rst:1081
+msgid ""
+"the ``CI-Dev`` container, ``Run: behave`` and ``Run: pc`` -- but not "
+"``Run: pytest``"
+msgstr "``CI-Dev`` 容器、 ``Run: behave`` 和 ``Run: pc`` ——但不包括 ``Run: pytest``"
+
+#: ../../source/contributing.rst:1082
+msgid "``ide/vscode/``, ``ide/vscode-shim/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1083
+msgid "``npm test``, ``VS Code extension``, ``IDE``"
+msgstr ""
+
+#: ../../source/contributing.rst:1084
+msgid "``ide/standalone/``, ``.vscode/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1085
+msgid "``IDE``"
+msgstr ""
+
+#: ../../source/contributing.rst:1086
+msgid ""
+"``dev-tools/pyinstaller/``, ``dev-tools/snap/``, ``.snapcraft.yaml``, "
+"``install.sh``"
+msgstr ""
+
+#: ../../source/contributing.rst:1087
+msgid "``Standalone``, ``IDE``"
+msgstr ""
+
+#: ../../source/contributing.rst:1088
+msgid "``pyproject.toml``, ``poetry.lock``, root ``requirements*``"
+msgstr "``pyproject.toml`` 、 ``poetry.lock`` 、根目录下的 ``requirements*``"
+
+#: ../../source/contributing.rst:1089
+msgid "the tests, the wheel **and** ``Standalone``"
+msgstr "测试、wheel 包 **以及** ``Standalone``"
+
+#: ../../source/contributing.rst:1090
+msgid "``tools/containers/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1091
+msgid ""
+"the tests and the wheel, **and** a rebuild of PartCAD's own container "
+"images -- see below"
+msgstr "测试和 wheel 包， **以及** 重新构建 PartCAD 自己的容器镜像——见下文"
+
+#: ../../source/contributing.rst:1092
+msgid ""
+"``src/``, ``tests/``, ``features/``, ``examples/``, ``cad/``, ``tools/``,"
+" ``dev-tools/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1093
+msgid "the tests and the wheel, but **not** ``Standalone``"
+msgstr "测试和 wheel 包，但 **不包括** ``Standalone``"
+
+#: ../../source/contributing.rst:1094
+msgid "anything else"
+msgstr "其他任何内容"
+
+#: ../../source/contributing.rst:1095
+msgid "all of the above, ``Standalone`` included"
+msgstr "以上全部，包括 ``Standalone``"
+
+#: ../../source/contributing.rst:1096
+msgid "``.github/``"
+msgstr ""
+
+#: ../../source/contributing.rst:1097
+msgid "everything, this being the thing that decides what runs"
+msgstr "全部内容，因为正是它决定了哪些东西会运行"
+
+#: ../../source/contributing.rst:1099
+msgid ""
+"**The table above is grouped by subject, for reading. The classifier is "
+"an ordered list of rules and the first one that matches a path wins**, "
+"and the two orders are not the same -- ``.github/`` is the last row here "
+"and the first rule there. What matters is the shape of that list: every "
+"rule that names a *directory* comes before every rule that matches by "
+"*extension*."
+msgstr ""
+"**上表是按主题分组的，便于阅读。而分类器是一份有序的规则列表，第一条匹配到某个路径的规则胜出** ，两种顺序并不相同—— ``.git"
+"hub/`` 在这里是最后一行，在那里却是第一条规则。真正重要的是那份列表的形态：每一条按 *目录* 指定的规则，都排在每一条按 *扩展"
+"名* 匹配的规则之前。"
+
+#: ../../source/contributing.rst:1104
+msgid ""
+"So a Markdown file belongs to whatever directory claims it first. ``ai-"
+"agents/common/skills/render/SKILL.md`` is the plugin -- and, since "
+"``src/partcad/ai_agents`` symlinks it into the wheel, the wheel -- rather"
+" than prose about either, and ``examples/feature_render/README.md`` is "
+"what ``pc render -r`` wrote and what the ``Examples (PartCAD)`` job "
+"compares against a fresh render; neither is documentation."
+msgstr ""
+"因此，一个 Markdown 文件归属于最先认领它的那个目录。 ``ai-agents/common/skills/render/SKI"
+"LL.md`` 属于插件——并且由于 ``src/partcad/ai_agents`` 以符号链接的方式把它纳入 wheel 包，它同"
+"时也属于 wheel 包——而不是关于这两者的说明文字；而 ``examples/feature_render/README.md`` "
+"是 ``pc render -r`` 写出来的东西，也是 ``Examples (PartCAD)`` 作业拿去与一次全新渲染作比较的东"
+"西；两者都不是文档。"
+
+#: ../../source/contributing.rst:1109
+msgid ""
+"``AGENTS.md`` and ``CLAUDE.md`` are matched ahead of the *source* "
+"directories, which is why ``src/partcad/AGENTS.md`` is documentation -- "
+"this repository keeps a package's own beside its code. They are not "
+"matched ahead of the directories above those, so they are **not** "
+"documentation wherever they sit: ``.github/AGENTS.md`` is CI, ``ai-"
+"agents/AGENTS.md`` is the plugin, and ``ide/vscode/AGENTS.md`` belongs to"
+" the extension. If you are adding a rule, its position in that list is "
+"the decision; ``.github/actions/changed-scopes`` carries the list in "
+"order, and ``tests/dev_tools/test_changed_scopes.py`` pins these cases."
+msgstr ""
+"``AGENTS.md`` 和 ``CLAUDE.md`` 的匹配排在各个 *源码* 目录之前，这就是为什么 ``src/partcad"
+"/AGENTS.md`` 属于文档——本仓库把每个包自己的说明放在它的代码旁边。它们的匹配并不排在那些源码目录之上的各个目录之前，因此无"
+"论放在哪里，它们都 **不是** 文档： ``.github/AGENTS.md`` 属于 CI， ``ai-agents/AGENTS"
+".md`` 属于插件，而 ``ide/vscode/AGENTS.md`` 属于扩展。如果你要新增一条规则，它在那份列表中的位置就是决定"
+"性的； ``.github/actions/changed-scopes`` 按顺序保存着这份列表，而 ``tests/dev_tool"
+"s/test_changed_scopes.py`` 把这些情形固定了下来。"
+
+#: ../../source/contributing.rst:1116
+msgid ""
+"Two of those rows are the same distinction from either side, and it is "
+"the only place a source change and a dependency change are treated "
+"differently. Freezing is the most expensive thing this repository does --"
+" ~500MB of OpenCASCADE per runner -- and what makes a frozen bundle "
+"differ from a working wheel is nearly always what went *into* it: a "
+"dependency shipping a data file PyInstaller cannot see, a new transitive "
+"import, a wheel with no build for one platform. So a dependency change "
+"freezes and a change to ``src/`` alone does not."
+msgstr ""
+"其中有两行是同一条区分从正反两面的说法，而这也是源码改动与依赖改动唯一被区别对待的地方。冻结打包是本仓库做的最昂贵的事情——每个运行器上"
+"约 500MB 的 OpenCASCADE——而让一个冻结打包件与一个可用的 wheel 包产生差异的，几乎总是 *进入* 它内部的东西"
+"：某个依赖携带了 PyInstaller 看不见的数据文件、一个新的传递导入、一个在某个平台上没有构建的 wheel 包。因此，依赖改动"
+"会触发冻结打包，而只改动 ``src/`` 则不会。"
+
+#: ../../source/contributing.rst:1122
+msgid ""
+"That is a trade rather than a fact. A source change *can* break the "
+"freeze -- a lazily imported module, a file read relative to ``__file__``;"
+" ``dev-tools/pyinstaller/README.md`` has the list -- and that is now "
+"found on ``devel`` after the merge rather than on the pull request. "
+"Specifically on the version bump that follows the merge, which is the "
+"same tree with a version on it and the commit a release is cut from; a "
+"release still refuses to publish with a platform missing, and "
+"``#deepTest`` still builds the whole set before a merge for a change that"
+" warrants it. Note also which way the last row falls: an unclassified "
+"path counts as **both** source and dependency, so a bundle is skipped "
+"only for a directory somebody has named as source."
+msgstr ""
+"这是一种权衡，而不是一个事实。源码改动 *确实可能* 破坏冻结打包——一个惰性导入的模块、一个相对 ``__file__`` 读取的文件"
+"； ``dev-tools/pyinstaller/README.md`` 列出了完整清单——而现在这类问题是在合并之后的 ``deve"
+"l`` 上被发现的，而不是在拉取请求上。具体来说，是在合并之后那次版本号提升上被发现的；它是同一棵树加上一个版本号，也是发布所依据的那个"
+"提交。发布时仍然会因为缺少某个平台而拒绝发布，而对于值得这样做的改动， ``#deepTest`` 仍然会在合并之前构建全套。另外请注意"
+"最后一行的倾向：一个未被分类的路径 **同时** 算作源码和依赖，因此只有当某个目录被明确命名为源码时，打包件才会被跳过。"
+
+#: ../../source/contributing.rst:1130
+msgid ""
+"Two properties are worth knowing before you edit that list. It is **fail-"
+"safe**: a path it has not been taught counts as both source and a "
+"dependency, so it runs everything a source change runs, the standalone "
+"bundles included, and a new directory can only ever run too much. It does"
+" not turn on the four subjects that only their own directory turns on -- "
+"the documentation, the extension, the IDE, the plugin -- and that is not "
+"a gap: each is built from one fixed directory, so a path outside them "
+"cannot change what they contain. And it is a job condition rather than a "
+"``paths:`` filter on the trigger, deliberately -- ``merge_group`` "
+"supports no ``paths:`` filter at all, so a trigger-level list is one the "
+"merge queue ignores; and a workflow skipped by ``paths:`` never creates "
+"the check run that a *required* check waits for, while a job skipped by a"
+" condition reports ``skipped``, which counts as passing."
+msgstr ""
+"在你动手修改那份列表之前，有两项性质值得了解。它是 **故障安全的** ：一个它尚未学过的路径同时算作源码和依赖，因此会运行源码改动所运"
+"行的一切，包括各个独立打包件；一个新目录只可能跑得过多。它不会开启那四个只由各自目录开启的主题——文档、扩展、IDE、插件——而这并不是"
+"缺陷：它们各自都由一个固定目录构建而成，因此这些目录之外的路径无法改变它们的内容。另外，它刻意采用作业条件，而不是触发器上的 ``pat"
+"hs:`` 过滤器—— ``merge_group`` 根本不支持 ``paths:`` 过滤器，因此写在触发器层面的列表会被合并队列忽"
+"略；而被 ``paths:`` 跳过的工作流，永远不会创建某个 *必需* 检查所等待的那次检查运行，相反，被条件跳过的作业会报告为 ``"
+"skipped`` ，而这算作通过。"
+
+#: ../../source/contributing.rst:1140
+msgid ""
+"``.devcontainer`` is the one entry that is a judgement rather than a "
+"mechanism. ``Run: pytest`` in ``CI-Dev`` is the ``Pytest`` matrix over "
+"again on one image and one interpreter, and a change to the container's "
+"configuration cannot make the unit tests disagree with what that matrix "
+"already said. What it can break is whether anything works inside the "
+"container at all, and ``Run: behave`` and ``Run: pc`` -- which drive the "
+"command line end to end, in the container -- are the jobs that ask that."
+msgstr ""
+"``.devcontainer`` 是其中唯一一条属于判断而非机制的条目。 ``CI-Dev`` 中的 ``Run: pytest`` "
+"不过是 ``Pytest`` 测试矩阵在一个镜像、一个解释器上重做一遍，而对容器配置的改动，不可能让单元测试得出与那个矩阵已经给出的结论"
+"不同的结果。它真正可能破坏的，是容器内部是否还能正常工作；而 ``Run: behave`` 和 ``Run: pc`` ——它们在容器"
+"内端到端地驱动命令行——正是提出这一问题的作业。"
+
+#: ../../source/contributing.rst:1146
+msgid ""
+"Both workflows install each macOS artifact on macOS 15 *and* on macOS 26,"
+" because there is one macOS build per architecture and it is frozen on "
+"the older release -- so \"a bundle runs on the OS it was built on and "
+"everything newer\" stopped being an assumption and became something a job"
+" checks. Only the Intel half of that is deep-only."
+msgstr ""
+"两个工作流都会把每个 macOS 制品分别安装到 macOS 15 *和* macOS 26 上，因为每种架构只有一个 macOS 构建"
+"，而且它是在较旧的版本上冻结打包的——于是“一个打包件能在它构建所用的操作系统以及更新的系统上运行”不再只是一个假设，而成了某个作业会去"
+"验证的事情。其中只有 Intel 那一半是仅限深度运行的。"
+
+#: ../../source/contributing.rst:1151
+msgid ""
+"The Python axis is not the same for every job, because not every job is "
+"testing the same thing. ``Pytest`` and ``Examples (All)`` run the whole "
+"supported range: they exercise PartCAD's own code, so the interpreter it "
+"runs on is the point. ``Examples (PartCAD)`` and ``Repo //pub`` render "
+"packages, so what they are really testing is the sandbox -- and a sandbox"
+" is built at the version PartCAD pins rather than at the version PartCAD "
+"is running on, so they run the two ends of the range a sandbox can be "
+"built at instead (``sandbox_versions.MIN_PYTHON_VERSION_CADQUERY`` and "
+"``MAX_PYTHON_VERSION_CAD``). ``Behave`` drives the command line, so it "
+"stays on the oldest and newest supported Python."
+msgstr ""
+"Python 这一维度对每个作业并不相同，因为并非每个作业测试的都是同一件事。 ``Pytest`` 和 ``Examples (All"
+")`` 会跑完整个受支持的版本范围：它们考验的是 PartCAD 自己的代码，因此它所运行的解释器正是重点。 ``Examples (P"
+"artCAD)`` 和 ``Repo //pub`` 渲染的是包，因此它们真正测试的是沙箱——而沙箱是按 PartCAD 所固定的版本构"
+"建的，而不是按 PartCAD 正在运行的版本构建的，所以它们转而运行沙箱可被构建的版本范围的两端（ ``sandbox_version"
+"s.MIN_PYTHON_VERSION_CADQUERY`` 和 ``MAX_PYTHON_VERSION_CAD`` ）。 ``Be"
+"have`` 驱动的是命令行，因此它保持在最旧和最新的受支持 Python 版本上。"
+
+#: ../../source/contributing.rst:1160
+msgid "Testing a change to a container image"
+msgstr "测试对容器镜像的改动"
+
+#: ../../source/contributing.rst:1162
+msgid ""
+"PartCAD ships container images of its own: the Python sandbox base images"
+" the ``docker`` sandbox renders in, and the KiCad sandbox ``pc open "
+"--with kicad`` and ``test_part_example_kicad`` start. Every one of them "
+"is addressed by the release that built it -- ``<name>:<release>``, plus "
+"the architecture suffix where there is one -- and that tag is written by "
+"exactly one run: the version bump on ``devel``."
+msgstr ""
+"PartCAD 自己也发布容器镜像： ``docker`` 沙箱在其中渲染的 Python 沙箱基础镜像，以及 ``pc open --"
+"with kicad`` 和 ``test_part_example_kicad`` 所启动的 KiCad 沙箱。它们每一个都以构建它的"
+"那个发布版本来寻址—— ``<name>:<release>`` ，在有架构后缀时再加上架构后缀——而这个标签只由一次运行写入： ``d"
+"evel`` 上的那次版本号提升。"
+
+#: ../../source/contributing.rst:1167
+msgid ""
+"That leaves a gap on a pull request, and it is not a small one. A run "
+"that *changes* ``tools/containers`` builds those images as a test, but "
+"its tests go on pulling the tag the last release published -- so a "
+"Dockerfile fix cannot be proven in the pull request that makes it, and a "
+"Dockerfile regression cannot be caught there at all. That is how "
+"``tools/containers/python/Dockerfile`` came to carry the ``pycairo`` "
+"wheel reportlab needs while every PNG in every rendering job went on "
+"failing: the fix was in the repository and not in the tag, and no run "
+"could tell."
+msgstr ""
+"这在拉取请求上留下了一处空白，而且这处空白不算小。一次 *改动* 了 ``tools/containers`` 的运行，会把那些镜像构建"
+"出来作为测试，但它的各项测试仍旧去拉取上一次发布所发布的那个标签——因此，一处 Dockerfile 的修复无法在做出该修复的拉取请求中"
+"得到证明，而一处 Dockerfile 的回归在那里根本无法被发现。 ``tools/containers/python/Dockerf"
+"ile`` 之所以明明已经带上了 reportlab 所需的 ``pycairo`` wheel 包，而每个渲染作业中的每一个 PNG "
+"却仍在失败，正是这个原因：修复在仓库里，而不在标签里，没有任何一次运行能看出这一点。"
+
+#: ../../source/contributing.rst:1174
+msgid ""
+"So a run that changes an image builds and publishes "
+"``<release>-<branch>-<digest>-<commit>`` instead, and points its own "
+"tests at it. The commit is in the name because a branch is not unique in "
+"time: two pushes to one branch are two runs, and each has to own the tag "
+"it builds, tests and deletes. Nothing but that run ever asks for that "
+"tag, which is what makes publishing it from an unreviewed branch safe -- "
+"the release tag, the one somebody else pulls, is still only ever written "
+"by the bump. The run exports ``PC_CONTAINER_IMAGE_TAG`` to every job that"
+" runs a test, and ``partcad_utils.container_image.image_tag`` reads it: "
+"unset, which is every installed PartCAD, it is the release."
+msgstr ""
+"因此，一次改动了镜像的运行，会转而构建并发布 ``<release>-<branch>-<digest>-<commit>`` ，并把它"
+"自己的测试指向它。名称里带上提交号，是因为分支在时间上并不唯一：对同一个分支的两次推送是两次运行，而每一次都必须拥有它自己构建、测试并删"
+"除的那个标签。除了那次运行之外，没有任何东西会去请求那个标签，这正是从一个未经评审的分支发布它仍然安全的原因——真正会被别人拉取的那个发"
+"布标签，依旧只由版本号提升写入。该次运行会把 ``PC_CONTAINER_IMAGE_TAG`` 导出给每一个运行测试的作业，而 ``"
+"partcad_utils.container_image.image_tag`` 会读取它：未设置时——也就是每一份已安装的 Part"
+"CAD——它就是发布版本。"
+
+#: ../../source/contributing.rst:1181
+msgid "Two things turn it on:"
+msgstr "有两样东西会把它打开："
+
+#: ../../source/contributing.rst:1183
+msgid ""
+"A change under ``tools/containers/`` does, by itself. That is the row in "
+"the table above."
+msgstr "``tools/containers/`` 下的改动本身就会。这就是上表中的那一行。"
+
+#: ../../source/contributing.rst:1184
+msgid ""
+"``#images`` anywhere in the pull request's title or description does, for"
+" a change the paths cannot see -- a workflow edit, a base image that "
+"moved under an unpinned tag, a dependency that changes what gets "
+"installed into the image. It is matched as a plain substring, exactly "
+"like ``#deepTest``, with the same consequence: a pull request that merely"
+" mentions it opts itself in."
+msgstr ""
+"在拉取请求的标题或描述中任何位置出现 ``#images`` 也会，用于那些路径看不见的改动——一处工作流改动、一个在未固定标签下移动了"
+"的基础镜像、一个改变了镜像安装内容的依赖。它和 ``#deepTest`` 一样是按纯子串匹配的，后果也一样：一个只是提到它的拉取请求就"
+"会把自己纳入进来。"
+
+#: ../../source/contributing.rst:1189
+msgid ""
+"What the switch turns on is not the build. ``Build Docker Containers`` is"
+" gated on the union of the ``pytest``, ``behave`` and ``examples`` gates "
+"*and* on this run having a tag of its own, so it runs on any run whose "
+"tests could reach a container -- and a pull request that fires neither "
+"trigger builds these images for ``linux/amd64`` as a test, exactly as it "
+"did before any of this, and renders against the release's. That fourth "
+"condition is what stops ``#images`` meaning nothing on a change that runs"
+" no tests at all: a documentation-only pull request that opts in still "
+"builds and publishes, rather than opting into a build the other three "
+"gates would then skip. What firing a trigger adds is the ``linux/arm64`` "
+"half, which goes through QEMU and costs minutes per version; publishing "
+"the result; pointing that run's own tests at it through "
+"``PC_CONTAINER_IMAGE_TAG``; and deleting it afterwards. Worth paying "
+"where an image changed, worth nothing where none did, which is the whole "
+"reason for a switch."
+msgstr ""
+"这个开关打开的并不是构建本身。 ``Build Docker Containers`` 的条件是 ``pytest`` 、 ``beha"
+"ve`` 和 ``examples`` 三道关卡的并集， *并且* 这次运行拥有属于自己的标签，因此它会在任何测试可能触及容器的运行上执"
+"行——而一个两个触发条件都没有命中的拉取请求，仍会像这一切出现之前那样，为 ``linux/amd64`` 构建这些镜像作为测试，并对着"
+"发布版本的镜像进行渲染。第四个条件的作用，是避免 ``#images`` 在一个根本不运行任何测试的改动上变得毫无意义：一个只改文档、却"
+"选择加入的拉取请求仍然会构建并发布，而不是加入一个随后会被其他三道关卡跳过的构建。命中触发条件所额外带来的是： ``linux/arm6"
+"4`` 那一半，它要经过 QEMU，每个版本要多花几分钟；发布构建结果；通过 ``PC_CONTAINER_IMAGE_TAG`` 把该"
+"次运行自己的测试指向它；以及事后把它删除。镜像有改动时这代价值得付，没有改动时则毫无价值，而这正是设置一个开关的全部理由。"
+
+#: ../../source/contributing.rst:1200
+msgid ""
+"From a **fork** the trigger fires and cannot finish, and the run says so "
+"in a ``::warning::``. A fork's ``GITHUB_TOKEN`` is read-only however the "
+"workflow declares its permissions, so nothing there can publish -- and a "
+"tag claimed but not published is every test job failing to pull an image "
+"that was never there, which is worse than the gap it was meant to close. "
+"So such a pull request falls back to what every pull request did before "
+"any of this: it builds the images as a test and runs against the "
+"release's. If you are changing one of these images from a fork, expect a "
+"maintainer to re-run the change from a branch of this repository before "
+"it lands."
+msgstr ""
+"从 **复刻仓库** 发起时，触发条件会命中却无法完成，运行会用一条 ``::warning::`` 说明这一点。无论工作流如何声明权限"
+"，复刻仓库的 ``GITHUB_TOKEN`` 都是只读的，因此那里什么都发布不了——而一个被认领却没有被发布的标签，意味着每一个测试作"
+"业都会因拉取一个从未存在过的镜像而失败，这比它本想弥补的那处空白更糟。因此这样的拉取请求会回退到这一切出现之前每个拉取请求的做法：把镜像"
+"构建出来作为测试，并对着发布版本的镜像运行。如果你是从复刻仓库改动这些镜像之一，那么在它合入之前，可以预期由维护者从本仓库的某个分支重新"
+"运行一次该改动。"
+
+#: ../../source/contributing.rst:1208
+msgid ""
+"These tags are cleaned up, in two places. ``CI`` deletes the Python "
+"sandbox tags it published once its own test jobs have finished -- it is "
+"their only consumer, the dev container being unable to use the ``docker``"
+" sandbox at all -- and ``Prune container images`` sweeps nightly for "
+"anything left: the KiCad tag, which ``CI`` cannot delete because ``CI-"
+"Dev`` reads it too and a ``needs:`` does not reach across a workflow; "
+"whatever a cancelled run abandoned; and the ``partcad-devcontainer`` "
+"tags, which ``CI-Dev`` has been publishing on every non-bump run since "
+"long before any of this and which nothing has ever removed. The sweep "
+"deletes a tag only when it looks like ``<release>-<something that is not "
+"py<N>>`` *and* the version is a month old, so the release tags, the "
+"``<release>-py<N>-<arch>`` images and the moving ``py<N>-<arch>`` tags "
+"are all out of its reach by construction. Run it by hand with ``dry-run``"
+" to see what it would take."
+msgstr ""
+"这些标签会在两个地方被清理。 ``CI`` 会在自己的测试作业结束之后，删除它所发布的 Python 沙箱标签——它是这些标签唯一的消费"
+"者，因为开发容器根本无法使用 ``docker`` 沙箱——而 ``Prune container images`` 则每夜清扫剩下的一"
+"切：KiCad 标签， ``CI`` 删不掉它，因为 ``CI-Dev`` 也会读取它，而 ``needs:`` 无法跨越工作流；某次被"
+"取消的运行遗弃下来的东西；以及 ``partcad-devcontainer`` 标签，早在这一切出现之前， ``CI-Dev`` 就在"
+"每一次非版本提升的运行上发布它们，而从来没有东西把它们清理掉。只有当一个标签形如 ``<release>-<something that"
+" is not py<N>>`` *并且* 版本已有一个月之久时，这次清扫才会删除它；因此，发布标签、 ``<release>-py<N"
+">-<arch>`` 镜像以及可移动的 ``py<N>-<arch>`` 标签，从构造上就都在它够不到的范围之外。用 ``dry-run"
+"`` 手动运行一次，就能看到它会清掉什么。"
+
+#: ../../source/contributing.rst:1218
+msgid ""
+"One detail is worth knowing if you are reading the workflows: the tag "
+"goes *on* the image and the release goes *into* it. A "
+"``<release>-<branch>-<digest>-<commit>`` image still installs the "
+"release, because what it is built to test is this commit's Dockerfile. "
+"``.github/actions/container-images`` is where all of this is decided, "
+"once, for both ``CI`` and ``CI-Dev`` -- they hand the same answer to the "
+"same ``Container (KiCad)`` build, which could not be told two different "
+"tags to build one image under."
+msgstr ""
+"如果你在阅读这些工作流，有一个细节值得知道：标签是打在镜像 *上* 的，而发布版本是装进镜像 *里* 的。一个 ``<release>-"
+"<branch>-<digest>-<commit>`` 镜像安装的仍然是发布版本，因为它被构建出来所要测试的，是这个提交的 Docke"
+"rfile。 ``.github/actions/container-images`` 是所有这些决定的唯一出处，对 ``CI`` 和 "
+"``CI-Dev`` 都只决定一次——它们把同一个答案交给同一个 ``Container (KiCad)`` 构建，而后者不可能被告知用"
+"两个不同的标签来构建同一个镜像。"
+
+#: ../../source/contributing.rst:1224
+msgid ""
+"A test job does not build these images. It pulls what ``Build Docker "
+"Containers`` built, which is why every job that can reach a container "
+"waits for that one. ``.github/actions/sandbox-image`` used to build a "
+"copy per job, because on a pull request the published tag was somebody "
+"else's build and nothing could tell whether this commit had changed the "
+"Dockerfile -- and that is the question the ``images`` gate above now "
+"answers for the whole run. What is left in the action is a pull, plus a "
+"build for the one caller with no such job to wait for: ``Examples via "
+"bundle`` in ``Standalone``, which runs on the version bump in a different"
+" workflow from the one publishing that release's images. That build is "
+"not a second implementation either -- both it and ``Build Docker "
+"Containers`` run ``dev-tools/ci/build-sandbox-image.sh``, so there is one"
+" answer to \"how is this image built\" and the two cannot drift into "
+"testing an image built differently from the one that was published. "
+"Changing that script counts as a container change, like changing a "
+"Dockerfile."
+msgstr ""
+"测试作业不会构建这些镜像。它拉取的是 ``Build Docker Containers`` 构建出来的东西，这也是为什么每一个可能触及"
+"容器的作业都要等待那个作业。 ``.github/actions/sandbox-image`` 过去会为每个作业构建一份副本，因为在拉"
+"取请求上，已发布的标签是别人的构建结果，而没有东西能判断这个提交是否改动过 Dockerfile——而这正是上面那道 ``images`"
+"` 关卡现在为整次运行回答的问题。该动作中剩下的只是一次拉取，外加为唯一一个没有这样的作业可等的调用方所做的一次构建： ``Standa"
+"lone`` 中的 ``Examples via bundle`` ，它在版本号提升时运行，而所处的工作流与发布该版本镜像的那个工作流并"
+"不相同。那次构建也不是第二套实现——它和 ``Build Docker Containers`` 都运行 ``dev-tools/ci/"
+"build-sandbox-image.sh`` ，因此“这个镜像是怎么构建的”只有一个答案，两者不可能漂移成在测试一个与已发布镜像构建"
+"方式不同的镜像。改动那个脚本算作一次容器改动，就像改动一个 Dockerfile 一样。"
+
+#: ../../source/contributing.rst:1236
 msgid "Implementation Details"
 msgstr "实现细节"
 
-#: ../../source/contributing.rst:608
+#: ../../source/contributing.rst:1238
 msgid "The following information is useful for PartCAD contributors."
 msgstr "以下信息对 PartCAD 贡献者很有用。"
 
-#: ../../source/contributing.rst:613
+#: ../../source/contributing.rst:1243
 msgid "Coordinates / Location"
 msgstr "坐标 / 位置"
 
-#: ../../source/contributing.rst:615
+#: ../../source/contributing.rst:1245
 msgid ""
 "PartCAD uses OpenCASCADE Location objects (TopLoc_Location) to represent "
 "locations of objects in 3D space."
 msgstr "PartCAD 使用 OpenCASCADE 的 Location 对象（TopLoc_Location）来表示对象在 3D 空间中的位置。"
 
-#: ../../source/contributing.rst:621
+#: ../../source/contributing.rst:1251
 msgid "The above list represents a location with the following components:"
 msgstr "上面的列表表示一个位置，包含以下几个组成部分："
 
-#: ../../source/contributing.rst:623
+#: ../../source/contributing.rst:1253
 msgid ""
 "``[1, 2, 3]``: Translation or offset (in millimeters) along the X, Y, and"
 " Z axes"
 msgstr "``[1, 2, 3]`` ：沿 X、Y、Z 轴的平移或偏移（单位为毫米）"
 
-#: ../../source/contributing.rst:624
+#: ../../source/contributing.rst:1254
 msgid "``[4, 5, 6]``: The X, Y and Z sizes of the vector to rotate around"
 msgstr "``[4, 5, 6]`` ：绕之旋转的向量的 X、Y、Z 分量大小"
 
-#: ../../source/contributing.rst:625
+#: ../../source/contributing.rst:1255
 msgid "``70``: The angle of rotation around the above vector"
 msgstr "``70`` ：绕上述向量旋转的角度"
 
-#: ../../source/contributing.rst:629
+#: ../../source/contributing.rst:1259
 msgid "Internal geometry representation"
 msgstr "内部几何表示"
 
-#: ../../source/contributing.rst:631
+#: ../../source/contributing.rst:1261
 msgid ""
 "PartCAD maintains parts as OpenCASCADE objects. Similar to ``wrapped`` "
 "objects found in ``CadQuery`` and ``build123d``."
@@ -1069,42 +2551,42 @@ msgstr ""
 "PartCAD 将零件维护为 OpenCASCADE 对象。类似于 ``CadQuery`` 和 ``build123d`` 中的 "
 "``wrapped`` 对象。"
 
-#: ../../source/contributing.rst:635
+#: ../../source/contributing.rst:1265
 msgid "Parallelism"
 msgstr "并行"
 
-#: ../../source/contributing.rst:637
+#: ../../source/contributing.rst:1267
 msgid "Asynchronous at heart"
 msgstr "以异步为核心"
 
-#: ../../source/contributing.rst:639
+#: ../../source/contributing.rst:1269
 msgid ""
 "PartCAD is designed to run most of its logic as coroutines in the "
 "asyncio's event loop."
 msgstr "PartCAD 被设计为将其大部分逻辑作为协程在 asyncio 的事件循环中运行。"
 
-#: ../../source/contributing.rst:641
+#: ../../source/contributing.rst:1271
 msgid "Threads for the muscle"
 msgstr "用线程来承担繁重工作"
 
-#: ../../source/contributing.rst:643
+#: ../../source/contributing.rst:1273
 msgid ""
 "There is a separate thread pool created for long-running procedures that "
 "are CPU intensive. The number of threads matches the number of CPU cores "
 "minus 1 (if there is more than 1)."
 msgstr "会为那些长时间运行且 CPU 密集的过程创建一个单独的线程池。线程数等于 CPU 核心数减 1（如果核心数大于 1）。"
 
-#: ../../source/contributing.rst:646
+#: ../../source/contributing.rst:1276
 msgid ""
 "Coroutines can spawn tasks on the thread pool. Tasks on the thread pool "
 "can't call coroutines that use asyncio.Lock()."
 msgstr "协程可以在线程池上派生任务。线程池上的任务不能调用使用了 asyncio.Lock() 的协程。"
 
-#: ../../source/contributing.rst:648
+#: ../../source/contributing.rst:1278
 msgid "Digest external code properly"
 msgstr "妥善处理外部代码"
 
-#: ../../source/contributing.rst:650
+#: ../../source/contributing.rst:1280
 msgid ""
 "Separate processes are spawned (optionally, in a sandboxed environment) "
 "to process third-party CAD-as-code parts and assemblies. One thread is "
@@ -1114,11 +2596,11 @@ msgstr ""
 "会派生出单独的进程（可选地在沙箱环境中）来处理第三方的代码化 CAD "
 "零件和装配体。线程池中会占用一个线程来等待每一个这样的进程完成（以便限制所占用的 CPU 核心数量）。"
 
-#: ../../source/contributing.rst:653
+#: ../../source/contributing.rst:1283
 msgid "Friendly face"
 msgstr "友好的外观"
 
-#: ../../source/contributing.rst:655
+#: ../../source/contributing.rst:1285
 msgid ""
 "To make it apparent to external users, all externally visible coroutines "
 "have names that end with \"_async\". Each such coroutine is accompanied "

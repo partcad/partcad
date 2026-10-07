@@ -53,3 +53,9 @@ test-results/
 # deliberately does not carry it (see its 'software:' section), and an untracked
 # copy left behind by 'pc install' would trip the rendered-examples check.
 /examples/produce_part_kicad/arduino-cli-install.sh
+# Crash dumps. A sandboxed CAD wrapper that segfaults drops one in the directory
+# the command ran from, which is the repository root, where a 130MB binary is one
+# `git add -A` away from a commit. Anchored, because `src/partcad_service_json_rpc/core/`
+# is a package.
+/core
+/core.*

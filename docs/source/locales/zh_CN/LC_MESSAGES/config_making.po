@@ -1,0 +1,1501 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-06 16:15+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/config_making.rst:3
+msgid "Making and buying"
+msgstr "制造与采购"
+
+#: ../../source/config_making.rst:7
+msgid "Manufacturing methods"
+msgstr "制造方式"
+
+#: ../../source/config_making.rst:9
+msgid "The ``manufacturing.method`` field says how a part is made:"
+msgstr "``manufacturing.method`` 字段说明一个零件是如何制造的："
+
+#: ../../source/config_making.rst:12
+msgid "Method"
+msgstr "方式"
+
+#: ../../source/config_making.rst:12
+msgid "Meaning"
+msgstr "含义"
+
+#: ../../source/config_making.rst:14
+msgid "``additive``"
+msgstr ""
+
+#: ../../source/config_making.rst:14
+msgid "Built up, e.g. 3D printed"
+msgstr "逐层堆积而成，例如 3D 打印"
+
+#: ../../source/config_making.rst:16
+msgid "``subtractive``"
+msgstr ""
+
+#: ../../source/config_making.rst:16
+msgid "Cut away from stock -- see :ref:`subtractive`"
+msgstr "从坯料上切除材料得到——参见 :ref:`subtractive`"
+
+#: ../../source/config_making.rst:18
+msgid "``forming``"
+msgstr ""
+
+#: ../../source/config_making.rst:18
+msgid "Shaped without adding or removing material"
+msgstr "在不增加也不去除材料的情况下成形"
+
+#: ../../source/config_making.rst:20
+msgid "``sheet_metal``"
+msgstr ""
+
+#: ../../source/config_making.rst:20
+msgid "A flat piece bent to shape -- see :ref:`sheet-metal`"
+msgstr "把一块平板折弯成形——参见 :ref:`sheet-metal`"
+
+#: ../../source/config_making.rst:22
+msgid "``pcbBasic``"
+msgstr ""
+
+#: ../../source/config_making.rst:22
+msgid "A printed circuit board (**not implemented yet**)"
+msgstr "印制电路板（ **尚未实现** ）"
+
+#: ../../source/config_making.rst:25
+msgid ""
+"These are ways of making a **part**, and apply to parts only. An assembly"
+" is put together rather than made, and has a single method of its own -- "
+"see :ref:`manufacturing an assembly <assembly-manufacturing>` below."
+msgstr ""
+"这些都是制造 **零件** 的方式，并且只适用于零件。装配体是装配起来的，而不是制造出来的，它有属于自己的单一方式——参见下文的 "
+":ref:`装配体的制造 <assembly-manufacturing>` 。"
+
+#: ../../source/config_making.rst:29
+msgid ""
+"A part that is bought rather than made carries ``vendor`` and ``sku`` "
+"instead of a method."
+msgstr "外购而非自制的零件携带 ``vendor`` 和 ``sku`` ，而不是制造方式。"
+
+#: ../../source/config_making.rst:35
+msgid "Subtractive"
+msgstr "减材加工"
+
+#: ../../source/config_making.rst:37
+msgid ""
+"``subtractive`` is the method that takes material away: a router, a "
+"laser, a saw, a drill. What it says about a part is not a property of the"
+" part's own shape -- almost any solid can be machined out of a big enough"
+" block -- but a relation between the part and what it is made *from*, and"
+" between the part and the machine that makes it. Both can be declared, "
+"and both are checked."
+msgstr ""
+"``subtractive`` "
+"是去除材料的制造方式：铣刀、激光、锯、钻头。它所陈述的并不是零件自身形状的某种属性——几乎任何实体都能从足够大的料块中加工出来——而是零件与其 "
+"*所用* 坯料之间、以及零件与加工它的机器之间的关系。两者都可以声明，也都会被检查。"
+
+#: ../../source/config_making.rst:44
+msgid "The stock it is cut from"
+msgstr "它所切削的坯料"
+
+#: ../../source/config_making.rst:46
+msgid "``source`` names the piece the part is cut out of:"
+msgstr "``source`` 指明零件是从哪一块料上切出来的："
+
+#: ../../source/config_making.rst:62
+msgid ""
+"Cutting can only ever remove material, so the part has to be what is left"
+" of the stock. ``pc test`` asks both halves of that, because each catches"
+" a different mistake and neither implies the other:"
+msgstr "切削永远只能去除材料，因此零件必须是坯料剩下的部分。 ``pc test`` 会分别追问这句话的两半，因为它们各自捕捉不同的错误，而且谁也推不出谁："
+
+#: ../../source/config_making.rst:66
+msgid ""
+"**Nothing of the part is outside the stock.** A part that pokes out of "
+"what it is cut from cannot be made from it however good the machine is --"
+" most often the stock is simply too small, or the part is positioned off "
+"it."
+msgstr "**零件没有任何部分落在坯料之外。** 伸出到坯料之外的零件，无论机器多好都不可能由它做出来——最常见的原因是坯料太小，或者零件的位置偏出了坯料。"
+
+#: ../../source/config_making.rst:69
+msgid ""
+"**The stock is bigger than the part somewhere.** A part that fills its "
+"stock exactly is one whose ``source`` names itself, or a copy of itself, "
+"which is the mistake a reader of the YAML cannot see."
+msgstr ""
+"**坯料在某处比零件大。** 恰好填满坯料的零件，说明它的 ``source`` 指向了它自己或它自己的一个副本，而这正是阅读 YAML "
+"的人看不出来的错误。"
+
+#: ../../source/config_making.rst:73
+msgid ""
+"``source`` is **required**, the way :ref:`sheet-metal`'s two fields are, "
+"and for the same reason: subtraction is defined by what it starts from. A"
+" shape somebody arrived at is not a subtractive part -- what makes it one"
+" is that it is what is left of a piece that existed first -- so a "
+"declaration naming no stock has not said what the method means."
+msgstr ""
+"``source`` 是 **必填的** ，就像 :ref:`sheet-metal` "
+"的那两个字段一样，原因也相同：减材加工是由它从什么开始而定义的。某个人凑出来的一个形状并不因此成为减材零件——使它成为减材零件的，是它是一块先前就存在的料剩下的部分——所以一份没有指明坯料的声明，并没有说清这种方式究竟意味着什么。"
+
+#: ../../source/config_making.rst:79
+msgid ""
+"A part genuinely made from no stock is a part made some other way: bought"
+" (``vendor``/``sku``), ``additive``, or ``forming``."
+msgstr ""
+"确实不是由任何坯料做出来的零件，是以别的方式做出来的零件：外购（ ``vendor`` / ``sku`` ）、 ``additive`` 或 "
+"``forming`` 。"
+
+#: ../../source/config_making.rst:85
+msgid "The machine it is cut on"
+msgstr "加工它的机器"
+
+#: ../../source/config_making.rst:87
+msgid ""
+"Subtraction is one idea, but the machines that do it are not "
+"interchangeable, and what they **cannot** do is the useful thing to know."
+" A machine is named by adding its own subsection:"
+msgstr "减材是一个统一的概念，但执行它的机器彼此并不可互换，而真正有用的信息是它们 **做不到** 什么。指定机器的方式是添加它自己的子小节："
+
+#: ../../source/config_making.rst:101
+msgid "Subsection"
+msgstr "子小节"
+
+#: ../../source/config_making.rst:101
+msgid "The machine, and what it cannot do"
+msgstr "机器，以及它做不到的事"
+
+#: ../../source/config_making.rst:103
+msgid "*(none)*"
+msgstr "*（无）*"
+
+#: ../../source/config_making.rst:103
+msgid ""
+"A CNC router or mill. It follows any 2.5D path, so there is nothing it is"
+" held to beyond fitting its stock."
+msgstr "一台 CNC 雕铣机或铣床。它可以走任意 2.5D 路径，因此除了必须放得进坯料之外，没有别的约束。"
+
+#: ../../source/config_making.rst:106
+msgid "``cnc:``"
+msgstr ""
+
+#: ../../source/config_making.rst:106
+msgid "The same machine, said out loud."
+msgstr "同一台机器，只是把它明确写了出来。"
+
+#: ../../source/config_making.rst:108
+msgid "``laser:``"
+msgstr ""
+
+#: ../../source/config_making.rst:108
+msgid ""
+"A laser cutter. Its beam does not tilt, so every wall it makes is "
+"parallel to the axis it fires along."
+msgstr "一台激光切割机。它的光束不能倾斜，因此它切出的每一个侧壁都平行于它的发射轴。"
+
+#: ../../source/config_making.rst:111
+msgid "``drill:``"
+msgstr ""
+
+#: ../../source/config_making.rst:111
+msgid ""
+"A drilling machine. It goes in and comes out, so the only thing it makes "
+"is a **round** hole along its own axis."
+msgstr "一台钻床。它只是扎进去再退出来，所以它唯一能做出的就是沿自身轴线的 **圆** 孔。"
+
+#: ../../source/config_making.rst:114
+msgid "``cut:``"
+msgstr ""
+
+#: ../../source/config_making.rst:114
+msgid ""
+"A saw that cuts the stock across -- a board to length, a sheet to size. "
+"It makes **nothing but the stock with its ends cut off**, where its cuts "
+"say. See :ref:`subtractive-cut`."
+msgstr ""
+"一把把坯料横向锯断的锯——把板材锯到长度，把板料锯到尺寸。它做出的 **只能是被锯掉两端之后的坯料** ，锯口的位置由它声明的切割给出。参见 "
+":ref:`subtractive-cut` 。"
+
+#: ../../source/config_making.rst:120
+msgid ""
+"Naming none of them means CNC. That is the machine that can make anything"
+" the other two can, so it is the answer that is never wrong -- and it is "
+"what every ``subtractive`` part written before machines could be named "
+"already meant."
+msgstr ""
+"一台都不指定就表示 CNC。那是能做出另外两台机器所能做的一切的机器，因此它是永远不会错的答案——而且在机器还无法被指定之前写下的每一个 "
+"``subtractive`` 零件，本来说的也正是它。"
+
+#: ../../source/config_making.rst:124
+msgid ""
+"**Several may be named, and they are alternatives rather than stages.** A"
+" part that declares both ``laser:`` and ``cnc:`` is claiming it could be "
+"made either way, and ``pc test`` answers for both claims. ``pc cam`` then"
+" has to be told which one to write for -- ``pc cam -m laser :gasket`` -- "
+"because a default nobody picked is a program for the wrong machine; the "
+"file it writes is named after the machine (``gasket.laser.nc``), so the "
+"alternatives land beside each other rather than one overwriting the "
+"other. A part that really is machined in *stages* is not this: it is a "
+"chain of parts, each naming the previous one as its ``source``."
+msgstr ""
+"**可以指定多台机器，它们是互相替代的方案，而不是先后的工序。** 同时声明了 ``laser:`` 和 ``cnc:`` "
+"的零件，是在宣称它两种方式都能做出来，而 ``pc test`` 会对这两项宣称分别作答。此后必须告诉 ``pc cam`` "
+"要为哪一台机器生成程序—— ``pc cam -m laser :gasket`` "
+"——因为没有人挑选过的默认值就是为错误的机器生成的程序；它写出的文件以机器命名（ ``gasket.laser.nc`` "
+"），所以这些替代方案会并排落盘，而不是互相覆盖。真正分 *工序* 加工的零件不是这种情况：那是一条零件链，其中每个零件都把前一个作为自己的 "
+"``source`` 。"
+
+#: ../../source/config_making.rst:134
+msgid ""
+"**Only ``subtractive`` has a machine at all**, and the keys that describe"
+" a cut are refused everywhere else rather than accepted and never read. A"
+" ``diameter:`` on a part that says ``method: additive`` is a number "
+"somebody chose and nothing acts on, which is the whole reason the job "
+"moved out of a section of its own -- a printer has feeds and speeds too, "
+"and the day PartCAD writes a program for one they will be a printer's "
+"keys under a printer's subsection rather than a router's read by "
+"accident. A *sketch* is the one section with no ``method:`` in it: a "
+"drawing is not made out of anything, so it names the machine and the job "
+"and nothing else."
+msgstr ""
+"**只有 ``subtractive`` 才谈得上机器** ，描述切削的那些键在其他任何地方都会被拒绝，而不是被接受却从不读取。写在声明了 "
+"``method: additive`` 的零件上的 ``diameter:`` "
+"，只是某个人选定却没有任何东西会去使用的数字，这正是作业参数从独立小节中移出来的全部原因——打印机同样有进给和转速，等到 PartCAD "
+"哪天为打印机生成程序时，它们会是打印机子小节下打印机自己的键，而不是被当成铣床的键误读。而 *草图* 是唯一一个其中没有 ``method:`` "
+"的小节：图纸不是由任何东西做出来的，所以它只指明机器和作业，别的什么都不说。"
+
+#: ../../source/config_making.rst:144
+msgid ""
+"Every machine takes a ``toolAxis``, which is the axis the tool, the beam,"
+" the drill or the saw approaches along, written as one of ``+X``, ``-X``,"
+" ``+Y``, ``-Y``, ``+Z`` or ``-Z``. It defaults to ``-Z``: the part sits "
+"on the bed and the tool comes down to it. Every machine also takes it as "
+"``along:`` -- the same key, the way it is usually said (\"the laser cuts "
+"along -Z\") -- and a subsection writes one or the other, never both. It "
+"is **not** ``direction:``, which says which way round a contour is cut "
+"(climb or conventional) -- the two reach one implementation in one "
+"request, which is why they do not share a name. A laser also takes a "
+"``kerf``, the width the beam itself removes, which is a property of that "
+"machine and that material rather than of the job -- which is why it is a "
+"property of the machine rather than of the cut."
+msgstr ""
+"每一台机器都接受 ``toolAxis`` ，即刀具、光束、钻头或锯子逼近工件所沿的轴，写作 ``+X`` 、 ``-X`` 、 ``+Y`` 、"
+" ``-Y`` 、 ``+Z`` 或 ``-Z`` 之一。它默认为 ``-Z`` ：零件放在工作台上，刀具自上而下落到它上面。每一台机器也都接受以"
+" ``along:`` 来写它——同一个键，只是日常的说法（“激光沿 -Z 切割”）——一个子小节写其中之一，绝不能两个都写。它 **不是** "
+"``direction:`` "
+"，后者说的是轮廓沿哪个方向切（顺铣还是逆铣）——这两者会在同一次实现中一并到来，这正是它们不共用一个名字的原因。激光还接受 ``kerf`` "
+"，即光束自身去除掉的宽度，它是那台机器和那种材料的属性，而不是这次作业的属性——这也正是它属于机器而不属于某次切割的原因。"
+
+#: ../../source/config_making.rst:156 ../../source/config_making.rst:356
+msgid "What ``pc test`` checks"
+msgstr "``pc test`` 检查什么"
+
+#: ../../source/config_making.rst:158
+msgid ""
+"Beyond the stock, one question per limited machine, and each applies "
+"**only to a part that named that machine**:"
+msgstr "除坯料之外，每一台有局限的机器对应一个问题，而每个问题 **只适用于指定了该机器的零件** ："
+
+#: ../../source/config_making.rst:161
+msgid ""
+"``manufacturability-laser`` -- every face of the part is either a wall "
+"along the beam or a face across it. A chamfer, a taper, a dome or a "
+"fillet rolling over an edge is none of those, and there is no orientation"
+" of a beam that produces a surface at an angle to itself."
+msgstr ""
+"``manufacturability-laser`` "
+"——零件的每一个面，要么是沿光束方向的侧壁，要么是横跨光束的端面。倒角、锥面、球顶或翻过一条边的圆角都不属于这两者，而且没有任何一种光束朝向能切出与自身成夹角的表面。"
+
+#: ../../source/config_making.rst:165
+msgid ""
+"``manufacturability-drill`` -- the same, and every wall is round. This "
+"one is asked of what the machine **took away** rather than of the part, "
+"where the part names a ``source``: a drilled plate's straight sides came "
+"with the stock, and asking the part's own walls would fail every plate "
+"for having them."
+msgstr ""
+"``manufacturability-drill`` ——同上，并且每一个侧壁都是圆的。在零件指明了 ``source`` "
+"的情况下，这个问题是针对机器 **去除掉的部分** "
+"提出的，而不是针对零件本身：钻孔板上那些平直的侧面本来就随坯料而来，若去追问零件自身的侧壁，每一块板都会因为有这些侧面而不通过。"
+
+#: ../../source/config_making.rst:169
+msgid ""
+"``manufacturability-cut`` -- the stock, cut where every declared cut "
+"says, **is** the part. See :ref:`subtractive-cut`."
+msgstr ""
+"``manufacturability-cut`` ——坯料在每一处声明的切割位置锯过之后， **就是** 这个零件。参见 :ref"
+":`subtractive-cut` 。"
+
+#: ../../source/config_making.rst:172
+msgid ""
+"The first two are measured by sampling each face's own normal against the"
+" axis, not by reading its surface type. The type is not the question: a "
+"cylinder is a wall when it is coaxial with the axis and a defect when it "
+"lies across it, and a surface extruded along the axis is a perfectly good"
+" wall whatever it is made of."
+msgstr ""
+"前两项都是通过对每个面自身的法向相对该轴进行采样来判定的，而不是读取它的曲面类型。类型不是问题所在：圆柱面与该轴同轴时是侧壁，横跨该轴时则是缺陷；而沿该轴拉伸出来的表面，无论由什么构成，都是完全合格的侧壁。"
+
+#: ../../source/config_making.rst:177
+msgid ""
+"What is deliberately **not** checked is thickness, material or power. A "
+"laser will cut a 20 mm plate as readily as a 1 mm sheet given enough of "
+"it, and how much is enough is a property of the machine and the material "
+"rather than of the design -- so it is not something PartCAD can answer "
+"from the geometry, and a check that guessed would refuse parts the shop "
+"next door cuts every day."
+msgstr ""
+"刻意 **不** 检查的是厚度、材料和功率。只要功率足够，激光切 20 mm 厚板和切 1 mm "
+"薄板一样轻松，而多少算足够是机器和材料的属性，而不是设计的属性——所以这不是 PartCAD "
+"能从几何中回答的问题，而一项靠猜测的检查，会拒掉隔壁车间天天都在切的零件。"
+
+#: ../../source/config_making.rst:184
+msgid "What ``pc cam`` writes"
+msgstr "``pc cam`` 写出什么"
+
+#: ../../source/config_making.rst:186
+msgid ""
+"The same ``gcode`` file type produces a different program for each "
+"machine, and which one it writes for is the part's own statement rather "
+"than a job parameter -- what a part is made on is a property of the part,"
+" and a re-tunable key for it would be a route written for a machine "
+"nobody owns."
+msgstr ""
+"同一个 ``gcode`` "
+"文件类型会为每一台机器生成不同的程序，而它为哪一台生成，取决于零件自己的声明，而不是某个作业参数——零件在什么机器上制造是零件的属性，而为它准备一个可随时调整的键，只会得到一条为谁也没有的机器写出的刀路。"
+
+#: ../../source/config_making.rst:192
+msgid "Machine"
+msgstr "机器"
+
+#: ../../source/config_making.rst:192
+msgid "The program"
+msgstr "程序"
+
+#: ../../source/config_making.rst:194
+msgid "CNC"
+msgstr ""
+
+#: ../../source/config_making.rst:194
+msgid ""
+"Contours offset by the cutter's radius, cut at stepped depths. "
+"``M3``/``M5`` where a ``speed`` is named."
+msgstr "按刀具半径偏置的轮廓，分层递进深度切削。在指定了 ``speed`` 处输出 ``M3`` / ``M5`` 。"
+
+#: ../../source/config_making.rst:197
+msgid "Laser"
+msgstr "激光"
+
+#: ../../source/config_making.rst:197
+msgid ""
+"One pass, offset by half the ``kerf``, with the beam gated ``M3 "
+"S<power>``/``M5`` around each contour and no Z motion at all. Reads no "
+"``tool`` and no ``depth_per_pass``."
+msgstr ""
+"单次走刀，按 ``kerf`` 的一半偏置，在每条轮廓前后用 ``M3 S<power>`` / ``M5`` 开闭光束，完全没有 Z "
+"向运动。不读取 ``tool`` ，也不读取 ``depth_per_pass`` 。"
+
+#: ../../source/config_making.rst:201
+msgid "Drilling"
+msgstr "钻孔"
+
+#: ../../source/config_making.rst:201
+msgid ""
+"A rapid to each round feature's centre, a plunge and a retract, broken "
+"into steps where ``peck:`` says."
+msgstr "快速移动到每个圆特征的中心，然后下刀再抬刀；在 ``peck:`` 有指定处拆成若干次啄钻。"
+
+#: ../../source/config_making.rst:205
+msgid ""
+"A ``cut:`` gets no program: a saw cutting stock to size is told where to "
+"cut and nothing else, and the part's declaration already says that. ``pc "
+"cam`` passes over a part that is only cut, and refuses ``-m cut``."
+msgstr ""
+"``cut:`` 不会得到程序：把坯料锯到尺寸的锯，只需要被告知在哪里下锯，别无其他，而零件的声明已经说明了这一点。 ``pc cam`` "
+"会跳过只做锯切的零件，并拒绝 ``-m cut`` 。"
+
+#: ../../source/config_making.rst:209
+msgid ""
+"``power`` (a laser's S-word) and ``peck`` (how deep a drill goes before "
+"clearing the swarf) join the other :ref:`cam job keys <cam-section>`. A "
+"part declaring a ``toolAxis`` other than ``-Z`` is rotated into the "
+"machine's frame before the route is written, so the program is in the "
+"coordinates the part is fixtured in."
+msgstr ""
+"``power`` （激光的 S 字）和 ``peck`` （钻头每次排屑前钻进多深）与其他 :ref:`cam 作业键 <cam-"
+"section>` 并列。声明了 ``-Z`` 之外 ``toolAxis`` "
+"的零件，会先被旋转到机器坐标系中再生成刀路，这样程序就处在零件实际装夹所在的坐标系下。"
+
+#: ../../source/config_making.rst:214
+msgid ""
+"``examples/produce_part_subtractive`` is the whole of the above in one "
+"package: two stocks, a laser-cut blank and gasket, a routed block whose "
+"chamfer is the one feature only a router can make, a drilled plate, and a"
+" rail cut to length off a board. The blank is what :ref:`sheet-metal` "
+"bends. The desk in ``//pub/furniture/workspace/basic`` is cut, every "
+"piece of it, with ``cut:``."
+msgstr ""
+"``examples/produce_part_subtractive`` "
+"用一个包涵盖了上述全部内容：两种坯料，一块激光切出的平板件和一个垫片，一个铣削出来的块体（它的倒角是唯一只有铣床才能做出的特征），一块钻孔板，以及一根从板材上锯到长度的导轨。那块平板件正是"
+" :ref:`sheet-metal` 所折弯的对象。 ``//pub/furniture/workspace/basic`` "
+"中的那张桌子，每一块料都是用 ``cut:`` 锯出来的。"
+
+#: ../../source/config_making.rst:223
+msgid "Cutting stock to size"
+msgstr "把坯料锯到尺寸"
+
+#: ../../source/config_making.rst:225
+msgid ""
+"``cut:`` is the machine most parts that are cut at all are cut on: a saw "
+"taking a stud off an eight foot 2x4, or a shelf out of a sheet of "
+"plywood. It follows no outline, so it is described by **where** it cuts, "
+"in the part's own coordinates, which are also its stock's:"
+msgstr ""
+"``cut:`` 是绝大多数需要切割的零件实际所用的那台机器：从八英尺长的 2x4 "
+"木料上锯下一根立柱，或者从一张胶合板上锯下一块搁板。它不沿任何轮廓走刀，因此描述它的方式是说明它在 **哪里** "
+"下锯，用零件自身的坐标——那也正是其坯料的坐标："
+
+#: ../../source/config_making.rst:251
+msgid ""
+"A saw is written the way every other machine is: by its ``toolAxis``, "
+"which points at the **offcut**. Each cut starts where the stock starts "
+"along that axis -- the way a board is measured from its end -- travels "
+"``length:`` into it, and cuts across; everything further along the axis "
+"is cut off, and what is behind the saw is the part. So ``toolAxis: -Y`` "
+"counts from the other end."
+msgstr ""
+"锯的写法与其他每一台机器相同：通过它的 ``toolAxis`` ，该轴指向 **被锯掉的那一端** "
+"。每一次切割都从坯料沿该轴的起点开始——就像一块板材是从它的一端量起的——沿该轴深入 ``length:`` "
+"，然后横向锯断；沿该轴更远处的一切都被锯掉，而锯口后方留下的就是零件。因此 ``toolAxis: -Y`` 就是从另一端量起。"
+
+#: ../../source/config_making.rst:257
+msgid "``length:`` is always there: it is the whole of *where*."
+msgstr "``length:`` 始终存在：它就是 *在哪里* 的全部内容。"
+
+#: ../../source/config_making.rst:258
+msgid ""
+"``toolAxis:`` on a cut, or ``along:`` -- which says the same, the way a "
+"saw cut is usually said; one or the other -- is the axis that cut travels"
+" along, as an axis (``+Y``) or a vector (``[0, 1, 0]``)."
+msgstr ""
+"写在一次切割上的 ``toolAxis:`` ，或者 ``along:`` "
+"——两者含义相同，后者是锯切通常的说法；二者只写其一——是该次切割所沿的轴，写成一个轴（ ``+Y`` ）或一个向量（ ``[0, 1, 0]``"
+" ）。"
+
+#: ../../source/config_making.rst:261
+msgid ""
+"A cut that names neither travels along the machine's ``toolAxis:`` (or "
+"``along:``), and a machine that names none has the default every machine "
+"has, ``-Z``."
+msgstr ""
+"两者都没写的切割，沿机器的 ``toolAxis:`` （或 ``along:`` ）进行；而两者都没写的机器，取每一台机器都有的默认值 "
+"``-Z`` 。"
+
+#: ../../source/config_making.rst:265
+msgid ""
+"Any number in a cut may be written as ``$name`` -- the value of the "
+"part's own parameter of that name, with a unit after it if it needs one "
+"(``$length in``). A part cut to length is nearly always parametric, and a"
+" cut written as a number would be right for one instance and wrong for "
+"every other."
+msgstr ""
+"切割中的任何数字都可以写成 ``$name`` ——即零件自身同名参数的值，需要时可在其后加上单位（ ``$length in`` "
+"）。锯到长度的零件几乎总是参数化的，而写成固定数字的切割只会对某一个实例正确，对其余每一个都是错的。"
+
+#: ../../source/config_making.rst:270
+msgid ""
+"``pc test`` runs ``manufacturability-cut`` over it, which makes each cut "
+"in the stock in turn and compares what is left with the part. Whatever "
+"the part has that the cut stock does not is a feature no saw made; "
+"whatever the cut stock has that the part does not is a notch, a hole or a"
+" cut in the wrong place; and a cut that takes nothing off the stock is "
+"one that misses it -- usually a length longer than the board, or an axis "
+"pointing the wrong way. Each of the three is a failure that says which "
+"plane it was about."
+msgstr ""
+"``pc test`` 会对它运行 ``manufacturability-cut`` "
+"：依次在坯料上做出每一次切割，再把剩下的部分与零件作比较。零件上有而锯过的坯料上没有的，是任何锯都做不出来的特征；锯过的坯料上有而零件上没有的，是缺口、孔，或者位置不对的锯口；而一次没有从坯料上锯掉任何东西的切割，就是完全没切到它——通常是长度超过了板材，或者轴指错了方向。这三者中的每一种都是一次失败，并会指明它涉及的是哪一个平面。"
+
+#: ../../source/config_making.rst:281
+msgid "Sheet metal"
+msgstr "钣金"
+
+#: ../../source/config_making.rst:283
+msgid ""
+"``sheet_metal`` is the one method that is not described by the part "
+"alone. The others say how a shape is produced from stock; this one says "
+"that an existing flat piece was put through a brake, so it names two "
+"things instead:"
+msgstr ""
+"``sheet_metal`` "
+"是唯一一种无法仅凭零件本身来描述的制造方式。其他方式说的是如何从坯料产生一个形状；而这一种说的是一块已经存在的平板被送进了折弯机，因此它转而指明两样东西："
+
+#: ../../source/config_making.rst:298
+msgid ""
+"``source`` -- **required.** The part that goes into the brake: the flat "
+"blank. It is a reference, resolved against this package like every other "
+"reference a part makes, and it points at a **part** rather than at a "
+"drawing because it is one. It has a thickness, a material, a tolerance, "
+"and a manufacturing method of its own."
+msgstr ""
+"``source`` —— **必填。** "
+"送进折弯机的那个零件：平整的平板件。它是一个引用，和零件所作的其他每一个引用一样相对本包解析；它指向的是 **零件** "
+"而不是图纸，因为它本来就是一个零件。它有自己的厚度、材料、公差和制造方式。"
+
+#: ../../source/config_making.rst:304
+msgid ""
+"``instructions`` -- **required.** The sketch that says where the bends "
+"are and what each of them is. It is a reference to a :ref:`sketch "
+"<sketches>`, so it may carry parameters: a drawing that holds the outline"
+" *and* the bend lines is read as bends alone with "
+"``;include=BEND_UP,BEND_DOWN``, which is what the DXF layer parameters "
+"are for."
+msgstr ""
+"``instructions`` —— **必填。** 说明折弯线在哪里、每一条分别是什么折弯的那张草图。它是对 :ref:`草图 "
+"<sketches>` 的引用，因此可以带参数：一张同时包含外轮廓 *和* 折弯线的图纸，加上 "
+"``;include=BEND_UP,BEND_DOWN`` 就只会被读作折弯线，这正是 DXF 图层参数的用途。"
+
+#: ../../source/config_making.rst:311
+msgid "The outline belongs to the blank"
+msgstr "外轮廓属于平板件"
+
+#: ../../source/config_making.rst:313
+msgid ""
+"The outline of the part, its holes, its slots and its cut-outs are "
+"**not** the sheet metal process's to make, and must not be described as "
+"part of it. They belong to the blank, which is usually cut flat -- laser,"
+" waterjet, punch, router -- and so is usually an ordinary ``subtractive``"
+" part:"
+msgstr ""
+"零件的外轮廓、它的孔、它的槽和它的开口 **不是** "
+"钣金工艺要做出来的东西，也不得作为钣金工艺的一部分来描述。它们属于平板件，而平板件通常是在平面状态下切出来的——激光、水刀、冲床、铣床——因此通常是一个普通的"
+" ``subtractive`` 零件："
+
+#: ../../source/config_making.rst:341
+msgid ""
+"That is how it is made, and so it is how it is written down. A shop cuts "
+"the flat pattern on one machine and bends it on another, they are quoted,"
+" toleranced and scheduled separately, and the flat pattern is a thing "
+"that exists -- it is what arrives at the brake. Describing a hole as part"
+" of the bending step would put it on the process that cannot make it, and"
+" would leave the part with no declaration of the process that can."
+msgstr "它实际就是这样做出来的，所以也就应该这样写下来。车间在一台机器上切出展开件，在另一台机器上把它折弯，两者分别报价、分别给公差、分别排产，而展开件是一个确实存在的东西——它就是送到折弯机前的那样东西。把一个孔描述成折弯工序的一部分，等于把它算在了做不出它的工艺头上，同时让零件对真正能做出它的那道工艺毫无声明。"
+
+#: ../../source/config_making.rst:348
+msgid ""
+"``subtractive`` is the usual answer rather than a required one: what has "
+"to be true of a ``source`` is that it is flat, which is what ``pc test`` "
+"asks of it. A blank that is bought in rather than made has no "
+"manufacturing method to declare, one sheared or punched to outline is "
+"``forming``, and an ``alias`` or an ``enrich`` of a part declared "
+"elsewhere carries whatever that one says. All of them are blanks, and the"
+" check takes them."
+msgstr ""
+"``subtractive`` 是常见的答案，而不是必须的答案： ``source`` 必须成立的一点是它是平的，这也正是 ``pc test``"
+" 对它的追问。外购而非自制的平板件没有制造方式可声明；剪切或冲裁出外轮廓的平板件是 ``forming`` ；而对别处声明的零件所作的 "
+"``alias`` 或 ``enrich`` ，沿用那个零件所说的内容。它们都是平板件，这项检查对它们一视同仁。"
+
+#: ../../source/config_making.rst:358
+msgid "Two questions, one about each half of the declaration:"
+msgstr "两个问题，分别针对这份声明的两半："
+
+#: ../../source/config_making.rst:360
+msgid ""
+"**The blank is flat, top and bottom.** What goes into a brake is a piece "
+"of sheet, so the horizontal plane through its highest point and the one "
+"through its lowest each meet it in an area rather than touching it at a "
+"point. A ``source`` that fails this is not a blank -- most often it is "
+"the bent part itself, named by mistake."
+msgstr ""
+"**平板件上下两面都是平的。** "
+"送进折弯机的是一块板料，所以过它最高点的水平面和过它最低点的水平面，与它相交的都是一块面积，而不是只在一个点上相触。未通过这一项的 "
+"``source`` 不是平板件——最常见的情况是误把折弯后的零件本身写了上去。"
+
+#: ../../source/config_making.rst:366
+msgid ""
+"**Every bend line says what kind of bend it is.** Each line of the "
+"instructions sketch carries three annotations:"
+msgstr "**每一条折弯线都说明了它是哪一种折弯。** instructions 草图中的每一条线都带有三项标注："
+
+#: ../../source/config_making.rst:370
+msgid "Annotation"
+msgstr "标注"
+
+#: ../../source/config_making.rst:370
+msgid "What it has to be"
+msgstr "它必须是什么"
+
+#: ../../source/config_making.rst:372
+msgid "``angle``"
+msgstr ""
+
+#: ../../source/config_making.rst:372
+msgid "How far the metal is turned, in degrees. Positive."
+msgstr "金属被折过多大角度，单位为度。必须为正。"
+
+#: ../../source/config_making.rst:374
+msgid "``radius``"
+msgstr ""
+
+#: ../../source/config_making.rst:374
+msgid ""
+"The **inner** radius of the bend, in millimetres. More than zero -- zero "
+"is a fold, not a bend."
+msgstr "折弯的 **内** 半径，单位为毫米。必须大于零——零是对折，不是折弯。"
+
+#: ../../source/config_making.rst:377
+msgid "``direction``"
+msgstr ""
+
+#: ../../source/config_making.rst:377
+msgid "``up`` or ``down``; letter case does not matter."
+msgstr ""
+"``up`` 或 ``down`` ，大小写均可。"
+
+#: ../../source/config_making.rst:380
+msgid ""
+"Where they come from is the sketch's business, not this check's: a DXF "
+"states them as :ref:`extended data <sketch-annotations>`, and the check "
+"reads what the sketch reports rather than the file it was read from."
+msgstr ""
+"它们从哪里来是草图的事，不是这项检查的事：DXF 把它们表述为 :ref:`扩展数据 <sketch-annotations>` "
+"，而这项检查读取的是草图所报告的内容，而不是草图所来自的那个文件。"
+
+#: ../../source/config_making.rst:384
+msgid ""
+"What is *not* checked is the geometry of the part against those "
+"instructions. Whether bending the blank as described produces the shape "
+"the part declares is a question for the day PartCAD bends the blank "
+"itself; until then the part is what its own type built, and these are the"
+" manufacturing inputs beside it."
+msgstr ""
+"*不* 做检查的，是零件的几何与这些折弯说明是否相符。按所述方式折弯平板件能否得到零件所声明的形状，要留到 PartCAD "
+"自己动手折弯平板件的那一天再回答；在那之前，零件就是它自己的类型构建出来的东西，而这些只是摆在它旁边的制造输入。"
+
+#: ../../source/config_making.rst:389
+msgid ""
+"``examples/produce_part_sheet_metal`` is the whole of the above in one "
+"package: one DXF holding the flat pattern and two bend lines, a blank "
+"extruded from the outline layer, and three parts folded from that one "
+"blank -- at one bend line, at the other, and at both. They differ in "
+"nothing but which layers their ``instructions`` select, which is the case"
+" the layer parameters exist for."
+msgstr ""
+"``examples/produce_part_sheet_metal`` 用一个包涵盖了上述全部内容：一个 DXF "
+"中同时放着展开轮廓和两条折弯线，一个从外轮廓图层拉伸出来的平板件，以及由这同一块平板件折出的三个零件——分别在其中一条折弯线处折、在另一条处折、以及两条都折。它们之间除了各自的"
+" ``instructions`` 选择了哪些图层之外别无差别，而这正是图层参数存在的理由。"
+
+#: ../../source/config_making.rst:399
+msgid "Procurement"
+msgstr "采购"
+
+#: ../../source/config_making.rst:401
+msgid ""
+"A part that can be bought off the shelf instead of being manufactured is "
+"declared using the following syntax:"
+msgstr "可以直接现货采购而无需制造的零件，使用以下语法声明："
+
+#: ../../source/config_making.rst:414
+msgid "``vendor``"
+msgstr ""
+
+#: ../../source/config_making.rst:416
+msgid "Optional. The vendor that sells the part."
+msgstr "可选。销售该零件的供应商。"
+
+#: ../../source/config_making.rst:418
+msgid "``sku``"
+msgstr ""
+
+#: ../../source/config_making.rst:420
+msgid ""
+"Optional. The vendor's `stock keeping unit "
+"<https://en.wikipedia.org/wiki/Stock_keeping_unit>`_ identifying what is "
+"ordered from that vendor."
+msgstr ""
+"可选。供应商的 `库存量单位 <https://en.wikipedia.org/wiki/Stock_keeping_unit>`_ "
+"，用于标识向该供应商订购的是什么。"
+
+#: ../../source/config_making.rst:424
+msgid ""
+"Both ``vendor`` and ``sku`` must be set for the part to be considered "
+"purchasable. If either is missing, the part has to be manufactured "
+"instead, which relies on the MCFTT parameters described above."
+msgstr ""
+"只有同时设置了 ``vendor`` 和 ``sku`` ，该零件才会被视为可购买的。只要缺少其中之一，该零件就只能改为制造，而这依赖于上文所述的"
+" MCFTT 参数。"
+
+#: ../../source/config_making.rst:428
+msgid "``count_per_sku``"
+msgstr ""
+
+#: ../../source/config_making.rst:430
+msgid "Optional. Defaults to ``1``. Must be a positive integer."
+msgstr "可选。默认为 ``1`` 。必须是正整数。"
+
+#: ../../source/config_making.rst:432
+msgid ""
+"The number of parts that come in a single SKU, for the parts that are "
+"sold in packs: a bag of 25 nuts is one SKU that yields 25 parts. "
+"Providers use it to translate the number of parts requested into the "
+"number of SKUs to order, and the number of SKUs a store has in stock into"
+" the number of parts it can supply."
+msgstr ""
+"对于成包出售的零件，单个 SKU 中包含的零件数量：一袋 25 个螺母是一个 SKU，可得到 25 "
+"个零件。提供方用它把请求的零件数量换算成需要订购的 SKU 数量，也把商店库存的 SKU 数量换算成它能供应的零件数量。"
+
+#: ../../source/config_making.rst:438
+msgid "``item_in_sku``"
+msgstr ""
+
+#: ../../source/config_making.rst:440
+msgid ""
+"Optional. Which item this is, where one SKU is a *set* of different "
+"things rather than a pack of one: a shaft sold with the clip that goes on"
+" it, a bracket that comes with its screws. Each of them is an object of "
+"its own -- used on its own, assembled on its own, possibly taken apart "
+"and put back later -- so each is declared as a part of its own. Each "
+"names the set's ``vendor`` and ``sku``, and says which item of the set it"
+" is:"
+msgstr ""
+"可选。当一个 SKU 是不同物品的 *一套* "
+"，而不是同一种物品的一包时，用它说明这是其中的哪一件：一根轴连同套在它上面的卡簧一起出售，一个支架随附它的螺钉。它们各自都是独立的对象——各自单独使用、单独装配，也可能被拆下来之后再装回去——所以各自都声明为独立的零件。它们都写明这一套的"
+" ``vendor`` 和 ``sku`` ，并说明自己是这一套中的哪一件："
+
+#: ../../source/config_making.rst:461
+msgid ""
+"``count_per_sku`` is then how many of that one kind come in a set. What "
+"is ordered is the set, as many times as the most demanding kind needs: "
+"two shafts and two clips are two sets, not four. Objects of one SKU that "
+"do not name an ``item_in_sku`` are one kind with each other, which is "
+"what a SKU of one kind of thing is."
+msgstr ""
+"此时 ``count_per_sku`` "
+"表示一套中包含多少件这一种物品。订购的对象是整套，套数按需求最多的那一种来定：两根轴和两个卡簧是两套，而不是四套。同一个 SKU 下没有写明 "
+"``item_in_sku`` 的对象，彼此属于同一种物品，而这正是只含一种物品的 SKU 的含义。"
+
+#: ../../source/config_making.rst:467
+msgid ""
+"An object sold in more than one set -- the same clip comes with every "
+"length of shaft -- is declared once for the geometry, with an ``alias`` "
+"of it for each set it comes in, the way a part sold by several vendors is"
+" (below)."
+msgstr ""
+"在不止一套中出售的对象——同一个卡簧随每一种长度的轴一起附带——其几何只声明一次，再为它所属的每一套各做一个它的 ``alias`` "
+"，与由多家供应商出售的零件的做法相同（见下文）。"
+
+#: ../../source/config_making.rst:471
+msgid ""
+"These values are passed on to providers of the type ``store`` as "
+"``request[\"vendor\"]``, ``request[\"sku\"]``, "
+"``request[\"count_per_sku\"]`` and ``request[\"item_in_sku\"]`` (see "
+":ref:`providers`). A cart also says what to order, one line per SKU, in "
+"``request[\"cart\"][\"skus\"]``."
+msgstr ""
+"这些值会作为 ``request[\"vendor\"]`` 、 ``request[\"sku\"]`` 、 "
+"``request[\"count_per_sku\"]`` 和 ``request[\"item_in_sku\"]`` 传给类型为 "
+"``store`` 的提供方（参见 :ref:`providers` ）。购物车还会在 "
+"``request[\"cart\"][\"skus\"]`` 中说明要订购什么，每个 SKU 一行。"
+
+#: ../../source/config_making.rst:479
+msgid "Parts that are made"
+msgstr "自制的零件"
+
+#: ../../source/config_making.rst:481
+msgid ""
+"A part with manufacturing instructions -- a ``manufacturing:`` section "
+"naming a method -- is **made**, and whoever builds the assembly is taken "
+"at their word that they can make it: PartCAD has the instructions, and "
+"for now assumes the capabilities to follow them. So nobody is asked to "
+"supply such a part. What has to be procured is what it is made *from*: "
+"the ``source:`` of its ``manufacturing:`` section, which is procured by "
+"the same rule in turn -- a bracket bent from a blank that is cut from a "
+"sheet is procured as the sheet. A part made from nothing it names "
+"(``additive``, ``forming``) needs nothing procured at all."
+msgstr ""
+"带有制造说明的零件——即一个指明了制造方式的 ``manufacturing:`` 小节——是 **自制的** "
+"，而构建该装配体的人被认为确实能照他们所说的把它做出来：PartCAD "
+"拥有这些说明，并且暂且假定具备照做的能力。因此不会有人被要求供应这样的零件。需要采购的是它 *由什么* 做成：它的 "
+"``manufacturing:`` 小节中的 ``source:`` "
+"，而这一项又按同样的规则继续采购——一个由平板件折弯而成、而平板件又是从板料上切出来的支架，采购的是那张板料。不由它所指明的任何东西做成的零件（ "
+"``additive`` 、 ``forming`` ）则完全不需要采购任何东西。"
+
+#: ../../source/config_making.rst:491
+msgid ""
+"**The bills of materials** list every part that goes into the assembly, "
+"and beside them a **Stock** section: what the made parts are made from, "
+"one piece for each part made from it, and which parts each is for. "
+"Cutting several parts out of one piece is a question of layout that "
+"PartCAD does not answer yet, so the count is what buying for each part "
+"separately would take -- an upper bound, never short. The detailed bill "
+"of materials (``pc bom``) lists what has to be procured: a made part is "
+"not a line item of its own there but the stock it is made from, of kind "
+"``stock``, with the vendor and the SKU to order it by."
+msgstr ""
+"**物料清单** 会列出进入该装配体的每一个零件，并在旁边给出 **Stock** "
+"一节：自制零件由什么做成、每一个由它做成的零件各算一件，以及每一件分别是为哪些零件准备的。从一块料上切出多个零件属于排样问题，PartCAD "
+"目前还不回答它，因此数量按为每个零件分别购买来计——这是一个上界，绝不会少。详细物料清单（ ``pc bom`` "
+"）列出的是必须采购的东西：自制零件在那里不是独立的条目，作为条目出现的是它所用的坯料，种类为 ``stock`` ，并附上订购它所需的供应商和 "
+"SKU。"
+
+#: ../../source/config_making.rst:500
+msgid ""
+"**The assembly instructions** open, after the bill of materials, with the"
+" parts to manufacture: each one, how many of it, what it is made from, "
+"and its manufacturing instructions written out in full."
+msgstr "**装配说明** 在物料清单之后，首先列出需要制造的零件：每一个零件、各需要多少、由什么做成，以及完整写出的制造说明。"
+
+#: ../../source/config_making.rst:503
+msgid "**pc supply** puts the stock in the cart instead of the part."
+msgstr "**pc supply** 放进购物车的是坯料，而不是零件。"
+
+#: ../../source/config_making.rst:504
+msgid ""
+"**pc test** does not look for a supplier of a made part. It checks that "
+"its instructions are complete (a tolerance), and that its stock can be "
+"had -- by running the same tests over the stock, which for a bought one "
+"is a supplier that carries it."
+msgstr ""
+"**pc test** "
+"不会为自制零件寻找供应商。它检查该零件的制造说明是否完整（有没有公差），以及它的坯料能否拿到——做法是对坯料运行同样的测试，而对外购的坯料来说，这意味着要有一家备有它的供应商。"
+
+#: ../../source/config_making.rst:509
+msgid ""
+"A part that has manufacturing instructions **and** a ``vendor`` and an "
+"``sku`` can be had either way. It is tried as bought first: ``pc test`` "
+"asks for a supplier, and only if no supplier confirms it does it check "
+"that the part can be made instead. The bills of materials and the cart "
+"list it as bought."
+msgstr ""
+"既有制造说明 **又有** ``vendor`` 和 ``sku`` 的零件，两条路都能拿到它。它会先按外购来尝试： ``pc test`` "
+"先去寻找供应商，只有在没有任何供应商确认时，才转而检查这个零件能否被制造出来。物料清单和购物车都会把它列为外购。"
+
+#: ../../source/config_making.rst:514
+msgid ""
+"Note that ``count_per_sku`` is a property of how the part is packaged for"
+" sale, not of the CAD model. If the same part is sold by several vendors "
+"in different pack sizes, declare one part per (vendor, SKU) pair, for "
+"example using ``alias``."
+msgstr ""
+"注意 ``count_per_sku`` 描述的是零件的销售包装方式，而不是 CAD "
+"模型。如果同一个零件由多家供应商以不同的包装规格出售，就为每一个（供应商，SKU）组合声明一个零件，例如使用 ``alias`` 。"
+
+#: ../../source/config_making.rst:537
+msgid ""
+"What an object is bought as is the one thing an ``alias`` or an "
+"``enrich`` may state of its own: everything else it reports -- where the "
+"file is, what it is built with, which parameter values it has -- belongs "
+"to the declaration it resolves to. A reference that names a ``vendor`` or"
+" an ``sku`` replaces the whole record, ``count_per_sku`` included, "
+"because a pack size written for one SKU says nothing about another one; "
+"an absent ``count_per_sku`` therefore reads as ``1``, the same as it "
+"would on a part declared outright. A reference that names neither is "
+"ordering the same thing, so the record stands -- and a ``count_per_sku`` "
+"on its own corrects how many of that same SKU arrive in one."
+msgstr ""
+"一个对象是以什么名义被买到的，是 ``alias`` 或 ``enrich`` "
+"唯一可以自行声明的东西：它所报告的其他一切——文件在哪里、用什么构建、参数取什么值——都属于它解析到的那份声明。写明了 ``vendor`` 或 "
+"``sku`` 的引用会整体替换这条采购记录， ``count_per_sku`` 也包括在内，因为为某一个 SKU 写下的包装规格，对另一个 "
+"SKU 什么也没说；因此缺失的 ``count_per_sku`` 会被读作 ``1`` "
+"，与直接声明的零件上的情形相同。两者都没写明的引用订购的是同一样东西，所以原记录依然成立——而单独出现的 ``count_per_sku`` "
+"只是在纠正同一个 SKU 一份里到底有多少件。"
+
+#: ../../source/config_making.rst:547
+msgid ""
+"This travels down a chain: an alias of an alias, and an enrich of an "
+"enrich, report what the reference in the middle declared rather than only"
+" what is at the end of the chain."
+msgstr ""
+"这一点会沿着引用链向下传递：alias 的 alias、enrich 的 "
+"enrich，报告的是链条中间那个引用所声明的内容，而不只是链条末端的内容。"
+
+#: ../../source/config_making.rst:555
+msgid "Materials"
+msgstr "材料"
+
+#: ../../source/config_making.rst:557
+msgid ""
+"A part is made of something, and ``materials`` is where a package says "
+"what that something is. It is the object the ``material`` parameter of a "
+"part points at (see :ref:`parameters`), so that naming a substance is "
+"naming a thing PartCAD can ask questions of rather than repeating a "
+"string every reader has to interpret for themselves."
+msgstr ""
+"零件总是由某种东西做成的，而 ``materials`` 就是一个包说明那是什么东西的地方。它是零件的 ``material`` "
+"参数所指向的对象（参见 :ref:`parameters` ），这样一来，指明一种物质就是指明一个 PartCAD "
+"可以向其提问的东西，而不是重复一个每位读者都得自行理解的字符串。"
+
+#: ../../source/config_making.rst:563
+msgid ""
+"A material is **not** a shape. PLA has no geometry: there is nothing to "
+"render, to export or to tessellate, and none of what :ref:`parts` and "
+":ref:`assemblies` can do applies to it. What it is, is a set of facts "
+"about a substance:"
+msgstr ""
+"材料 **不是** 形状。PLA 没有几何：没有东西可渲染、可导出或可网格化，而 :ref:`parts` 和 :ref:`assemblies`"
+" 能做的事没有一项适用于它。它所是的，是关于一种物质的一组事实："
+
+#: ../../source/config_making.rst:579
+msgid "The short form gives the full name and nothing else:"
+msgstr "简写形式只给出全名，别无其他："
+
+#: ../../source/config_making.rst:586
+msgid ""
+"Density is in ``g/mm^3``, the units every length in PartCAD is already "
+"in, so that a mass falls out of a volume without a conversion nobody "
+"remembers to apply. Datasheets quote ``g/cm^3``, which is 1000 times "
+"larger: PLA at 1.32 g/cm^3 is declared as ``0.00132``. A material that "
+"states no density reports no mass, rather than a mass of zero -- nothing "
+"downstream could tell an invented figure apart from a stated one."
+msgstr ""
+"密度的单位是 ``g/mm^3`` ，也就是 PartCAD "
+"中每一个长度本来就在用的单位，这样质量就能直接从体积得出，而不需要一次谁也记不住要做的换算。数据表上给出的是 ``g/cm^3`` ，数值要大 "
+"1000 倍：密度为 1.32 g/cm^3 的 PLA 声明为 ``0.00132`` "
+"。没有给出密度的材料报告的是没有质量，而不是质量为零——否则下游的任何环节都无法把一个编造的数字和一个真实给出的数字区分开。"
+
+#: ../../source/config_making.rst:593
+msgid ""
+"``tags`` is free-form on purpose. There is no controlled vocabulary of "
+"material properties that survives contact with real catalogues, and "
+"imposing one would only mean packages could not say what they mean."
+msgstr "``tags`` 是刻意保持自由格式的。不存在一套能经受住真实产品目录检验的材料属性受控词表，而强行规定一套，只会让包说不出自己想说的东西。"
+
+#: ../../source/config_making.rst:597
+msgid ""
+"Materials are addressed like every other object, as ``<package>:<name>``,"
+" so a part in one package names a material catalogued in another:"
+msgstr "材料和其他每一种对象一样寻址，写作 ``<package>:<name>`` ，因此一个包中的零件可以指明另一个包中登记的材料："
+
+#: ../../source/config_making.rst:610
+msgid ""
+"List what a package catalogues with ``pc list materials`` (and ``pc list "
+"materials //...`` to walk the packages it imports)."
+msgstr ""
+"用 ``pc list materials`` 列出一个包登记了哪些材料（用 ``pc list materials //...`` "
+"可遍历它所导入的各个包）。"
+
+#: ../../source/config_making.rst:614
+msgid "Standard catalogues"
+msgstr "标准目录"
+
+#: ../../source/config_making.rst:616
+msgid ""
+"The PartCAD index publishes two families of standard materials, so that a"
+" part made of something ordinary need not restate any of the above:"
+msgstr "PartCAD 索引发布了两个系列的标准材料，这样由常见材料做成的零件就不必重复上述任何内容："
+
+#: ../../source/config_making.rst:619
+msgid ""
+"``//pub/std/manufacturing/material/plastic`` -- polymers: the commodity "
+"and printable thermoplastics (``pla``, ``abs``, ``asa``, ``petg``, "
+"``pc``), the engineering ones (``nylon``, ``pa12``, ``pa66-gf30``, "
+"``pom``, ``uhmwpe``), the high-performance ones (``ptfe``, ``peek``, "
+"``pei``, ``pps``), the polymer-matrix composites (``cfrp``, ``gfrp``) and"
+" the elastomers (``tpu``, ``nr``, ``nbr``, ``epdm``, ``fkm``, "
+"``silicone``)."
+msgstr ""
+"``//pub/std/manufacturing/material/plastic`` ——高分子材料：通用及可打印的热塑性塑料（ "
+"``pla`` 、 ``abs`` 、 ``asa`` 、 ``petg`` 、 ``pc`` ）、工程塑料（ ``nylon`` 、 "
+"``pa12`` 、 ``pa66-gf30`` 、 ``pom`` 、 ``uhmwpe`` ）、高性能塑料（ ``ptfe`` 、 "
+"``peek`` 、 ``pei`` 、 ``pps`` ）、聚合物基复合材料（ ``cfrp`` 、 ``gfrp`` ）以及弹性体（ "
+"``tpu`` 、 ``nr`` 、 ``nbr`` 、 ``epdm`` 、 ``fkm`` 、 ``silicone`` ）。"
+
+#: ../../source/config_making.rst:626
+msgid ""
+"``//pub/std/manufacturing/material/metal`` -- metals and alloys, named by"
+" their standard designation and temper: ``al-5052-h32``, ``al-6061-t6``, "
+"``al-7075-t6``, ``steel-4130``, ``ss-316l``, ``ti-6al-4v``, "
+"``inconel-718`` and the rest of what robotics, aviation and automotive "
+"parts are made of."
+msgstr ""
+"``//pub/std/manufacturing/material/metal`` ——金属与合金，按其标准牌号和热处理状态命名： "
+"``al-5052-h32`` 、 ``al-6061-t6`` 、 ``al-7075-t6`` 、 ``steel-4130`` 、 "
+"``ss-316l`` 、 ``ti-6al-4v`` 、 ``inconel-718`` ，以及机器人、航空和汽车零件所用的其余材料。"
+
+#: ../../source/config_making.rst:631
+msgid ""
+"An alloy is named ``<metal>-<designation>-<temper>`` rather than by the "
+"bare designation for two reasons: ``5052:`` in YAML is the *number* 5052 "
+"rather than a name, and a temper is part of what was ordered -- 6061-T6 "
+"and 6061-O are one alloy and not one material to build out of."
+msgstr ""
+"合金命名为 ``<metal>-<designation>-<temper>`` 而不是只用牌号，有两个原因：在 YAML 中 ``5052:``"
+" 是 *数字* 5052 而不是一个名字；而且热处理状态是订购内容的一部分——6061-T6 和 6061-O "
+"是同一种合金，却不是同一种可用来制造的材料。"
+
+#: ../../source/config_making.rst:640
+msgid "Software"
+msgstr "软件"
+
+#: ../../source/config_making.rst:642
+msgid ""
+"A product is rarely hardware alone: the board in it runs a firmware "
+"image, the controller boots a disk image, the tool that talks to it is a "
+"binary on the host. ``software`` declares those as objects of the "
+"package, beside its parts and its assemblies."
+msgstr ""
+"产品很少只有硬件：其中的电路板运行一份固件镜像，控制器从一个磁盘镜像启动，与它通信的工具是主机上的一个可执行文件。 ``software`` "
+"把这些声明为包的对象，与包的零件和装配体并列。"
+
+#: ../../source/config_making.rst:647
+msgid ""
+"Software is **not** a shape. There is no geometry to render, to export or"
+" to measure, and none of what :ref:`parts` and :ref:`assemblies` can do "
+"applies to it. What it is, always, is a *file*:"
+msgstr ""
+"软件 **不是** 形状。没有几何可渲染、可导出或可测量，而 :ref:`parts` 和 :ref:`assemblies` "
+"能做的事没有一项适用于它。它始终都只是一个 *文件* ："
+
+#: ../../source/config_making.rst:664
+msgid "The short form declares nothing but the path:"
+msgstr "简写形式只声明路径，别无其他："
+
+#: ../../source/config_making.rst:671
+msgid ""
+"``path`` behaves as it does everywhere else (see :ref:`files`): without "
+"it the file is the object's own name, and a file the package does not "
+"carry is declared with ``fileFrom``/``fileUrl`` and fetched lazily. The "
+"default path carries no extension, because a firmware image is as likely "
+"to be a ``.img``, a ``.uf2`` or nothing at all as it is a ``.bin``."
+msgstr ""
+"``path`` 的行为与它在别处一致（参见 :ref:`files` ）：不写它时，文件就是对象自身的名字；包本身不携带的文件则用 "
+"``fileFrom`` / ``fileUrl`` 声明，并在需要时惰性获取。默认路径不带扩展名，因为一份固件镜像既可能是 ``.bin`` "
+"，也同样可能是 ``.img`` 、 ``.uf2`` 或者根本没有扩展名。"
+
+#: ../../source/config_making.rst:677
+msgid ""
+"``raw`` is the file handed over as it is: PartCAD carries it, says which "
+"one it is, and what to do with it is the reader's business. Every type is"
+" a file and that will not change -- the types that come after ``raw`` "
+"name the *procedure* the file goes through rather than a different kind "
+"of object, associating a specific firmware flashing procedure (which "
+"tool, which bootloader, which reset dance) with the image."
+msgstr ""
+"``raw`` 就是原样交付的文件：PartCAD "
+"携带它，说明它是哪一个，至于拿它做什么则是读者自己的事。每一种类型都是一个文件，这一点不会改变—— ``raw`` "
+"之后出现的那些类型，命名的是文件所要经历的 *流程* "
+"，而不是另一类对象，它们把某种特定的固件烧录流程（用哪个工具、哪个引导加载程序、怎样的复位操作）与镜像关联起来。"
+
+#: ../../source/config_making.rst:685
+msgid "Which software an object ships with"
+msgstr "对象随附哪些软件"
+
+#: ../../source/config_making.rst:687
+msgid ""
+"A part or an assembly says what it ships with in its own ``software`` "
+"list. A bare name is software of the same package; a qualified one is "
+"software of another:"
+msgstr "零件或装配体在它自己的 ``software`` 列表中说明它随附什么。不带限定的名字指的是同一个包中的软件；带限定的名字指的是另一个包中的软件："
+
+#: ../../source/config_making.rst:707
+msgid ""
+"``software`` is optional, and most parts declare none. A single one may "
+"be written on its own instead of as a list (``software: controller-"
+"firmware``). Declaring it is what puts the file into the bill of "
+"materials of every assembly the part ends up in, and what makes ``pc "
+"test`` insist the file be obtainable (see `Manufacturability`_ below)."
+msgstr ""
+"``software`` 是可选的，大多数零件都不声明它。只有一项时可以直接单独写出，而不必写成列表（ ``software: "
+"controller-firmware`` ）。声明它的作用，是把该文件放进这个零件最终所属的每一个装配体的物料清单，并让 ``pc test``"
+" 坚持要求该文件必须可获取（参见下文的 `Manufacturability`_ ）。"
+
+#: ../../source/config_making.rst:713
+msgid ""
+"The reference is resolved against the package that *wrote* it, so an "
+"``alias`` or an ``enrich`` of that part in another package still points "
+"at the same file."
+msgstr "该引用是相对 *写下* 它的那个包解析的，因此在另一个包中对该零件所作的 ``alias`` 或 ``enrich`` ，指向的仍是同一个文件。"
+
+#: ../../source/config_making.rst:717
+msgid "In the bill of materials"
+msgstr "在物料清单中"
+
+#: ../../source/config_making.rst:719
+msgid ""
+"Every assembly's bill of materials lists the software of the parts and "
+"sub-assemblies it is made of, and its own, under a heading of its own:"
+msgstr "每个装配体的物料清单，都会在一个单独的标题下列出它所包含的零件和子装配体的软件，以及它自身的软件："
+
+#: ../../source/config_making.rst:733
+msgid ""
+"Each software line names the package it came from **and the revision of "
+"that package** -- the commit its files were read at. A bracket is the "
+"same bracket whenever it is fetched; a firmware image is a different file"
+" as soon as its package publishes again, so the revision is what makes "
+"the line mean something. A package that is not in a git repository has no"
+" revision, and the line says so rather than inventing one."
+msgstr ""
+"每一行软件都会写明它来自哪个包， **以及该包的修订版本** "
+"——即读取其文件时所处的提交。支架无论何时取回都还是那个支架；而固件镜像，只要它所在的包再次发布就成了另一个文件，所以修订版本才是让这一行有意义的东西。不在"
+" git 仓库中的包没有修订版本，这一行会如实说明，而不是凭空编一个。"
+
+#: ../../source/config_making.rst:740
+msgid ""
+"The count is how many times something in the assembly needs it: three "
+"boards running one image is a count of three, the same way three of "
+"anything else is. A sub-assembly that is bought whole -- it declares a "
+"vendor and an SKU, and a supplier has it available -- is not expanded, so"
+" its firmware is no more a line item than its screws are."
+msgstr ""
+"计数是装配体中有多少处需要它：三块板运行同一份镜像，计数就是三，和其他任何东西数三个是一样的。整体外购的子装配体——它声明了供应商和 "
+"SKU，并且有供应商能提供——不会被展开，所以它的固件和它的螺钉一样，都不会成为单独的条目。"
+
+#: ../../source/config_making.rst:746
+msgid ""
+"Software is not procured: ``pc supply`` and the manufacturability tests "
+"walk the hardware only, because nobody sells a firmware image."
+msgstr "软件不参与采购： ``pc supply`` 和可制造性测试只遍历硬件，因为没有人出售固件镜像。"
+
+#: ../../source/config_making.rst:750
+msgid "In the package's README"
+msgstr "在包的 README 中"
+
+#: ../../source/config_making.rst:752
+msgid ""
+"``pc render -t readme`` lists the software of a package in a table of its"
+" own, saying which file each one is, the version it declares, and the "
+"hash it is pinned to. The file is linked where the package carries it; "
+"where it is fetched, the URL it comes from is shown instead."
+msgstr ""
+"``pc render -t readme`` "
+"会用一个单独的表格列出一个包的软件，说明每一项分别是哪个文件、它声明的版本，以及它被固定到的哈希值。包自身携带的文件会给出链接；需要获取的文件，则改为显示它的来源"
+" URL。"
+
+#: ../../source/config_making.rst:758
+msgid "Which file is it?"
+msgstr "到底是哪个文件？"
+
+#: ../../source/config_making.rst:760
+msgid ""
+"The whole point of listing software beside the hardware is being able to "
+"say which file went into a product. There are two ways a package can be "
+"that specific, and ``pc lint`` requires one of them (the ``Software`` "
+"check):"
+msgstr ""
+"把软件与硬件并列列出，全部意义就在于能够说清是哪个文件进入了产品。一个包要做到这样具体有两种方式，而 ``pc lint`` 要求其中必须有一种（"
+" ``Software`` 检查）："
+
+#: ../../source/config_making.rst:764
+msgid ""
+"The package **carries the file**. It is content of the repository, so the"
+" revision recorded beside every software line item identifies it exactly."
+msgstr "包 **自身携带该文件** 。它是仓库的内容，因此记录在每一行软件条目旁边的修订版本就能精确地标识它。"
+
+#: ../../source/config_making.rst:766
+msgid ""
+"The package **pulls it in** with ``fileFrom``, and pins it with "
+"``fileHash``. Without a hash nothing identifies it: the URL serves "
+"whatever it serves at the moment it is fetched, and the same package "
+"revision produces a different image tomorrow."
+msgstr ""
+"包用 ``fileFrom`` **把它拉取进来** ，并用 ``fileHash`` 固定它。没有哈希值就没有任何东西能标识它：URL "
+"在被获取的那一刻给出什么就是什么，而同一个包的同一修订版本明天就会得到另一份镜像。"
+
+#: ../../source/config_making.rst:784
+msgid ""
+"``fileHash`` is not a software-specific idea: it pins the bytes of any "
+"file a package fetches rather than carries, and the download is refused "
+"unless they match (see :ref:`file-hash` for the spelling and the "
+"details). Everywhere it is required for the object to be manufacturable; "
+"software is the one kind where a missing one is reported by ``pc lint`` "
+"as well, before anything is built."
+msgstr ""
+"``fileHash`` 并不是软件特有的概念：它固定的是包所获取而非自身携带的任何文件的字节内容，字节不匹配时下载会被拒绝（写法和细节参见 "
+":ref:`file-hash` ）。在所有场合下，它都是对象可制造所必需的；而软件是唯一一类，缺少它还会在构建任何东西之前就由 ``pc "
+"lint`` 报告出来。"
+
+#: ../../source/config_making.rst:790
+msgid ""
+"See ``examples/produce_software`` for a package that does both, and "
+"``examples/produce_part_kicad`` for a board that pulls its host-side tool"
+" from a public URL."
+msgstr ""
+"两种方式兼有的包，参见 ``examples/produce_software`` ；从公开 URL 拉取其主机端工具的电路板，参见 "
+"``examples/produce_part_kicad`` 。"
+
+#: ../../source/config_making.rst:795
+msgid "Manufacturability"
+msgstr "可制造性"
+
+#: ../../source/config_making.rst:797
+msgid ""
+"A board nobody can flash is not a board anybody can make. So the "
+"manufacturing test (``pc test``, the ``manufacturability`` check) asks "
+"the same question of a part's ``software`` that it asks of everything "
+"else the part needs, and the part fails unless all of it holds:"
+msgstr ""
+"没有人能烧录的电路板，也就没有人能把它做出来。因此制造测试（ ``pc test`` 中的 ``manufacturability`` "
+"检查）会对零件的 ``software`` 提出与对该零件所需的其他一切相同的问题，并且只有下列各项全部成立，零件才算通过："
+
+#: ../../source/config_making.rst:802
+msgid "every reference resolves to a software object;"
+msgstr "每一个引用都能解析到一个软件对象；"
+
+#: ../../source/config_making.rst:803
+msgid "the file is there -- carried by the package, or fetched successfully;"
+msgstr "文件确实存在——由包自身携带，或者成功获取到；"
+
+#: ../../source/config_making.rst:804
+msgid "it matches its ``fileHash``, where one is declared;"
+msgstr "在声明了 ``fileHash`` 的情况下，文件与之匹配；"
+
+#: ../../source/config_making.rst:805
+msgid ""
+"and the declaration is reproducible at all, which is the same "
+"``fileFrom``-needs-a-``fileHash`` rule the part's own file is held to "
+"(:ref:`reproducibility`)."
+msgstr ""
+"以及这份声明本身是可复现的，这与零件自身文件所遵循的“ ``fileFrom`` 需要配一个 ``fileHash`` ”规则完全相同（ "
+":ref:`reproducibility` ）。"
+
+#: ../../source/config_making.rst:809
+msgid ""
+"That applies whether the part is bought or made: buying the board does "
+"not answer the question of which image goes on it. An assembly that "
+"declares software of its own is held to the same rule; its parts' "
+"software is checked by their own run of the test."
+msgstr "无论零件是外购还是自制，这一点都适用：买下电路板并不能回答该给它装哪一份镜像。自己声明了软件的装配体受同样的规则约束；而它的零件的软件，则由这些零件各自的那次测试来检查。"
+
+#: ../../source/config_making.rst:814
+msgid ""
+"Software is otherwise absent from procurement -- ``pc supply`` walks the "
+"hardware only, because nobody sells a firmware image."
+msgstr "除此之外，软件完全不参与采购—— ``pc supply`` 只遍历硬件，因为没有人出售固件镜像。"
+
+#: ../../source/config_making.rst:821
+msgid "Providers"
+msgstr "提供方"
+
+#: ../../source/config_making.rst:823
+msgid "Providers are declared in ``partcad.yaml`` using the following syntax:"
+msgstr "提供方在 ``partcad.yaml`` 中使用以下语法声明："
+
+#: ../../source/config_making.rst:844
+msgid ""
+"``enrich`` providers are just references to other providers with some "
+"parameters modified to specific values. ``with:`` sets any of the "
+"parameters the source provider declares, the same way an ``enrich`` "
+"part's ``with:`` does, and under the same rule: a value may not contain "
+"``,``, ``;`` or ``=``. ``currency`` is also read by PartCAD itself, as "
+"what the provider's quotes are in, so it has to be a name such as "
+"``USD``."
+msgstr ""
+"``enrich`` 提供方只是对其他提供方的引用，并把其中某些参数改成了特定的值。 ``with:`` 可以设置源提供方所声明的任意参数，方式与"
+" ``enrich`` 零件的 ``with:`` 相同，并遵循同一条规则：取值中不得包含 ``,`` 、 ``;`` 或 ``=`` 。 "
+"``currency`` 还会被 PartCAD 自身读取，用来表示该提供方的报价采用什么币种，因此它必须是诸如 ``USD`` 这样的名称。"
+
+#: ../../source/config_making.rst:851
+msgid ""
+"``store`` and ``manufacturer`` providers are implemented as Python "
+"scripts. These scripts are invoked using the ``runpy`` module which "
+"allows to pass input as values of global objects. The outputs are also "
+"extracted from the value of global objects."
+msgstr ""
+"``store`` 和 ``manufacturer`` 提供方以 Python 脚本的形式实现。这些脚本使用 ``runpy`` "
+"模块来调用，该模块允许以全局对象的值的形式传入输入。输出也是从全局对象的值中提取的。"
+
+#: ../../source/config_making.rst:856
+msgid ""
+"The input is passed as the dictionary ``request``. The output is "
+"extracted from the dictionary ``output``"
+msgstr "输入以字典 ``request`` 的形式传入。输出则从字典 ``output`` 中提取"
+
+#: ../../source/config_making.rst:860
+msgid "Store"
+msgstr "Store"
+
+#: ../../source/config_making.rst:862
+msgid "``store`` providers use the following input and output values:"
+msgstr "``store`` 提供方使用以下输入和输出值："
+
+#: ../../source/config_making.rst:864 ../../source/config_making.rst:922
+msgid "`request[\"parameters\"]`: The configuration parameters of the provider."
+msgstr "`request[\"parameters\"]`：提供方的配置参数。"
+
+#: ../../source/config_making.rst:865 ../../source/config_making.rst:923
+msgid "`request[\"api\"]`: The API method called."
+msgstr "`request[\"api\"]`：被调用的 API 方法。"
+
+#: ../../source/config_making.rst:867 ../../source/config_making.rst:925
+msgid "`request[\"api\"] == \"caps\"`"
+msgstr "`request[\"api\"] == \"caps\"`"
+
+#: ../../source/config_making.rst:869
+msgid ""
+"Get capabilities of this provider. Currently PartCAD does not use "
+"capabilities for ``store`` providers."
+msgstr "获取该提供方的能力。目前 PartCAD 不会为 ``store`` 提供方使用能力信息。"
+
+#: ../../source/config_making.rst:872
+msgid "`output`: no output is expected"
+msgstr "`output`：不期望有任何输出"
+
+#: ../../source/config_making.rst:874
+msgid "`request[\"api\"] == \"avail\"`"
+msgstr "`request[\"api\"] == \"avail\"`"
+
+#: ../../source/config_making.rst:876
+msgid "Check availability of the specific part."
+msgstr "检查特定零件的可用性。"
+
+#: ../../source/config_making.rst:878
+msgid "`request[\"vendor\"]`: the vendor of the part"
+msgstr "`request[\"vendor\"]`：该零件的供应商"
+
+#: ../../source/config_making.rst:879
+msgid "`request[\"sku\"]`: the SKU of the part"
+msgstr "`request[\"sku\"]`：该零件的 SKU"
+
+#: ../../source/config_making.rst:880
+msgid "`request[\"count\"]`: the requested quantity of the parts"
+msgstr "`request[\"count\"]`：所请求的零件数量"
+
+#: ../../source/config_making.rst:881
+msgid "`request[\"count_per_sku\"]`: the known number of parts per SKU"
+msgstr "`request[\"count_per_sku\"]`：每个 SKU 已知包含的零件数量"
+
+#: ../../source/config_making.rst:882
+msgid ""
+"`request[\"item_in_sku\"]`: which item of the SKU this is, where the SKU "
+"is a set of several kinds of items, or `None`"
+msgstr "`request[\"item_in_sku\"]`：当该 SKU 是由多种物品组成的一套时，表示这是其中的哪一件；否则为 `None`"
+
+#: ../../source/config_making.rst:884
+msgid "`output[\"available\"]`: boolean, whether it is available in this store"
+msgstr "`output[\"available\"]`：布尔值，表示该零件在此商店中是否可用"
+
+#: ../../source/config_making.rst:886 ../../source/config_making.rst:941
+msgid "`request[\"api\"] == \"quote\"`"
+msgstr "`request[\"api\"] == \"quote\"`"
+
+#: ../../source/config_making.rst:888 ../../source/config_making.rst:943
+msgid ""
+"Get a quote for the specific cart of parts. Quote API is the core of the "
+"provider. It is expected to return the price of a cart."
+msgstr "为特定的零件购物车获取报价。报价 API 是提供方的核心，它应当返回一个购物车的价格。"
+
+#: ../../source/config_making.rst:892 ../../source/config_making.rst:947
+msgid "`request[\"cart\"][\"parts\"]`: the dictionary of parts"
+msgstr "`request[\"cart\"][\"parts\"]`：零件的字典"
+
+#: ../../source/config_making.rst:893
+msgid "`request[\"cart\"][\"parts\"][<id>][\"vendor\"]`: the vendor of the part"
+msgstr "`request[\"cart\"][\"parts\"][<id>][\"vendor\"]`：该零件的供应商"
+
+#: ../../source/config_making.rst:894
+msgid "`request[\"cart\"][\"parts\"][<id>][\"sku\"]`: the SKU of the part"
+msgstr "`request[\"cart\"][\"parts\"][<id>][\"sku\"]`：该零件的 SKU"
+
+#: ../../source/config_making.rst:895
+msgid ""
+"`request[\"cart\"][\"parts\"][<id>][\"count\"]`: the requested quantity "
+"of the parts"
+msgstr "`request[\"cart\"][\"parts\"][<id>][\"count\"]`：所请求的零件数量"
+
+#: ../../source/config_making.rst:896
+msgid ""
+"`request[\"cart\"][\"parts\"][<id>][\"count_per_sku\"]`: the known number"
+" of parts per SKU"
+msgstr "`request[\"cart\"][\"parts\"][<id>][\"count_per_sku\"]`：每个 SKU 已知包含的零件数量"
+
+#: ../../source/config_making.rst:897
+msgid ""
+"`request[\"cart\"][\"parts\"][<id>][\"item_in_sku\"]`: which item of the "
+"SKU the part is, where the SKU is a set of several kinds of items (absent"
+" otherwise)"
+msgstr ""
+"`request[\"cart\"][\"parts\"][<id>][\"item_in_sku\"]`：当该 SKU "
+"是由多种物品组成的一套时，表示该零件是其中的哪一件（否则没有这一项）"
+
+#: ../../source/config_making.rst:899
+msgid ""
+"`request[\"cart\"][\"skus\"]`: what to order, a list with one entry per "
+"SKU"
+msgstr "`request[\"cart\"][\"skus\"]`：要订购的内容，每个 SKU 一个条目的列表"
+
+#: ../../source/config_making.rst:900
+msgid "`request[\"cart\"][\"skus\"][<n>][\"vendor\"]`, `[\"sku\"]`: the SKU"
+msgstr "`request[\"cart\"][\"skus\"][<n>][\"vendor\"]` 、 `[\"sku\"]`：该 SKU"
+
+#: ../../source/config_making.rst:901
+msgid ""
+"`request[\"cart\"][\"skus\"][<n>][\"count\"]`: how many of that SKU to "
+"order, which is already worked out from `count_per_sku` and "
+"`item_in_sku`. Order from here rather than once per part: a SKU that is a"
+" set of several parts would otherwise be bought once for each of them."
+msgstr ""
+"`request[\"cart\"][\"skus\"][<n>][\"count\"]`：该 SKU 要订购多少份，这个数量已经根据 "
+"`count_per_sku` 和 `item_in_sku` 算好。请依据这里下单，而不是按每个零件各下一次：否则一个包含多个零件的 SKU "
+"会被为其中每个零件各买一次。"
+
+#: ../../source/config_making.rst:905
+msgid "`request[\"cart\"][\"skus\"][<n>][\"parts\"]`: the parts that SKU is for"
+msgstr "`request[\"cart\"][\"skus\"][<n>][\"parts\"]`：该 SKU 所对应的零件"
+
+#: ../../source/config_making.rst:906 ../../source/config_making.rst:950
+msgid "`output[\"price\"]`: the total price of the cart"
+msgstr "`output[\"price\"]`：购物车的总价"
+
+#: ../../source/config_making.rst:907 ../../source/config_making.rst:951
+msgid "`output[\"cartId\"]`: the id of the cart (to be used for the order later)"
+msgstr "`output[\"cartId\"]`：购物车的 id（稍后用于下单）"
+
+#: ../../source/config_making.rst:909 ../../source/config_making.rst:953
+msgid "`request[\"api\"] == \"order\"`"
+msgstr "`request[\"api\"] == \"order\"`"
+
+#: ../../source/config_making.rst:911 ../../source/config_making.rst:955
+msgid ""
+"Order the specific quote. Order API does not need to be implemented as "
+"there is no infrastructure for payments yet."
+msgstr "对特定的报价下单。由于目前还没有支付相关的基础设施，因此下单 API 无需实现。"
+
+#: ../../source/config_making.rst:915 ../../source/config_making.rst:959
+msgid "`request[\"cartId\"]`: the id of the cart to be purchased"
+msgstr "`request[\"cartId\"]`：要购买的购物车的 id"
+
+#: ../../source/config_making.rst:918
+msgid "Manufacturer"
+msgstr "Manufacturer"
+
+#: ../../source/config_making.rst:920
+msgid "``manufacturer`` providers use the following input and output values:"
+msgstr "``manufacturer`` 提供方使用以下输入和输出值："
+
+#: ../../source/config_making.rst:927
+msgid "Get capabilities of this provider."
+msgstr "获取该提供方的能力。"
+
+#: ../../source/config_making.rst:929
+msgid "`output[\"materials\"]`: the dictionary of supported materials"
+msgstr "`output[\"materials\"]`：所支持材料的字典"
+
+#: ../../source/config_making.rst:939
+msgid "`output[\"format\"]`: the list of supported formats (e.g. `[\"step\"]`)"
+msgstr "`output[\"format\"]`：所支持格式的列表（例如 `[\"step\"]` ）"
+
+#: ../../source/config_making.rst:948
+msgid ""
+"`request[\"cart\"][\"parts\"][<id>][\"format\"]`: the format of the "
+"binary (e.g. `\"step\"`)"
+msgstr "`request[\"cart\"][\"parts\"][<id>][\"format\"]`：二进制数据的格式（例如 `\"step\"` ）"
+
+#: ../../source/config_making.rst:949
+msgid "`request[\"cart\"][\"parts\"][<id>][\"binary\"]`: the geometry data"
+msgstr "`request[\"cart\"][\"parts\"][<id>][\"binary\"]`：几何数据"

@@ -147,6 +147,8 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] Generating user-friendly visual assembly instructions (`PDF` and `HTML` instruction books)
   - [x] Using `URDF`, with links, joints and physics
   - [x] Using a `STEP` file that stays the source
+  - [x] `pc filter` declares a second assembly made of some of the links of an existing one — a sub-assembly
+        carved out of a big one without editing it by hand
 - Scenes (3D) — placed arrangements of objects: a workcell, a table, a simulation world
   - [x] Stating where things are, rather than how they got there
   - [x] Reading and writing an engine's own scene format through the package that implements it —
@@ -163,6 +165,31 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
         [`partcad-sim-gazebo`](https://github.com/partcad/partcad-sim-gazebo) one in `Gazebo`
   - [x] `mu` on a material, so that what a part is made of decides whether it stands up — written out as
         SDFormat's `<mu>`, URDF's `<mu1>` and MJCF's `friction`
+- Engineering analysis — what the part does before anything is cut
+  - [x] `pc cae fea`, finite element analysis: the part says what holds it (`fix:`) and what pulls on it
+        (`load:`) in terms of its own interfaces, so the boundary conditions survive a change of geometry
+  - [x] `pc cae cfd`, computational fluid dynamics, the same way
+  - [x] The solver is a package, not part of this wheel — `//pub/feature/cae/openfoam` for CFD — and the
+        **FEA** and **CFD** tabs of the PartCAD Viewer run it on the object on screen
+- Materials — what a part is made of, as an object of a package
+  - [x] A `materials:` section, and standard catalogues to inherit from rather than restate:
+        `//pub/std/manufacturing/material/plastic` and `.../metal`, named by designation and temper
+        (`al-6061-t6`, `ss-316l`, `ti-6al-4v`, `petg`, `peek`)
+  - [x] Reported by `pc info`, carried into the bill of materials, and used by simulation (`mu`) and
+        by analysis
+- Manufacturing — how it gets made, and the program that makes it
+  - [x] Manufacturing methods: `additive`, `subtractive`, `sheet_metal` and `forming`
+  - [ ] `pcbBasic` _(the schema accepts it; the manufacturability test is not implemented yet)_
+  - [x] `pc cam` produces the route files: the object's outline offset by the cutter radius and cut at a
+        series of depths — the 2.5D program a CNC router or a mill runs
+  - [x] A made part is procured as the **stock it is made from**, so the bill of materials orders sheet and
+        bar rather than a part nobody sells
+  - [x] **Build vs Buy**: a switch per line item deciding whether it is made or bought, with the lines that
+        can be neither marked `Incomplete`; the choice is what the bill of materials and the instructions
+        below are then written against
+  - [x] `pc instructions` writes the assembly instructions as `PDF` or `HTML` — this assembly's own steps,
+        or with `-r`/`-b` the steps of every sub-assembly built and how to make every part built, each put
+        in just before the step that first needs it
 - Part models (3D)
   - Using scripting languages
     - [x] [CadQuery]
@@ -198,8 +225,10 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] Free-form `comment:` context in `Assembly YAML`, written for whoever reads the assembly next
 - Other features
   - Object-Oriented Programming approach to maintaining part interfaces and mating information
-  - Live preview of 3D models while working in Visual Studio Code, with 2D renders, dimensioned drawings, the
-    bill of materials, the assembly instructions and supplier quotes on tabs beside the 3D view
+  - Live preview of 3D models while working in Visual Studio Code, with 2D renders, dimensioned drawings,
+    engineering analysis, the build-or-buy decision, the bill of materials, the assembly instructions and
+    supplier quotes on tabs beside the 3D view — and a software fallback that still draws the model in a
+    window with no `WebGL`, such as a virtual machine or a remote desktop
   - Open an object in the application that made it (`pc open`): `FreeCAD`, `Blender`, `KiCad` — and
     `Gazebo` or `MuJoCo` from the plugin package for that engine —
     installed locally, or run in a container when it is not; an object `Blender` cannot read is converted to

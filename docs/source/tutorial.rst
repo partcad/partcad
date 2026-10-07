@@ -343,7 +343,7 @@ steps of this tutorial:
 
     other_part = pc.get_
 
-Please, note, that after "``pc.get_"`` a code completion suggestion appears.
+Please, note, that after ``pc.get_`` a code completion suggestion appears.
 Use the suggested code completion option to insert the code that adds
 the selected part to this ``build123d`` script.
 

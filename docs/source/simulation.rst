@@ -568,8 +568,8 @@ beside the export and render ones, and it is declared in exactly the same form:
 a ``path`` to a script, the sandbox that script needs, and its parameters. What
 differs is what it does with them. The contract is deliberately narrow:
 
-  **a scene with the subject in it goes in, JSON carrying ``before`` and
-  ``after`` comes out.**
+  **a scene with the subject in it goes in, and JSON carrying** ``before``
+  **and** ``after`` **comes out.**
 
 .. code-block:: yaml
 
