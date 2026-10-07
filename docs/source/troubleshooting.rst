@@ -150,11 +150,13 @@ then nothing can be mounted into a container, and the answer is to send the
 files instead: set ``useDockerRemote: true`` (``PC_USE_DOCKER_REMOTE=true``).
 See :ref:`useDockerRemote <use-docker-remote>`, including what it does not protect yet.
 
-The KiCad container earlier releases made, ``integration-kicad``, carries no
-PartCAD label, so ``pc system prune`` cannot see it: remove it by hand with
-``docker rm -f integration-kicad``. The containers for the Python
-sandbox, KiCad imports and a plugin's ``container:`` are now named
-``partcad-<role>-<tag>-<identity>`` and labelled, and prune removes them.
+Containers earlier releases made carry no PartCAD label, so ``pc system prune``
+cannot see them: remove them by hand -- ``integration-kicad`` (KiCad) and the
+``partcad-freecad``-style ones ``pc open`` used to make, with
+``docker rm -f integration-kicad partcad-freecad`` and so on. Every container
+PartCAD makes now -- the Python sandbox, KiCad imports, a plugin's
+``container:`` and an application ``pc ide open`` runs -- is named
+``partcad-<role>-<tag>-<identity>`` and labelled, and prune removes it.
 
 Typical problems
 ----------------
