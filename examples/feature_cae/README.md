@@ -50,32 +50,6 @@ README.
 > image that carries it, which *is* built for arm64, is not published yet. The
 > line comes out when it is.
 
-> **A temporary arrangement, and why it is here.** `//pub/feature/cae/calculix`
-> is registered on the public index's `devel` branch and has not reached `main`,
-> which is what `examples/partcad.yaml` and every `pc init` project pin — so the
-> default `caeFeaImplementation` resolves to nothing. Rather than repin the whole
-> examples tree at the index's `devel`, which would drag in unrelated changes,
-> this package depends on
-> [`partcad-cae-calculix`](https://github.com/partcad/partcad-cae-calculix)
-> directly and the cantilever names it (the block written out beside the pipe
-> names it too, for whoever pastes it back):
->
-> ```yaml
-> fea:
->   implementation: calculix:fea
-> ```
->
-> `implementation:` is a general thing — a part saying which solver it was
-> written against, outranked only by `-i` — but the `dependencies:` entry and
-> these two lines exist for this reason and go away once the index carries
-> `feature/cae`. `partcad.yaml` says so where they are.
->
-> `calculix` there is relative, and resolves against *this* package, so it means
-> the same thing however deep in a tree the command is run — which is what makes
-> `pc test -r` from the examples root work. A relative name a user types is not
-> the same: `-i calculix:fea` below means the `calculix` beside the user, so it
-> wants this directory.
-
 ## 1. Cantilever beam — `cantilever`
 
 A 100 × 10 × 10 mm steel bar, held at one end, pulled down by 100 N at the other.
@@ -255,7 +229,7 @@ own neighbourhood.
 pc cae fea :cantilever
 
 # a particular implementation, this run only (outranks the part's own)
-pc cae fea -i calculix:fea :cantilever
+pc cae fea -i //pub/feature/cae/calculix:fea :cantilever
 
 # as a check that fails on any finding
 pc test -f fea
