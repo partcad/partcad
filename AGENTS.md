@@ -441,7 +441,8 @@ status and `exit` it at the end. Do not end such a script with a command whose s
 
 That dev container holds the *host's* `/var/run/docker.sock`, so the daemon it talks to resolves bind mounts
 against the host's filesystem rather than the container's -- and the `docker` Python sandbox works there anyway.
-`mount_sources` in `runtime_python_docker.py` writes a file and has a throwaway container look for it; when it is
+`mount_sources` in `partcad_utils/daemon_mounts.py` (re-exported by `runtime_python_docker`, and asked by `pc ide
+open` for an application's container too) writes a file and has a throwaway container look for it; when it is
 not found, PartCAD finds its own container on that daemon, binds each directory from where the daemon keeps the
 mount holding it, and keeps the target, so inside the sandbox every path is still the one PartCAD sees. That is
 why `devcontainer.json` puts `~/.partcad` and `/tmp` on per-container volumes (the workspace is a bind already):

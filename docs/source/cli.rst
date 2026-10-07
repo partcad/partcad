@@ -992,7 +992,12 @@ of ``pc --help``, and print a note on stderr saying what to type instead.
   The file reaches the container one of two ways, and ``useDockerRemote`` chooses:
 
   * **mount** (the default) -- the directory holding the file is mounted at the path it has on the host, so one
-    path means the same thing on both sides, and the application saves straight into it.
+    path means the same thing on both sides, and the application saves straight into it. In a dev container
+    holding the host's Docker socket, each directory is bound from where the host's daemon keeps it -- the
+    workspace's bind, ``/tmp``'s volume -- at the path it has in the dev container, which is how the ``docker``
+    Python sandbox binds them too. A file on none of the dev container's mounts is refused with the ways out
+    (mount it, ``PC_DOCKER_MOUNT_SOURCES``, or ``useDockerRemote``). Outside any workspace, only the file's own
+    directory is mounted -- not the directory the command was run from.
   * **upload** (``useDockerRemote: true``, or ``PC_USE_DOCKER_REMOTE=true``) -- nothing is mounted. The file (or,
     for KiCad, its directory) is sent with the request that launches the application, and what it is when the
     application closes is sent back and written here. This is what a Docker daemon on another machine needs.

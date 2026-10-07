@@ -1073,7 +1073,12 @@ def _open_in_container(
         # container is created, which may be long before that daemon starts.
         with contextlib.suppress(OSError):
             os.makedirs(_state_dir(root), exist_ok=True)
-        mounts = {d: {"bind": d, "mode": "rw"} for d in _shared_directories(root, path)}
+        # The state directory is there for the daemon's socket, which a PartCAD
+        # inside the application could use and nothing needs -- unless the file
+        # opened is a converted copy, which lives in it.
+        state = _state_dir(root)
+        optional = () if _is_within(path, state) else (state,)
+        mounts, local_binds = _binds(spec, reference, _shared_directories(root, path), local_binds, optional)
         user = _host_user()
 
     endpoint_spec = containers.ContainerSpec(
@@ -1127,6 +1132,75 @@ def _open_in_container(
     return command, detail
 
 
+def _mount_sources(reference: str, python: str):
+    """Where the Docker daemon has this machine's directories: None, (here, there) pairs, or False.
+
+    See `partcad_utils.daemon_mounts.mount_sources`, which this asks with the
+    application's own image -- the one image certain to be here, since it is
+    about to be run. Kept to one function so that what it answers is what a
+    test replaces.
+    """
+    import docker
+
+    from partcad_utils import daemon_mounts
+
+    client = docker.from_env()
+    try:
+        resolved, _ = containers.resolve_image(client, reference)
+    except containers.ContainerUnavailable as e:
+        raise ExternalToolError(str(e))
+    return daemon_mounts.mount_sources(client, resolved, python)
+
+
+def _binds(spec: Tool, reference: str, wanted: List[str], local_binds: dict, optional=()) -> Tuple[dict, dict]:
+    """The binds for ``wanted`` and for the display, as the daemon can make them: (mounts, local binds).
+
+    On an ordinary host every path is bound as it is. In a dev container holding
+    the host's Docker socket -- this repository's own -- the daemon resolves a
+    bind against the *host's* filesystem, where this container's workspace and
+    temporary directory are somewhere else entirely; binding them as they are
+    gave the application an empty directory of the same name, owned by root,
+    and the file it was told to open was not there. So each is bound from where
+    the daemon keeps it, at the path it has here -- the sandbox's rule, from the
+    same code (`partcad_utils.daemon_mounts`). The display's socket and cookie
+    are translated the same way when this container has them from the host, and
+    left as they are when it does not, since then they are the host's own.
+
+    A directory in ``optional`` that the daemon does not have is left out
+    rather than refused.
+    """
+    from partcad_utils import daemon_mounts, docker_mount
+
+    sources = _mount_sources(reference, spec.container_python or "python3")
+    if sources is None:
+        return {d: {"bind": d, "mode": "rw"} for d in wanted}, local_binds
+    if sources is False:
+        raise ExternalToolError(
+            "The Docker daemon cannot see this machine's files, so %s's container cannot be given %s by "
+            "mounting it -- which is what a Docker daemon on another machine, or behind DOCKER_HOST, looks "
+            "like. Set 'useDockerRemote: true' (PC_USE_DOCKER_REMOTE=true) so that PartCAD sends the file "
+            "to the container and brings it back instead." % (spec.display_name, ", ".join(wanted))
+        )
+    missing = daemon_mounts.unbacked(wanted, sources)
+    wanted = [d for d in wanted if d not in missing or not any(_is_within(d, o) for o in optional)]
+    missing = [d for d in missing if d in wanted]
+    if missing:
+        raise ExternalToolError(
+            "The Docker daemon here does not share this filesystem, and binds from where it keeps this "
+            "container's mounts -- but %s %s on none of them. Mount %s into this container, name where the "
+            "daemon has %s in PC_DOCKER_MOUNT_SOURCES (here=there;...), or set 'useDockerRemote: true' so "
+            "that PartCAD sends the file instead."
+            % (
+                ", ".join(missing),
+                "is" if len(missing) == 1 else "are",
+                "it" if len(missing) == 1 else "them",
+                "it" if len(missing) == 1 else "them",
+            )
+        )
+    translated = {docker_mount.backed_by(source, sources) or source: bind for source, bind in local_binds.items()}
+    return docker_mount.mounts(wanted, sources=sources), translated
+
+
 def _container_binary(spec: Tool, endpoint, image: str) -> str:
     """Which of the application's names its container has, or an error naming why not.
 
@@ -1166,7 +1240,11 @@ def _workspace_for(path: str) -> str:
     it; there is simply no daemon of this workspace's to offer it.
     """
     root = determine_root_path()
-    if _is_within(path, root):
+    # Only where there is a workspace: with no 'partcad.yaml' the root found is
+    # just where the command was run, and run from '/' or '~' that bound the
+    # whole filesystem, or the whole home directory, into the application's
+    # container to open one file.
+    if _is_within(path, root) and os.path.isfile(os.path.join(root, "partcad.yaml")):
         return root
     return determine_root_path(os.path.dirname(path))
 

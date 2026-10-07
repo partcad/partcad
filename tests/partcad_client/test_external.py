@@ -116,12 +116,16 @@ class FakeDocker:
         self.exit_code = 0
         self.stderr = ""
         self.refuse = None
+        # Where the daemon has this machine's directories (see
+        # 'external._mount_sources'): None for an ordinary host.
+        self.sources = None
 
     def install(self, monkeypatch):
         from partcad_utils import containers
 
         monkeypatch.setattr(external, "_docker_available", lambda: self.available)
         monkeypatch.setattr(containers, "acquire", self.acquire)
+        monkeypatch.setattr(external, "_mount_sources", lambda reference, python: self.sources)
         return self
 
     def acquire(self, spec, client=None, ping=None):
@@ -1442,3 +1446,107 @@ def test_launching_waits_for_the_exit_code(monkeypatch):
 
     monkeypatch.setattr(external.subprocess, "Popen", lambda args, **kwargs: Process())
     assert external._launch(["freecad"]) == 3
+
+
+# --------------------------------------------------------------------------- #
+# A dev container holding the host's Docker socket                             #
+# --------------------------------------------------------------------------- #
+
+
+def _devcontainer(docker, tmp_path):
+    """This machine's directories as a dev container has them from the host's daemon."""
+    docker.sources = [(str(tmp_path), "/host/volumes/ws/_data"), ("/tmp", "/host/volumes/tmp/_data")]
+    return docker
+
+
+def test_in_a_dev_container_the_workspace_is_bound_from_where_the_daemon_has_it(part, docker, tmp_path):
+    """Bound as it is, the host's daemon would make an empty directory of that name on the host."""
+    _devcontainer(docker, tmp_path)
+    external.open_file(str(part), "freecad", use_docker=True, mode="mount")
+
+    binds = docker.spec.mounts
+    assert binds["/host/volumes/ws/_data"] == {"bind": str(tmp_path), "mode": "rw"}
+    # Nothing is bound from a path the daemon does not have.
+    assert str(tmp_path) not in binds
+    assert all(source.startswith("/host/volumes/") for source in binds)
+
+
+def test_in_a_dev_container_the_display_is_bound_from_where_the_host_has_it(docker, tmp_path):
+    """The X socket this container has from the host is the host's own display: bound from there."""
+    _devcontainer(docker, tmp_path)
+    docker.sources.append(("/tmp/.X11-unix", "/tmp/.X11-unix-of-the-host"))
+    x11 = {"/tmp/.X11-unix": {"bind": "/tmp/.X11-unix", "mode": "rw"}}
+    cookie = {"/opt/nowhere/.Xauthority": {"bind": "/tmp/.partcad-xauth", "mode": "ro"}}
+
+    _, binds = external._binds(external.TOOLS["freecad"], "img", [str(tmp_path)], {**x11, **cookie})
+
+    assert binds["/tmp/.X11-unix-of-the-host"] == {"bind": "/tmp/.X11-unix", "mode": "rw"}
+    # A file this container does not have from the host is the host's already.
+    assert binds["/opt/nowhere/.Xauthority"] == {"bind": "/tmp/.partcad-xauth", "mode": "ro"}
+
+
+def test_on_an_ordinary_host_everything_is_bound_as_it_is(docker, tmp_path):
+    x11 = {"/tmp/.X11-unix": {"bind": "/tmp/.X11-unix", "mode": "rw"}}
+    mounts, binds = external._binds(external.TOOLS["freecad"], "img", [str(tmp_path)], x11)
+    assert mounts == {str(tmp_path): {"bind": str(tmp_path), "mode": "rw"}}
+    assert binds == x11
+
+
+def test_a_daemon_that_cannot_see_these_files_says_to_send_them(part, docker):
+    docker.sources = False
+    with pytest.raises(external.ExternalToolError, match="useDockerRemote"):
+        external.open_file(str(part), "freecad", use_docker=True, mode="mount")
+    assert docker.spec is None
+
+
+def test_a_directory_on_none_of_the_containers_mounts_is_named(part, docker, tmp_path):
+    docker.sources = [("/somewhere/else", "/host/else")]
+    with pytest.raises(external.ExternalToolError) as raised:
+        external.open_file(str(part), "freecad", use_docker=True, mode="mount")
+    assert str(tmp_path) in str(raised.value)
+    assert "PC_DOCKER_MOUNT_SOURCES" in str(raised.value)
+
+
+def test_upload_mode_does_not_ask_where_the_daemon_has_anything(part, docker):
+    """Nothing is bound, so there is nothing to ask -- and a daemon elsewhere answers False."""
+    docker.sources = False
+    external.open_file(str(part), "freecad", use_docker=True, mode="upload")
+    assert docker.spec.mounts == {}
+
+
+def test_a_file_in_no_workspace_gets_its_own_directory_not_where_the_command_ran(tmp_path, docker, monkeypatch):
+    """Run from '/' or '~', the "workspace" found was that, and all of it was bound in."""
+    loose = tmp_path / "loose"
+    loose.mkdir()
+    part = loose / "cube.step"
+    part.write_text("ISO-10303-21;\n")
+    monkeypatch.chdir(tmp_path)  # no partcad.yaml here, and the file is under it
+
+    external.open_file(str(part), "freecad", use_docker=True, mode="mount")
+
+    bound = [value["bind"] for value in docker.spec.mounts.values()]
+    assert str(loose) in bound
+    assert str(tmp_path) not in bound
+
+
+def test_in_a_dev_container_a_state_directory_the_daemon_lacks_is_left_out(part, docker, tmp_path, monkeypatch):
+    """It is there for the daemon's socket, which nothing in the application needs."""
+    docker.sources = [(str(tmp_path), "/host/volumes/ws/_data")]
+    monkeypatch.setattr(external, "_state_dir", lambda root: "/not/on/any/mount")
+    external.open_file(str(part), "freecad", use_docker=True, mode="mount")
+    assert list(docker.spec.mounts) == ["/host/volumes/ws/_data"]
+
+
+def test_but_not_when_the_file_opened_is_in_it(tmp_path, docker, monkeypatch):
+    """A converted copy lives there: without it there is nothing to open."""
+    state = tmp_path / "state"
+    state.mkdir()
+    copy = state / "cube.stl"
+    copy.write_text("solid")
+    docker.sources = [("/elsewhere", "/host/elsewhere")]
+    monkeypatch.setattr(external, "_state_dir", lambda root: str(state))
+    monkeypatch.setattr(external, "_workspace_for", lambda path: str(tmp_path / "ws"))
+    with pytest.raises(external.ExternalToolError, match=str(state)):
+        external._open_in_container(
+            external.TOOLS["freecad"], str(copy), str(tmp_path / "ws"), "img", lambda m: None, "mount"
+        )
