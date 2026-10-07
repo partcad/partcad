@@ -270,6 +270,29 @@ def _image_allowlist(image_obj) -> Dict[str, Optional[str]]:
 _LOCAL_SCHEMES = ("unix", "npipe", "http+docker")
 
 
+_CLEARTEXT_WARNED = set()
+
+
+def _warn_cleartext(host: str) -> None:
+    """Say once per host that the service on a daemon elsewhere is reached in plain HTTP.
+
+    A container on another machine publishes its service on every interface
+    there, and every request to it -- its token, a package's source -- crosses
+    the network unencrypted. The `remote` sandbox refuses exactly that; this
+    does not yet, because encrypting it is its own change. Until then the least
+    owed to whoever turned it on is to be told.
+    """
+    if host in _CLEARTEXT_WARNED:
+        return
+    _CLEARTEXT_WARNED.add(host)
+    pc_logging.warning(
+        "The Docker daemon is on %s, so PartCAD's containers there are reached over the network in plain "
+        "HTTP: each one's token, and the files sent to it, can be read by anyone on that network -- even "
+        "with DOCKER_HOST=ssh://, which carries Docker's own API and not these. Use only a daemon on a "
+        "network you trust." % host
+    )
+
+
 def daemon_host(client) -> Optional[str]:
     """The host the daemon runs on, when it is not this machine; None when it is.
 
@@ -548,6 +571,8 @@ def acquire(spec: ContainerSpec, client=None, ping: Callable[[str, int], Optiona
     name = container_name(spec)
     digest = identity(spec)
     remote_host = daemon_host(client)
+    if remote_host:
+        _warn_cleartext(remote_host)
 
     with _lock(name):
         reference, image_obj = resolve_image(client, spec.image)

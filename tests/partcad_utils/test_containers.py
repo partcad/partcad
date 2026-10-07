@@ -668,3 +668,19 @@ def test_an_installation_without_the_service_says_so():
     finally:
         containers._service_path = original
         containers._service_source.cache_clear()
+
+
+def test_a_daemon_elsewhere_is_warned_about_once(monkeypatch):
+    """Its containers are reached in plain HTTP; whoever turned that on is told, once per daemon."""
+    said = []
+    monkeypatch.setattr(containers, "_CLEARTEXT_WARNED", set())
+    monkeypatch.setattr(containers.pc_logging, "warning", said.append)
+
+    for _ in range(3):
+        containers._warn_cleartext("build-box")
+    containers._warn_cleartext("other-box")
+
+    assert len(said) == 2
+    assert "plain HTTP" in said[0] and "build-box" in said[0]
+    # The advice that would be wrong is not given as a way out.
+    assert "carries Docker's own API and not these" in said[0]

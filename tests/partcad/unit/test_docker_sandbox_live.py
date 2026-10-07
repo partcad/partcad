@@ -325,3 +325,67 @@ def test_upload_mode_keeps_its_environment_for_the_next_process(uploaded, monkey
     exitcode, stdout, stderr = fresh.run(["-c", "import OCP; print('still here')"])
     assert exitcode == 0, stderr
     assert "still here" in stdout
+
+
+_RACER = """
+import os, sys, types
+from partcad import runtime_python_docker
+ctx = types.SimpleNamespace(
+    user_config=types.SimpleNamespace(internal_state_dir=sys.argv[2], use_docker_remote=True),
+    root_path=sys.argv[3],
+)
+sandbox = runtime_python_docker.DockerUploadPythonRuntime(ctx, "3.11", image=sys.argv[1])
+code, out, err = sandbox.run(["-c", "import OCP, build123d; print('imported')"])
+sys.stdout.write(out or "")
+sys.stderr.write(err or "")
+sys.exit(code)
+"""
+
+
+def test_two_processes_provisioning_one_fresh_volume_both_get_a_working_stack(tmp_path):
+    """The volume is the only thing two PartCAD processes share, so it is where the lock has to be.
+
+    Each process keeps its own `Environments` and its own gate; without a lock
+    on the volume one of them imports OCP while the other's pip is halfway
+    through replacing it. A tag of the image made for this test only, so the
+    volume -- named after the image -- starts empty and both really provision.
+    """
+    import subprocess
+    import sys
+    import uuid
+
+    import docker
+
+    from partcad import remote_sandbox
+    from partcad_utils import containers
+
+    if not runtime.docker_available():
+        pytest.skip("no container runtime is answering here")
+    client = docker.from_env()
+    repository = "partcad-test/sandbox-race-%s" % uuid.uuid4().hex[:8]
+    client.images.get(IMAGE).tag(repository, "race")
+    image = repository + ":race"
+    (tmp_path / "pkg").mkdir()
+    try:
+        racers = [
+            subprocess.Popen(
+                [sys.executable, "-c", _RACER, image, str(tmp_path / ("state-%d" % i)), str(tmp_path / "pkg")],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for i in range(2)
+        ]
+        results = [racer.communicate(timeout=1800) + (racer.returncode,) for racer in racers]
+        for stdout, stderr, code in results:
+            assert code == 0, stderr[-3000:]
+            assert "imported" in stdout
+    finally:
+        for container in client.containers.list(all=True, filters={"label": containers.LABEL_CONTAINER}):
+            if container.attrs["Config"]["Image"] == image:
+                container.remove(force=True)
+        try:
+            client.volumes.get(remote_sandbox.volume_name(image)).remove(force=True)
+        except docker.errors.NotFound:
+            pass
+        client.images.remove(image, noprune=True)

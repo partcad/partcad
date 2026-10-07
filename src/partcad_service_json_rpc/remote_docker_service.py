@@ -199,7 +199,9 @@ def main(argv=None) -> int:
     pool = remote_docker.ContainerPool(remote_docker.start, idle_seconds=args.idle_timeout)
     # Provisioning reaches a container the same way a forwarded request does,
     # so there is one path to a container and not two.
-    environments = remote_sandbox.Environments(lambda image, command: _forward(pool, image, command))
+    environments = remote_sandbox.Environments(
+        lambda image, command, lock: _forward(pool, image, command, {"lock": lock})
+    )
 
     # A service that starts containers and runs commands in them, reachable
     # from the network and asking nothing of its callers, is a remote shell for

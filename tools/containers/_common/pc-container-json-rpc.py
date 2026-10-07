@@ -72,6 +72,7 @@ container running some time before the process inside it is listening.
 """
 
 import base64
+import contextlib
 import gzip
 import hmac
 import io
@@ -90,8 +91,8 @@ from socketserver import ThreadingMixIn
 # What `GET /` reports, and what a client may ask of a server before relying on
 # one of the additions below. 1 is the service as it was before them; 2 sends
 # in-place edits back, sends `output_dirs`, resolves a null allowlist entry on
-# PATH and rewrites `cwd`.
-PROTOCOL = 2
+# PATH and rewrites `cwd`; 3 holds a `lock` around a command.
+PROTOCOL = 3
 
 # Where the service listens unless told otherwise. Not a request parameter: what
 # answers inside a container is part of the container's identity, and a request
@@ -224,10 +225,20 @@ def pack_directory(path):
     what comes back are one format. Entries sorted, owners and times zeroed, and
     the gzip header's own time pinned -- otherwise two packs of one directory
     differ in bytes 4 to 8 and nowhere else.
+
+    No member is a link, because `unpack_directory` refuses every one (a link is
+    how an archive from elsewhere writes outside the directory it lands in). A
+    symbolic link resolving inside the directory is sent as what it points at; one
+    resolving outside it, or nowhere, is left out with a warning -- following it
+    would send a file that is not part of what was asked for.
     """
+    root = os.path.realpath(path)
+    skipped = []
     buffer = io.BytesIO()
     with gzip.GzipFile(fileobj=buffer, mode="wb", compresslevel=6, mtime=0) as compressed:
-        with tarfile.open(fileobj=compressed, mode="w") as tar:
+        # `dereference`: or a second name for a hard-linked file is archived as a
+        # link to the first.
+        with tarfile.open(fileobj=compressed, mode="w", dereference=True) as tar:
 
             def sanitize(info):
                 info.mtime = 0
@@ -235,10 +246,39 @@ def pack_directory(path):
                 info.uname = info.gname = ""
                 return info
 
+            def add(full, arcname, ancestors):
+                real = os.path.realpath(full)
+                if os.path.islink(full):
+                    inside = os.path.commonpath([root, real]) == root
+                    if not inside or not os.path.exists(real):
+                        skipped.append(arcname)
+                        return
+                if os.path.isdir(real):
+                    if real in ancestors:
+                        # A link to a directory holding it: following it never ends.
+                        skipped.append(arcname)
+                        return
+                    tar.addfile(sanitize(tar.gettarinfo(real, arcname=arcname)))
+                    for entry in sorted(os.listdir(real)):
+                        add(os.path.join(full, entry), arcname + "/" + entry, ancestors | {real})
+                elif os.path.isfile(real):
+                    info = sanitize(tar.gettarinfo(real, arcname=arcname))
+                    with open(real, "rb") as content:
+                        tar.addfile(info, content)
+                else:
+                    skipped.append(arcname)
+
             for entry in sorted(os.listdir(path)):
                 if entry in (".git", "__pycache__", ".venv"):
                     continue
-                tar.add(os.path.join(path, entry), arcname=entry, filter=sanitize)
+                add(os.path.join(path, entry), entry, frozenset({root}))
+    if skipped:
+        log.warning(
+            "Not sent: %s -- %s to nothing inside %s.",
+            ", ".join(skipped),
+            "a link that points" if len(skipped) == 1 else "links, or special files, that point",
+            path,
+        )
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
@@ -259,6 +299,45 @@ def unpack_directory(archive, target):
         tar.extractall(target)
 
 
+def _lock_path(lock):
+    """Where a request's ``lock`` is kept, refused unless it is a file under the sandbox root."""
+    if not isinstance(lock, dict) or not isinstance(lock.get("path"), str) or not lock["path"]:
+        raise ExecuteError(-32602, "'lock' must be an object with a 'path'")
+    root = os.path.normpath(SANDBOX_ROOT)
+    path = os.path.normpath(lock["path"])
+    # The lock file is created if it is not there, so a path anywhere would be
+    # a request creating files anywhere.
+    if not os.path.isabs(path) or path == root or os.path.commonpath([root, path]) != root:
+        raise ExecuteError(-32602, "A lock has to be a file under %s: %s" % (SANDBOX_ROOT, lock["path"]))
+    return path
+
+
+@contextlib.contextmanager
+def _held(lock):
+    """``lock`` held for as long as the block runs: exclusive, or shared with other shared holders.
+
+    What lets processes that never heard of each other share one environment on
+    a volume: whatever installs into it holds it exclusively, and whatever runs
+    out of it holds it shared, so nothing imports a package while pip is halfway
+    through replacing it. Taken here, by the service, because a request in
+    'upload' mode cannot run 'flock' itself -- it is not on any allowlist -- and
+    because a lock must live on the same disk as what it guards.
+    """
+    if lock is None:
+        yield
+        return
+    import fcntl
+
+    path = _lock_path(lock)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    descriptor = os.open(path, os.O_RDWR | os.O_CREAT, 0o666)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX if lock.get("exclusive") else fcntl.LOCK_SH)
+        yield
+    finally:
+        os.close(descriptor)
+
+
 def handle_execute_command(
     command,
     stdin=None,
@@ -268,8 +347,20 @@ def handle_execute_command(
     input_dirs=None,
     output_dirs=None,
     allowed=None,
+    lock=None,
 ):
-    """Run one command, with whatever files the caller sent, and answer with what it produced."""
+    """Run one command, with whatever files the caller sent, and answer with what it produced.
+
+    ``lock`` is ``{"path": ..., "exclusive": bool}``: a file under the sandbox
+    root held around the command (see `_held`).
+    """
+    if lock is not None:
+        _lock_path(lock)
+    with _held(lock):
+        return _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_dirs, allowed)
+
+
+def _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_dirs, allowed):
     input_files = input_files or {}
     output_files = list(output_files or [])
     input_dirs = input_dirs or {}
@@ -415,7 +506,7 @@ def dispatch(payload):
     params = payload.get("params") or {}
     if not isinstance(params, dict):
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "Params must be an object"}}
-    known = ("command", "stdin", "cwd", "input_files", "output_files", "input_dirs", "output_dirs")
+    known = ("command", "stdin", "cwd", "input_files", "output_files", "input_dirs", "output_dirs", "lock")
     try:
         result = handle_execute_command(**{key: params[key] for key in known if key in params})
     except ExecuteError as e:

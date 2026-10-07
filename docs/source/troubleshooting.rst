@@ -143,6 +143,18 @@ reports that no container runtime is available, start Docker or take the other
 route the message names -- for KiCad that is installing KiCad on this machine
 and setting ``useDockerKicad: false``.
 
+If one of them says instead that the Docker daemon **cannot see this machine's
+files** -- ``DOCKER_HOST`` names another machine, or the daemon is reached
+through a socket from inside a container it does not share a filesystem with --
+then nothing can be mounted into a container, and the answer is to send the
+files instead: set ``useDockerRemote: true`` (``PC_USE_DOCKER_REMOTE=true``).
+See :ref:`use-docker-remote`, including what it does not protect yet.
+
+Containers made by a PartCAD older than 0.8.161 were not all labelled, so
+``pc system prune`` cannot see them: remove ``integration-kicad`` (KiCad) by
+hand with ``docker rm -f integration-kicad``. Every container PartCAD makes now
+is named ``partcad-<role>-<tag>-<identity>`` and labelled, and prune removes it.
+
 Typical problems
 ----------------
 

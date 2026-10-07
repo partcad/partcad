@@ -291,6 +291,71 @@ def test_packing_is_deterministic(tmp_path):
     assert service.pack_directory(str(tmp_path)) == service.pack_directory(str(tmp_path))
 
 
+def _round_trip(source, tmp_path):
+    target = tmp_path / "unpacked"
+    target.mkdir()
+    service.unpack_directory(service.pack_directory(str(source)), str(target))
+    return target
+
+
+@pytest.mark.skipif(not hasattr(os, "symlink") or sys.platform == "win32", reason="symbolic links")
+def test_a_link_inside_the_package_arrives_as_what_it_points_at(tmp_path):
+    """A package with a link in it must still be sendable: the unpacking side refuses links."""
+    package = tmp_path / "pkg"
+    (package / "parts").mkdir(parents=True)
+    (package / "parts" / "cube.step").write_text("solid")
+    os.symlink("parts/cube.step", package / "cube.step")
+    os.symlink("parts", package / "shortcut")
+
+    target = _round_trip(package, tmp_path)
+
+    assert (target / "cube.step").read_text() == "solid"
+    assert not (target / "cube.step").is_symlink()
+    assert (target / "shortcut" / "cube.step").read_text() == "solid"
+
+
+@pytest.mark.skipif(not hasattr(os, "symlink") or sys.platform == "win32", reason="symbolic links")
+def test_a_link_out_of_the_package_is_not_followed(tmp_path, caplog):
+    """Following it would send a file nobody asked to send -- a key, a password store."""
+    secret = tmp_path / "secret"
+    secret.write_text("key")
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "part.py").write_text("x")
+    os.symlink(str(secret), package / "leak")
+    os.symlink(str(package / "nowhere"), package / "dangling")
+
+    with caplog.at_level("WARNING"):
+        target = _round_trip(package, tmp_path)
+
+    assert sorted(os.listdir(target)) == ["part.py"]
+    assert "dangling" in caplog.text and "leak" in caplog.text
+
+
+@pytest.mark.skipif(not hasattr(os, "symlink") or sys.platform == "win32", reason="symbolic links")
+def test_a_link_to_a_directory_holding_it_ends(tmp_path):
+    package = tmp_path / "pkg"
+    (package / "sub").mkdir(parents=True)
+    os.symlink("..", package / "sub" / "up")
+
+    target = _round_trip(package, tmp_path)
+
+    assert (target / "sub").is_dir()
+    assert not (target / "sub" / "up").exists()
+
+
+@pytest.mark.skipif(not hasattr(os, "link") or sys.platform == "win32", reason="hard links")
+def test_a_hard_linked_file_arrives_twice_as_a_file(tmp_path):
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "a.txt").write_text("same")
+    os.link(package / "a.txt", package / "b.txt")
+
+    target = _round_trip(package, tmp_path)
+
+    assert (target / "b.txt").read_text() == "same"
+
+
 def test_nothing_a_call_unpacked_is_left_behind(allowed, tmp_path, monkeypatch):
     """One container serves every command a machine sends; a directory per call that stays is a full disk."""
     scratch = tmp_path / "scratch"
@@ -444,3 +509,84 @@ def test_the_copy_images_carry_is_this_file_byte_for_byte():
     assert baked.read_bytes() == pathlib.Path(service.__file__).read_bytes(), (
         "copy src/partcad_utils/container_service.py over %s" % baked
     )
+
+
+# --------------------------------------------------------------------------- #
+# A lock held around a command                                                 #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def sandbox_root(tmp_path, monkeypatch):
+    root = tmp_path / "pc-sandbox"
+    root.mkdir()
+    monkeypatch.setattr(service, "SANDBOX_ROOT", str(root))
+    return root
+
+
+@pytest.mark.parametrize("path", ["/etc/x.lock", "relative.lock", "{root}", "{root}/../escape.lock"])
+def test_a_lock_outside_the_sandbox_root_is_refused(allowed, sandbox_root, tmp_path, path):
+    """The lock file is created when it is not there: a path anywhere is a file created anywhere."""
+    with pytest.raises(service.ExecuteError):
+        service.handle_execute_command(
+            ["python", "-c", "pass"], allowed=allowed, lock={"path": path.format(root=sandbox_root)}
+        )
+    assert not (tmp_path / "escape.lock").exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the service runs on Linux; flock is POSIX")
+def test_a_shared_holder_waits_for_an_exclusive_one(allowed, sandbox_root, tmp_path):
+    """Nothing runs out of an environment while something installs into it."""
+    import time
+
+    lock = str(sandbox_root / "v-env-3.11.lock")
+    order = []
+    started = threading.Event()
+    slow = script(tmp_path, "import time; time.sleep(1)", name="install.py")
+
+    def install():
+        started.set()
+        service.handle_execute_command(["python", str(slow)], allowed=allowed, lock={"path": lock, "exclusive": True})
+        order.append("installed")
+
+    installer = threading.Thread(target=install)
+    installer.start()
+    started.wait()
+    time.sleep(0.3)  # let it take the lock
+    service.handle_execute_command(["python", "-c", "pass"], allowed=allowed, lock={"path": lock})
+    order.append("ran")
+    installer.join()
+
+    assert order == ["installed", "ran"]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the service runs on Linux; flock is POSIX")
+def test_shared_holders_do_not_wait_for_each_other(allowed, sandbox_root, tmp_path):
+    import time
+
+    lock = {"path": str(sandbox_root / "v-env-3.11.lock")}
+    slow = script(tmp_path, "import time; time.sleep(1)", name="wrapper.py")
+    threads = [
+        threading.Thread(
+            target=service.handle_execute_command,
+            args=(["python", str(slow)],),
+            kwargs={"allowed": allowed, "lock": lock},
+        )
+        for _ in range(3)
+    ]
+    began = time.monotonic()
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert time.monotonic() - began < 2.5
+
+
+def test_the_lock_reaches_the_handler_through_the_protocol(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(service, "handle_execute_command", lambda **kwargs: seen.update(kwargs) or {})
+    service.dispatch(
+        {"jsonrpc": "2.0", "id": 1, "method": "execute", "params": {"command": ["x"], "lock": {"path": "/p"}}}
+    )
+    assert seen["lock"] == {"path": "/p"}

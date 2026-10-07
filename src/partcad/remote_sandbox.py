@@ -71,12 +71,26 @@ def interpreter_path(version: str) -> str:
     return "%s/bin/python" % environment_path(version)
 
 
+def lock_for(version: str, exclusive: bool) -> dict:
+    """The lock guarding one environment, as the container service takes it.
+
+    Held exclusively by every command that builds or installs into the
+    environment, and shared by every command that runs out of it. Not this
+    service's own gate, which guards only the processes that share *it*: in
+    'upload' mode every PartCAD process keeps an `Environments` of its own over
+    one volume, and the service pool may run several containers on it, so the
+    only thing all of them share is the volume -- and that is where the lock is.
+    """
+    return {"path": environment_path(version) + ".lock", "exclusive": exclusive}
+
+
 class Environments:
     """The environments this service has built, and what is installed in them.
 
     ``run`` is how a command reaches the container -- the service passes
     something that forwards over JSON-RPC, and a test passes something that
-    records. It must return ``(exit_code, stdout, stderr)``.
+    records. It is called as ``run(image, command, lock)``, ``lock`` being
+    `lock_for` the environment, and must return ``(exit_code, stdout, stderr)``.
     """
 
     def __init__(self, run: Callable[[str, list], tuple]):
@@ -129,7 +143,9 @@ class Environments:
         with this is install something.
         """
         exitcode, _, stderr = self._run(
-            image, [IMAGE_PYTHON, "-m", "venv", "--upgrade-deps", environment_path(version)]
+            image,
+            [IMAGE_PYTHON, "-m", "venv", "--upgrade-deps", environment_path(version)],
+            lock_for(version, exclusive=True),
         )
         if exitcode != 0:
             raise RuntimeError(
@@ -143,7 +159,9 @@ class Environments:
         # also asked for. Without this the mismatch is silent until something
         # imports a wheel built for the other one.
         exitcode, stdout, stderr = self._run(
-            image, [interpreter_path(version), "-c", "import sys; print('%d.%d' % sys.version_info[:2])"]
+            image,
+            [interpreter_path(version), "-c", "import sys; print('%d.%d' % sys.version_info[:2])"],
+            lock_for(version, exclusive=False),
         )
         built = (stdout or "").strip()
         if exitcode != 0 or built != version:
@@ -156,6 +174,7 @@ class Environments:
         exitcode, _, stderr = self._run(
             image,
             [interpreter_path(version), "-m", "pip", "install", "--no-input", requirement],
+            lock_for(version, exclusive=True),
         )
         if exitcode != 0:
             raise RuntimeError(
@@ -262,6 +281,9 @@ def execute(pool, environments, params: dict, timeout: Optional[float] = None) -
                 "output_files": params.get("output_files") or [],
                 "input_dirs": params.get("input_dirs") or {},
                 "output_dirs": params.get("output_dirs") or [],
+                # Shared: any number of commands may run out of the environment
+                # at once, and none while something installs into it.
+                "lock": lock_for(version, exclusive=False),
             },
             timeout=timeout,
         )

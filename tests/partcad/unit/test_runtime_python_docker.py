@@ -836,7 +836,10 @@ def test_the_container_is_asked_for_in_mount_mode_with_this_contexts_mounts(tmp_
 def test_the_container_runs_as_this_user_on_linux(tmp_path, asked, monkeypatch):
     from partcad import container_mounts
 
-    monkeypatch.setattr(container_mounts.platform, "system", lambda: "Linux")
+    # Its own reference to the module, not the module: patching `platform.system`
+    # itself would make every other caller -- the sandbox's mount probe among
+    # them -- believe it is on Linux too, which on Windows it then refuses.
+    monkeypatch.setattr(container_mounts, "platform", types.SimpleNamespace(system=lambda: "Linux"))
     _runtime(tmp_path)._start()
     if hasattr(os, "getuid"):
         assert asked[0].user == "%d:%d" % (os.getuid(), os.getgid())

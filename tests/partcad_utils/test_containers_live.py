@@ -74,10 +74,25 @@ def test_a_command_runs_in_a_fresh_container(client):
     assert (code, stdout.strip()) == (0, "Linux"), stderr
 
 
+def _binds(client, *paths):
+    """The binds for ``paths``, the way every caller makes them.
+
+    Not ``{path: {"bind": path}}``: in a dev container holding the host's Docker
+    socket, the daemon resolves a source against the *host's* filesystem, where
+    this container's temporary directory is not -- it would bind an empty
+    directory of the same name, owned by root. `container_mounts.bind_mounts` is
+    what maps a path to where the daemon really keeps it.
+    """
+    from partcad import container_mounts, runtime
+
+    try:
+        return container_mounts.bind_mounts(client, IMAGE, [str(p) for p in paths], "This test")
+    except runtime.SandboxUnavailable as e:
+        pytest.skip(str(e))
+
+
 def test_mount_mode_shares_this_machines_files(client, tmp_path):
-    endpoint = containers.acquire(
-        live("mount", mounts={str(tmp_path): {"bind": str(tmp_path), "mode": "rw"}}), client=client
-    )
+    endpoint = containers.acquire(live("mount", mounts=_binds(client, tmp_path)), client=client)
     (tmp_path / "in.txt").write_text("from here")
     target = tmp_path / "out.txt"
     code, _, stderr = endpoint.run(
