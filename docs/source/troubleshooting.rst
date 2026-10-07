@@ -181,6 +181,9 @@ suffice due to the ephemeral nature of some output in that view (many output
 lines get overwritten). To get the complete and detailed error log, see the
 ``PartCAD`` output in the ``Output`` view.
 
+A ``PartCAD`` terminal you closed stays closed: **PartCAD: Show Terminal** opens
+it again, with everything it missed (see :ref:`partcad-terminal`).
+
 Typical problems
 ----------------
 
