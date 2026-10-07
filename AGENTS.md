@@ -109,8 +109,9 @@ a CAD addon, or documentation.
 
 * [src/partcad_ide_client](./src/partcad_ide_client/AGENTS.md):
 
-  The Python side of the socket protocol `partcad` uses to display shapes in the IDE's `PartCAD Viewer`. Lazily
-  imported by `partcad.viewer`, and by nothing else.
+  The Python side of the socket protocol `partcad` uses to display shapes in the IDE's `PartCAD Viewer`, and that
+  `pc ide state` uses to ask the IDE what it is showing. Lazily imported by `partcad.viewer`, and imported by
+  that one command.
 
 ### Everything else
 

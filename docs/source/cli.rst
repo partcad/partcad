@@ -870,19 +870,48 @@ Object commands
     pc instructions robot                         # robot.pdf: this assembly's own steps
     pc instructions -t html -r -b -O docs/ robot  # every step and every part made, as HTML
 
-************
-IDE commands
-************
+********************
+Interacting with IDE
+********************
 
-Putting an object in front of a person, in one of two windows: the IDE's own **PartCAD Viewer**
+Putting an object in front of a person, in one of two windows -- the IDE's own **PartCAD Viewer**
 (``pc ide view``), or **another application** on this machine (``pc ide open``, which is also what the editor
-extension's "Open in..." menu runs). Neither leaves anything new in the package -- that is what ``pc export``
-and ``pc render`` are for. They used to be ``pc inspect`` and ``pc open``. Those names still work, are left out
+extension's "Open in..." menu runs) -- and asking the IDE what it is showing (``pc ide state``). None of them
+leaves anything new in the package: that is what ``pc export`` and ``pc render`` are for. They used to be ``pc inspect`` and ``pc open``. Those names still work, are left out
 of ``pc --help``, and print a note on stderr saying what to type instead.
 
 ``pc ide view``
   View a part, assembly, or scene in the PartCAD Viewer. Use ``-V`` for a verbal (text) description instead of a visual
   one, and ``-p <name>=<value>`` to set parameters.
+
+``pc ide state``
+  Print what the PartCAD IDE on this machine is showing, as YAML (the default) or ``--json``::
+
+    pc ide state                 # YAML
+    pc ide state --json          # the same document, for a program to read
+
+  One document, one entry per view:
+
+  * ``explorer`` -- what is selected in the PartCAD Explorer: each row's ``kind`` (``part``, ``assembly``,
+    ``package``, ...), its full ``path`` (``//pub/examples:cube``, or a package's own path), what it is declared
+    as and the file it is read from.
+  * ``inspector`` -- the object the PartCAD Inspector shows: its properties, every parameter it declares with
+    what the field holds **now** (``value``), and what the object was last shown with (``applied``). The two
+    differ when a value has been typed and Update not pressed. ``live: false`` says the Inspector's panel could
+    not be asked -- it is collapsed -- and the values are the applied ones.
+  * ``viewer`` -- the PartCAD Viewer: the ``tab`` and ``subTab`` on screen (``design``/``2d``), what every tab
+    strip offers and which tabs are disabled, and for **each sub-tab** its ``filters`` -- what it would send
+    ``pc render --filter``, or ``null`` for the whole object -- and its ``selections``: the boxes ticked in its
+    tree, the port overlays on the 2D tab, and the value of every control in its pane (format, drawing package,
+    switches). They differ by sub-tab, which is why each has its own entry. ``screenshot`` is the path of a PNG of
+    the sub-tab on screen, written by the IDE into its temporary directory (``/tmp/partcad-viewer-design-2d-<time>.png``
+    on Linux); when one cannot be taken -- the panel is closed, or hidden behind another editor --
+    ``screenshotError`` says why.
+
+  The IDE is asked over the socket ``pc ide view`` shows things on, so this needs no daemon and no workspace,
+  and runs where the IDE does. The 3D view's text callouts are drawn over the canvas rather than in it, so they
+  are not in its screenshot. With two VS Code windows open on Linux, the kernel hands the question to one of
+  them; ``window.workspaceFolders`` says which one answered.
 
 ``pc ide open``
   Open a file in a third-party application, on this machine::

@@ -10,7 +10,22 @@
 import * as vscode from 'vscode';
 import * as utils from './utils';
 
-type ItemData = { pkg: string; name: string; itemPath: string | undefined };
+type ItemData = {
+    pkg: string;
+    name: string;
+    itemPath: string | undefined;
+    config?: { type?: string; parameters?: Record<string, Record<string, unknown>> };
+};
+
+/** What the Inspector last showed, kept here so that `pc ide state` can say so without the webview. */
+interface Shown {
+    kind: string;
+    item: ItemData;
+    params: Record<string, unknown>;
+}
+
+/** How long the Inspector's webview has to say what its fields hold. */
+const STATE_REPLY_MS = 3000;
 
 /** The kinds of item that can be inspected, and how each is shown. */
 const KINDS = {
@@ -44,6 +59,9 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
 
     private shownPackage: string = '';
     private shownItem: string = '';
+    private shown: Shown | undefined;
+    private stateRequests = 0;
+    private readonly stateReplies = new Map<number, (reply: InspectorReply) => void>();
 
     constructor(private readonly _extensionUri: vscode.Uri) {
         this.clear().then(() => {
@@ -54,6 +72,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
     async clear() {
         this.shownPackage = '';
         this.shownItem = '';
+        this.shown = undefined;
         await this._view?.webview.postMessage({ type: 'clear' });
     }
 
@@ -72,6 +91,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
     }
 
     public async inspectPackage(pkg: ItemData) {
+        this.shown = { kind: 'package', item: pkg, params: {} };
         await this._view?.webview.postMessage({ type: 'package', obj: pkg, params: {} });
     }
 
@@ -111,6 +131,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
         // skip re-posting, leaving the software details in view.
         this.shownPackage = '';
         this.shownItem = '';
+        this.shown = { kind: 'software', item: software, params: {} };
         await this._view?.webview.postMessage({ type: 'software', obj: software, params: {} });
     }
 
@@ -128,6 +149,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
         const itemName = item['name'];
         const packageName = item['pkg'];
         const itemPath = item['itemPath'];
+        this.shown = { kind, item, params: { ...(params as Record<string, unknown>) } };
 
         if (this.shownPackage !== packageName || this.shownItem !== itemName) {
             await this._view?.webview.postMessage({ type: kind, obj: item, params });
@@ -206,10 +228,56 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-        webviewView.webview.onDidReceiveMessage((message: { action: string; command: string; params: [] }) => {
+        webviewView.webview.onDidReceiveMessage((message: { action: string; command: string; params: [] } & any) => {
+            if (message.action === 'state') {
+                this.stateReplies.get(message.token)?.(message as InspectorReply);
+                return;
+            }
             if (message.action === 'command') {
                 vscode.commands.executeCommand(message.command, ...message.params);
             }
+        });
+    }
+
+    /**
+     * What the Inspector shows, for `pc ide state`.
+     *
+     * The object and the parameters it was last shown with are known here. What
+     * the fields hold *now* is only in the webview -- somebody may have typed a
+     * new value and not pressed Update -- so it is asked, and when it cannot
+     * answer (collapsed, not yet opened) the state says the values it reports
+     * are the applied ones.
+     */
+    public async state(): Promise<unknown> {
+        if (this.shown === undefined) {
+            return null;
+        }
+        const reply = await this.askWebview();
+        return inspectorState(this.shown, reply);
+    }
+
+    private askWebview(): Promise<InspectorReply | undefined> {
+        const view = this._view;
+        if (view === undefined) {
+            return Promise.resolve(undefined);
+        }
+        const token = ++this.stateRequests;
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => finish(undefined), STATE_REPLY_MS);
+            const finish = (reply: InspectorReply | undefined) => {
+                clearTimeout(timer);
+                this.stateReplies.delete(token);
+                resolve(reply);
+            };
+            this.stateReplies.set(token, finish);
+            view.webview.postMessage({ type: 'state', token }).then(
+                (delivered) => {
+                    if (!delivered) {
+                        finish(undefined);
+                    }
+                },
+                () => finish(undefined),
+            );
         });
     }
 
@@ -268,4 +336,41 @@ function getNonce() {
         text += possible.charAt(Math.floor(Math.random() * possible.length));
     }
     return text;
+}
+
+/** What the Inspector's webview says about itself when asked. */
+export interface InspectorReply {
+    /** The rows of its table, label to the text in it. */
+    properties?: Record<string, string>;
+    /** Each parameter field, by parameter name, as it holds now. */
+    values?: Record<string, string>;
+}
+
+/**
+ * The Inspector's entry of the state. Pure, so that it is tested without a window.
+ *
+ * 'reply' is undefined when the webview did not answer; the values are then the
+ * applied ones, and `live` says so.
+ */
+export function inspectorState(shown: Shown, reply: InspectorReply | undefined): Record<string, unknown> {
+    const { kind, item, params } = shown;
+    const isPackage = kind === 'package';
+    const declared = item.config?.parameters ?? {};
+    const parameters: Record<string, unknown> = {};
+    for (const [name, spec] of Object.entries(declared)) {
+        const value = reply?.values?.[name] ?? params[name] ?? spec.default ?? null;
+        parameters[name] = { ...spec, value };
+    }
+    return {
+        kind,
+        path: isPackage ? item.name : `${item.pkg}:${item.name}`,
+        package: isPackage ? item.name : item.pkg,
+        name: item.name,
+        type: item.config?.type ?? null,
+        file: item.itemPath ?? null,
+        properties: reply?.properties ?? null,
+        parameters,
+        applied: params,
+        live: reply !== undefined,
+    };
 }

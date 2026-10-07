@@ -67,6 +67,9 @@ IN_PROCESS = {
     # the path it is handed only exists there. A daemon can be remote, so this
     # cannot be its work -- and it needs no package graph or CAD runtime anyway.
     "ide/open.py": "launches a third-party application on the client's own machine, with the client's own file",
+    # Asks the IDE on this machine what it is showing, over the IDE's own
+    # socket. The IDE is wherever the person is, and a daemon can be remote.
+    "ide/state.py": "asks the PartCAD IDE on the client's own machine what it is showing",
     "daemon/start.py": "manages the daemon process itself",
     "daemon/stop.py": "manages the daemon process itself",
     "system/telemetry/clear.py": "clears the client's own telemetry id under the client's state dir",

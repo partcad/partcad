@@ -41,6 +41,15 @@ class ViewerNotAvailable(Exception):
     """No IDE is listening on the PartCAD viewer port."""
 
 
+class StateNotSupported(Exception):
+    """The IDE listening answered, but is too old to say what it is showing."""
+
+
+# How long to wait for the state. Longer than a ping, shorter than a show: the
+# IDE asks two webviews and takes a screenshot, all of it on this machine.
+STATE_TIMEOUT = 20.0
+
+
 # Decimal digits only: 'int()' would also take "+9999", " 9999 " and "1_0",
 # none of which the JS side reads the same way.
 _PORT_RE = re.compile(r"\A[0-9]+\Z")
@@ -236,3 +245,21 @@ def show(
 def clear() -> dict:
     """Empty the viewer."""
     return _send({"type": protocol.MSG_CLEAR, "id": uuid.uuid4().hex})
+
+
+def state(reply_timeout: float = STATE_TIMEOUT) -> dict:
+    """What the IDE is showing: its Explorer, Inspector and Viewer (see 'protocol.MSG_STATE').
+
+    Over a connection of its own rather than the shared one: this is a one-off
+    question, usually from a process that will never show anything.
+    """
+    with Connection() as connection:
+        reply = connection.send({"type": protocol.MSG_STATE, "id": uuid.uuid4().hex}, reply_timeout=reply_timeout)
+    if protocol.KEY_STATE not in reply:
+        if reply.get("ok") is False and reply.get("error"):
+            raise StateNotSupported(str(reply["error"]))
+        raise StateNotSupported(
+            "the PartCAD IDE listening on port %d does not report its state; update the PartCAD extension"
+            % connection.port
+        )
+    return reply[protocol.KEY_STATE]

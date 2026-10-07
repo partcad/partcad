@@ -25,6 +25,14 @@ Two properties of this package are deliberate and easy to break:
   before it reaches here, so there is nothing to import. `partcad` imports *this*, lazily, from
   `partcad.viewer`.
 
+**One message is a question rather than a display: `state`**, which `pc ide state` sends. The IDE answers in
+the acknowledgement it sends every message, under `state` -- the Explorer's selection, the Inspector's object
+and the Viewer's tabs, filters, selections and a screenshot path; the shape is the comment beside `MSG_STATE`.
+An IDE from before it acknowledges it without a state, which is how `client.state()` tells "too old"
+(`StateNotSupported`) from "no IDE" (`ViewerNotAvailable`). It is the one asynchronous answer on the IDE's side
+-- two webviews are asked and a screenshot taken -- so `PartcadViewerServer.answerState` bounds it and fails
+with a sentence rather than leave `pc` blocked.
+
 A node names its geometry (`KEY_GLTF_REF`) rather than carrying it, and the root holds one entry per distinct
 shape (`KEY_GEOMETRY`). An assembly that places the same bolt a hundred times therefore sends that bolt once and
 names it a hundred times — possible only because a node's placement was never part of its geometry, which is the

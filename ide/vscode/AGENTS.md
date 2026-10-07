@@ -673,6 +673,22 @@ than being worked out anywhere in Python: PartCAD decides *how* to run the appli
 say what it is allowed to do. Adding a second application is a command, a menu entry and a row in
 `external.TOOLS` -- no new branch in this extension.
 
+**`pc ide state` is answered here** (`src/ideState.ts`). The viewer server (`PartcadViewerServer`) receives
+the `state` message and asks a provider wired in `extension.ts`, which collects three entries: the
+Explorer's selection straight off the `TreeView`, the Inspector's object (`PartcadInspector.state`, which asks
+its webview what each field holds *now* and falls back to the applied values when the view cannot answer), and
+the Viewer's (`PartcadViewer.state`, which asks its webview). The webview's half is `src/webview/state.ts`
+plus `collectState`/`answerState` in `viewer.ts`: the tab and sub-tab on screen, what every strip offers, each
+sub-tab's `pc render --filter` and selections (its tree's rows from `Tree.rows()`, the 2D overlays, and every
+control in its pane from `controlValues`), and a screenshot. The screenshot is the pane's DOM drawn through an
+SVG `<foreignObject>` onto a canvas, with each `<canvas>` replaced by an image of itself first -- the 3D view's
+through `scene.screenshot()`, which draws and reads in one task because its WebGL buffer is not preserved. The
+host writes the PNG into `os.tmpdir()` (`writeScreenshot`); the webview has no filesystem. A view that fails
+reports an error in its own entry and the rest still answers. The panel is never brought forward to be
+photographed. Nothing about any of this is visible to `vscode-test` without a display; the pure parts
+(`explorerEntry`, `inspectorState`, `writeScreenshot`, `Tree.rows`) and the socket round trip are tested in
+`ideState.test.ts` and `viewerTree.test.ts`.
+
 **The editor waits while the application is open** (`src/editingBanner.ts`). `pc ide open` blocks until the
 application closes and then brings the edit back into the package, so until it returns the package is in two
 places at once. `openWith` therefore shows a banner over the editor area, sets the `partcad.editingExternally`

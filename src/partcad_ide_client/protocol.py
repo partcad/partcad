@@ -98,6 +98,40 @@ MSG_SHOW = "show"
 MSG_CLEAR = "clear"
 MSG_PING = "ping"
 MSG_ACK = "ack"
+# A question rather than a display: what the IDE is showing, for 'pc ide state'.
+#
+# Answered in the acknowledgement every message gets, under KEY_STATE. An IDE
+# from before this acknowledges it like any message it does not understand --
+# without a state -- which is how a client tells "too old" from "nothing open".
+# The reply is
+#
+#     {
+#       "window":    {"pid", "workspaceFolders": [path, ...], "extensionVersion"}
+#       "explorer":  {"selection": [{"kind", "path", "package", "name", "type",
+#                                    "file"}, ...]}
+#       "inspector": {"kind", "path", "package", "name",
+#                     "properties": {label: value, ...},
+#                     "parameters": {name: {"type", "default", "enum", ...,
+#                                           "value": what the field holds now}},
+#                     "applied": {name: value} -- what the object was last
+#                                 shown with, which the fields may have moved on
+#                                 from without "Update" being pressed},
+#                    or null when the Inspector shows nothing
+#       "viewer":    {"open", "subject": {"name", "kind", "package"},
+#                     "tab", "subTab",
+#                     "tabs": {group: [{"id", "label", "disabled"}, ...]},
+#                     "subTabs": {id: {"filters", "selections"}},
+#                     "screenshot": the path of a PNG of the sub-tab on screen,
+#                                   written by the IDE into its temporary
+#                                   directory, or null with "screenshotError"}
+#     }
+#
+# "filters" is what that sub-tab would send 'pc render --filter', or null for
+# the whole object; "selections" is what is chosen in it -- the boxes ticked in
+# its tree, and the value of every control in its pane. They differ by sub-tab,
+# which is why there is one entry per sub-tab rather than one for the panel.
+MSG_STATE = "state"
+KEY_STATE = "state"
 
 # The keys of a node. 'gltf' is to this protocol what 'brep' is to the shape
 # envelope: the compressed geometry payload of one node.

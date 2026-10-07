@@ -316,7 +316,24 @@ export interface DetailsMessage {
     error?: string;
 }
 
+/** Host to renderer: what is on screen, for `pc ide state`; answered with a 'StateReplyMessage'. */
+export interface StateRequestMessage {
+    type: 'state';
+    token: number;
+}
+
+/** Renderer to host: the panel's state, and the sub-tab on screen as a PNG. */
+export interface StateReplyMessage {
+    type: 'state';
+    token: number;
+    state: Record<string, unknown>;
+    /** Base64, without a 'data:' prefix; absent with 'screenshotError' saying why. */
+    screenshot?: string;
+    screenshotError?: string;
+}
+
 export type HostMessage =
+    | StateRequestMessage
     | ShowMessage
     | ClearMessage
     | TabDataMessage

@@ -115,6 +115,10 @@ own five are read straight off disk out of the wheel, so the call is made only w
 actually found — a `pc ide open` outside a workspace starts no daemon and creates no context. The daemon says
 which applications there are; it never opens one, and there is still no method that opens a file.
 
+`pc ide state` is in-process for the same reason and makes **no** daemon call at all: it asks the PartCAD IDE
+on this machine what it is showing, over the socket the IDE already listens on for `show`
+(`partcad_ide_client.state`). The IDE is wherever the person is; a daemon can be remote.
+
 Those two are the only daemon calls an in-process command makes, and `IN_PROCESS_DAEMON_CALLS` in
 `tests/partcad_cli/unit/test_command_boundary.py` is where it is written down -- one method at a time, so
 widening it is a decision somebody makes on purpose.

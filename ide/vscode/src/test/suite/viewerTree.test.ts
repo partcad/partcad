@@ -228,6 +228,27 @@ suite("The 3D view's control tree", () => {
         ]);
     });
 
+    test('every row is reported with where it is, its kind and its own box, for pc ide state', () => {
+        const [pane, element] = host();
+        const tree = new Tree(element, () => undefined);
+        tree.setObject(assembly());
+
+        const reported = tree.rows();
+        // The same rows the pane draws, in the same order...
+        assert.deepStrictEqual(
+            reported.map((row) => `${row.kind} ${row.path.split('/').pop()}`),
+            rows(pane),
+        );
+        // ...each named by the path down to it...
+        assert.strictEqual(reported[0].path, 'mount');
+        assert.strictEqual(reported[1].path, 'mount/bottom');
+        // ...and ticked exactly when its own box is.
+        assert.deepStrictEqual(
+            reported.map((row) => row.ticked),
+            descendants(pane, 'input').map((box) => box.checked),
+        );
+    });
+
     test('a part is the same thing one node deep, with nothing special about it', () => {
         const [pane, element] = host();
         const tree = new Tree(element, () => undefined);

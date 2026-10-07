@@ -108,6 +108,9 @@ export class PartcadViewer implements vscode.Disposable {
 
     private panel: vscode.WebviewPanel | undefined;
     private lastShow: ViewerMessage | undefined;
+    /** The `pc ide state` questions the webview has not answered yet, by token. */
+    private readonly stateReplies = new Map<number, (reply: ViewerStateReply | undefined) => void>();
+    private stateRequests = 0;
     /** The configured CAE implementations, once the daemon has been asked. */
     private caeDefaults: Record<string, string> | undefined;
     /**
@@ -521,6 +524,55 @@ export class PartcadViewer implements vscode.Disposable {
         return this.caeDefaults[analysis];
     }
 
+    /**
+     * What the panel is showing, for `pc ide state`, with a screenshot of the sub-tab on screen.
+     *
+     * The webview is asked: the tabs, the trees and the controls are all in it.
+     * It sends the screenshot as a PNG and this side writes it -- the webview has
+     * no filesystem -- into the temporary directory, where `pc` is told to look.
+     * The panel is not brought forward to take it: a question about what
+     * somebody is looking at must not change what they are looking at.
+     */
+    public async state(): Promise<unknown> {
+        const panel = this.panel;
+        if (panel === undefined) {
+            return { open: false };
+        }
+        const token = ++this.stateRequests;
+        const reply = await new Promise<ViewerStateReply | undefined>((resolve) => {
+            const timer = setTimeout(() => finish(undefined), VIEWER_STATE_REPLY_MS);
+            const finish = (answer: ViewerStateReply | undefined) => {
+                clearTimeout(timer);
+                this.stateReplies.delete(token);
+                resolve(answer);
+            };
+            this.stateReplies.set(token, finish);
+            panel.webview.postMessage({ type: 'state', token }).then(
+                (delivered) => {
+                    if (!delivered) {
+                        finish(undefined);
+                    }
+                },
+                () => finish(undefined),
+            );
+        });
+        const base = { open: true, visible: panel.visible };
+        if (reply === undefined) {
+            return { ...base, error: `the PartCAD Viewer did not answer within ${VIEWER_STATE_REPLY_MS / 1000}s` };
+        }
+        const { screenshot, screenshotError, state } = reply;
+        let written: string | null = null;
+        let failure = screenshotError ?? null;
+        if (screenshot) {
+            try {
+                written = writeScreenshot(screenshot, state);
+            } catch (error: any) {
+                failure = `the screenshot could not be written: ${error?.message ?? error}`;
+            }
+        }
+        return { ...base, ...state, screenshot: written, ...(failure ? { screenshotError: failure } : {}) };
+    }
+
     private create(column: vscode.ViewColumn, preserveFocus: boolean): void {
         const panel = vscode.window.createWebviewPanel(
             PartcadViewer.viewType,
@@ -552,9 +604,11 @@ export class PartcadViewer implements vscode.Disposable {
                     objects?: unknown;
                     width?: number;
                     height?: number;
-                },
+                } & Partial<ViewerStateReply>,
             ) => {
-                if (message.type === 'error') {
+                if (message.type === 'state') {
+                    this.stateReplies.get(message.token ?? 0)?.(message as ViewerStateReply);
+                } else if (message.type === 'error') {
                     traceError(`PartCAD Viewer: ${message.message}`);
                 } else if (message.type === 'ready') {
                     this.postSpaceMouseState();
@@ -843,4 +897,32 @@ function getNonce(): string {
         text += possible.charAt(Math.floor(Math.random() * possible.length));
     }
     return text;
+}
+
+/** How long the Viewer's webview has to collect its state and take the screenshot. */
+const VIEWER_STATE_REPLY_MS = 10000;
+
+/** What the Viewer's webview answers a `state` with; see `webview/state.ts`. */
+export interface ViewerStateReply {
+    type: 'state';
+    token: number;
+    state: Record<string, unknown>;
+    /** The sub-tab on screen as a PNG, base64, or absent with `screenshotError` saying why. */
+    screenshot?: string;
+    screenshotError?: string;
+}
+
+/**
+ * Write a screenshot where `pc ide state` says it is, and return the path.
+ *
+ * Into the temporary directory -- /tmp on Linux -- named after the tab and the
+ * sub-tab it shows and the time it was taken, so that two answers in a row are
+ * two files and an agent comparing before and after has both.
+ */
+export function writeScreenshot(base64: string, state: Record<string, unknown> | undefined): string {
+    const part = (value: unknown) => String(value ?? 'none').replace(/[^A-Za-z0-9_-]/g, '-');
+    const name = `partcad-viewer-${part(state?.tab)}-${part(state?.subTab)}-${Date.now()}.png`;
+    const file = path.join(os.tmpdir(), name);
+    fs.writeFileSync(file, Buffer.from(base64, 'base64'));
+    return file;
 }

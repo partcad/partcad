@@ -66,6 +66,7 @@ import {
     reportFailure,
     saveChoices,
     saveRendered,
+    sendState,
 } from './host';
 import {
     ANALYSIS_TABS,
@@ -84,12 +85,14 @@ import {
     RenderData,
     RenderFormat,
     ShowMessage,
+    StateReplyMessage,
     SupplyData,
     TabId,
     isAnalysisTab,
     isRenderTab,
 } from './messages';
 import { Choice, RenderView } from './render';
+import { controlValues, snapshot } from './state';
 import { SupplyView } from './supply';
 import { TabSpec, Tabs } from './tabs';
 import { LinkFilter, OverlayRequest, Selection, Tree, filterIsEmpty } from './tree';
@@ -1187,9 +1190,87 @@ function render(tab: TabId, pane: HTMLElement, data: unknown): void {
     }
 }
 
+/**
+ * What the panel shows, for `pc ide state`: the tab and sub-tab on screen, what
+ * every strip offers, and for each sub-tab its filter and its selections.
+ *
+ * Per sub-tab because they differ by sub-tab: 3D, 2D and Draft share the boxes
+ * ticked in their trees (see 'selection'), but 2D also draws port overlays and
+ * has a format, Draft has a drawing package and a format of its own, and each
+ * Manufacturing tab has switches nobody else has. 'filters' is what the sub-tab
+ * would send 'pc render --filter' -- null for the whole object -- and is
+ * reported for the three that send one.
+ */
+function collectState(): Record<string, unknown> {
+    const tab = tabs.current;
+    const subTab = tab !== undefined ? groups[tab]?.current : undefined;
+    const subTabs: Record<string, unknown> = {};
+    const strips: Record<string, unknown> = { panel: tabs.offered };
+    for (const [group, strip] of Object.entries(groups)) {
+        if (strip === undefined) {
+            continue;
+        }
+        strips[group] = strip.offered;
+        for (const offered of strip.offered) {
+            const id = offered.id;
+            const tree = id === '3d' ? objectTree : renderTrees[id];
+            const selections: Record<string, unknown> = { controls: controlValues(panes[id]) };
+            if (tree !== undefined) {
+                selections.tree = tree.rows();
+            }
+            if (id === '2d') {
+                selections.overlays = renderTrees['2d']!.overlay();
+            }
+            subTabs[id] = { filters: tree?.filter() ?? null, selections };
+        }
+    }
+    return {
+        subject: shown ? { name: shown.name, kind: shown.kind, package: shown.package } : null,
+        tab: tab ?? null,
+        subTab: subTab ?? null,
+        tabs: strips,
+        subTabs,
+    };
+}
+
+/** Answer the host's 'state' with the state and a screenshot of the sub-tab on screen. */
+async function answerState(token: number): Promise<void> {
+    let state: Record<string, unknown>;
+    try {
+        state = collectState();
+    } catch (error: unknown) {
+        state = { error: error instanceof Error ? error.message : String(error) };
+    }
+    const reply: StateReplyMessage = { type: 'state', token, state };
+    const on = (state.subTab ?? state.tab) as TabId | null | undefined;
+    if (!on) {
+        reply.screenshotError = 'nothing is on screen in the PartCAD Viewer';
+    } else {
+        try {
+            reply.screenshot = await snapshot(panes[on], (canvas) => {
+                // The 3D view draws only when something changed, and its buffer
+                // is gone once drawn: it has to draw again to be read.
+                if (scene !== undefined && canvas.classList.contains('surface')) {
+                    return scene.screenshot();
+                }
+                try {
+                    return canvas.toDataURL('image/png');
+                } catch {
+                    return undefined;
+                }
+            });
+        } catch (error: unknown) {
+            reply.screenshotError = error instanceof Error ? error.message : String(error);
+        }
+    }
+    sendState(reply);
+}
+
 window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
     const message = event.data;
-    if (message.type === 'clear') {
+    if (message.type === 'state') {
+        void answerState(message.token);
+    } else if (message.type === 'clear') {
         clear();
     } else if (message.type === 'show') {
         show(message);

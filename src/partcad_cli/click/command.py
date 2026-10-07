@@ -174,10 +174,11 @@ command_groups = [
         ],
     },
     {
-        # Putting an object in front of a person: `pc ide view` in the PartCAD
-        # Viewer, `pc ide open` in another application on this machine. Neither
-        # makes anything a package keeps, which is what the panel above is for.
-        "name": "IDE commands",
+        # Putting an object in front of a person -- `pc ide view` in the PartCAD
+        # Viewer, `pc ide open` in another application on this machine -- and
+        # asking the IDE what it shows, `pc ide state`. None of them makes
+        # anything a package keeps, which is what the panel above is for.
+        "name": "Interacting with IDE",
         "commands": ["ide"],
     },
     {

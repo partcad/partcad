@@ -13,12 +13,15 @@ free - see 'client' for why.
 from .client import (
     CONNECT_TIMEOUT,
     REPLY_TIMEOUT,
+    STATE_TIMEOUT,
     Connection,
+    StateNotSupported,
     ViewerNotAvailable,
     clear,
     disconnect,
     is_available,
     show,
+    state,
 )
 from .protocol import (
     PARTCAD_IDE_HOST,
@@ -40,6 +43,8 @@ __all__ = [
     "PARTCAD_IDE_PORT",
     "ProtocolError",
     "REPLY_TIMEOUT",
+    "STATE_TIMEOUT",
+    "StateNotSupported",
     "VERSION",
     "ViewerNotAvailable",
     "clear",
@@ -50,4 +55,5 @@ __all__ = [
     "is_node",
     "make_node",
     "show",
+    "state",
 ]

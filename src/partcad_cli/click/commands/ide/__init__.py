@@ -5,7 +5,8 @@
 #
 """`pc ide`: putting an object in front of a person.
 
-Two ways, and they differ in where the window is. `pc ide view` shows an object in
+Two ways, and they differ in where the window is -- and a third command that
+asks the IDE what it is showing, `pc ide state`. `pc ide view` shows an object in
 the PartCAD Viewer -- the IDE's own window, fed by the daemon that builds the
 shape. `pc ide open` opens a file in a third-party application on the machine of
 whoever ran the command, waits for it to close, and brings back what was edited
@@ -25,7 +26,9 @@ class IdeCommands(Loader):
     COMMANDS_PACKAGE_NAME = Loader.COMMANDS_PACKAGE_NAME + ".ide"
 
 
-@click.command(cls=IdeCommands, help="Show an object: in the PartCAD Viewer, or in another application")
+@click.command(
+    cls=IdeCommands, help="Show an object in the PartCAD Viewer or another application, or ask the IDE what it shows"
+)
 def cli() -> None:
     pass
 
