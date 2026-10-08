@@ -383,6 +383,12 @@ def test_an_enrich_writes_its_ports_in_terms_of_what_it_asks_for(ctx):
     assert face.location.as_packed()[0] == [0.0, 0.0, 7.5]
 
 
+def test_an_enrich_s_ports_ignore_a_parameters_section_it_ignores(ctx):
+    """The instance is chosen by 'with'; a 'parameters:' on the enrich chooses nothing."""
+    face = ctx.get_part(":misdeclared-plate").with_ports.get_ports()["face"]
+    assert face.location.as_packed()[0] == [0.0, 0.0, 5.0]
+
+
 def test_an_enriched_assembly_writes_its_ports_in_terms_of_what_it_asks_for(ctx):
     top = ctx.get_assembly(":wide-stack").with_ports.get_ports()["top"]
     assert top.location.as_packed()[0] == [0.0, 0.0, 23.0]

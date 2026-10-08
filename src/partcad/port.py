@@ -115,16 +115,18 @@ class WithPorts(Interface):
         the reference gets its values put ('Project.get_object'). So those are
         what its own 'ports:' and 'implements:' are written in terms of: a leg
         cut to length from a post has its top end wherever that length says.
+        A 'parameters:' section on a reference is ignored when it is built
+        ('enrich.ENRICH_IGNORED_PROPERTIES'), so it is ignored here as well:
+        reading it would put the ports where the instance is not.
         """
-        declared = config.get(interface_config.PARAMETERS)
-        if not declared and config.get("type") in ("alias", "enrich"):
+        if config.get("type") in ("alias", "enrich"):
             # Untyped: the types are declared by what this points at, which
             # need not be loaded yet. A value from the declaration is the type
             # YAML gave it, and one from a parametrized name ('leg;length=20')
             # is the text it was written as, which is read as the number it
             # spells so that an expression can do arithmetic with it.
-            declared = {name: _as_written(value) for name, value in (config.get("with") or {}).items()}
-        return declared or {}
+            return {name: _as_written(value) for name, value in (config.get("with") or {}).items()}
+        return config.get(interface_config.PARAMETERS) or {}
 
     def declared_movement_params(self, config: dict) -> dict:
         """None: a shape states the freedom of movement in the interfaces it implements.
