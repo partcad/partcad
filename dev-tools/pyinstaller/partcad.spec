@@ -243,7 +243,7 @@ for _dist in ("opentelemetry-api", "opentelemetry-sdk", "opentelemetry-semantic-
 hiddenimports += collect_submodules("opentelemetry")
 
 # Imported lazily, by name, so PyInstaller cannot see it from the import graph.
-# `pc inspect` sends the tessellated shape to the PartCAD IDE through this. It
+# `pc ide view` sends the tessellated shape to the PartCAD IDE through this. It
 # ships inside the `partcad` wheel, so installing that is what puts it here.
 add_package("partcad_ide_client")
 

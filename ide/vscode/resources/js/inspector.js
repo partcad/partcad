@@ -36,6 +36,31 @@
       config = message.obj['config'];
     }
     switch (message.type) {
+      // 'pc ide state' asking what is on screen: the table's rows as text, and
+      // what each parameter field holds now -- which may be a value typed and
+      // not yet applied with Update.
+      case 'state':
+        {
+          const properties = {};
+          for (const row of document.querySelectorAll('table.inspector tr')) {
+            const cells = row.querySelectorAll('td');
+            if (cells.length !== 2) {
+              continue;
+            }
+            const label = cells[0].textContent.trim().replace(/:$/, '');
+            const field = cells[1].querySelector('input, select, textarea');
+            if (field && field.classList.contains('param-input')) {
+              continue;
+            }
+            properties[label] = field ? field.value : cells[1].textContent.trim();
+          }
+          const values = {};
+          for (const field of document.querySelectorAll('.param-input')) {
+            values[field.id] = field.value;
+          }
+          vscode.postMessage({ action: 'state', token: message.token, properties, values });
+          return;
+        }
       case 'clear':
         let contents = document.querySelector('.contents');
         if (contents) {
@@ -139,10 +164,14 @@
 
                 html += `<tr><td>${paramName}:</td><td>`;
                 let value = '';
-                if (message.params && message.params[paramName]) {
+                // What the object was shown with first, and only then what it
+                // declares: the default used to overwrite the value it was just
+                // updated to, so after "Update" every field went back to its
+                // default while the viewer showed the updated object.
+                const applied = message.params && paramName in message.params;
+                if (applied) {
                   value = message.params[paramName];
-                }
-                if ("default" in param) {
+                } else if ("default" in param) {
                   if (param["type"] === "float") {
                     let num = parseFloat(param["default"]);
                     if (Number.isInteger(num)) {

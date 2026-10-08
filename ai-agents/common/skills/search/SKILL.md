@@ -74,7 +74,7 @@ When the user picks a match, reference it by the two columns the search printed 
 `-P <package>` plus the object name; add `-a` when it is an assembly:
 
 ```sh
-pc inspect -P <package> <name>                            # view a part; add -a for an assembly
+pc ide view -P <package> <name>                            # view a part; add -a for an assembly
 mkdir -p /tmp/pc-render                                    # the -O directory must already exist
 pc render -t png -O /tmp/pc-render -P <package> <name>     # writes a PNG under /tmp/pc-render; add -a for an assembly
 ```

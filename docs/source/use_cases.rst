@@ -72,10 +72,10 @@ The command line tools are the easiest way to browse parts:
     pc info //pub/std/metric/cqwarehouse:fastener/hexhead-din931
 
     # Display the model in the PartCAD Viewer
-    pc inspect //pub/std/metric/cqwarehouse:fastener/hexhead-din931
+    pc ide view //pub/std/metric/cqwarehouse:fastener/hexhead-din931
 
     # Display the parametrized model
-    pc inspect \
+    pc ide view \
         -p length=30 \
         -p size=M4-0.7 \
         //pub/std/metric/cqwarehouse:fastener/hexhead-din931

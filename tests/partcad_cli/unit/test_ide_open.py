@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Tests for `pc open`.
+"""Tests for `pc ide open`.
 
 The command is a thin wrapper over `partcad_client.external`, and what is pinned
 here is the wrapping: the options it hands over, and the two ways it reports
@@ -14,7 +14,7 @@ a non-zero exit rather than be replaced by one.
 
 The one thing this command sends to the daemon is pinned here too, from both
 sides: an application that reads meshes has to be handed one, and making a mesh
-out of a solid is CAD work -- but *only* that. A `pc open` that needed no
+out of a solid is CAD work -- but *only* that. A `pc ide open` that needed no
 conversion and connected anyway would start a daemon to open a file that was
 already on disk, on a machine that may have neither a CAD environment nor any
 use for one, and would fail where it used to work. Which method is sent, on
@@ -32,13 +32,13 @@ import pytest
 from click.testing import CliRunner
 
 from partcad_cli.click.command import cli
-from partcad_cli.click.commands import open as open_command
+from partcad_cli.click.commands.ide import open as open_command
 from partcad_client import external
 
 
 @pytest.fixture
 def opened(monkeypatch):
-    """Record the call `pc open` makes, and answer it however a test wants."""
+    """Record the call `pc ide open` makes, and answer it however a test wants."""
 
     class Recorder:
         def __init__(self):
@@ -76,7 +76,7 @@ def opened(monkeypatch):
 
 
 def _invoke(click_runner, *args):
-    return click_runner.invoke(cli, ["--no-ansi", "open", *args])
+    return click_runner.invoke(cli, ["--no-ansi", "ide", "open", *args])
 
 
 def test_the_options_reach_the_opener(click_runner: Iterator[CliRunner], opened) -> None:
@@ -119,7 +119,37 @@ def test_json_reports_what_happened_in_full(click_runner: Iterator[CliRunner], o
         "source": None,
         "command": ["/usr/bin/freecad", "/w/cube.step"],
         "detail": "FreeCAD is installed on this machine.",
+        "changed": False,
+        "writtenBack": None,
+        "edited": None,
     }
+
+
+def test_json_says_where_an_edit_went(click_runner: Iterator[CliRunner], opened) -> None:
+    # What the editor turns into its one sentence when the application closes.
+    opened.result.changed = True
+    opened.result.written_back = "/w/cube.step"
+    reported = json.loads(_invoke(click_runner, "--json", "x.step").output)
+    assert (reported["changed"], reported["writtenBack"], reported["edited"]) == (True, "/w/cube.step", None)
+
+
+def test_nothing_changed_is_said(click_runner: Iterator[CliRunner], opened) -> None:
+    assert "No changes." in _invoke(click_runner, "x.step").output
+
+
+def test_an_edit_written_back_is_said(click_runner: Iterator[CliRunner], opened) -> None:
+    opened.result.changed = True
+    opened.result.written_back = "/w/cube.step"
+    assert "Saved your changes to /w/cube.step." in _invoke(click_runner, "x.step").output
+
+
+def test_an_edit_that_had_nowhere_to_go_says_where_it_is(click_runner: Iterator[CliRunner], opened) -> None:
+    # A script's output, edited: the script is not overwritten with it.
+    opened.result.changed = True
+    opened.result.edited = "/w/.partcad/open/cube-1.step"
+    output = _invoke(click_runner, "cube.py").output
+    assert "Your changes are in /w/.partcad/open/cube-1.step." in output
+    assert "cube.py" in output
 
 
 def test_json_stays_silent_about_progress(click_runner: Iterator[CliRunner], opened) -> None:
@@ -155,7 +185,7 @@ def test_the_declared_type_is_handed_over(click_runner: Iterator[CliRunner], ope
 def test_a_conversion_is_the_daemon_s_adhoc_convert(click_runner: Iterator[CliRunner], opened, monkeypatch) -> None:
     """Making a mesh out of a solid is CAD work, so it crosses the wire.
 
-    The opening does not: what `pc open` sends is the same file-in, file-out
+    The opening does not: what `pc ide open` sends is the same file-in, file-out
     conversion `pc adhoc convert` sends, and nothing else.
     """
     sent = []
@@ -233,13 +263,13 @@ def no_daemon(monkeypatch):
     """Fail loudly if the command connects to the daemon at all.
 
     Both doors are shut, not just the one this command holds the key to:
-    `service.run` is what `pc open` calls, and `client.connect` is what would
+    `service.run` is what `pc ide open` calls, and `client.connect` is what would
     answer if anything else in the invocation reached for a daemon.
     """
     import partcad_client.client
 
     def refuse(*_args, **_kwargs):
-        raise AssertionError("pc open reached for the daemon when nothing needed converting")
+        raise AssertionError("pc ide open reached for the daemon when nothing needed converting")
 
     monkeypatch.setattr(open_command, "run", refuse)
     monkeypatch.setattr(partcad_client.client, "connect", refuse)
@@ -250,7 +280,7 @@ def installed_blender(monkeypatch):
     """A machine with Blender on it, and nothing actually started."""
     started = []
     monkeypatch.setattr(external, "native_command", lambda _spec: ["/usr/bin/blender"])
-    monkeypatch.setattr(external, "_spawn", lambda args: started.append(list(args)))
+    monkeypatch.setattr(external, "_launch", lambda args: started.append(list(args)) or 0)
     return started
 
 
@@ -273,7 +303,7 @@ def workspace_state(monkeypatch, tmp_path):
 
 
 def test_a_mesh_is_opened_without_a_daemon(click_runner, no_daemon, installed_blender, mesh) -> None:
-    """The whole point of `pc open` staying a client command, kept true.
+    """The whole point of `pc ide open` staying a client command, kept true.
 
     This one goes through the real `partcad_client.external`, not the recorder
     above: what is being checked is that no conversion is *decided on*, which
@@ -296,7 +326,7 @@ def test_an_application_that_takes_what_it_is_given_never_connects(click_runner,
     """FreeCAD, Gazebo and KiCad read what they are handed; there is nothing to ask."""
     started = []
     monkeypatch.setattr(external, "native_command", lambda _spec: ["/usr/bin/freecad"])
-    monkeypatch.setattr(external, "_spawn", lambda args: started.append(list(args)))
+    monkeypatch.setattr(external, "_launch", lambda args: started.append(list(args)) or 0)
 
     result = _invoke(click_runner, "--json", "--with", "freecad", str(mesh))
 
@@ -368,7 +398,7 @@ def test_the_workspace_p_selected_is_the_one_asked_about(click_runner, installed
 
     with click_runner.isolated_filesystem():
         result = click_runner.invoke(
-            cli, ["--no-ansi", "-p", str(workspace), "open", "--json", "--with", "blender", str(mesh_file)]
+            cli, ["--no-ansi", "-p", str(workspace), "ide", "open", "--json", "--with", "blender", str(mesh_file)]
         )
 
     assert result.exit_code == 0, result.output
@@ -398,8 +428,16 @@ def test_no_package_at_the_selected_path_asks_nothing(click_runner, installed_bl
     monkeypatch.chdir(workspace)
 
     result = click_runner.invoke(
-        cli, ["--no-ansi", "-p", str(empty), "open", "--json", "--with", "blender", str(mesh_file)]
+        cli, ["--no-ansi", "-p", str(empty), "ide", "open", "--json", "--with", "blender", str(mesh_file)]
     )
 
     assert result.exit_code == 0, result.output
     assert asked == []
+
+
+def test_the_old_name_still_answers_in_json_with_a_note_on_stderr(click_runner: Iterator[CliRunner], opened) -> None:
+    """An editor extension older than `pc ide` runs `pc open --json` and parses stdout."""
+    result = click_runner.invoke(cli, ["--no-ansi", "open", "--json", "x.step"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["tool"] == "freecad"
+    assert "'pc open' is deprecated: use 'pc ide open'." in result.stderr

@@ -4,7 +4,7 @@ This example demonstrates how to define a sketch using a build123d script.
 
 ## Usage
 ```shell
-pc inspect -s clock
+pc ide view -s clock
 ```
 
 

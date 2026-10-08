@@ -13,6 +13,8 @@ import {
     MSG_CLEAR,
     MSG_PING,
     MSG_SHOW,
+    MSG_STATE,
+    KEY_STATE,
     PARTCAD_IDE_HOST,
     ViewerMessage,
     encodeFrame,
@@ -75,8 +77,13 @@ export function listenOptions(port: number, host: string): net.ListenOptions {
  * Bound to loopback only. The payloads are the user's own geometry and the
  * protocol has no authentication, so it must not be reachable off the machine.
  */
+/** How long the IDE may take to collect its state before the answer is a failure saying so. */
+export const STATE_DEADLINE_MS = 15000;
+
 export class PartcadViewerServer implements vscode.Disposable {
     private server: net.Server | undefined;
+    /** Who answers `pc ide state`; until there is one, the answer says so. */
+    private stateProvider: (() => Promise<unknown>) | undefined;
     private sockets = new Set<net.Socket>();
     private readonly onMessageEmitter = new vscode.EventEmitter<ViewerMessage>();
 
@@ -87,6 +94,11 @@ export class PartcadViewerServer implements vscode.Disposable {
         private readonly port: number = listenPort(),
         private readonly host: string = PARTCAD_IDE_HOST,
     ) {}
+
+    /** Answer `state` messages with what this returns. */
+    public setStateProvider(provider: () => Promise<unknown>): void {
+        this.stateProvider = provider;
+    }
 
     public async start(): Promise<void> {
         if (this.server !== undefined) {
@@ -155,6 +167,10 @@ export class PartcadViewerServer implements vscode.Disposable {
     }
 
     private dispatch(socket: net.Socket, message: ViewerMessage): void {
+        if (message.type === MSG_STATE) {
+            void this.answerState(socket, message);
+            return;
+        }
         let ok = true;
         try {
             switch (message.type) {
@@ -181,6 +197,44 @@ export class PartcadViewerServer implements vscode.Disposable {
         // degrade it.
         if (!socket.destroyed) {
             socket.write(encodeFrame({ type: MSG_ACK, id: message.id ?? null, ok }));
+        }
+    }
+
+    /**
+     * A question, answered in the acknowledgement once the state is collected.
+     *
+     * Asynchronous unlike every other message -- two webviews are asked and a
+     * screenshot is taken -- and bounded, because the client is blocked on the
+     * reply: a webview that never answers must cost a failure saying so, not a
+     * hung `pc ide state`.
+     */
+    private async answerState(socket: net.Socket, message: ViewerMessage): Promise<void> {
+        const reply: Record<string, unknown> = { type: MSG_ACK, id: message.id ?? null };
+        try {
+            if (this.stateProvider === undefined) {
+                throw new Error('this window is not ready to report its state yet');
+            }
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            const deadline = new Promise<never>((_, reject) => {
+                timer = setTimeout(
+                    () =>
+                        reject(new Error(`the IDE took longer than ${STATE_DEADLINE_MS / 1000}s to collect its state`)),
+                    STATE_DEADLINE_MS,
+                );
+            });
+            try {
+                reply[KEY_STATE] = await Promise.race([this.stateProvider(), deadline]);
+            } finally {
+                clearTimeout(timer);
+            }
+            reply.ok = true;
+        } catch (error: any) {
+            reply.ok = false;
+            reply.error = error?.message ?? String(error);
+            traceError(`PartCAD Viewer: failed to report the state: ${reply.error}`);
+        }
+        if (!socket.destroyed) {
+            socket.write(encodeFrame(reply));
         }
     }
 

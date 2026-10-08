@@ -479,7 +479,7 @@ everything else, and a package that sets ``path`` replaces it.
 
 Two of the other sections ship one the same way: ``//builtin/cam`` declares the
 ``gcode`` file type ``pc cam`` writes (see :ref:`pc cam <cam>`), and
-``//builtin/open`` declares the applications ``pc open`` starts. ``cae:`` is the
+``//builtin/open`` declares the applications ``pc ide open`` starts. ``cae:`` is the
 one that ships nothing, because PartCAD implements no solver.
 
 ``//builtin/export`` implements ``step``, ``brep``, ``stl``, ``3mf``, ``obj``,

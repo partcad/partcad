@@ -346,7 +346,7 @@ relative placements are not lost: they are what ``pc convert assembly -t assy``
 turns into joints, below. The only nesting left is the one that means something,
 a link whose several shapes group together.
 
-Those parts are ordinary parts. ``pc inspect robot/forearm`` and
+Those parts are ordinary parts. ``pc ide view robot/forearm`` and
 ``pc export -t step robot/wrist`` work on them like on any other. They are not
 declared in ``partcad.yaml`` - the URDF is what declares them - so a package
 handed one of these names builds the assembly that owns it first.
@@ -474,8 +474,8 @@ simply declared by the STEP file rather than by ``partcad.yaml``:
 
 .. code-block:: shell
 
-  pc inspect -a :gearbox            # the assembly
-  pc inspect :gearbox/output_shaft  # one component of it
+  pc ide view -a :gearbox             # the assembly
+  pc ide view :gearbox/output_shaft   # one component of it
 
 A group inside the STEP file becomes a nested assembly, so the tree PartCAD
 shows is the tree the CAD tool exported. Components that are the same geometry
@@ -619,7 +619,7 @@ Scenes
 A **scene** is a placed arrangement of objects: a workcell, a table with the
 parts laid out on it, a simulation world. It is built the way an assembly is,
 out of the very same files, and everything that works on an assembly works on a
-scene -- it renders, it exports, it has a bill of materials, ``pc inspect``
+scene -- it renders, it exports, it has a bill of materials, ``pc ide view``
 shows it.
 
 What separates the two is intent, and one rule follows from it. An assembly is a
@@ -693,7 +693,7 @@ The ``sim-gazebo:world`` type reads an `SDFormat <http://sdformat.org/>`_
 ``.world`` file -- what Gazebo describes a simulation world in -- as a scene
 directly, with no conversion step. It is declared by
 `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ rather than
-by PartCAD itself, beside the exporter, the ``pc open`` entry and the simulator
+by PartCAD itself, beside the exporter, the ``pc ide open`` entry and the simulator
 that share their knowledge of the format, so a package that uses it imports that
 package and names the type through it. Every model is placed where its ``<pose>`` puts it, every link
 where its own pose puts it inside the model, and every shape becomes a part of
@@ -773,4 +773,4 @@ meshes it references:
   pc export -t sim-mujoco:mjcf :arm         # or an assembly
 
 It is also the format ``pc sim`` hands a scene to MuJoCo in, and the one
-``pc open --with mujoco`` expects a file to already be in; see :ref:`simulate`.
+``pc ide open --with mujoco`` expects a file to already be in; see :ref:`simulate`.

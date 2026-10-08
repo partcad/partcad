@@ -19,8 +19,10 @@ class FakeIde:
     collides with a PartCAD IDE the developer actually has open.
     """
 
-    def __init__(self, reply=True):
+    def __init__(self, reply=True, ack=None):
         self.reply = reply
+        # More to say in the acknowledgement: what an IDE answers a 'state' with.
+        self.ack = ack or {}
         self.received = []
         self.connections = 0
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -72,7 +74,9 @@ class FakeIde:
             self.received.append(message)
             if not self.reply:
                 return
-            conn.sendall(protocol.encode_frame({"type": protocol.MSG_ACK, "id": message.get("id"), "ok": True}))
+            ack = {"type": protocol.MSG_ACK, "id": message.get("id"), "ok": True}
+            ack.update(self.ack.get(message.get("type"), {}))
+            conn.sendall(protocol.encode_frame(ack))
 
     @staticmethod
     def _read_exactly(conn, length):
@@ -251,3 +255,43 @@ def test_port_override_falls_back_when_unparseable(monkeypatch):
 def test_port_override_matches_the_js_parser(monkeypatch, override, expected):
     monkeypatch.setenv("PARTCAD_IDE_PORT", override)
     assert client._port() == expected
+
+
+def _ide_answering(monkeypatch, ack):
+    server = FakeIde(ack=ack)
+    monkeypatch.setenv("PARTCAD_IDE_PORT", str(server.port))
+    return server
+
+
+def test_state_is_asked_for_and_returned(monkeypatch):
+    shown = {"explorer": {"selection": [{"kind": "part", "path": "//:cube"}]}}
+    server = _ide_answering(monkeypatch, {protocol.MSG_STATE: {protocol.KEY_STATE: shown}})
+    try:
+        assert client.state() == shown
+        assert server.received[0]["type"] == protocol.MSG_STATE
+    finally:
+        server.close()
+
+
+def test_an_ide_too_old_to_say_is_told_apart_from_no_ide(monkeypatch):
+    """It acknowledges 'state' like any message it does not know, without one."""
+    server = _ide_answering(monkeypatch, {})
+    try:
+        with pytest.raises(client.StateNotSupported, match="update the PartCAD extension"):
+            client.state()
+    finally:
+        server.close()
+
+
+def test_an_ide_that_failed_to_collect_its_state_says_why(monkeypatch):
+    server = _ide_answering(monkeypatch, {protocol.MSG_STATE: {"ok": False, "error": "the Viewer did not answer"}})
+    try:
+        with pytest.raises(client.StateNotSupported, match="the Viewer did not answer"):
+            client.state()
+    finally:
+        server.close()
+
+
+def test_state_with_no_ide_is_no_ide(no_ide):
+    with pytest.raises(client.ViewerNotAvailable):
+        client.state()

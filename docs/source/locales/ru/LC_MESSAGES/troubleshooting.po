@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 08:56-0700\n"
+"POT-Creation-Date: 2026-10-07 23:49-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ru\n"
@@ -270,7 +270,7 @@ msgid ""
 "reached rather than in advance: an implementation whose package declares "
 "``container:``, importing a KiCad PCB (``useDockerKicad``), and the "
 "``docker`` Python sandbox when it was asked for by name. If ``pc "
-"render``, ``pc export`` or ``pc inspect`` reports that no container "
+"render``, ``pc export`` or ``pc ide view`` reports that no container "
 "runtime is available, start Docker or take the other route the message "
 "names -- for KiCad that is installing KiCad on this machine and setting "
 "``useDockerKicad: false``."
@@ -279,7 +279,7 @@ msgstr ""
 "них доходит дело, а не заранее: реализация, пакет которой объявляет "
 "``container:``, импорт печатной платы KiCad (``useDockerKicad``) и "
 "песочница Python ``docker``, когда она запрошена по имени. Если ``pc "
-"render``, ``pc export`` или ``pc inspect`` сообщает, что контейнерная "
+"render``, ``pc export`` или ``pc ide view`` сообщает, что контейнерная "
 "среда выполнения недоступна, запустите Docker или воспользуйтесь другим "
 "путём, который назван в сообщении: для KiCad это установка KiCad на этой "
 "машине и ``useDockerKicad: false``."
@@ -304,26 +304,31 @@ msgstr ""
 
 #: ../../source/troubleshooting.rst:153
 msgid ""
-"The KiCad container earlier releases made, ``integration-kicad``, carries"
-" no PartCAD label, so ``pc system prune`` cannot see it: remove it by "
-"hand with ``docker rm -f integration-kicad``. The containers for the "
-"Python sandbox, KiCad imports and a plugin's ``container:`` are now named"
-" ``partcad-<role>-<tag>-<identity>`` and labelled, and prune removes "
-"them."
+"Containers earlier releases made carry no PartCAD label, so ``pc system "
+"prune`` cannot see them: remove them by hand -- ``integration-kicad`` "
+"(KiCad) and the ``partcad-freecad``-style ones ``pc open`` used to make, "
+"with ``docker rm -f integration-kicad partcad-freecad`` and so on. Every "
+"container PartCAD makes now -- the Python sandbox, KiCad imports, a "
+"plugin's ``container:`` and an application ``pc ide open`` runs -- is "
+"named ``partcad-<role>-<tag>-<identity>`` and labelled, and prune removes"
+" it."
 msgstr ""
-"Контейнер KiCad, который создавали прежние версии, ``integration-kicad``,"
-" не несёт метки PartCAD, поэтому ``pc system prune`` его не видит: "
-"удалите его вручную командой ``docker rm -f integration-kicad``. "
-"Контейнеры для песочницы Python, импорта KiCad и ``container:`` плагина "
-"теперь называются ``partcad-<role>-<tag>-<identity>`` и помечены метками,"
-" и prune их удаляет."
+"Контейнеры, которые создавали прежние версии, не несут меток PartCAD, "
+"поэтому ``pc system prune`` их не видит: удалите их вручную — "
+"``integration-kicad`` (KiCad) и контейнеры вида ``partcad-freecad``, "
+"которые раньше создавал ``pc open``, — командой ``docker rm -f "
+"integration-kicad partcad-freecad`` и так далее. Каждый контейнер, "
+"который PartCAD создаёт теперь, — для песочницы Python, импорта KiCad, "
+"``container:`` плагина и приложения, которое запускает ``pc ide open``, —"
+" называется ``partcad-<role>-<tag>-<identity>`` и помечен метками, и "
+"prune его удаляет."
 
-#: ../../source/troubleshooting.rst:160 ../../source/troubleshooting.rst:201
-#: ../../source/troubleshooting.rst:263
+#: ../../source/troubleshooting.rst:162 ../../source/troubleshooting.rst:203
+#: ../../source/troubleshooting.rst:265
 msgid "Typical problems"
 msgstr "Типичные проблемы"
 
-#: ../../source/troubleshooting.rst:162
+#: ../../source/troubleshooting.rst:164
 msgid ""
 "When running `pc ...` commands, getting: \"pc is not a recognized "
 "command...\""
@@ -331,7 +336,7 @@ msgstr ""
 "При выполнении команд `pc ...` появляется: \"pc is not a recognized "
 "command...\""
 
-#: ../../source/troubleshooting.rst:164
+#: ../../source/troubleshooting.rst:166
 msgid ""
 "Make sure that Conda environment is activated in the current terminal, "
 "for example by running `conda info`"
@@ -339,7 +344,7 @@ msgstr ""
 "Убедитесь, что окружение Conda активировано в текущем терминале, например"
 " выполнив `conda info`"
 
-#: ../../source/troubleshooting.rst:165
+#: ../../source/troubleshooting.rst:167
 msgid ""
 "With the :ref:`standalone build <standalone-cli>`, there is no "
 "environment to activate: the commands are linked into ``~/.local/bin``, "
@@ -351,11 +356,11 @@ msgstr ""
 " Выполните ``~/.local/bin/pc version``, чтобы убедиться, что сама "
 "установка в порядке, затем добавьте этот каталог в ``PATH``."
 
-#: ../../source/troubleshooting.rst:169
+#: ../../source/troubleshooting.rst:171
 msgid "Which one is running, the standalone build or a wheel?"
 msgstr "Что запущено — автономная сборка или wheel-пакет?"
 
-#: ../../source/troubleshooting.rst:171
+#: ../../source/troubleshooting.rst:173
 msgid ""
 "``command -v pc`` says. A path under ``~/.local/share/partcad`` (or "
 "wherever ``--install-dir`` pointed) is the standalone build; a path "
@@ -367,13 +372,13 @@ msgstr ""
 " внутри окружения Python — это wheel-пакет. Установка обоих одновременно "
 "поддерживается, но запускается только первый в ``PATH``."
 
-#: ../../source/troubleshooting.rst:175
+#: ../../source/troubleshooting.rst:177
 msgid "Imports hang, or time out reaching a repository the browser can open:"
 msgstr ""
 "Импорты зависают или завершаются по таймауту при обращении к репозиторию,"
 " который открывается в браузере:"
 
-#: ../../source/troubleshooting.rst:177
+#: ../../source/troubleshooting.rst:179
 msgid ""
 "The network is very likely one where a proxy is the only route out. "
 "PartCAD reads ``HTTPS_PROXY``, ``HTTP_PROXY`` and ``NO_PROXY`` for "
@@ -387,7 +392,7 @@ msgstr ""
 "``fileFrom: url``, — поэтому обычно достаточно экспортировать эти "
 "переменные. См. :ref:`proxy-configuration`."
 
-#: ../../source/troubleshooting.rst:181
+#: ../../source/troubleshooting.rst:183
 msgid ""
 "If a fetch fails to verify a certificate rather than hanging, the proxy "
 "is re-terminating TLS and its CA is not trusted here. Point "
@@ -398,11 +403,11 @@ msgstr ""
 "является доверенным. Укажите в ``SSL_CERT_FILE`` и ``REQUESTS_CA_BUNDLE``"
 " путь к набору сертификатов удостоверяющего центра прокси."
 
-#: ../../source/troubleshooting.rst:186
+#: ../../source/troubleshooting.rst:188
 msgid "PartCAD VSCode Extension"
 msgstr "Расширение PartCAD для VSCode"
 
-#: ../../source/troubleshooting.rst:188
+#: ../../source/troubleshooting.rst:190
 msgid ""
 "The recommended way to use PartCAD is by using the Visual Studio "
 "Extension called ``PartCAD``. Follow the extension documentation for "
@@ -412,7 +417,7 @@ msgstr ""
 "Studio под названием ``PartCAD``. Инструкции по использованию этого "
 "расширения см. в его документации."
 
-#: ../../source/troubleshooting.rst:192
+#: ../../source/troubleshooting.rst:194
 msgid ""
 "For troubleshooting purposes, the ``PartCAD`` terminal view output may "
 "not suffice due to the ephemeral nature of some output in that view (many"
@@ -425,18 +430,18 @@ msgstr ""
 "получить полный и подробный журнал ошибок, откройте вывод ``PartCAD`` в "
 "представлении ``Output``."
 
-#: ../../source/troubleshooting.rst:197
+#: ../../source/troubleshooting.rst:199
 msgid ""
 "A ``PartCAD`` terminal you closed stays closed: **PartCAD: Show "
 "Terminal** opens it again, with everything it missed (see :ref:`partcad-"
 "terminal`)."
 msgstr "Закрытый вами терминал ``PartCAD`` остаётся закрытым: **PartCAD: Show Terminal** снова открывает его со всем, что он пропустил (см. :ref:`partcad-terminal`)."
 
-#: ../../source/troubleshooting.rst:203
+#: ../../source/troubleshooting.rst:205
 msgid "Message in \"Explorer\" left panel: \"PartCAD ... is not found\""
 msgstr "Сообщение в левой панели \"Explorer\": \"PartCAD ... is not found\""
 
-#: ../../source/troubleshooting.rst:205
+#: ../../source/troubleshooting.rst:207
 msgid ""
 "Press \"Install or update PartCAD\" in the \"Explorer\" left panel and "
 "the extension downloads a standalone PartCAD for you. No Python is "
@@ -445,7 +450,7 @@ msgstr ""
 "Нажмите \"Install or update PartCAD\" в левой панели \"Explorer\", и "
 "расширение загрузит для вас автономный PartCAD. Python при этом не нужен."
 
-#: ../../source/troubleshooting.rst:207
+#: ../../source/troubleshooting.rst:209
 msgid ""
 "Or, if you would rather use your own Python environment, run ``pip "
 "install partcad`` in it. The extension looks for ``partcad-json-rpc`` on "
@@ -458,7 +463,7 @@ msgid ""
 msgstr ""
 "Либо, если вы предпочитаете использовать собственное окружение Python, выполните в нём ``pip install partcad``. Расширение ищет ``partcad-json-rpc`` в том ``PATH``, **с которым был запущен сам Visual Studio Code**, — это не тот интерпретатор, который вы выбрали в редакторе, и виртуальное окружение попадает в него, только если Visual Studio Code был запущен из него. Поэтому либо запускайте редактор из активированного окружения, либо выполните **Find installed PartCAD**, либо задайте ``partcad.servicePath`` вручную, указав исполняемый файл."
 
-#: ../../source/troubleshooting.rst:214
+#: ../../source/troubleshooting.rst:216
 msgid ""
 "Reload PartCAD extension (by pressing \"Reload\" button in \"Context\" "
 "left panel)"
@@ -466,7 +471,7 @@ msgstr ""
 "Перезагрузите расширение PartCAD (нажав кнопку \"Reload\" в левой панели "
 "\"Context\")"
 
-#: ../../source/troubleshooting.rst:216
+#: ../../source/troubleshooting.rst:218
 msgid ""
 "\"The PartCAD extension is being initialized...\" in \"Explorer\" gets "
 "into infinite loop (and nothing happens in the corresponding terminal "
@@ -475,17 +480,17 @@ msgstr ""
 "\"The PartCAD extension is being initialized...\" в \"Explorer\" "
 "зацикливается (и в соответствующем окне терминала ничего не происходит)"
 
-#: ../../source/troubleshooting.rst:218
+#: ../../source/troubleshooting.rst:220
 msgid "Close and reopen VSCode"
 msgstr "Закройте и снова откройте VSCode"
 
-#: ../../source/troubleshooting.rst:220
+#: ../../source/troubleshooting.rst:222
 msgid "Error while loading part or assembly view: \"Module ... not found\""
 msgstr ""
 "Ошибка при загрузке представления детали или сборки: \"Module ... not "
 "found\""
 
-#: ../../source/troubleshooting.rst:222
+#: ../../source/troubleshooting.rst:224
 msgid ""
 "Make sure that the extension version matches the PartCAD version in ``pc "
 "version`` command output"
@@ -493,11 +498,11 @@ msgstr ""
 "Убедитесь, что версия расширения совпадает с версией PartCAD в выводе "
 "команды ``pc version``"
 
-#: ../../source/troubleshooting.rst:226
+#: ../../source/troubleshooting.rst:228
 msgid "PartCAD Viewer"
 msgstr "PartCAD Viewer"
 
-#: ../../source/troubleshooting.rst:228
+#: ../../source/troubleshooting.rst:230
 msgid ""
 "The ``PartCAD Viewer`` is a tab the extension opens when a part, "
 "assembly, scene, sketch or interface is inspected. PartCAD tessellates "
@@ -516,7 +521,7 @@ msgstr ""
 "так что достаточно ``pip install partcad`` и устанавливать отдельно "
 "ничего не нужно."
 
-#: ../../source/troubleshooting.rst:236
+#: ../../source/troubleshooting.rst:238
 msgid ""
 "Beside the 3D view the panel carries tabs for the questions that are "
 "about the object rather than its shape -- **FEA** and **CFD** under "
@@ -539,7 +544,7 @@ msgstr ""
 "одной из них — это проблема демона, о чём она и сообщает на самой "
 "вкладке, тогда как трёхмерный вид продолжает работать."
 
-#: ../../source/troubleshooting.rst:245
+#: ../../source/troubleshooting.rst:247
 msgid ""
 "Anything with a ``partcad`` that can reach that port can display into the"
 " same viewer -- including a ``pc`` run in a plain terminal, as long as a "
@@ -556,13 +561,13 @@ msgstr ""
 "дополнительной настройки (``partcad.addToolsToTerminalPath`` это "
 "отключает):"
 
-#: ../../source/troubleshooting.rst:265
+#: ../../source/troubleshooting.rst:267
 msgid "``Failed to load \"partcad_ide_client\"`` in the PartCAD terminal view"
 msgstr ""
 "``Failed to load \"partcad_ide_client\"`` в представлении терминала "
 "PartCAD"
 
-#: ../../source/troubleshooting.rst:267
+#: ../../source/troubleshooting.rst:269
 msgid ""
 "The package ships inside ``partcad``, so this means the installation is "
 "damaged rather than incomplete. Reinstall with ``pip install --force-"
@@ -574,7 +579,7 @@ msgstr ""
 "install --force-reinstall partcad`` или нажмите \"Update PartCAD\" в "
 "левой панели \"Context\"."
 
-#: ../../source/troubleshooting.rst:271
+#: ../../source/troubleshooting.rst:273
 msgid ""
 "On a PartCAD older than 0.8.0 it was a separate ``partcad-ide-client`` "
 "distribution that was never published; upgrading is the fix."
@@ -582,11 +587,11 @@ msgstr ""
 "В версиях PartCAD старше 0.8.0 это был отдельный дистрибутив ``partcad-"
 "ide-client``, который так и не был опубликован; решение — обновиться."
 
-#: ../../source/troubleshooting.rst:274
+#: ../../source/troubleshooting.rst:276
 msgid "``No PartCAD IDE with an open PartCAD Viewer detected``"
 msgstr "``No PartCAD IDE with an open PartCAD Viewer detected``"
 
-#: ../../source/troubleshooting.rst:276
+#: ../../source/troubleshooting.rst:278
 msgid ""
 "Nothing is listening on the viewer port. Open a window with the PartCAD "
 "extension active; the extension starts listening when it activates."
@@ -594,7 +599,7 @@ msgstr ""
 "Никто не слушает порт просмотрщика. Откройте окно с активным расширением "
 "PartCAD; расширение начинает слушать порт при активации."
 
-#: ../../source/troubleshooting.rst:278
+#: ../../source/troubleshooting.rst:280
 msgid ""
 "If two windows are open, only one of them may own the port on platforms "
 "without ``SO_REUSEPORT``. The \"PartCAD Viewer port ... is already in "
@@ -605,7 +610,7 @@ msgstr ""
 "in use\" в представлении вывода ``PartCAD`` говорит, что это именно такой"
 " случай."
 
-#: ../../source/troubleshooting.rst:281
+#: ../../source/troubleshooting.rst:283
 msgid ""
 "Set ``PARTCAD_IDE_PORT`` to move a ``partcad`` process to a different "
 "port if 9137 is taken by something else on the machine."
@@ -613,13 +618,13 @@ msgstr ""
 "Задайте ``PARTCAD_IDE_PORT``, чтобы перевести процесс ``partcad`` на "
 "другой порт, если 9137 занят на этой машине чем-то другим."
 
-#: ../../source/troubleshooting.rst:284
+#: ../../source/troubleshooting.rst:286
 msgid ""
 "\"Drawn without a graphics card\" in the corner of the 3D view or an "
 "analysis"
 msgstr "\"Drawn without a graphics card\" в углу трёхмерного вида или анализа"
 
-#: ../../source/troubleshooting.rst:286
+#: ../../source/troubleshooting.rst:288
 msgid ""
 "VS Code could not use the graphics card, so the window has no WebGL, and "
 "the 3D view and the **FEA** and **CFD** tabs draw the model on the "
@@ -638,11 +643,11 @@ msgstr ""
 "Chromium, которая выглядит как обычный вид), и как сделать, чтобы его "
 "ярлык делал это каждый раз. В PartCAD IDE это уже сделано."
 
-#: ../../source/troubleshooting.rst:293
+#: ../../source/troubleshooting.rst:295
 msgid "The **Draft** tab says a package is not found"
 msgstr "Вкладка **Draft** сообщает, что пакет не найден"
 
-#: ../../source/troubleshooting.rst:295
+#: ../../source/troubleshooting.rst:297
 msgid ""
 "The drawing package, ``//pub/feature/render/draftwright``, comes from the"
 " public PartCAD index. A workspace that does not import ``pub`` has no "

@@ -10,7 +10,7 @@ design files.
 NOTE: If you happen to have KiCad installed on your machine, set `useDockerKicad: false` in `~/.partcad/config.yaml`
 (`PC_USE_DOCKER_KICAD=false` in the environment) to run that `kicad-cli` instead of this image.
 
-The same image is what `pc open --with kicad` -- the "Open in KiCad" item in the VS Code extension's context menu for a
+The same image is what `pc ide open --with kicad` -- the "Open in KiCad" item in the VS Code extension's context menu for a
 `kicad` part -- falls back to when the machine has no KiCad of its own. It is the same image either way: `kicad/kicad` with
 PartCAD's environment on top, so it carries the GUI as well as `kicad-cli`, and there is one KiCad image in the
 product rather than two. A `kicad` part points at the STEP file `kicad-cli` writes out of the
@@ -29,7 +29,7 @@ parts:
 
 ## How PartCAD runs it
 
-Through `partcad_utils.containers`, like the Python sandbox and a plugin's `container:`: the image is
+Like every container PartCAD starts, through `partcad_utils.containers`: the image is
 `ghcr.io/partcad/partcad-container-kicad:<release>` -- the release of the PartCAD running, never `latest` -- and the
 container is named `partcad-kicad-<release>-<identity>`, the identity a digest of everything it was created with. A
 container from another release, or created differently, is a different name, so an import never runs in a container

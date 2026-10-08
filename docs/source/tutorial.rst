@@ -131,7 +131,7 @@ Once a part is created, it can be inspected in ``PartCAD Viewer``.
 
   .. code-block:: shell
 
-    pc inspect :test
+    pc ide view :test
 
 Export the part
 ---------------

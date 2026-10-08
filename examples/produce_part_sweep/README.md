@@ -4,9 +4,9 @@ This example demonstrates how to define 3D parts by sweeping 2D sketches.
 
 ## Usage
 ```shell
-pc inspect dxf
-pc inspect cylinder
-pc inspect clock
+pc ide view dxf
+pc ide view cylinder
+pc ide view clock
 ```
 
 

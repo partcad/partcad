@@ -49,6 +49,8 @@ EXPECTED_PATHS = [
     "pc list parts",
     "pc supply quote",
     "pc system set telemetry env",
+    "pc ide open",
+    "pc ide view",
 ]
 
 
@@ -119,7 +121,9 @@ def test_every_top_level_command_is_in_exactly_one_help_panel():
     under `commands/`, and nothing asks the author to name its panel.
     """
     ctx = root.context_class(root, info_name="pc")
-    actual = set(root.list_commands(ctx))
+    # A hidden command is in no panel by design: it is an old name kept for
+    # whatever still types it (`pc open`, `pc inspect`), and help omits it.
+    actual = {name for name in root.list_commands(ctx) if not root.get_command(ctx, name).hidden}
 
     listed = [name for group in command_groups for name in group["commands"]]
 
@@ -216,9 +220,11 @@ def _transcript_panels():
     end = text.index("\nCommon options apply", start)
     panels, panel = {}, None
     for line in text[start:end].split("\n"):
-        heading = re.fullmatch(r"  ([A-Z][a-z]+) commands:", line)
+        # A panel is a two-space-indented line ending in a colon, named as
+        # command_groups names it: "Host commands", "Interacting with IDE".
+        heading = re.fullmatch(r"  ([A-Z][A-Za-z ]+):", line)
         if heading:
-            panel = "%s commands" % heading.group(1)
+            panel = heading.group(1)
             panels[panel] = []
             continue
         # '    name         description'. One space is enough: the description
@@ -254,3 +260,15 @@ def test_the_documented_help_transcript_lists_every_command():
             documented[panel],
             names,
         )
+
+
+@pytest.mark.parametrize("old, new", [("open", ["ide", "open"]), ("inspect", ["ide", "view"])])
+def test_an_old_name_is_the_new_command_hidden(old, new):
+    """`pc open` and `pc inspect` still run -- as `pc ide open` and `pc ide view` -- and help omits them."""
+    ctx = root.context_class(root, info_name="pc")
+    alias = root.get_command(ctx, old)
+    group = root.get_command(ctx, new[0])
+    target = group.get_command(group.context_class(group, info_name=new[0], parent=ctx), new[1])
+
+    assert alias.hidden and not target.hidden
+    assert [p.name for p in alias.params] == [p.name for p in target.params]

@@ -1064,6 +1064,24 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     }
 }
 
+/**
+ * The 3D view as a PNG data URL, for `pc ide state`.
+ *
+ * Drawn first and read in the same task: a WebGL canvas made without
+ * 'preserveDrawingBuffer' -- which this one is, because keeping the buffer costs
+ * every frame -- is blank to 'toDataURL' once the frame it drew has been shown.
+ * The callouts are DOM over the canvas rather than pixels in it, so they are
+ * not in the picture.
+ */
+export function screenshot(): string {
+    const canvas = surface.domElement;
+    if (!(canvas instanceof HTMLCanvasElement)) {
+        throw new Error('the 3D view is not drawn on a canvas');
+    }
+    surface.render(scene, camera);
+    return canvas.toDataURL('image/png');
+}
+
 export function resizeCanvas(): void {
     const width = container.clientWidth;
     const height = container.clientHeight;

@@ -1160,7 +1160,7 @@ Testing a change to a container image
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 PartCAD ships container images of its own: the Python sandbox base images the ``docker`` sandbox renders in,
-and the KiCad sandbox ``pc open --with kicad`` and ``test_part_example_kicad`` start. Every one of them is
+and the KiCad sandbox ``pc ide open --with kicad`` and ``test_part_example_kicad`` start. Every one of them is
 addressed by the release that built it -- ``<name>:<release>``, plus the architecture suffix where there is
 one -- and that tag is written by exactly one run: the version bump on ``devel``.
 

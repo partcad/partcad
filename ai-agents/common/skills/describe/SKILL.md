@@ -157,9 +157,9 @@ background but cannot see it:
   images", which is an artifact of how you looked at it.
 - Produce prose that is ready to be narrated as-is (no markdown, no lists).
 
-## 6. Persist it (so `pc inspect` shows it)
+## 6. Persist it (so `pc ide view` shows it)
 
-`pc inspect` reads a shape's `summary:` from its configuration. Write your
+`pc ide view` reads a shape's `summary:` from its configuration. Write your
 description there so the tool and other agents can reuse it:
 
 ```yaml

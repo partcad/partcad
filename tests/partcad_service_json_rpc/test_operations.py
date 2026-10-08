@@ -649,7 +649,7 @@ def test_inspect_shows_the_object_in_this_session_s_context(operation, kind):
     daemon can: it has the context in hand, it may be serving several, and whether
     the global is set at all depends on how the session was brought up. Dropping it
     is how showing a sketch from the IDE's Explorer came to answer "A context is
-    required to tessellate a shape tree" while 'pc inspect' - which goes through
+    required to tessellate a shape tree" while 'pc ide view' - which goes through
     'inspect_object', and always passed it - worked.
     """
     session, _seen = make_session()
@@ -2437,7 +2437,7 @@ def open_tools_of(projects):
 
 
 def test_open_tools_reports_the_applications_a_package_declares():
-    """Which is the only half of 'pc open' that needs the package graph.
+    """Which is the only half of 'pc ide open' that needs the package graph.
 
     A plugin package declares no objects at all, so the default "keep only
     packages holding something" filter is exactly the one that would drop it;

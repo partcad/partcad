@@ -71,6 +71,13 @@ export const MSG_SHOW = 'show';
 export const MSG_CLEAR = 'clear';
 export const MSG_PING = 'ping';
 export const MSG_ACK = 'ack';
+/**
+ * What the IDE is showing, for `pc ide state`: answered in the acknowledgement,
+ * under KEY_STATE. The shape is specified once, beside `MSG_STATE` in
+ * `src/partcad_ide_client/protocol.py`.
+ */
+export const MSG_STATE = 'state';
+export const KEY_STATE = 'state';
 
 /** A packed rigid placement: [[tx, ty, tz], [ax, ay, az], angleInDegrees]. */
 export type ViewerLocation = [[number, number, number], [number, number, number], number];

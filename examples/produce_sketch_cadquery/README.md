@@ -4,7 +4,7 @@ This example demonstrates how to define a sketch using a CadQuery script.
 
 ## Usage
 ```shell
-pc inspect -s sketch
+pc ide view -s sketch
 ```
 
 

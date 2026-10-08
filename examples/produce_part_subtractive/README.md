@@ -4,12 +4,12 @@ This example demonstrates parts that are made by taking material away from a pie
 
 ## Usage
 ```shell
-pc inspect stock_sheet
-pc inspect blank
-pc inspect gasket
-pc inspect bearing_block
-pc inspect drilled_plate
-pc inspect rail
+pc ide view stock_sheet
+pc ide view blank
+pc ide view gasket
+pc ide view bearing_block
+pc ide view drilled_plate
+pc ide view rail
 pc test -f manufacturability
 ```
 

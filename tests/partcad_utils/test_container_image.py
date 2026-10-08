@@ -188,7 +188,7 @@ def test_the_image_pc_open_starts_follows_the_owner(monkeypatch):
     That workflow publishes `<this repository>-container-kicad`, so in a fork
     the image is the fork's. `partcad.part_factory_kicad` follows the owner;
     this path is the other consumer, and one following while the other does not
-    is how `pc open --with kicad` ends up reaching for a tag nobody published.
+    is how `pc ide open --with kicad` ends up reaching for a tag nobody published.
     """
     import importlib
 

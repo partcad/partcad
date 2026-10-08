@@ -6,8 +6,8 @@
 """The client's copy of PartCAD's object types, checked against the original.
 
 `partcad_client.object_types` answers one question -- is this object already a
-mesh? -- for `pc open`, in a process that must not `import partcad`: the client
-is deliberately cheap, and a machine running `pc open` may have no CAD kernel on
+mesh? -- for `pc ide open`, in a process that must not `import partcad`: the client
+is deliberately cheap, and a machine running `pc ide open` may have no CAD kernel on
 it at all. So the type tables are inlined there, the way
 `partcad_cli.click.commands.adhoc.convert.part` inlines the type lists it offers.
 
@@ -41,7 +41,7 @@ def test_every_part_type_partcad_has_is_classified():
     assert not missing, (
         f"These PartCAD part types are not classified in partcad_client.object_types: {', '.join(missing)}. "
         "Add each one to PART_TYPE_IS_MESH with True when the file it names carries triangles and False "
-        "when it does not. Leaving one out is not a no-op: `pc open --with blender` would convert it to "
+        "when it does not. Leaving one out is not a no-op: `pc ide open --with blender` would convert it to "
         "STL first, which works and is wrong for a format Blender could have read as it is."
     )
 
@@ -62,7 +62,7 @@ def test_the_extension_of_each_type_is_the_one_partcad_uses():
 
 
 def test_the_types_that_only_mean_something_in_a_package_are_the_same_ones():
-    """`pc open` refuses these by name instead of sending a conversion that is refused."""
+    """`pc ide open` refuses these by name instead of sending a conversion that is refused."""
     assert object_types.PACKAGE_ONLY_TYPES == PACKAGE_ONLY_TYPES
 
 
@@ -77,7 +77,7 @@ def test_the_extensions_that_are_other_spellings_name_types_that_exist():
 
 
 def test_the_scene_formats_are_the_ones_partcad_stores_a_scene_in():
-    """The second table, for the second question `pc open` asks of a file.
+    """The second table, for the second question `pc ide open` asks of a file.
 
     Blender reads triangles, so what matters there is whether the file holds
     any; MuJoCo reads MJCF, so what matters there is which description language
@@ -85,3 +85,16 @@ def test_the_scene_formats_are_the_ones_partcad_stores_a_scene_in():
     drift, so both are checked here.
     """
     assert object_types.SCENE_TYPE_EXTENSION == SCENE_EXTENSION_MAPPING
+
+
+def test_the_writable_formats_are_the_ones_partcad_exports_outside_a_package():
+    """Mirrors '//builtin/export': a format added there and not here is one `pc ide open` cannot convert into."""
+    import os
+
+    import yaml
+
+    from partcad import output
+
+    with open(os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.EXPORT]], "partcad.yaml")) as f:
+        exported = set((yaml.safe_load(f) or {}).get("export") or {})
+    assert object_types.WRITABLE_PART_TYPES == exported - set(object_types.PACKAGE_ONLY_TYPES)

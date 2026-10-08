@@ -14,7 +14,7 @@ docs:
   usage: |
     ```
     pc list parts example
-    pc inspect example:bolt
+    pc ide view example:bolt
     ```
 
 dependencies:

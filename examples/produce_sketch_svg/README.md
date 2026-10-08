@@ -4,7 +4,7 @@ This example demonstrates how to define a sketch using an SVG file.
 
 ## Usage
 ```shell
-pc inspect -s svg_01
+pc ide view -s svg_01
 ```
 
 

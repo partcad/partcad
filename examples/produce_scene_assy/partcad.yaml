@@ -7,7 +7,7 @@ docs:
     that works on an assembly works on a scene:
 
     ```shell
-    pc inspect -S bench
+    pc ide view -S bench
     pc export -S -t step -O ./ bench
     pc bom bench
     ```

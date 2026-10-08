@@ -90,7 +90,7 @@ def test_the_name_answers_where_it_can(path, expected):
 
 
 def test_the_other_spellings_of_a_format_are_the_same_format():
-    """A file `pc open` is handed was written by something else as often as not."""
+    """A file `pc ide open` is handed was written by something else as often as not."""
     assert object_types.type_of_file("/w/cube.stp") == "step"
     assert object_types.type_of_file("/w/cube.igs") == "iges"
     assert object_types.type_of_file("/w/scene.glb") == "gltf"
@@ -121,7 +121,7 @@ def test_a_type_that_names_no_file_of_its_own_defers_to_the_file():
     """An `alias` is not a mesh; what it points at may well be one.
 
     This is the case that decides the precedence rule, and it is not academic:
-    the VS Code tree hands `pc open` the declared type of the object the user
+    the VS Code tree hands `pc ide open` the declared type of the object the user
     clicked, and for a reference type that type says nothing about the file.
     """
     assert object_types.is_mesh_type("alias") is False

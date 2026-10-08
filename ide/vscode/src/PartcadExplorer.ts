@@ -8,6 +8,8 @@
 //
 
 import * as vscode from 'vscode';
+
+import { OpenOutcome, outcomeMessage, showEditingBanner } from './editingBanner';
 import { pathKey } from './common/paths';
 import {
     PartcadItem,
@@ -48,11 +50,24 @@ function assyPaths(items: PartConfig[] | undefined): string[] {
         .map((item) => item.item_path as string);
 }
 
+// What the applications behind the "Open in..." menu are called in a sentence.
+// A tool a package declares and this table does not name is called by its name.
+const APPLICATION_NAMES: { [tool: string]: string } = {
+    freecad: 'FreeCAD',
+    kicad: 'KiCad',
+    blender: 'Blender',
+    gazebo: 'Gazebo',
+    mujoco: 'MuJoCo',
+};
+
 export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
     public static readonly viewType = 'partcadExplorer';
 
     packages: { [name: string]: ItemMetadata };
     root: string;
+    // The object open in another application right now, if one is: `pc ide open`
+    // waits for it to close, and a second one while it does is refused.
+    editing: string | undefined = undefined;
 
     constructor() {
         let wsUri = undefined;
@@ -154,7 +169,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
      *
      * It is the item's own source file that is handed over, not a rendering of
      * it: rendering is the daemon's work, and this deliberately has none in it.
-     * `pc open` runs on the machine the user is sitting at, finds a locally
+     * `pc ide open` runs on the machine the user is sitting at, finds a locally
      * installed application or (when the setting allows it) a container, and
      * says what to install when it can find neither -- which is why the failure
      * is shown as it comes back rather than summarised.
@@ -164,7 +179,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         // the types this editor can edit (scripts), and a STEP or BREP part --
         // exactly what another CAD application is for -- is not one of them.
         // A `kicad` part hands over the STEP KiCad's CLI writes; which file
-        // KiCad is actually pointed at is `pc open`'s to decide, because that
+        // KiCad is actually pointed at is `pc ide open`'s to decide, because that
         // is a fact about KiCad rather than about this tree.
         const path = item?.config?.item_path ?? item?.itemPath;
         if (path === undefined) {
@@ -173,31 +188,62 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             );
             return;
         }
+        if (this.editing !== undefined) {
+            await vscode.window.showWarningMessage(
+                `'${this.editing}' is still open in another application. Close it there first.`,
+            );
+            return;
+        }
+        const application = APPLICATION_NAMES[tool] ?? tool;
+        const stop = new AbortController();
+        let banner: vscode.Disposable | undefined;
+        this.editing = item.name;
         try {
-            // Under a progress notification because the first open of a
-            // containerised application downloads its image, which takes
-            // minutes and would otherwise look like nothing happening.
-            await vscode.window.withProgress(
-                { location: vscode.ProgressLocation.Notification, title: `${item.name}`, cancellable: false },
-                async (progress) => {
-                    progress.report({ message: 'Opening...' });
+            // `pc ide open` waits for the application to close, so that what was
+            // done in it can be brought back -- and until it does, the banner
+            // says so and every PartCAD command is paused (see editingBanner).
+            banner = await showEditingBanner(item.name, application, () => stop.abort());
+            const outcome = await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: `Editing ${item.name} in ${application}`,
+                    cancellable: true,
+                },
+                async (progress, token) => {
+                    token.onCancellationRequested(() => stop.abort());
+                    // The first open of a containerised application downloads
+                    // its image, which takes minutes and would otherwise look
+                    // like nothing happening.
+                    progress.report({ message: `close ${application} to continue` });
                     // The declared type travels with the path, because the path
                     // does not always say: a '.py' is a CadQuery script, a
                     // build123d one or an SDF one, and PartCAD has to know which
-                    // before it can convert one for an application that reads
-                    // meshes. Everything that is decided from it -- whether a
-                    // conversion is needed at all -- is decided in `pc open`,
-                    // not here.
-                    await vscode.commands.executeCommand('partcad.openExternal', {
+                    // before it can convert one. Everything that is decided from
+                    // it is decided in `pc ide open`, not here.
+                    return (await vscode.commands.executeCommand('partcad.openExternal', {
                         path: path,
                         tool: tool,
                         type: item?.config?.type,
-                    });
+                        signal: stop.signal,
+                    })) as OpenOutcome;
                 },
             );
+            if (outcome) {
+                await vscode.window.showInformationMessage(outcomeMessage(item.name, application, outcome));
+            }
         } catch (e) {
-            const reason = e instanceof Error ? e.message : `${e}`;
-            await vscode.window.showErrorMessage(`Could not open '${item.name}'`, { modal: false, detail: reason });
+            if (stop.signal.aborted) {
+                await vscode.window.showWarningMessage(
+                    `Stopped waiting for ${application}. It is still open, and what you save there now is not ` +
+                        `brought back into '${item.name}'.`,
+                );
+            } else {
+                const reason = e instanceof Error ? e.message : `${e}`;
+                await vscode.window.showErrorMessage(`Could not open '${item.name}'`, { modal: false, detail: reason });
+            }
+        } finally {
+            banner?.dispose();
+            this.editing = undefined;
         }
     }
 

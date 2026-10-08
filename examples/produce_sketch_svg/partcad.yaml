@@ -3,7 +3,7 @@ desc: This example demonstrates how to define a sketch using an SVG file.
 docs:
   usage: |
     ```shell
-    pc inspect -s svg_01
+    pc ide view -s svg_01
     ```
 
 sketches:

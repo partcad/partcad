@@ -465,7 +465,7 @@ def inspect_part(session, params):
     it has the context in hand, it may be serving several, and whether the global
     happens to be set at all depends on how the session was brought up - which is
     how showing a sketch from the Explorer came to answer "A context is required to
-    tessellate a shape tree" while the same sketch shown by 'pc inspect' worked.
+    tessellate a shape tree" while the same sketch shown by 'pc ide view' worked.
     That path ('inspect_object') passed the context all along.
 
     Every one of the per-kind inspect operations below does the same, for the same
@@ -1135,9 +1135,9 @@ def info_object(session, params):
 
 
 def open_tools(session, params):
-    """The applications this workspace's packages declare, for `pc open`.
+    """The applications this workspace's packages declare, for `pc ide open`.
 
-    The one thing `pc open` needs the package graph for, and the reason it is
+    The one thing `pc ide open` needs the package graph for, and the reason it is
     answered here: opening a file is deliberately client-side work -- the window
     belongs to whoever ran the command, and a daemon can be remote -- but
     *which* applications exist is a fact about the packages a workspace imports,
@@ -1191,7 +1191,7 @@ def adhoc_convert(session, params):
         from partcad.shape import PART_EXTENSION_MAPPING as mapping
     elif kind == "scene":
         # The third kind of object a file can hold: an arrangement rather than a
-        # shape or a drawing. Nothing asks for it today -- `pc open` refuses a
+        # shape or a drawing. Nothing asks for it today -- `pc ide open` refuses a
         # scene it would have to convert, because every arrangement format
         # belongs to a plugin package an ad-hoc context cannot reach -- and it is
         # here because the machinery is the part conversion's. See

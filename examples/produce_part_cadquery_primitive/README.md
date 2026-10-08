@@ -4,9 +4,9 @@ PartCAD example project which demonstrates parts defined using CadQuery.
 
 ## Usage
 ```shell
-pc inspect cube
-pc inspect brick
-pc inspect cylinder
+pc ide view cube
+pc ide view brick
+pc ide view cylinder
 ```
 
 

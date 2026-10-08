@@ -153,7 +153,7 @@ export class PartcadItem extends vscode.TreeItem {
             //
             // Each takes only its own format. Nothing converts between them
             // here: an engine's scene format is implemented by that engine's
-            // plugin package, and `pc open` is handed a file with no package
+            // plugin package, and `pc ide open` is handed a file with no package
             // around it to reach either implementation through.
             //
             // The type is compared bare, because a scene declares one of these

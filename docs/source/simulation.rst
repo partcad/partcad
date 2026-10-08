@@ -422,7 +422,7 @@ the *concept* -- the ``import:`` and ``export:`` sections, the sandbox, the
 ``simulation:`` plugin protocol, the ``open:`` entry -- and the engine's package
 supplies the knowledge. Each of those two packages declares all four for its own
 format, so importing it is what makes the type, the exporter, ``pc sim`` and
-``pc open --with`` all work at once.
+``pc ide open --with`` all work at once.
 
 A package that uses one imports it and names the type through it:
 
@@ -452,7 +452,7 @@ the URDF reader above is: what a static arrangement cannot hold is counted and
 reported rather than passed over, and ``pc info`` lists it.
 
 One consequence is worth stating because it is a change and not an oversight:
-``pc open --with mujoco`` no longer converts a scene into MJCF. It opens a file
+``pc ide open --with mujoco`` no longer converts a scene into MJCF. It opens a file
 that already is one -- the application's ``open:`` entry names the extensions its
 format is stored in -- and refuses anything else with the export that does work.
 An ad-hoc conversion has a throwaway package around the file and no dependency on
@@ -616,7 +616,7 @@ difference in the section. MuJoCo is a wheel, so the plugin lists it under
 ``pythonRequirements`` and a machine with no MuJoCo simulates just the same.
 Gazebo is not a wheel and there is none, so that plugin names an image under
 ``dockerImage`` and looks for a local ``gz`` first -- the same two places
-``pc open --with gazebo`` looks.
+``pc ide open --with gazebo`` looks.
 
 ``before`` and ``after`` are all PartCAD knows about a result. What is *inside*
 them, and anything else beside them, is the plugin's own vocabulary -- the
@@ -688,8 +688,8 @@ simulator defaults to, which is a number nobody chose.
 Opening a scene in a simulator
 ==============================
 
-``pc open --with gazebo`` hands a ``.world`` file to Gazebo, and
-``pc open --with mujoco`` hands an MJCF model to MuJoCo. Both open a window on
+``pc ide open --with gazebo`` hands a ``.world`` file to Gazebo, and
+``pc ide open --with mujoco`` hands an MJCF model to MuJoCo. Both open a window on
 the machine the command was run on, never through the daemon -- see
 ``partcad_client.external`` for why.
 
@@ -979,7 +979,7 @@ literal:
 
 Everything that exists today - a tree of rigid placements - is what you get by
 evaluating a configuration, so no consumer of the representation has to change.
-But ``pc inspect 'robot;configuration=stowed'`` becomes meaningful through the
+But ``pc ide view 'robot;configuration=stowed'`` becomes meaningful through the
 parameter machinery ASSY files already have, and an exporter gains something to
 write a joint *state* from.
 

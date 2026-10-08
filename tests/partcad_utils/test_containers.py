@@ -684,3 +684,34 @@ def test_a_daemon_elsewhere_is_warned_about_once(monkeypatch):
     assert "plain HTTP" in said[0] and "build-box" in said[0]
     # The advice that would be wrong is not given as a way out.
     assert "carries Docker's own API and not these" in said[0]
+
+
+def test_env_is_sent_in_either_mode(tmp_path):
+    for mode in (MOUNT, UPLOAD):
+        assert _endpoint(mode).params(env={"DISPLAY": ":1"})["env"] == {"DISPLAY": ":1"}
+    assert "env" not in _endpoint(MOUNT).params()
+
+
+def test_display_plumbing_is_bound_on_a_local_daemon_in_either_mode(daemon):
+    """The X socket is not how files arrive, so upload mode keeps it -- on this machine."""
+    x11 = {"/tmp/.X11-unix": {"bind": "/tmp/.X11-unix", "mode": "rw"}}
+    containers.acquire(spec(mode=UPLOAD, local_binds=x11), client=daemon, ping=ready)
+    assert daemon.created[0][1]["volumes"] == x11
+
+
+def test_display_plumbing_is_not_bound_on_another_machines_daemon():
+    """There it would bind that machine's sockets, which are nobody's display."""
+    remote = FakeDaemon(base_url="https://builder.example.com:2376")
+    x11 = {"/tmp/.X11-unix": {"bind": "/tmp/.X11-unix", "mode": "rw"}}
+    containers.acquire(spec(mode=UPLOAD, local_binds=x11), client=remote, ping=ready)
+    assert not remote.created[0][1]["volumes"]
+
+
+def test_extra_hosts_reach_the_container(daemon):
+    containers.acquire(spec(extra_hosts={"host.docker.internal": "host-gateway"}), client=daemon, ping=ready)
+    assert daemon.created[0][1]["extra_hosts"] == {"host.docker.internal": "host-gateway"}
+
+
+def test_display_plumbing_and_hosts_are_identity():
+    assert containers.identity(spec()) != containers.identity(spec(extra_hosts={"h": "a"}))
+    assert containers.identity(spec()) != containers.identity(spec(local_binds={"/x": {"bind": "/x", "mode": "rw"}}))

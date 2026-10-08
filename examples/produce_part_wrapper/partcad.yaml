@@ -9,7 +9,7 @@ desc: |
 docs:
   usage: |
     ```shell
-    pc inspect :demo
+    pc ide view :demo
     ```
 
 partTypes:

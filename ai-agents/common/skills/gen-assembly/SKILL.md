@@ -495,12 +495,12 @@ is fixed in the part, not in the ASSY — render that part on its own with
 assembly that uses it.
 
 Then adjust the placements or mates, re-test, and re-render. Iterate until every
-view matches. `pc inspect -a <name>` gives an interactive view.
+view matches. `pc ide view -a <name>` gives an interactive view.
 
 ## 7. Finalize
 
 Summarize the structure — parts, sub-assemblies, key placements — and how to view
-it (`pc inspect -a <name>`, or `pc render -a -t png --with-all <name>` for a
+it (`pc ide view -a <name>`, or `pc render -a -t png --with-all <name>` for a
 picture with the connection metadata on it).
 
 Say what is still placed by coordinates and why, one reason per case. "The rest

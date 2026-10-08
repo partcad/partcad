@@ -107,9 +107,9 @@ apart all come from `connect:`. The result is checked in as
 ## Usage
 ```shell
 # the three stages
-pc inspect -a AeroAssembly_assy_example/AeroAssembly
-pc inspect -a AeroAssembly_assy_example/AeroAssembly_corrected
-pc inspect -a AeroAssembly_assy_example/AeroAssembly_connected
+pc ide view -a AeroAssembly_assy_example/AeroAssembly
+pc ide view -a AeroAssembly_assy_example/AeroAssembly_corrected
+pc ide view -a AeroAssembly_assy_example/AeroAssembly_connected
 
 # what each stage is held to
 pc test -a AeroAssembly_assy_example/AeroAssembly_connected
@@ -121,8 +121,8 @@ pc render -t svg --with-all AeroAssembly_assy_example/AeroFrame_Plate
 pc render -t pdf -a AeroAssembly_assy_example/AeroAssembly_connected
 
 # the billet a part is cut out of, and the part beside it
-pc inspect AeroAssembly_assy_example/AeroFrame_Plate_stock
-pc inspect AeroAssembly_assy_example/AeroFrame_Plate
+pc ide view AeroAssembly_assy_example/AeroFrame_Plate_stock
+pc ide view AeroAssembly_assy_example/AeroFrame_Plate
 
 # that this part is what is left of the stock it names
 pc test -f manufacturability AeroAssembly_assy_example/AeroFrame_Plate

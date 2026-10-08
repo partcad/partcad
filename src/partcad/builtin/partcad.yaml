@@ -9,7 +9,7 @@
 #   - `//builtin/render` -- the 2D projections `pc render` writes.
 #   - `//builtin/import` -- the third-party formats a package can declare an
 #     object as.
-#   - `//builtin/open` -- the applications `pc open` launches.
+#   - `//builtin/open` -- the applications `pc ide open` launches.
 #   - `//builtin/cam` -- the machine programs `pc cam` writes.
 #
 # And one that declares an object rather than a way of producing one:

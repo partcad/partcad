@@ -136,7 +136,7 @@ def test_every_feature_has_a_measurement():
 def test_wip_features_are_estimated_as_free(tmp_path):
     """`behave.ini` runs `tags = ~@wip`, so a @wip feature costs nothing.
 
-    This is what made `inspect.feature` -- 36 scenarios, every one of them
+    This is what made `ide_view.feature` (then `inspect.feature`) -- 36 scenarios, every one of them
     skipped -- the heaviest file in the suite under the old weighting.
     """
     wip = tmp_path / "wip.feature"

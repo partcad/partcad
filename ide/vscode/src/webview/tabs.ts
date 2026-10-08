@@ -72,6 +72,11 @@ export class Tabs {
         this.bar.setAttribute('role', 'tablist');
     }
 
+    /** The tabs on offer, for `pc ide state`. */
+    public get offered(): { id: TabId; label: string; disabled: boolean }[] {
+        return this.specs.map((spec) => ({ id: spec.id, label: spec.label, disabled: spec.disabled === true }));
+    }
+
     /** The tab the panel is currently on, or undefined when none of them can be opened. */
     public get current(): TabId | undefined {
         return this.enabled(this.selected) ? this.selected : undefined;

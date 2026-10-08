@@ -8,7 +8,7 @@
 #
 """Where `RuntimeJsonRpcClient` used to live; it is `partcad_utils.json_rpc_client` now.
 
-Moved so that a client -- `pc open` -- can talk to a container without importing
+Moved so that a client -- `pc ide open` -- can talk to a container without importing
 the core. Re-exported here for everything that imported it from here.
 """
 

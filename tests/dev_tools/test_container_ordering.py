@@ -101,7 +101,7 @@ def test_the_tag_it_publishes_is_the_tag_the_runtime_pulls():
     #
     # The two readers name the image in different places now. `part_factory_kicad`
     # builds the reference in Python. The client's copy is an `open:` declaration
-    # -- `//builtin/open` is where the applications `pc open` launches are
+    # -- `//builtin/open` is where the applications `pc ide open` launches are
     # described, as data -- so the repository holds the image name and
     # `external.py` holds the substitution that resolves its `{version}`. Both
     # halves are checked, because either one alone can drift into naming a tag
@@ -125,7 +125,7 @@ def test_the_tag_it_publishes_is_the_tag_the_runtime_pulls():
     assert "image_tag(" in client
     assert '"{version}"' in client
     # And the owner, for the same reason as the factory above: two readers of
-    # one image, one following the owner and one not, is a `pc open` reaching
+    # one image, one following the owner and one not, is a `pc ide open` reaching
     # for a tag nobody published.
     assert "image_name(" in client
 

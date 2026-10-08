@@ -21,7 +21,7 @@ from . import logging as pc_logging
 from . import runtime
 from .part_factory_step import PartFactoryStep
 
-# The image 'pc open --with kicad' runs as well (see '//builtin/open'): one KiCad
+# The image 'pc ide open --with kicad' runs as well (see '//builtin/open'): one KiCad
 # container image in the product, not two.
 KICAD_IMAGE = "ghcr.io/partcad/partcad-container-kicad"
 
@@ -48,7 +48,7 @@ async def get_runtime(ctx):
         # API version: ('Connection aborted.', FileNotFoundError(2, 'No
         # such file or directory'))" -- which names neither the PCB being
         # imported nor either of the two things the user can do about it.
-        # 'pc render', 'pc export' and 'pc inspect' all arrive here, and all
+        # 'pc render', 'pc export' and 'pc ide view' all arrive here, and all
         # three said that.
         #
         # 'SandboxUnavailable' rather than a plain exception because it

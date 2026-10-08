@@ -267,7 +267,7 @@ the whole interface is consistent, not just one lucky pair.
 Summarize the interfaces you defined (with the male/female Z convention), which
 ports/instances you placed and where, where you stored them (the part's package,
 or the consuming package for a plugin-backed part), and how to view a connected
-example (`pc inspect -a <name>`, or
+example (`pc ide view -a <name>`, or
 `pc render -a -t png --with-all <name>` for a picture with the connection
 metadata on it).
 

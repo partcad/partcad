@@ -371,6 +371,23 @@ export class Tree {
         this.root = undefined;
     }
 
+    /**
+     * Every row, as `pc ide state` reports it: where it is (the names down to it,
+     * joined with '/'), what kind of row it is, and whether its own box is ticked.
+     */
+    public rows(): { path: string; kind: string; ticked: boolean }[] {
+        const rows: { path: string; kind: string; ticked: boolean }[] = [];
+        const walk = (row: Row, above: string) => {
+            const path = above ? `${above}/${row.item.name}` : row.item.name;
+            rows.push({ path, kind: row.item.kind, ticked: row.checked });
+            row.children.forEach((child) => walk(child, path));
+        };
+        if (this.root !== undefined) {
+            walk(this.root, '');
+        }
+        return rows;
+    }
+
     /** The items to draw: every one whose own box and every box above it is ticked. */
     public visible(): Set<ItemId> {
         const visible = new Set<ItemId>();

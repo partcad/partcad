@@ -4,7 +4,7 @@ PartCAD example project to demonstrate parts defined using BREP files.
 
 ## Usage
 ```shell
-pc inspect box
+pc ide view box
 ```
 
 

@@ -9,7 +9,7 @@
 straight to `docker.from_env()`. On a machine with nothing behind the socket
 that raised the SDK's own "Error while fetching server API version:
 ('Connection aborted.', FileNotFoundError(2, 'No such file or directory'))" --
-out of `pc render`, `pc export` and `pc inspect` alike, naming neither the PCB
+out of `pc render`, `pc export` and `pc ide view` alike, naming neither the PCB
 nor anything the reader could do next.
 
 Nothing here starts a container.

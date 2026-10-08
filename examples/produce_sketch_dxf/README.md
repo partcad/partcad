@@ -4,7 +4,7 @@ This example demonstrates how to define a sketch using a DXF file.
 
 ## Usage
 ```shell
-pc inspect -s dxf_01
+pc ide view -s dxf_01
 ```
 
 

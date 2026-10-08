@@ -59,7 +59,7 @@ def convert_scene_file(input_filename: str, input_type: str, output_filename: st
     Nothing asks for it today, and that is worth stating rather than leaving to
     be discovered. The scene formats that are not `assy` all belong to a
     simulation engine's plugin package, and a throwaway package has no dependency
-    on one -- so `pc open --with mujoco` refuses a file that is not already MJCF
+    on one -- so `pc ide open --with mujoco` refuses a file that is not already MJCF
     instead of converting it (see `partcad_client.external._transcode_scene`).
     This stays because the machinery is the part conversion's, not because there
     is a caller: a scene format PartCAD itself implemented would convert here.

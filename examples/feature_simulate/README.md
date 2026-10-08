@@ -77,7 +77,7 @@ opened in MuJoCo:
 
 ```shell
 pc export -a -t sim-mujoco:mjcf -O ./ unstable
-pc open --with mujoco ./unstable.xml
+pc ide open --with mujoco ./unstable.xml
 ```
 
 

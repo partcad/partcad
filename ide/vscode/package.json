@@ -464,298 +464,345 @@
         "title": "Restart PartCAD",
         "category": "PartCAD",
         "command": "partcad.restart",
-        "icon": "$(refresh)"
+        "icon": "$(refresh)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "title": "Update PartCAD",
         "category": "PartCAD",
         "command": "partcad.update",
-        "icon": "$(cloud-download)"
+        "icon": "$(cloud-download)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "title": "Show Terminal",
         "category": "PartCAD",
         "command": "partcad.showTerminal",
-        "icon": "$(terminal)"
+        "icon": "$(terminal)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.promptInitPackage",
         "category": "PartCAD",
         "title": "Initialize new package",
-        "icon": "$(new-folder)"
+        "icon": "$(new-folder)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.promptInitPackageCustom",
         "category": "PartCAD",
         "title": "Initialize new package at a custom path",
-        "icon": "$(new-folder)"
+        "icon": "$(new-folder)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.promptLoadPackage",
         "category": "PartCAD",
         "title": "Open package",
-        "icon": "$(folder-opened)"
+        "icon": "$(folder-opened)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "title": "Reload the package",
         "category": "PartCAD",
         "command": "partcad.refresh",
-        "icon": "$(sync)"
+        "icon": "$(sync)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "title": "Install the package dependencies",
         "category": "PartCAD",
         "command": "partcad.installPackage",
-        "icon": "$(cloud-download)"
+        "icon": "$(cloud-download)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "title": "PartCAD support",
         "category": "PartCAD",
         "command": "partcad.support",
-        "icon": "$(icon)"
+        "icon": "$(icon)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "title": "Open PartCAD Viewer",
         "category": "PartCAD",
         "command": "partcad.viewer",
-        "icon": "$(preview)"
+        "icon": "$(preview)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "title": "Explain why an object could not be loaded",
         "category": "PartCAD",
         "command": "partcad.showBrokenItem",
-        "icon": "$(warning)"
+        "icon": "$(warning)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.addPart",
         "category": "PartCAD",
         "title": "Add a part",
-        "icon": "$(file-add)"
+        "icon": "$(file-add)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.addPartItem",
         "category": "PartCAD",
         "title": "Add a part",
-        "icon": "$(file-add)"
+        "icon": "$(file-add)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.addAssembly",
         "category": "PartCAD",
         "title": "Add an assembly",
-        "icon": "$(diff-added)"
+        "icon": "$(diff-added)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.addAssemblyItem",
         "category": "PartCAD",
         "title": "Add an assembly",
-        "icon": "$(diff-added)"
+        "icon": "$(diff-added)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.addScene",
         "category": "PartCAD",
         "title": "Add a scene",
-        "icon": "$(diff-added)"
+        "icon": "$(diff-added)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.addSceneItem",
         "category": "PartCAD",
         "title": "Add a scene",
-        "icon": "$(diff-added)"
+        "icon": "$(diff-added)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.addSketch",
         "category": "PartCAD",
         "title": "Add a sketch",
-        "icon": "$(error)"
+        "icon": "$(error)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.addInterface",
         "category": "PartCAD",
         "title": "Add an interface",
-        "icon": "$(error)"
+        "icon": "$(error)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.importSketch",
         "category": "PartCAD",
         "title": "Import a sketch",
-        "icon": "$(error)"
+        "icon": "$(error)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.importPart",
         "category": "PartCAD",
         "title": "Import a part",
-        "icon": "$(error)"
+        "icon": "$(error)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.importAssembly",
         "category": "PartCAD",
         "title": "Import an assembly",
-        "icon": "$(error)"
+        "icon": "$(error)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.importScene",
         "category": "PartCAD",
         "title": "Import a scene",
-        "icon": "$(error)"
+        "icon": "$(error)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.inspectSketch",
         "category": "PartCAD",
         "title": "Display",
-        "icon": "$(eye)"
+        "icon": "$(eye)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.inspectPart",
         "category": "PartCAD",
         "title": "Display",
-        "icon": "$(eye)"
+        "icon": "$(eye)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.inspectPartWithCode",
         "category": "PartCAD",
         "title": "Display and edit",
-        "icon": "$(eye)"
+        "icon": "$(eye)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.inspectAssembly",
         "category": "PartCAD",
         "title": "Display",
-        "icon": "$(eye)"
+        "icon": "$(eye)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.inspectScene",
         "category": "PartCAD",
         "title": "Display",
-        "icon": "$(eye)"
+        "icon": "$(eye)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.inspectInterface",
         "category": "PartCAD",
         "title": "Display",
-        "icon": "$(eye)"
+        "icon": "$(eye)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.test",
         "category": "PartCAD",
         "title": "Test",
-        "icon": "$(debug)"
+        "icon": "$(debug)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.inspectFileRoot",
         "category": "PartCAD",
         "title": "Top level config",
-        "icon": "$(edit)"
+        "icon": "$(edit)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.inspectSource",
         "category": "PartCAD",
         "title": "Edit",
-        "icon": "$(edit)"
+        "icon": "$(edit)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.exportToSVG",
         "category": "PartCAD",
         "group": "Export",
         "title": "SVG...",
-        "icon": "$(export)"
+        "icon": "$(export)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.exportToPNG",
         "category": "PartCAD",
         "group": "Export",
         "title": "PNG...",
-        "icon": "$(export)"
+        "icon": "$(export)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.exportToJPEG",
         "category": "PartCAD",
         "group": "Export",
         "title": "JPEG...",
-        "icon": "$(export)"
+        "icon": "$(export)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.exportToSTEP",
         "category": "PartCAD",
         "group": "Export",
         "title": "STEP...",
-        "icon": "$(export)"
+        "icon": "$(export)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.exportToSTL",
         "category": "PartCAD",
         "group": "Export",
         "title": "STL...",
-        "icon": "$(export)"
+        "icon": "$(export)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.exportTo3MF",
         "category": "PartCAD",
         "group": "Export",
         "title": "3MF...",
-        "icon": "$(export)"
+        "icon": "$(export)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.exportToThreeJS",
         "category": "PartCAD",
         "group": "Export",
         "title": "ThreeJS...",
-        "icon": "$(export)"
+        "icon": "$(export)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.exportToOBJ",
         "category": "PartCAD",
         "group": "Export",
         "title": "OBJ...",
-        "icon": "$(export)"
+        "icon": "$(export)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.exportToIGES",
         "category": "PartCAD",
         "group": "Export",
         "title": "IGES...",
-        "icon": "$(export)"
+        "icon": "$(export)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.exportToGLTF",
         "category": "PartCAD",
         "group": "Export",
         "title": "glTF...",
-        "icon": "$(export)"
+        "icon": "$(export)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.openInFreeCAD",
         "category": "PartCAD",
         "group": "Open in",
         "title": "FreeCAD",
-        "icon": "$(link-external)"
+        "icon": "$(link-external)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.openInGazebo",
         "category": "PartCAD",
         "group": "Open in",
         "title": "Gazebo",
-        "icon": "$(link-external)"
+        "icon": "$(link-external)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.openInKiCad",
         "category": "PartCAD",
         "group": "Open in",
         "title": "KiCad",
-        "icon": "$(link-external)"
+        "icon": "$(link-external)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.openInBlender",
         "category": "PartCAD",
         "group": "Open in",
         "title": "Blender",
-        "icon": "$(link-external)"
+        "icon": "$(link-external)",
+        "enablement": "!partcad.editingExternally"
       },
       {
         "command": "partcad.openInMuJoCo",
         "category": "PartCAD",
         "group": "Open in",
         "title": "MuJoCo",
-        "icon": "$(link-external)"
+        "icon": "$(link-external)",
+        "enablement": "!partcad.editingExternally"
       }
     ],
     "submenus": [

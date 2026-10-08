@@ -4,8 +4,8 @@ PartCAD example project which implements its logo.
 
 ## Usage
 ```shell
-pc inspect head_half
-pc inspect bone
+pc ide view head_half
+pc ide view bone
 ```
 
 

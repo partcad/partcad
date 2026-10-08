@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 08:56-0700\n"
+"POT-Creation-Date: 2026-10-07 23:49-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -218,14 +218,14 @@ msgid ""
 "reached rather than in advance: an implementation whose package declares "
 "``container:``, importing a KiCad PCB (``useDockerKicad``), and the "
 "``docker`` Python sandbox when it was asked for by name. If ``pc "
-"render``, ``pc export`` or ``pc inspect`` reports that no container "
+"render``, ``pc export`` or ``pc ide view`` reports that no container "
 "runtime is available, start Docker or take the other route the message "
 "names -- for KiCad that is installing KiCad on this machine and setting "
 "``useDockerKicad: false``."
 msgstr ""
 "有三样东西明确需要容器，而且它们只在真正被用到时才会说明，不会提前告知：包中声明了 ``container:`` 的实现、导入 KiCad "
 "PCB（ ``useDockerKicad``），以及按名称指定使用的 ``docker`` Python 沙箱。如果 ``pc "
-"render``、 ``pc export`` 或 ``pc inspect`` 报告没有可用的容器运行时，请启动 "
+"render``、 ``pc export`` 或 ``pc ide view`` 报告没有可用的容器运行时，请启动 "
 "Docker，或者采用消息中指出的另一条路径——对于 KiCad 来说，那就是在本机安装 KiCad 并设置 ``useDockerKicad: "
 "false``。"
 
@@ -246,36 +246,39 @@ msgstr ""
 
 #: ../../source/troubleshooting.rst:153
 msgid ""
-"The KiCad container earlier releases made, ``integration-kicad``, carries"
-" no PartCAD label, so ``pc system prune`` cannot see it: remove it by "
-"hand with ``docker rm -f integration-kicad``. The containers for the "
-"Python sandbox, KiCad imports and a plugin's ``container:`` are now named"
-" ``partcad-<role>-<tag>-<identity>`` and labelled, and prune removes "
-"them."
+"Containers earlier releases made carry no PartCAD label, so ``pc system "
+"prune`` cannot see them: remove them by hand -- ``integration-kicad`` "
+"(KiCad) and the ``partcad-freecad``-style ones ``pc open`` used to make, "
+"with ``docker rm -f integration-kicad partcad-freecad`` and so on. Every "
+"container PartCAD makes now -- the Python sandbox, KiCad imports, a "
+"plugin's ``container:`` and an application ``pc ide open`` runs -- is "
+"named ``partcad-<role>-<tag>-<identity>`` and labelled, and prune removes"
+" it."
 msgstr ""
-"早期版本创建的 KiCad 容器 ``integration-kicad`` 没有 PartCAD 标签，因此 ``pc system "
-"prune`` 看不到它：请用 ``docker rm -f integration-kicad`` 手动删除。Python 沙箱、KiCad "
-"导入和插件的 ``container:`` 所用的容器现在都命名为 ``partcad-<role>-<tag>-<identity>`` "
-"并带有标签，prune 会删除它们。"
+"早期版本创建的容器没有 PartCAD 标签，因此 ``pc system prune`` 看不到它们：请手动删除——``integration-"
+"kicad`` （KiCad）以及 ``pc open`` 过去创建的 ``partcad-freecad`` 这类容器——用 ``docker "
+"rm -f integration-kicad partcad-freecad`` 等命令。PartCAD 现在创建的每个容器——Python "
+"沙箱、KiCad 导入、插件的 ``container:``，以及 ``pc ide open`` 运行的应用程序——都命名为 "
+"``partcad-<role>-<tag>-<identity>`` 并带有标签，prune 会删除它们。"
 
-#: ../../source/troubleshooting.rst:160 ../../source/troubleshooting.rst:201
-#: ../../source/troubleshooting.rst:263
+#: ../../source/troubleshooting.rst:162 ../../source/troubleshooting.rst:203
+#: ../../source/troubleshooting.rst:265
 msgid "Typical problems"
 msgstr "常见问题"
 
-#: ../../source/troubleshooting.rst:162
+#: ../../source/troubleshooting.rst:164
 msgid ""
 "When running `pc ...` commands, getting: \"pc is not a recognized "
 "command...\""
 msgstr "运行 `pc ...` 命令时，出现：“pc is not a recognized command...”"
 
-#: ../../source/troubleshooting.rst:164
+#: ../../source/troubleshooting.rst:166
 msgid ""
 "Make sure that Conda environment is activated in the current terminal, "
 "for example by running `conda info`"
 msgstr "请确保当前终端中已激活 Conda 环境，例如可以运行 `conda info` 来确认。"
 
-#: ../../source/troubleshooting.rst:165
+#: ../../source/troubleshooting.rst:167
 msgid ""
 "With the :ref:`standalone build <standalone-cli>`, there is no "
 "environment to activate: the commands are linked into ``~/.local/bin``, "
@@ -286,11 +289,11 @@ msgstr ""
 "目录，该目录必须位于 ``PATH`` 中。运行 ``~/.local/bin/pc version`` "
 "以确认安装本身没有问题，然后将该目录添加到 ``PATH`` 中。"
 
-#: ../../source/troubleshooting.rst:169
+#: ../../source/troubleshooting.rst:171
 msgid "Which one is running, the standalone build or a wheel?"
 msgstr "当前运行的是哪一个：独立构建版本还是 wheel 包？"
 
-#: ../../source/troubleshooting.rst:171
+#: ../../source/troubleshooting.rst:173
 msgid ""
 "``command -v pc`` says. A path under ``~/.local/share/partcad`` (or "
 "wherever ``--install-dir`` pointed) is the standalone build; a path "
@@ -301,11 +304,11 @@ msgstr ""
 "dir`` 所指向的任意位置）的路径是独立构建版本；位于某个 Python 环境内的路径则是 wheel 包。同时安装两者是受支持的，但只有 "
 "``PATH`` 中排在最前面的那个会被运行。"
 
-#: ../../source/troubleshooting.rst:175
+#: ../../source/troubleshooting.rst:177
 msgid "Imports hang, or time out reaching a repository the browser can open:"
 msgstr "导入卡住，或者在访问浏览器明明能打开的仓库时超时："
 
-#: ../../source/troubleshooting.rst:177
+#: ../../source/troubleshooting.rst:179
 msgid ""
 "The network is very likely one where a proxy is the only route out. "
 "PartCAD reads ``HTTPS_PROXY``, ``HTTP_PROXY`` and ``NO_PROXY`` for "
@@ -317,7 +320,7 @@ msgstr ""
 "``NO_PROXY``——git 仓库、tarball 以及 ``fileFrom: url`` "
 "文件都一样——所以导出这几个变量通常就是全部的解决办法。参见 :ref:`proxy-configuration`。"
 
-#: ../../source/troubleshooting.rst:181
+#: ../../source/troubleshooting.rst:183
 msgid ""
 "If a fetch fails to verify a certificate rather than hanging, the proxy "
 "is re-terminating TLS and its CA is not trusted here. Point "
@@ -326,11 +329,11 @@ msgstr ""
 "如果抓取不是卡住，而是证书校验失败，那就说明代理重新终结了 TLS，而它的 CA 在这里不被信任。请把 ``SSL_CERT_FILE`` 和 "
 "``REQUESTS_CA_BUNDLE`` 指向该代理的 CA 证书包。"
 
-#: ../../source/troubleshooting.rst:186
+#: ../../source/troubleshooting.rst:188
 msgid "PartCAD VSCode Extension"
 msgstr "PartCAD VSCode 扩展"
 
-#: ../../source/troubleshooting.rst:188
+#: ../../source/troubleshooting.rst:190
 msgid ""
 "The recommended way to use PartCAD is by using the Visual Studio "
 "Extension called ``PartCAD``. Follow the extension documentation for "
@@ -339,7 +342,7 @@ msgstr ""
 "推荐的 PartCAD 使用方式是使用名为 ``PartCAD`` 的 Visual Studio "
 "扩展。请按照该扩展的文档说明来了解如何使用此扩展。"
 
-#: ../../source/troubleshooting.rst:192
+#: ../../source/troubleshooting.rst:194
 msgid ""
 "For troubleshooting purposes, the ``PartCAD`` terminal view output may "
 "not suffice due to the ephemeral nature of some output in that view (many"
@@ -350,18 +353,18 @@ msgstr ""
 "终端视图的输出可能并不够用，因为该视图中的部分输出是临时性的（许多输出行会被覆盖）。要获取完整而详细的错误日志，请查看 ``Output`` "
 "视图中的 ``PartCAD`` 输出。"
 
-#: ../../source/troubleshooting.rst:197
+#: ../../source/troubleshooting.rst:199
 msgid ""
 "A ``PartCAD`` terminal you closed stays closed: **PartCAD: Show "
 "Terminal** opens it again, with everything it missed (see :ref:`partcad-"
 "terminal`)."
 msgstr "你关闭的 ``PartCAD`` 终端会一直保持关闭： **PartCAD: Show Terminal** 会重新打开它，并带上它错过的全部内容（参见 :ref:`partcad-terminal` ）。"
 
-#: ../../source/troubleshooting.rst:203
+#: ../../source/troubleshooting.rst:205
 msgid "Message in \"Explorer\" left panel: \"PartCAD ... is not found\""
 msgstr "“Explorer”左侧面板中出现消息：“PartCAD ... is not found”"
 
-#: ../../source/troubleshooting.rst:205
+#: ../../source/troubleshooting.rst:207
 msgid ""
 "Press \"Install or update PartCAD\" in the \"Explorer\" left panel and "
 "the extension downloads a standalone PartCAD for you. No Python is "
@@ -370,7 +373,7 @@ msgstr ""
 "在“Explorer”左侧面板中按下“Install or update PartCAD”，扩展就会为你下载一份独立版 PartCAD。完全不需要"
 " Python。"
 
-#: ../../source/troubleshooting.rst:207
+#: ../../source/troubleshooting.rst:209
 msgid ""
 "Or, if you would rather use your own Python environment, run ``pip "
 "install partcad`` in it. The extension looks for ``partcad-json-rpc`` on "
@@ -383,13 +386,13 @@ msgid ""
 msgstr ""
 "或者，如果你更愿意使用自己的 Python 环境，就在其中运行 ``pip install partcad`` 。扩展会在 **Visual Studio Code 自身启动时所用的** ``PATH`` 上查找 ``partcad-json-rpc`` ，那并不是你在编辑器中选择的解释器；除非 Visual Studio Code 是从虚拟环境中启动的，否则该 ``PATH`` 也不包含虚拟环境。因此，要么从已激活的环境中启动编辑器，要么运行 **Find installed PartCAD** ，要么手动把 ``partcad.servicePath`` 设为该可执行文件。"
 
-#: ../../source/troubleshooting.rst:214
+#: ../../source/troubleshooting.rst:216
 msgid ""
 "Reload PartCAD extension (by pressing \"Reload\" button in \"Context\" "
 "left panel)"
 msgstr "重新加载 PartCAD 扩展（点击“Context”左侧面板中的“Reload”按钮）"
 
-#: ../../source/troubleshooting.rst:216
+#: ../../source/troubleshooting.rst:218
 msgid ""
 "\"The PartCAD extension is being initialized...\" in \"Explorer\" gets "
 "into infinite loop (and nothing happens in the corresponding terminal "
@@ -398,25 +401,25 @@ msgstr ""
 "“Explorer”中的“The PartCAD extension is being "
 "initialized...”陷入无限循环（并且对应的终端窗口中没有任何反应）"
 
-#: ../../source/troubleshooting.rst:218
+#: ../../source/troubleshooting.rst:220
 msgid "Close and reopen VSCode"
 msgstr "关闭并重新打开 VSCode"
 
-#: ../../source/troubleshooting.rst:220
+#: ../../source/troubleshooting.rst:222
 msgid "Error while loading part or assembly view: \"Module ... not found\""
 msgstr "加载零件或装配体视图时出错：“Module ... not found”"
 
-#: ../../source/troubleshooting.rst:222
+#: ../../source/troubleshooting.rst:224
 msgid ""
 "Make sure that the extension version matches the PartCAD version in ``pc "
 "version`` command output"
 msgstr "请确保扩展的版本与 ``pc version`` 命令输出中的 PartCAD 版本一致"
 
-#: ../../source/troubleshooting.rst:226
+#: ../../source/troubleshooting.rst:228
 msgid "PartCAD Viewer"
 msgstr ""
 
-#: ../../source/troubleshooting.rst:228
+#: ../../source/troubleshooting.rst:230
 msgid ""
 "The ``PartCAD Viewer`` is a tab the extension opens when a part, "
 "assembly, scene, sketch or interface is inspected. PartCAD tessellates "
@@ -431,7 +434,7 @@ msgstr ""
 "Python 一侧是 ``partcad_ide_client`` 包，它随 ``partcad`` 本身一起发布——因此只需要 ``pip "
 "install partcad``，没有任何需要单独安装的东西。"
 
-#: ../../source/troubleshooting.rst:236
+#: ../../source/troubleshooting.rst:238
 msgid ""
 "Beside the 3D view the panel carries tabs for the questions that are "
 "about the object rather than its shape -- **FEA** and **CFD** under "
@@ -449,7 +452,7 @@ msgstr ""
 "视图旁边还有 **2D** 和 **Draft**，它们会把对象渲染成文件。这些内容并不走上面那个套接字：它们由 PartCAD "
 "守护进程作答，并在首次打开相应标签页时获取，因此其中某一项失败属于守护进程的问题，并会在该标签页中说明，而 3D 视图仍可继续工作。"
 
-#: ../../source/troubleshooting.rst:245
+#: ../../source/troubleshooting.rst:247
 msgid ""
 "Anything with a ``partcad`` that can reach that port can display into the"
 " same viewer -- including a ``pc`` run in a plain terminal, as long as a "
@@ -463,11 +466,11 @@ msgstr ""
 "``PATH``，因此无需任何额外设置就能使用 ``pc`` （ ``partcad.addToolsToTerminalPath`` "
 "可以关闭这一行为）："
 
-#: ../../source/troubleshooting.rst:265
+#: ../../source/troubleshooting.rst:267
 msgid "``Failed to load \"partcad_ide_client\"`` in the PartCAD terminal view"
 msgstr "PartCAD 终端视图中出现 ``Failed to load \"partcad_ide_client\"``"
 
-#: ../../source/troubleshooting.rst:267
+#: ../../source/troubleshooting.rst:269
 msgid ""
 "The package ships inside ``partcad``, so this means the installation is "
 "damaged rather than incomplete. Reinstall with ``pip install --force-"
@@ -477,7 +480,7 @@ msgstr ""
 "该包随 ``partcad`` 一起发布，所以这说明安装被损坏了，而不是不完整。请用 ``pip install --force-"
 "reinstall partcad`` 重新安装，或者在“Context”左侧面板中按下“Update PartCAD”。"
 
-#: ../../source/troubleshooting.rst:271
+#: ../../source/troubleshooting.rst:273
 msgid ""
 "On a PartCAD older than 0.8.0 it was a separate ``partcad-ide-client`` "
 "distribution that was never published; upgrading is the fix."
@@ -485,17 +488,17 @@ msgstr ""
 "在早于 0.8.0 的 PartCAD 上，它曾是一个独立的 ``partcad-ide-client`` "
 "分发包，而那个分发包从未发布过；升级即可解决。"
 
-#: ../../source/troubleshooting.rst:274
+#: ../../source/troubleshooting.rst:276
 msgid "``No PartCAD IDE with an open PartCAD Viewer detected``"
 msgstr ""
 
-#: ../../source/troubleshooting.rst:276
+#: ../../source/troubleshooting.rst:278
 msgid ""
 "Nothing is listening on the viewer port. Open a window with the PartCAD "
 "extension active; the extension starts listening when it activates."
 msgstr "没有任何程序在监听查看器端口。请打开一个启用了 PartCAD 扩展的窗口；扩展在激活时就会开始监听。"
 
-#: ../../source/troubleshooting.rst:278
+#: ../../source/troubleshooting.rst:280
 msgid ""
 "If two windows are open, only one of them may own the port on platforms "
 "without ``SO_REUSEPORT``. The \"PartCAD Viewer port ... is already in "
@@ -504,7 +507,7 @@ msgstr ""
 "如果打开了两个窗口，在不支持 ``SO_REUSEPORT`` 的平台上只有其中一个能占有该端口。 ``PartCAD`` "
 "输出视图中的“PartCAD Viewer port ... is already in use”消息会说明属于哪种情况。"
 
-#: ../../source/troubleshooting.rst:281
+#: ../../source/troubleshooting.rst:283
 msgid ""
 "Set ``PARTCAD_IDE_PORT`` to move a ``partcad`` process to a different "
 "port if 9137 is taken by something else on the machine."
@@ -512,13 +515,13 @@ msgstr ""
 "如果 9137 端口已被机器上的其他程序占用，可以设置 ``PARTCAD_IDE_PORT``，把某个 ``partcad`` "
 "进程挪到别的端口上。"
 
-#: ../../source/troubleshooting.rst:284
+#: ../../source/troubleshooting.rst:286
 msgid ""
 "\"Drawn without a graphics card\" in the corner of the 3D view or an "
 "analysis"
 msgstr "3D 视图或分析结果的角落里出现“Drawn without a graphics card”"
 
-#: ../../source/troubleshooting.rst:286
+#: ../../source/troubleshooting.rst:288
 msgid ""
 "VS Code could not use the graphics card, so the window has no WebGL, and "
 "the 3D view and the **FEA** and **CFD** tabs draw the model on the "
@@ -533,11 +536,11 @@ msgstr ""
 "Code 才能重新获得 WebGL（由 Chromium "
 "自身以软件方式绘制，外观与平常的视图一致），以及如何让它的图标每次都这样启动。PartCAD IDE 已经默认这样做了。"
 
-#: ../../source/troubleshooting.rst:293
+#: ../../source/troubleshooting.rst:295
 msgid "The **Draft** tab says a package is not found"
 msgstr "**Draft** 标签页提示找不到某个包"
 
-#: ../../source/troubleshooting.rst:295
+#: ../../source/troubleshooting.rst:297
 msgid ""
 "The drawing package, ``//pub/feature/render/draftwright``, comes from the"
 " public PartCAD index. A workspace that does not import ``pub`` has no "

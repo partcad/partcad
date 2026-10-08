@@ -66,7 +66,10 @@ IN_PROCESS = {
     # A GUI application opens on the screen of the machine that starts it, and
     # the path it is handed only exists there. A daemon can be remote, so this
     # cannot be its work -- and it needs no package graph or CAD runtime anyway.
-    "open.py": "launches a third-party application on the client's own machine, with the client's own file",
+    "ide/open.py": "launches a third-party application on the client's own machine, with the client's own file",
+    # Asks the IDE on this machine what it is showing, over the IDE's own
+    # socket. The IDE is wherever the person is, and a daemon can be remote.
+    "ide/state.py": "asks the PartCAD IDE on the client's own machine what it is showing",
     "daemon/start.py": "manages the daemon process itself",
     "daemon/stop.py": "manages the daemon process itself",
     "system/telemetry/clear.py": "clears the client's own telemetry id under the client's state dir",
@@ -96,7 +99,7 @@ IN_PROCESS = {
 
 # The one thing an in-process command may ask the daemon for, and what it may
 # ask. An in-process command works on client-only state, and that stays true of
-# every command listed above -- but `pc open` has one step in the middle that is
+# every command listed above -- but `pc ide open` has one step in the middle that is
 # not client work at all: an application that reads meshes has to be handed one,
 # and turning a solid into a mesh drives a CAD wrapper, whose Python runtime
 # lives in the daemon's environment and may not exist on this machine.
@@ -115,7 +118,7 @@ IN_PROCESS_DAEMON_CALLS = {
     # asks which applications the workspace's packages declare. Both are
     # questions for the side that has the package graph and the CAD wrappers,
     # and neither opens anything: the window is still this process's to open.
-    "open.py": ("adhoc.convert", "open.tools"),
+    "ide/open.py": ("adhoc.convert", "open.tools"),
 }
 
 # Commands that have not been migrated to the daemon yet. This list is a debt
@@ -386,7 +389,7 @@ def test_in_process_commands_do_not_call_the_daemon():
 
                 The one exception is a step that is neither: contextless, file-in file-out
                 work that only the daemon's CAD runtime can do, wrapped in a command whose
-                result belongs on this machine. `pc open` converting a solid to a mesh for
+                result belongs on this machine. `pc ide open` converting a solid to a mesh for
                 Blender is that, and IN_PROCESS_DAEMON_CALLS at the top of this file is
                 where such a step is named -- one method at a time, with the reason.
                 """).format(details=details))

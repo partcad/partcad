@@ -29,7 +29,7 @@ Read out of the environment, and that is deliberately the whole of the mechanism
 on this side. The alternative -- asking here whether this is CI, on what branch,
 and whether that branch is ``devel`` -- would put a build system's facts inside
 a library that mostly runs on somebody's laptop, where those questions have no
-answers and a wrong one means ``pc open --with kicad`` quietly starting an
+answers and a wrong one means ``pc ide open --with kicad`` quietly starting an
 unreviewed branch's image. The run that knows the answer decides; this obeys.
 Which also makes it one variable to set in a test, rather than a CI environment
 to simulate.

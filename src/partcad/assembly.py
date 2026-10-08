@@ -367,7 +367,7 @@ class Assembly(Shape):
         'name' is the **object**: '<package>:<object>', what the child *is*. An
         assembly that places the same bolt a hundred times stamps one name on a
         hundred nodes, which is the point -- it is the identity the geometry
-        table is keyed by and the name 'pc inspect' resolves.
+        table is keyed by and the name 'pc ide view' resolves.
 
         'label' is the **link**: what *this* assembly addresses the child by, and
         so what a 'connect:', a 'map:' and a filter name (see 'link_name'). It

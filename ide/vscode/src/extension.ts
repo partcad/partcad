@@ -31,6 +31,7 @@ import { PartcadLint } from './PartcadLint';
 import { registerSpellingDictionary } from './spelling';
 import { PartcadViewer } from './viewer/PartcadViewer';
 import { PartcadViewerServer } from './viewer/PartcadViewerServer';
+import { ExplorerItemLike, collectIdeState } from './ideState';
 import * as PartcadItem from './PartcadItem';
 import { examples } from './examples';
 import { PartcadTerminals, setTerminalWriter, TERMINAL_PROFILE_ID, writeTerminal } from './terminal';
@@ -1167,6 +1168,18 @@ location: [[100, 0, 0], [0, 0, 1], 0]
     /* Instantiate the inspector */
     partcadInspector = new PartcadInspector(context.extensionUri);
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(PartcadInspector.viewType, partcadInspector));
+
+    // `pc ide state`: what the three views show, asked over the viewer's socket.
+    // Wired once all three exist; until then the server answers that the window
+    // is not ready rather than reporting half of it.
+    partcadViewerServer.setStateProvider(() =>
+        collectIdeState({
+            explorer: partcadExplorerView as unknown as vscode.TreeView<ExplorerItemLike>,
+            inspector: partcadInspector,
+            viewer: partcadViewer,
+            extensionVersion: context.extension?.packageJSON?.version ?? '',
+        }),
+    );
 
     vscode.languages.registerImplementationProvider('scad', {
         provideImplementation(

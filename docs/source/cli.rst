@@ -227,84 +227,6 @@ Host commands
     answer. ``pc`` itself does not use it yet — each command there still runs a service of its own — so what a
     daemon buys on Windows today is the editor extension's warm context.
 
-``pc open``
-  Open a file in a third-party application, on this machine::
-
-    pc open cube.step                       # in a locally installed FreeCAD
-    pc open --use-docker cube.step          # or in a container, when there is none
-    pc open --with blender cube.stl         # a mesh, in Blender
-    pc open --with blender cube.step        # a solid, converted to STL for Blender first
-    pc open --with gazebo warehouse.world   # a scene, in Gazebo (from partcad-sim-gazebo)
-    pc open --with mujoco stack.xml         # a scene, in MuJoCo (from partcad-sim-mujoco)
-    pc open --with kicad Arduino_Nano.step  # a board, in KiCad
-
-  ``--with`` names the application: ``freecad`` (the default), ``blender`` and ``kicad`` for a board are the
-  ones PartCAD itself ships. ``gazebo`` and ``mujoco`` come from the plugin package for that engine
-  (`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_,
-  `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_), beside the reader, the exporter and
-  the simulator for its scene format, so they are offered in a workspace that imports one and are an unknown
-  application anywhere else. A locally installed one is always
-  used when there is one: the command looks on the ``PATH``, in ``/Applications`` on macOS, under
-  ``Program Files`` on Windows, and for a flatpak on Linux. Gazebo is looked for under all three of the names
-  it has had (``gz sim``, ``ign gazebo``, ``gazebo``), and whichever the machine has is the one used.
-
-  Blender reads meshes and nothing else, so a file that is not one is converted to STL and Blender is given
-  that instead: an STL, an OBJ or a glTF is imported as it is, while a STEP file, a CadQuery script or a mesh
-  in a format Blender ships no importer for (3MF) is converted first. This is the one thing ``pc open`` asks
-  the PartCAD daemon for, because turning a solid into a mesh is CAD work; the window still opens on the
-  machine the command was run on. The converted copy is written under this workspace's own directory (never
-  beside your file), named after the object it came from, and reused until that object changes. ``--type``
-  says what the file holds when its name does not -- a ``.py`` is a CadQuery script, a build123d one or an SDF
-  one -- and the VS Code extension passes the declared type of the object you clicked. A ``.blend`` is
-  Blender's own file and is opened, not converted.
-
-  MuJoCo reads MJCF and no other model format, and a scene that is not already one is **not** converted here.
-  That is not an omission: MJCF is written by ``partcad-sim-mujoco``'s exporter and a Gazebo world is read by
-  ``partcad-sim-gazebo``'s reader, and a file handed to ``pc open`` has no package around it to reach either
-  through. So such a file is refused with the export that does work rather than converted wrongly. An
-  application's ``open:`` entry names the extensions its own format is stored in (``sceneExtensions``), which
-  is how a file that already is one goes straight over without any conversion at all.
-
-  An object that only means something inside a package -- an ASSY file, a URDF -- has nothing to convert
-  ad-hoc, and is refused with that for the same reason: export it to a mesh first (``pc export -t stl``), or
-  a scene to its engine's format (``pc export -S -t sim-mujoco:mjcf``), and open that.
-
-  KiCad is handed the board rather than the file named, when the two are not the same: a ``kicad`` part *is*
-  the STEP file KiCad's command line writes out of the board, so ``pc open --with kicad`` on it opens the
-  ``.kicad_pro`` (or ``.kicad_pcb``, or ``.kicad_sch``) beside it. Nothing is created here and nothing is
-  rendered -- a file with no board beside it is handed over as it is. Every application but Blender is given
-  the file it was pointed at, whatever it holds.
-
-  With ``--use-docker``, a machine that has no local installation runs the application in a container instead
-  — one container per application, named after it (``partcad-freecad``, ``partcad-blender``,
-  ``partcad-gazebo``, ``partcad-mujoco``, ``partcad-kicad``), created from the application's image
-  (``--docker-image`` overrides it; FreeCAD's is ``linuxserver/freecad:latest``, since the FreeCAD project
-  publishes no image of its own, Blender's is ``linuxserver/blender:latest`` for the same reason, KiCad's is
-  the ``ghcr.io/partcad/partcad-container-kicad`` image PartCAD already builds for ``kicad`` parts, and an
-  engine's is whatever its plugin package declares) the first
-  time and reused afterwards, so a container you have prepared
-  keeps being the one that is used. Without ``--use-docker``, a machine with neither the application nor
-  Docker is told so rather than being left with a command that quietly did nothing. Remove the application's
-  own container (``docker rm -f partcad-freecad``, ``partcad-blender``,
-  ``partcad-gazebo``, ``partcad-mujoco``, ``partcad-kicad``) to have the next ``pc open``
-  create a fresh one. The workspace and the directory holding this workspace's daemon socket are mounted **at
-  the paths they have on the host**, which is what lets one path mean the same thing on both sides. A file
-  that is not in this workspace gets its own workspace mounted instead, so that whatever is mounted always
-  contains the file the application is handed; a container created for one workspace and then used from
-  another says so, and says to remove it, rather than opening a name the container cannot resolve.
-
-  A containerised application draws on the host's X display. On Linux that display is usually a socket, which
-  is shared with the container along with its authority cookie, and nothing needs configuring; a display
-  reached over TCP — a forwarded one, or an X server on macOS or Windows (XQuartz, VcXsrv) — has to be
-  installed and allowed to accept the connection. When there is none, the command says which one to install
-  and what to run rather than starting a container whose window never appears.
-
-  Like ``pc lint --file`` and ``pc upgrade``, this never talks to the daemon — a daemon can be remote, where
-  the window would open on somebody else's screen. That is also why it takes a path rather than a
-  ``<package>:<part>`` name: resolving a name is a package-graph question, which is the round trip this
-  command does not make. ``--json`` prints what happened (or the reason it did not) as one object, which is
-  what the VS Code extension's "Open in..." context menu reads.
-
 ****************
 Package commands
 ****************
@@ -449,13 +371,9 @@ Object commands
   PartCAD implements no simulator: a package imports one and names it in ``simulation:``
   (`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the MuJoCo one and
   `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ the Gazebo one; each also declares
-  the reader, the writer and the ``pc open`` entry for that engine's own scene format). The *scene* does
+  the reader, the writer and the ``pc ide open`` entry for that engine's own scene format). The *scene* does
   have a built-in default -- an empty world holding the object -- so a simulation of a part standing on its
   own is a few lines. See :doc:`simulation` and ``examples/feature_simulate``.
-
-``pc inspect``
-  View a part, assembly, or scene visually. Use ``-V`` for a verbal (text) description instead of a visual
-  one, and ``-p <name>=<value>`` to set parameters.
 
 ``pc info``
   Show detailed information about a part, assembly, scene, or software, including its parameters. Name the
@@ -951,6 +869,152 @@ Object commands
 
     pc instructions robot                         # robot.pdf: this assembly's own steps
     pc instructions -t html -r -b -O docs/ robot  # every step and every part made, as HTML
+
+********************
+Interacting with IDE
+********************
+
+Putting an object in front of a person, in one of two windows -- the IDE's own **PartCAD Viewer**
+(``pc ide view``), or **another application** on this machine (``pc ide open``, which is also what the editor
+extension's "Open in..." menu runs) -- and asking the IDE what it is showing (``pc ide state``). None of them
+leaves anything new in the package: that is what ``pc export`` and ``pc render`` are for. They used to be ``pc inspect`` and ``pc open``. Those names still work, are left out
+of ``pc --help``, and print a note on stderr saying what to type instead.
+
+``pc ide view``
+  View a part, assembly, or scene in the PartCAD Viewer. Use ``-V`` for a verbal (text) description instead of a visual
+  one, and ``-p <name>=<value>`` to set parameters.
+
+``pc ide state``
+  Print what the PartCAD IDE on this machine is showing, as YAML (the default) or ``--json``::
+
+    pc ide state                 # YAML
+    pc ide state --json          # the same document, for a program to read
+
+  One document, one entry per view:
+
+  * ``explorer`` -- what is selected in the PartCAD Explorer: each row's ``kind`` (``part``, ``assembly``,
+    ``package``, ...), its full ``path`` (``//pub/examples:cube``, or a package's own path), what it is declared
+    as and the file it is read from.
+  * ``inspector`` -- the object the PartCAD Inspector shows: its properties, every parameter it declares with
+    what the field holds **now** (``value``), and what the object was last shown with (``applied``). The two
+    differ when a value has been typed and Update not pressed. ``live: false`` says the Inspector's panel could
+    not be asked -- it is collapsed -- and the values are the applied ones.
+  * ``viewer`` -- the PartCAD Viewer: the ``tab`` and ``subTab`` on screen (``design``/``2d``), what every tab
+    strip offers and which tabs are disabled, and for **each sub-tab** its ``filters`` -- what it would send
+    ``pc render --filter``, or ``null`` for the whole object -- and its ``selections``: the boxes ticked in its
+    tree, the port overlays on the 2D tab, and the value of every control in its pane (format, drawing package,
+    switches). They differ by sub-tab, which is why each has its own entry. ``screenshot`` is the path of a PNG of
+    the sub-tab on screen, written by the IDE into its temporary directory (``/tmp/partcad-viewer-design-2d-<time>.png``
+    on Linux); when one cannot be taken -- the panel is closed, or hidden behind another editor --
+    ``screenshotError`` says why.
+
+  The IDE is asked over the socket ``pc ide view`` shows things on, so this needs no daemon and no workspace,
+  and runs where the IDE does. The 3D view's text callouts are drawn over the canvas rather than in it, so they
+  are not in its screenshot. With two VS Code windows open on Linux, the kernel hands the question to one of
+  them; ``window.workspaceFolders`` says which one answered.
+
+``pc ide open``
+  Open a file in a third-party application, on this machine::
+
+    pc ide open cube.step                       # in a locally installed FreeCAD
+    pc ide open --use-docker cube.step          # or in a container, when there is none
+    pc ide open --with blender cube.stl         # a mesh, in Blender
+    pc ide open --with blender cube.step        # a solid, converted to STL for Blender first
+    pc ide open --with gazebo warehouse.world   # a scene, in Gazebo (from partcad-sim-gazebo)
+    pc ide open --with mujoco stack.xml         # a scene, in MuJoCo (from partcad-sim-mujoco)
+    pc ide open --with kicad Arduino_Nano.step  # a board, in KiCad
+
+  ``--with`` names the application: ``freecad`` (the default), ``blender`` and ``kicad`` for a board are the
+  ones PartCAD itself ships. ``gazebo`` and ``mujoco`` come from the plugin package for that engine
+  (`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_,
+  `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_), beside the reader, the exporter and
+  the simulator for its scene format, so they are offered in a workspace that imports one and are an unknown
+  application anywhere else. A locally installed one is always
+  used when there is one: the command looks on the ``PATH``, in ``/Applications`` on macOS, under
+  ``Program Files`` on Windows, and for a flatpak on Linux. Gazebo is looked for under all three of the names
+  it has had (``gz sim``, ``ign gazebo``, ``gazebo``), and whichever the machine has is the one used.
+
+  **``pc ide open`` waits for the application to close**, and then brings back what was done in it. Each application
+  declares what it opens, best first (``formats:`` in its ``open:`` entry -- FreeCAD's is ``fcstd``, ``step``,
+  ``brep``, ``iges``, ``stl``, ``obj``; Blender's is ``blend`` and the meshes it imports). A file already in one of
+  them is opened as it is. Any other is converted to the first one PartCAD can write, and the application is
+  given that: a STEP file, a CadQuery script or a 3MF mesh reaches Blender as STL, and a build123d script
+  reaches FreeCAD as STEP. Converting is the one thing ``pc ide open`` asks the PartCAD daemon for, because turning
+  a solid into a mesh is CAD work; the window still opens on the machine the command was run on. The converted
+  copy is written under this workspace's own directory (never beside your file), named after the object it
+  came from, and reused until that object changes. ``--type`` says what the file holds when its name does not
+  -- a ``.py`` is a CadQuery script, a build123d one or an SDF one -- and the VS Code extension passes the
+  declared type of the object you clicked.
+
+  When the application closes, the file it was given is compared with what it was before:
+
+  * **Unchanged** -- nothing happens, and ``No changes.`` says so.
+  * **Changed, and opened as it is** -- the edit is already in your file.
+  * **Changed, and converted first** -- the edited copy is converted back into the object's own format and
+    written over its source, when that source is a file PartCAD can write (``step``, ``brep``, ``stl``, ``3mf``,
+    ``obj``, ``iges``, ``gltf``). A script is not: its edit is kept where it was made and the path is printed,
+    because overwriting the program that generates a part with its output would destroy the program.
+
+  An application that saves beside what it opened -- KiCad -- has its whole directory compared rather than
+  the one file. Interrupting ``pc ide open`` (``Ctrl+C``) stops the wait and leaves the application open; what is
+  saved in it from then on is not brought back.
+
+  MuJoCo reads MJCF and no other model format, and a scene that is not already one is **not** converted here.
+  That is not an omission: MJCF is written by ``partcad-sim-mujoco``'s exporter and a Gazebo world is read by
+  ``partcad-sim-gazebo``'s reader, and a file handed to ``pc ide open`` has no package around it to reach either
+  through. So such a file is refused with the export that does work rather than converted wrongly. An
+  application's ``open:`` entry names the extensions its own format is stored in (``sceneExtensions``), which
+  is how a file that already is one goes straight over without any conversion at all.
+
+  An object that only means something inside a package -- an ASSY file, a URDF -- has nothing to convert
+  ad-hoc, and is refused with that for the same reason: export it to a mesh first (``pc export -t stl``), or
+  a scene to its engine's format (``pc export -S -t sim-mujoco:mjcf``), and open that.
+
+  KiCad is handed the board rather than the file named, when the two are not the same: a ``kicad`` part *is*
+  the STEP file KiCad's command line writes out of the board, so ``pc ide open --with kicad`` on it opens the
+  ``.kicad_pro`` (or ``.kicad_pcb``, or ``.kicad_sch``) beside it. Nothing is created here and nothing is
+  rendered -- a file with no board beside it is handed over as it is. Every application but Blender is given
+  the file it was pointed at, whatever it holds.
+
+  With ``--use-docker``, a machine that has no local installation runs the application in a container instead,
+  started the way PartCAD starts every container (see :ref:`useDockerRemote <use-docker-remote>`): named
+  ``partcad-open-<application>-<tag>-<identity>``, labelled so that ``pc system prune`` removes it, replaced
+  rather than reused when what it was created from has changed, and running PartCAD's own container service,
+  through which the application is launched. The image is the one the application's ``open:`` entry declares
+  under ``container:`` (``--docker-image`` overrides it): FreeCAD's is ``linuxserver/freecad:latest``, since the
+  FreeCAD project publishes no image of its own, Blender's is ``linuxserver/blender:latest`` for the same
+  reason, KiCad's is the ``ghcr.io/partcad/partcad-container-kicad`` image PartCAD already builds for
+  ``kicad`` parts, and an engine's is whatever its plugin package declares. The application's own settings
+  live in a volume of their own (``partcad-open-<application>-home``), so they outlast the container. Without
+  ``--use-docker``, a machine with neither the application nor Docker is told so rather than being left with a
+  command that quietly did nothing.
+
+  The file reaches the container one of two ways, and ``useDockerRemote`` chooses:
+
+  * **mount** (the default) -- the directory holding the file is mounted at the path it has on the host, so one
+    path means the same thing on both sides, and the application saves straight into it. In a dev container
+    holding the host's Docker socket, each directory is bound from where the host's daemon keeps it -- the
+    workspace's bind, ``/tmp``'s volume -- at the path it has in the dev container, which is how the ``docker``
+    Python sandbox binds them too. A file on none of the dev container's mounts is refused with the ways out
+    (mount it, ``PC_DOCKER_MOUNT_SOURCES``, or ``useDockerRemote``). Outside any workspace, only the file's own
+    directory is mounted -- not the directory the command was run from.
+  * **upload** (``useDockerRemote: true``, or ``PC_USE_DOCKER_REMOTE=true``) -- nothing is mounted. The file (or,
+    for KiCad, its directory) is sent with the request that launches the application, and what it is when the
+    application closes is sent back and written here. This is what a Docker daemon on another machine needs.
+    A ``fileArgs`` template that quotes the path inside a script (``{path_repr}``) cannot be sent this way and is
+    refused; ``{path}``, the path as an argument of its own, can.
+
+  A containerised application draws on the host's X display. On Linux that display is usually a socket, which
+  is shared with the container along with its authority cookie, and nothing needs configuring; a display
+  reached over TCP — a forwarded one, or an X server on macOS or Windows (XQuartz, VcXsrv) — has to be
+  installed and allowed to accept the connection. When there is none, the command says which one to install
+  and what to run rather than starting a container whose window never appears.
+
+  Like ``pc lint --file`` and ``pc upgrade``, this never talks to the daemon — a daemon can be remote, where
+  the window would open on somebody else's screen. That is also why it takes a path rather than a
+  ``<package>:<part>`` name: resolving a name is a package-graph question, which is the round trip this
+  command does not make. ``--json`` prints what happened (or the reason it did not) as one object, which is
+  what the VS Code extension's "Open in..." context menu reads.
 
 *****************
 Workflow commands

@@ -378,7 +378,7 @@ class JsonRpcBackend implements PartcadBackend {
     }
 
     /**
-     * Open one file in a third-party application with `pc open`.
+     * Open one file in a third-party application with `pc ide open`.
      *
      * Never over this connection, and there is no RPC method for it: the daemon
      * can be remote, where the window would open on somebody else's screen and
@@ -389,27 +389,30 @@ class JsonRpcBackend implements PartcadBackend {
      * something worked out here: PartCAD decides how to run the application, and
      * this only says what it is allowed to do.
      *
-     * `pc open` may make a daemon call of its own on the way -- an application
+     * `pc ide open` may make a daemon call of its own on the way -- an application
      * that reads meshes has to be handed one, and converting a solid into one is
      * CAD work. That is its connection, not this one, and it is a conversion
      * rather than an opening: the window still belongs to the machine the
      * command ran on.
      */
-    private async openExternal(arg: {
-        path?: string;
-        tool?: string;
-        type?: string;
-    }): Promise<{ detail: string; method: string }> {
+    private async openExternal(arg: { path?: string; tool?: string; type?: string; signal?: AbortSignal }): Promise<{
+        detail: string;
+        method: string;
+        changed?: boolean;
+        writtenBack?: string | null;
+        edited?: string | null;
+    }> {
         const config = vscode.workspace.getConfiguration('partcad');
         const image = (config.get<string>('open.dockerImage') ?? '').trim();
         const args = [
+            'ide',
             'open',
             '--with',
             arg?.tool ?? 'freecad',
             // What the object was declared as. It matters for an application
             // that reads meshes only -- Blender -- where a file that is not one
             // has to be converted first, and a file name does not always say
-            // which type it holds. `pc open` decides what to do with it.
+            // which type it holds. `pc ide open` decides what to do with it.
             ...(arg?.type ? ['--type', arg.type] : []),
             ...((config.get<boolean>('open.useDocker') ?? true) ? ['--use-docker'] : []),
             ...(image ? ['--docker-image', image] : []),
@@ -422,6 +425,7 @@ class JsonRpcBackend implements PartcadBackend {
             // Rejecting on the exit code would throw it away and leave the user
             // with "the command failed".
             allowFailure: true,
+            signal: arg?.signal,
         });
         let parsed: any;
         try {
@@ -435,7 +439,13 @@ class JsonRpcBackend implements PartcadBackend {
         if (!parsed?.ok) {
             throw new Error(parsed?.error ?? 'PartCAD could not open the file.');
         }
-        return { detail: parsed.detail ?? '', method: parsed.method ?? '' };
+        return {
+            detail: parsed.detail ?? '',
+            method: parsed.method ?? '',
+            changed: parsed.changed,
+            writtenBack: parsed.writtenBack,
+            edited: parsed.edited,
+        };
     }
 
     /**
@@ -695,23 +705,35 @@ function runCli(
     cwd: string,
     outputChannel: vscode.LogOutputChannel,
     env?: NodeJS.ProcessEnv,
-    options?: { stdin?: string; allowFailure?: boolean },
+    options?: { stdin?: string; allowFailure?: boolean; signal?: AbortSignal },
 ): Promise<string> {
     return new Promise((resolve, reject) => {
         if (!cliPath) {
             reject(new Error('no `pc` executable beside the PartCAD service'));
             return;
         }
-        const proc = cp.execFile(cliPath, ['--no-ansi', ...args], { cwd, env: utf8Env(env) }, (err, stdout, stderr) => {
-            if (stderr) {
-                outputChannel.append(stderr);
-            }
-            if (err && !options?.allowFailure) {
-                reject(new Error(`pc ${args.join(' ')} failed: ${err.message}: ${stderr}`));
-                return;
-            }
-            resolve(stdout);
-        });
+        // No timeout: `pc ide open` runs for as long as somebody is editing. The
+        // signal is what stops it -- which stops the waiting and leaves the
+        // application open, since `pc ide open` starts it in a session of its own.
+        const proc = cp.execFile(
+            cliPath,
+            ['--no-ansi', ...args],
+            { cwd, env: utf8Env(env), signal: options?.signal, maxBuffer: 16 * 1024 * 1024 },
+            (err, stdout, stderr) => {
+                if (stderr) {
+                    outputChannel.append(stderr);
+                }
+                if (options?.signal?.aborted) {
+                    reject(new Error('stopped waiting'));
+                    return;
+                }
+                if (err && !options?.allowFailure) {
+                    reject(new Error(`pc ${args.join(' ')} failed: ${err.message}: ${stderr}`));
+                    return;
+                }
+                resolve(stdout);
+            },
+        );
         // Always closed, with the content when there is any. `pc` never prompts,
         // so a child left holding an open stdin would only ever be one that
         // cannot tell "nothing yet" from "nothing at all".

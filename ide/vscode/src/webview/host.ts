@@ -23,7 +23,14 @@
 // been, and every other tab goes on working.
 //
 
-import { FetchDetailsMessage, FetchFormatsMessage, FetchTabMessage, SaveChoicesMessage, TabId } from './messages';
+import {
+    FetchDetailsMessage,
+    FetchFormatsMessage,
+    FetchTabMessage,
+    SaveChoicesMessage,
+    StateReplyMessage,
+    TabId,
+} from './messages';
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 
@@ -215,3 +222,8 @@ window.addEventListener('error', (event: ErrorEvent) => {
 window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
     report('The PartCAD Viewer hit an error', describe(event.reason));
 });
+
+/** Answer `pc ide state` (see 'state.ts'). */
+export function sendState(reply: StateReplyMessage): void {
+    vscode.postMessage(reply);
+}

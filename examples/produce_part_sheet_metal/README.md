@@ -4,9 +4,9 @@ This example demonstrates parts that are made by bending a flat piece of sheet m
 
 ## Usage
 ```shell
-pc inspect angle_up
-pc inspect angle_down
-pc inspect bracket
+pc ide view angle_up
+pc ide view angle_down
+pc ide view bracket
 pc test -f manufacturability-sheet-metal
 ```
 
@@ -15,9 +15,9 @@ is a sketch of its own -- its own geometry, its own cache entry, its own
 file:
 
 ```shell
-pc inspect -s 'panel;include=BEND_UP'
-pc inspect -s 'panel;include=BEND_DOWN'
-pc inspect -s 'panel;include=BEND_UP,BEND_DOWN'
+pc ide view -s 'panel;include=BEND_UP'
+pc ide view -s 'panel;include=BEND_DOWN'
+pc ide view -s 'panel;include=BEND_UP,BEND_DOWN'
 ```
 
 

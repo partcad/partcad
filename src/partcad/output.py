@@ -158,7 +158,7 @@ SIMULATE = "simulation"
 IMPORT = "import"
 
 # The fifth, and the only one whose implementation is not a script: 'open:'
-# declares the third-party applications 'pc open' can launch. An entry is data
+# declares the third-party applications 'pc ide open' can launch. An entry is data
 # and nothing else -- where the application is on each operating system, what to
 # run it as, which container to fall back to, and what it can read -- because
 # the one thing that would be code is the same for every tool there is, and
@@ -170,8 +170,8 @@ IMPORT = "import"
 # simulator for that engine's own scene format; a package that wraps some other
 # tool adds it without PartCAD having heard of it.
 #
-# 'pc open' is a client-side command that deliberately needs no package graph
-# (see 'partcad_cli.click.commands.open'), so the built-in half of this table is
+# 'pc ide open' is a client-side command that deliberately needs no package graph
+# (see 'partcad_cli.click.commands.ide.open'), so the built-in half of this table is
 # read straight off disk out of the wheel and needs no context at all. Only a
 # tool a *package* declares needs one, and that is the daemon's to answer.
 OPEN = "open"
