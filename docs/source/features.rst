@@ -98,10 +98,10 @@ The 3D view arrives over the viewer protocol from whichever ``partcad`` asked fo
 other tabs are questions put to the PartCAD daemon, fetched the first time the tab is looked at and cached
 until the next object is shown. An object that belongs to no package gets the 3D view alone.
 
-The 3D view uses the graphics card where the window can (WebGL). In a window that cannot -- a virtual machine,
-a remote desktop, a graphics driver the editor could not use -- it draws the model without it instead:
-flat-shaded and slower, and a big model is drawn as boxes while it is being turned. A note in the corner of
-the view says so, and hovering over it says how to have the graphics card back.
+The 3D view and the **FEA** and **CFD** models use the graphics card where the window can (WebGL, else WebGPU). In a
+window that cannot -- a virtual machine, a remote desktop, a graphics driver the editor could not use -- they draw
+the model without it instead: flat-shaded and slower, and a big model is drawn as boxes while it is being turned. A
+note in the corner of the view says so, and hovering over it says how to have the graphics card back.
 
 Down the left of the 3D view is a list of **what is on screen**, with a checkbox on every line: unticking one
 hides that line and everything under it, and ticking it again brings back exactly what was showing before.

@@ -54,11 +54,19 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { calloutsOf } from './callouts';
 import { el } from './dom';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
-import { noWebGL, reportError } from './host';
-import { CanvasPainter } from './painter';
+import { reportError } from './host';
 import { ShowMessage, ShowNode } from './messages';
 import { ItemId, PORT_COLOR, PORT_OPACITY, flickerOn, nodeId, portId, totalSize } from './nodes';
 import { SpaceMouse, navigate } from './spacemouse';
+import {
+    SOFTWARE_TRIANGLE_BUDGET,
+    Surface,
+    boxesOf,
+    createSurface,
+    disposeBoxes,
+    softwareNotice,
+    trianglesOf,
+} from './surface';
 
 // Part.js: <Stage intensity={0.5}> and MeshPhongMaterial with no arguments.
 const STAGE_INTENSITY = 0.5;
@@ -69,114 +77,15 @@ const overlay = document.getElementById('overlay') as HTMLDivElement;
 
 /**
  * What draws the stage: the GPU through WebGL, the GPU through WebGPU, or the
- * CPU into a canvas - the first of the three this window can give.
+ * CPU into a canvas - the first of the three this window can give (see
+ * 'surface.ts', which every 3D pane of the panel draws with).
  *
- * WebGL is the ordinary case and the one everything here was written for. Its
- * constructor throws when there is no context - in a virtual machine, over a
- * remote desktop, on a Linux box whose GPU process failed - and the view used to
- * end there, with instructions for restarting VS Code in a mode it could draw
- * in. Now it goes on to the next:
- *
- *   * WebGPU, through three's 'WebGPURenderer', where the window has an adapter
- *     to give it - a GPU that WebGL could not use but WebGPU can, or Chromium's
- *     software fallback adapter. The same scene, lit the same way. Its build of
- *     three shares this one's core ('three.core.js'), so the meshes and
- *     materials made here are the ones it draws. Loaded only when it is needed,
- *     and given up on - for the canvas - if it does not start.
- *   * The canvas painter ('painter.ts'): the scene projected on the CPU and its
- *     triangles filled far to near, flat-shaded. No GPU at all, and slower for
- *     it - so it draws only when something changed ('invalidate'), and a big
- *     model is drawn as boxes while the camera is being moved ('proxies').
+ * The canvas painter is a different renderer with different limits, and this
+ * file says where it differs: it draws only when something changed
+ * ('invalidate'), and a big model is drawn as boxes while the camera is being
+ * moved ('proxies').
  */
-interface Surface {
-    readonly backend: 'webgl' | 'webgpu' | 'software';
-    readonly domElement: HTMLElement;
-    setSize(width: number, height: number): void;
-    render(scene: THREE.Scene, camera: THREE.Camera): void;
-    /** Image-based lighting, where the backend can make it; undefined where it cannot. */
-    environment?(scene: THREE.Scene): THREE.Texture | undefined;
-    /** Draw every frame, through the backend's own loop. Absent for the painter, which draws on demand. */
-    setAnimationLoop?(callback: (() => void) | null): void;
-    /** What the performance readout reports, where the backend counts it. */
-    readonly info?: { render: { calls: number; triangles: number }; memory: { geometries: number; textures: number } };
-}
-
-/** Why there is no WebGL, in three's words, for the notice that says so. */
-let noWebGLReason: string | undefined;
-
-function webglSurface(): Surface | undefined {
-    let renderer: THREE.WebGLRenderer;
-    try {
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    } catch (error: unknown) {
-        noWebGLReason = error instanceof Error ? error.message : String(error);
-        return undefined;
-    }
-    renderer.setPixelRatio(window.devicePixelRatio);
-    // The panel's background is the editor's, so the canvas stays transparent and
-    // the viewer follows the user's colour theme rather than fighting it.
-    renderer.setClearColor(0x000000, 0);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    return {
-        backend: 'webgl',
-        domElement: renderer.domElement,
-        setSize: (width, height) => renderer.setSize(width, height, false),
-        render: (scene, camera) => renderer.render(scene, camera),
-        environment: (scene) => new THREE.PMREMGenerator(renderer).fromScene(scene, 0.04).texture,
-        setAnimationLoop: (callback) => renderer.setAnimationLoop(callback),
-        info: renderer.info,
-    };
-}
-
-async function webgpuSurface(): Promise<Surface | undefined> {
-    const gpu = (navigator as Navigator & { gpu?: { requestAdapter(options?: object): Promise<unknown> } }).gpu;
-    if (gpu === undefined) {
-        return undefined;
-    }
-    try {
-        // Asked before three is: 'WebGPURenderer' falls back to WebGL 2 by itself
-        // when there is no adapter, and there is no WebGL here - so a renderer it
-        // made would fail later rather than now.
-        const adapter = (await gpu.requestAdapter()) ?? (await gpu.requestAdapter({ forceFallbackAdapter: true }));
-        if (!adapter) {
-            return undefined;
-        }
-        const WEBGPU = await import(/* webpackMode: "eager" */ 'three/webgpu');
-        const renderer = new WEBGPU.WebGPURenderer({ antialias: true, alpha: true });
-        await renderer.init();
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setClearColor(0x000000, 0);
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.outputColorSpace = THREE.SRGBColorSpace;
-        return {
-            backend: 'webgpu',
-            domElement: renderer.domElement,
-            setSize: (width, height) => renderer.setSize(width, height, false),
-            render: (scene, camera) => renderer.render(scene, camera),
-            environment: (scene) => new WEBGPU.PMREMGenerator(renderer).fromScene(scene, 0.04).texture,
-            setAnimationLoop: (callback) => void renderer.setAnimationLoop(callback),
-            info: renderer.info as unknown as Surface['info'],
-        };
-    } catch (error: unknown) {
-        // Reported, and not fatal: the canvas is still there to draw with.
-        reportError(`the 3D view could not use WebGPU, and draws without the GPU: ${error}`);
-        return undefined;
-    }
-}
-
-function softwareSurface(): Surface {
-    const painter = new CanvasPainter();
-    painter.setPixelRatio(window.devicePixelRatio);
-    return {
-        backend: 'software',
-        domElement: painter.domElement,
-        setSize: (width, height) => painter.setSize(width, height),
-        render: (scene, camera) => painter.render(scene, camera),
-    };
-}
-
-const surface: Surface = webglSurface() ?? (await webgpuSurface()) ?? softwareSurface();
+const surface: Surface = await createSurface('the 3D view', { toneMapping: THREE.ACESFilmicToneMapping });
 
 /** Which of the three draws the 3D view (see 'Surface'). */
 export const backend = surface.backend;
@@ -188,12 +97,7 @@ surface.domElement.classList.add('surface');
 container.appendChild(surface.domElement);
 
 if (software) {
-    // Said, small and out of the way: the view works, and the reader should know
-    // why it is flat-shaded and slower than it could be - and how to have the
-    // GPU back, which is the advice the view used to give instead of a picture.
-    const notice = el('div', 'software-notice', 'Drawn without a graphics card');
-    notice.title = noWebGL(noWebGLReason ?? 'WebGL is not available');
-    container.appendChild(notice);
+    container.appendChild(softwareNotice());
 }
 
 /** Draw the stage once. */
@@ -1301,39 +1205,12 @@ function animate(): void {
     }
 }
 
-/**
- * How many triangles the software renderer draws while the camera is moving.
- *
- * Above it, a frame is long enough that a drag stutters, so while one lasts the
- * model is drawn as the outline of each of its pieces' boxes - which says where
- * everything is and moves at once - and in full again when it is let go.
- */
-const SOFTWARE_TRIANGLE_BUDGET = 60000;
-
 /** The boxes a big model is drawn as while it is being moved, or undefined. */
 let proxies: THREE.Group | undefined;
 
-function trianglesOf(group: THREE.Object3D): number {
-    let count = 0;
-    group.traverse((node) => {
-        const mesh = node as THREE.Mesh;
-        if (!mesh.isMesh || mesh.geometry === undefined) {
-            return;
-        }
-        const geometry = mesh.geometry as THREE.BufferGeometry;
-        const vertices = geometry.index?.count ?? geometry.getAttribute('position')?.count ?? 0;
-        count += vertices / 3;
-    });
-    return count;
-}
-
 function dropProxies(): void {
     if (proxies !== undefined) {
-        scene.remove(proxies);
-        proxies.traverse((node) => {
-            const helper = node as THREE.Box3Helper;
-            helper.geometry?.dispose();
-        });
+        disposeBoxes(proxies);
         proxies = undefined;
     }
 }
@@ -1344,19 +1221,7 @@ function buildProxies(group: THREE.Group): void {
     if (!software || trianglesOf(group) <= SOFTWARE_TRIANGLE_BUDGET) {
         return;
     }
-    group.updateMatrixWorld(true);
-    proxies = new THREE.Group();
-    proxies.visible = false;
-    group.traverse((node) => {
-        const mesh = node as THREE.Mesh;
-        if (!mesh.isMesh) {
-            return;
-        }
-        const box = new THREE.Box3().setFromObject(mesh);
-        if (!box.isEmpty()) {
-            proxies!.add(new THREE.Box3Helper(box, 0x40c040));
-        }
-    });
+    proxies = boxesOf(group, 0x40c040);
     scene.add(proxies);
 }
 

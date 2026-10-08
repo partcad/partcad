@@ -209,6 +209,8 @@ the protocol has no authentication.
 | `src/webview/viewer.ts` | The panel shell inside the webview: tabs, routing |
 | `src/webview/messages.ts` | The `postMessage` contract between the two, and the daemon payloads |
 | `src/webview/scene.ts` | The three.js renderer behind the 3D tab: the node tree as groups |
+| `src/webview/surface.ts` | What every 3D pane draws with: WebGL, else WebGPU, else the canvas painter |
+| `src/webview/painter.ts` | The canvas painter: the scene filled on the CPU, for a window with no GPU it can use |
 | `src/webview/nodes.ts` | The vocabulary the renderer and the pane share about the tree |
 | `src/webview/frames.ts` | PartCAD's frame against glTF's, and the one conversion between them |
 | `src/webview/tree.ts` | The 3D view's control pane: the rows, the boxes, and what is to be drawn |

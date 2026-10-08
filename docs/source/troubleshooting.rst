@@ -281,14 +281,14 @@ Typical problems
  - Set ``PARTCAD_IDE_PORT`` to move a ``partcad`` process to a different port
    if 9137 is taken by something else on the machine.
 
-"Drawn without a graphics card" in the corner of the 3D view
+"Drawn without a graphics card" in the corner of the 3D view or an analysis
 
- - VS Code could not use the graphics card, so the window has no WebGL, and the
-   3D view draws the model on the processor instead: flat-shaded, and slower
-   for a big model, which is drawn as boxes while it is being turned. Hover
-   over the note for how to start VS Code so that it has WebGL again (drawn in
-   software by Chromium itself, which looks like the usual view), and how to
-   make its icon do that every time. The PartCAD IDE does this already.
+ - VS Code could not use the graphics card, so the window has no WebGL, and the 3D
+   view and the **FEA** and **CFD** tabs draw the model on the processor instead:
+   flat-shaded, and slower for a big model, which is drawn as boxes while it is
+   being turned. Hover over the note for how to start VS Code so that it has WebGL
+   again (drawn in software by Chromium itself, which looks like the usual view),
+   and how to make its icon do that every time. The PartCAD IDE does this already.
 
 The **Draft** tab says a package is not found
 
