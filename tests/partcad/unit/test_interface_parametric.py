@@ -373,6 +373,38 @@ def test_port_coordinates_may_be_expressions(ctx):
     }
 
 
+def test_an_enrich_writes_its_ports_in_terms_of_what_it_asks_for(ctx):
+    """An enrich has no 'parameters:' of its own; its 'with' is what it has."""
+    face = ctx.get_part(":thick-plate").with_ports.get_ports()["face"]
+    assert face.location.as_packed()[0] == [0.0, 0.0, 5.0]
+
+    # Parametrized by name, the value arrives as the text it was written as.
+    face = ctx.get_part(":thick-plate;thickness=7.5").with_ports.get_ports()["face"]
+    assert face.location.as_packed()[0] == [0.0, 0.0, 7.5]
+
+
+def test_an_alias_writes_its_ports_in_terms_of_what_it_asks_for(ctx):
+    face = ctx.get_part(":aliased-plate").with_ports.get_ports()["face"]
+    assert face.location.as_packed()[0] == [0.0, 0.0, 5.0]
+
+    face = ctx.get_part(":aliased-plate;thickness=7.5").with_ports.get_ports()["face"]
+    assert face.location.as_packed()[0] == [0.0, 0.0, 7.5]
+
+
+def test_an_enrich_s_ports_ignore_a_parameters_section_it_ignores(ctx):
+    """The instance is chosen by 'with'; a 'parameters:' on the enrich chooses nothing."""
+    face = ctx.get_part(":misdeclared-plate").with_ports.get_ports()["face"]
+    assert face.location.as_packed()[0] == [0.0, 0.0, 5.0]
+
+
+def test_an_enriched_assembly_writes_its_ports_in_terms_of_what_it_asks_for(ctx):
+    top = ctx.get_assembly(":wide-stack").with_ports.get_ports()["top"]
+    assert top.location.as_packed()[0] == [0.0, 0.0, 23.0]
+
+    top = ctx.get_assembly(":wide-stack;gap=5").with_ports.get_ports()["top"]
+    assert top.location.as_packed()[0] == [0.0, 0.0, 8.0]
+
+
 def test_an_inherited_interface_may_be_named_by_an_expression(ctx):
     pattern = ctx.get_interface(":m-square-pattern;size=4,pitch=20,depth=2")
     assert sorted(pattern.get_parents().keys()) == ["//:m-thru;depth=2,size=4"]

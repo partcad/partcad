@@ -108,7 +108,24 @@ class WithPorts(Interface):
         did: 'parameters:' is what 'cube;width=20' sets and what a CAD script is
         handed, and that is the whole of it. So a part whose parameter happens
         to be called 'moveX' keeps it as the value it is.
+
+        A reference ('enrich', 'alias') declares no parameters: it asks for an
+        instance of what it points at, and the values that instance has are
+        the ones in its 'with' - which is also where a parametrized instance of
+        the reference gets its values put ('Project.get_object'). So those are
+        what its own 'ports:' and 'implements:' are written in terms of: a leg
+        cut to length from a post has its top end wherever that length says.
+        A 'parameters:' section on a reference is ignored when it is built
+        ('enrich.ENRICH_IGNORED_PROPERTIES'), so it is ignored here as well:
+        reading it would put the ports where the instance is not.
         """
+        if config.get("type") in ("alias", "enrich"):
+            # Untyped: the types are declared by what this points at, which
+            # need not be loaded yet. A value from the declaration is the type
+            # YAML gave it, and one from a parametrized name ('leg;length=20')
+            # is the text it was written as, which is read as the number it
+            # spells so that an expression can do arithmetic with it.
+            return {name: _as_written(value) for name, value in (config.get("with") or {}).items()}
         return config.get(interface_config.PARAMETERS) or {}
 
     def declared_movement_params(self, config: dict) -> dict:
@@ -204,3 +221,15 @@ class WithPorts(Interface):
             ),
             "ports": dict((port_name, port_info(port)) for port_name, port in self.get_ports().items()),
         }
+
+
+def _as_written(value):
+    """A parameter value from a reference's 'with', as the number it spells if it is one."""
+    if not isinstance(value, str):
+        return value
+    for parse in (int, float):
+        try:
+            return parse(value)
+        except ValueError:
+            pass
+    return value
