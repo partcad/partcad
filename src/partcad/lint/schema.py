@@ -1,3 +1,4 @@
+import contextvars
 import hashlib
 import json
 import os
@@ -26,6 +27,13 @@ from .. import logging as pc_logging
 from ..context import Context
 from ..project import Project
 from .lint import Linting, LintingReport, Severity
+
+# What 'get_hash' worked out a file is rendered with, for the 'validate' that
+# follows it when the cache has no answer: describing a file renders every
+# 'partcad.yaml' above it, which a cold 'pc lint' would otherwise do twice per
+# file. Held per task rather than on the instance, which every run shares, so a
+# description is only ever used by the check it was made for.
+_described = contextvars.ContextVar("partcad_lint_described", default=None)
 
 
 class YamlLinting(Linting):
@@ -80,7 +88,9 @@ class YamlLinting(Linting):
         # parameters its declaration gives it and what the packages around it
         # mark manufacturable. Editing either changes the findings of a file
         # nobody touched.
-        hash.add_string(self._context_key(name, target))
+        context = self.context(name, target)
+        _described.set((name, target, context))
+        hash.add_string(self._context_key(context, target))
         return hash
 
     def context(self, name: str, target: str) -> lint_context.FileContext:
@@ -94,8 +104,7 @@ class YamlLinting(Linting):
             context.flavor = flavor
         return context
 
-    def _context_key(self, name: str, target: str) -> str:
-        context = self.context(name, target)
+    def _context_key(self, context: lint_context.FileContext, target: str) -> str:
         search_path = context.renders[0].search_path if context.renders else [os.path.dirname(target)]
         try:
             with open(target, "r", encoding="utf-8") as file:
@@ -144,7 +153,12 @@ class YamlLinting(Linting):
             return lint_result
 
         try:
-            context = self.context(package.name, target)
+            described = _described.get()
+            _described.set(None)
+            if described is not None and described[:2] == (package.name, target):
+                context = described[2]
+            else:
+                context = self.context(package.name, target)
             diagnostics = context.check(raw, schema_for_file(target, context.flavor))
         except Exception as exc:  # pylint: disable=broad-except
             pc_logging.debug(package.name, str(exc))

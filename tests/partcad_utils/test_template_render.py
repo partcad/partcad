@@ -162,6 +162,40 @@ def test_a_template_that_would_take_forever_is_stopped(source):
         template_render.render(source, {})
 
 
+@pytest.mark.parametrize(
+    "source, line",
+    [
+        # Loops that print nothing: there is no output to watch the clock by.
+        # Over a sequence made once, so that no call inside them looks either.
+        ("a: 1\n{% set r = range(100000) %}{% for i in r %}{% for j in r %}{% set x = i %}{% endfor %}{% endfor %}", 1),
+        (
+            "\n{% set r = range(100000) %}{% for i in r %}{% for j in r %}{% if false %}x{% endif %}{% endfor %}{% endfor %}",
+            1,
+        ),
+        # A macro calling itself twice, 2**40 calls in all, and nothing printed.
+        (
+            "{% macro m(n) %}{% if n %}{% set _ = m(n - 1) ~ m(n - 1) %}{% endif %}{% endmacro %}\n{% set _ = m(40) %}",
+            0,
+        ),
+    ],
+)
+@pytest.mark.parametrize("render", [template_render.render, template_render.render_plain])
+def test_a_template_that_would_take_forever_without_printing_is_stopped(monkeypatch, source, line, render):
+    monkeypatch.setattr(template_render, "MAX_SECONDS", 0.2)
+    with pytest.raises(template_render.RenderError, match="seconds to render") as raised:
+        render(source, {})
+    assert raised.value.line == line
+
+
+def test_a_loop_is_still_the_loop_it_was():
+    source = (
+        "{% for k, v in {'a': 1, 'b': 2}.items() %}{{ k }}{{ v }}{{ loop.length }}{{ loop.last }} {% endfor %}"
+        "{% for x in [] %}x{% else %}empty{% endfor %}"
+        "{% for x in [3, 1, 2] if x > 1 recursive %}{{ x }}{% endfor %}"
+    )
+    assert template_render.render_plain(source, {}) == "a12False b22True empty32"
+
+
 def test_what_a_template_reads_is_listed_for_a_cache(tmp_path):
     (tmp_path / "a.yaml").write_text("{% include 'b.yaml' %}")
     (tmp_path / "b.yaml").write_text("b: 1\n")

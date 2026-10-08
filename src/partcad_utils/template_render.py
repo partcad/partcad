@@ -38,12 +38,14 @@ it open.
 import bisect
 import os
 import re
+import threading
 import time
 import traceback
 
 import jinja2
 import jinja2.meta
 from jinja2 import nodes
+from jinja2.compiler import CodeGenerator
 from jinja2.sandbox import SandboxedEnvironment, SecurityError
 
 # Private-use characters: nothing a YAML document or a template is going to
@@ -76,10 +78,65 @@ MAX_SEQUENCE = 1024 * 1024
 MAX_POWER_BITS = 1024 * 1024
 
 
+# When the rendering under way in this thread has to be done by. A thread's
+# own, because the daemon checks files for several editors at once.
+_budget = threading.local()
+
+
+def _check_time():
+    deadline = getattr(_budget, "deadline", None)
+    if deadline is not None and time.monotonic() > deadline:
+        raise RenderError("it takes more than %g seconds to render" % MAX_SECONDS)
+
+
+# The filter every loop's sequence is passed through (see below). A name a
+# template has no reason to use, though nothing breaks if one does.
+_TIMED = "partcad_timed"
+
+
+def _timed(sequence):
+    """``sequence``, item by item, with the clock checked before each."""
+    for item in sequence:
+        _check_time()
+        yield item
+
+
+class _TimedCodeGenerator(CodeGenerator):
+    """Compiles every `{% for %}` to look at the clock on each pass.
+
+    The output is not enough to watch. A loop whose body prints nothing -- a
+    `{% set %}`, an `{% if %}` that is never true -- yields nothing to the
+    caller however long it runs, and two of them nested over `range()` run for
+    hours. A macro calling itself is the other way to work without printing,
+    and every call goes through `_BoundedSandbox.call`, which checks too.
+    """
+
+    def visit_Template(self, node, frame=None):
+        for loop in list(node.find_all(nodes.For)):
+            loop.iter = nodes.Filter(loop.iter, _TIMED, [], [], None, None, lineno=loop.iter.lineno)
+            loop.iter.set_environment(self.environment)
+        super().visit_Template(node, frame)
+
+
 class _BoundedSandbox(SandboxedEnvironment):
-    """Jinja2's sandbox, with the two operators that can make a value of any size checked first."""
+    """Jinja2's sandbox, with the two operators that can make a value of any size checked first.
+
+    And with the clock checked on every loop pass and every call, so that a
+    template that works without printing is stopped as one that prints is.
+    """
 
     intercepted_binops = frozenset(["*", "**"])
+    code_generator_class = _TimedCodeGenerator
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filters[_TIMED] = _timed
+
+    # The parameter names are Jinja2's own: a template's keyword arguments
+    # arrive in the same call, and must not be able to collide with them.
+    def call(__self, __context, __obj, *args, **kwargs):
+        _check_time()
+        return super().call(__context, __obj, *args, **kwargs)
 
     def call_binop(self, context, operator, left, right):
         if operator == "*":
@@ -108,17 +165,25 @@ def _environment(search_path) -> _BoundedSandbox:
 
 def _generate(template, variables) -> str:
     """Render ``template`` within the budget above."""
-    started = time.monotonic()
-    size = 0
-    chunks = []
-    for chunk in template.generate(variables):
-        size += len(chunk)
-        chunks.append(chunk)
-        if size > MAX_OUTPUT:
-            raise RenderError("it renders to more than %d characters" % MAX_OUTPUT)
-        if time.monotonic() - started > MAX_SECONDS:
-            raise RenderError("it takes more than %d seconds to render" % MAX_SECONDS)
-    return "".join(chunks)
+    previous = getattr(_budget, "deadline", None)
+    _budget.deadline = time.monotonic() + MAX_SECONDS
+    try:
+        size = 0
+        chunks = []
+        for chunk in template.generate(variables):
+            size += len(chunk)
+            chunks.append(chunk)
+            if size > MAX_OUTPUT:
+                raise RenderError("it renders to more than %d characters" % MAX_OUTPUT)
+            _check_time()
+        return "".join(chunks)
+    except RenderError as exc:
+        # Raised from inside the template: say where it had got to.
+        if exc.line is None:
+            exc.line = _template_line(exc)
+        raise
+    finally:
+        _budget.deadline = previous
 
 
 class RenderError(Exception):

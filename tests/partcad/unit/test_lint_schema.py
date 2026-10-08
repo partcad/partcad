@@ -29,6 +29,7 @@ import pytest
 import partcad as pc
 from partcad.lint.all import get_partcad_schema
 from partcad.lint.schema import AssySchemaLinting, SchemaLinting
+from partcad_utils import lint_context
 
 
 def validate(config):
@@ -489,6 +490,33 @@ def test_a_file_that_includes_by_an_expression_is_not_served_from_the_cache(tmp_
     target = str(root / "thing.assy")
     check_run = AssySchemaLinting("AssySchema")
     assert check_run.get_hash("//", target).get() != check_run.get_hash("//", target).get()
+
+
+def test_a_check_the_cache_cannot_answer_describes_its_file_once(tmp_path, monkeypatch):
+    """The description made for the cache key is the one the check uses, and only that check."""
+    root = package(tmp_path, "assemblies:\n  thing:\n    type: assy\n")
+    (root / "thing.assy").write_text("links:\n  - part: frame\n")
+    ctx = pc.Context(str(root))
+    project = ctx.get_project("//")
+    check_run = AssySchemaLinting("AssySchema")
+    target = check_run.get_targets(ctx, project)[0]
+    described = []
+    describe = lint_context.describe
+    monkeypatch.setattr(
+        lint_context, "describe", lambda path, *a, **k: described.append(path) or describe(path, *a, **k)
+    )
+
+    async def check():
+        # As 'validate_cached' does on a miss: the key, then the check.
+        check_run.get_hash(project.name, target)
+        first = await check_run.validate(ctx, project, target)
+        # And a check with no key made before it describes the file itself.
+        second = await check_run.validate(ctx, project, target)
+        return first, second
+
+    first, second = asyncio.run(check())
+    assert described == [target, target]
+    assert first.messages == second.messages
 
 
 def test_a_package_above_that_cannot_be_read_does_not_stop_the_walk(tmp_path):
