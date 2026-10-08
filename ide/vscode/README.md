@@ -48,9 +48,10 @@ and on the first that does otherwise.
 Only the 3D view comes over the viewer protocol. The others are questions about `<package>:<name>` that this
 extension puts to the PartCAD daemon, fetched the first time a tab is looked at and cached until the next
 object is shown — so an object belonging to no package gets the 3D view alone. In a window without WebGL —
-a virtual machine, a remote desktop, a GPU the editor could not use — the 3D view is drawn without the graphics
-card instead: flat-shaded and slower, with a big model drawn as boxes while it is being turned. It says so in a
-corner, and hovering there says how to have the graphics card back.
+a virtual machine, a remote desktop, a GPU the editor could not use — the 3D view and the FEA and CFD models are
+drawn with WebGPU where the window has it, and without the graphics card otherwise: flat-shaded and slower, with
+a big model drawn as boxes while it is being turned. It says so in a corner, and hovering there says how to have
+the graphics card back.
 
 ### 3Dconnexion SpaceMouse
 

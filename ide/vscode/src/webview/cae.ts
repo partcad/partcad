@@ -37,6 +37,15 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { el, empty, placeholder } from './dom';
 import { IMAGE_TYPES, ImageView, decodeBase64 } from './image';
 import { CaeData, CaeFinding } from './messages';
+import {
+    SOFTWARE_TRIANGLE_BUDGET,
+    Surface,
+    boxesOf,
+    createSurface,
+    disposeBoxes,
+    softwareNotice,
+    trianglesOf,
+} from './surface';
 
 /** How much of the pane the findings take when there are any. */
 const FINDINGS_SHARE = '20%';
@@ -45,57 +54,123 @@ const FINDINGS_SHARE = '20%';
 const MESH_TYPES = new Set(['glb', 'gltf', 'stl']);
 
 /**
+ * The light a result is drawn in: flat and even, and nothing else.
+ *
+ * A result plot's colours are the answer; a rig that shades them is a rig that
+ * changes the answer. The hemisphere is there so that a model of one colour still
+ * reads as a shape. Given as three's GPU renderers take it; the painter, which
+ * has no pi in its Lambert term, takes each over pi and so draws the same light.
+ */
+const AMBIENT_INTENSITY = 2.2;
+const HEMISPHERE_INTENSITY = 1.0;
+
+/**
  * A mesh, turned and zoomed with an orbit camera.
  *
- * Built the first time a 3D result arrives and kept afterwards: a WebGL context
- * is not free, and there are already two panes in this panel that want one.
+ * Built the first time a 3D result arrives and kept afterwards: a GPU context
+ * is not free, and the 3D view in this panel already holds one.
+ *
+ * What it draws with is chosen as the 3D view's is ('surface.ts'): WebGL, else
+ * WebGPU, else the canvas painter - so a window with no GPU it can use shows an
+ * analysis's result flat-shaded rather than not at all. Drawn by the painter, it
+ * draws only when the camera moved, a closed result is drawn front-side only (as
+ * the 3D view draws a solid, for the same reason), and a big one is drawn as
+ * boxes while it is being turned.
  */
 class MeshView {
-    private readonly renderer: THREE.WebGLRenderer;
+    private surface: Surface | undefined;
+    /** Settles once there is something to draw with; 'show' waits on it. */
+    private readonly ready: Promise<Surface | undefined>;
     private readonly scene = new THREE.Scene();
     private readonly camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100000);
-    private readonly controls: OrbitControls;
-    private readonly observer: ResizeObserver;
+    private controls: OrbitControls | undefined;
+    private observer: ResizeObserver | undefined;
+    private notice: HTMLElement | undefined;
     private model: THREE.Object3D | undefined;
+    /** The boxes a big model is drawn as by the painter while it is turned. */
+    private boxes: THREE.Group | undefined;
     private frameRequest: number | undefined;
+    /** Whether the painter has something new to draw; the GPU draws every frame regardless. */
+    private dirty = true;
     private disposed = false;
 
     constructor(private readonly host: HTMLElement) {
         host.classList.add('cae-canvas');
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        this.renderer.setPixelRatio(window.devicePixelRatio);
-        this.renderer.setClearColor(0x000000, 0);
-        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-        host.appendChild(this.renderer.domElement);
+        this.ready = createSurface('the analysis view').then((surface) => {
+            if (this.disposed) {
+                // Replaced while the surface was being made: nobody will draw
+                // with it, and a GPU context left behind is one fewer for the
+                // panel.
+                surface.dispose();
+                return undefined;
+            }
+            this.attach(surface);
+            return surface;
+        });
+    }
 
-        this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-        this.controls.enableDamping = true;
+    private get software(): boolean {
+        return this.surface?.backend === 'software';
+    }
 
-        // Flat, even light and nothing else. A result plot's colours are the
-        // answer; a rig that shades them is a rig that changes the answer.
-        this.scene.add(new THREE.AmbientLight(0xffffff, 2.2));
-        const fill = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-        this.scene.add(fill);
+    private attach(surface: Surface): void {
+        this.surface = surface;
+        this.host.appendChild(surface.domElement);
+
+        const controls = new OrbitControls(this.camera, surface.domElement);
+        controls.enableDamping = true;
+        controls.addEventListener('change', () => {
+            this.dirty = true;
+        });
+        this.controls = controls;
+
+        // The painter has no pi in its Lambert term (see 'painter.ts').
+        const scale = this.software ? 1 / Math.PI : 1;
+        this.scene.add(new THREE.AmbientLight(0xffffff, AMBIENT_INTENSITY * scale));
+        this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, HEMISPHERE_INTENSITY * scale));
+
+        if (this.software) {
+            this.notice = softwareNotice();
+            this.host.appendChild(this.notice);
+            controls.addEventListener('start', () => {
+                if (this.boxes !== undefined && this.model !== undefined) {
+                    this.model.visible = false;
+                    this.boxes.visible = true;
+                }
+            });
+            controls.addEventListener('end', () => {
+                if (this.boxes !== undefined && this.model !== undefined) {
+                    this.model.visible = true;
+                    this.boxes.visible = false;
+                }
+                this.dirty = true;
+            });
+        }
 
         this.observer = new ResizeObserver(() => this.resize());
-        this.observer.observe(host);
+        this.observer.observe(this.host);
     }
 
     public async show(bytes: Uint8Array, extension: string): Promise<void> {
         const object = extension === 'stl' ? loadStl(bytes) : await loadGltf(bytes, extension);
-        if (this.disposed) {
+        await this.ready;
+        if (this.disposed || this.surface === undefined) {
             // Parsing a mesh outlives the tab it was parsed for easily. Whoever
             // disposed of this view has a newer one on screen, so drop what was
             // just built rather than adding it to a scene nobody draws.
             dispose(object);
             return;
         }
-        if (this.model !== undefined) {
-            this.scene.remove(this.model);
-            dispose(this.model);
+        if (this.software) {
+            paintable(object);
         }
+        this.drop();
         this.model = object;
         this.scene.add(object);
+        if (this.software && trianglesOf(object) > SOFTWARE_TRIANGLE_BUDGET) {
+            this.boxes = boxesOf(object, 0xbfc4c9);
+            this.scene.add(this.boxes);
+        }
         this.frame(object);
         this.resize();
         this.start();
@@ -104,7 +179,7 @@ class MeshView {
     /** Put the whole model in view, whatever units and origin it came in. */
     private frame(object: THREE.Object3D): void {
         const box = new THREE.Box3().setFromObject(object);
-        if (box.isEmpty()) {
+        if (box.isEmpty() || this.controls === undefined) {
             return;
         }
         const size = box.getSize(new THREE.Vector3());
@@ -118,6 +193,7 @@ class MeshView {
         this.camera.updateProjectionMatrix();
         this.controls.target.copy(center);
         this.controls.update();
+        this.dirty = true;
     }
 
     private start(): void {
@@ -125,18 +201,38 @@ class MeshView {
             return;
         }
         const tick = () => {
-            this.controls.update();
-            this.renderer.render(this.scene, this.camera);
             this.frameRequest = requestAnimationFrame(tick);
+            this.controls?.update();
+            if (this.surface === undefined || (this.software && !this.dirty)) {
+                // The painter's picture on screen is still the picture: a frame
+                // of it is every triangle filled on the CPU, so it is not
+                // redrawn for nothing.
+                return;
+            }
+            this.dirty = false;
+            this.surface.render(this.scene, this.camera);
         };
         this.frameRequest = requestAnimationFrame(tick);
+    }
+
+    /** Take the model, and its boxes, off the stage. */
+    private drop(): void {
+        if (this.boxes !== undefined) {
+            disposeBoxes(this.boxes);
+            this.boxes = undefined;
+        }
+        if (this.model !== undefined) {
+            this.scene.remove(this.model);
+            dispose(this.model);
+            this.model = undefined;
+        }
     }
 
     /**
      * Give the GPU back.
      *
-     * A WebGL context is a scarce thing - a browser keeps a handful and drops
-     * the oldest when asked for one too many - and a render loop that nothing
+     * A GPU context is a scarce thing - a browser keeps a handful and drops the
+     * oldest when asked for one too many - and a render loop that nothing
      * disposes of keeps drawing a canvas nobody can see. So every analysis that
      * replaces this view has to end it, not merely stop referring to it.
      */
@@ -146,15 +242,15 @@ class MeshView {
             cancelAnimationFrame(this.frameRequest);
             this.frameRequest = undefined;
         }
-        this.observer.disconnect();
-        this.controls.dispose();
-        if (this.model !== undefined) {
-            this.scene.remove(this.model);
-            dispose(this.model);
-            this.model = undefined;
+        this.observer?.disconnect();
+        this.controls?.dispose();
+        this.drop();
+        this.notice?.remove();
+        if (this.surface !== undefined) {
+            this.surface.dispose();
+            this.surface.domElement.remove();
+            this.surface = undefined;
         }
-        this.renderer.dispose();
-        this.renderer.domElement.remove();
         this.host.classList.remove('cae-canvas');
     }
 
@@ -162,13 +258,54 @@ class MeshView {
     public resize(): void {
         const width = this.host.clientWidth;
         const height = this.host.clientHeight;
-        if (this.disposed || width === 0 || height === 0) {
+        if (this.disposed || this.surface === undefined || width === 0 || height === 0) {
             return;
         }
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
-        this.renderer.setSize(width, height, false);
+        this.surface.setSize(width, height);
+        this.dirty = true;
     }
+}
+
+/**
+ * Ready a result for the painter.
+ *
+ * Two things a GPU takes in its stride and the painter does not. Its 'Projector'
+ * reads a colour attribute as three floats a vertex, which is what an STL's
+ * colours are and not what glTF has to be - 'COLOR_0' may be RGBA, and may be
+ * bytes or shorts scaled to 0..1 - so every colour attribute is rewritten as
+ * that. And it orders whole triangles by depth rather than each pixel, so a far
+ * face can stripe the near one: a result is the surface of a part, which is
+ * closed, so it is drawn front-side only and its far side is not drawn at all.
+ * (A texture is beyond the painter either way: a face is one colour.)
+ */
+function paintable(object: THREE.Object3D): void {
+    object.traverse((node) => {
+        const mesh = node as THREE.Mesh;
+        if (!mesh.isMesh) {
+            return;
+        }
+        const geometry = mesh.geometry as THREE.BufferGeometry;
+        const color = geometry.getAttribute('color');
+        if (
+            color !== undefined &&
+            (color.itemSize !== 3 || color.normalized || !(color.array instanceof Float32Array))
+        ) {
+            const rgb = new Float32Array(color.count * 3);
+            for (let i = 0; i < color.count; i++) {
+                // 'getX' and the rest undo the normalisation; the alpha is dropped.
+                rgb[i * 3] = color.getX(i);
+                rgb[i * 3 + 1] = color.getY(i);
+                rgb[i * 3 + 2] = color.getZ(i);
+            }
+            geometry.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
+        }
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const material of materials) {
+            material.side = THREE.FrontSide;
+        }
+    });
 }
 
 function loadStl(bytes: Uint8Array): THREE.Object3D {
@@ -357,7 +494,7 @@ export class CaeView {
         );
     }
 
-    /** The canvas had no size while the tab was hidden; WebGL does not notice. */
+    /** The canvas had no size while the tab was hidden; a renderer does not notice. */
     public resize(): void {
         this.meshView?.resize();
     }
@@ -366,7 +503,7 @@ export class CaeView {
      * Empty the model band, ending whatever was drawing into it.
      *
      * 'empty()' takes the nodes away and nothing else: a 'MeshView' left behind
-     * goes on holding a WebGL context and asking for animation frames for a
+     * goes on holding a GPU context and asking for animation frames for a
      * canvas that is no longer in the document, and an 'ImageView' goes on
      * listening on the band. Both are ended here, and the count this returns is
      * how anything slow that was working for the old contents finds out.

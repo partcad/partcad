@@ -124,6 +124,15 @@ export class CanvasPainter {
                 color.add(material.emissive);
             }
         }
+        if (material.vertexColors && Number.isFinite(face.color.r)) {
+            // A result plot's colours are per vertex, and they are the answer.
+            // 'Projector' gives a face the colour of its first vertex, which is
+            // as near as one flat colour per triangle comes; three multiplies
+            // it into the material's colour, and so does this. A geometry with
+            // no colours to give leaves the face's unset, and the material's
+            // colour stands.
+            color.multiply(face.color);
+        }
 
         const context = this.context;
         context.globalAlpha = material.transparent ? material.opacity : 1;
@@ -136,11 +145,32 @@ export class CanvasPainter {
         context.fill();
     }
 
-    /** How much light falls on a face: the ambient light, and each directional one it faces. */
+    /**
+     * How much light falls on a face: the ambient light, each hemisphere light,
+     * and each directional one it faces.
+     *
+     * Not three's arithmetic to the letter: its Lambert term divides by pi, and
+     * this does not, so a pane that lights the same scene for both gives the
+     * painter its intensities over pi (see 'cae.ts').
+     */
     private shade(face: RenderableFace, lights: THREE.Light[], into: THREE.Color): void {
         into.copy(this.ambient);
         this.normal.copy(face.normalModel).normalize();
         for (const light of lights) {
+            const hemisphere = light as THREE.HemisphereLight;
+            if (hemisphere.isHemisphereLight) {
+                // The sky's colour on a face turned to it, the ground's on one
+                // turned away, and a blend between - as three's shader has it.
+                this.direction.setFromMatrixPosition(hemisphere.matrixWorld).normalize();
+                const sky = 0.5 * this.normal.dot(this.direction) + 0.5;
+                into.r +=
+                    (hemisphere.groundColor.r + (light.color.r - hemisphere.groundColor.r) * sky) * light.intensity;
+                into.g +=
+                    (hemisphere.groundColor.g + (light.color.g - hemisphere.groundColor.g) * sky) * light.intensity;
+                into.b +=
+                    (hemisphere.groundColor.b + (light.color.b - hemisphere.groundColor.b) * sky) * light.intensity;
+                continue;
+            }
             const directional = light as THREE.DirectionalLight;
             if (!directional.isDirectionalLight) {
                 continue;
