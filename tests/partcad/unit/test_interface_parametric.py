@@ -383,6 +383,14 @@ def test_an_enrich_writes_its_ports_in_terms_of_what_it_asks_for(ctx):
     assert face.location.as_packed()[0] == [0.0, 0.0, 7.5]
 
 
+def test_an_alias_writes_its_ports_in_terms_of_what_it_asks_for(ctx):
+    face = ctx.get_part(":aliased-plate").with_ports.get_ports()["face"]
+    assert face.location.as_packed()[0] == [0.0, 0.0, 5.0]
+
+    face = ctx.get_part(":aliased-plate;thickness=7.5").with_ports.get_ports()["face"]
+    assert face.location.as_packed()[0] == [0.0, 0.0, 7.5]
+
+
 def test_an_enrich_s_ports_ignore_a_parameters_section_it_ignores(ctx):
     """The instance is chosen by 'with'; a 'parameters:' on the enrich chooses nothing."""
     face = ctx.get_part(":misdeclared-plate").with_ports.get_ports()["face"]

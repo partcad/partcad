@@ -195,6 +195,15 @@ parts:
     ports:
       face: [[0, 0, "%thickness%"], [0, 1, 0], 180]
 
+  # An alias asks for its instance in 'with' too.
+  aliased-plate:
+    type: alias
+    source: plate
+    with:
+      thickness: 5.0
+    ports:
+      face: [[0, 0, "%thickness%"], [0, 1, 0], 180]
+
   # The same, with a 'parameters:' section the enrich ignores: what it is built
   # as is what 'with' asks for, and its ports have to be where that is.
   misdeclared-plate:
