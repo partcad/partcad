@@ -25,6 +25,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 import { lintOptions } from '../../PartcadLint';
+import { pathKey } from '../../common/paths';
 
 type Token = { line: number; column: number; text: string; scopes: string[] };
 
@@ -217,10 +218,18 @@ suite("PartCAD's YAML languages", () => {
         try {
             // A file outside every workspace folder: relative to its own directory.
             const document = await vscode.workspace.openTextDocument(write('robot.assy', 'links: []\n'));
-            assert.deepStrictEqual(lintOptions(document), {
-                includePaths: [path.join(directory, 'shared')],
-                extraParams: ['desk.length=60', '//pub/v1.2:desk.v2.width=30', 'desk.label=a.b=c'],
-            });
+            const options = lintOptions(document);
+            // Compared as one file, not as one string: the directory comes from
+            // `Uri.fsPath`, which spells a Windows drive letter in lower case.
+            assert.deepStrictEqual(
+                options.includePaths.map((entry) => pathKey(entry)),
+                [pathKey(path.join(directory, 'shared'))],
+            );
+            assert.deepStrictEqual(options.extraParams, [
+                'desk.length=60',
+                '//pub/v1.2:desk.v2.width=30',
+                'desk.label=a.b=c',
+            ]);
         } finally {
             await config.update('includePaths', undefined, target);
             await config.update('extraParams', undefined, target);
