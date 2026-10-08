@@ -94,6 +94,17 @@ from ..service import run
         "say it is ('auto'). Ignored for a 'partcad.yaml', which has one schema."
     ),
 )
+@click.option(
+    "--include-path",
+    "include_paths",
+    multiple=True,
+    type=click.Path(file_okay=False),
+    metavar="DIR",
+    help=(
+        "A directory an ASSY or 'partcad.yaml' --file may include or import from, besides its own "
+        "and the 'includePaths' a package above it declares. May be repeated."
+    ),
+)
 @exclude_option
 @click.pass_context
 def cli(
@@ -105,16 +116,17 @@ def cli(
     stdin: bool,
     as_json: bool,
     flavor: str,
+    include_paths,
     exclude,
 ) -> None:
     if file_paths:
         if package or recursive or exclude:
             raise click.UsageError("--file checks the files named on the command line; --package/-r/-x check a package")
-        _lint_files(click_ctx, list(file_paths), stdin, as_json, flavor)
+        _lint_files(click_ctx, list(file_paths), stdin, as_json, flavor, list(include_paths))
         return
 
-    if stdin or as_json:
-        raise click.UsageError("--stdin and --json only apply to --file")
+    if stdin or as_json or include_paths:
+        raise click.UsageError("--stdin, --json and --include-path only apply to --file")
 
     run(
         click_ctx.obj,
@@ -147,7 +159,7 @@ def _read_stdin() -> str:
     return raw.read().decode("utf-8-sig")
 
 
-def _lint_files(click_ctx, paths: list, stdin: bool, as_json: bool, flavor: str = "auto") -> None:
+def _lint_files(click_ctx, paths: list, stdin: bool, as_json: bool, flavor: str = "auto", include_paths=()) -> None:
     """Check the named files in this process and report what came back."""
     text = None
     if stdin:
@@ -164,9 +176,18 @@ def _lint_files(click_ctx, paths: list, stdin: bool, as_json: bool, flavor: str 
     # Deferred: `pc --help` imports every command module to print its short help,
     # and this one pulls in jsonschema and jinja2.
     from partcad_client import lint as client_lint
+    from partcad_utils.user_config import user_config
 
     try:
-        reports = client_lint.check_files(paths, text, None if flavor == "auto" else flavor)
+        reports = client_lint.check_files(
+            paths,
+            text,
+            None if flavor == "auto" else flavor,
+            include_paths=include_paths,
+            # What '--extra-param' and '~/.partcad/config.yaml' override, which
+            # PartCAD renders a declared file with and so does the check.
+            parameter_overrides=user_config.parameter_config.to_dict(),
+        )
     except (OSError, IOError, UnicodeDecodeError) as e:
         raise click.UsageError(str(e))
 

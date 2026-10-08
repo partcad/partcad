@@ -182,9 +182,13 @@ Run the check over a package, or over the file alone:
 
 Every finding names the line and column it came from. ``partcad.yaml`` is a
 Jinja2 template rendered to YAML before it is parsed (see ``includePaths``
-below), so the checker masks each template construct before parsing rather than
-rendering the file, which would need the values the template is waiting for. It
-is the same checker :doc:`ASSY files <assy>` go through, and the `PartCAD
+below), so the checker renders it the way PartCAD does -- with the version and
+constants it may name, and with the ``includePaths`` a package above gives it --
+and reports each finding at the template line and column it came from. A part
+marked ``manufacturable: true`` (on itself, on the package, or on a package
+above) that is neither an ``alias`` nor an ``enrich`` has to say how it is had:
+a ``manufacturing:`` section, or both a ``vendor:`` and an ``sku:``. It is the
+same checker :doc:`ASSY files <assy>` go through, and the `PartCAD
 extension for VS Code
 <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ runs it
 on the open document -- so a mistyped section is underlined as it is typed,

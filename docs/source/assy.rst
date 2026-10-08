@@ -780,13 +780,51 @@ forbidden. The scene schema is derived from the one above rather than kept
 beside it, so the two cannot drift apart; only the one rule differs.
 
 Because the file on disk is a template rather than the YAML it renders to, the
-checker masks every Jinja2 construct before parsing: ``{{ expr }}`` becomes a
-placeholder value and ``{% tag %}`` becomes blanks of the same size. The masked
-document keeps the exact line and column layout of the file, so a template
-error, a YAML error and a schema violation are all reported at the character
-they came from, and a loop or conditional body is checked once. Anything the
-mask makes unknowable -- what an expression evaluates to, which branch of an
-``{% if %}`` is taken -- is left unreported rather than guessed at.
+checker **renders it** first, the way PartCAD does: with the parameters its
+declaration in ``partcad.yaml`` gives it, at their defaults, as
+``param_<name>``. What is checked is what that renders to -- the items a loop
+produces, the branch an ``{% if %}`` takes, the numbers expressions come to --
+and every finding is reported at the line and column of the template it came
+from: literal text at itself, a computed value at its ``{{ }}``, every pass of
+a loop at the loop's body. A template that fails to render with those values
+(an undefined name, or a deliberate call to an undefined function to stop with
+a message) is reported on the line it failed on, since PartCAD would stop
+there too.
+
+A file no package declares has no known parameters, so it is checked masked
+instead: ``{{ expr }}`` becomes a placeholder value and ``{% tag %}`` becomes
+blanks of the same size. An expression alone on its line -- a macro call, say
+-- stands for lines of YAML rather than a value, so it becomes blanks too, as
+do the bodies of ``{% macro %}``, ``{% call %}`` and a block ``{% set %}``.
+Anything the mask makes unknowable -- what an expression evaluates to, which
+branch of an ``{% if %}`` is taken -- is left unreported rather than guessed at.
+
+What is to be made
+------------------
+
+An assembly marked ``manufacturable: true`` -- on its declaration, or on its
+package or a package above it -- is held to more. Somebody has to physically
+put it together, and a coordinate says where a part ends up but not what holds
+it there. So no item of any ``links:`` list may have a ``location:``, and
+every item after the first has to say what it is joined to with ``connect:``
+or ``connectPorts:``; the first item of a list is the one the others hang
+from. The document's own top-level ``location:`` beside its ``links:`` -- the
+frame the whole assembly sits in -- is allowed; a file that is a single
+``part:`` or ``assembly:`` with no ``links:`` is that one item, and may not.
+This is the rule ``pc test`` holds a manufacturable assembly to (the
+``connectivity`` test), reported where it is written, and like that test it
+stands down for an assembly whose declaration says ``connectivity:`` with
+``requireAnchored: false`` or ``skip: true``.
+
+The same goes for a ``partcad.yaml``: a part marked manufacturable (on the
+part, on the package, or on a package above it) that is not an ``alias`` or an
+``enrich`` has to say how it is had -- a ``manufacturing:`` section to make it,
+or both a ``vendor:`` and an ``sku:`` to buy it.
+
+Both are errors, and both apply only to what is *marked*. PartCAD takes an
+object as manufacturable unless something says otherwise, but a package nobody
+has said that about is one still being sketched, and underlining all of it
+would be underlining work in progress. ``pc init`` asks.
 
 Run the checks over a package from the command line with:
 
@@ -825,6 +863,20 @@ a scene. Say so outright with ``--schema``:
 
     pc lint --file workcell.assy --schema scene
 
+The same ``partcad.yaml`` files say what the file is rendered with: the
+defaults of the parameters its declaration gives it, overridden -- exactly as
+for every other ``pc`` command -- by the ``parameters:`` of
+``~/.partcad/config.yaml`` and by ``--extra-param <object>.<parameter>=<value>``
+-- the object's name may have dots of its own, and the value is read as the
+type the parameter declares. Without the package's name to hand, an override
+may name the object with its package or without it.
+``--include-path`` adds a directory to include from, for an ``includePaths``
+that a package importing this one from elsewhere declares:
+
+  .. code-block:: shell
+
+    pc --extra-param desk.length=60 lint --file desk.assy --include-path ../common
+
 The `PartCAD extension for VS Code <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_
 runs exactly that while an ASSY file is open and shows the findings in the
 Problems view. It answers the same question from the package contents it has
@@ -834,8 +886,8 @@ Set ``partcad.lint.enabled`` to ``false`` to turn that off.
 
 ``partcad.yaml`` is checked the same way, by the same checker, against the
 configuration schema (``src/partcad_utils/schema/partcad.json``) -- see
-:doc:`configuration`. It is a Jinja2 template too, so it is masked before
-parsing exactly as an ASSY file is, and it has no assembly/scene flavor:
+:doc:`configuration`. It is a Jinja2 template too, so it is rendered before it
+is checked exactly as an ASSY file is, and it has no assembly/scene flavor:
 nothing points at a package configuration, so ``--schema`` does not apply to
 one.
 

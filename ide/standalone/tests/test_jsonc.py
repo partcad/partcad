@@ -54,4 +54,4 @@ def test_the_repositorys_own_recommendations_parse():
     # The file this component reads to decide what the IDE ships with. It has
     # comments and a trailing comma today; both are what this parser is for.
     recommendations = jsonc.load(REPO_ROOT / ".vscode" / "extensions.json")["recommendations"]
-    assert "redhat.vscode-yaml" in recommendations
+    assert "yzhang.markdown-all-in-one" in recommendations

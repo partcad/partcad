@@ -346,9 +346,15 @@ class JsonRpcBackend implements PartcadBackend {
         path?: string;
         text?: string;
         flavor?: string;
+        includePaths?: string[];
+        extraParams?: string[];
     }): Promise<{ path: string; diagnostics: any[] }> {
         const path = arg?.path ?? '';
         const args = [
+            // A global option rather than one of 'lint's: it is the one every
+            // `pc` command takes to override an object's parameters, and the
+            // checker reads the overrides it leaves, as PartCAD does.
+            ...(arg?.extraParams ?? []).flatMap((param) => ['--extra-param', param]),
             'lint',
             '--file',
             path,
@@ -357,6 +363,7 @@ class JsonRpcBackend implements PartcadBackend {
             // know, and then `pc lint` works it out from the `partcad.yaml`
             // files around the file -- see `PartcadLint.flavorOf`.
             ...(arg?.flavor === undefined ? [] : ['--schema', arg.flavor]),
+            ...(arg?.includePaths ?? []).flatMap((directory) => ['--include-path', directory]),
         ];
         const stdout = await runCli(this.cliPath, [...args, '--json'], this.cwd, this.outputChannel, undefined, {
             stdin: arg?.text,

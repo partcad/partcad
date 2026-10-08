@@ -63,6 +63,14 @@ a CAD addon, or documentation.
   escaping (`ide/vscode/src/common/garage.ts`), which is why the escaping is the one both languages have
   built in.
 
+  `assy_lint` checks an ASSY file or a `partcad.yaml` *as it renders*, and rendering is the other thing both
+  ends do: PartCAD as it loads a package, and every client as it lints the file an editor has open. So what a
+  template may name (`config_template`) and what a parameter declaration means (`parameters`) are here, with
+  `partcad.config_template` and `partcad.config` re-exporting them, and so are `lint_context` (what a file is
+  rendered with and whether it is marked manufacturable, worked out from the `partcad.yaml` files above it --
+  the daemon asks it too, so the editor and `pc lint` cannot disagree) and `template_render` (rendering with
+  the way back from each rendered character to the template line and column it came from).
+
 * [src/partcad_client](./src/partcad_client):
 
   What a **client** does, and a daemon must not: discovering the daemon serving a workspace and connecting to

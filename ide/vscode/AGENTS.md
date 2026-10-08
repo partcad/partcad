@@ -492,19 +492,65 @@ ordinary terminal and gets the tools like any other.
 
 ## YAML diagnostics
 
-Two documents are checked: `.assy` files and a package's `partcad.yaml`. Both are registered as YAML for
-highlighting and neither is YAML -- each is a Jinja2 template that renders to YAML and then has to match a
-schema. (`.world` files are registered the same way, against `xml`: a Gazebo world *is* XML, so the editor's
-own XML support is the whole of what it needs -- there is no PartCAD check for one, and none is wanted.)
-`src/PartcadLint.ts` checks the open document (debounced on edit, immediately on open/save) through the
-`partcad.lintFile` command and publishes the answer into a `partcad` diagnostic collection.
+Two documents are checked: `.assy` files and a package's `partcad.yaml`. Neither is YAML -- each is a Jinja2
+template that renders to YAML and then has to match a schema. (`.world` files are claimed for `xml`, only to give
+them the PartCAD icon: a Gazebo world *is* XML, so the editor's own XML support is the whole of what it needs --
+there is no PartCAD check for one, and none is wanted.) `src/PartcadLint.ts` checks the open document
+(debounced on edit, immediately on open/save) through the `partcad.lintFile` command and publishes the answer
+into a `partcad` diagnostic collection. Diagnostics are published per document URI, so they need no language id;
+`isPackageConfigDocument` matches the basename rather than the extension, because a `parts.yaml` next door is
+somebody's own file and not a package configuration.
 
-**Keeping the `yaml` language id is what keeps the highlighting.** The id is how the editor picks a grammar, so
-a PartCAD id of its own would have to bring a grammar of its own; the `languages` contribution in
-`package.json` claims `partcad.yaml` by filename and `.assy` by extension, and gives each the PartCAD icon,
-without taking either away from `yaml`. Diagnostics need none of that -- they are published per document URI,
-beside whatever else has an opinion about the file. `isPackageConfigDocument` matches the basename rather than
-the extension, because a `parts.yaml` next door is somebody's own file and not a package configuration.
+**An `.assy` file is `partcad-assy`, and `partcad.yaml` is `partcad-yaml` -- neither is `yaml`.** Both used to
+be `yaml`, for the highlighting, and then every YAML extension had an opinion about them too, and reported the
+template's tags -- every `{% for %}` line -- as YAML errors, beside the real findings, in a template that renders
+fine. A YAML extension picks its documents by language id, so a language of its own is what keeps them off. That
+also takes away the `[yaml]` editor defaults -- spaces, two of them, and suggestions inside values, which `- pa`
+completion needs -- so `configurationDefaults` restates them for both ids, and the `partcad:` snippet provider in
+`extension.ts` is registered for both. With that, a YAML extension had nothing left to do for a PartCAD user, and
+neither the repository nor the PartCAD IDE recommends one any more.
+
+**Both languages share one grammar, `syntaxes/partcad-yaml.tmLanguage.json` (`source.partcad.yaml`): the
+editor's YAML grammar with Jinja2 injected on top.** Everything subtle about it is about the YAML grammar
+underneath, which is not one grammar: VS Code's own (`source.yaml`, which picks between a full YAML 1.2 grammar
+and an "embedded" one), unless somebody has installed a YAML extension that brings a `source.yaml` of its own and
+so replaces it -- Red Hat's, with an older one, is the one people have. Each `comment` in the file says why a rule
+is there; the short version:
+
+* It includes `source.yaml` and nothing more specific. VS Code's versioned grammars refer back to `source.yaml`
+  for some of their rules, so naming `source.yaml.1.2` directly turned every comment into an error wherever such an
+  extension is installed.
+* The YAML grammar tracks indentation with `while` rules, checked at the start of every line before any
+  injection: a `{% endfor %}` indented less than the YAML around it had its characters eaten as indentation
+  errors, and a block scalar never ended. So the outermost rule (`meta.template.jinja`) is a `while` of its own
+  that takes the `{% %}`/`{# #}` tags a line starts with: the whole line when that is all it has, so YAML sees the
+  blank line it renders to, and otherwise up to the last of them, so YAML reads the rest from there.
+* Inside `[...]` and `{...}` the 1.2 grammar is strict about what follows what, and never sees what `{{ x }}`
+  stands for: `[{{ x }}, {{ y }}, 0]` flagged its second `,`, and `-{{ x }}` its `-`. A second injection takes
+  those before YAML does. It has to be declared first, since injections that tie are tried in declaration
+  order.
+
+`src/test/suite/partcadYaml.test.ts` asks the running editor for its tokens (`_workbench.captureSyntaxTokens`,
+which VS Code's own colorization tests read) for a fixture of the placements above and for every templated
+`.assy`/`partcad.yaml` under `examples/` and `src/partcad/`, and fails on any `invalid.illegal` token or any tag
+that is not read as Jinja. So it checks VS Code's own YAML grammar, under `npm test` and in the `bundledIde` run
+alike; one an installed YAML extension substitutes is not covered by any run, and a change to the grammar has to be
+tried with Red Hat's installed by hand. A window that was open while the grammar changed keeps the old one until it
+is reloaded.
+
+The checker's half of the same problem lives in `partcad_utils.assy_lint`: it renders the template with the
+values PartCAD would (see "The checker is" below) and maps every finding back to the template, and only masks a file
+nothing declares. In the mask, a `{{ expr }}` alone on its line counts as lines of YAML (blank, and unknown both
+as a value and as keys) rather than as a value -- the filler scalar it used to become turned the next key into
+"mapping values are not allowed here" -- and macro, `call` and block-`set` bodies are masked whole.
+
+**The `Lint` settings section** is `partcad.lint.enabled`, `partcad.lint.includePaths` and
+`partcad.lint.extraParams`, read per document by `PartcadLint.lintOptions` (they are resource settings, and
+include paths resolve against the document's workspace folder) and handed to `partcad.lintFile`. The backend
+passes them on as `pc`'s global `--extra-param` -- the option every command overrides parameters with, so the
+check renders with what a render would -- and `pc lint`'s own `--include-path`. Only entries in the
+`object.parameter=value` shape that `--extra-param` parses are passed: a `pc` that cannot parse its own arguments
+checks nothing. Changing any of them re-checks every open file.
 
 **The check never reaches the daemon**, and there is no RPC method for it. It is the client's own file --
 usually one the editor has not saved -- and it needs no package graph, no CAD runtime and no loaded context, so
@@ -526,10 +572,45 @@ an assembly as a scene would put a false error on correct code.
 
 The checker is `partcad_utils.assy_lint` (schemas: `src/partcad_utils/schema/assy.json` and
 `partcad.json`), shared with the daemon-side package lint so an editor and CI cannot disagree about a file. It
-masks each Jinja2 construct with equally sized filler before parsing, which is what keeps every finding on its
-source line and column; findings that depend on what the mask hid are dropped rather than guessed. Change the
+renders the file with the values PartCAD would -- an ASSY file's parameters at the defaults its declaration
+gives them, worked out from the `partcad.yaml` files above it by `partcad_utils.lint_context` -- and
+`partcad_utils.template_render` keeps the way back from every rendered character to the template, so each
+finding still lands on the line and column the user wrote. A file nothing declares has no known values and is
+masked instead; findings that depend on what the mask hid are dropped rather than guessed. The same discovery
+says whether the file is marked `manufacturable: true`, which adds the rules for what is to be made. Change the
 schema or the message wording there, not here -- and remember that a gap in the configuration schema is now a
 squiggle on a working file, so anything PartCAD's own tooling writes has to validate.
+
+## Spelling
+
+Code Spell Checker checks every language unless told otherwise (`cSpell.enabledFileTypes` is `{"*": true}`), so
+giving the two documents languages of their own did not take them away from it, and every key that is not English
+-- `assy`, `connectPorts`, `countPerSku` -- was underlined in every package. `src/spelling.ts` hands it
+`cspell/cspell-ext.json` through the API it exports for exactly this, `registerConfig`, which is also how its own
+language dictionaries arrive. That file defines one dictionary, `cspell/partcad.txt`, and gives it to
+`partcad-assy` and `partcad-yaml` and nothing else, so a `desc:` is still checked against English and no other
+file loses a typo to it. It is not a `cSpell.*` default in `package.json`: that could only carry the words inline,
+and a user's own `cSpell.languageSettings` would replace it rather than add to it. The spell checker is optional
+both ways -- not a dependency, registered whenever it turns up, and nothing breaks when its API does not answer.
+
+`cspell/partcad.txt` is generated (`npm run cspell-dictionary`, `cspell/generate.js`) from
+`src/partcad_utils/schema/assy.json` and `partcad.json`: every property name and every string an `enum` or a
+`const` allows, cut where the spell checker cuts (at case changes and non-letters), plus a short list in the
+script of what no schema spells -- tool and format names, Jinja2's end tags. A key a schema gains is a word
+packages are about to be written in, so rerun it with any schema change; `src/test/suite/spelling.test.ts` fails
+while the file is out of date. The generated file is what is packaged (`.vscodeignore` leaves the script out),
+since the `.vsix` carries no schemas to generate from.
+
+The same test file asks a real spell checker which words it flags in a `partcad.yaml`, and skips under a plain
+`npm test`, which does not install one. To run it:
+
+```bash
+npm run pretest && PARTCAD_TEST_WITH_CSPELL=streetsidesoftware.code-spell-checker npx vscode-test --label withSpellChecker
+```
+
+`installExtensions` puts it in `.vscode-test/extensions`, which every configuration shares, so from then on
+`npm test` runs that test too rather than skipping it. Take it out again with the downloaded editor's
+`bin/code --extensions-dir .vscode-test/extensions --uninstall-extension streetsidesoftware.code-spell-checker`.
 
 ## Opening a file in a third-party application
 

@@ -1,9 +1,12 @@
+import hashlib
 import json
 import os
+import uuid
 
 import aiofiles
 
 from partcad.cache_hash import CacheHash
+from partcad_utils import lint_context, template_render
 
 # Shared with every client's `pc lint --file`, which is why it is not in this
 # package: the daemon checks a package's files when it walks the package graph,
@@ -16,8 +19,8 @@ from partcad_utils.assy_lint import (
     SEVERITY_WARNING,
     is_assy_file,
     schema_for_file,
-    validate_source,
 )
+from partcad_utils.user_config import user_config
 
 from .. import logging as pc_logging
 from ..context import Context
@@ -31,9 +34,13 @@ class YamlLinting(Linting):
     A `partcad.yaml` and an `.assy` are the same kind of document -- a Jinja2
     template that renders to YAML and then has to match a schema -- so they are
     checked by the same code, `partcad_utils.assy_lint.validate_source`, which
-    masks the template before parsing and reports each finding at the source
-    line and column it came from. What the two subclasses below differ in is
-    only which files they walk and which schema each file gets.
+    renders the template with the values PartCAD would and reports each finding
+    at the source line and column it came from. What it renders a file with, and
+    whether the rules for what is to be made apply, are worked out from the
+    files around it by `partcad_utils.lint_context` -- not from the package
+    graph, so that the editor, which has no graph, gets the same answer. What
+    the two subclasses below differ in is only which files they walk and which
+    schema each file gets.
 
     That sharing is the point rather than a convenience. `validate_source` is
     also what every client runs over the single file somebody is editing
@@ -69,7 +76,58 @@ class YamlLinting(Linting):
         hash.add_string(json.dumps(self.schema(name, target), sort_keys=True))
         hash.add_string(str(self.flavor(name, target)))
         hash.add_string("checker-v%d" % CHECKER_VERSION)
+        # And what the file is rendered with, which is not in the file: the
+        # parameters its declaration gives it and what the packages around it
+        # mark manufacturable. Editing either changes the findings of a file
+        # nobody touched.
+        hash.add_string(self._context_key(name, target))
         return hash
+
+    def context(self, name: str, target: str) -> lint_context.FileContext:
+        """What ``target`` is rendered with and held to, as a client works it out -- see 'lint_context'."""
+        # With the overrides PartCAD renders the file with -- '--extra-param'
+        # and the 'parameters:' of the user's configuration -- matched by the
+        # object's full name, which here is known.
+        context = lint_context.describe(target, name, parameter_overrides=user_config.parameter_config.to_dict())
+        flavor = self.flavor(name, target)
+        if flavor is not None:
+            context.flavor = flavor
+        return context
+
+    def _context_key(self, name: str, target: str) -> str:
+        context = self.context(name, target)
+        search_path = context.renders[0].search_path if context.renders else [os.path.dirname(target)]
+        try:
+            with open(target, "r", encoding="utf-8") as file:
+                found, missing, dynamic = template_render.referenced_files(file.read(), search_path)
+        except (OSError, UnicodeDecodeError):
+            found, missing, dynamic = [], [], False
+        includes = []
+        for path in found:
+            # What the file includes or imports is part of what it renders to:
+            # an edited fragment changes the findings of a file nobody touched.
+            try:
+                with open(path, "rb") as file:
+                    includes.append([path, hashlib.sha256(file.read()).hexdigest()])
+            except OSError:
+                includes.append([path, None])
+        return json.dumps(
+            {
+                "renders": [[render.variables, render.search_path] for render in context.renders],
+                "manufacturable": context.manufacturable,
+                "inherited": context.inherited_manufacturable,
+                "includes": includes,
+                # A name that is only known once the template runs could be
+                # any file at all, so no key made in advance covers it: such a
+                # file is checked every time rather than served stale.
+                "dynamic": uuid.uuid4().hex if dynamic else None,
+                "missing": missing,
+            },
+            sort_keys=True,
+            # The callables a 'partcad.yaml' is rendered with, by name: what
+            # they answer is decided by the version, which is in there too.
+            default=lambda value: getattr(value, "__name__", type(value).__name__),
+        )
 
     async def validate(self, ctx: Context, package: Project, target: str, lint_ctx: dict = {}) -> LintingReport:
         lint_result = LintingReport(package.name)
@@ -86,7 +144,8 @@ class YamlLinting(Linting):
             return lint_result
 
         try:
-            diagnostics = validate_source(raw, self.schema(package.name, target))
+            context = self.context(package.name, target)
+            diagnostics = context.check(raw, schema_for_file(target, context.flavor))
         except Exception as exc:  # pylint: disable=broad-except
             pc_logging.debug(package.name, str(exc))
             lint_result.add(Severity.FAILED, f"Internal Error: Failed to check {os.path.basename(target)}")

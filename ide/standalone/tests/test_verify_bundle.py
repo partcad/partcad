@@ -21,7 +21,7 @@ from conftest import COMPONENT_ROOT
 PLAN = {
     "install": [
         {"id": "PartCAD.partcad-official", "source": "local", "url": None, "path": "partcad.vsix", "required": True},
-        {"id": "redhat.vscode-yaml", "source": "gallery", "url": None, "required": False},
+        {"id": "yzhang.markdown-all-in-one", "source": "gallery", "url": None, "required": False},
     ],
     "skip": [{"id": "ms-python.vscode-pylance", "reason": "proprietary"}],
 }
@@ -75,7 +75,7 @@ def make_bundle(tmp_path, with_tools=True):
     extensions = resources / "app" / "extensions"
     extensions.mkdir()
     add_extension(extensions, "PartCAD", "partcad-official")
-    add_extension(extensions, "redhat", "vscode-yaml")
+    add_extension(extensions, "yzhang", "markdown-all-in-one")
 
     for path in (tmp_path / "partcad-ide" / "partcad-ide", tmp_path / "partcad-ide" / "bin" / "partcad-ide"):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -128,12 +128,12 @@ def test_a_missing_required_extension_fails(tmp_path, capsys):
 def test_a_missing_optional_extension_only_warns(tmp_path, capsys):
     resources = make_bundle(tmp_path)
     for entry in (resources / "app" / "extensions").iterdir():
-        if entry.name.startswith("redhat."):
+        if entry.name.startswith("yzhang."):
             (entry / "package.json").unlink()
             entry.rmdir()
 
     assert run(resources, tmp_path) == 0
-    assert "optional extension redhat.vscode-yaml is not installed" in capsys.readouterr().out
+    assert "optional extension yzhang.markdown-all-in-one is not installed" in capsys.readouterr().out
 
 
 def test_an_extension_the_policy_skips_must_not_be_there(tmp_path, capsys):

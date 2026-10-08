@@ -1,57 +1,8 @@
-import decimal
+from partcad_utils.parameters import coerce_parameter_value, normalize_parameters  # noqa: F401
 
 from . import expr
 from . import logging as pc_logging
 from .user_config import user_config
-
-
-def normalize_parameters(parameters: dict) -> dict:
-    """Expand the short forms of one parameter declaration section.
-
-    A parameter may be declared as the bare value it defaults to - a number, a
-    string, a boolean, a list - and this turns each of those into the long form
-    the rest of PartCAD reads: a dictionary with a 'type' and a 'default'.
-
-    Lifted out of 'Configuration.normalize' below because an interface's
-    'parameters:' holds these beside its freedom of movement and expands only
-    that half (see 'partcad.interface_config'), and two copies of these rules
-    would be two answers to "what does 'size: 3' mean".
-    """
-    if not isinstance(parameters, dict):
-        return parameters
-
-    for param_name, param_value in parameters.items():
-        # Expand short formats
-        if isinstance(param_value, str):
-            parameters[param_name] = {
-                "type": "string",
-                "default": param_value,
-            }
-        elif isinstance(param_value, bool):
-            parameters[param_name] = {
-                "type": "bool",
-                "default": param_value,
-            }
-        elif isinstance(param_value, float):
-            parameters[param_name] = {
-                "type": "float",
-                "default": param_value,
-            }
-        elif isinstance(param_value, int):
-            parameters[param_name] = {
-                "type": "int",
-                "default": param_value,
-            }
-        elif isinstance(param_value, list):
-            parameters[param_name] = {
-                "type": "array",
-                "default": param_value,
-            }
-        # All params are float unless another type is explicitly specified
-        elif isinstance(param_value, dict) and "type" not in param_value:
-            param_value["type"] = "float"
-
-    return parameters
 
 
 def apply_user_parameter_overrides(config: dict, object_name: str, section: str = "parameters") -> dict:
@@ -61,13 +12,29 @@ def apply_user_parameter_overrides(config: dict, object_name: str, section: str 
     interface's 'parameters:' holds two kinds and only the construction half is
     overridable, so a name meant for the other half reaches this as a name that
     is simply not there.
+
+    A value is read as the type the parameter declares, the way a value written
+    into an object's name is ('desk;length=60', see 'apply_parameter_values'):
+    '--extra-param' hands over text, and '60' used to reach a template as the
+    string '60', which multiplies into '606060'. One that cannot be read as its
+    type is an error, and the declared default stands.
     """
     config_parameters = user_config.parameter_config.to_dict()
     if object_name in config_parameters and section in config and config[section]:
         parameter_config = config_parameters[object_name]
         for param_name in parameter_config:
             if param_name in config[section]:
-                config[section][param_name]["default"] = parameter_config[param_name]
+                declared = config[section][param_name]
+                try:
+                    value = coerce_parameter_value(
+                        declared_parameter_type(declared), parameter_config[param_name], param_name, object_name
+                    )
+                except (ArithmeticError, TypeError, ValueError) as e:
+                    pc_logging.error(
+                        "The override of the parameter '%s' of '%s' cannot be used: %s" % (param_name, object_name, e)
+                    )
+                    continue
+                declared["default"] = value
             else:
                 pc_logging.debug(
                     "The configured parameter '%s' is not declared in '%s' of '%s'" % (param_name, section, object_name)
@@ -95,41 +62,6 @@ class Configuration:
 
         # Override parameters with user configuration
         return apply_user_parameter_overrides(config, object_name)
-
-
-def coerce_parameter_value(param_type, param_value, param_name: str, object_name: str):
-    """One parameter value, read as the type the parameter declares.
-
-    The values arrive as the strings they were written as - '<name>;size=4' is
-    text - and this is where each becomes the number, string or flag it stands
-    for.
-    """
-    if param_type == "string":
-        return str(param_value)
-    if param_type == "int":
-        # A whole number written as one ('4.0', which is what a YAML value of
-        # 4.0 spells) is what was meant; anything with a fraction is not an
-        # integer and is refused rather than silently truncated. Through
-        # 'Decimal' rather than 'float' so that neither the test nor the value
-        # loses precision on a large integer.
-        value = decimal.Decimal(str(param_value))
-        if value != value.to_integral_value():
-            raise ValueError(
-                "The parameter '%s' of '%s' is an integer, and '%s' is not one" % (param_name, object_name, param_value)
-            )
-        return int(value)
-    if param_type == "float":
-        return float(param_value)
-    if param_type == "bool":
-        if isinstance(param_value, str):
-            return param_value.lower() == "true"
-        return bool(param_value)
-    if param_type == "array":
-        return param_value
-    pc_logging.debug(
-        "The parameter '%s' of '%s' has no type; taking '%s' as it is" % (param_name, object_name, param_value)
-    )
-    return param_value
 
 
 def apply_parameter_values(parameters: dict, values: dict, object_name: str) -> dict:

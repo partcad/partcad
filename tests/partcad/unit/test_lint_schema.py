@@ -439,6 +439,68 @@ def test_a_templated_configuration_is_not_reported_as_broken_yaml(tmp_path):
     assert report.messages == []
 
 
+def test_an_assy_file_is_checked_as_its_declaration_renders_it(tmp_path):
+    """The same rendering, with the same parameters, as 'pc lint --file' and the editor use."""
+    root = package(
+        tmp_path,
+        "manufacturable: true\nassemblies:\n  thing:\n    type: assy\n    parameters:\n      count: 2\n",
+    )
+    (root / "thing.assy").write_text(
+        "links:\n  - part: frame\n{% for n in range(param_count) %}\n  - part: leg\n"
+        "    location: [[{{ n }}, 0, 0], [0, 0, 1], 0]\n{% endfor %}\n"
+    )
+    ctx = pc.Context(str(root))
+    project = ctx.get_project("//")
+
+    check_run = AssySchemaLinting("AssySchema")
+    report = asyncio.run(check_run.validate(ctx, project, check_run.get_targets(ctx, project)[0]))
+    # Two legs render, both from line 5, and the package marks the assembly as
+    # one to be made: one finding, at the line that places them.
+    assert [message.split(": ", 1)[0] for _, message in report.messages] == ["thing.assy:5:5"]
+
+
+def test_the_cached_findings_follow_the_declaration(tmp_path):
+    """Editing the parameters a file is rendered with changes its findings without touching it."""
+    root = package(tmp_path, "assemblies:\n  thing:\n    type: assy\n    parameters:\n      count: 2\n")
+    (root / "thing.assy").write_text("links:\n  - part: frame\n")
+    target = str(root / "thing.assy")
+    check_run = AssySchemaLinting("AssySchema")
+    before = check_run.get_hash("//", target).get()
+    (root / "partcad.yaml").write_text("assemblies:\n  thing:\n    type: assy\n    parameters:\n      count: 3\n")
+    assert check_run.get_hash("//", target).get() != before
+
+
+def test_the_cached_findings_follow_what_the_file_includes(tmp_path):
+    """An edited fragment changes the findings of the file that includes it."""
+    root = package(tmp_path, "assemblies:\n  thing:\n    type: assy\n")
+    (root / "thing.assy").write_text("links:\n{% include 'legs.yaml' %}\n")
+    (root / "legs.yaml").write_text("  - part: leg\n")
+    target = str(root / "thing.assy")
+    check_run = AssySchemaLinting("AssySchema")
+    before = check_run.get_hash("//", target).get()
+    assert check_run.get_hash("//", target).get() == before
+    (root / "legs.yaml").write_text("  - part: leg\n    locaton: 1\n")
+    assert check_run.get_hash("//", target).get() != before
+
+
+def test_a_file_that_includes_by_an_expression_is_not_served_from_the_cache(tmp_path):
+    root = package(tmp_path, "assemblies:\n  thing:\n    type: assy\n")
+    (root / "thing.assy").write_text("links:\n{% include which %}\n")
+    target = str(root / "thing.assy")
+    check_run = AssySchemaLinting("AssySchema")
+    assert check_run.get_hash("//", target).get() != check_run.get_hash("//", target).get()
+
+
+def test_a_package_above_that_cannot_be_read_does_not_stop_the_walk(tmp_path):
+    """'get_hash' runs outside the check's own error handling, before every check."""
+    (tmp_path / "partcad.yaml").write_text("desc: 2001-13-45\n")
+    root = package(tmp_path, "assemblies:\n  thing:\n    type: assy\n")
+    (root / "thing.assy").write_text("links:\n  - part: frame\n")
+    check_run = AssySchemaLinting("AssySchema")
+    assert check_run.get_hash("//", str(root / "thing.assy")).get()
+    assert SchemaLinting("PartcadSchema").get_hash("//", str(root / "partcad.yaml")).get()
+
+
 @pytest.mark.parametrize(
     "section, declaration",
     [

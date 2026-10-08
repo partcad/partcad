@@ -1,0 +1,219 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "PartCAD YAML",
+  "scopeName": "source.partcad.yaml",
+  "comment": "The two documents PartCAD reads YAML from -- an ASSY file and a package's partcad.yaml -- are each a Jinja2 template that renders to YAML, and this one grammar serves both languages. The YAML is highlighted by the editor's own YAML grammar, and the template's constructs are injected on top of it with left priority, so that wherever one starts it wins over whatever YAML would have made of the same characters (a '{{' is not a flow mapping, a '{% for %}' line is not a plain scalar). Jinja renders the whole file, YAML comments included, so the injection applies everywhere except inside the template's own constructs.",
+  "patterns": [
+    {
+      "comment": "The editor's YAML grammar tracks indentation with 'while' rules, which are checked at the start of every line before anything else -- an injection included -- gets a say: a '{% endfor %}' indented less than the YAML around it had its characters eaten one by one as 'expected indentation' errors, and a block scalar never ended. This rule is the outermost 'while', so its condition is checked first, and it takes the '{% %}' and '{# #}' tags a line starts with -- the whole line, when that is all it has, and the YAML grammar then sees the blank line it renders to; otherwise up to the end of the last of them, each up to its own closing, and the YAML grammar reads the rest of the line from there, indentation and all. It includes 'source.yaml' and not one of the versioned grammars behind it: the YAML extension most people have installed replaces 'source.yaml' with a grammar of its own, and the editor's versioned grammars refer back to 'source.yaml' for some of their rules, so naming one directly broke every comment wherever that extension is installed. (With the editor's own grammar, a file is read by its 'embedded' YAML grammar rather than the full one from the first line that is nothing but tags, or from the start if it opens with a tag: the full one is chosen by a rule that has to see the first character and holds only while every line is left to it. The two read correct YAML the same way.)",
+      "name": "meta.template.jinja",
+      "begin": "\\A",
+      "while": "^(?:[ \\t]*+((?:\\{%(?:[^%]|%(?!\\}))*+%\\}|\\{#(?:[^#]|#(?!\\}))*+#\\})(?:[ \\t]*+(?:\\{%(?:[^%]|%(?!\\}))*+%\\}|\\{#(?:[^#]|#(?!\\}))*+#\\}))*+)(?:[ \\t]*+$)?)?",
+      "whileCaptures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#comment"
+            },
+            {
+              "include": "#statement"
+            }
+          ]
+        }
+      },
+      "patterns": [
+        {
+          "include": "source.yaml"
+        }
+      ]
+    }
+  ],
+  "injections": {
+    "L:meta.template.jinja meta.flow.sequence.yaml -meta.flow.entry.jinja -comment.block.jinja -meta.embedded.block.jinja -meta.embedded.expression.jinja, L:meta.template.jinja meta.flow.mapping.yaml -meta.flow.entry.jinja -comment.block.jinja -meta.embedded.block.jinja -meta.embedded.expression.jinja": {
+      "comment": "Inside '[...]' and '{...}' the YAML grammar is strict about what may follow what, and it never sees what a '{{ }}' stands for, so two common spellings in correct templates came out as errors. Both are taken here, before YAML gets to them, with the scopes YAML gives the same characters when the value is a literal. This injection is listed before the general one because injections that tie are tried in the order they are declared, and the general one would otherwise take every '{{' first.",
+      "patterns": [
+        {
+          "comment": "An expression that is an entry of its own, as in '[{{ x }}, {{ y }}, 0]': it follows a '[', a ',' or the start of a line. After a ',' the YAML grammar waits for the next entry to start, and the expression is read while it is still waiting -- so the ',' after it looked like a second ',' in a row. So that ',' is taken along with the expression, and so is a sign in front of it. Only an entry: a value in a mapping follows a ':', and its ',' is the mapping's, which YAML has to see.",
+          "name": "meta.flow.entry.jinja",
+          "begin": "(?<=^[ \\t]*|[,\\[][ \\t]*)(-?)(?=\\{\\{)",
+          "end": "(?<=\\}\\})(?:[ \\t]*+(,))?",
+          "beginCaptures": {
+            "1": {
+              "name": "string.unquoted.plain.in.yaml"
+            }
+          },
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.separator.sequence.yaml"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#expression-block"
+            }
+          ]
+        },
+        {
+          "comment": "A sign in front of any other expression, as in '{x: -{{ x }}}'. To YAML, a '-' followed by '{' is not the start of anything.",
+          "name": "string.unquoted.plain.in.yaml",
+          "match": "-(?=\\{\\{)"
+        }
+      ]
+    },
+    "L:meta.template.jinja -comment.block.jinja -meta.embedded.block.jinja -meta.embedded.expression.jinja": {
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#statement"
+        },
+        {
+          "include": "#expression-block"
+        },
+        {
+          "comment": "A '-' joining an expression to what is before it, as in '{{ a }}-{{ b }}'. A YAML grammar that reads a plain scalar in one match starts that match at the '-', before the '{{' has a chance, and the second expression came out as text.",
+          "name": "string.unquoted.plain.out.yaml",
+          "match": "-(?=\\{\\{)"
+        }
+      ]
+    }
+  },
+  "repository": {
+    "comment": {
+      "name": "comment.block.jinja",
+      "begin": "\\{#",
+      "end": "#\\}",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.begin.jinja"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.end.jinja"
+        }
+      }
+    },
+    "statement": {
+      "name": "meta.embedded.block.jinja",
+      "begin": "\\{%[-+]?",
+      "end": "[-+]?%\\}",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.begin.jinja"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.end.jinja"
+        }
+      },
+      "patterns": [
+        {
+          "name": "keyword.control.jinja",
+          "match": "\\b(?:for|endfor|if|elif|else|endif|set|endset|macro|endmacro|call|endcall|filter|endfilter|block|endblock|extends|include|import|from|as|with|without|endwith|context|ignore|missing|recursive|scoped|required|autoescape|endautoescape|raw|endraw|break|continue|do)\\b"
+        },
+        {
+          "include": "#expression"
+        }
+      ]
+    },
+    "expression-block": {
+      "name": "meta.embedded.expression.jinja",
+      "begin": "\\{\\{[-+]?",
+      "end": "[-+]?\\}\\}",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.begin.jinja"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.end.jinja"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#expression"
+        }
+      ]
+    },
+    "expression": {
+      "patterns": [
+        {
+          "name": "string.quoted.single.jinja",
+          "match": "'(?:[^'\\\\]|\\\\.)*'"
+        },
+        {
+          "name": "string.quoted.double.jinja",
+          "match": "\"(?:[^\"\\\\]|\\\\.)*\""
+        },
+        {
+          "name": "constant.numeric.jinja",
+          "match": "\\b\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][-+]?\\d+)?\\b"
+        },
+        {
+          "name": "constant.language.jinja",
+          "match": "\\b(?:true|false|none|True|False|None)\\b"
+        },
+        {
+          "name": "keyword.control.jinja",
+          "match": "\\b(?:if|else)\\b"
+        },
+        {
+          "name": "keyword.operator.expression.jinja",
+          "match": "\\b(?:and|or|not|in|is)\\b"
+        },
+        {
+          "match": "(\\|)\\s*([A-Za-z_]\\w*)",
+          "captures": {
+            "1": {
+              "name": "keyword.operator.filter.jinja"
+            },
+            "2": {
+              "name": "support.function.filter.jinja"
+            }
+          }
+        },
+        {
+          "match": "(\\.)\\s*([A-Za-z_]\\w*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.accessor.jinja"
+            },
+            "2": {
+              "name": "variable.other.property.jinja"
+            }
+          }
+        },
+        {
+          "name": "entity.name.function.jinja",
+          "match": "\\b[A-Za-z_]\\w*(?=\\s*\\()"
+        },
+        {
+          "name": "variable.other.jinja",
+          "match": "\\b[A-Za-z_]\\w*\\b"
+        },
+        {
+          "name": "keyword.operator.jinja",
+          "match": "\\*\\*|//|==|!=|<=|>=|[-+*/%<>=~]"
+        },
+        {
+          "name": "punctuation.separator.jinja",
+          "match": "[,:]"
+        },
+        {
+          "comment": "A dict literal. Its own rule so that the '}' closing it is not read as half of the '}}' closing the expression.",
+          "begin": "\\{",
+          "end": "\\}",
+          "patterns": [
+            {
+              "include": "#expression"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

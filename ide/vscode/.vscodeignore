@@ -9,3 +9,4 @@ out/**
 **/.pyc
 **/.pytest_cache/**
 **/.conda/**
+cspell/generate.js
