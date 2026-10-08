@@ -154,7 +154,15 @@ def test_requirements_accumulate_and_travel_with_every_request(tmp_path, monkeyp
     asyncio.run(made.ensure_async("numpy==2.4.1"))  # said twice, sent once
 
     made.run(["-c", "pass"])
-    assert service.params["requirements"] == ["numpy==2.4.1", "trimesh"]
+    # The base stack first, as every sandbox installs it, then what was asked
+    # for -- each once.
+    from partcad import runtime_python
+
+    sent = service.params["requirements"]
+    base = runtime_python.base_requirements(made.version)
+    assert sent[-2:] == ["numpy==2.4.1", "trimesh"]
+    assert [r for r in sent if r in base] == base
+    assert len(sent) == len(set(sent))
 
 
 def test_stdin_is_encoded_the_way_the_container_reads_it(tmp_path, monkeypatch):
@@ -339,3 +347,51 @@ def test_loopback_stays_plain(tmp_path, monkeypatch):
     _runtime(tmp_path).run(["-c", "pass"])
 
     assert service.scheme == "http"
+
+
+# --------------------------------------------------------------------------- #
+# What every sandbox has before anything runs in it                           #
+# --------------------------------------------------------------------------- #
+
+
+def test_the_base_stack_is_asked_for_before_anything_else(tmp_path):
+    """Every wrapper deserializes its request with OCP; an environment without it runs nothing."""
+    from partcad import runtime_python
+
+    made = _runtime(tmp_path)
+    made.once()
+    base = runtime_python.base_requirements(made.version)
+    assert made.requirements[-len(base) :] == base
+
+
+def test_the_vtk_ocp_is_reasserted_after_build123d():
+    from partcad import runtime_python, sandbox_versions
+
+    order = runtime_python.base_requirements("3.11")
+    assert order.index(sandbox_versions.CADQUERY_OCP) > order.index(sandbox_versions.BUILD123D)
+    assert order[-1] == sandbox_versions.CADQUERY_OCP
+
+
+def test_python_3_10_gets_no_cadquery():
+    from partcad import runtime_python, sandbox_versions
+
+    assert sandbox_versions.CADQUERY not in runtime_python.base_requirements("3.10")
+    assert sandbox_versions.CADQUERY in runtime_python.base_requirements("3.11")
+
+
+def test_a_command_brings_the_base_stack_with_it_even_without_once(tmp_path, monkeypatch):
+    """'once()' was dead code here: every override skipped it, so nothing ever asked for OCP."""
+    from partcad import runtime_python
+
+    made = _runtime(tmp_path)
+    sent = {}
+
+    class _Service:
+        def execute(self, command, params, timeout=None):
+            sent.update(params)
+            return {"result": {"exit_code": 0, "stdout": "", "stderr": ""}}
+
+    monkeypatch.setattr(made, "_client", lambda: _Service())
+    made.run(["x.py"])
+    for requirement in runtime_python.base_requirements(made.version):
+        assert requirement in sent["requirements"]

@@ -80,11 +80,6 @@ def main() -> int:
         os.path.isfile("/pc/pc-container-json-rpc.py"),
         "the image's entrypoint serves it from there, and the 'remote' sandbox has nothing to talk to without it",
     )
-    check(
-        "flask_jsonrpc is importable",
-        _importable("flask_jsonrpc"),
-        "the service imports it at startup, so the container would exit immediately instead of serving",
-    )
 
     state = os.environ.get("PC_INTERNAL_STATE_DIR", "")
     check(

@@ -135,6 +135,10 @@ def command_modules():
 datas += [
     # Executed by the sandbox interpreter, by path. They must exist as files.
     (str(SRC / "partcad" / "wrappers"), "partcad/wrappers"),
+    # Copied into every container PartCAD starts, as its command -- read as a
+    # file, by `partcad_utils.containers`, which a module compiled into the
+    # archive is not. Frozen as a module too, for the imports of it.
+    (str(SRC / "partcad_utils" / "container_service.py"), "partcad_utils"),
     # The packages PartCAD ships inside itself, loaded from disk as '//builtin'
     # and executed by path in a sandbox. Both their configuration and their
     # scripts must exist as files.

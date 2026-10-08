@@ -14,7 +14,38 @@ release of PartCAD carry a release of somebody else's runtime, and the two do no
 runtime was built here and now is not — see `partcad/partcad-cae-calculix` for what that looks like.
 
 `_common/` holds what both share: `pc-container-json-rpc.py`, the service that accepts a command and runs
-it, and the requirements it needs.
+it. It is a byte-for-byte copy of `src/partcad_utils/container_service.py`, kept identical by a test, and it
+imports only the standard library -- `requirements.txt` beside it is empty on purpose.
+
+## How PartCAD runs a container
+
+Every container PartCAD starts -- the `docker` sandbox's, KiCad's, a plugin's `container:`, the
+`partcad-service-remote-docker` pool's -- is started by `partcad_utils.containers`, one way:
+
+* **Named after what it is**, `partcad-<role>-<tag>-<identity>`: the role (`sandbox`, `kicad`,
+  `plugin-<name>`, `remote`), the image's tag, and a digest of everything fixed at creation -- the image,
+  the mounts, the environment, the allowlist, the user, and the service's own source. Two callers needing the
+  same container share it; two needing different ones never touch each other's. The digest is also a
+  `partcad.identity` label, and a container answering to the name with another identity, or running an
+  image other than the one its tag resolves to now, is replaced rather than trusted.
+* **Labelled** `partcad.container`, `partcad.version`, `partcad.role`, `partcad.identity` and
+  `partcad.mode`, so `pc system prune` finds every one of them.
+* **Running PartCAD's service, not the image's.** The service is copied into the container after it is
+  created and before it starts, and is its command (`python3 /.partcad-service/container_service.py`).
+  So the protocol spoken is always the running PartCAD's own, whatever copy -- if any -- the image carries.
+  The one thing an image needs for this is a `python3` on `PATH`.
+* **Reached on a published port** -- loopback when the daemon is this machine, every interface when it is
+  another (`DOCKER_HOST`) -- or on its own network address from a dev container on the same daemon, and only
+  once its service answers. Every container gets a token of its own, which every request must carry.
+
+Files reach it one of two ways, chosen by the `useDockerRemote` option (`PC_USE_DOCKER_REMOTE`):
+
+* **`mount`** (the default) -- the directories under *Mounts* below are bind-mounted at the paths they have
+  here, and commands name files by those paths.
+* **`upload`** -- nothing from this machine is mounted. The files a command reads travel with the request
+  (`input_files`, `input_dirs`) and what it writes comes back with the answer (`output_files`,
+  `output_dirs`). A sandbox's environment lives in a named volume on the daemon's side. This is what a
+  daemon that cannot see this machine's files needs.
 
 ## Base image contract
 
@@ -23,13 +54,13 @@ entitled to assume. Change any of it and PartCAD cannot run scripts in your imag
 
 | | |
 | --- | --- |
-| **Service** | `pc-container-json-rpc.py` runs as the entrypoint and serves JSON-RPC on **port 5000** at `/jsonrpc`. |
+| **Service** | PartCAD runs its own copy of the service in every container and does not use the image's entrypoint (see above). An image may still carry `pc-container-json-rpc.py` as its entrypoint, serving JSON-RPC on **port 5000** at `/jsonrpc`, for anybody running it by hand. What the image must have is a `python3` on `PATH`. |
 | **Working directory** | `/pc`, holding the service. |
 | **State** | `PC_INTERNAL_STATE_DIR` is set and writable by the running user. |
-| **Commands** | `PC_CONTAINER_ALLOWED_COMMANDS` maps a name to an absolute executable path. A caller names `python`; the image decides what that is. A name the image does not list cannot be run — this is the whole of the service's isolation. |
+| **Commands** | `PC_CONTAINER_ALLOWED_COMMANDS` maps a name to an absolute executable path, or to `null` for "wherever `PATH` finds it". A caller names `python`; the image decides what that is. PartCAD adds what a container needs on top of the image's own list when it creates the container, and a path the image pins is never unpinned by a `null`. A name not listed cannot be run. |
 | **Sandbox root** | `PC_CONTAINER_SANDBOX_ROOT` (default `/pc-sandbox`) is where the `remote` sandbox's environments are mounted. The service also accepts a command that *is* the `bin/python` of an environment under it, because an environment built at run time carries a Python version the allowlist could not have named. Nothing else there may be run, and the file has to exist. |
 | **User** | Not `root`. The mounted directories are the user's own files, and files the sandbox creates have to stay usable outside it. |
-| **Mounts** | The home directory, the temporary directory, the context root, the internal state directory and PartCAD's own installation, mounted at the paths they have on the host (drive-letter-mapped on Windows, where identical paths are not possible) and all writable. Nested paths are dropped, so on an ordinary machine the home directory covers the context root, the state directory and the installation, leaving it and the temporary directory -- two mounts, or one on Windows, where the temporary directory is inside the user profile. Nothing may occupy those paths in the image. The container is named after the image alone, so it is reused across contexts and across runs; only a new version or tag makes a new one. |
+| **Mounts** | The home directory, the temporary directory, the context root, the internal state directory and PartCAD's own installation, mounted at the paths they have on the host (drive-letter-mapped on Windows, where identical paths are not possible) and all writable. Nested paths are dropped, so on an ordinary machine the home directory covers the context root, the state directory and the installation, leaving it and the temporary directory -- two mounts, or one on Windows, where the temporary directory is inside the user profile. Nothing may occupy those paths in the image. The container is named after the image and the mount set, so it is reused across contexts and across runs that need the same mounts; a new version, a new tag or another mount set makes a new one. None of this applies in `upload` mode, which mounts nothing. |
 | **Interpreter** | The `python` entry in the allowlist is a real CPython of the version the tag names, with `pip` available. PartCAD installs a package's requirements into a mounted environment, so the interpreter must be able to install and import from a directory that did not exist when the image was built. |
 
 What a derived image is expected to change: the packages installed in it, and nothing else. Add your apt

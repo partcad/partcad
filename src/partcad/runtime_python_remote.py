@@ -130,12 +130,16 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
     # exchanges files" instead of naming this class.
     EXCHANGES_FILES = True
 
+    # What the sandbox is called, before the image's digest. A subclass that is
+    # the same sandbox reached another way says so here.
+    SANDBOX_PREFIX = "remote-"
+
     def __init__(self, ctx, version=None, image=None, endpoint=None):
         if image is None:
             from . import runtime_python_docker
 
             image = runtime_python_docker.image_for(version or runtime_python.sandbox_versions.DEFAULT_PYTHON_VERSION)
-        super().__init__(ctx, "remote-" + _short(image), version)
+        super().__init__(ctx, self.SANDBOX_PREFIX + _short(image), version)
 
         self.image = image
         self.endpoint = endpoint or getattr(ctx.user_config, "remote_sandbox", None)
@@ -162,22 +166,41 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
     # builds the environment on the first request that names one.
 
     def once(self):
+        self._want_base()
         self.provisioned = True
 
     async def once_async(self):
+        self._want_base()
         self.provisioned = True
 
+    def _want_base(self) -> None:
+        """What every sandbox has before anything runs in it -- asked for here, installed over there.
+
+        Without it the environment held only what a package or a shape named,
+        and every wrapper, which deserializes its request with OCP, failed on
+        the import before doing anything at all.
+        """
+        zstd = runtime_python.sandbox_versions.zstd_requirement(self.version)
+        if zstd:
+            self._want(zstd)
+        for requirement in runtime_python.base_requirements(self.version):
+            self._want(requirement)
+
     def ensure(self, python_package, session=None, path=None, force=False):
+        self.once()
         self._want(python_package)
 
     async def ensure_async(self, python_package, session=None, path=None, force=False):
+        await self.once_async()
         self._want(python_package)
 
     async def prepare_for_package(self, project, session=None):
+        await self.once_async()
         for dep in runtime_python.package_requirements(project):
             self._want(dep)
 
     async def prepare_for_shape(self, config, session=None):
+        await self.once_async()
         for req in runtime_python.shape_requirements(config):
             self._want(req)
 
@@ -258,6 +281,10 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
         return self._finished(cmd, stdout, stderr, returncode)
 
     def run(self, cmd, stdin="", cwd=None, session=None, input_files=None, output_files=None, input_dirs=None):
+        # As the base class does on its way to every command: these overrides
+        # skipped it, so the base stack was never asked for and every wrapper
+        # died on its first import.
+        self.once()
         params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs)
         return self._answer(cmd, self._client().execute(list(cmd), params), output_files)
 
@@ -272,6 +299,7 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
         output_files=None,
         input_dirs=None,
     ):
+        await self.once_async()
         params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs)
         # The bound the caller was given, honoured. Dropped, it meant an
         # unresponsive service held the render open with nothing to wait for.

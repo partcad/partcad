@@ -1,5 +1,10 @@
 FROM kicad/kicad:8.0
 
+# What `pc system prune` recognises as PartCAD's: without it this image could not
+# be told from the rest of what a machine has installed. See
+# tools/containers/README.md.
+LABEL partcad.image="1"
+
 USER root
 RUN \
   apt-get update \

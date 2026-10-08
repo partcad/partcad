@@ -17,7 +17,6 @@ import os
 import pathlib
 import platform
 import tempfile
-import time
 import types
 
 import docker
@@ -779,382 +778,192 @@ def test_the_environment_is_built_over_there(tmp_path, monkeypatch):
 
 
 def _elsewhere(name="somewhere-else") -> str:
-    """An absolute directory this context did not ask for, spelled for this host.
-
-    A literal '/somewhere/else' is not one on Windows: it has no drive letter,
-    so 'translate' refuses it outright rather than mapping it, and the stub
-    below could not even be constructed there. The mount PartCAD is being told
-    about is a *host* path, so it has to look like one here.
-    """
+    """An absolute directory this context did not ask for, spelled for this host."""
     return os.path.join(os.path.abspath(os.sep), name)
 
 
-class _Container:
-    """A container that was started with some set of mounts.
-
-    'sources' is either the paths, all writable, or a mapping of path to
-    whether it is writable. 'Type' is what tells a bind mount from a volume an
-    image declared itself, which PartCAD never asked for and does not compare.
-
-    Each mount lands where 'translate' says, which is what a container PartCAD
-    started would carry. A test that wants one landing somewhere else edits
-    'attrs' afterwards.
-    """
-
-    def __init__(self, sources, status="running"):
-        if not isinstance(sources, dict):
-            sources = {source: True for source in sources}
-        self.attrs = {
-            "Mounts": [
-                {
-                    "Type": "bind",
-                    "Source": source,
-                    # The platform's own mapping, not a hardcoded POSIX one.
-                    # Pinning 'windows=False' made this stub disagree with
-                    # '_start' on Windows -- its 'Destination' stayed 'C:\\...'
-                    # while the real one is '/c/...' -- so every container
-                    # looked wrong and the reuse tests failed there and only
-                    # there.
-                    "Destination": docker_mount.translate(source),
-                    "RW": rw,
-                }
-                for source, rw in sources.items()
-            ]
-        }
-        self.status = status
-        self.removed = False
-        self.started = False
-
-    def start(self):
-        self.started = True
-
-    def remove(self, force=False):
-        self.removed = True
+# --------------------------------------------------------------------------- #
+# Its container                                                                #
+# --------------------------------------------------------------------------- #
+#
+# Finding it, checking that it is the container its name stands for, replacing
+# an impostor and racing other threads and processes for it are
+# 'partcad_utils.containers.acquire', pinned in tests/partcad_utils. What the
+# sandbox decides is what it asks for.
 
 
-class _Client:
-    """A daemon on this filesystem, holding at most one sandbox container.
+class _ProbeOnly:
+    """A daemon on this filesystem, as far as the mount probe can tell."""
 
-    Two kinds of run reach it. The named one is the sandbox's own container;
-    the unnamed one is the mount probe, which every '_start' now makes first,
-    and which this stub answers the way a daemon that shares this filesystem
-    does. Keeping them apart here rather than in each test is what stops the
-    probe from counting as "a container was created".
-    """
-
-    def __init__(self, existing=None):
-        self.existing = existing
-        self.made = None
-        self.probes = []
+    def __init__(self):
         self.api = types.SimpleNamespace(base_url="http+docker://localhost")
         self.images = types.SimpleNamespace(get=lambda name: name, pull=lambda name: name)
-        self.containers = types.SimpleNamespace(get=self._get, run=self._run)
+        self.containers = types.SimpleNamespace(run=lambda image, **kwargs: b"")
 
-    def _get(self, name):
-        import docker
 
-        if self.existing is None:
-            raise docker.errors.NotFound(name)
-        return self.existing
+@pytest.fixture
+def asked(tmp_path, monkeypatch):
+    """What '_start' asked 'containers.acquire' for, answered with a container that is nothing."""
+    from partcad_utils import containers
 
-    def _run(self, image, **kwargs):
-        if kwargs.get("name") is None:
-            self.probes.append(kwargs)
-            return b""
-        self.made = kwargs
-        # What is created answers to the name afterwards, the way Docker's does,
-        # and carries the modes it was asked for. A stub that kept returning the
-        # removed one, or that made everything writable, would have the second
-        # caller replace a container that is in fact the one it wanted.
-        self.existing = _Container({host: spec["mode"] != "ro" for host, spec in (kwargs.get("volumes") or {}).items()})
-        return self.existing
+    requests = []
 
-
-def _except_the_probe(client, replacement):
-    """Replace 'containers.run' for the *sandbox* container only.
-
-    The mount probe keeps the stub's own answer. A test about a name taken
-    between the look-up and the create, or about a refusal that is not a race,
-    is not a test about whether the daemon shares this filesystem -- and saying
-    so in each of them would be three copies of one fact.
-    """
-    original = client._run
-
-    def run(image, **kwargs):
-        if kwargs.get("name") is None:
-            return original(image, **kwargs)
-        return replacement(image, **kwargs)
-
-    client.containers.run = run
-
-
-def _started(tmp_path, monkeypatch, existing):
-    made = _runtime(tmp_path)
-    client = _Client(existing)
-    monkeypatch.setattr(runtime, "docker_available", lambda: True)
-    monkeypatch.setattr("docker.from_env", lambda: client)
-    return made, client, made._start()
-
-
-def _wanted_binds(made):
-    mounts = docker_mount.mounts(made._mounted)
-    return {host: spec["mode"] != "ro" for host, spec in mounts.items()}
-
-
-def test_a_container_that_can_see_this_context_is_reused(tmp_path, monkeypatch):
-    made = _runtime(tmp_path)
-    existing = _Container(_wanted_binds(made), status="exited")
-
-    _made, client, got = _started(tmp_path, monkeypatch, existing)
-
-    assert got is existing
-    assert existing.started is True
-    assert client.made is None
-
-
-def test_a_container_that_cannot_is_replaced(tmp_path, monkeypatch):
-    """The name says which image and nothing about what is mounted.
-
-    The context root is mounted too, and that is per package -- so a container
-    started while working on one package cannot serve another, and reusing it
-    made every command naming a file under the second root fail on a path that
-    is not there.
-    """
-    existing = _Container([_elsewhere()])
-
-    _made, client, got = _started(tmp_path, monkeypatch, existing)
-
-    assert got is not existing
-    assert existing.removed is True
-    assert client.made is not None
-
-
-def test_a_container_holding_more_than_was_asked_for_is_replaced(tmp_path, monkeypatch):
-    """It used to be reused, and that leaked one context's directory into another.
-
-    The check was for coverage: a container with *more* mounts than the request
-    satisfied it. Nearly harmless while the set was the state directory and the
-    context root; not once a context can name a directory of the user's own, as
-    an ad-hoc conversion does -- the container it started still has that
-    directory mounted, and the next context wanting this image would have
-    inherited it without ever asking.
-    """
-    binds = _wanted_binds(_runtime(tmp_path))
-    binds[str(tmp_path / "somebody-elses-files")] = True
-    existing = _Container(binds)
-
-    _made, client, got = _started(tmp_path, monkeypatch, existing)
-
-    assert got is not existing
-    assert existing.removed is True
-    assert client.made is not None
-
-
-def test_a_container_mounting_it_somewhere_else_is_replaced(tmp_path, monkeypatch):
-    """The right directories in the wrong places is still the wrong container.
-
-    A destination is derived from its source, so the two agree for as long as
-    that derivation does. The run where it does not is a PartCAD that changed
-    it, whose containers from before the change are still on the machine -- and
-    a path the host and the container disagree about is the whole class of bug
-    binding directories onto themselves exists to prevent.
-    """
-    made = _runtime(tmp_path)
-    existing = _Container(_wanted_binds(made))
-    existing.attrs["Mounts"][0]["Destination"] = "/somewhere/else"
-
-    _made, client, got = _started(tmp_path, monkeypatch, existing)
-
-    assert got is not existing
-    assert existing.removed is True
-
-
-def test_a_volume_the_image_declared_is_not_compared(tmp_path, monkeypatch):
-    """PartCAD never asked for it and cannot match it.
-
-    Comparing it in would replace such an image's container before every command.
-    """
-    made = _runtime(tmp_path)
-    existing = _Container(_wanted_binds(made))
-    existing.attrs["Mounts"].append({"Type": "volume", "Source": "some-volume", "RW": True})
-
-    _made, client, got = _started(tmp_path, monkeypatch, existing)
-
-    assert got is existing
-    assert client.made is None
-
-
-# --------------------------------------------------------------------------- #
-# Two of them starting at once                                                 #
-# --------------------------------------------------------------------------- #
-
-
-class _StaleContainer(_Container):
-    """One carrying this name with the wrong mounts, so '_start' replaces it.
-
-    Which is the only path that removes anything, and therefore the only one
-    where two callers can collide.
-    """
-
-    def __init__(self, removals, error=None, status="running", client=None):
-        super().__init__([_elsewhere()], status=status)
-        self.removals = removals
-        self.error = error
-        self.client = client
-
-    def remove(self, force=False):
-        self.removals.append(force)
-        if self.error is not None:
-            raise self.error
-        if self.client is not None:
-            self.client.existing = None
-
-
-def _conflict(message):
-    """What Docker answers with when two callers want one name at one moment."""
-    import docker
-
-    response = types.SimpleNamespace(status_code=409, reason="Conflict", url="http+docker://localhost/containers/x")
-    return docker.errors.APIError(message, response=response, explanation=message)
-
-
-def test_two_threads_starting_one_container_remove_it_once(tmp_path, monkeypatch):
-    """The 409 that CI caught: two threads both replacing one container.
-
-    PartCAD instantiates parts concurrently, so two sandboxes reach '_start'
-    together. Both found the container wrong, both called 'remove(force=True)',
-    and Docker answers the second with "removal of container ... is already in
-    progress" -- which arrived as a failed render, not as a retry.
-    """
-    import threading
-
-    removals = []
-    client = _Client(None)
-    client.existing = _StaleContainer(removals, client=client)
-    monkeypatch.setattr(runtime, "docker_available", lambda: True)
-    monkeypatch.setattr("docker.from_env", lambda: client)
-
-    # Two sandboxes, one name: what two part factories in one context are.
-    sandboxes = [_runtime(tmp_path) for _ in range(2)]
-    assert sandboxes[0].container_name == sandboxes[1].container_name
-
-    # Slow enough that both threads are inside the look-up together when
-    # nothing serializes them -- which is the interleaving that happened in CI
-    # and which a test running them back to back would never produce.
-    inner = client.containers.get
-
-    def _slow_get(name):
-        found = inner(name)
-        time.sleep(0.05)
-        return found
-
-    client.containers.get = _slow_get
-
-    started = threading.Barrier(len(sandboxes))
-    errors = []
-
-    def start(sandbox):
-        started.wait()
-        try:
-            sandbox._start()
-        except Exception as e:  # noqa: BLE001 - the point is that there are none
-            errors.append(e)
-
-    threads = [threading.Thread(target=start, args=(s,)) for s in sandboxes]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-
-    assert errors == []
-    # The second caller finds the container the first one made, under the name
-    # it looked up, and it is the one it wanted -- so it never reaches the
-    # removal at all. Unserialized, both find the stale one and both remove it,
-    # and Docker answers the second with a 409.
-    assert len(removals) == 1
-
-
-def test_a_removal_already_in_progress_is_waited_out(tmp_path, monkeypatch):
-    """Another *process* removing it is not something a lock here can prevent.
-
-    It is also not a failure: gone is what this wanted. The attempt gives up
-    its turn rather than trying to create the replacement while the name is
-    still taken.
-    """
-    monkeypatch.setattr(runtime_python_docker, "_START_RETRY_DELAY", 0)
-    made = _runtime(tmp_path)
-    existing = _StaleContainer([], error=_conflict("removal of container abc is already in progress"))
-    client = _Client(existing)
-    monkeypatch.setattr(runtime, "docker_available", lambda: True)
-    monkeypatch.setattr("docker.from_env", lambda: client)
-
-    # It goes: the second turn finds nothing under the name and creates one.
-    client.existing = existing
-
-    def _get(name):
-        import docker
-
-        if client.existing is None:
-            raise docker.errors.NotFound(name)
-        found, client.existing = client.existing, None
-        return found
-
-    client.containers.get = _get
-
-    got = made._start()
-
-    assert got is not None
-    assert client.made is not None
-
-
-def test_a_name_taken_between_the_lookup_and_the_create_is_retried(tmp_path, monkeypatch):
-    """Another process created it first, and it is named after these mounts.
-
-    So it is very likely exactly the container this one was about to make --
-    which is what going round and inspecting it establishes.
-    """
-    monkeypatch.setattr(runtime_python_docker, "_START_RETRY_DELAY", 0)
-    made = _runtime(tmp_path)
-    client = _Client(None)
-    monkeypatch.setattr(runtime, "docker_available", lambda: True)
-    monkeypatch.setattr("docker.from_env", lambda: client)
-
-    theirs = _Container(_wanted_binds(made))
-
-    def _run(image, **kwargs):
-        client.existing = theirs
-        raise _conflict('Conflict. The container name "%s" is already in use' % kwargs["name"])
-
-    _except_the_probe(client, _run)
-
-    got = made._start()
-
-    assert got is theirs
-
-
-def test_a_refusal_that_is_not_a_race_is_raised(tmp_path, monkeypatch):
-    """A sandbox that cannot start is a thing to report, not to retry."""
-    import docker
-
-    monkeypatch.setattr(runtime_python_docker, "_START_RETRY_DELAY", 0)
-    made = _runtime(tmp_path)
-    client = _Client(None)
-    monkeypatch.setattr(runtime, "docker_available", lambda: True)
-    monkeypatch.setattr("docker.from_env", lambda: client)
-
-    response = types.SimpleNamespace(
-        status_code=500, reason="Server Error", url="http+docker://localhost/containers/create"
-    )
-
-    def _run(image, **kwargs):
-        raise docker.errors.APIError(
-            "no space left on device", response=response, explanation="no space left on device"
+    def acquire(spec, client=None):
+        requests.append(spec)
+        return containers.Endpoint(
+            name=containers.container_name(spec), spec=spec, container=object(), host="127.0.0.1", port=1, token="t"
         )
 
-    _except_the_probe(client, _run)
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr("docker.from_env", lambda: _ProbeOnly())
+    monkeypatch.setattr(containers, "acquire", acquire)
+    return requests
 
-    with pytest.raises(docker.errors.APIError, match="no space left"):
-        made._start()
+
+def test_the_container_is_asked_for_in_mount_mode_with_this_contexts_mounts(tmp_path, asked):
+    from partcad_utils import containers
+
+    made = _runtime(tmp_path)
+    made._start()
+
+    spec = asked[0]
+    assert spec.role == "sandbox"
+    assert spec.image == made.image
+    assert spec.mode == containers.MOUNT
+    assert spec.mounts == docker_mount.mounts(made._mounted)
+
+
+def test_the_container_runs_as_this_user_on_linux(tmp_path, asked, monkeypatch):
+    from partcad import container_mounts
+
+    # Its own reference to the module, not the module: patching `platform.system`
+    # itself would make every other caller -- the sandbox's mount probe among
+    # them -- believe it is on Linux too, which on Windows it then refuses.
+    monkeypatch.setattr(container_mounts, "platform", types.SimpleNamespace(system=lambda: "Linux"))
+    _runtime(tmp_path)._start()
+    if hasattr(os, "getuid"):
+        assert asked[0].user == "%d:%d" % (os.getuid(), os.getgid())
+
+
+def test_the_sandbox_takes_the_name_of_the_container_it_got(tmp_path, asked):
+    from partcad_utils import containers
+
+    made = _runtime(tmp_path)
+    made._start()
+    assert made.container_name == containers.container_name(asked[0])
+    assert made.container_name.startswith("partcad-sandbox-")
+
+
+def test_a_second_start_asks_nothing(tmp_path, asked):
+    made = _runtime(tmp_path)
+    made._start()
+    made._start()
+    assert len(asked) == 1
+
+
+def test_the_directories_it_binds_exist_before_the_container_does(tmp_path, asked):
+    """A directory the daemon creates for a bind is root's, and nothing written later can fix that."""
+    made = _runtime(tmp_path)
+    assert not os.path.isdir(made._container_home)
+    made._start()
+    assert os.path.isdir(made._container_home)
+
+
+def test_a_container_that_cannot_be_had_is_the_sandbox_being_unavailable(tmp_path, monkeypatch):
+    from partcad_utils import containers
+
+    def refuse(spec, client=None):
+        raise containers.ContainerUnavailable("python3 is not on its PATH")
+
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr("docker.from_env", lambda: _ProbeOnly())
+    monkeypatch.setattr(containers, "acquire", refuse)
+    with pytest.raises(runtime.SandboxUnavailable, match="PATH"):
+        _runtime(tmp_path)._start()
+
+
+# --------------------------------------------------------------------------- #
+# 'upload' mode                                                                #
+# --------------------------------------------------------------------------- #
+
+
+def _upload_ctx(tmp_path):
+    ctx = _ctx(tmp_path)
+    ctx.user_config.use_docker_remote = True
+    return ctx
+
+
+def test_use_docker_remote_makes_the_docker_sandbox_send_its_files(tmp_path):
+    from partcad import runtime_python_all
+
+    made = runtime_python_all.create(_upload_ctx(tmp_path), "3.11", "docker", image="ghcr.io/x/solver:abc")
+    assert isinstance(made, runtime_python_docker.DockerUploadPythonRuntime)
+    # So that a part says what it writes: nothing it writes is visible here.
+    assert made.EXCHANGES_FILES is True
+
+
+def test_without_it_the_docker_sandbox_mounts(tmp_path):
+    from partcad import runtime_python_all
+
+    ctx = _ctx(tmp_path)
+    ctx.user_config.use_docker_remote = False
+    made = runtime_python_all.create(ctx, "3.11", "docker", image="ghcr.io/x/solver:abc")
+    assert type(made) is runtime_python_docker.DockerPythonRuntime
+
+
+def test_the_upload_sandbox_is_named_as_a_docker_sandbox(tmp_path):
+    made = runtime_python_docker.DockerUploadPythonRuntime(_upload_ctx(tmp_path), "3.11", image="ghcr.io/x/solver:abc")
+    assert os.path.basename(made.path).startswith("pc-py-docker-upload-")
+
+
+def test_an_upload_command_runs_through_the_same_execute_as_the_remote_service(tmp_path, monkeypatch):
+    """One implementation of provisioning and forwarding, not two."""
+    from partcad import remote_sandbox
+
+    seen = {}
+
+    def execute(pool, environments, params, timeout=None):
+        seen.update(params)
+        seen["timeout"] = timeout
+        return {"exit_code": 0, "stdout": "", "stderr": "", "output_files": {}}
+
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr(remote_sandbox, "execute", execute)
+    made = runtime_python_docker.DockerUploadPythonRuntime(_upload_ctx(tmp_path), "3.11", image="ghcr.io/x/solver:abc")
+    script = tmp_path / "pkg" / "part.py"
+    script.parent.mkdir(parents=True)
+    script.write_text("print(1)")
+    code, _, _ = made.run(["part.py", str(script)], output_files=[str(tmp_path / "out.stl")])
+
+    assert code == 0
+    assert seen["image"] == "ghcr.io/x/solver:abc"
+    assert seen["python_version"] == "3.11"
+    assert seen["command"] == ["part.py", str(script)]
+    # The script's directory travels; what it writes is named so it can come back.
+    assert str(script.parent) in seen["input_dirs"]
+    assert seen["output_files"] == [str(tmp_path / "out.stl")]
+
+
+def test_upload_mode_holds_its_containers_in_a_pool_of_sandbox_role(monkeypatch):
+    from partcad import remote_docker
+
+    started = []
+    monkeypatch.setattr(runtime_python_docker, "_LOCAL", None)
+    monkeypatch.setattr(
+        remote_docker,
+        "start",
+        lambda image, role="remote": started.append(role) or remote_docker.Lease(image, object(), "127.0.0.1:1", "t"),
+    )
+    pool, _ = runtime_python_docker._local_service()
+    pool.release(pool.acquire("ghcr.io/x/solver:abc"))
+    assert started == ["sandbox"]
+
+
+def test_no_container_runtime_is_the_upload_sandbox_being_unavailable(tmp_path, monkeypatch):
+    monkeypatch.setattr(runtime, "docker_available", lambda: False)
+    made = runtime_python_docker.DockerUploadPythonRuntime(_upload_ctx(tmp_path), "3.11", image="ghcr.io/x/solver:abc")
+    with pytest.raises(runtime.SandboxUnavailable):
+        made.run(["x.py"])
 
 
 def test_the_temporary_directory_is_mounted(tmp_path):

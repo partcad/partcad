@@ -23,6 +23,14 @@ def create(ctx, version, python_runtime=None, image=None):
         # 'image' is the one parameter only this sandbox can use: it is which
         # image to build the environment in, and every other sandbox builds one
         # out of what the host has.
+        #
+        # Which of its two forms is the transfer mode's to say: with
+        # 'useDockerRemote' the daemon cannot see this machine, so the
+        # environment lives over there and the files travel with each command.
+        from partcad_utils import containers
+
+        if containers.transfer_mode(ctx.user_config) == containers.UPLOAD:
+            return runtime_python_docker.DockerUploadPythonRuntime(ctx, version, image=image)
         return runtime_python_docker.DockerPythonRuntime(ctx, version, image=image)
     elif python_runtime == "none":
         return runtime_python_none.NonePythonRuntime(ctx, version)

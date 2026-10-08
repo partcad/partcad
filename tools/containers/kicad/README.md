@@ -7,13 +7,13 @@ The official website: [KiCad.org](https://kicad.org/)
 KiCad can be used to model PCBs. PartCAD can be used to package and version KiCad project files just like any other
 design files.
 
-NOTE: If you happen to have KiCad installed on your machine, you can use the `--use-docker-kicad=false` flag to run the
-KiCad locally.
+NOTE: If you happen to have KiCad installed on your machine, set `useDockerKicad: false` in `~/.partcad/config.yaml`
+(`PC_USE_DOCKER_KICAD=false` in the environment) to run that `kicad-cli` instead of this image.
 
 The same image is what `pc open --with kicad` -- the "Open in KiCad" item in the VS Code extension's context menu for a
-`kicad` part -- falls back to when the machine has no KiCad of its own. It is the same container either way: this image
-is `kicad/kicad` with PartCAD's environment on top, so it carries the GUI as well as `kicad-cli`, and there is one
-KiCad container in the product rather than two. A `kicad` part points at the STEP file `kicad-cli` writes out of the
+`kicad` part -- falls back to when the machine has no KiCad of its own. It is the same image either way: `kicad/kicad` with
+PartCAD's environment on top, so it carries the GUI as well as `kicad-cli`, and there is one KiCad image in the
+product rather than two. A `kicad` part points at the STEP file `kicad-cli` writes out of the
 board, so what actually gets opened is the `.kicad_pro`, `.kicad_pcb` or `.kicad_sch` beside it (see `KICAD` in
 `partcad_client.external`).
 
@@ -26,6 +26,21 @@ parts:
   my-pcb:
     type: kicad
 ```
+
+## How PartCAD runs it
+
+Through `partcad_utils.containers`, like the Python sandbox and a plugin's `container:`: the image is
+`ghcr.io/partcad/partcad-container-kicad:<release>` -- the release of the PartCAD running, never `latest` -- and the
+container is named `partcad-kicad-<release>-<identity>`, the identity a digest of everything it was created with. A
+container from another release, or created differently, is a different name, so an import never runs in a container
+some other PartCAD left behind; `pc system prune` removes the ones nothing uses any more. (Before this it was a
+container named `integration-kicad`, whoever had made it. That one carries no PartCAD label, so remove it by hand:
+`docker rm -f integration-kicad`.)
+
+The service inside is PartCAD's own (`partcad_utils.container_service`), copied in when the container is created, so
+the protocol it speaks is always the running release's. The board reaches it one of two ways: its directory is mounted
+at the path it has on the host (the default), or, with `useDockerRemote: true`, sent with the command and the STEP
+file sent back -- which is what a Docker daemon on another machine needs.
 
 ## Platforms
 
@@ -104,8 +119,11 @@ providers:
 
 ## Build Instructions
 
-To build the container, run the following command:
+To build the image, run the following command from the repository root:
 
 ```bash
-docker build -t partcad-integration-kicad -f tools/containers/kicad/Dockerfile tools/containers
+docker build -t ghcr.io/partcad/partcad-container-kicad:dev -f tools/containers/kicad/Dockerfile tools/containers
 ```
+
+PartCAD looks for the image by its release tag, so point it at this one with `PC_CONTAINER_IMAGE_TAG=dev` (see
+`partcad_utils.container_image`) -- or tag the build with the release you are running.

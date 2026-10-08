@@ -449,6 +449,28 @@ back to conda; when a package's own `dockerImage` is skipped for any such reason
 the reason in the failure. It is one probe per process; see the docstring for what a wrong answer costs in each
 direction.
 
+**Every container PartCAD starts goes through `partcad_utils.containers`, and nothing else may start one.**
+That is the `docker` Python sandbox, KiCad, a plugin's `container:` and the `partcad-service-remote-docker`
+pool (`pc open` is next). There used to be five spawn paths, and they disagreed: KiCad reused whatever answered
+to the name `integration-kicad`, so imports for one release ran in a container another had made, unlabelled,
+where `pc system prune` could not see it. Now a container is *described* -- a `ContainerSpec` -- and named
+`partcad-<role>-<tag>-<identity>` from that description (the digest covers the image, mounts, environment,
+allowlist, user and the service's own source); a container answering to the name with another identity, or
+running an image its tag no longer resolves to, is replaced. Every one runs `partcad_utils.container_service`
+-- stdlib only, copied in before the container starts -- so the protocol spoken is always this release's.
+`tools/containers/_common/pc-container-json-rpc.py` is a byte-identical copy for images that bake it, and a
+test fails if the two differ: edit the one in `src/` and copy it over.
+
+Files reach a container two ways, and **both have to work for every caller**: `mount` (the default) binds
+directories at the paths they have here; `upload` (`useDockerRemote: true`, `PC_USE_DOCKER_REMOTE=true`)
+mounts nothing and sends what a command reads with the request and what it writes back with the answer. A
+sandbox in `upload` mode is the `remote` sandbox talking to its container itself -- the same
+`remote_sandbox.execute`, so one implementation of provisioning and forwarding, not two. You can exercise
+`upload` mode on an ordinary machine with a local daemon by setting the variable; the live suites in
+`tests/partcad_utils/test_containers_live.py` run both modes against a real daemon, and
+`PC_USE_DOCKER_REMOTE=true poetry run pytest tests/partcad/unit/test_part.py::test_part_example_kicad` is the
+whole chain end to end.
+
 The packages under `examples/` are a third suite. The images and `README.md` files there are what
 `cd examples && pc render -r` produces, and they are checked in so that a change in how PartCAD renders is a
 diff someone has to look at rather than something a reader of the README discovers. If a change affects a

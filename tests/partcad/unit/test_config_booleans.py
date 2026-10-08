@@ -52,6 +52,7 @@ BOOLEAN_OPTIONS = [
     ("useDocker", "PC_USE_DOCKER", "use_docker"),
     ("useDockerPython", "PC_USE_DOCKER_PYTHON", "use_docker_python_declared"),
     ("useDockerKicad", "PC_USE_DOCKER_KICAD", "use_docker_kicad_declared"),
+    ("useDockerRemote", "PC_USE_DOCKER_REMOTE", "use_docker_remote"),
 ]
 
 # The booleans TelemetryConfig reads, which go through the same get_bool.

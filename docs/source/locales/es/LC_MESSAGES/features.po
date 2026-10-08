@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 15:23+0000\n"
+"POT-Creation-Date: 2026-10-07 17:05-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -1301,7 +1301,70 @@ msgstr ""
 "uno que este sandbox no puede usar, y PartCAD lo indica y usa conda o un "
 "entorno virtual, que se quedan ambos en esta máquina."
 
-#: ../../source/features.rst:547
+#: ../../source/features.rst:549
+msgid ""
+"**A daemon that cannot see your files at all** -- ``DOCKER_HOST`` on "
+"another machine, shared by a team -- is what ``useDockerRemote`` is for:"
+msgstr ""
+"**Un daemon que no puede ver sus archivos en absoluto** -- "
+"``DOCKER_HOST`` en otra máquina, compartido por un equipo -- es para lo "
+"que existe ``useDockerRemote``:"
+
+#: ../../source/features.rst:557
+msgid ""
+"(``PC_USE_DOCKER_REMOTE=true`` in the environment.) Nothing is bind-"
+"mounted then. Every file a command reads is sent to the container with "
+"the command, and every file it writes is sent back with the answer; a "
+"sandbox's environment lives in a Docker volume on the daemon's side, "
+"built once and reused. It applies to the containers PartCAD starts for a "
+"package -- the ``docker`` sandbox, KiCad imports and a plugin's "
+"``container:`` -- and off by default, because sending a package with "
+"every command costs time that a shared filesystem does not. It needs no "
+"service in between: that is the difference from the ``remote`` sandbox "
+"below, which reaches containers through ``partcad-service-remote-docker``"
+" and never talks to Docker itself."
+msgstr ""
+"(``PC_USE_DOCKER_REMOTE=true`` en el entorno.) Entonces no se monta nada."
+" Cada archivo que lee un comando se envía al contenedor con el comando, y"
+" cada archivo que escribe vuelve con la respuesta; el entorno de un "
+"sandbox vive en un volumen de Docker del lado del daemon, construido una "
+"vez y reutilizado. Se aplica a los contenedores que PartCAD arranca para "
+"un paquete -- el sandbox ``docker``, las importaciones de KiCad y el "
+"``container:`` de un plugin -- y está desactivado por defecto, porque "
+"enviar un paquete con cada comando cuesta un tiempo que un sistema de "
+"archivos compartido no cuesta. No necesita ningún servicio intermedio: "
+"esa es la diferencia con el sandbox ``remote`` de más abajo, que llega a "
+"los contenedores a través de ``partcad-service-remote-docker`` y nunca "
+"habla con Docker por sí mismo."
+
+#: ../../source/features.rst:568
+msgid ""
+"Containers on another machine are reached on a port that daemon publishes"
+" on every interface, protected by a token of each container's own -- **in"
+" plain HTTP**. Unlike the ``remote`` sandbox below, which refuses to send"
+" a request off this machine unencrypted, this does not encrypt yet: the "
+"token and the files sent with each command can be read by anyone on the "
+"network between here and that daemon, and ``DOCKER_HOST=ssh://`` does not"
+" change that, because SSH then carries Docker's own API and not the "
+"containers' ports. PartCAD says so once per daemon. Until it is "
+"encrypted, use it only on a network you trust -- and treat a daemon "
+"shared this way as you would any Docker daemon on a network: anybody who "
+"can reach the daemon itself can do anything on that host."
+msgstr ""
+"Los contenedores en otra máquina se alcanzan en un puerto que ese daemon "
+"publica en todas las interfaces, protegido por un token propio de cada "
+"contenedor -- **por HTTP sin cifrar**. A diferencia del sandbox "
+"``remote`` de más abajo, que se niega a enviar una petición fuera de esta"
+" máquina sin cifrar, esto todavía no cifra: el token y los archivos "
+"enviados con cada comando los puede leer cualquiera en la red entre aquí "
+"y ese daemon, y ``DOCKER_HOST=ssh://`` no cambia eso, porque SSH lleva "
+"entonces la API propia de Docker y no los puertos de los contenedores. "
+"PartCAD lo avisa una vez por daemon. Hasta que esté cifrado, úselo solo "
+"en una red de confianza -- y trate un daemon compartido así como "
+"cualquier daemon de Docker en una red: quien pueda alcanzar el propio "
+"daemon puede hacer cualquier cosa en ese host."
+
+#: ../../source/features.rst:579
 msgid ""
 "That fallback is only ever for a choice PartCAD made. Say "
 "``pythonSandbox: docker`` yourself and it is obeyed: an image that cannot"
@@ -1315,11 +1378,11 @@ msgstr ""
 "entonces un fallo, porque no poder hacer lo que se pidió no es motivo "
 "para hacer otra cosa en silencio."
 
-#: ../../source/features.rst:555
+#: ../../source/features.rst:587
 msgid "The ``docker`` sandbox"
 msgstr "El sandbox ``docker``"
 
-#: ../../source/features.rst:557
+#: ../../source/features.rst:589
 msgid ""
 "The container is a place to run the interpreter, not a place to keep your"
 " work. What it can see is whatever PartCAD bind-mounts into it, and that "
@@ -1331,11 +1394,11 @@ msgstr ""
 "mediante bind, y esa lista se mantiene tan corta como se puede -- en una "
 "máquina ordinaria, dos directorios:"
 
-#: ../../source/features.rst:561
+#: ../../source/features.rst:593
 msgid "your **home directory**, which already contains most of the rest;"
 msgstr "su **directorio de inicio**, que ya contiene casi todo lo demás;"
 
-#: ../../source/features.rst:562
+#: ../../source/features.rst:594
 msgid ""
 "the **temporary directory**, because things land there without asking to "
 "be mounted -- an ad-hoc command's generated package, a factory's "
@@ -1347,13 +1410,13 @@ msgstr ""
 "una factoría -- y un montaje fijo es más sencillo que arreglárselas para "
 "que nada sea temporal;"
 
-#: ../../source/features.rst:565
+#: ../../source/features.rst:597
 msgid "the **context root** -- the package tree the command is working on;"
 msgstr ""
 "la **raíz del contexto** -- el árbol de paquetes sobre el que trabaja el "
 "comando;"
 
-#: ../../source/features.rst:566
+#: ../../source/features.rst:598
 msgid ""
 "**the internal state directory** (``~/.partcad`` by default), which is "
 "where the sandbox environments, the caches and the fetched dependencies "
@@ -1363,7 +1426,7 @@ msgstr ""
 "predeterminada), que es donde residen los entornos de sandbox, las cachés"
 " y las dependencias descargadas;"
 
-#: ../../source/features.rst:568
+#: ../../source/features.rst:600
 msgid ""
 "**PartCAD's own installation**, because the interpreter over there is "
 "handed PartCAD's scripts by path and has to be able to open them."
@@ -1371,7 +1434,7 @@ msgstr ""
 "**la instalación propia de PartCAD**, porque al intérprete de allí se le "
 "entregan los scripts de PartCAD por su ruta y tiene que poder abrirlos."
 
-#: ../../source/features.rst:571
+#: ../../source/features.rst:603
 msgid ""
 "Nested directories are mounted once, by the outermost of them, since two "
 "views of one directory leave it undecided which a write lands in. So when"
@@ -1396,7 +1459,7 @@ msgstr ""
 "otro volumen, una instalación para todo el sistema, un archivo al que un "
 "comando ad-hoc apuntó en otro sitio."
 
-#: ../../source/features.rst:581
+#: ../../source/features.rst:613
 msgid ""
 "That is not tidiness. A mount set that does not vary from one context to "
 "the next is a container that never has to be replaced, which is what lets"
@@ -1408,7 +1471,7 @@ msgstr ""
 "que permite que un contenedor sirva a todos los paquetes en los que "
 "trabaja y siga sirviéndolos después de que ``pc`` termine."
 
-#: ../../source/features.rst:586
+#: ../../source/features.rst:618
 msgid ""
 "Everything is mounted **writable**, your home directory included. "
 "Mounting the installation read-only was tried and taken back out: it "
@@ -1428,7 +1491,7 @@ msgstr ""
 "ruta que se le entrega a un wrapper signifique algo al otro lado, y eso "
 "es un apaño y no un límite de seguridad."
 
-#: ../../source/features.rst:594
+#: ../../source/features.rst:626
 msgid ""
 "On a POSIX host all of them are mounted **at the same paths they have "
 "outside**, so a path in a log, in an error, in a cached artifact or in a "
@@ -1440,7 +1503,7 @@ msgstr ""
 "artefacto en caché o en un ``.frd`` que escribió un solver significa lo "
 "mismo a ambos lados y no hay que reescribir nada."
 
-#: ../../source/features.rst:599
+#: ../../source/features.rst:631
 msgid ""
 "That is not available on Windows and never was: "
 "``C:\\Users\\you\\.partcad`` is not a path a Linux container can have, so"
@@ -1462,22 +1525,31 @@ msgstr ""
 "conviene saberlo antes de tratar \"las rutas tienen que coincidir\" como "
 "una restricción para algún cambio futuro en cómo se eligen los montajes."
 
-#: ../../source/features.rst:608
+#: ../../source/features.rst:640
 msgid ""
-"The container is named after the **image** and nothing else, so it "
-"outlives the process that started it: the next ``pc`` command finds it "
-"warm rather than paying to start one, and only a new version or image tag"
-" makes it a different container. It carries PartCAD's labels, so ``pc "
-"system prune`` clears out the ones a machine has stopped needing."
+"The container is named after its image and everything it is created with "
+"-- how files reach it, its mounts and volumes, its environment, what it "
+"may run, the user it runs as, the interpreter PartCAD's service runs on, "
+"and the source of that service (``partcad-sandbox-<tag>-<identity>``). So"
+" it outlives the process that started it: the next ``pc`` command with "
+"the same mounts finds it warm rather than paying to start one, and a new "
+"image tag -- every release has its own -- another mount set, or a change "
+"to the service is a different container. It carries PartCAD's labels, so "
+"``pc system prune`` clears out the ones a machine has stopped needing."
 msgstr ""
-"El contenedor lleva el nombre de la **imagen** y nada más, así que "
-"sobrevive al proceso que lo arrancó: el siguiente comando ``pc`` lo "
-"encuentra caliente en lugar de pagar por arrancar uno, y solo una versión"
-" o etiqueta de imagen nuevas lo convierten en un contenedor distinto. "
-"Lleva las etiquetas de PartCAD, así que ``pc system prune`` limpia los "
-"que una máquina ha dejado de necesitar."
+"El contenedor recibe el nombre de su imagen y de todo aquello con lo que "
+"se crea -- cómo le llegan los archivos, sus montajes y volúmenes, su "
+"entorno, lo que puede ejecutar, el usuario con el que se ejecuta, el "
+"intérprete en el que corre el servicio de PartCAD y el código fuente de "
+"ese servicio (``partcad-sandbox-<tag>-<identity>``). Así sobrevive al "
+"proceso que lo arrancó: el siguiente comando ``pc`` con los mismos "
+"montajes lo encuentra en caliente en lugar de pagar por arrancar uno, y "
+"una etiqueta de imagen nueva -- cada versión tiene la suya --, otro "
+"conjunto de montajes o un cambio en el servicio es un contenedor "
+"distinto. Lleva las etiquetas de PartCAD, así que ``pc system prune`` "
+"elimina los que una máquina ha dejado de necesitar."
 
-#: ../../source/features.rst:614
+#: ../../source/features.rst:649
 msgid ""
 "Because the state directory is mounted rather than copied, ``pip`` "
 "installs persist across container restarts and the environment locking, "
@@ -1496,11 +1568,11 @@ msgstr ""
 "depende de las bibliotecas nativas que hay debajo, y dos imágenes no "
 "tienen las mismas."
 
-#: ../../source/features.rst:624
+#: ../../source/features.rst:659
 msgid "The ``remote`` sandbox"
 msgstr "El sandbox ``remote``"
 
-#: ../../source/features.rst:626
+#: ../../source/features.rst:661
 msgid ""
 "``remote`` makes no assumption that the container can see your disk. The "
 "directories a command needs are packed up and sent to it, and the files "
@@ -1514,7 +1586,7 @@ msgstr ""
 " a cambio da un sandbox que puede estar en cualquier sitio -- otra "
 "máquina, otra arquitectura, una granja de compilación."
 
-#: ../../source/features.rst:631
+#: ../../source/features.rst:666
 msgid ""
 "It is served by ``partcad-service-remote-docker``, which accepts those "
 "requests, starts and reuses a container per image, multiplexes callers "
@@ -1526,7 +1598,7 @@ msgstr ""
 " sobre él y lo retira cuando nadie lo usa. Ese servicio existe; ejecútelo"
 " con ``--host`` y ``--port`` para decir dónde."
 
-#: ../../source/features.rst:636
+#: ../../source/features.rst:671
 msgid ""
 "**It runs commands, so who may reach it matters.** A request names the "
 "image, the requirements and the command, and the sandbox interpreter runs"
@@ -1553,7 +1625,7 @@ msgstr ""
 "entorno a la opción, ya que los argumentos de un proceso los puede leer "
 "cualquiera en la máquina."
 
-#: ../../source/features.rst:647
+#: ../../source/features.rst:682
 msgid ""
 "The service owns the environment, and that is the arrangement worth "
 "knowing. A sandbox is a virtual environment on a disk, and for ``remote``"
@@ -1570,7 +1642,7 @@ msgstr ""
 "está. Las salvaguardas que dicen \"numpy está instalado\" pertenecen al "
 "mismo disco que el numpy que describen."
 
-#: ../../source/features.rst:654
+#: ../../source/features.rst:689
 msgid ""
 "Which directories a command needs are worked out from the command: any "
 "argument naming a file on this machine contributes the directory it is "
@@ -1585,7 +1657,7 @@ msgstr ""
 "llama y produce un archivo lo nombra, exactamente igual que hace para un "
 "contenedor."
 
-#: ../../source/features.rst:660
+#: ../../source/features.rst:695
 msgid ""
 "Point a client at it with ``remoteSandbox`` (or ``PC_REMOTE_SANDBOX``), "
 "as ``host:port``, and give it the service's token with "
@@ -1600,7 +1672,7 @@ msgstr ""
 "los dos: adivinar un servicio que ejecuta comandos no es algo que hacer "
 "en nombre de nadie."
 
-#: ../../source/features.rst:666
+#: ../../source/features.rst:701
 msgid ""
 "**Off this machine, that has to be encrypted.** Every request carries the"
 " token and the package's own source, so PartCAD refuses to send one to an"
@@ -1623,7 +1695,7 @@ msgstr ""
 " un certificado entre un proceso y su propio contenedor no aseguraría "
 "nada."
 
-#: ../../source/features.rst:675
+#: ../../source/features.rst:710
 msgid ""
 "Today the transfer is a whole directory at a time; the intent is to "
 "replace that with a filesystem the container mounts and pulls files "
@@ -1635,11 +1707,11 @@ msgstr ""
 "que extraiga los archivos de uno en uno, momento en el cual ``remote`` "
 "pasará a ser tan barato como ``docker`` y dejará de ser un compromiso."
 
-#: ../../source/features.rst:680
+#: ../../source/features.rst:715
 msgid "Containers PartCAD manages"
 msgstr "Contenedores que gestiona PartCAD"
 
-#: ../../source/features.rst:682
+#: ../../source/features.rst:717
 msgid ""
 "Every image PartCAD builds is labelled as its own, and ``pc system "
 "prune`` removes the images and containers carrying those labels -- never "
@@ -1653,7 +1725,7 @@ msgstr ""
 "--stale`` elimina solo lo que está obsoleto: imágenes de releases de "
 "PartCAD distintos de este, y contenedores que nadie está usando."
 
-#: ../../source/features.rst:688
+#: ../../source/features.rst:723
 msgid ""
 "Third-party images are asked, by convention, to carry the same labels. An"
 " image that does not is still usable; it simply cannot be told apart from"
@@ -1665,11 +1737,11 @@ msgstr ""
 "simplemente no se puede distinguir del resto de lo que usted tenga "
 "instalado, así que ``pc system prune`` la deja en paz."
 
-#: ../../source/features.rst:696
+#: ../../source/features.rst:731
 msgid "Caching"
 msgstr "Caché"
 
-#: ../../source/features.rst:698
+#: ../../source/features.rst:733
 msgid ""
 "PartCAD is capable of caching intermediate and final results of all model"
 " compilations. This can be particularly useful when working with large "
@@ -1682,7 +1754,7 @@ msgstr ""
 "lenguajes de scripting (como OpenSCAD, CadQuery, build123d, Chili3D o "
 "sdf)."
 
-#: ../../source/features.rst:702
+#: ../../source/features.rst:737
 msgid ""
 "Anything PartCAD produces in a sandbox is cached under the environment "
 "that produced it as well as under its own inputs: the interpreter version"
@@ -1707,7 +1779,7 @@ msgstr ""
 "los objetos que tienen uno; un ensamblaje no lo tiene, porque se compone "
 "de objetos que llevan cada uno el suyo."
 
-#: ../../source/features.rst:712
+#: ../../source/features.rst:747
 msgid ""
 "At the moment code-CAD caching is experimental and can be enabled by "
 "using the following configuration:"
@@ -1715,11 +1787,11 @@ msgstr ""
 "Por el momento, el almacenamiento en caché de code-CAD es experimental y "
 "se puede habilitar usando la siguiente configuración:"
 
-#: ../../source/features.rst:720
+#: ../../source/features.rst:755
 msgid "Cache tiers"
 msgstr "Niveles de caché"
 
-#: ../../source/features.rst:722
+#: ../../source/features.rst:757
 msgid ""
 "The cache is a hierarchy of tiers, each with its own switch, because what"
 " is worth keeping in memory is not what is worth a file, and neither is "
@@ -1729,59 +1801,59 @@ msgstr ""
 "porque lo que merece la pena mantener en memoria no es lo que merece un "
 "archivo, y ninguno de los dos es lo que merece un viaje por la red:"
 
-#: ../../source/features.rst:727
+#: ../../source/features.rst:762
 msgid "Tier"
 msgstr "Nivel"
 
-#: ../../source/features.rst:727
+#: ../../source/features.rst:762
 msgid "Where it keeps things"
 msgstr "Dónde guarda las cosas"
 
-#: ../../source/features.rst:727
+#: ../../source/features.rst:762
 msgid "Default"
 msgstr "Predeterminado"
 
-#: ../../source/features.rst:729
+#: ../../source/features.rst:764
 msgid "``cacheMem``"
 msgstr "``cacheMem``"
 
-#: ../../source/features.rst:729
+#: ../../source/features.rst:764
 msgid "This process's memory. Nearest, and lost on exit."
 msgstr "La memoria de este proceso. El más cercano, y se pierde al salir."
 
-#: ../../source/features.rst:729 ../../source/features.rst:730
+#: ../../source/features.rst:764 ../../source/features.rst:765
 msgid "on"
 msgstr "activado"
 
-#: ../../source/features.rst:730
+#: ../../source/features.rst:765
 msgid "``cacheFiles``"
 msgstr "``cacheFiles``"
 
-#: ../../source/features.rst:730
+#: ../../source/features.rst:765
 msgid "A directory under the internal state directory. Local."
 msgstr "Un directorio bajo el directorio de estado interno. Local."
 
-#: ../../source/features.rst:731
+#: ../../source/features.rst:766
 msgid "``cacheRemote``"
 msgstr "``cacheRemote``"
 
-#: ../../source/features.rst:731
+#: ../../source/features.rst:766
 msgid "A memcached server, shared by a team or a CI fleet."
 msgstr "Un servidor memcached, compartido por un equipo o una flota de CI."
 
-#: ../../source/features.rst:731 ../../source/features.rst:732
+#: ../../source/features.rst:766 ../../source/features.rst:767
 msgid "off"
 msgstr "desactivado"
 
-#: ../../source/features.rst:732
+#: ../../source/features.rst:767
 msgid "``cacheS3``"
 msgstr "``cacheS3``"
 
-#: ../../source/features.rst:732
+#: ../../source/features.rst:767
 msgid "An S3 bucket, which outlives all of the above."
 msgstr "Un bucket de S3, que sobrevive a todos los anteriores."
 
-#: ../../source/features.rst:735
+#: ../../source/features.rst:770
 msgid ""
 "A read walks them in that order and stops at the first hit; a write "
 "offers the entry to every tier whose size window accepts it. The two "
@@ -1794,7 +1866,7 @@ msgstr ""
 "forma predeterminada porque necesitan una dirección que solo puede "
 "aportar un despliegue:"
 
-#: ../../source/features.rst:749
+#: ../../source/features.rst:784
 msgid ""
 "Each tier also takes ``...MaxEntrySize`` and ``...MinEntrySize`` to set "
 "the window of object sizes it accepts, and the memcached tier takes "
@@ -1808,7 +1880,7 @@ msgstr ""
 "``cacheS3`` acepta además ``cacheS3Prefix`` y ``cacheS3EndpointUrl``, "
 "este último para un almacén compatible con S3 que no sea AWS."
 
-#: ../../source/features.rst:755
+#: ../../source/features.rst:790
 msgid ""
 "``cacheRemote`` needs nothing installed. ``cacheS3`` needs the ``aws`` "
 "extra (``pip install -U 'partcad[aws]'``); enabling it without that "
@@ -1820,11 +1892,11 @@ msgstr ""
 "un error que nombra el paquete a instalar y deja funcionando los demás "
 "niveles. Consulte :doc:`installation` para ambos."
 
-#: ../../source/features.rst:761
+#: ../../source/features.rst:796
 msgid "Cache keys"
 msgstr "Claves de caché"
 
-#: ../../source/features.rst:763
+#: ../../source/features.rst:798
 msgid ""
 "An object is cached under a hash of what produces it: its configuration "
 "(less the keys that only describe it, such as ``desc``), the environment "
@@ -1847,7 +1919,7 @@ msgstr ""
 "tamaño sin cambiar no se detecta; ejecute ese comando con ``--cache-"
 "bypass``."
 
-#: ../../source/features.rst:772
+#: ../../source/features.rst:807
 msgid ""
 "An object made out of others is keyed on theirs as well: an ``extrude`` "
 "or ``sweep`` on its sketch, a ``compound`` part on its assembly, an "
@@ -1862,7 +1934,7 @@ msgstr ""
 "ensamblajes que la usan, y un objeto con ``cache: false`` hace que "
 "tampoco se guarde en caché nada construido a partir de él."
 
-#: ../../source/features.rst:778
+#: ../../source/features.rst:813
 msgid ""
 "``pc --cache-bypass <command>`` (or ``PC_CACHE_BYPASS=1``, or "
 "``cacheBypass: True``) bypasses every tier for one run: nothing is read "
@@ -1872,7 +1944,7 @@ msgstr ""
 "``cacheBypass: True``) salta todos los niveles para una ejecución: no se "
 "lee nada de ninguna caché y nada de lo construido se escribe en ninguna."
 
-#: ../../source/features.rst:782
+#: ../../source/features.rst:817
 msgid ""
 "The daemon keeps packages loaded between commands. Before each command it"
 " compares the ``partcad.yaml`` of the packages the command is about, and "
@@ -1888,11 +1960,11 @@ msgstr ""
 " haya cambiado junto con los paquetes que hay debajo de él. Cada paquete "
 "se compara como mucho una vez cada 15 segundos."
 
-#: ../../source/features.rst:790
+#: ../../source/features.rst:825
 msgid "Security"
 msgstr "Seguridad"
 
-#: ../../source/features.rst:792
+#: ../../source/features.rst:827
 msgid ""
 "As code-CAD is gaining popularity in the community, the topic of supply "
 "chain security and the risk of running arbitrary third-party code is not "
@@ -1907,7 +1979,7 @@ msgstr ""
 " manera que supere todo lo que el software comercial pueda ofrecer "
 "actualmente."
 
-#: ../../source/features.rst:797
+#: ../../source/features.rst:832
 msgid ""
 "PartCAD is capable of rendering scripted parts in sandboxed environments:"
 " ``CadQuery``, ``build123d`` and ``sdf`` use Python, and ``Chili3D`` uses"
@@ -1917,7 +1989,7 @@ msgstr ""
 "aislados: ``CadQuery``, ``build123d`` y ``sdf`` usan Python, y "
 "``Chili3D`` usa JavaScript."
 
-#: ../../source/features.rst:801
+#: ../../source/features.rst:836
 msgid ""
 "At the moment it is only useful from a dependency management perspective "
 "(it allows third-party packages to bring their Python and npm "
@@ -1933,15 +2005,15 @@ msgstr ""
 "entornos sandbox. Eso cambiará fundamentalmente las implicaciones de "
 "seguridad de usar modelos basados en scripts compartidos en línea."
 
-#: ../../source/features.rst:810
+#: ../../source/features.rst:845
 msgid "Telemetry"
 msgstr "Telemetría"
 
-#: ../../source/features.rst:813
+#: ../../source/features.rst:848
 msgid "Public Repositories"
 msgstr "Repositorios públicos"
 
-#: ../../source/features.rst:815
+#: ../../source/features.rst:850
 msgid ""
 "By default PartCAD collects telemetry data to improve the user experience"
 " and to help understand how the tool is being used. The data collected "
@@ -1951,19 +2023,19 @@ msgstr ""
 "mejorar la experiencia del usuario y ayudar a entender cómo se usa la "
 "herramienta. Los datos recopilados incluyen lo siguiente:"
 
-#: ../../source/features.rst:819
+#: ../../source/features.rst:854
 msgid "What commands are being run?"
 msgstr "¿Qué comandos se están ejecutando?"
 
-#: ../../source/features.rst:820
+#: ../../source/features.rst:855
 msgid "How much time is consumed by each step?"
 msgstr "¿Cuánto tiempo consume cada paso?"
 
-#: ../../source/features.rst:821
+#: ../../source/features.rst:856
 msgid "What errors and exceptions are being raised?"
 msgstr "¿Qué errores y excepciones se están generando?"
 
-#: ../../source/features.rst:823
+#: ../../source/features.rst:858
 msgid ""
 "PartCAD uses `OpenTelemetry <https://opentelemetry.io/>`_ to collect "
 "telemetry data. You can disable telemetry by setting the following "
@@ -1973,7 +2045,7 @@ msgstr ""
 "datos de telemetría. Puede deshabilitar la telemetría estableciendo la "
 "siguiente configuración:"
 
-#: ../../source/features.rst:832
+#: ../../source/features.rst:867
 msgid ""
 "Alternatively, you can disable telemetry by setting the following "
 "environment variable:"
@@ -1981,11 +2053,11 @@ msgstr ""
 "Alternativamente, puede deshabilitar la telemetría estableciendo la "
 "siguiente variable de entorno:"
 
-#: ../../source/features.rst:838
+#: ../../source/features.rst:873
 msgid "You can also change telemetry settings using CLI:"
 msgstr "También puede cambiar la configuración de telemetría usando la CLI:"
 
-#: ../../source/features.rst:848
+#: ../../source/features.rst:883
 msgid ""
 "How deep the traces go is a separate setting. By default PartCAD reports "
 "the operations it names for itself -- the process a command is, and the "
@@ -1996,7 +2068,7 @@ msgstr ""
 "mismo -- el proceso que es un comando, y la acción que es cada objeto "
 "sobre el que trabaja -- y de nada por debajo de ellas:"
 
-#: ../../source/features.rst:857
+#: ../../source/features.rst:892
 msgid ""
 "``methods`` adds a span for every instrumented method underneath those, "
 "which is what a trace needs to answer \"where inside this did the time "
@@ -2013,15 +2085,15 @@ msgstr ""
 "millón de spans. Actívelo mientras esté mirando algo, no de forma "
 "permanente."
 
-#: ../../source/features.rst:864
+#: ../../source/features.rst:899
 msgid "``pc system telemetry info`` reports both settings."
 msgstr "``pc system telemetry info`` informa de ambos ajustes."
 
-#: ../../source/features.rst:867
+#: ../../source/features.rst:902
 msgid "Private Repositories"
 msgstr "Repositorios privados"
 
-#: ../../source/features.rst:869
+#: ../../source/features.rst:904
 msgid ""
 "If you are systemically using PartCAD in your organization then it makes "
 "sense to collect your own telemetry data to understand how the tool is "
@@ -2033,7 +2105,7 @@ msgstr ""
 "herramienta en su organización, y aprender a mejorar el rendimiento de su"
 " organización."
 
-#: ../../source/features.rst:873
+#: ../../source/features.rst:908
 msgid ""
 "The only OpenTelemetry backend provider currently supported is `Sentry "
 "<https://sentry.io/>`_. Create an organization account on Sentry and "
@@ -2043,17 +2115,17 @@ msgstr ""
 "`Sentry <https://sentry.io/>`_. Cree una cuenta de organización en Sentry"
 " y obtenga una clave DSN."
 
-#: ../../source/features.rst:883
+#: ../../source/features.rst:918
 msgid "Other OpenTelemetry backend providers can be supported on request."
 msgstr ""
 "Se puede agregar soporte para otros proveedores de backend de "
 "OpenTelemetry bajo solicitud."
 
-#: ../../source/features.rst:887
+#: ../../source/features.rst:922
 msgid "Automation Support"
 msgstr "Soporte de automatización"
 
-#: ../../source/features.rst:889
+#: ../../source/features.rst:924
 msgid ""
 "PartCAD allows you to set CLI options and override user configurations "
 "specified in ``~/.partcad/config.yaml`` using environment variables. This"
@@ -2066,7 +2138,7 @@ msgstr ""
 "establecer configuraciones dinámicamente o en entornos donde modificar "
 "archivos de configuración no es factible."
 
-#: ../../source/features.rst:894
+#: ../../source/features.rst:929
 msgid ""
 "Generally, all of PartCAD's environment variables are prefixed with "
 "``PC``."
@@ -2074,7 +2146,7 @@ msgstr ""
 "En general, todas las variables de entorno de PartCAD tienen el prefijo "
 "``PC``."
 
-#: ../../source/features.rst:896
+#: ../../source/features.rst:931
 msgid ""
 "For CLI options, the environment variable prefix depends on the command "
 "being used. You can use the `--help` option to determine the "
@@ -2085,11 +2157,11 @@ msgstr ""
 "determinar la variable de entorno correspondiente a cada opción de la "
 "CLI."
 
-#: ../../source/features.rst:900
+#: ../../source/features.rst:935
 msgid "Here are some examples:"
 msgstr "Aquí hay algunos ejemplos:"
 
-#: ../../source/features.rst:907
+#: ../../source/features.rst:942
 msgid ""
 "Note that, these environment variables will be overridden if the CLI "
 "option is specified."
@@ -2097,7 +2169,7 @@ msgstr ""
 "Tenga en cuenta que estas variables de entorno serán anuladas si se "
 "especifica la opción de la CLI."
 
-#: ../../source/features.rst:909
+#: ../../source/features.rst:944
 msgid ""
 "For user configurations, the environment variables are of the format "
 "``PC_`` followed by the configuration option name in upper snake case "
@@ -2111,7 +2183,7 @@ msgstr ""
 " bajos). Por ejemplo, para anular la configuración ``pythonSandbox``, "
 "establecería la variable de entorno ``PC_PYTHON_SANDBOX``."
 
-#: ../../source/features.rst:914
+#: ../../source/features.rst:949
 msgid ""
 "Note that environment variable names are case-sensitive. Always use "
 "uppercase letters for the ``PC`` prefix and the rest of the variable "
@@ -2122,7 +2194,7 @@ msgstr ""
 "prefijo ``PC`` y el resto del nombre de la variable, como se muestra en "
 "los ejemplos anteriores."
 
-#: ../../source/features.rst:917
+#: ../../source/features.rst:952
 msgid ""
 "In this case, these environment variables will take precedence over the "
 "values specified in ``~/.partcad/config.yaml``."
@@ -2130,11 +2202,11 @@ msgstr ""
 "En este caso, estas variables de entorno tendrán prioridad sobre los "
 "valores especificados en ``~/.partcad/config.yaml``."
 
-#: ../../source/features.rst:924
+#: ../../source/features.rst:959
 msgid "Flexible Git Configuration"
 msgstr "Configuración flexible de Git"
 
-#: ../../source/features.rst:926
+#: ../../source/features.rst:961
 msgid ""
 "PartCAD imports packages from git repositories without the ``git`` "
 "command line tool: it speaks the git protocols itself, through the "
@@ -2147,7 +2219,7 @@ msgstr ""
 "dependencias. No es necesario instalar nada adicional para que las "
 "importaciones funcionen."
 
-#: ../../source/features.rst:930
+#: ../../source/features.rst:965
 msgid ""
 "By default, PartCAD uses the system's Git configuration when importing "
 "packages using git, which it reads from ``~/.gitconfig`` whether or not "
@@ -2160,7 +2232,7 @@ msgstr ""
 "configuraciones, puede agregar sus anulaciones en "
 "``~/.partcad/config.yaml`` como se muestra a continuación:"
 
-#: ../../source/features.rst:944
+#: ../../source/features.rst:979
 msgid ""
 "Cloning over SSH is faster and more reliable because it uses an efficient"
 " protocol with lower overhead, supports compression, and maintains stable"
@@ -2175,7 +2247,7 @@ msgstr ""
 " de credenciales, lo que lo hace ideal para repositorios grandes o "
 "interacciones frecuentes."
 
-#: ../../source/features.rst:950
+#: ../../source/features.rst:985
 msgid ""
 "Repositories reached over SSH are authenticated with the keys held by the"
 " running SSH agent, and then with the default key files "
@@ -2192,7 +2264,7 @@ msgstr ""
 "repositorio al que no puede autenticarse falla con un error en lugar de "
 "esperar una solicitud que nada respondería."
 
-#: ../../source/features.rst:956
+#: ../../source/features.rst:991
 msgid ""
 "If you have SSH keys configured then you can add the following to the "
 "~/.partcad/config.yaml:"
@@ -2200,11 +2272,11 @@ msgstr ""
 "Si tiene claves SSH configuradas, puede agregar lo siguiente a "
 "~/.partcad/config.yaml:"
 
-#: ../../source/features.rst:971
+#: ../../source/features.rst:1006
 msgid "Fetching via a Proxy"
 msgstr "Descargar a través de un proxy"
 
-#: ../../source/features.rst:973
+#: ../../source/features.rst:1008
 msgid ""
 "On many networks a proxy is not a preference but the only route out. "
 "PartCAD reads the usual environment variables, and everything it "
@@ -2218,7 +2290,7 @@ msgstr ""
 "paquetes importados de un tarball, y los archivos individuales que un "
 "objeto obtiene con ``fileFrom: url``."
 
-#: ../../source/features.rst:985
+#: ../../source/features.rst:1020
 msgid ""
 "``HTTPS_PROXY`` covers ``https://`` remotes and ``HTTP_PROXY`` covers "
 "``http://`` ones; the lowercase spellings work equally. ``NO_PROXY`` "
@@ -2232,7 +2304,7 @@ msgstr ""
 "interno accesible solo *sin* el proxy. Un proxy que quiere credenciales "
 "las admite en la URL (``http://user:password@proxy.example.com:3128``)."
 
-#: ../../source/features.rst:991
+#: ../../source/features.rst:1026
 msgid ""
 "Nothing has to be configured in PartCAD for any of this. A proxy that "
 "should apply to git imports alone -- rather than to everything this shell"
@@ -2244,7 +2316,7 @@ msgstr ""
 "que ejecuta este shell -- se puede establecer como opción de "
 "configuración de git, y tiene prioridad sobre el entorno:"
 
-#: ../../source/features.rst:1003
+#: ../../source/features.rst:1038
 msgid ""
 "Note that a proxy re-terminating TLS presents its own certificate, which "
 "has to be trusted or every fetch fails to verify it. That is a property "
@@ -2258,11 +2330,11 @@ msgstr ""
 "``SSL_CERT_FILE`` (y ``REQUESTS_CA_BUNDLE``) al paquete de CA del proxy, "
 "o instálelo en el almacén de confianza del sistema."
 
-#: ../../source/features.rst:1010
+#: ../../source/features.rst:1045
 msgid "Personally Identifiable Information"
 msgstr "Información de identificación personal"
 
-#: ../../source/features.rst:1012
+#: ../../source/features.rst:1047
 msgid ""
 "The user section in ``~/.partcad/config.yaml`` defines the default "
 "personal and contact details used throughout the system. These details "
@@ -2274,11 +2346,11 @@ msgstr ""
 "incluyen el nombre del usuario, correo electrónico, número de teléfono, "
 "empresa e información de dirección."
 
-#: ../../source/features.rst:1033
+#: ../../source/features.rst:1068
 msgid "Address Configuration"
 msgstr "Configuración de dirección"
 
-#: ../../source/features.rst:1035
+#: ../../source/features.rst:1070
 msgid ""
 "Users can override any details from the user section by specifying "
 "shippingAddress and billingAddress separately."
@@ -2286,11 +2358,11 @@ msgstr ""
 "Los usuarios pueden anular cualquier dato de la sección user "
 "especificando shippingAddress y billingAddress por separado."
 
-#: ../../source/features.rst:1067
+#: ../../source/features.rst:1102
 msgid "**Override Behavior**"
 msgstr "**Comportamiento de anulación**"
 
-#: ../../source/features.rst:1069
+#: ../../source/features.rst:1104
 msgid ""
 "If shippingAddress is not specified, the system will use the user details"
 " for shipping."
@@ -2298,7 +2370,7 @@ msgstr ""
 "Si no se especifica shippingAddress, el sistema usará los datos de user "
 "para el envío."
 
-#: ../../source/features.rst:1070
+#: ../../source/features.rst:1105
 msgid ""
 "If billingAddress is not specified, the system will use the user details "
 "for billing."
@@ -2306,7 +2378,7 @@ msgstr ""
 "Si no se especifica billingAddress, el sistema usará los datos de user "
 "para la facturación."
 
-#: ../../source/features.rst:1071
+#: ../../source/features.rst:1106
 msgid ""
 "If shippingAddress or billingAddress is provided, it completely replaces "
 "the corresponding fields from user."
@@ -2314,7 +2386,7 @@ msgstr ""
 "Si se proporciona shippingAddress o billingAddress, este reemplaza "
 "completamente los campos correspondientes de user."
 
-#: ../../source/features.rst:1073
+#: ../../source/features.rst:1108
 msgid ""
 "This setup allows full customization of shipping and billing details, "
 "supporting scenarios where items need to be sent to different recipients "
@@ -2324,11 +2396,11 @@ msgstr ""
 "envío y facturación, admitiendo escenarios en los que los artículos deben"
 " enviarse a diferentes destinatarios o direcciones."
 
-#: ../../source/features.rst:1079
+#: ../../source/features.rst:1114
 msgid "Parameter Configuration"
 msgstr "Configuración de parámetros"
 
-#: ../../source/features.rst:1081
+#: ../../source/features.rst:1116
 msgid ""
 "The configuration file (``~/.partcad/config.yaml``) allows users to "
 "define reusable parameters, which can be accessed dynamically within the "
@@ -2338,7 +2410,7 @@ msgstr ""
 "usuarios definir parámetros reutilizables, a los que se puede acceder "
 "dinámicamente dentro de las configuraciones de proveedores."
 
-#: ../../source/features.rst:1084
+#: ../../source/features.rst:1119
 msgid ""
 "In ``~/.partcad/config.yaml``, parameters are stored under a parameters "
 "section."
@@ -2346,11 +2418,11 @@ msgstr ""
 "En ``~/.partcad/config.yaml``, los parámetros se almacenan en una sección"
 " parameters."
 
-#: ../../source/features.rst:1086 ../../source/features.rst:1109
+#: ../../source/features.rst:1121 ../../source/features.rst:1144
 msgid "Example:"
 msgstr "Ejemplo:"
 
-#: ../../source/features.rst:1096
+#: ../../source/features.rst:1131
 msgid ""
 "Object IDs are used to reference different types of objects within a "
 "package, such as sketches, parts, assemblies, scenes, interfaces, and "
@@ -2360,11 +2432,11 @@ msgstr ""
 "objetos dentro de un paquete, como bocetos, piezas, ensamblajes, escenas,"
 " interfaces y proveedores."
 
-#: ../../source/features.rst:1102
+#: ../../source/features.rst:1137
 msgid "Accessing Parameters in Providers"
 msgstr "Acceso a parámetros en proveedores"
 
-#: ../../source/features.rst:1104
+#: ../../source/features.rst:1139
 msgid ""
 "In the providers section, parameters can be referenced dynamically using "
 "a function ``get_from_config()``, ensuring that sensitive or reusable "

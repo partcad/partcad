@@ -544,6 +544,38 @@ the container's mounts -- is the daemon one this sandbox cannot use, and PartCAD
 says so and uses conda or a virtual environment, both of which stay on this
 machine.
 
+.. _use-docker-remote:
+
+**A daemon that cannot see your files at all** -- ``DOCKER_HOST`` on another
+machine, shared by a team -- is what ``useDockerRemote`` is for:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    useDockerRemote: true
+
+(``PC_USE_DOCKER_REMOTE=true`` in the environment.) Nothing is bind-mounted
+then. Every file a command reads is sent to the container with the command, and
+every file it writes is sent back with the answer; a sandbox's environment lives
+in a Docker volume on the daemon's side, built once and reused. It applies to
+the containers PartCAD starts for a package -- the ``docker`` sandbox, KiCad
+imports and a plugin's ``container:`` -- and off by default, because sending a package
+with every command costs time that a shared filesystem does not. It needs no
+service in between: that is the difference from the ``remote`` sandbox below,
+which reaches containers through ``partcad-service-remote-docker`` and never
+talks to Docker itself.
+
+Containers on another machine are reached on a port that daemon publishes on
+every interface, protected by a token of each container's own -- **in plain
+HTTP**. Unlike the ``remote`` sandbox below, which refuses to send a request off
+this machine unencrypted, this does not encrypt yet: the token and the files
+sent with each command can be read by anyone on the network between here and
+that daemon, and ``DOCKER_HOST=ssh://`` does not change that, because SSH then
+carries Docker's own API and not the containers' ports. PartCAD says so once per
+daemon. Until it is encrypted, use it only on a network you trust -- and treat a
+daemon shared this way as you would any Docker daemon on a network: anybody who
+can reach the daemon itself can do anything on that host.
+
 That fallback is only ever for a choice PartCAD made. Say ``pythonSandbox:
 docker`` yourself and it is obeyed: an image that cannot be had, or a daemon
 that cannot see your files, is then a failure, because being unable to do what
@@ -605,10 +637,13 @@ machinery PartCAD already has rather than a line it will not cross -- worth
 knowing before treating "the paths must match" as a constraint on some future
 change to how the mounts are chosen.
 
-The container is named after the **image** and nothing else, so it outlives the
-process that started it: the next ``pc`` command finds it warm rather than
-paying to start one, and only a new version or image tag makes it a different
-container. It carries PartCAD's labels, so ``pc system prune`` clears out the
+The container is named after its image and everything it is created with -- how
+files reach it, its mounts and volumes, its environment, what it may run, the
+user it runs as, the interpreter PartCAD's service runs on, and the source of
+that service (``partcad-sandbox-<tag>-<identity>``). So it outlives the process
+that started it: the next ``pc`` command with the same mounts finds it warm
+rather than paying to start one, and a new image tag -- every release has its
+own -- another mount set, or a change to the service is a different container. It carries PartCAD's labels, so ``pc system prune`` clears out the
 ones a machine has stopped needing.
 
 Because the state directory is mounted rather than copied, ``pip`` installs

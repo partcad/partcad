@@ -251,3 +251,149 @@ def test_what_the_sandbox_writes_is_readable_afterwards(made):
     assert exitcode == 0, stderr
     with open(written) as f:
         assert f.read() == "hello"
+
+
+# --------------------------------------------------------------------------- #
+# 'upload' mode: nothing mounted, everything sent                              #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture(scope="module")
+def uploaded(tmp_path_factory):
+    """The same sandbox with 'useDockerRemote' on: its environment over there, its files sent."""
+    if not runtime.docker_available():
+        pytest.skip("no container runtime is answering here")
+
+    root = tmp_path_factory.mktemp("upload")
+    ctx = types.SimpleNamespace(
+        user_config=types.SimpleNamespace(internal_state_dir=str(root / "state"), use_docker_remote=True),
+        root_path=str(root / "pkg"),
+    )
+    os.makedirs(ctx.root_path, exist_ok=True)
+    yield runtime_python_docker.DockerUploadPythonRuntime(ctx, "3.11", image=IMAGE), root
+
+
+def test_upload_mode_runs_in_the_container_with_nothing_mounted(uploaded):
+    sandbox, _ = uploaded
+    exitcode, stdout, stderr = sandbox.run(["-c", "import sys; print(sys.prefix)"])
+    assert exitcode == 0, stderr
+    # The environment the service built in the volume, not anything of this machine's.
+    assert stdout.strip().startswith("/pc-sandbox/"), stdout
+
+    import docker
+
+    from partcad_utils import containers
+
+    for container in docker.from_env().containers.list(filters={"label": containers.LABEL_MODE + "=upload"}):
+        if container.labels.get(containers.LABEL_ROLE) == "sandbox":
+            binds = [m for m in container.attrs.get("Mounts") or [] if m.get("Type") == "bind"]
+            assert binds == [], binds
+
+
+def test_upload_mode_sends_a_package_and_brings_its_output_back(uploaded):
+    """A script imports its siblings; what it writes is not in the command, so it is named."""
+    sandbox, root = uploaded
+    package = root / "pkg" / "widget"
+    package.mkdir(parents=True)
+    (package / "helper.py").write_text("SHAPE = 'a cube'\n")
+    (package / "make.py").write_text(
+        "import os, sys\n"
+        "sys.path.insert(0, os.path.dirname(__file__))\n"
+        "import helper\n"
+        "open(sys.argv[1], 'w').write(helper.SHAPE)\n"
+    )
+    target = root / "out" / "widget.txt"
+    target.parent.mkdir()
+    exitcode, _, stderr = sandbox.run([str(package / "make.py"), str(target)], output_files=[str(target)])
+    assert exitcode == 0, stderr
+    assert target.read_text() == "a cube"
+
+
+def test_upload_mode_has_the_cad_stack_every_wrapper_needs(uploaded):
+    """What the 'remote' sandbox never asked for until this, and every wrapper imports first."""
+    sandbox, _ = uploaded
+    exitcode, stdout, stderr = sandbox.run(["-c", "import OCP, build123d; print('ok')"])
+    assert exitcode == 0, stderr
+    assert stdout.strip().endswith("ok")
+
+
+def test_upload_mode_keeps_its_environment_for_the_next_process(uploaded, monkeypatch):
+    """The volume outlives what any one process knows about it."""
+    sandbox, _ = uploaded
+    monkeypatch.setattr(runtime_python_docker, "_LOCAL", None)
+    fresh = runtime_python_docker.DockerUploadPythonRuntime(sandbox.ctx, "3.11", image=IMAGE)
+    exitcode, stdout, stderr = fresh.run(["-c", "import OCP; print('still here')"])
+    assert exitcode == 0, stderr
+    assert "still here" in stdout
+
+
+_RACER = """
+import os, sys, types
+from partcad import runtime_python_docker
+ctx = types.SimpleNamespace(
+    user_config=types.SimpleNamespace(internal_state_dir=sys.argv[2], use_docker_remote=True),
+    root_path=sys.argv[3],
+)
+sandbox = runtime_python_docker.DockerUploadPythonRuntime(ctx, "3.11", image=sys.argv[1])
+code, out, err = sandbox.run(["-c", "import OCP, build123d; print('imported')"])
+sys.stdout.write(out or "")
+sys.stderr.write(err or "")
+sys.exit(code)
+"""
+
+
+def test_two_processes_provisioning_one_fresh_volume_both_get_a_working_stack(tmp_path):
+    """The volume is the only thing two PartCAD processes share, so it is where the lock has to be.
+
+    Each process keeps its own `Environments` and its own gate; without a lock
+    on the volume one of them imports OCP while the other's pip is halfway
+    through replacing it. A tag of the image made for this test only, so the
+    volume -- named after the image -- starts empty and both really provision.
+    """
+    import subprocess
+    import sys
+    import uuid
+
+    import docker
+
+    from partcad import remote_sandbox
+    from partcad_utils import containers
+
+    if not runtime.docker_available():
+        pytest.skip("no container runtime is answering here")
+    client = docker.from_env()
+    repository = "partcad-test/sandbox-race-%s" % uuid.uuid4().hex[:8]
+    client.images.get(IMAGE).tag(repository, "race")
+    image = repository + ":race"
+    (tmp_path / "pkg").mkdir()
+    racers = []
+    try:
+        racers += [
+            subprocess.Popen(
+                [sys.executable, "-c", _RACER, image, str(tmp_path / ("state-%d" % i)), str(tmp_path / "pkg")],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for i in range(2)
+        ]
+        results = [racer.communicate(timeout=1800) + (racer.returncode,) for racer in racers]
+        for stdout, stderr, code in results:
+            assert code == 0, stderr[-3000:]
+            assert "imported" in stdout
+    finally:
+        # Before anything is removed: a racer still running -- the other one
+        # timed out, or an assertion failed first -- would make the containers
+        # and the volume again behind the cleanup.
+        for racer in racers:
+            if racer.poll() is None:
+                racer.kill()
+                racer.wait()
+        for container in client.containers.list(all=True, filters={"label": containers.LABEL_CONTAINER}):
+            if container.attrs["Config"]["Image"] == image:
+                container.remove(force=True)
+        try:
+            client.volumes.get(remote_sandbox.volume_name(image)).remove(force=True)
+        except docker.errors.NotFound:
+            pass
+        client.images.remove(image, noprune=True)
