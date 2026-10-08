@@ -502,4 +502,3 @@ msgstr ""
 #: ../../source/config_plugins.rst:302
 msgid "See :doc:`simulation` and ``examples/feature_simulate``."
 msgstr "Consulte :doc:`simulation` y ``examples/feature_simulate``."
-

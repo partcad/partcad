@@ -497,4 +497,3 @@ msgstr ""
 #: ../../source/config_plugins.rst:302
 msgid "See :doc:`simulation` and ``examples/feature_simulate``."
 msgstr "См. :doc:`simulation` и ``examples/feature_simulate``."
-

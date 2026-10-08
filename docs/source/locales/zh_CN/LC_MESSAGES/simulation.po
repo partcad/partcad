@@ -2138,4 +2138,3 @@ msgid ""
 msgstr ""
 "读取 URDF 不应该靠把 PartCAD 的模型做成 URDF 模型的副本来实现无损。关键在于建立一个模型，让 URDF、SDF、MJCF 和 "
 "USD 都成为它的视图。"
-

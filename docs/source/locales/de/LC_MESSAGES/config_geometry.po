@@ -965,4 +965,3 @@ msgstr "Weitere Informationen finden Sie im Beispiel `feature_interfaces`."
 #~ " that one value rather than the "
 #~ "package."
 #~ msgstr ""
-

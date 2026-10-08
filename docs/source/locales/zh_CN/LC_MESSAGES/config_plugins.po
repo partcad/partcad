@@ -407,4 +407,3 @@ msgstr ""
 #: ../../source/config_plugins.rst:302
 msgid "See :doc:`simulation` and ``examples/feature_simulate``."
 msgstr "参见 :doc:`simulation` 和 ``examples/feature_simulate``。"
-

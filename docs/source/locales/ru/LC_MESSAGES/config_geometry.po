@@ -942,4 +942,3 @@ msgstr "Дополнительную информацию см. в пример�
 #~ " that one value rather than the "
 #~ "package."
 #~ msgstr ""
-

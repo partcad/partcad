@@ -2634,4 +2634,3 @@ msgstr ""
 "Leer un URDF no debería volverse sin pérdidas haciendo que el modelo de "
 "PartCAD sea una copia del de URDF. La idea es un modelo del que URDF, "
 "SDF, MJCF y USD sean todos vistas."
-

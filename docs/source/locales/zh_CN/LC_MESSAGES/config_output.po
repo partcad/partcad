@@ -1111,4 +1111,3 @@ msgstr ""
 "``examples/feature_interface`` 声明了四张这样的图：两张是某个零件的，两张是它所属装配体的，每一张都按 `"
 "Using another package's implementation`_ 的方式，指名 ``//builtin/render``"
 " 中的 ``render_svg.py`` 作为自己的实现。"
-

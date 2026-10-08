@@ -1398,4 +1398,3 @@ msgstr ""
 "de una pieza y dos del ensamblaje al que pertenece, cada uno nombrando "
 "``render_svg.py`` de ``//builtin/render`` como su implementación, al modo "
 "de `Using another package's implementation`_."
-

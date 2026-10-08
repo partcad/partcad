@@ -1417,4 +1417,3 @@ msgid ""
 "package's implementation`_."
 msgstr ""
 "``examples/feature_interface`` deklariert vier solche Zeichnungen: zwei von einem Teil und zwei von der Baugruppe, zu der es gehört, die jeweils ``render_svg.py`` in ``//builtin/render`` als ihre Implementierung benennen, nach der Art von `Die Implementierung eines anderen Pakets verwenden`_."
-
