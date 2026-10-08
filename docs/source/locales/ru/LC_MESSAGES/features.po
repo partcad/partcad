@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 08:56-0700\n"
+"POT-Creation-Date: 2026-10-07 17:05-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ru\n"
@@ -1315,26 +1315,25 @@ msgid ""
 "mounted then. Every file a command reads is sent to the container with "
 "the command, and every file it writes is sent back with the answer; a "
 "sandbox's environment lives in a Docker volume on the daemon's side, "
-"built once and reused. It applies to every container PartCAD starts -- "
-"the ``docker`` sandbox, KiCad imports and a plugin's ``container:`` alike"
-" -- and off by default, because sending a package with every command "
-"costs time that a shared filesystem does not. It needs no service in "
-"between: that is the difference from the ``remote`` sandbox below, which "
-"reaches containers through ``partcad-service-remote-docker`` and never "
-"talks to Docker itself."
+"built once and reused. It applies to the containers PartCAD starts for a "
+"package -- the ``docker`` sandbox, KiCad imports and a plugin's "
+"``container:`` -- and off by default, because sending a package with "
+"every command costs time that a shared filesystem does not. It needs no "
+"service in between: that is the difference from the ``remote`` sandbox "
+"below, which reaches containers through ``partcad-service-remote-docker``"
+" and never talks to Docker itself."
 msgstr ""
 "(``PC_USE_DOCKER_REMOTE=true`` в окружении.) Тогда ничего не монтируется."
 " Каждый файл, который читает команда, отправляется в контейнер вместе с "
 "командой, а каждый файл, который она записывает, возвращается вместе с "
 "ответом; окружение песочницы хранится в томе Docker на стороне демона, "
-"собирается один раз и используется повторно. Это относится ко всем "
-"контейнерам, которые запускает PartCAD, — к песочнице ``docker``, к "
-"импорту KiCad и к ``container:`` плагина в равной мере — и по умолчанию "
-"выключено, потому что отправка пакета с каждой командой стоит времени, "
-"которого общая файловая система не стоит. Посредник не нужен: в этом "
-"отличие от песочницы ``remote`` ниже, которая добирается до контейнеров "
-"через ``partcad-service-remote-docker`` и никогда сама не обращается к "
-"Docker."
+"собирается один раз и используется повторно. Это относится к контейнерам,"
+" которые PartCAD запускает для пакета, — к песочнице ``docker``, к "
+"импорту KiCad и к ``container:`` плагина — и по умолчанию выключено, "
+"потому что отправка пакета с каждой командой стоит времени, которого "
+"общая файловая система не стоит. Посредник не нужен: в этом отличие от "
+"песочницы ``remote`` ниже, которая добирается до контейнеров через "
+"``partcad-service-remote-docker`` и никогда сама не обращается к Docker."
 
 #: ../../source/features.rst:568
 msgid ""
@@ -1527,25 +1526,27 @@ msgstr ""
 #: ../../source/features.rst:640
 msgid ""
 "The container is named after its image and everything it is created with "
-"-- its mounts, its environment, what it may run, the user it runs as, and"
-" the version of PartCAD's service inside it (``partcad-"
-"sandbox-<tag>-<identity>``). So it outlives the process that started it: "
-"the next ``pc`` command with the same mounts finds it warm rather than "
-"paying to start one, and a new version, a new tag or another mount set is"
-" a different container. It carries PartCAD's labels, so ``pc system "
-"prune`` clears out the ones a machine has stopped needing."
+"-- how files reach it, its mounts and volumes, its environment, what it "
+"may run, the user it runs as, the interpreter PartCAD's service runs on, "
+"and the source of that service (``partcad-sandbox-<tag>-<identity>``). So"
+" it outlives the process that started it: the next ``pc`` command with "
+"the same mounts finds it warm rather than paying to start one, and a new "
+"image tag -- every release has its own -- another mount set, or a change "
+"to the service is a different container. It carries PartCAD's labels, so "
+"``pc system prune`` clears out the ones a machine has stopped needing."
 msgstr ""
-"Контейнер называется по своему образу и всему, с чем он создан, — его "
-"монтированиям, окружению, тому, что ему разрешено запускать, "
-"пользователю, от имени которого он работает, и версии сервиса PartCAD "
-"внутри него (``partcad-sandbox-<tag>-<identity>``). Поэтому он переживает"
-" процесс, который его запустил: следующая команда ``pc`` с теми же "
-"монтированиями находит его тёплым, а не платит за запуск нового, а новая "
-"версия, новый тег или другой набор монтирований — это другой контейнер. "
-"Он несёт метки PartCAD, так что ``pc system prune`` убирает те, что "
-"машине больше не нужны."
+"Контейнер называется по своему образу и всему, с чем он создан, — тому, "
+"как к нему попадают файлы, его монтированиям и томам, окружению, тому, "
+"что ему разрешено запускать, пользователю, от имени которого он работает,"
+" интерпретатору, на котором работает сервис PartCAD, и исходному коду "
+"этого сервиса (``partcad-sandbox-<tag>-<identity>``). Поэтому он "
+"переживает процесс, который его запустил: следующая команда ``pc`` с теми"
+" же монтированиями находит его тёплым, а не платит за запуск нового, а "
+"новый тег образа (у каждой версии свой), другой набор монтирований или "
+"изменение сервиса — это другой контейнер. Он несёт метки PartCAD, так что"
+" ``pc system prune`` убирает те, что машине больше не нужны."
 
-#: ../../source/features.rst:648
+#: ../../source/features.rst:649
 msgid ""
 "Because the state directory is mounted rather than copied, ``pip`` "
 "installs persist across container restarts and the environment locking, "
@@ -1563,11 +1564,11 @@ msgstr ""
 "то, что установил другой: то, что ``pip`` разрешает и компилирует, "
 "зависит от нативных библиотек под ним, а у двух образов они не одинаковы."
 
-#: ../../source/features.rst:658
+#: ../../source/features.rst:659
 msgid "The ``remote`` sandbox"
 msgstr "Песочница ``remote``"
 
-#: ../../source/features.rst:660
+#: ../../source/features.rst:661
 msgid ""
 "``remote`` makes no assumption that the container can see your disk. The "
 "directories a command needs are packed up and sent to it, and the files "
@@ -1581,7 +1582,7 @@ msgstr ""
 "покупает песочницу, которая может быть где угодно: на другой машине, на "
 "другой архитектуре, в сборочной ферме."
 
-#: ../../source/features.rst:665
+#: ../../source/features.rst:666
 msgid ""
 "It is served by ``partcad-service-remote-docker``, which accepts those "
 "requests, starts and reuses a container per image, multiplexes callers "
@@ -1594,7 +1595,7 @@ msgstr ""
 "когда им никто не пользуется. Этот сервис существует; запускайте его с "
 "``--host`` и ``--port``, чтобы указать, где он находится."
 
-#: ../../source/features.rst:670
+#: ../../source/features.rst:671
 msgid ""
 "**It runs commands, so who may reach it matters.** A request names the "
 "image, the requirements and the command, and the sandbox interpreter runs"
@@ -1620,7 +1621,7 @@ msgstr ""
 "поднялся и внешне работает. Предпочитайте переменную окружения флагу, "
 "поскольку аргументы процесса на машине может прочитать кто угодно."
 
-#: ../../source/features.rst:681
+#: ../../source/features.rst:682
 msgid ""
 "The service owns the environment, and that is the arrangement worth "
 "knowing. A sandbox is a virtual environment on a disk, and for ``remote``"
@@ -1637,7 +1638,7 @@ msgstr ""
 " записи вида «numpy установлен» должны лежать на том же диске, что и "
 "описываемый ими numpy."
 
-#: ../../source/features.rst:688
+#: ../../source/features.rst:689
 msgid ""
 "Which directories a command needs are worked out from the command: any "
 "argument naming a file on this machine contributes the directory it is "
@@ -1652,7 +1653,7 @@ msgstr ""
 "поэтому вызывающая сторона, создающая файл, называет его — ровно так же, "
 "как она делает это для контейнера."
 
-#: ../../source/features.rst:694
+#: ../../source/features.rst:695
 msgid ""
 "Point a client at it with ``remoteSandbox`` (or ``PC_REMOTE_SANDBOX``), "
 "as ``host:port``, and give it the service's token with "
@@ -1667,7 +1668,7 @@ msgstr ""
 "другого: угадывать за кого-то сервис, который выполняет команды, не "
 "стоит."
 
-#: ../../source/features.rst:700
+#: ../../source/features.rst:701
 msgid ""
 "**Off this machine, that has to be encrypted.** Every request carries the"
 " token and the package's own source, so PartCAD refuses to send one to an"
@@ -1690,7 +1691,7 @@ msgstr ""
 "PartCAD запускает на этой машине, тоже петлевой, а сертификат между "
 "процессом и его собственным контейнером ничего бы не защитил."
 
-#: ../../source/features.rst:709
+#: ../../source/features.rst:710
 msgid ""
 "Today the transfer is a whole directory at a time; the intent is to "
 "replace that with a filesystem the container mounts and pulls files "
@@ -1702,11 +1703,11 @@ msgstr ""
 " одному, — и тогда ``remote`` станет таким же дешёвым, как ``docker``, и "
 "перестанет быть компромиссом."
 
-#: ../../source/features.rst:714
+#: ../../source/features.rst:715
 msgid "Containers PartCAD manages"
 msgstr "Контейнеры, которыми управляет PartCAD"
 
-#: ../../source/features.rst:716
+#: ../../source/features.rst:717
 msgid ""
 "Every image PartCAD builds is labelled as its own, and ``pc system "
 "prune`` removes the images and containers carrying those labels -- never "
@@ -1720,7 +1721,7 @@ msgstr ""
 "только устаревшее: образы от релизов PartCAD, отличных от текущего, и "
 "контейнеры, которыми никто не пользуется."
 
-#: ../../source/features.rst:722
+#: ../../source/features.rst:723
 msgid ""
 "Third-party images are asked, by convention, to carry the same labels. An"
 " image that does not is still usable; it simply cannot be told apart from"
@@ -1732,11 +1733,11 @@ msgstr ""
 "нельзя отличить от всего остального, что у вас установлено, поэтому ``pc "
 "system prune`` его не трогает."
 
-#: ../../source/features.rst:730
+#: ../../source/features.rst:731
 msgid "Caching"
 msgstr "Кэширование"
 
-#: ../../source/features.rst:732
+#: ../../source/features.rst:733
 msgid ""
 "PartCAD is capable of caching intermediate and final results of all model"
 " compilations. This can be particularly useful when working with large "
@@ -1748,7 +1749,7 @@ msgstr ""
 " моделями или при использовании скриптовых языков (таких как OpenSCAD, "
 "CadQuery, build123d, Chili3D или sdf)."
 
-#: ../../source/features.rst:736
+#: ../../source/features.rst:737
 msgid ""
 "Anything PartCAD produces in a sandbox is cached under the environment "
 "that produced it as well as under its own inputs: the interpreter version"
@@ -1774,7 +1775,7 @@ msgstr ""
 " нет, потому что она составлена из объектов, каждый из которых несёт "
 "своё."
 
-#: ../../source/features.rst:746
+#: ../../source/features.rst:747
 msgid ""
 "At the moment code-CAD caching is experimental and can be enabled by "
 "using the following configuration:"
@@ -1782,11 +1783,11 @@ msgstr ""
 "На данный момент кэширование code-CAD является экспериментальным и может "
 "быть включено с помощью следующей конфигурации:"
 
-#: ../../source/features.rst:754
+#: ../../source/features.rst:755
 msgid "Cache tiers"
 msgstr "Уровни кэша"
 
-#: ../../source/features.rst:756
+#: ../../source/features.rst:757
 msgid ""
 "The cache is a hierarchy of tiers, each with its own switch, because what"
 " is worth keeping in memory is not what is worth a file, and neither is "
@@ -1797,59 +1798,59 @@ msgstr ""
 " стоит класть в файл, и ни то ни другое не совпадает с тем, что стоит "
 "обращения по сети:"
 
-#: ../../source/features.rst:761
+#: ../../source/features.rst:762
 msgid "Tier"
 msgstr "Уровень"
 
-#: ../../source/features.rst:761
+#: ../../source/features.rst:762
 msgid "Where it keeps things"
 msgstr "Где он хранит"
 
-#: ../../source/features.rst:761
+#: ../../source/features.rst:762
 msgid "Default"
 msgstr "По умолчанию"
 
-#: ../../source/features.rst:763
+#: ../../source/features.rst:764
 msgid "``cacheMem``"
 msgstr "``cacheMem``"
 
-#: ../../source/features.rst:763
+#: ../../source/features.rst:764
 msgid "This process's memory. Nearest, and lost on exit."
 msgstr "Память этого процесса. Ближе всего, и теряется при выходе."
 
-#: ../../source/features.rst:763 ../../source/features.rst:764
+#: ../../source/features.rst:764 ../../source/features.rst:765
 msgid "on"
 msgstr "вкл."
 
-#: ../../source/features.rst:764
+#: ../../source/features.rst:765
 msgid "``cacheFiles``"
 msgstr "``cacheFiles``"
 
-#: ../../source/features.rst:764
+#: ../../source/features.rst:765
 msgid "A directory under the internal state directory. Local."
 msgstr "Каталог внутри каталога внутреннего состояния. Локально."
 
-#: ../../source/features.rst:765
+#: ../../source/features.rst:766
 msgid "``cacheRemote``"
 msgstr "``cacheRemote``"
 
-#: ../../source/features.rst:765
+#: ../../source/features.rst:766
 msgid "A memcached server, shared by a team or a CI fleet."
 msgstr "Сервер memcached, общий для команды или парка машин CI."
 
-#: ../../source/features.rst:765 ../../source/features.rst:766
+#: ../../source/features.rst:766 ../../source/features.rst:767
 msgid "off"
 msgstr "выкл."
 
-#: ../../source/features.rst:766
+#: ../../source/features.rst:767
 msgid "``cacheS3``"
 msgstr "``cacheS3``"
 
-#: ../../source/features.rst:766
+#: ../../source/features.rst:767
 msgid "An S3 bucket, which outlives all of the above."
 msgstr "Корзина S3, которая переживает всё перечисленное выше."
 
-#: ../../source/features.rst:769
+#: ../../source/features.rst:770
 msgid ""
 "A read walks them in that order and stops at the first hit; a write "
 "offers the entry to every tier whose size window accepts it. The two "
@@ -1861,7 +1862,7 @@ msgstr ""
 "Два общих уровня по умолчанию выключены, потому что им нужен адрес, "
 "который может дать только развёртывание:"
 
-#: ../../source/features.rst:783
+#: ../../source/features.rst:784
 msgid ""
 "Each tier also takes ``...MaxEntrySize`` and ``...MinEntrySize`` to set "
 "the window of object sizes it accepts, and the memcached tier takes "
@@ -1876,7 +1877,7 @@ msgstr ""
 "``cacheS3EndpointUrl`` — последний для S3-совместимого хранилища, не "
 "являющегося AWS."
 
-#: ../../source/features.rst:789
+#: ../../source/features.rst:790
 msgid ""
 "``cacheRemote`` needs nothing installed. ``cacheS3`` needs the ``aws`` "
 "extra (``pip install -U 'partcad[aws]'``); enabling it without that "
@@ -1889,11 +1890,11 @@ msgstr ""
 "остальные уровни продолжают работать. О том и о другом см. "
 ":doc:`installation`."
 
-#: ../../source/features.rst:795
+#: ../../source/features.rst:796
 msgid "Cache keys"
 msgstr "Ключи кэша"
 
-#: ../../source/features.rst:797
+#: ../../source/features.rst:798
 msgid ""
 "An object is cached under a hash of what produces it: its configuration "
 "(less the keys that only describe it, such as ``desc``), the environment "
@@ -1915,7 +1916,7 @@ msgstr ""
 "файла размером больше 1 МБ и не меняющая его размер, не замечается; "
 "запускайте такую команду с ``--cache-bypass``."
 
-#: ../../source/features.rst:806
+#: ../../source/features.rst:807
 msgid ""
 "An object made out of others is keyed on theirs as well: an ``extrude`` "
 "or ``sweep`` on its sketch, a ``compound`` part on its assembly, an "
@@ -1929,7 +1930,7 @@ msgstr ""
 "пересобирает каждую сборку, которая её использует, а объект с ``cache: "
 "false`` делает некэшируемым и всё, что из него построено."
 
-#: ../../source/features.rst:812
+#: ../../source/features.rst:813
 msgid ""
 "``pc --cache-bypass <command>`` (or ``PC_CACHE_BYPASS=1``, or "
 "``cacheBypass: True``) bypasses every tier for one run: nothing is read "
@@ -1939,7 +1940,7 @@ msgstr ""
 "``cacheBypass: True``) обходит все уровни на один запуск: ничего не "
 "читается из кэша и ничего построенное в него не записывается."
 
-#: ../../source/features.rst:816
+#: ../../source/features.rst:817
 msgid ""
 "The daemon keeps packages loaded between commands. Before each command it"
 " compares the ``partcad.yaml`` of the packages the command is about, and "
@@ -1955,11 +1956,11 @@ msgstr ""
 "изменившийся пакет вместе с пакетами под ним. Каждый пакет сравнивается "
 "не чаще одного раза в 15 секунд."
 
-#: ../../source/features.rst:824
+#: ../../source/features.rst:825
 msgid "Security"
 msgstr "Безопасность"
 
-#: ../../source/features.rst:826
+#: ../../source/features.rst:827
 msgid ""
 "As code-CAD is gaining popularity in the community, the topic of supply "
 "chain security and the risk of running arbitrary third-party code is not "
@@ -1973,7 +1974,7 @@ msgstr ""
 "программного обеспечения с открытым исходным кодом способом, "
 "превосходящим всё, что на данный момент может предложить коммерческое ПО."
 
-#: ../../source/features.rst:831
+#: ../../source/features.rst:832
 msgid ""
 "PartCAD is capable of rendering scripted parts in sandboxed environments:"
 " ``CadQuery``, ``build123d`` and ``sdf`` use Python, and ``Chili3D`` uses"
@@ -1983,7 +1984,7 @@ msgstr ""
 "окружениях (песочницах): ``CadQuery``, ``build123d`` и ``sdf`` используют"
 " Python, а ``Chili3D`` использует JavaScript."
 
-#: ../../source/features.rst:835
+#: ../../source/features.rst:836
 msgid ""
 "At the moment it is only useful from a dependency management perspective "
 "(it allows third-party packages to bring their Python and npm "
@@ -1999,15 +2000,15 @@ msgstr ""
 "фундаментально изменит последствия для безопасности при использовании "
 "скриптовых моделей, распространяемых онлайн."
 
-#: ../../source/features.rst:844
+#: ../../source/features.rst:845
 msgid "Telemetry"
 msgstr "Телеметрия"
 
-#: ../../source/features.rst:847
+#: ../../source/features.rst:848
 msgid "Public Repositories"
 msgstr "Публичные репозитории"
 
-#: ../../source/features.rst:849
+#: ../../source/features.rst:850
 msgid ""
 "By default PartCAD collects telemetry data to improve the user experience"
 " and to help understand how the tool is being used. The data collected "
@@ -2017,19 +2018,19 @@ msgstr ""
 "использования и помочь понять, как используется инструмент. Собираемые "
 "данные включают следующее:"
 
-#: ../../source/features.rst:853
+#: ../../source/features.rst:854
 msgid "What commands are being run?"
 msgstr "Какие команды выполняются?"
 
-#: ../../source/features.rst:854
+#: ../../source/features.rst:855
 msgid "How much time is consumed by each step?"
 msgstr "Сколько времени занимает каждый шаг?"
 
-#: ../../source/features.rst:855
+#: ../../source/features.rst:856
 msgid "What errors and exceptions are being raised?"
 msgstr "Какие ошибки и исключения возникают?"
 
-#: ../../source/features.rst:857
+#: ../../source/features.rst:858
 msgid ""
 "PartCAD uses `OpenTelemetry <https://opentelemetry.io/>`_ to collect "
 "telemetry data. You can disable telemetry by setting the following "
@@ -2039,7 +2040,7 @@ msgstr ""
 " данных телеметрии. Вы можете отключить телеметрию, задав следующую "
 "конфигурацию:"
 
-#: ../../source/features.rst:866
+#: ../../source/features.rst:867
 msgid ""
 "Alternatively, you can disable telemetry by setting the following "
 "environment variable:"
@@ -2047,11 +2048,11 @@ msgstr ""
 "Кроме того, вы можете отключить телеметрию, задав следующую переменную "
 "окружения:"
 
-#: ../../source/features.rst:872
+#: ../../source/features.rst:873
 msgid "You can also change telemetry settings using CLI:"
 msgstr "Вы также можете изменить настройки телеметрии с помощью CLI:"
 
-#: ../../source/features.rst:882
+#: ../../source/features.rst:883
 msgid ""
 "How deep the traces go is a separate setting. By default PartCAD reports "
 "the operations it names for itself -- the process a command is, and the "
@@ -2062,7 +2063,7 @@ msgstr ""
 " является команда, и действие, которым является каждый объект, с которым "
 "она работает, — и ничего ниже них:"
 
-#: ../../source/features.rst:891
+#: ../../source/features.rst:892
 msgid ""
 "``methods`` adds a span for every instrumented method underneath those, "
 "which is what a trace needs to answer \"where inside this did the time "
@@ -2078,15 +2079,15 @@ msgstr ""
 "перечисление пакета из восьми тысяч деталей стоит четверти миллиона "
 "интервалов. Включайте это, пока вы что-то изучаете, а не насовсем."
 
-#: ../../source/features.rst:898
+#: ../../source/features.rst:899
 msgid "``pc system telemetry info`` reports both settings."
 msgstr "``pc system telemetry info`` сообщает обе настройки."
 
-#: ../../source/features.rst:901
+#: ../../source/features.rst:902
 msgid "Private Repositories"
 msgstr "Приватные репозитории"
 
-#: ../../source/features.rst:903
+#: ../../source/features.rst:904
 msgid ""
 "If you are systemically using PartCAD in your organization then it makes "
 "sense to collect your own telemetry data to understand how the tool is "
@@ -2098,7 +2099,7 @@ msgstr ""
 "инструмент используется в вашей организации, и узнать, как повысить её "
 "производительность."
 
-#: ../../source/features.rst:907
+#: ../../source/features.rst:908
 msgid ""
 "The only OpenTelemetry backend provider currently supported is `Sentry "
 "<https://sentry.io/>`_. Create an organization account on Sentry and "
@@ -2108,15 +2109,15 @@ msgstr ""
 "OpenTelemetry — это `Sentry <https://sentry.io/>`_. Создайте учётную "
 "запись организации в Sentry и получите ключ DSN."
 
-#: ../../source/features.rst:917
+#: ../../source/features.rst:918
 msgid "Other OpenTelemetry backend providers can be supported on request."
 msgstr "Другие backend-провайдеры OpenTelemetry могут быть поддержаны по запросу."
 
-#: ../../source/features.rst:921
+#: ../../source/features.rst:922
 msgid "Automation Support"
 msgstr "Поддержка автоматизации"
 
-#: ../../source/features.rst:923
+#: ../../source/features.rst:924
 msgid ""
 "PartCAD allows you to set CLI options and override user configurations "
 "specified in ``~/.partcad/config.yaml`` using environment variables. This"
@@ -2129,13 +2130,13 @@ msgstr ""
 "динамической установки конфигураций или в окружениях, где изменение "
 "конфигурационных файлов невозможно."
 
-#: ../../source/features.rst:928
+#: ../../source/features.rst:929
 msgid ""
 "Generally, all of PartCAD's environment variables are prefixed with "
 "``PC``."
 msgstr "Как правило, все переменные окружения PartCAD имеют префикс ``PC``."
 
-#: ../../source/features.rst:930
+#: ../../source/features.rst:931
 msgid ""
 "For CLI options, the environment variable prefix depends on the command "
 "being used. You can use the `--help` option to determine the "
@@ -2145,11 +2146,11 @@ msgstr ""
 "команды. Вы можете использовать параметр `--help`, чтобы определить "
 "соответствующую переменную окружения для каждого параметра CLI."
 
-#: ../../source/features.rst:934
+#: ../../source/features.rst:935
 msgid "Here are some examples:"
 msgstr "Вот несколько примеров:"
 
-#: ../../source/features.rst:941
+#: ../../source/features.rst:942
 msgid ""
 "Note that, these environment variables will be overridden if the CLI "
 "option is specified."
@@ -2157,7 +2158,7 @@ msgstr ""
 "Обратите внимание, что эти переменные окружения будут переопределены, "
 "если указан параметр CLI."
 
-#: ../../source/features.rst:943
+#: ../../source/features.rst:944
 msgid ""
 "For user configurations, the environment variables are of the format "
 "``PC_`` followed by the configuration option name in upper snake case "
@@ -2171,7 +2172,7 @@ msgstr ""
 "Например, чтобы переопределить настройку ``pythonSandbox``, нужно задать "
 "переменную окружения ``PC_PYTHON_SANDBOX``."
 
-#: ../../source/features.rst:948
+#: ../../source/features.rst:949
 msgid ""
 "Note that environment variable names are case-sensitive. Always use "
 "uppercase letters for the ``PC`` prefix and the rest of the variable "
@@ -2181,7 +2182,7 @@ msgstr ""
 "регистру. Всегда используйте заглавные буквы для префикса ``PC`` и "
 "остальной части имени переменной, как показано в примерах выше."
 
-#: ../../source/features.rst:951
+#: ../../source/features.rst:952
 msgid ""
 "In this case, these environment variables will take precedence over the "
 "values specified in ``~/.partcad/config.yaml``."
@@ -2189,11 +2190,11 @@ msgstr ""
 "В этом случае эти переменные окружения будут иметь приоритет над "
 "значениями, указанными в ``~/.partcad/config.yaml``."
 
-#: ../../source/features.rst:958
+#: ../../source/features.rst:959
 msgid "Flexible Git Configuration"
 msgstr "Гибкая конфигурация Git"
 
-#: ../../source/features.rst:960
+#: ../../source/features.rst:961
 msgid ""
 "PartCAD imports packages from git repositories without the ``git`` "
 "command line tool: it speaks the git protocols itself, through the "
@@ -2205,7 +2206,7 @@ msgstr ""
 "``libgit2``, которая поставляется с его зависимостями. Для работы импорта"
 " ничего дополнительно устанавливать не нужно."
 
-#: ../../source/features.rst:964
+#: ../../source/features.rst:965
 msgid ""
 "By default, PartCAD uses the system's Git configuration when importing "
 "packages using git, which it reads from ``~/.gitconfig`` whether or not "
@@ -2218,7 +2219,7 @@ msgstr ""
 "эти настройки, вы можете добавить свои переопределения в "
 "``~/.partcad/config.yaml``, как показано ниже:"
 
-#: ../../source/features.rst:978
+#: ../../source/features.rst:979
 msgid ""
 "Cloning over SSH is faster and more reliable because it uses an efficient"
 " protocol with lower overhead, supports compression, and maintains stable"
@@ -2233,7 +2234,7 @@ msgstr ""
 "экранами и устраняет запросы учётных данных, что делает его идеальным для"
 " больших репозиториев или частых взаимодействий."
 
-#: ../../source/features.rst:984
+#: ../../source/features.rst:985
 msgid ""
 "Repositories reached over SSH are authenticated with the keys held by the"
 " running SSH agent, and then with the default key files "
@@ -2250,7 +2251,7 @@ msgstr ""
 "которому он не может аутентифицироваться, завершается ошибкой, а не ждёт "
 "запроса, на который никто не ответит."
 
-#: ../../source/features.rst:990
+#: ../../source/features.rst:991
 msgid ""
 "If you have SSH keys configured then you can add the following to the "
 "~/.partcad/config.yaml:"
@@ -2258,11 +2259,11 @@ msgstr ""
 "Если у вас настроены SSH-ключи, то вы можете добавить следующее в "
 "~/.partcad/config.yaml:"
 
-#: ../../source/features.rst:1005
+#: ../../source/features.rst:1006
 msgid "Fetching via a Proxy"
 msgstr "Загрузка через прокси"
 
-#: ../../source/features.rst:1007
+#: ../../source/features.rst:1008
 msgid ""
 "On many networks a proxy is not a preference but the only route out. "
 "PartCAD reads the usual environment variables, and everything it "
@@ -2276,7 +2277,7 @@ msgstr ""
 "импортированные из tar-архива, и отдельные файлы, которые объект "
 "подтягивает через ``fileFrom: url``."
 
-#: ../../source/features.rst:1019
+#: ../../source/features.rst:1020
 msgid ""
 "``HTTPS_PROXY`` covers ``https://`` remotes and ``HTTP_PROXY`` covers "
 "``http://`` ones; the lowercase spellings work equally. ``NO_PROXY`` "
@@ -2291,7 +2292,7 @@ msgstr ""
 " прокси. Прокси, которому нужны учётные данные, принимает их в URL "
 "(``http://user:password@proxy.example.com:3128``)."
 
-#: ../../source/features.rst:1025
+#: ../../source/features.rst:1026
 msgid ""
 "Nothing has to be configured in PartCAD for any of this. A proxy that "
 "should apply to git imports alone -- rather than to everything this shell"
@@ -2303,7 +2304,7 @@ msgstr ""
 "запускает эта оболочка, можно задать вместо этого параметром конфигурации"
 " git, и он имеет приоритет над окружением:"
 
-#: ../../source/features.rst:1037
+#: ../../source/features.rst:1038
 msgid ""
 "Note that a proxy re-terminating TLS presents its own certificate, which "
 "has to be trusted or every fetch fails to verify it. That is a property "
@@ -2318,11 +2319,11 @@ msgstr ""
 " удостоверяющего центра прокси или установите его в системное хранилище "
 "доверия."
 
-#: ../../source/features.rst:1044
+#: ../../source/features.rst:1045
 msgid "Personally Identifiable Information"
 msgstr "Персональные данные"
 
-#: ../../source/features.rst:1046
+#: ../../source/features.rst:1047
 msgid ""
 "The user section in ``~/.partcad/config.yaml`` defines the default "
 "personal and contact details used throughout the system. These details "
@@ -2334,11 +2335,11 @@ msgstr ""
 "имя пользователя, адрес электронной почты, номер телефона, компанию и "
 "адресную информацию."
 
-#: ../../source/features.rst:1067
+#: ../../source/features.rst:1068
 msgid "Address Configuration"
 msgstr "Настройка адреса"
 
-#: ../../source/features.rst:1069
+#: ../../source/features.rst:1070
 msgid ""
 "Users can override any details from the user section by specifying "
 "shippingAddress and billingAddress separately."
@@ -2346,11 +2347,11 @@ msgstr ""
 "Пользователи могут переопределить любые данные из раздела user, указав "
 "shippingAddress и billingAddress отдельно."
 
-#: ../../source/features.rst:1101
+#: ../../source/features.rst:1102
 msgid "**Override Behavior**"
 msgstr "**Поведение переопределения**"
 
-#: ../../source/features.rst:1103
+#: ../../source/features.rst:1104
 msgid ""
 "If shippingAddress is not specified, the system will use the user details"
 " for shipping."
@@ -2358,7 +2359,7 @@ msgstr ""
 "Если shippingAddress не указан, система будет использовать данные "
 "пользователя для доставки."
 
-#: ../../source/features.rst:1104
+#: ../../source/features.rst:1105
 msgid ""
 "If billingAddress is not specified, the system will use the user details "
 "for billing."
@@ -2366,7 +2367,7 @@ msgstr ""
 "Если billingAddress не указан, система будет использовать данные "
 "пользователя для выставления счетов."
 
-#: ../../source/features.rst:1105
+#: ../../source/features.rst:1106
 msgid ""
 "If shippingAddress or billingAddress is provided, it completely replaces "
 "the corresponding fields from user."
@@ -2374,7 +2375,7 @@ msgstr ""
 "Если указан shippingAddress или billingAddress, он полностью заменяет "
 "соответствующие поля из user."
 
-#: ../../source/features.rst:1107
+#: ../../source/features.rst:1108
 msgid ""
 "This setup allows full customization of shipping and billing details, "
 "supporting scenarios where items need to be sent to different recipients "
@@ -2384,11 +2385,11 @@ msgstr ""
 "выставления счетов, поддерживая сценарии, когда товары нужно отправлять "
 "разным получателям или по разным адресам."
 
-#: ../../source/features.rst:1113
+#: ../../source/features.rst:1114
 msgid "Parameter Configuration"
 msgstr "Настройка параметров"
 
-#: ../../source/features.rst:1115
+#: ../../source/features.rst:1116
 msgid ""
 "The configuration file (``~/.partcad/config.yaml``) allows users to "
 "define reusable parameters, which can be accessed dynamically within the "
@@ -2398,17 +2399,17 @@ msgstr ""
 "пользователям определять многократно используемые параметры, к которым "
 "можно динамически обращаться в конфигурациях поставщиков."
 
-#: ../../source/features.rst:1118
+#: ../../source/features.rst:1119
 msgid ""
 "In ``~/.partcad/config.yaml``, parameters are stored under a parameters "
 "section."
 msgstr "В ``~/.partcad/config.yaml`` параметры хранятся в разделе parameters."
 
-#: ../../source/features.rst:1120 ../../source/features.rst:1143
+#: ../../source/features.rst:1121 ../../source/features.rst:1144
 msgid "Example:"
 msgstr "Пример:"
 
-#: ../../source/features.rst:1130
+#: ../../source/features.rst:1131
 msgid ""
 "Object IDs are used to reference different types of objects within a "
 "package, such as sketches, parts, assemblies, scenes, interfaces, and "
@@ -2418,11 +2419,11 @@ msgstr ""
 "внутри пакета, такие как эскизы, детали, сборки, сцены, интерфейсы и "
 "поставщики."
 
-#: ../../source/features.rst:1136
+#: ../../source/features.rst:1137
 msgid "Accessing Parameters in Providers"
 msgstr "Доступ к параметрам в поставщиках"
 
-#: ../../source/features.rst:1138
+#: ../../source/features.rst:1139
 msgid ""
 "In the providers section, parameters can be referenced dynamically using "
 "a function ``get_from_config()``, ensuring that sensitive or reusable "
@@ -2473,4 +2474,3 @@ msgstr ""
 #~ "by PartCAD rather than by the "
 #~ "window."
 #~ msgstr ""
-

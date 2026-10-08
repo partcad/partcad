@@ -645,4 +645,3 @@ msgstr ""
 #~ "``partcad-<role>-<tag>-<identity>`` and labelled, "
 #~ "and prune removes them."
 #~ msgstr ""
-

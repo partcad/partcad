@@ -558,8 +558,8 @@ machine, shared by a team -- is what ``useDockerRemote`` is for:
 then. Every file a command reads is sent to the container with the command, and
 every file it writes is sent back with the answer; a sandbox's environment lives
 in a Docker volume on the daemon's side, built once and reused. It applies to
-every container PartCAD starts -- the ``docker`` sandbox, KiCad imports and a
-plugin's ``container:`` alike -- and off by default, because sending a package
+the containers PartCAD starts for a package -- the ``docker`` sandbox, KiCad
+imports and a plugin's ``container:`` -- and off by default, because sending a package
 with every command costs time that a shared filesystem does not. It needs no
 service in between: that is the difference from the ``remote`` sandbox below,
 which reaches containers through ``partcad-service-remote-docker`` and never
@@ -637,12 +637,13 @@ machinery PartCAD already has rather than a line it will not cross -- worth
 knowing before treating "the paths must match" as a constraint on some future
 change to how the mounts are chosen.
 
-The container is named after its image and everything it is created with -- its
-mounts, its environment, what it may run, the user it runs as, and the version
-of PartCAD's service inside it (``partcad-sandbox-<tag>-<identity>``). So it
-outlives the process that started it: the next ``pc`` command with the same
-mounts finds it warm rather than paying to start one, and a new version, a new
-tag or another mount set is a different container. It carries PartCAD's labels, so ``pc system prune`` clears out the
+The container is named after its image and everything it is created with -- how
+files reach it, its mounts and volumes, its environment, what it may run, the
+user it runs as, the interpreter PartCAD's service runs on, and the source of
+that service (``partcad-sandbox-<tag>-<identity>``). So it outlives the process
+that started it: the next ``pc`` command with the same mounts finds it warm
+rather than paying to start one, and a new image tag -- every release has its
+own -- another mount set, or a change to the service is a different container. It carries PartCAD's labels, so ``pc system prune`` clears out the
 ones a machine has stopped needing.
 
 Because the state directory is mounted rather than copied, ``pip`` installs

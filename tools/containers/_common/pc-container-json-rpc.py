@@ -218,6 +218,14 @@ def _relocate(path, directories):
     return None
 
 
+def _under(root, path):
+    """Whether ``path`` is ``root`` or under it -- False, not an exception, for two paths on two drives."""
+    try:
+        return os.path.commonpath([root, path]) == root
+    except ValueError:
+        return False
+
+
 def pack_directory(path):
     """A directory as a base64 gzipped tar, with nothing in it that varies between two packs.
 
@@ -249,7 +257,7 @@ def pack_directory(path):
             def add(full, arcname, ancestors):
                 real = os.path.realpath(full)
                 if os.path.islink(full):
-                    inside = os.path.commonpath([root, real]) == root
+                    inside = _under(root, real)
                     if not inside or not os.path.exists(real):
                         skipped.append(arcname)
                         return
@@ -290,7 +298,7 @@ def unpack_directory(archive, target):
             # A member escaping the directory it is extracted into is how an
             # archive from elsewhere becomes a write to /usr/bin.
             resolved = os.path.realpath(os.path.join(target, member.name))
-            if os.path.commonpath([root, resolved]) != root:
+            if not _under(root, resolved):
                 raise ExecuteError(-32602, "Archive member escapes its directory: %s" % member.name)
             if member.issym() or member.islnk():
                 raise ExecuteError(-32602, "Archive member is a link: %s" % member.name)
@@ -307,7 +315,7 @@ def _lock_path(lock):
     path = os.path.normpath(lock["path"])
     # The lock file is created if it is not there, so a path anywhere would be
     # a request creating files anywhere.
-    if not os.path.isabs(path) or path == root or os.path.commonpath([root, path]) != root:
+    if not (os.path.isabs(path) and path != root and _under(root, path)):
         raise ExecuteError(-32602, "A lock has to be a file under %s: %s" % (SANDBOX_ROOT, lock["path"]))
     return path
 

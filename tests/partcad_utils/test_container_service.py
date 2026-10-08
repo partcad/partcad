@@ -590,3 +590,15 @@ def test_the_lock_reaches_the_handler_through_the_protocol(monkeypatch):
         {"jsonrpc": "2.0", "id": 1, "method": "execute", "params": {"command": ["x"], "lock": {"path": "/p"}}}
     )
     assert seen["lock"] == {"path": "/p"}
+
+
+def test_paths_on_two_drives_are_not_one_inside_the_other(monkeypatch):
+    """Windows' commonpath raises for them; the answer is "no", not a crash."""
+
+    def two_drives(paths):
+        raise ValueError("Paths don't have the same drive")
+
+    monkeypatch.setattr(service.os.path, "commonpath", two_drives)
+    assert service._under("C:\\\\sandbox", "D:\\\\x.lock") is False
+    with pytest.raises(service.ExecuteError):
+        service._lock_path({"path": "/pc-sandbox/v-env-3.11.lock"})
