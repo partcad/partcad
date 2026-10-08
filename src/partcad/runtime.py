@@ -9,20 +9,17 @@
 import asyncio
 import base64
 import contextlib
-import gzip
-import io
 import os
 import subprocess
-import tarfile
-import time
 
 import docker
+
+from partcad_utils import container_service
 
 from . import logging as pc_logging
 from . import sandbox_lock
 from .process_crash import describe_termination
 from .process_output import decode as decode_output
-from .runtime_json_rpc import RuntimeJsonRpcClient
 
 
 async def communicate(p, stdin: bytes, timeout=None):
@@ -53,34 +50,6 @@ async def communicate(p, stdin: bytes, timeout=None):
         raise
 
 
-async def wait_for_port(host, port, timeout=30):
-    """
-    Asynchronously waits for a port to become open on the specified host.
-
-    Args:
-        host (str): The hostname or IP address to check.
-        port (int): The port number to check.
-        timeout (int, optional): The maximum time to wait in seconds. Defaults to 30.
-
-    Returns:
-        bool: True if the port is open within the timeout, False otherwise.
-    """
-    start_time = asyncio.get_event_loop().time()
-    while True:
-        writer = None
-        try:
-            _, writer = await asyncio.open_connection(host, port)
-            return True
-        except (ConnectionRefusedError, TimeoutError):
-            if asyncio.get_event_loop().time() - start_time > timeout:
-                return False
-            await asyncio.sleep(1)
-        finally:
-            if writer:
-                writer.close()
-                await writer.wait_closed()
-
-
 def pack_directory(path: str) -> str:
     """A directory as a base64 gzipped tar, for sending to a container.
 
@@ -103,23 +72,7 @@ def pack_directory(path: str) -> str:
     deterministic -- which `test_packing_is_deterministic` caught only when its
     two calls happened to straddle a second.
     """
-    buffer = io.BytesIO()
-    with gzip.GzipFile(fileobj=buffer, mode="wb", compresslevel=6, mtime=0) as compressed:
-        with tarfile.open(fileobj=compressed, mode="w") as tar:
-
-            def sanitize(info: tarfile.TarInfo) -> tarfile.TarInfo:
-                info.mtime = 0
-                info.uid = info.gid = 0
-                info.uname = info.gname = ""
-                return info
-
-            for entry in sorted(os.listdir(path)):
-                if entry in (".git", "__pycache__", ".venv"):
-                    # Never wanted in a sandbox, and '.git' alone can be most of
-                    # what a package weighs.
-                    continue
-                tar.add(os.path.join(path, entry), arcname=entry, filter=sanitize)
-    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+    return container_service.pack_directory(path)
 
 
 class SandboxUnavailable(Exception):
@@ -237,75 +190,21 @@ class Runtime:
         )
         self.initialized = os.path.exists(self.path)
 
-        self.rpc_client = None
+        # The container this runtime runs commands in, once it has one. See
+        # 'use_container'.
+        self.endpoint = None
 
-    async def use_docker(self, image_name: str, container_name: str, port: int, host: str = "localhost"):
-        if self.rpc_client:
-            return
+    def use_container(self, endpoint) -> None:
+        """Run every command from now on in ``endpoint``'s container.
 
-        if not host or host == "localhost":
-            docker_client = docker.from_env()
-            pc_logging.debug("Got a docker client")
-            try:
-                container = docker_client.containers.get(container_name)
-            except docker.errors.NotFound:
-                pc_logging.debug("Starting a docker container")
-
-                # # Since .containers.run() fails to pull the image on some platforms, we do it manually
-                # image_found = False
-                # try:
-                #     images = docker_client.api.images(image_name)
-                #     if images:
-                #         image_found = True
-                # except docker.errors.ImageNotFound:
-                #     pass
-                # if not image_found:
-                #     pc_logging.debug("Image not found: %s" % image_name)
-                #     try:
-                #         docker_client.api.pull(image_name)
-                #     except docker.errors.ImageNotFound:
-                #         pc_logging.error("Failed to pull the image: %s" % image_name)
-                #         pass
-
-                container = docker_client.containers.run(
-                    image_name,
-                    name=container_name,
-                    detach=True,
-                    # TODO(clairbee): mount data directories across docker containers
-                    # TODO: Mount the root and .partcad directories
-                    # volumes={self.path: {"bind": "/data", "mode": "rw"}},
-                )
-            pc_logging.debug("Got a docker container: %s" % container)
-            pc_logging.debug("Container status: %s" % container.status)
-            if container.status == "exited" or container.status == "stopped" or container.status == "created":
-                pc_logging.debug("Starting the container")
-                container.start()
-
-            timeout = time.time() + 300
-            while time.time() < timeout:
-                container.reload()
-                if container.status == "running":
-                    pc_logging.debug("Container is running")
-                    host = container.attrs["NetworkSettings"]["Networks"]["bridge"]["IPAddress"]
-                    if await wait_for_port(host, port):
-                        pc_logging.debug(f"{host}:{port} is open!")
-                    else:
-                        pc_logging.error(f"Timeout waiting for the container: {host}:{port}")
-                    break
-                elif container.status == "exited":
-                    pc_logging.error("Container exited")
-                    return
-                else:
-                    pc_logging.debug("Container is starting...")
-                    await asyncio.sleep(1)
-
-            pc_logging.debug("Container properties are: %s" % container.attrs)
-            host = container.attrs["NetworkSettings"]["Networks"]["bridge"]["IPAddress"]
-            pc_logging.debug("The docker container is running at: %s" % host)
-        else:
-            raise Exception("Remote docker sandboxes are not supported yet")
-
-        self.rpc_client = RuntimeJsonRpcClient(host, port)
+        Where that container came from -- its name, its image, whether files
+        reach it by mount or by upload -- is `partcad_utils.containers`'s
+        business and the caller's, not this class's. It used to be this class's:
+        `use_docker()` found a container by a name it was handed and ran in
+        whatever answered to it, which is how KiCad imports for one release ran
+        in a container another release had made.
+        """
+        self.endpoint = endpoint
 
     # ----------------------------------------------------------------- #
     # What 'run' and 'run_async' both do                                  #
@@ -470,11 +369,15 @@ class Runtime:
         if input_dirs is None:
             input_dirs = []
 
-        if self.rpc_client:
-            response = self.rpc_client.execute(cmd, self._rpc_params(stdin, cwd, input_files, output_files, input_dirs))
-            if not response:
-                return self._no_response(self.name)
-            stdout, stderr, returncode = self._rpc_result(response, output_files)
+        if self.endpoint is not None:
+            returncode, stdout, stderr = self.endpoint.run(
+                cmd,
+                stdin=stdin,
+                cwd=cwd,
+                input_files=input_files,
+                output_files=output_files,
+                input_dirs=input_dirs,
+            )
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
             with sandbox_lock.process_slots.slot():
@@ -516,13 +419,16 @@ class Runtime:
         if input_dirs is None:
             input_dirs = []
 
-        if self.rpc_client:
-            response = await self.rpc_client.execute_async(
-                cmd, self._rpc_params(stdin, cwd, input_files, output_files, input_dirs)
+        if self.endpoint is not None:
+            returncode, stdout, stderr = await self.endpoint.run_async(
+                cmd,
+                stdin=stdin,
+                cwd=cwd,
+                input_files=input_files,
+                output_files=output_files,
+                input_dirs=input_dirs,
+                timeout=timeout,
             )
-            if not response:
-                return self._no_response(self.name)
-            stdout, stderr, returncode = self._rpc_result(response, output_files)
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
             async with sandbox_lock.process_slots.slot_async():

@@ -234,7 +234,7 @@ def test_two_dev_containers_on_one_host_are_two_containers(tmp_path):
     one._mounts(one_sources)
     two._mounts(two_sources)
     assert one.container_name != two.container_name
-    assert one.container_name.startswith(runtime_python_docker.container_name(one.image) + "-")
+    assert one.container_name.startswith("partcad-sandbox-")
 
 
 def test_one_dev_container_is_one_container_whatever_its_home(tmp_path):
@@ -275,31 +275,53 @@ def test_only_directories_are_bound(tmp_path):
 
 
 class _HostDockerDaemon:
-    """The host's daemon, shared by two dev containers: containers by name, removed for real."""
+    """The host's daemon, shared by two dev containers: containers by name, removed for real.
+
+    It speaks what `partcad_utils.containers.acquire` asks: create, put the
+    service in, start, reload; and the service answers at once.
+    """
 
     def __init__(self):
         self.containers_by_name = {}
         self.removed = []
         self.api = types.SimpleNamespace(base_url="unix://var/run/docker.sock")
-        self.images = types.SimpleNamespace(get=lambda name: name, pull=lambda name: name)
-        self.containers = types.SimpleNamespace(get=self._get, run=self._run)
+        self.image = types.SimpleNamespace(id="sha256:base", attrs={"Config": {"Env": []}})
+        self.images = types.SimpleNamespace(get=lambda name: self.image, pull=lambda name: self.image)
+        self.containers = types.SimpleNamespace(get=self._get, create=self._create)
 
     def _get(self, name):
         if name not in self.containers_by_name:
             raise docker.errors.NotFound(name)
         return self.containers_by_name[name]
 
-    def _run(self, image, name=None, volumes=None, **_kwargs):
+    def _create(self, image, name=None, volumes=None, labels=None, environment=None, **_kwargs):
         daemon = self
 
         class _Made:
-            status = "running"
-            attrs = {
-                "Mounts": [
-                    {"Type": "bind", "Source": source, "Destination": spec["bind"], "RW": True}
-                    for source, spec in (volumes or {}).items()
-                ]
-            }
+            status = "created"
+
+            def __init__(self):
+                self.attrs = {
+                    "Image": "sha256:base",
+                    "Config": {
+                        "Labels": dict(labels or {}),
+                        "Env": ["%s=%s" % kv for kv in (environment or {}).items()],
+                    },
+                    "Mounts": [
+                        {"Type": "bind", "Source": source, "Destination": spec["bind"], "RW": True}
+                        for source, spec in (volumes or {}).items()
+                    ],
+                    "NetworkSettings": {"Ports": {"5000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "1"}]}},
+                }
+
+            def put_archive(self, path, data):
+                return True
+
+            def start(self):
+                self.status = "running"
+
+            def reload(self):
+                pass
 
             def remove(self, force=False):
                 daemon.removed.append(name)
@@ -311,7 +333,9 @@ class _HostDockerDaemon:
 
 
 def test_a_second_dev_container_does_not_remove_the_first_ones_container(tmp_path, monkeypatch):
-    """The problem itself, end to end through '_start'."""
+    """The problem itself, end to end through '_start' and 'containers.acquire'."""
+    from partcad_utils import containers
+
     daemon = _HostDockerDaemon()
     one, one_sources = _dev_container(tmp_path, "devcontainer-one")
     two, two_sources = _dev_container(tmp_path, "devcontainer-two")
@@ -322,6 +346,7 @@ def test_a_second_dev_container_does_not_remove_the_first_ones_container(tmp_pat
     monkeypatch.setattr(runtime_python_docker.docker, "from_env", lambda: daemon)
     monkeypatch.setattr(runtime_python_docker, "resolve_image", lambda client, image, version="": image)
     monkeypatch.setattr(runtime_python_docker, "mount_sources", lambda client, image: sources_of[starting[-1]])
+    monkeypatch.setattr(containers, "_default_ping", lambda host, port: 2)
 
     for sandbox in (one, two):
         starting.append(id(sandbox))

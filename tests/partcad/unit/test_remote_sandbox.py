@@ -27,12 +27,14 @@ class _Recorder:
 
     def __init__(self, fail_on=None, version=None):
         self.calls = []
+        self.locks = []
         self.fail_on = fail_on
         # What the image's interpreter reports, when that is not what was asked.
         self.version = version
 
-    def __call__(self, image, command):
+    def __call__(self, image, command, lock=None):
         self.calls.append((image, command))
+        self.locks.append(lock)
         if self.fail_on and self.fail_on in " ".join(command):
             return 1, "", "it went wrong"
         if "sys.version_info" in " ".join(command):
@@ -70,6 +72,27 @@ def test_each_python_version_gets_an_environment_of_its_own():
     assert remote_sandbox.environment_path("3.11") != remote_sandbox.environment_path("3.12")
     assert remote_sandbox.interpreter_path("3.11").endswith("/bin/python")
     assert remote_sandbox.interpreter_path("3.11").startswith(remote_sandbox.environment_path("3.11"))
+
+
+def test_whatever_changes_the_environment_holds_its_lock_exclusively():
+    """Other PartCAD processes share the volume, and their own gates know nothing of this one's."""
+    run = _Recorder()
+    remote_sandbox.Environments(run).ensure("ghcr.io/x/a:1", "3.11", ["numpy"])
+
+    held = dict(zip((" ".join(c) for c in run.commands()), run.locks))
+    exclusive = remote_sandbox.lock_for("3.11", exclusive=True)
+    assert all(held[" ".join(c)] == exclusive for c in run.builds())
+    # The version probe only reads it.
+    probe = next(c for c in run.commands() if "sys.version_info" in " ".join(c))
+    assert held[" ".join(probe)] == remote_sandbox.lock_for("3.11", exclusive=False)
+
+
+def test_each_environment_has_a_lock_of_its_own_beside_it_on_the_volume():
+    one = remote_sandbox.lock_for("3.11", exclusive=True)["path"]
+    assert one != remote_sandbox.lock_for("3.12", exclusive=True)["path"]
+    assert one.startswith(remote_sandbox.SANDBOX_ROOT + "/")
+    # Beside the environment, not in it: 'venv' creates that directory.
+    assert not one.startswith(remote_sandbox.environment_path("3.11") + "/")
 
 
 # --------------------------------------------------------------------------- #
@@ -247,7 +270,7 @@ def test_one_environment_is_built_once_under_concurrency():
     seen = []
     barrier = threading.Barrier(2)
 
-    def run(image, command):
+    def run(image, command, lock=None):
         seen.append(command)
         if "sys.version_info" in " ".join(command):
             return 0, "3.11", ""

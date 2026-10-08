@@ -62,3 +62,50 @@ def test_the_native_path_does_not_ask_for_a_container(tmp_path, monkeypatch):
     monkeypatch.setattr(runtime, "docker_available", _must_not_be_asked)
     _, uses_docker = asyncio.run(part_factory_kicad.get_runtime(_ctx(tmp_path, False)))
     assert uses_docker is False
+
+
+def _counting_acquire(monkeypatch):
+    """Stand in for the container, recording which thread asked for it."""
+    import threading
+
+    from partcad import container_mounts
+
+    asked = []
+
+    class Endpoint:
+        name = "partcad-kicad-test"
+
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr(container_mounts, "spec_for", lambda *args, **kwargs: object())
+    monkeypatch.setattr(container_mounts, "acquire", lambda spec: asked.append(threading.get_ident()) or Endpoint())
+    monkeypatch.setattr(runtime.Runtime, "use_container", lambda self, endpoint: None)
+    return asked
+
+
+def test_the_container_is_asked_for_once_per_context(tmp_path, monkeypatch):
+    """Every board after the first reuses it: asking again is the Docker round trips again."""
+    asked = _counting_acquire(monkeypatch)
+    ctx = _ctx(tmp_path, True)
+
+    async def two_boards():
+        return await part_factory_kicad.get_runtime(ctx), await part_factory_kicad.get_runtime(ctx)
+
+    first, second = asyncio.run(two_boards())
+
+    assert len(asked) == 1
+    assert first is second
+
+
+def test_the_container_is_asked_for_off_the_event_loop(tmp_path, monkeypatch):
+    """Starting one is seconds of blocking calls; every other part waits on the loop meanwhile."""
+    import threading
+
+    asked = _counting_acquire(monkeypatch)
+
+    async def on_the_loop():
+        await part_factory_kicad.get_runtime(_ctx(tmp_path, True))
+        return threading.get_ident()
+
+    loop_thread = asyncio.run(on_the_loop())
+
+    assert asked and asked[0] != loop_thread

@@ -224,6 +224,36 @@ def environment_requirements(project, config) -> list[str]:
 
 
 @telemetry.instrument()
+def base_requirements(version: str) -> list:
+    """What every Python sandbox has installed before anything runs in it, in order.
+
+    One list, read by every sandbox, because two were how the ``remote`` sandbox
+    came to install none of it: it collected each package's and each shape's own
+    requirements and never this, so the first wrapper to deserialize a shape died
+    on "No module named 'OCP'" -- in the remote sandbox, and in the ``docker``
+    sandbox in ``upload`` mode, which is the same code.
+
+    The order is the install order and it matters: CadQuery's OCP comes last,
+    re-asserting the VTK-enabled build that build123d's 'cadquery-ocp-novtk'
+    dependency has just replaced. zstd is not here; see 'ensure_zstd_onced_locked'.
+    """
+    requirements = [sandbox_versions.OCP_TESSELLATE, sandbox_versions.NLOPT]
+    # CadQuery has no release for Python 3.10, and pip fails the whole install
+    # rather than skipping it. Nothing is lost by leaving it out: the factories
+    # that need CadQuery render on MIN_PYTHON_VERSION_CADQUERY or newer, so they
+    # never look at a 3.10 sandbox in the first place.
+    if sandbox_versions.is_at_least(version, sandbox_versions.MIN_PYTHON_VERSION_CADQUERY):
+        requirements.append(sandbox_versions.CADQUERY)
+    requirements += [
+        sandbox_versions.NUMPY,
+        sandbox_versions.TYPING_EXTENSIONS,
+        sandbox_versions.OCPSVG,
+        sandbox_versions.BUILD123D,
+        sandbox_versions.CADQUERY_OCP,
+    ]
+    return requirements
+
+
 class PythonRuntime(runtime.Runtime):
     def __init__(self, ctx, sandbox, version=None):
         if version is None:
@@ -465,22 +495,8 @@ class PythonRuntime(runtime.Runtime):
                 self.ensure_zstd_onced_locked()
                 if not self.initialized:
                     # Preinstall the most common packages to avoid race conditions
-                    self.ensure_onced_locked(sandbox_versions.OCP_TESSELLATE)
-                    self.ensure_onced_locked(sandbox_versions.NLOPT)
-                    # CadQuery has no release for Python 3.10, and pip fails the
-                    # whole install rather than skipping it. Nothing is lost by
-                    # leaving it out: the factories that need CadQuery render on
-                    # MIN_PYTHON_VERSION_CADQUERY or newer, so they never look at
-                    # a 3.10 sandbox in the first place.
-                    if sandbox_versions.is_at_least(self.version, sandbox_versions.MIN_PYTHON_VERSION_CADQUERY):
-                        self.ensure_onced_locked(sandbox_versions.CADQUERY)
-                    self.ensure_onced_locked(sandbox_versions.NUMPY)
-                    self.ensure_onced_locked(sandbox_versions.TYPING_EXTENSIONS)
-                    self.ensure_onced_locked(sandbox_versions.OCPSVG)
-                    self.ensure_onced_locked(sandbox_versions.BUILD123D)
-                    # Last: re-asserts the VTK-enabled OCP that build123d's
-                    # 'cadquery-ocp-novtk' dependency has just replaced.
-                    self.ensure_onced_locked(sandbox_versions.CADQUERY_OCP)
+                    for requirement in base_requirements(self.version):
+                        self.ensure_onced_locked(requirement)
                     self.initialized = True
         self.provisioned = True
 
@@ -491,19 +507,9 @@ class PythonRuntime(runtime.Runtime):
             async with self.async_lock_install():
                 await self.ensure_zstd_onced_locked_async()
                 if not self.initialized:
-                    # Preinstall the most common packages to avoid
-                    await self.ensure_async_onced_locked(sandbox_versions.OCP_TESSELLATE)
-                    await self.ensure_async_onced_locked(sandbox_versions.NLOPT)
-                    # See the note in once(): CadQuery has no Python 3.10 release.
-                    if sandbox_versions.is_at_least(self.version, sandbox_versions.MIN_PYTHON_VERSION_CADQUERY):
-                        await self.ensure_async_onced_locked(sandbox_versions.CADQUERY)
-                    await self.ensure_async_onced_locked(sandbox_versions.NUMPY)
-                    await self.ensure_async_onced_locked(sandbox_versions.TYPING_EXTENSIONS)
-                    await self.ensure_async_onced_locked(sandbox_versions.OCPSVG)
-                    await self.ensure_async_onced_locked(sandbox_versions.BUILD123D)
-                    # Last: re-asserts the VTK-enabled OCP that build123d's
-                    # 'cadquery-ocp-novtk' dependency has just replaced.
-                    await self.ensure_async_onced_locked(sandbox_versions.CADQUERY_OCP)
+                    # Preinstall the most common packages to avoid race conditions
+                    for requirement in base_requirements(self.version):
+                        await self.ensure_async_onced_locked(requirement)
                     self.initialized = True
         self.provisioned = True
 

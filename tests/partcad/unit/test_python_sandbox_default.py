@@ -161,7 +161,7 @@ def _chooser(monkeypatch, available, **overrides):
     monkeypatch.setattr(runtime, "docker_available", lambda: True)
     from partcad import runtime_python_docker
 
-    monkeypatch.setattr(runtime_python_docker, "image_available", lambda image, version="": available)
+    monkeypatch.setattr(runtime_python_docker, "image_available", lambda image, version="", mode=None: available)
     return _Ctx(_config(**overrides)).__init_images__()
 
 
@@ -199,7 +199,9 @@ def test_the_registry_is_asked_once(monkeypatch):
     from partcad import runtime_python_docker
 
     asked = []
-    monkeypatch.setattr(runtime_python_docker, "image_available", lambda image, version="": asked.append(image) or True)
+    monkeypatch.setattr(
+        runtime_python_docker, "image_available", lambda image, version="", mode=None: asked.append(image) or True
+    )
     made = _Ctx(_config()).__init_images__()
     for _ in range(5):
         made._docker_or_next_best("3.11")

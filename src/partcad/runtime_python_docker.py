@@ -24,13 +24,20 @@ whatever the host happens to have -- and that a package needing something pip
 cannot install can name an image carrying it. What it costs is a container
 runtime.
 
-The one thing that does **not** go through the container's RPC service is this.
-``PC_CONTAINER_ALLOWED_COMMANDS`` exists because that service takes commands
-from a caller who may be somewhere else and may not be trusted; ``docker exec``
-here is PartCAD running a command on its own machine, in a container it started
-itself, against files it already has. There is no boundary to enforce, and
-pretending otherwise would mean routing pip through an allowlist that PartCAD
-writes and PartCAD checks.
+The container itself is started the way every container PartCAD starts is --
+`partcad_utils.containers` names it after the image and the mounts, labels it,
+puts the service in it and replaces a stale one -- so what is particular to this
+module is only how commands reach it, and that depends on the transfer mode:
+
+* ``mount`` -- this class. The environment is on a mounted directory and every
+  command runs through ``docker exec``, so that everything ``PythonRuntime``
+  does around a subprocess -- the process slots, the timeout, killing a child
+  whose await was cancelled -- goes on applying unchanged.
+* ``upload`` -- `DockerUploadPythonRuntime`. Nothing here is visible over there,
+  so the environment lives in a volume on the daemon's side and every command
+  goes through the container's service with its files, exactly as the
+  ``remote`` sandbox's commands do through `partcad-service-remote-docker` --
+  by the same code, without the hop.
 """
 
 import hashlib
@@ -40,16 +47,15 @@ import re
 import socket
 import tempfile
 import threading
-import time
 from typing import Optional
 
 import docker
 
-from partcad_utils import container_image
+from partcad_utils import container_image, containers
 
-from . import docker_image, docker_mount
+from . import container_mounts, docker_image, docker_mount
 from . import logging as pc_logging
-from . import runtime, runtime_python, telemetry
+from . import runtime, runtime_python, runtime_python_remote, telemetry
 
 # The images PartCAD publishes to run its own sandboxes in, one per supported
 # Python version and architecture. The tag is completed by the release and the
@@ -62,39 +68,6 @@ BASE_IMAGE = "ghcr.io/partcad/partcad-container-python"
 # which this sandbox does not use. A name rather than a path, so an image is
 # free to put its interpreter wherever it likes as long as it is on PATH.
 CONTAINER_PYTHON = "python3"
-
-# What keeps a sandbox container alive between commands. Its own entrypoint
-# serves the RPC service, which this sandbox has no use for, so it is replaced
-# with something that does nothing and stays running to be 'docker exec'd into.
-KEEPALIVE = ["sleep", "infinity"]
-
-# One thread at a time may decide what the container of a given name should be,
-# because that decision can end in removing it and creating another under the
-# same name. Two threads reaching it together is one of them removing the
-# container the other just made -- and, since Docker answers the second removal
-# of one container with a 409, a command that fails with "removal of container
-# ... is already in progress" rather than running.
-#
-# Per name, not one lock for everything: two sandboxes for two different images
-# have nothing to say to each other and should not wait on each other's pulls.
-_START_LOCKS = {}
-_START_LOCKS_GUARD = threading.Lock()
-
-# How many times '_start' will go round when another *process* on this machine
-# is doing the same thing at the same instant -- which the lock above cannot
-# help with. Each turn is one lost race: a container removed from under the
-# create, or created under the name between the look-up and the create. A
-# machine losing three in a row has something wrong with it that a fourth turn
-# would not fix.
-_START_ATTEMPTS = 3
-_START_RETRY_DELAY = 0.5
-
-
-def _start_lock(name: str) -> threading.Lock:
-    """The lock guarding the container called ``name``."""
-    with _START_LOCKS_GUARD:
-        return _START_LOCKS.setdefault(name, threading.Lock())
-
 
 # Where PartCAD's own files are, on the host. The sandbox interpreter is handed
 # the wrappers by path -- 'wrapper.get()' -- and the packages PartCAD ships
@@ -191,12 +164,15 @@ def unavailable_reason(image: str) -> Optional[str]:
 _SOURCES = {}
 
 
-def misses(image: str, needed) -> bool:
+def misses(image: str, needed, mode: str = containers.MOUNT) -> bool:
     """Whether the daemon cannot bind one of ``needed`` for ``image``; records why, as 'image_available' does.
 
     Separate from 'image_available' because the directories are a context's
-    and the answer to that question is not: asked after it said yes.
+    and the answer to that question is not: asked after it said yes. Never in
+    ``upload`` mode, which binds nothing from here.
     """
+    if mode == containers.UPLOAD:
+        return False
     missing = unbacked(needed, _SOURCES.get(image))
     if missing:
         _UNAVAILABLE_REASONS[image] = (
@@ -206,7 +182,7 @@ def misses(image: str, needed) -> bool:
     return bool(missing)
 
 
-def image_available(image: str, version: str = "", needed=()) -> bool:
+def image_available(image: str, version: str = "", needed=(), mode: str = containers.MOUNT) -> bool:
     """Whether this machine can get an image to run that sandbox in.
 
     Local first, then a pull, exactly as starting the sandbox would -- so a
@@ -231,6 +207,11 @@ def image_available(image: str, version: str = "", needed=()) -> bool:
     except Exception as e:
         _UNAVAILABLE_REASONS[image] = "it could not be pulled: %s" % e
         return False
+    # In 'upload' mode that is all of it: nothing from here is bound, so what
+    # the daemon can see of this machine does not matter.
+    if mode == containers.UPLOAD:
+        _UNAVAILABLE_REASONS.pop(image, None)
+        return True
     # An image is only half of it. The other half is whether the daemon that
     # would run it can see the directories PartCAD is going to bind -- see
     # 'mounts_are_shared'. A machine that fails this is one where every part
@@ -239,8 +220,8 @@ def image_available(image: str, version: str = "", needed=()) -> bool:
     if sources is False:
         _UNAVAILABLE_REASONS[image] = (
             "the Docker daemon cannot see this machine's files, so nothing can be bind-mounted into a "
-            "container -- which is what a dev container using the host's Docker socket, or a 'DOCKER_HOST' "
-            "on another machine, looks like"
+            "container -- which is what a 'DOCKER_HOST' on another machine looks like. Set "
+            "'useDockerRemote: true' to send the files instead"
         )
         return False
     # Reaching the files through this container's mounts is only as good as
@@ -370,29 +351,22 @@ def client_mounts(sources) -> dict:
     return mounts
 
 
-def container_name(image: str, mounts=None) -> str:
-    """The sandbox container for ``image`` with ``mounts``: one per image and mount set.
+def sandbox_spec(image: str, mounts) -> containers.ContainerSpec:
+    """The container a ``mount``-mode sandbox for ``image`` with ``mounts`` runs in.
 
-    Named after the image alone, one container served every process on the
-    daemon, and any of them needing different mounts replaced it -- a package
-    outside the home directory on an ordinary host, another dev container on
-    the same machine, a test with a temporary home. Whoever had started it went
-    on running commands by name in the replacement, with somebody else's
-    mounts: writing where it never looked, reading what was not its own, and
-    killed outright if a command was running when it was removed.
-
-    So the mounts are in the name: where each one comes from and where it
-    lands. Processes needing the same ones share a container, which is safe
-    because they see the same files -- every project under one home directory
-    on an ordinary host, everything in one dev container (see 'client_mounts').
-    Processes needing different ones each have their own, and never touch each
-    other's. Without ``mounts``, the name before '_start' has worked them out.
+    One per image and mount set, as ever: processes needing the same mounts see
+    the same files and may share a container, and processes needing different
+    ones each get their own (see 'client_mounts' for why a dev container asks
+    for one set). The name is derived from this by 'containers.container_name'.
     """
-    name = "pc-sandbox-" + _short(image)
-    if not mounts:
-        return name
-    whose = repr(sorted((source, spec["bind"]) for source, spec in mounts.items()))
-    return name + "-" + _short(whose)
+    return containers.ContainerSpec(
+        role="sandbox",
+        image=image,
+        mode=containers.MOUNT,
+        mounts=dict(mounts),
+        user=container_mounts.host_user(),
+        allowed_commands={CONTAINER_PYTHON: None},
+    )
 
 
 def _declared_sources():
@@ -510,11 +484,16 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         super().__init__(ctx, "docker-" + _short(image), version)
 
         self.image = image
-        # Named after the image and, once '_start' knows them, the mounts -- see
-        # 'container_name'. It outlives the process that started it, so the
-        # next 'pc' command with the same mounts finds it warm.
-        self.container_name = container_name(image)
+        # Named after the image and the mounts -- see 'sandbox_spec'. Worked
+        # out here for an ordinary host, where it is final; '_start' works it
+        # out again from what the daemon really sees, which differs only in a
+        # dev container. It outlives the process that started it, so the next
+        # 'pc' command with the same mounts finds it warm.
+        self.container_name = containers.container_name(sandbox_spec(image, docker_mount.mounts(self._mounted)))
         self._container = None
+        # One start at a time per sandbox. Across sandboxes and processes the
+        # name is the lock; see 'containers.acquire'.
+        self._start_guard = threading.Lock()
         # Where the daemon has the directories, when it is not here -- see
         # 'mount_sources'. Set by '_start'.
         self._mount_sources = None
@@ -622,7 +601,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         # from it rather than only what this context asked for -- see
         # 'client_mounts'. Either way the container is named after the result.
         mounts = docker_mount.mounts(paths) if sources is None else client_mounts(sources)
-        self.container_name = container_name(self.image, mounts)
+        self.container_name = containers.container_name(sandbox_spec(self.image, mounts))
         return mounts
 
     @property
@@ -661,14 +640,12 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         tree of parts would otherwise pay it per part -- and the next 'pc'
         command finds it still running rather than paying again.
 
-        It is replaced only when what it has mounted is not what this context
-        needs, which on an ordinary machine is never: the home directory covers
-        everything and the mount set does not vary. A package on another volume
-        or an ad-hoc file elsewhere is what makes it vary.
-
-        Under a lock, because the body can remove a container and create
-        another with the same name, and two threads doing that at once leave
-        one of them holding a container the other has already destroyed.
+        Named after the image and the mounts, so a context needing other mounts
+        gets a container of its own rather than replacing one somebody else is
+        running commands in; on an ordinary machine the mount set does not vary
+        and there is one. Finding it, checking it is really the container that
+        name stands for, starting it and racing other processes for it are all
+        'containers.acquire'.
         """
         if self._container is not None:
             return self._container
@@ -679,138 +656,43 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 "Start Docker, or choose another sandbox with 'pythonSandbox'."
             )
 
-        name = self.container_name
-        with _start_lock(name):
-            # Another thread may have done this while this one waited.
-            if self._container is not None:
-                return self._container
-
-            client = docker.from_env()
-            # Asked before anything is created. A daemon that is not on this
-            # filesystem hands the container directories that are not these
-            # ones, and every failure after that names something else -- see
-            # 'mounts_are_shared'. Only a *declared* 'pythonSandbox: docker'
-            # reaches this: where PartCAD chooses, 'image_available' asked the
-            # same question first and chose another sandbox.
-            sources = mount_sources(client, resolve_image(client, self.image, self.version))
-            if sources is False:
-                raise runtime.SandboxUnavailable(
-                    "the 'docker' sandbox needs a container runtime that can see this machine's files, "
-                    "and this one cannot: a directory created here is not the directory it binds. That "
-                    "is what a dev container with the host's Docker socket, or a 'DOCKER_HOST' on "
-                    "another machine, gives you. Run PartCAD where that daemon is, or choose a sandbox "
-                    "that stays here with 'pythonSandbox' -- 'conda' and 'venv' both work."
-                )
-
-            mounts = self._mounts(sources)
-            for attempt in range(_START_ATTEMPTS):
-                container = self._start_once(client, mounts)
-                if container is not None:
-                    self._container = container
-                    return container
-                # Lost to another process on this machine. Give its removal or
-                # its creation a moment to finish rather than spinning against
-                # a name that is briefly neither there nor free.
-                time.sleep(_START_RETRY_DELAY * (attempt + 1))
-
-            raise Exception(
-                "Could not get the '%s' container for the '%s' sandbox: something else on this "
-                "machine kept creating and removing it. Check for another PartCAD run, or for a "
-                "container of that name being managed by hand." % (name, self.sandbox)
-            )
-
-    def _start_once(self, client, mounts):
-        """One attempt at having the container this sandbox wants.
-
-        Returns it, or ``None`` to say the attempt lost a race with another
-        process and is worth making again. Only that: anything else Docker
-        refuses is raised, because a sandbox that cannot start is a thing to
-        report rather than to retry.
-        """
+        client = docker.from_env()
+        # Asked before anything is created. A daemon that is not on this
+        # filesystem hands the container directories that are not these ones,
+        # and every failure after that names something else -- see
+        # 'mounts_are_shared'. Only a *declared* 'pythonSandbox: docker' reaches
+        # this: where PartCAD chooses, 'image_available' asked the same question
+        # first and chose another sandbox.
         try:
-            existing = client.containers.get(self.container_name)
-        except docker.errors.NotFound:
-            existing = None
-
-        if existing is not None:
-            # The name now says which image *and* which mounts, so a container
-            # that answers to it should already be the right one. This is the
-            # case where it is not: a container left by a PartCAD that derived
-            # either of those differently, still on the machine under a name
-            # this one also uses.
-            #
-            # Bind mounts only. An image may declare a VOLUME of its own, which
-            # Docker adds as a mount PartCAD never asked for and cannot match --
-            # comparing those in would replace such an image's container before
-            # every single command.
-            #
-            # Where each one lands is compared as well as whether it may be
-            # written, since a destination is derived from its source and the
-            # run where they disagree is exactly the stale container above.
-            existing_binds = {
-                mount.get("Source"): (mount.get("Destination"), bool(mount.get("RW", True)))
-                for mount in (existing.attrs.get("Mounts") or [])
-                if mount.get("Type") == "bind"
-            }
-            wanted_binds = {host: (spec["bind"], spec["mode"] != "ro") for host, spec in mounts.items()}
-            if existing_binds == wanted_binds:
-                if existing.status != "running":
-                    try:
-                        existing.start()
-                    except docker.errors.NotFound:
-                        return None  # removed between the look-up and the start
-                return existing
-
-            pc_logging.debug(
-                "Replacing %s: it is mounted %s rather than %s"
-                % (self.container_name, sorted(existing_binds.items()), sorted(wanted_binds.items()))
+            resolved = resolve_image(client, self.image, self.version)
+        except Exception as e:
+            raise runtime.SandboxUnavailable("the 'docker' sandbox cannot get %s: %s" % (self.image, e))
+        sources = mount_sources(client, resolved)
+        if sources is False:
+            raise runtime.SandboxUnavailable(
+                "the 'docker' sandbox needs a container runtime that can see this machine's files, "
+                "and this one cannot: a directory created here is not the directory it binds. That is "
+                "what a 'DOCKER_HOST' on another machine gives you. Set 'useDockerRemote: true' "
+                "(PC_USE_DOCKER_REMOTE=true) to send the files with each command instead, or choose a "
+                "sandbox that stays here with 'pythonSandbox' -- 'conda' and 'venv' both work."
             )
-            try:
-                existing.remove(force=True)
-            except docker.errors.NotFound:
-                pass  # somebody else removed it, which is the outcome asked for
-            except docker.errors.APIError as e:
-                if e.status_code != 409:
-                    raise
-                # "removal of container ... is already in progress": another
-                # process wants it gone too. Let it finish rather than trying to
-                # create the replacement while the name is still taken.
-                return None
 
-        image = self._resolve_image(client)
+        mounts = self._mounts(sources)
+        # Made here, before the container binds them: a directory the daemon
+        # creates for a bind is root's, and nothing written later can fix that.
         os.makedirs(self._container_home, exist_ok=True)
         for host, spec in mounts.items():
-            # Made here, where this process sees it: with mount sources the key
-            # is the daemon's name for the directory, which is nothing here.
+            # With mount sources the key is the daemon's name for the
+            # directory, which is nothing here; the bind is where it is here.
             os.makedirs(spec["bind"] if self._mount_sources is not None else host, exist_ok=True)
             pc_logging.debug("Sandbox mount: %s -> %s" % (host, spec["bind"]))
 
-        with pc_logging.Action("Container", self.version, self.container_name):
-            try:
-                return client.containers.run(
-                    image,
-                    command=KEEPALIVE,
-                    entrypoint=[],
-                    name=self.container_name,
-                    detach=True,
-                    volumes=mounts,
-                    # So that what the sandbox writes is owned by whoever is running
-                    # PartCAD. Linux only: there a bind mount passes uids straight
-                    # through and files would otherwise come back owned by the
-                    # image's user, while Docker Desktop maps ownership itself and
-                    # naming a uid that does not exist in the image breaks it.
-                    user=("%d:%d" % (os.getuid(), os.getgid())) if platform.system() == "Linux" else None,
-                    labels={"partcad.container": "1", "partcad.image": "1"},
-                    auto_remove=False,
-                )
-            except docker.errors.APIError as e:
-                if e.status_code != 409:
-                    raise
-                # The name is taken: another process created it between the
-                # look-up above and here. Go round and inspect *that* container
-                # -- it is named after these mounts, so it is very likely the
-                # one this sandbox was about to make.
-                return None
+        with self._start_guard:
+            if self._container is None:
+                endpoint = container_mounts.acquire(sandbox_spec(self.image, mounts), client=client)
+                self.container_name = endpoint.name
+                self._container = endpoint.container
+        return self._container
 
     # ----------------------------------------------------------- execution --
 
@@ -944,3 +826,79 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             elif self._environment_built:
                 self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)
         await super().once_async()
+
+
+# --------------------------------------------------------------------------- #
+# 'upload' mode                                                                #
+# --------------------------------------------------------------------------- #
+
+# The containers and the environments in them that this process holds in
+# 'upload' mode: the same pool and the same provisioning
+# 'partcad-service-remote-docker' holds, kept here instead of over there.
+_LOCAL = None
+_LOCAL_GUARD = threading.Lock()
+
+
+def _local_service():
+    """This process's pool and environments, made on first use."""
+    global _LOCAL
+    from . import remote_docker, remote_sandbox
+
+    with _LOCAL_GUARD:
+        if _LOCAL is None:
+            pool = remote_docker.ContainerPool(lambda image: remote_docker.start(image, role="sandbox"))
+            environments = remote_sandbox.Environments(
+                lambda image, command, lock: remote_sandbox.forward(pool, image, command, {"lock": lock})
+            )
+            _LOCAL = (pool, environments)
+        return _LOCAL
+
+
+class _InProcessService:
+    """`partcad-service-remote-docker`'s ``execute``, called here rather than over HTTP.
+
+    The same function, so a sandbox in ``upload`` mode provisions its
+    environment, prepends its interpreter and moves its files exactly as a
+    ``remote`` one does -- one implementation of all of that, not two.
+    """
+
+    def execute(self, command, params, timeout=None):
+        from . import remote_sandbox
+
+        pool, environments = _local_service()
+        try:
+            result = remote_sandbox.execute(pool, environments, {"command": list(command), **params}, timeout=timeout)
+        except Exception as e:
+            return {"error": {"message": str(e)}}
+        return {"result": result}
+
+    async def execute_async(self, command, params, timeout=None):
+        import asyncio
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.execute(command, params, timeout))
+
+
+class DockerUploadPythonRuntime(runtime_python_remote.RemotePythonRuntime):
+    """The ``docker`` sandbox when the daemon cannot see this machine's files.
+
+    Which is what ``useDockerRemote`` says. Nothing is mounted: the environment
+    lives in a volume on the daemon's side, every command goes through the
+    container's service carrying the directories it reads, and what it writes
+    comes back with the answer. That is the ``remote`` sandbox exactly, minus
+    the service in the middle -- so it *is* that sandbox, talking to its
+    containers itself.
+    """
+
+    SANDBOX_PREFIX = "docker-upload-"
+
+    def __init__(self, ctx, version=None, image=None):
+        super().__init__(ctx, version, image=image, endpoint="in-process")
+
+    def _client(self):
+        if not runtime.docker_available():
+            raise runtime.SandboxUnavailable(
+                "the 'docker' sandbox needs a container runtime and there is none here. "
+                "Start Docker, or choose another sandbox with 'pythonSandbox'."
+            )
+        return _InProcessService()
