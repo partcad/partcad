@@ -71,8 +71,10 @@ class PartFactoryAlias(pf.PartFactory):
             # part that nothing can be connected to. One that declares ports or
             # interfaces of its own keeps them, and so does one that moves or
             # scales the geometry, which the source's ports would no longer
-            # sit on.
-            if not any(key in config for key in ("implements", "ports", "offset", "scale")):
+            # sit on. One with a 'map:' has them too, and the names it maps
+            # besides: they are its own, so it answers for its ports itself
+            # (see 'assembly_ports.keeps_source_ports').
+            if not any(key in config for key in ("implements", "ports", "map", "offset", "scale")):
                 self.part.with_ports = _SourcePorts(ctx, self.source)
 
             # pc_logging.debug("Initialized an alias to %s" % self.source)

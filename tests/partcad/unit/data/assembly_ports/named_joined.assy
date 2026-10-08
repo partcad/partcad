@@ -1,0 +1,10 @@
+links:
+  - part: plate
+    name: base
+  # Joined through a name the enrich gave one of its source's ports.
+  - part: named-plate
+    name: lid
+    connectPorts:
+      with: lift
+      name: base
+      to: handle

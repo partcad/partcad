@@ -244,17 +244,15 @@ def connection_metadata(shape) -> dict:
 async def prepare_async(shape, ctx) -> None:
     """Resolve what this object's ports depend on but its declaration does not hold.
 
-    Which is one thing: an assembly's 'map:', whose answers are where the
-    assembly put its children. Everything else is in the declaration and is
-    resolved on first use, so this is a no-op - and has to stay cheap, because
-    every caller that is about to read an object's ports calls it first without
-    knowing whether the object is an assembly at all.
+    Which is one thing: a 'map:', whose answers are where an assembly put its
+    children, or what an enrich's source has. Everything else is in the
+    declaration and is resolved on first use, so this is a no-op - and has to
+    stay cheap, because every caller that is about to read an object's ports
+    calls it first without knowing what kind of object it is.
 
     The declaration is what decides, rather than the kind of object or anything
     'with_ports' is asked: a shape that declares no 'map:' is every shape but a
-    few, and answering for one must not mean reaching into it. A 'map:' on
-    something that is not an assembly still gets here, and is reported there
-    rather than passed over in silence.
+    few, and answering for one must not mean reaching into it.
     """
     from . import assembly_ports
 

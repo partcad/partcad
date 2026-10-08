@@ -137,7 +137,7 @@ def test_every_way_of_getting_it_wrong_is_reported_rather_than_raised(monkeypatc
     assert "rather than a port of it" in reported
     assert "does not implement 'nowhere'" in reported
     assert "has no instance 'nowhere'" in reported
-    assert "must name a node and a port" in reported
+    assert "must be a list" in reported
 
 
 def test_a_port_with_no_location_is_at_the_origin_of_what_declares_it():
@@ -226,16 +226,19 @@ def test_searching_by_interface_finds_what_declares_it_and_what_maps_it():
     ctx = pc.init(PACKAGE)
     package = "//"
 
+    # A part is found by what it implements, and by an interface its 'map:'
+    # names (the long form states it, even in an entry that is otherwise wrong).
     parts = [part.name for part in search_parts(ctx, package, False, "", "m3-thru")]
-    assert parts == ["plate"]
+    assert sorted(parts) == ["broken-plate", "named-plate", "plate"]
 
     # The abstract interface a family derives from is exactly what a search is
     # written against, so the closure is walked upwards.
-    assert [part.name for part in search_parts(ctx, package, False, "", "m3")] == ["plate", "screw"]
+    parts = [part.name for part in search_parts(ctx, package, False, "", "m3")]
+    assert sorted(parts) == ["broken-plate", "named-plate", "plate", "screw"]
 
     # An assembly is found by what its 'map:' externalizes, without resolving it.
     assemblies = [assembly.name for assembly in search_assemblies(ctx, package, False, "", "m3-thru")]
-    assert sorted(assemblies) == ["broken", "column", "mount"]
+    assert sorted(assemblies) == ["broken", "column", "mount", "mount-renamed"]
 
     # And the keyword still applies on top of it.
     assert [part.name for part in search_parts(ctx, package, False, "screw", "m3")] == ["screw"]
@@ -253,7 +256,15 @@ def test_the_search_index_is_built_once_and_not_before_it_is_asked_for():
     project.interface_indexes.clear()
 
     # What 'pc list parts' reads, and all it reads.
-    assert [part.name for part in project.parts.values()] == ["plate", "screw"]
+    assert [part.name for part in project.parts.values()] == [
+        "plate",
+        "screw",
+        "named-plate",
+        "raised-plate",
+        "scaled-plate",
+        "relabelled-plate",
+        "broken-plate",
+    ]
     assert project.interface_indexes == {}
 
     search_parts(ctx, "//", False, "", "m3-thru")
@@ -281,3 +292,143 @@ def test_a_port_inside_an_assembly_is_named_by_every_level_above_it():
     # The second 'links:' names itself nothing, so it is 'link#2' - and the two
     # plates' ports are told apart rather than sharing one address.
     assert "link#2:loose:handle" in names
+
+
+# --- a map of what the object has of its own --------------------------------
+
+
+def _part(name):
+    """One part of the test package, with its 'map:' resolved."""
+    ctx = pc.init(PACKAGE)
+    part = ctx.get_part(":" + name)
+    asyncio.run(shape_ports.prepare_async(part, ctx))
+    return ctx, part
+
+
+def _frame(shape, port_name):
+    from partcad.interface import port_location
+
+    return port_location(_ports(shape)[port_name])
+
+
+def test_an_enrich_maps_a_port_of_what_it_points_at():
+    """[port]: no node, so the port is the object's own - its source's, for an enrich."""
+    _, plate = _part("named-plate")
+    assert _at(plate, "lift") == pytest.approx((0.0, 0.0, 5.0))
+
+
+def test_an_enrich_with_a_map_keeps_the_ports_of_what_it_points_at():
+    """The names it maps are added to the ones it has, not put in their place."""
+    _, plate = _part("named-plate")
+    ports = _ports(plate)
+    for name in ("handle", "origin", "TL-thru-m3", "TR-thru-m3", "lift", "raised"):
+        assert name in ports
+    assert sorted(plate.with_ports.get_interfaces()["//:m3-thru"].keys()) == ["TL", "TR", "corner"]
+
+
+def test_a_mapped_port_may_be_moved_and_turned_in_its_own_frame():
+    """The moves, then the turns, in the frame of what is named."""
+    _, plate = _part("named-plate")
+    raised = _frame(plate, "raised")
+    assert tuple(raised.translation) == pytest.approx((0.0, 0.0, 7.0))
+    # Turned a quarter turn about its own Z: its X is where its Y was.
+    assert tuple(raised.rotate_vector((1.0, 0.0, 0.0))) == pytest.approx((0.0, 1.0, 0.0), abs=1e-9)
+
+
+def test_an_interface_instance_may_be_mapped_and_moved():
+    """A new instance of the same interface, a millimetre beside the old one."""
+    _, plate = _part("named-plate")
+    assert _at(plate, "corner-thru-m3") == pytest.approx((-11.0, 10.0, 0.0))
+
+
+def test_mapping_an_instance_does_not_add_it_to_the_source():
+    """The interfaces an enrich adopts are its own copies: 'corner' is the
+    enrich's instance, not the plate's or that of every other reference to it."""
+    ctx, named = _part("named-plate")
+    assert "corner" in named.with_ports.get_interfaces()["//:m3-thru"]
+    plate = ctx.get_part(":plate")
+    asyncio.run(shape_ports.prepare_async(plate, ctx))
+    assert sorted(plate.with_ports.get_interfaces()["//:m3-thru"].keys()) == ["TL", "TR"]
+    assert "corner-thru-m3" not in plate.with_ports.get_ports()
+
+
+def test_a_reference_s_offset_moves_what_it_maps_of_its_source():
+    _, plate = _part("raised-plate")
+    assert _at(plate, "lift") == pytest.approx((0.0, 0.0, 15.0))
+
+
+def test_a_reference_that_scales_cannot_map_its_source_s_ports(monkeypatch):
+    from partcad import logging as pc_logging
+
+    errors = []
+    monkeypatch.setattr(
+        pc_logging, "error", lambda *args: errors.append(args[0] % args[1:] if len(args) > 1 else args[0])
+    )
+    _, plate = _part("scaled-plate")
+    assert "lift" not in _ports(plate)
+    assert any("which it scales" in error for error in errors)
+
+
+def test_an_object_that_is_no_reference_maps_what_it_declares():
+    _, plate = _part("relabelled-plate")
+    assert _at(plate, "a") == pytest.approx((1.0, 2.0, 3.0))
+    assert _at(plate, "b") == pytest.approx((2.0, 2.0, 3.0))
+
+
+def test_an_enriched_assembly_maps_what_its_source_externalizes():
+    _, mount = _assembly("mount-renamed")
+    assert _at(mount, "handle") == pytest.approx((0.0, 0.0, 5.0))
+    # The source's 'top' is its upper plate's TL hole, 20mm up.
+    assert _at(mount, "shifted-thru-m3") == pytest.approx((-10.0, 10.0, 25.0))
+
+
+def test_a_node_s_port_may_be_externalized_beside_where_it_is():
+    _, mount = _assembly("mount-offset")
+    assert _at(mount, "beside") == pytest.approx((3.0, 0.0, 5.0))
+
+
+def test_every_way_of_getting_the_long_form_wrong_is_reported(monkeypatch):
+    from partcad import logging as pc_logging
+
+    errors = []
+    monkeypatch.setattr(
+        pc_logging, "error", lambda *args: errors.append(args[0] % args[1:] if len(args) > 1 else args[0])
+    )
+
+    _, plate = _part("broken-plate")
+    ports = _ports(plate)
+    # What it points at is still there; what it maps is not.
+    assert "handle" in ports
+    for name in ("neither", "both", "unknown_key", "instance_alone", "not_a_number", "node_on_a_part"):
+        assert name not in ports
+
+    reported = "\n".join(errors)
+    assert "'neither' must name either a 'port' or an 'interface'" in reported
+    assert "'both' must name either a 'port' or an 'interface'" in reported
+    assert "'unknown_key' says spin" in reported
+    assert "'instance_alone' names an 'instance' of no 'interface'" in reported
+    assert "'moveX' must be a number" in reported
+    assert "only an assembly has nodes" in reported
+
+
+def test_something_can_be_connected_through_a_port_an_enrich_mapped():
+    """'lift' is the plate's 'handle', 5mm up; mating it to the base's 'handle'
+    turns the lid over onto it, which puts the lid's origin 10mm up."""
+    ctx = pc.init(PACKAGE)
+    joined = ctx._get_assembly(":named_joined")
+    asyncio.run(joined.do_instantiate())
+    placed = {child.name: child for child in joined.connected_children() if child.name}
+    assert tuple(placed["lid"].location.translation) == pytest.approx((0.0, 0.0, 10.0))
+    assert placed["lid"].connection["to_port"] == "handle"
+
+
+def test_a_key_that_is_not_text_is_reported_rather_than_raised(monkeypatch):
+    from partcad import assembly_ports
+    from partcad import logging as pc_logging
+
+    errors = []
+    monkeypatch.setattr(
+        pc_logging, "error", lambda *args: errors.append(args[0] % args[1:] if len(args) > 1 else args[0])
+    )
+    assert assembly_ports.parse_entry("odd", {"port": "handle", 1: 2, "spin": 3}, "here") is None
+    assert any("'odd' says 1, spin" in error for error in errors)
