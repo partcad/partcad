@@ -420,3 +420,15 @@ def test_something_can_be_connected_through_a_port_an_enrich_mapped():
     placed = {child.name: child for child in joined.connected_children() if child.name}
     assert tuple(placed["lid"].location.translation) == pytest.approx((0.0, 0.0, 10.0))
     assert placed["lid"].connection["to_port"] == "handle"
+
+
+def test_a_key_that_is_not_text_is_reported_rather_than_raised(monkeypatch):
+    from partcad import assembly_ports
+    from partcad import logging as pc_logging
+
+    errors = []
+    monkeypatch.setattr(
+        pc_logging, "error", lambda *args: errors.append(args[0] % args[1:] if len(args) > 1 else args[0])
+    )
+    assert assembly_ports.parse_entry("odd", {"port": "handle", 1: 2, "spin": 3}, "here") is None
+    assert any("'odd' says 1, spin" in error for error in errors)

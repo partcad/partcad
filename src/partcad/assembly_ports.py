@@ -170,7 +170,8 @@ def parse_entry(name: str, spec, where: str):
         )
         return None
 
-    unknown = sorted(set(spec) - set(REFERENCE_KEYS) - set(MOVES) - set(TURNS))
+    # As text: a key YAML read as a number ('1:') is reported, not raised on.
+    unknown = sorted(str(key) for key in set(spec) - set(REFERENCE_KEYS) - set(MOVES) - set(TURNS))
     if unknown:
         pc_logging.error("%s: '%s' says %s, which a map entry does not take" % (where, name, ", ".join(unknown)))
         return None
