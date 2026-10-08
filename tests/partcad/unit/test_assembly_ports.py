@@ -260,6 +260,8 @@ def test_the_search_index_is_built_once_and_not_before_it_is_asked_for():
         "plate",
         "screw",
         "named-plate",
+        "raised-plate",
+        "scaled-plate",
         "relabelled-plate",
         "broken-plate",
     ]
@@ -337,6 +339,34 @@ def test_an_interface_instance_may_be_mapped_and_moved():
     """A new instance of the same interface, a millimetre beside the old one."""
     _, plate = _part("named-plate")
     assert _at(plate, "corner-thru-m3") == pytest.approx((-11.0, 10.0, 0.0))
+
+
+def test_mapping_an_instance_does_not_add_it_to_the_source():
+    """The interfaces an enrich adopts are its own copies: 'corner' is the
+    enrich's instance, not the plate's or that of every other reference to it."""
+    ctx, named = _part("named-plate")
+    assert "corner" in named.with_ports.get_interfaces()["//:m3-thru"]
+    plate = ctx.get_part(":plate")
+    asyncio.run(shape_ports.prepare_async(plate, ctx))
+    assert sorted(plate.with_ports.get_interfaces()["//:m3-thru"].keys()) == ["TL", "TR"]
+    assert "corner-thru-m3" not in plate.with_ports.get_ports()
+
+
+def test_a_reference_s_offset_moves_what_it_maps_of_its_source():
+    _, plate = _part("raised-plate")
+    assert _at(plate, "lift") == pytest.approx((0.0, 0.0, 15.0))
+
+
+def test_a_reference_that_scales_cannot_map_its_source_s_ports(monkeypatch):
+    from partcad import logging as pc_logging
+
+    errors = []
+    monkeypatch.setattr(
+        pc_logging, "error", lambda *args: errors.append(args[0] % args[1:] if len(args) > 1 else args[0])
+    )
+    _, plate = _part("scaled-plate")
+    assert "lift" not in _ports(plate)
+    assert any("which it scales" in error for error in errors)
 
 
 def test_an_object_that_is_no_reference_maps_what_it_declares():

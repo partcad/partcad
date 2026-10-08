@@ -81,6 +81,8 @@ those are declarations about this assembly, and they are entitled to refer to
 what the map has already produced.
 """
 
+import copy
+
 from . import logging as pc_logging
 from . import shape_ports
 from .geom import Location
@@ -517,11 +519,30 @@ def keeps_source_ports(shape) -> bool:
     return not any(key in config for key in ("implements", "ports", "offset", "scale"))
 
 
+def _own_placement(shape) -> Location:
+    """Where what an entry with no node names is, in this object's frame.
+
+    An enrich or an alias that declares 'offset:' moves the geometry of what it
+    points at (see 'wrapper_transform'), and a port of that geometry moves with
+    it. Anything else's own ports are its own and are where it declares them.
+    """
+    if not is_reference(shape):
+        return Location()
+    offset = _declaration(shape).get("offset")
+    return Location() if offset is None else Location(offset)
+
+
 def _adopt_all(shape, mapped: MappedPorts, source) -> None:
     """Every port and interface of 'source', as this object's own (see 'keeps_source_ports')."""
     carrier = source.with_ports
     for name, inherit in (carrier.get_parents() or {}).items():
-        mapped.inherits[name] = inherit
+        # A copy: an entry that maps another instance of the same interface
+        # adds it here ('_merge_inherit'), and that is this object's instance,
+        # not one of the source and of every other reference to it.
+        adopted = copy.copy(inherit)
+        adopted.instances = dict(inherit.instances)
+        adopted.sketches = dict(inherit.sketches)
+        mapped.inherits[name] = adopted
     owned = shape_ports.interface_of_port(carrier)
     for port_name, port in (carrier.get_ports() or {}).items():
         if port_name in owned:
@@ -551,7 +572,13 @@ async def _resolve_entry(ctx, shape, mapped: MappedPorts, nodes, own, name: str,
         if own is None:
             pc_logging.error("%s: '%s': what this object points at cannot be found" % (where, name))
             return
-        item, placement = own, Location()
+        if is_reference(shape) and "scale" in _declaration(shape):
+            pc_logging.error(
+                "%s: '%s' names a port of what this object points at, which it scales: "
+                "where that port is on the scaled geometry is not something a map can say" % (where, name)
+            )
+            return
+        item, placement = own, _own_placement(shape)
     else:
         if nodes is None:
             pc_logging.error("%s: '%s' names the node '%s', and only an assembly has nodes" % (where, name, entry.node))

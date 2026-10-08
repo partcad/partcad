@@ -248,6 +248,11 @@ or moves the geometry with ``offset:`` -- the rule it has always followed. An
 assembly, which has no ports but the ones it states, has the ones its map
 names.
 
+An entry that names a port of what an enrich or an alias points at follows
+the reference's ``offset:``, since the port moves with the geometry it is on.
+One that declares ``scale:`` cannot map those ports at all: where a port is on
+the scaled geometry is not something a map can say, and it is reported.
+
 Other assembly types
 ^^^^^^^^^^^^^^^^^^^^
 

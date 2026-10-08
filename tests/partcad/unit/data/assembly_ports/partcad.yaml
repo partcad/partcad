@@ -60,6 +60,22 @@ parts:
         instance: TL
         moveX: -1.0
 
+  # A plate moved up by 10mm: what it maps of its source moves with it.
+  raised-plate:
+    type: enrich
+    source: plate
+    offset: [[0.0, 0.0, 10.0], [0.0, 0.0, 1.0], 0.0]
+    map:
+      lift: [handle]
+
+  # A plate scaled: where its source's ports are on it cannot be mapped.
+  scaled-plate:
+    type: enrich
+    source: plate
+    scale: 2.0
+    map:
+      lift: [handle]
+
   # Not a reference: what it has of its own is what it declares.
   relabelled-plate:
     type: cadquery
