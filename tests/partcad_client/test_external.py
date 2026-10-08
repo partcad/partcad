@@ -19,6 +19,8 @@ process, and both are replaced. `test_external_live.py` runs a container.
 """
 
 import os
+import re
+import sys
 
 import pytest
 
@@ -1453,12 +1455,19 @@ def test_launching_waits_for_the_exit_code(monkeypatch):
 # --------------------------------------------------------------------------- #
 
 
+# What a dev container's daemon reports is a Linux daemon's paths, and binding
+# from them is POSIX-only (see 'docker_mount.backed_by'): a dev container is a
+# Linux environment, whatever machine runs it.
+linux_paths = pytest.mark.skipif(sys.platform == "win32", reason="a dev container's daemon paths are POSIX")
+
+
 def _devcontainer(docker, tmp_path):
     """This machine's directories as a dev container has them from the host's daemon."""
     docker.sources = [(str(tmp_path), "/host/volumes/ws/_data"), ("/tmp", "/host/volumes/tmp/_data")]
     return docker
 
 
+@linux_paths
 def test_in_a_dev_container_the_workspace_is_bound_from_where_the_daemon_has_it(part, docker, tmp_path):
     """Bound as it is, the host's daemon would make an empty directory of that name on the host."""
     _devcontainer(docker, tmp_path)
@@ -1471,6 +1480,7 @@ def test_in_a_dev_container_the_workspace_is_bound_from_where_the_daemon_has_it(
     assert all(source.startswith("/host/volumes/") for source in binds)
 
 
+@linux_paths
 def test_in_a_dev_container_the_display_is_bound_from_where_the_host_has_it(docker, tmp_path):
     """The X socket this container has from the host is the host's own display: bound from there."""
     _devcontainer(docker, tmp_path)
@@ -1499,6 +1509,7 @@ def test_a_daemon_that_cannot_see_these_files_says_to_send_them(part, docker):
     assert docker.spec is None
 
 
+@linux_paths
 def test_a_directory_on_none_of_the_containers_mounts_is_named(part, docker, tmp_path):
     docker.sources = [("/somewhere/else", "/host/else")]
     with pytest.raises(external.ExternalToolError) as raised:
@@ -1529,6 +1540,7 @@ def test_a_file_in_no_workspace_gets_its_own_directory_not_where_the_command_ran
     assert str(tmp_path) not in bound
 
 
+@linux_paths
 def test_in_a_dev_container_a_state_directory_the_daemon_lacks_is_left_out(part, docker, tmp_path, monkeypatch):
     """It is there for the daemon's socket, which nothing in the application needs."""
     docker.sources = [(str(tmp_path), "/host/volumes/ws/_data")]
@@ -1537,6 +1549,7 @@ def test_in_a_dev_container_a_state_directory_the_daemon_lacks_is_left_out(part,
     assert list(docker.spec.mounts) == ["/host/volumes/ws/_data"]
 
 
+@linux_paths
 def test_but_not_when_the_file_opened_is_in_it(tmp_path, docker, monkeypatch):
     """A converted copy lives there: without it there is nothing to open."""
     state = tmp_path / "state"
@@ -1546,7 +1559,7 @@ def test_but_not_when_the_file_opened_is_in_it(tmp_path, docker, monkeypatch):
     docker.sources = [("/elsewhere", "/host/elsewhere")]
     monkeypatch.setattr(external, "_state_dir", lambda root: str(state))
     monkeypatch.setattr(external, "_workspace_for", lambda path: str(tmp_path / "ws"))
-    with pytest.raises(external.ExternalToolError, match=str(state)):
+    with pytest.raises(external.ExternalToolError, match=re.escape(str(state))):
         external._open_in_container(
             external.TOOLS["freecad"], str(copy), str(tmp_path / "ws"), "img", lambda m: None, "mount"
         )
