@@ -135,10 +135,37 @@ match the ASSY schema. The extension checks all three of those while the file is
 open -- template errors, YAML errors and schema errors, such as a mistyped key or
 a `location` that is not an OCCT location -- and reports them in the Problems
 view at the line they came from. A file that uses `{% for %}` loops or
-`{{ parameters }}` is checked too: what those stand in for is unknown until the
-template is rendered, so a schema finding that depends on such a value is left
-out rather than guessed at. Set `partcad.lint.enabled` to `false` to turn this
-off.
+`{{ parameters }}` is checked as it renders, with the default values of the
+parameters its declaration in `partcad.yaml` gives it: a finding inside a loop
+is reported once, at the loop's body, and one about a computed value at the
+`{{ }}` that computed it. A file no package declares yet is checked without
+rendering, and anything that depends on a template value is left out rather than
+guessed at. An assembly or a part marked `manufacturable: true` is also held to
+what something that is to be made needs: items connected rather than placed, and
+parts that say how they are made or bought.
+
+The **PartCAD > Lint** settings say how:
+
+* `partcad.lint.enabled` turns the check off.
+* `partcad.lint.includePaths` adds directories that templates may
+  `{% include %}` from, relative to the workspace folder -- for files a package
+  above yours provides through `includePaths`, when that package is not in a
+  directory above the file.
+* `partcad.lint.extraParams` renders files with other parameter values than
+  their defaults, written as `pc --extra-param` takes them:
+  `desk.length=60` (or `//pub/furniture:desk.length=60`).
+
+ASSY files and `partcad.yaml` are languages of their own in the editor, "PartCAD
+ASSY" and "PartCAD Package Configuration": highlighted as YAML, with the
+template's `{% %}`, `{{ }}` and `{# #}` tags highlighted on top. That also keeps
+YAML extensions from checking them as plain YAML, which reported template tags
+such as `{% for %}` as errors.
+
+With [Code Spell Checker](https://marketplace.visualstudio.com/items?itemName=streetsidesoftware.code-spell-checker)
+installed, the words these files are written in -- `assy`, `cadquery`,
+`connectPorts`, every other key and value the ASSY and package schemas spell,
+and Jinja2's `endfor` -- are not flagged as typos in them. Everything else,
+such as a `desc:`, is still checked.
 
 ## Opening an object in another application
 

@@ -39,6 +39,14 @@ const mocha = {
 // and a prompt is still something nothing can answer.
 const env = { PARTCAD_EXTENSION_NO_PROMPTS: '1' };
 
+// Code Spell Checker, to install into a run of its own: a marketplace ID or the
+// path to a '.vsix'. PartCAD hands it a dictionary (see 'src/spelling.ts'), and
+// whether the spell checker takes it is only answered with one installed --
+// which a plain run does not do, because it would be a download on every run
+// and a second extension reporting diagnostics beside every other test. Unset,
+// this run is not offered, and the test that needs it says it was skipped.
+const spellChecker = process.env.PARTCAD_TEST_WITH_CSPELL;
+
 module.exports = defineConfig([
   {
     label: 'unitTests',
@@ -63,6 +71,19 @@ module.exports = defineConfig([
           // released copy of this extension; `--extensionDevelopmentPath`,
           // which the runner passes, is what takes precedence over it.
           useInstallation: { fromPath: bundledIde },
+          env,
+          mocha,
+        },
+      ]
+    : []),
+  ...(spellChecker
+    ? [
+        {
+          label: 'withSpellChecker',
+          files: 'out/test/**/spelling.test.js',
+          launchArgs: ['--disable-gpu'],
+          workspaceFolder: './sampleWorkspace',
+          installExtensions: [spellChecker],
           env,
           mocha,
         },

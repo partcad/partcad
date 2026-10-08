@@ -22,6 +22,7 @@ from partcad_cli.click.cli_context import CliContext
 from partcad_cli.click.loader import Loader
 from partcad_utils import logging as pc_logging
 from partcad_utils import telemetry as pc_telemetry
+from partcad_utils.parameters import parse_override
 from partcad_utils.user_config import user_config as pc_user_config
 
 # partcad's package __init__ used to run this when the CLI imported it; the CLI
@@ -449,7 +450,11 @@ click.rich_click.COMMAND_GROUPS = {
     multiple=True,
     default=(),
     show_envvar=True,
-    help="parameter(s) for configuration. Example: --extra-param key1=value1 --extra-param key2=value2",
+    help=(
+        "Override a parameter of an object: <object>.<parameter>=<value>, e.g. "
+        "//pub/furniture:desk.length=60. The object's name may have dots of its own; the value is read "
+        "as the type the parameter declares. May be repeated."
+    ),
 )
 @click.pass_context
 def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str, **kwargs):
@@ -617,13 +622,19 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                     setattr(pc_user_config, attrib, value)
         _bypass_cache(ctx, pc_user_config, kwargs)
 
-        # parse extra parameters and add them to the user_config
-        for params in kwargs["extra_param"]:
-            param, value = params.split("=")
-            object_id, key = param.split(".")
-            if object_id not in pc_user_config.parameter_config:
-                pc_user_config.parameter_config[object_id] = {}
-            pc_user_config.parameter_config[object_id][key] = value
+        # Parameter overrides, onto the ones the user's configuration file
+        # already has: written back whole, one object at a time, so that two
+        # for one object both stand -- each used to replace the object's
+        # overrides with a set of its own.
+        for override in kwargs["extra_param"]:
+            try:
+                object_id, key, value = parse_override(override)
+            except ValueError as e:
+                raise click.BadParameter(str(e), ctx=ctx, param_hint="'--extra-param'") from e
+            pc_user_config.parameter_config[object_id] = {
+                **(pc_user_config.parameter_config[object_id] or {}),
+                key: value,
+            }
 
         # Prepare the callboack to be used by command handlers should they need a PartCAD context object
         def get_partcad_context():

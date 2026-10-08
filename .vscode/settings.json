@@ -33,10 +33,6 @@
   "[typescriptreact]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
-  // TODO-38: https://github.com/redhat-developer/vscode-yaml/issues/1075
-  // "[yaml]": {
-  //   "editor.defaultFormatter": "redhat.vscode-yaml"
-  // },
   "atlascode.bitbucket.enabled": false,
   "atlascode.jira.enabled": true,
   "cSpell.enabledFileTypes": {
@@ -241,7 +237,6 @@
   "python.testing.pytestArgs": [],
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
-  // "redhat.telemetry.enabled": false,
   "remote.autoForwardPortsSource": "hybrid",
   "search.exclude": {
     "**/*.egg-info": true,
@@ -277,15 +272,7 @@
   "testing.automaticallyOpenTestResults": "neverOpen",
   "testing.followRunningTest": false,
   // "testing.openTesting": "neverOpen",
-  "yaml.customTags": [
-    "tag:yaml.org,2002:python/name:material.extensions.emoji.to_svg",
-    "tag:yaml.org,2002:python/name:material.extensions.emoji.twemoji"
-  ],
-  "yaml.format.bracketSpacing": false, // prevent YAML formatter from breaking Jinja2 templates
   "githubPullRequests.ignoredPullRequestBranches": [
     "devel"
-  ],
-  "yaml.schemas": {
-    "src/partcad_utils/schema/partcad.json": "*/partcad.yaml"
-  }
+  ]
 }

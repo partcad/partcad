@@ -55,6 +55,11 @@ class BaseConfig(dict):
     def __iter__(self):
         return iter(self._config)
 
+    def __contains__(self, key):
+        # The 'dict' this subclasses is never filled -- everything is in the
+        # Vyper behind it -- so without this every 'in' answered False.
+        return key in self._config
+
     def __len__(self):
         return len(self._config)
 

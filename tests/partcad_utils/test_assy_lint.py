@@ -24,6 +24,7 @@ import pytest
 from partcad_utils.assy_lint import (
     ASSY_SCHEMA,
     CODE_LINKS,
+    CODE_MANUFACTURABLE,
     CODE_SCHEMA,
     CODE_TEMPLATE,
     CODE_YAML,
@@ -31,6 +32,7 @@ from partcad_utils.assy_lint import (
     PARTCAD_SCHEMA,
     SEVERITY_ERROR,
     SEVERITY_WARNING,
+    Render,
     get_schema,
     is_assy_file,
     schema_for_file,
@@ -73,10 +75,38 @@ def only(text):
         # An empty file renders to nothing, which is not an error to type.
         "",
         "{% set unused = 1 %}\n",
+        # An expression alone on its line stands for lines of YAML, or for none:
+        # here, a call to an undefined function that stops rendering with a
+        # message, which once made the next key "mapping values are not allowed
+        # here".
+        "{% if param_width < 12 %}\n{{ width_must_be_at_least_12_in() }}\n{% endif %}\nlinks:\n  - part: cube\n",
+        # A macro: its body renders nothing where it is defined, and each call
+        # on a line of its own renders items.
+        "{% macro leg(x) %}\n  - part: leg\n    location: [[{{ x }}, 0, 0], [0, 0, 1], 0]\n{% endmacro %}\n"
+        "links:\n{{ leg(0) }}\n{{ leg(10) }}\n",
+        "{% set legs %}\n  - part: leg\n{% endset %}\nlinks:\n{{ legs }}\n",
+        "{% macro named() %}cube{% endmacro %}\nlinks:\n{% call named() %}{% endcall %}\n",
+        # Items that come from another file.
+        "links:\n{% include 'legs.assy' %}\n",
+        # A value written on the line after its key.
+        "links:\n  - part:\n      {{ param_part }}\n",
     ],
 )
 def test_valid_sources_report_nothing(text):
     assert check(text) == []
+
+
+@pytest.mark.parametrize(
+    "text, line",
+    [
+        ("{{ check() }}\nlinks:\n  - part: cube\n    assembly: sub\n", 2),
+        ("{% macro leg() %}\n  - part: leg\n{% endmacro %}\nlinks:\n{{ leg() }}\n  - part: a\n    assembly: b\n", 5),
+    ],
+)
+def test_lines_a_template_renders_do_not_excuse_the_yaml_beside_them(text, line):
+    diagnostic = only(text)
+    assert "mutually exclusive" in diagnostic.message
+    assert diagnostic.line == line
 
 
 def test_examples_shipped_with_partcad_are_clean(tmp_path):
@@ -551,3 +581,205 @@ def test_a_scene_connect_is_checked_the_same_way():
 
 def test_a_configuration_has_no_links_to_check():
     assert [one for one in config_diagnostics("parts:\n  cube:\n    type: cadquery\n") if one.code == CODE_LINKS] == []
+
+
+# ---- checked as it renders --------------------------------------------------
+#
+# What PartCAD reads is the rendering: the items a loop produces, the branch an
+# '{% if %}' takes, the numbers expressions come to. Wherever the values a file
+# is rendered with are known, that is what is checked, and each finding is put
+# back on the template line it came from.
+
+
+def rendered(text, variables=None, schema=ASSY_SCHEMA, **kwargs):
+    return validate_source(text, get_schema(schema), renders=[Render(variables or {})], **kwargs)
+
+
+def test_a_value_an_expression_computes_is_checked():
+    # Masked, the filler standing in for the expression excused the value. As
+    # rendered, the location is a string and the schema says where.
+    text = "links:\n  - part: cube\n    location: {{ where }}\n"
+    diagnostic = rendered(text, {"where": "'up'"})[0]
+    assert diagnostic.code == CODE_SCHEMA
+    assert (diagnostic.line, diagnostic.column) == (2, text.split("\n")[2].index("{{"))
+    assert rendered(text, {"where": "[[0, 0, 1], [0, 0, 1], 0]"}) == []
+
+
+def test_a_finding_in_a_loop_is_reported_once_at_the_body():
+    text = "links:\n{% for n in range(3) %}\n  - part: a\n    locaton: {{ n }}\n{% endfor %}\n"
+    diagnostics = rendered(text)
+    assert [(d.message, d.line, d.column) for d in diagnostics] == [("unexpected property 'locaton'", 3, 4)]
+
+
+def test_only_the_branch_that_renders_is_checked():
+    # Masked, both branches survive side by side, which is not YAML at all.
+    text = "links:\n{%- if subject %}\n  - part: cube\n{%- else %}\n  []\n{%- endif %}\n"
+    assert rendered(text, {"subject": True}) == []
+    assert rendered(text, {"subject": False}) == []
+
+
+def test_yaml_an_expression_breaks_is_reported_at_the_expression():
+    text = "links:\n  - part: cube\n    name: {{ label }}\n"
+    diagnostic = only_of(rendered(text, {"label": "a: b"}))
+    assert diagnostic.code == CODE_YAML
+    assert (diagnostic.line, diagnostic.column) == (2, text.split("\n")[2].index("{{"))
+
+
+def test_a_template_that_raises_with_its_defaults_is_an_error_on_that_line():
+    text = "{% if width < 12 %}\n{{ width_must_be_at_least_12() }}\n{% endif %}\nlinks:\n  - part: cube\n"
+    assert rendered(text, {"width": 20}) == []
+    diagnostic = only_of(validate_source(text, get_schema(ASSY_SCHEMA), renders=[Render({"width": 6}, label="desk")]))
+    assert diagnostic.code == CODE_TEMPLATE
+    assert diagnostic.line == 1
+    assert "'desk'" in diagnostic.message and "width_must_be_at_least_12" in diagnostic.message
+
+
+def test_every_declaration_s_rendering_is_checked():
+    text = "links:\n{% for n in range(count) %}\n  - part: a\n{% endfor %}\n"
+    schema = get_schema(ASSY_SCHEMA)
+    ok, broken = Render({"count": 1}), Render({"count": "x"}, label="broken")
+    assert validate_source(text, schema, renders=[ok]) == []
+    assert [d.code for d in validate_source(text, schema, renders=[ok, broken])] == [CODE_TEMPLATE]
+
+
+def only_of(diagnostics):
+    assert len(diagnostics) == 1, "expected exactly one finding, got %r" % (diagnostics,)
+    return diagnostics[0]
+
+
+# ---- what is marked manufacturable -----------------------------------------
+
+
+def made(text, variables=None):
+    return rendered(text, variables, manufacturable=True)
+
+
+def test_a_manufacturable_assembly_connects_what_it_places():
+    text = """
+location: [[0, 0, 0], [0, 0, 1], 0]
+links:
+  - part: frame
+  - part: bracket
+    connect:
+      name: frame
+  - part: motor
+    location: [[0, 0, 5], [0, 0, 1], 0]
+  - part: loose
+"""
+    diagnostics = made(text)
+    assert [d.code for d in diagnostics] == [CODE_MANUFACTURABLE, CODE_MANUFACTURABLE]
+    located, loose = diagnostics
+    # At the key that has to go, and the root's own placement is not one.
+    assert text.split("\n")[located.line][located.column :].startswith("location:")
+    assert "'motor' is placed by coordinates" in located.message
+    assert "'loose' says neither where it goes nor what holds it" in loose.message
+    # Not marked, the same file is somebody's work in progress.
+    assert rendered(text) == []
+
+
+def test_even_the_first_item_is_not_placed_by_coordinates():
+    diagnostic = only_of(made("links:\n  - part: frame\n    location: [[0, 0, 0], [0, 0, 1], 0]\n"))
+    assert "'frame' is placed by coordinates" in diagnostic.message
+
+
+def test_every_links_list_has_its_own_first_item():
+    text = """
+links:
+  - part: frame
+  - name: arm
+    connect:
+      name: frame
+    links:
+      - part: upper
+      - part: lower
+        location: [[0, 0, 5], [0, 0, 1], 0]
+"""
+    diagnostic = only_of(made(text))
+    assert "'lower'" in diagnostic.message
+
+
+def test_the_rule_follows_what_renders():
+    text = "links:\n  - part: frame\n{% for n in range(2) %}\n  - part: leg\n    location: {{ at }}\n{% endfor %}\n"
+    diagnostic = only_of(made(text, {"at": "[[0, 0, 0], [0, 0, 1], 0]"}))
+    assert diagnostic.line == 4
+
+
+def config_made(text, inherited=None):
+    return rendered(text, schema=PARTCAD_SCHEMA, inherited_manufacturable=inherited)
+
+
+@pytest.mark.parametrize(
+    "part",
+    [
+        "    type: step\n    manufacturing:\n      method: additive\n",
+        "    type: step\n    vendor: McMaster\n    sku: 91290A115\n",
+        "    type: alias\n    source: :other\n",
+        "    type: enrich\n    source: :other\n",
+        "    type: step\n    manufacturable: false\n",
+    ],
+)
+def test_a_manufacturable_part_that_can_be_had_is_clean(part):
+    assert config_made("manufacturable: true\nparts:\n  bolt:\n" + part) == []
+
+
+@pytest.mark.parametrize(
+    "config, inherited",
+    [
+        ("manufacturable: true\nparts:\n  bolt:\n    type: step\n", None),
+        ("manufacturable: true\nparts:\n  bolt:\n    type: step\n    vendor: McMaster\n", None),
+        ("parts:\n  bolt:\n    type: step\n    manufacturable: true\n", None),
+        ("parts:\n  bolt:\n    type: step\n", True),
+        ("manufacturable: false\nparts:\n  bolt:\n    type: step\n    manufacturable: true\n", None),
+    ],
+)
+def test_a_manufacturable_part_nobody_could_make_or_buy(config, inherited):
+    diagnostic = only_of(config_made(config, inherited))
+    assert diagnostic.code == CODE_MANUFACTURABLE
+    assert diagnostic.severity == SEVERITY_ERROR
+    assert "'bolt' is marked manufacturable" in diagnostic.message
+    assert config.split("\n")[diagnostic.line][diagnostic.column :].startswith("bolt:")
+
+
+@pytest.mark.parametrize(
+    "config, inherited",
+    [
+        # Nothing marks it: PartCAD takes it as manufacturable, but nobody said so yet.
+        ("parts:\n  bolt:\n    type: step\n", None),
+        ("manufacturable: false\nparts:\n  bolt:\n    type: step\n", True),
+        ("parts:\n  bolt:\n    type: step\n", False),
+    ],
+)
+def test_a_part_nothing_marks_manufacturable_is_not_held_to_it(config, inherited):
+    assert config_made(config, inherited) == []
+
+
+def test_parts_a_configuration_declares_in_a_loop_are_each_checked():
+    config = "manufacturable: true\nparts:\n{% for n in [3, 4] %}\n  m{{ n }}:\n    type: step\n{% endfor %}\n"
+    diagnostics = config_made(config)
+    assert sorted(d.message.split("'")[1] for d in diagnostics) == ["m3", "m4"]
+    assert {d.line for d in diagnostics} == {3}
+
+
+def test_a_file_that_is_one_placed_item_is_that_item():
+    """Its root is not the frame of a list, so a 'location:' on it is the item's own."""
+    diagnostic = only_of(made("part: frame\nlocation: [[0, 0, 0], [0, 0, 1], 0]\n"))
+    assert "'frame' is placed by coordinates" in diagnostic.message
+    assert made("location: [[0, 0, 0], [0, 0, 1], 0]\nlinks:\n  - part: frame\n") == []
+
+
+def test_an_include_that_is_not_found_is_checked_masked():
+    text = "links:\n{% include 'legs.assy' %}\n  - part: frame\n"
+    assert rendered(text) == []
+
+
+def test_a_name_whose_value_is_a_template_line_is_not_missing():
+    # Masked, an expression alone on its line reads as nothing at all.
+    text = "links:\n  - part: a\n    name: first\n  - part: b\n    connect:\n      name:\n        {{ target }}\n"
+    assert check(text) == []
+
+
+@pytest.mark.parametrize("renders", [(), (Render({}),)])
+def test_yaml_the_parser_raises_on_otherwise_is_a_finding_and_not_a_crash(renders):
+    # An impossible date is a 'ValueError' out of PyYAML, not a 'YAMLError'.
+    diagnostic = only_of(validate_source("desc: 2001-13-45\n", get_schema(PARTCAD_SCHEMA), renders=list(renders)))
+    assert diagnostic.code == CODE_YAML

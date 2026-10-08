@@ -80,25 +80,36 @@
     "lint": "eslint src",
     "format-check": "prettier --check \"src/**/*.ts\"",
     "test": "vscode-test",
-    "vsce-package": "vsce package -o partcad.vsix"
+    "vsce-package": "vsce package -o partcad.vsix",
+    "cspell-dictionary": "node cspell/generate.js"
   },
   "contributes": {
     "languages": [
       {
+        "id": "partcad-yaml",
+        "aliases": [
+          "PartCAD Package Configuration",
+          "partcad.yaml"
+        ],
         "filenames": [
           "partcad.yaml"
         ],
-        "id": "yaml",
+        "configuration": "./syntaxes/partcad-yaml.language-configuration.json",
         "icon": {
           "light": "./resources/logo.svg",
           "dark": "./resources/logo.svg"
         }
       },
       {
-        "id": "yaml",
+        "id": "partcad-assy",
+        "aliases": [
+          "PartCAD ASSY",
+          "assy"
+        ],
         "extensions": [
           ".assy"
         ],
+        "configuration": "./syntaxes/partcad-yaml.language-configuration.json",
         "icon": {
           "light": "./resources/logo.svg",
           "dark": "./resources/logo.svg"
@@ -115,6 +126,50 @@
         }
       }
     ],
+    "grammars": [
+      {
+        "language": "partcad-assy",
+        "scopeName": "source.partcad.yaml",
+        "path": "./syntaxes/partcad-yaml.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "invalid.illegal",
+          "meta.scalar.yaml",
+          "storage.type.tag.shorthand.yaml",
+          "keyword.control.flow"
+        ]
+      },
+      {
+        "language": "partcad-yaml",
+        "scopeName": "source.partcad.yaml",
+        "path": "./syntaxes/partcad-yaml.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "invalid.illegal",
+          "meta.scalar.yaml",
+          "storage.type.tag.shorthand.yaml",
+          "keyword.control.flow"
+        ]
+      }
+    ],
+    "configurationDefaults": {
+      "[partcad-assy]": {
+        "editor.insertSpaces": true,
+        "editor.tabSize": 2,
+        "editor.autoIndent": "advanced",
+        "editor.quickSuggestions": {
+          "strings": "on"
+        },
+        "diffEditor.ignoreTrimWhitespace": false
+      },
+      "[partcad-yaml]": {
+        "editor.insertSpaces": true,
+        "editor.tabSize": 2,
+        "editor.autoIndent": "advanced",
+        "editor.quickSuggestions": {
+          "strings": "on"
+        },
+        "diffEditor.ignoreTrimWhitespace": false
+      }
+    },
     "configuration": [
       {
         "title": "Backend",
@@ -206,12 +261,6 @@
         "title": "General",
         "order": 3,
         "properties": {
-          "partcad.lint.enabled": {
-            "default": true,
-            "description": "Check ASSY files and `partcad.yaml` for Jinja2, YAML and schema errors while editing, and report them in the Problems view.",
-            "scope": "resource",
-            "type": "boolean"
-          },
           "partcad.verbosity": {
             "default": "info",
             "description": "What level of logs need to be displayed in the PartCAD terminal view?",
@@ -335,8 +384,43 @@
         }
       },
       {
-        "title": "PartCAD Viewer",
+        "title": "Lint",
         "order": 4,
+        "properties": {
+          "partcad.lint.enabled": {
+            "default": true,
+            "description": "Check ASSY files and `partcad.yaml` while editing -- Jinja2, YAML, schema, and the rules for what is marked manufacturable -- and report the findings in the Problems view.",
+            "scope": "resource",
+            "type": "boolean",
+            "order": 0
+          },
+          "partcad.lint.includePaths": {
+            "default": [],
+            "order": 1,
+            "markdownDescription": "Directories an ASSY file or a `partcad.yaml` may `{% include %}` or `{% import %}` from, besides its own directory and the `includePaths` a package above it declares for it. Use this for what is declared by a package the checker cannot see from where the file is -- one that imports this package from elsewhere. Relative to the workspace folder the file is in.",
+            "items": {
+              "type": "string"
+            },
+            "scope": "resource",
+            "type": "array"
+          },
+          "partcad.lint.extraParams": {
+            "default": [],
+            "order": 2,
+            "markdownDescription": "Parameter values to render ASSY files with instead of their declared defaults, written the way `pc --extra-param` takes them: `object.parameter=value`, e.g. `desk.length=60` or `//pub/furniture:desk.length=60`. The object may be named with or without its package, and its name may have dots of its own. The value is read as the type the parameter declares. Applied on top of the `parameters:` in `~/.partcad/config.yaml`, which the checker reads too.",
+            "items": {
+              "type": "string",
+              "pattern": "^.+\\.[^.=]+=.*$",
+              "patternErrorMessage": "Write it as object.parameter=value"
+            },
+            "scope": "resource",
+            "type": "array"
+          }
+        }
+      },
+      {
+        "title": "PartCAD Viewer",
+        "order": 5,
         "properties": {
           "partcad.spaceMouse.enabled": {
             "default": true,

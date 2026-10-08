@@ -28,6 +28,7 @@ import { PartcadExplorer } from './PartcadExplorer';
 import { PartcadInspector } from './PartcadInspector';
 import { PartcadContext } from './PartcadContext';
 import { PartcadLint } from './PartcadLint';
+import { registerSpellingDictionary } from './spelling';
 import { PartcadViewer } from './viewer/PartcadViewer';
 import { PartcadViewerServer } from './viewer/PartcadViewerServer';
 import * as PartcadItem from './PartcadItem';
@@ -88,6 +89,9 @@ async function installPackageOnOpen(
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    // A list of words for Code Spell Checker, where it is installed: data, not
+    // code, so there is nothing about it that waits for trust.
+    registerSpellingDictionary(context);
     // In Restricted Mode the extension stays visible and inert: the Explorer
     // asks for trust (a `viewsWelcome` on `!isWorkspaceTrusted`) and everything
     // below runs once it is granted. See `common/trust.ts`.
@@ -1254,7 +1258,7 @@ location: [[100, 0, 0], [0, 0, 1], 0]
     });
     context.subscriptions.push(completionPython);
 
-    let completionYaml = vscode.languages.registerCompletionItemProvider('yaml', {
+    let completionYaml = vscode.languages.registerCompletionItemProvider(['yaml', 'partcad-assy', 'partcad-yaml'], {
         provideCompletionItems(
             _document: vscode.TextDocument,
             _position: vscode.Position,

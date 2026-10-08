@@ -21,38 +21,19 @@ process, and the VS Code extension by running that same command. The check
 itself is `partcad_utils.assy_lint`, shared with the daemon-side package lint so
 an editor and CI cannot disagree about a file.
 
-One thing has to be decided before an **ASSY** file can be checked: whether it
-is an **assembly** or a **scene**, because a scene is checked against the same
-schema with ``how`` forbidden (see `partcad.scene`). That is not a property of
-the file -- it is a property of what points at it -- so it is answered best
-effort, by `detect_flavor` below, and a caller that knows better says so
-instead. A `partcad.yaml` has no flavor: nothing points at a package
-configuration, and there is only one schema for it.
+Three things about a file are not in it, and have to be worked out before it
+can be checked: the values it renders with (an ASSY file's parameters, from its
+declaration), whether an **ASSY** file is an **assembly** or a **scene** (a
+scene is checked against the same schema with ``how`` forbidden, see
+`partcad.scene`), and whether what it describes is marked manufacturable. They
+are properties of what points at the file, so they are answered best effort,
+from the `partcad.yaml` files around it, by `partcad_utils.lint_context` -- the
+same code the daemon asks, so the two cannot answer differently. A caller that
+knows the flavor better says so instead. A `partcad.yaml` has no flavor: nothing
+points at a package configuration, and there is only one schema for it.
 """
 
-import os
-
-import yaml
-
-from partcad_utils import assy_lint
-
-# How far up from the file the search for a package declaring it goes. A
-# package's own directory is where it is normally declared; an ancestor package
-# can declare it too, with a `path:` that reaches down. Bounded because this
-# runs on every keystroke in an editor, and because walking to the filesystem
-# root would start reading other people's packages.
-MAX_PACKAGE_DEPTH = 8
-
-# The sections that may point at an ASSY file, and the flavor each one makes it.
-_SECTIONS = {
-    "assemblies": assy_lint.FLAVOR_ASSEMBLY,
-    "scenes": assy_lint.FLAVOR_SCENE,
-}
-
-# The object types within those sections that name an ASSY file. A scene of
-# type 'world' points at a Gazebo world, not at an ASSY, and says nothing about
-# how any '.assy' file should be read.
-_ASSY_TYPES = ("assy",)
+from partcad_utils import assy_lint, lint_context
 
 
 class FileReport:
@@ -95,100 +76,49 @@ def detect_flavor(path: str) -> str:
     assembly costs a missed finding (a ``how:`` nobody objected to); reading an
     assembly as a scene costs a false error on correct code, which is worse in
     an editor and worse in CI. So anything unresolved -- no package found, a
-    `partcad.yaml` that will not parse, a declaration whose path is a Jinja2
-    expression -- lands on the assembly schema.
-
-    What it looks at is the `assemblies:` and `scenes:` sections of every
-    `partcad.yaml` from the file's own directory upwards. That is text, not a
-    loaded context: a package graph would answer this exactly, and it would
-    also mean the editor could not check a file until the whole package loaded,
-    which is precisely when checking matters most.
+    `partcad.yaml` that will not parse, a declaration whose path only resolves
+    with parameters -- lands on the assembly schema. The search itself is
+    `partcad_utils.lint_context`, shared with the daemon.
     """
-    target = os.path.abspath(path)
-    referenced_by_scene = False
-
-    directory = os.path.dirname(target)
-    for _ in range(MAX_PACKAGE_DEPTH):
-        config_path = os.path.join(directory, "partcad.yaml")
-        if os.path.isfile(config_path):
-            for flavor in _declared_in(config_path, target):
-                if flavor == assy_lint.FLAVOR_ASSEMBLY:
-                    # One assembly is enough: the file has to satisfy the full
-                    # schema for that assembly to be readable, whatever else
-                    # also points at it.
-                    return assy_lint.FLAVOR_ASSEMBLY
-                referenced_by_scene = True
-        parent = os.path.dirname(directory)
-        if parent == directory:
-            break
-        directory = parent
-
-    return assy_lint.FLAVOR_SCENE if referenced_by_scene else assy_lint.FLAVOR_ASSEMBLY
+    return lint_context.describe(path).flavor or assy_lint.FLAVOR_ASSEMBLY
 
 
-def _declared_in(config_path: str, target: str):
-    """Yield the flavor of every declaration in this package that names 'target'."""
-    try:
-        with open(config_path, "r", encoding="utf-8") as file:
-            config = yaml.safe_load(file)
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
-        # A `partcad.yaml` is itself a Jinja2 template, so one that does not
-        # parse as plain YAML is not necessarily broken - it just cannot be read
-        # from here. Either way there is nothing to learn from it.
-        return
-    if not isinstance(config, dict):
-        return
-
-    package_dir = os.path.dirname(os.path.abspath(config_path))
-    for section, flavor in _SECTIONS.items():
-        declarations = config.get(section)
-        if not isinstance(declarations, dict):
-            continue
-        for name, declaration in declarations.items():
-            if not isinstance(declaration, dict) or declaration.get("type") not in _ASSY_TYPES:
-                continue
-            declared = declaration.get("path")
-            if declared is None:
-                declared = "%s.assy" % name
-            if not isinstance(declared, str) or "{" in declared:
-                # A templated path; what it resolves to is not knowable here.
-                continue
-            if os.path.abspath(os.path.join(package_dir, declared)) == target:
-                yield flavor
-
-
-def check_file(path: str, text: str = None, flavor: str = None) -> FileReport:
+def check_file(
+    path: str, text: str = None, flavor: str = None, include_paths=(), parameter_overrides=None
+) -> FileReport:
     """Check one file, or ``text`` as its unsaved content.
 
-    ``flavor`` says whether to read an ASSY file as an assembly or as a scene
-    (see `assy_lint.FLAVORS`); None works it out with `detect_flavor`. It is
-    ignored for a `partcad.yaml`, which has one schema and no flavor -- and the
-    search is not run for one either, so an editor checking a configuration on
-    every keystroke does not walk the tree above it to answer a question that
-    does not apply.
+    The file is checked as it renders, with the values PartCAD would render it
+    with, worked out from the `partcad.yaml` files around it -- see
+    `partcad_utils.lint_context`, which also answers whether it is read as an
+    assembly or a scene and whether the rules for what is to be made apply.
+    ``flavor`` overrides the first of those (see `assy_lint.FLAVORS`); it is
+    ignored for a `partcad.yaml`, which has one schema and no flavor.
+    ``include_paths`` are more directories to include from, and
+    ``parameter_overrides`` the values that replace declared defaults, by object
+    -- see `lint_context.describe`.
 
     Raises ``OSError`` if ``text`` is None and the file cannot be read: a caller
     that named a file it cannot open wants to hear about it.
     """
     if assy_lint.schema_name_for_file(path) is None:
         return FileReport(path, [], checked=False)
-    if not assy_lint.is_assy_file(path):
-        flavor = None
-    elif flavor not in assy_lint.FLAVORS:
-        flavor = detect_flavor(path)
     if text is None:
         with open(path, "r", encoding="utf-8") as file:
             text = file.read()
-    schema = assy_lint.schema_for_file(path, flavor)
-    return FileReport(path, assy_lint.validate_source(text, schema), checked=True, flavor=flavor)
+    context = lint_context.describe(path, include_paths=include_paths, parameter_overrides=parameter_overrides)
+    if assy_lint.is_assy_file(path) and flavor in assy_lint.FLAVORS:
+        context.flavor = flavor
+    schema = assy_lint.schema_for_file(path, context.flavor)
+    return FileReport(path, context.check(text, schema), checked=True, flavor=context.flavor)
 
 
-def check_files(paths, text: str = None, flavor: str = None) -> list:
-    """Check every path given. ``text`` supplies the content of a single path."""
+def check_files(paths, text: str = None, flavor: str = None, include_paths=(), parameter_overrides=None) -> list:
+    """Check every path given. ``text`` supplies the content of a single path; the rest is as `check_file`."""
     paths = list(paths)
     if text is not None and len(paths) != 1:
         raise ValueError("content can only be supplied for a single file")
     # Paths are reported back exactly as they came in: a user who typed a
     # relative path wants to read one, and an editor that passed an absolute one
     # needs it back to match the document it asked about.
-    return [check_file(path, text, flavor) for path in paths]
+    return [check_file(path, text, flavor, include_paths, parameter_overrides) for path in paths]

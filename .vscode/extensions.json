@@ -4,8 +4,6 @@
     "ms-python.vscode-pylance",
     "ms-python.black-formatter",
     "donjayamanne.python-environment-manager",
-    // YAML
-    "redhat.vscode-yaml",
     // Markdown
     "yzhang.markdown-all-in-one",
     "bierner.github-markdown-preview",

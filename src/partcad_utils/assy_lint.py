@@ -17,16 +17,38 @@ useful if it can point at the *source* line of each one.
 Which schema governs a file is `schema_for_file`, and it is the only thing that
 differs between the two: everything below is about the shape they share.
 
-Rendering the template first is not an option here: rendering needs the
-parameter values, which are only known once the whole package is loaded, and it
-destroys the mapping from a rendered line back to the line the user is typing.
+**A file is checked as it renders.** What PartCAD reads is the rendering -- the
+items a loop produces, the branch an ``{% if %}`` takes, the number an
+expression comes to -- so that is what is checked, with the values PartCAD
+renders it with: an ASSY file's parameters as its declaration defaults them, a
+``partcad.yaml``'s version and constants (see `Render`, and
+'partcad_utils.lint_context', which works the values out). Every finding is then
+put back on the line and column of the template it came from, which is what
+'partcad_utils.template_render' keeps the way back for: literal text maps to
+itself, what an expression produced to its ``{{ }}``, a loop's every pass to its
+body. A template that raises with those values -- an undefined name, a division
+by zero, a template that calls an undefined function on purpose to stop with a
+message -- is an error on the line it raised on, because PartCAD would stop
+there too.
 
-So this module masks the template instead. Every Jinja2 construct is replaced,
-in place, with an equally sized run of inert characters:
+**A file nothing declares is checked masked.** Its values are not known (it is
+being written, or belongs to no package yet), and rendering it with none would
+report every parameter as missing. So the template is masked instead: every
+Jinja2 construct is replaced, in place, with an equally sized run of inert
+characters:
 
   * ``{{ expr }}`` becomes a filler scalar, so a templated value stays a value,
   * ``{% tag %}`` and ``{# comment #}`` become blanks, so a control-flow line
-    stays an empty line, and a loop or conditional body is checked once.
+    stays an empty line, and a loop or conditional body is checked once,
+  * a ``{{ expr }}`` alone on its line, an ``{% include %}`` and a
+    ``{% call %}`` block become blanks too, and count as unknown both as a value
+    and as keys. What each stands for is lines of YAML -- a macro's output, a
+    fragment kept in a variable, another file -- or none at all (a template
+    that calls an undefined function to stop with a message); a filler scalar
+    in their place turned the next key into "mapping values are not allowed
+    here",
+  * the body of a ``{% macro %}`` or of a block ``{% set %}`` becomes blanks:
+    it renders nothing where it is written.
 
 Newlines inside a construct are preserved, so the masked document has exactly
 the same line and column layout as the file on disk: a YAML parse error, or a
@@ -36,7 +58,14 @@ character the user actually wrote.
 Masking necessarily loses information -- what a ``{{ expr }}`` evaluates to, and
 which branch of a ``{% if %}`` is taken -- so any finding that depends on that
 lost information is dropped rather than reported. That trades a missed error for
-never underlining correct code, which is the right trade for an editor.
+never underlining correct code, which is the right trade for an editor, and is
+why masking is the fallback rather than the check.
+
+Beside the schema, two things are checked that no schema can say: a link named
+by a ``connect:`` that nothing places ('check_links'), and, for what is marked
+manufacturable, an assembly item that is placed rather than connected and a part
+that nobody could make or buy ('check_manufacturable_assembly',
+'check_manufacturable_parts').
 
 It lives here, next to ``framing`` and ``workspace``, because neither end owns
 it. The daemon checks a package's files when `pc lint` walks the package graph;
@@ -60,7 +89,7 @@ import jsonschema
 import jsonschema.exceptions
 import yaml
 
-from . import assy_filter
+from . import assy_filter, template_render
 
 SEVERITY_ERROR = "error"
 SEVERITY_WARNING = "warning"
@@ -76,6 +105,10 @@ CODE_SCHEMA = "schema"
 # is a relation between two parts of one document rather than the shape of
 # either. See 'check_links()'.
 CODE_LINKS = "links"
+# Something marked manufacturable that nobody could make: an item of an assembly
+# placed by coordinates rather than connected, a part with no way to be had.
+# See 'check_manufacturable_assembly()' and 'check_manufacturable_parts()'.
+CODE_MANUFACTURABLE = "manufacturable"
 
 # Kinds of masked region. They differ in what they are allowed to suppress:
 # an expression stands in for a *value*, a statement can add or remove *keys*.
@@ -176,7 +209,10 @@ SCENE_NO_HOW = (
 #   1 -- the template, YAML and schema checks.
 #   2 -- 'check_links': a 'connect:' or an 'interferes:' naming a link nothing
 #        places.
-CHECKER_VERSION = 2
+#   3 -- the document is checked as it renders, not masked, wherever the values
+#        it is rendered with are known; and the two rules for what is marked
+#        manufacturable.
+CHECKER_VERSION = 3
 
 # An upper bound on how many findings a single file reports. A file that is
 # mid-edit can cascade; an editor gains nothing from the thousandth squiggle.
@@ -378,11 +414,60 @@ def mask_template(text: str) -> _Masked:
             out.append(text[index:])
             break
         end += len(closing)
+        tag = _TAG.match(text, at) if opening == "{%" else None
+        tag = tag.group(1) if tag else None
+        renders_lines = (kind == _EXPR and _alone_on_its_lines(text, at, end)) or tag in ("include", "call")
+        if tag in _BODY_TAGS and (tag != "set" or "=" not in text[at:end]):
+            # A macro or a block `set` renders nothing where it stands, and a
+            # `call` renders the macro's output: either way its body is not
+            # YAML at this place, so all of it goes, up to the closing tag.
+            end = _end_of_block(text, end, tag)
         out.append(text[index:at])
-        out.append(_blank_like(text[at:end], kind))
-        spans.append((_to_position(line_starts, at), _to_position(line_starts, end), kind))
+        start_position, end_position = _to_position(line_starts, at), _to_position(line_starts, end)
+        if renders_lines:
+            # Lines of YAML, or none: it may supply a value, keys or items, so it
+            # is both kinds of unknown.
+            out.append(_blank_like(text[at:end], _STMT))
+            spans.append((start_position, end_position, _EXPR))
+            spans.append((start_position, end_position, _STMT))
+        else:
+            out.append(_blank_like(text[at:end], kind))
+            spans.append((start_position, end_position, kind))
         index = end
     return _Masked("".join(out), spans)
+
+
+# The name of a `{% tag %}`, and the tags whose body is not YAML where it stands.
+_TAG = re.compile(r"\{%[-+]?\s*(\w+)")
+_BODY_TAGS = ("macro", "call", "set")
+
+
+def _end_of_block(text: str, index: int, tag: str) -> int:
+    """Where the `{% end<tag> %}` closing a block opened just before ``index`` ends.
+
+    Blocks of the same tag nest. A block that is never closed is a template
+    error `check_template()` has already reported, and the masking never runs
+    for it -- but if it does, only the opening tag is masked.
+    """
+    pattern = re.compile(r"\{%[-+]?\s*(end)?" + tag + r"\b[^%]*(?:%(?!\})[^%]*)*[-+]?%\}")
+    depth = 1
+    for match in pattern.finditer(text, index):
+        if match.group(1):
+            depth -= 1
+            if depth == 0:
+                return match.end()
+        elif tag != "set" or "=" not in match.group(0):
+            depth += 1
+    return index
+
+
+def _alone_on_its_lines(text: str, start: int, end: int) -> bool:
+    """Whether nothing but whitespace shares the lines ``text[start:end]`` is on."""
+    line_start = text.rfind("\n", 0, start) + 1
+    line_end = text.find("\n", end)
+    if line_end == -1:
+        line_end = len(text)
+    return not text[line_start:start].strip() and not text[end:line_end].strip()
 
 
 def check_template(text: str) -> list:
@@ -615,7 +700,7 @@ def _validate_schema(data, schema, root_node, masked) -> list:
                 start, end = _node_span(key_node)
 
         # Drop what the mask made unknowable (see the module docstring).
-        if error.validator in _VALUE_VALIDATORS and masked.overlaps(start, end, _EXPR):
+        if error.validator in _VALUE_VALIDATORS and masked.overlaps(start, _reach(node, end, masked), _EXPR):
             continue
         if error.validator in _KEY_VALIDATORS and masked.overlaps(start, end, _STMT):
             continue
@@ -634,6 +719,23 @@ def _validate_schema(data, schema, root_node, masked) -> list:
         )
 
     return diagnostics
+
+
+def _reach(node, end, masked):
+    """Where the value at ``node`` could extend to once the template is rendered.
+
+    Its own end, except for a key with nothing after it: YAML reads that as an
+    empty value, and the lines up to the next thing YAML sees are where a
+    template that renders lines -- an ``{% include %}``, a ``{{ macro() }}`` on
+    a line of its own -- puts the value YAML did not see.
+    """
+    if not isinstance(node, yaml.ScalarNode) or node.value != "" or node.style is not None:
+        return end
+    line_starts = _line_starts(masked.text)
+    offset = line_starts[end[0]] + end[1]
+    while offset < len(masked.text) and masked.text[offset].isspace():
+        offset += 1
+    return _to_position(line_starts, offset)
 
 
 def _fallback_span(node):
@@ -736,7 +838,8 @@ def check_links(data, root_node=None, masked=None) -> list:
         if node is None:
             return False
         start, end = _node_span(node)
-        return masked.overlaps(start, end, kind)
+        # An empty value reaches to the next line YAML sees: see '_reach'.
+        return masked.overlaps(start, _reach(node, end, masked), kind)
 
     # The root node is the assembly itself, so there is nothing beside it.
     for section in _CONNECT_SECTIONS:
@@ -800,6 +903,10 @@ def _check_connect(node, path, names, index, everywhere, report, templated) -> N
         target = connect.get("name")
         target_path = path + [section, "name"]
         if target is None:
+            if templated(target_path) or templated(target_path, _STMT):
+                # A 'name:' whose value is lines a template writes -- on the
+                # line after it, say -- reads as empty when masked.
+                continue
             report(
                 path + [section],
                 "'%s' does not say which link to connect to: it needs a 'name'" % section,
@@ -836,15 +943,184 @@ def _check_connect(node, path, names, index, everywhere, report, templated) -> N
                 report(other_path, "nothing in this file places a link called '%s'" % other)
 
 
+# ---- what is to be made ----------------------------------------------------
+#
+# Two rules for what is marked 'manufacturable: true' -- on the object, on its
+# package, or on a package above it. "Marked", not "is": PartCAD takes an
+# object as manufacturable unless something says otherwise, and 'pc test'
+# holds it to that, but a package nobody has said anything about yet is one
+# being sketched, and an editor that underlined every part of it would be
+# underlining work in progress. Saying 'manufacturable: true' -- which is what
+# 'pc init' asks about -- is what turns these on.
+
+_MANUFACTURED_CONNECTIONS = ("connect", "connectPorts")
+_NOT_MADE_OF_ITS_OWN = ("alias", "enrich")
+
+
+def _report_at(diagnostics, root_node, path, key, message):
+    node = _resolve(root_node, path) if root_node is not None else None
+    key_node = _key_node(node, key) if node is not None and key is not None else None
+    start, end = _node_span(key_node) if key_node is not None else _fallback_span(node)
+    diagnostics.append(
+        Diagnostic(
+            SEVERITY_ERROR,
+            message,
+            start[0],
+            start[1],
+            end[0],
+            end[1],
+            code=CODE_MANUFACTURABLE,
+            path="$." + ".".join(str(step) for step in path + ([key] if key else [])),
+        )
+    )
+
+
+def check_manufacturable_assembly(data, root_node=None) -> list:
+    """Report an item of an assembly that is to be made that is not connected to anything.
+
+    The same rule 'partcad.test.connectivity' holds a manufacturable assembly
+    to, and in the same words, so that the editor and 'pc test' say one thing:
+    somebody has to physically put this together, and a coordinate does not
+    tell them anything they can act on -- it says where a part ends up, not
+    what holds it there. So no item of any 'links:' list may say 'location:',
+    and every item after the first has to say what it is joined to. The first
+    item of a list is the one the others hang from, placed by being first. The
+    document's own root -- the frame the whole assembly is in -- is not an item
+    of anything, and may be placed.
+    """
+    diagnostics: list = []
+
+    def level(node, path):
+        links = node.get(assy_filter.LINKS)
+        if not isinstance(links, list):
+            return
+        for index, item in enumerate(links):
+            if not isinstance(item, dict):
+                continue
+            item_path = path + [assy_filter.LINKS, index]
+            name = assy_filter.link_name(item, index)
+            if "location" in item:
+                _report_at(
+                    diagnostics,
+                    root_node,
+                    item_path,
+                    "location",
+                    "'%s' is placed by coordinates, which says where it ends up but not what holds it there - "
+                    "an assembly that is to be made has to connect it" % name,
+                )
+            elif index > 0 and not any(item.get(key) for key in _MANUFACTURED_CONNECTIONS):
+                _report_at(
+                    diagnostics,
+                    root_node,
+                    item_path,
+                    None,
+                    "'%s' says neither where it goes nor what holds it - an assembly that is to be made has to "
+                    "connect it" % name,
+                )
+            level(item, item_path)
+
+    if isinstance(data, dict):
+        if data.get(assy_filter.LINKS) is None and "location" in data:
+            # A file that is one part or one assembly and nothing else: its
+            # root is not the frame of a list but the one item it places
+            # ('AssemblyFactoryAssy.instantiate_async'), and 'pc test' reports
+            # it like any other.
+            _report_at(
+                diagnostics,
+                root_node,
+                [],
+                "location",
+                "'%s' is placed by coordinates, which says where it ends up but not what holds it there - "
+                "an assembly that is to be made has to connect it" % assy_filter.link_name(data, 0),
+            )
+        level(data, [])
+    return diagnostics
+
+
+def check_manufacturable_parts(data, root_node=None, inherited=None) -> list:
+    """Report a part marked manufacturable that nobody could make or buy.
+
+    A part is had in one of two ways, and the build plan asks exactly these
+    two questions of it (see 'partcad.procurement'): it is made, which takes a
+    'manufacturing:' section saying how, or it is bought, which takes both a
+    'vendor:' and an 'sku:' -- the SKU alone does not say from whom, and the
+    vendor alone does not say what. A part that is neither is one the build
+    plan calls missing.
+
+    An 'alias' or an 'enrich' is not checked: it is made of another part, and
+    what it is had by is that part's. ``inherited`` is what a package above
+    this one marks -- see the section comment for why only what is marked.
+    """
+    diagnostics: list = []
+    if not isinstance(data, dict):
+        return diagnostics
+    package_mark = data.get("manufacturable", inherited)
+    parts = data.get("parts")
+    if not isinstance(parts, dict):
+        return diagnostics
+    for name, config in parts.items():
+        if not isinstance(config, dict) or config.get("type") in _NOT_MADE_OF_ITS_OWN:
+            # A bare string is the short form of an alias.
+            continue
+        if config.get("manufacturable", package_mark) is not True:
+            continue
+        if config.get("manufacturing") or (config.get("vendor") and config.get("sku")):
+            continue
+        _report_at(
+            diagnostics,
+            root_node,
+            ["parts"],
+            name,
+            "'%s' is marked manufacturable, but says neither how it is made ('manufacturing:') nor what it "
+            "is ordered by ('vendor:' and 'sku:')" % name,
+        )
+    return diagnostics
+
+
 # ---- entry points ----------------------------------------------------------
 
 
-def validate_source(text: str, schema: dict) -> list:
+class Render:
+    """One way to render a template for checking: the values it is given, and where it includes from.
+
+    ``variables`` are what PartCAD renders the file with -- for an ASSY file
+    its parameters as ``param_<name>`` and its ``name`` (see
+    'AssemblyFactoryFile.template_params'), for a ``partcad.yaml`` the names in
+    'partcad_utils.config_template'. ``search_path`` is where ``{% include %}``
+    looks, which for PartCAD is the directory of the file. ``label`` names what
+    the values are, for a message about a rendering that failed.
+    """
+
+    def __init__(self, variables: dict, search_path=(), label: str = None):
+        self.variables = dict(variables or {})
+        self.search_path = list(search_path)
+        self.label = label
+
+
+def validate_source(
+    text: str,
+    schema: dict,
+    renders=(),
+    manufacturable: bool = False,
+    inherited_manufacturable: bool = None,
+) -> list:
     """Check one Jinja2-templated YAML document against ``schema``.
 
     Returns the diagnostics in document order. An empty list means the file is
-    a valid template, renders to parsable YAML on every branch this can see, and
-    matches the schema.
+    a valid template, renders to parsable YAML, and matches the schema.
+
+    ``renders`` are the ways to render it (see 'Render'). The document is
+    checked as each of them renders it -- the items a loop produces, the branch
+    an ``{% if %}`` takes, the numbers expressions evaluate to -- and every
+    finding is put back on the template line and column it came from. With
+    none, the values it would be rendered with are not known (an ASSY file no
+    package declares), and it is checked masked instead: see 'mask_template'.
+
+    ``manufacturable`` says that the ASSY file is the assembly of something
+    marked manufacturable, and holds it to 'check_manufacturable_assembly'.
+    ``inherited_manufacturable`` is, for a ``partcad.yaml``, what a package
+    above it marks its objects -- True, False, or None for nothing -- for
+    'check_manufacturable_parts'.
     """
     diagnostics = check_template(text)
     if diagnostics:
@@ -852,6 +1128,105 @@ def validate_source(text: str, schema: dict) -> list:
         # only invent follow-on YAML errors.
         return diagnostics
 
+    if renders:
+        for render in renders:
+            diagnostics.extend(_check_rendered(text, schema, render, manufacturable, inherited_manufacturable))
+    else:
+        diagnostics.extend(_check_masked(text, schema, manufacturable, inherited_manufacturable))
+    diagnostics.sort(key=lambda d: (d.line, d.column, d.message))
+    return _dedupe(diagnostics)[:MAX_DIAGNOSTICS]
+
+
+def _is_assy_schema(schema) -> bool:
+    # Asked of the schema rather than of the filename, because that is what the
+    # caller settled (see 'schema_for_file'), and the scene-simplified schema is
+    # the same document's -- a scene's 'connect:' names a link exactly as an
+    # assembly's does.
+    return schema is not None and schema.get("$id") == get_schema(ASSY_SCHEMA).get("$id")
+
+
+def _is_configuration_schema(schema) -> bool:
+    return schema is not None and schema.get("$id") == get_schema(PARTCAD_SCHEMA).get("$id")
+
+
+def _document_checks(data, schema, root_node, masked, manufacturable, inherited_manufacturable) -> list:
+    """Everything said about a parsed document: its schema, and what no schema can say."""
+    diagnostics = _validate_schema(data, schema, root_node, masked)
+    # Only for an ASSY document, and only ever as well as the schema: a link
+    # that nothing places is not a shape the schema can describe, and a
+    # 'partcad.yaml' has no links at all.
+    if _is_assy_schema(schema):
+        diagnostics.extend(check_links(data, root_node, masked))
+        if manufacturable:
+            diagnostics.extend(check_manufacturable_assembly(data, root_node))
+    elif _is_configuration_schema(schema):
+        diagnostics.extend(check_manufacturable_parts(data, root_node, inherited_manufacturable))
+    return diagnostics
+
+
+def _check_rendered(text, schema, render, manufacturable, inherited_manufacturable) -> list:
+    """Check ``text`` as ``render`` renders it, with every finding placed back on the template."""
+    try:
+        rendering = template_render.render(text, render.variables, render.search_path)
+    except template_render.RenderError as exc:
+        if exc.missing_template:
+            # An include that is not where it is looked for. For a file checked
+            # on its own that may only mean that what puts it there -- an
+            # 'includePaths' declared by a package this cannot see -- is not
+            # known here, so it is checked as if its values were not known.
+            return _check_masked(text, schema, manufacturable, inherited_manufacturable)
+        line = exc.line if exc.line is not None else 0
+        values = " with the default parameters of '%s'" % render.label if render.label else ""
+        return [
+            Diagnostic(
+                SEVERITY_ERROR,
+                "Jinja2 template error while rendering it%s: %s" % (values, exc.message),
+                line,
+                0,
+                end_line=line,
+                end_column=_line_length(text, line),
+                code=CODE_TEMPLATE,
+            )
+        ]
+
+    try:
+        data = yaml.safe_load(rendering.text)
+        root_node = yaml.compose(rendering.text, Loader=yaml.SafeLoader)
+    except yaml.MarkedYAMLError as exc:
+        mark = exc.problem_mark or exc.context_mark
+        line, column = rendering.position(mark.line, mark.column) if mark is not None else (0, 0)
+        return [Diagnostic(SEVERITY_ERROR, (exc.problem or str(exc)).strip(), line, column, code=CODE_YAML)]
+    except Exception as exc:  # pylint: disable=broad-except
+        # Not only 'yaml.YAMLError': a date that is not one ('2001-13-45') is
+        # a 'ValueError' out of the parser, and nesting deep enough a
+        # 'RecursionError'. Either is a finding about the file, not a crash.
+        return [Diagnostic(SEVERITY_ERROR, str(exc).strip() or type(exc).__name__, 0, 0, code=CODE_YAML)]
+
+    if data is None:
+        return []
+    # Nothing is masked: every value is the one PartCAD reads.
+    nothing_masked = _Masked(rendering.text, [])
+    found = _document_checks(data, schema, root_node, nothing_masked, manufacturable, inherited_manufacturable)
+    placed = []
+    for diagnostic in found:
+        start, end = rendering.span((diagnostic.line, diagnostic.column), (diagnostic.end_line, diagnostic.end_column))
+        placed.append(
+            Diagnostic(
+                diagnostic.severity,
+                diagnostic.message,
+                start[0],
+                start[1],
+                end[0],
+                end[1],
+                code=diagnostic.code,
+                path=diagnostic.path,
+            )
+        )
+    return placed
+
+
+def _check_masked(text, schema, manufacturable, inherited_manufacturable) -> list:
+    """Check ``text`` with its template masked: what is left when the values it renders with are unknown."""
     masked = mask_template(text)
 
     try:
@@ -877,24 +1252,15 @@ def validate_source(text: str, schema: dict) -> list:
                 )
             ]
         return [Diagnostic(SEVERITY_ERROR, problem, line, column, code=CODE_YAML)]
-    except yaml.YAMLError as exc:
-        return [Diagnostic(SEVERITY_ERROR, str(exc).strip(), 0, 0, code=CODE_YAML)]
+    except Exception as exc:  # pylint: disable=broad-except
+        # See '_check_rendered': not every parse failure is a 'yaml.YAMLError'.
+        return [Diagnostic(SEVERITY_ERROR, str(exc).strip() or type(exc).__name__, 0, 0, code=CODE_YAML)]
 
     if data is None:
         # An empty document (or one whose entire body is Jinja2 control flow).
         return []
 
-    diagnostics = _validate_schema(data, schema, root_node, masked)
-    # Only for an ASSY document, and only ever as well as the schema: a link
-    # that nothing places is not a shape the schema can describe, and a
-    # 'partcad.yaml' has no links at all. Asked of the schema rather than of the
-    # filename, because that is what the caller settled (see
-    # 'schema_for_file'), and the scene-simplified schema is the same document's
-    # -- a scene's 'connect:' names a link exactly as an assembly's does.
-    if schema is not None and schema.get("$id") == get_schema(ASSY_SCHEMA).get("$id"):
-        diagnostics.extend(check_links(data, root_node, masked))
-    diagnostics.sort(key=lambda d: (d.line, d.column, d.message))
-    return _dedupe(diagnostics)[:MAX_DIAGNOSTICS]
+    return _document_checks(data, schema, root_node, masked, manufacturable, inherited_manufacturable)
 
 
 def _dedupe(diagnostics: list) -> list:

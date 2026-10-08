@@ -6,18 +6,20 @@
 // Syntax and schema checking for the two YAML documents PartCAD writes: an
 // `.assy` file and a package's `partcad.yaml`.
 //
-// Both are registered as YAML so they get the editor's YAML syntax
-// highlighting, and neither is YAML: each is a Jinja2 template that renders to
-// YAML and then has to match a schema. A plain YAML checker therefore both
-// misses the errors that matter (a mistyped `locaton:`, a location that is not
-// an OCCT location, a `part` declared with a `type` PartCAD has no factory for)
-// and invents errors that are not there (every `{% for %}` line).
+// Neither is YAML: each is a Jinja2 template that renders to YAML and then has
+// to match a schema. A plain YAML checker therefore both misses the errors that
+// matter (a mistyped `locaton:`, a location that is not an OCCT location, a
+// `part` declared with a `type` PartCAD has no factory for) and invents errors
+// that are not there (every `{% for %}` line).
 //
-// Registering them as `yaml` is also what keeps that highlighting: the language
-// id is what the editor picks a grammar by, so these stay `yaml` documents and
-// the diagnostics are published into a `partcad` collection beside whatever
-// else has an opinion about the file. Giving them a PartCAD language id of
-// their own would have bought nothing and lost the grammar.
+// So neither is a `yaml` document: each has a language of its own --
+// `partcad-assy` and `partcad-yaml` -- and no YAML checker is handed either. A
+// YAML extension picks the documents it checks by language id, and while these
+// were `yaml` one reported the template's tags (every `{% for %}` line) as YAML
+// errors, beside the findings published here. The language id is also what the
+// editor picks a grammar by, so the two bring one, which they share:
+// `syntaxes/partcad-yaml.tmLanguage.json`, the editor's YAML grammar with the
+// template's tags highlighted on top of it.
 //
 // The check runs locally, never on the daemon: it is the client's own file --
 // usually one this editor has not saved -- and it needs no package graph, no CAD
@@ -27,9 +29,10 @@
 // very file being typed into.
 //
 // This class is the editor half: it decides when to ask, and turns the answer
-// into diagnostics. The checking is `partcad_utils.assy_lint`, which masks the
-// Jinja2 template before parsing so each finding still carries the line and
-// column of the source file.
+// into diagnostics. The checking is `partcad_utils.assy_lint`, which renders the
+// Jinja2 template with the values PartCAD would and maps each finding back to
+// the line and column of the source file (or masks the template, for a file no
+// package declares).
 //
 // One thing has to be settled before an **ASSY** file can be checked: whether
 // it is an **assembly** or a **scene**. The two are the same format read for two
@@ -53,6 +56,7 @@
 // and none is sent.
 //
 
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { traceVerbose } from './common/log/logging';
 import { pathKey } from './common/paths';
@@ -112,6 +116,30 @@ function isCheckedDocument(document: vscode.TextDocument): boolean {
     return isAssyDocument(document) || isPackageConfigDocument(document);
 }
 
+/**
+ * What the `partcad.lint` settings add to a check of ``document``: directories
+ * to include from, and parameter values to render with. Per document, because
+ * both are resource settings -- a multi-root workspace can give each folder its
+ * own -- and include paths are relative to the folder the document is in.
+ */
+export function lintOptions(document: vscode.TextDocument): { includePaths: string[]; extraParams: string[] } {
+    const config = vscode.workspace.getConfiguration('partcad.lint', document.uri);
+    const folder = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath;
+    const base = folder ?? path.dirname(document.uri.fsPath);
+    const includePaths = (config.get<string[]>('includePaths') ?? [])
+        .filter((entry) => typeof entry === 'string' && entry.trim() !== '')
+        .map((entry) => path.resolve(base, entry.trim()));
+    // In the spelling `pc --extra-param` parses (`partcad_utils.parameters.
+    // parse_override`), and nothing else: a `pc` that refuses its own arguments
+    // checks nothing at all. The object is everything before the first
+    // `.<parameter>=`, dots and all; the value is everything after it.
+    const extraParams = (config.get<string[]>('extraParams') ?? [])
+        .filter((entry) => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => /^.+?\.[^.=]+=.*$/s.test(entry));
+    return { includePaths, extraParams };
+}
+
 function isEnabled(): boolean {
     return vscode.workspace.getConfiguration('partcad').get<boolean>('lint.enabled', true);
 }
@@ -141,7 +169,7 @@ export class PartcadLint implements vscode.Disposable {
             vscode.workspace.onDidSaveTextDocument((d) => this.schedule(d, 0)),
             vscode.workspace.onDidCloseTextDocument((d) => this.forget(d)),
             vscode.workspace.onDidChangeConfiguration((e) => {
-                if (e.affectsConfiguration('partcad.lint.enabled')) {
+                if (e.affectsConfiguration('partcad.lint')) {
                     this.refresh();
                 }
             }),
@@ -260,6 +288,7 @@ export class PartcadLint implements vscode.Disposable {
                 path: document.uri.fsPath,
                 text: document.getText(),
                 flavor: this.flavorOf(document),
+                ...lintOptions(document),
             });
         } catch (e) {
             // No backend yet, no local PartCAD to run, or one too old to know
