@@ -185,6 +185,25 @@ def test_a_link_already_in_the_directory_does_not_carry_a_write_out_of_it(tmp_pa
     assert (outside / "block.stl").read_text() == "keep me"
 
 
+@pytest.mark.skipif(not hasattr(os, "symlink") or os.name == "nt", reason="needs POSIX symbolic links")
+def test_a_refused_restore_creates_nothing_where_a_link_points(tmp_path):
+    """The check comes before any directory is made, not only before the file."""
+    cache = _cache(tmp_path)
+    first = tmp_path / "run-a"
+    (first / "meshes" / "deep").mkdir(parents=True)
+    (first / "meshes" / "deep" / "inner.stl").write_bytes(b"solid\n" * 40)
+    assert _run(cache_artifacts.store_async(cache, _hash(), {"before": {}}, directory=str(first)))
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    second = tmp_path / "run-b"
+    second.mkdir()
+    os.symlink(outside, second / "meshes")
+
+    assert _run(cache_artifacts.restore_async(cache, _hash(), directory=str(second))) is None
+    assert os.listdir(outside) == []
+
+
 def test_garbage_under_the_key_is_a_miss(tmp_path):
     cache = _cache(tmp_path)
     _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: b"not a tarball at all" * 10}))

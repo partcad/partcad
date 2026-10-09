@@ -182,12 +182,14 @@ def _write_inside(directory: str, path: str, data: bytes) -> None:
     is resolved and held to the run directory, and the file itself is opened
     without following a link. Raising is a miss (see 'restore_async').
     """
-    parent = os.path.dirname(path)
-    os.makedirs(parent, exist_ok=True)
+    # Resolved before anything is created: 'realpath' follows the links in the
+    # part of the path that exists, and creating the rest first would create it
+    # wherever such a link points.
     root = os.path.realpath(directory)
-    resolved = os.path.realpath(parent)
+    resolved = os.path.realpath(os.path.dirname(path))
     if os.path.commonpath([root, resolved]) != root:
         raise ValueError("%s leads outside %s" % (path, directory))
+    os.makedirs(resolved, exist_ok=True)
     flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
     with os.fdopen(os.open(path, flags, 0o644), "wb") as f:
         f.write(data)
