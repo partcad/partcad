@@ -154,6 +154,27 @@ def test_show_sends_the_object_tree_and_returns_the_ack(ide):
     assert protocol.decode_gltf(child[protocol.KEY_GLTF]) == b"child-glTF"
 
 
+def test_show_carries_the_tab_asked_for(ide):
+    client.show(protocol.make_node(b"glTF"), name="//pkg:beam", kind="part", package="//pkg", tab="fea")
+
+    (message,) = ide.received
+    assert message[protocol.KEY_TAB] == "fea"
+
+
+def test_show_without_a_tab_sends_no_tab_key(ide):
+    """An IDE from before the key, and every show that names no tab, leave the viewer where it is."""
+    client.show(protocol.make_node(b"glTF"), name="//pkg:beam")
+
+    (message,) = ide.received
+    assert protocol.KEY_TAB not in message
+
+
+def test_show_refuses_a_tab_the_viewer_does_not_have(ide):
+    with pytest.raises(ValueError, match="not a PartCAD Viewer tab"):
+        client.show(protocol.make_node(b"glTF"), name="//pkg:beam", tab="buy")
+    assert ide.received == []
+
+
 def test_show_without_a_package_says_so_rather_than_omitting_it(ide):
     """A shape belonging to no package still has geometry to show"""
     client.show(protocol.make_node(b"glTF-payload"), name="widget")

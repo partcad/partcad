@@ -132,6 +132,15 @@ End-to-end walkthrough, with the data flow diagram and what each tab is:
 send (`PartcadViewer`). `src/webview/` is what runs *inside* that webview: `viewer.ts` is the shell,
 `scene.ts` the three.js renderer, and one module per tab beside it.
 
+**A show can say which tab to open on** (`tab`, from `pc ide view --design-2d` and its siblings; `KEY_TAB` in
+`src/partcad_ide_client/protocol.py`). It rides on the show rather than arriving as a message of its own,
+because the show is what decides which tabs apply, and because two windows sharing the viewer port share it
+by connection. The renderer hands it to the strips as a *request* (`Tabs.request`) before they are rebuilt for
+the object: a request is opened even when the tab is `secondary`, waits through a rebuild that does not offer
+it yet (Build and Buy, until Build vs Buy has answered), and is forgotten once opened or when the next show
+asks for nothing. `TAB_GROUPS` in `src/webview/messages.ts` is the list of what can be asked for, and a Python
+test holds it to `VIEWER_TABS` on the other side.
+
 **The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA and CFD for a part, then
 Manufacturing: what is built and what is bought, how to build it, the bill of materials, where to buy it and the
 assembly instructions. Only the 3D
@@ -288,6 +297,18 @@ SpaceMouse" in [docs/partcad-viewer.md](./docs/partcad-viewer.md).
 Geometry reaches the viewer already tessellated: `partcad` renders to binary glTF in a sandbox and sends it
 compressed, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party
 `OCP CAD Viewer` extension, which is why that dependency is gone.
+
+## Opening a workspace from the command line
+
+`pc ide open <directory>` opens the folder in an editor and asks for the PartCAD workbench in the window that
+opens it. An editor's command line cannot run a command in a window, so the CLI writes a request first --
+`~/.partcad/ide/requests/<random>.json`, `{"folder", "view": "workbench", "requested"}`, renamed into place --
+and `src/workbenchRequest.ts` takes it: on activation, whenever the window gains focus (an existing window of
+that folder is brought to the front, and activates nothing), and when the workspace's folders change. The
+window whose workspace is the folder runs `workbench.view.extension.partcad-container` and deletes the file;
+an expired one (`REQUEST_TTL_S`, five minutes) is deleted unread by whoever sees it. It is registered before
+the trust gate on purpose: in Restricted Mode the workbench is where the Explorer asks for trust. The Python
+half is `partcad_client.ide`, and the file's layout is written down in both.
 
 ## What the Explorer says while starting
 
@@ -786,6 +807,25 @@ Three things the bundled run needs, all of which have already cost a debugging s
 - **A first `Display` provisions a conda environment**, which takes about three minutes on a clean machine
   against roughly two seconds warm. A test that exercises geometry needs a warmed `~/.partcad/conda` or a
   budget that admits the cold path; the 60s Mocha timeout is sized for activation, not for that.
+
+### The end-to-end test, in a real editor
+
+`tests/ide/test_ide_e2e.py` (Python, beside the other `pc` tests) does what a person does: `pc ide install` a
+`.vsix` into an editor with a profile of its own, `pc ide open examples`, `pc ide view --design-3d` the logo
+assembly and `pc ide view --analysis-fea` the cantilever -- and fails on anything going wrong on the way: an
+`ERROR` from the daemon in what `pc` printed, an `[error]` the extension logged, a console error or uncaught
+exception in any PartCAD webview, the viewer's error overlay, or an error in the FEA pane. It drives the editor
+over the DevTools protocol (`--remote-debugging-port`) and attaches to the webviews' own targets, because the
+viewer is an out-of-process frame inside another one, which Playwright's `connect_over_cdp` does not reach.
+
+It is off unless `PC_TEST_IDE_E2E=1`; `PC_TEST_IDE_EDITOR` and `PC_TEST_IDE_VSIX` name the editor and the package,
+or VSCodium is downloaded and the package built from this directory. It starts an `Xvfb` where there is no
+display. The FEA step needs the CalculiX solver: from the plugin's image where a container runtime is running,
+or `ccx` on the `PATH` (`apt install calculix-ccx`) where it is not.
+
+That test is also why `surface.ts` asks a throwaway canvas for WebGL 2 before three is asked: three
+`console.error`s three lines and then throws in a window with no GPU, and a missing GPU is a fallback to the
+painter, not an error.
 
 ## Build / package
 

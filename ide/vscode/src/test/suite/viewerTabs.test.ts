@@ -228,4 +228,49 @@ suite('The tab strips', () => {
         assert.strictEqual(Tabs.anyEnabled(specs(panes, { fea: false, cfd: true })), true);
         assert.strictEqual(Tabs.anyEnabled(specs(panes, { fea: false, cfd: false })), false);
     });
+    test('a tab asked for from outside is opened on the next rebuild, and then forgotten', () => {
+        // 'pc ide view --analysis-cfd': the show carries the tab, and the strip
+        // is rebuilt for the object it brought.
+        const { tabs, panes } = strip();
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }));
+        assert.strictEqual(tabs.current, 'fea');
+
+        tabs.request('cfd');
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }));
+        assert.strictEqual(tabs.current, 'cfd');
+    });
+
+    test('a tab asked for waits through a rebuild that does not offer it', () => {
+        // The Manufacturing strip disables Buy until it knows what is bought: a
+        // request for Buy lands on Buy when that answer arrives.
+        const { tabs, panes } = strip();
+        tabs.request('cfd');
+        tabs.setTabs(specs(panes, { fea: true, cfd: false }));
+        assert.strictEqual(tabs.current, 'fea');
+
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }));
+        assert.strictEqual(tabs.current, 'cfd');
+    });
+
+    test('a tab asked for is opened even when it is secondary', () => {
+        const { tabs, panes } = strip();
+        const secondaryFea = specs(panes, { fea: true, cfd: true }).map((spec) => ({
+            ...spec,
+            secondary: spec.id === 'fea',
+        }));
+        tabs.request('fea');
+        tabs.setTabs(secondaryFea);
+        assert.strictEqual(tabs.current, 'fea');
+    });
+
+    test('a withdrawn request leaves behind what a click would have', () => {
+        const { tabs, panes } = strip();
+        tabs.setTabs(specs(panes, { fea: true, cfd: false }));
+        tabs.request('cfd');
+        tabs.request(undefined);
+        tabs.setTabs(specs(panes, { fea: true, cfd: false }));
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }));
+        // Still what the user is taken to want, as a click would be.
+        assert.strictEqual(tabs.current, 'cfd');
+    });
 });

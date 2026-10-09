@@ -1118,7 +1118,8 @@ class Shape(ShapeConfiguration):
         )
         return await self.convert("build123d", ctx)
 
-    async def show_async(self, ctx=None):
+    async def show_async(self, ctx=None, tab=None):
+        """Show this shape in the PartCAD Viewer, on viewer tab 'tab' if one is named."""
         from . import viewer
 
         # A caller that cannot pass one gets the process-wide context; one that
@@ -1144,10 +1145,10 @@ class Shape(ShapeConfiguration):
                 pc_logging.exception(e)
 
             if tree is not None:
-                await viewer.show(ctx, tree, name=self.name, kind=self.kind, package=self.project_name)
+                await viewer.show(ctx, tree, name=self.name, kind=self.kind, package=self.project_name, tab=tab)
 
-    def show(self, ctx=None):
-        asyncio.run(self.show_async(ctx))
+    def show(self, ctx=None, tab=None):
+        asyncio.run(self.show_async(ctx, tab=tab))
 
     def shape_info(self, ctx):
         """What 'pc info' reports of any shape, whatever kind or type it is.

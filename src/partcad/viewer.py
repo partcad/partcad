@@ -70,7 +70,7 @@ def context(ctx, name=None):
     return _partcad_context
 
 
-async def show(ctx, tree, name=None, kind=None, package=None):
+async def show(ctx, tree, name=None, kind=None, package=None, tab=None):
     """Display one shape tree in the IDE's PartCAD Viewer.
 
     'tree' is the object as 'Shape.get_representation(ctx, "gltf")' returns it:
@@ -81,6 +81,9 @@ async def show(ctx, tree, name=None, kind=None, package=None):
     can ask the daemon the questions its other tabs answer - the bill of
     materials, the assembly instructions, where to buy the parts - which take a
     package and a name, not a name on its own.
+
+    'tab' is the viewer tab to open on ('partcad_ide_client.protocol.KEY_TAB'),
+    or None to leave the viewer on whichever one it is on.
 
     Never raises: a show is a side effect of browsing a package, and neither a
     missing IDE nor a shape that will not tessellate should fail the command
@@ -105,7 +108,7 @@ async def show(ctx, tree, name=None, kind=None, package=None):
         _previously_displayed = name
 
         pc_logging.info('Visualizing in "PartCAD Viewer"...')
-        client.show(tree, name=name, kind=kind, package=package, keep_camera=keep_camera)
+        client.show(tree, name=name, kind=kind, package=package, keep_camera=keep_camera, tab=tab)
         return True
     except client.ViewerNotAvailable as e:
         pc_logging.warning("%s" % e)

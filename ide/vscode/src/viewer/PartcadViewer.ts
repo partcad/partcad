@@ -224,6 +224,9 @@ export class PartcadViewer implements vscode.Disposable {
             // the renderer showing the 3D view alone.
             package: message.package ?? null,
             keepCamera: message.keepCamera === true,
+            // Which tab to open on, when the show asked for one. Passed as it
+            // came: the renderer is what knows its tabs, and what applies.
+            tab: typeof message.tab === 'string' ? message.tab : null,
             // The object as it arrived, geometry aside: the hierarchy, the
             // placements, the ports and the interfaces are PartCAD's account of
             // what is on screen, and this side knows nothing about assemblies,

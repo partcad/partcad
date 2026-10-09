@@ -56,6 +56,17 @@ export class Tabs {
     /** The tab on screen. */
     private selected: TabId | undefined;
     /**
+     * A tab asked for from outside the panel ('pc ide view --manufacturing-buy'),
+     * not yet opened.
+     *
+     * Kept apart from 'preferred' because it is stronger: it is opened even when
+     * it is 'secondary', and it waits through a rebuild that does not offer it -
+     * the Manufacturing strip disables Build and Buy until it knows what is
+     * built and what is bought, and a request for Buy has to land on Buy when
+     * that answer arrives. Opened once, and then forgotten.
+     */
+    private requested: TabId | undefined;
+    /**
      * Every pane this strip has ever been given.
      *
      * A pane dropped from the strip has to be hidden as it goes: the panes are
@@ -143,6 +154,19 @@ export class Tabs {
         }
     }
 
+    /**
+     * Open on 'id' at the next rebuild that offers it (see 'requested'), or forget
+     * an earlier request that never came to anything when 'id' is undefined.
+     *
+     * It is also what the user is taken to want from then on, as a click is.
+     */
+    public request(id: TabId | undefined): void {
+        this.requested = id;
+        if (id !== undefined) {
+            this.preferred = id;
+        }
+    }
+
     /** The user asked for a tab: remembered, and opened if it can be. */
     public click(id: TabId): void {
         if (!this.enabled(id)) {
@@ -169,6 +193,11 @@ export class Tabs {
     /** What a rebuilt strip opens on; see 'setTabs'. */
     private choose(): TabId | undefined {
         const open = this.specs.filter((spec) => !spec.disabled);
+        const asked = open.find((spec) => spec.id === this.requested)?.id;
+        if (asked !== undefined) {
+            this.requested = undefined;
+            return asked;
+        }
         const usable = (id: TabId | undefined) => open.find((spec) => spec.id === id && !spec.secondary)?.id;
         return (
             usable(this.preferred) ??

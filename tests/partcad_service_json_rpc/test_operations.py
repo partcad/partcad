@@ -176,8 +176,9 @@ class FakeShape:
         self.instantiated = True
         return {"shape": self.name}
 
-    def show(self, ctx=None):
+    def show(self, ctx=None, tab=None):
         self.shown = True
+        self.shown_on = tab
         # Which context it was shown in, and not merely that it was shown. A
         # 'show()' with none falls back to a module-level context that a daemon
         # cannot count on having, and a fake that dropped the argument is what let
@@ -233,7 +234,7 @@ class FakeObject:
         self.summarized_for = project
         return self._summary
 
-    def show(self, ctx=None):
+    def show(self, ctx=None, tab=None):
         self.shown = True
         self.shown_in = ctx
 
@@ -1600,6 +1601,41 @@ def test_a_part_is_not_staged():
     operations.inspect_object(session, {"package": "//", "object": "widget"})
 
     assert part.shown is True
+
+
+def test_the_viewer_tab_asked_for_goes_with_the_show():
+    """'pc ide view --analysis-fea': the tab rides on the show (see 'protocol.KEY_TAB')."""
+    session, _ = make_session()
+    part = FakeShape(name="widget")
+    session.partcad_ctx.shapes[("part", "//:widget")] = part
+
+    operations.inspect_object(session, {"package": "//", "object": "widget", "tab": "fea"})
+
+    assert part.shown is True
+    assert part.shown_on == "fea"
+
+
+def test_a_show_with_no_tab_leaves_the_viewer_where_it_is():
+    session, _ = make_session()
+    part = FakeShape(name="widget")
+    session.partcad_ctx.shapes[("part", "//:widget")] = part
+
+    operations.inspect_object(session, {"package": "//", "object": "widget"})
+
+    assert part.shown_on is None
+
+
+def test_a_tab_the_viewer_does_not_have_is_refused_before_anything_is_built():
+    session, _ = make_session()
+    part = FakeShape(name="widget")
+    session.partcad_ctx.shapes[("part", "//:widget")] = part
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.inspect_object(session, {"package": "//", "object": "widget", "tab": "buy"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "'buy'" in caught.value.message
+    assert part.shown is False
 
 
 def test_instantiate_assembly_builds_it_and_sends_back_a_status():

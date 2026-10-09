@@ -1851,6 +1851,9 @@ def inspect_object(session, params):
     pc = session.partcad
     # One object: the viewer shows a shape, and a verbal summary describes one.
     _refuse_recursion(params)
+    # Checked before anything is built: a misspelt tab costs a message, not a
+    # tessellation.
+    tab = _viewer_tab(params)
     package = ctx.resolve_package_path(params.get("package"))
     package_obj = ctx.get_project(package)
     if not package_obj:
@@ -1907,8 +1910,22 @@ def inspect_object(session, params):
             # and builds nothing: there is nothing to stage for a question the
             # daemon answers without instantiating anything.
             _stage_subassemblies(session, ctx, obj)
-        obj.show(ctx)
+        # Which tab of the viewer to open on ('pc ide view --design-2d'). It
+        # rides on the show itself -- see 'partcad_ide_client.protocol.KEY_TAB'.
+        obj.show(ctx, tab=tab)
     return None
+
+
+def _viewer_tab(params):
+    """The viewer tab 'inspect.object' was asked to open on, or None; refused when it is not one."""
+    tab = params.get("tab")
+    if tab is None:
+        return None
+    from partcad_ide_client.protocol import viewer_tab_ids
+
+    if tab not in viewer_tab_ids():
+        raise JsonRpcError(USAGE_ERROR, "Not a PartCAD Viewer tab: %r (one of %s)" % (tab, ", ".join(viewer_tab_ids())))
+    return tab
 
 
 def version(session, params):

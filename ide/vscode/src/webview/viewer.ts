@@ -88,6 +88,7 @@ import {
     StateReplyMessage,
     SupplyData,
     TabId,
+    groupOf,
     isAnalysisTab,
     isRenderTab,
 } from './messages';
@@ -705,9 +706,27 @@ async function show(message: ShowMessage): Promise<void> {
             view.setOpacity(opacity);
         }
     }
+    // A tab asked for with the show ('pc ide view --analysis-fea'): the group's
+    // strip and the panel's are both told, before they are rebuilt for this
+    // object, which is when they choose what to open. Every show says, so that
+    // a request this object could not honour does not linger for the next one.
+    requestTab(message.tab);
     // Rebuilt on every show, which also re-asks for whatever tab the user is on:
     // the object may be the same one after an edit, and its answers may not be.
     setAllTabs(message);
+}
+
+/** Have every strip open on 'tab' when it next can, or forget any earlier request. */
+function requestTab(tab: TabId | null | undefined): void {
+    const group = groupOf(tab);
+    if (tab && group === undefined) {
+        // From a 'partcad' newer than this extension, most likely.
+        console.warn(`[PartCAD Viewer] there is no '${tab}' tab to open`);
+    }
+    for (const [id, strip] of Object.entries(groups)) {
+        strip?.request(id === group ? (tab as TabId) : undefined);
+    }
+    tabs.request(group);
 }
 
 function clear(): void {

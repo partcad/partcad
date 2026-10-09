@@ -53,6 +53,16 @@ knows the tool. Only the latter need the graph, so `open.tools` fetches them and
 a daemon that is not running costs nothing but those. The window still opens
 here, from this process, on this machine's display: the daemon says *which*
 applications there are, never opens one.
+
+**A directory is opened as a workspace instead**, in an editor on this machine
+-- the PartCAD IDE, VSCodium or Visual Studio Code -- and in the PartCAD
+workbench: what a person sitting down to a package wants on screen. It is the
+same command because it is the same question ("open this, here") with the one
+answer a folder has, and it stays on this side of the wire for the same reason
+as the rest of it: the window is on this machine's screen. It makes no daemon
+call at all. Which editor, and how the window is told to show the workbench, is
+`partcad_client.ide`. A file is never opened this way: there is nothing about
+opening a part in an editor that the Explorer does not already do.
 """
 
 import json
@@ -69,18 +79,20 @@ from ...service import run
     help="Open a file in a third-party application on this machine, wait for it to close, and bring "
     "back what was done in it: an object the application cannot open is converted to a format it can, "
     "and an edit to that copy is converted back over the object's source when that source is a file "
-    "PartCAD can write."
+    "PartCAD can write. A directory is opened as the workspace of an editor instead -- the PartCAD IDE, "
+    "VSCodium or Visual Studio Code -- in the PartCAD workbench; anything after '--' is then passed to "
+    "the editor."
 )
 @click.option(
     "--with",
     "tool",
     type=str,
-    default="freecad",
-    show_default=True,
+    default=None,
     metavar="APPLICATION",
-    help="Which application to open the file in: freecad, blender, gazebo (a scene's world file), "
-    "mujoco (a scene, converted to MJCF if it is not one already) or kicad (a board) -- plus "
-    "whatever the workspace's packages declare in their 'open:' sections.",
+    help="Which application to open the file in: freecad (the default), blender, gazebo (a scene's world "
+    "file), mujoco (a scene, converted to MJCF if it is not one already) or kicad (a board) -- plus "
+    "whatever the workspace's packages declare in their 'open:' sections. For a directory, the editor: "
+    "partcad-ide, codium, code or a path, by default the first of those on the PATH.",
 )
 @click.option(
     "--type",
@@ -112,8 +124,25 @@ from ...service import run
     help="Print what happened as JSON, including the reason on failure.",
 )
 @click.argument("path", type=str, required=True)
+@click.argument("editor_args", nargs=-1, type=click.UNPROCESSED, metavar="[-- EDITOR_ARGS...]")
 @click.pass_context
-def cli(click_ctx, tool: str, object_type: str, use_docker: bool, docker_image: str, as_json: bool, path: str) -> None:
+def cli(
+    click_ctx,
+    tool: str,
+    object_type: str,
+    use_docker: bool,
+    docker_image: str,
+    as_json: bool,
+    path: str,
+    editor_args: tuple,
+) -> None:
+    if os.path.isdir(path):
+        _open_workspace(click_ctx, path, tool, as_json, editor_args)
+        return
+    if editor_args:
+        raise click.UsageError("Arguments after the path are for an editor, and a file is not opened in one.")
+    tool = tool or "freecad"
+
     # Deferred: `pc --help` imports every command module to print its short
     # help, and there is no reason for that to touch the tool tables.
     from partcad_client import external
@@ -223,3 +252,23 @@ def cli(click_ctx, tool: str, object_type: str, use_docker: bool, docker_image: 
             "Your changes are in %s. %s has no file they could be written back into -- it is not a format "
             "PartCAD can write -- so it was left as it was." % (result.edited, os.path.basename(path))
         )
+
+
+def _open_workspace(click_ctx, path: str, editor: str, as_json: bool, editor_args: tuple) -> None:
+    """`pc ide open <directory>`: the directory as an editor's workspace, in the PartCAD workbench."""
+    from partcad_client import ide
+
+    try:
+        result = ide.open_workspace(
+            path,
+            editor=editor,
+            editor_args=editor_args,
+            log=(lambda _line: None) if as_json else click.echo,
+        )
+    except ide.IdeError as e:
+        if as_json:
+            click.echo(json.dumps({"ok": False, "editor": editor, "path": path, "error": str(e)}))
+            click_ctx.exit(1)
+        raise click.ClickException(str(e))
+    if as_json:
+        click.echo(json.dumps(result))

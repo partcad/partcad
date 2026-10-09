@@ -115,6 +115,21 @@ own five are read straight off disk out of the wheel, so the call is made only w
 actually found — a `pc ide open` outside a workspace starts no daemon and creates no context. The daemon says
 which applications there are; it never opens one, and there is still no method that opens a file.
 
+`pc ide install` and `pc ide open <directory>` are in-process too, and make **no** daemon call either: one
+installs the PartCAD extension into an editor on this machine, the other opens a folder as that editor's
+workspace, in the PartCAD workbench (`partcad_client.ide`). Both change this machine -- its editor, its screen --
+which a daemon that can be remote must never be asked to do, for the reason `pc upgrade` is a client command.
+The workbench half needs the extension's cooperation, because an editor's command line can open a folder but not
+run a command in the window it opens: the CLI leaves a request file under `~/.partcad/ide/requests/` before
+opening the folder, and `ide/vscode/src/workbenchRequest.ts` takes it. The file's layout is the contract between
+the two and is written down in both.
+
+`pc ide view`'s tab flags (`--design-3d`, `--analysis-fea`, ...) are generated from
+`partcad_ide_client.protocol.VIEWER_TABS`, one per tab, and the tab goes to the daemon with `inspect.object` and
+from there onto the show itself (`KEY_TAB`) -- not as a message of its own from the client: the show is what
+decides which tabs apply, and two IDE windows sharing the viewer port share it by connection, so a second
+message could reach the other window.
+
 `pc ide state` is in-process for the same reason and makes **no** daemon call at all: it asks the PartCAD IDE
 on this machine what it is showing, over the socket the IDE already listens on for `show`
 (`partcad_ide_client.state`). The IDE is wherever the person is; a daemon can be remote.

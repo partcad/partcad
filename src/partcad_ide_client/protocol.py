@@ -194,6 +194,25 @@ KEY_PACKAGE = "package"
 # On a node: what was learnt about its shape as it was built. PartCAD's own
 # 'shape_envelope.KEY_METADATA', carried through the tessellation untouched.
 KEY_METADATA = "metadata"
+# On a show message: the tab of the PartCAD Viewer to open on, or absent to
+# stay on whichever one is open. One of the leaf ids in VIEWER_TABS -- what
+# 'pc ide view --design-2d' and its siblings ask for. It travels *with* the show
+# rather than as a message of its own because the show is what decides which
+# tabs apply (an assembly has no FEA tab), and because two IDE windows sharing
+# the port share it by load-balancing connections: a second message could reach
+# the other window. A tab that does not apply to the object is not opened, and
+# the viewer stays where it was.
+KEY_TAB = "tab"
+
+# The viewer's tabs, by the group whose strip holds them, in the order they are
+# shown. 'ide/vscode/src/webview/messages.ts' ('TabId', 'TAB_GROUPS') is the
+# other copy, and 'tests/partcad_ide_client/unit/test_protocol.py' holds the two
+# to each other. 'supply' is the tab labelled "Buy".
+VIEWER_TABS = {
+    "design": ("3d", "2d", "draft"),
+    "analysis": ("fea", "cfd"),
+    "manufacturing": ("bvb", "build", "supply", "bom", "assembly"),
+}
 
 
 class ProtocolError(Exception):
@@ -265,3 +284,8 @@ def decode_payload(payload: bytes) -> dict:
     if not isinstance(message, dict):
         raise ProtocolError("frame payload must be a JSON object, got %s" % type(message))
     return message
+
+
+def viewer_tab_ids() -> tuple:
+    """Every leaf tab of the viewer, group by group: what KEY_TAB may name."""
+    return tuple(tab for tabs in VIEWER_TABS.values() for tab in tabs)

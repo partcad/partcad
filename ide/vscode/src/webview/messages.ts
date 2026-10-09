@@ -45,6 +45,31 @@ export type TabId =
 /** The Design tab's own tabs. */
 export const DESIGN_TABS: TabId[] = ['3d', '2d', 'draft'];
 
+/**
+ * Every group of the panel's strip that holds tabs of its own, and those tabs in
+ * the order they are shown.
+ *
+ * What a show's 'tab' may name ('pc ide view --design-2d' and its siblings), and
+ * which group has to be opened for it. 'VIEWER_TABS' in
+ * 'src/partcad_ide_client/protocol.py' is the other copy, and a test there holds
+ * the two to each other.
+ */
+export const TAB_GROUPS: Partial<Record<TabId, TabId[]>> = {
+    design: DESIGN_TABS,
+    analysis: ['fea', 'cfd'],
+    manufacturing: ['bvb', 'build', 'supply', 'bom', 'assembly'],
+};
+
+/** The group a tab of 'TAB_GROUPS' is in, or undefined for anything else. */
+export function groupOf(tab: string | null | undefined): TabId | undefined {
+    for (const [group, tabs] of Object.entries(TAB_GROUPS)) {
+        if (tabs?.includes(tab as TabId)) {
+            return group as TabId;
+        }
+    }
+    return undefined;
+}
+
 /** The two tabs that show the object rendered to a file, and save it. */
 export const RENDER_TABS: TabId[] = ['2d', 'draft'];
 
@@ -61,7 +86,7 @@ export function isRenderTab(tab: TabId): boolean {
 export const DRAFT_PLUGINS = ['//pub/feature/render/draftwright'];
 
 /** The two tabs that run an analysis rather than ask a question about the object. */
-export const ANALYSIS_TABS: TabId[] = ['fea', 'cfd'];
+export const ANALYSIS_TABS: TabId[] = TAB_GROUPS.analysis!;
 
 export function isAnalysisTab(tab: TabId): boolean {
     return ANALYSIS_TABS.includes(tab);
@@ -216,6 +241,12 @@ export interface ShowMessage {
      */
     package: string | null;
     keepCamera: boolean;
+    /**
+     * The tab to open on, one of those in 'TAB_GROUPS', or null to stay on the
+     * one that is open. What 'pc ide view --analysis-fea' asks for; a tab that
+     * does not apply to this object is not opened.
+     */
+    tab?: TabId | null;
     /** The object itself, as the root node of its tree, or null when it is empty. */
     object: ShowNode | null;
     /** Configuration for the viewer, sent from the extension. */

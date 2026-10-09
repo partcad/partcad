@@ -29,6 +29,7 @@ import { PartcadInspector } from './PartcadInspector';
 import { PartcadContext } from './PartcadContext';
 import { PartcadLint } from './PartcadLint';
 import { registerSpellingDictionary } from './spelling';
+import { registerWorkbenchRequests } from './workbenchRequest';
 import { PartcadViewer } from './viewer/PartcadViewer';
 import { PartcadViewerServer } from './viewer/PartcadViewerServer';
 import { ExplorerItemLike, collectIdeState } from './ideState';
@@ -93,6 +94,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // A list of words for Code Spell Checker, where it is installed: data, not
     // code, so there is nothing about it that waits for trust.
     registerSpellingDictionary(context);
+    // `pc ide open <folder>` asks for the PartCAD workbench. Before trust, and
+    // deliberately: in Restricted Mode the workbench is where the Explorer asks
+    // for it, and showing a view container runs nothing of the workspace's.
+    registerWorkbenchRequests(context);
     // In Restricted Mode the extension stays visible and inert: the Explorer
     // asks for trust (a `viewsWelcome` on `!isWorkspaceTrusted`) and everything
     // below runs once it is granted. See `common/trust.ts`.

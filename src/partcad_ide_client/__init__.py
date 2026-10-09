@@ -27,11 +27,13 @@ from .protocol import (
     PARTCAD_IDE_HOST,
     PARTCAD_IDE_PORT,
     VERSION,
+    VIEWER_TABS,
     ProtocolError,
     decode_gltf,
     encode_gltf,
     is_node,
     make_node,
+    viewer_tab_ids,
 )
 
 __version__ = "0.8.167"
@@ -46,6 +48,7 @@ __all__ = [
     "STATE_TIMEOUT",
     "StateNotSupported",
     "VERSION",
+    "VIEWER_TABS",
     "ViewerNotAvailable",
     "clear",
     "decode_gltf",
@@ -56,4 +59,5 @@ __all__ = [
     "make_node",
     "show",
     "state",
+    "viewer_tab_ids",
 ]

@@ -876,13 +876,45 @@ Interacting with IDE
 
 Putting an object in front of a person, in one of two windows -- the IDE's own **PartCAD Viewer**
 (``pc ide view``), or **another application** on this machine (``pc ide open``, which is also what the editor
-extension's "Open in..." menu runs) -- and asking the IDE what it is showing (``pc ide state``). None of them
+extension's "Open in..." menu runs) -- and asking the IDE what it is showing (``pc ide state``). Two more set the
+IDE up: ``pc ide install`` puts the PartCAD extension into an editor, and ``pc ide open <directory>`` opens a
+package as an editor's workspace, in the PartCAD workbench. None of them
 leaves anything new in the package: that is what ``pc export`` and ``pc render`` are for. They used to be ``pc inspect`` and ``pc open``. Those names still work, are left out
 of ``pc --help``, and print a note on stderr saying what to type instead.
 
 ``pc ide view``
   View a part, assembly, or scene in the PartCAD Viewer. Use ``-V`` for a verbal (text) description instead of a visual
   one, and ``-p <name>=<value>`` to set parameters.
+
+  One flag per tab of the viewer opens it on that tab, named ``--<group>-<tab>`` the way the viewer's two strips
+  read: ``--design-3d``, ``--design-2d``, ``--design-draft``; ``--analysis-fea``, ``--analysis-cfd``;
+  ``--manufacturing-bvb``, ``--manufacturing-build``, ``--manufacturing-buy``, ``--manufacturing-bom``,
+  ``--manufacturing-assembly``. With none, the viewer stays on whichever tab it is on. The tab travels with the
+  shape, so it is the window that draws the object that switches; a tab that does not apply to the object (FEA
+  of an assembly) is not opened, and one that is not known yet (Build, until the viewer has worked out what is
+  built) is opened as soon as it is. Opening an analysis tab runs the analysis, as clicking it does.
+
+  .. code-block:: shell
+
+    pc ide view --design-2d -a :logo           # the logo assembly, rendered to a picture
+    pc ide view --analysis-fea :cantilever     # the cantilever, with its FEA run
+
+``pc ide install``
+  Install the PartCAD extension into an editor on this machine -- the PartCAD IDE, VSCodium or Visual Studio
+  Code, whichever of ``partcad-ide``, ``codium`` and ``code`` is found first on the ``PATH``, or the one
+  ``--with`` names (by name or path). The package is the ``partcad-<version>.vsix`` published on PartCAD's
+  GitHub release -- the latest one, or the one ``--version`` names -- or a ``.vsix`` on disk given with
+  ``--vsix``. Anything after ``--`` goes on the editor's command line, which is how a profile of its own is
+  used:
+
+  .. code-block:: shell
+
+    pc ide install                                        # the latest release, into the first editor found
+    pc ide install --with codium --version 0.8.159        # a particular release, into VSCodium
+    pc ide install --vsix partcad.vsix -- --extensions-dir /tmp/ext
+
+  ``PARTCAD_BASE_URL`` replaces the release's download directory, as it does for ``pc upgrade``. Like
+  ``pc upgrade``, it changes this machine and asks no daemon anything.
 
 ``pc ide state``
   Print what the PartCAD IDE on this machine is showing, as YAML (the default) or ``--json``::
@@ -1015,6 +1047,23 @@ of ``pc --help``, and print a note on stderr saying what to type instead.
   ``<package>:<part>`` name: resolving a name is a package-graph question, which is the round trip this
   command does not make. ``--json`` prints what happened (or the reason it did not) as one object, which is
   what the VS Code extension's "Open in..." context menu reads.
+
+  **A directory is opened as a workspace instead**, in an editor on this machine -- the PartCAD IDE, VSCodium or
+  Visual Studio Code, found the way ``pc ide install`` finds one, or named with ``--with`` -- and in the
+  **PartCAD workbench**: the window comes up on the PartCAD Explorer rather than on the files. Anything after
+  ``--`` goes on the editor's command line.
+
+  .. code-block:: shell
+
+    pc ide open .                                  # this package, in the first editor found
+    pc ide open --with codium examples             # ./examples, in VSCodium
+    pc ide open examples -- --new-window
+
+  An editor's command line can open a folder but not run a command in the window it opens, so ``pc ide open``
+  leaves a request under ``~/.partcad/ide/requests/`` first, and the PartCAD extension takes it as it starts in
+  that folder's window, or as an existing window of that folder comes to the front. A request nobody takes is
+  ignored after five minutes. The extension starts in a folder that holds PartCAD files (a ``partcad.yaml``, an
+  ASSY file, a script); any other folder is opened without the workbench.
 
 *****************
 Workflow commands

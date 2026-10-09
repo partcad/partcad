@@ -12,6 +12,11 @@ shape. `pc ide open` opens a file in a third-party application on the machine of
 whoever ran the command, waits for it to close, and brings back what was edited
 in it. Neither one produces anything a package keeps: that is `export`,
 `render` and the rest.
+
+Two more set the IDE up rather than show anything in it: `pc ide install` puts
+the PartCAD extension into an editor on this machine, and `pc ide open
+<directory>` opens a package as an editor's workspace, in the PartCAD workbench.
+Both are `partcad_client.ide`.
 """
 
 import os
@@ -27,7 +32,9 @@ class IdeCommands(Loader):
 
 
 @click.command(
-    cls=IdeCommands, help="Show an object in the PartCAD Viewer or another application, or ask the IDE what it shows"
+    cls=IdeCommands,
+    help="Show an object in the PartCAD Viewer or another application, ask the IDE what it shows, install "
+    "the PartCAD extension, or open a package in the PartCAD workbench",
 )
 def cli() -> None:
     pass

@@ -74,8 +74,10 @@ a CAD addon, or documentation.
 * [src/partcad_client](./src/partcad_client):
 
   What a **client** does, and a daemon must not: discovering the daemon serving a workspace and connecting to
-  it (`daemon`, `client`), replacing this installation of PartCAD (`selfupdate`), and opening a file in a
-  third-party CAD application on this machine (`external`).
+  it (`daemon`, `client`), replacing this installation of PartCAD (`selfupdate`), opening a file in a
+  third-party CAD application on this machine (`external`), and putting the PartCAD extension into an editor
+  on this machine and opening a workspace in it, in the PartCAD workbench (`ide`: `pc ide install`,
+  `pc ide open <directory>`).
 
   All of it acts on **this machine**, from the process running out of it. A daemon can be remote, where
   "update PartCAD" would mean updating somebody else's installation and "stop the local daemons" somebody

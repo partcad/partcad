@@ -71,7 +71,46 @@ export interface SurfaceOptions {
     toneMapping?: THREE.ToneMapping;
 }
 
+/**
+ * Why this window has no WebGL 2, or undefined when it has.
+ *
+ * Asked of a throwaway canvas before three is, because three says so on the
+ * console - three 'console.error' lines for a window that merely has no GPU -
+ * and then throws, which is the case this file exists to handle quietly. A
+ * console error is what a broken pane looks like (and what the IDE's end to end
+ * test fails on), so a missing GPU must not produce one. The browser's own
+ * reason, when it gives one, is what the notice's tooltip quotes.
+ */
+function webglUnavailable(): string | undefined {
+    const canvas = document.createElement('canvas');
+    let reason: string | undefined;
+    canvas.addEventListener(
+        'webglcontextcreationerror',
+        (event) => {
+            reason = (event as WebGLContextEvent).statusMessage || reason;
+        },
+        { once: true },
+    );
+    let context: WebGL2RenderingContext | null = null;
+    try {
+        context = canvas.getContext('webgl2');
+    } catch (error: unknown) {
+        return error instanceof Error ? error.message : String(error);
+    }
+    if (context === null) {
+        return reason || 'WebGL 2 is not available in this window';
+    }
+    // Given back at once: a window has a small budget of live contexts.
+    context.getExtension('WEBGL_lose_context')?.loseContext();
+    return undefined;
+}
+
 function webglSurface(options: SurfaceOptions): Surface | undefined {
+    const unavailable = webglUnavailable();
+    if (unavailable !== undefined) {
+        noWebGLReason = unavailable;
+        return undefined;
+    }
     let renderer: THREE.WebGLRenderer;
     try {
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });

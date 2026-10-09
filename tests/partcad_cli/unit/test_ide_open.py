@@ -441,3 +441,44 @@ def test_the_old_name_still_answers_in_json_with_a_note_on_stderr(click_runner: 
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["tool"] == "freecad"
     assert "'pc open' is deprecated: use 'pc ide open'." in result.stderr
+
+
+# ---- a directory: a workspace in the PartCAD workbench ----------------------
+
+
+@pytest.fixture
+def workspace(monkeypatch):
+    from partcad_client import ide
+
+    calls = []
+
+    def open_workspace(path, editor=None, editor_args=(), log=None):
+        calls.append({"path": path, "editor": editor, "editor_args": editor_args})
+        return {"ok": True, "editor": "/usr/bin/codium", "path": path, "workbench": True}
+
+    monkeypatch.setattr(ide, "open_workspace", open_workspace)
+    return calls
+
+
+def test_a_directory_is_opened_as_a_workspace_and_asks_no_daemon(click_runner, workspace, monkeypatch, tmp_path):
+    monkeypatch.setattr(open_command, "run", lambda *a, **k: pytest.fail("a workspace needs no daemon"))
+    result = click_runner.invoke(
+        cli, ["--no-ansi", "ide", "open", "--with", "codium", str(tmp_path), "--", "--user-data-dir", "/u"]
+    )
+    assert result.exit_code == 0, result.output
+    assert workspace == [{"path": str(tmp_path), "editor": "codium", "editor_args": ("--user-data-dir", "/u")}]
+
+
+def test_a_directory_opened_as_json_says_where(click_runner, workspace, tmp_path):
+    result = click_runner.invoke(cli, ["--no-ansi", "ide", "open", "--json", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["workbench"] is True
+    assert workspace[0]["editor"] is None
+
+
+def test_editor_arguments_are_refused_for_a_file(click_runner, opened, tmp_path):
+    part = tmp_path / "cube.step"
+    part.write_text("")
+    result = click_runner.invoke(cli, ["--no-ansi", "ide", "open", str(part), "--", "--user-data-dir", "/u"])
+    assert result.exit_code != 0
+    assert opened.calls == []
