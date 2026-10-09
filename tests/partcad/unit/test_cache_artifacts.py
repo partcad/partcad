@@ -163,6 +163,28 @@ def test_an_entry_that_would_write_outside_the_directory_is_refused(tmp_path, na
     assert os.listdir(directory) == []
 
 
+@pytest.mark.skipif(not hasattr(os, "symlink") or os.name == "nt", reason="needs POSIX symbolic links")
+@pytest.mark.parametrize("link", ["meshes", "meshes/block.stl"])
+def test_a_link_already_in_the_directory_does_not_carry_a_write_out_of_it(tmp_path, link):
+    """The member name is checked as a name; what is on disk is checked as well."""
+    cache = _cache(tmp_path)
+    first = tmp_path / "run-a"
+    (first / "meshes").mkdir(parents=True)
+    (first / "meshes" / "block.stl").write_bytes(b"solid\n" * 40)
+    assert _run(cache_artifacts.store_async(cache, _hash(), {"before": {}}, directory=str(first)))
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "block.stl").write_text("keep me")
+    second = tmp_path / "run-b"
+    # The link is either the directory the file goes in or the file itself.
+    (second / link).parent.mkdir(parents=True)
+    os.symlink(outside / os.path.relpath(link, "meshes") if link != "meshes" else outside, second / link)
+
+    assert _run(cache_artifacts.restore_async(cache, _hash(), directory=str(second))) is None
+    assert (outside / "block.stl").read_text() == "keep me"
+
+
 def test_garbage_under_the_key_is_a_miss(tmp_path):
     cache = _cache(tmp_path)
     _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: b"not a tarball at all" * 10}))

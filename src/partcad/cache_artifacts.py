@@ -172,6 +172,27 @@ def _safe_relative(name: str) -> Optional[str]:
     return normalized
 
 
+def _write_inside(directory: str, path: str, data: bytes) -> None:
+    """Write 'path', which has to stay inside 'directory' once links are followed.
+
+    The member name was already checked by '_safe_relative', and that is a
+    check of the name alone: a link already in the directory - left by
+    something other than PartCAD, since nothing here writes one - would carry a
+    write through it to wherever it points. So the directory the file lands in
+    is resolved and held to the run directory, and the file itself is opened
+    without following a link. Raising is a miss (see 'restore_async').
+    """
+    parent = os.path.dirname(path)
+    os.makedirs(parent, exist_ok=True)
+    root = os.path.realpath(directory)
+    resolved = os.path.realpath(parent)
+    if os.path.commonpath([root, resolved]) != root:
+        raise ValueError("%s leads outside %s" % (path, directory))
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    with os.fdopen(os.open(path, flags, 0o644), "wb") as f:
+        f.write(data)
+
+
 def _unpack(data: bytes, files: dict, directory: Optional[str]) -> Optional[dict]:
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
         members = {member.name: member for member in tar.getmembers() if member.isfile()}
@@ -193,13 +214,16 @@ def _unpack(data: bytes, files: dict, directory: Optional[str]) -> Optional[dict
                 placed.append((name, os.path.join(directory, relative)))
 
         result = json.loads(tar.extractfile(members[_RESULT_MEMBER]).read().decode("utf-8"))
-        targets = [(_FILES_PREFIX + role, path) for role, path in files.items()] + placed
-        for name, path in targets:
+        for role, path in files.items():
+            # The caller's own output path, written exactly as the
+            # implementation would have written it.
             parent = os.path.dirname(path)
             if parent:
                 os.makedirs(parent, exist_ok=True)
             with open(path, "wb") as f:
-                f.write(tar.extractfile(members[name]).read())
+                f.write(tar.extractfile(members[_FILES_PREFIX + role]).read())
+        for name, path in placed:
+            _write_inside(directory, path, tar.extractfile(members[name]).read())
 
     if directory:
         result = _relocate(result, DIRECTORY_PLACEHOLDER, directory)
