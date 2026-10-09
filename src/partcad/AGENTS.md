@@ -251,6 +251,43 @@ at all).
   that now analyses perfectly well. `CaeTest` is the only test that reaches that state, and the flag exists
   for it.
 
+- **What a solver, a route implementation or a simulator produced is cached**
+  (`./src/partcad/cache_artifacts.py`, `ctx.cache_artifacts`): the verdict cache above remembers one bit, and
+  `pc cae`, `pc cam` and the IDE's tab want the file and what came with it, so `Shape._analysis_run_async()`,
+  `Shape._route_run_async()` and `simulation.run_async()` all ask `cache_artifacts` before starting the
+  implementation and store what came back after. The entry is the result plus the files the run wrote -- the
+  model or the route program by *role*, so it goes back wherever the next caller asks for it; a simulation's whole run directory, with the directory's path in the result replaced by a
+  placeholder, so a hit read through a shared tier points at this machine's copy. One entry, so a hit is never
+  a result whose model went missing.
+
+  The key (`question_hash`, built by `Shape._artifact_hash()` for the two output sections) is the subject's
+  `get_cache_key_async()` plus what the run adds: the request minus the geometry payload (boundary, job,
+  machine, resolved options, material facts), the implementation's name and
+  `Implementation.environment_cache_key()`, and the **content** of the implementation's script and of the
+  wrapper that runs it.
+
+  **Nothing in a key may describe the sandbox that runs it.** Every sandbox type -- conda, venv, none,
+  docker, remote, and the ones after them -- is expected to be reproducible and equivalent, so an entry
+  written under one has to be found under all of them and through a shared tier. Environments are therefore
+  built from declarations alone: the interpreter asked for, `environment_requirements()` (the pinned stack,
+  the package's and the object's own), and the image *declared* (`dockerImage`, `container:`). Never
+  `runtime.image` -- PartCAD's own base image carries the release and the architecture in its tag, so keying
+  on it moved every key on every release and split docker from conda -- and never the Node.js a `none`
+  sandbox found on the host. The artifact key is worked out without asking for a runtime at all, and
+  `tests/partcad/unit/test_cache_artifacts.py` makes asking for one fail. The machine has to come from the
+  request because `manufacturing:` is outside the shape's hash: a part moved from a router to a laser keeps
+  its key and must not get the router's program.
+  For a simulation the subject is the *scene*, whose key covers the subject through its `subject` parameter
+  and its links, plus the plugin, the declaration's `params` and how the scene is exported for it. The
+  `validation:` is deliberately not in it: it is re-evaluated on a hit, so editing it re-judges the run. A
+  subject with no key (`cache: false`) is never cached, and only successes are stored, for the reason the
+  verdict cache does not store an unrunnable analysis. The key is worked out without building the subject, so
+  a simulation hit skips building the scene, exporting it and running the plugin alike.
+
+  The `artifact` key is in `cache_backend.MAX_ONLY_KEYS`: a tier's maximum applies and its minimum does not,
+  and `store_async` stops packing as soon as the compressed entry outgrows every tier. A simulation's run
+  directory is emptied before each run, so nothing an earlier run left there is stored as this one's.
+
 - **Routes** (`./src/partcad/cam.py`, `Shape.route_async()`, `./src/partcad/builtin/cam/`):
   `pc cam` is a fourth output section, `cam:`, resolved by the very code that resolves the other three, and
   out of `output.SECTIONS` for the reason `cae:` is. It differs from `cae:` in one thing that matters: it

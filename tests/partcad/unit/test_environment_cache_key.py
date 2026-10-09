@@ -136,25 +136,75 @@ def test_a_python_part_keys_on_the_interpreter_and_the_cad_stack(tmp_path, confi
         assert requirement in part.environment_cache_key
 
 
-def test_a_python_part_keys_on_the_image_its_sandbox_was_built_in(tmp_path, config, monkeypatch):
-    """The factory has to pass it on; the key alone knowing how is not enough.
+def _package(tmp_path, name):
+    """A directory of its own for one of two packages a test compares."""
+    directory = tmp_path / name
+    directory.mkdir()
+    return directory
 
-    Stamped onto whatever runtime the context hands back rather than by asking
-    for a container one: what is under test is the wiring from the runtime to
-    the key, and starting a real container sandbox needs a daemon this suite
-    does not assume.
+
+def _stamped(monkeypatch, image):
+    """Every Python runtime the context hands back claims to run in 'image'.
+
+    Stamped onto whatever runtime the context returns rather than by asking for
+    a container one: what is under test is that the key does *not* read it, and
+    starting a real container sandbox needs a daemon this suite does not assume.
     """
     real = pc.Context.get_python_runtime
 
     def stamped(self, *args, **kwargs):
         runtime = real(self, *args, **kwargs)
-        runtime.image = "ghcr.io/x/a:1"
+        runtime.image = image
         return runtime
 
     monkeypatch.setattr(pc.Context, "get_python_runtime", stamped)
-    part = _part(tmp_path, config, "parts:\n  thing:\n    type: build123d\n", "thing.py")
 
-    assert part.environment_cache_key.endswith(";image=ghcr.io/x/a:1")
+
+@pytest.mark.parametrize(
+    "image",
+    [
+        # PartCAD's own base image, as the 'docker' and 'remote' sandboxes run a
+        # package that declares none: the release and the architecture are in
+        # the tag, so keying on it would move every key on every release.
+        "ghcr.io/partcad/partcad-container-python:0.8.166-py3.11-amd64",
+        "ghcr.io/partcad/partcad-container-python:0.8.167-py3.11-arm64",
+    ],
+)
+def test_the_sandbox_a_part_happened_to_run_in_is_not_in_its_key(tmp_path, config, monkeypatch, image):
+    """Sandboxes are equivalent, so switching between them must find the same entries."""
+    yaml = "parts:\n  thing:\n    type: build123d\n"
+    on_conda = _part(_package(tmp_path, "a"), config, yaml, "thing.py")
+    _stamped(monkeypatch, image)
+    in_a_container = _part(_package(tmp_path, "b"), config, yaml, "thing.py")
+
+    assert in_a_container.environment_cache_key == on_conda.environment_cache_key
+    assert "image=" not in in_a_container.environment_cache_key
+
+
+def test_a_python_part_keys_on_the_image_its_package_declares(tmp_path, config, monkeypatch):
+    """A declaration, so the same string whichever sandbox ran it.
+
+    A machine with no container runtime installs the requirements instead of
+    pulling the image, and a 'docker' sandbox that could not pull it falls back
+    to PartCAD's own; neither changes what the package said it needs.
+    """
+    yaml = "dockerImage: ghcr.io/x/a:1\nparts:\n  thing:\n    type: build123d\n"
+    declared = _part(_package(tmp_path, "a"), config, yaml, "thing.py")
+    _stamped(monkeypatch, "ghcr.io/partcad/partcad-container-python:0.8.166-py3.11-amd64")
+    fell_back = _part(_package(tmp_path, "b"), config, yaml, "thing.py")
+
+    assert declared.environment_cache_key.endswith(";image=ghcr.io/x/a:1")
+    assert fell_back.environment_cache_key == declared.environment_cache_key
+
+
+def test_a_part_naming_its_own_image_keys_on_it(tmp_path, config):
+    part = _part(
+        tmp_path,
+        config,
+        "parts:\n  thing:\n    type: build123d\n    dockerImage: ghcr.io/x/b:1\n",
+        "thing.py",
+    )
+    assert part.environment_cache_key.endswith(";image=ghcr.io/x/b:1")
 
 
 def test_a_sandbox_with_no_image_says_nothing_about_one(tmp_path, config):
@@ -209,6 +259,23 @@ def test_a_javascript_part_keys_on_node_and_its_dependencies(tmp_path, config):
     assert part.environment_cache_key.startswith("nodejs==")
     assert sandbox_versions.CHILI3D in part.environment_cache_key
     assert sandbox_versions.HAPPY_DOM in part.environment_cache_key
+
+
+def test_a_javascript_part_keys_on_the_node_it_asked_for_not_the_host_s(tmp_path, config, monkeypatch):
+    """The 'none' sandbox runs whatever Node.js the host has; the key is the declaration.
+
+    Otherwise one shape keys one way on a machine with Node.js 20 and another on
+    one with 22 or on the conda sandbox, and every entry is private to a host.
+    """
+    monkeypatch.setattr("partcad.runtime_javascript_none.host_node_version", lambda _path: "17")
+    part = _part(
+        tmp_path,
+        config,
+        'javascriptVersion: "22.11"\nparts:\n  thing:\n    type: chili3d\n',
+        "thing.chili",
+    )
+
+    assert part.environment_cache_key.startswith("nodejs==22;")
 
 
 def test_a_javascript_part_keys_on_the_chili3d_it_chose(tmp_path, config):

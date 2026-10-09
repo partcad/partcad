@@ -18,6 +18,7 @@ import threading
 import warnings
 from typing import TYPE_CHECKING, Optional
 
+from . import cache_artifacts
 from . import cae as pc_cae
 from . import cam as pc_cam
 from . import logging as pc_logging
@@ -2335,7 +2336,19 @@ class Shape(ShapeConfiguration):
                 # wrote; this says where it goes, which is what a solver needs.
                 request["boundary"] = boundary
 
-                result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+                # The same question asked again is a read: the model goes back
+                # where this run would have written it, and the findings come
+                # with it. Asked here, once the request is complete, because the
+                # request is most of the question.
+                cache = getattr(ctx, "cache_artifacts", None)
+                artifact = await self._artifact_hash(
+                    output.CAE, analysis, impl, script, request, "%s:%s" % (options_project.name, format_name)
+                )
+                model = {"model": final_filepath}
+                result = await cache_artifacts.restore_async(cache, artifact, files=model)
+                cached = result is not None
+                if not cached:
+                    result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
 
                 if result is None:
                     raise Exception("The '%s' implementation reported nothing: %s" % (format_name, script))
@@ -2351,6 +2364,10 @@ class Shape(ShapeConfiguration):
                         )
                     )
                 written = os.path.exists(final_filepath)
+                if written and not cached:
+                    # Only an answer is remembered: everything that failed has
+                    # raised by now (see 'partcad.cache_artifacts').
+                    await cache_artifacts.store_async(cache, artifact, result, files=model)
 
         if not written:
             # The meta-wrapper reports what the script returned and does not look
@@ -2377,6 +2394,54 @@ class Shape(ShapeConfiguration):
             "findings": pc_cae.normalize_findings(result.get("findings")),
             "boundary": boundary,
         }
+
+    async def _artifact_hash(self, section: str, label: str, impl, script: str, request: dict, implementation: str):
+        """The cache key of one analysis's or one route's answer, or None.
+
+        'section' is the output section that produced it ('cae' or 'cam') and
+        'label' what this run is of the shape - the analysis, or the machine a
+        route is for - which only names the entry; what decides the key is the
+        rest. That is the shape's own key, and everything the run adds to it:
+        the request the implementation is handed (an analysis's boundary
+        conditions as the user wrote them and where they landed, a route's job
+        and the machine it is for, every resolved option, the shape's material
+        facts), which implementation it is, the sandbox it runs in, and the
+        content of its script and of the meta-wrapper that runs it. What the
+        request carries the geometry in is left out, because the shape's key
+        already covers it and the payload is the one thing in there that is not
+        a description.
+
+        The machine matters here more than anywhere: 'manufacturing:' is one of
+        the keys the shape's own hash leaves out, so a part moved from a router
+        to a laser keeps its key - and it is the request, which carries the
+        machine, that tells the two routes apart.
+
+        Never raises. A key that cannot be worked out - the implementation's
+        container declaration is broken, say - is a run that is not cached, and
+        the run itself is what reports why.
+        """
+        try:
+            subject_key = await self.get_cache_key_async()
+            question = {
+                "section": section,
+                "label": label,
+                "implementation": implementation,
+                "options": impl.config,
+                "request": {key: value for key, value in request.items() if key != "wrapped"},
+                "decode": impl.decode,
+                "reproducible": impl.reproducible,
+                # Declared, never observed: see 'Implementation.environment_cache_key'.
+                "environment": impl.environment_cache_key(),
+            }
+            return cache_artifacts.question_hash(
+                "%s:%s#%s" % (self.project_name, self.name, label),
+                subject_key,
+                question,
+                files=[script, wrapper.get("export.py")],
+            )
+        except Exception as e:
+            pc_logging.debug("%s:%s: the %s result will not be cached: %s" % (self.project_name, self.name, label, e))
+            return None
 
     def analyze(
         self,
@@ -2669,7 +2734,25 @@ class Shape(ShapeConfiguration):
                 # understand as the same words written on the object.
                 request = pc_cam.normalize_job(request)
 
-                result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+                # The same route asked for again is a read, exactly as an
+                # analysis is: the program goes back where this run would have
+                # written it, with what the implementation counted. Keyed after
+                # the request is complete, because the machine and the job are
+                # in it and in nothing else.
+                cache = getattr(ctx, "cache_artifacts", None)
+                artifact = await self._artifact_hash(
+                    output.CAM,
+                    "cam.%s" % (machine or request.get("machine") or "default"),
+                    impl,
+                    script,
+                    request,
+                    "%s:%s" % (options_project.name, format_name),
+                )
+                route = {"route": final_filepath}
+                result = await cache_artifacts.restore_async(cache, artifact, files=route)
+                cached = result is not None
+                if not cached:
+                    result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
 
                 if result is None:
                     raise Exception("The '%s' implementation reported nothing: %s" % (format_name, script))
@@ -2684,6 +2767,10 @@ class Shape(ShapeConfiguration):
                         )
                     )
                 written = os.path.exists(final_filepath)
+                if written and not cached:
+                    # Only an answer is remembered: everything that failed has
+                    # raised by now (see 'partcad.cache_artifacts').
+                    await cache_artifacts.store_async(cache, artifact, result, files=route)
 
         if not written:
             # The meta-wrapper reports what the script returned and does not look

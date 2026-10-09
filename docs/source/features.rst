@@ -744,6 +744,15 @@ Chili3D, therefore re-renders rather than serving what the previous environment
 built. ``pc info`` reports that environment for the objects that have one; an
 assembly does not, because it is composed from objects that each carry theirs.
 
+That environment is the one the package *declares*, not the sandbox that
+happened to run: its interpreter version, its requirements, and the
+``dockerImage`` it names, if any. The sandbox types (``conda``, ``venv``,
+``none``, ``docker``, ``remote``) are expected to be reproducible and
+equivalent, so switching between them, or between machines that use different
+ones through a shared cache tier, finds the entries the other one wrote. A
+``none`` sandbox running a host interpreter other than the one declared warns
+about it and is cached as the declared one.
+
 At the moment code-CAD caching is experimental and can be enabled by using the following configuration:
 
   .. code-block:: yaml
@@ -809,6 +818,31 @@ An object made out of others is keyed on theirs as well: an ``extrude`` or
 assembly on everything it links to. Editing a part rebuilds every assembly that
 uses it, and an object with ``cache: false`` makes everything built out of it
 uncached too.
+
+Analyses, routes and simulations
+--------------------------------
+
+What ``pc cae fea``/``pc cae cfd``, ``pc cam`` and ``pc simulate`` produce is
+cached in the same tiers: the result (the findings, what the route
+implementation counted, or what the simulator reported) together with the files
+the run wrote -- the analysis model, the route program, or the whole run
+directory of a simulation, with the scene, its meshes and whatever the plugin
+left there. Asking the same question again puts the files back where that run
+asks for them and runs nothing. The ``fea``, ``cfd`` and ``cam`` checks of
+``pc test``, and the IDE's FEA and CFD tabs, go through the same cache.
+
+The question is the object's own cache key plus everything the run adds to it:
+the boundary conditions and where they landed, a route's job and the machine it
+is cut on, the implementation and every option it resolved to, the sandbox it
+runs in, and the content of its script. Changing any of those runs it again. A simulation's ``validation:`` is not part
+of the question: it is evaluated again on every run, so editing it re-judges the
+cached run rather than repeating it.
+
+Only answers are cached: an analysis, a route or a simulation that failed is run again
+next time, since installing a missing solver changes no key. The tiers' maximum
+entry sizes apply as usual -- a model larger than ``cacheFilesMaxEntrySize`` is
+not kept in ``cacheFiles`` -- but their minimum sizes do not, because no
+solver's answer is too small to be worth keeping.
 
 ``pc --cache-bypass <command>`` (or ``PC_CACHE_BYPASS=1``, or ``cacheBypass: True``)
 bypasses every tier for one run: nothing is read from a cache and nothing built

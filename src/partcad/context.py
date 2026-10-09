@@ -425,6 +425,9 @@ class Context:
         # Pictures drawn for lists of objects (see 'partcad.thumbnail'), under
         # the cache key of the shape they are a picture of.
         self.cache_renders = Cache("renders", user_config=self.user_config)
+        # What an analysis or a simulation produced, under a key describing the
+        # question it answered (see 'partcad.cache_artifacts').
+        self.cache_artifacts = Cache("artifacts", user_config=self.user_config)
 
         self.connection_status = {}
 
