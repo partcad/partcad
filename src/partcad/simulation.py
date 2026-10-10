@@ -127,6 +127,20 @@ VALIDATION_BUILTINS = {
 }
 
 
+class SimulationConfigError(Exception):
+    """What a declaration names cannot be found, so nothing could be run.
+
+    No plugin named, a plugin no package declares, a scene that is not there or
+    cannot hold a subject, a plugin that names no format to hand the scene over
+    in. Each of those is wrong on every machine the package is opened on, and no
+    install mends it -- which is the whole of why it is a type of its own:
+    `partcad.test.sim` fails it whatever the machine, while a run that resolved
+    and then did not deliver may be the machine's fault (see
+    `ImplementationTest._verdict`). The same split `CaeConfigError` and
+    `CamConfigError` make for the analyses and the routes.
+    """
+
+
 class SimulationDeclaration:
     """One entry of an object's ``simulate:`` section, normalized."""
 
@@ -172,6 +186,27 @@ class SimulationResult:
         self.result: dict = {}
         self.error: typing.Optional[str] = None
 
+        # The four below are for a caller that has to say *why*, and are kept
+        # out of 'to_dict()' -- which is what 'pc sim --json' prints, and which
+        # is unchanged by them.
+        #
+        # What the run raised, beside 'error', which is only its text: whether
+        # it was the declaration's fault ('SimulationConfigError') or the
+        # machine's ('runtime.SandboxUnavailable') is a question of its type.
+        self.exception: typing.Optional[BaseException] = None
+        # The plugin, once it resolved. None means the run never got as far as
+        # knowing who would have run it.
+        self.plugin: typing.Optional[output.Implementation] = None
+        # Why the 'validation:' could not be evaluated, when that is why it
+        # failed: a syntax error, or an expression that raised. None when it was
+        # evaluated -- including to False, which is a verdict and not a problem.
+        self.problem: typing.Optional[str] = None
+        # The key the run's answer was looked up and stored under in the
+        # artifact cache, or None when it had none. A caller that remembers
+        # something derived from the run -- 'pc test''s verdict -- may only do
+        # so when there was one (see 'question_key_async').
+        self.artifact_key: typing.Optional[str] = None
+
     @property
     def name(self) -> str:
         return self.declaration.name
@@ -180,6 +215,18 @@ class SimulationResult:
     def failed(self) -> bool:
         """Whether this run is a failure the command should exit non-zero on."""
         return self.error is not None or self.passed is False
+
+    @property
+    def misconfigured(self) -> bool:
+        """Whether this run failed on what the declaration names, before anything ran."""
+        return isinstance(self.exception, SimulationConfigError)
+
+    @property
+    def plugin_name(self) -> str:
+        """The plugin as a full path, or as the declaration wrote it if it never resolved."""
+        if self.plugin is not None and self.plugin.project is not None:
+            return "%s:%s" % (self.plugin.project.name, self.plugin.format_name)
+        return str(self.declaration.simulation)
 
     def to_dict(self) -> dict:
         return {
@@ -266,12 +313,27 @@ def resolve_plugin(ctx, package_name: str, spec: str):
     plugin_package, plugin_name = resolve_resource_path(package_name, spec)
     project = ctx.get_project(plugin_package)
     if project is None:
-        raise Exception("The package implementing the simulation '%s' is not found: %s" % (spec, plugin_package))
+        raise SimulationConfigError(
+            "The package implementing the simulation '%s' is not found: %s. "
+            "Add it to this package's 'dependencies:', or name another one." % (spec, plugin_package)
+        )
+    if getattr(project, "broken", False):
+        # A package that failed to load answers every question about itself
+        # with nothing, so without this the sentence below would say it declares
+        # no simulations at all -- sending the reader to a file that was never
+        # read. The reason is already in the log; what is worth saying here is
+        # that this is why the simulation is not running. The same note
+        # 'Shape._analysis_implementation' makes for a solver.
+        raise SimulationConfigError(
+            "The package implementing the simulation '%s' did not load: %s. "
+            "The reason is reported above; a dependency that could not be fetched is the usual one."
+            % (spec, project.name)
+        )
 
     section = project.config_obj.get(output.SIMULATE) or {}
     config = section.get(plugin_name)
     if config is None:
-        raise Exception(
+        raise SimulationConfigError(
             "The package '%s' declares no simulation '%s'. It declares: %s"
             % (plugin_package, plugin_name, ", ".join(sorted(section)) or "none")
         )
@@ -293,14 +355,14 @@ def scene_parameters(
     """
     project = ctx.get_project(scene_package)
     if project is None:
-        raise Exception("The package holding the simulation scene is not found: %s" % scene_package)
+        raise SimulationConfigError("The package holding the simulation scene is not found: %s" % scene_package)
     config = project.get_scene_config(scene_name)
     if config is None:
-        raise Exception("The simulation scene is not found: %s:%s" % (scene_package, scene_name))
+        raise SimulationConfigError("The simulation scene is not found: %s:%s" % (scene_package, scene_name))
 
     parameters = config.get("parameters") or {} if isinstance(config, dict) else {}
     if SUBJECT_PARAMETER not in parameters:
-        raise Exception(
+        raise SimulationConfigError(
             "The scene '%s:%s' declares no '%s' parameter, so it cannot hold the object being simulated"
             % (scene_package, scene_name, SUBJECT_PARAMETER)
         )
@@ -353,26 +415,42 @@ def run_directory(ctx, object_name: str, simulation_name: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration) -> SimulationResult:
-    """Run one declared simulation of one object and validate what came back."""
+def subject_kind(shape) -> typing.Optional[str]:
+    """What a shape is as the subject of a simulation, or None if it cannot be one.
+
+    A part or an assembly: those are what declare ``simulate:``. Asked of the
+    shape's own ``kind`` rather than of its class, because a scene *is* an
+    assembly in the class hierarchy and is not a subject -- it is the world a
+    subject is placed in.
+    """
+    kind = getattr(shape, "kind", None)
+    return kind if kind in ("part", "assembly") else None
+
+
+async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration, report: bool = True) -> SimulationResult:
+    """Run one declared simulation of one object and validate what came back.
+
+    Never raises: whatever went wrong is on the result, as text in ``error``
+    and as the exception itself in ``exception``.
+
+    ``report`` is whether this says what came of the run, at the level the
+    outcome deserves -- ``ERROR`` for a run that failed or did not validate.
+    ``pc sim`` asks it to, because those lines are its verdict. ``pc test`` does
+    not, because its verdict is the check's to write: a check that decides a
+    failed run was the machine's fault and *skips* it cannot have had an
+    ``ERROR`` logged in its name already, since any ``ERROR`` is what makes
+    ``pc`` exit non-zero. Unreported, the same lines go to ``DEBUG``.
+    """
     object_name = "%s:%s" % (shape.project_name, shape.name)
     result = SimulationResult(declaration, object_name)
+    say_error = pc_logging.error if report else pc_logging.debug
+    say_info = pc_logging.info if report else pc_logging.debug
 
     with pc_logging.Action("Simulate", shape.project_name, "%s/%s" % (shape.name, declaration.name)):
         try:
-            if not declaration.simulation:
-                raise Exception(
-                    "the simulation '%s' names no 'simulation:' plugin to run it. PartCAD implements no "
-                    "simulator itself; import one and name it, e.g. '%s' for MuJoCo"
-                    % (declaration.name, KNOWN_SIMULATION)
-                )
-            impl = resolve_plugin(ctx, shape.project_name, declaration.simulation)
-            scene_package, scene_name = resolve_resource_path(shape.project_name, declaration.scene)
-            params = scene_parameters(ctx, scene_package, scene_name, declaration, object_name, kind)
-
-            scene = ctx.get_scene("%s:%s" % (scene_package, scene_name), params)
-            if scene is None:
-                raise Exception("The simulation scene could not be built: %s:%s" % (scene_package, scene_name))
+            impl = _resolve_plugin_of(ctx, shape, declaration)
+            result.plugin = impl
+            scene = _resolve_scene_of(ctx, shape, kind, declaration)
 
             directory = run_directory(ctx, object_name, declaration.name)
             # What the directory holds is this run's and nothing else's: the
@@ -388,6 +466,7 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration) -
             # run rather than repeating it.
             cache = getattr(ctx, "cache_artifacts", None)
             artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind)
+            result.artifact_key = artifact.get() if artifact is not None else None
             result.result = await cache_artifacts.restore_async(cache, artifact, directory=directory)
             if result.result is None:
                 # Whatever a failed restore managed to write is not this run's.
@@ -400,15 +479,75 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration) -
                 await cache_artifacts.store_async(cache, artifact, result.result, directory=directory)
         except Exception as e:  # pylint: disable=broad-except
             result.error = str(e)
-            pc_logging.error("%s: the simulation '%s' failed: %s" % (object_name, declaration.name, e))
+            result.exception = e
+            say_error("%s: the simulation '%s' failed: %s" % (object_name, declaration.name, e))
             return result
 
-        result.passed = validate(declaration, result.result, object_name)
+        result.passed, result.problem = _evaluate(declaration, result.result, object_name)
+        if result.problem:
+            say_error(result.problem)
         if result.passed is False:
-            pc_logging.error("%s: the simulation '%s' did not validate" % (object_name, declaration.name))
+            say_error("%s: the simulation '%s' did not validate" % (object_name, declaration.name))
         elif result.passed is True:
-            pc_logging.info("%s: the simulation '%s' validated" % (object_name, declaration.name))
+            say_info("%s: the simulation '%s' validated" % (object_name, declaration.name))
         return result
+
+
+def _resolve_plugin_of(ctx, shape, declaration: SimulationDeclaration):
+    """The plugin a declaration names, resolved from the package the object is in.
+
+    Never against the current package: 'sim-mujoco:mujoco' means the
+    'sim-mujoco' *that* package imported. Which is what keeps 'pc test -P //...'
+    -- run with the root of a tree current while every object in it sits one or
+    more packages down -- resolving each declaration the way 'pc sim' in its
+    own package would.
+    """
+    if not declaration.simulation:
+        raise SimulationConfigError(
+            "the simulation '%s' names no 'simulation:' plugin to run it. PartCAD implements no "
+            "simulator itself; import one and name it, e.g. '%s' for MuJoCo" % (declaration.name, KNOWN_SIMULATION)
+        )
+    return resolve_plugin(ctx, shape.project_name, declaration.simulation)
+
+
+def _resolve_scene_of(ctx, shape, kind: str, declaration: SimulationDeclaration):
+    """The scene a declaration places the object in, with the object in it, unbuilt."""
+    object_name = "%s:%s" % (shape.project_name, shape.name)
+    scene_package, scene_name = resolve_resource_path(shape.project_name, declaration.scene)
+    params = scene_parameters(ctx, scene_package, scene_name, declaration, object_name, kind)
+    scene = ctx.get_scene("%s:%s" % (scene_package, scene_name), params)
+    if scene is None:
+        raise SimulationConfigError("The simulation scene could not be built: %s:%s" % (scene_package, scene_name))
+    return scene
+
+
+async def question_key_async(ctx, shape, kind: str, declaration: SimulationDeclaration) -> typing.Optional[str]:
+    """The key one run's answer is cached under, or None when it has none.
+
+    What 'run_async' asks the artifact cache with, worked out the same way and
+    without building or running anything: the scene's key (which covers the
+    subject), the plugin and its resolved options, its environment, the
+    declaration's 'params', how the scene is exported for it, and the content of
+    both scripts and of the wrappers. So it is the whole of what a run's
+    'before' and 'after' depend on -- and deliberately not the 'validation:',
+    which is judged over them afterwards.
+
+    For a caller that remembers something *derived* from a run, and has to be
+    told when the run it was derived from would be a different one: 'pc test'
+    keys its 'sim' verdict on it (see 'SimTest.cache_key_suffix'). None for a
+    declaration that does not resolve, and for a subject with no key
+    ('cache: false') -- a run that has no key is one nothing may be remembered
+    about.
+    """
+    object_name = "%s:%s" % (shape.project_name, shape.name)
+    try:
+        impl = _resolve_plugin_of(ctx, shape, declaration)
+        scene = _resolve_scene_of(ctx, shape, kind, declaration)
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.debug("%s: the simulation '%s' has no key: %s" % (object_name, declaration.name, e))
+        return None
+    artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind)
+    return artifact.get() if artifact is not None else None
 
 
 def _empty(directory: str) -> None:
@@ -421,7 +560,9 @@ def _scene_export(ctx, scene, impl, directory: str):
     """Who writes the scene for the plugin: the format, its implementation, the package."""
     format_name = impl.config.get("format")
     if not format_name:
-        raise Exception("The simulation '%s' declares no 'format' to hand the scene over in" % impl.format_name)
+        raise SimulationConfigError(
+            "The simulation '%s' declares no 'format' to hand the scene over in" % impl.format_name
+        )
 
     scene_project = ctx.get_project(scene.project_name)
     # The plugin's own package is read for the file type as well, underneath the
@@ -577,8 +718,22 @@ def validate(declaration: SimulationDeclaration, result: dict, object_name: str)
     it. Reported with the exception, because "TypeError" on its own tells
     whoever wrote it nothing.
     """
+    verdict, problem = _evaluate(declaration, result, object_name)
+    if problem:
+        pc_logging.error(problem)
+    return verdict
+
+
+def _evaluate(declaration: SimulationDeclaration, result: dict, object_name: str):
+    """'validate' without the logging: the verdict, and why it could not be reached.
+
+    The second is None unless the expression would not compile or raised, and
+    is then the sentence 'validate' logs. Returned rather than logged so that
+    'run_async' can leave the saying of it to its caller (see its ``report``),
+    and so that 'pc test' can put it in the one line its verdict is.
+    """
     if not declaration.validation:
-        return None
+        return None, None
     # In the globals rather than in a separate locals mapping, and that is not a
     # detail: a generator expression compiles to a function of its own, and a
     # function body sees the enclosing globals but never a caller's locals. The
@@ -598,15 +753,70 @@ def validate(declaration: SimulationDeclaration, result: dict, object_name: str)
             scope,
         )
     except SyntaxError as e:
-        pc_logging.error(
+        return False, (
             "%s: the 'validation' of the simulation '%s' is not a Python expression: %s"
             % (object_name, declaration.name, e)
         )
-        return False
     except Exception as e:  # pylint: disable=broad-except
-        pc_logging.error(
+        return False, (
             "%s: the 'validation' of the simulation '%s' could not be evaluated: %s: %s"
             % (object_name, declaration.name, type(e).__name__, e)
         )
-        return False
-    return bool(verdict)
+    return bool(verdict), None
+
+
+# ---------------------------------------------------------------------------
+# Saying what came of it
+# ---------------------------------------------------------------------------
+
+
+def dysfunction_report(
+    object_name: str, simulation_name: str, plugin: str, error, remedy: typing.Optional[str] = None
+) -> str:
+    """Why a simulation produced no answer, as the failure a user has to act on.
+
+    The report 'partcad.cae.dysfunction_report()' writes for an analysis and
+    'partcad.cam.dysfunction_report()' for a route, and for the same reason:
+    what the plugin said is relayed verbatim, because only it knows what went
+    wrong, and what PartCAD adds is the two things the sentence usually omits
+    and the reader always needs -- which plugin was asked, and which machine it
+    did not work on. "No module named 'mujoco'" is a puzzle; the same sentence
+    under '//...:mujoco' on Windows-AMD64 is an answer.
+    """
+    import platform
+
+    lines = [
+        "%s: the simulation '%s' could not be run by %s" % (object_name, simulation_name, plugin),
+        "\t%s" % str(error).replace("\n", "\n\t"),
+        "\tplatform: %s-%s, Python %s" % (platform.system(), platform.machine(), platform.python_version()),
+    ]
+    if remedy:
+        lines.append("\t%s" % remedy)
+    return "\n".join(lines)
+
+
+def validation_report(result: SimulationResult) -> str:
+    """Why a run that happened is not what the declaration said would happen.
+
+    The expression is quoted, because it is the claim that failed and the reader
+    has to see which one -- an object can declare several, and the package may
+    have been edited since anybody last read it. What the plugin reported is
+    not: it is the plugin's own vocabulary and often long, and ``pc sim --json``
+    prints the whole of it for the one run somebody wants to look into.
+    """
+    declaration = result.declaration
+    if result.problem:
+        # The expression never reached a verdict, which says more about it than
+        # "does not hold" would.
+        head = result.problem
+    else:
+        head = "%s: the simulation '%s' ran, and its 'validation' does not hold" % (
+            result.object_name,
+            declaration.name,
+        )
+    expression = str(declaration.validation or "").strip().replace("\n", "\n\t\t")
+    return "%s\n\tvalidation:\n\t\t%s\n\t'pc sim --json' prints what %s reported" % (
+        head,
+        expression,
+        result.plugin_name,
+    )

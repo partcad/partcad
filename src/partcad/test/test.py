@@ -7,7 +7,9 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import contextvars
 import copy
+import json
 from abc import ABC, abstractmethod
 
 from .. import logging as pc_logging
@@ -22,6 +24,21 @@ from ..concurrency import ReentrantGate
 # used to wedge 'pc test -r' for good -- with every permit held by a caller
 # waiting for a permit, no test ever finished and the daemon stopped answering.
 _gate = ReentrantGate("partcad.test.concurrency")
+
+
+# What 'failed()' said while a verdict was being worked out, so that a failure
+# read back from the cache can say it again. A context variable rather than an
+# attribute: one Test instance checks every object concurrently, and each
+# 'test_cached()' call is a task of its own, so the collector has to belong to
+# the call. Holds (test, shape, messages); 'failed()' appends only for that test
+# and that shape, because a check that tests other objects on the way -- an
+# assembly's manufacturability testing its parts -- logs their failures too,
+# and those are theirs to remember, under their own keys.
+_reasons: contextvars.ContextVar = contextvars.ContextVar("partcad.test.reasons", default=None)
+
+# How much of what a failure said is kept with it. A reason is a sentence or a
+# short report; this is a bound on a pathological one, not a budget.
+_MAX_REASONS_BYTES = 64 * 1024
 
 
 def semaphore_wrapper(f):
@@ -50,6 +67,15 @@ class Test(ABC):
     # the reason for it going away. See 'CaeTest.test()', which is the one test
     # that can reach that state.
     NOT_CACHEABLE = "not_cacheable"
+
+    # A key the caller sets on 'test_ctx' to say the object was asked about on
+    # its own, by name -- 'pc test <object>' -- rather than reached by walking a
+    # package or a tree of them. Most checks give the same verdict either way;
+    # one that does not reads this (see 'SimTest', where a claim with no
+    # condition to check is a skip in a walk and a failure when asked about).
+    # A verdict that turns on it must not be cached, since the cache key does
+    # not carry it.
+    NAMED = "named"
 
     def __init__(self, name: str) -> None:
         self.name = name
@@ -91,22 +117,61 @@ class Test(ABC):
             cached_results = await ctx.cache_tests.read_data_async(shape.hash, [cache_key])
             cached_bytes = cached_results.get(cache_key, [])
             if cached_bytes and len(cached_bytes) != 0:
-                if len(cached_bytes) != 1:
-                    # TODO(clairbee): use this space to persist the failure error message in the cache, be mindful of the special treatment 1 byte objects get in the cache
-                    # raise ValueError(f"Invalid cache data for test {self.name} in shape {shape.name}")
-                    return self.failed(shape, "Invalid cached data")
-                result = bool(cached_bytes[0])
-                if result == self.TEST_FAILED:
-                    # TODO(clairbee): persist the failure error message in the cache, be mindful of the special treatment 1 byte objects get in the cache
-                    self.failed(shape, "Failed test result loaded from cache")
-                return result
+                return self._replay(shape, bytes(cached_bytes))
 
-        result = await self.test(tests_to_run, ctx, shape, test_ctx)
+        token = _reasons.set((self, shape, []))
+        try:
+            result = await self.test(tests_to_run, ctx, shape, test_ctx)
+            reasons = _reasons.get()[2]
+        finally:
+            _reasons.reset(token)
 
         if is_cacheable and not test_ctx.get(self.NOT_CACHEABLE):
-            # Only cache passed test results?
-            # if result == self.TEST_PASSED:
-            await ctx.cache_tests.write_data_async(shape.hash, {cache_key: bytes([result])})
+            await ctx.cache_tests.write_data_async(shape.hash, {cache_key: self._record(result, reasons)})
+        return result
+
+    @classmethod
+    def _record(cls, result: bool, reasons: list) -> bytes:
+        """A verdict as it is stored: one byte, and for a failure the reasons after it.
+
+        The first byte is the verdict and is all a pass is, which is every entry
+        this cache held before reasons were kept -- so an old entry reads back
+        exactly as it always did. A failure carries what 'failed()' said while
+        it was reached, as JSON, so that reading it back can say *why* rather
+        than only that it failed: a cached failure used to print "Failed test
+        result loaded from cache", which is the one thing its reader already
+        knew. Test entries are outside every tier's size window (see
+        'cache_backend.SIZED_KEYS'), so the longer entry is stored like the
+        short one.
+        """
+        if result == cls.TEST_PASSED or not reasons:
+            return bytes([result])
+        payload = json.dumps(reasons).encode("utf-8")
+        if len(payload) > _MAX_REASONS_BYTES:
+            payload = json.dumps([reason[:1024] for reason in reasons[:16]]).encode("utf-8")
+        return bytes([result]) + payload
+
+    def _replay(self, shape, cached: bytes) -> bool:
+        """A stored verdict, read back and said again."""
+        result = bool(cached[0])
+        if result == self.TEST_PASSED:
+            if len(cached) != 1:
+                return self.failed(shape, "Invalid cached data")
+            return result
+        reasons = []
+        if len(cached) > 1:
+            try:
+                reasons = [str(reason) for reason in json.loads(cached[1:].decode("utf-8"))]
+            except Exception:  # pylint: disable=broad-except
+                # Not ours to interpret: the verdict still stands, and the
+                # sentence below says less than it could rather than nothing.
+                reasons = []
+        if not reasons:
+            # An entry written before reasons were kept, or a failure that
+            # said nothing in the check's own name.
+            self.failed(shape, "Failed test result loaded from cache")
+        for reason in reasons:
+            self.failed(shape, "%s (remembered from an earlier run; 'pc --cache-bypass test' checks again)", reason)
         return result
 
     @abstractmethod
@@ -162,9 +227,18 @@ class Test(ABC):
         return self.TEST_PASSED
 
     def failed(self, shape, *args) -> bool:
-        """This methods works like logging.error() but prepends the message with the test name and the shape name."""
+        """This methods works like logging.error() but prepends the message with the test name and the shape name.
+
+        What it says is also kept with the verdict being worked out, when this
+        check is working one out for this shape (see 'test_cached()'), so that
+        a failure read back from the cache can say it again.
+        """
         message = self._log_message_prepare(*args)
         pc_logging.error(f"Test failed: {shape.project_name}:{shape.name}: {self.name}{message}")
+        collecting = _reasons.get()
+        if collecting is not None and collecting[0] is self and collecting[1] is shape and message:
+            # Without the ": " '_log_message_prepare' puts in front of it.
+            collecting[2].append(message[2:])
         return self.TEST_FAILED
 
     def passed(self, shape, *args) -> bool:

@@ -295,6 +295,12 @@ runtime for this, or for choosing a sandbox. Every image PartCAD builds, pulls o
 documents is a Linux image, and such a daemon answers a ping and then fails every
 pull with ``no matching manifest for windows/amd64``.
 
+The same policy, from the same code, decides ``pc test``'s ``sim`` check, which
+holds a part or an assembly to the ``simulate:`` claims it makes: a simulator
+that resolved and did not run is a failure, but for the one excuse, and a
+simulation plugin that cannot be found is never excused. See "Running a
+simulation" in :doc:`simulation`.
+
 ``examples/feature_cae`` is the pair of cases to check an implementation against
 — a cantilever and a pipe, each with a closed-form answer to compare the solver
 with. Against CalculiX the cantilever reads 0.1655 mm where the model predicts
@@ -837,8 +843,8 @@ implementation counted, or what the simulator reported) together with the files
 the run wrote -- the analysis model, the route program, or the whole run
 directory of a simulation, with the scene, its meshes and whatever the plugin
 left there. Asking the same question again puts the files back where that run
-asks for them and runs nothing. The ``fea``, ``cfd`` and ``cam`` checks of
-``pc test``, and the IDE's FEA and CFD tabs, go through the same cache.
+asks for them and runs nothing. The ``fea``, ``cfd``, ``cam`` and ``sim`` checks
+of ``pc test``, and the IDE's FEA and CFD tabs, go through the same cache.
 
 The question is the object's own cache key plus everything the run adds to it:
 the boundary conditions and where they landed, a route's job and the machine it
@@ -852,6 +858,11 @@ next time, since installing a missing solver changes no key. The tiers' maximum
 entry sizes apply as usual -- a model larger than ``cacheFilesMaxEntrySize`` is
 not kept in ``cacheFiles`` -- but their minimum sizes do not, because no
 solver's answer is too small to be worth keeping.
+
+``pc test`` also remembers each check's verdict on each object, and a failure it
+remembers keeps what the check said about it: read back, it repeats the reason
+and says that it was remembered from an earlier run. ``pc --cache-bypass test``
+works every verdict out again.
 
 ``pc --cache-bypass <command>`` (or ``PC_CACHE_BYPASS=1``, or ``cacheBypass: True``)
 bypasses every tier for one run: nothing is read from a cache and nothing built
