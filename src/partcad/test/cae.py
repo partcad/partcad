@@ -39,10 +39,19 @@ from .. import cae as pc_cae
 from .. import output
 from .. import runtime as pc_runtime
 from ..part import Part
+from .implementation import ImplementationTest
 from .test import Test
 
 
-class CaeTest(Test):
+class CaeTest(ImplementationTest):
+    """The `fea` and `cfd` checks.
+
+    What an analysis that produced no answer costs -- a failure, or on a machine
+    with no container runtime a skip -- is `ImplementationTest._verdict()`,
+    shared with the `sim` check so that a missing solver and a missing simulator
+    are answered by one rule.
+    """
+
     def __init__(self, analysis: str) -> None:
         """One check per analysis, named after it: `pc test -f fea` selects it."""
         super().__init__(analysis)
@@ -113,86 +122,6 @@ class CaeTest(Test):
             # a run that did resolve.
             parts.append("unresolved:%s" % e)
         return "." + self.analysis + "=" + hashlib.md5("\n".join(parts).encode()).hexdigest()
-
-    def _a_container_was_available(self, ctx) -> bool:
-        """Whether a container was available to run this implementation in.
-
-        Two ways for that to be true, and only one of them is on this machine.
-        A local daemon is the obvious one. The other is `pythonSandbox: remote`,
-        which sends the command to a service that starts the container over
-        there -- so the host needs no daemon of its own, and asking its daemon
-        would report "no container runtime" on a machine whose every part is
-        already being built in one.
-        """
-        if getattr(ctx.user_config, "python_sandbox", None) == "remote":
-            return True
-        return pc_runtime.docker_available()
-
-    def _verdict(self, ctx, shape, impl, report: str) -> bool:
-        """What an analysis that produced no answer costs: a failure, or a skip.
-
-        A failure by default, and that default is the whole contract of this
-        check: a part asked a question, the implementation was asked it, and
-        nothing came back. Whatever the reason -- no solver, no mesher, a crash
-        -- the part has no answer, and a check that passed anyway would make
-        `fea:` decoration.
-
-        The exception is a machine with **no container runtime**, and it is the
-        only one. A container is how an implementation brings what pip cannot
-        install: an image can carry a solver, a mesher and the shared libraries
-        under them, and nothing else PartCAD has can. On a machine with no
-        container runtime there is no arrangement under which such an
-        implementation could have been given what it needs, so the question was
-        never really put -- and the honest verdict for a question nobody could
-        ask is a skip.
-
-        That the implementation declares an image or not does not change it, and
-        deliberately: an implementation is free to say nothing about containers
-        and still need a solver, and reading the declaration would make the
-        verdict depend on how well its author documented themselves rather than
-        on what this machine can do. What the declaration is good for is the
-        *message*, which names the image when there is one.
-
-        Once a runtime answers, the excuse is gone entirely -- a registry that
-        cannot be reached, an image that will not start, a solver missing from
-        the image are all things somebody can fix, and calling them
-        "unavailable" would hide exactly the failures a plugin's own CI exists
-        to catch. That is the half that keeps this narrow enough to be worth
-        having, and it is why continuous integration, which has a container
-        runtime, sees every one of these as a failure.
-
-        "Answers" is not "answers *here*", though, and the `remote` sandbox is
-        the case that makes the difference: it runs the implementation in a
-        container on somebody else's machine and needs no daemon on this one. A
-        host configured that way has a container runtime in every sense that
-        matters to this question -- one carried the analysis -- so a failure
-        there is a failure, and reading the local daemon would have excused it.
-
-        Either way the reader gets the same sentence, which is the point of
-        `dysfunction_report()`: what was asked, what it said, and which platform
-        it did not work on. A skip that said less than a failure would be a way
-        of not finding out.
-        """
-        if self._a_container_was_available(ctx):
-            return self.failed(shape, "%s", report)
-
-        try:
-            image = impl.docker_image or (impl.container or {}).get("image")
-        except Exception:
-            # `container` raises on a `container:` that names no `image:`. That
-            # is its own failure, reported where the declaration is read; here
-            # it only means there is no image name to put in this sentence, and
-            # raising out of an error path would replace a report the user needs
-            # with a traceback about a different mistake.
-            image = None
-        return self.skipped(
-            shape,
-            "%s\n\t%s",
-            report,
-            "There is no container runtime on this machine, so there is no way to give this implementation"
-            " what pip cannot install%s. Start one, or install what the message above names, to have this"
-            " analysis run here." % (" -- it runs in '%s'" % image if image else ""),
-        )
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = None) -> bool:
         """Run the analysis, and pass the shape only if it found nothing.

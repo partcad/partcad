@@ -191,6 +191,16 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         # Outputs, not inputs. A part that gains a material has not become a
         # different shape (see test_shape_properties.py).
         "properties",
+        # What the object is supposed to do once it is placed in a world, not
+        # what it is. A simulation's own answer is cached under a key of its
+        # own that covers what decides it -- the scene, the plugin, its
+        # options, its 'params' -- and deliberately not the 'validation:', so
+        # that editing the claim re-judges the run rather than repeating it
+        # (see 'simulation.run_async'). Hashed here, every such edit rebuilt the
+        # object, moved the key of the scene it is placed in and ran the
+        # simulator again: the opposite of what that leaves out, and the one
+        # edit somebody writing the claim first makes over and over.
+        "simulate",
         "sku",
         "summary",
         "supplier",

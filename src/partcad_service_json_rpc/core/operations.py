@@ -1571,12 +1571,12 @@ async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_na
     if fast_only:
         targets = [(kind, shape) for kind, shape in targets if not pc.fast_only.leaves_out(shape)]
 
+    # Each object's simulations are run by the loop 'pc test' runs too, for its
+    # 'sim' check, so the command and the check cannot come to disagree about
+    # which of an object's simulations there are or how one is run.
     results = []
     for kind, shape in targets:
-        for declaration in pc_simulation.of_shape(shape):
-            if filter_name and declaration.name != filter_name:
-                continue
-            results.append(await pc_simulation.run_async(ctx, shape, kind, declaration))
+        results.extend(await pc_simulation.run_declared_async(ctx, shape, kind, filter_name))
     return results
 
 

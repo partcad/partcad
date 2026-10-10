@@ -165,7 +165,9 @@ Simulations
 A part says what it *is*. ``simulate:`` is an optional section of a part or an
 assembly where it says what it is supposed to **do** once it is placed in a
 world and the world is switched on -- or, more often, what it is supposed not to
-do: not fall over, not slide off, not come apart. ``pc sim`` runs them.
+do: not fall over, not slide off, not come apart. ``pc sim`` runs them, and
+``pc test`` holds the object to them every time it runs, as its ``sim`` check
+(see "Running a simulation" in :doc:`simulation`).
 
 .. code-block:: yaml
 
@@ -222,7 +224,8 @@ the two objects the plugin produced, and ``result``, the whole of what it
 returned. It is the only thing PartCAD reads out of a result: what is *inside*
 those objects is the plugin's vocabulary, and the expression is written by
 whoever knows both the object and the plugin. An entry that states none runs and
-reports, and passes nothing.
+reports, and passes nothing; ``pc test`` counts it as passing once it has run,
+since running is the whole of what it asked.
 
 Simulation plugins
 ------------------

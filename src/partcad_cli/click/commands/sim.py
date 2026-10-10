@@ -5,11 +5,19 @@
 #
 """`pc sim` -- run the simulations a part or an assembly declares.
 
-`pc test` asks whether a part can be made. This asks whether it works: it takes
-the `simulate:` section of a part or an assembly, places that object in the
+A part says what it is; `simulate:` is where it says what it is supposed to do.
+This takes that section of a part or an assembly, places the object in the
 scene the section names, runs it through the simulation plugin the section
 names, and evaluates the `validation:` expression the section states over what
 came back. See `docs/source/simulation.rst` and `partcad.simulation`.
+
+`pc test` holds an object to the same claims, as its `sim` check
+(`partcad.test.sim`), so a `simulate:` is checked whenever the package is
+tested and not only when somebody asks. Both run an object's simulations through
+`simulation.run_declared_async`, so they cannot disagree about which there are
+or how one runs. What this command is for is asking on purpose: one simulation
+by name (`-f`), and everything the plugin reported (`--json`) rather than a
+verdict.
 
 All of that is daemon work -- it loads the package graph, exports the scene
 through a CAD wrapper and runs the plugin in a sandbox -- so this command is a
