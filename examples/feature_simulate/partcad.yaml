@@ -121,6 +121,16 @@ docs:
     [partcad-sim-mujoco](https://github.com/partcad/partcad-sim-mujoco) for what
     is and is not modelled.
 
+    `buoy` is the float again with its weight low down: 4 g, balanced 6 mm
+    below its middle, as a float with a lead weight in its bottom would be. The
+    water lifts it from its middle -- the centroid of its solid, its centre of
+    buoyancy -- so its weight and the lift make a couple that turns the heavy
+    side down. Released tilted 60 degrees, it is upright within a second.
+
+    ```shell
+    pc sim buoy           # the ballasted float rights itself as it rises
+    ```
+
     `water` is declared below so that this example stays self-contained; the
     standard catalogue's is `//pub/std/manufacturing/material/fluid:water`.
 
@@ -216,9 +226,10 @@ parts:
       sinks:
         desc: Aluminium is denser than water, so the block goes to the bottom of the tank
         simulation: sim-mujoco:mujoco
-        # A scene of this package's own, filled with water. It places the
-        # subject itself, 100 mm above its floor, so there is no 'offset:'.
+        # A scene of this package's own, filled with water, and the block
+        # released 100 mm above its floor.
         scene: :tank
+        offset: [[0, 0, 100], [0, 0, 1], 0]
         # Released at 100 mm, it ends with its centre 10 mm above the floor:
         # 90 mm down. Water slows it; it does not stop it.
         validation: |
@@ -244,6 +255,7 @@ parts:
         desc: Lighter than the water it displaces, the float rises through the tank
         simulation: sim-mujoco:mujoco
         scene: :tank
+        offset: [[0, 0, 100], [0, 0, 1], 0]
         # The water has no surface, so a float rises for as long as the run
         # lasts. A tenth of a metre is far below where it gets to in ten
         # seconds, and something that sank could not get there.
@@ -263,6 +275,40 @@ parts:
               after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2]
               for name in before["bodies"]
           ) < -50.0
+
+  buoy:
+    desc: The float again, with its 4 g of weight low down - a ballasted float, which rights itself
+    type: cadquery
+    # The same solid once more: what makes it right itself is where its weight
+    # is, not its shape.
+    path: block.py
+    properties:
+      physics:
+        # 4 g, half the water it displaces, and balanced 6 mm below its middle:
+        # what a float with a lead weight in its bottom states about itself.
+        # The water lifts it from its middle -- the centroid of the solid,
+        # which PartCAD measures -- so the lift and the weight make a couple
+        # that turns the heavy side down, whichever way it was released.
+        mass: 0.004
+        centerOfMass: [0, 0, -6]
+    simulate:
+      rights_itself:
+        desc: Released tilted 60 degrees in the tank, the ballasted float turns its heavy side down
+        simulation: sim-mujoco:mujoco
+        scene: :tank
+        # 100 mm above the floor and turned 60 degrees about X, so its own Z
+        # axis starts half-way to horizontal.
+        offset: [[0, 0, 100], [1, 0, 0], 60]
+        # How upright it is: the world Z component of its own Z axis, from the
+        # orientation the plugin reports (w, x, y, z) - 1 is upright, 0.5 is the
+        # 60 degrees it was released at. It swings a little either side of
+        # upright as it goes on rising, so "upright" is within 25 degrees.
+        validation: |
+          all(
+              1 - 2 * (before["bodies"][name]["quat"][1] ** 2 + before["bodies"][name]["quat"][2] ** 2) < 0.6
+              and 1 - 2 * (after["bodies"][name]["quat"][1] ** 2 + after["bodies"][name]["quat"][2] ** 2) > 0.9
+              for name in before["bodies"]
+          )
 
   block_ptfe:
     desc: The same 20 mm cube, in PTFE
@@ -323,6 +369,11 @@ scenes:
       subject_kind:
         type: string
         default: part
+      # Where it goes - seven numbers, as the scene PartCAD ships takes them,
+      # from the 'offset:' of the simulation that names this scene.
+      subject_offset:
+        type: string
+        default: "0 0 100 0 0 1 0"
 
 assemblies:
   stable:
