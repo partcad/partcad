@@ -195,6 +195,27 @@ air, fresh water and seawater at 15 °C -- inside `partcad-index`). A catalog de
 its units; converting the catalogs from g/mm³ to kg/m³ raises that requirement, so an older PartCAD refuses a catalog
 rather than computing masses a million times too large.
 
+Planned on a material, so that one substance drives rendering, the manufacturing cost estimate and the simulation
+alike:
+
+- **appearance**, physically based: colour or albedo, metalness, roughness, transparency, normal maps. It matters to a
+  simulation once a camera is in the loop -- a perception stack trained in simulation is sensitive to all of it -- and
+  SDFormat and USD both carry a PBR description, while URDF carries an RGBA colour and a texture file;
+- **restitution**;
+- **static and dynamic friction**, with an optional anisotropy. Today's `friction`/`friction2`/`frictionDirection` is
+  ODE's shape of it, kept because it is what URDF states; the modelled version is a static and a dynamic coefficient,
+  and the URDF exporter flattens it on the way out.
+
+```yaml
+materials:
+  aluminum-6061:
+    density: 2700               # kg/m³
+    mu: 1.05                    # today
+    friction: { static: 0.61, dynamic: 0.47 }   # planned
+    restitution: 0.3                            # planned
+    appearance: { color: "#b8b8b8", metalness: 1.0, roughness: 0.35 }   # planned
+```
+
 ### 5.2 Resolving a part's physics (in review in #755)
 
 Every exporter, `pc info` and the simulation read one resolution, in `partcad/physics.py`:
@@ -217,6 +238,16 @@ masses, the combined centre of mass, and the inertia about it by the parallel-ax
 
 A link or body made of several shapes is weighed shape by shape, each at its own density, so its mass, centre of mass
 and inertia come from one consistent set of densities. The combination is `mass_properties.of_body()`.
+
+How the cache entries relate. What a shape reports about itself -- its `properties:` facts, its material -- is cached
+in an entry of its own beside the geometry (the geometry's key with `-props` appended). Both are filled by the one run
+that instantiates the shape, and they are read apart: a consumer after a part's material need not pull its BREP out
+of the cache, and a cache written before that entry existed is a miss for the properties and not for the geometry. The
+derived mass properties are a third entry (`<hash>.mass`), keyed as above. A hit answers without the geometry; a miss
+works the values out from what the geometry's own entry carries -- the volume, the centroid, and the inertia at unit
+density that OCCT measures as the shape is built -- so a miss costs arithmetic, not a rebuild. Inside a cached
+assembly the children carry the properties they were built with; only the object asking is restamped from its own
+configuration on every read.
 
 What is planned on top of it: **provenance** of a stated value (`measured | datasheet | estimated`), and `pc lint`
 checks for the classic defects of published robot descriptions -- zero mass, an inertia tensor that is not positive
@@ -243,6 +274,15 @@ a static-friction claim answered by the solver rather than by the friction. The 
 `cone="elliptic" impratio="10" noslip_iterations="3"`, under which the same block moves under half a millimetre at 15°
 (in review in sim-mujoco #8).
 
+Contact is physically a property of a **surface pairing** -- restitution, contact stiffness and damping, slip
+compliance, and the solver knobs that go with them (`kp`, `kd`, `min_depth`, `max_vel`, `soft_cfm`, `soft_erp`) -- and
+every engine in use approximates it per body. PartCAD therefore stores per-body values and lets each engine combine
+them; a pairing-level declaration (a material pair with its own coefficients) is a possible later step, and would be
+written as MJCF `<contact><pair>` and as SDFormat surface parameters on both collisions.
+
+One plugin-side detail: a body PartCAD could not weigh -- a mesh with no solid in it -- gets the density written on its
+MJCF geoms, so that MuJoCo weighs it at the right density rather than at its own default, which is water's.
+
 ### 5.4 Collision geometry (planned)
 
 Simulators separate the shape that is drawn from the shape that collides, because contact against a hundred-thousand
@@ -258,9 +298,14 @@ parts:
       maxHulls: 8
 ```
 
-`convexHull` and `convexDecomposition` are computed in a sandbox and cached like any derived shape; `part` points at a
-hand-simplified part version-controlled beside the real one -- which is also what a URDF import would produce instead
-of a part with a suggestive name.
+`convexHull` and `convexDecomposition` (V-HACD and its successors) are computed in a sandbox and cached like any derived
+shape, with a `tolerance` for how far the stand-in may depart from the solid; `primitive` fits a box, cylinder, sphere
+or capsule to it; `part` points at a hand-simplified part version-controlled beside the real one -- which is also what
+a URDF import would produce instead of a part with a suggestive name; `none` takes the body out of contact.
+
+It is independently valuable: the same stand-ins make rendering and interference checking cheaper, and they are what
+lets a URDF import's `ignoreCollision` choice -- build a link from its collision geometry or from its visual one --
+become "keep both, related".
 
 ## 6. Scenes as worlds
 
@@ -302,8 +347,22 @@ centroid per step, which PartCAD can compute exactly from the B-rep and an engin
 
 ### 6.2 What else a world is (planned)
 
-Lights, wind and current, the engine's own step and solver settings, the initial pose of every object, and a body
-fixed to the world (section 7). This is SDFormat's `<world>`; a scene is where each of them belongs.
+Gravity and the medium went first because underwater and aerospace validation turn on them, and because neither
+needed anything new below the scene: a gravity is three numbers, and a fluid is a material with one more fact on it.
+What else belongs to a world, and is planned:
+
+- **The ground and the lights.** The exporters write them today from parameters of their own (`ground_plane`,
+  `light`, `sun`), because a scene has nowhere to say them.
+- **A surface.** A medium fills the whole world. A waterline -- air above, water below, a body floating where they
+  meet -- is a world with regions in it, which Gazebo's graded buoyancy can express and MuJoCo's fluid model cannot.
+  Section 6.1 says what PartCAD can contribute: the exact submerged volume and its centroid.
+- **Wind and current**: a velocity of the medium, which MuJoCo states as `<option wind>`; `medium:` grows from a
+  material reference into a mapping to carry it.
+- **A body fixed to the world** (section 7), and the initial pose of every object.
+- **Not the engine's step size, solver or iteration count.** Those belong to an engine rather than to a world; a
+  `simulate:` passes them to its plugin as `params`, and a plugin documents its defaults.
+
+This is SDFormat's `<world>`; a scene is where each of these belongs.
 
 ## 7. Bodies
 
@@ -559,6 +618,71 @@ Frames are the attachment points for sensors, tool centre points and grasp poses
 not a parallel mechanism, and an exporter may emit one per port it is asked to. This is also how URDF consumers get
 back a frame per part after rigid attachment merges the parts into one link.
 
+```yaml
+parts:
+  gripper:
+    type: step
+    ports:
+      tcp: [[0, 0, 180], [0, 0, 1], 0]      # a tool centre point is a port like any other
+```
+
+### 8.11 Named configurations (planned)
+
+With degrees of freedom in place, a connection's `toParams` is the value of one joint. What is missing one level up is
+a name for a value of *all* of them:
+
+```yaml
+assemblies:
+  robot:
+    type: assy
+    configurations:
+      home:   { shoulder_pan: 0, elbow: 0 }
+      stowed: { shoulder_pan: -90, elbow: 135 }
+    configuration: home        # the one the assembly shows
+```
+
+The keys are joint names (section 8.4) and the values are in the joints' units. A configuration overrides the
+`toParams` of the joints it names; it is a parameter of the assembly, hashed into its cache key like any other, so
+`pc ide view 'robot;configuration=stowed'` works through the parameter machinery an ASSY file already has. A
+`simulate:` names the configuration it starts from (`initial:`, section 13), and the URDF exporter has somewhere to
+write a starting pose at last -- an SRDF `group_state`. Everything that exists today, a tree of rigid placements, is
+what evaluating a configuration produces, so no consumer of the representation has to change.
+
+### 8.12 Devices, actuation and control (planned)
+
+Which joints are driven, by what, through which reduction, and what a controller sees: ROS 1 spelled it
+`<transmission>`, ROS 2 spells it `<ros2_control>` with hardware components and command and state interfaces, and
+simulators additionally want actuator limits and often a motor model. These are robot-level, not link-level, so they
+attach to the assembly; an assembly takes the same `properties:` section a part does, and nothing reads one there yet.
+
+Sensors -- cameras with intrinsics, resolution, clipping and distortion; depth cameras; lidars with ray patterns and
+ranges; IMUs; contact and force-torque sensors -- are each attached to a frame, with an update rate and a noise model.
+URDF has no sensor element at all; they arrive through `<gazebo>` extension blocks, which is the clearest evidence that
+URDF is a kinematics format with a simulation format bolted on.
+
+```yaml
+assemblies:
+  robot:
+    devices:
+      front_camera:
+        type: camera
+        frame: head/camera_mount     # a port (section 8.10)
+        rate: 30                     # Hz
+        image: { width: 1280, height: 720, format: R8G8B8 }
+        fov: 60                      # deg
+        noise: { type: gaussian, stddev: 0.007 }
+      shoulder_motor:
+        type: actuator
+        joint: shoulder_pan
+        gearRatio: 100
+        torqueConstant: 0.05         # N·m/A
+        rotorInertia: 1.2e-5         # kg·m², written as MJCF 'armature' through the reduction
+```
+
+PartCAD models the handful of device types every simulator agrees on -- camera, depth, lidar, IMU, contact,
+force-torque, and an actuator on a joint -- and, following section 2, reports any other device it is handed rather than
+carrying it as passthrough. The URDF reader counts sensors, transmissions and `ros2_control` blocks as dropped today.
+
 ## 9. Simulations as tests
 
 `pc test` runs every `simulate:` declaration of every part and assembly as its `sim` check (`pc test -f sim`), so the
@@ -674,9 +798,24 @@ flip on the plug keeps the socket readable against the URDF. Interfaces are dedu
 limits, dynamics and mimic: a four-wheeled robot gets one interface pair for its wheels. No attempt is made to match
 the library of real interfaces: a URDF joint says nothing about the hardware that implements it.
 
+Three mechanisms the URDF support needed, which the joint work builds on:
+
+- **Units and conventions in one module.** URDF is metres, radians and fixed-axis roll-pitch-yaw; PartCAD is
+  millimetres, degrees and axis-angle. `wrappers/urdf_common.py` keeps that conversion in one tested place, and the
+  engine plugins import it rather than repeating it.
+- **Parts that exist because an assembly produced them.** The parts a URDF points at have no declaration of their
+  own; they are materialized into the package as `<assembly>/<link>` (and `<assembly>/<link>/<n>` under a link of
+  several shapes), and the package resolves such a name by building the assembly that owns it. They are ordinary parts,
+  inspectable and exportable, not an internal detail.
+- **One link-frame term.** A link that is one shape placed at an `<origin>` has its part's frame at that offset, and a
+  link of several is a sub-assembly whose frame is the link's. The ASSY conversion re-expresses each link in the link
+  frame before writing its mesh -- one term per link, recorded by the importer and applied in one place -- rather than
+  folding it into every socket and plug, so that everything downstream may assume the part's origin is the link's.
+
 What does not survive today: names (PartCAD names carry package paths), nesting, parametrization, exact B-rep geometry,
 and the digital thread itself -- and on export, the joints, which are all written `fixed` because PartCAD holds one
-static configuration. Section 8 is what changes the last of those.
+static configuration. Section 8 is what changes the last of those, and its explicit `dof:` form is what removes the one
+place a generated `motion:` still has to state its units in prose.
 
 ### 12.2 SDFormat and MJCF (built, in the engine plugins)
 
@@ -771,6 +910,9 @@ where the design's boundaries are.
   remembered which link it was.
 - **A cache keyed on geometry must not carry identity.** Two parts reading one mesh hash the same, so the second came
   back wearing the first one's name. What identifies the shape asked for is stamped onto the payload on every read.
+- **Generating declarations finds the gaps hand-writing never reaches.** The schema had always allowed
+  `ports: {name:}` and `implements: {iface:}` with no value, and both crashed; nothing had written them until the URDF
+  conversion generated interfaces programmatically, and it found both at once.
 - **A claim in an example is a test.** `slippery` said friction made a block slide off a level stack; nothing pushed it,
   and nothing checked until `pc test` ran simulations. An example whose claim is not checked is one readers learn to
   trust and should not.
