@@ -7,7 +7,7 @@
 
 `partcad.cache_artifacts` on its own first - what goes into an entry, what comes
 back out, and what is refused - and then the two places that use it: a second
-`pc cae` of an unchanged part and a second `pc simulate` of an unchanged object
+`pc cae` of an unchanged part and a second `pc sim` of an unchanged object
 must be reads, with the files back where the caller expects them, and anything
 that changes the question must be a run.
 
@@ -336,7 +336,7 @@ def test_a_part_that_is_not_cached_is_analysed_every_time(analysed, monkeypatch)
 
 
 # --------------------------------------------------------------------------- #
-# `pc simulate`                                                               #
+# `pc sim`                                                                    #
 # --------------------------------------------------------------------------- #
 
 
