@@ -787,7 +787,10 @@ A file type that has a way to state these declares ``properties: true`` in its
 belong to -- already worked out in the order above, so that an exporter writes
 a mass and never computes one. URDF is the one built-in format that does. Each
 shape with a solid in it is handed its measured ``volume`` beside them, in
-mm³: not a property a part states, but what it displaces of the fluid a
-:ref:`scene <scenes>` is filled with, which is how a simulation buoys it. A
-float states its mass and still pushes aside the whole of its solid, so the
-volume is measured rather than worked back out of a mass and a density.
+mm³, and that volume's centroid as ``centerOfVolume``, in mm: not properties a
+part states, but what it displaces of the fluid a :ref:`scene <scenes>` is
+filled with and where the fluid lifts it from, which is how a simulation buoys
+it. A float states its mass and still pushes aside the whole of its solid, and
+a float that states a low ``centerOfMass`` is still lifted from its middle --
+which is what rights it -- so both are measured rather than worked back out of
+a mass and a density.

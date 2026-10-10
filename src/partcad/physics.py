@@ -32,6 +32,10 @@ One order, for every value, and the same everywhere:
                  the fluid a scene is filled with, which is how a simulation
                  buoys it (see 'partcad.scene_world') - and it is handed over
                  so that no exporter has to measure the geometry to find it
+  centerOfVolume measured, never stated: the centroid of that volume, in mm,
+                 which is where the fluid lifts the solid from. The same point
+                 as a derived 'centerOfMass', and a different one from a stated
+                 'centerOfMass' - which is what rights a ballasted float
 
 Every density is in kg/m^3: a material's, a part's and an export's are one unit,
 so nothing here converts one. The arithmetic - a volume and a density into a
@@ -112,7 +116,9 @@ DERIVED_KEY = "mass"
 #   1: mass, centre of mass and inertia.
 #   2: and the 'volume' the solid encloses, which a simulation buoys it by. An
 #      entry written under 1 has none, and read back would buoy nothing.
-_DERIVED_FORMAT = 2
+#   3: and its 'centerOfVolume', which the buoyancy acts at. An entry written
+#      under 2 has none, and a body read back from one would not right itself.
+_DERIVED_FORMAT = 3
 
 # What a derivation reads besides the geometry: the density it weighs the solid
 # at, and every stated value that stands in for a derived one. Each goes into
@@ -256,6 +262,13 @@ def _derive(physics, measurements):
     if "mass" not in physics and density is not None:
         derived["mass"] = mass_properties.mass_of(volume, density)
         sources["mass"] = "derived: %.9g mm^3 at %.9g kg/m^3" % (volume, density)
+    if centroid is not None:
+        # Where the volume above is centred, whatever the part is made of or
+        # says its mass is: the point a fluid lifts it from. Measured, like the
+        # volume, and never stated - a 'centerOfMass' a part states says where
+        # it balances, and says nothing about where it is buoyed.
+        derived[mass_properties.CENTER_OF_VOLUME_KEY] = [float(v) for v in centroid]
+        sources[mass_properties.CENTER_OF_VOLUME_KEY] = "measured: the centroid of the solid"
     if centroid is None or unit_inertia is None:
         return derived, sources, volume
 

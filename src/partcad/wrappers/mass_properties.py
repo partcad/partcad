@@ -37,16 +37,20 @@ carries an 'inertiaOrientation'. One it is handed may, and is read as stated.
 Keys other than these four are neither read nor carried: friction and contact
 are not mass properties, and have nothing to add up.
 
-One more key is read, by 'volume_of()' alone:
+Two more keys are read, by 'volume_of()' and 'displacement_of()' alone:
 
     volume              mm^3, what the solid encloses - measured, never stated
+    centerOfVolume      [x, y, z] mm, the centroid of that volume, in the frame
+                        the dict is stated in - measured, never stated
 
-It is not a mass property either, and is not carried into what 'placed()' and
-'combined()' return: a volume does not move or turn with a placement, and what a
-body's volume is has nothing to do with where its mass balances. It is what a
-body displaces of the fluid a scene is filled with, and the one fact buoyancy
-needs that a mass and a density cannot give: a sealed float states its mass and
-still pushes aside the whole of its solid.
+Neither is a mass property, and neither is carried into what 'placed()' and
+'combined()' return: what a body's volume is, and where its middle is, have
+nothing to do with how its mass is spread. They are what the body displaces of
+the fluid a scene is filled with, and where the fluid pushes it up from - the
+two facts buoyancy needs that a mass and a density cannot give. A sealed float
+states its mass and still pushes aside the whole of its solid, and a hull with a
+lead keel balances low while the water lifts it from its middle; the distance
+between those two points is what rights it.
 
 The products of inertia are the tensor's own entries, not the integrals they
 are the negatives of - the convention URDF, SDFormat and MJCF all state, and
@@ -74,6 +78,8 @@ INERTIA_KEYS = ("ixx", "ixy", "ixz", "iyy", "iyz", "izz")
 MASS_KEYS = ("mass", "centerOfMass", "inertia", "inertiaOrientation")
 
 VOLUME_KEY = "volume"
+
+CENTER_OF_VOLUME_KEY = "centerOfVolume"
 
 _ZERO = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
 
@@ -282,6 +288,39 @@ def volume_of(parts):
         total += volume
         counted += 1
     return total if counted else None
+
+
+def displacement_of(parts):
+    """What one rigid body displaces, as {'volume': mm^3, 'centerOfVolume': [x, y, z] mm}, or None.
+
+    'parts' is the same (physics, placement) pairs 'of_body()' and
+    'volume_of()' take. The centre of volume is the volume-weighted mean of
+    each part's own, each moved to where the body holds it - the centre of
+    buoyancy of the body when it is wholly submerged, which is where a fluid's
+    lift acts. Unlike the centre of mass it does not care what anything is made
+    of: a hull and its keel are weighed by their materials and buoyed by their
+    shapes.
+
+    None when any part's volume or centre of volume is not known, for the reason
+    'volume_of()' gives.
+    """
+    total = volume_of(parts)
+    if total is None:
+        return None
+    centre = [0.0, 0.0, 0.0]
+    for physics, location in parts:
+        own = (physics or {}).get(CENTER_OF_VOLUME_KEY)
+        if not own or len(own) != 3:
+            return None
+        point = [float(v) for v in own]
+        if location is not None:
+            rotation, translation = urdf_common.from_packed(location)
+            moved = urdf_common.rotate_vec(rotation, point)
+            point = [moved[axis] + translation[axis] for axis in range(3)]
+        weight = float(physics[VOLUME_KEY]) / total
+        for axis in range(3):
+            centre[axis] += weight * point[axis]
+    return {VOLUME_KEY: total, CENTER_OF_VOLUME_KEY: centre}
 
 
 def weighs(physics):

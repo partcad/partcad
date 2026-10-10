@@ -732,8 +732,9 @@ at all).
   part's is. The core resolves it and hands the facts — gravity, the medium's `density` (kg/m^3) and
   `viscosity` (Pa*s) — to every file type declaring `properties: true` as `request["world"]`
   (`output.WORLD_KEY`), where they go into the engine's format unconverted. A body's buoyancy needs what it
-  displaces, which is the `volume` (mm^3) `physics.physics_by_shape()` resolves beside each shape's mass and
-  `mass_properties.volume_of()` adds up per body. Both default to *nothing sent*, which is
+  displaces, which is the `volume` (mm^3) `physics` resolves beside each shape's mass and
+  `mass_properties.volume_of()` adds up per body, and where it is lifted from, the `centerOfVolume` (mm) that
+  `mass_properties.displacement_of()` combines with it. Both default to *nothing sent*, which is
   what keeps every existing export byte-identical: the engine's own gravity, and vacuum. A bad gravity or a
   medium nothing answers to raises `scene_world.WorldError` (it is a different world, not a less detailed
   one), which `_render_one_async` reports against the scene. It lives in its own module because `shape.py`

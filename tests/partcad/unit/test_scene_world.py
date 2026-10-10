@@ -346,7 +346,48 @@ def test_no_exporter_reports_the_volume_as_a_property_it_cannot_state():
     export_urdf = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(export_urdf)
 
-    assert "volume" in export_urdf.URDF_STATED
+    assert {"volume", "centerOfVolume"} <= export_urdf.URDF_STATED
+
+
+#
+# Where a body is lifted from: the centre of buoyancy
+#
+
+
+def test_every_shape_is_handed_over_with_the_centre_of_its_volume():
+    """Measured, never derived from the mass: a ballasted float is still lifted from its middle."""
+    ballasted, sources = physics.resolve({"mass": 0.004, "centerOfMass": [0.0, 0.0, -6.0]}, measurements=CUBE)
+
+    assert ballasted["centerOfVolume"] == [0.0, 0.0, 0.0]
+    assert ballasted["centerOfMass"] == [0.0, 0.0, -6.0]
+    assert sources["centerOfVolume"].startswith("measured")
+
+
+def test_a_body_is_lifted_from_the_volume_weighted_centre_of_its_parts():
+    """A hull and its keel are weighed by their materials and buoyed by their shapes."""
+    hull = {"mass": 0.001, "volume": 3000.0, "centerOfVolume": [0.0, 0.0, 0.0]}
+    keel = {"mass": 0.05, "volume": 1000.0, "centerOfVolume": [0.0, 0.0, 0.0]}
+    parts = [(hull, None), (keel, [[0.0, 0.0, -20.0], [0.0, 0.0, 1.0], 0.0])]
+
+    displacement = mass_properties.displacement_of(parts)
+
+    assert displacement["volume"] == 4000.0
+    # A quarter of the volume, 20 mm down: the centre of buoyancy is 5 mm down,
+    assert displacement["centerOfVolume"] == pytest.approx([0.0, 0.0, -5.0])
+    # while the centre of mass is almost at the keel: that distance is what rights it.
+    assert mass_properties.of_body(parts)["centerOfMass"][2] == pytest.approx(-20.0 * 0.05 / 0.051)
+
+
+def test_a_part_turned_where_it_is_held_is_lifted_from_where_its_centre_went():
+    part = {"volume": 1000.0, "centerOfVolume": [10.0, 0.0, 0.0]}
+    turned = [(part, [[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], 90.0])]
+
+    assert mass_properties.displacement_of(turned)["centerOfVolume"] == pytest.approx([0.0, 10.0, 0.0])
+
+
+def test_a_body_with_a_part_whose_centre_of_volume_is_unknown_has_no_displacement():
+    assert mass_properties.displacement_of([({"volume": 1000.0}, None)]) is None
+    assert mass_properties.displacement_of([({"centerOfVolume": [0, 0, 0]}, None)]) is None
 
 
 def test_the_properties_index_does_not_mistake_the_world_for_a_shape():

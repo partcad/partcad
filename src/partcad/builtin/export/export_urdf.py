@@ -106,13 +106,13 @@ GAZEBO_LINK_PHYSICS = {
 # states no mass were worked out from, so the file states it the only way URDF
 # can - as the '<inertial>' it comes to.
 #
-# 'volume' is here for the opposite reason: it is not a property of the part
-# at all but what PartCAD measured its solid to enclose, handed to every
-# exporter for the one that buoys a body in a fluid. A URDF has no world to
-# fill with one, so there is nothing it could lose.
-URDF_STATED = frozenset(("mass", "centerOfMass", "inertiaOrientation", "inertia", "density", "volume")) | frozenset(
-    GAZEBO_LINK_PHYSICS
-)
+# 'volume' and 'centerOfVolume' are here for the opposite reason: they are not
+# properties of the part at all but what PartCAD measured its solid to enclose
+# and where, handed to every exporter for the one that buoys a body in a fluid.
+# A URDF has no world to fill with one, so there is nothing it could lose.
+URDF_STATED = frozenset(
+    ("mass", "centerOfMass", "inertiaOrientation", "inertia", "density", "volume", "centerOfVolume")
+) | frozenset(GAZEBO_LINK_PHYSICS)
 
 
 def sanitize_name(name, fallback):

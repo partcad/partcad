@@ -1,20 +1,20 @@
 # A tank of water, holding whatever is being simulated in it.
 #
 # The water is not in this file: a scene's 'medium:' is declared beside it in
-# partcad.yaml, as a material. What is here is only where the subject goes --
-# 100 mm above the floor, far enough from it for a block that sinks and a float
-# that rises to be told apart at a glance.
+# partcad.yaml, as a material. What is here is only where the subject goes,
+# which the 'simulate:' that names this scene says with its 'offset:' -- the
+# same seven numbers, written the same way, as the scene PartCAD ships
+# ('//builtin/scene:subject'); see the note beside 'subject_offset' there for
+# why they arrive without brackets or commas. The simulations here release
+# their subjects 100 mm above the floor, far enough from it for a block that
+# sinks and a float that rises to be told apart at a glance, and the buoy
+# tilted, to see it right itself.
 #
-# The subject arrives as a parameter, the way it does in the scene PartCAD ships
-# ('//builtin/scene:subject'): 'pc sim' assigns the full path of the object
-# whose 'simulate:' names this scene. Unlike that scene, this one says where its
-# subject goes itself, so it declares no 'subject_offset' and a 'simulate:' that
-# names it states no 'offset:'.
-#
-# Also unlike that scene, it is never empty: the subject defaults to the float,
-# so the tank as declared -- what 'pc render' draws and 'pc ide view' shows -- is
-# the float released in it. An empty scene is one nothing can draw.
+# The subject defaults to the float, so the tank as declared -- what 'pc render'
+# draws and 'pc ide view' shows -- is the float released in it. An empty scene
+# is one nothing can draw.
+{%- set offset = param_subject_offset.split() %}
 links:
   - {{ param_subject_kind }}: "{{ param_subject }}"
     name: subject
-    location: [[0, 0, 100], [0, 0, 1], 0]
+    location: [[{{ offset[0] }}, {{ offset[1] }}, {{ offset[2] }}], [{{ offset[3] }}, {{ offset[4] }}, {{ offset[5] }}], {{ offset[6] }}]
