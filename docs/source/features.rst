@@ -859,7 +859,8 @@ seen. What a run writes into a package, a model or a picture, is not part of the
 question, and neither is where the package is on disk or when its files were
 last touched. A simulation's ``validation:`` is not part
 of the question: it is evaluated again on every run, so editing it re-judges the
-cached run rather than repeating it.
+cached run rather than repeating it. What a simulation's question is made of,
+and how ``pc test``'s verdict on one is kept, are in :ref:`sim-caching`.
 
 Only answers are cached: an analysis, a route or a simulation that failed is run again
 next time, since installing a missing solver changes no key. The tiers' maximum

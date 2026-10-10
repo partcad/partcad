@@ -517,11 +517,15 @@ import rather than tucking the value away, and a property PartCAD holds that a
 target format cannot state is reported when it is exported - so the gap is
 always visible in one direction or the other.
 
-``pc convert assembly -t assy`` fills ``motion:`` and ``physics:`` in from a URDF's
-joints - see :doc:`simulation` for the mapping - and what it writes is an
-implicit declaration of the joint it was. ``pc info -a <assembly>`` lists an
-assembly's joints, and :ref:`assy-joints` how a connection names, locks and
-starts one.
+``pc convert assembly -t assy`` fills both sections in from a URDF's joints -
+see :ref:`sim-urdf-joints` for the mapping - and what it writes is an implicit
+declaration of the joint it was. ``pc info -a <assembly>`` lists an assembly's
+joints, and :ref:`assy-joints` how a connection names, locks and starts one.
+
+No exporter writes those joints yet: a simulation still sees each part where its
+connection placed it, every one of them a free body (see :ref:`sim-limitations`).
+Writing them out to MJCF, URDF and SDFormat is the next step; see the simulation
+`design record <https://github.com/partcad/partcad/blob/devel/docs/design/simulation.md>`__.
 
 Abstract interfaces
 -------------------
