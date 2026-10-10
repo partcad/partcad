@@ -807,7 +807,10 @@ The scene's world is resolved by the core -- the medium is a material, and only
 the core can load the package that catalogues it -- and handed to every file
 type that declares ``properties: true`` (the ones that state physics: URDF,
 SDFormat, MJCF) as ``request["world"]``: the gravity, and the medium as its
-material's name, density and viscosity. A scene that states neither sends
+material's name, density and viscosity. What a body displaces of that medium is
+its solid's volume, which PartCAD resolves beside each shape's mass (``volume``,
+in mm^3) and ``mass_properties.volume_of()`` adds up per body, so no exporter
+measures or weighs anything itself. A scene that states neither sends
 nothing, and an export of it is byte for byte what it was. A medium nothing
 answers to is an error rather than a vacuum, and so is a gravity that is not
 three numbers: the default is a different world, and a simulation of it would

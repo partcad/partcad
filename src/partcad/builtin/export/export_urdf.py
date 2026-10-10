@@ -105,7 +105,12 @@ GAZEBO_LINK_PHYSICS = {
 # lost: it is what the mass, the centre of mass and the inertia of a part that
 # states no mass were worked out from, so the file states it the only way URDF
 # can - as the '<inertial>' it comes to.
-URDF_STATED = frozenset(("mass", "centerOfMass", "inertiaOrientation", "inertia", "density")) | frozenset(
+#
+# 'volume' is here for the opposite reason: it is not a property of the part
+# at all but what PartCAD measured its solid to enclose, handed to every
+# exporter for the one that buoys a body in a fluid. A URDF has no world to
+# fill with one, so there is nothing it could lose.
+URDF_STATED = frozenset(("mass", "centerOfMass", "inertiaOrientation", "inertia", "density", "volume")) | frozenset(
     GAZEBO_LINK_PHYSICS
 )
 
