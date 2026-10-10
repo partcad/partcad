@@ -1,0 +1,17 @@
+# A world whose gravity leans 15 degrees off vertical, holding whatever is
+# being simulated in it.
+#
+# The lean is not in this file: a scene's 'gravity:' is declared beside it in
+# partcad.yaml. What is here is only where the subject goes, which the
+# 'simulate:' that names this scene says with its 'offset:' -- the same seven
+# numbers, written the same way, as the scene PartCAD ships
+# ('//builtin/scene:subject'). See the note beside 'subject_offset' there for
+# why they arrive without brackets or commas.
+#
+# The subject defaults to the stack that stands, so that the scene as declared
+# -- what 'pc render' draws and 'pc ide view' shows -- holds something.
+{%- set offset = param_subject_offset.split() %}
+links:
+  - {{ param_subject_kind }}: "{{ param_subject }}"
+    name: subject
+    location: [[{{ offset[0] }}, {{ offset[1] }}, {{ offset[2] }}], [{{ offset[3] }}, {{ offset[4] }}, {{ offset[5] }}], {{ offset[6] }}]

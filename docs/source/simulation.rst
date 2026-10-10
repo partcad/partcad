@@ -729,10 +729,36 @@ property, and with it the mass, centre of mass and inertia its solid comes to
 not weigh (a mesh with no solid in it), so that MuJoCo weighs it at the right
 density rather than at its own default of water's.
 
-One thing is deliberately not done here. PartCAD writes each *body's*
-coefficient and says nothing about how a simulator combines the two sides of a
-contact, because they do not agree about it: that is the simulator's model, not
-the part's.
+PartCAD writes each *body's* coefficient, and a contact has two. How they
+combine is the simulator's model rather than the part's, and the two engines a
+plugin exists for do not agree about it:
+
+======================  ==================================================
+engine                  the coefficient of a contact between A and B
+======================  ==================================================
+MuJoCo                  the **larger** of the two, element-wise -- unless one
+                        geom has a higher ``priority``, which no exporter here
+                        sets (`Contact parameters
+                        <https://mujoco.readthedocs.io/en/stable/modeling.html#contact-parameters>`_)
+Gazebo (DART)           the **smaller** of the two (DART's ``ContactSurface``,
+                        which Gazebo Harmonic's default physics engine uses)
+======================  ==================================================
+
+So two blocks of one material meet at that material's ``mu`` in both, and that
+is what a stack's question -- does the top block stay on the bottom one? --
+turns on. A block on the floor does not agree: the ground plane each exporter
+writes states no friction, which is 1.0 in both formats, so in MuJoCo every
+block grips the floor at 1.0 or more, and in Gazebo at its own ``mu`` or less.
+``examples/feature_simulate`` asks only the first question.
+
+MuJoCo also needs telling how hard to hold. Its contacts are soft, and a block
+under a steady sideways load slips at a small steady rate even well inside its
+friction cone; with MuJoCo's own defaults that rate is large enough that an
+aluminium stack (``mu`` 1.05) in a world tilted by 6 degrees -- where
+tan(6 deg) = 0.105 -- slid apart in ten seconds. The MJCF exporter therefore
+writes MuJoCo's own remedies for slow slippage into every model -- elliptic
+friction cones, an ``impratio`` of 10 and three NoSlip iterations -- and with
+them the same stack creeps half a millimetre at 15 degrees.
 
 A part that states a ``friction`` of its own keeps it -- a measured part beats
 the substance it is made of -- and a part that states neither gets whatever the
