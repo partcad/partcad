@@ -54,7 +54,7 @@ import typing
 
 from . import cache_artifacts
 from . import logging as pc_logging
-from . import output, shape_envelope, wrapper
+from . import output, shape_envelope, source_key, wrapper
 from .process_crash import describe_exit_code
 from .utils import resolve_resource_path
 
@@ -444,7 +444,9 @@ async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str)
     parameter of the scene and the scene is keyed on what it links to - and
     everything the run adds to it: the plugin, its resolved options and its
     sandbox, what the declaration hands it, how the scene is written for it,
-    and the content of both scripts and of the wrappers that run them.
+    and the content of both scripts and of the wrappers that run them -- and of
+    every module those can import from their packages ('source_key'), since a
+    plugin release that changes only 'mujoco_common.py' changes the answer.
 
     Never raises. A key that cannot be worked out is a run that is not cached,
     and the run itself is what reports why.
@@ -474,6 +476,12 @@ async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str)
             "format": format_name,
             "export": export_impl.config,
             "export_environment": export_impl.environment_cache_key(),
+            # What the two scripts import from their packages, and the
+            # revision a fetched one is at -- not only the scripts themselves,
+            # which 'files' already holds. See 'partcad.source_key'.
+            "source": impl.source_cache_key(),
+            "export_source": export_impl.source_cache_key(),
+            "wrappers": source_key.wrappers_key(),
         }
         return cache_artifacts.question_hash("%s#%s" % (subject, declaration.name), subject_key, question, files)
     except Exception as e:  # pylint: disable=broad-except

@@ -20,7 +20,10 @@ of an unchanged part, a `pc simulate` of an unchanged assembly: each is a read.
 files it is built from, the keys of what it is built out of and the sandbox it
 was built in; and adds what the run adds - the boundary conditions, a route's
 job and machine, the implementation's resolved options, the sandbox it runs in,
-and the *content* of its script and of the PartCAD wrapper that runs it. A
+the *content* of its script and of the PartCAD wrapper that runs it, and every
+Python module either can import from where it lives -- the implementing
+package's sources (with the commit it is at, when it was fetched), and PartCAD's
+own wrappers (see 'partcad.source_key'). A
 subject with no key ('cache: false', or made of something that says so) has no
 question to key on, and its runs are never cached.
 

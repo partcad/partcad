@@ -18,6 +18,7 @@ would be started, and counted.
 import asyncio
 import io
 import os
+import pathlib
 import tarfile
 import textwrap
 import types
@@ -642,3 +643,87 @@ def test_an_implementation_s_environment_is_its_declaration(analysed):
     key = impl.environment_cache_key()
     assert key.startswith("python==%s;" % impl.python_version())
     assert "image=" not in key
+
+
+# --------------------------------------------------------------------------- #
+# What the implementation imports is part of the question                     #
+# --------------------------------------------------------------------------- #
+#
+# A plugin is rarely one file. 'partcad-sim-mujoco' keeps what its exporter,
+# its reader and its simulator share in 'mujoco_common.py', and the Gazebo one
+# its picture-drawing in 'snapshot_raster.py'. A key made of the script alone
+# answered a plugin update that changed only such a module with the result
+# the old module produced, until '--cache-bypass'.
+
+HELPER_V1 = "SCALE = 1.0\n"
+HELPER_V2 = "SCALE = 2.0  # a new release of the helper\n"
+
+
+def _imports_a_helper(directory, script, helper):
+    """'script' reads its helper the way the MuJoCo plugin reads 'mujoco_common'."""
+    (directory / helper).write_text(HELPER_V1)
+    module = helper[: -len(".py")]
+    (directory / script).write_text(
+        "import os, sys\n"
+        "sys.path.append(os.path.dirname(os.path.abspath(__file__)))\n"
+        "import %s\n"
+        "def process(path, request):\n"
+        "    return {'success': True, 'scale': %s.SCALE}\n" % (module, module)
+    )
+
+
+def test_a_simulation_plugin_whose_helper_changed_is_run_again(simulated):
+    ctx, part, runs = simulated
+    root = ctx.get_project("//sim").config_dir
+    _imports_a_helper(pathlib.Path(root), "run_it.py", "sim_common.py")
+    (entry,) = simulation.of_shape(part)
+
+    _run(simulation.run_async(ctx, part, "part", entry))
+    _run(simulation.run_async(ctx, part, "part", entry))
+    assert len(runs) == 1
+
+    (pathlib.Path(root) / "sim_common.py").write_text(HELPER_V2)
+    _run(simulation.run_async(ctx, part, "part", entry))
+    assert len(runs) == 2
+
+
+def test_an_analysis_whose_solver_helper_changed_is_run_again(analysed):
+    ctx, part, runs, root = analysed
+    _imports_a_helper(root, "solve.py", "solver_common.py")
+
+    _run(part.analyze_async(ctx, cae.FEA))
+    _run(part.analyze_async(ctx, cae.FEA))
+    assert len(runs) == 1
+
+    (root / "solver_common.py").write_text(HELPER_V2)
+    _run(part.analyze_async(ctx, cae.FEA))
+    assert len(runs) == 2
+
+
+def test_a_route_whose_post_processor_helper_changed_is_produced_again(routed):
+    ctx, runs, root = routed
+    _imports_a_helper(root, "route.py", "post_common.py")
+    part = ctx.get_part("//cam-cache:panel")
+
+    _run(part.route_async(ctx))
+    _run(part.route_async(ctx))
+    assert len(runs) == 1
+
+    (root / "post_common.py").write_text(HELPER_V2)
+    _run(part.route_async(ctx))
+    assert len(runs) == 2
+
+
+def test_what_a_run_writes_into_its_package_is_not_part_of_the_question(analysed):
+    """An analysis keeps its model beside the package, and a render its pictures.
+
+    Were every file of the implementing package in the key, the run would move
+    its own key by writing its answer, and nothing would ever be found.
+    """
+    ctx, part, runs, root = analysed
+    _run(part.analyze_async(ctx, cae.FEA))
+    (root / "bracket.svg").write_text("<svg/>")
+    (root / "README.md").write_text("# rendered\n")
+    (root / "notes.txt").write_text("measured 0.1655 mm\n")
+    _run(part.analyze_async(ctx, cae.FEA))
+    assert len(runs) == 1
