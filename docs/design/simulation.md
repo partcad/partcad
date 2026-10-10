@@ -739,9 +739,13 @@ of a shape's cache key: declaring or editing a simulation does not rebuild the o
 **What an implementation runs has to be in the key.** #753 keys a run on the content of the implementation's script and
 the exporter's script, and on PartCAD's wrappers -- not on the other files those scripts import from their own package
 (`mujoco_common.py`, `snapshot_raster.py`, ...), nor on the package's revision. A plugin update that changes only such a
-module therefore served the previous result until `--cache-bypass`. The fix keys simulation, CAE and CAM runs on the
-implementing package's content, computed once per package per process and independent of the machine and the sandbox
-type (in progress).
+module therefore served the previous result until `--cache-bypass`. Simulation, CAE and CAM runs are now keyed on
+`Implementation.source_cache_key()`: every `.py` file of the implementing package by relative path and content (line
+endings normalised), plus the commit for a package imported from git -- which also covers the data files a fetched
+plugin ships -- and PartCAD's own `wrappers/` the same way. Not every file: CAE models and render outputs are written
+into packages and would change the key on every run. So a data file a *local* plugin reads is the one input still
+outside the key. No absolute path, mtime or sandbox detail enters it; each file is read once per process and then
+`stat`ed, 9.7 ms the first time for the MuJoCo plugin and 0.05 ms after (in review in #765).
 
 ## 11. Engine plugins
 
@@ -856,7 +860,7 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 7a | The friction table, measured | in review (#762) |
 | 7b | Buoyancy at the centre of buoyancy | in review (#763, sim-mujoco #9, sim-gazebo #8) |
 | 7c | Per-run Gazebo partitions | in review (sim-gazebo #7) |
-| 7d | Run keys cover what an implementation package ships | in progress |
+| 7d | Run keys cover what an implementation package ships | in review (#765) |
 | 7e | `resolve_resource_path` and colons in parameter values | in review (#760) |
 | 7f | Skills prepare generated objects for simulation | in review (#759) |
 | 7g | The user documentation refactored to how to use it; this record for the design | in progress (with #758) |
