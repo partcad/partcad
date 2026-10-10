@@ -65,7 +65,13 @@ from . import logging as pc_logging
 #      rather than the key's, so nothing about a declaration changes when
 #      PartCAD does and an entry written under 6 would go on being served - a
 #      panel offering to select links by names the daemon does not know.
-VERSION = 7
+#   8: a node placed by a connection that keeps a degree of freedom carries its
+#      joint (see 'shape_envelope.KEY_JOINT' and 'partcad.joint'), which an
+#      entry written under 7 has nowhere to have recorded. The same case as 5
+#      and 7: the payload's shape rather than the key's, so an old entry would
+#      go on being served - and an exporter of the mechanism would be handed
+#      one with no joints in it, silently.
+VERSION = 8
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.

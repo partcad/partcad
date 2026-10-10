@@ -71,6 +71,15 @@ every time it is written, from the same object. An
 implementation with nothing to decide ignores it; one that would otherwise stamp
 the file with the clock, or reach for the quicker of two algorithms that do not
 agree to the last bit, reads it and does the other thing. See REPRODUCIBLE_KEY.
+
+A format handed the tree ('decode: false') finds, on every node an assembly
+placed by connecting it to a sibling it then moves against, that node's joint
+under JOINT_KEY: its name, the labels of the two siblings it joins, the ordered
+steps the node's placement is the product of - 'fixed' ones and 'free' ones,
+each free one with its kind ("turn" or "move"), axis, range, starting value and
+the parameters it came from - and its physics. A node placed rigidly carries
+none: there are no fixed joints. It is the core's 'Joint.to_envelope()', and
+decoding the tree throws it away with every other envelope.
 """
 
 import os
@@ -111,6 +120,12 @@ DECODE_KEY = "__decode__"
 # reserved key: a format that has no way to state a material or a mass never
 # declares it and never sees the index.
 PROPERTIES_KEY = "properties"
+
+# The key a node's joint rides under, beside its properties. Not a parameter of
+# anything - nothing has to ask for it - and spelled out here, rather than
+# imported, for the reason DECODE_KEY is: its twin is
+# 'partcad.shape_envelope.KEY_JOINT', and a wrapper cannot import 'partcad'.
+JOINT_KEY = "joint"
 
 # Whether the file this implementation is about to write has to come out
 # byte-for-byte the same every time it is written, from the same object.

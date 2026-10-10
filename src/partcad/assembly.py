@@ -37,6 +37,15 @@ class AssemblyChild:
     connected to and where the two ports met, so that an assembly instruction
     book can show that step (see assembly_guide.py). It stays 'None' for items
     placed with 'location:', and for assemblies built through 'add()'.
+
+    'composition' is how a connected child's location was worked out: the
+    placement kept as the ordered steps it is the product of (see
+    'partcad.joint'), so that 'composition.location()' is 'location' bit for
+    bit. 'joint' is set when any of those steps stayed free - the child moves
+    against its target - and stays None for a rigid attachment: PartCAD has no
+    fixed joints. A reader that knows its joints some other way (a URDF does)
+    may fill 'joint' in directly. 'joint_problems' is what resolving the joint
+    found wrong with the declarations it read, which 'pc test' reports.
     """
 
     def __init__(
@@ -49,6 +58,9 @@ class AssemblyChild:
         connection=None,
         description=None,
         located=False,
+        composition=None,
+        joint=None,
+        joint_problems=None,
     ):
         self.item = item
         self.name = name
@@ -69,6 +81,9 @@ class AssemblyChild:
         # too. Like 'comment', nothing in PartCAD interprets it: it is what the
         # assembly's generated documents say about this step (assembly_guide.py).
         self.description = description
+        self.composition = composition
+        self.joint = joint
+        self.joint_problems = list(joint_problems or [])
 
     def connect_info(self):
         """What the ASSY file says about connecting this child, or None.
@@ -313,7 +328,7 @@ class Assembly(Shape):
                 self.error(msg)
                 raise Exception(msg)
             name, label = self._child_name_label(child, index)
-            return self._place(envelope, child.location, name, label)
+            return self._place(envelope, child.location, name, label, child.joint)
 
         if len(self.children) == 0:
             pc_logging.warning("The assembly %s:%s is empty" % (self.project_name, self.name))
@@ -382,15 +397,25 @@ class Assembly(Shape):
         name = ("%s:%s" % (project, item_name)) if project and item_name else item_name
         return name, self.link_name(index)
 
-    def _place(self, child_env, placement, name, label):
+    def _place(self, child_env, placement, name, label, joint=None):
         """The child's node re-stamped for this assembly.
 
         'shape_envelope.placed()' is the composition, and is shared with
         everything else that puts a node inside a node: the name and the label
         are this assembly's account of the child, and the placement is composed
         onto whatever the child already carried.
+
+        A child that moves against its target carries its joint on the node as
+        well (KEY_JOINT), beside the properties its object reports, so that an
+        exporter walking the tree ('decode: false') finds the mechanism where it
+        finds the parts. It is this assembly's account of the child, like the
+        label, so it is stamped here rather than by the child: one part may be
+        placed rigidly once and on a hinge twice.
         """
-        return shape_envelope.placed(child_env, placement, name=name, label=label)
+        node = shape_envelope.placed(child_env, placement, name=name, label=label)
+        if joint is not None:
+            node[shape_envelope.KEY_JOINT] = joint.to_envelope()
+        return node
 
     def connected_children(self):
         """Every child of this assembly, including those of the sub-assemblies it embeds.
@@ -407,19 +432,39 @@ class Assembly(Shape):
             if isinstance(item, Assembly) and item.config.get("child", False):
                 yield from item.connected_children()
 
+    def joints(self, prefix: str = ""):
+        """Every joint this assembly declares, in link order, as '(path prefix, joint)'.
+
+        The prefix is the path of the container the two links it joins are in
+        ('' at the top, 'gearbox/' inside a container named 'gearbox'), which is
+        what makes 'prefix + joint.child' the path the rest of PartCAD names the
+        link by. A sub-assembly the file *places* has joints of its own; they
+        are its, not this one's, exactly as its connections are.
+        """
+        for index, child in enumerate(self.children):
+            if child.joint is not None:
+                yield prefix, child.joint
+            item = child.item
+            if isinstance(item, Assembly) and item.config.get("child", False):
+                yield from item.joints(prefix + self.link_name(index) + "/")
+
     async def get_connect_problems(self):
         """What makes this assembly's connection instructions invalid, if anything.
 
         Each entry is '(child name, problem)'. The instructions are repaired in
         place as they are resolved - an assembly still builds - so this is what
-        'pc test' looks at to tell a repaired one from a sound one.
+        'pc test' looks at to tell a repaired one from a sound one. The joints
+        are resolved the same lenient way, and what that found is here too: a
+        'motion:' that contradicts itself, a 'dof' naming no parameter, two
+        interfaces disagreeing about the physics of the joint they make, two
+        joints of one name, and a connection that would close a loop.
         """
         await self.do_instantiate()
         problems = []
         for child in self.connected_children():
-            if child.how is None:
-                continue
-            problems.extend([(child.name, problem) for problem in child.how.problems])
+            if child.how is not None:
+                problems.extend([(child.name, problem) for problem in child.how.problems])
+            problems.extend([(child.name, problem) for problem in child.joint_problems])
         return problems
 
     async def get_bounding_box_async(self, ctx):
