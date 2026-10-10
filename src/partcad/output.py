@@ -336,6 +336,23 @@ SCRIPT_KEY = "__script__"
 # sandbox and cannot import this.
 PROPERTIES_KEY = "properties"
 
+# The request key a scene's world travels to an implementation under: the
+# gravity it states and the fluid it is filled with (see 'Scene.world_facts()').
+#
+# Only beside 'properties: true', and only for a scene that states either. The
+# file types that declare 'properties' are the ones that state physics -- URDF,
+# SDFormat, MJCF -- and the world is physics too; every other file type (a
+# drawing, a STEP file) has nowhere to write a gravity, and asking it to carry
+# one would mean resolving the medium's material, and loading the package that
+# catalogues it, for a picture. A scene that states neither sends nothing, so an
+# exporter that has never heard of this key writes exactly what it always did.
+#
+# A plain key rather than a reserved '__world__', for the reason
+# 'PROPERTIES_KEY' is one: it is meant to be read by the implementation, and its
+# twin, 'wrapper_export.WORLD_KEY', is spelled out there because a wrapper runs
+# in a sandbox and cannot import this.
+WORLD_KEY = "world"
+
 # The request key that says whether the sandbox rebuilds the shape and assembly
 # envelopes into live OCCT geometry before the implementation sees them. The
 # wrapper has to know before it deserializes anything, which is why it travels

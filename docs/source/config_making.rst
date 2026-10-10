@@ -573,6 +573,7 @@ can do applies to it. What it is, is a set of facts about a substance:
       desc: <(optional) textual description>
       url: <(optional) where to read about it>
       density: <(optional) density in kg/m^3>
+      viscosity: <(optional) dynamic viscosity in Pa*s>
       mu: <(optional) coefficient of sliding friction, dimensionless>
       tags: <(optional) a list of free-form tags, or a single tag>
 
@@ -610,6 +611,22 @@ simulation formats a plugin writes. See :ref:`properties` for the order.
   older PartCAD refuses them rather than weighing anything wrong, and a
   catalogue of your own should say the same.
 
+``viscosity`` is what a *fluid* states: how hard it resists being sheared, which
+is what a simulator drags a body moving through it with. It is the **dynamic**
+viscosity, in ``Pa*s``: water at 15 C is ``0.001138``, the number its datasheet
+prints and the one MuJoCo is handed. A part is rarely made of a fluid; a
+:ref:`scene <scenes>` is often filled with one, and names it as its ``medium``.
+
+.. note::
+
+  **Every physical quantity PartCAD states is SI, except lengths and angles.**
+  Lengths are millimetres and angles degrees, as everywhere else in PartCAD;
+  everything else -- a density (``kg/m^3``), a viscosity (``Pa*s``), a mass
+  (``kg``), an inertia (``kg*m^2``), a force (``N``), the gravity of a scene
+  (``m/s^2``) -- is in the SI unit for it, with no prefix. That is the rule the
+  ``how:`` section of an assembly already follows (see :doc:`assy`), and it is
+  what lets a value go into a simulation format as it was written.
+
 ``tags`` is free-form on purpose. There is no controlled vocabulary of material
 properties that survives contact with real catalogues, and imposing one would
 only mean packages could not say what they mean.
@@ -633,8 +650,9 @@ List what a package catalogues with ``pc list materials`` (and
 Standard catalogues
 -------------------
 
-The PartCAD index publishes two families of standard materials, so that a part
-made of something ordinary need not restate any of the above:
+The PartCAD index publishes three families of standard materials, so that a part
+made of something ordinary -- or a scene filled with it -- need not restate any
+of the above:
 
 - ``//pub/std/manufacturing/material/plastic`` -- polymers: the commodity and
   printable thermoplastics (``pla``, ``abs``, ``asa``, ``petg``, ``pc``), the
@@ -647,6 +665,11 @@ made of something ordinary need not restate any of the above:
   their standard designation and temper: ``al-5052-h32``, ``al-6061-t6``,
   ``al-7075-t6``, ``steel-4130``, ``ss-316l``, ``ti-6al-4v``, ``inconel-718``
   and the rest of what robotics, aviation and automotive parts are made of.
+
+- ``//pub/std/manufacturing/material/fluid`` -- what a scene is filled with:
+  ``air`` (the ICAO standard atmosphere at sea level), ``water`` (fresh) and
+  ``seawater`` (standard seawater), each at 15 C with its density and its
+  viscosity. There is no ``vacuum``: a scene that names no medium is one.
 
 An alloy is named ``<metal>-<designation>-<temper>`` rather than by the bare
 designation for two reasons: ``5052:`` in YAML is the *number* 5052 rather than

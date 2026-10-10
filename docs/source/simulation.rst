@@ -556,7 +556,10 @@ is one simulation, and states four things:
 
    The default is ``//builtin/scene:subject``, an empty world holding the
    subject and nothing else. A package that needs more -- a fixture to drop the
-   part onto, a conveyor to push it along -- writes a scene of its own.
+   part onto, a conveyor to push it along, a tank of water to sink it in --
+   writes a scene of its own. The scene is also what says the gravity the run
+   is under and the fluid it is filled with; see `Gravity, and the fluid a
+   scene is filled with`_.
 
 ``offset:``
    Where in that scene the object goes, in the scene's frame. It is stated here
@@ -735,6 +738,118 @@ A part that states a ``friction`` of its own keeps it -- a measured part beats
 the substance it is made of -- and a part that states neither gets whatever the
 simulator defaults to, which is a number nobody chose.
 
+Gravity, and the fluid a scene is filled with
+=============================================
+
+A scene states where things are. A *simulation* scene has to state two more
+things, because the same arrangement comes out differently without them: which
+way, and how hard, things fall -- and what they fall *through*. A block dropped
+on the Moon and the same block dropped into a tank of seawater are the same
+scene in every other respect. So a scene may say both:
+
+.. code-block:: yaml
+
+  scenes:
+    tank:
+      type: assy
+      gravity: [0, 0, -9.81]                                # m/s^2, the scene's own frame
+      medium: //pub/std/manufacturing/material/fluid:water  # a material
+
+``gravity:`` is a vector, so that a scene whose Z axis is not up says so rather
+than being rotated. ``medium:`` names a **material**, resolved exactly as a
+part's material is -- ``:brine`` is "the ``brine`` this package catalogues" --
+because a fluid is a substance with a density like any other, and the one fact
+it states that a solid does not, its ``viscosity``, belongs beside the density
+rather than in a scene. The index catalogues the usual three at
+``//pub/std/manufacturing/material/fluid``: ``air``, ``water`` (fresh) and
+``seawater``, each at 15 C and sea-level pressure.
+
+Both are optional, and the two defaults are what every scene meant before a
+scene could say anything: **no gravity** leaves it to the engine, whose default
+is Earth's along -Z (MuJoCo writes 9.81, SDFormat 9.8 -- PartCAD restates neither,
+so no existing result moves), and **no medium** is a vacuum, which is what every
+engine assumes. ``//builtin/scene:subject`` states neither, and a ``simulate:``
+cannot ask it for a medium: the fluid a part is simulated in is a fact about
+the world, like the fixture it stands on, and a package that wants its part
+under water writes a scene that is under water (``examples/feature_simulate``
+has one, ``tank``). A ``medium`` parameter on the built-in scene would be a
+second way to say the same thing, spelled as a material reference inside an
+instance name and resolved against ``//builtin/scene`` rather than against the
+package that wrote it.
+
+The units, and why they are these
+---------------------------------
+
+Every physical quantity a scene and a material state is **SI**, with the two
+exceptions PartCAD makes everywhere: lengths are millimetres and angles are
+degrees. So a scene's gravity is in **m/s^2** and a fluid's density and dynamic
+viscosity are in **kg/m^3** and **Pa*s** -- the units every engine states them
+in, so none of them is converted on its way into a model. That is the rule the
+``how:`` section of an assembly has always followed (see :doc:`assy`), and the
+one a part's ``physics`` follows.
+
+For gravity it is also the right answer on its own terms. A ``simulate:`` may
+pass its plugin a ``gravity`` of its own in ``params:``, and both plugins have
+always taken that in m/s^2; two numbers where one replaces the other must not
+be a thousand apart for the same acceleration. And 9.81, 1.62 and 3.72 are
+Earth, the Moon and Mars to anyone who reads the file, where 9806.65 is not
+recognisable as anything. The mistake it invites, a vector written in mm/s^2,
+is a thousand g and is reported (above 1000 m/s^2).
+
+Unit-suffixed strings (``"9.81 m/s^2"``) are not accepted: PartCAD has no
+unit-aware scalar yet (item 10 below), and a parser for one field would be a
+third dialect beside the ones ``pc cam`` and ``pc cae`` already speak.
+
+What reaches an engine
+----------------------
+
+The scene's world is resolved by the core -- the medium is a material, and only
+the core can load the package that catalogues it -- and handed to every file
+type that declares ``properties: true`` (the ones that state physics: URDF,
+SDFormat, MJCF) as ``request["world"]``: the gravity, and the medium as its
+material's name, density and viscosity. A scene that states neither sends
+nothing, and an export of it is byte for byte what it was. A medium nothing
+answers to is an error rather than a vacuum, and so is a gravity that is not
+three numbers: the default is a different world, and a simulation of it would
+answer a different question with the same confidence. Both are also part of what
+a simulation's answer is cached under, as the *facts* the medium resolved to: the
+density behind ``:water`` can be corrected in another package without this one
+changing.
+
+======================  =====================================================
+engine                  what the scene's world becomes
+======================  =====================================================
+MuJoCo                  ``<option gravity density viscosity>``, which turns on
+                        MuJoCo's passive fluid model, plus a ``gravcomp`` on
+                        every body for its buoyancy
+Gazebo                  ``<world><gravity>``; a medium is reported and not
+                        written
+URDF                    nothing: a URDF has no world
+======================  =====================================================
+
+MuJoCo's fluid model -- the default, *inertia-box* one -- is drag and nothing
+else: quadratic in speed from the density, linear from the viscosity, acting on
+the box each body's mass and inertia describe. It has **no buoyancy**, so the
+MJCF exporter adds it with MuJoCo's own ``gravcomp``: an upward force at the
+centre of mass of rho_fluid * volume / mass of the body's weight. That is
+Archimedes with no surface -- the fluid fills the whole world, so a body lighter
+than it rises for as long as the run lasts rather than floating at a waterline
+-- with the force at the centre of mass rather than the centre of buoyancy, the
+volume of the solid rather than of what a sealed cavity displaces, and no added
+mass or lift (MuJoCo's per-geom *ellipsoid* model, which needs coefficients a
+scene does not state). Gazebo's ``gz-sim-buoyancy-system`` is not written: on
+Harmonic it ignores a mesh's ``<scale>``, which would buoy PartCAD's millimetre
+meshes by 10^9 times their volume, and a world that names any system loses all
+of Gazebo's default ones. Each plugin's own documentation has the detail.
+
+**Which gravity a run is under**, in order: a ``simulate:``'s own
+``params: {gravity: ...}``, which is handed to the plugin like any other of its
+parameters and applied over the scene's for that run; the scene's
+``gravity:``; the engine's default. Neither plugin's own declaration states a
+default ``gravity`` any more -- until a scene could state one that was harmless,
+and now it would beat every scene that does. An explicit ``gravity`` on the
+exporter itself does the same for a file written with ``pc export``.
+
 Opening a scene in a simulator
 ==============================
 
@@ -843,7 +958,9 @@ The world
 Gravity, the ground, lighting, the initial pose of every model, wind,
 atmosphere, and the physics engine's own parameters (step size, solver type and
 iteration count, contact parameters). This is SDF's ``<world>``, and it is
-exactly the "scenes" PartCAD has always intended to have.
+exactly the "scenes" PartCAD has always intended to have. Gravity and the fluid
+a scene is filled with are the first of these a scene states (see `Gravity, and
+the fluid a scene is filled with`_ above).
 
 Frames
 ======
@@ -1095,6 +1212,26 @@ The scenes PartCAD has always planned are SDF worlds: gravity, ground, lights,
 model instances with initial poses, and physics engine settings. A scene is also
 where a *fixed to the world* joint belongs, which is the piece a single assembly
 cannot express.
+
+Two of those are built: a scene states its ``gravity:`` and the ``medium:`` it
+is filled with, as a material, and both reach the engines (see `Gravity, and the
+fluid a scene is filled with`_). They went first because they are what
+underwater and aerospace validation turn on, and because neither needed anything
+new below the scene: a gravity is three numbers, and a fluid is a material with
+one more fact on it. What is still a proposal:
+
+- **The ground and the lights**, which the exporters write from parameters of
+  their own (``ground_plane``, ``light``, ``sun``) because a scene has nowhere
+  to say them.
+- **A surface.** A medium fills the whole world. A waterline -- air above,
+  water below, and a body floating where the two meet -- is a world with
+  regions in it, which Gazebo's graded buoyancy can express and MuJoCo's fluid
+  model cannot.
+- **Wind and current**: a velocity of the medium, which MuJoCo states as
+  ``<option wind>`` and which ``medium:`` would grow into a mapping to carry.
+- **The physics engine's own parameters** -- step size, solver, iterations --
+  which a ``simulate:`` passes to its plugin today and which belong to an
+  engine rather than to a world.
 
 9. The property tables, and keeping them honest (in place)
 ==========================================================

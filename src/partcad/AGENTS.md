@@ -278,7 +278,9 @@ at all).
   request because `manufacturing:` is outside the shape's hash: a part moved from a router to a laser keeps
   its key and must not get the router's program.
   For a simulation the subject is the *scene*, whose key covers the subject through its `subject` parameter
-  and its links, plus the plugin, the declaration's `params` and how the scene is exported for it. The
+  and its links, plus the plugin, the declaration's `params`, how the scene is exported for it, and the
+  scene's world as the facts it *resolved* to (a `medium:` is a reference into another package, whose
+  density can change without the scene's key moving). The
   `validation:` is deliberately not in it: it is re-evaluated on a hit, so editing it re-judges the run. A
   subject with no key (`cache: false`) is never cached, and only successes are stored, for the reason the
   verdict cache does not store an unrunnable analysis. The key is worked out without building the subject, so
@@ -723,6 +725,17 @@ at all).
   `PartFactory.record_object_type_properties()` is the instantiation code that writes it down. A `step` part
   accepts no such parameter (its file states a material per solid, and says it better), so nothing is promoted
   and the reader that read the file is what fills the property in.
+
+- **A scene's world is a fact a simulation reads too** (`scene_world.py`, `Scene.world_facts()`): a scene
+  may state its `gravity:` (a vector in **m/s^2**: physical quantities are SI, only lengths and angles are mm
+  and degrees) and the `medium:` it is filled with, which is a *material* reference resolved exactly as a
+  part's is. The core resolves it and hands the facts — gravity, the medium's `density` (kg/m^3) and
+  `viscosity` (Pa*s) — to every file type declaring `properties: true` as `request["world"]`
+  (`output.WORLD_KEY`), where they go into the engine's format unconverted. Both default to *nothing sent*, which is
+  what keeps every existing export byte-identical: the engine's own gravity, and vacuum. A bad gravity or a
+  medium nothing answers to raises `scene_world.WorldError` (it is a different world, not a less detailed
+  one), which `_render_one_async` reports against the scene. It lives in its own module because `shape.py`
+  catches it and cannot import `scene.py`, which is an `Assembly`.
 
 - **Where an object's ports are, and who has one** (`./src/partcad/shape_ports.py`,
   `./src/partcad/assembly_ports.py`): one answer, for every caller that asks. `shape_ports.own_ports()` is the

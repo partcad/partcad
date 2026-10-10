@@ -79,6 +79,38 @@ docs:
     pc ide open --with mujoco ./unstable.xml
     ```
 
+    ### `float` and `block` in a tank of water
+
+    A scene says what its world is like as well as where things are in it: the
+    `gravity:` in it, and the `medium:` it is filled with, which is a material
+    like any other. `tank` is filled with `water`, and holds whatever is
+    simulated in it 100 mm above its floor.
+
+    ```shell
+    pc sim -f sinks block    # the aluminium block sinks to the bottom of the tank
+    pc sim float             # the float rises -- and, in the default scene, falls
+    ```
+
+    `float` is the same 20 mm cube as `block`, standing for a sealed float that
+    weighs 3 g: less than the 8 g of water it displaces. Its `simulate:` runs it
+    twice, in the tank and in the default scene, and the two validations are
+    opposite claims about the same part. The default scene is a vacuum, as every
+    scene that states no `medium:` is, so there the float falls like anything
+    else.
+
+    The float states its own `mass` because it is hollow, which its geometry
+    does not say; PartCAD works out the rest -- its centre of mass and its
+    inertia, from its solid, scaled to that mass -- and so does the volume of
+    water it displaces. MuJoCo models a fluid as drag alone; the buoyancy is
+    written by the MJCF exporter, and the water has no surface, so the float
+    rises for as long as the run lasts rather than coming to rest at a
+    waterline. See
+    [partcad-sim-mujoco](https://github.com/partcad/partcad-sim-mujoco) for what
+    is and is not modelled.
+
+    `water` is declared below so that this example stays self-contained; the
+    standard catalogue's is `//pub/std/manufacturing/material/fluid:water`.
+
 dependencies:
   # The simulator. Declared here rather than assumed: PartCAD implements no
   # simulator, so a package that wants one imports it and says so.
@@ -120,6 +152,22 @@ materials:
     tags:
       - low-friction
 
+  # What 'tank' below is filled with. A part is rarely made of water; a scene is
+  # often filled with it, and names it the same way a part names what it is made
+  # of. 'viscosity' is the fact a fluid states that a solid does not: dynamic
+  # viscosity, in Pa*s - SI, like the density beside it.
+  water:
+    formal: H2O
+    full: Fresh water at 15 C
+    desc: |
+      The same numbers as the standard catalogue's
+      //pub/std/manufacturing/material/fluid:water, declared here so that this
+      example works checked out on its own.
+    density: 999.1 # kg/m^3
+    viscosity: 0.001138 # Pa*s
+    tags:
+      - fluid
+
 parts:
   block:
     desc: A 20 mm cube of aluminium, centred on its own origin
@@ -152,6 +200,56 @@ parts:
               abs(after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2])
               for name in before["bodies"]
           ) < 5.0
+      sinks:
+        desc: Aluminium is denser than water, so the block goes to the bottom of the tank
+        simulation: sim-mujoco:mujoco
+        # A scene of this package's own, filled with water. It places the
+        # subject itself, 100 mm above its floor, so there is no 'offset:'.
+        scene: :tank
+        # Released at 100 mm, it ends with its centre 10 mm above the floor:
+        # 90 mm down. Water slows it; it does not stop it.
+        validation: |
+          max(
+              after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2]
+              for name in before["bodies"]
+          ) < -50.0
+
+  float:
+    desc: A sealed float - a 20 mm cube that weighs 3 g, less than the 8 g of water it displaces
+    type: cadquery
+    # The same script and so the same geometry as 'block': a float is the solid
+    # it displaces. What makes it a float is what it weighs.
+    path: block.py
+    properties:
+      physics:
+        # Stated rather than derived, because it is hollow and its geometry
+        # does not say so: 3 g in kg, the unit 'mass' is in. Its inertia is
+        # the solid's, scaled to this, and is not stated.
+        mass: 0.003
+    simulate:
+      floats:
+        desc: Lighter than the water it displaces, the float rises through the tank
+        simulation: sim-mujoco:mujoco
+        scene: :tank
+        # The water has no surface, so a float rises for as long as the run
+        # lasts. A tenth of a metre is far below where it gets to in ten
+        # seconds, and something that sank could not get there.
+        validation: |
+          min(
+              after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2]
+              for name in before["bodies"]
+          ) > 100.0
+      falls:
+        desc: The same float in the default scene, which is a vacuum, falls like anything else
+        simulation: sim-mujoco:mujoco
+        # Released at the height the tank releases it at, so the two runs differ
+        # in the medium and in nothing else.
+        offset: [[0, 0, 100], [0, 0, 1], 0]
+        validation: |
+          max(
+              after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2]
+              for name in before["bodies"]
+          ) < -50.0
 
   block_ptfe:
     desc: The same 20 mm cube, in PTFE
@@ -165,6 +263,31 @@ parts:
       material:
         type: string
         default: ":ptfe"
+
+scenes:
+  tank:
+    desc: A tank of fresh water, holding whatever is simulated in it 100 mm above its floor
+    type: assy
+    path: tank.assy
+    # The fluid the scene is filled with, as a material: its density and
+    # viscosity are what a simulation of the scene drags and buoys what moves
+    # through it with. A scene that names none is a vacuum.
+    medium: :water
+    # Earth's, along -Z, in m/s^2 - which is also what a scene that states no
+    # gravity gets from the engine. Stated here only to show where it goes: on
+    # the scene, and in m/s^2, the units every reader of 9.81 already knows.
+    gravity: [0, 0, -9.81]
+    parameters:
+      # The object being simulated, assigned by 'pc sim' as a full path. The
+      # float by default, so that the tank on its own holds something to draw.
+      subject:
+        type: string
+        default: float
+      # Which kind of object that is, since an ASSY link names a part and an
+      # assembly with different keys.
+      subject_kind:
+        type: string
+        default: part
 
 assemblies:
   stable:
