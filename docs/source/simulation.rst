@@ -694,13 +694,15 @@ the machine the command was run on, never through the daemon -- see
 ``partcad_client.external`` for why.
 
 MuJoCo reads MJCF and no other model format, so a Gazebo world it is pointed at
-is not a slow way of opening a scene, it is a file it cannot read. PartCAD
-writes it out as MJCF first. That conversion is the one thing here that does
-cross the wire, for the reason converting a solid into a mesh for Blender does:
-it drives a CAD wrapper, whose runtime lives in the daemon's environment. An
-ASSY scene is refused rather than converted -- it is nothing but references to
-the parts of a package, and an ad-hoc conversion has no package to resolve them
-against.
+is not a slow way of opening a scene, it is a file it cannot read -- and PartCAD
+does not convert it. MJCF is written by ``partcad-sim-mujoco``'s exporter, and a
+file handed to ``pc ide open`` has no package around it to reach that exporter
+through. So MuJoCo is handed a file that already is MJCF, and anything else is
+refused with the export that does work (``pc export -S -t sim-mujoco:mjcf``,
+then open what it wrote); see `An engine's own scene format is its plugin's`_
+above. An ASSY scene is refused too, for a reason of its own -- it is nothing but
+references to the parts of a package, and an ad-hoc conversion has no package to
+resolve them against.
 
 ==========================================
 What a physical simulation actually needs

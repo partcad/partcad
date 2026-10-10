@@ -12,7 +12,7 @@ cached the way a shape is: under a key that describes the question, in the
 same tiers ('Cache', 'ctx.cache_artifacts'), with the same switches
 ('cacheFiles', 'cacheRemote', 'cacheS3', '--cache-bypass'). A second
 `pc cae fea` of an unchanged part, the IDE's FEA tab opened again, a `pc cam`
-of an unchanged part, a `pc simulate` of an unchanged assembly: each is a read.
+of an unchanged part, a `pc sim` of an unchanged assembly: each is a read.
 
 **The key is the question, and the question is the subject plus the run.**
 'question_hash()' starts from the subject's own cache key

@@ -132,13 +132,16 @@ Any other is converted to the first one on the list that PartCAD can write, and
 changed, it is converted back into the object's own format and written over its
 source, where that source is a file (a STEP, an STL...) rather than a script.
 
-Two more are how an application that cannot read what it was handed still gets
-to open something. ``companions:`` names the extensions the application really
-opens, for a file that sits beside the one PartCAD was pointed at -- a ``kicad``
-part *is* the STEP file KiCad's CLI writes, and the board is the project next to
-it. ``sceneType:`` says which description language an application reads, for
-one that reads an arrangement rather than geometry: MuJoCo reads MJCF, so a
-Gazebo world it is pointed at is written out as MJCF first.
+Two more are about what an application is really handed. ``companions:`` names
+the extensions the application really opens, for a file that sits beside the one
+PartCAD was pointed at -- a ``kicad`` part *is* the STEP file KiCad's CLI writes,
+and the board is the project next to it. ``sceneType:`` says which description
+language an application reads, for one that reads an arrangement rather than
+geometry, and ``sceneExtensions:`` the extensions a file in it is stored in:
+MuJoCo reads MJCF, kept in ``.xml``. A scene in that language is handed over as
+it is, and one in any other is refused rather than converted, with the export
+that writes it -- the language is the engine plugin's, and a file handed to
+``pc ide open`` has no package around it to reach that plugin through.
 
 ``container:`` has the shape a plugin's implementation gives it -- ``image``, and
 ``python`` for an image whose ``python3`` is not on ``PATH`` -- and the container
