@@ -22,6 +22,8 @@ warrants, but always finish by validating.
   reference images directly. Ask the user to clarify only genuinely load-bearing
   ambiguities; otherwise proceed and state your assumptions.
 - Work in millimeters and degrees unless told otherwise.
+- Put the origin where the part rests: a part that stands on its own has its
+  base on z = 0, which is the floor of the scene it is simulated in.
 
 ## 2. Make sure PartCAD is available
 
@@ -87,6 +89,31 @@ the model was made to match; nothing else reads them.
       - photo.jpg
 ```
 
+**Say what it is made of.** PartCAD derives the part's mass, centre of mass and
+inertia from its solid and its material's density, so a part that names a
+material never needs a guessed mass — and one that names none has no mass at
+all, which every simulation of it then makes up. The script types (`build123d`,
+`cadquery`, `scad`, `sdf`) take a `material` parameter, which the script does
+not have to read; a `step` part rejects it and states `properties: material:`
+instead.
+
+```yaml
+    parameters:
+      material:
+        type: string
+        default: //pub/std/manufacturing/material/plastic:pla
+```
+
+Pick from the standard catalogues — `pc list materials
+//pub/std/manufacturing/material/plastic` (`pla`, `petg`, `abs`, `nylon`, …) or
+`.../metal` (`al-6061-t6`, `steel-1018`, `ss-304`, …). When none fits, declare
+one under `materials:` and name it as `:<material>`: `density` in kg/m³ (a
+datasheet's 1.32 g/cm³ is `1320`), and `mu`, the sliding friction, if the part
+will rest on or slide against something. Where grip matters and the material
+states no `Mu` (`pc info` shows it under `Material`), give the part a `friction`
+under `properties: physics:` from a datasheet — otherwise the engine uses a
+default nobody chose.
+
 If you started the project with `pc init`, also delete the empty `sketches:` and
 `assemblies:` sections it leaves — a null section crashes `pc render` on older
 PartCAD (fixed in partcad/partcad#470).
@@ -111,6 +138,22 @@ no such setting, and inventing one is rejected by `pc lint`. Fix the geometry:
 close the shape, keep the feature that collapsed, orient the faces outward. A
 part that fails one of these is a part nothing downstream can compute with,
 however good the picture of it looks.
+
+Then weigh it. `pc --no-ansi info <name>` reports `MassProperties` — `mass` in
+kg, `centerOfMass` in mm, `inertia` in kg·m² — each with the `source` it came
+from. Check the mass against what the real object would weigh (a 20 mm aluminium
+cube is 21.6 g). A mass reported as not known is a part with no material; one a
+thousand or a million times off is a density in the wrong unit, here or in the
+catalogue. State `properties: physics:` only for what is *known* and the solid
+cannot say — a hollow body, a print's infill, a weighed part — because a stated
+value overrides the derived one. `mass` alone keeps the solid's inertia, scaled
+to it:
+
+```yaml
+    properties:
+      physics:
+        mass: 0.045 # kg, weighed
+```
 
 ## 7. Render it from several angles, compare, and iterate
 
@@ -153,8 +196,13 @@ need checking, `/pc:describe` renders a dimensioned drawing of it.
 
 ## 8. Finalize
 
-Summarize what you built — key dimensions and assumptions — and how to view it:
-`pc ide view <name>`.
+Summarize what you built — key dimensions, material and mass, and assumptions —
+and how to view it: `pc ide view <name>`.
+
+If the description claims something physical of the part on its own — it rests
+without rolling, it floats — declare that claim as a `simulate:` and check it
+with `pc sim`. A part takes the same section an assembly does; `/pc:gen-assembly`
+§7 shows how.
 
 If the part is meant to connect to something — a bolt pattern, a plug, a rail —
 say so and offer `/pc:add-interfaces`, which adds the ports and interfaces that
