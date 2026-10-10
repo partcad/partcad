@@ -683,16 +683,31 @@ Friction, and why it is a material property
 ===========================================
 
 Whether a stack of blocks stands up is not a property of its geometry. Two 20 mm
-cubes squarely stacked, ten seconds under gravity, nothing else changed:
+cubes, one squarely on the other, on a level floor in a world whose gravity
+leans 15 degrees off vertical -- the ``tilted`` scene of
+``examples/feature_simulate``, which for sliding is a ramp with no edge --
+for ten seconds in MuJoCo, through the MJCF exporter and the simulation of
+`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_, with
+nothing changed but the sliding friction both blocks are given:
 
-=================  ==========================================
-sliding friction   what happens
-=================  ==========================================
-0.04               the top block slides off -- 35 mm, and it ends up on the floor
+=================  ==========================================================
+sliding friction   what happens to the top block
+=================  ==========================================================
+0.04 (PTFE)        slides 69 mm and falls 20 mm, its own height, to the floor
+0.1                slides 63 mm and falls
+0.2                slides 56 mm and falls
+0.25               slides 32 mm and falls
+0.28               slides 34 mm and falls
+0.3                stays: 0.5 mm of creep, 0.4 mm of settling
 0.4                the same
-0.5                it stays -- 3 mm of settling
-1.05               it stays -- 1 mm
-=================  ==========================================
+1.05 (aluminium)   the same
+=================  ==========================================================
+
+A block slides when its friction is below tan(15 deg), 0.268; MuJoCo's soft
+contacts put the line a little higher, between 0.28 and 0.3. On a level floor
+with gravity straight down, every one of these stays put, PTFE included:
+nothing pushes a block sideways, so its friction is never asked anything. The
+bottom block grips the floor in every row, for the reason given below.
 
 So the answer to "will this stand?" is a fact about the *material*, and
 ``materials:`` is where a package already says what its parts are made of. A
