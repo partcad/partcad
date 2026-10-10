@@ -369,7 +369,14 @@ target format cannot state is reported when it is exported - so the gap is
 always visible in one direction or the other.
 
 ``pc convert assembly -t assy`` fills both sections in from a URDF's joints -
-see :doc:`simulation` for the mapping.
+see :ref:`sim-urdf-joints` for the mapping.
+
+They are a record and nothing runs them yet: a connection is one rigid
+placement, at the values its parameters are given, and a simulation sees the
+parts where that placement put them, every one of them a free body (see
+:ref:`sim-limitations`). Joints that take their degrees of freedom from these
+sections are planned; see the simulation
+`design record <https://github.com/partcad/partcad/blob/devel/docs/design/simulation.md>`__.
 
 Abstract interfaces
 -------------------

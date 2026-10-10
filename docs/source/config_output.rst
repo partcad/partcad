@@ -159,6 +159,16 @@ PartCAD's ``wrappers/`` directory -- on the path of every implementation -- adds
 them up. Only shapes that declare something, or have a mass worked out for
 them, appear.
 
+With ``properties: true``, an implementation writing a :ref:`scene <scenes>`
+that states a ``gravity:`` or a ``medium:`` is also handed that scene's world,
+as ``world``: the gravity in
+m/s², and the medium as its material's full name with its ``density`` (kg/m³)
+and ``viscosity`` (Pa·s), resolved by PartCAD from the package that catalogues
+it. A scene that states neither sends no ``world`` at all, so an implementation
+that has never heard of it writes exactly what it always did. What a body
+displaces of that medium is the ``volume`` and ``centerOfVolume`` each shape
+with a solid in it is handed beside its mass (see :ref:`properties`).
+
 A part that states no density and is made of nothing that does is weighed at
 the file type's ``density`` parameter, in kg/m³, or at 2700 kg/m³ (aluminium)
 where the file type declares none. That makes ``density``, after ``properties``
@@ -584,7 +594,7 @@ it declares ``decode: false`` - it is handed the assembly *tree* itself, one
 URDF link per node, rather than the geometry the tree decodes to. Decoding keeps
 the shape of the tree but nothing else about it: every node's ``name`` and
 ``label`` is dropped, and its placement is baked into the geometry instead of
-staying readable as the joint origin. See :doc:`simulation`.
+staying readable as the joint origin. See :ref:`sim-urdf` for what it writes.
 
 .. _cae-section:
 

@@ -745,7 +745,7 @@ of a ``<gazebo>`` block into these properties one value at a time, and a URDF
 export writes each of them back into the element that states it. A URDF that
 says something PartCAD has no property for stops the import instead of being
 carried opaquely, and a property PartCAD holds that URDF cannot state is
-reported when it is exported. See :doc:`simulation`.
+reported when it is exported. See :ref:`sim-urdf`.
 
 Most parts state none of these, and have most of them all the same. A shape
 made of a :ref:`material <materials>` has the material's ``mu`` as its
@@ -780,7 +780,8 @@ the entry is keyed on the part's own cache key, so an edit to its CAD is a new
 one, and on what the derivation reads besides the geometry -- the density and
 where it came from, and the values the part states -- so an edit to its
 material's density, or to its stated mass, is a new one too, and an edit to
-anything else is not. See :doc:`simulation`.
+anything else is not. See :ref:`sim-physics` for what a simulation does with
+them.
 
 A file type that has a way to state these declares ``properties: true`` in its
 ``export:`` section, and is handed them keyed by the full name of the shape they

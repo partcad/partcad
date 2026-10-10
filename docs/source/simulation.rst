@@ -1,359 +1,938 @@
-Simulation, URDF, SDFormat and MJCF
-###################################
+##########
+Simulation
+##########
 
-PartCAD can read a `URDF <https://wiki.ros.org/urdf>`_ file as an assembly
-(``type: urdf``), write one back out (``pc export -t urdf``), and convert an
-assembly between URDF and ASSY in either direction (``pc convert assembly``).
-URDF is the one of these three PartCAD implements itself, because it describes a
-robot rather than any one engine's world and ROS, MuJoCo, PyBullet and Isaac all
-read it.
+A part or an assembly can say what it is supposed to *do* once it is placed in a
+world and the world is switched on -- stand, stay stacked, sink, float, turn its
+heavy side down -- and PartCAD can check that claim by simulating it, the same
+way ``pc test`` checks that it can be made. This page is how to use that:
+declaring a simulation, the world it runs in, the physical properties it reads,
+running it, the engines that do the physics, writing the condition that decides
+whether it passed, and the robot description formats -- URDF, SDFormat, MJCF --
+that the same machinery reads and writes.
 
-The same machinery reads and writes `SDFormat <http://sdformat.org/>`_ -- what
-Gazebo describes a simulation *world* in -- against a :ref:`scene <scenes>`
-rather than an assembly, and
-`MJCF <https://mujoco.readthedocs.io/en/stable/XMLreference.html>`_, what
-`MuJoCo <https://mujoco.org/>`_ describes a model in, as either. Neither is in
-this wheel: each is declared by the plugin package for its engine and named
-through it (``sim-gazebo:world``, ``sim-mujoco:mjcf``). See `An engine's own
-scene format is its plugin's`_ below.
+Why it is built the way it is, what has been decided and not built yet, and the
+plan, are in the simulation `design record`_.
 
-It can also **run** one. ``simulate:`` is where a part or an assembly says what
-it is supposed to do -- or not do -- once it is placed in a world and the world
-is switched on, and ``pc sim`` places it, runs it and checks the claim. This
-page is the design record for all of that: what the conversions actually
-preserve, what they cannot, and what it would take for PartCAD to hold
-everything a physical simulation needs.
-
-The "What exists today" section describes what is built. Everything after it is
-a proposal, and none of it is implemented.
+.. _design record: https://github.com/partcad/partcad/blob/devel/docs/design/simulation.md
+.. _partcad-sim-mujoco: https://github.com/partcad/partcad-sim-mujoco
+.. _partcad-sim-gazebo: https://github.com/partcad/partcad-sim-gazebo
 
 .. contents::
    :local:
    :depth: 2
 
-==================
-What exists today
-==================
+.. _sim-purpose:
 
-Reading a URDF
-==============
+======================
+What simulation is for
+======================
 
-A URDF reaches a package by the same two commands any other foreign file does,
-and they mean the same two things they mean for a STEP file. ``pc add assembly
-urdf <path>`` *declares* it: the package points at the file, the file stays a
-URDF, and its links become parts as it is read. ``pc import assembly <path>``
-*converts* it: the package gains an ``stl`` part per link, an interface pair per
-joint and an ``.assy``, and nothing points at the URDF afterwards. The import is
-the conversion described in `Converting between the two`_, run against a
-declaration that lives only for the length of it - which is what lets the source
-file sit anywhere, the way a STEP file being imported does.
+A drawing says what a product *is*. Much of what makes it right is what it
+*does*: a stack of parts that stands, a fixture that does not tip, a float that
+rises, a hull that turns its keel down. None of that can be read off the
+geometry, and a claim that nobody checks is one readers learn to trust and
+should not.
 
-``AssemblyFactoryUrdf`` drives ``wrapper_import_urdf`` in a python sandbox. The
-sandbox parses the file with ROS's own ``urdf_parser_py``, walks the joint tree
-from the root link with every joint at its zero position, resolves each link's
-geometry, and hands back plain data. The core registers one part per shape -
-``<assembly>/<link>`` for a link that is one, and ``<assembly>/<link>/<n>``
-under a sub-assembly for a link that is several - and builds the very same
-``Assembly``/``AssemblyChild`` tree an ASSY file produces.
+So a part or an assembly states the claim, in a ``simulate:`` section -- the
+world it is placed in, where it goes, the engine that runs it, and a condition
+over what happened -- and PartCAD runs it and judges it:
 
-The links go into **one flat list**, each at its absolute placement. The joint
-tree is the robot's kinematics; an assembly is one static configuration of it,
-so nesting a sub-assembly per joint would make an arm as deep as it has joints
-and say nothing the placement does not. The relative placements are recorded in
-a link table instead, which is what the ASSY conversion turns into joints.
+- ``pc sim`` runs the simulations an object declares and reports what each
+  engine said;
+- ``pc test`` holds every object to them, as its ``sim`` check, every time it
+  runs.
 
-Nothing is rewritten that does not have to be: a ``<mesh>`` becomes a part that
-reads the very file the URDF named, and the ``<origin>`` that places it becomes
-a location rather than a transform baked into a copy of the geometry. Only
-``<box>``/``<cylinder>``/``<sphere>`` are generated, because there is no file to
-point at.
+The second is what makes it worth writing the claim *first*. Declare what the
+part has to do, watch ``pc test`` fail, and change the design until it passes:
+test-driven development, for a physical product. Once it passes it stays
+checked, and an edit that breaks the claim -- a heavier part, a slipperier
+material, a centre of mass moved -- fails the next test run rather than the
+first prototype.
 
-A link is built from its **collision** geometry when it states both, since that
-is the shape a simulator resolves contact against; ``ignoreCollision`` reverses
-that per link or wholesale. The geometry that was not used is not discarded: it
-becomes the part ``<assembly>/<link>/<visual|collision>``, defined and
-exportable but not placed in the assembly.
+PartCAD implements no physics of its own. An engine is a package that a project
+imports -- `partcad-sim-mujoco`_ for MuJoCo, `partcad-sim-gazebo`_ for
+Gazebo -- and PartCAD's part is everything around it: placing the object in the
+world, writing that world out in the engine's own format with every part's mass
+and friction in it, running the engine in a sandbox that installs it, and
+judging the result. A simulation is therefore as good as the engine's model and
+the physical properties it is handed, and :ref:`sim-limitations` says what is
+not modelled.
 
-What the link says about its physics is **copied field by field into named
-PartCAD properties**, in PartCAD's own units. ``<inertial>`` becomes ``mass``,
-``centerOfMass`` and ``inertia``; the friction and contact settings of a
-``<gazebo>`` block become ``friction``, ``contactStiffness`` and the rest;
-``<material>`` becomes ``material`` and ``color``. A joint's ``<limit>``,
-``<dynamics>``, ``<safety_controller>`` and ``<mimic>`` become the ``motion``
-and ``physics`` sections of the interface it turns into. Nothing is nested under
-the name of the format it came from, and nothing is opaque.
+.. _sim-quick-start:
 
-That choice has a cost and it is deliberate: URDF that no property covers stops
-the import, naming what it found. Core URDF is a closed vocabulary, so an
-unknown element there means PartCAD is out of date and the remedy is to extend
-the tables in ``wrapper_import_urdf.py``. ``<gazebo>`` is an open extension
-point, so an unknown setting there is reported rather than fatal unless the
-assembly asks for ``strict: true``. The export mirrors it: a PartCAD property
-URDF cannot state is reported at info level rather than dropped in silence.
+===========
+Quick start
+===========
 
-Nor does anything record the link's name or its parent. The part *is* named
-after the link, and the joint tree is the URDF file - which is still on disk and
-is read afresh - or, once converted, the ``connect:`` sections of the ASSY. A
-second copy in a properties section would only be a second thing to keep right.
+``examples/feature_simulate`` is a package of small claims that can each be
+checked, run in MuJoCo through `partcad-sim-mujoco`_. From that directory:
 
-Writing a URDF
-==============
+.. code-block:: shell
 
-The URDF exporter (``//builtin/export``'s ``export_urdf.py``) is handed the
-assembly *tree* rather than the compound it decodes to - which is what
-``decode: false`` on its declaration asks for. Each node becomes a link, each parent/child relation a fixed joint
-carrying that child's placement, and each node with geometry gets an STL written
-next to the URDF. A shape that appears more than once is written once and
-referenced by every link that uses it.
+  pc sim -a stable      # two aluminium blocks, squarely stacked: nothing moves
+  pc sim -a unstable    # the top block 18 mm off the edge: it falls off
+  pc sim -a slippery    # 'stable' in PTFE, in a tilted world: the top block slides off
+  pc sim block          # an aluminium cube rests on the floor, and sinks in water
+  pc sim float          # a sealed 3 g cube rises in water, and falls in a vacuum
+  pc sim buoy           # the float with its weight low down rights itself
+  pc test -f sim        # every one of them, as the check pc test runs
 
-A sub-assembly whose children are named *under* it - ``wrist`` holding
-``wrist/1`` and ``wrist/2`` - goes back out as one link with a ``<visual>`` per
-shape, at the offset each was placed at, rather than as a frame link with a link
-per shape. So a link of several visuals survives the round trip as itself. The
-slash is the whole of the rule, and it needs nothing recorded anywhere: it is
-the same convention the import uses to name those parts in the first place.
+Nothing has to be installed first. The MuJoCo plugin is a dependency of the
+package, and PartCAD installs MuJoCo into the sandbox it runs the plugin in.
 
-The joint *tree* does not survive: the export mirrors the assembly, and a URDF
-assembly is flat, so what comes out is a root frame with every link fixed to it
-directly. That is an honest reading - the exported joints are all fixed because
-PartCAD holds one static configuration, and a star of fixed joints is what that
-is. The chain is preserved where it means something, in
-``pc convert assembly -t assy``, and a faithful re-export would read it back
-from there rather than from anything stashed on the parts.
+A declaration is a dependency on an engine and one entry under ``simulate:``.
+This is ``stable``:
 
-What a part states about itself is written into the URDF element that states it:
-mass, centre of mass and inertia into ``<inertial>``, friction and the contact
-parameters into a ``<gazebo>`` block, ``material``/``color`` into
-``<material>``. A part that states none of its mass properties is written no
-differently, because PartCAD has already worked them out: OCCT measured the
-solid's volume, its centroid and its inertia at unit density as the part was
-built, and the density of what the part is made of turns those into a mass, a
-centre of mass and an inertia (``partcad.physics``). They reach the exporter in
-the part's properties, under the names a part would state them under, and the
-exporter writes them - this one, and the MJCF and SDFormat ones the simulation
-plugins carry, all the same way, because none of them works a mass out. Every
-value is resolved in one order:
+.. code-block:: yaml
 
-#. what the part states, as stated;
-#. its ``density`` - one it states itself, or else its material's;
-#. for an export only, the ``density`` parameter of the export, else 2700 kg/m³
-   (aluminium), for a part that states no density and is made of nothing that
-   does.
+  dependencies:
+    sim-mujoco:
+      type: git
+      url: https://github.com/partcad/partcad-sim-mujoco.git
 
-A part that states its mass and not its inertia gets its solid's inertia scaled
-to that mass, so it turns the way its shape says at the weight it says. The
-centre of mass and the inertia come from the same density as the mass, so the
-three cannot disagree. ``pc info`` reports the same values as
-``MassProperties``, each with where it came from, so what it says a part weighs
-is what a simulation of it weighs.
+  assemblies:
+    stable:
+      type: assy
+      simulate:
+        stands:
+          desc: Nothing moves, even pulled sideways by a quarter of its weight
+          simulation: sim-mujoco:mujoco        # the engine, from the package above
+          scene: :tilted                       # a world of this package's own
+          offset: [[0, 0, 10], [0, 0, 1], 0]   # stand the stack's bottom face on its floor
+          validation: |
+            max(
+                sum((a - b) ** 2 for a, b in zip(after["bodies"][name]["pos"], before["bodies"][name]["pos"])) ** 0.5
+                for name in before["bodies"]
+            ) < 5.0
 
-What an exporter still does is add up a link made of several shapes -
-``wrist/1`` in aluminium, ``wrist/2`` in steel - each placed where the link
-holds it, its inertia turned with it and moved to the common centre of mass, so
-that the link balances where the steel pulls it. That arithmetic is
-``mass_properties`` in PartCAD's ``wrappers/`` directory, beside
-``urdf_common``, and it is the one copy of it: the plugins import it the way
-they import ``urdf_common``, and carry none of their own.
+The validation says that no block moved 5 mm in any direction. ``pc sim -a
+stable`` says whether it held; ``pc sim --json -a stable`` prints everything
+the engine reported as well, which is where to look before writing a validation
+of your own.
 
-Every density is in kg/m³ - a material's, a part's and an export's - so none is
-ever converted on the way, and there is no factor of a million anywhere to get
-wrong.
+The rest of the example reads the same way. ``stable`` and ``unstable`` are the
+same two blocks and differ by 18 mm. ``stable`` and ``slippery`` differ by one
+word, the material, and both run in ``tilted``, a scene whose gravity leans 15
+degrees: on a level floor nothing pushes a block sideways, so its friction is
+never asked anything. ``tank`` is a scene filled with water. ``float`` and
+``buoy`` are the same cube as ``block``, and state what they weigh because a
+sealed float is hollow and its geometry does not say so. The example's
+``README.md`` walks through each of them.
 
-A link's name, and the properties written under it, come from the shape the
-exporter is handed, and both travel on that shape together. This used to be the
-one place the shape cache showed through: the cache is keyed by geometry,
-deliberately, so that two parts reading the same mesh file do not compute it
-twice, and the entry used to carry the name of whichever part wrote it - so the
-other part read back wearing a name that was not its own, and the properties
-looked up under that name were the wrong part's or nobody's. The entry no longer
-stores that outer layer at all. What identifies the shape being asked for - its
-name, its label, its placement, and what it reports about itself - is stamped
-onto the payload from the asking object's own configuration every time an entry
-is read, so parts that share geometry each get themselves back.
+.. _sim-declaring:
 
-The stamp reaches the shape that was asked for and no further. Inside a cached
-assembly the children sit in the entry with the names, labels and properties
-they were built with, because down there they are not who is asking - they are
-what the tree is made of, as much a part of the answer as the geometry. So a
-link exported from a part is that part; a link exported from a child of a cached
-assembly is whatever that child was when the tree was cached, and it takes a
-change the assembly actually hashes, or ``pc system reset``, to build it again.
+======================
+Declaring a simulation
+======================
 
-What a shape reports about itself is cached too, in an entry of its own beside
-the geometry - the geometry's key with ``-props`` appended. Both are filled by
-the one run that actually instantiates the shape, and they are read apart: a
-consumer after a part's material need not pull its BREP back out of the cache,
-and a cache written before that entry existed is a miss for the properties and
-not for the geometry. It is not what the stamp above is made of, though: that
-entry is keyed on the geometry, so what sits in it belongs to the geometry. What
-the object asking reports is its own ``properties:`` section, and only that.
+``simulate:`` is an optional section of a part or an assembly. Each entry is one
+simulation under a name of its own -- the name is what ``-f`` selects and what a
+report prints beside the verdict -- and states:
 
-A *derived* property is not cached there either, and the reason is the same
-key. A mass is the solid times a density, and the density lives in a
-``materials:`` section or a ``properties:`` one, neither of which the geometry's
-hash covers - so a mass cached beside the geometry would outlive an edit to the
-density it was worked out from. It has an entry of its own instead
-(``partcad.physics``), holding the part's volume, mass, centre of mass and
-inertia, under a key made of the part's own cache key - which every edit to the
-CAD moves - and of everything the derivation reads that the part's key does
-not cover: the density it was weighed at and where that came from (a stated
-density, the material that lent it, or an export's fallback), and every value
-the part states that a derived one would otherwise fill in. An edit to a
-material's density or to a stated mass is therefore a new entry as well, and
-an edit to anything that does not weigh - a material's description, a part's
-friction - is not. ``pc info``, an export and the IDE read the same entry, and
-a hit answers without the geometry. A miss works the values out from what the
-geometry's own entry carries: the volume, and the centroid and inertia at unit
-density OCCT measures as the shape is built.
+``scene``
+  The world the object is placed in, by full path. It may be left out: the
+  default, ``//builtin/scene:subject``, is an empty world that holds the object
+  and nothing else, which is what "does this stand up on its own" means. A world
+  with more in it -- a fixture to stand on, a tank of water, a tilted floor -- is
+  a scene of your own; see :ref:`sim-scenes`.
 
-Converting between the two
+``offset``
+  Where the object's origin goes in that scene, as a location
+  (``[[x, y, z], [axis x, axis y, axis z], angle]``, in millimetres and degrees).
+  It is stated here rather than in the scene because it is a fact about *this*
+  object -- where its origin sits relative to the floor it is meant to stand on
+  -- and the scene is shared. The blocks of ``feature_simulate`` are drawn about
+  their own centres, so each stack is lifted 10 mm to stand on the floor;
+  ``buoy`` is also turned 60 degrees, to be released tilted.
+
+``simulation``
+  The engine plugin that runs it, by full path: ``sim-mujoco:mujoco`` is the
+  ``mujoco`` simulation of the package this one imported as ``sim-mujoco``.
+  There is no default, since PartCAD implements no simulator; see
+  :ref:`sim-engines`.
+
+``params``
+  Values of the plugin's own parameters for this run -- ``duration``,
+  ``samples``, ``gravity`` and the others each plugin lists (see
+  :ref:`sim-engines`).
+
+``validation``
+  A Python expression over what the engine reported, true when what happened is
+  what was supposed to happen; see :ref:`sim-validation`.
+
+``desc``
+  The claim in words, for whoever reads the result.
+
+An object may declare as many simulations as it likes, and two of them can
+make opposite claims about one part in two worlds: ``float`` rises in ``tank``
+and falls in the default scene, which is a vacuum.
+
+Relative names in a declaration -- ``sim-mujoco:mujoco``, ``:tilted`` --
+resolve from the package the object is in, not from where the command was run,
+so ``pc test -P //...`` run at the root of a tree resolves each of them the way
+``pc sim`` in that package would.
+
+``simulate:`` is not part of what the object is built from: declaring or
+editing a simulation does not rebuild the object. The section's schema is under
+:ref:`simulate`.
+
+.. _sim-scenes:
+
+================
+Scenes as worlds
+================
+
+A simulation is never of an object alone: it is of an object *in a world*. That
+world is an ordinary :ref:`scene <scenes>`, of any scene type, with one thing
+about it that makes it a simulation scene -- it takes the object as a parameter.
+
+The default scene
+=================
+
+``//builtin/scene:subject`` holds the object being simulated and nothing else.
+It states no gravity, so a run in it is under the engine's own -- Earth's, along
+-Z -- and no medium, so it is a vacuum. The floor the object stands on and the
+light it is drawn in are not part of the scene: each engine's exporter writes
+its own (see :ref:`sim-engines`).
+
+Writing a simulation scene
 ==========================
 
-``pc convert assembly`` rewrites the package rather than just producing a file.
-To URDF it writes the ``.urdf`` and its meshes and switches the declaration
-over. To ASSY it writes an ``stl`` part for every link, an interface pair for
-every joint, and an ``.assy`` whose nodes use ``connect:`` - so the result is an
-assembly stated the way PartCAD states one, not a transcription of coordinates.
-How the joints become interfaces is `URDF joints as PartCAD interfaces`_ below.
+When a simulation runs, PartCAD sets three parameters of the scene it names, and
+a scene that is to hold the object declares them:
 
-What the round trip preserves
-=============================
+``subject``
+  The full path of the object being simulated (``//package:part``). It is
+  assigned whatever else the declaration says, which is what lets one scene
+  serve every object that names it.
 
-``examples/produce_assembly_assy:logo`` exported to URDF and read back as a
-``urdf`` assembly puts every shape back where it was, under the name it had,
-built from the same geometry - flattened, because a URDF has no way to say
-"these parts belong together" other than by joining them. That is the whole of
-what survives.
+``subject_kind``
+  ``part`` or ``assembly``, because an ASSY link names the two with different
+  keys.
+
+``subject_offset``
+  The declaration's ``offset``, as seven numbers separated by spaces -- the
+  translation, then the axis, then the angle. Not the location as it is written
+  everywhere else, because a parameter value has to be spellable inside an
+  instance name, where ``,`` and ``;`` are separators.
+
+An ASSY file is a Jinja2 template (see :ref:`sim-templates`), and that is how
+the scene places the object. This is ``tilted.assy`` from
+``examples/feature_simulate``, whole:
+
+.. code-block:: jinja
+
+  {%- set offset = param_subject_offset.split() %}
+  links:
+    - {{ param_subject_kind }}: "{{ param_subject }}"
+      name: subject
+      location: [[{{ offset[0] }}, {{ offset[1] }}, {{ offset[2] }}], [{{ offset[3] }}, {{ offset[4] }}, {{ offset[5] }}], {{ offset[6] }}]
+
+and its declaration, which gives each parameter a default so that the scene on
+its own -- what ``pc render`` draws and ``pc ide view`` shows -- holds
+something:
+
+.. code-block:: yaml
+
+  scenes:
+    tilted:
+      type: assy
+      path: tilted.assy
+      gravity: [2.539, 0, -9.476]   # 9.81 m/s^2, leaning 15 degrees towards +X
+      parameters:
+        subject:
+          type: string
+          default: stable
+        subject_kind:
+          type: string
+          default: assembly
+        subject_offset:
+          type: string
+          default: "0 0 10 0 0 1 0"
+
+A scene that declares no ``subject`` parameter cannot hold the object, and a
+simulation that names one fails. Anything else the world needs -- a fixture, a
+ramp, a bin -- is linked into the scene beside the subject, like any other part
+of it.
+
+Gravity, and the fluid a scene is filled with
+=============================================
+
+A scene may say what its world is like as well as where things are in it: the
+gravity in it, and the fluid it is filled with.
+
+.. code-block:: yaml
+
+  scenes:
+    tank:
+      type: assy
+      path: tank.assy
+      gravity: [0, 0, -9.81]   # m/s^2, in the scene's own frame
+      medium: :water           # a material, resolved the way a part's is
+
+``gravity:`` is a vector, so a world whose Z axis is not up says so, and so does
+a ramp with no edge -- ``tilted`` above is a level floor under a gravity that
+leans, which for sliding is the same thing. ``medium:`` names a
+:ref:`material <materials>`, and its ``density`` and ``viscosity`` are what the
+engine drags and buoys a body with; ``//pub/std/manufacturing/material/fluid``
+catalogues ``air``, ``water`` and ``seawater``. Both are optional, and leaving
+them out is what every engine assumes: its own gravity, in a vacuum. The keys,
+their units and what is refused are in :ref:`scenes`; what each engine makes of
+a medium is in :ref:`sim-engines`.
+
+A ``simulate:`` cannot ask the default scene for water. The fluid a part is
+simulated in is a fact about the world, like the fixture it stands on, so a
+package that wants its part under water writes a scene that is under water, as
+``tank`` is. A medium parameter on the built-in scene would be a second way of
+saying the same thing, resolved against ``//builtin/scene`` rather than against
+the package that wrote it.
+
+**Which gravity a run is under**, in order: the declaration's own
+``params: {gravity: [...]}``, for that run; the scene's ``gravity:``; the
+engine's default (MuJoCo's 9.81 m/s², SDFormat's 9.8, both along -Z).
+
+.. _sim-physics:
+
+=================================
+Materials and physical properties
+=================================
+
+Whether a stack stands, a float rises or a block slides is decided by what the
+parts are made of as much as by their shape. The model an engine is handed
+carries, for every part, its mass, its centre of mass and its inertia, its
+sliding friction, and -- for a scene filled with a fluid -- the volume it
+displaces and where that volume is centred. PartCAD works each of them out once,
+the same way for every engine, for ``pc info`` and for the URDF export, so what
+``pc info`` says a part weighs is what a simulation of it weighs.
+
+What a part is made of
+======================
+
+A :ref:`material <materials>` is a set of facts about a substance, declared in a
+``materials:`` section and shared like any other object. A simulation reads
+three of them: ``density``, in kg/m³, which gives a part its mass, centre of
+mass and inertia; ``mu``, the dimensionless coefficient of sliding friction; and
+``viscosity``, in Pa·s, which only a fluid states. The standard catalogues
+listed there cover the usual plastics, metals and fluids.
+
+A part names its material with the ``material`` parameter, on the part types
+that make one homogeneous body (see :ref:`parameters`), and the part type
+records the answer as the ``material`` property of the shape it makes, which is
+what every exporter reads. That is also how two parts built by one script can be
+made of different things, as ``block`` and ``block_ptfe`` are in
+``feature_simulate``:
+
+.. code-block:: yaml
+
+  parts:
+    block:
+      type: cadquery
+      path: block.py
+      parameters:
+        material:
+          type: string
+          default: ":aluminium"   # or //pub/std/manufacturing/material/metal:al-6061-t6
+
+Stating what the material cannot say
+====================================
+
+A part states a value under ``properties: physics:`` when its geometry and its
+material cannot say it. A sealed float is drawn as the solid it displaces, but
+it is hollow, so it states its mass; a float with a lead weight in its bottom
+also states where it balances:
+
+.. code-block:: yaml
+
+  parts:
+    buoy:
+      type: cadquery
+      path: block.py
+      properties:
+        physics:
+          mass: 0.004                # kg
+          centerOfMass: [0, 0, -6]   # mm, in the part's own frame
+
+A stated value beats the material, because a measured part beats the substance
+it is made of, and whatever the part does not state is still worked out: the
+float above turns the way its solid says it does, at the weight it states.
+
+Where each value comes from
+===========================
+
+Each value is the first of these that applies -- what the part states; what its
+solid comes to at the density of its material; and, for an export only, the
+export's ``density`` parameter or else 2700 kg/m³ (aluminium). Friction is what
+the part states, or else its material's ``mu``, or else the engine's default.
+The mass, the centre of mass and the inertia come from one density, so they
+cannot disagree. The full order, and every property a part can state, is under
+:ref:`properties`.
+
+The volume a part displaces and that volume's centroid -- its centre of
+buoyancy -- are always measured from the solid, never stated: a float states 3 g
+and still pushes aside the whole 8 cm³ of its cube, and is lifted from the
+cube's middle whatever its stated centre of mass. That difference between where
+a body balances and where it is lifted is what turns ``buoy`` upright.
+
+Two cases are worth knowing about. A part that names no material with a density,
+and states no mass, has no known mass: ``pc info`` says so rather than inventing
+one, while an export -- and so a simulation -- weighs it at 2700 kg/m³, because
+an engine handed a body with no mass makes one up regardless. Give it a
+material. And a part with no solid in it, an open mesh, has no volume to weigh
+or to buoy.
+
+What pc info shows
+==================
+
+``pc info`` reports all of this as ``MassProperties``: each value with its unit
+and where it came from -- ``stated``, ``the material :aluminium``,
+``derived: 8000 mm^3 at 2700 kg/m^3``, ``measured``. An assembly reports its
+parts added up in its own frame and names any part it could not weigh, and the
+material itself is reported as ``Material``, with its density and its friction.
+See ``pc info`` in :doc:`cli`.
+
+The values are cached, keyed on the part's geometry and on what they were
+derived from, so an edit to the CAD, to the material's density or to a stated
+value is picked up, and an edit to anything else costs nothing.
+
+Every one of these quantities is SI except lengths, which are millimetres, and
+angles, which are degrees -- the units every engine states them in, so nothing
+is converted on its way into a model (see the note under :ref:`materials`).
+They are plain numbers: a unit written into a value, ``"9.81 m/s^2"``, is not
+accepted.
+
+.. _sim-running:
+
+====================
+Running a simulation
+====================
+
+``pc sim``
+==========
+
+.. code-block:: shell
+
+  pc sim block                # every simulation the part 'block' declares
+  pc sim -a stable            # an assembly
+  pc sim -f sinks block       # one simulation, by name
+  pc sim                      # everything this package declares
+  pc sim -P ...               # and everything in the packages below it
+  pc sim --json -a slippery   # and the whole of what the engine reported
+
+It exits non-zero when a validation does not hold or a run cannot be made. A
+declaration with no ``validation:`` is run and reported as having run, which is
+how to look at what a plugin reports before writing the condition. Each run
+gets a directory of its own under PartCAD's state directory, one per object and
+simulation and emptied by the next run, holding the scene file the engine was
+handed, its meshes and whatever the plugin wrote. See ``pc sim`` in :doc:`cli`
+for every option.
+
+.. _sim-test:
+
+``pc test``'s ``sim`` check
+===========================
+
+``pc test`` holds an object to the same claims every time it runs, as its
+``sim`` check -- ``pc test -f sim`` runs that check alone -- so a ``simulate:``
+is checked whenever the package is tested rather than whenever somebody
+remembers to ask. It runs a simulation through the same code ``pc sim`` does,
+and shares its cache.
+
+It applies to a part or an assembly that declares ``simulate:`` and to nothing
+else, so a package of bolts pays nothing for it. The verdicts:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 62 38
+
+   * - What happened
+     - Verdict
+   * - Every simulation the object declares ran, and every ``validation:`` held
+     - pass
+   * - A ``validation:`` did not hold, or could not be evaluated
+     - fail
+   * - A run could not be made: no ``simulation:`` named, a plugin or a scene
+       that cannot be found, a simulator that will not install on this
+       platform, a sandbox that will not build, a crash
+     - fail
+   * - The plugin names a ``container:`` or a ``dockerImage``, and this machine
+       has no container runtime
+     - skip, with a ``WARNING`` carrying the whole report
+   * - The declaration states no ``validation:``
+     - skip when a package or a tree is tested; fail when the object is named
+
+A failure names the object, the simulation and the reason. Not running is a
+failure rather than a skip, for the reason the engineering analyses give (see
+:ref:`engineering-analysis`): the object asked a question, and a plugin that
+answered nothing has failed. The one excuse is a plugin that was never given the
+environment it said it needs -- it named an image, and there is nowhere for an
+image to run. MuJoCo is a wheel and its plugin names no image, so a MuJoCo run
+that fails has failed on any machine; the Gazebo plugin names one, so a Gazebo
+run that cannot be made on a machine with no container runtime is skipped. A
+plugin or a scene that cannot be found is never excused: it is wrong wherever
+the package is opened.
+
+A declaration with no ``validation:`` has nothing to be judged by, so ``pc
+test`` does not run it, and what that costs depends on what was asked. Testing a
+package, it is skipped with a ``WARNING`` saying why: the claim may be one
+somebody is still writing, and the rest of the package deserves its verdict.
+Testing the object by name -- ``pc test -a stable`` -- it fails: somebody asked
+whether this object does what it says, and it says nothing.
+
+``--fast-only`` passes over an object that declares a ``timeout:``, as it does
+for every check. An object's simulations are checked where the object is tested
+in its own right, and not again for every assembly whose manufacturability
+check walks the parts it is made of.
+
+.. _sim-caching:
+
+Caching runs
+============
+
+A run is cached the way an engineering analysis is (see "Analyses, routes and
+simulations" under :ref:`caching`): what the plugin reported together with the
+whole run directory, so asking the same question again puts those files back
+and runs nothing, and only a run that succeeded is kept.
+
+For a simulation the question is the scene -- which covers the object, a
+parameter of it, and so its geometry and everything it is built from -- plus the
+plugin and every option it resolved to, its environment, the declaration's
+``params``, the exporter and its options, and the content of every script
+involved. A ``medium:`` is in it as the facts it resolved to rather than as a
+name, so a correction to the density of ``:water`` in the package that
+catalogues it runs the simulation again.
+
+A ``validation:`` is not part of the question: editing one re-judges the cached
+run rather than repeating it, in ``pc sim`` and in ``pc test`` alike. ``pc
+test``'s verdict is cached too, keyed on the declarations as written,
+``validation:`` included, and on the key of every run it was judged on, so
+nothing else changes it. A skip, a run that did not deliver, a declaration that
+does not resolve and one with no ``validation:`` are worked out afresh every
+time.
+
+.. _sim-engines:
+
+==============
+Engine plugins
+==============
+
+An engine is a package, imported like any other dependency. Each of the two
+PartCAD maintains declares four things about its engine's own format, because
+they are one piece of knowledge: a reader for it (``import:``), a writer
+(``export:``), the simulation (``simulation:``) and the application that opens
+it (``open:``). Importing the package is what makes all four work at once.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 12 26 22 40
+
+   * - Engine
+     - Package
+     - Simulation
+     - Where the engine comes from
+   * - MuJoCo
+     - `partcad-sim-mujoco`_
+     - ``sim-mujoco:mujoco``
+     - the ``mujoco`` wheel, which PartCAD installs into the plugin's sandbox --
+       nothing to install by hand
+   * - Gazebo
+     - `partcad-sim-gazebo`_
+     - ``sim-gazebo:gazebo``
+     - a ``gz`` on ``PATH`` or in a ROS installation, or else the container image
+       the plugin names, which needs a container runtime
+
+The names assume the package is imported as ``sim-mujoco`` or ``sim-gazebo``,
+as every example here does. Each plugin's repository documents its engine in
+full; what follows is what a claim depends on.
+
+What a run is
+=============
+
+Before the plugin starts, PartCAD builds the scene with the object in it and
+writes it out in the engine's format, with every part's mass, inertia and
+friction in it and, for a scene that states them, its gravity and its medium.
+The plugin is handed that file, steps it for ``duration`` seconds of simulated
+time, and reports the state of the world before and after (see
+:ref:`sim-validation`).
+
+**Every body in a run is free.** The plugin asks the export for that, through
+the ``formatOptions`` of its declaration -- ``static: false`` and
+``flatten: true`` for MJCF, ``static: false`` for SDFormat -- so every part with
+geometry becomes a rigid body of its own, with nothing holding it to anything.
+That is what lets a stack of blocks fall over, and it holds for the parts of an
+assembly too, which are not attached to each other in a run (see
+:ref:`sim-limitations`). Each exporter also writes a ground plane under the
+world and a light over it.
+
+The parameters both plugins take, as fields of the plugin's declaration or for
+one run in a declaration's ``params:``:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 16 18 66
+
+   * - Parameter
+     - Default
+     - Meaning
+   * - ``duration``
+     - ``10.0``
+     - Seconds of simulated time to run for.
+   * - ``timestep``
+     - the engine's
+     - The integration step, in seconds.
+   * - ``gravity``
+     - the scene's
+     - In m/s², in the scene's frame; overrides the scene's ``gravity:`` for
+       this run.
+   * - ``samples``
+     - ``0``
+     - Report the state at this many evenly spaced instants as well, as
+       ``samples``.
+   * - ``timeout``
+     - ``300.0``
+     - Gazebo only: wall-clock seconds to wait for the server before giving up.
+
+Friction and contact
+====================
+
+Each part's friction coefficient is written into every format in its own
+spelling -- MJCF's first ``friction`` component, SDFormat's
+``<surface><friction><ode><mu>``, URDF's ``<gazebo><mu1>`` -- and is the same
+dimensionless number in all of them. A part that states no friction and names no
+material with a ``mu`` gets the engine's default, which is a number nobody
+chose.
+
+A contact has two sides, and how their coefficients combine is the engine's
+model rather than the part's. The two engines do not agree:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 76
+
+   * - Engine
+     - The coefficient of a contact between A and B
+   * - MuJoCo
+     - the **larger** of the two (no exporter here sets the ``priority`` that
+       would change that)
+   * - Gazebo (DART)
+     - the **smaller** of the two
+
+So two blocks of one material meet at that material's ``mu`` in both. A block
+on the floor does not: the ground plane each exporter writes states no friction,
+which is 1.0 in both formats, so in MuJoCo every block grips the floor at 1.0 or
+more, and in Gazebo at its own ``mu`` or less. In ``slippery``, run in MuJoCo, it
+is the top PTFE block that slides off the bottom one, and not the stack along
+the floor.
+
+MuJoCo's contacts are soft: a body under a steady sideways load slips at a small
+steady rate even well inside its friction cone, and with MuJoCo's own defaults
+an aluminium stack slid apart in a world tilted by only 6 degrees. So the MJCF
+exporter writes MuJoCo's own remedies into every model -- elliptic friction
+cones, an ``impratio`` of 10 and three NoSlip iterations, which are its
+``cone``, ``impratio`` and ``noslip_iterations`` parameters -- and with them a
+stack holds or slides as its friction says. Measured that way, two 20 mm cubes
+in ``tilted`` for ten seconds, with nothing changed but the coefficient both are
+given:
 
 .. list-table::
    :header-rows: 1
    :widths: 30 70
 
-   * - Preserved
-     - Lost
-   * - Every shape, at the placement it had
-     - Every name (PartCAD names carry package paths; ROS names cannot)
-   * - Placements, to full double precision
-     - Nesting: an ASSY may group its parts, a URDF's grouping is its joint tree
-   * - Names of the assembly's own children
-     - Parametrization: an ASSY parameter, an enrich, an alias
-   * - Geometry, as a triangle mesh
-     - Exact B-rep geometry; the mesh is a tessellation at a chosen tolerance
-   * - Shape sharing (one mesh, many links)
-     - Which part in which package a link came from - the digital thread itself
+   * - Sliding friction
+     - What happens to the top block
+   * - 0.04 (PTFE)
+     - slides 69 mm and falls 20 mm, its own height, to the floor
+   * - 0.1
+     - slides 63 mm and falls
+   * - 0.2
+     - slides 56 mm and falls
+   * - 0.25
+     - slides 32 mm and falls
+   * - 0.28
+     - slides 34 mm and falls
+   * - 0.3
+     - stays: 0.5 mm of creep, 0.4 mm of settling
+   * - 0.4
+     - the same
+   * - 1.05 (aluminium)
+     - the same
 
-In the other direction, reading a URDF loses less than it used to but still
-loses. Mass, inertia, friction, contact parameters and appearance become named
-properties of the part and are written back on export; joint types, axes, limits
-and dynamics become the ``motion`` and ``physics`` of the generated interfaces
-when the assembly is converted to ASSY; the geometry a link was not built from
-becomes a part of its own. What is genuinely gone is the *effect* of a joint -
-the assembly is one configuration, so a movable joint is a placement and not a
-degree of freedom - along with transmissions, sensors and ``ros2_control``
-blocks, and the ``<origin>`` of geometry that ends up unplaced. PartCAD reports
-the count of each rather than passing over them in silence, so the loss is
-visible at import time and in ``pc info``.
+A block on a 15-degree slope slides when its friction is below tan 15°, 0.268;
+MuJoCo's soft contacts put the line a little higher, between 0.28 and 0.3, so a
+claim close to a threshold needs margin. On a level floor with gravity straight
+down every row stays put, PTFE included, because nothing pushes a block sideways.
 
-What it took to implement
+``friction2``, a coefficient across a second direction, travels between SDFormat
+and URDF. MJCF has no second direction -- its other two ``friction`` components
+are torsional and rolling coefficients, which are different quantities -- so a
+``friction2`` is reported as one MJCF cannot state, and torsional and rolling
+friction in an MJCF file that is read are counted as dropped.
+
+A scene filled with a fluid
+===========================
+
+What the two engines make of a scene's world:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 46 27 27
+
+   * - Effect
+     - MuJoCo
+     - Gazebo
+   * - the scene's ``gravity:``
+     - modelled
+     - modelled
+   * - drag, from the fluid's density and viscosity
+     - modelled
+     - not modelled
+   * - buoyancy, ρ · V · g
+     - modelled
+     - not modelled
+   * - acting at the centre of buoyancy, so that a body with its weight low down
+       rights itself
+     - modelled, in ``pc sim``
+     - not modelled
+   * - a free surface: floating at a waterline, partly submerged
+     - not modelled
+     - not modelled
+   * - added mass, lift, the Magnus effect
+     - not modelled
+     - not modelled
+
+**MuJoCo** is handed the fluid's density and viscosity, which turn on its
+passive fluid model: drag, quadratic in speed from the density and linear from
+the viscosity, acting on the box each body's mass and inertia describe. That
+model has no buoyancy at all, so the MJCF exporter adds it, as Archimedes has
+it: a lift of the fluid's density times the volume PartCAD measured times
+gravity, acting at the centre of buoyancy. Where that point is not the centre of
+mass, the lift turns the body, which is what rights ``buoy``: released tilted 60
+degrees in ``tank``, it turns its heavy side down within a second. The lift's
+turning moment is applied by the plugin at every step of a run, so the same
+model opened in MuJoCo's own viewer floats but does not right itself.
+
+**Gazebo** writes the scene's gravity and nothing for its medium, and its export
+says so: the buoyancy system Gazebo Harmonic has measures a mesh without its
+scale, which would buoy PartCAD's millimetre meshes by a billion times their
+volume, and a world that names any system of its own loses all of Gazebo's
+default ones. A Gazebo run of a scene filled with water is a run in a vacuum.
+
+Writing a plugin of your own
+============================
+
+A simulation plugin is declared the way an export implementation is -- a script,
+the sandbox it needs, and its parameters -- and the contract is narrow: a scene
+with the object in it goes in, as a file in the format the plugin names, and
+JSON carrying ``before`` and ``after`` comes out. See :ref:`simulate`.
+
+.. _sim-validation:
+
+====================
+Writing a validation
+====================
+
+``validation:`` is one Python expression, evaluated over three names:
+
+``before`` and ``after``
+  The state of the world when the run started and when it ended, as the plugin
+  reported it.
+
+``result``
+  The whole of what the plugin returned, ``before`` and ``after`` included.
+
+It may call the builtins that work over numbers and collections -- ``abs``,
+``all``, ``any``, ``min``, ``max``, ``sum``, ``len``, ``zip``, ``sorted``,
+``round``, ``pow``, ``range``, ``enumerate``, ``map``, ``filter`` and the type
+constructors -- and nothing else: no imports, no ``math``, nothing that reaches
+the filesystem (``x ** 0.5`` is a square root). That is not a security boundary;
+it is what keeps a validation readable as an assertion. An expression that
+raises is a validation that did not hold, and is reported with the exception.
+
+What the plugins report
+=======================
+
+PartCAD reads nothing inside ``before`` and ``after``: what is in them is the
+plugin's vocabulary. The two plugins PartCAD maintains report the same one, so a
+validation reads the same against either engine:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Key
+     - Content
+   * - ``time``
+     - Simulated seconds at the reading.
+   * - ``bodies.<name>.pos``
+     - The body's position, ``[x, y, z]`` in **millimetres**, in the scene's
+       frame.
+   * - ``bodies.<name>.quat``
+     - The body's orientation, ``[w, x, y, z]``.
+   * - ``joints.<name>.type``
+     - ``revolute``, ``continuous`` (a turn with no limit), ``prismatic`` or
+       ``ball``.
+   * - ``joints.<name>.pos``, ``joints.<name>.vel``
+     - Degrees and deg/s for a turn, millimetres and mm/s for a move. A ball
+       joint reports ``quat`` and an angular velocity ``[x, y, z]`` in deg/s
+       instead.
+   * - ``joints.<name>.effort``
+     - What the model's actuators exert along the joint, in N·m or N. MuJoCo
+       only.
+
+A body is named after the link that places it -- an ASSY link's ``name:`` --
+and made unique where two would collide. Walking every body, ``for name in
+before["bodies"]``, is the robust form, and the one every example uses.
+
+A free body is not reported as a joint, since ``bodies`` already says where it
+is, and every body in a run today is free; so ``joints`` is ``{}``. It is there
+so that a validation of a mechanism reads the same once joints exist.
+
+Beside ``before`` and ``after``, ``result`` carries ``samples`` -- a list of the
+same readings at evenly spaced instants, when the run asked for any -- and what
+the run was: which engine ran it, the ``duration``, the ``gravity`` it was
+actually under in m/s², and the ``medium`` for a MuJoCo run in a fluid. Whatever
+the engine could not report is named in ``warnings`` rather than reported as
+zero.
+
+Some validations
+================
+
+No body moved 5 mm in any direction:
+
+.. code-block:: python
+
+  max(
+      sum((a - b) ** 2 for a, b in zip(after["bodies"][n]["pos"], before["bodies"][n]["pos"])) ** 0.5
+      for n in before["bodies"]
+  ) < 5.0
+
+Something ended up more than 5 mm lower than it started -- a block fell off:
+
+.. code-block:: python
+
+  max(before["bodies"][n]["pos"][2] - after["bodies"][n]["pos"][2] for n in before["bodies"]) > 5.0
+
+Everything rose more than 100 mm -- it floats:
+
+.. code-block:: python
+
+  min(after["bodies"][n]["pos"][2] - before["bodies"][n]["pos"][2] for n in before["bodies"]) > 100.0
+
+Upright at the end -- the vertical component of a body's own Z axis, worked out
+from ``quat``, is 1 when it is upright and 0 when it lies on its side:
+
+.. code-block:: python
+
+  all(
+      1 - 2 * (after["bodies"][n]["quat"][1] ** 2 + after["bodies"][n]["quat"][2] ** 2) > 0.9
+      for n in before["bodies"]
+  )
+
+Held at every sampled instant and not only at the end -- nothing rose or sank
+5 mm on the way -- with ``params: {samples: 20}``:
+
+.. code-block:: python
+
+  all(
+      abs(s["bodies"][n]["pos"][2] - before["bodies"][n]["pos"][2]) < 5.0
+      for s in result["samples"]
+      for n in before["bodies"]
+  )
+
+Choose thresholds well clear of both outcomes. A stack that holds still creeps
+and settles by half a millimetre, because contacts are soft; a block that comes
+off moves tens. A threshold between the two, like the 5 mm above, says which
+happened and nothing else.
+
+.. _sim-formats:
+
+=========================
+Robot description formats
 =========================
 
-Worth recording, because the shape of the work says something about where the
-gap is:
+The machinery that writes a world out for an engine also reads and writes the
+formats robots and worlds are described in, so a model somebody else wrote is an
+object you can place parts in, and an object built out of parts is a model an
+engine can run.
 
-- **No change to the assembly representation was needed.** ``Assembly``,
-  ``AssemblyChild`` and ``Part`` expressed everything the *geometric* half of
-  URDF needs, on the first try. That is the good news and the bad news: the
-  representation is exactly rich enough for shapes and placements, and has no
-  place at all for anything else.
-- **The wrapper protocol had to grow a raw mode.** ``ocp_serialize.decode()``
-  turns an assembly envelope into a single ``TopoDS_Compound``, which is right
-  for every other exporter and fatal for this one - URDF *is* the tree. Hence
-  ``wrapper_common.handle_input(decode=False)``.
-- **Units and conventions cost a module.** URDF is metres, radians and
-  fixed-axis roll-pitch-yaw; PartCAD is millimetres, degrees and axis-angle.
-  ``wrappers/urdf_common.py`` exists to keep that conversion in one tested
-  place rather than spread across two wrappers.
-- **The parts a URDF points at have no declaration.** They are whatever the URDF
-  names, so they are materialized into the package in memory as
-  ``<assembly>/<link>`` and the package resolves such a name by building the
-  assembly that owns it. A concept of "a part that exists because an assembly
-  produced it" did not exist before, and it turns out to be the right one: those
-  parts are ordinary parts, inspectable and exportable, not an internal detail.
-- **Mapping the robot's root link to the assembly itself was a mistake too.**
-  It made an export come out with one link fewer, which looked like fidelity,
-  but it only worked because each part recorded which link it *was*: the export
-  matched the assembly node against a stored link name. Once that stored name
-  went away - and it had to, since the part is already named after the link -
-  the assembly went back to being what it is, a container. An export now writes
-  a root frame with no geometry and every link fixed to it, which reads back as
-  the same four placed links; the round trip is stable, just one honest link
-  longer.
-- **A link of several shapes is a sub-assembly, and combining them was a
-  mistake.** Merging a link's visuals into one generated shape made the joint
-  algebra fall out neatly - every part's origin was the link frame - but it
-  bought that by rewriting the model: the mesh files the URDF pointed at were
-  replaced by a generated compound and the ``<origin>`` that placed each one
-  disappeared into the geometry. Keeping them as parts of a sub-assembly, each
-  reading its own file at its own offset, costs one extra term in the joint
-  algebra (below) and a table of where each link's item sits relative to the
-  link frame. That is the right trade: a digital thread that rewrites what it
-  was handed is not one.
-- **Nesting a sub-assembly per joint was also a mistake, for the opposite
-  reason.** It preserved the URDF's tree faithfully and cost an arm one level of
-  depth per joint, in a representation that has no joints in it. Two different
-  things were being expressed by one mechanism - "these shapes are one link",
-  which is grouping, and "this link hangs off that one", which is kinematics -
-  and only the first is structure. Flattening the second and recording the
-  relative placements in a table beside the tree is what let the ASSY conversion
-  keep the kinematics *and* the assembly stay shallow.
-- **An opaque properties section was a mistake, and the least obvious one.** The
-  first version carried what a URDF said under ``physics: {urdf: ...}``, keeping
-  the source format's own structure so that an export could hand it straight
-  back. It round-tripped perfectly and told PartCAD nothing: a mass was a mass
-  only to the URDF exporter, and no other part of the system could read it,
-  check it, or state one of its own. Copying each value into a named PartCAD
-  property with a PartCAD unit is more code and a closed list to maintain, and
-  it is what makes the property *PartCAD's* rather than a souvenir of where it
-  came from. The rule that falls out of it - refuse URDF nothing maps, report
-  PartCAD properties URDF cannot state - is what keeps the list honest, because
-  the alternative to a loud failure is a quiet loss.
-- **The same went for the link's identity.** Recording which link a part came
-  from, and which link that link hung off, looked like cheap insurance. It was
-  two more things to keep consistent with the names and the connections that
-  already said it, and it let the exporter take a shortcut that stopped working
-  the moment the record was removed. Hierarchy that has to be preserved belongs
-  in the *name*, where a slash already means containment; relations between two
-  things belong in the connection between them.
-- **A cache entry is keyed by geometry, and carried an identity it should not
-  have.** Two parts that read the same mesh file hash the same, so the second
-  one came back wearing the first one's name and label. Nothing had noticed,
-  because nothing had keyed anything off those; the URDF exporter names its
-  links from them. Restamping on the way out of the cache, exactly as the write
-  path stamps on the way in, was the fix.
-- **Two long-standing gaps in the interface code surfaced.** The schema has
-  always allowed ``ports: {name:}`` and ``implements: {iface:}`` with no value,
-  and both crashed - nothing had written them before, because nothing had
-  generated interfaces programmatically. Generating them found it at once.
+.. _sim-urdf:
 
-None of that was hard. The hard part is everything the geometry does not cover,
-which is the rest of this page.
+URDF
+====
 
-.. _URDF joints as PartCAD interfaces:
+`URDF <https://wiki.ros.org/urdf>`_ is the one of these PartCAD implements
+itself, because it describes a robot rather than any one engine's world, and
+ROS, MuJoCo, PyBullet and Isaac all read it.
 
-URDF joints as PartCAD interfaces
-=================================
+Reading one
+-----------
 
-This is the part worth dwelling on, because it is where the two models actually
-have to be reconciled rather than translated.
+.. code-block:: shell
 
-A URDF joint relates two link *frames*: at the zero configuration, the child
-link's frame sits at the joint's ``origin`` in the parent link's frame, and the
-joint's ``axis`` says how it may move from there. PartCAD does not relate frames;
-it relates **ports**, and its rule is that two connected ports *face* each
-other - the connection composes the target's placement, the target port, a half
-turn, the freedom-of-movement offsets, and the inverse of the source port.
+  pc add assembly urdf robot.urdf   # declare it: the URDF stays a URDF, read in place
+  pc import assembly robot.urdf     # convert it: parts, interfaces and an .assy
 
-So one side has to carry the flip. The mapping is:
+``add`` declares an assembly of type ``urdf``. Its links become parts named
+``<assembly>/<link>`` -- ordinary parts, which ``pc ide view robot/forearm`` and
+``pc export -t step robot/wrist`` work on like any other -- placed with every
+joint at zero. A link's ``<inertial>``, the friction and contact settings of its
+``<gazebo>`` block and its ``<material>`` become named properties of its part,
+in PartCAD's units, and are written back on export. URDF that PartCAD has no
+property for stops the import, naming what it found, rather than being carried
+along unread. How links become parts, which of a link's shapes is used, and the
+declaration's options are under :ref:`assembly-urdf`.
+
+``import`` converts instead, the way ``pc convert assembly -t assy`` does below,
+and leaves the package holding PartCAD's own objects with nothing pointing back
+at the URDF.
+
+Writing one
+-----------
+
+.. code-block:: shell
+
+  pc export -t urdf -a logo   # logo.urdf, plus a directory of the STL meshes it references
+
+Each node of the assembly becomes a link, each parent/child relation a fixed
+joint carrying the child's placement, and a shape used more than once is written
+once. A sub-assembly whose children are named under it -- ``wrist`` holding
+``wrist/1`` and ``wrist/2`` -- goes out as one link with a ``<visual>`` per
+shape, which is how a URDF link of several shapes survives a round trip as
+itself.
+
+Every link carries the mass, centre of mass and inertia PartCAD resolved for it
+(:ref:`sim-physics`) in ``<inertial>``, its friction and contact properties in a
+``<gazebo>`` block, and its material and colour in ``<material>``. A link of
+several parts in different materials is added up, each at its own density, so it
+balances where the heavier one pulls it. A property PartCAD holds that URDF
+cannot state is reported rather than dropped in silence.
+
+The joints all come out **fixed**, to a root link with no geometry: an assembly
+is one static configuration, and a star of fixed joints is what that is. The
+kinematic chain is kept where PartCAD can state it, in the interfaces that
+``pc convert assembly -t assy`` writes.
+
+Converting
+----------
+
+.. code-block:: shell
+
+  pc convert assembly -t assy robot   # urdf -> assy
+  pc convert assembly -t urdf logo    # assy -> urdf
+
+``pc convert assembly`` rewrites the package rather than producing a file. To
+URDF, it writes the ``.urdf`` and its meshes and switches the declaration over.
+To ASSY, it writes an ``stl`` part for every link, an interface pair for every
+joint, and an ``.assy`` that places the parts with ``connect:`` -- an assembly
+stated the way PartCAD states one, not a transcription of coordinates.
+
+.. _sim-urdf-joints:
+
+How joints become interfaces
+----------------------------
+
+Each URDF joint becomes a pair of :ref:`interfaces <interfaces>`, and each link
+is connected to its parent through them:
 
 .. list-table::
    :header-rows: 1
@@ -361,116 +940,109 @@ So one side has to carry the flip. The mapping is:
 
    * - URDF
      - PartCAD
-   * - joint (parent side)
-     - a **socket** interface with one port at its origin, which the parent part
-       implements at the joint origin, under an instance named after the joint
-   * - joint (child side)
-     - a **plug** interface whose one port sits at the half turn, which the child
-       part implements once, at its own origin
-   * - the two are the same joint
-     - ``mates:`` on the plug, naming the socket
-   * - ``axis``, ``limit`` lower/upper
-     - ``motion: {axis, limits}``, in degrees or millimetres, plus an interface
-       ``parameter`` (``angle`` for a revolute joint, ``offset`` for a prismatic
-       one) that makes it move
+   * - the joint, parent side
+     - a **socket** interface with one port, which the parent part implements at
+       the joint's origin, under an instance named after the joint
+   * - the joint, child side
+     - a **plug** interface, which the child part implements at its own origin,
+       with ``mates:`` naming the socket
+   * - ``axis``, ``limit`` lower and upper
+     - ``motion: {axis, limits}``, in degrees or millimetres, and an interface
+       parameter that moves the connection: ``angle`` for a revolute joint,
+       ``offset`` for a prismatic one
    * - ``safety_controller``, ``mimic``
-     - ``motion: {softLimits, mimic}`` - both bound the movement, so both are
-       kinematics
-   * - ``limit`` effort/velocity, ``dynamics``
-     - ``physics: {maxEffort, maxVelocity, damping, friction}`` - what the
-       movement costs
+     - ``motion: {softLimits, mimic}``
+   * - ``limit`` effort and velocity, ``dynamics``
+     - ``physics: {maxEffort, maxVelocity, damping, friction}``
    * - a joint's ``<gazebo>`` block
      - ``physics: {springStiffness, springReference, stopCfm, ...}``
    * - ``calibration``
-     - nothing: a limit-switch reference used when a real robot is
-       commissioned, which says nothing about the model. Counted and reported
-   * - a link's attachment
+     - nothing: a reference for commissioning a real robot, which says nothing
+       about the model; counted and reported
+   * - the child link's attachment
      - ``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: <joint>}``
 
-All of this is stated in the *link* frame, which is not necessarily where a
-link's geometry sits: a link that is one shape placed at an ``<origin>`` has its
-part's frame at that offset, and a link of several is a sub-assembly whose frame
-is the link's. So the conversion re-expresses each link in the link frame before
-writing its mesh - one term, recorded per link by the importer and applied in
-one place - and everything downstream can then assume the part's origin *is* the
-link's. Folding that term into the interface instances instead would have worked
-too, and would have spread it across every socket and plug in the file.
+The socket's port sits exactly at the joint's origin, so the numbers in the
+``.assy`` can be checked against the URDF; the half turn that makes two
+connected ports face each other is on the plug's side. Limits are converted from
+radians and metres once, on the way in.
 
-Putting the flip on the plug is what keeps the *socket* readable: the parent
-implements it at exactly the joint origin, which is a number a reader can check
-against the URDF. It costs one wrinkle, in the axis. The half turn ``T`` is a
-180 degree rotation about ``(1, 1, 0)``, and a rotation conjugated by it is the
-same rotation about the mapped axis, ``(x, y, z) -> (y, x, -z)``. So the
-parameter's ``dir`` is the joint axis under that map, while ``motion.axis``
-keeps it as URDF stated it - which is also the socket port's own frame, since
-that port sits at the joint origin. The record stays readable; the executable
-half stays correct.
+Joints of one kind -- the same type, axis, limits, dynamics and mimic -- share
+one interface pair, since what differs between them is where they are, which is
+the instance's location: a four-wheeled robot gets one pair for its wheels.
+Nothing is matched against the library of real interfaces, because a URDF joint
+says nothing about the hardware that implements it.
 
-The units change at the boundary and only there. A URDF limit is radians for a
-revolute joint and metres for a prismatic one; what lands in ``motion.limits``
-is degrees and millimetres, because those are PartCAD's units and a property
-that keeps its source format's unit is a property nothing else can use. The
-reader converts once, and every consumer downstream - the generated parameter,
-the schema, a person reading the file - sees one convention.
+The generated parameter is what lets the assembly be **posed**:
+``connect: {toParams: {angle: 90}}`` places the child where the URDF joint at 90
+degrees would, and everything below it follows. It is a pose and not a joint:
+the connection is still one rigid placement, and ``motion:`` and ``physics:``
+are a record that nothing yet runs (see :ref:`interfaces`).
 
-Two things fall out of this that are worth more than the mapping itself.
+.. _sim-urdf-round-trip:
 
-**Interfaces are reusable, instances are not.** What varies between two joints of
-the same kind is *where* they are, and that lives in the ``implements:``
-instance location, not in the interface. So every fixed joint in a robot is the
-same interface, and so is every revolute joint with the same axis and limits.
-The converter deduplicates on exactly that - the joint's type, axis, limits,
-dynamics and mimic - and a four-wheeled robot comes out with one interface pair
-for its wheels rather than four. There is deliberately no attempt to match
-against the existing library of interfaces: a URDF joint says nothing about the
-*hardware* that implements it, so claiming it is an ``m3-screw-6mm`` would be an
-invention. Custom interfaces per joint kind, reused where they agree, is the
-honest reading.
+What a round trip keeps
+-----------------------
 
-**A pose becomes expressible.** The parameter the converter generates is not
-decoration: ``connect: {toParams: {angle: 90}}`` in the generated ASSY places
-the child exactly where the URDF joint at 90 degrees would, and everything
-below it follows. That is a static assembly gaining the first half of a
-kinematic one, using machinery PartCAD already had. What is still missing is the
-other half - a *named configuration* of the whole assembly rather than a value
-written into one connection - which is item 5 below.
-
-An engine's own scene format is its plugin's
-============================================
-
-SDFormat and MJCF are read and written exactly the way URDF is -- one entry of an
-``import:`` section for the reader, one of an ``export:`` section for the writer,
-the same sandbox, the same envelopes, the same ``dropped`` counters -- but the
-entries are **not in this wheel**. Each belongs to the plugin package for its
-engine:
+An ASSY assembly exported to URDF and read back as a ``urdf`` assembly puts
+every shape back where it was, under the name it had, built from the same
+geometry -- flattened, because a URDF has no way to say "these parts belong
+together" other than by joining them:
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 24 28 28
+   :widths: 40 60
 
-   * - Engine
+   * - Kept
+     - Lost
+   * - every shape, at the placement it had, to full double precision
+     - every name that carries a package path, which a ROS name cannot
+   * - the names of the assembly's own children
+     - nesting: an ASSY may group its parts; a URDF's only grouping is its joint
+       tree
+   * - geometry, as a triangle mesh
+     - exact B-rep geometry; the mesh is a tessellation at a chosen tolerance
+   * - shape sharing: one mesh, many links
+     - parametrization: an ASSY parameter, an enrich, an alias
+   * - mass, inertia, friction, contact settings and appearance
+     - which part in which package a link came from -- the digital thread itself
+
+Reading a URDF keeps every link's physics as properties and, through ``pc
+convert assembly -t assy``, every joint's type, axis, limits and dynamics as
+interfaces; the geometry a link was not built from becomes a part of its own,
+``<assembly>/<link>/<visual|collision>``. What is gone is the *motion* of a
+joint -- an assembly is one configuration, so a movable joint is a placement --
+along with transmissions, sensors and ``ros2_control`` blocks. Each is counted
+and reported at import and in ``pc info``, so the loss is visible rather than
+silent.
+
+.. _sim-engine-formats:
+
+SDFormat and MJCF
+=================
+
+`SDFormat <http://sdformat.org/>`_, what Gazebo describes a world in, and
+`MJCF <https://mujoco.readthedocs.io/en/stable/XMLreference.html>`_, what MuJoCo
+describes a model in, are read and written the same way URDF is -- but by the
+engine's plugin package rather than by PartCAD, so a package imports the plugin
+and names the format through it:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 14 26 30 30
+
+   * - Format
      - Package
-     - Scene type
-     - Export
-   * - Gazebo
-     - `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_
-     - ``sim-gazebo:world``
+     - Declared as
+     - Written by
+   * - SDFormat
+     - `partcad-sim-gazebo`_
+     - a scene of type ``sim-gazebo:world``
      - ``pc export -S -t sim-gazebo:world``
-   * - MuJoCo
-     - `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_
-     - ``sim-mujoco:mjcf``
-     - ``pc export -S -t sim-mujoco:mjcf``
-
-That is the same rule the simulator itself follows, and for the same reason.
-Reading a format, writing it, launching the application on it and running a
-physics step with it are one body of knowledge about one engine; PartCAD ships
-the *concept* -- the ``import:`` and ``export:`` sections, the sandbox, the
-``simulation:`` plugin protocol, the ``open:`` entry -- and the engine's package
-supplies the knowledge. Each of those two packages declares all four for its own
-format, so importing it is what makes the type, the exporter, ``pc sim`` and
-``pc ide open --with`` all work at once.
-
-A package that uses one imports it and names the type through it:
+   * - MJCF
+     - `partcad-sim-mujoco`_
+     - a scene or an assembly of type ``sim-mujoco:mjcf``
+     - ``pc export -t sim-mujoco:mjcf``
 
 .. code-block:: yaml
 
@@ -484,927 +1056,128 @@ A package that uses one imports it and names the type through it:
       type: sim-gazebo:world
       path: warehouse.world
 
-A bare ``type: world`` resolves to nothing and says so. So does
-``pc export -t mjcf``: nothing in ``//builtin/export`` writes either format, and
-the qualified spelling is what reaches the package that does.
+A bare ``type: world``, or ``pc export -t mjcf``, resolves to nothing and says
+which package to name. A world is always a scene; an MJCF file can be either,
+and the section that declares it says which (see :ref:`scenes`, which also has
+each reader's options).
 
-What the readers preserve and what they cannot is documented in those
-repositories, beside the code -- including the parts of MJCF that are easy to
-get wrong (angles are degrees by default, an orientation has five spellings, and
-a box's ``size`` is its half-extents), and the export parameters a simulation
-needs that a scene never states (``static``, ``flatten``, ``light``,
-``ground_plane``, ``sun``). The two readers are best-effort in exactly the way
-the URDF reader above is: what a static arrangement cannot hold is counted and
-reported rather than passed over, and ``pc info`` lists it.
+.. code-block:: shell
 
-One consequence is worth stating because it is a change and not an oversight:
-``pc ide open --with mujoco`` no longer converts a scene into MJCF. It opens a file
-that already is one -- the application's ``open:`` entry names the extensions its
-format is stored in -- and refuses anything else with the export that does work.
-An ad-hoc conversion has a throwaway package around the file and no dependency on
-either plugin, so it cannot run the exporter that would be needed; see
-:doc:`cli`.
+  pc export -S -t sim-gazebo:world workcell           # a scene, as a Gazebo world
+  pc export -S -t sim-mujoco:mjcf workcell            # or as an MJCF model
+  pc convert scene -t assy warehouse                  # a world's shapes become parts of this package
+  pc import scene -t sim-gazebo:world warehouse.world # the same, for a file not declared yet
 
-Every description is a Jinja2 template
-======================================
+Both readers are best-effort in the way the URDF one is: what a static
+arrangement cannot hold -- joints, lights, sensors, actuators, engine plugins --
+is counted and reported, and ``pc info`` lists it. A file written for looking at
+is not one written for running: by default each exporter welds every body to
+the world, because a scene on its own states where things are, and a simulation
+asks the export for the opposite. What each format keeps, and every export
+parameter, is documented in the plugin's repository, including the parts of
+MJCF that are easy to get wrong (angles are degrees by default, an orientation
+has five spellings, and a box's ``size`` is its half-extents).
 
-An ASSY file has always been rendered as a `Jinja2 <https://jinja.palletsprojects.com/>`_
-template before it is parsed, which is what lets one file describe a family of
-assemblies. A URDF, a ``.world`` and an MJCF model are declared exactly the same
-way and were not, so a package could parameterize one kind of arrangement and
-not the other three. All four share one implementation now, and the parameters
-reach every one of them under the same names: ``param_<name>`` for each declared
-parameter, and ``name`` for the object's own.
+.. _sim-templates:
 
-.. code-block:: yaml
+Every description is a template
+===============================
 
-   scenes:
-     cell:
-       type: sim-mujoco:mjcf
-       path: cell.xml
-       parameters:
-         conveyor_length: 2.0
-
-.. code-block:: xml
-
-   <body name="conveyor">
-     <geom type="box" size="{{ param_conveyor_length / 2 }} 0.3 0.05"/>
-   </body>
-
-The rendered file is written under PartCAD's own state directory rather than
-beside the original -- rendering is derived data, and instantiating an object
-must not drop files into the user's source tree -- and the file is left exactly
-as it is when rendering changes nothing, which is the usual case. What the file
-*references* keeps resolving against the directory the package declared it in:
-each reader is handed that directory separately, which is what keeps a
-``package://`` mesh, a ``model://`` include and an ``<asset>`` file working in a
-template.
-
-Running a simulation
-====================
-
-``simulate:`` is an optional section of a part or an assembly. Each entry in it
-is one simulation, and states four things:
-
-``scene:``
-   The scene the object is placed in, by full path. The object's own full path
-   is assigned to that scene's ``subject`` parameter -- unconditionally, and
-   whatever else the entry says -- which is what lets one scene serve every
-   object that names it. Nothing special is declared for it: a simulation scene
-   is an ordinary scene with an ordinary parameter, and a Jinja2 template is
-   what places the subject.
-
-   The default is ``//builtin/scene:subject``, an empty world holding the
-   subject and nothing else. A package that needs more -- a fixture to drop the
-   part onto, a conveyor to push it along, a tank of water to sink it in --
-   writes a scene of its own. The scene is also what says the gravity the run
-   is under and the fluid it is filled with; see `Gravity, and the fluid a
-   scene is filled with`_.
-
-``offset:``
-   Where in that scene the object goes, in the scene's frame. It is stated here
-   rather than in the scene because it is a fact about *this* object -- where
-   its origin sits relative to the floor it is meant to stand on -- and the
-   scene is shared.
-
-``simulation:``
-   The simulation plugin that runs it, by full path. There is no default:
-   PartCAD implements no simulator, so a package imports one and says which.
-   `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the
-   MuJoCo one and
-   `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ the
-   Gazebo one. Each also declares the reader, the writer and the ``open:`` entry
-   for that engine's own scene format, because those are one piece of knowledge
-   and the simulator is what decides what the file has to say.
-
-``validation:``
-   A Python expression over ``before`` and ``after`` that says whether what
-   happened is what was supposed to happen.
-
-.. code-block:: yaml
-
-   dependencies:
-     sim-mujoco:
-       type: git
-       url: https://github.com/partcad/partcad-sim-mujoco.git
-
-   assemblies:
-     stack:
-       type: assy
-       simulate:
-         stands:
-           desc: Nothing moves, because there is no reason for anything to move
-           simulation: sim-mujoco:mujoco
-           offset: [[0, 0, 10], [0, 0, 1], 0]
-           validation: |
-             max(
-                 abs(after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2])
-                 for name in before["bodies"]
-             ) < 2.0
-
-``pc sim`` runs them -- one object, or everything a package declares, or
-everything a package tree declares with ``-P <package>...`` -- and exits non-zero when a
-validation does not hold. ``--json`` prints the whole of what each plugin
-reported. ``examples/feature_simulate`` has three assemblies of two blocks each:
-two identical but for 18 millimetres, and two identical but for the material.
-All three simulations pass, and no two of them end the same way.
-
-Simulation plugins
-==================
-
-A simulation plugin is the third kind of implementation a package can declare,
-beside the export and render ones, and it is declared in exactly the same form:
-a ``path`` to a script, the sandbox that script needs, and its parameters. What
-differs is what it does with them. The contract is deliberately narrow:
-
-  **a scene with the subject in it goes in, and JSON carrying** ``before``
-  **and** ``after`` **comes out.**
-
-.. code-block:: yaml
-
-   simulation:
-     mujoco:
-       path: simulate_mujoco.py
-       format: mjcf
-       formatOptions:
-         static: false
-         flatten: true
-       pythonRequirements:
-         - mujoco>=3.2,<4
-       duration: 10.0
-
-The scene arrives as a **file**, in the format ``format:`` names, because a
-simulator reads its own model format and PartCAD already knows how to write
-several; ``formatOptions:`` is how that export is asked for, and is where a
-physics plugin says that it wants every body free to move. That also keeps a
-plugin free of OCP: it is handed a path.
-
-**PartCAD implements none of these**, and that is the point of the section.
-A simulator is somebody's program with a release cycle of its own; shipping one
-inside the wheel would make every PartCAD release a statement about which
-version of it you get, and would pin a large dependency on every user who never
-simulates anything. So PartCAD ships the concept -- the section, the sandbox
-wrapper, the runner -- and a package supplies the physics, the same way
-``//pub/feature/render/draftwright`` supplies technical drawings.
-
-``format:`` resolves in the plugin's own package first, which is what lets a
-plugin name the format it implements itself. An engine's scene format is
-exactly that: MJCF is MuJoCo's and SDFormat is Gazebo's, so each plugin declares
-the ``export:`` that writes it beside the ``simulation:`` that reads it.
-
-There are two, and they are deliberately alike:
-`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ and
-`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_. Each
-declares four things about one format -- ``import:`` to read it, ``export:`` to
-write it, ``simulation:`` to run it and ``open:`` to look at it -- so a world
-somebody else wrote is a scene you can place parts in, and a scene you built out
-of parts is a model the engine can run.
-
-Where the simulator comes from is the one way they differ, and it is not a
-difference in the section. MuJoCo is a wheel, so the plugin lists it under
-``pythonRequirements`` and a machine with no MuJoCo simulates just the same.
-Gazebo is not a wheel and there is none, so that plugin names an image under
-``dockerImage`` and looks for a local ``gz`` first -- the same two places
-``pc ide open --with gazebo`` looks.
-
-``before`` and ``after`` are all PartCAD knows about a result. What is *inside*
-them, and anything else beside them, is the plugin's own vocabulary -- the
-MuJoCo plugin states where every body ended up, in millimetres; another might
-state a temperature field -- and PartCAD neither reads nor validates it. It
-carries the two objects to the ``validation:`` expression the package wrote and
-reports what that says. Every judgement in that sentence belongs to the package.
-
-The MuJoCo plugin loads the MJCF, steps it for ``duration`` seconds of
-simulated time, and reports each body's position and orientation before and
-after. Running it needs no MuJoCo on the machine: the plugin runs in a PartCAD
-sandbox that installs one.
-
-Friction, and why it is a material property
-===========================================
-
-Whether a stack of blocks stands up is not a property of its geometry. Two 20 mm
-cubes, one squarely on the other, on a level floor in a world whose gravity
-leans 15 degrees off vertical -- the ``tilted`` scene of
-``examples/feature_simulate``, which for sliding is a ramp with no edge --
-for ten seconds in MuJoCo, through the MJCF exporter and the simulation of
-`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_, with
-nothing changed but the sliding friction both blocks are given:
-
-=================  ==========================================================
-sliding friction   what happens to the top block
-=================  ==========================================================
-0.04 (PTFE)        slides 69 mm and falls 20 mm, its own height, to the floor
-0.1                slides 63 mm and falls
-0.2                slides 56 mm and falls
-0.25               slides 32 mm and falls
-0.28               slides 34 mm and falls
-0.3                stays: 0.5 mm of creep, 0.4 mm of settling
-0.4                the same
-1.05 (aluminium)   the same
-=================  ==========================================================
-
-A block slides when its friction is below tan(15 deg), 0.268; MuJoCo's soft
-contacts put the line a little higher, between 0.28 and 0.3. On a level floor
-with gravity straight down, every one of these stays put, PTFE included:
-nothing pushes a block sideways, so its friction is never asked anything. The
-bottom block grips the floor in every row, for the reason given below.
-
-So the answer to "will this stand?" is a fact about the *material*, and
-``materials:`` is where a package already says what its parts are made of. A
-material states ``mu`` beside its ``density``; a part that names that material
-gets that coefficient; and the coefficient is written into whichever format the
-object is exported to:
-
-======================  ==========================================
-format                  where it is written
-======================  ==========================================
-PartCAD                 the ``friction`` property of a shape
-SDFormat (``.world``)   ``<collision><surface><friction><ode><mu>``
-URDF                    ``<gazebo reference="..."><mu1>``
-MJCF                    the first component of a geom's ``friction``
-======================  ==========================================
-
-All four are the same dimensionless number, so the conversion between them is
-the identity -- which is the whole reason it is worth carrying, and why a
-material states one coefficient rather than one per format.
-
-``friction2`` -- the coefficient in the *second* friction direction, which
-SDFormat and URDF both spell ``mu2`` -- travels between those two unchanged.
-MJCF has no second direction at all: its other two ``friction`` components are a
-torsional and a rolling coefficient, which are different quantities. So a
-``friction2`` is reported as one MJCF cannot state rather than written into a
-slot that means something else, and torsion and roll on the way in are counted
-as dropped rather than turned into a PartCAD property that does not exist. Both
-are the same rule the URDF and SDFormat readers already follow.
-
-A material's **density** travels the same way, as the shape's ``density``
-property, and with it the mass, centre of mass and inertia its solid comes to
--- see `Writing a URDF`_ for the order. All three formats write those as an
-``<inertial>``; MJCF also writes the density on a geom of a body PartCAD could
-not weigh (a mesh with no solid in it), so that MuJoCo weighs it at the right
-density rather than at its own default of water's.
-
-PartCAD writes each *body's* coefficient, and a contact has two. How they
-combine is the simulator's model rather than the part's, and the two engines a
-plugin exists for do not agree about it:
-
-======================  ==================================================
-engine                  the coefficient of a contact between A and B
-======================  ==================================================
-MuJoCo                  the **larger** of the two, element-wise -- unless one
-                        geom has a higher ``priority``, which no exporter here
-                        sets (`Contact parameters
-                        <https://mujoco.readthedocs.io/en/stable/modeling.html#contact-parameters>`_)
-Gazebo (DART)           the **smaller** of the two (DART's ``ContactSurface``,
-                        which Gazebo Harmonic's default physics engine uses)
-======================  ==================================================
-
-So two blocks of one material meet at that material's ``mu`` in both, and that
-is what a stack's question -- does the top block stay on the bottom one? --
-turns on. A block on the floor does not agree: the ground plane each exporter
-writes states no friction, which is 1.0 in both formats, so in MuJoCo every
-block grips the floor at 1.0 or more, and in Gazebo at its own ``mu`` or less.
-``examples/feature_simulate`` asks only the first question.
-
-MuJoCo also needs telling how hard to hold. Its contacts are soft, and a block
-under a steady sideways load slips at a small steady rate even well inside its
-friction cone; with MuJoCo's own defaults that rate is large enough that an
-aluminium stack (``mu`` 1.05) in a world tilted by 6 degrees -- where
-tan(6 deg) = 0.105 -- slid apart in ten seconds. The MJCF exporter therefore
-writes MuJoCo's own remedies for slow slippage into every model -- elliptic
-friction cones, an ``impratio`` of 10 and three NoSlip iterations -- and with
-them the same stack creeps half a millimetre at 15 degrees.
-
-A part that states a ``friction`` of its own keeps it -- a measured part beats
-the substance it is made of -- and a part that states neither gets whatever the
-simulator defaults to, which is a number nobody chose.
-
-Gravity, and the fluid a scene is filled with
-=============================================
-
-A scene states where things are. A *simulation* scene has to state two more
-things, because the same arrangement comes out differently without them: which
-way, and how hard, things fall -- and what they fall *through*. A block dropped
-on the Moon and the same block dropped into a tank of seawater are the same
-scene in every other respect. So a scene may say both:
+A URDF, a ``.world`` and an MJCF model are rendered as `Jinja2
+<https://jinja.palletsprojects.com/>`_ templates before they are read, exactly
+as an ASSY file is, so one file can describe a family of robots or worlds. The
+parameters reach every one of them under the same names: ``param_<name>`` for
+each parameter the object declares, and ``name`` for the object's own name.
 
 .. code-block:: yaml
 
   scenes:
-    tank:
-      type: assy
-      gravity: [0, 0, -9.81]                                # m/s^2, the scene's own frame
-      medium: //pub/std/manufacturing/material/fluid:water  # a material
+    cell:
+      type: sim-mujoco:mjcf
+      path: cell.xml
+      parameters:
+        conveyor_length: 2.0
 
-``gravity:`` is a vector, so that a scene whose Z axis is not up says so rather
-than being rotated. ``medium:`` names a **material**, resolved exactly as a
-part's material is -- ``:brine`` is "the ``brine`` this package catalogues" --
-because a fluid is a substance with a density like any other, and the one fact
-it states that a solid does not, its ``viscosity``, belongs beside the density
-rather than in a scene. The index catalogues the usual three at
-``//pub/std/manufacturing/material/fluid``: ``air``, ``water`` (fresh) and
-``seawater``, each at 15 C and sea-level pressure.
+.. code-block:: xml
 
-Both are optional, and the two defaults are what every scene meant before a
-scene could say anything: **no gravity** leaves it to the engine, whose default
-is Earth's along -Z (MuJoCo writes 9.81, SDFormat 9.8 -- PartCAD restates neither,
-so no existing result moves), and **no medium** is a vacuum, which is what every
-engine assumes. ``//builtin/scene:subject`` states neither, and a ``simulate:``
-cannot ask it for a medium: the fluid a part is simulated in is a fact about
-the world, like the fixture it stands on, and a package that wants its part
-under water writes a scene that is under water (``examples/feature_simulate``
-has one, ``tank``). A ``medium`` parameter on the built-in scene would be a
-second way to say the same thing, spelled as a material reference inside an
-instance name and resolved against ``//builtin/scene`` rather than against the
-package that wrote it.
+  <body name="conveyor">
+    <geom type="box" size="{{ param_conveyor_length / 2 }} 0.3 0.05"/>
+  </body>
 
-The units, and why they are these
----------------------------------
+The rendered file is written under PartCAD's own state directory, never beside
+the original, and the file is used as it is when rendering changes nothing. What
+it references keeps resolving against the directory the package declared it in,
+so a ``package://`` mesh, a ``model://`` include or an MJCF ``<asset>`` file
+works in a template as it does outside one.
 
-Every physical quantity a scene and a material state is **SI**, with the two
-exceptions PartCAD makes everywhere: lengths are millimetres and angles are
-degrees. So a scene's gravity is in **m/s^2** and a fluid's density and dynamic
-viscosity are in **kg/m^3** and **Pa*s** -- the units every engine states them
-in, so none of them is converted on its way into a model. That is the rule the
-``how:`` section of an assembly has always followed (see :doc:`assy`), and the
-one a part's ``physics`` follows.
+.. _sim-opening:
 
-For gravity it is also the right answer on its own terms. A ``simulate:`` may
-pass its plugin a ``gravity`` of its own in ``params:``, and both plugins have
-always taken that in m/s^2; two numbers where one replaces the other must not
-be a thousand apart for the same acceleration. And 9.81, 1.62 and 3.72 are
-Earth, the Moon and Mars to anyone who reads the file, where 9806.65 is not
-recognisable as anything. The mistake it invites, a vector written in mm/s^2,
-is a thousand g and is reported (above 1000 m/s^2).
-
-Unit-suffixed strings (``"9.81 m/s^2"``) are not accepted: PartCAD has no
-unit-aware scalar yet (item 10 below), and a parser for one field would be a
-third dialect beside the ones ``pc cam`` and ``pc cae`` already speak.
-
-What reaches an engine
-----------------------
-
-The scene's world is resolved by the core -- the medium is a material, and only
-the core can load the package that catalogues it -- and handed to every file
-type that declares ``properties: true`` (the ones that state physics: URDF,
-SDFormat, MJCF) as ``request["world"]``: the gravity, and the medium as its
-material's name, density and viscosity. What a body displaces of that medium is
-its solid's volume, which PartCAD resolves beside each shape's mass (``volume``,
-in mm^3) and ``mass_properties.volume_of()`` adds up per body, so no exporter
-measures or weighs anything itself. A scene that states neither sends
-nothing, and an export of it is byte for byte what it was. A medium nothing
-answers to is an error rather than a vacuum, and so is a gravity that is not
-three numbers: the default is a different world, and a simulation of it would
-answer a different question with the same confidence. Both are also part of what
-a simulation's answer is cached under, as the *facts* the medium resolved to: the
-density behind ``:water`` can be corrected in another package without this one
-changing.
-
-======================  =====================================================
-engine                  what the scene's world becomes
-======================  =====================================================
-MuJoCo                  ``<option gravity density viscosity>``, which turns on
-                        MuJoCo's passive fluid model, plus a ``gravcomp`` on
-                        every body for its buoyancy
-Gazebo                  ``<world><gravity>``; a medium is reported and not
-                        written
-URDF                    nothing: a URDF has no world
-======================  =====================================================
-
-MuJoCo's fluid model -- the default, *inertia-box* one -- is drag and nothing
-else: quadratic in speed from the density, linear from the viscosity, acting on
-the box each body's mass and inertia describe. It has **no buoyancy**, so the
-MJCF exporter adds it, as Archimedes has it: a lift of rho_fluid * V * g, acting
-at the **centre of buoyancy** -- the centroid of the displaced volume, which for
-a wholly submerged body is the centroid of its solids. Both come from what
-PartCAD resolved and nothing is measured again: each shape is handed over with
-its ``volume`` and its ``centerOfVolume`` beside its mass, and
-``mass_properties.displacement_of()`` adds them up per body as it adds the
-masses up. The force is MuJoCo's own ``gravcomp`` -- that fraction of the body's
-weight, upward at its centre of mass, so a model opened anywhere floats -- and
-the moment it has about the centre of mass when it really acts at the centre of
-buoyancy is applied by the simulation each step, from the centre of buoyancy
-the exporter writes into the model. That moment is what rights a body whose
-weight is not centred where its volume is: a hull with a heavy keel, a float
-that states a low ``centerOfMass``. ``examples/feature_simulate``'s ``buoy`` is
-one: released tilted 60 degrees, it turns its heavy side down within a second.
-Opened outside ``pc sim``, the same model floats but does not right itself.
-
-What is not modelled:
-
-- **A surface.** The fluid fills the whole world, so a body lighter than it
-  rises for as long as the run lasts rather than floating at a waterline. A
-  waterline would mean clipping every body against a plane every step -- the
-  volume below it and that volume's centroid, out of the mesh -- which is
-  geometry the simulation would have to do itself, and which no fact PartCAD
-  hands over could answer in advance. It is the next thing this needs, not a
-  small one.
-- **Sealed cavities.** The volume displaced is the solid's, so a hollow part is
-  buoyed as if flooded. A float is drawn as the solid it displaces, and states
-  its own mass.
-- **Added mass, lift, the Magnus effect.** MuJoCo's per-geom *ellipsoid* fluid
-  model has them, and needs five coefficients per geom that a scene does not
-  state.
-
-Gazebo's ``gz-sim-buoyancy-system`` is not written: on Harmonic it ignores a
-mesh's ``<scale>``, which would buoy PartCAD's millimetre meshes by 10^9 times
-their volume, and a world that names any system loses all of Gazebo's default
-ones. A Gazebo run of a scene filled with a fluid is therefore a run in a
-vacuum -- no buoyancy, no drag, no centre of buoyancy -- and its export says so.
-Each plugin's own documentation has the detail.
-
-**Which gravity a run is under**, in order: a ``simulate:``'s own
-``params: {gravity: ...}``, which is handed to the plugin like any other of its
-parameters and applied over the scene's for that run; the scene's
-``gravity:``; the engine's default. Neither plugin's own declaration states a
-default ``gravity`` any more -- until a scene could state one that was harmless,
-and now it would beat every scene that does. An explicit ``gravity`` on the
-exporter itself does the same for a file written with ``pc export``.
-
+==============================
 Opening a scene in a simulator
 ==============================
 
-``pc ide open --with gazebo`` hands a ``.world`` file to Gazebo, and
-``pc ide open --with mujoco`` hands an MJCF model to MuJoCo. Both open a window on
-the machine the command was run on, never through the daemon -- see
-``partcad_client.external`` for why.
-
-MuJoCo reads MJCF and no other model format, so a Gazebo world it is pointed at
-is not a slow way of opening a scene, it is a file it cannot read. PartCAD
-writes it out as MJCF first. That conversion is the one thing here that does
-cross the wire, for the reason converting a solid into a mesh for Blender does:
-it drives a CAD wrapper, whose runtime lives in the daemon's environment. An
-ASSY scene is refused rather than converted -- it is nothing but references to
-the parts of a package, and an ad-hoc conversion has no package to resolve them
-against.
-
-==========================================
-What a physical simulation actually needs
-==========================================
-
-URDF is the smaller half of the story. Gazebo does not simulate URDF: it
-converts it to `SDF <http://sdformat.org/>`_ on load, and SDF is what expresses
-a simulatable world. MuJoCo's MJCF and Isaac Sim's USD physics schemas differ in
-spelling but ask for the same information. Taking the union of them, a
-simulation needs the following, and PartCAD today has none of it.
-
-Mass properties
-===============
-
-Mass, centre of mass, and the inertia tensor about the centre of mass, in a
-stated frame. URDF requires them per link and defaults them to zero, which makes
-a model load and then behave nonsensically - a zero-mass link is the single most
-common defect in published URDFs.
-
-These are *derivable* from a solid plus a density, and PartCAD derives them:
-a part has a mass, a centre of mass and an inertia, at the density of the
-material it names, whether or not it states them, and ``pc info`` shows them.
-What is still missing is collision geometry and the rest below.
-
-Collision geometry
-==================
-
-Simulators separate the shape that is drawn from the shape that collides,
-because contact resolution against a hundred-thousand-triangle visual mesh is
-both slow and numerically ill-behaved. The usual answers are a primitive
-(box/cylinder/sphere/capsule), a convex hull, or a convex decomposition
-(V-HACD and friends). MuJoCo goes further and *only* collides convex shapes,
-silently taking the hull of anything else.
-
-PartCAD has one shape per part. A part has no way to say "collide me as this
-simpler thing".
-
-Contact and surface properties
-==============================
-
-Friction (isotropic and anisotropic - SDF's ``mu``/``mu2`` with a direction
-``fdir1``, plus torsional friction), restitution, contact stiffness and damping,
-slip compliance, and the solver knobs that go with them (``kp``, ``kd``,
-``min_depth``, ``max_vel``, ``soft_cfm``, ``soft_erp``). These are properties of
-a surface pairing, approximated per-body by every engine in use.
-
-Kinematics
-==========
-
-The joint: its type (fixed, revolute, continuous, prismatic, ball, planar,
-floating, screw, universal), its axis, the frames on the two bodies it relates,
-its position/velocity/effort limits, its dynamics (damping, Coulomb friction,
-spring stiffness and reference), and relations between joints (``mimic``, gear
-ratios).
-
-URDF is restricted to a *tree*: it cannot express a closed kinematic loop, which
-is why four-bar linkages and parallel manipulators are written in SDF or with an
-explicit loop-closing constraint. SDF can.
-
-Actuation and control
-=====================
-
-Which joints are driven, by what, through which reduction, and what interfaces
-a controller sees. ROS 1 spelled this ``<transmission>``; ROS 2 spells it
-``<ros2_control>`` with hardware components, command interfaces and state
-interfaces. Simulators additionally want actuator limits and often a motor
-model.
-
-Sensors
-=========
-
-Cameras (with intrinsics, resolution, clipping, distortion), depth cameras,
-lidars (with ray patterns and ranges), IMUs, contact sensors, force-torque
-sensors - each attached to a *frame*, each with an update rate and a noise
-model. URDF has no sensor element at all; they arrive through ``<gazebo>``
-extension blocks, which is the clearest evidence that URDF is not a simulation
-format so much as a kinematics format with a simulation format bolted on.
-
-Appearance
-==========
-
-Colors and materials matter to simulation once a camera is in the loop: a
-perception stack trained in simulation is sensitive to albedo, roughness,
-metalness, normal maps and transparency. SDF and USD both carry a PBR material
-description; URDF carries an RGBA color and a texture filename.
-
-The world
-=========
-
-Gravity, the ground, lighting, the initial pose of every model, wind,
-atmosphere, and the physics engine's own parameters (step size, solver type and
-iteration count, contact parameters). This is SDF's ``<world>``, and it is
-exactly the "scenes" PartCAD has always intended to have. Gravity and the fluid
-a scene is filled with are the first of these a scene states (see `Gravity, and
-the fluid a scene is filled with`_ above).
-
-Frames
-======
-
-Everything above hangs off named coordinate frames: the link frame, the joint
-frame, a tool centre point, a sensor mount, a grasp pose. SDF has explicit
-``<frame>`` elements and poses stated ``relative_to`` them. PartCAD has
-locations, but no named frames to state them against.
-
-=========
-Proposal
-=========
-
-Principles
-==========
-
-**Derive what can be derived; store only what cannot.** PartCAD's advantage over
-a hand-written URDF is that it holds the actual geometry. Mass, centre of mass
-and inertia should be computed from the solid and a material, not typed in - and
-a typed-in value should be an explicit override that says why it exists (a
-measurement, a vendor datasheet, a stand-in for content PartCAD does not model).
-
-**Keep the CAD the source of truth.** Simulation artifacts - tessellated meshes,
-convex hulls, computed inertia - are derived data. They belong in the shape
-cache, content-hashed like every other derived shape, so that changing the CAD
-invalidates them. This is what the digital thread means here.
-
-**Model the concept, not the format.** ``mu``/``mu2`` is ODE's spelling of
-friction. PartCAD should store friction and let each exporter spell it. The
-formats disagree on almost everything except what they are trying to describe.
-
-**Lose loudly, never quietly.** The tempting version of this principle is "lose
-nothing": carry whatever PartCAD does not model as opaque, format-tagged
-passthrough so that a round trip is lossless long before it is understood. That
-is what ``physics:`` was at first, and it was the wrong trade. A value stored
-under the name of the format it came from is readable by exactly one exporter;
-it is not a property of the part, it is a souvenir. The version that survived
-copies each value into a named PartCAD property with a PartCAD unit, keeps the
-list of them closed, and makes the two failure modes loud: input nothing maps
-stops the import, and a property the target format cannot state is reported when
-it is written. A round trip is then lossless *and* the values mean something to
-the rest of the system. Everything below extends that list; none of it reopens
-the passthrough.
-
-1. Materials as first-class objects
-===================================
-
-A new object kind alongside parts and sketches, so that materials are packaged,
-versioned and shared the way parts already are:
-
-.. code-block:: yaml
-
-  # //pub/materials:partcad.yaml
-  materials:
-    aluminum-6061:
-      density: 2700 kg/m^3
-      appearance:
-        color: "#b8b8b8"
-        metalness: 1.0
-        roughness: 0.35
-      friction: { static: 0.6, dynamic: 0.5 }
-      restitution: 0.3
-
-This single addition is what turns the exporter's density parameter into a
-property of the model, and it does double duty: the same material drives
-rendering, the manufacturing cost estimate that ``partcad`` already reasons
-about, and the simulation.
-
-2. Physical properties a part does not have to state
-====================================================
-
-A part's ``physics:`` section already holds the modelled properties -
-``mass``, ``centerOfMass``, ``inertia``, ``friction``, the contact parameters -
-each with a PartCAD name and a PartCAD unit. What it does not do is *derive*
-any of them, check any of them, or distinguish a measured value from a guess.
-Three additions, in increasing order of how much they are worth:
-
-- **Derivation** - *done*. With a material behind it (item 1), a part that
-  states no ``mass`` has one: the solid's volume times the material's density.
-  The same for ``centerOfMass``, ``inertia`` and ``friction``. The derived
-  values are cached under the part's key and what they were derived from, so an
-  edit to the CAD or to the material invalidates them; ``pc info`` shows each
-  value and where it came from, and every exporter is handed the same values
-  instead of working its own out. See `Writing a URDF`_.
-- **Provenance.** A declared value should say why it exists, since "measured on
-  the bench" and "copied from a vendor datasheet" and "invented so the
-  simulation would load" are not the same claim:
-
-  .. code-block:: yaml
-
-    physics:
-      mass: 0.812
-      massSource: measured   # measured | datasheet | estimated | derived
-
-- **Checking.** ``pc lint`` should flag the classic defects, all of which are
-  common in published URDFs and all of which load without complaint: zero mass,
-  an inertia tensor that is not positive definite, one that violates the
-  triangle inequality, and a declared mass that disagrees with volume times
-  density by more than a tolerance.
-
-Anisotropic friction is the one property that needs more structure than it has
-today: ``friction``/``friction2``/``frictionDirection`` is ODE's shape of it,
-kept because it is what URDF states. A modelled version would be a static and a
-dynamic coefficient with an optional anisotropy, and the URDF exporter would
-flatten it on the way out.
-
-3. Collision geometry
-=====================
-
-A URDF's collision geometry is not lost today - a link that states both shapes
-is built from the collision one and the visual one becomes a part of its own -
-but the *relation* between the two is: they are two parts that happen to be
-named alike, and nothing says one is the simplified stand-in for the other. A
-part should be able to say it:
-
-.. code-block:: yaml
-
-  parts:
-    bracket:
-      type: step
-      collision:
-        type: convexDecomposition   # or: convexHull | primitive | part | none
-        maxHulls: 8
-        tolerance: 0.5mm
-
-``convexHull`` and ``convexDecomposition`` are computed in a sandbox and cached
-like any derived shape; ``part`` points at another PartCAD part, which is how a
-hand-simplified collision shape gets version-controlled next to the real one -
-and is exactly what a URDF import would then produce instead of a part with a
-suggestive name; ``primitive`` fits a box/cylinder/sphere/capsule to the
-geometry.
-
-4. Named frames
-===============
-
-.. code-block:: yaml
-
-  parts:
-    gripper:
-      type: step
-      frames:
-        tcp:   { location: [[0,0,180], [0,0,1], 0] }
-        mount: { port: base_flange }     # derived from an existing port
-
-Frames are the attachment points for sensors, joints and grasp poses, and they
-are what an exporter needs to write ``<frame>`` or a sensor's ``<origin>``.
-PartCAD's ``interfaces`` and ``ports`` already describe named, located features
-on a part; frames should be the same mechanism, not a parallel one.
-
-5. Kinematics: a configuration, not a joint section
-===================================================
-
-The obvious proposal here used to be a ``joint:`` form for an ASSY node, next to
-``location:`` and ``connect:``. Building the URDF mapping above argues against
-it. A joint is not a third way to place a part - it is what a ``connect:``
-*already is*, plus a value. An interface says what freedom of movement it allows
-(``motion:``, ``parameters:``); a connection says which two things are joined
-and, optionally, at what value (``toParams:``). Adding a parallel ``joint:``
-section would restate the interface's own description at every use site, which
-is the duplication the rest of PartCAD exists to remove.
-
-What is actually missing is one level up: the assembly has no way to name a
-*configuration*.
-
-.. code-block:: yaml
-
-  assemblies:
-    robot:
-      type: assy
-      configurations:
-        home:    { shoulder_pan: 0deg, elbow: 0deg }
-        stowed:  { shoulder_pan: -90deg, elbow: 135deg }
-      configuration: home    # which one this assembly shows
-
-with the connections referring to the configuration rather than carrying a
-literal:
-
-.. code-block:: yaml
-
-  - part: arm
-    connect:
-      to: shoulder_pan-socket
-      toParams: { angle: "{{ joint.shoulder_pan }}" }
-
-Everything that exists today - a tree of rigid placements - is what you get by
-evaluating a configuration, so no consumer of the representation has to change.
-But ``pc ide view 'robot;configuration=stowed'`` becomes meaningful through the
-parameter machinery ASSY files already have, and an exporter gains something to
-write a joint *state* from.
-
-Two things this still needs, which the URDF work did not:
-
-- **A joint identity.** ``toInstance: shoulder_pan`` names the joint today only
-  by convention. A configuration has to address it, so the instance name has to
-  become the joint's name in earnest.
-- **Loops.** A four-bar linkage is a connection whose child is already placed.
-  PartCAD's tree cannot express it and neither can URDF; SDF can. Until then the
-  honest behaviour is to detect it and say so.
-
-There remains a genuinely attractive case for *deriving* joints from the
-existing interface library: a bearing bore is revolute about its own axis and a
-linear rail is prismatic along its own, so an interface that says so once gives
-every ``connect:`` that uses it a joint for free. That is the same ``motion:``
-section the URDF conversion writes, applied to hand-authored interfaces instead
-of generated ones - which is why ``motion:`` belongs on the interface and not on
-the connection.
-
-6. Internal representation
-==========================
-
-The corresponding change in ``partcad.assembly`` is small and additive:
-
-- ``AssemblyChild`` gains ``joint`` (the kinematic relation to its parent, or to
-  a named sibling) and ``frames``. ``location`` stays what it is - the resolved
-  placement at the current joint states - so ``Assembly._get_shape_real()``,
-  the BREP envelope, the cache and every exporter keep working unchanged.
-- ``Assembly`` gains a ``configuration``: the map of joint name to value it was
-  evaluated at, hashed into the cache key like any other parameter.
-- ``Part`` gains ``physical`` and ``collision`` accessors that resolve declared
-  values against derived ones, computing the derived ones in a sandbox on
-  demand and caching them.
-- The BREP envelope grows a sibling channel for non-geometric data, so a
-  wrapper can be handed the physical properties without a second round trip.
-
-7. Sensors, actuators and plugins
-=================================
-
-.. code-block:: yaml
-
-  assemblies:
-    robot:
-      devices:
-        front_camera:
-          type: camera
-          frame: head/camera_mount
-          rate: 30Hz
-          image: { width: 1280, height: 720, format: R8G8B8 }
-          fov: 1.05rad
-          noise: { type: gaussian, stddev: 0.007 }
-
-PartCAD should model the handful of device types that every simulator agrees on
-(camera, depth, lidar, imu, contact, force-torque) and treat the rest as
-passthrough.
-
-8. Scenes as worlds
-===================
-
-The scenes PartCAD has always planned are SDF worlds: gravity, ground, lights,
-model instances with initial poses, and physics engine settings. A scene is also
-where a *fixed to the world* joint belongs, which is the piece a single assembly
-cannot express.
-
-Two of those are built: a scene states its ``gravity:`` and the ``medium:`` it
-is filled with, as a material, and both reach the engines (see `Gravity, and the
-fluid a scene is filled with`_). They went first because they are what
-underwater and aerospace validation turn on, and because neither needed anything
-new below the scene: a gravity is three numbers, and a fluid is a material with
-one more fact on it. What is still a proposal:
-
-- **The ground and the lights**, which the exporters write from parameters of
-  their own (``ground_plane``, ``light``, ``sun``) because a scene has nowhere
-  to say them.
-- **A surface.** A medium fills the whole world. A waterline -- air above,
-  water below, and a body floating where the two meet -- is a world with
-  regions in it, which Gazebo's graded buoyancy can express and MuJoCo's fluid
-  model cannot.
-- **Wind and current**: a velocity of the medium, which MuJoCo states as
-  ``<option wind>`` and which ``medium:`` would grow into a mapping to carry.
-- **The physics engine's own parameters** -- step size, solver, iterations --
-  which a ``simulate:`` passes to its plugin today and which belong to an
-  engine rather than to a world.
-
-9. The property tables, and keeping them honest (in place)
-==========================================================
-
-This is the item that is built, and doing it first was right: it makes a URDF
-round trip nearly lossless while the rest of the proposal is still being
-designed, and it is the difference between PartCAD being usable in a robotics
-workflow and being a one-way trip out of one.
-
-A part carries a ``properties:`` section holding ``material``, ``color`` and
-``physics``; an interface carries ``motion:`` and ``physics:``. Every property
-in them is a PartCAD property with a PartCAD unit and a closed definition in the
-schema. A URDF import reads its
-values into them one at a time and the URDF export writes each one back into the
-element that states it. The two rules that keep the list honest are the loud
-failures: URDF that no property covers stops the import, and a property URDF
-cannot state is reported when the file is written.
-
-What is still missing:
-
-- **``<ros2_control>`` and ``<transmission>``**, which are robot-level rather
-  than link-level, and so have nowhere to attach yet. The assembly needs a
-  place to attach robot-level physics - an assembly takes the same
-  ``properties:`` section a part does, but nothing yet reads one there, because
-  every property so far belongs to something inside the container.
-- **Properties that are not a link's or a joint's.** A URDF's ``<gazebo>``
-  blocks also carry sensors and simulator plugins, which items 7 and 8 cover;
-  until then they are counted and reported, not carried.
-- **Any check at all that a declared property still applies.** ``properties:``
-  does not take part in the shape cache *key*, which is right - it says nothing
-  about the geometry - but it also means nothing notices when the geometry moves
-  out from under it. A mass read from a URDF survives an edit to the CAD that
-  invalidates it, silently. ``pc lint`` is where that belongs, and it needs
-  item 2 to have something to compare against.
-
-10. Units
-=========
-
-Simulation is SI; PartCAD is millimetres and degrees. The notation used
-throughout this page - ``12 N*m``, ``2 rad/s``, ``2700 kg/m^3``, ``180deg`` -
-should be real: a unit-aware scalar type, stored canonically, so that no
-exporter has to guess and no user has to remember which of the two conventions a
-given field is in. This is the smallest item on the list and the one that
-prevents the largest class of silent errors.
-
-11. Export targets
-==================
-
-With the above in place, the export matrix is:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 20 20 60
-
-   * - Target
-     - Priority
-     - Notes
-   * - URDF
-     - Done (geometry only)
-     - The common denominator. Tree-only kinematics, sensors only via extensions.
-   * - SDF
-     - Next
-     - What Gazebo actually simulates. Expresses everything in this proposal, worlds included, and is where a PartCAD *scene* maps naturally.
-   * - MJCF
-     - Later
-     - MuJoCo. Needs convex collision geometry, which item 3 provides.
-   * - USD
-     - Later
-     - Isaac Sim and the wider DCC ecosystem, through the UsdPhysics schemas.
-
-Suggested order of work
-=======================
-
-Each step is useful on its own, which is the test of whether the decomposition
-is right:
-
-0. **Passthrough** (item 9) - *done*. The URDF round trip carries what PartCAD
-   does not model instead of dropping it.
-1. **Units** (item 10). Everything after this depends on it and it gets harder
-   to add later - the generated ``motion:`` sections already have to state
-   ``units: rad`` in prose because there is no way to state it in the value.
-2. **Materials and physical properties** (items 1-2) - *partly done*. Materials
-   exist, and a part's mass, centre of mass and inertia are derived from the
-   one it names, so that carrying an inertial is the exception rather than the
-   rule. Provenance and checking (item 2) remain.
-3. **Collision geometry** (item 3). Independently valuable - it also makes
-   rendering and interference checking cheaper - and it is what would let the
-   collision/visual choice ``ignoreCollision`` makes today become "keep both".
-4. **Frames** (item 4), folded into the existing ports/interfaces mechanism.
-5. **Configurations** (items 5-6). The largest change, and the one that turns an
-   assembly into a mechanism rather than a photograph of one.
-6. **SDF export**, which is the first target able to carry all of the above.
-7. **Sensors** (item 7) and **scenes** (item 8).
-
-Non-goals
-=========
-
-- PartCAD should not become a simulator, or wrap one. It should describe a
-  product well enough that a simulator can be handed it.
-- PartCAD should not model every engine-specific solver parameter as a
-  first-class concept. But the alternative is not a passthrough container: it is
-  to leave them out and say so when one is seen, which is what the import does
-  for an unknown ``<gazebo>`` setting.
-- Reading a URDF should not become lossless by making PartCAD's model a copy of
-  URDF's. The point is a model that URDF, SDF, MJCF and USD are all views of.
+.. code-block:: shell
+
+  pc ide open --with gazebo warehouse.world   # a Gazebo world, in Gazebo
+  pc ide open --with mujoco stack.xml         # an MJCF model, in MuJoCo
+
+Both open a window on the machine the command was run on -- from an
+installation there, or with ``--use-docker`` from a container when there is
+none -- and never on the daemon's machine, which can be somebody else's. The ``gazebo`` and ``mujoco``
+applications are declared by the engine plugins, so they are offered in a
+workspace that imports one. The editor extension's **Open in** menu runs the
+same command, and offers each engine for scenes in its own format only.
+
+Each engine is handed a file that already is in its format. MuJoCo reads MJCF
+and nothing else, and ``pc ide open`` converts no scene into it: MJCF is written
+by the MuJoCo plugin's exporter, and a file handed to ``pc ide open`` has no
+package around it to reach that plugin through. A Gazebo world, or anything else
+that is not MJCF, is refused with the export that does work -- write the scene
+out first, and open what was written:
+
+.. code-block:: shell
+
+  pc export -S -t sim-mujoco:mjcf workcell
+  pc ide open --with mujoco workcell.xml
+
+An ASSY scene is refused too, for a reason of its own: it is nothing but
+references to the parts of a package, and a file opened on its own has no
+package to resolve them against. See ``pc ide open`` in :doc:`cli`.
+
+.. _sim-limitations:
+
+===========
+Limitations
+===========
+
+What a run does not model today, so that a claim is not written against it:
+
+- **Every body is free.** Nothing in a run is attached to anything: the parts of
+  an assembly are separate bodies that come apart under gravity, and nothing in
+  a scene is fixed to the world -- a fixture is held by the floor under it and
+  by nothing else. Keep claims to things that are separate bodies in reality --
+  a stack, a part on a floor, a float -- or to a single part. An interface's
+  ``motion:`` and ``physics:`` are not read as a joint. Joints, and attaching
+  what an assembly bolts together, are designed and planned; see the
+  `design record`_.
+- **No inputs.** A run starts at rest, where the scene places everything, and
+  nothing moves it but gravity, contact and the fluid: no initial velocity, no
+  motor, no controller, no sensor.
+- **Contact is against the part's own shape.** There is no separate, simpler
+  collision shape. MuJoCo collides only convex shapes and takes the convex hull
+  of anything else, so in MuJoCo a pocket, a slot or the gap between a gripper's
+  fingers is filled in.
+- **One friction coefficient per body**, the sliding one, combined with the
+  other body's by the engine's own rule (see `Friction and contact`_).
+- **No water surface.** A fluid fills the whole world: a body lighter than it
+  rises for as long as the run lasts rather than coming to float at a
+  waterline, and nothing is ever partly submerged.
+- **Sealed cavities are flooded.** A body displaces its solid's volume, so a
+  hollow part is buoyed as if it were open. Draw a float as the solid it
+  displaces, and state its mass.
+- **No added mass, lift or Magnus effect**, and drag is MuJoCo's simplest model
+  of it.
+- **No fluid in Gazebo** at all: a Gazebo run of a scene filled with water is a
+  run in a vacuum, and its export says so.
+- **No units inside values**: a gravity is ``[0, 0, -9.81]``, not
+  ``"9.81 m/s^2"``.

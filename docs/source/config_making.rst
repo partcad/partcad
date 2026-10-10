@@ -598,7 +598,13 @@ A part made of a material is weighed at its density. Its mass, its centre of
 mass and its inertia are worked out from its solid and that density unless the
 part states them itself, and they are what ``pc info`` reports as
 ``MassProperties`` and what every exporter writes -- the URDF one, and the
-simulation formats a plugin writes. See :ref:`properties` for the order.
+simulation formats a plugin writes. See :ref:`properties` for the order, and
+:ref:`sim-physics` for what a simulation reads.
+
+``mu`` is the coefficient of sliding friction, the same dimensionless number in
+every format a part is written into. A part made of the material has it as its
+``friction`` unless it states one of its own; how an engine combines the two
+coefficients of a contact is in :ref:`sim-engines`.
 
 .. warning::
 

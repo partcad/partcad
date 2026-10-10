@@ -429,8 +429,8 @@ Notes
 - Importing a URDF produces one ``stl`` part per link, carrying the mass,
   inertia, friction and colour the URDF stated, and one pair of interfaces per
   joint - so the generated assembly connects its parts through the joints
-  rather than placing them by coordinates. See :doc:`simulation` for what
-  survives the conversion and what does not.
+  rather than placing them by coordinates. See :ref:`sim-urdf-round-trip` for
+  what survives the conversion and what does not.
 
 Create an assembly
 ------------------
