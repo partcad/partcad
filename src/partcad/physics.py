@@ -33,14 +33,23 @@ so nothing here converts one. The arithmetic - a volume and a density into a
 mass, a tensor moved or added up - is 'wrappers/mass_properties.py', which the
 exporters in the sandbox import too, so there is one copy of that as well.
 
-**What is cached is the geometry's share.** The centroid and the inertia at unit
-density are measured by OCCT as the shape is built and stored with its
-geometry, under the hash that makes the geometry valid or stale (see
-'shape_measure.distribution()'). The density is multiplied in here, every time
-it is asked for, from the declarations as they stand - because neither a
-material's density nor a part's stated mass is in that hash, and a mass cached
-beside the geometry would survive an edit of either. Multiplying is cheaper
-than finding out it should have been invalidated.
+**What a part weighs is cached, and goes stale exactly when it should.** Its
+volume, mass, centre of mass and inertia are stored as one entry of the shape
+cache (DERIVED_KEY) under a key of their own: the part's own cache key - so an
+edit to the CAD is a new key - and everything the derivation reads that the
+part's key does not cover. That is the density it was weighed at and where the
+density came from (a stated one, the material that lent it, or an export's
+fallback) and every value the part states that a derived one would otherwise
+fill in. So an edit to a material's density, or to a stated mass, is a new key
+as well; and nothing else is - a material's description, or a part's friction,
+does not touch what the part weighs. A hit answers without the geometry: 'pc
+info', an export and the IDE read the same entry, and none of them measures a
+thing it was not asked to build. See '_derived_async()'.
+
+A miss derives the values from what the shape measured as it was built - its
+volume, and its centroid and its inertia at unit density, which OCCT works out
+in the encoder and the geometry's own entry carries (see
+'shape_measure.distribution()').
 """
 
 import math
@@ -58,6 +67,8 @@ _WRAPPERS = os.path.join(os.path.dirname(__file__), "wrappers")
 if _WRAPPERS not in sys.path:
     sys.path.append(_WRAPPERS)
 import mass_properties  # noqa: E402
+
+from .cache_hash import CacheHash  # noqa: E402
 
 # The request key the resolved physics of every shape travels to a sandbox
 # under, keyed by the shape's full name. 'wrappers/wrapper_export.PHYSICS_KEY'
@@ -82,6 +93,24 @@ DENSITY_PARAMETER = "density"
 _SHOWN = 9
 
 STATED = "stated"
+
+# The shape-cache key what a part weighs is stored under. The entry's hash is
+# not the part's own but one derived from it (see '_derived_hash()'), so the
+# file is '<that hash>.mass' and sits beside nothing it could be mistaken for.
+DERIVED_KEY = "mass"
+
+# The shape of what is stored under DERIVED_KEY. It is hashed into the key, so
+# that changing what an entry holds moves every entry to a new key rather than
+# reading an old one back under new rules - the same arrangement as
+# 'cache_hash.VERSION', for an entry that version does not describe.
+_DERIVED_FORMAT = 1
+
+# What a derivation reads besides the geometry: the density it weighs the solid
+# at, and every stated value that stands in for a derived one. Each goes into
+# the key with where it came from - a density of 2700 lent by aluminium and a
+# density of 2700 stated by the part are two different reasons for one number,
+# and 'pc info' says which.
+_DERIVATION_INPUTS = ("density", "mass", "centerOfMass", "inertia", "inertiaOrientation")
 
 
 def _positive(value):
@@ -142,6 +171,25 @@ def resolve(stated=None, material=None, material_name=None, measurements=None, f
     and what was lent or derived under the same names and in the same units.
     'sources' says, per name, "stated", which material lent it, or how it was
     derived. A value that could not be had is in neither.
+
+    The arithmetic, with nothing cached: what every reader that has a shape to
+    ask goes through instead is '_derived_async()', which keeps the derived half
+    of this in the cache.
+    """
+    physics, sources = _declared(stated, material, material_name, fallback)
+    derived, derived_sources, _volume = _derive(physics, measurements)
+    physics.update(derived)
+    sources.update(derived_sources)
+    return physics, sources
+
+
+def _declared(stated, material, material_name, fallback):
+    """What a shape's physics is before anything is derived: (physics, sources).
+
+    What it states, what its material lends, and an export's fallback density.
+    All of it is read off declarations, so it needs no geometry - which is what
+    lets the key of a cached derivation be worked out before the geometry is
+    asked for (see '_derived_hash()').
     """
     physics = {}
     sources = {}
@@ -169,45 +217,134 @@ def resolve(stated=None, material=None, material_name=None, measurements=None, f
         if _positive(value) is not None:
             physics["density"] = float(value)
             sources["density"] = source
+    return physics, sources
 
+
+def _derive(physics, measurements):
+    """What the solid adds to 'physics': (derived, sources, volume).
+
+    Only the values 'physics' does not already state - a mass at its density,
+    the centroid, and the solid's inertia at the density its mass implies, so
+    that a stated mass and a derived inertia agree. 'volume' is the solid's, or
+    None for a shape that encloses nothing.
+    """
+    derived = {}
+    sources = {}
     measured = measurements or {}
     volume = _positive(measured.get(shape_envelope.METADATA_VOLUME))
     centroid = measured.get(shape_envelope.METADATA_CENTROID)
     unit_inertia = measured.get(shape_envelope.METADATA_UNIT_INERTIA)
     if volume is None:
-        return physics, sources
+        return derived, sources, None
 
     density = _positive(physics.get("density"))
     if "mass" not in physics and density is not None:
-        physics["mass"] = mass_properties.mass_of(volume, density)
+        derived["mass"] = mass_properties.mass_of(volume, density)
         sources["mass"] = "derived: %.9g mm^3 at %.9g kg/m^3" % (volume, density)
     if centroid is None or unit_inertia is None:
-        return physics, sources
+        return derived, sources, volume
 
     if "centerOfMass" not in physics:
-        physics["centerOfMass"] = [float(v) for v in centroid]
+        derived["centerOfMass"] = [float(v) for v in centroid]
         sources["centerOfMass"] = "derived: the centroid of the solid"
-    mass = _positive(physics.get("mass"))
+    mass = _positive(physics["mass"] if "mass" in physics else derived.get("mass"))
     if "inertia" not in physics and mass is not None:
         # At the density that makes the solid weigh what the part does: the
         # material's, or - for a part that states its mass - the one that mass
         # implies. Either way the mass and the inertia agree.
         at = mass / (volume * mass_properties.M3_PER_MM3)
-        physics["inertia"] = mass_properties.of_solid(volume, centroid, unit_inertia, at)["inertia"]
+        derived["inertia"] = mass_properties.of_solid(volume, centroid, unit_inertia, at)["inertia"]
         sources["inertia"] = (
             "derived: the solid at %.9g kg/m^3" % at
-            if sources.get("mass", "").startswith("derived")
+            if "mass" in derived
             else "derived: the solid, scaled to the stated mass"
         )
-    return physics, sources
+    return derived, sources, volume
+
+
+def _derived_hash(shape_key, physics, sources):
+    """The key a shape's derived values are cached under.
+
+    The shape's own key, which moves with every edit to the CAD, and what
+    '_declared()' worked out that a derivation reads: the density and every
+    stated value that stands in for a derived one, each with where it came from.
+    Nothing else - so a material's description, a part's friction or its colour
+    can change without a part being weighed again.
+    """
+    inputs = {name: [physics[name], sources.get(name)] for name in _DERIVATION_INPUTS if name in physics}
+    derived_hash = CacheHash("mass properties", cache=True)
+    derived_hash.add_string(shape_key)
+    derived_hash.add_dict({"format": _DERIVED_FORMAT, "inputs": inputs})
+    return derived_hash
+
+
+async def _derived_async(ctx, shape, physics, sources, measure):
+    """What the solid adds to 'physics', from the cache where it can be: (derived, sources, volume).
+
+    The one place a derivation is cached and read back, for 'pc info', for every
+    export and for the IDE. 'shape' is the object the values belong to and is
+    what keys them (see '_derived_hash()'); 'measure' is a coroutine function
+    returning what the shape measured, called only on a miss - a hit needs no
+    geometry at all.
+
+    Nothing is cached for a shape with no key of its own (one that is not
+    cached, or that hashes another), and nothing for one whose measurements
+    could not be had: a shape that failed to build has no weight to remember,
+    and remembering that it had none would outlast whatever made it fail.
+    """
+    entry_hash = None
+    cache = getattr(ctx, "cache_shapes", None) if ctx is not None else None
+    if shape is not None and cache is not None:
+        try:
+            shape_key = await shape.get_cache_key_async()
+        except Exception as e:  # pylint: disable=broad-except
+            pc_logging.debug("No cache key to weigh %s under: %s" % (getattr(shape, "name", shape), e))
+            shape_key = None
+        if shape_key:
+            entry_hash = _derived_hash(shape_key, physics, sources)
+            cached, _ = await cache.read_async(entry_hash, [DERIVED_KEY])
+            entry = cached.get(DERIVED_KEY)
+            if isinstance(entry, dict) and isinstance(entry.get("physics"), dict):
+                return entry["physics"], entry.get("sources") or {}, entry.get("volume")
+
+    measurements = await measure()
+    derived, derived_sources, volume = _derive(physics, measurements)
+    if entry_hash is not None and measurements:
+        entry = {"physics": derived, "sources": derived_sources, "volume": volume}
+        await cache.write_async(entry_hash, {DERIVED_KEY: entry})
+    return derived, derived_sources, volume
 
 
 class _Materials:
-    """Material references resolved once per (package, reference) for one walk."""
+    """Material references - and the parts behind a tree's leaves - resolved once per walk."""
 
     def __init__(self, ctx):
         self.ctx = ctx
         self.found = {}
+        self.parts = {}
+        self.leaves = {}
+
+    async def part(self, name):
+        """The part a leaf of a tree is named after, or None.
+
+        What a leaf's derived values are cached under is that part's key, and a
+        tree carries the part's name but not its key. Looked up quietly: a leaf
+        whose part cannot be found is still weighed, just not remembered.
+        """
+        if name not in self.parts:
+            found = None
+            if self.ctx is not None and name and ":" in name:
+                # Split at the first ':' - a package path has none, and a
+                # parameter value may.
+                package, object_name = name.split(":", 1)
+                try:
+                    project = self.ctx.get_project(package)
+                    if project is not None:
+                        found = await project.get_part_async(object_name, quiet=True)
+                except Exception as e:  # pylint: disable=broad-except
+                    pc_logging.debug("No part behind %s to weigh it by: %s" % (name, e))
+            self.parts[name] = found
+        return self.parts[name]
 
     def get(self, owner, reference):
         """(Material or None, its full name) for 'reference' as written in 'owner'."""
@@ -220,8 +357,8 @@ class _Materials:
         return self.found[key]
 
 
-def _of_node(node, materials, fallback=None):
-    """resolve() for one envelope of a tree, with its material looked up by its owner."""
+def _node_inputs(node, materials):
+    """(stated, material, material_name, measurements) of one envelope of a tree."""
     properties = node.get(shape_envelope.KEY_PROPERTIES) or {}
     if not isinstance(properties, dict):
         properties = {}
@@ -233,7 +370,68 @@ def _of_node(node, materials, fallback=None):
     metadata = node.get(shape_envelope.KEY_METADATA)
     measurements = shape_envelope.metadata_section(metadata, shape_envelope.METADATA_MEASUREMENTS)
     stated = properties.get("physics") if isinstance(properties.get("physics"), dict) else None
+    return stated, material, material_name, measurements
+
+
+def _of_node(node, materials, fallback=None):
+    """resolve() for one envelope of a tree, with its material looked up by its owner."""
+    stated, material, material_name, measurements = _node_inputs(node, materials)
     return resolve(stated, material, material_name, measurements, fallback)
+
+
+async def _leaf_async(node, materials, fallback=None):
+    """(physics, sources, volume) of one leaf of a tree, its derived share cached.
+
+    Keyed on the part the leaf is named after, so that a part weighed by 'pc
+    info' is not weighed again by an export of an assembly holding it, nor the
+    other way round. What is measured on a miss is what the leaf carries - the
+    tree was built, so its geometry is already in hand.
+    """
+    name = node.get("name")
+    memo = (name, fallback)
+    if name and memo in materials.leaves:
+        physics, sources, volume = materials.leaves[memo]
+        return dict(physics), dict(sources), volume
+    stated, material, material_name, measurements = _node_inputs(node, materials)
+    physics, sources = _declared(stated, material, material_name, fallback)
+
+    async def measure():
+        return measurements
+
+    derived, derived_sources, volume = await _derived_async(
+        materials.ctx, await materials.part(name), physics, sources, measure
+    )
+    physics.update(derived)
+    sources.update(derived_sources)
+    if name:
+        materials.leaves[memo] = (dict(physics), dict(sources), volume)
+    return physics, sources, volume
+
+
+def _envelopes(request):
+    """Every named envelope of a request, depth first, as (node, is_shape) pairs."""
+    found = []
+
+    def walk(obj):
+        if isinstance(obj, list):
+            for item in obj:
+                walk(item)
+            return
+        if not isinstance(obj, dict):
+            return
+        is_shape = shape_envelope.KEY_BREP in obj
+        if is_shape or shape_envelope.KEY_ASSEMBLY in obj:
+            if obj.get("name"):
+                found.append((obj, is_shape))
+            for child in obj.get(shape_envelope.KEY_ASSEMBLY) or []:
+                walk(child)
+            return
+        for key, value in obj.items():
+            if key not in (shape_envelope.KEY_PROPERTIES, FACTS_KEY):
+                walk(value)
+
+    walk(request)
+    return found
 
 
 def physics_by_shape(ctx, request, fallback=None):
@@ -260,32 +458,35 @@ def physics_by_shape(ctx, request, fallback=None):
     and lends nothing: a part whose material is a typo is weighed at the
     fallback, and gets the simulator's friction, which is what it got before
     anyone declared a material at all.
+
+    This one caches nothing, for a caller with no loop to read a cache on; an
+    export goes through 'physics_by_shape_async()', which is this walk with
+    every leaf's derived values read from the cache and written back to it.
     """
-    facts = {}
     materials = _Materials(ctx)
+    facts = {}
+    for node, is_shape in _envelopes(request):
+        resolved, _sources = _of_node(node, materials, fallback if is_shape else None)
+        if resolved:
+            facts[node["name"]] = resolved
+    return facts
 
-    def walk(obj):
-        if isinstance(obj, list):
-            for item in obj:
-                walk(item)
-            return
-        if not isinstance(obj, dict):
-            return
-        is_shape = shape_envelope.KEY_BREP in obj
-        if is_shape or shape_envelope.KEY_ASSEMBLY in obj:
-            name = obj.get("name")
-            if name:
-                resolved, _sources = _of_node(obj, materials, fallback if is_shape else None)
-                if resolved:
-                    facts[name] = resolved
-            for child in obj.get(shape_envelope.KEY_ASSEMBLY) or []:
-                walk(child)
-            return
-        for key, value in obj.items():
-            if key not in (shape_envelope.KEY_PROPERTIES, FACTS_KEY):
-                walk(value)
 
-    walk(request)
+async def physics_by_shape_async(ctx, request, fallback=None):
+    """'physics_by_shape()', with every leaf's derived values cached (see '_derived_async()').
+
+    What an export is handed, so that it reads the very values 'pc info'
+    reports for the same parts, from the same cache entries.
+    """
+    materials = _Materials(ctx)
+    facts = {}
+    for node, is_shape in _envelopes(request):
+        if is_shape:
+            resolved, _sources, _volume = await _leaf_async(node, materials, fallback)
+        else:
+            resolved, _sources = _of_node(node, materials)
+        if resolved:
+            facts[node["name"]] = resolved
     return facts
 
 
@@ -297,24 +498,23 @@ def export_fallback(request):
     return DEFAULT_EXPORT_DENSITY, "the export default, for a part made of nothing that states a density"
 
 
-def _tree(node, materials):
+async def _tree_async(node, materials):
     """(physics, sources, volume, parts, unweighed) of one node of a tree, in its own frame.
 
     'parts' counts the shapes under the node and 'unweighed' names those with no
-    mass, so that a total that is not one can say so.
+    mass, so that a total that is not one can say so. Each part's own values
+    come from the cache, under that part's key (see '_leaf_async()'); the sum is
+    worked out again on every read, because it is the placements that decide
+    it, and those are the tree's rather than any one part's.
     """
     if shape_envelope.KEY_BREP in node:
-        physics, sources = _of_node(node, materials)
-        measured = shape_envelope.metadata_section(
-            node.get(shape_envelope.KEY_METADATA), shape_envelope.METADATA_MEASUREMENTS
-        )
-        volume = _positive((measured or {}).get(shape_envelope.METADATA_VOLUME)) or 0.0
+        physics, sources, volume = await _leaf_async(node, materials)
         unweighed = [] if mass_properties.weighs(physics) else [node.get("name") or node.get("label") or "?"]
-        return physics, sources, volume, 1, unweighed
+        return physics, sources, volume or 0.0, 1, unweighed
 
     placed, volume, parts, unweighed = [], 0.0, 0, []
     for child in node.get(shape_envelope.KEY_ASSEMBLY) or []:
-        physics, _sources, child_volume, child_parts, child_unweighed = _tree(child, materials)
+        physics, _sources, child_volume, child_parts, child_unweighed = await _tree_async(child, materials)
         volume += child_volume
         parts += child_parts
         unweighed += child_unweighed
@@ -392,7 +592,7 @@ async def mass_properties_async(ctx, shape):
         tree = await shape.get_wrapped(ctx)
         if not isinstance(tree, dict):
             return None
-        physics, sources, volume, parts, unweighed = _tree(tree, _Materials(ctx))
+        physics, sources, volume, parts, unweighed = await _tree_async(tree, _Materials(ctx))
         if not parts:
             return None
         if unweighed and "mass" in physics:
@@ -407,8 +607,7 @@ async def mass_properties_async(ctx, shape):
 
     if kind != "part":
         return None
-    physics, sources, measurements, material, material_name = await _part_async(ctx, shape)
-    volume = _positive(measurements.get(shape_envelope.METADATA_VOLUME))
+    physics, sources, volume, material, material_name = await _part_async(ctx, shape)
     if not volume and "mass" not in physics:
         return None
     missing = None
@@ -422,16 +621,22 @@ async def mass_properties_async(ctx, shape):
 
 
 async def _part_async(ctx, shape):
-    """resolve() for a part: (physics, sources, measurements, material, material_name)."""
-    measurements = await shape.get_measurements_async(ctx) or {}
+    """A part's physics, its derived share cached: (physics, sources, volume, material, material_name)."""
     material = shape.get_material(ctx)
     material_name = None
     if material is not None:
         package, name = resolve_resource_path(shape.project_name, shape.material_reference())
         material_name = "%s:%s" % (package, name)
     stated = ((shape._shape_properties() or {}).get("physics")) or None
-    physics, sources = resolve(stated, material, material_name, measurements)
-    return physics, sources, measurements, material, material_name
+    physics, sources = _declared(stated, material, material_name, None)
+
+    async def measure():
+        return await shape.get_measurements_async(ctx)
+
+    derived, derived_sources, volume = await _derived_async(ctx, shape, physics, sources, measure)
+    physics.update(derived)
+    sources.update(derived_sources)
+    return physics, sources, volume, material, material_name
 
 
 async def part_mass_async(ctx, shape):
@@ -442,16 +647,17 @@ async def part_mass_async(ctx, shape):
     """
     if getattr(shape, "kind", None) != "part":
         return None
-    physics, _sources, _measurements, _material, _name = await _part_async(ctx, shape)
+    physics, _sources, _volume, _material, _name = await _part_async(ctx, shape)
     return _positive(physics.get("mass"))
 
 
 def owner_package(shape_name: str) -> str:
     """The package a shape's full name ("//pkg:part") belongs to.
 
-    Split from the right: a package path is full of '/' and starts with '//',
-    and an object name carries no ':' at all, so the last one is the separator.
-    A name with no ':' is a package with nothing after it, which is what an
-    assembly with no name of its own carries.
+    Split at the first ':': a package path is full of '/' and starts with '//'
+    but carries no ':', while what follows it may - a parameter value naming
+    another object (";material=//pkg:steel"), or the container an ASSY file
+    holds ("//pkg:arm:wrist"). A name with no ':' is a package with nothing
+    after it, which is what an assembly with no name of its own carries.
     """
-    return shape_name.rsplit(":", 1)[0] if ":" in shape_name else shape_name
+    return shape_name.split(":", 1)[0] if ":" in shape_name else shape_name

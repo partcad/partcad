@@ -696,11 +696,14 @@ at all).
   table shows the same mass. No exporter knows materials or densities exist.
 
   **Every density is kg/m³** — a material's, a part's, an export's — so nothing converts one, and
-  `mass_properties.mass_of()` is the one place a volume (mm³) and a density become a mass. The geometry's share
-  of a mass — the centroid and the inertia at unit density — is measured by `shape_measure.distribution()` as
-  the shape is encoded and cached in the geometry's entry; the density is multiplied in on every read, because
-  neither a material's density nor a stated mass is in the geometry's hash, and a cached mass would outlive an
-  edit to either. Do not cache a derived mass beside the geometry (`-props`).
+  `mass_properties.mass_of()` is the one place a volume (mm³) and a density become a mass. A part's volume,
+  mass, centre of mass and inertia are cached as one entry (`physics.DERIVED_KEY`) under `_derived_hash()`: the
+  part's own cache key plus the density, where it came from, and every stated value that stands in for a
+  derived one — because neither a material's density nor a stated mass is in the geometry's hash. So a CAD
+  edit, a material density edit and a stated-value edit each invalidate it, and nothing else does. A miss
+  derives from the geometry entry's measurements (`shape_measure.distribution()` adds the centroid and the
+  unit-density inertia). `_derived_async()` is the only reader and writer; do not cache a derived mass
+  beside the geometry (`-props`), whose key would not see a density edit.
 
   `wrappers/mass_properties.py` is the **one copy of mass-property arithmetic**: placing a part's inertia where
   a shape is placed, adding several shapes up into one body by the parallel-axis theorem, mm → m. The core

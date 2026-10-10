@@ -1461,7 +1461,7 @@ class Shape(ShapeConfiguration):
         # itself, and the exporter writes what it is handed. See
         # 'partcad.physics.physics_by_shape()'.
         if request.get(output.PROPERTIES_KEY):
-            facts = pc_physics.physics_by_shape(ctx, request, pc_physics.export_fallback(request))
+            facts = await pc_physics.physics_by_shape_async(ctx, request, pc_physics.export_fallback(request))
             if facts:
                 request[pc_physics.FACTS_KEY] = facts
         return request

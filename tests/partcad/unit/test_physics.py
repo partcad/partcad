@@ -19,6 +19,8 @@ What OCCT measures, and how the helper adds bodies up, is
 'test_export_urdf_mass.py'.
 """
 
+import asyncio
+
 import pytest
 
 import partcad as pc
@@ -199,7 +201,7 @@ def test_an_assembly_weighs_what_its_parts_add_up_to(ctx, root):
     pla = "%s:a" % root.name
     tree = _tree(_leaf(pla, ":pla"), _leaf(pla, ":pla", location=[[100.0, 0.0, 0.0], [0.0, 0.0, 1.0], 0.0]))
 
-    resolved, sources, volume, parts, unweighed = physics._tree(tree, physics._Materials(ctx))
+    resolved, sources, volume, parts, unweighed = asyncio.run(physics._tree_async(tree, physics._Materials(ctx)))
 
     mass = 1320.0 * VOLUME_M3
     assert resolved["mass"] == pytest.approx(2 * mass)
@@ -216,7 +218,7 @@ def test_a_part_with_no_mass_is_left_out_of_a_total_and_named(ctx, root):
     pla, vague = "%s:a" % root.name, "%s:vague" % root.name
     tree = _tree(_leaf(pla, ":pla"), _leaf(vague, ":mystery"))
 
-    resolved, _sources, _volume, parts, unweighed = physics._tree(tree, physics._Materials(ctx))
+    resolved, _sources, _volume, parts, unweighed = asyncio.run(physics._tree_async(tree, physics._Materials(ctx)))
 
     assert resolved["mass"] == pytest.approx(1320.0 * VOLUME_M3)
     assert parts == 2
@@ -231,7 +233,7 @@ def test_an_assembly_that_states_its_mass_is_taken_at_its_word(ctx, root):
         physics_={"mass": 1.0},
     )
 
-    resolved, sources, _volume, _parts, unweighed = physics._tree(tree, physics._Materials(ctx))
+    resolved, sources, _volume, _parts, unweighed = asyncio.run(physics._tree_async(tree, physics._Materials(ctx)))
 
     assert resolved["mass"] == 1.0
     assert sources["mass"] == "stated"

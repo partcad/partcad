@@ -775,10 +775,12 @@ simulator handed a body with no mass makes one up regardless.
 
 ``pc info`` reports all of this as ``MassProperties`` -- each value with its
 unit and where it came from -- and an assembly's as its parts' added up in its
-own frame. The geometry's share (the centroid, and the inertia at unit density)
-is measured once, by OCCT, as the shape is built, and cached with its geometry;
-the density is multiplied in on every read, so editing a material's density
-changes every part made of it without rebuilding one. See :doc:`simulation`.
+own frame. A part's values are cached, and go stale exactly when they should:
+the entry is keyed on the part's own cache key, so an edit to its CAD is a new
+one, and on what the derivation reads besides the geometry -- the density and
+where it came from, and the values the part states -- so an edit to its
+material's density, or to its stated mass, is a new one too, and an edit to
+anything else is not. See :doc:`simulation`.
 
 A file type that has a way to state these declares ``properties: true`` in its
 ``export:`` section, and is handed them keyed by the full name of the shape they

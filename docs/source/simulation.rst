@@ -192,11 +192,19 @@ A *derived* property is not cached there either, and the reason is the same
 key. A mass is the solid times a density, and the density lives in a
 ``materials:`` section or a ``properties:`` one, neither of which the geometry's
 hash covers - so a mass cached beside the geometry would outlive an edit to the
-density it was worked out from. What is cached is the geometry's own share: the
-centroid and the inertia at unit density, measured as the shape is built and
-stored with its volume in the geometry's entry, valid exactly as long as the
-geometry is. The density is multiplied in on every read, which is cheaper than
-finding out a cached mass should have been thrown away.
+density it was worked out from. It has an entry of its own instead
+(``partcad.physics``), holding the part's volume, mass, centre of mass and
+inertia, under a key made of the part's own cache key - which every edit to the
+CAD moves - and of everything the derivation reads that the part's key does
+not cover: the density it was weighed at and where that came from (a stated
+density, the material that lent it, or an export's fallback), and every value
+the part states that a derived one would otherwise fill in. An edit to a
+material's density or to a stated mass is therefore a new entry as well, and
+an edit to anything that does not weigh - a material's description, a part's
+friction - is not. ``pc info``, an export and the IDE read the same entry, and
+a hit answers without the geometry. A miss works the values out from what the
+geometry's own entry carries: the volume, and the centroid and inertia at unit
+density OCCT measures as the shape is built.
 
 Converting between the two
 ==========================
@@ -915,11 +923,11 @@ Three additions, in increasing order of how much they are worth:
 
 - **Derivation** - *done*. With a material behind it (item 1), a part that
   states no ``mass`` has one: the solid's volume times the material's density.
-  The same for ``centerOfMass``, ``inertia`` and ``friction``. The geometry's
-  share is cached with the geometry and invalidated when the CAD changes, and
-  the density is multiplied in on every read; ``pc info`` shows each value and
-  where it came from, and every exporter is handed the same values instead of
-  working its own out. See `Writing a URDF`_.
+  The same for ``centerOfMass``, ``inertia`` and ``friction``. The derived
+  values are cached under the part's key and what they were derived from, so an
+  edit to the CAD or to the material invalidates them; ``pc info`` shows each
+  value and where it came from, and every exporter is handed the same values
+  instead of working its own out. See `Writing a URDF`_.
 - **Provenance.** A declared value should say why it exists, since "measured on
   the bench" and "copied from a vendor datasheet" and "invented so the
   simulation would load" are not the same claim:
