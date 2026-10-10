@@ -146,19 +146,19 @@ class CaeTest(ImplementationTest):
         CFD implementation that never converges, and a plugin that cannot be
         installed on this platform at all.
 
-        **Nothing is a skip any more**, including a machine with no container
-        runtime. That one was a skip while a `container:` meant "a sandbox is
-        not enough" -- nothing was asked, because the thing that asks could not
-        start, so the verdict said nothing about the implementation or the part.
-        A `dockerImage` is a different claim: it names the sandbox to prefer,
-        while the same package's requirements say how to run without one. So a
-        machine with no container runtime is a machine that has to supply the
-        dependencies itself, and a part that asked a question and got no answer
-        has failed either way.
+        **There is one excuse**: an implementation that names a `container:` or
+        a `dockerImage`, on a machine with no container runtime. It said a
+        container is how what pip cannot install arrives, and here there is
+        nothing to start one with, so nothing was really asked. An
+        implementation that names no image gets no such excuse, and nor does one
+        on a machine whose runtime answered. That rule is
+        `ImplementationTest._verdict()`, which the `sim` check shares, and its
+        docstring is the argument for it.
 
-        What that absence still earns is a sentence PartCAD has to write, since
-        the implementation never ran to write one: both remedies, because either
-        fixes it and only the reader knows which is easier where they are.
+        What a sandbox that never started still earns is a sentence PartCAD has
+        to write, since the implementation never ran to write one: both
+        remedies, because either fixes it and only the reader knows which is
+        easier where they are.
 
         The consequence is real and is the point: declaring `fea:` in a shared
         package makes `pc test` fail for everyone who has not installed what the
@@ -231,7 +231,8 @@ class CaeTest(ImplementationTest):
             #
             # Whether it is a failure at all is `_verdict`'s to decide, and the
             # answer is the same one it gives the branch below: no container
-            # runtime is a skip, and everything else is a failure. Deciding it
+            # runtime is a skip for an implementation that names an image, and
+            # everything else is a failure. Deciding it
             # in one place is what keeps "the sandbox would not start" and "the
             # solver was missing from it" from being answered differently, which
             # they were while this branch answered for itself.

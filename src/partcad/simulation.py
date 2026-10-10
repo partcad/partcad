@@ -186,7 +186,7 @@ class SimulationResult:
         self.result: dict = {}
         self.error: typing.Optional[str] = None
 
-        # The three below are for a caller that has to say *why*, and are kept
+        # The four below are for a caller that has to say *why*, and are kept
         # out of 'to_dict()' -- which is what 'pc sim --json' prints, and which
         # is unchanged by them.
         #
@@ -201,6 +201,11 @@ class SimulationResult:
         # failed: a syntax error, or an expression that raised. None when it was
         # evaluated -- including to False, which is a verdict and not a problem.
         self.problem: typing.Optional[str] = None
+        # The key the run's answer was looked up and stored under in the
+        # artifact cache, or None when it had none. A caller that remembers
+        # something derived from the run -- 'pc test''s verdict -- may only do
+        # so when there was one (see 'question_key_async').
+        self.artifact_key: typing.Optional[str] = None
 
     @property
     def name(self) -> str:
@@ -422,28 +427,6 @@ def subject_kind(shape) -> typing.Optional[str]:
     return kind if kind in ("part", "assembly") else None
 
 
-async def run_declared_async(
-    ctx, shape, kind: str, name: typing.Optional[str] = None, report: bool = True
-) -> typing.List[SimulationResult]:
-    """Run the simulations a shape declares, or the one called ``name``.
-
-    One after another, deliberately: a simulation plugin is a whole simulator
-    running a physics model, so the machine is what limits how many fit at once,
-    and two competing for it make both slower and neither more informative. This
-    is the loop ``pc sim`` runs for each object it was asked about and the one
-    ``pc test``'s ``sim`` check runs for the object it is checking -- one loop,
-    so the two cannot come to run different simulations of the same object.
-
-    ``report`` is handed to 'run_async' for each.
-    """
-    results = []
-    for declaration in of_shape(shape):
-        if name and declaration.name != name:
-            continue
-        results.append(await run_async(ctx, shape, kind, declaration, report=report))
-    return results
-
-
 async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration, report: bool = True) -> SimulationResult:
     """Run one declared simulation of one object and validate what came back.
 
@@ -465,28 +448,9 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration, r
 
     with pc_logging.Action("Simulate", shape.project_name, "%s/%s" % (shape.name, declaration.name)):
         try:
-            if not declaration.simulation:
-                raise SimulationConfigError(
-                    "the simulation '%s' names no 'simulation:' plugin to run it. PartCAD implements no "
-                    "simulator itself; import one and name it, e.g. '%s' for MuJoCo"
-                    % (declaration.name, KNOWN_SIMULATION)
-                )
-            # Both names resolve against the package the object is in, never
-            # against the current one: 'sim-mujoco:mujoco' means the
-            # 'sim-mujoco' *that* package imported. Which is what keeps
-            # 'pc test -P //...' -- run with the root of a tree current while
-            # every object in it sits one or more packages down -- resolving
-            # each declaration the way 'pc sim' in its own package would.
-            impl = resolve_plugin(ctx, shape.project_name, declaration.simulation)
+            impl = _resolve_plugin_of(ctx, shape, declaration)
             result.plugin = impl
-            scene_package, scene_name = resolve_resource_path(shape.project_name, declaration.scene)
-            params = scene_parameters(ctx, scene_package, scene_name, declaration, object_name, kind)
-
-            scene = ctx.get_scene("%s:%s" % (scene_package, scene_name), params)
-            if scene is None:
-                raise SimulationConfigError(
-                    "The simulation scene could not be built: %s:%s" % (scene_package, scene_name)
-                )
+            scene = _resolve_scene_of(ctx, shape, kind, declaration)
 
             directory = run_directory(ctx, object_name, declaration.name)
             # What the directory holds is this run's and nothing else's: the
@@ -502,6 +466,7 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration, r
             # run rather than repeating it.
             cache = getattr(ctx, "cache_artifacts", None)
             artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind)
+            result.artifact_key = artifact.get() if artifact is not None else None
             result.result = await cache_artifacts.restore_async(cache, artifact, directory=directory)
             if result.result is None:
                 # Whatever a failed restore managed to write is not this run's.
@@ -526,6 +491,63 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration, r
         elif result.passed is True:
             say_info("%s: the simulation '%s' validated" % (object_name, declaration.name))
         return result
+
+
+def _resolve_plugin_of(ctx, shape, declaration: SimulationDeclaration):
+    """The plugin a declaration names, resolved from the package the object is in.
+
+    Never against the current package: 'sim-mujoco:mujoco' means the
+    'sim-mujoco' *that* package imported. Which is what keeps 'pc test -P //...'
+    -- run with the root of a tree current while every object in it sits one or
+    more packages down -- resolving each declaration the way 'pc sim' in its
+    own package would.
+    """
+    if not declaration.simulation:
+        raise SimulationConfigError(
+            "the simulation '%s' names no 'simulation:' plugin to run it. PartCAD implements no "
+            "simulator itself; import one and name it, e.g. '%s' for MuJoCo" % (declaration.name, KNOWN_SIMULATION)
+        )
+    return resolve_plugin(ctx, shape.project_name, declaration.simulation)
+
+
+def _resolve_scene_of(ctx, shape, kind: str, declaration: SimulationDeclaration):
+    """The scene a declaration places the object in, with the object in it, unbuilt."""
+    object_name = "%s:%s" % (shape.project_name, shape.name)
+    scene_package, scene_name = resolve_resource_path(shape.project_name, declaration.scene)
+    params = scene_parameters(ctx, scene_package, scene_name, declaration, object_name, kind)
+    scene = ctx.get_scene("%s:%s" % (scene_package, scene_name), params)
+    if scene is None:
+        raise SimulationConfigError("The simulation scene could not be built: %s:%s" % (scene_package, scene_name))
+    return scene
+
+
+async def question_key_async(ctx, shape, kind: str, declaration: SimulationDeclaration) -> typing.Optional[str]:
+    """The key one run's answer is cached under, or None when it has none.
+
+    What 'run_async' asks the artifact cache with, worked out the same way and
+    without building or running anything: the scene's key (which covers the
+    subject), the plugin and its resolved options, its environment, the
+    declaration's 'params', how the scene is exported for it, and the content of
+    both scripts and of the wrappers. So it is the whole of what a run's
+    'before' and 'after' depend on -- and deliberately not the 'validation:',
+    which is judged over them afterwards.
+
+    For a caller that remembers something *derived* from a run, and has to be
+    told when the run it was derived from would be a different one: 'pc test'
+    keys its 'sim' verdict on it (see 'SimTest.cache_key_suffix'). None for a
+    declaration that does not resolve, and for a subject with no key
+    ('cache: false') -- a run that has no key is one nothing may be remembered
+    about.
+    """
+    object_name = "%s:%s" % (shape.project_name, shape.name)
+    try:
+        impl = _resolve_plugin_of(ctx, shape, declaration)
+        scene = _resolve_scene_of(ctx, shape, kind, declaration)
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.debug("%s: the simulation '%s' has no key: %s" % (object_name, declaration.name, e))
+        return None
+    artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind)
+    return artifact.get() if artifact is not None else None
 
 
 def _empty(directory: str) -> None:

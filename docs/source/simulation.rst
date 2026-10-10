@@ -564,17 +564,14 @@ All three simulations pass, and no two of them end the same way.
 -f sim`` runs it alone -- so a ``simulate:`` is checked every time the package is
 tested rather than whenever somebody remembers to ask. That is what makes it
 worth writing the claim *first*: declare what the part has to do, watch ``pc
-test`` fail, and change the part until it passes. The check runs every
-simulation the object declares through the same code ``pc sim`` does, so a run
-nothing about has changed is read back from the cache rather than simulated
-again, and editing a ``validation:`` re-judges the run without repeating it.
+test`` fail, and change the part until it passes. The check runs a simulation
+through the same code ``pc sim`` does, so a run nothing about has changed is read
+back from the cache rather than simulated again.
 
 It applies to a part or an assembly that declares ``simulate:`` and to nothing
 else, so a package of bolts pays nothing for it. An object passes when every one
-of its simulations ran and every ``validation:`` held; a declaration that states
-no ``validation:`` passes once it has run, since running is all it asked, and the
-check says so. Everything else fails, naming the object, the simulation and the
-reason:
+of its simulations ran and every ``validation:`` held. Everything else fails,
+naming the object, the simulation and the reason:
 
 * a plugin or a scene that cannot be found -- no ``simulation:`` named, a
   package that is not a dependency or did not load, a scene that cannot hold a
@@ -586,10 +583,30 @@ reason:
 Not running is a failure rather than a skip, for the reason the engineering
 analyses give (see :ref:`engineering-analysis`): the object asked a question,
 and a plugin that answered nothing has failed. It has their one excuse, decided
-by the same code: on a machine with no container runtime, a plugin that could
-not run is skipped with a ``WARNING`` carrying the whole report. A plugin or a
-scene that cannot be found is never excused -- it is wrong wherever the package
-is opened.
+by the same code: a plugin that names a ``container:`` or a ``dockerImage``, on a
+machine with no container runtime, is skipped with a ``WARNING`` carrying the
+whole report. A plugin that names neither is never excused -- MuJoCo is a wheel,
+so a MuJoCo run that fails has failed -- and neither is a plugin or a scene that
+cannot be found, which is wrong wherever the package is opened.
+
+A declaration that states **no** ``validation:`` has nothing to be checked
+against, so ``pc test`` does not run it, and what that costs depends on what was
+asked. Testing a package, or a tree of them, it is **skipped** with a
+``WARNING`` saying why: the claim may be one somebody is still writing, and the
+rest of the package deserves its verdict. Testing the object by name -- ``pc test
+-a :stack`` -- it **fails**: somebody asked whether this
+object does what it says, and it says nothing. ``pc sim`` still runs such a
+declaration and reports that it ran, which is how somebody looks at what a
+plugin reports before writing the condition.
+
+The verdict is remembered, as every check's is. It is keyed on the object, on
+every declaration as written, ``validation:`` included, and on the key of each
+run it was judged on -- the scene, the plugin and its options, its environment
+and the content of every script involved. So editing a ``validation:`` re-judges
+the cached run without running it again, changing anything a run depends on
+runs it again, and nothing else changes the answer. A skip, a plugin that did not
+deliver, a declaration that does not resolve and one with no ``validation:`` are
+worked out afresh every time.
 
 Relative names in a declaration -- ``sim-mujoco:mujoco`` -- resolve from the
 package the object is in, so ``pc test -P //...``, run with the root of a tree

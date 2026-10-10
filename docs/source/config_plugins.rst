@@ -224,8 +224,8 @@ the two objects the plugin produced, and ``result``, the whole of what it
 returned. It is the only thing PartCAD reads out of a result: what is *inside*
 those objects is the plugin's vocabulary, and the expression is written by
 whoever knows both the object and the plugin. An entry that states none runs and
-reports, and passes nothing; ``pc test`` counts it as passing once it has run,
-since running is the whole of what it asked.
+reports, and passes nothing. ``pc test`` does not run it: testing a package it is
+skipped, with a warning saying why, and testing the object by name it fails.
 
 Simulation plugins
 ------------------

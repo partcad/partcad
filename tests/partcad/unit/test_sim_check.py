@@ -55,10 +55,16 @@ name: //sim
 
 # The plugin, declared exactly as 'partcad-sim-mujoco' declares MuJoCo: a script,
 # and the format the scene is handed to it in, which this package writes too.
+# 'boxed' is the same script declared the way 'partcad-sim-gazebo' declares
+# Gazebo, naming the image that carries what pip cannot install.
 simulation:
   stub:
     path: stub_sim.py
     format: stubfmt
+  boxed:
+    path: stub_sim.py
+    format: stubfmt
+    dockerImage: ghcr.io/example/simulator:1
 export:
   stubfmt:
     path: write_scene.py
@@ -78,6 +84,9 @@ parts:
     type: step
     path: cube.step
 """
+
+HOLDS = 'after["bodies"]["block"]["pos"][2] > 5.0'
+DOES_NOT_HOLD = 'after["bodies"]["block"]["pos"][2] > 50.0'
 
 
 def write_package(root, text=PACKAGE):
@@ -109,11 +118,10 @@ class HostRuntime:
         return process.returncode, out.decode("utf-8"), err.decode("utf-8")
 
 
-def _equip(ctx, tmp_path, monkeypatch):
-    """Give a context the stub's arrangements: a host 'sandbox', a cache and run directories of its own."""
-    monkeypatch.setattr(ctx, "get_python_runtime", lambda *args, **kwargs: HostRuntime())
-    ctx.cache_artifacts = Cache(
-        "artifacts",
+def _cache(tmp_path, name):
+    """A files-only cache of the test's own, so no test reads what another wrote."""
+    return Cache(
+        name,
         types.SimpleNamespace(
             cache=True,
             internal_state_dir=str(tmp_path / "state"),
@@ -121,6 +129,13 @@ def _equip(ctx, tmp_path, monkeypatch):
             cache_max_entry_size=10 * 1024 * 1024,
         ),
     )
+
+
+def _equip(ctx, tmp_path, monkeypatch):
+    """Give a context the stub's arrangements: a host 'sandbox', caches and run directories of its own."""
+    monkeypatch.setattr(ctx, "get_python_runtime", lambda *args, **kwargs: HostRuntime())
+    ctx.cache_artifacts = _cache(tmp_path, "artifacts")
+    ctx.cache_tests = _cache(tmp_path, "tests")
 
     async def export(_ctx, _scene, impl, directory):
         # Where the scene would be written, and nothing more: the stub reads none.
@@ -142,10 +157,10 @@ def _equip(ctx, tmp_path, monkeypatch):
 def a_container_runtime(monkeypatch):
     """Every check below runs as if this machine had one, unless it says not to.
 
-    The one excuse the check has is the absence of a container runtime (see
-    `ImplementationTest._verdict`). Left to the real answer, these tests would
-    assert the strict contract on a machine with Docker and the lenient one on a
-    machine without -- the same reason `test_cae_output.py` pins it.
+    The one excuse the check has turns on the absence of a container runtime
+    (see `ImplementationTest._verdict`). Left to the real answer, these tests
+    would assert the strict contract on a machine with Docker and the lenient
+    one on a machine without -- the same reason `test_cae_output.py` pins it.
     """
     monkeypatch.setattr(pc_runtime, "docker_available", lambda: True)
 
@@ -157,6 +172,20 @@ def package(tmp_path, monkeypatch):
     ctx = pc.Context(str(root))
     _equip(ctx, tmp_path, monkeypatch)
     return ctx
+
+
+@pytest.fixture
+def plugin_runs(monkeypatch):
+    """How many times the simulator itself was started."""
+    runs = []
+    real = simulation._run_plugin_async
+
+    async def counting(*args, **kwargs):
+        runs.append(1)
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(simulation, "_run_plugin_async", counting)
+    return runs
 
 
 def _part(ctx, name="block"):
@@ -175,8 +204,18 @@ def _check(ctx, part, test_ctx=None):
     return asyncio.run(SimTest().test([], ctx, part, {} if test_ctx is None else test_ctx))
 
 
+def _cached_check(ctx, part, test_ctx=None):
+    """The check as `pc test` runs it: through the verdict cache."""
+    return asyncio.run(SimTest().test_cached([], ctx, part, {} if test_ctx is None else test_ctx))
+
+
 def _errors(caplog):
     return [record for record in caplog.records if record.levelno >= logging.ERROR]
+
+
+def _no_container_runtime(ctx, monkeypatch, sandbox="venv"):
+    monkeypatch.setattr(pc_runtime, "docker_available", lambda: False)
+    monkeypatch.setattr(ctx.user_config, "python_sandbox", sandbox)
 
 
 # --------------------------------------------------------------------------- #
@@ -220,21 +259,17 @@ def test_a_simulation_whose_validation_holds_passes(package, caplog):
     with caplog.at_level(logging.DEBUG):
         assert _check(package, _part(package), test_ctx) is Test.TEST_PASSED
     assert not _errors(caplog)
-    # The verdict is the run's to remember, where the whole question is the key.
-    assert test_ctx.get(Test.NOT_CACHEABLE) is True
+    # A verdict on a run that came back, with a key: remembered.
+    assert Test.NOT_CACHEABLE not in test_ctx
 
 
 def test_a_validation_that_does_not_hold_fails_naming_the_object_the_simulation_and_the_claim(
     package, monkeypatch, caplog
 ):
-    part = _declare(
-        package,
-        monkeypatch,
-        _part(package),
-        floats={"simulation": ":stub", "validation": 'after["bodies"]["block"]["pos"][2] > 50.0'},
-    )
+    part = _declare(package, monkeypatch, _part(package), floats={"simulation": ":stub", "validation": DOES_NOT_HOLD})
+    test_ctx = {}
     with caplog.at_level(logging.ERROR):
-        assert _check(package, part) is Test.TEST_FAILED
+        assert _check(package, part, test_ctx) is Test.TEST_FAILED
 
     (record,) = _errors(caplog)
     message = record.getMessage()
@@ -243,6 +278,8 @@ def test_a_validation_that_does_not_hold_fails_naming_the_object_the_simulation_
     assert "does not hold" in message
     assert '["pos"][2] > 50.0' in message
     assert "pc sim --json" in message
+    # A fact about the run, which is in the key: remembered too.
+    assert Test.NOT_CACHEABLE not in test_ctx
 
 
 def test_a_validation_that_raises_fails_with_what_it_raised(package, monkeypatch, caplog):
@@ -258,15 +295,6 @@ def test_a_validation_that_raises_fails_with_what_it_raised(package, monkeypatch
     assert "could not be evaluated: KeyError" in record.getMessage()
 
 
-def test_a_declaration_with_no_validation_passes_once_it_has_run_and_says_so(package, monkeypatch, caplog):
-    """It states no condition, so running is the whole of what it asked."""
-    part = _declare(package, monkeypatch, _part(package), runs={"simulation": ":stub"})
-    with caplog.at_level(logging.INFO):
-        assert _check(package, part) is Test.TEST_PASSED
-    assert "running is all it was checked for" in caplog.text
-    assert not _errors(caplog)
-
-
 def test_a_plugin_that_does_not_deliver_fails_with_what_it_said(package, monkeypatch, caplog):
     part = _declare(
         package,
@@ -274,8 +302,9 @@ def test_a_plugin_that_does_not_deliver_fails_with_what_it_said(package, monkeyp
         _part(package),
         stays={"simulation": ":stub", "validation": "True", "params": {"explode": True}},
     )
+    test_ctx = {}
     with caplog.at_level(logging.ERROR):
-        assert _check(package, part) is Test.TEST_FAILED
+        assert _check(package, part, test_ctx) is Test.TEST_FAILED
 
     (record,) = _errors(caplog)
     message = record.getMessage()
@@ -283,6 +312,8 @@ def test_a_plugin_that_does_not_deliver_fails_with_what_it_said(package, monkeyp
     assert "no physics here" in message
     assert "could not be run by //sim:stub" in message
     assert "platform:" in message
+    # Possibly the machine's doing, which no key describes.
+    assert test_ctx.get(Test.NOT_CACHEABLE) is True
 
 
 def test_a_plugin_that_is_not_there_fails(package, monkeypatch, caplog):
@@ -307,7 +338,7 @@ def test_every_simulation_is_run_and_every_failure_reported(package, monkeypatch
         _part(package),
         first={"simulation": ":stub", "validation": "False"},
         second={"simulation": ":stub", "validation": "True"},
-        third={"simulation": ":nosuch"},
+        third={"simulation": ":nosuch", "validation": "True"},
     )
     with caplog.at_level(logging.ERROR):
         assert _check(package, part) is Test.TEST_FAILED
@@ -318,22 +349,67 @@ def test_every_simulation_is_run_and_every_failure_reported(package, monkeypatch
 
 
 # --------------------------------------------------------------------------- #
+# A claim with no condition                                                   #
+# --------------------------------------------------------------------------- #
+
+
+def test_no_validation_is_a_skip_when_a_package_is_tested(package, monkeypatch, plugin_runs, caplog):
+    """The rest of the package deserves its verdict; this one is said out loud and not run."""
+    part = _declare(package, monkeypatch, _part(package), runs={"simulation": ":stub"})
+    test_ctx = {}
+    with caplog.at_level(logging.DEBUG):
+        assert _check(package, part, test_ctx) is Test.TEST_PASSED
+
+    assert "Test skipped" in caplog.text
+    assert "states no 'validation'" in caplog.text
+    # 'pc' exits non-zero on any ERROR, so a skip must not have logged one.
+    assert not _errors(caplog)
+    # Nothing to judge a run by, so nothing was run.
+    assert plugin_runs == []
+    # Its verdict turns on who asked, which the key does not carry.
+    assert test_ctx.get(Test.NOT_CACHEABLE) is True
+
+
+def test_no_validation_is_a_failure_when_the_object_is_tested_by_name(package, monkeypatch, plugin_runs, caplog):
+    """`pc test <object>` asks whether it does what it says, and it says nothing."""
+    part = _declare(package, monkeypatch, _part(package), runs={"simulation": ":stub"})
+    test_ctx = {Test.NAMED: True}
+    with caplog.at_level(logging.ERROR):
+        assert _check(package, part, test_ctx) is Test.TEST_FAILED
+
+    (record,) = _errors(caplog)
+    assert "'runs' states no 'validation'" in record.getMessage()
+    assert plugin_runs == []
+    assert test_ctx.get(Test.NOT_CACHEABLE) is True
+
+
+def test_a_claim_with_no_condition_does_not_hide_the_others(package, monkeypatch, caplog):
+    """In a walk the skip is one line, and the claims that do state a condition are judged."""
+    part = _declare(
+        package,
+        monkeypatch,
+        _part(package),
+        unfinished={"simulation": ":stub"},
+        stays={"simulation": ":stub", "validation": DOES_NOT_HOLD},
+    )
+    with caplog.at_level(logging.WARNING):
+        assert _check(package, part) is Test.TEST_FAILED
+    assert "Test skipped" in caplog.text
+    assert "does not hold" in caplog.text
+
+
+# --------------------------------------------------------------------------- #
 # The one excuse                                                              #
 # --------------------------------------------------------------------------- #
 
 
-def _no_container_runtime(ctx, monkeypatch):
-    monkeypatch.setattr(pc_runtime, "docker_available", lambda: False)
-    monkeypatch.setattr(ctx.user_config, "python_sandbox", "venv")
-
-
-def test_no_container_runtime_is_a_skip_that_carries_the_report(package, monkeypatch, caplog):
+def test_no_container_runtime_is_a_skip_for_a_plugin_that_names_an_image(package, monkeypatch, caplog):
     """The rule the `fea` and `cfd` checks follow, from the same code."""
     part = _declare(
         package,
         monkeypatch,
         _part(package),
-        stays={"simulation": ":stub", "validation": "True", "params": {"explode": True}},
+        stays={"simulation": ":boxed", "validation": "True", "params": {"explode": True}},
     )
     _no_container_runtime(package, monkeypatch)
 
@@ -344,10 +420,47 @@ def test_no_container_runtime_is_a_skip_that_carries_the_report(package, monkeyp
     assert "Test skipped" in caplog.text
     assert "no physics here" in caplog.text
     assert "no container runtime on this machine" in caplog.text
+    assert "ghcr.io/example/simulator:1" in caplog.text
     # 'pc' exits non-zero on any ERROR, so a skip must not have logged one --
     # including the one 'run_async' writes when it reports for itself.
     assert not _errors(caplog)
     assert test_ctx.get(Test.NOT_CACHEABLE) is True
+
+
+def test_no_container_runtime_is_no_excuse_for_a_plugin_that_names_none(package, monkeypatch, caplog):
+    """MuJoCo is a wheel. A plugin that said it runs in an ordinary sandbox and did not has failed."""
+    part = _declare(
+        package,
+        monkeypatch,
+        _part(package),
+        stays={"simulation": ":stub", "validation": "True", "params": {"explode": True}},
+    )
+    _no_container_runtime(package, monkeypatch)
+    with caplog.at_level(logging.WARNING):
+        assert _check(package, part) is Test.TEST_FAILED
+    assert "Test skipped" not in caplog.text
+    assert "no physics here" in caplog.text
+
+
+def test_a_container_runtime_that_is_here_leaves_no_excuse(package, monkeypatch):
+    part = _declare(
+        package,
+        monkeypatch,
+        _part(package),
+        stays={"simulation": ":boxed", "validation": "True", "params": {"explode": True}},
+    )
+    assert _check(package, part) is Test.TEST_FAILED
+
+
+def test_a_remote_sandbox_is_a_container_runtime(package, monkeypatch):
+    part = _declare(
+        package,
+        monkeypatch,
+        _part(package),
+        stays={"simulation": ":boxed", "validation": "True", "params": {"explode": True}},
+    )
+    _no_container_runtime(package, monkeypatch, sandbox="remote")
+    assert _check(package, part) is Test.TEST_FAILED
 
 
 def test_a_plugin_that_is_not_there_is_not_excused(package, monkeypatch, caplog):
@@ -360,7 +473,7 @@ def test_a_plugin_that_is_not_there_is_not_excused(package, monkeypatch, caplog)
 
 def test_a_validation_that_does_not_hold_is_not_excused(package, monkeypatch):
     """The run happened; what failed is the claim, which no machine changes."""
-    part = _declare(package, monkeypatch, _part(package), stays={"simulation": ":stub", "validation": "False"})
+    part = _declare(package, monkeypatch, _part(package), stays={"simulation": ":boxed", "validation": "False"})
     _no_container_runtime(package, monkeypatch)
     assert _check(package, part) is Test.TEST_FAILED
 
@@ -400,6 +513,23 @@ def test_an_object_reached_through_what_it_is_made_into_is_not_simulated_again(p
     monkeypatch.setattr(simulation, "run_async", no)
     test_ctx = {"force_manufacturing": True, "action_prefix": "//sim:stack"}
     assert _check(package, _part(package), test_ctx) is Test.TEST_PASSED
+    assert test_ctx.get(Test.NOT_CACHEABLE) is True
+
+
+def test_the_walk_is_kept_away_from_the_verdict_cache(package, monkeypatch):
+    """Its key does not carry the flag, so the walk must neither read nor write it.
+
+    Read, it would hand the walk the object's own verdict -- an assembly made
+    unmanufacturable by a part that does not stand up. Written, its "nothing to
+    say" would become the object's own pass.
+    """
+    part = _declare(package, monkeypatch, _part(package), stays={"simulation": ":stub", "validation": "False"})
+    assert _cached_check(package, part) is Test.TEST_FAILED
+
+    walk = {"force_manufacturing": True, "action_prefix": "//sim:stack"}
+    assert _cached_check(package, part, walk) is Test.TEST_PASSED
+    # And the object's own verdict is still its own.
+    assert _cached_check(package, part) is Test.TEST_FAILED
 
 
 # --------------------------------------------------------------------------- #
@@ -407,18 +537,98 @@ def test_an_object_reached_through_what_it_is_made_into_is_not_simulated_again(p
 # --------------------------------------------------------------------------- #
 
 
-def test_declaring_a_simulation_is_a_new_question_for_the_verdict_cache(package, monkeypatch):
-    """The "not applicable" pass is cached, and must not answer for a declared simulation."""
+def test_a_verdict_is_remembered(package, monkeypatch):
+    """The second `pc test` asks the verdict cache and runs nothing at all."""
+    part = _part(package)
+    assert _cached_check(package, part) is Test.TEST_PASSED
+
+    async def no(*_args, **_kwargs):
+        raise AssertionError("a remembered verdict is not worked out again")
+
+    monkeypatch.setattr(simulation, "run_async", no)
+    assert _cached_check(package, part) is Test.TEST_PASSED
+
+
+def test_editing_a_validation_re_judges_from_the_cached_run(package, monkeypatch, plugin_runs):
+    """The claim is in the verdict's key and not in the run's: a new verdict, the same run."""
+    part = _declare(package, monkeypatch, _part(package), stays={"simulation": ":stub", "validation": HOLDS})
+    assert _cached_check(package, part) is Test.TEST_PASSED
+
+    _declare(package, monkeypatch, part, stays={"simulation": ":stub", "validation": DOES_NOT_HOLD})
+    assert _cached_check(package, part) is Test.TEST_FAILED
+
+    _declare(package, monkeypatch, part, stays={"simulation": ":stub", "validation": HOLDS})
+    assert _cached_check(package, part) is Test.TEST_PASSED
+    assert len(plugin_runs) == 1
+
+
+def test_a_change_to_what_the_run_depends_on_is_a_new_verdict(package, monkeypatch, plugin_runs):
+    """The plugin's script is outside the shape and the declaration, and inside the run's key."""
+    part = _part(package)
+    assert _cached_check(package, part) is Test.TEST_PASSED
+
+    script = os.path.join(package.get_project("//sim").config_dir, "stub_sim.py")
+    with open(script, "a", encoding="utf-8") as f:
+        f.write("\n# A new release of the simulator.\n")
+    assert _cached_check(package, part) is Test.TEST_PASSED
+    assert len(plugin_runs) == 2
+
+
+def test_what_was_not_judged_on_a_keyed_run_is_worked_out_again(package, monkeypatch, plugin_runs):
+    """A plugin that did not deliver may have been the machine; it is asked again."""
+    part = _declare(
+        package,
+        monkeypatch,
+        _part(package),
+        stays={"simulation": ":stub", "validation": "True", "params": {"explode": True}},
+    )
+    assert _cached_check(package, part) is Test.TEST_FAILED
+    assert _cached_check(package, part) is Test.TEST_FAILED
+    assert len(plugin_runs) == 2
+
+
+def test_a_skip_is_said_every_time(package, monkeypatch, caplog):
+    """A remembered skip would come back as a silent pass."""
+    part = _declare(package, monkeypatch, _part(package), runs={"simulation": ":stub"})
+    _cached_check(package, part)
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        assert _cached_check(package, part) is Test.TEST_PASSED
+    assert "Test skipped" in caplog.text
+
+
+def test_a_run_with_no_key_is_never_looked_up(package, monkeypatch):
+    """Nothing is stored for it, and its key is one nothing could be found under."""
+
+    async def unkeyed(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(simulation, "question_key_async", unkeyed)
+    part = _part(package)
+    first = asyncio.run(SimTest().cache_key_suffix(package, part))
+    assert first != asyncio.run(SimTest().cache_key_suffix(package, part))
+
+
+def test_the_verdict_key_follows_the_declarations(package, monkeypatch):
     bolt = _part(package, "bolt")
-    before = asyncio.run(SimTest().cache_key_suffix(package, bolt))
-    assert before == ""
+    assert asyncio.run(SimTest().cache_key_suffix(package, bolt)) == ""
 
     _declare(package, monkeypatch, bolt, holds={"simulation": ":stub", "validation": "True"})
     declared = asyncio.run(SimTest().cache_key_suffix(package, bolt))
     assert declared.startswith(".sim=")
+    assert asyncio.run(SimTest().cache_key_suffix(package, bolt)) == declared
 
     _declare(package, monkeypatch, bolt, holds={"simulation": ":stub", "validation": "False"})
     assert asyncio.run(SimTest().cache_key_suffix(package, bolt)) != declared
+
+
+def test_the_verdict_key_carries_the_run_the_artifact_cache_is_asked_with(package, plugin_runs):
+    """One key for the run, worked out in one place, so the two cannot disagree."""
+    part = _part(package)
+    (declaration,) = simulation.of_shape(part)
+    result = asyncio.run(simulation.run_async(package, part, "part", declaration, report=False))
+    assert result.artifact_key is not None
+    assert asyncio.run(simulation.question_key_async(package, part, "part", declaration)) == result.artifact_key
 
 
 def test_editing_a_claim_does_not_move_the_objects_own_key():
@@ -431,20 +641,12 @@ def test_editing_a_claim_does_not_move_the_objects_own_key():
     assert "simulate" in pc_shape._NON_GEOMETRIC_CONFIG_KEYS
 
 
-def test_a_rerun_is_read_back_rather_than_simulated(package, monkeypatch):
-    """`pc test` twice runs the simulator once: the run's own cache answers the second."""
-    runs = []
-    real = simulation._run_plugin_async
-
-    async def counting(*args, **kwargs):
-        runs.append(1)
-        return await real(*args, **kwargs)
-
-    monkeypatch.setattr(simulation, "_run_plugin_async", counting)
+def test_a_rerun_is_read_back_rather_than_simulated(package, plugin_runs):
+    """Worked out again, a verdict is still judged on the cached run."""
     part = _part(package)
     assert _check(package, part) is Test.TEST_PASSED
     assert _check(package, part) is Test.TEST_PASSED
-    assert len(runs) == 1
+    assert len(plugin_runs) == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -455,8 +657,9 @@ def test_a_rerun_is_read_back_rather_than_simulated(package, monkeypatch):
 def test_pc_sim_still_reports_for_itself(package, monkeypatch, caplog):
     """What `pc sim` prints is its verdict, and is what it always printed."""
     part = _declare(package, monkeypatch, _part(package), stays={"simulation": ":stub", "validation": "False"})
+    (declaration,) = simulation.of_shape(part)
     with caplog.at_level(logging.INFO):
-        (result,) = asyncio.run(simulation.run_declared_async(package, part, "part"))
+        result = asyncio.run(simulation.run_async(package, part, "part", declaration))
     assert result.failed
     assert "the simulation 'stays' did not validate" in caplog.text
     assert _errors(caplog)
@@ -473,23 +676,22 @@ def test_pc_sim_still_reports_for_itself(package, monkeypatch, caplog):
     }
 
 
+def test_pc_sim_still_runs_a_declaration_with_no_validation(package, monkeypatch, plugin_runs):
+    """There it is how somebody looks at what a plugin reports before writing the condition."""
+    part = _declare(package, monkeypatch, _part(package), runs={"simulation": ":stub"})
+    (declaration,) = simulation.of_shape(part)
+    result = asyncio.run(simulation.run_async(package, part, "part", declaration))
+    assert result.passed is None
+    assert not result.failed
+    assert result.result["simulator"] == "stub"
+    assert len(plugin_runs) == 1
+
+
 def test_the_check_leaves_the_saying_to_itself(package, monkeypatch, caplog):
     """Unreported, a run logs nothing above DEBUG: the check writes the one line."""
     part = _declare(package, monkeypatch, _part(package), stays={"simulation": ":stub", "validation": "False"})
+    (declaration,) = simulation.of_shape(part)
     with caplog.at_level(logging.INFO):
-        (result,) = asyncio.run(simulation.run_declared_async(package, part, "part", report=False))
+        result = asyncio.run(simulation.run_async(package, part, "part", declaration, report=False))
     assert result.passed is False
     assert not [record for record in caplog.records if record.levelno >= logging.INFO]
-
-
-def test_one_simulation_is_selected_by_name(package, monkeypatch):
-    """`pc sim -f NAME`, through the loop the check shares."""
-    part = _declare(
-        package,
-        monkeypatch,
-        _part(package),
-        first={"simulation": ":stub", "validation": "True"},
-        second={"simulation": ":stub", "validation": "True"},
-    )
-    results = asyncio.run(simulation.run_declared_async(package, part, "part", "second"))
-    assert [result.name for result in results] == ["second"]

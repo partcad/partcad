@@ -1348,12 +1348,21 @@ async def _test_package_async(pc, package, coroutine):
 
 
 async def _test_async(
-    ctx, pc, packages, filter_prefix, sketch, interface, assembly, scene, object_name, fast_only=False
+    ctx, pc, packages, filter_prefix, sketch, interface, assembly, scene, object_name, fast_only=False, named=False
 ):
+    """Run the checks over what was selected.
+
+    ``named`` is whether one object was asked about on its own -- an object
+    name and no walk below the package -- and reaches the checks as
+    ``Test.NAMED``. ``...:bolt`` names an object too, but every one of that name
+    in a tree, which is a walk and is tested as one.
+    """
     import asyncio
 
     from partcad.test.all import tests as all_tests
+    from partcad.test.test import Test
 
+    test_ctx = {Test.NAMED: True} if named else {}
     tasks = []
     tests_to_run = all_tests(pc.user_config.threads_max)
     if filter_prefix:
@@ -1417,7 +1426,7 @@ async def _test_async(
             elif fast_only and pc.fast_only.leaves_out(shape):
                 continue
             else:
-                tasks.extend([t.test_log_wrapper(tests_to_run, ctx, shape) for t in tests_to_run])
+                tasks.extend([t.test_log_wrapper(tests_to_run, ctx, shape, test_ctx) for t in tests_to_run])
 
     await asyncio.gather(*tasks)
 
@@ -1470,6 +1479,7 @@ def test_run(session, params):
                 params.get("scene"),
                 object_name,
                 bool(params.get("fast_only")),
+                named=bool(object_name) and not recursive,
             )
         )
     return None
@@ -1571,12 +1581,12 @@ async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_na
     if fast_only:
         targets = [(kind, shape) for kind, shape in targets if not pc.fast_only.leaves_out(shape)]
 
-    # Each object's simulations are run by the loop 'pc test' runs too, for its
-    # 'sim' check, so the command and the check cannot come to disagree about
-    # which of an object's simulations there are or how one is run.
     results = []
     for kind, shape in targets:
-        results.extend(await pc_simulation.run_declared_async(ctx, shape, kind, filter_name))
+        for declaration in pc_simulation.of_shape(shape):
+            if filter_name and declaration.name != filter_name:
+                continue
+            results.append(await pc_simulation.run_async(ctx, shape, kind, declaration))
     return results
 
 

@@ -1332,7 +1332,8 @@ jobs:
       # the answer, and neither runner has a container runtime that can run a
       # Linux one -- Windows ships a daemon in Windows-container mode, which is
       # not the same thing. So `pc test` skips those analyses there rather than
-      # failing them, and says so; see `CaeTest._verdict()` for why that is the
+      # failing them, and says so -- the plugin names a `dockerImage`, which is
+      # what earns it; see `ImplementationTest._verdict()` for why that is the
       # one excuse it accepts.
       - name: The CAE example's native dependencies
         if: ${{ startsWith(matrix.os, 'ubuntu') }}

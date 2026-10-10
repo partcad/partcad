@@ -236,7 +236,8 @@ at all).
   solver, a sandbox that will not build, a crash. `CaeTest` cannot tell those apart and does not try: it
   relays whatever the implementation said, through `cae.dysfunction_report()`, which adds the two things the
   sentence usually omits and the reader always needs -- which implementation was asked, and which machine it
-  did not work on. Whether that is a failure or the one excuse (no container runtime) is
+  did not work on. Whether that is a failure or the one excuse -- an implementation that names a `container:`
+  or a `dockerImage`, on a machine with no container runtime; one that names neither is never excused -- is
   `ImplementationTest._verdict()` in `./src/partcad/test/implementation.py`, which the `sim` check shares:
   one rule for a missing solver and a missing simulator, not one per check.
 
@@ -251,7 +252,7 @@ at all).
   options -- and nothing in it describes the machine, because a test cannot know what its implementation needs
   installed. Installing CalculiX therefore changes no key, and a remembered failure would go on failing a part
   that now analyses perfectly well. `CaeTest` is the test the flag was made for; `CamTest` sets it for the
-  same reason, and `SimTest` on every run of an object that declares a simulation (see below).
+  same reason, and so does `SimTest`, for every verdict that was not reached on a keyed run (see below).
 
 - **What a solver, a route implementation or a simulator produced is cached**
   (`./src/partcad/cache_artifacts.py`, `ctx.cache_artifacts`): the verdict cache above remembers one bit, and
@@ -630,17 +631,27 @@ at all).
   types exist, and a simulation is not one.
 
   **`pc test` runs `simulate:` as its `sim` check** (`./src/partcad/test/sim.py`), through
-  `simulation.run_declared_async()` -- the loop `pc sim` runs, so the two cannot come to run different
-  simulations of one object. Same gate as `fea`/`cfd`/`cam` (a part or an assembly that declares the section,
-  nothing else), same verdict on a run that did not deliver (`ImplementationTest._verdict()`), and
-  `simulation.SimulationConfigError` is what keeps a plugin or a scene that cannot be found out of the one
-  excuse. `run_async(report=False)` is how the check keeps the lines that are its verdict to itself: `pc`
-  exits non-zero on any `ERROR`, so a run that logged one in its own name could not then be *skipped*. The
-  verdict bit is never cached -- the run's own artifact key already holds the whole question -- and
-  `simulate` is in `shape._NON_GEOMETRIC_CONFIG_KEYS`, so editing a `validation:` re-judges the cached run
-  rather than rebuilding the object and simulating again. An object reached through a manufacturability
-  walk (`force_manufacturing`) is passed over: its claims are checked where it is tested in its own right,
-  and running them per assembly would race its own run for the one run directory it has.
+  `simulation.run_async()` -- the code `pc sim` runs, so the two cannot come to run a simulation differently.
+  Same gate as `fea`/`cfd`/`cam` (a part or an assembly that declares the section, nothing else), same verdict
+  on a run that did not deliver (`ImplementationTest._verdict()`), and `simulation.SimulationConfigError` is
+  what keeps a plugin or a scene that cannot be found out of the one excuse. `run_async(report=False)` is how
+  the check keeps the lines that are its verdict to itself: `pc` exits non-zero on any `ERROR`, so a run that
+  logged one in its own name could not then be *skipped*.
+
+  A declaration with **no `validation:`** is not run: in a walk over a package it is skipped, and asked about
+  by name (`Test.NAMED`, which `_test_async` sets for an object named without a walk) it fails. `pc sim` still
+  runs it and reports that it ran -- there it is how somebody looks at what a plugin reports before writing the
+  condition.
+
+  **The verdict is cached** like every check's, keyed by `SimTest.cache_key_suffix()` on the declarations
+  (`validation:` included) and on each run's artifact key from `simulation.question_key_async()` -- the very
+  key `run_async` looks the run up under, so a verdict cannot outlive the run it was judged on. `simulate` is
+  in `shape._NON_GEOMETRIC_CONFIG_KEYS`, so editing a `validation:` changes the verdict key and nothing else,
+  and is re-judged from the cached run rather than by rebuilding the object and simulating again. Only a
+  verdict reached on keyed runs that came back is stored: a skip, a plugin that did not deliver, a declaration
+  that does not resolve and one with no `validation:` are worked out again every time. An object reached through
+  a manufacturability walk (`force_manufacturing`) is passed over, and `SimTest.test_cached` keeps that walk away
+  from the cache, whose key does not carry the flag.
 
   **`import:` is the fourth, and the mirror image of `export:`.** It declares who turns somebody else's
   file format *into* a PartCAD object, and it is why there is no `assembly_factory_urdf.py` any more:

@@ -13,11 +13,13 @@ came back. See `docs/source/simulation.rst` and `partcad.simulation`.
 
 `pc test` holds an object to the same claims, as its `sim` check
 (`partcad.test.sim`), so a `simulate:` is checked whenever the package is
-tested and not only when somebody asks. Both run an object's simulations through
-`simulation.run_declared_async`, so they cannot disagree about which there are
-or how one runs. What this command is for is asking on purpose: one simulation
-by name (`-f`), and everything the plugin reported (`--json`) rather than a
-verdict.
+tested and not only when somebody asks. Both run a simulation through
+`simulation.run_async`, so they cannot disagree about how one runs, and share
+its cache. What this command is for is asking on purpose: one simulation by name
+(`-f`), and everything the plugin reported (`--json`) rather than a verdict --
+which is also why a declaration with no `validation:` is run here and reported
+as having run, where `pc test` skips or fails it: here it is how somebody looks
+at what a plugin reports before writing the condition.
 
 All of that is daemon work -- it loads the package graph, exports the scene
 through a CAD wrapper and runs the plugin in a sandbox -- so this command is a

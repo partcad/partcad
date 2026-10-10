@@ -119,6 +119,39 @@ Feature: `pc test` command
     And STDOUT should contain "declares no simulation 'nosuch'"
 
   @success @pc-test @pc-test-sim
+  Scenario: A claim with no condition is skipped in a package and fails by name
+    # Nothing is run either way -- there is nothing to judge a run by -- so the
+    # plugin need not even exist. Testing the package, the claim may be one
+    # somebody is still writing, and is skipped out loud; asking about the
+    # object by name is asking whether it does what it says, and it says
+    # nothing.
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        block:
+          type: step
+          path: block.step
+          simulate:
+            drafting:
+              simulation: :nosuch
+      """
+    And a file named "block.step" with content:
+      """
+      ISO-10303-21;
+      HEADER;
+      ENDSEC;
+      DATA;
+      ENDSEC;
+      END-ISO-10303-21;
+      """
+    When I run "pc test -f sim"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "the simulation 'drafting' states no 'validation'"
+    When I run "pc test -f sim block"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "the simulation 'drafting' states no 'validation'"
+
+  @success @pc-test @pc-test-sim
   Scenario: `pc test` passes over an object that claims nothing
     # The same gate as 'fea', 'cfd' and 'cam': an object with no 'simulate:'
     # has nothing to be placed in a world for, and a package of them pays

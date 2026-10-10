@@ -1734,10 +1734,64 @@ def test_inspect_object_reports_a_missing_object_of_the_requested_package():
 # ---- test ------------------------------------------------------------------
 
 
-def install_fake_tests(monkeypatch):
-    """The check list '_test_async' imports. Empty: what is under test here is
-    which package each request lands on, not what the checks then do."""
-    install_fake_partcad_modules(monkeypatch, {"partcad.test.all": {"tests": lambda threads_max: []}})
+class FakeTestBase:
+    """'partcad.test.test.Test' as '_test_async' reads it: the context keys."""
+
+    NAMED = "named"
+
+
+def install_fake_tests(monkeypatch, checks=()):
+    """The check list '_test_async' imports. Empty by default: what is under test
+    here is which package each request lands on, not what the checks then do."""
+    install_fake_partcad_modules(
+        monkeypatch,
+        {
+            "partcad.test.all": {"tests": lambda threads_max: list(checks)},
+            "partcad.test.test": {"Test": FakeTestBase},
+        },
+    )
+
+
+class RecordingCheck:
+    """A check that remembers the context each object was tested with."""
+
+    name = "recording"
+
+    def __init__(self):
+        self.contexts = []
+
+    async def test_log_wrapper(self, tests_to_run, ctx, shape, test_ctx={}):
+        self.contexts.append((shape.name, dict(test_ctx)))
+        return True
+
+
+def test_an_object_named_on_its_own_is_tested_as_named(monkeypatch):
+    """'pc test widget' is a question about that object, and the checks are told so.
+
+    The 'sim' check is the one that reads it: a claim with no condition to
+    check fails when the object is asked about, and is skipped in a walk.
+    """
+    check = RecordingCheck()
+    install_fake_tests(monkeypatch, [check])
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].add("parts", FakeObject("widget"))
+
+    operations.test_run(session, {"object": "widget"})
+
+    assert check.contexts == [("widget", {"named": True})]
+
+
+def test_every_object_of_a_name_in_a_tree_is_a_walk_and_not_named(monkeypatch):
+    """'...:widget' names an object, but every one of that name from here down."""
+    check = RecordingCheck()
+    install_fake_tests(monkeypatch, [check])
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].add("parts", FakeObject("widget"))
+    session.partcad_ctx.projects["//sub"] = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+
+    operations.test_run(session, {"recursive": True, "object": "widget"})
+
+    assert check.contexts == [("widget", {}), ("widget", {})]
 
 
 def test_test_run_looks_the_object_up_in_the_requested_package(monkeypatch):

@@ -12,17 +12,20 @@ solver nor a simulator -- and in each the hard question is not what the program
 said but what to make of it saying nothing at all.
 
 The answer is one policy, and it lives here so that it is one: **not running is
-a failure**, with one excuse, which is a machine that has no container runtime.
-`_verdict()` is that policy, and its docstring is the argument for it.
-Answering it once per check would be answering it differently sooner or later,
-and then a part whose solver is missing would be failed by one check and excused
-by the one beside it on the same machine.
+a failure**, with one excuse -- an implementation that declares a container is
+how what it needs arrives, on a machine with no container runtime to start one.
+`_verdict()` is that policy, and its docstring is the argument for it. Answering
+it once per check would be answering it differently sooner or later, and then a
+part whose solver is missing would be failed by one check and excused by the one
+beside it on the same machine.
 
 Named after what the checks have in common rather than after either of them, and
 emphatically *not* `implementation_test.py`: that matches pytest's default
 `*_test.py` pattern, so any collection that reaches `src/` imports this module as
 a test file -- see the note at the top of `test/cae.py`.
 """
+
+import typing
 
 from .. import runtime as pc_runtime
 from .test import Test
@@ -45,6 +48,26 @@ class ImplementationTest(Test):
             return True
         return pc_runtime.docker_available()
 
+    @staticmethod
+    def _declared_image(impl) -> typing.Tuple[bool, typing.Optional[str]]:
+        """Whether the implementation says a container is how it runs, and in which image.
+
+        Either spelling says so: a `container:`, which runs it there and nowhere
+        else, and a `dockerImage`, which names the image its sandbox is built
+        from where there is a runtime to build one. A `container:` that names no
+        image is a broken declaration rather than a statement about this
+        machine, so it claims nothing here -- it fails with its own sentence,
+        wherever it is read.
+        """
+        if impl is None:
+            return False, None
+        try:
+            container = impl.container
+        except Exception:
+            container = None
+        image = impl.docker_image or (container or {}).get("image")
+        return bool(image), image
+
     def _verdict(self, ctx, shape, impl, report: str) -> bool:
         """What an implementation that produced no answer costs: a failure, or a skip.
 
@@ -54,29 +77,27 @@ class ImplementationTest(Test):
         simulator, a crash -- the object has no answer, and a check that passed
         anyway would make `fea:` or `simulate:` decoration.
 
-        The exception is a machine with **no container runtime**, and it is the
-        only one. A container is how an implementation brings what pip cannot
-        install: an image can carry a solver, a mesher and the shared libraries
-        under them, and nothing else PartCAD has can. On a machine with no
-        container runtime there is no arrangement under which such an
-        implementation could have been given what it needs, so the question was
-        never really put -- and the honest verdict for a question nobody could
-        ask is a skip.
+        **There is one excuse**, and it is the case where the implementation was
+        never given the environment it says it needs. An implementation that
+        names a `container:` or a `dockerImage` is stating that a container is
+        how what pip cannot install arrives -- a solver, a mesher, the shared
+        libraries under them. On a machine with no container runtime that
+        statement has nowhere to land, nothing was ever really asked, and the
+        honest verdict for a question nobody could ask is a skip.
 
-        That the implementation declares an image or not does not change it, and
-        deliberately: an implementation is free to say nothing about containers
-        and still need a solver, and reading the declaration would make the
-        verdict depend on how well its author documented themselves rather than
-        on what this machine can do. What the declaration is good for is the
-        *message*, which names the image when there is one.
+        It is narrow in both directions, and both are the point:
 
-        Once a runtime answers, the excuse is gone entirely -- a registry that
-        cannot be reached, an image that will not start, a solver missing from
-        the image are all things somebody can fix, and calling them
-        "unavailable" would hide exactly the failures a plugin's own CI exists
-        to catch. That is the half that keeps this narrow enough to be worth
-        having, and it is why continuous integration, which has a container
-        runtime, sees every one of these as a failure.
+        * **An implementation that names no image gets no excuse.** It said it
+          runs in an ordinary sandbox, and a machine with a working sandbox is a
+          machine it was supposed to work on. A simulator that is a wheel, a
+          solver the package installs with pip: if those do not run here, that
+          is the implementation or the platform, and somebody can fix it.
+        * **A container runtime that answers removes the excuse entirely.** A
+          registry that cannot be reached, an image that will not start, a
+          solver missing from the image are all things somebody can fix, and
+          calling them "unavailable" would hide exactly the failures a plugin's
+          own CI exists to catch -- which is why continuous integration, which
+          has a runtime, sees every one of these as a failure.
 
         "Answers" is not "answers *here*", though, and the `remote` sandbox is
         the case that makes the difference: it runs the implementation in a
@@ -85,33 +106,28 @@ class ImplementationTest(Test):
         matters to this question -- one carried the run -- so a failure there is
         a failure, and reading the local daemon would have excused it.
 
+        This is the rule `docs/source/features.rst` ("Engineering analysis") and
+        `runtime.SandboxUnavailable` state. Until the `sim` check arrived the
+        code read only the machine and excused everything on one without a
+        runtime, image or not; moving it here was when the two were made to
+        agree, so `fea` and `cfd` are as strict as the documentation said they
+        were.
+
         Either way the reader gets the same sentence, which is the point of the
         dysfunction reports (`partcad.cae.dysfunction_report()`,
         `partcad.simulation.dysfunction_report()`): what was asked, what it
         said, and which platform it did not work on. A skip that said less than
         a failure would be a way of not finding out.
-
-        Moved here from `CaeTest` when the `sim` check arrived, with nothing
-        changed but the word "analysis" in the sentence it writes, so that a
-        missing simulator and a missing solver are answered by one rule.
         """
-        if self._a_container_was_available(ctx):
+        declares_one, image = self._declared_image(impl)
+        if not declares_one or self._a_container_was_available(ctx):
             return self.failed(shape, "%s", report)
 
-        try:
-            image = impl.docker_image or (impl.container or {}).get("image")
-        except Exception:
-            # `container` raises on a `container:` that names no `image:`. That
-            # is its own failure, reported where the declaration is read; here
-            # it only means there is no image name to put in this sentence, and
-            # raising out of an error path would replace a report the user needs
-            # with a traceback about a different mistake.
-            image = None
         return self.skipped(
             shape,
             "%s\n\t%s",
             report,
-            "There is no container runtime on this machine, so there is no way to give this implementation"
-            " what pip cannot install%s. Start one, or install what the message above names, to have this"
-            " run here." % (" -- it runs in '%s'" % image if image else ""),
+            "There is no container runtime on this machine, and this implementation runs in '%s': that is how"
+            " it brings what pip cannot install. Start one, or install what the message above names, to have"
+            " this run here." % image,
         )

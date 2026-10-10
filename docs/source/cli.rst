@@ -372,9 +372,11 @@ Object commands
   ``pc test`` asks the same thing every time it runs, as its ``sim`` check: an object passes when every
   simulation it declares ran and every ``validation:`` held, and fails naming the simulation and the reason
   otherwise. A simulator that could not run is a failure there, with the one excuse the ``fea`` and ``cfd``
-  checks have -- no container runtime on this machine -- and a plugin that cannot be found is never excused.
-  This command is for asking on purpose: one simulation by name, and everything the plugin reported. See
-  "Running a simulation" in :doc:`simulation`.
+  checks have -- a plugin that names an image, on a machine with no container runtime -- and a plugin that
+  cannot be found is never excused. A declaration with no ``validation:`` is not run by ``pc test``: it is
+  skipped when a package is tested and fails when the object is tested by name. This command is for asking on
+  purpose: one simulation by name, and everything the plugin reported, which is why it does run such a
+  declaration and says it ran. See "Running a simulation" in :doc:`simulation`.
 
   PartCAD implements no simulator: a package imports one and names it in ``simulation:``
   (`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the MuJoCo one and

@@ -51,6 +51,15 @@ class Test(ABC):
     # that can reach that state.
     NOT_CACHEABLE = "not_cacheable"
 
+    # A key the caller sets on 'test_ctx' to say the object was asked about on
+    # its own, by name -- 'pc test <object>' -- rather than reached by walking a
+    # package or a tree of them. Most checks give the same verdict either way;
+    # one that does not reads this (see 'SimTest', where a claim with no
+    # condition to check is a skip in a walk and a failure when asked about).
+    # A verdict that turns on it must not be cached, since the cache key does
+    # not carry it.
+    NAMED = "named"
+
     def __init__(self, name: str) -> None:
         self.name = name
 
