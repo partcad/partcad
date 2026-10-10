@@ -65,7 +65,13 @@ from . import logging as pc_logging
 #      rather than the key's, so nothing about a declaration changes when
 #      PartCAD does and an entry written under 6 would go on being served - a
 #      panel offering to select links by names the daemon does not know.
-VERSION = 7
+#   8: a shape's measurements carry where its volume is and how it is spread -
+#      its centroid and its inertia at unit density (see 'shape_envelope') -
+#      which is what a part's mass, centre of mass and inertia are worked out
+#      from. An entry written under 7 measured the volume and nothing else, and
+#      reading one back would give a part a mass with no centre and no inertia:
+#      a URDF link that weighs what it should and turns as if it were a point.
+VERSION = 8
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.

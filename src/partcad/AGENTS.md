@@ -685,23 +685,33 @@ at all).
   tool a *package* declares needs the graph, and that is the `open.tools` method: the daemon says **which**
   applications exist, and never opens one. Do not add a method that opens a file.
 
-- **A material is a fact a simulation reads** (`material.py`): `mu` and `density` are what
-  `PHYSICS_FROM_MATERIAL` makes reach an exporter, as the shape's `friction` and its `density`. A shape names
-  its material by a *reference* (`:aluminium`), and resolving one needs the package graph — which the core has
-  and a sandbox does not. So `physics_by_shape()` resolves every reference in an export request against the
-  package of the shape that wrote it (which is what lets the reference be relative), and
-  `wrapper_export.properties_index()` merges what it found *underneath* what each shape states itself. No
-  exporter knows materials exist, which is what keeps URDF's `<mu1>`, SDFormat's `<mu>` and MJCF's `friction`
-  agreeing for free — and the mass all three compute agreeing with it.
+- **A part's physics is resolved once, in core** (`physics.py`, `material.py`, `wrappers/mass_properties.py`). A
+  part states what it states under `properties: physics:`; `physics.resolve()` fills in the rest, in one order
+  for every reader: `density` stated, else the material's (`PHYSICS_FROM_MATERIAL` lends `mu` as `friction` and
+  `density` as `density`), else — for an export only — the export's `density` parameter, else 2700; `mass` stated,
+  else volume × density; `centerOfMass` stated, else the centroid; `inertia` stated, else the solid's scaled to
+  that mass. `pc info` shows the result as `MassProperties` with a `source` per value, an assembly's as its
+  parts' combined in its own frame; an export with `properties: true` is handed it per shape (`FACTS_KEY`,
+  merged *underneath* what each shape states by `wrapper_export.properties_index()`); the IDE's Build vs Buy
+  table shows the same mass. No exporter knows materials or densities exist.
 
-  The density is lent in **kg/m³**, not the g/mm³ a material is declared in, and `Material.density_kg_m3` is the
-  only conversion between the two: an exporter reads a `density` property in the unit its `density` parameter
-  has always been in, and has no factor of a million of its own. Every exporter weighs a part in one order — a
-  stated `mass`, then the shape's `density` (its own, else its material's), then the export's `density`
-  parameter, then its own default — per shape rather than per link, so a link of several shapes in several
-  materials balances where it should. `export_urdf.density_of()`/`mass_properties()` are the URDF half; the
-  MJCF and SDFormat exporters in the `partcad-sim-*` plugins carry their own copies, because a plugin runs
-  against whatever PartCAD release is installed and cannot import a helper that release does not have.
+  **Every density is kg/m³** — a material's, a part's, an export's — so nothing converts one, and
+  `mass_properties.mass_of()` is the one place a volume (mm³) and a density become a mass. The geometry's share
+  of a mass — the centroid and the inertia at unit density — is measured by `shape_measure.distribution()` as
+  the shape is encoded and cached in the geometry's entry; the density is multiplied in on every read, because
+  neither a material's density nor a stated mass is in the geometry's hash, and a cached mass would outlive an
+  edit to either. Do not cache a derived mass beside the geometry (`-props`).
+
+  `wrappers/mass_properties.py` is the **one copy of mass-property arithmetic**: placing a part's inertia where
+  a shape is placed, adding several shapes up into one body by the parallel-axis theorem, mm → m. The core
+  imports it for assembly totals, and every exporter that writes a body's inertia imports it from the sandbox
+  path — the URDF one here and the MJCF and SDFormat ones in the `partcad-sim-*` plugins, which require the
+  PartCAD release that ships it. Do not give an exporter a copy of its own: three copies is three answers to
+  where a robot balances.
+
+  A shape names its material by a *reference* (`:aluminium`), and resolving one needs the package graph — which
+  the core has and a sandbox does not. So `physics.physics_by_shape()` resolves every reference in an export
+  request against the package of the shape that wrote it, which is what lets the reference be relative.
 
   Which reference it reads is `properties: material:`, and **a package never writes that by hand**.
   `parameters:` is what is asked of the type that produces the shape; `properties:` is what the shape turned

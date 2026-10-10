@@ -747,16 +747,40 @@ says something PartCAD has no property for stops the import instead of being
 carried opaquely, and a property PartCAD holds that URDF cannot state is
 reported when it is exported. See :doc:`simulation`.
 
-A shape made of a :ref:`material <materials>` has two of these without stating
-them: the material's ``mu`` is its ``friction``, and the material's ``density``
-is its ``density`` -- converted from the g/mm³ a material is declared in to the
-kg/m³ this property is in. Whatever the shape states itself wins over both. So
-the mass of a part that states none is computed from what the part is made of,
-and every exporter resolves it in the same order: a stated ``mass``, then the
-shape's ``density`` (its own, or else its material's), then the ``density``
-parameter of the export, then that exporter's default. The centre of mass and
-the inertia come from the same density as the mass, so the three agree.
+Most parts state none of these, and have most of them all the same. A shape
+made of a :ref:`material <materials>` has the material's ``mu`` as its
+``friction`` and the material's ``density`` as its ``density`` -- the same unit,
+so nothing is converted -- and a shape with a solid in it has a mass, a centre
+of mass and an inertia: its solid at that density. PartCAD works these out in
+one order, everywhere:
+
+=================  ==========================================================
+property           where it comes from, first one that applies
+=================  ==========================================================
+``density``        stated; else the material's; else, for an export only, the
+                   export's ``density`` parameter, else 2700 kg/m³
+``mass``           stated; else the volume at that density
+``centerOfMass``   stated; else the centroid of the solid
+``inertia``        stated; else the solid's, scaled to the mass above
+``friction``       stated; else the material's ``mu``
+=================  ==========================================================
+
+So a part that states its mass and nothing else still turns the way its solid
+says it does, at the weight it says it is; and the centre of mass and the
+inertia come from the same density as the mass, so the three agree. A part
+that states no density and is made of nothing that does has no known mass, and
+``pc info`` says so rather than inventing one; an export weighs it at the
+export's ``density`` parameter, or at aluminium's 2700 kg/m³, because a
+simulator handed a body with no mass makes one up regardless.
+
+``pc info`` reports all of this as ``MassProperties`` -- each value with its
+unit and where it came from -- and an assembly's as its parts' added up in its
+own frame. The geometry's share (the centroid, and the inertia at unit density)
+is measured once, by OCCT, as the shape is built, and cached with its geometry;
+the density is multiplied in on every read, so editing a material's density
+changes every part made of it without rebuilding one. See :doc:`simulation`.
 
 A file type that has a way to state these declares ``properties: true`` in its
 ``export:`` section, and is handed them keyed by the full name of the shape they
-belong to. URDF is the one built-in format that does.
+belong to -- already worked out in the order above, so that an exporter writes
+a mass and never computes one. URDF is the one built-in format that does.

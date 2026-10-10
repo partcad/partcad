@@ -381,10 +381,19 @@ Object commands
   package with no object at all to report each package of a subtree (see :ref:`recursive-names`).
 
   Where the object says what it is made of, the material it names is resolved and reported as
-  ``Material`` — the formal and full names, the density both ways round, the coefficient of friction and
-  the tags the catalogue states — rather than as the bare reference the configuration beside it already
+  ``Material`` — the formal and full names, the density in kg/m³, the coefficient of friction and the
+  tags the catalogue states — rather than as the bare reference the configuration beside it already
   shows. A reference nothing answers to is reported as it was written, with the error, which is why no
   mass and no friction came from it. See :ref:`materials`.
+
+  A part or an assembly with a solid in it also gets ``MassProperties``: its ``volume``, ``density``,
+  ``mass``, ``centerOfMass`` and ``inertia``, each as its ``value``, its ``unit`` and its ``source`` —
+  ``stated`` where the part says so itself, the material that lent it, or how it was derived from the
+  solid. An assembly's are its parts' added up, in the assembly's own frame: the masses summed, the centres
+  combined, and each part's inertia moved to the combined centre and added. A part whose mass is not
+  known — it states none, and is made of nothing that states a density — is reported as such rather than
+  given one, and an assembly says which of its parts those were. These are the values an export is handed,
+  so what ``pc info`` says a part weighs is what a simulation of it weighs. See :ref:`properties`.
 
   For anything with geometry it also reports what PartCAD **measured** when it built it:
   ``BoundingBox`` as ``min``, ``max`` and ``size`` in millimetres, and -- for anything holding a solid --

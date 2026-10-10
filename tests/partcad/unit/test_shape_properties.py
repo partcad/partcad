@@ -488,7 +488,7 @@ def test_a_material_fills_in_what_the_shape_did_not_state():
             "brep": "AAAA",
         },
         "properties": True,
-        "__materials__": {"pkg:leaf": {"friction": 0.04}},
+        "__physics__": {"pkg:leaf": {"friction": 0.04}},
     }
 
     assert wrapper_export.properties_index(request) == {
@@ -505,7 +505,7 @@ def test_what_the_shape_states_itself_wins_over_its_material():
             "brep": "AAAA",
         },
         "properties": True,
-        "__materials__": {"pkg:leaf": {"friction": 0.04}},
+        "__physics__": {"pkg:leaf": {"friction": 0.04}},
     }
 
     index = wrapper_export.properties_index(request)
@@ -534,7 +534,7 @@ def test_a_material_s_density_arrives_beside_a_stated_mass_and_under_a_stated_de
             ],
         },
         "properties": True,
-        "__materials__": {"pkg:weighed": {"density": 7850.0}, "pkg:dense": {"density": 7850.0}},
+        "__physics__": {"pkg:weighed": {"density": 7850.0}, "pkg:dense": {"density": 7850.0}},
     }
 
     index = wrapper_export.properties_index(request)
@@ -558,7 +558,7 @@ def test_the_table_is_keyed_by_shape_so_a_reference_can_be_relative():
             ],
         },
         "properties": True,
-        "__materials__": {"a:part": {"friction": 1.05}, "b:part": {"friction": 0.2}},
+        "__physics__": {"a:part": {"friction": 1.05}, "b:part": {"friction": 0.2}},
     }
 
     index = wrapper_export.properties_index(request)
@@ -570,10 +570,22 @@ def test_a_shape_with_no_material_is_left_exactly_as_it_was():
     request = {
         "wrapped": {"name": "pkg:leaf", "properties": STEEL, "brep": "AAAA"},
         "properties": True,
-        "__materials__": {"pkg:other": {"friction": 0.04}},
+        "__physics__": {"pkg:other": {"friction": 0.04}},
     }
 
     assert wrapper_export.properties_index(request) == {"pkg:leaf": STEEL}
+
+
+def test_a_shape_that_declares_nothing_is_indexed_for_what_it_weighs():
+    """A STEP bolt with no 'properties:' still has a mass, and an exporter needs it."""
+    weighed = {"density": 2700.0, "mass": 0.0162, "centerOfMass": [5.0, 10.0, 15.0]}
+    request = {
+        "wrapped": {"name": "pkg:bolt", "brep": "AAAA"},
+        "properties": True,
+        "__physics__": {"pkg:bolt": weighed},
+    }
+
+    assert wrapper_export.properties_index(request) == {"pkg:bolt": {"physics": weighed}}
 
 
 def test_the_material_table_is_not_walked_for_shapes():
@@ -581,7 +593,7 @@ def test_the_material_table_is_not_walked_for_shapes():
     request = {
         "wrapped": {"name": "pkg:leaf", "properties": STEEL, "brep": "AAAA"},
         "properties": True,
-        "__materials__": {"pkg:leaf": {"friction": 0.04}, "brep": "not a shape"},
+        "__physics__": {"pkg:leaf": {"friction": 0.04}, "brep": "not a shape"},
     }
 
     index = wrapper_export.properties_index(request)

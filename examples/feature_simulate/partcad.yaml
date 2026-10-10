@@ -104,7 +104,7 @@ materials:
     desc: |
       Dry aluminium on aluminium, which galls rather than slides - which is why
       the coefficient is above one, and why the stack in `stable.assy` stands.
-    density: 0.0027 # g/mm^3, i.e. 2.7 g/cm^3
+    density: 2700 # kg/m^3, i.e. 2.7 g/cm^3
     mu: 1.05
     tags:
       - metal
@@ -115,7 +115,7 @@ materials:
     desc: |
       One of the lowest coefficients of friction of any solid. The same two
       blocks made of it do not stay stacked.
-    density: 0.0022
+    density: 2200
     mu: 0.04
     tags:
       - low-friction

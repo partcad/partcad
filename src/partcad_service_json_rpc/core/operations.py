@@ -2864,8 +2864,9 @@ def manufacturing_details(session, params):
     ``{"name": "//pkg:obj", "kind": "part"|"assembly"}``, and each comes back
     with an SVG thumbnail ``width`` by ``height`` pixels (base64; see
     ``partcad.thumbnail``, which keeps it in PartCAD's cache under the shape's
-    key and the size), its size in millimetres, its volume, and its mass in
-    grams where its material says how dense it is.
+    key and the size), its size in millimetres, its volume, and - for a part
+    whose mass is known, stated or worked out from what it is made of - its
+    mass in grams.
 
     Several objects to one request, because the daemon answers one request at a
     time and a table of forty rows is forty pictures: one request per row would
@@ -2895,7 +2896,7 @@ def manufacturing_details(session, params):
             _stage_subassemblies(session, ctx, obj)
         resolved.append((name, kind, obj))
 
-    from partcad import thumbnail
+    from partcad import physics, thumbnail
     from partcad.sandbox_lock import process_slots
 
     async def details(name, kind, obj, budget):
@@ -2915,9 +2916,13 @@ def manufacturing_details(session, params):
             volume = measured.get("volume")
             if volume is not None:
                 item["volume"] = volume
-                material = obj.get_material(ctx) if hasattr(obj, "get_material") else None
-                if material is not None:
-                    item["mass"] = material.mass(abs(volume))
+            # What 'pc info' says the part weighs - stated, or its solid at the
+            # density of what it is made of - in kilograms, as PartCAD states a
+            # mass, and in grams on the wire, which is what this table has
+            # always been sent.
+            mass = await physics.part_mass_async(ctx, obj)
+            if mass is not None:
+                item["mass"] = mass * 1000.0
         except Exception as e:  # pylint: disable=broad-except
             item["error"] = str(e)
         return item

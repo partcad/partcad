@@ -23,7 +23,9 @@ from . import cae as pc_cae
 from . import cam as pc_cam
 from . import logging as pc_logging
 from . import material as pc_material
-from . import output, render_overlay
+from . import output
+from . import physics as pc_physics
+from . import render_overlay
 from . import runtime as pc_runtime
 from . import sandbox_versions, shape_ports, wrapper
 from .cache_hash import CacheHash
@@ -819,7 +821,7 @@ class Shape(ShapeConfiguration):
         """The material this shape is made of, or None if it names none.
 
         Resolved against the package that owns *this shape*, exactly as
-        'material.physics_by_shape()' resolves it on the far side of an export:
+        'physics.physics_by_shape()' resolves it on the far side of an export:
         ':aluminium' means "in my own package", and whose package that is is a
         fact about the shape that wrote the reference rather than about the
         string. Two packages may each catalogue an 'aluminium' of their own and
@@ -1188,6 +1190,15 @@ class Shape(ShapeConfiguration):
                 else {"Name": material_reference, "Errors": ["The material is not found"]}
             )
 
+        # What it weighs, where it balances and how it turns, each value with
+        # where it came from - stated, lent by the material, or derived from the
+        # solid at its density. The same values an export of it is handed, by
+        # the same function, so that what 'pc info' says a part weighs is what a
+        # simulation of it weighs. See 'partcad.physics'.
+        mass_properties = asyncio.run(pc_physics.mass_properties_async(ctx, self))
+        if mass_properties:
+            info["MassProperties"] = mass_properties
+
         info["Hash"] = self.hash.get()
         if self.environment_cache_key is not None:
             # Part of that hash, and the part of it a user is most likely to be
@@ -1437,18 +1448,22 @@ class Shape(ShapeConfiguration):
         # that arrives there - see wrappers/wrapper_export.py. Nothing has to be
         # collected here, and nothing has to be instantiated to collect it.
         #
-        # A material is the exception, and only because it is a *name*: what a
-        # shape carries is ':aluminium', and turning that into a coefficient of
-        # friction means resolving it against the package that wrote it and
-        # loading the package that catalogues it - neither of which the sandbox
-        # can do. So the names are resolved here and the facts travel beside the
-        # shapes, keyed by the shape that inherits them; the wrapper merges them
-        # under what each shape said about itself. See
-        # 'partcad.material.physics_by_shape()'.
+        # What each shape's physics *resolves* to is the exception, because
+        # resolving it needs what only the core has: a material is a *name*,
+        # ':aluminium', and turning it into a density means loading the package
+        # that catalogues it; and a mass is that density times the solid, which
+        # is the one rule every exporter has to apply the same way. So it is
+        # worked out here, once, for every shape in the tree, and travels beside
+        # the shapes keyed by the shape it belongs to - stated values, what the
+        # material lends, and the mass, centre of mass and inertia derived from
+        # them, at the export's own 'density' for a part made of nothing that
+        # states one. The wrapper merges it under what each shape said about
+        # itself, and the exporter writes what it is handed. See
+        # 'partcad.physics.physics_by_shape()'.
         if request.get(output.PROPERTIES_KEY):
-            facts = pc_material.physics_by_shape(ctx, request)
+            facts = pc_physics.physics_by_shape(ctx, request, pc_physics.export_fallback(request))
             if facts:
-                request[pc_material.FACTS_KEY] = facts
+                request[pc_physics.FACTS_KEY] = facts
         return request
 
     async def _overlay_ports_async(self, ctx, overlay, cache):

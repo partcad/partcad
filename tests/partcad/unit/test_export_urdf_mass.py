@@ -4,30 +4,28 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""What a link of an exported URDF weighs, and what it weighs that at.
+"""What a link of an exported URDF weighs, and what 'pc info' says it weighs.
 
-A part that states no mass is weighed: OCCT integrates its solid, and a density
-turns the volume into a mass and the second moment into an inertia. Which
-density is the subject here. It is the part's own where it has one - the
-'density' of the material it names, which the core resolves and converts to
-kg/m^3 before the exporter ever sees it - then the 'density' parameter of the
-export, then the exporter's default; and a 'mass' the part states beats all of
-them.
+A package exported end to end, through the sandbox, because what is under test
+is the whole of the chain: a material declared in one place, its density in
+kg/m^3, the part's solid measured as it was built, the mass worked out once in
+the core, handed to the exporter in the part's properties, and written into
+the URDF - and the same number reported by 'pc info'. The arithmetic itself is
+'test_mass_properties.py' and the order it is resolved in 'test_physics.py';
+this is about the pieces being connected.
 
-The first half runs the exporter's arithmetic in this process, against boxes
-whose mass, centre and inertia are known in closed form. The second exports a
-package through the sandbox, end to end, because what is under test there is
-that a material declared in one place arrives as the right number in another.
+The package is five blocks of one geometry, made of different things, and a
+link of two of them: every rung of the order, in one export.
 """
 
 import asyncio
 import os
-import sys
 import xml.etree.ElementTree as ET
 
 import pytest
 
 import partcad as pc
+from partcad import physics
 
 # 'partcad' before OCP, and 'isort: split' so it stays there: importing the
 # package pins the standard library's expat (see the comment on 'import
@@ -35,20 +33,8 @@ import partcad as pc
 # process.
 # isort: split
 
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
-from OCP.BRepGProp import BRepGProp
 from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
 from OCP.BRepTools import BRepTools
-from OCP.gp import gp_Pln
-from OCP.GProp import GProp_GProps
-
-# The exporter is a sandbox script: it finds 'ocp_serialize' and 'urdf_common'
-# in PartCAD's 'wrappers/' directory, which a sandbox has on its path. Its
-# URDF-writing half needs 'urdf_parser_py', which this process does not have and
-# which the functions under test here do not import.
-sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
-sys.path.append(os.path.join(os.path.dirname(pc.__file__), "builtin", "export"))
-import export_urdf  # noqa: E402
 
 # 10 x 20 x 30 mm, so 6000 mm^3, 6e-6 m^3.
 SIZE = (10.0, 20.0, 30.0)
@@ -66,132 +52,6 @@ def _box_inertia(mass, size_mm=SIZE):
     """The principal moments of a box about its own centre, in kg.m^2."""
     a, b, c = (v / 1000.0 for v in size_mm)
     return (mass * (b * b + c * c) / 12.0, mass * (a * a + c * c) / 12.0, mass * (a * a + b * b) / 12.0)
-
-
-#
-# Which density
-#
-
-
-def test_the_shape_is_asked_first_then_its_link_then_the_export():
-    """Most specific first: a shape of a link may be made of something else."""
-    warnings = []
-    assert export_urdf.density_of(({"density": STEEL}, {"density": FOAM}), 2700.0, warnings, "l") == STEEL
-    assert export_urdf.density_of(({"mass": 1.0}, {"density": FOAM}), 2700.0, warnings, "l") == FOAM
-    assert export_urdf.density_of(({}, {}), 1234.0, warnings, "l") == 1234.0
-    assert export_urdf.density_of((), 1234.0, warnings, "l") == 1234.0
-    assert warnings == []
-
-
-def test_a_density_that_weighs_nothing_is_reported_and_passed_over():
-    """Not written out as a link that weighs nothing, nor as one that weighs less."""
-    for nothing in (0.0, -5.0, "heavy", float("nan")):
-        warnings = []
-        assert export_urdf.density_of(({"density": nothing}, {"density": FOAM}), 2700.0, warnings, "arm") == FOAM
-        assert len(warnings) == 1
-        assert "density" in warnings[0] and "'arm'" in warnings[0]
-
-
-def test_the_default_is_aluminium_s_density():
-    """What a part that says nothing about what it is made of has always weighed."""
-    assert export_urdf.DEFAULT_DENSITY == 2700.0
-
-
-#
-# What it weighs
-#
-
-
-def test_a_solid_weighs_its_volume_at_its_density():
-    mass, centre, inertia = export_urdf.mass_properties([(_box(), None, STEEL)])
-
-    assert mass == pytest.approx(STEEL * VOLUME_M3)
-    assert centre == pytest.approx((5.0, 10.0, 15.0))
-    # About the centre of mass, which is the frame URDF states it in.
-    assert [inertia[i][i] for i in range(3)] == pytest.approx(_box_inertia(mass))
-    for row in range(3):
-        for col in range(3):
-            if row != col:
-                assert inertia[row][col] == pytest.approx(0.0, abs=1e-15)
-
-
-def test_mass_and_inertia_come_from_the_same_density():
-    """Twice the density is twice the mass and twice the inertia, and the same centre."""
-    light = export_urdf.mass_properties([(_box(), None, FOAM)])
-    heavy = export_urdf.mass_properties([(_box(), None, 2 * FOAM)])
-
-    assert heavy[0] == pytest.approx(2 * light[0])
-    assert heavy[1] == pytest.approx(light[1])
-    for row in range(3):
-        assert heavy[2][row][row] == pytest.approx(2 * light[2][row][row])
-
-
-def test_a_link_of_two_materials_balances_where_the_heavier_one_pulls_it():
-    """Each shape at its own density, and the link as the sum of them.
-
-    A steel box and a foam one 100 mm along X, as one link: the centre of mass
-    sits a millimetre and a quarter from the steel box's own, not halfway
-    between the two, and the inertia is each box's own about its centre moved
-    to the link's by the parallel-axis theorem.
-    """
-    apart = [[100.0, 0.0, 0.0], [0.0, 0.0, 1.0], 0.0]
-    mass, centre, inertia = export_urdf.mass_properties([(_box(), None, STEEL), (_box(), apart, FOAM)])
-
-    steel, foam = STEEL * VOLUME_M3, FOAM * VOLUME_M3
-    assert mass == pytest.approx(steel + foam)
-    x = (steel * 5.0 + foam * 105.0) / (steel + foam)
-    assert centre == pytest.approx((x, 10.0, 15.0))
-
-    # Only the X offsets differ, so only Iyy and Izz move.
-    offsets = ((5.0 - x) / 1000.0, (105.0 - x) / 1000.0)
-    own = (_box_inertia(steel), _box_inertia(foam))
-    expected = (
-        own[0][0] + own[1][0],
-        own[0][1] + own[1][1] + steel * offsets[0] ** 2 + foam * offsets[1] ** 2,
-        own[0][2] + own[1][2] + steel * offsets[0] ** 2 + foam * offsets[1] ** 2,
-    )
-    assert [inertia[i][i] for i in range(3)] == pytest.approx(expected)
-
-
-def test_a_link_of_one_material_weighs_what_one_solid_of_it_would():
-    """No change for a link whose shapes agree: the sum is the compound."""
-    from OCP.BRep import BRep_Builder
-    from OCP.TopoDS import TopoDS_Compound
-
-    apart = [[100.0, 0.0, 0.0], [0.0, 0.0, 1.0], 0.0]
-    mass, centre, inertia = export_urdf.mass_properties([(_box(), None, 2700.0), (_box(), apart, 2700.0)])
-
-    builder = BRep_Builder()
-    compound = TopoDS_Compound()
-    builder.MakeCompound(compound)
-    builder.Add(compound, _box())
-    builder.Add(compound, _box().Located(export_urdf._toploc(apart)))
-    props = GProp_GProps()
-    BRepGProp.VolumeProperties_s(compound, props)
-
-    assert mass == pytest.approx(props.Mass() * 1e-9 * 2700.0)
-    com = props.CentreOfMass()
-    assert centre == pytest.approx((com.X(), com.Y(), com.Z()))
-    matrix = props.MatrixOfInertia()
-    for row in range(3):
-        for col in range(3):
-            assert inertia[row][col] == pytest.approx(matrix.Value(row + 1, col + 1) * 1e-15 * 2700.0, abs=1e-15)
-
-
-def test_a_shape_with_no_volume_weighs_nothing_and_adds_nothing():
-    """A face has nothing to weigh; beside a solid it changes nothing about it."""
-    face = BRepBuilderAPI_MakeFace(gp_Pln(), 0.0, 10.0, 0.0, 10.0).Face()
-
-    assert export_urdf.mass_properties([(face, None, STEEL)]) is None
-    alone = export_urdf.mass_properties([(_box(), None, STEEL)])
-    beside = export_urdf.mass_properties([(_box(), None, STEEL), (face, None, FOAM)])
-    assert beside[0] == pytest.approx(alone[0])
-    assert beside[1] == pytest.approx(alone[1])
-
-
-#
-# End to end: a material declared in a package, weighed in the URDF
-#
 
 
 ASSY = """\
@@ -225,9 +85,9 @@ PACKAGE = """\
 name: //weighing
 materials:
   steel:
-    density: 0.008 # g/mm^3, so 8000 kg/m^3
+    density: 8000 # kg/m^3
   foam:
-    density: 0.0001
+    density: 100
   vague:
     desc: A material that states no density
 parts:
@@ -303,10 +163,12 @@ def test_each_part_is_weighed_at_what_it_is_made_of(weighing, tmp_path, caplog):
     assert mass("foam") == pytest.approx(FOAM * VOLUME_M3)
     # Stated, so not computed - the material beside it decides nothing.
     assert mass("weighed") == pytest.approx(0.5)
-    # Nothing said, or nothing that weighs: what every part weighed before
-    # materials existed.
-    assert mass("plain") == pytest.approx(export_urdf.DEFAULT_DENSITY * VOLUME_M3)
-    assert mass("vague") == pytest.approx(export_urdf.DEFAULT_DENSITY * VOLUME_M3)
+    # Nothing said, or nothing that weighs: the export's fallback, aluminium.
+    assert mass("plain") == pytest.approx(physics.DEFAULT_EXPORT_DENSITY * VOLUME_M3)
+    assert mass("vague") == pytest.approx(physics.DEFAULT_EXPORT_DENSITY * VOLUME_M3)
+    # Stated mass, derived inertia: the box's, at the weight it says.
+    weighed = [float(inertial["weighed"].find("inertia").get(axis)) for axis in ("ixx", "iyy", "izz")]
+    assert weighed == pytest.approx(_box_inertia(0.5))
 
     # The centre of mass and the inertia are the steel's too, not aluminium's.
     steel = inertial["steel"]
@@ -339,3 +201,49 @@ def test_the_export_s_density_is_for_a_part_that_says_nothing(weighing, tmp_path
     assert mass("steel") == pytest.approx(STEEL * VOLUME_M3)
     assert mass("foam") == pytest.approx(FOAM * VOLUME_M3)
     assert mass("weighed") == pytest.approx(0.5)
+
+
+def _info(ctx, name, kind):
+    shape = ctx._get_assembly(name) if kind == "assembly" else ctx.get_part(name)
+    return shape.shape_info(ctx)["MassProperties"]
+
+
+def test_pc_info_reports_what_the_export_writes(weighing):
+    """The same number in 'pc info' as in the URDF, and where it came from."""
+    ctx = pc.Context(str(weighing))
+
+    steel = _info(ctx, "//weighing:steel_block", "part")
+    assert steel["mass"]["value"] == pytest.approx(STEEL * VOLUME_M3)
+    assert steel["mass"]["unit"] == "kg"
+    assert steel["mass"]["source"] == "derived: 6000 mm^3 at 8000 kg/m^3"
+    assert steel["density"]["source"] == "the material //weighing:steel"
+    assert steel["volume"] == {"value": 6000.0, "unit": "mm^3", "source": "measured"}
+    assert steel["centerOfMass"]["value"] == pytest.approx([5.0, 10.0, 15.0])
+
+    weighed = _info(ctx, "//weighing:weighed_block", "part")
+    assert weighed["mass"] == {"value": 0.5, "unit": "kg", "source": "stated"}
+    assert weighed["inertia"]["source"] == "derived: the solid, scaled to the stated mass"
+
+    # No density anywhere: 'pc info' says so rather than weighing it at the
+    # export's fallback, and keeps what it does know.
+    plain = _info(ctx, "//weighing:plain_block", "part")
+    assert plain["mass"]["value"] is None
+    assert "names no material" in plain["mass"]["source"]
+    assert "density" not in plain
+    assert plain["centerOfMass"]["value"] == pytest.approx([5.0, 10.0, 15.0])
+
+
+def test_pc_info_adds_an_assembly_up_and_names_what_it_could_not_weigh(weighing):
+    ctx = pc.Context(str(weighing))
+
+    bench = _info(ctx, "//weighing:bench", "assembly")
+
+    # Steel, foam, the stated half kilogram, and the wrist's steel and foam;
+    # the plain and the vague blocks have no mass, and are named.
+    expected = (STEEL + FOAM + STEEL + FOAM) * VOLUME_M3 + 0.5
+    assert bench["mass"]["value"] == pytest.approx(expected)
+    assert "5 parts" in bench["mass"]["source"]
+    assert "//weighing:plain_block" in bench["mass"]["source"]
+    assert "//weighing:vague_block" in bench["mass"]["source"]
+    assert bench["volume"]["value"] == pytest.approx(7 * 6000.0)
+    assert bench["centerOfMass"]["source"] == "combined from 5 parts"
