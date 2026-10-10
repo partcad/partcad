@@ -518,14 +518,25 @@ def environment_cache_key(interpreter: str, version: str, requirements, image: O
     entries are dropped: a package that declares no dependencies of its own has
     to key the same as one that declares an empty list.
 
-    'image' is the container image the sandbox was built in, where there is one.
-    It belongs here for the same reason the requirements do, and more so: an
-    image is named precisely when a package needs something pip cannot install,
-    so two images carrying the same interpreter and the same wheels are still
-    two different native stacks -- a different OpenCASCADE, a different solver
-    -- and a shape built in one is not the shape the other builds. Without it a
-    package that changed its 'dockerImage' would be handed back the model the
-    previous image produced.
+    **Everything here is what was declared, never what this machine ran.** The
+    sandbox types -- conda, venv, docker, remote, and whatever comes after them
+    -- are expected to be reproducible and equivalent, so a shape or an analysis
+    produced in one is the one any other produces, and a cache entry written
+    under one has to be found under all of them. A key that recorded which
+    sandbox ran, the image a 'docker' or 'remote' sandbox happened to be built
+    in (PartCAD's own base image carries the release and the architecture in
+    its tag), or the interpreter a 'none' sandbox found on the host, would make
+    switching sandboxes a full rebuild and a shared tier a set of private ones.
+
+    'image' is therefore the container image the package *declared*
+    ('dockerImage', or an implementation's 'container:'), where it declared
+    one. It belongs here for the same reason the requirements do: an image is
+    named precisely when a package needs something pip cannot install, so a
+    package that changes its 'dockerImage' has changed the native stack it says
+    it needs -- a different OpenCASCADE, a different solver -- and must not be
+    handed back the model the previous image produced. It is the same string on
+    a machine that ran the image and on one that could not and installed the
+    requirements instead.
 
     Appended only when there is an image, so a sandbox that has none keys
     exactly as it did before there was such a thing as an image. A key that

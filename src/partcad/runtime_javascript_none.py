@@ -10,11 +10,14 @@ dependency tree is. What the package asked for is therefore a request rather
 than a guarantee - so this runtime is identified by the Node.js it actually
 found, not by the one it was asked for.
 
-That distinction matters because the version is what names the sandbox
-directory and what a shape is cached under (see
-Shape.set_environment_cache_key). Taking the request at face value would let a
-package that asks for Node.js 24 run on the host's 22 and then record the result
-as though 24 had produced it. Use the conda sandbox when a version has to be
+That distinction matters for the sandbox directory, which is named after the
+version: two packages asking for different versions that both run on the host's
+one share it rather than install the same tree twice. It does not reach the
+cache key. A shape is keyed on the version its package *declared* (see
+PartFactoryJavaScript.environment_cache_key), because every sandbox type is
+expected to produce the same shape and a key naming the host's Node.js would
+key it differently here and on conda. A host whose Node.js is not the one asked
+for is warned about instead; use the conda sandbox when a version has to be
 enforced rather than observed.
 """
 
@@ -85,15 +88,16 @@ class NoneJavaScriptRuntime(runtime_javascript.JavaScriptRuntime):
                 # a different interpreter than the one a package asked for, and
                 # refusing here would make this sandbox unusable for anyone
                 # whose Node.js is not the default. Saying so is what matters,
-                # because the shape is about to be cached as version 'detected'.
+                # because the shape is about to be cached as the version the
+                # package asked for, which is not the one rendering it.
                 pc_logging.warning(
                     "This package asks for Node.js %s but the host has %s, which is what will render it. "
                     "Set the 'javascriptSandbox' user configuration option to 'conda' to have PartCAD "
                     "provision the requested version instead." % (requested, detected)
                 )
 
-        # The version that actually renders, so the sandbox directory and the
-        # environment cache key both describe what produced the shape.
+        # The version that actually renders, so the sandbox directory describes
+        # what is in it. The cache key is the declared one (see the header).
         super().__init__(ctx, "none", detected if detected is not None else version)
 
         self.exec_path = exec_path
