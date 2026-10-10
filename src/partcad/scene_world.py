@@ -48,7 +48,8 @@ invited -- -9.81 in a file that means mm/s^2 -- is a thousandth of a g, which
 looks like a plausible slow simulation and is caught by nothing.
 
 Unit-suffixed strings ("9.81 m/s^2") are deliberately not accepted. PartCAD has
-no unit-aware scalar yet (item 10 of docs/source/simulation.rst), and a parser
+no unit-aware scalar yet (section 2, "One unit per quantity", of
+docs/design/simulation.md; scenes as worlds are its section 6), and a parser
 for one field would be a third dialect beside the ones 'partcad.cam' and
 'partcad.cae' already speak. A bare number in a documented unit is checked by
 the schema; a string would be checked by nothing until it was read here.
