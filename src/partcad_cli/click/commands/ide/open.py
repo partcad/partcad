@@ -28,16 +28,24 @@ context menu passes the source file of the object the user clicked -- and no
 more than that: which file KiCad is actually pointed at, given the STEP a
 `kicad` part is, is a fact about KiCad and lives in the tool table.
 
-**One thing here does cross the wire, and it is not the opening.** Two of the
-applications read one thing only: Blender reads meshes, and MuJoCo reads MJCF.
-A part that is not already a mesh, or a scene that is not already an MJCF model,
-has to be converted before it is handed over -- and both conversions drive a CAD
-wrapper, whose runtime lives in the daemon's environment and may not exist on
-this machine at all. So the conversion is `adhoc.convert`, the same method
-`pc adhoc convert` sends, on the same absolute paths, with `kind` saying which
-of the two it is; it carries no context (it is file-in, file-out) and it leaves
-nothing on the daemon to go stale. The window still opens here, from this
-process, on this machine's display.
+**One thing here does cross the wire, and it is not the opening.** Blender
+reads meshes and nothing else, so a part that is not already one has to be
+converted before it is handed over -- and that conversion drives a CAD wrapper,
+whose runtime lives in the daemon's environment and may not exist on this
+machine at all. So the conversion is `adhoc.convert`, the same method
+`pc adhoc convert` sends, on the same absolute paths; it carries no context (it
+is file-in, file-out) and it leaves nothing on the daemon to go stale. The
+window still opens here, from this process, on this machine's display.
+
+MuJoCo reads one thing only as well, MJCF, and a scene is *not* converted for
+it. MJCF is written by `partcad-sim-mujoco`'s exporter, and a file handed to
+this command has no package around it to reach that exporter through. So MuJoCo
+is handed a file that already is MJCF -- its `open:` entry names the extensions
+MJCF is stored in, and `--type` says so for any other -- and anything else is
+refused with the export that does work, `pc export -S -t <package>:mjcf`. A
+Gazebo world is refused the same way. `kind` on the conversion request is how a
+scene conversion would be asked for, between formats PartCAD itself writes;
+there is none today.
 
 The application is run from this machine when it is installed here, and
 otherwise -- with `--use-docker` -- from a container PartCAD keeps for it. The
@@ -79,7 +87,8 @@ from ...service import run
     show_default=True,
     metavar="APPLICATION",
     help="Which application to open the file in: freecad, blender, gazebo (a scene's world file), "
-    "mujoco (a scene, converted to MJCF if it is not one already) or kicad (a board) -- plus "
+    "mujoco (a scene that is already an MJCF model; any other is refused, with the export that writes one) "
+    "or kicad (a board) -- plus "
     "whatever the workspace's packages declare in their 'open:' sections.",
 )
 @click.option(
