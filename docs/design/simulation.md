@@ -718,7 +718,7 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 7b | Buoyancy at the centre of buoyancy | in review (#763, sim-mujoco #9, sim-gazebo #8) |
 | 7c | Per-run Gazebo partitions | in review (sim-gazebo #7) |
 | 7d | Run keys cover what an implementation package ships | in progress |
-| 7e | `resolve_resource_path` and colons in parameter values | in progress |
+| 7e | `resolve_resource_path` and colons in parameter values | in review (#760) |
 | 7f | Skills prepare generated objects for simulation | in review (#759) |
 | 7g | The user documentation refactored to how to use it; this record for the design | in progress (with #758) |
 | 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and `pc lint` | in progress |
