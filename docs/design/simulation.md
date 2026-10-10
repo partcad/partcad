@@ -469,7 +469,9 @@ addressable from `toParams` -- and otherwise brings its own, named as the predef
 writes. So every `motion:` the URDF converter has ever generated is an implicit declaration and keeps working; the
 converter switches to writing the explicit form.
 
-A `motion:` that states both a `type` and a `dof` list must agree with itself, and `pc lint` says where it does not.
+A `motion:` that states both a `type` and a `dof` list must agree with itself; a disagreement is reported and `dof`
+wins, and where they agree `type` supplies the range. `limits` apply to a revolute, a prismatic and a screw's turn; on
+any other kind they are reported and ignored.
 
 ### 8.3 Where it is declared, and how declarations combine
 
@@ -599,6 +601,34 @@ Rules the table does not show:
   `group_state` would carry). SDFormat: to be checked per version; reported when not written.
 - **Units** convert at the boundary only: URDF and SDFormat in radians and metres, MJCF in degrees (its default) and
   metres.
+
+### 8.8a How the core model resolved the open details (in review in #766)
+
+Building the model (`AssemblyChild.joint`, `pc info`'s "Joints", the checks) settled what the text above left open:
+
+- **Merging two freedoms** happens only if nothing free between them fails to commute with them, with the adjustments
+  between them taken at their values rather than at zero. Placements change -- by rounding only -- only where both
+  sides give a merged freedom a non-zero value.
+- **Axis frames.** A mating's `motion:` states its axis in the frame of the interface that declares it; a connection's
+  in the contact frame. A `dof` name at either level means that parameter on whichever interface has it.
+- **Inheritance.** `motion` and `physics` are inherited from a single drop-in parent or an `alias:`, not from every
+  `inherits:` instance -- an interface that inherits four hole patterns does not inherit four joints.
+- **Physics** is one record per joint; any disagreement between the two interfaces is reported (8.7).
+- **Where the findings are reported**: `pc test`'s `connect` check, not `pc lint`, because a lint verdict is cached per
+  file and these findings depend on interfaces declared in other packages.
+- **Closed loops** in an ASSY file are refused in three forms: a link placed twice, a connection to a later link that
+  connects back, and a link connected to itself. A connection to a target not yet placed used to crash.
+- **Scenes** place exactly as before and make no joints (section 7).
+- **The invariant holds**: the factory now takes each connected child's location from the product of its steps, and
+  all 39 connected children of the 19 ASSY assemblies and scenes under `examples/` -- and a converted URDF at rest and
+  posed -- come out bit for bit where they were.
+
+What step 10 (MJCF) takes from it: each envelope node carries `joint`, whose steps are parent-relative (port, half turn,
+adjustments, free steps, source port⁻¹); the steps before a free one place its `pos` and `axis` in the child body; a
+screw's coupling (`ratio`, `offset`) and a `mimic` are joint equalities; an unlimited bound is `None`; the starting value
+is the `ref`. One classifier of free steps into joint kinds, shared by the MJCF, URDF and SDFormat exporters, belongs in
+`partcad/wrappers/` beside `mass_properties`. One gap found on the way, for step 11: the URDF converter writes no `axis`
+when a joint states none, so URDF's default X axis comes out as Z.
 
 ### 8.9 What this does not cover yet
 
@@ -864,7 +894,7 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 7e | `resolve_resource_path` and colons in parameter values | in review (#760) |
 | 7f | Skills prepare generated objects for simulation | in review (#759) |
 | 7g | The user documentation refactored to how to use it; this record for the design | in progress (with #758) |
-| 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and `pc lint` | in progress |
+| 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and the `connect` check | in review (#766) |
 | 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes | decided |
 | 10 | **MJCF joints**, with a pendulum example checked against its closed form | decided |
 | 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics | decided |
