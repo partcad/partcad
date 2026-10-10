@@ -248,8 +248,8 @@ GAZEBO_JOINT_PHYSICS = {
 
 # Gazebo tags that are understood and deliberately have no PartCAD property:
 # appearance, geometry PartCAD already holds, and the two - sensors and
-# simulator plugins - that items 7 and 8 of docs/source/simulation.rst are
-# about. They are counted as dropped rather than reported one by one. Anything
+# simulator plugins - that docs/design/simulation.md plans for (sections 8.12
+# and 6.2). They are counted as dropped rather than reported one by one. Anything
 # else is reported, which is the point: this list is short on purpose.
 GAZEBO_IGNORED = frozenset(("material", "visual", "collision", "sensor", "plugin"))
 
@@ -854,7 +854,7 @@ def process(path, request):  # pylint: disable=unused-argument
     # looked at, so nothing above had the chance to report what it says. Most
     # often it is the robot-level block, which holds simulator plugins and the
     # settings of the model as a whole - and a PartCAD assembly has nowhere to
-    # put those (see docs/source/simulation.rst, item 9).
+    # put those (see docs/design/simulation.md, section 8.12).
     for reference, blocks in context["gazebo"].items():
         if reference in robot.link_map or reference in robot.joint_map:
             continue
