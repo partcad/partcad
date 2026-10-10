@@ -48,14 +48,27 @@ docs:
     pc sim -a slippery    # the top block slides off
     ```
 
-    That is not a quirk of the simulator; it is what the two materials are.
-    Aluminium on aluminium grips (`mu: 1.05` -- dry aluminium galls, which is why
-    the number is above one), PTFE on PTFE does not (`mu: 0.04`), and somewhere
-    between 0.4 and 0.5 a squarely stacked pair of these blocks stops standing
-    up. So "will this stack stand?" is a question about the material, and
-    `materials:` below is where the answer is written down. Every part that names
-    one gets its `mu` written into the simulation, in the same place SDFormat
-    calls `<mu>` and URDF calls `<mu1>`.
+    The scene both run in is `tilted`, whose gravity leans 15 degrees off
+    vertical. On a level floor nothing pushes a block sideways, so its friction
+    is never asked anything and both stacks stand; a sideways pull is what makes
+    the material matter. Tilting the world rather than building a ramp keeps
+    the floor endless and the stacks placed exactly as they are drawn: a block
+    on a level floor under a leaning gravity is, as far as sliding goes, a
+    block on a 15-degree ramp.
+
+    That is not a quirk of the simulator; it is what the two materials are. A
+    block slides when its friction is below tan(15 deg), 0.268. Aluminium on
+    aluminium grips (`mu: 1.05` -- dry aluminium galls, which is why the number
+    is above one): four times what it takes. PTFE on PTFE (`mu: 0.04`) has a
+    seventh of it. So "will this stack stand?" is a question about the
+    material, and `materials:` below is where the answer is written down. Every
+    part that names one gets its `mu` written into the simulation, in the same
+    place SDFormat calls `<mu>` and URDF calls `<mu1>`.
+
+    It is the top block that slides, and not the stack along the floor: MuJoCo
+    meets two surfaces at the larger of their two frictions, and the floor
+    states MuJoCo's default of 1.0, so every block grips the floor. Two PTFE
+    blocks meet at PTFE's.
 
     Without it the simulation would answer with **MuJoCo's** default friction of
     1.0 -- a plausible number for metal, a badly wrong one for PTFE, and in
@@ -265,6 +278,28 @@ parts:
         default: ":ptfe"
 
 scenes:
+  tilted:
+    desc: An empty world whose gravity leans 15 degrees off vertical, towards +X - a ramp with no edge
+    type: assy
+    path: tilted.assy
+    # 9.81 m/s^2, 15 degrees off -Z towards +X: (9.81 sin 15, 0, -9.81 cos 15).
+    # Everything in it is pulled sideways by a quarter of its weight, which is
+    # what makes its friction matter: a block slides when its friction is below
+    # tan(15 deg) = 0.268.
+    gravity: [2.539, 0, -9.476]
+    parameters:
+      # The same three the scene PartCAD ships takes, assigned by 'pc sim'. The
+      # stack that stands by default, so the scene on its own holds something.
+      subject:
+        type: string
+        default: stable
+      subject_kind:
+        type: string
+        default: assembly
+      subject_offset:
+        type: string
+        default: "0 0 10 0 0 1 0"
+
   tank:
     desc: A tank of fresh water, holding whatever is simulated in it 100 mm above its floor
     type: assy
@@ -295,8 +330,13 @@ assemblies:
     type: assy
     simulate:
       stands:
-        desc: Nothing moves, because there is no reason for anything to move
+        desc: |
+          Nothing moves, even pulled sideways by a quarter of its weight:
+          aluminium grips with four times the friction it takes to hold.
         simulation: sim-mujoco:mujoco
+        # A world tilted by 15 degrees, so that something pushes the top block
+        # sideways and its friction is asked what it can hold.
+        scene: :tilted
         # The blocks are drawn about their own centres, so the stack spans z
         # from -10 to 30. Lift it by 10 to stand its bottom face on the floor of
         # the scene: this is what an 'offset:' is for -- reconciling the frame
@@ -304,11 +344,12 @@ assemblies:
         offset: [[0, 0, 10], [0, 0, 1], 0]
         # 'before' and 'after' are what the MuJoCo plugin reported: where every
         # body was when the world started, and where it was ten seconds later,
-        # in millimetres. A millimetre of settling is contact softness, not
-        # motion; a block that came off the stack moves twenty.
+        # in millimetres. Half a millimetre of creep and settling is contact
+        # softness, not motion; a block that comes off the stack moves seventy
+        # along and twenty down. So: no block moved 5 mm in any direction.
         validation: |
           max(
-              abs(after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2])
+              sum((a - b) ** 2 for a, b in zip(after["bodies"][name]["pos"], before["bodies"][name]["pos"])) ** 0.5
               for name in before["bodies"]
           ) < 5.0
 
@@ -336,10 +377,14 @@ assemblies:
     simulate:
       slides_off:
         desc: |
-          The same geometry as 'stable' and the opposite outcome, because the
-          material is the other one.
+          The same geometry as 'stable', in the same tilted world, and the
+          opposite outcome, because the material is the other one.
         simulation: sim-mujoco:mujoco
+        scene: :tilted
         offset: [[0, 0, 10], [0, 0, 1], 0]
+        # The top block slides off the bottom one and falls its full height, 20
+        # mm, onto the floor; 5 mm is far below that and far above the settling
+        # of a stack that holds.
         validation: |
           max(
               before["bodies"][name]["pos"][2] - after["bodies"][name]["pos"][2]
