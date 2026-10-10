@@ -21,12 +21,13 @@ those facts PartCAD computes with (mass = volume x density; 'mu' is what decides
 whether a stack of them stands up), and it is why both are carried in the units
 the rest of PartCAD works in rather than the ones a datasheet prints.
 
-'mu' is the one that reaches a simulation. Whether two blocks stay stacked is
-not a property of their geometry at all: squarely stacked 20 mm cubes stay put
-at mu = 0.2 and scatter at mu = 0.0, and nothing about the arrangement changes
-in between. A part that says what it is made of therefore says whether it stands
-up, and 'PHYSICS_FROM_MATERIAL' below is where that stops being a fact nobody
-reads. See docs/source/simulation.rst.
+Both reach a simulation. Whether two blocks stay stacked is not a property of
+their geometry at all: squarely stacked 20 mm cubes stay put at mu = 0.2 and
+scatter at mu = 0.0, and nothing about the arrangement changes in between. And
+what they weigh, where they balance and how they turn are the solid plus the
+density, and nothing else. A part that says what it is made of therefore says
+whether it stands up and what it weighs, and 'PHYSICS_FROM_MATERIAL' below is
+where that stops being a fact nobody reads. See docs/source/simulation.rst.
 
 Materials are addressed like every other object, as '<package>:<name>', so a
 part in one package names a material catalogued in another exactly as it names
@@ -52,14 +53,35 @@ from .utils import resolve_resource_path
 # happened; each goes on reading 'physics' as it always did.
 FACTS_KEY = "__materials__"
 
-# What a material contributes to the physics of a shape made of it: the material
-# field, and the PartCAD property it fills in where the shape states none.
+# Kilograms per cubic metre in one gram per cubic millimetre: 1e-3 kg/g times
+# 1e9 mm^3/m^3.
 #
-# One entry, and that is deliberate rather than a start. 'density' is the other
-# fact a material states, and wiring it here would change the computed mass of
-# every part that names a material - a real improvement, and a different change
-# with a diff of its own. 'mu' has nowhere to go at all until this table exists.
-PHYSICS_FROM_MATERIAL = {"mu": "friction"}
+# The one place a density changes units, and the reason there is one. A
+# material states its density in g/mm^3, the units PartCAD measures a volume
+# in. Everything that turns a density into a mass for a simulation states it in
+# kg/m^3 - MJCF's 'density', the 'density' parameter PartCAD's own exporters
+# have always taken, and so the 'density' property a material lends a shape
+# below. Converted here, once, on the core's side of the pipe: three exporters
+# in three repositories would otherwise be three chances to get a factor of a
+# million wrong, and a mass off by that much loads without complaint.
+KG_M3_PER_G_MM3 = 1.0e6
+
+# What a material contributes to the physics of a shape made of it: the
+# 'Material' attribute, and the PartCAD property it fills in where the shape
+# states none.
+#
+# 'mu' decides whether a stack of these stands up. 'density' is what they weigh:
+# an exporter computes a link's mass, centre of mass and inertia from its solid
+# and this one number, so the three agree with each other and with what the part
+# is made of. It is lent as 'density_kg_m3' rather than 'density' because the
+# property is stated in kg/m^3, and 'KG_M3_PER_G_MM3' above is that conversion.
+#
+# A part that states a 'mass' of its own keeps it, and the density then decides
+# nothing: a part weighed on the bench beats the substance it is made of. A part
+# that names no material, or one that states no density, is exactly what it was
+# before materials existed - the export's 'density' parameter, and then the
+# exporter's own default.
+PHYSICS_FROM_MATERIAL = {"mu": "friction", "density_kg_m3": "density"}
 
 
 @telemetry.instrument()
@@ -126,6 +148,17 @@ class Material:
         """The same density in the units datasheets quote."""
         density = self.density
         return None if density is None else density * 1000.0
+
+    @property
+    def density_kg_m3(self) -> typing.Optional[float]:
+        """The same density in kg/m^3, the units a simulation states one in.
+
+        What a shape made of this material is lent as its 'density' property
+        (see 'PHYSICS_FROM_MATERIAL'), and the only place a density is turned
+        into those units: see 'KG_M3_PER_G_MM3'.
+        """
+        density = self.density
+        return None if density is None else density * KG_M3_PER_G_MM3
 
     @property
     def mu(self) -> typing.Optional[float]:
@@ -276,7 +309,8 @@ def physics_by_shape(ctx, request) -> dict:
 
     A reference that does not resolve is reported once, by 'lookup()', and
     contributes nothing: a part whose material is a typo gets the simulator's
-    default, which is what it got before anyone declared a material at all.
+    friction and the export's density, which is what it got before anyone
+    declared a material at all.
     """
     facts = {}
     resolved = {}

@@ -37,9 +37,10 @@ close:
 What the part states about itself wins over anything computed here: mass,
 centre of mass, inertia, friction and the contact parameters are named PartCAD
 properties, and this writes each of them back into the URDF element that states
-it. Only a part that says nothing gets computed inertial properties, from its
-solid and the configured density. A property PartCAD has and URDF has no
-spelling for is reported rather than dropped in silence - see URDF_STATED.
+it. Only a part that states no mass gets computed inertial properties, from its
+solid and its density - see 'density_of()' for which density that is. A
+property PartCAD has and URDF has no spelling for is reported rather than
+dropped in silence - see URDF_STATED.
 """
 
 import math
@@ -58,10 +59,10 @@ import urdf_common  # noqa: E402
 # in millimetres and URDF reads mesh coordinates as metres after scaling.
 MESH_SCALE = 1.0 / urdf_common.MM_PER_M
 
-# Density used to turn a volume into a mass when the caller does not name one,
-# in kg/m^3. Aluminium: a middle-of-the-road value for a machined part, and one
-# whose provenance is obvious in the output rather than looking like a
-# measurement.
+# Density used to turn a volume into a mass when neither the part nor the caller
+# names one, in kg/m^3. Aluminium: a middle-of-the-road value for a machined
+# part, and one whose provenance is obvious in the output rather than looking
+# like a measurement.
 DEFAULT_DENSITY = 2700.0
 
 # mm^5 -> m^5. The second moment OCCT integrates has units of length^5, so this
@@ -105,7 +106,14 @@ GAZEBO_LINK_PHYSICS = {
 # image of the import refusing URDF that PartCAD has no property for. When
 # PartCAD grows a physical property, either give it a spelling above or let it
 # be reported here - do not let it disappear quietly.
-URDF_STATED = frozenset(("mass", "centerOfMass", "inertiaOrientation", "inertia")) | frozenset(GAZEBO_LINK_PHYSICS)
+#
+# 'density' is here although URDF has no element for one, because it is not
+# lost: it is what the '<inertial>' of a part that states no mass is computed
+# from, so the file states it the only way URDF can - as the mass, the centre
+# of mass and the inertia it comes to.
+URDF_STATED = frozenset(("mass", "centerOfMass", "inertiaOrientation", "inertia", "density")) | frozenset(
+    GAZEBO_LINK_PHYSICS
+)
 
 
 def sanitize_name(name, fallback):
@@ -165,73 +173,125 @@ def write_mesh(shape, path, options):
         raise Exception("Failed to write the mesh file: %s" % path)
 
 
-def inertial_of(placed, density, warnings, link_name):
+def density_of(physics, fallback, warnings, link_name):
+    """The density, in kg/m^3, one shape of a link is weighed at.
+
+    'physics' is what to ask, most specific first: the shape's own properties,
+    then those of the link it is a part of - the same thing twice for an
+    ordinary link, and two different things for a link of several shapes, whose
+    shapes may each be made of something else. The first 'density' any of them
+    states wins, and 'fallback' - the export's 'density' parameter, or
+    DEFAULT_DENSITY - is what a part that states none of them gets, which is
+    exactly what it got before materials existed.
+
+    A part that names a material has that material's density here, because the
+    core resolved it and 'wrapper_export.properties_index()' merged it in
+    underneath what the part stated itself - so "the part's density" and "its
+    material's" are one lookup, and a part that states a density of its own
+    beats its material's the way a stated friction does. It arrives in kg/m^3
+    already; the one conversion from the g/mm^3 a material is declared in is
+    'partcad.material.KG_M3_PER_G_MM3', on the core's side of the pipe, and
+    there is deliberately no second one here.
+
+    Asked only for a link that states no 'mass': a mass on the bench beats any
+    density, and is written as it was stated.
+
+    A density that is not a positive number cannot weigh anything. It is
+    reported and passed over, rather than written out as a link that weighs
+    nothing or less.
+    """
+    for each in physics:
+        value = (each or {}).get("density")
+        if value is None:
+            continue
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = math.nan
+        if math.isfinite(value) and value > 0.0:
+            return value
+        warnings.append(
+            "Ignoring the density %r stated for the link '%s', which is not a positive number"
+            % (each.get("density"), link_name)
+        )
+    return fallback
+
+
+def mass_properties(placed):
+    """The mass, centre of mass and inertia of (shape, placement, density) triples.
+
+    One triple for an ordinary link, several for a URDF link with more than one
+    ``<visual>``. Each shape is put where it belongs and integrated on its own,
+    and is added into the total at its *own* density: OCCT's
+    GProp_GProps.Add() weights a system by a density as it adds it. So a link
+    built from an aluminium bracket and a steel pin balances where the steel
+    pulls it rather than where the geometry alone would, and its mass, centre of
+    mass and inertia all come from the one set of densities - which is what
+    keeps the three consistent with each other.
+
+    GProp integrates in the shape's own (millimetre) units, so what comes out
+    is weighted by kg/m^3 over mm^3: the volume term becomes a mass with
+    MM3_TO_M3 and the second moment (length^5) becomes kg.m^2 with MM5_TO_M5.
+    The tensor is already about the centre of mass, the frame URDF's
+    ``<inertia>`` is stated in, so no parallel-axis shift is needed.
+
+    Returns (mass in kg, centre of mass in mm, 3x3 tensor in kg.m^2), or None
+    when nothing here has a volume. A shape with none of its own - an open
+    shell, a mesh - adds nothing, which is also what it added when this took the
+    moments of all of them as one compound.
+    """
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    total = GProp_GProps()
+    for shape, placement, density in placed:
+        props = GProp_GProps()
+        BRepGProp.VolumeProperties_s(shape if placement is None else shape.Located(_toploc(placement)), props)
+        if props.Mass() <= 0.0:
+            continue
+        total.Add(props, density)
+    if total.Mass() <= 0.0:
+        return None
+
+    com = total.CentreOfMass()
+    matrix = total.MatrixOfInertia()
+    # Row/column indices in OCCT's gp_Mat are 1-based.
+    inertia = [[matrix.Value(row, col) * MM5_TO_M5 for col in (1, 2, 3)] for row in (1, 2, 3)]
+    return total.Mass() * MM3_TO_M3, (com.X(), com.Y(), com.Z()), inertia
+
+
+def inertial_of(placed, warnings, link_name):
     """The URDF ``<inertial>`` for a link's solids, or None when they have none.
 
-    'placed' is the (shape, packed placement) pairs the link is made of - one for
-    an ordinary link, several for a URDF link with more than one ``<visual>``.
-    Each is put where it belongs before the moments are taken, so the result is
-    about the link as a whole.
-
-    OCCT's GProp_GProps.MatrixOfInertia() is already the tensor about the centre
-    of mass, which is the frame URDF's ``<inertia>`` is stated in, so no
-    parallel-axis shift is needed - only the units and the density. GProp
-    integrates at unit density in the shape's own (millimetre) units, so the
-    volume becomes a mass and the second moment (length^5) becomes kg.m^2.
+    'placed' is the (shape, packed placement, density) triples the link is made
+    of; see 'mass_properties()', which is the arithmetic.
 
     A link with no volume (a mesh imported as a shell, an empty compound) has no
     inertia to compute: it is reported and the link goes out without an
     ``<inertial>``, rather than carrying invented numbers.
     """
-    from OCP.BRepGProp import BRepGProp
-    from OCP.GProp import GProp_GProps
     from urdf_parser_py.urdf import Inertia, Inertial, Pose
 
-    props = GProp_GProps()
-    BRepGProp.VolumeProperties_s(combined(placed), props)
-    volume = props.Mass()
-    if volume <= 0.0:
+    computed = mass_properties(placed)
+    if computed is None:
         warnings.append(
             "Link '%s' has no computable volume (an open shell or a mesh), so it carries no <inertial>" % link_name
         )
         return None
 
-    com = props.CentreOfMass()
-    centre = (com.X(), com.Y(), com.Z())
-    matrix = props.MatrixOfInertia()
-    # Row/column indices in OCCT's gp_Mat are 1-based.
-    inertia = [[matrix.Value(row, col) for col in (1, 2, 3)] for row in (1, 2, 3)]
-
-    mass = volume * MM3_TO_M3 * density
-    factor = density * MM5_TO_M5
+    mass, centre, inertia = computed
     return Inertial(
         mass=mass,
         origin=Pose(xyz=[v * MESH_SCALE for v in centre], rpy=[0.0, 0.0, 0.0]),
         inertia=Inertia(
-            ixx=inertia[0][0] * factor,
-            ixy=inertia[0][1] * factor,
-            ixz=inertia[0][2] * factor,
-            iyy=inertia[1][1] * factor,
-            iyz=inertia[1][2] * factor,
-            izz=inertia[2][2] * factor,
+            ixx=inertia[0][0],
+            ixy=inertia[0][1],
+            ixz=inertia[0][2],
+            iyy=inertia[1][1],
+            iyz=inertia[1][2],
+            izz=inertia[2][2],
         ),
     )
-
-
-def combined(placed):
-    """The (shape, placement) pairs as one shape, each put where it belongs."""
-    if len(placed) == 1 and placed[0][1] is None:
-        return placed[0][0]
-
-    from OCP.BRep import BRep_Builder
-    from OCP.TopoDS import TopoDS_Compound
-
-    builder = BRep_Builder()
-    compound = TopoDS_Compound()
-    builder.MakeCompound(compound)
-    for shape, placement in placed:
-        builder.Add(compound, shape if placement is None else shape.Located(_toploc(placement)))
-    return compound
 
 
 def _toploc(packed):
@@ -369,12 +429,17 @@ def shape_elements(node, state):
     return own, [child for child in children if not belongs(child)]
 
 
+def physics_of(node, state):
+    """What the part behind one node of the tree states about its physics."""
+    return (state["properties"].get(node.get("name")) or {}).get("physics") or {}
+
+
 def build_link(node, link_name, elements, state):
     """The URDF ``<link>`` for one node of the assembly tree."""
     from urdf_parser_py.urdf import Collision, Link, Mesh, Pose, Visual
 
     link = Link(name=link_name)
-    physics = (state["properties"].get(node.get("name")) or {}).get("physics") or {}
+    physics = physics_of(node, state)
 
     placed = []
     for shape_node, placement in elements:
@@ -393,7 +458,11 @@ def build_link(node, link_name, elements, state):
         material = carried_material(state["properties"].get(shape_node.get("name")) or {}, state)
         link.add_aggregate("visual", Visual(geometry=geometry, origin=origin, material=material))
         link.add_aggregate("collision", Collision(geometry=geometry, origin=origin))
-        placed.append((shape, placement))
+        # What to weigh this shape at is asked of the shape first and of the
+        # link second - see 'density_of()'. Once, for an ordinary link, where
+        # the shape *is* the link.
+        asked = (physics,) if shape_node is node else (physics_of(shape_node, state), physics)
+        placed.append((shape, placement, asked))
 
     if not placed:
         # A frame that carries children, with no geometry of its own. URDF has
@@ -402,7 +471,12 @@ def build_link(node, link_name, elements, state):
 
     if state["options"]["inertial"]:
         link.inertial = carried_inertial(physics) or inertial_of(
-            placed, state["options"]["density"], state["warnings"], link_name
+            [
+                (shape, placement, density_of(asked, state["options"]["density"], state["warnings"], link_name))
+                for shape, placement, asked in placed
+            ],
+            state["warnings"],
+            link_name,
         )
     gazebo = gazebo_element(link_name, physics, state)
     if gazebo is not None:
@@ -480,6 +554,9 @@ def process(path, request):
             "angularTolerance": request.get("angularTolerance", 0.1),
             "ascii": request.get("ascii", False),
             "inertial": request.get("inertial", True),
+            # What a part is weighed at when neither it nor its material states
+            # a density - see 'density_of()'. Not an override: a part that says
+            # what it is made of is weighed as that.
             "density": request.get("density") or DEFAULT_DENSITY,
         },
         "warnings": warnings,

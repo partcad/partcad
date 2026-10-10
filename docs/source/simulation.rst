@@ -124,11 +124,32 @@ from there rather than from anything stashed on the parts.
 What a part states about itself is written into the URDF element that states it:
 mass, centre of mass and inertia into ``<inertial>``, friction and the contact
 parameters into a ``<gazebo>`` block, ``material``/``color`` into
-``<material>``. Only a part that says nothing gets computed inertial properties:
-OCCT gives the volume, the centre of mass and the inertia tensor about it, and a
-density turns those into a mass. Since PartCAD still has nowhere to record what
-a part is *made of*, that density is a parameter of the export with a default
-rather than a property of the part - the first gap this page proposes to close.
+``<material>``. Only a part that states no ``mass`` gets computed inertial
+properties: OCCT gives the volume, the centre of mass and the inertia tensor
+about it, and a density turns those into a mass.
+
+That density is what the part is made of. A part whose material states a
+``density`` is weighed at it, and every exporter - this one, and the MJCF and
+SDFormat ones the simulation plugins carry - resolves the mass in one order:
+
+#. the part's own ``mass``, as stated;
+#. the part's ``density`` - one it states itself, or else its material's;
+#. the ``density`` parameter of the export;
+#. the exporter's own default, 2700 kg/m³ (aluminium).
+
+So a part that names no material, or one that states no density, comes out
+exactly as it did before materials existed. The centre of mass and the inertia
+come from the same density as the mass, so the three cannot disagree, and a
+link of several shapes - ``wrist/1`` in aluminium, ``wrist/2`` in steel - is
+weighed shape by shape, each at its own density, and balances where the steel
+pulls it.
+
+A material is declared in g/mm³ and every simulation format states a density in
+kg/m³. The material's density reaches an exporter already converted, as the
+part's ``density`` property, beside the ``friction`` its ``mu`` becomes (see
+`Friction, and why it is a material property`_). The conversion is
+``Material.density_kg_m3`` and nothing else: no exporter has a factor of a
+million of its own to get wrong.
 
 A link's name, and the properties written under it, come from the shape the
 exporter is handed, and both travel on that shape together. This used to be the
@@ -673,13 +694,17 @@ slot that means something else, and torsion and roll on the way in are counted
 as dropped rather than turned into a PartCAD property that does not exist. Both
 are the same rule the URDF and SDFormat readers already follow.
 
-Two things are deliberately not done here. A material's **density** is not wired
-in the same way: it already has a home (``Material.mass()``), and making every
-part that names a material weigh what that material weighs changes the
-``<inertial>`` of every existing export -- a real improvement, and a change of
-its own. And PartCAD writes each *body's* coefficient and says nothing about how
-a simulator combines the two sides of a contact, because they do not agree about
-it: that is the simulator's model, not the part's.
+A material's **density** travels the same way, as the shape's ``density``
+property, and is what a part that states no ``mass`` is weighed at -- see
+`Writing a URDF`_ for the order. MJCF writes it on each geom as ``density`` and
+lets MuJoCo integrate the mesh; URDF and SDFormat have no density, so their
+exporters integrate the solid themselves and write the ``<inertial>`` it comes
+to.
+
+One thing is deliberately not done here. PartCAD writes each *body's*
+coefficient and says nothing about how a simulator combines the two sides of a
+contact, because they do not agree about it: that is the simulator's model, not
+the part's.
 
 A part that states a ``friction`` of its own keeps it -- a measured part beats
 the substance it is made of -- and a part that states neither gets whatever the
@@ -721,8 +746,9 @@ a model load and then behave nonsensically - a zero-mass link is the single most
 common defect in published URDFs.
 
 These are *derivable* from a solid plus a density, which is exactly what the
-exporter does today. What is missing is the density, and behind it the notion of
-what a part is made of.
+exporters do today, at the density of the material a part names. What is still
+missing is a mass the part *has*, rather than one each exporter works out and
+throws away - item 2 below.
 
 Collision geometry
 ==================
@@ -873,10 +899,11 @@ Three additions, in increasing order of how much they are worth:
 - **Derivation.** With a material behind it (item 1), a part that states no
   ``mass`` has one: the solid's volume times the material's density, cached like
   any other derived value and invalidated when the CAD changes. The same for
-  ``centerOfMass``, ``inertia`` and the surface properties. Today the URDF
-  exporter computes exactly this, from the ``density`` parameter of its
-  ``export:`` configuration, and throws it away afterwards - it should be a property of the part that every
-  consumer sees.
+  ``centerOfMass``, ``inertia`` and the surface properties. Today every
+  exporter computes exactly this, from the material's density (or, for a part
+  that names none, the ``density`` parameter of its ``export:`` configuration),
+  and throws it away afterwards - it should be a property of the part that
+  every consumer sees.
 - **Provenance.** A declared value should say why it exists, since "measured on
   the bench" and "copied from a vendor datasheet" and "invented so the
   simulation would load" are not the same claim:

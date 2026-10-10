@@ -590,6 +590,13 @@ apply. Datasheets quote ``g/cm^3``, which is 1000 times larger: PLA at
 reports no mass, rather than a mass of zero -- nothing downstream could tell an
 invented figure apart from a stated one.
 
+A part made of a material is weighed at its density wherever PartCAD writes a
+mass: the URDF exporter, and the simulation formats a plugin writes, compute
+each part's mass, centre of mass and inertia from its solid and the density of
+what it is made of, unless the part states its own ``mass``. The density
+reaches them as the part's ``density`` property in kg/m³, the unit every
+simulation format states one in (see :ref:`properties`).
+
 ``tags`` is free-form on purpose. There is no controlled vocabulary of material
 properties that survives contact with real catalogues, and imposing one would
 only mean packages could not say what they mean.

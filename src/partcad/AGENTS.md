@@ -685,13 +685,23 @@ at all).
   tool a *package* declares needs the graph, and that is the `open.tools` method: the daemon says **which**
   applications exist, and never opens one. Do not add a method that opens a file.
 
-- **A material is a fact a simulation reads** (`material.py`): `mu` sits beside `density`, and
-  `PHYSICS_FROM_MATERIAL` is what makes it reach an exporter. A shape names its material by a *reference*
-  (`:aluminium`), and resolving one needs the package graph — which the core has and a sandbox does not. So
-  `physics_by_shape()` resolves every reference in an export request against the package of the shape that
-  wrote it (which is what lets the reference be relative), and `wrapper_export.properties_index()` merges what
-  it found *underneath* what each shape states itself. No exporter knows materials exist, which is what keeps
-  URDF's `<mu1>`, SDFormat's `<mu>` and MJCF's `friction` agreeing for free.
+- **A material is a fact a simulation reads** (`material.py`): `mu` and `density` are what
+  `PHYSICS_FROM_MATERIAL` makes reach an exporter, as the shape's `friction` and its `density`. A shape names
+  its material by a *reference* (`:aluminium`), and resolving one needs the package graph — which the core has
+  and a sandbox does not. So `physics_by_shape()` resolves every reference in an export request against the
+  package of the shape that wrote it (which is what lets the reference be relative), and
+  `wrapper_export.properties_index()` merges what it found *underneath* what each shape states itself. No
+  exporter knows materials exist, which is what keeps URDF's `<mu1>`, SDFormat's `<mu>` and MJCF's `friction`
+  agreeing for free — and the mass all three compute agreeing with it.
+
+  The density is lent in **kg/m³**, not the g/mm³ a material is declared in, and `Material.density_kg_m3` is the
+  only conversion between the two: an exporter reads a `density` property in the unit its `density` parameter
+  has always been in, and has no factor of a million of its own. Every exporter weighs a part in one order — a
+  stated `mass`, then the shape's `density` (its own, else its material's), then the export's `density`
+  parameter, then its own default — per shape rather than per link, so a link of several shapes in several
+  materials balances where it should. `export_urdf.density_of()`/`mass_properties()` are the URDF half; the
+  MJCF and SDFormat exporters in the `partcad-sim-*` plugins carry their own copies, because a plugin runs
+  against whatever PartCAD release is installed and cannot import a helper that release does not have.
 
   Which reference it reads is `properties: material:`, and **a package never writes that by hand**.
   `parameters:` is what is asked of the type that produces the shape; `properties:` is what the shape turned

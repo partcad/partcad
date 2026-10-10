@@ -54,6 +54,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
         physics: # (optional) physical properties
           mass: ... # kg
+          density: ... # kg/m^3, what the mass is computed from if 'mass' is not stated
           centerOfMass: [<x>, <y>, <z>] # mm, in the shape's own frame
           inertiaOrientation: [<roll>, <pitch>, <yaw>] # (optional) degrees
           inertia: # kg*m^2, about 'centerOfMass'
@@ -737,14 +738,24 @@ change to something the assembly does hash, is what picks them up.
 
 Every ``physics`` property has a PartCAD name and a PartCAD unit, and the set of
 them is closed. Lengths are millimetres and angles degrees, as everywhere else
-in PartCAD; everything else is SI, so a mass is kilograms and an inertia tensor
-kg·m². Nothing is stored under the name of the format it came from: a URDF
-import reads ``<inertial>`` and the friction and contact settings of a
-``<gazebo>`` block into these properties one value at a time, and a URDF export
-writes each of them back into the element that states it. A URDF that says
-something PartCAD has no property for stops the import instead of being carried
-opaquely, and a property PartCAD holds that URDF cannot state is reported when
-it is exported. See :doc:`simulation`.
+in PartCAD; everything else is SI, so a mass is kilograms, a density kg/m³ and
+an inertia tensor kg·m². Nothing is stored under the name of the format it came
+from: a URDF import reads ``<inertial>`` and the friction and contact settings
+of a ``<gazebo>`` block into these properties one value at a time, and a URDF
+export writes each of them back into the element that states it. A URDF that
+says something PartCAD has no property for stops the import instead of being
+carried opaquely, and a property PartCAD holds that URDF cannot state is
+reported when it is exported. See :doc:`simulation`.
+
+A shape made of a :ref:`material <materials>` has two of these without stating
+them: the material's ``mu`` is its ``friction``, and the material's ``density``
+is its ``density`` -- converted from the g/mm³ a material is declared in to the
+kg/m³ this property is in. Whatever the shape states itself wins over both. So
+the mass of a part that states none is computed from what the part is made of,
+and every exporter resolves it in the same order: a stated ``mass``, then the
+shape's ``density`` (its own, or else its material's), then the ``density``
+parameter of the export, then that exporter's default. The centre of mass and
+the inertia come from the same density as the mass, so the three agree.
 
 A file type that has a way to state these declares ``properties: true`` in its
 ``export:`` section, and is handed them keyed by the full name of the shape they
