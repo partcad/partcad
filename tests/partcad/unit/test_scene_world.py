@@ -27,9 +27,9 @@ import jsonschema
 import pytest
 
 import partcad as pc
-from partcad import assembly_filter, output, scene_world, simulation
+from partcad import assembly_filter, output, physics, scene_world, simulation
 from partcad.scene import Scene
-from partcad.wrappers import wrapper_export
+from partcad.wrappers import mass_properties, wrapper_export
 from partcad_utils import assy_lint
 
 WATER = {"full": "Fresh water at 15 C", "density": 999.1, "viscosity": 0.001138}
@@ -289,6 +289,64 @@ def test_a_filtered_view_of_a_scene_is_the_same_world(tmp_path):
 
     assert isinstance(view, Scene)
     assert view.world_facts(ctx) == {"gravity": [0.0, 0.0, -1.62]}
+
+
+#
+# What a body displaces: the one fact buoyancy needs that a mass cannot give
+#
+
+# What a 20 mm cube measures as it is built (see 'shape_measure').
+CUBE = {
+    "volume": 8000.0,
+    "centroid": [0.0, 0.0, 0.0],
+    "unitInertia": [[1.0e8 * 8 / 6, 0.0, 0.0], [0.0, 1.0e8 * 8 / 6, 0.0], [0.0, 0.0, 1.0e8 * 8 / 6]],
+    "solids": 1,
+}
+
+
+def test_every_shape_is_handed_over_with_the_volume_its_solid_encloses():
+    """Measured, never derived: a float that states its mass still displaces its whole solid."""
+    stated, _sources = physics.resolve({"mass": 0.003}, measurements=CUBE)
+    derived, sources = physics.resolve(None, measurements=CUBE, fallback=(2700.0, "x"))
+
+    assert stated["volume"] == derived["volume"] == 8000.0
+    assert sources["volume"] == "measured"
+    # Not the volume a mass and a density would imply, which for the float
+    # would be that of 3 g of aluminium.
+    assert stated["mass"] == 0.003
+
+
+def test_a_shape_that_encloses_nothing_is_handed_no_volume():
+    resolved, _sources = physics.resolve({"mass": 1.0}, measurements={"volume": None, "solids": 0})
+    assert "volume" not in resolved
+
+
+def test_a_body_displaces_the_sum_of_what_its_parts_enclose():
+    parts = [({"mass": 1.0, "volume": 8000.0}, None), ({"mass": 2.0, "volume": 1000.0}, [[10, 0, 0], [0, 0, 1], 90])]
+
+    assert mass_properties.volume_of(parts) == 9000.0
+    # And the placements change nothing about it, or about the mass beside it.
+    assert mass_properties.of_body(parts)["mass"] == 3.0
+    assert "volume" not in mass_properties.combined([physics_ for physics_, _ in parts])
+
+
+def test_a_body_with_a_part_of_unknown_volume_has_no_volume_rather_than_part_of_one():
+    """A body buoyed by part of what it displaces would float wrongly, and nothing could tell."""
+    assert mass_properties.volume_of([({"volume": 8000.0}, None), ({"mass": 1.0}, None)]) is None
+    assert mass_properties.volume_of([({"volume": 0.0}, None)]) is None
+    assert mass_properties.volume_of([]) is None
+
+
+def test_no_exporter_reports_the_volume_as_a_property_it_cannot_state():
+    """It is a measurement handed over for buoyancy, not a property of the part."""
+    import importlib.util
+
+    path = os.path.join(os.path.dirname(pc.__file__), "builtin", "export", "export_urdf.py")
+    spec = importlib.util.spec_from_file_location("export_urdf_under_test", path)
+    export_urdf = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(export_urdf)
+
+    assert "volume" in export_urdf.URDF_STATED
 
 
 def test_the_properties_index_does_not_mistake_the_world_for_a_shape():
