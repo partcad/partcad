@@ -119,6 +119,25 @@ class Material:
         return None if value is None else float(value)
 
     @property
+    def viscosity(self) -> typing.Optional[float]:
+        """Dynamic viscosity in Pa*s, or None if the package did not state one.
+
+        What makes a substance a *fluid* worth filling a scene with (see
+        'Scene.get_medium()'): how hard it resists being sheared, which is what
+        a simulator's drag on a body moving through it is made of. Dynamic
+        rather than kinematic viscosity, because that is what MuJoCo states and
+        what a datasheet tabulates first; the kinematic one is this divided by
+        'density', and stating both would be two numbers that can disagree.
+
+        In SI, as every physical quantity PartCAD states is (only lengths and
+        angles are millimetres and degrees), so that it goes into a simulation
+        format as it was written: water at 15 degrees C is 0.001138 here, on its
+        datasheet and in MuJoCo's '<option viscosity>' alike.
+        """
+        value = self.config.get("viscosity")
+        return None if value is None else float(value)
+
+    @property
     def mu(self) -> typing.Optional[float]:
         """The coefficient of sliding friction, or None if none was stated.
 
@@ -190,6 +209,8 @@ class Material:
             info["Desc"] = self.desc
         if self.density is not None:
             info["Density"] = "%g kg/m^3" % self.density
+        if self.viscosity is not None:
+            info["Viscosity"] = "%g Pa*s" % self.viscosity
         if self.mu is not None:
             info["Mu"] = "%g" % self.mu
         if self.tags:

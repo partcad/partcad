@@ -653,6 +653,8 @@ Declare scenes
         - <macros.j2>
       offset: <(optional) OCCT Location object>
       manufacturable: <(optional) false by default; a scene is not a product to be made>
+      gravity: <(optional) [x, y, z] in m/s^2; the engine's own, Earth's along -Z, by default>
+      medium: <(optional) the material the scene is filled with; a vacuum by default>
 
       # 'sim-gazebo:world' only -- the reader's own parameters, declared by the
       # package that implements it and passed straight through to it
@@ -685,6 +687,44 @@ Scenes take parameters, aliases and enriches exactly as assemblies do:
       source: :workcell
       with:
         spacing: 900
+
+Gravity, and the fluid a scene is filled with
+---------------------------------------------
+
+A scene is a world as well as an arrangement, and may say two things about that
+world which an assembly cannot: the gravity in it, and the fluid it is filled
+with.
+
+.. code-block:: yaml
+
+  scenes:
+    tank:
+      type: assy
+      gravity: [0, 0, -9.81]
+      medium: //pub/std/manufacturing/material/fluid:water
+
+``gravity:`` is a vector in **m/s^2**, in the scene's own frame: ``[0, 0, -9.81]``
+is Earth with Z up, ``[0, 0, -1.62]`` the Moon, ``[0, 0, 0]`` free fall. It is
+SI because every physical quantity PartCAD states is SI -- only lengths and
+angles are millimetres and degrees (see the note under :ref:`materials`) -- and
+it is also the number every reader knows, every engine states, and the unit a
+``simulate:`` passes its plugin a gravity in; see :doc:`simulation`. A scene
+that states none leaves it to the engine, whose own default is Earth's along -Z.
+
+``medium:`` names a :ref:`material <materials>`, resolved the way a part's
+material is (``:brine`` is the ``brine`` this package catalogues), and its
+``density`` (kg/m^3) and ``viscosity`` (Pa*s) are what a simulation drags and
+buoys what moves through the scene with.
+``//pub/std/manufacturing/material/fluid`` catalogues ``air``, ``water`` and
+``seawater``. A scene that names none is a vacuum, which
+is what every engine assumes.
+
+Both defaults are what a scene meant before it could say either, so a scene
+that says neither simulates and exports exactly as it always did. A medium that
+names a material nothing answers to is an error rather than a vacuum, and
+``pc info`` reports the world a scene resolved to -- the gravity and the facts of
+the material it is filled with. What each engine makes of it, and what it does
+not model, is in :doc:`simulation`.
 
 Gazebo worlds
 -------------
