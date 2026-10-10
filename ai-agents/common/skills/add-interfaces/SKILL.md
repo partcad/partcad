@@ -116,6 +116,25 @@ Interfaces can `inherits:` others (share ports/parameters) and declare
 mating such as a slotted hole. Reuse an existing interface if one already fits
 rather than inventing a new one.
 
+A connection that is meant to **move** — a hinge, a slide, a wheel on its axle —
+says so with `motion:` on the receiving interface, beside the parameter that
+poses it:
+
+```yaml
+interfaces:
+  <female-iface>:
+    parameters:
+      turnZ: { min: 0, max: 90, default: 0 }
+    motion:
+      type: revolute     # fixed|revolute|continuous|prismatic|planar|floating|ball|screw
+      axis: [0, 0, 1]    # in this interface's port frame
+      limits: { lower: 0, upper: 90 }   # degrees for a turn, mm for a move
+```
+
+`motion:` is a record of the freedom the joint is meant to have, and it is
+nothing more yet: a simulation does not make it a joint — every body there is
+free, held only by contact — so no `simulate:` claim can rest on it.
+
 ## 4. Attach the interfaces to the part with `implements:`
 
 A part **implements** an interface, placing that interface's ports onto the
