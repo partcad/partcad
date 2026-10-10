@@ -295,6 +295,12 @@ runtime for this, or for choosing a sandbox. Every image PartCAD builds, pulls o
 documents is a Linux image, and such a daemon answers a ping and then fails every
 pull with ``no matching manifest for windows/amd64``.
 
+The same policy, from the same code, decides ``pc test``'s ``sim`` check, which
+holds a part or an assembly to the ``simulate:`` claims it makes: a simulator
+that resolved and did not run is a failure, but for the one excuse, and a
+simulation plugin that cannot be found is never excused. See "Running a
+simulation" in :doc:`simulation`.
+
 ``examples/feature_cae`` is the pair of cases to check an implementation against
 — a cantilever and a pipe, each with a closed-form answer to compare the solver
 with. Against CalculiX the cantilever reads 0.1655 mm where the model predicts
@@ -831,21 +837,22 @@ uncached too.
 Analyses, routes and simulations
 --------------------------------
 
-What ``pc cae fea``/``pc cae cfd``, ``pc cam`` and ``pc simulate`` produce is
+What ``pc cae fea``/``pc cae cfd``, ``pc cam`` and ``pc sim`` produce is
 cached in the same tiers: the result (the findings, what the route
 implementation counted, or what the simulator reported) together with the files
 the run wrote -- the analysis model, the route program, or the whole run
 directory of a simulation, with the scene, its meshes and whatever the plugin
 left there. Asking the same question again puts the files back where that run
-asks for them and runs nothing. The ``fea``, ``cfd`` and ``cam`` checks of
-``pc test``, and the IDE's FEA and CFD tabs, go through the same cache.
+asks for them and runs nothing. The ``fea``, ``cfd``, ``cam`` and ``sim`` checks
+of ``pc test``, and the IDE's FEA and CFD tabs, go through the same cache.
 
 The question is the object's own cache key plus everything the run adds to it:
 the boundary conditions and where they landed, a route's job and the machine it
 is cut on, the implementation and every option it resolved to, the sandbox it
 runs in, and the content of its script. Changing any of those runs it again. A simulation's ``validation:`` is not part
 of the question: it is evaluated again on every run, so editing it re-judges the
-cached run rather than repeating it.
+cached run rather than repeating it. What a simulation's question is made of,
+and how ``pc test``'s verdict on one is kept, are in :ref:`sim-caching`.
 
 Only answers are cached: an analysis, a route or a simulation that failed is run again
 next time, since installing a missing solver changes no key. The tiers' maximum

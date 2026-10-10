@@ -132,13 +132,16 @@ Any other is converted to the first one on the list that PartCAD can write, and
 changed, it is converted back into the object's own format and written over its
 source, where that source is a file (a STEP, an STL...) rather than a script.
 
-Two more are how an application that cannot read what it was handed still gets
-to open something. ``companions:`` names the extensions the application really
-opens, for a file that sits beside the one PartCAD was pointed at -- a ``kicad``
-part *is* the STEP file KiCad's CLI writes, and the board is the project next to
-it. ``sceneType:`` says which description language an application reads, for
-one that reads an arrangement rather than geometry: MuJoCo reads MJCF, so a
-Gazebo world it is pointed at is written out as MJCF first.
+Two more are about what an application is really handed. ``companions:`` names
+the extensions the application really opens, for a file that sits beside the one
+PartCAD was pointed at -- a ``kicad`` part *is* the STEP file KiCad's CLI writes,
+and the board is the project next to it. ``sceneType:`` says which description
+language an application reads, for one that reads an arrangement rather than
+geometry, and ``sceneExtensions:`` the extensions a file in it is stored in:
+MuJoCo reads MJCF, kept in ``.xml``. A scene in that language is handed over as
+it is, and one in any other is refused rather than converted, with the export
+that writes it -- the language is the engine plugin's, and a file handed to
+``pc ide open`` has no package around it to reach that plugin through.
 
 ``container:`` has the shape a plugin's implementation gives it -- ``image``, and
 ``python`` for an image whose ``python3`` is not on ``PATH`` -- and the container
@@ -165,7 +168,9 @@ Simulations
 A part says what it *is*. ``simulate:`` is an optional section of a part or an
 assembly where it says what it is supposed to **do** once it is placed in a
 world and the world is switched on -- or, more often, what it is supposed not to
-do: not fall over, not slide off, not come apart. ``pc sim`` runs them.
+do: not fall over, not slide off, not come apart. ``pc sim`` runs them, and
+``pc test`` holds the object to them every time it runs, as its ``sim`` check
+(see "Running a simulation" in :doc:`simulation`).
 
 .. code-block:: yaml
 
@@ -176,53 +181,13 @@ do: not fall over, not slide off, not come apart. ``pc sim`` runs them.
           desc: <(optional) what this simulation is about>
           scene: <(optional) the scene to place this object in, by full path>
           offset: <(optional) OCCT Location object: where in that scene it goes>
-          simulation: <(optional) the simulation plugin, by full path>
+          simulation: <the simulation plugin, by full path; there is no default>
           validation: <(optional) a Python expression that is true when it went as it should>
           params: <(optional) parameter values handed to the plugin>
 
-The object's own full path is assigned to the scene's ``subject`` parameter --
-unconditionally, and whatever else the entry says. That is what lets one scene
-serve every object that names it, and nothing special is declared for it: a
-simulation scene is an ordinary scene with an ordinary parameter, and the
-Jinja2 template its file is read as (see :doc:`assy`) is what places the subject.
-
-``scene:`` does not have to be given: the default is ``//builtin/scene:subject``,
-an empty world holding the subject and nothing else, which is what "does this
-stand up on its own" means. ``simulation:`` does have to be given -- PartCAD
-implements no simulator, so a package imports one and says which:
-
-.. code-block:: yaml
-
-  dependencies:
-    sim-mujoco:
-      type: git
-      url: https://github.com/partcad/partcad-sim-mujoco.git
-
-  assemblies:
-    stack:
-      type: assy
-      simulate:
-        stands:
-          simulation: sim-mujoco:mujoco
-          # The blocks are drawn about their own centres, so lift the stack to
-          # stand its bottom face on the floor of the scene.
-          offset: [[0, 0, 10], [0, 0, 1], 0]
-          validation: |
-            max(
-                abs(after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2])
-                for name in before["bodies"]
-            ) < 2.0
-
-``offset:`` is stated here rather than in the scene because it is a fact about
-*this* object -- where its origin sits relative to the floor it is meant to
-stand on -- and the scene is shared.
-
-``validation:`` is a Python expression evaluated over ``before`` and ``after``,
-the two objects the plugin produced, and ``result``, the whole of what it
-returned. It is the only thing PartCAD reads out of a result: what is *inside*
-those objects is the plugin's vocabulary, and the expression is written by
-whoever knows both the object and the plugin. An entry that states none runs and
-reports, and passes nothing.
+What each key means is in :ref:`sim-declaring`, the scene an object is placed in
+and how to write one in :ref:`sim-scenes`, and what a ``validation:`` is
+evaluated over in :ref:`sim-validation`.
 
 Simulation plugins
 ------------------
@@ -251,54 +216,38 @@ a file in the format** ``format:`` **names, and JSON carrying** ``before`` **and
 its own model format and PartCAD already knows how to write several -- which is
 also what keeps a plugin free of any CAD dependency.
 
+The exporter for ``format:`` is looked up in the plugin's own package as well as
+in the scene's, beneath it, which is how a plugin implements the format it
+reads: an engine's scene format belongs to that engine's plugin, so each plugin
+declares the ``export:`` that writes it beside the ``simulation:`` that runs it,
+and a package that re-tunes that export for its own scenes still wins.
+``formatOptions:`` is how the plugin asks for the export -- a physics run wants
+every body free to move, the opposite of what a scene means on its own.
+
+The script runs in a PartCAD sandbox with two globals. ``request`` holds the
+plugin's declared parameters, overridden by the ``params:`` of the declaration
+being run, and then ``scene_file`` (the absolute path of the exported scene),
+``scene_format``, ``scene_name``, ``subject`` (the full path of the object being
+simulated), ``subject_kind`` and ``simulation`` (the declaration's name).
+``path`` is a directory the run may write anything into -- a trajectory, a log
+-- which is kept and cached with the result. The script sets ``output``, or
+defines ``process(path, request)`` returning it:
+
+.. code-block:: python
+
+  output = {"success": True, "before": {...}, "after": {...}}
+  output = {"success": False, "exception": "..."}
+
+A success without ``before`` and ``after``, each an object, is refused. What is
+inside them, and anything else beside them, is the plugin's own vocabulary:
+PartCAD carries it to the ``validation:`` expression and reads none of it. The
+two plugins PartCAD maintains share one vocabulary, described in
+:ref:`sim-validation`, and a plugin that reports the same is one whose
+validations read the same.
+
 **PartCAD ships none of these.** A simulator is somebody's program with a
 release cycle of its own, so PartCAD ships the concept -- this section, the
 sandbox a plugin runs in, and the export a scene reaches it through -- and a
-package supplies the physics.
-`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the
-MuJoCo one: it is handed the scene as MJCF, steps it -- under the scene's
-gravity and through the fluid it is filled with, when it states either (see
-:ref:`scenes`) -- for ``duration`` seconds of simulated time, and reports each
-body's position (in
-millimetres) and orientation before and after. Running it needs no MuJoCo on the
-machine, since the plugin runs in a PartCAD sandbox that installs one.
-
-Friction is a material property
--------------------------------
-
-Whether a stack of blocks stands up is not a property of its geometry. Two 20 mm
-blocks squarely stacked stay put when they are aluminium (``mu: 1.05`` -- dry
-aluminium galls) and the top one slides off when they are PTFE (``mu: 0.04``),
-and nothing about the arrangement changes in between.
-
-So it is stated where it belongs, on the :ref:`material <materials>`, and a part
-that names one gets it. A part names one the way it always has -- with the
-``material`` parameter, on a part type that accepts one (see :ref:`parameters`) --
-and the factory records the answer as the shape's ``material`` property, which
-is what reads it from there on:
-
-.. code-block:: yaml
-
-  parts:
-    block:
-      type: cadquery
-      path: block.py
-      parameters:
-        material:
-          type: string
-          default: ":aluminium"
-
-``mu`` then becomes the shape's ``friction`` property unless the shape states a
-``friction`` of its own, and every format writes it in its own spelling --
-SDFormat's ``<friction><ode><mu>``, URDF's ``<gazebo><mu1>``, MJCF's first
-``friction`` component. A part that says nothing gets whatever the simulator
-defaults to, which is a number nobody chose.
-
-Note which section that is. ``parameters:`` is what is *asked of* the type that
-produces the shape and is where a package writes what it wants; ``properties:``
-is what the shape *turned out to be*, and is filled in by whatever built it -- a
-URDF reader naming a link's material, a STEP reader finding one in the file, or
-the part factory recording what its type was asked for. A package does not write
-``properties:`` by hand.
+package supplies the physics. :ref:`sim-engines` lists the two there are.
 
 See :doc:`simulation` and ``examples/feature_simulate``.

@@ -107,8 +107,10 @@ using existing parts.
   itself - mass, inertia, friction and contact, material and colour - becomes
   named PartCAD properties of the part that link turns into, and goes back out
   on export. What an assembly built out of rigid placements has nowhere to put -
-  joint kinematics, collision geometry, sensors, transmissions - is dropped, and
-  reported. :doc:`simulation` describes that gap and what closing it would take.
+  the motion of a joint, collision geometry, sensors, transmissions - is dropped,
+  and reported. :ref:`sim-urdf` says what survives a round trip; the simulation
+  `design record <https://github.com/partcad/partcad/blob/devel/docs/design/simulation.md>`__
+  says what closing the gap would take.
 
 For an assembly defined by a file another tool produced - the STEP and the URDF
 above - nothing is copied into the package, so the file stays the source of
@@ -117,10 +119,14 @@ truth.
 Scenes
 ======
 
-PartCAD does not yet implement scenes. But the idea is to be able to reproduce
-the same features as worlds in Gazebo to the extent that PartCAD scenes can be
-exported to and simulated in Gazebo, but without using XML while creating the
-scene. See :doc:`simulation`.
+A scene is a placed arrangement of objects - a workcell, a table with parts laid
+out on it, a simulation world. It is built out of the same files as an assembly,
+and differs in intent: an assembly is a product that was put together, and a
+scene states only where things are. A scene can also say what its world is
+like, the gravity in it and the fluid it is filled with, and it is what a
+simulation places an object in. A Gazebo world or a MuJoCo model is read as a
+scene, and a scene is written out as either, through the engine's plugin
+package. See :ref:`scenes` and :doc:`simulation`.
 
 Monorepos
 =========
