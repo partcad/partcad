@@ -193,12 +193,16 @@ The plugin folder is named `claude`, but the command namespace comes from
   `iso`) and checking each against the description — `pc test` only proves the
   geometry instantiates, and one projection hides whatever is behind it.
   Supersedes the legacy `pc add part --ai` pipeline (the agent is the model; no
-  provider/API key).
+  provider/API key). It names the material the part is made of and checks the
+  mass `pc info` derives from it, so the part is ready to simulate.
 - **`/pc:gen-assembly <description>`** — generates an assembly: reuses or
   generates the component parts, authors the `.assy` (explicit placement or
   interface mates), and validates the same four ways — a component offset along
   the viewing direction sits perfectly in the one view that hides the offset. New
-  capability — PartCAD had no AI assembly path.
+  capability — PartCAD had no AI assembly path. Where the description makes a
+  physical claim (it stands, it floats, it holds a load) it also declares that
+  claim as a `simulate:`, in a scene with the right gravity and medium, and
+  checks it with `pc sim`.
 - **`/pc:gen-sketch <description>`** — generates a 2D sketch: the agent picks a
   representation (build123d / cadquery / dxf / svg), authors the sketch, and
   validates by rendering to SVG.

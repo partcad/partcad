@@ -31,6 +31,11 @@ Heuristics:
 If it is genuinely ambiguous, ask one short question. Otherwise proceed with your
 best judgment and state which you picked — the user can redirect.
 
+A physical claim in the description — it stands, it does not tip, it floats, it
+holds a load, it works under water or on the Moon — is part of the request, not
+decoration: carry it into the part or assembly flow, which makes the result
+ready to simulate and checks the claim with `pc sim`.
+
 ## Then
 
 - Sketch → follow **`/pc:gen-sketch`**.
