@@ -37,6 +37,17 @@ carries an 'inertiaOrientation'. One it is handed may, and is read as stated.
 Keys other than these four are neither read nor carried: friction and contact
 are not mass properties, and have nothing to add up.
 
+One more key is read, by 'volume_of()' alone:
+
+    volume              mm^3, what the solid encloses - measured, never stated
+
+It is not a mass property either, and is not carried into what 'placed()' and
+'combined()' return: a volume does not move or turn with a placement, and what a
+body's volume is has nothing to do with where its mass balances. It is what a
+body displaces of the fluid a scene is filled with, and the one fact buoyancy
+needs that a mass and a density cannot give: a sealed float states its mass and
+still pushes aside the whole of its solid.
+
 The products of inertia are the tensor's own entries, not the integrals they
 are the negatives of - the convention URDF, SDFormat and MJCF all state, and
 OCCT's MatrixOfInertia() already follows.
@@ -61,6 +72,8 @@ M5_PER_MM5 = 1.0e-15
 INERTIA_KEYS = ("ixx", "ixy", "ixz", "iyy", "iyz", "izz")
 
 MASS_KEYS = ("mass", "centerOfMass", "inertia", "inertiaOrientation")
+
+VOLUME_KEY = "volume"
 
 _ZERO = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
 
@@ -241,6 +254,34 @@ def of_body(parts, own=None):
         physics = parts[0][0]
         return physics if weighs(physics) else None
     return combined([placed(physics, location) for physics, location in parts if physics])
+
+
+def volume_of(parts):
+    """The volume one rigid body encloses, in mm^3, or None if any part of it is not known.
+
+    'parts' is the same (physics, placement) pairs 'of_body()' takes, so that an
+    exporter hands both functions one list and the body's volume and its mass
+    are of the same shapes. The placements are not needed - a volume is the
+    same wherever the shape is put - and are taken only so the two agree.
+
+    The sum of what each part encloses, which is the body's as long as its
+    parts do not overlap, as the parts of one body do not. None, rather than the
+    sum of the rest, when a part's volume is not known (an open mesh, a shell):
+    a body buoyed by part of what it displaces floats wrongly, and nothing
+    downstream could tell. None for a body of no parts, too.
+    """
+    total = 0.0
+    counted = 0
+    for physics, _location in parts:
+        try:
+            volume = float((physics or {}).get(VOLUME_KEY))
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(volume) or volume <= 0.0:
+            return None
+        total += volume
+        counted += 1
+    return total if counted else None
 
 
 def weighs(physics):

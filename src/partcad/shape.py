@@ -27,7 +27,7 @@ from . import output
 from . import physics as pc_physics
 from . import render_overlay
 from . import runtime as pc_runtime
-from . import sandbox_versions, shape_ports, wrapper
+from . import sandbox_versions, scene_world, shape_ports, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import ShapeConfiguration
@@ -839,6 +839,17 @@ class Shape(ShapeConfiguration):
         _project, found = pc_material.lookup(ctx, "%s:%s" % (package, name), quiet=quiet)
         return found
 
+    def world_facts(self, ctx) -> Optional[dict]:
+        """What this shape says about the world it is, or None: nothing, unless it is a scene.
+
+        A part or an assembly is a thing placed *in* a world and has no gravity
+        or medium of its own to state; 'Scene' overrides this. Asked of every
+        shape rather than only of scenes so that '_output_request()' below has
+        one question to ask and no kind to test for -- a filtered view of a
+        scene is a scene too, and answers the same.
+        """
+        return None
+
     async def get_cached_properties_async(self, ctx):
         """What the cache recorded beside this shape's geometry, or None.
 
@@ -1464,6 +1475,16 @@ class Shape(ShapeConfiguration):
             facts = await pc_physics.physics_by_shape_async(ctx, request, pc_physics.export_fallback(request))
             if facts:
                 request[pc_physics.FACTS_KEY] = facts
+            # The scene's own physics, beside its shapes': the gravity it states
+            # and the fluid it is filled with, the latter resolved here for the
+            # reason a shape's material is. See 'output.WORLD_KEY' for why only a
+            # file type that asked for 'properties' is handed it. A medium that
+            # resolves to nothing raises rather than being left out: a model
+            # written in a vacuum for a scene that said it was under water is a
+            # wrong answer, not a less detailed one.
+            world = self.world_facts(ctx)
+            if world:
+                request[output.WORLD_KEY] = world
         return request
 
     async def _overlay_ports_async(self, ctx, overlay, cache):
@@ -1729,7 +1750,15 @@ class Shape(ShapeConfiguration):
                 subject_ports if subject is not self else (ports_cache if ports_cache is not None else {}),
             )
 
-        request = await subject._output_request(ctx, obj, impl, kwargs, overlay=effective_overlay, ports=ports)
+        try:
+            request = await subject._output_request(ctx, obj, impl, kwargs, overlay=effective_overlay, ports=ports)
+        except scene_world.WorldError as e:
+            # What a scene states about its world, stated wrongly: a gravity that
+            # is not a vector, a medium nothing answers to. The declaration's
+            # mistake rather than the implementation's, reported the way a bad
+            # filter is above and with nothing written.
+            self.error("%s: %s" % (format_name, e))
+            return
         result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
         if result is None:
             return

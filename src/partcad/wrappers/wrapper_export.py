@@ -66,6 +66,15 @@ what each shape reports about itself - its material, its colour, its physics,
 with every shape's mass, centre of mass, inertia, density and friction already
 resolved - keyed by the full name the shape carries. See 'properties_index()'.
 
+Such a format, handed a scene that states a gravity or a medium, also finds
+'request["world"]': the gravity as [x, y, z] in m/s^2, and the fluid the scene is
+filled with as the material it names and that material's 'density' (kg/m^3) and
+'viscosity' (Pa*s), each only when stated - SI, so it is written as it arrives.
+Absent means the
+scene states neither - Earth's gravity as the engine has it, and vacuum - and an
+implementation that writes what it always wrote in that case changes nothing for
+anybody. See WORLD_KEY.
+
 Every request carries 'request["reproducible"]', a boolean, whether or not the
 file type declared it: whether the caller needs this file to come out the same
 every time it is written, from the same object. An
@@ -141,6 +150,15 @@ REPRODUCIBLE_KEY = "reproducible"
 # itself. See 'partcad.physics.physics_by_shape()', whose 'FACTS_KEY' is this
 # key's twin.
 PHYSICS_KEY = "__physics__"
+
+# What a scene says about the world it is: its gravity and the fluid it is
+# filled with, resolved by the core (the fluid is a material, named the way a
+# part names what it is made of, and only the core can load the package that
+# catalogues it). Its twin is 'partcad.output.WORLD_KEY'. Nothing here reads it:
+# it is a fact about the scene rather than about any one shape, so it reaches the
+# implementation as the core sent it, beside 'wrapped', and is not folded into
+# the properties index.
+WORLD_KEY = "world"
 
 
 def properties_index(request):

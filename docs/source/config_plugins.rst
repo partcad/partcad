@@ -256,8 +256,10 @@ release cycle of its own, so PartCAD ships the concept -- this section, the
 sandbox a plugin runs in, and the export a scene reaches it through -- and a
 package supplies the physics.
 `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the
-MuJoCo one: it is handed the scene as MJCF, steps it under gravity for
-``duration`` seconds of simulated time, and reports each body's position (in
+MuJoCo one: it is handed the scene as MJCF, steps it -- under the scene's
+gravity and through the fluid it is filled with, when it states either (see
+:ref:`scenes`) -- for ``duration`` seconds of simulated time, and reports each
+body's position (in
 millimetres) and orientation before and after. Running it needs no MuJoCo on the
 machine, since the plugin runs in a PartCAD sandbox that installs one.
 
