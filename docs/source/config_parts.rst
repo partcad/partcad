@@ -405,6 +405,9 @@ Because asking for a value is asking for the instance that has it, and an
 instance is named ``<name>;<param>=<value>,...``, a ``with:`` value may not
 contain ``,``, ``;`` or ``=``: such a value could not be named. The same holds
 for what a parameter declares as its ``default:`` or offers in its ``enum:``.
+A ``:`` or a ``//`` is fine -- a material reference such as
+``//pub/std/materials:water`` or a URL is a value like any other, because only
+a ``:`` *before* the parameters separates a package from the object it names.
 
 An enrich says which values it wants, and nothing about how the object is
 built. ``path``, the requirements, the sandbox versions, the inputs of the

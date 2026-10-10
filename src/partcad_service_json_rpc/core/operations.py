@@ -26,7 +26,12 @@ from packaging.specifiers import SpecifierSet
 
 from partcad_utils import conda as pc_conda
 from partcad_utils import config_report, staging
-from partcad_utils.utils import directory_size_mb, split_recursive_object, split_recursive_package
+from partcad_utils.utils import (
+    directory_size_mb,
+    split_recursive_object,
+    split_recursive_package,
+    split_resource_path,
+)
 
 from ..rpc.dispatcher import JsonRpcError
 from . import events
@@ -100,8 +105,10 @@ def _config_check_targets(ctx, params):
     package, object_name, recursive = _request(params)
     target = ctx.resolve_package_path(package)
     for name in (object_name, params.get("name")):
-        if isinstance(name, str) and ":" in name:
-            object_package = name.split(":", 1)[0]
+        # A ':' in a parameter value ('room;medium=//pub/std:air') names no
+        # package; only one before the parameters does.
+        object_package = split_resource_path(name)[0] if isinstance(name, str) else None
+        if object_package is not None:
             if object_package:
                 target = ctx.resolve_package_path(object_package)
             break

@@ -169,10 +169,11 @@ def split_recursive_object(package, object_name):
     package of its own, so the subtree is still the one '--package' selected.
     """
     package, recursive = split_recursive_package(package)
-    if not isinstance(object_name, str) or ":" not in object_name:
+    object_package, item = split_resource_path(object_name) if isinstance(object_name, str) else (None, None)
+    if object_package is None:
+        # No package named, which a ':' in a parameter value does not change.
         return package, object_name, recursive
 
-    object_package, _, item = object_name.partition(":")
     object_package, object_recursive = split_recursive_package(object_package)
     if not object_recursive:
         return package, object_name, recursive
@@ -227,12 +228,33 @@ def format_parameterized_name(base: str, parameters: dict) -> str:
     return base + ";" + ",".join("%s=%s" % (name, inherited[name]) for name in sorted(inherited))
 
 
+def split_resource_path(pattern: str) -> tuple:
+    """Split '<package>:<object>[;<param>=<value>,...]' into the package and the rest.
+
+    The package is what precedes the first ':', and only a ':' before the
+    parameters counts. A parameter value is the user's text and may hold
+    anything - a material reference ('medium=//pub/std/materials:water'), a URL,
+    a ratio - so splitting on every ':' made such a name unreadable ("too many
+    values to unpack"), and splitting on the last one made it name an object
+    called after the tail of its own value. The first ':' and not the last,
+    because a package path holds none and an object name may: an assembly
+    embedded in an ASSY file is '<file>:<assembly>' in its package.
+
+    The package is None when the reference names none ('obj', 'obj;a=x:y') and
+    '' when it names the current one by writing nothing before the ':' (':obj').
+    The rest - the object, parameters and all - is returned as it was written.
+    """
+    head, _, _ = pattern.partition(";")
+    package, separator, _ = head.partition(":")
+    if not separator:
+        return None, pattern
+    return package, pattern[len(package) + 1 :]
+
+
 @telemetry.instrument_function("resolve_resource_path")
 def resolve_resource_path(current_project_name, pattern: str):
-    if ":" not in pattern:
-        pattern = ":" + pattern
-    project_pattern, item_pattern = pattern.split(":")
-    if project_pattern == "":
+    project_pattern, item_pattern = split_resource_path(pattern)
+    if not project_pattern:
         project_pattern = current_project_name
 
     # For backward compatibility '/' -> '//'
@@ -246,7 +268,10 @@ def resolve_resource_path(current_project_name, pattern: str):
         else:
             project_pattern = current_project_name + "/" + project_pattern
     project_pattern = re.sub(r"/[^/]*/\.\.", "", project_pattern)
-    item_pattern = item_pattern.replace("...", "*")
+    # '...' is a wildcard in an object's name, and not in its parameters, for
+    # the reason ':' is not a separator there: a value is the user's text.
+    name, separator, parameters = item_pattern.partition(";")
+    item_pattern = name.replace("...", "*") + separator + parameters
 
     return project_pattern, item_pattern
 
