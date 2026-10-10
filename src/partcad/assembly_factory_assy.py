@@ -16,10 +16,11 @@ import yaml
 
 from partcad_utils import assy_filter
 
+from . import joint as pc_joint
 from . import logging as pc_logging
 from . import telemetry
 from .assembly import Assembly, AssemblyChild
-from .assembly_connect import ConnectHow, check_stage_sequence
+from .assembly_connect import ConnectHow, _mating_between, check_stage_sequence
 from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
 from .interface import port_location
@@ -301,8 +302,38 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     assembly.children.append(result)
             if not assembly.children:
                 pc_logging.warning("Assembly is empty")
+            self.name_joints(assembly)
 
             self.count_instantiated()
+
+    def name_joints(self, assembly) -> None:
+        """Make every joint's name unique across the assembly, in link order.
+
+        A joint is named '<child link>-<target link>' unless its connection says
+        'joint:', and link names need not be unique - four 'leg' links connected
+        to one 'table' are four 'leg-table' joints. A joint's name is what a
+        simulation reports it under and what another joint's 'mimic' points at,
+        so the second and later ones are suffixed ('leg-table-2', ...) and each
+        of them is reported: an explicit 'joint:' on each is the fix.
+        """
+        taken = {}
+        for child in assembly.connected_children():
+            joint = child.joint
+            if joint is None:
+                continue
+            base = joint.name
+            if base not in taken:
+                taken[base] = child
+                continue
+            suffix = 2
+            while "%s-%d" % (base, suffix) in taken:
+                suffix += 1
+            joint.name = "%s-%d" % (base, suffix)
+            taken[joint.name] = child
+            child.joint_problems.append(
+                "the joint name '%s' is taken by the link '%s' above, so this joint is '%s'; "
+                "give each of them a 'joint:' of its own" % (base, taken[base].name, joint.name)
+            )
 
     def apply_root_placement(self, assembly, node) -> None:
         """Move what the file holds by where its root node says it is.
@@ -333,6 +364,10 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         placement = Location(location)
         for child in assembly.children:
             child.location = placement if child.location is None else placement * Location(child.location)
+            if child.composition is not None:
+                # The same product, one factor further out: which is what keeps
+                # the composition the location of the child it composed.
+                child.composition.place_within(placement)
 
     def link_names(self, node_list) -> list:
         """What each link of one ``links:`` list is called, in file order.
@@ -365,21 +400,95 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
         check_stage_sequence(node_list, self.name)
         names = self.link_names(node_list)
+        refusals = self.placement_refusals(node_list, names)
 
         async def wait_for_tasks():
             while len(tasks) > 0:
-                task = tasks.pop(0)
+                index, task = tasks.pop(0)
                 f = await asyncio.tasks.wait([task])
                 result = f[0].pop().result()
                 if result is not None:
+                    result.joint_problems.extend(refusals.get(index, []))
                     assembly.children.append(result)
 
         for index, link in enumerate(node_list):
             if "connect" in link or "connectPorts" in link:
                 # wait for all previous nodes to get added first
                 await wait_for_tasks()
-            tasks.append(asyncio.create_task(self.handle_node(assembly, link, names[index])))
+            tasks.append((index, asyncio.create_task(self.handle_node(assembly, link, names[index]))))
         await wait_for_tasks()
+
+    # The three ways a link is placed, in the order 'handle_node' takes them.
+    PLACEMENTS = ("location", "connect", "connectPorts")
+
+    def placement_refusals(self, node_list, names) -> dict:
+        """The placements of one 'links:' list that cannot be honoured, by link index.
+
+        A link is placed once, and a connection is to a link already placed -
+        which is exactly what makes a closed chain (a four-bar linkage) unstatable
+        today: closing it takes a connection whose child is already placed, or one
+        whose target is not placed yet. Both are detected here and refused, with a
+        message that says so, rather than answered with "Target part not found"
+        and a part at the origin. A loop-closing constraint between two ports is
+        planned (docs/design/simulation.md, section 8.9).
+
+        Static, over the file as read, so it costs nothing and is the same answer
+        on every run. The schema forbids two placements on one node and 'pc lint'
+        reports a target named further down; this is the same thing found by the
+        reader that has to act on it.
+        """
+        refusals = {}
+        targets = {}
+        for index, link in enumerate(node_list):
+            if not isinstance(link, dict):
+                continue
+            stated = [section for section in self.PLACEMENTS if section in link]
+            if len(stated) > 1:
+                refusals.setdefault(index, []).append(
+                    "it is placed by '%s' and again by '%s'; a link is placed once, so the second would be a "
+                    "connection of a link that is already placed - a closed loop, which cannot be stated yet. "
+                    "It is ignored" % (stated[0], "' and '".join(stated[1:]))
+                )
+            if stated and stated[0] != "location" and isinstance(link.get(stated[0]), dict):
+                target = link[stated[0]].get("name")
+                if target is not None:
+                    targets[index] = str(target)
+
+        def first(name):
+            return next((position for position, other in enumerate(names) if other == name), None)
+
+        for index, target in targets.items():
+            if target in names[:index]:
+                continue
+            if target == names[index]:
+                refusals.setdefault(index, []).append("it is connected to itself; the connection is refused")
+                continue
+            if target not in names[index + 1 :]:
+                # Named nowhere in this list: 'Target part not found', as ever.
+                continue
+            chain, seen, current = [names[index], target], {target}, first(target)
+            closes = False
+            while current is not None and current in targets:
+                following = targets[current]
+                if following == names[index]:
+                    closes = True
+                    break
+                if following in seen or following in names[:index]:
+                    break
+                seen.add(following)
+                chain.append(following)
+                current = first(following)
+            if closes:
+                refusals.setdefault(index, []).append(
+                    "connecting it to '%s' closes a loop (%s -> %s): a link is placed once, against a link "
+                    "already placed, so a closed chain cannot be stated yet, and the connection is refused"
+                    % (target, " -> ".join(chain), names[index])
+                )
+            else:
+                refusals.setdefault(index, []).append(
+                    "'%s' is placed after it, so it is not there to be connected to yet; move it above" % target
+                )
+        return refusals
 
     def connect_how(self, node, connect, name):
         """The assembly instructions this link carries.
@@ -422,6 +531,12 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         connect_comment = None
         connect_how = None
         connection = None
+        # How a connected node's location was composed, and the joint that
+        # composition makes when it kept a degree of freedom (see
+        # 'compose_connection').
+        composition = None
+        joint = None
+        joint_problems = []
         connect_with_iface = None
         connect_with_params = None
         connect_with_instance = None
@@ -544,14 +659,12 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 source_port = None
                 source_iface = None
                 source_iface_obj = None
-                source_offsets = []
                 source_iface_instance = None
                 target_part = None
                 target_part_location = None
                 target_port = None
                 target_iface = None
                 target_iface_obj = None
-                target_offsets = []
                 target_iface_instance = None
                 # trsf = None # TODO(clairbee): implement offsets
 
@@ -570,9 +683,12 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     pc_logging.error("Target part not found: %s" % connect_to_name)
                 else:
                     await prepare_ports_async(target_part, self.ctx)
-                    if hasattr(child, "location"):
+                    if getattr(child, "location", None) is not None:
                         target_part_location = child.location
                     else:
+                        # A target whose own connection could not be made - one
+                        # refused for closing a loop, say - has no placement, and
+                        # is drawn at the origin. This used to multiply 'None'.
                         target_part_location = Location((0, 0, 0), (0, 0, 1), 0)
 
                     # If there is no source interface specified,
@@ -1024,39 +1140,6 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     # TODO(clairbee): before the next step, deduce the interface
                     #                 based on the port name if the interface is missing
 
-                    # Now calculate offsets based on params.
-                    # This requires an interface object to be present, as that's where the params are defined.
-                    # If the source interface params are passed, calculate the offsets
-                    if source_iface_obj is not None and connect_with_params is not None:
-                        pc_logging.debug("Source params are found")
-                        for (
-                            param_name,
-                            param_value,
-                        ) in connect_with_params.items():
-                            pc_logging.debug("Source param: %s" % param_name)
-                            param = source_iface_obj.params.get(param_name, None)
-                            pc_logging.debug("Source param: %s" % param)
-                            if param is not None:
-                                offsets = param.get_offsets(param_value)
-                                pc_logging.debug("Source offsets: %s" % offsets)
-                                source_offsets.extend(offsets)
-
-                    # If the target interface params are passed, calculate the offsets
-                    if target_iface_obj is not None and connect_to_params is not None:
-                        pc_logging.debug("Target params are found")
-                        for (
-                            param_name,
-                            param_value,
-                        ) in connect_to_params.items():
-                            pc_logging.debug("Target param: %s" % param_name)
-                            pc_logging.debug("Target info: %s" % target_iface_obj.info())
-                            param = target_iface_obj.params.get(param_name, None)
-                            pc_logging.debug("Target param: %s" % param)
-                            if param is not None:
-                                offsets = param.get_offsets(param_value)
-                                pc_logging.debug("Target offsets: %s" % offsets)
-                                target_offsets.extend(offsets)
-
                     if (source_port is None and target_port is not None) or (
                         source_port is not None and target_port is None
                     ):
@@ -1067,53 +1150,26 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     # Pure-Python rigid-transform algebra (geom.Location): the
                     # connection location is the target part/port placement,
                     # flipped to face the source, offset by the freedom-of-movement
-                    # parameters, and pulled back by the source port. gp_Trsf.Multiply
-                    # composed left-to-right, which is exactly Location '*'.
-                    turn_around = Location((0, 0, 0), (0.71, 0.71, 0), 180)
-
-                    if source_port is not None and target_port is not None:
-                        pc_logging.debug(
-                            "Connected %s of %s to %s of %s"
-                            % (
-                                connect_with_port,
-                                name,
-                                connect_to_port,
-                                connect_to_name,
-                            )
-                        )
-
-                        location = target_part_location * port_location(target_port) * turn_around
-                        for target_offset in target_offsets:
-                            pc_logging.debug("Target offset: %s" % target_offset)
-                            location = location * target_offset
-                        for source_offset in source_offsets:
-                            location = location * source_offset
-                        location = location * port_location(source_port).inverse()
-                    elif source_port is None and target_port is not None:
-                        pc_logging.debug(
-                            "Connected %s to %s of %s"
-                            % (
-                                name,
-                                connect_to_port,
-                                connect_to_name,
-                            )
-                        )
-
-                        location = target_part_location * port_location(target_port) * turn_around
-                        for target_offset in target_offsets:
-                            location = location * target_offset
-                    elif source_port is not None and target_port is None:
-                        pc_logging.debug("Connected %s of %s to %s" % (connect_with_port, name, connect_to_name))
-                        location = target_part_location * turn_around
-                        for source_offset in source_offsets:
-                            location = location * source_offset
-                        location = location * port_location(source_port).inverse()
-                    elif source_port is None and target_port is None:
-                        pc_logging.debug("Connected %s to %s" % (name, connect_to_name))
-                        location = target_part_location * turn_around
-                    else:
-                        pc_logging.error("Not enough data to connect %s" % name)
-                        location = Location((0, 0, 0), (0, 0, 1), 0)
+                    # parameters, and pulled back by the source port - kept as the
+                    # ordered steps it is the product of, which is what a joint is
+                    # made of (see 'partcad.joint'). The product is the placement:
+                    # it is taken from the steps rather than worked out beside them.
+                    composition, joint, joint_problems = self.compose_connection(
+                        connect,
+                        name,
+                        connect_to_name,
+                        target_part_location,
+                        target_port,
+                        source_port,
+                        target_iface_obj,
+                        source_iface_obj,
+                        connect_to_params,
+                        connect_with_params,
+                    )
+                    location = composition.location()
+                    pc_logging.debug(
+                        "Connected %s of %s to %s of %s" % (connect_with_port, name, connect_to_port, connect_to_name)
+                    )
 
                     connection = self._connection_info(
                         connect,
@@ -1143,9 +1199,136 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 )
 
         if item is not None:
-            return AssemblyChild(item, name, location, connect_comment, connect_how, connection, description, located)
+            child = AssemblyChild(
+                item,
+                name,
+                location,
+                connect_comment,
+                connect_how,
+                connection,
+                description,
+                located,
+                composition=composition,
+                joint=joint,
+                joint_problems=joint_problems,
+            )
+            if joint is not None:
+                # One list, so that what is found about the joint after this -
+                # a name another link already has - is the joint's too.
+                joint.problems = child.joint_problems
+            return child
         else:
             return None
+
+    def info(self, shape):
+        """The usual shape info, plus the joints the assembly is a mechanism of.
+
+        The assembly is instantiated for it, which reads the ASSY file and not
+        any geometry: the geometry may have come from the cache, and then nothing
+        has worked out which of its connections move. A joint is shown with the
+        two links it joins, every degree of freedom it keeps - kind, axis,
+        range, starting value, and the parameter and declaration each one came
+        from - and its physics. A rigid assembly has no 'Joints' at all, and
+        neither has a scene, whose connections attach nothing.
+        """
+        info = super().info(shape)
+        if not self.KEEPS_JOINTS:
+            return info
+        asyncio.run(shape.do_instantiate())
+        joints = {joint.name: joint.info(prefix) for prefix, joint in shape.joints()}
+        if joints:
+            info["Joints"] = joints
+        return info
+
+    # Whether a connection that keeps a degree of freedom makes a joint. It does
+    # in an assembly, which is a product that was put together; a scene only
+    # states where things are, and every element of one is a body of its own
+    # (see 'SceneFactoryAssy'). Either way the connection is resolved the same
+    # way, so that one file places its parts in one place whatever reads it.
+    KEEPS_JOINTS = True
+
+    def compose_connection(
+        self,
+        connect,
+        name,
+        connect_to_name,
+        target_part_location,
+        target_port,
+        source_port,
+        target_iface_obj,
+        source_iface_obj,
+        connect_to_params,
+        connect_with_params,
+    ):
+        """One connection as '(composition, joint or None, problems)'.
+
+        The composition is the placement as the steps it is the product of, and
+        the joint is that composition when a step stayed free; see
+        'partcad.joint' for both, and for where a degree of freedom may be
+        declared and how the two interfaces' declarations combine.
+        """
+        connect = connect if isinstance(connect, dict) else {}
+        to_side = pc_joint.Side(pc_joint.TO, target_iface_obj, connect_to_params, target_port is not None)
+        with_side = pc_joint.Side(pc_joint.WITH, source_iface_obj, connect_with_params, source_port is not None)
+        mating = None
+        if source_iface_obj is not None and target_iface_obj is not None:
+            mating = _mating_between(source_iface_obj, target_iface_obj)
+
+        resolution = pc_joint.Resolution(
+            to_side,
+            with_side,
+            connect,
+            mating,
+            self._thread_step(connect, mating, target_iface_obj, source_iface_obj),
+        )
+        composition = pc_joint.compose(
+            target_part_location,
+            None if target_port is None else port_location(target_port),
+            None if source_port is None else port_location(source_port),
+            to_side,
+            with_side,
+        )
+        # Coupled before merging: a step that follows another is not a freedom
+        # of its own, and must not be summed into one.
+        resolution.apply_couplings(composition)
+        pc_joint.merge(composition)
+        problems = list(resolution.problems)
+
+        joint = None
+        if composition.has_freedom and self.KEEPS_JOINTS:
+            physics, physics_source = pc_joint.resolve_physics(
+                connect, mating, to_side, with_side, composition, problems
+            )
+            joint_name = connect.get("joint")
+            if joint_name is not None and (not isinstance(joint_name, str) or not joint_name):
+                problems.append("connect: 'joint' must be a name, ignoring: %r" % (joint_name,))
+                joint_name = None
+            joint = pc_joint.Joint(
+                joint_name or "%s-%s" % (name, connect_to_name),
+                connect_to_name,
+                name,
+                composition,
+                physics,
+                physics_source,
+                resolution.record,
+            )
+        for problem in problems:
+            pc_logging.error("%s: %s: %s" % (self.name, name, problem))
+        return composition, joint, problems
+
+    def _thread_step(self, connect, mating, target_iface_obj, source_iface_obj):
+        """The thread a screw joint advances along: the connection's, the mating's, or an interface's."""
+        candidates = [
+            (connect.get("how") or {}).get("threadStep") if isinstance(connect.get("how"), dict) else None,
+            (getattr(mating, "how", None) or {}).get("threadStep"),
+        ]
+        for interface in (target_iface_obj, source_iface_obj):
+            get_thread_step = getattr(interface, "get_thread_step", None)
+            candidates.append(get_thread_step() if get_thread_step is not None else None)
+        for candidate in candidates:
+            if isinstance(candidate, (int, float)) and not isinstance(candidate, bool) and candidate > 0:
+                return float(candidate)
+        return None
 
     def _connection_info(
         self,

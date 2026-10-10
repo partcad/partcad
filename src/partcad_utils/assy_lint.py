@@ -262,11 +262,88 @@ class Diagnostic:
 
 
 def get_schema(filename: str) -> dict:
-    """Load and cache one of the JSON schemas shipped in ``partcad_utils.schema``."""
+    """Load and cache one of the JSON schemas shipped in ``partcad_utils.schema``.
+
+    A schema may borrow a definition from another one by naming it
+    (``"$ref": "partcad.json#/definitions/motion"``), and what is returned has
+    every such definition copied in -- with whatever that one refers to in turn
+    -- so it is self-contained. See '_inline_borrowed'.
+    """
     if filename not in _schema_cache:
         with resources.files("partcad_utils.schema").joinpath(filename).open("r") as f:
-            _schema_cache[filename] = json.load(f)
+            _schema_cache[filename] = _inline_borrowed(json.load(f), filename)
     return _schema_cache[filename]
+
+
+# A '$ref' into another schema of this directory: '<file>.json#/definitions/<name>'.
+_BORROWED_REF = re.compile(r"^([A-Za-z0-9_.-]+\.json)#/definitions/([^/]+)$")
+_LOCAL_REF = re.compile(r"^#/definitions/([^/]+)$")
+
+
+def _inline_borrowed(schema: dict, filename: str) -> dict:
+    """``schema`` with the definitions it borrows from the other schemas copied into it.
+
+    A connection's 'motion:' and 'physics:' in an ASSY file are the very
+    sections an interface states in 'partcad.yaml', and a copy of their
+    definitions in the ASSY schema would be a copy that stops matching -- the
+    reason 'scene_schema()' derives the scene schema rather than keeping one.
+    So the ASSY schema names them where they are defined, and this resolves the
+    name when the schema is loaded rather than leaving it to a resolver.
+
+    Two things make that better than registering the other file with the
+    validator. The result is one document, so everything that hashes a schema
+    to key what it found (see 'lint/schema.py') hashes what was borrowed too,
+    and a change to a borrowed definition is a change to every schema that
+    borrows it. And nothing has to know the files refer to each other.
+
+    The borrowed definitions keep their names, and so do the ones they refer to;
+    a name both schemas define differently is refused rather than overwritten.
+    """
+    borrowed = []
+
+    def rewrite(node):
+        if isinstance(node, dict):
+            match = _BORROWED_REF.match(node.get("$ref", "")) if isinstance(node.get("$ref"), str) else None
+            if match is not None:
+                borrowed.append((match.group(1), match.group(2)))
+                node["$ref"] = "#/definitions/%s" % match.group(2)
+            for value in node.values():
+                rewrite(value)
+        elif isinstance(node, list):
+            for value in node:
+                rewrite(value)
+
+    rewrite(schema)
+    if not borrowed:
+        return schema
+    definitions = schema.setdefault("definitions", {})
+    while borrowed:
+        source, name = borrowed.pop()
+        if source == filename:
+            continue
+        definition = get_schema(source).get("definitions", {}).get(name)
+        if definition is None:
+            raise ValueError("%s borrows the definition '%s' from %s, which has none" % (filename, name, source))
+        if name in definitions:
+            if definitions[name] != definition:
+                raise ValueError("%s defines '%s' and also borrows another one from %s" % (filename, name, source))
+            continue
+        definitions[name] = copy.deepcopy(definition)
+
+        def local_refs(node):
+            if isinstance(node, dict):
+                ref = node.get("$ref")
+                match = _LOCAL_REF.match(ref) if isinstance(ref, str) else None
+                if match is not None:
+                    borrowed.append((source, match.group(1)))
+                for value in node.values():
+                    local_refs(value)
+            elif isinstance(node, list):
+                for value in node:
+                    local_refs(value)
+
+        local_refs(definition)
+    return schema
 
 
 def schema_name_for_file(path: str):

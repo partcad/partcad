@@ -56,6 +56,14 @@ class SceneFactoryAssy(SceneFactoryMixin, AssemblyFactoryAssy):
     ``assemblies:`` section an assembly.
     """
 
+    # A scene states where things are, and every element of one is a body of
+    # its own: its 'connect:' places one object against another and attaches
+    # nothing, so a connection that keeps a degree of freedom makes no joint
+    # here. The placement is worked out exactly as in an assembly - including
+    # the parameters a 'motion:' brings - so one file puts its parts in one
+    # place whichever kind of object reads it.
+    KEEPS_JOINTS = False
+
     def connect_how(self, node, connect, name):
         """A scene has no assembly instructions, and says so rather than ignoring them.
 

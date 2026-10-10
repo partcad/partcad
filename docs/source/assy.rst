@@ -120,6 +120,9 @@ The following syntax is used to create a node that places a part in the assembly
       how: <(optional) assembly instructions, see "How" below>
       exploded: <(optional) the gap to show in the exploded view of this step, in mm>
       interferes: <(optional) named nodes this one also ends up sharing space with, see "Expected overlaps" below>
+      motion: <(optional) the degrees of freedom this connection keeps, see "Joints" below>
+      physics: <(optional) what moving it costs, see "Joints" below>
+      joint: <(optional) the name of the joint it makes, see "Joints" below>
 
 The `name` a node is given is how everything else in and around this assembly
 refers to it: the `name` of a `connect`/`connectPorts` names a node, and so does
@@ -143,6 +146,69 @@ The `exploded` field does not affect the assembly itself: it is how far apart
 the two parts are drawn in the exploded view of this step in the assembly
 instruction book (`pc render -t pdf` and `pc render -t html`).
 Without it, the two are spaced by half of the largest dimension of the two.
+
+`toParams` and `withParams` give values to the freedom-of-movement parameters of
+the two interfaces (see :ref:`interface-parameters`), and both are read in the
+**contact frame** - the frame where the two ports meet, which is the port of the
+part being added (`with`), and the port of the part it is added to (`to`) turned
+round to face it. So a `turnZ` in `toParams` turns the part about the target
+port's Z axis *reversed*: `turnZ: 30` turns it -30 degrees about the target
+port's own Z.
+
+.. _assy-joints:
+
+Joints
+------
+
+A connection is a **joint** when it keeps a degree of freedom once it is made -
+a hinge, a slide, a bearing. Which of the two interfaces' parameters stay free is
+declared in `motion:` (see :ref:`joints` for the whole of it), on the interfaces,
+on the mating between them, and on the connection itself, the most specific of
+which wins:
+
+  .. code-block:: yaml
+
+    - part: upper_arm
+      connect:
+        name: base
+        to: hinge-bore
+        toInstance: shoulder
+        joint: shoulder_pan     # (optional) the joint's name
+        toParams: { turnZ: 30 } # where the joint starts
+        motion: revolute        # (optional) outranks the mating's and the interfaces'
+        physics:                # (optional) the same
+          damping: 0.05
+
+* `motion` takes everything an interface's `motion` takes. Its `axis` is in the
+  contact frame, where `toParams` are read too; `motion: fixed` locks a joint the
+  interfaces would let move, for one test or one variant of a product.
+* `physics` is what moving the joint costs (damping, friction, effort and velocity
+  limits, a spring), and outranks the mating's and the interfaces'.
+* `joint` names the joint: what a simulation reports it under, and what another
+  joint's `mimic` points at. It is not `name`, which is the link this one is
+  connected to. Without it the joint is `<this link>-<that link>` - `upper_arm-base`
+  above - and since link names need not be unique, a second joint of one name is
+  `<name>-2`, a third `<name>-3`, in link order, and `pc test` asks for a `joint:`
+  on each.
+
+`toParams` and `withParams` place the joint where it **starts**, and a
+parameter at zero is the joint's zero. The assembly as drawn - rendered, viewed,
+exported as geometry - is the mechanism at those values, exactly as it always
+was; a parameter that is not a degree of freedom is what it always was too, an
+adjustment fixed at its value.
+
+A connection that keeps no degree of freedom attaches the part rigidly: there are
+no fixed joints. A scene's connections make no joints at all - a scene states
+where things are, and every element of one moves on its own.
+
+`pc info -a <assembly>` lists the joints under ``Joints``: the two links each one
+joins, every degree of freedom it keeps - its kind, axis, range, starting value,
+and which parameter and which declaration it came from - and its physics.
+
+A link is placed once, against a link already placed, so a closed chain - a
+four-bar linkage - cannot be stated yet: closing it takes a connection whose
+target is placed after it, or a second placement of a link already placed. Both
+are refused, and `pc test` says so.
 
 Expected overlaps
 -----------------
@@ -504,6 +570,23 @@ What it rejects today:
   minimum above a maximum is a contradiction rather than a range.
 * two interfaces that disagree about their `threadStep` with neither declaring
   `selfScrew`.
+* a `motion:` that contradicts itself - a `type` and a `dof` that describe
+  different degrees of freedom, a `fixed` motion with a `dof`, `limits` on a
+  `continuous` one - on the interfaces, the mating or the connection.
+* a `dof` naming no freedom-of-movement parameter.
+* two interfaces stating different `physics` for the joint they make together,
+  when the mating states none (see :ref:`joints`).
+* two joints of one name (see "Joints" above).
+* a screw motion with no `threadStep` to advance by.
+* a connection that would close a loop, or that places a link already placed.
+
+It is `pc test` rather than `pc lint` because each of these is a finding about
+what a connection *resolved* to: which interfaces and which mating it matched,
+which parameters they inherit from other packages, which ones a `motion:` brought
+along. `pc lint` checks a file as it is written, and caches its verdict on that
+file - a verdict about interfaces declared in another package would go stale
+there the moment that package changed. `pc test` keys its verdict on the
+assembly, whose key covers the interfaces it connects.
 
 .. code-block:: shell
 

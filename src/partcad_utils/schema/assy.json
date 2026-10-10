@@ -146,7 +146,20 @@
         "comment": { "$ref": "#/definitions/comment" },
         "interferes": { "$ref": "#/definitions/interferes" },
         "how": { "$ref": "#/definitions/how" },
-        "exploded": { "$ref": "#/definitions/exploded" }
+        "exploded": { "$ref": "#/definitions/exploded" },
+        "motion": {
+          "description": "Which degrees of freedom this connection keeps, outranking the mating's and the two interfaces': 'motion: fixed' locks a joint, for one test or one variant. Its 'axis' is in the contact frame, where 'toParams' are read too. The same section an interface states; see partcad.json.",
+          "$ref": "partcad.json#/definitions/motion"
+        },
+        "physics": {
+          "description": "What moving this joint costs, outranking the mating's and the two interfaces'.",
+          "$ref": "partcad.json#/definitions/physics"
+        },
+        "joint": {
+          "description": "The name of the joint this connection makes, when it keeps a degree of freedom: what a simulation reports it under and what a 'mimic' points at. Default: '<this link>-<the link it is connected to>'. Not 'name', which is the link it is connected to.",
+          "type": "string",
+          "minLength": 1
+        }
       },
       "additionalProperties": false
     },

@@ -328,10 +328,11 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
           default: ...
           type: <move (default)|turn>
           dir: [<x>, <y>, <z>] # the vector to move along or rotate around
-      motion: # (optional) what freedom of movement this connection allows
-        type: <fixed|revolute|continuous|prismatic|planar|floating|ball|screw>
-        axis: [<x>, <y>, <z>] # in the frame of this interface's port
-        limits: # degrees for a turn, millimetres for a move
+      motion: # (optional) the degrees of freedom a connection keeps; see "Joints" below
+        dof: [<parameter name>, ...] # the freedom-of-movement parameters that stay free
+        type: <fixed|revolute|continuous|prismatic|cylindrical|screw|universal|ball|planar|floating>
+        axis: [<x>, <y>, <z>] # in the frame of this interface's port; Z by default
+        limits: # for a revolute, prismatic or screw type: degrees for a turn, millimetres for a move
           lower: ...
           upper: ...
         softLimits: # (optional) limits a controller enforces before the hard ones
@@ -340,36 +341,187 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
           kPosition: ...
           kVelocity: ...
         mimic: # (optional) a movement that follows another one
-          joint: <the name of the connection it follows>
+          joint: <the name of the joint it follows>
           multiplier: ...
           offset: ...
-      physics: # (optional) what the connection costs
+      # motion: revolute  # the short form of 'motion: {type: revolute}'
+      physics: # (optional) what moving the joint costs
         maxEffort: ... # N*m for a turn, N for a move
         maxVelocity: ... # deg/s for a turn, mm/s for a move
-        damping: ...
-        friction: ...
-        springStiffness: ...
-        springReference: ...
+        damping: ... # N*m*s/rad for a turn, N*s/m for a move
+        friction: ... # N*m for a turn, N for a move
+        springStiffness: ... # N*m/rad for a turn, N/m for a move
+        springReference: ... # degrees for a turn, millimetres for a move
 
-Motion and physics
-------------------
+.. _joints:
 
-``motion`` and ``physics`` are a *record* of a connection, next to the
-``parameters`` that make it move. Where a parameter is executable - naming it in
-a connection places the parts - ``motion`` states what kind of joint the
-connection is, about which axis, and between which limits, and ``physics``
-states what a simulation needs to know about the cost of moving it.
+Joints
+------
 
-Every property has a PartCAD name and a PartCAD unit, and the set of them is
-closed: angles are degrees and lengths millimetres, as everywhere else in
+A connection between two interfaces is a composition of rigid transforms: the
+target's port, a half turn that makes the two ports face each other, then every
+freedom-of-movement parameter the connection gives a value to (``toParams``,
+``withParams``; see `Interface parameters`_). What none of that says is which of
+those parameters **stay free** once the parts are joined. A slotted hole's
+``moveX`` is an *adjustment*: the screw is tightened and it is fixed. A bearing's
+``turnZ`` is a *degree of freedom*: it turns while the machine runs. A connection
+that keeps any degree of freedom is a **joint**, and ``motion:`` is where they
+are declared.
+
+Declaring degrees of freedom
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Explicitly**, by naming the parameters that stay free. The parameter already
+says its kind, its direction and its range, so nothing is restated:
+
+.. code-block:: yaml
+
+  interfaces:
+    hinge-bore:
+      ports: { bore: [[0, 0, 0], [0, 0, 1], 0] }
+      parameters:
+        turnZ: [-150, 150, 0]   # where a connection may place it
+      motion:
+        dof: [turnZ]            # and it stays free once joined
+      physics:
+        damping: 0.05           # N*m*s/rad
+        maxEffort: 2.0          # N*m
+        maxVelocity: 180        # deg/s
+
+A predefined name (``moveX`` ... ``turnZ``) need not be declared under
+``parameters:`` to be named here: the name says its kind and its axis, and a
+degree of freedom with no declared range is unlimited. Any other name has to be a
+freedom-of-movement parameter of the interface.
+
+**Implicitly**, by naming a kind of joint. Every degree of freedom it implies is
+declared - about the port's Z axis unless ``axis:`` says otherwise, between
+``limits:`` where those apply:
+
+======================= ====================================================================
+``type``                Degrees of freedom
+======================= ====================================================================
+``fixed``               none
+``revolute``            one turn about ``axis``, within ``limits``
+``continuous``          one turn about ``axis``, unlimited
+``prismatic``           one move along ``axis``, within ``limits``
+``cylindrical``         one turn and one move, about and along ``axis``
+``screw``               the same two, the move following the turn by the ``threadStep``
+``universal``           two turns, about ``axis`` and about the port's X axis
+``ball``                three turns about the port's origin
+``planar``              two moves across the plane normal to ``axis``, and one turn about it
+``floating``            all six
+======================= ====================================================================
+
+``motion: revolute`` is the short form of ``motion: {type: revolute}``. ``limits``
+bound the one freedom of a ``revolute`` or ``prismatic`` motion and the turn of a
+``screw`` (whose move follows it); a kind with more than one degree of freedom
+states the range of each on its parameter and names them in ``dof`` instead.
+
+An implied degree of freedom is the interface's parameter of the same kind along
+the same axis when there is one - which is what makes it addressable from
+``toParams`` - and otherwise one it brings along: ``turnZ``, ``moveX`` and their
+siblings along a principal axis, ``angle`` and ``offset`` along any other (the
+names ``pc convert assembly -t assy`` writes). Either way a connection can give
+it a value. A ``motion:`` that states both a ``type`` and a ``dof`` list has to
+describe one set of freedoms, and ``pc test`` says where it does not; the ``type``
+still decides the range (a ``continuous`` joint has none) and ``dof`` which
+parameters they are.
+
+Where it is declared
+^^^^^^^^^^^^^^^^^^^^
+
+In three places, most specific first - the precedence a mating's ``how`` already
+has:
+
+1. the connection's own ``motion:`` in the ASSY file (``connect: {motion: fixed}``
+   locks a joint, for one test or one variant; see :ref:`assy-joints`);
+2. the mating's ``motion:`` - what this *pair* does, whatever each would do with
+   another partner: a 6 mm pin turns in a clearance bore and is fixed in a
+   press-fit one.
+
+   .. code-block:: yaml
+
+     interfaces:
+       pin-6:
+         mates:
+           bore-6-h7:
+             motion: revolute
+           bore-6-press:
+             motion: fixed
+
+3. the two interfaces' own ``motion:``, combined.
+
+An interface that inherits exactly one other one, once (``inherits: bore``), or
+is an ``alias:`` of it, is that interface under another name and moves as it does
+unless it says otherwise. One assembled out of several - a bolt pattern of four
+pins - inherits no ``motion``: four pins in four holes do not turn.
+
+The axis of a mating's ``motion`` is in the frame of the port of the interface
+that declares the mating; a connection's is in the contact frame (below). A name
+in a mating's or a connection's ``dof`` means that parameter on either interface.
+
+How two interfaces combine
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The two sides' freedoms are in series - which is how the placement composes them
+too, the target's parameters and then the connected object's - so they **add**:
+
+* the degrees of freedom are the union of both sides';
+* two that lie on the same axis are one, whose range is the sum of the two ranges
+  and whose value is the sum of the two values, and which is unlimited if either
+  is.
+
+"On the same axis" means the same kind (two turns, or two moves) on the same line
+in the contact frame, with every degree of freedom at zero and every adjustment
+at its value; two moves need only point the same way. Opposite directions match,
+with the sign of one of them flipped. Two swivels in series, each declaring
+``turnZ: [-90, 90]``, are one revolute joint over -180 to 180 degrees; a slotted
+plate on a slotted bracket is one prismatic joint over the sum of the two slots.
+Two freedoms are left apart when something that moves lies between them in a way
+that would turn one relative to the other - a slide between two parallel turns
+moves one turn off the other's axis as soon as it slides.
+
+The rule has one trap, and it is documented rather than special-cased: a
+symmetric hinge whose two leaves *both* declare ``turnZ: [0, 90]`` comes out with
+180 degrees of travel. A freedom is declared on the side that provides it.
+
+**Both sides read their parameters in the contact frame**, which is where the two
+ports meet: the connected object's port, and the target's port turned round to
+face it. That is how a connection has always been placed, and it has one
+consequence a joint makes visible: a target interface's ``turnZ`` turns the child
+about the contact frame's Z, which is the target port's own Z *reversed* - so a
+target's +30 degrees turns the child -30 degrees about the target port's Z, and a
+target's ``limits`` written about its own port's Z come out the other way round
+on ``turnZ``. A ``motion:`` on an interface states its ``axis`` in its own port's
+frame, as written; PartCAD maps it.
+
+What it costs
+^^^^^^^^^^^^^
+
+``physics:`` on an interface, a mating or a connection, with the precedence of
+``motion:``. Where both interfaces state physics they are taken together, and a
+value they both state has to agree, or the mating has to state its own: two
+dampers in series do not add, so there is no sum to take. ``pc test`` reports a
+disagreement.
+
+Damping and a joint's friction are SI per unit of the joint's motion -
+N*m*s/rad and N*m for a turn, N*s/m and N for a move - because that is what every
+engine takes and what a URDF's ``<dynamics>`` states. It is the one place an
+angle is not in degrees.
+
+Every other property has a PartCAD name and a PartCAD unit too, and the set of
+them is closed: angles are degrees and lengths millimetres, as everywhere else in
 PartCAD, and the rest is SI. Nothing is stored under the name of the format it
 came from. A format that states something PartCAD has no property for fails the
 import rather than tucking the value away, and a property PartCAD holds that a
 target format cannot state is reported when it is exported - so the gap is
 always visible in one direction or the other.
 
-``pc convert assembly -t assy`` fills both sections in from a URDF's joints -
-see :doc:`simulation` for the mapping.
+``pc convert assembly -t assy`` fills ``motion:`` and ``physics:`` in from a URDF's
+joints - see :doc:`simulation` for the mapping - and what it writes is an
+implicit declaration of the joint it was. ``pc info -a <assembly>`` lists an
+assembly's joints, and :ref:`assy-joints` how a connection names, locks and
+starts one.
 
 Abstract interfaces
 -------------------
@@ -451,6 +603,8 @@ If any pair of ports is aligned then all three other port pairs are aligned too.
   :width: 50%
   :align: center
 
+.. _interface-parameters:
+
 Interface parameters
 --------------------
 
@@ -518,6 +672,15 @@ get resolved and applied as inheritance or connection coordinate offsets.
         name: <target part>
         toParams:
           turnZ: 1.57
+
+A connection reads both interfaces' parameters in the **contact frame**: the
+frame where the two ports meet, which is the connected part's port and the target
+part's port turned round to face it. A move is in millimetres and a turn in
+degrees, about the frame's origin, in the order the connection names them. So the
+target's ``turnZ`` turns the connected part about the target port's own Z axis
+*reversed*. A parameter is an adjustment, fixed at the value it is given, unless
+the interface's ``motion:`` declares it a degree of freedom - then the value is
+where the joint starts (see `Joints`_).
 
 .. _parametric_interfaces:
 
