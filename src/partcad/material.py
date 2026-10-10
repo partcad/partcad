@@ -21,12 +21,13 @@ those facts PartCAD computes with (mass = volume x density; 'mu' is what decides
 whether a stack of them stands up), and it is why both are carried in the units
 the rest of PartCAD works in rather than the ones a datasheet prints.
 
-'mu' is the one that reaches a simulation. Whether two blocks stay stacked is
-not a property of their geometry at all: squarely stacked 20 mm cubes stay put
-at mu = 0.2 and scatter at mu = 0.0, and nothing about the arrangement changes
-in between. A part that says what it is made of therefore says whether it stands
-up, and 'PHYSICS_FROM_MATERIAL' below is where that stops being a fact nobody
-reads. See docs/source/simulation.rst.
+Both reach a simulation. Whether two blocks stay stacked is not a property of
+their geometry at all: squarely stacked 20 mm cubes stay put at mu = 0.2 and
+scatter at mu = 0.0, and nothing about the arrangement changes in between. And
+what they weigh, where they balance and how they turn are the solid plus the
+density, and nothing else. A part that says what it is made of therefore says
+whether it stands up and what it weighs, and 'PHYSICS_FROM_MATERIAL' below is
+where that stops being a fact nobody reads. See docs/source/simulation.rst.
 
 Materials are addressed like every other object, as '<package>:<name>', so a
 part in one package names a material catalogued in another exactly as it names
@@ -39,38 +40,34 @@ questions of.
 import typing
 
 from . import logging as pc_logging
-from . import shape_envelope, telemetry
+from . import telemetry
 from .utils import resolve_resource_path
 
-# The request key the resolved material facts travel to a sandbox under.
+# What a material contributes to the physics of a shape made of it: the
+# 'Material' attribute, and the PartCAD property it fills in where the shape
+# states none.
 #
-# An exporter never sees a material *name*: resolving one means loading the
-# package that catalogues it, which only the core can do. So the core resolves
-# every material the tree it is exporting names, and the export wrapper merges
-# the facts under each shape's own properties - see
-# 'wrappers/wrapper_export.properties_index()'. No exporter knows any of this
-# happened; each goes on reading 'physics' as it always did.
-FACTS_KEY = "__materials__"
-
-# What a material contributes to the physics of a shape made of it: the material
-# field, and the PartCAD property it fills in where the shape states none.
+# 'mu' decides whether a stack of these stands up. 'density' is what they weigh:
+# a part's mass, centre of mass and inertia are its solid at this one number,
+# so the three agree with each other and with what the part is made of (see
+# 'partcad.physics'). Both are lent under the names and in the units a part
+# would state them in itself - a density in kg/m^3, the one unit PartCAD has for
+# one - so lending is a copy and not a conversion.
 #
-# One entry, and that is deliberate rather than a start. 'density' is the other
-# fact a material states, and wiring it here would change the computed mass of
-# every part that names a material - a real improvement, and a different change
-# with a diff of its own. 'mu' has nowhere to go at all until this table exists.
-PHYSICS_FROM_MATERIAL = {"mu": "friction"}
+# A part that states a value of its own keeps it: a part weighed on the bench
+# beats the substance it is made of.
+PHYSICS_FROM_MATERIAL = {"mu": "friction", "density": "density"}
 
 
 @telemetry.instrument()
 class Material:
     """One material of a package.
 
-    'density' is in g/mm^3, the units every length in PartCAD is already in, so
-    that a mass falls out of a volume without a conversion nobody remembers to
-    apply. Datasheets quote g/cm^3, which is 1000x larger; a declaration is
-    taken at face value, and 'density_g_cm3' exists for reporting it back the
-    way it was read.
+    'density' is in kg/m^3, the unit every density in PartCAD is in - a part's
+    'physics', an export's 'density' parameter, and every simulation format a
+    part is written into. One unit is what keeps a mass from being off by a
+    factor nobody notices: a datasheet's 1.32 g/cm^3 is 1320 here, and there is
+    no second spelling of it anywhere for that number to be mistaken for.
     """
 
     name: str
@@ -117,15 +114,9 @@ class Material:
 
     @property
     def density(self) -> typing.Optional[float]:
-        """Density in g/mm^3, or None if the package did not state one."""
+        """Density in kg/m^3, or None if the package did not state one."""
         value = self.config.get("density")
         return None if value is None else float(value)
-
-    @property
-    def density_g_cm3(self) -> typing.Optional[float]:
-        """The same density in the units datasheets quote."""
-        density = self.density
-        return None if density is None else density * 1000.0
 
     @property
     def mu(self) -> typing.Optional[float]:
@@ -162,14 +153,23 @@ class Material:
         return [str(tag) for tag in tags]
 
     def mass(self, volume: float) -> typing.Optional[float]:
-        """The mass in grams of 'volume' mm^3 of this material.
+        """The mass in kilograms of 'volume' mm^3 of this material.
+
+        A volume is measured in mm^3 and a density is stated in kg/m^3, and
+        'mass_properties.mass_of()' is the one place the two meet - the same
+        function every part's derived mass goes through, so this answer and the
+        one 'pc info' gives for a part cannot disagree.
 
         None when the material does not state a density: a made-up mass is
         worse than no mass, because nothing downstream can tell it apart from a
         measured one.
         """
         density = self.density
-        return None if density is None else volume * density
+        if density is None:
+            return None
+        from .physics import mass_properties
+
+        return mass_properties.mass_of(volume, density)
 
     def material_info(self) -> dict:
         """What this object is, as the '<label>: <value>' pairs 'pc info' prints.
@@ -189,7 +189,7 @@ class Material:
         if self.desc:
             info["Desc"] = self.desc
         if self.density is not None:
-            info["Density"] = "%g g/mm^3 (%g g/cm^3)" % (self.density, self.density_g_cm3)
+            info["Density"] = "%g kg/m^3" % self.density
         if self.mu is not None:
             info["Mu"] = "%g" % self.mu
         if self.tags:
@@ -252,75 +252,3 @@ def physics_of(material) -> dict:
         if value is not None:
             facts[prop] = value
     return facts
-
-
-def physics_by_shape(ctx, request) -> dict:
-    """The physics each shape inherits from its material, by the shape's full name.
-
-    The same walk 'wrappers/wrapper_export.properties_index()' does on the far
-    side of the pipe, asking a different question of the same envelopes: which
-    shape names a material, and what does that material say. Kept short and
-    duplicated rather than shared, because the two live on opposite sides of a
-    process boundary and the sandbox cannot import this.
-
-    Keyed by *shape* rather than by material reference, which is what lets a
-    reference be relative. A material is named the way every other object is,
-    so ':aluminium' means "in my own package" -- and whose package that is is a
-    fact about the shape that wrote it, not about the string. Two packages in
-    one tree may each catalogue an 'aluminium' of their own and each get theirs.
-
-    Empty when nothing names a material, or when nothing any of them names has
-    a fact 'PHYSICS_FROM_MATERIAL' carries; an empty answer is left out of the
-    request entirely, so an export of a package with no materials in it is
-    exactly what it was.
-
-    A reference that does not resolve is reported once, by 'lookup()', and
-    contributes nothing: a part whose material is a typo gets the simulator's
-    default, which is what it got before anyone declared a material at all.
-    """
-    facts = {}
-    resolved = {}
-
-    def physics_for(owner, ref):
-        """What 'ref' contributes, looked up once per (package, reference)."""
-        key = (owner, ref)
-        if key not in resolved:
-            package, name = resolve_resource_path(owner, ref)
-            _project, material = lookup(ctx, "%s:%s" % (package, name), quiet=False)
-            resolved[key] = physics_of(material) if material is not None else {}
-        return resolved[key]
-
-    def walk(obj):
-        if isinstance(obj, list):
-            for item in obj:
-                walk(item)
-            return
-        if not isinstance(obj, dict):
-            return
-        if shape_envelope.KEY_BREP in obj or shape_envelope.KEY_ASSEMBLY in obj:
-            properties = obj.get(shape_envelope.KEY_PROPERTIES)
-            name = obj.get("name")
-            if name and isinstance(properties, dict) and isinstance(properties.get("material"), str):
-                physics = physics_for(owner_package(name), properties["material"])
-                if physics:
-                    facts[name] = physics
-            for child in obj.get(shape_envelope.KEY_ASSEMBLY) or []:
-                walk(child)
-            return
-        for key, value in obj.items():
-            if key != shape_envelope.KEY_PROPERTIES:
-                walk(value)
-
-    walk(request)
-    return facts
-
-
-def owner_package(shape_name: str) -> str:
-    """The package a shape's full name ("//pkg:part") belongs to.
-
-    Split from the right: a package path is full of '/' and starts with '//',
-    and an object name carries no ':' at all, so the last one is the separator.
-    A name with no ':' is a package with nothing after it, which is what an
-    assembly with no name of its own carries.
-    """
-    return shape_name.rsplit(":", 1)[0] if ":" in shape_name else shape_name

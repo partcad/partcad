@@ -54,6 +54,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
         physics: # (optional) physical properties
           mass: ... # kg
+          density: ... # kg/m^3, what the mass is computed from if 'mass' is not stated
           centerOfMass: [<x>, <y>, <z>] # mm, in the shape's own frame
           inertiaOrientation: [<roll>, <pitch>, <yaw>] # (optional) degrees
           inertia: # kg*m^2, about 'centerOfMass'
@@ -737,15 +738,51 @@ change to something the assembly does hash, is what picks them up.
 
 Every ``physics`` property has a PartCAD name and a PartCAD unit, and the set of
 them is closed. Lengths are millimetres and angles degrees, as everywhere else
-in PartCAD; everything else is SI, so a mass is kilograms and an inertia tensor
-kg·m². Nothing is stored under the name of the format it came from: a URDF
-import reads ``<inertial>`` and the friction and contact settings of a
-``<gazebo>`` block into these properties one value at a time, and a URDF export
-writes each of them back into the element that states it. A URDF that says
-something PartCAD has no property for stops the import instead of being carried
-opaquely, and a property PartCAD holds that URDF cannot state is reported when
-it is exported. See :doc:`simulation`.
+in PartCAD; everything else is SI, so a mass is kilograms, a density kg/m³ and
+an inertia tensor kg·m². Nothing is stored under the name of the format it came
+from: a URDF import reads ``<inertial>`` and the friction and contact settings
+of a ``<gazebo>`` block into these properties one value at a time, and a URDF
+export writes each of them back into the element that states it. A URDF that
+says something PartCAD has no property for stops the import instead of being
+carried opaquely, and a property PartCAD holds that URDF cannot state is
+reported when it is exported. See :doc:`simulation`.
+
+Most parts state none of these, and have most of them all the same. A shape
+made of a :ref:`material <materials>` has the material's ``mu`` as its
+``friction`` and the material's ``density`` as its ``density`` -- the same unit,
+so nothing is converted -- and a shape with a solid in it has a mass, a centre
+of mass and an inertia: its solid at that density. PartCAD works these out in
+one order, everywhere:
+
+=================  ==========================================================
+property           where it comes from, first one that applies
+=================  ==========================================================
+``density``        stated; else the material's; else, for an export only, the
+                   export's ``density`` parameter, else 2700 kg/m³
+``mass``           stated; else the volume at that density
+``centerOfMass``   stated; else the centroid of the solid
+``inertia``        stated; else the solid's, scaled to the mass above
+``friction``       stated; else the material's ``mu``
+=================  ==========================================================
+
+So a part that states its mass and nothing else still turns the way its solid
+says it does, at the weight it says it is; and the centre of mass and the
+inertia come from the same density as the mass, so the three agree. A part
+that states no density and is made of nothing that does has no known mass, and
+``pc info`` says so rather than inventing one; an export weighs it at the
+export's ``density`` parameter, or at aluminium's 2700 kg/m³, because a
+simulator handed a body with no mass makes one up regardless.
+
+``pc info`` reports all of this as ``MassProperties`` -- each value with its
+unit and where it came from -- and an assembly's as its parts' added up in its
+own frame. A part's values are cached, and go stale exactly when they should:
+the entry is keyed on the part's own cache key, so an edit to its CAD is a new
+one, and on what the derivation reads besides the geometry -- the density and
+where it came from, and the values the part states -- so an edit to its
+material's density, or to its stated mass, is a new one too, and an edit to
+anything else is not. See :doc:`simulation`.
 
 A file type that has a way to state these declares ``properties: true`` in its
 ``export:`` section, and is handed them keyed by the full name of the shape they
-belong to. URDF is the one built-in format that does.
+belong to -- already worked out in the order above, so that an exporter writes
+a mass and never computes one. URDF is the one built-in format that does.

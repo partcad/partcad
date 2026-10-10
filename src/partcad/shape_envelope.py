@@ -154,6 +154,13 @@ METADATA_SECTIONS = "sections"
 METADATA_BBOX = "bbox"
 METADATA_VOLUME = "volume"
 METADATA_SOLIDS = "solids"
+# Where that volume is and how it is spread: the centroid in millimetres, and
+# the 3x3 inertia tensor about it at a density of one, in mm^5. The geometry's
+# half of a mass, a centre of mass and an inertia - the other half is a density,
+# multiplied in by the core (see 'partcad.physics'). Absent for a shape with no
+# solid, or with one whose faces are turned inward.
+METADATA_CENTROID = "centroid"
+METADATA_UNIT_INERTIA = "unitInertia"
 
 # The zstd frame header. Sniffed rather than declared in the envelope, so that
 # a payload written without compression stays readable; the one copy of this

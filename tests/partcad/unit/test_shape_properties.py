@@ -165,6 +165,19 @@ def test_the_schema_takes_a_body_property_on_a_shape():
     _validate({"assemblies": {"rig": {"type": "assy", "properties": {"physics": {"restitution": 0.2}}}}})
 
 
+def test_the_schema_takes_a_density_and_only_one_that_weighs_something():
+    """What a part that names no material says it is as dense as, in kg/m^3.
+
+    The property a material lends a shape, and so one a shape may state itself:
+    an STL bracket somebody weighed a sample of has a density and no material to
+    put it in. Zero or less would weigh nothing, which no solid does.
+    """
+    _validate({"parts": {"bracket": {"type": "stl", "properties": {"physics": {"density": 1240.0}}}}})
+    for nothing in (0, -1.0):
+        with pytest.raises(jsonschema.exceptions.ValidationError):
+            _validate({"parts": {"bracket": {"type": "stl", "properties": {"physics": {"density": nothing}}}}})
+
+
 @pytest.mark.parametrize("name,value", sorted(CONNECTION_ONLY_PHYSICS.items()))
 @pytest.mark.parametrize("kind,declaration", [("parts", {"type": "step"}), ("assemblies", {"type": "assy"})])
 def test_the_schema_refuses_a_connection_property_on_a_shape(kind, declaration, name, value):
@@ -475,7 +488,7 @@ def test_a_material_fills_in_what_the_shape_did_not_state():
             "brep": "AAAA",
         },
         "properties": True,
-        "__materials__": {"pkg:leaf": {"friction": 0.04}},
+        "__physics__": {"pkg:leaf": {"friction": 0.04}},
     }
 
     assert wrapper_export.properties_index(request) == {
@@ -492,11 +505,41 @@ def test_what_the_shape_states_itself_wins_over_its_material():
             "brep": "AAAA",
         },
         "properties": True,
-        "__materials__": {"pkg:leaf": {"friction": 0.04}},
+        "__physics__": {"pkg:leaf": {"friction": 0.04}},
     }
 
     index = wrapper_export.properties_index(request)
     assert index["pkg:leaf"]["physics"] == {"friction": 0.9, "mass": 2.0}
+
+
+def test_a_material_s_density_arrives_beside_a_stated_mass_and_under_a_stated_density():
+    """The index merges; which number decides the mass is the exporter's question.
+
+    A part that states its mass keeps it, and its material's density still
+    arrives beside it: an exporter reads 'mass' first and never gets as far as
+    the density, so nothing is lost by carrying both and nothing is gained by
+    deciding here. A part that states a density of its own beats its
+    material's, exactly the way a stated friction does.
+    """
+    request = {
+        "wrapped": {
+            "name": "pkg:rig",
+            "assembly": [
+                {"name": "pkg:weighed", "properties": {"material": ":steel", "physics": {"mass": 2.0}}, "brep": "A"},
+                {
+                    "name": "pkg:dense",
+                    "properties": {"material": ":steel", "physics": {"density": 9000.0}},
+                    "brep": "B",
+                },
+            ],
+        },
+        "properties": True,
+        "__physics__": {"pkg:weighed": {"density": 7850.0}, "pkg:dense": {"density": 7850.0}},
+    }
+
+    index = wrapper_export.properties_index(request)
+    assert index["pkg:weighed"]["physics"] == {"density": 7850.0, "mass": 2.0}
+    assert index["pkg:dense"]["physics"] == {"density": 9000.0}
 
 
 def test_the_table_is_keyed_by_shape_so_a_reference_can_be_relative():
@@ -515,7 +558,7 @@ def test_the_table_is_keyed_by_shape_so_a_reference_can_be_relative():
             ],
         },
         "properties": True,
-        "__materials__": {"a:part": {"friction": 1.05}, "b:part": {"friction": 0.2}},
+        "__physics__": {"a:part": {"friction": 1.05}, "b:part": {"friction": 0.2}},
     }
 
     index = wrapper_export.properties_index(request)
@@ -527,10 +570,22 @@ def test_a_shape_with_no_material_is_left_exactly_as_it_was():
     request = {
         "wrapped": {"name": "pkg:leaf", "properties": STEEL, "brep": "AAAA"},
         "properties": True,
-        "__materials__": {"pkg:other": {"friction": 0.04}},
+        "__physics__": {"pkg:other": {"friction": 0.04}},
     }
 
     assert wrapper_export.properties_index(request) == {"pkg:leaf": STEEL}
+
+
+def test_a_shape_that_declares_nothing_is_indexed_for_what_it_weighs():
+    """A STEP bolt with no 'properties:' still has a mass, and an exporter needs it."""
+    weighed = {"density": 2700.0, "mass": 0.0162, "centerOfMass": [5.0, 10.0, 15.0]}
+    request = {
+        "wrapped": {"name": "pkg:bolt", "brep": "AAAA"},
+        "properties": True,
+        "__physics__": {"pkg:bolt": weighed},
+    }
+
+    assert wrapper_export.properties_index(request) == {"pkg:bolt": {"physics": weighed}}
 
 
 def test_the_material_table_is_not_walked_for_shapes():
@@ -538,7 +593,7 @@ def test_the_material_table_is_not_walked_for_shapes():
     request = {
         "wrapped": {"name": "pkg:leaf", "properties": STEEL, "brep": "AAAA"},
         "properties": True,
-        "__materials__": {"pkg:leaf": {"friction": 0.04}, "brep": "not a shape"},
+        "__physics__": {"pkg:leaf": {"friction": 0.04}, "brep": "not a shape"},
     }
 
     index = wrapper_export.properties_index(request)

@@ -230,7 +230,7 @@
                 "density": {
                   "type": "number",
                   "exclusiveMinimum": 0,
-                  "description": "Density in g/mm^3, the units every length in PartCAD is already in. A datasheet quotes g/cm^3, which is 1000x larger"
+                  "description": "Density in kg/m^3, the one unit PartCAD states a density in. A datasheet's 1.32 g/cm^3 is 1320. A part made of this material is weighed at it unless it states a 'mass' or a 'density' of its own"
                 },
                 "mu": {
                   "type": "number",
@@ -513,6 +513,11 @@
       "description": "Physical properties, each with a documented name and unit. Lengths are millimetres and angles are degrees, as everywhere else in PartCAD; everything else is SI. A property that has no entry here is not carried: a format that states one PartCAD does not support fails the import, and a property PartCAD holds that the target format cannot state is reported on export.",
       "properties": {
         "mass": { "type": "number", "description": "Mass, in kilograms.", "minimum": 0 },
+        "density": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Density, in kg/m^3: what the mass, the centre of mass and the inertia are worked out from when 'mass' is not stated. A shape made of a material that states a density has the material's unless it states one of its own."
+        },
         "centerOfMass": {
           "type": "array",
           "description": "Centre of mass in the shape's own frame, in millimetres.",

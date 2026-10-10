@@ -150,8 +150,20 @@ file type that declares ``properties: true`` is handed, in place of the flag, an
 index of what the shapes being written declare about themselves: their
 ``physics``, ``material`` and ``color``, keyed by the full ``<package>:<name>``
 of each shape, so an implementation given a whole assembly tree can look up the
-properties belonging to each node of it. Only shapes that declare at least one
-appear.
+properties belonging to each node of it. Each shape's ``physics`` is complete:
+what it states, what its material lends, and the ``mass``, ``centerOfMass`` and
+``inertia`` its solid comes to at its ``density`` (see :ref:`properties`), so an
+implementation writes those and works none of them out. A body made of several
+shapes is the one thing left to it, and ``mass_properties.of_body()`` in
+PartCAD's ``wrappers/`` directory -- on the path of every implementation -- adds
+them up. Only shapes that declare something, or have a mass worked out for
+them, appear.
+
+A part that states no density and is made of nothing that does is weighed at
+the file type's ``density`` parameter, in kg/m³, or at 2700 kg/m³ (aluminium)
+where the file type declares none. That makes ``density``, after ``properties``
+itself, the one other parameter PartCAD reads on an implementation's behalf
+when ``properties: true`` is declared; it is still passed through as well.
 
 .. code-block:: yaml
 

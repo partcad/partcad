@@ -539,7 +539,7 @@ def test_export_reports_properties_urdf_cannot_state(tmp_path, caplog):
 
     A property both legal on a shape and unstatable in URDF would say this more
     directly, but there is none: 'shape-physics' and export_urdf.URDF_STATED are
-    the same sixteen names today. They are two lists that may drift apart, which
+    the same seventeen names today. They are two lists that may drift apart, which
     is why the exporter reports rather than drops - and why this stays tested
     with a property the schema turns away rather than not at all.
 
