@@ -254,6 +254,13 @@ at all).
   that now analyses perfectly well. `CaeTest` is the test the flag was made for; `CamTest` sets it for the
   same reason, and so does `SimTest`, for every verdict that was not reached on a keyed run (see below).
 
+  A verdict that *is* cached keeps its reasons. The entry's first byte is the verdict -- all a pass is, and
+  all every entry was before -- and a failure carries what `failed()` said while it was reached, as JSON,
+  so a cache hit repeats the reason instead of "Failed test result loaded from cache". `failed()` collects
+  through a context variable `test_cached()` sets for its own check and shape only, because a check that
+  tests other objects on the way (an assembly's manufacturability) logs their failures too, and those are
+  theirs to remember. Test entries are outside every tier's size window (`cache_backend.SIZED_KEYS`).
+
 - **What a solver, a route implementation or a simulator produced is cached**
   (`./src/partcad/cache_artifacts.py`, `ctx.cache_artifacts`): the verdict cache above remembers one bit, and
   `pc cae`, `pc cam` and the IDE's tab want the file and what came with it, so `Shape._analysis_run_async()`,

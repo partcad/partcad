@@ -859,6 +859,11 @@ entry sizes apply as usual -- a model larger than ``cacheFilesMaxEntrySize`` is
 not kept in ``cacheFiles`` -- but their minimum sizes do not, because no
 solver's answer is too small to be worth keeping.
 
+``pc test`` also remembers each check's verdict on each object, and a failure it
+remembers keeps what the check said about it: read back, it repeats the reason
+and says that it was remembered from an earlier run. ``pc --cache-bypass test``
+works every verdict out again.
+
 ``pc --cache-bypass <command>`` (or ``PC_CACHE_BYPASS=1``, or ``cacheBypass: True``)
 bypasses every tier for one run: nothing is read from a cache and nothing built
 is written to one.

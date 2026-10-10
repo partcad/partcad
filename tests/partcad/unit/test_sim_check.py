@@ -537,6 +537,25 @@ def test_the_walk_is_kept_away_from_the_verdict_cache(package, monkeypatch):
 # --------------------------------------------------------------------------- #
 
 
+def test_a_remembered_failure_quotes_the_claim_that_failed(package, monkeypatch, caplog):
+    """Read back from the cache, a failed validation still says which, and why."""
+    part = _declare(package, monkeypatch, _part(package), floats={"simulation": ":stub", "validation": DOES_NOT_HOLD})
+    assert _cached_check(package, part) is Test.TEST_FAILED
+
+    async def no(*_args, **_kwargs):
+        raise AssertionError("a remembered verdict is not worked out again")
+
+    monkeypatch.setattr(simulation, "run_async", no)
+    caplog.clear()
+    with caplog.at_level(logging.ERROR):
+        assert _cached_check(package, part) is Test.TEST_FAILED
+    (record,) = _errors(caplog)
+    message = record.getMessage()
+    assert "'floats' ran, and its 'validation' does not hold" in message
+    assert '["pos"][2] > 50.0' in message
+    assert "remembered from an earlier run" in message
+
+
 def test_a_verdict_is_remembered(package, monkeypatch):
     """The second `pc test` asks the verdict cache and runs nothing at all."""
     part = _part(package)
