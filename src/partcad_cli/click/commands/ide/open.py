@@ -40,10 +40,13 @@ window still opens here, from this process, on this machine's display.
 MuJoCo reads one thing only as well, MJCF, and a scene is *not* converted for
 it. MJCF is written by `partcad-sim-mujoco`'s exporter, and a file handed to
 this command has no package around it to reach that exporter through. So MuJoCo
-is handed a file that already is MJCF -- its `open:` entry names the extensions
-MJCF is stored in, and `--type` says so for any other -- and anything else is
-refused with the export that does work, `pc export -S -t <package>:mjcf`. A
-Gazebo world is refused the same way. `kind` on the conversion request is how a
+is handed a file that already is MJCF and anything else is refused, with the
+export that does work, `pc export -S -t <package>:mjcf`. What a file is, is
+what `--type` declares, and otherwise what its extension says -- the `open:`
+entry names the extensions MJCF is stored in. PartCAD does not read the file to
+check, so an SDFormat world saved as `.xml` and opened without `--type` reaches
+MuJoCo, which says what is wrong with it; one declared `sim-gazebo:world`, or
+named `.world`, is refused. `kind` on the conversion request is how a
 scene conversion would be asked for, between formats PartCAD itself writes;
 there is none today.
 
@@ -87,7 +90,8 @@ from ...service import run
     show_default=True,
     metavar="APPLICATION",
     help="Which application to open the file in: freecad, blender, gazebo (a scene's world file), "
-    "mujoco (a scene that is already an MJCF model; any other is refused, with the export that writes one) "
+    "mujoco (a scene that is already an MJCF model, as --type or else its extension says; any other is "
+    "refused, with the export that writes one) "
     "or kicad (a board) -- plus "
     "whatever the workspace's packages declare in their 'open:' sections.",
 )

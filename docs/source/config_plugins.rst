@@ -138,10 +138,12 @@ PartCAD was pointed at -- a ``kicad`` part *is* the STEP file KiCad's CLI writes
 and the board is the project next to it. ``sceneType:`` says which description
 language an application reads, for one that reads an arrangement rather than
 geometry, and ``sceneExtensions:`` the extensions a file in it is stored in:
-MuJoCo reads MJCF, kept in ``.xml``. A scene in that language is handed over as
-it is, and one in any other is refused rather than converted, with the export
-that writes it -- the language is the engine plugin's, and a file handed to
-``pc ide open`` has no package around it to reach that plugin through.
+MuJoCo reads MJCF, kept in ``.xml``. A scene in that language -- by its declared
+type, or else by one of those extensions, since the file itself is not read --
+is handed over as it is, and one in any other is refused rather than converted,
+with the export that writes it -- the language is the engine plugin's, and a
+file handed to ``pc ide open`` has no package around it to reach that plugin
+through.
 
 ``container:`` has the shape a plugin's implementation gives it -- ``image``, and
 ``python`` for an image whose ``python3`` is not on ``PATH`` -- and the container

@@ -700,7 +700,10 @@ file handed to ``pc ide open`` has no package around it to reach that exporter
 through. So MuJoCo is handed a file that already is MJCF, and anything else is
 refused with the export that does work (``pc export -S -t sim-mujoco:mjcf``,
 then open what it wrote); see `An engine's own scene format is its plugin's`_
-above. An ASSY scene is refused too, for a reason of its own -- it is nothing but
+above. What a file is, is its declared type, and otherwise its extension:
+PartCAD does not read the file to check, so an SDFormat world saved as ``.xml``
+and opened with no type reaches MuJoCo, which reports what it cannot read. An
+ASSY scene is refused too, for a reason of its own -- it is nothing but
 references to the parts of a package, and an ad-hoc conversion has no package to
 resolve them against.
 
