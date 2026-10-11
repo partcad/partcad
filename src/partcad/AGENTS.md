@@ -786,6 +786,30 @@ at all).
   reader of an object's ports calls it first. It runs *before* `ports:` and `implements:` are read, which is
   what lets an `implements:` instance sit at a mapped port (`port:` on the instance).
 
+- **A connection is kept as its steps, and a joint is those steps with one left free**
+  (`./src/partcad/joint.py`, `./src/partcad/motion.py`, `AssemblyFactoryAssy.compose_connection`): `connect:`
+  places a child at *target placement · target port · half turn · target offsets · source offsets · source
+  port⁻¹*, and `joint.Composition` is that product as an ordered list of fixed and free steps. The factory
+  takes `AssemblyChild.location` **from** `Composition.location()` rather than computing it beside it, and the
+  arithmetic is the placement's own -- one grouping, left to right, the root `location:` outermost, a free
+  step at zero skipped rather than multiplied by the identity, every offset through
+  `interface.movement_offset` -- so the two are equal bit for bit. Keep it that way:
+  `tests/partcad/unit/test_joint_examples.py` compares them with `==` over every ASSY object under
+  `examples/`, because a joint that is the placement "to within rounding" is a second placement.
+
+  Which steps are free is `motion:` (`dof:` names parameters; `type:` implies them), resolved by
+  `joint.Resolution` from the connection, else the mating, else both interfaces combined -- where two
+  freedoms on one axis merge into one, ranges and values summed, and only when nothing that moves lies between
+  them in a way that would turn one off the other's axis. A freedom a `type` implies uses the parameter
+  along its axis or synthesizes one (`turnZ`, `angle`), which `toParams` then addresses; that is how every
+  `motion:` the URDF converter has written becomes a joint without touching the converter. `AssemblyChild.joint`
+  is None for a rigid attachment -- there are no fixed joints -- and for anything in a **scene**
+  (`SceneFactoryAssy.KEEPS_JOINTS`), whose placements are resolved identically. A joint rides to an
+  exporter on its child's envelope node (`shape_envelope.KEY_JOINT`, stamped by `Assembly._place` because it
+  belongs to the placement, not the object); `pc info -a` lists them, and what resolving them found wrong
+  (`AssemblyChild.joint_problems`) fails `pc test`'s `connect` check rather than `pc lint`, because it is a
+  finding about interfaces in other packages that a lint verdict, cached on one file, would serve stale.
+
 - **One shape, one tree, two forms** (`./src/partcad/shape_envelope.py`,
   `./src/partcad/shape_gltf.py`): every shape is a tree of nodes, and
   `Shape.get_representation(ctx, form)` is the one way to ask for it. A part or a sketch is that tree one node

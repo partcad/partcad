@@ -40,7 +40,7 @@ import typing
 
 from . import logging as pc_logging
 from . import shape_envelope, telemetry
-from .utils import resolve_resource_path
+from .utils import resolve_resource_path, split_resource_path
 
 # The request key the resolved material facts travel to a sandbox under.
 #
@@ -318,9 +318,12 @@ def physics_by_shape(ctx, request) -> dict:
 def owner_package(shape_name: str) -> str:
     """The package a shape's full name ("//pkg:part") belongs to.
 
-    Split from the right: a package path is full of '/' and starts with '//',
-    and an object name carries no ':' at all, so the last one is the separator.
-    A name with no ':' is a package with nothing after it, which is what an
-    assembly with no name of its own carries.
+    What precedes the first ':' (see 'split_resource_path'). Not the last one:
+    an object's name can hold a ':' of its own -- an assembly embedded in an ASSY
+    file is '<file>:<assembly>', and an instance's parameter value is whatever
+    was written ('room;medium=//pub/std/materials:water'). A name with no ':' is
+    a package with nothing after it, which is what an assembly with no name of
+    its own carries.
     """
-    return shape_name.rsplit(":", 1)[0] if ":" in shape_name else shape_name
+    package, _ = split_resource_path(shape_name)
+    return shape_name if package is None else package

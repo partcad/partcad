@@ -540,7 +540,7 @@
           },
           "additionalProperties": false
         },
-        "friction": { "type": "number", "description": "Coefficient of friction, along the first friction direction.", "minimum": 0 },
+        "friction": { "type": "number", "description": "On a shape: the coefficient of friction along the first friction direction, dimensionless. On an interface, a mating or a connection: the joint's own friction, N*m for a turn and N for a move.", "minimum": 0 },
         "friction2": { "type": "number", "description": "Coefficient of friction, along the second friction direction.", "minimum": 0 },
         "frictionDirection": {
           "type": "array",
@@ -560,8 +560,8 @@
         "gravity": { "type": "boolean", "description": "Whether gravity acts on this body." },
         "maxEffort": { "type": "number", "description": "The largest effort a connection may exert: N*m for a turn, N for a move." },
         "maxVelocity": { "type": "number", "description": "The largest velocity a connection allows: deg/s for a turn, mm/s for a move." },
-        "damping": { "type": "number", "description": "Damping resisting the movement a connection allows." },
-        "springStiffness": { "type": "number", "description": "Stiffness of a spring returning a connection to 'springReference'." },
+        "damping": { "type": "number", "description": "Damping resisting the movement a connection allows, per unit of that movement in SI: N*m*s/rad for a turn, N*s/m for a move. It is what every engine takes and what a URDF's <dynamics> states, and it is the one place an angle is not in degrees." },
+        "springStiffness": { "type": "number", "description": "Stiffness of a spring returning a connection to 'springReference', in SI: N*m/rad for a turn, N/m for a move." },
         "springReference": { "type": "number", "description": "The position a spring returns a connection to: degrees for a turn, millimetres for a move." },
         "stopCfm": { "type": "number", "description": "Constraint force mixing used at a connection's limits." },
         "stopErp": { "type": "number", "description": "Error reduction used at a connection's limits." },
@@ -597,24 +597,39 @@
         }
       ]
     },
+    "motion-type": {
+      "description": "A kind of joint, which implies its degrees of freedom: 'fixed' none; 'revolute' one turn about 'axis' within 'limits'; 'continuous' one turn, unlimited; 'prismatic' one move along 'axis' within 'limits'; 'cylindrical' a turn and a move about and along 'axis'; 'screw' the same two, the move following the turn by the 'threadStep'; 'universal' two turns, about 'axis' and about the port's X axis; 'ball' three turns about the port's origin; 'planar' two moves across the plane normal to 'axis' and one turn about it; 'floating' all six. See docs/source/config_geometry.rst.",
+      "type": "string",
+      "enum": ["fixed", "revolute", "continuous", "prismatic", "cylindrical", "screw", "universal", "ball", "planar", "floating"]
+    },
     "motion": {
+      "description": "Which degrees of freedom a connection keeps once it is made: by naming the freedom-of-movement parameters that stay free ('dof'), or by naming a kind of joint ('type'), or both - in which case the two have to agree. 'motion: revolute' is the short form of 'motion: {type: revolute}'. Declared on an interface, on a mating and on a connection, the most specific of which wins; an interface's own and its partner's are combined. Angles are degrees and lengths millimetres, as everywhere else in PartCAD.",
+      "oneOf": [
+        { "$ref": "#/definitions/motion-type" },
+        { "$ref": "#/definitions/motion-section" }
+      ]
+    },
+    "motion-section": {
       "type": "object",
-      "description": "The freedom of movement a connection allows. Angles are degrees and lengths millimetres, as everywhere else in PartCAD.",
       "properties": {
-        "type": {
-          "type": "string",
-          "enum": ["fixed", "revolute", "continuous", "prismatic", "planar", "floating", "ball", "screw"]
+        "type": { "$ref": "#/definitions/motion-type" },
+        "dof": {
+          "description": "The freedom-of-movement parameters that stay free once the connection is made, by name. Each already says its kind, its direction and its range; one not named is an adjustment, fixed at the value a connection gives it. A predefined name (moveX ... turnZ) need not be declared.",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+          ]
         },
         "axis": {
           "type": "array",
-          "description": "The axis moved about or along, in the frame of this interface's port.",
+          "description": "The axis 'type' moves about or along: in the frame of this interface's port; on a mating, of the port of the interface that declares it; on a connection, in the contact frame. Default: Z.",
           "items": { "$ref": "#/definitions/number-or-expression" },
           "minItems": 3,
           "maxItems": 3
         },
         "limits": {
           "type": "object",
-          "description": "How far the movement may go: degrees for a turn, millimetres for a move.",
+          "description": "How far a 'revolute', 'prismatic' or 'screw' motion may go, in the sense of 'axis': degrees for a turn, millimetres for a move. A kind with more than one degree of freedom states the range of each on its parameter instead.",
           "properties": {
             "lower": { "$ref": "#/definitions/number-or-expression" },
             "upper": { "$ref": "#/definitions/number-or-expression" }
@@ -636,7 +651,7 @@
           "type": "object",
           "description": "A movement that follows another one: value = multiplier * other + offset.",
           "properties": {
-            "joint": { "type": "string", "minLength": 1 },
+            "joint": { "type": "string", "minLength": 1, "description": "The name of the joint it follows: '<child link>-<target link>', or what that connection's 'joint:' says." },
             "multiplier": { "$ref": "#/definitions/number-or-expression" },
             "offset": { "$ref": "#/definitions/number-or-expression" }
           },
@@ -1039,6 +1054,14 @@
                 }
               },
               "additionalProperties": false
+            },
+            "motion": {
+              "description": "Which degrees of freedom every connection that joins these two interfaces keeps, whatever each would do with another partner: a pin turns in a clearance bore and is fixed in a press-fit one. Outranks the two interfaces' own 'motion' and is outranked by a connection's. 'axis' is in the frame of the port of the interface that declares the mating; a 'dof' name is that parameter of either interface.",
+              "$ref": "#/definitions/motion"
+            },
+            "physics": {
+              "description": "What moving such a connection costs, when it is a joint. Outranks the two interfaces' own 'physics', which is how a pairing whose interfaces disagree states what the pair really does.",
+              "$ref": "#/definitions/physics"
             },
             "sourcePortSelector": { "type": "string", "minLength": 1 },
             "targetPortSelector": { "type": "string", "minLength": 1 }

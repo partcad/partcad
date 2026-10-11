@@ -377,6 +377,37 @@ def test_the_schemas_ship_with_the_package():
     assert "parts" in schema["properties"]
 
 
+def test_a_connection_s_motion_is_the_section_an_interface_states():
+    """Borrowed from the configuration schema, not copied: one definition, checked in both."""
+    joint = (
+        "links:\n"
+        "  - part: base\n"
+        "  - part: arm\n"
+        "    connect:\n"
+        "      name: base\n"
+        "      joint: shoulder\n"
+        "      motion: {type: revolute, limits: {lower: -90, upper: 90}}\n"
+        "      physics: {damping: 0.1}\n"
+    )
+    assert check(joint) == []
+    assert check(joint.replace("motion: {type: revolute,", "motion: {type: hinged,")) != []
+
+    def refs(node):
+        if isinstance(node, dict):
+            yield from ([node["$ref"]] if isinstance(node.get("$ref"), str) else [])
+            for value in node.values():
+                yield from refs(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from refs(value)
+
+    # Self-contained once loaded: every reference is to a definition in it.
+    assert all(ref.startswith("#/definitions/") for ref in refs(get_schema(ASSY_SCHEMA)))
+    # The scene schema is derived from it, and keeps what it borrowed.
+    assert validate_source(joint, schema_for_file("/pkg/x.assy", FLAVOR_SCENE)) == []
+    assert get_schema(ASSY_SCHEMA)["definitions"]["motion"] == get_schema(PARTCAD_SCHEMA)["definitions"]["motion"]
+
+
 # A package configuration is the same kind of document as an ASSY file -- a
 # Jinja2 template that renders to YAML and then has to match a schema -- so the
 # whole of the machinery above applies to it. What follows is what is specific
