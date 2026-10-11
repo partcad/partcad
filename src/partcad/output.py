@@ -625,6 +625,30 @@ class Implementation:
         """
         return list(self._declared("pythonRequirements") or [])
 
+    def environment_cache_key(self) -> str:
+        """The sandbox this implementation runs in, as its package declared it.
+
+        What a cached answer of it is keyed on (see 'partcad.cache_artifacts'),
+        and built from declarations alone: the interpreter it asks for, what is
+        installed beside it -- the CAD stack every sandbox carries, the
+        implementing package's own requirements and this file type's -- and the
+        image it names, if it names one. Never from the runtime that ends up
+        running it, because every sandbox type is expected to give the same
+        answer and an entry written under one has to be found under all of them
+        (see 'sandbox_versions.environment_cache_key').
+
+        Requires 'project', which 'materialize_script()' fills in.
+        """
+        from .runtime_python import environment_requirements
+
+        container = self.container or {}
+        return sandbox_versions.environment_cache_key(
+            "python",
+            self.python_version(),
+            environment_requirements(self.project, {"pythonRequirements": self.python_requirements}),
+            image=container.get("image") or self.docker_image,
+        )
+
 
 def normalize(config) -> dict:
     """A file type's configuration as a dict.

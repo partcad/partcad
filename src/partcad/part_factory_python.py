@@ -57,12 +57,13 @@ class PartFactoryPython(PartFactoryHomogen, PartFactoryFile):
             "python",
             self.runtime.version,
             environment_requirements(self.project, self.config),
-            # What the sandbox was actually built in, not what was asked for: a
-            # 'dockerImage' that could not be pulled falls back to PartCAD's own
-            # (see 'Context.get_python_runtime'), and the shape then belongs to
-            # the image it was really built in. 'getattr' because only the
-            # container-backed runtimes have one.
-            image=getattr(self.runtime, "image", None),
+            # What the package declared, never what this machine's sandbox was
+            # built in: every sandbox type is expected to produce the same shape,
+            # so a key that named the image a 'docker' or 'remote' sandbox ran
+            # in - or the PartCAD release tagged on it - would key the one shape
+            # differently on conda, and switching sandboxes would orphan every
+            # entry (see 'sandbox_versions.environment_cache_key').
+            image=shape_docker_image(self.config, self.project),
         )
 
     def post_create(self) -> None:

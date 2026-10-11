@@ -51,6 +51,11 @@ class PartFactoryJavaScript(PartFactoryFile):
             # The part's own choice outranks the package's, matching how
             # 'javascriptRequirements' works at both levels.
             javascript_version = config.get("javascriptVersion", None) or self.project.javascript_version
+        # What the shape is keyed on (see 'environment_cache_key'): the major
+        # line asked for, normalized the way 'get_javascript_runtime' does.
+        self.javascript_version_declared = sandbox_versions.node_major_version(
+            str(javascript_version or sandbox_versions.DEFAULT_NODE_VERSION)
+        )
         self.runtime = self.ctx.get_javascript_runtime(javascript_version)
         # One session per part, not per package: a session carries the exact
         # dependency set its part asked for, and the environment it resolves to
@@ -71,8 +76,16 @@ class PartFactoryJavaScript(PartFactoryFile):
         The session's dependency set is exactly what gets installed, and is what
         the environment directory is named after, so there is nothing to resolve
         again here.
+
+        The version is the one the package asked for, not the one the runtime
+        ended up being. They differ only in the 'none' sandbox, which runs
+        whatever Node.js the host has and warns when that is not what was asked
+        for; keying on the host's would key one shape differently there and on
+        'conda', and every sandbox type is expected to produce the same shape.
+        The Python 'venv' sandbox, which cannot provision an interpreter either,
+        has always keyed on the version asked for.
         """
-        return sandbox_versions.environment_cache_key("nodejs", self.runtime.version, self.session["deps"])
+        return sandbox_versions.environment_cache_key("nodejs", self.javascript_version_declared, self.session["deps"])
 
     def post_create(self) -> None:
         for dep in self.config.get("dependencies", []):

@@ -49,8 +49,10 @@ from __future__ import annotations
 import copy
 import hashlib
 import os
+import shutil
 import typing
 
+from . import cache_artifacts
 from . import logging as pc_logging
 from . import output, shape_envelope, wrapper
 from .process_crash import describe_exit_code
@@ -337,7 +339,8 @@ def run_directory(ctx, object_name: str, simulation_name: str) -> str:
     Under PartCAD's own state directory, for the reason every other generated
     file is: a simulation is derived data and running one must not drop files
     into the user's source tree. Stable per (object, simulation), so a rerun
-    overwrites the previous one instead of accumulating.
+    replaces the previous one instead of accumulating (see 'run_async', which
+    empties it first).
     """
     digest = hashlib.sha256(("%s\0%s" % (object_name, simulation_name)).encode("utf-8")).hexdigest()[:16]
     directory = os.path.join(ctx.user_config.internal_state_dir, "simulate", digest)
@@ -372,8 +375,29 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration) -
                 raise Exception("The simulation scene could not be built: %s:%s" % (scene_package, scene_name))
 
             directory = run_directory(ctx, object_name, declaration.name)
-            scene_file = await _export_scene_async(ctx, scene, impl, directory)
-            result.result = await _run_plugin_async(ctx, impl, directory, scene_file, declaration, object_name, kind)
+            # What the directory holds is this run's and nothing else's: the
+            # whole of it is what the cache stores, and an artifact an earlier
+            # run left there would be stored as this one's - or, worse, read by
+            # whoever opens the directory as what this run produced.
+            _empty(directory)
+
+            # The same question asked again is a read: the directory is put
+            # back as the run that answered it left it, scene and all, and the
+            # result comes with it. The validation is not part of the question
+            # and is evaluated below either way, so editing it re-judges the
+            # run rather than repeating it.
+            cache = getattr(ctx, "cache_artifacts", None)
+            artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind)
+            result.result = await cache_artifacts.restore_async(cache, artifact, directory=directory)
+            if result.result is None:
+                # Whatever a failed restore managed to write is not this run's.
+                _empty(directory)
+                scene_file = await _export_scene_async(ctx, scene, impl, directory)
+                result.result = await _run_plugin_async(
+                    ctx, impl, directory, scene_file, declaration, object_name, kind
+                )
+                # Only an answer is remembered: a run that failed raised above.
+                await cache_artifacts.store_async(cache, artifact, result.result, directory=directory)
         except Exception as e:  # pylint: disable=broad-except
             result.error = str(e)
             pc_logging.error("%s: the simulation '%s' failed: %s" % (object_name, declaration.name, e))
@@ -387,15 +411,14 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration) -
         return result
 
 
-async def _export_scene_async(ctx, scene, impl, directory: str) -> str:
-    """Write the scene out in the format the plugin reads, and return the file.
+def _empty(directory: str) -> None:
+    """Leave 'directory' there and empty."""
+    shutil.rmtree(directory, ignore_errors=True)
+    os.makedirs(directory, exist_ok=True)
 
-    The plugin's own declaration decides both halves: ``format:`` says which
-    file type, and ``formatOptions:`` says how it is to be written -- which for
-    a physics simulation means "every body free to move", the opposite of what a
-    scene means on its own. A plugin is the only thing that knows that, which is
-    why it says so rather than PartCAD assuming it.
-    """
+
+def _scene_export(ctx, scene, impl, directory: str):
+    """Who writes the scene for the plugin: the format, its implementation, the package."""
     format_name = impl.config.get("format")
     if not format_name:
         raise Exception("The simulation '%s' declares no 'format' to hand the scene over in" % impl.format_name)
@@ -411,6 +434,63 @@ async def _export_scene_async(ctx, scene, impl, directory: str) -> str:
     export_impl, _ = scene.output_getopts(
         ctx, format_name, project=scene_project, options_project=impl.project, output_dir=directory
     )
+    return format_name, export_impl, scene_project
+
+
+async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str):
+    """The cache key of one simulation's answer, or None when it has none.
+
+    The scene's own key - which covers the subject, since the subject is a
+    parameter of the scene and the scene is keyed on what it links to - and
+    everything the run adds to it: the plugin, its resolved options and its
+    sandbox, what the declaration hands it, how the scene is written for it,
+    and the content of both scripts and of the wrappers that run them.
+
+    Never raises. A key that cannot be worked out is a run that is not cached,
+    and the run itself is what reports why.
+    """
+    try:
+        subject_key = await scene.get_cache_key_async()
+        if not subject_key:
+            return None
+        format_name, export_impl, _ = _scene_export(ctx, scene, impl, os.curdir)
+        # First: resolving a script is also what tells an implementation which
+        # package it lives in, and its interpreter is that package's to say.
+        files = [
+            await output.materialize_script(ctx, impl),
+            await output.materialize_script(ctx, export_impl),
+            wrapper.get("simulate.py"),
+            wrapper.get("export.py"),
+        ]
+        question = {
+            "kind": "simulation",
+            "plugin": "%s:%s" % (impl.project.name, impl.format_name),
+            "options": impl.config,
+            "params": declaration.params,
+            "subject": subject,
+            "subject_kind": kind,
+            # Declared, never observed: see 'Implementation.environment_cache_key'.
+            "environment": impl.environment_cache_key(),
+            "format": format_name,
+            "export": export_impl.config,
+            "export_environment": export_impl.environment_cache_key(),
+        }
+        return cache_artifacts.question_hash("%s#%s" % (subject, declaration.name), subject_key, question, files)
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.debug("%s: the simulation '%s' will not be cached: %s" % (subject, declaration.name, e))
+        return None
+
+
+async def _export_scene_async(ctx, scene, impl, directory: str) -> str:
+    """Write the scene out in the format the plugin reads, and return the file.
+
+    The plugin's own declaration decides both halves: ``format:`` says which
+    file type, and ``formatOptions:`` says how it is to be written -- which for
+    a physics simulation means "every body free to move", the opposite of what a
+    scene means on its own. A plugin is the only thing that knows that, which is
+    why it says so rather than PartCAD assuming it.
+    """
+    format_name, export_impl, scene_project = _scene_export(ctx, scene, impl, directory)
     path = os.path.join(directory, "scene." + export_impl.extension(format_name))
 
     options = impl.config.get("formatOptions") or {}

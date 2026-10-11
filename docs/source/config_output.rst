@@ -392,14 +392,22 @@ falls back to its own base image, because "runs best here" is not "runs only
 here"; the package's requirements are then the whole of what it gets, which is
 exactly the case the paragraph above is about.
 
-**The image is part of what a shape is cached under.** An image is named
-precisely for what pip cannot install, so two images carrying the same
+**The declared image is part of what a shape is cached under.** An image is
+named precisely for what pip cannot install, so two images carrying the same
 interpreter and the same wheels are still two different native stacks. Changing
-``dockerImage`` therefore rebuilds the shapes that were produced in the old one
-rather than handing back what it built -- as does falling back to PartCAD's own
-image, since that is the image the shape was really produced in. A sandbox with
-no image keys exactly as it did before there was such a thing as an image, so
-nothing else is invalidated.
+``dockerImage`` therefore rebuilds the shapes that were produced under the old
+one rather than handing back what it built.
+
+What is keyed is the *declaration*, never the image a sandbox ended up running.
+Every sandbox type is expected to produce the same result from the same
+declaration, so a shape -- or an analysis, a route or a simulation of it -- that
+a ``conda`` sandbox produced is found again from ``docker``, ``remote`` or
+``venv``, and the other way round. Falling back to PartCAD's own image, or
+installing the requirements on a machine with no container runtime, keys
+exactly as the image it stands in for; PartCAD's own base image, whose tag
+carries the release and the architecture, is never in a key at all. A package
+that declares no image keys exactly as it did before there was such a thing as
+an image.
 
 .. _docker-image-architecture:
 

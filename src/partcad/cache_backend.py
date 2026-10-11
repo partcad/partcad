@@ -54,6 +54,17 @@ PROPERTIES_SUFFIX = "-props"
 # renamed: there is no separate key left to exempt.
 NON_GEOMETRY_SUFFIXES = (PROPERTIES_SUFFIX,)
 
+# What an analysis, a route or a simulation produced: its result and the files
+# it wrote, as one entry (see cache_artifacts.py).
+ARTIFACT_KEY = "artifact"
+
+# The keys a size window applies to from above only. What is stored under them
+# is the answer of a solver or a simulator - minutes of work, however few bytes
+# it came to - so no entry is too small to be worth a round trip; but a model or
+# a video can still be too big for a tier, and memcached in particular refuses
+# anything past its item size.
+MAX_ONLY_KEYS = (ARTIFACT_KEY,)
+
 
 class CacheBackend:
     """One storage tier: flat names in, bytes out.
@@ -79,6 +90,8 @@ class CacheBackend:
 
     def accepts(self, key: str, size: int) -> bool:
         """Whether an entry of this size belongs in this tier."""
+        if key.startswith(MAX_ONLY_KEYS):
+            return not (self.max_entry_size and size > self.max_entry_size)
         if not key.startswith(SIZED_KEYS) or key.endswith(NON_GEOMETRY_SUFFIXES):
             return True
         # One-byte entries are how a test result is stored, and they are exempt
