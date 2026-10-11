@@ -484,8 +484,14 @@ def session(editor, vsix, display):
         "--skip-release-notes",
         "--disable-workspace-trust",
     ]
-    if hasattr(os, "geteuid") and os.geteuid() == 0:
-        # Electron refuses to run as root with its sandbox on.
+    if sys.platform.startswith("linux"):
+        # Chromium's sandbox needs unprivileged user namespaces or a setuid
+        # helper, and on Linux this has neither for certain: an editor unpacked
+        # from a tarball has no setuid `chrome-sandbox`, and GitHub's Ubuntu
+        # 24.04 runners restrict unprivileged user namespaces -- where the window
+        # dies before it writes a single log line. Electron also refuses to run
+        # as root with the sandbox on. `build-ide-standalone.yml` passes the same
+        # flag for the same reason, and so does `@vscode/test-electron`.
         window.append("--no-sandbox")
 
     # The daemon serving './examples' has to be one started with this
@@ -553,7 +559,10 @@ def test_install_open_view_and_analyse_in_a_real_editor(session):
 
     # 2. './examples' as the workspace, in the PartCAD workbench.
     pc(env, "ide", "workspace", "--with", session["editor"], EXAMPLES, "--", *session["window"])
-    wait_for("the editor's DevTools", lambda: devtools.workbench(), WINDOW_TIMEOUT)
+    try:
+        wait_for("the editor's DevTools", lambda: devtools.workbench(), WINDOW_TIMEOUT)
+    except AssertionError as e:
+        raise AssertionError("%s\n%s" % (e, editor_startup_report(session["user_data_dir"]))) from None
     title = wait_for(
         "the PartCAD workbench",
         lambda: (lambda value: value if value and value.strip().upper() == "PARTCAD" else None)(
@@ -648,6 +657,20 @@ def test_install_open_view_and_analyse_in_a_real_editor(session):
     if excused:
         logged = [line for line in logged if "failed to fetch the 'fea' tab" not in line]
     assert logged == []
+
+
+def editor_startup_report(user_data_dir: str) -> str:
+    """What the editor said as it started, for a window that never answered: the end of its main log, or that there is none.
+
+    No log at all means it died before it got that far -- on Linux, most often
+    the Chromium sandbox (see `--no-sandbox` in `session`).
+    """
+    logs = sorted(glob.glob(os.path.join(user_data_dir, "logs", "*", "main.log")))
+    if not logs:
+        return "The editor wrote no log under %s: it did not get as far as starting." % user_data_dir
+    with open(logs[-1], encoding="utf-8", errors="replace") as f:
+        tail = f.readlines()[-40:]
+    return "The end of %s:\n%s" % (logs[-1], "".join(tail))
 
 
 def container_runtime() -> bool:
