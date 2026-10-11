@@ -162,8 +162,15 @@ def _git_revision(project) -> typing.Optional[str]:
     Only for a package imported as ``type: git``. A local package that happens
     to sit inside somebody's own repository has a revision too, but it is the
     revision of a tree they are editing, and the edit is what has to count.
+
+    Read from the package's own configuration, which is where the import puts
+    it: 'ProjectFactory._create()' copies the import's type into
+    ``config_obj["type"]``. The factory's ``import_config_type`` attribute is the
+    factory's and never reaches the package -- reading that one found no
+    package to be a git import, and left every revision out of the key.
     """
-    if getattr(project, "import_config_type", None) != "git":
+    config = getattr(project, "config_obj", None)
+    if not isinstance(config, dict) or config.get("type") != "git":
         return None
     try:
         return _revisions[project]

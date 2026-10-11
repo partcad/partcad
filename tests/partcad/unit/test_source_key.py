@@ -17,7 +17,9 @@ import shutil
 import pygit2
 import pytest
 
+import partcad as pc
 from partcad import source_key
+from partcad.user_config import UserConfig
 
 
 def _package(root, files):
@@ -163,34 +165,66 @@ def _commit(repository_path, files, message):
     return str(repository.create_commit("HEAD", signature, signature, message, tree, parents))
 
 
-class _Fetched:
-    """A package as the git import leaves it: a clone, and the type it was imported as.
+def _origin(tmp_path, files=None):
+    """A repository a plugin is released from, with one release in it."""
+    origin = tmp_path / "origin"
+    pygit2.init_repository(str(origin), initial_head="main")
+    commit = _commit(str(origin), files or dict(PLUGIN, **{"partcad.yaml": "name: //plugin\n"}), "release 1")
+    return origin, commit
 
-    A class rather than a 'SimpleNamespace', which cannot be weakly referenced,
-    because a real package object can and the revision is remembered per package.
+
+def _workspace(tmp_path, state):
+    """A context of its own: its own package, and its own state directory to clone into."""
+    root = tmp_path / ("workspace-" + state)
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "partcad.yaml").write_text("name: //workspace\n")
+    config = UserConfig()
+    config.internal_state_dir = str(tmp_path / state)
+    return pc.Context(str(root), user_config=config)
+
+
+def _imported(tmp_path, origin, state="state"):
+    """The package as a 'type: git' import leaves it, through the real import.
+
+    Not a stand-in. The import keeps its type where the import puts it -- the
+    package's 'config_obj["type"]', copied there by 'ProjectFactory._create()'
+    -- and a stand-in that carried it anywhere else would test a package no
+    import ever makes, which is how this was once wrong and green.
     """
-
-    def __init__(self, config_dir, kind):
-        self.name = "//plugin"
-        self.config_dir = str(config_dir)
-        self.import_config_type = kind
+    ctx = _workspace(tmp_path, state)
+    factory = pc.ProjectFactoryGit(ctx, None, {"name": "//plugin", "type": "git", "url": str(origin)})
+    return factory.project
 
 
-def _fetched(config_dir, kind="git"):
-    return _Fetched(config_dir, kind)
+def test_a_package_imported_from_git_is_keyed_on_its_commit(tmp_path):
+    origin, commit = _origin(tmp_path)
+    package = _imported(tmp_path, origin)
+
+    assert package.config_obj["type"] == "git"
+    key = source_key.package_key(package)
+    assert key == source_key.directory_key(package.config_dir) + ";git:" + commit
 
 
-def test_a_package_fetched_from_git_is_keyed_on_its_revision(tmp_path):
+def test_a_release_that_changed_only_a_data_file_is_a_new_key(tmp_path):
     """A data file the plugin reads is not a '.py', and its release still has to count."""
-    clone = tmp_path / "clone"
-    pygit2.init_repository(str(clone))
-    first = _commit(str(clone), dict(PLUGIN, **{"partcad.yaml": "name: //plugin\n"}), "release 1")
+    origin, first = _origin(tmp_path)
+    before = source_key.package_key(_imported(tmp_path, origin, state="before"))
 
-    key = source_key.package_key(_fetched(clone))
-    assert key.endswith(";git:" + first)
+    second = _commit(str(origin), {"table.json": "[1, 2]\n"}, "release 2: a data file only")
+    after = source_key.package_key(_imported(tmp_path, origin, state="after"))
 
-    second = _commit(str(clone), {"table.json": "[1, 2]\n"}, "release 2: a data file only")
-    assert source_key.package_key(_fetched(clone)) == key.replace(first, second)
+    assert after != before
+    assert after == before.replace(first, second)
+
+
+def test_one_release_imported_on_two_machines_is_one_key(tmp_path):
+    """Two clones in two state directories: the paths differ, the release does not."""
+    origin, _commit_id = _origin(tmp_path)
+    here = _imported(tmp_path, origin, state="here")
+    there = _imported(tmp_path, origin, state="there")
+
+    assert here.config_dir != there.config_dir
+    assert source_key.package_key(here) == source_key.package_key(there)
 
 
 def test_a_local_package_inside_a_repository_is_keyed_on_its_files_alone(tmp_path):
@@ -198,18 +232,19 @@ def test_a_local_package_inside_a_repository_is_keyed_on_its_files_alone(tmp_pat
     checkout = tmp_path / "checkout"
     pygit2.init_repository(str(checkout))
     _commit(str(checkout), dict(PLUGIN, **{"partcad.yaml": "name: //plugin\n"}), "work in progress")
+    config = UserConfig()
+    config.internal_state_dir = str(tmp_path / "state")
+    package = pc.Context(str(checkout), user_config=config).get_project("//")
 
-    key = source_key.package_key(_fetched(checkout, kind="local"))
+    key = source_key.package_key(package)
     assert ";git:" not in key
     assert key == source_key.directory_key(str(checkout))
 
 
 def test_a_revision_is_read_once_per_package(tmp_path, monkeypatch):
     """A managed clone changes only when its package is fetched again, which makes a new package."""
-    clone = tmp_path / "clone"
-    pygit2.init_repository(str(clone))
-    _commit(str(clone), dict(PLUGIN, **{"partcad.yaml": "name: //plugin\n"}), "release 1")
-    package = _fetched(clone)
+    origin, _commit_id = _origin(tmp_path)
+    package = _imported(tmp_path, origin)
     source_key.package_key(package)
 
     opened = []
@@ -224,10 +259,11 @@ def test_a_revision_is_read_once_per_package(tmp_path, monkeypatch):
     assert opened == []
 
 
-def test_a_git_package_with_no_repository_is_still_keyed_on_its_files(tmp_path):
-    root = _package(tmp_path / "plugin", PLUGIN)
-    shutil.rmtree(root / ".git", ignore_errors=True)
-    assert source_key.package_key(_fetched(root)) == source_key.directory_key(str(root))
+def test_a_git_package_whose_repository_is_gone_is_still_keyed_on_its_files(tmp_path):
+    origin, _commit_id = _origin(tmp_path)
+    package = _imported(tmp_path, origin)
+    shutil.rmtree(os.path.join(package.config_dir, ".git"))
+    assert source_key.package_key(package) == source_key.directory_key(package.config_dir)
 
 
 def test_partcad_s_wrappers_are_keyed_the_same_way():
