@@ -12,9 +12,15 @@
 def render_cfg_merge(a: dict, b: dict, path=[]):
     for key in b:
         if key in a:
+            # One of three, and only one. This was an 'if' rather than an
+            # 'elif', so a section that had just been merged went on to the
+            # comparison below - which it failed whenever the package had said
+            # anything the shape had not, and was then replaced by the shape's.
+            # A shape setting 'viewport_origin' on 'svg' lost the package's
+            # 'prefix' for it, and the README looked for its picture elsewhere.
             if isinstance(a[key], dict) and isinstance(b[key], dict):
                 a[key] = render_cfg_merge(a[key], b[key], path + [str(key)])
-            if isinstance(a[key], list) and isinstance(b[key], list):
+            elif isinstance(a[key], list) and isinstance(b[key], list):
                 a[key].extend(b[key])
             elif a[key] != b[key]:
                 a[key] = b[key]
