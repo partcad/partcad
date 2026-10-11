@@ -877,7 +877,7 @@ Interacting with IDE
 Putting an object in front of a person, in one of two windows -- the IDE's own **PartCAD Viewer**
 (``pc ide view``), or **another application** on this machine (``pc ide open``, which is also what the editor
 extension's "Open in..." menu runs) -- and asking the IDE what it is showing (``pc ide state``). Two more set the
-IDE up: ``pc ide install`` puts the PartCAD extension into an editor, and ``pc ide open <directory>`` opens a
+IDE up: ``pc ide install`` puts the PartCAD extension into an editor, and ``pc ide workspace <directory>`` opens a
 package as an editor's workspace, in the PartCAD workbench. None of them
 leaves anything new in the package: that is what ``pc export`` and ``pc render`` are for. They used to be ``pc inspect`` and ``pc open``. Those names still work, are left out
 of ``pc --help``, and print a note on stderr saying what to type instead.
@@ -915,6 +915,26 @@ of ``pc --help``, and print a note on stderr saying what to type instead.
 
   ``PARTCAD_BASE_URL`` replaces the release's download directory, as it does for ``pc upgrade``. Like
   ``pc upgrade``, it changes this machine and asks no daemon anything.
+
+``pc ide workspace``
+  Open a directory -- by default the current one -- as the workspace of an editor on this machine, in the
+  **PartCAD workbench**: the window comes up on the PartCAD Explorer rather than on the files. The editor is
+  found the way ``pc ide install`` finds one, or named with ``--with``, and anything after ``--`` goes on its
+  command line.
+
+  .. code-block:: shell
+
+    pc ide workspace                                # this package, in the first editor found
+    pc ide workspace --with codium examples         # ./examples, in VSCodium
+    pc ide workspace examples -- --new-window
+
+  An editor's command line can open a folder but not run a command in the window it opens, so
+  ``pc ide workspace`` leaves a request under ``~/.partcad/ide/requests/`` first, and the PartCAD extension takes
+  it as it starts in that folder's window, or as an existing window of that folder comes to the front. A request
+  nobody takes is ignored after five minutes. The extension starts in a folder that holds PartCAD files (a
+  ``partcad.yaml``, an ASSY file, a script); any other folder is opened without the workbench. It is not
+  ``pc ide open``, which puts one object in front of a person in a design application and waits for it to come
+  back edited; this returns as soon as the editor has the folder.
 
 ``pc ide state``
   Print what the PartCAD IDE on this machine is showing, as YAML (the default) or ``--json``::
@@ -1047,23 +1067,6 @@ of ``pc --help``, and print a note on stderr saying what to type instead.
   ``<package>:<part>`` name: resolving a name is a package-graph question, which is the round trip this
   command does not make. ``--json`` prints what happened (or the reason it did not) as one object, which is
   what the VS Code extension's "Open in..." context menu reads.
-
-  **A directory is opened as a workspace instead**, in an editor on this machine -- the PartCAD IDE, VSCodium or
-  Visual Studio Code, found the way ``pc ide install`` finds one, or named with ``--with`` -- and in the
-  **PartCAD workbench**: the window comes up on the PartCAD Explorer rather than on the files. Anything after
-  ``--`` goes on the editor's command line.
-
-  .. code-block:: shell
-
-    pc ide open .                                  # this package, in the first editor found
-    pc ide open --with codium examples             # ./examples, in VSCodium
-    pc ide open examples -- --new-window
-
-  An editor's command line can open a folder but not run a command in the window it opens, so ``pc ide open``
-  leaves a request under ``~/.partcad/ide/requests/`` first, and the PartCAD extension takes it as it starts in
-  that folder's window, or as an existing window of that folder comes to the front. A request nobody takes is
-  ignored after five minutes. The extension starts in a folder that holds PartCAD files (a ``partcad.yaml``, an
-  ASSY file, a script); any other folder is opened without the workbench.
 
 *****************
 Workflow commands

@@ -14,8 +14,8 @@ in it. Neither one produces anything a package keeps: that is `export`,
 `render` and the rest.
 
 Two more set the IDE up rather than show anything in it: `pc ide install` puts
-the PartCAD extension into an editor on this machine, and `pc ide open
-<directory>` opens a package as an editor's workspace, in the PartCAD workbench.
+the PartCAD extension into an editor on this machine, and `pc ide workspace`
+opens a package as an editor's workspace, in the PartCAD workbench.
 Both are `partcad_client.ide`.
 """
 

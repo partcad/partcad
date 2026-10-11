@@ -300,7 +300,7 @@ compressed, so the extension never needs a CAD library. It used to hand live OCP
 
 ## Opening a workspace from the command line
 
-`pc ide open <directory>` opens the folder in an editor and asks for the PartCAD workbench in the window that
+`pc ide workspace <directory>` opens the folder in an editor and asks for the PartCAD workbench in the window that
 opens it. An editor's command line cannot run a command in a window, so the CLI writes a request first --
 `~/.partcad/ide/requests/<random>.json`, `{"folder", "view": "workbench", "requested"}`, renamed into place --
 and `src/workbenchRequest.ts` takes it: on activation, whenever the window gains focus (an existing window of
@@ -811,7 +811,7 @@ Three things the bundled run needs, all of which have already cost a debugging s
 ### The end-to-end test, in a real editor
 
 `tests/ide/test_ide_e2e.py` (Python, beside the other `pc` tests) does what a person does: `pc ide install` a
-`.vsix` into an editor with a profile of its own, `pc ide open examples`, `pc ide view --design-3d` the logo
+`.vsix` into an editor with a profile of its own, `pc ide workspace examples`, `pc ide view --design-3d` the logo
 assembly and `pc ide view --analysis-fea` the cantilever -- and fails on anything going wrong on the way: an
 `ERROR` from the daemon in what `pc` printed, an `[error]` the extension logged, a console error or uncaught
 exception in any PartCAD webview, the viewer's error overlay, or an error in the FEA pane. It drives the editor
@@ -819,9 +819,17 @@ over the DevTools protocol (`--remote-debugging-port`) and attaches to the webvi
 viewer is an out-of-process frame inside another one, which Playwright's `connect_over_cdp` does not reach.
 
 It is off unless `PC_TEST_IDE_E2E=1`; `PC_TEST_IDE_EDITOR` and `PC_TEST_IDE_VSIX` name the editor and the package,
-or VSCodium is downloaded and the package built from this directory. It starts an `Xvfb` where there is no
-display. The FEA step needs the CalculiX solver: from the plugin's image where a container runtime is running,
-or `ccx` on the `PATH` (`apt install calculix-ccx`) where it is not.
+or VSCodium is downloaded (Linux, macOS or Windows) and the package built from this directory. It starts an
+`Xvfb` on Linux where there is no display. The FEA step needs the CalculiX solver: from the plugin's image where a
+container runtime is running, or `ccx` on the `PATH` (`apt install calculix-ccx`) where it is not. Where there is
+neither and no runtime could have run the image, the test accepts the excuse `pc test` accepts
+(`CaeTest._verdict`) and checks the rest of the tab.
+
+CI runs it as `IDE (end to end)` in `.github/workflows/test.yml`, gated on the `ide-e2e` output of
+`changed-scopes` (a change to `ide/`, to the source or to its dependencies): on `ubuntu-latest` for a pull
+request, and on `windows-latest` and `macos-latest` as well from the merge queue up (`OSES_IDE_E2E`). The job
+fails on a skip, since running this one test is all it is for, and uploads the editor's logs and the viewer's
+screenshots (`PC_TEST_IDE_ARTIFACTS`).
 
 That test is also why `surface.ts` asks a throwaway canvas for WebGL 2 before three is asked: three
 `console.error`s three lines and then throws in a window with no GPU, and a missing GPU is a fallback to the

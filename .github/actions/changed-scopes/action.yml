@@ -96,6 +96,15 @@ outputs:
   plugin:
     description: "Build and validate the Claude Code plugin."
     value: ${{ steps.classify.outputs.plugin }}
+  ide-e2e:
+    description: >
+      Run the IDE end-to-end test ("tests/ide/test_ide_e2e.py"): the extension
+      installed into a real editor, a package opened in it, a part shown and
+      analysed. It is about both halves at once -- the extension and the
+      "pc"/daemon it drives -- so it listens to both: a change to "ide/" or to
+      the source (which is where the test itself lives, under "tests/"), and to
+      what PartCAD is built out of.
+    value: ${{ steps.classify.outputs.ide-e2e }}
   images:
     description: >
       Build PartCAD's own container images out of this commit, publish them
@@ -346,6 +355,9 @@ runs:
         emit ide                 ci packaging vscode ide
         emit vsix                ci vscode
         emit plugin              ci ai
+        # The extension and what it drives, together: "ide/" on one side, the
+        # source and its dependencies on the other.
+        emit ide-e2e             code deps ci vscode ide
         # The one subject that does not listen to "ci" -- see the note on the
         # "images" output for why, and for what to do when a workflow change
         # does need the images rebuilt.
@@ -363,7 +375,7 @@ runs:
           echo "| Subject | Runs |"
           echo "| --- | --- |"
           for subject in wheel docs pytest behave examples devcontainer \
-                         devcontainer-pytest bundle ide vsix plugin; do
+                         devcontainer-pytest bundle ide vsix plugin ide-e2e; do
             value=$(grep -m1 "^${subject}=" "${GITHUB_OUTPUT}" | cut -d= -f2)
             printf '| `%s` | %s |\n' "${subject}" "$([ "${value}" = "true" ] && echo yes || echo no)"
           done

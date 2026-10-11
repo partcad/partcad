@@ -77,7 +77,7 @@ a CAD addon, or documentation.
   it (`daemon`, `client`), replacing this installation of PartCAD (`selfupdate`), opening a file in a
   third-party CAD application on this machine (`external`), and putting the PartCAD extension into an editor
   on this machine and opening a workspace in it, in the PartCAD workbench (`ide`: `pc ide install`,
-  `pc ide open <directory>`).
+  `pc ide workspace <directory>`).
 
   All of it acts on **this machine**, from the process running out of it. A daemon can be remote, where
   "update PartCAD" would mean updating somebody else's installation and "stop the local daemons" somebody

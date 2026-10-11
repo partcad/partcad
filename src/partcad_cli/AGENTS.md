@@ -115,7 +115,7 @@ own five are read straight off disk out of the wheel, so the call is made only w
 actually found — a `pc ide open` outside a workspace starts no daemon and creates no context. The daemon says
 which applications there are; it never opens one, and there is still no method that opens a file.
 
-`pc ide install` and `pc ide open <directory>` are in-process too, and make **no** daemon call either: one
+`pc ide install` and `pc ide workspace <directory>` are in-process too, and make **no** daemon call either: one
 installs the PartCAD extension into an editor on this machine, the other opens a folder as that editor's
 workspace, in the PartCAD workbench (`partcad_client.ide`). Both change this machine -- its editor, its screen --
 which a daemon that can be remote must never be asked to do, for the reason `pc upgrade` is a client command.

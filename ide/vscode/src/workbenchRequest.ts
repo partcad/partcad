@@ -3,7 +3,7 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// `pc ide open <directory>`: open the folder, and show the PartCAD workbench in
+// `pc ide workspace <directory>`: open the folder, and show the PartCAD workbench in
 // the window that opens it.
 //
 // An editor's command line can open a folder but cannot run a command in the

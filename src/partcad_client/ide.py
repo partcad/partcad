@@ -5,7 +5,7 @@
 #
 """The editor on this machine: putting the PartCAD extension into it, and opening a workspace in it.
 
-`pc ide install` and `pc ide open <directory>` end here. Both act on **this
+`pc ide install` and `pc ide workspace <directory>` end here. Both act on **this
 machine** -- an editor installed here, a folder on this disk, a window on this
 screen -- which is why they are in `partcad_client` and why there is no RPC
 method for either: a daemon can be remote, where "install the extension" would

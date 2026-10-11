@@ -9,15 +9,18 @@ What a person does on a first afternoon, done by the commands a person types:
 
 1. `pc ide install` puts this tree's extension into an editor -- VSCodium, or
    any editor built on VS Code -- with a profile of its own;
-2. `pc ide open examples` opens `./examples` as the workspace, which has to land
-   in the PartCAD workbench;
+2. `pc ide workspace examples` opens `./examples` as the workspace, which has to
+   land in the PartCAD workbench;
 3. `pc ide view --design-3d -a :logo` shows the logo assembly on the 3D tab, and
    it has to be drawn with nothing going wrong on the daemon's side (what `pc`
    printed, and what the extension logged of what the daemon told it) or in the
    viewer's JavaScript -- whichever of WebGL, WebGPU and the software painter the
    window ends up drawing with;
 4. `pc ide view --analysis-fea :cantilever` opens the FEA tab on the cantilever,
-   which runs the analysis, and that has to come back without an error either.
+   which runs the analysis, and that has to come back without an error either --
+   unless this machine has no container runtime that can run a Linux image, the
+   one excuse `pc test` accepts for an analysis that could not run (macOS and
+   Windows runners; see `container_runtime`).
 
 The editor is driven over the Chrome DevTools protocol, which every editor built
 on Electron speaks when started with `--remote-debugging-port`. Not through
@@ -36,10 +39,13 @@ analysis: minutes on a warm machine, the better part of an hour on a cold one.
 * `PC_TEST_IDE_EDITOR` names the editor's launcher (`codium`, `code`, the
   PartCAD IDE's `partcad-ide`, or a path). Unset, VSCodium is downloaded from its
   GitHub release into `~/.cache/partcad/ide-e2e` -- and stock VS Code from
-  Microsoft where that cannot be had (Linux only, for both).
+  Microsoft where that cannot be had -- for Linux, macOS or Windows, x64 or
+  arm64. `GITHUB_TOKEN` is sent with the release lookup when it is set.
 * `PC_TEST_IDE_VSIX` names the `.vsix` to install. Unset, it is built from
   `ide/vscode` (`npm run vsce-package`, which needs its `node_modules`).
-* With no `DISPLAY`, an `Xvfb` is started for the duration.
+* On Linux with no `DISPLAY`, an `Xvfb` is started for the duration.
+
+CI runs it in the `IDE (end to end)` job of `.github/workflows/test.yml`.
 
 Run it as::
 
@@ -56,6 +62,7 @@ import contextlib
 import glob
 import json
 import os
+import platform
 import shutil
 import socket
 import subprocess
@@ -64,6 +71,7 @@ import tarfile
 import tempfile
 import time
 import urllib.request
+import zipfile
 
 import pytest
 
@@ -99,6 +107,15 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
+def _github_headers() -> dict:
+    """Headers for GitHub's API: a CI token where there is one, which is what keeps a shared runner under its rate limit."""
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "partcad-ide-e2e"}
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        headers["Authorization"] = "Bearer %s" % token
+    return headers
+
+
 def _download(url: str, dest: str) -> None:
     request = urllib.request.Request(url, headers={"User-Agent": "partcad-ide-e2e"})
     with urllib.request.urlopen(request, timeout=600) as response, open(dest + ".part", "wb") as out:  # nosec B310
@@ -107,24 +124,68 @@ def _download(url: str, dest: str) -> None:
 
 
 def _unpack(archive: str, into: str) -> None:
+    """A tarball or a zip, keeping what an application needs of it.
+
+    On macOS a zip is unpacked by `ditto`, not by `zipfile`: an application bundle
+    is made of symlinks and executable bits, and `zipfile` keeps neither.
+    """
     os.makedirs(into, exist_ok=True)
-    with tarfile.open(archive) as tar:
-        tar.extractall(into, filter="data")
+    if archive.endswith((".tar.gz", ".tgz")):
+        with tarfile.open(archive) as tar:
+            tar.extractall(into, filter="data")
+    elif sys.platform == "darwin":
+        subprocess.run(["ditto", "-x", "-k", archive, into], check=True)
+    else:
+        with zipfile.ZipFile(archive) as zipped:
+            zipped.extractall(into)
+
+
+def _machine() -> str:
+    """This machine's architecture, as both editors name their builds."""
+    machine = platform.machine().lower()
+    return {"x86_64": "x64", "amd64": "x64", "aarch64": "arm64", "arm64": "arm64"}.get(machine, machine)
+
+
+def _platform() -> str:
+    if sys.platform.startswith("linux"):
+        return "linux"
+    if sys.platform == "darwin":
+        return "darwin"
+    if sys.platform == "win32":
+        return "win32"
+    pytest.skip("no editor is downloaded for %s; name one with PC_TEST_IDE_EDITOR" % sys.platform)
+
+
+# Where each build keeps its command line launcher, by platform: the one
+# `pc ide install` and `pc ide workspace` are given, as a person would be.
+_VSCODIUM_LAUNCHER = {
+    "linux": ("bin", "codium"),
+    "darwin": ("VSCodium.app", "Contents", "Resources", "app", "bin", "codium"),
+    "win32": ("bin", "codium.cmd"),
+}
+_VSCODE_LAUNCHER = {
+    "linux": ("VSCode-linux-%s", "bin", "code"),
+    "darwin": ("Visual Studio Code.app", "Contents", "Resources", "app", "bin", "code"),
+    "win32": ("bin", "code.cmd"),
+}
 
 
 def _vscodium() -> str:
     """VSCodium's launcher, downloaded from its latest GitHub release."""
     request = urllib.request.Request(
-        "https://api.github.com/repos/VSCodium/vscodium/releases/latest",
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "partcad-ide-e2e"},
+        "https://api.github.com/repos/VSCodium/vscodium/releases/latest", headers=_github_headers()
     )
     with urllib.request.urlopen(request, timeout=60) as response:  # nosec B310
         release = json.load(response)
-    machine = {"x86_64": "x64", "aarch64": "arm64"}.get(os.uname().machine, os.uname().machine)
-    wanted = "VSCodium-linux-%s-%s.tar.gz" % (machine, release["tag_name"])
+    system, machine, version = _platform(), _machine(), release["tag_name"]
+    wanted = {
+        "linux": "VSCodium-linux-%s-%s.tar.gz",
+        "darwin": "VSCodium-darwin-%s-%s.zip",
+        "win32": "VSCodium-win32-%s-%s.zip",
+    }[system] % (machine, version)
     url = next(a["browser_download_url"] for a in release["assets"] if a["name"] == wanted)
-    root = os.path.join(CACHE, "vscodium-%s" % release["tag_name"])
-    launcher = os.path.join(root, "bin", "codium")
+    root = os.path.join(CACHE, "vscodium-%s-%s-%s" % (system, machine, version))
+    launcher = os.path.join(root, *_VSCODIUM_LAUNCHER[system])
     if not os.path.exists(launcher):
         archive = os.path.join(CACHE, wanted)
         _download(url, archive)
@@ -135,12 +196,17 @@ def _vscodium() -> str:
 
 def _vscode() -> str:
     """Stock VS Code's launcher, for where VSCodium's release cannot be reached."""
-    machine = {"x86_64": "x64", "aarch64": "arm64"}.get(os.uname().machine, os.uname().machine)
-    root = os.path.join(CACHE, "vscode-linux-%s" % machine)
-    launcher = os.path.join(root, "VSCode-linux-%s" % machine, "bin", "code")
+    system, machine = _platform(), _machine()
+    build, archive_name = {
+        "linux": ("linux-%s" % machine, "vscode.tar.gz"),
+        "darwin": ("darwin-universal", "vscode.zip"),
+        "win32": ("win32-%s-archive" % machine, "vscode.zip"),
+    }[system]
+    root = os.path.join(CACHE, "vscode-%s" % build)
+    launcher = os.path.join(root, *(part.replace("%s", machine) for part in _VSCODE_LAUNCHER[system]))
     if not os.path.exists(launcher):
-        archive = os.path.join(CACHE, "vscode.tar.gz")
-        _download("https://update.code.visualstudio.com/latest/linux-%s/stable" % machine, archive)
+        archive = os.path.join(CACHE, archive_name)
+        _download("https://update.code.visualstudio.com/latest/%s/stable" % build, archive)
         _unpack(archive, root)
         os.remove(archive)
     return launcher
@@ -151,8 +217,7 @@ def editor() -> str:
     named = os.environ.get("PC_TEST_IDE_EDITOR")
     if named:
         return shutil.which(named) or named
-    if not sys.platform.startswith("linux"):
-        pytest.skip("an editor is downloaded on Linux only; name one with PC_TEST_IDE_EDITOR")
+    _platform()
     os.makedirs(CACHE, exist_ok=True)
     try:
         return _vscodium()
@@ -426,24 +491,46 @@ def session(editor, vsix, display):
     # The daemon serving './examples' has to be one started with this
     # environment, or it shows on whatever port it was started with.
     pc(env, "daemon", "stop", timeout=120)
+    state = {
+        "editor": editor,
+        "vsix": vsix,
+        "env": env,
+        "profile": profile,
+        "window": window,
+        "devtools": devtools,
+        "user_data_dir": user_data_dir,
+        "extensions_dir": extensions_dir,
+        # Every screenshot `pc ide state` reported, for the artifacts below.
+        "screenshots": [],
+    }
     try:
-        yield {
-            "editor": editor,
-            "vsix": vsix,
-            "env": env,
-            "profile": profile,
-            "window": window,
-            "devtools": devtools,
-            "user_data_dir": user_data_dir,
-            "extensions_dir": extensions_dir,
-        }
+        yield state
     finally:
         with contextlib.suppress(Exception):
             browser = json.load(urllib.request.urlopen("http://127.0.0.1:%d/json/version" % devtools.port, timeout=5))
             asyncio.run(_close(browser["webSocketDebuggerUrl"]))
         with contextlib.suppress(Exception):
             pc(env, "daemon", "stop", timeout=120)
+        keep_artifacts(state)
         shutil.rmtree(root, ignore_errors=True)
+
+
+def keep_artifacts(state: dict) -> None:
+    """Copy the editor's logs and the viewer's screenshots to `PC_TEST_IDE_ARTIFACTS`, when it is set.
+
+    What a red CI cell is read by: the extension's own log (what the daemon told
+    it), the editor's renderer and extension host logs, and what the viewer was
+    showing each time it was asked.
+    """
+    target = os.environ.get("PC_TEST_IDE_ARTIFACTS")
+    if not target:
+        return
+    os.makedirs(target, exist_ok=True)
+    with contextlib.suppress(Exception):
+        shutil.copytree(os.path.join(state["user_data_dir"], "logs"), os.path.join(target, "logs"), dirs_exist_ok=True)
+    for screenshot in state["screenshots"]:
+        with contextlib.suppress(Exception):
+            shutil.copy2(screenshot, target)
 
 
 async def _close(url: str) -> None:
@@ -465,7 +552,7 @@ def test_install_open_view_and_analyse_in_a_real_editor(session):
     assert any(name.lower().startswith("partcad.partcad-official-") for name in installed), installed
 
     # 2. './examples' as the workspace, in the PartCAD workbench.
-    pc(env, "ide", "open", "--with", session["editor"], EXAMPLES, "--", *session["window"])
+    pc(env, "ide", "workspace", "--with", session["editor"], EXAMPLES, "--", *session["window"])
     wait_for("the editor's DevTools", lambda: devtools.workbench(), WINDOW_TIMEOUT)
     title = wait_for(
         "the PartCAD workbench",
@@ -496,8 +583,9 @@ def test_install_open_view_and_analyse_in_a_real_editor(session):
     assert daemon_errors(output) == []
 
     def viewer_state():
-        state = json.loads(pc(env, "ide", "state", "--json", timeout=120))
-        viewer = state["viewer"]
+        viewer = json.loads(pc(env, "ide", "state", "--json", timeout=120))["viewer"]
+        if viewer.get("screenshot"):
+            session["screenshots"].append(viewer["screenshot"])
         return viewer
 
     viewer = wait_for(
@@ -539,11 +627,33 @@ def test_install_open_view_and_analyse_in_a_real_editor(session):
     probe = wait_for("the FEA result", analysed, BUILD_TIMEOUT, interval=5)
     viewer = viewer_state()
     assert (viewer["subject"]["name"], viewer["tab"], viewer["subTab"]) == ("cantilever", "analysis", "fea")
-    assert probe["fea"]["errors"] == [], probe["fea"]["text"]
+    excused = probe["fea"]["errors"] and not container_runtime()
+    if excused:
+        # The one excuse `pc test` accepts for an analysis that came back with
+        # nothing (see `CaeTest._verdict`): no container runtime that can run a
+        # Linux image -- macOS, and Windows' Windows-container daemon -- so the
+        # solver the implementation's image carries could never have been had.
+        # Everything else about the tab still has to hold.
+        print("NOTE: the FEA was not run, and is excused -- no container runtime here:\n%s" % probe["fea"]["text"])
+    else:
+        assert probe["fea"]["errors"] == [], probe["fea"]["text"]
     assert "error" not in [severity.lower() for severity in probe["fea"]["severities"]], probe["fea"]["text"]
     assert not probe["failure"], probe["overlay"]
     for target in devtools.partcad_webviews():
         assert js_errors(devtools.session(target)[0]) == [], target["url"]
 
-    # What the extension heard from the daemon over the whole session.
-    assert extension_log_errors(session["user_data_dir"]) == []
+    # What the extension heard from the daemon over the whole session -- less the
+    # one line saying the excused analysis did not run, when it was excused.
+    logged = extension_log_errors(session["user_data_dir"])
+    if excused:
+        logged = [line for line in logged if "failed to fetch the 'fea' tab" not in line]
+    assert logged == []
+
+
+def container_runtime() -> bool:
+    """Whether this machine could have run the analysis's container: `pc test`'s own question, asked the same way."""
+    if os.environ.get("PC_PYTHON_SANDBOX") == "remote":
+        return True
+    from partcad import runtime
+
+    return runtime.docker_available()

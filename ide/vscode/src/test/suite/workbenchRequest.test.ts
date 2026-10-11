@@ -3,7 +3,7 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// `pc ide open <folder>` leaves a request for the window that opens the folder.
+// `pc ide workspace <folder>` leaves a request for the window that opens the folder.
 // The file is written by `partcad_client.ide.write_request`; what is pinned here
 // is which window takes it, and that nothing is left behind.
 //

@@ -57,6 +57,7 @@ SUBJECTS = {
     "vsix",
     "plugin",
     "images",
+    "ide-e2e",
 }
 
 
@@ -321,6 +322,28 @@ def test_ci_configuration_runs_everything_but_the_image_builds(tmp_path):
 
     assert not subjects.pop("images")
     assert all(subjects.values()), subjects
+
+
+@pytest.mark.parametrize(
+    "path, runs",
+    [
+        # Either half of what it tests: the extension, the IDE around it, the
+        # source the extension drives -- and the test itself, which lives in
+        # "tests/" and so is "code".
+        ("ide/vscode/src/webview/viewer.ts", True),
+        ("ide/standalone/build.sh", True),
+        ("src/partcad_cli/click/commands/ide/view.py", True),
+        ("tests/ide/test_ide_e2e.py", True),
+        ("poetry.lock", True),
+        # Neither half.
+        ("docs/source/cli.rst", False),
+        ("ai-agents/scripts/materialize.sh", False),
+        (".devcontainer/devcontainer.json", False),
+    ],
+)
+def test_the_ide_end_to_end_test_runs_for_the_ide_and_the_source(tmp_path, path, runs):
+    subjects, _ = classify(tmp_path, [path])
+    assert subjects["ide-e2e"] is runs
 
 
 def test_one_unrecognised_file_is_enough(tmp_path):
