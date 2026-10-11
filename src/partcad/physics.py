@@ -59,7 +59,7 @@ import sys
 from . import logging as pc_logging
 from . import material as pc_material
 from . import shape_envelope
-from .utils import resolve_resource_path
+from .utils import resolve_resource_path, split_resource_path
 
 # The wrappers directory is on the path for anything that imports 'partcad'
 # (see 'shape.py'); said again here so that this module stands on its own.
@@ -333,10 +333,10 @@ class _Materials:
         """
         if name not in self.parts:
             found = None
-            if self.ctx is not None and name and ":" in name:
-                # Split at the first ':' - a package path has none, and a
-                # parameter value may.
-                package, object_name = name.split(":", 1)
+            package, object_name = split_resource_path(name) if name else (None, None)
+            if self.ctx is not None and package:
+                # 'split_resource_path' reads the name the way every other
+                # reference is read: a ':' in a parameter value names nothing.
                 try:
                     project = self.ctx.get_project(package)
                     if project is not None:
@@ -654,10 +654,12 @@ async def part_mass_async(ctx, shape):
 def owner_package(shape_name: str) -> str:
     """The package a shape's full name ("//pkg:part") belongs to.
 
-    Split at the first ':': a package path is full of '/' and starts with '//'
-    but carries no ':', while what follows it may - a parameter value naming
-    another object (";material=//pkg:steel"), or the container an ASSY file
-    holds ("//pkg:arm:wrist"). A name with no ':' is a package with nothing
-    after it, which is what an assembly with no name of its own carries.
+    What precedes the first ':' (see 'split_resource_path'). Not the last one:
+    an object's name can hold a ':' of its own -- an assembly embedded in an ASSY
+    file is '<file>:<assembly>', and an instance's parameter value is whatever
+    was written ('room;medium=//pub/std/materials:water'). A name with no ':' is
+    a package with nothing after it, which is what an assembly with no name of
+    its own carries.
     """
-    return shape_name.split(":", 1)[0] if ":" in shape_name else shape_name
+    package, _ = split_resource_path(shape_name)
+    return shape_name if package is None else package
