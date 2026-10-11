@@ -581,6 +581,28 @@ def test_a_link_placed_twice_is_refused_the_second_time(tmp_path):
     assert any("placed by 'location' and again by 'connect'" in problem for problem in arm.joint_problems)
 
 
+def test_a_refusal_is_logged_as_the_assembly_is_built(tmp_path, caplog):
+    """Not only kept for 'pc test': a link placed twice was otherwise silent at build time."""
+    links = """
+    links:
+      - part: base
+      - part: arm
+        location: [[0, 0, 0], [0, 0, 1], 0]
+        connect: {name: base, with: pin, to: bore}
+      - part: lid
+        name: leg
+        connect: {name: base, with: pin, to: bore}
+      - part: lid
+        name: leg
+        connect: {name: base, with: pin, to: bore}
+    """
+    with caplog.at_level("ERROR"):
+        _rig(tmp_path, links, bore="motion: revolute")
+    logged = [record.getMessage() for record in caplog.records]
+    assert any("arm: it is placed by 'location' and again by 'connect'" in message for message in logged)
+    assert any("leg: the joint name 'leg-base' is taken" in message for message in logged)
+
+
 def test_a_connection_to_itself_is_refused(tmp_path):
     links = """
     links:

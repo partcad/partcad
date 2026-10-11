@@ -330,10 +330,23 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 suffix += 1
             joint.name = "%s-%d" % (base, suffix)
             taken[joint.name] = child
-            child.joint_problems.append(
+            self.report_joint_problem(
+                child,
                 "the joint name '%s' is taken by the link '%s' above, so this joint is '%s'; "
-                "give each of them a 'joint:' of its own" % (base, taken[base].name, joint.name)
+                "give each of them a 'joint:' of its own" % (base, taken[base].name, joint.name),
             )
+
+    def report_joint_problem(self, child, problem) -> None:
+        """Log one problem with a child's placement or joint, and keep it for 'pc test'.
+
+        Both, the way 'compose_connection' does with what it finds: the log is
+        what a build shows, and 'joint_problems' is what the 'connect' check
+        fails on. Kept without being logged, a placement refused for closing a
+        loop was answered at build time with "Target part not found" - and one
+        placed twice with nothing at all, its 'location:' used silently.
+        """
+        pc_logging.error("%s: %s: %s" % (self.name, child.name, problem))
+        child.joint_problems.append(problem)
 
     def apply_root_placement(self, assembly, node) -> None:
         """Move what the file holds by where its root node says it is.
@@ -408,7 +421,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 f = await asyncio.tasks.wait([task])
                 result = f[0].pop().result()
                 if result is not None:
-                    result.joint_problems.extend(refusals.get(index, []))
+                    for refusal in refusals.get(index, []):
+                        self.report_joint_problem(result, refusal)
                     assembly.children.append(result)
 
         for index, link in enumerate(node_list):
