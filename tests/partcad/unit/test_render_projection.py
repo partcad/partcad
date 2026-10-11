@@ -16,10 +16,11 @@ post with one corner on the origin came out of '--view front' as an oblique
 view of three of its faces, out of '--view top' as a low view of its front, and
 out of '--view back' as a view of its front.
 
-The first half of this file checks, without a sandbox, that every projection the
-renderer makes looks along the direction asked for. The second half renders
-shapes that are nowhere near the origin, through the real renderer, with both
-hidden-line algorithms, and measures what comes out.
+This file checks it three ways. With the CAD kernel stubbed out, that every
+projection the renderer makes looks along the direction asked for. With the real
+kernel, in this process, that a shape nowhere near the origin is drawn as the
+view asked for, through both hidden-line algorithms. And end to end, through a
+package and the sandbox, that what 'pc render' writes is that view too.
 """
 
 import importlib.util
@@ -37,6 +38,14 @@ from partcad import output
 from partcad.render import VIEWS, resolve_viewport
 
 RENDER_DIR = output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.RENDER]]
+WRAPPERS_DIR = os.path.join(os.path.dirname(os.path.abspath(pc.__file__)), "wrappers")
+
+# The name 'render_svg.py' is executed under in this process, and it is inside
+# the 'partcad' namespace for the reason 'test_cam_gcode.py' gives: CI measures
+# coverage with '--cov=partcad', which traces by module name, so the module run
+# under any other name is not measured however squarely its file sits in
+# 'src/partcad/'. Never registered in 'sys.modules', so nothing can import it.
+MODULE_NAME = "partcad.builtin.render.render_svg"
 
 # --------------------------------------------------------------------------- #
 # Which way the camera looks, without a sandbox                               #
@@ -112,7 +121,7 @@ def _svg_implementation():
     saved = {key: sys.modules.get(key) for key in stubs}
     sys.modules.update(stubs)
     try:
-        spec = importlib.util.spec_from_file_location("test_render_svg_impl", os.path.join(RENDER_DIR, "render_svg.py"))
+        spec = importlib.util.spec_from_file_location(MODULE_NAME, os.path.join(RENDER_DIR, "render_svg.py"))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
     finally:
@@ -188,7 +197,7 @@ def test_the_default_corner_is_a_direction_too(render_svg, monkeypatch, tmp_path
 
 
 # --------------------------------------------------------------------------- #
-# What the real renderer draws                                                #
+# The shapes, and how a drawing of one is measured                           #
 # --------------------------------------------------------------------------- #
 
 # A 4x4 post a foot long, with one corner on the origin - so its centre is far
@@ -260,6 +269,78 @@ def _extent(segments):
     xs = [x for segment in segments for x, _y in segment]
     ys = [y for segment in segments for _x, y in segment]
     return min(xs), min(ys), max(xs), max(ys)
+
+
+# --------------------------------------------------------------------------- #
+# The real renderer, in this process                                          #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture(scope="module")
+def real_svg():
+    """'render_svg.py' with the real kernel, as the sandbox runs it.
+
+    The sandbox puts the wrappers on 'sys.path' and the module imports its
+    helpers from there top-level; so does this, for as long as it is loaded.
+    """
+    saved_path = list(sys.path)
+    sys.path.append(WRAPPERS_DIR)
+    try:
+        spec = importlib.util.spec_from_file_location(MODULE_NAME, os.path.join(RENDER_DIR, "render_svg.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        yield module
+    finally:
+        sys.path[:] = saved_path
+
+
+@pytest.fixture(scope="module")
+def shapes(real_svg):
+    """The post and the flagged post, as the scripts below build them."""
+    import build123d as bd
+
+    corner = (bd.Align.MIN, bd.Align.MIN, bd.Align.MIN)
+    post = bd.Box(WIDTH, LENGTH, HEIGHT, align=corner)
+    fin = bd.Pos(WIDTH - FIN_WIDTH, 0, HEIGHT) * bd.Box(FIN_WIDTH, LENGTH, FIN_HEIGHT, align=corner)
+    return {"post": post.wrapped, "flagged": (post + fin).wrapped}
+
+
+def _process(real_svg, shapes, tmp_path, name, reproducible, view):
+    path = str(tmp_path / ("%s.svg" % name))
+    request = {"wrapped": shapes[name], "shape_kind": "part", "reproducible": reproducible}
+    request.update(resolve_viewport(view))
+
+    assert real_svg.process(path, request) == {"success": True, "exception": None}
+
+    with open(path, encoding="utf-8") as f:
+        return _segments(f.read())
+
+
+@pytest.mark.parametrize("reproducible", [True, False])
+@pytest.mark.parametrize(
+    "view, size", [("front", (WIDTH, HEIGHT)), ("right", (LENGTH, HEIGHT)), ("top", (WIDTH, LENGTH))]
+)
+def test_a_shape_off_the_origin_is_drawn_from_the_view_asked_for(real_svg, shapes, tmp_path, view, size, reproducible):
+    segments = _process(real_svg, shapes, tmp_path, "post", reproducible, view)
+
+    min_x, min_y, max_x, max_y = _extent(segments)
+    assert (max_x - min_x, max_y - min_y) == pytest.approx(size, abs=1e-3)
+    assert len(segments) == 4
+
+
+@pytest.mark.parametrize("reproducible", [True, False])
+@pytest.mark.parametrize("view, fin_on_the_right", [("front", True), ("back", False)])
+def test_the_back_is_drawn_from_behind(real_svg, shapes, tmp_path, view, fin_on_the_right, reproducible):
+    segments = _process(real_svg, shapes, tmp_path, "flagged", reproducible, view)
+
+    min_x, _min_y, max_x, max_y = _extent(segments)
+    (top,) = [segment for segment in segments if all(abs(y - max_y) < 1e-6 for _x, y in segment)]
+    assert ((top[0][0] + top[1][0]) / 2.0 > (min_x + max_x) / 2.0) is fin_on_the_right
+
+
+# --------------------------------------------------------------------------- #
+# End to end, through a package and the sandbox                               #
+# --------------------------------------------------------------------------- #
 
 
 @pytest.fixture(scope="module")
