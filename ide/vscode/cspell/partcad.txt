@@ -54,6 +54,7 @@ currency
 cut
 cuts
 cwd
+cylindrical
 damper
 damping
 decode
@@ -70,6 +71,7 @@ display
 distance
 docker
 docs
+dof
 drill
 dropped
 duplicates
@@ -327,6 +329,7 @@ torque
 turn
 type
 types
+universal
 unless
 upper
 urdf
