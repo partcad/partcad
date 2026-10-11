@@ -244,11 +244,15 @@ def of_body(parts, own=None):
         if not derived:
             return own
         result = with_mass(derived, own["mass"])
-        if any(key in own for key in ("inertia", "inertiaOrientation")):
+        result.update({key: own[key] for key in ("mass", "centerOfMass") if key in own})
+        stated_inertia = own.get("inertia")
+        if isinstance(stated_inertia, dict) and stated_inertia:
             # A stated tensor is stated in a frame of its own, and the derived
-            # one must not be left beside it to be read as the same thing.
+            # one must not be left beside it to be read as the same thing. An
+            # empty one, or an orientation with no tensor to orient, states
+            # nothing, and the derived tensor stands.
             result.pop("inertia", None)
-        result.update({key: own[key] for key in MASS_KEYS if key in own})
+            result.update({key: own[key] for key in ("inertia", "inertiaOrientation") if key in own})
         return result
     if len(parts) == 1 and parts[0][1] is None:
         physics = parts[0][0]

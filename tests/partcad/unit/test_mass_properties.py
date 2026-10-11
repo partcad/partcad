@@ -206,6 +206,13 @@ def test_a_body_that_states_its_own_mass_beats_the_sum_of_its_parts():
     assert body["centerOfMass"] == [1.0, 2.0, 3.0]
     assert body["inertia"] == stated["inertia"]
 
+    # An empty tensor, or an orientation with no tensor to orient, states no
+    # inertia: the derived one stands, and nothing dangles beside it.
+    for nothing in ({"mass": 5.0, "inertia": {}}, {"mass": 5.0, "inertiaOrientation": [0.0, 0.0, 90.0]}):
+        body = mass_properties.of_body(parts, own=nothing)
+        assert body["inertia"]["iyy"] == pytest.approx(summed["inertia"]["iyy"] * ratio)
+        assert "inertiaOrientation" not in body
+
     # And over pieces with nothing to add up, the body is what it states.
     assert mass_properties.of_body([({}, None), ({}, apart)], own={"mass": 5.0}) == {"mass": 5.0}
 
