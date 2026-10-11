@@ -247,10 +247,11 @@ GAZEBO_JOINT_PHYSICS = {
 }
 
 # Gazebo tags that are understood and deliberately have no PartCAD property:
-# appearance, geometry PartCAD already holds, and the two - sensors and
-# simulator plugins - that docs/design/simulation.md plans for (sections 8.12
-# and 6.2). They are counted as dropped rather than reported one by one. Anything
-# else is reported, which is the point: this list is short on purpose.
+# appearance and geometry PartCAD already holds, sensors - which
+# docs/design/simulation.md plans as devices (section 8.12) - and simulator
+# plugins, which belong to an engine and have no PartCAD property planned. They
+# are counted as dropped rather than reported one by one. Anything else is
+# reported, which is the point: this list is short on purpose.
 GAZEBO_IGNORED = frozenset(("material", "visual", "collision", "sensor", "plugin"))
 
 
