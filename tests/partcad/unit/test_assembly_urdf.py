@@ -695,6 +695,63 @@ def test_a_converted_joint_can_be_posed(tmp_path):
     assert placements["base_link"][2] == 0.0
 
 
+def test_a_converted_urdf_is_a_mechanism(tmp_path):
+    """Every 'motion:' the converter writes is an implicit declaration of the joint it was.
+
+    The converter is unchanged: a socket interface stating 'motion: {type:
+    revolute, axis, limits}' beside an 'angle' parameter, and a plug that mates
+    with it. The revolute type implies a turn about the socket port's axis, and
+    'angle' is the parameter along it in the contact frame - so the converted
+    assembly is the robot's mechanism, with the joint's name, range and physics,
+    and the fixed URDF joints are rigid attachments, not joints.
+    """
+    root = sandbox(tmp_path, URDF_EXAMPLE_PACKAGES)
+    package = root / "produce_assembly_urdf"
+    convert_assembly_action(pc.Context(str(root)).get_project("//produce_assembly_urdf"), "robot", "assy")
+
+    robot = pc.Context(str(package))._get_assembly(":robot")
+    asyncio.run(robot.do_instantiate())
+    ((prefix, joint),) = robot.joints()
+    assert (joint.name, joint.parent, joint.child) == ("shoulder-base_link", "base_link", "shoulder")
+    (free,) = joint.free_steps()
+    assert (free.kind, free.axis, free.value) == ("turn", [0.0, 0.0, -1.0], 0.0)
+    assert (free.lower, free.upper) == pytest.approx((-179.908747671, 179.908747671))
+    (source,) = free.source
+    assert (source["parameter"], source["synthesized"], source["by"]) == ("angle", False, "motion 'revolute'")
+    assert joint.physics == pytest.approx(
+        {"maxEffort": 12.0, "maxVelocity": 114.591559026, "damping": 0.1, "friction": 0.05}
+    )
+    assert asyncio.run(robot.get_connect_problems()) == []
+
+    # The steps are the placement, bit for bit, for every link.
+    for child in robot.children:
+        if child.composition is not None:
+            product = child.composition.location()
+            assert (product._q, product._t) == (child.location._q, child.location._t), child.name
+
+    # And moving the joint is posing it: the steps at 90 degrees are exactly
+    # where 'toParams: {angle: 90}' puts the shoulder.
+    assy = package / "robot.assy"
+    assy.write_text(
+        assy.read_text().replace(
+            "      toInstance: shoulder_pan\n",
+            "      toInstance: shoulder_pan\n      toParams: {angle: 90}\n",
+        )
+    )
+    posed = pc.Context(str(package))._get_assembly(":robot")
+    asyncio.run(posed.do_instantiate())
+    shoulder = next(child for child in robot.children if child.name == "shoulder")
+    posed_shoulder = next(child for child in posed.children if child.name == "shoulder")
+    moved = shoulder.composition.location({shoulder.composition.steps.index(free): 90.0})
+    assert (moved._q, moved._t) == (posed_shoulder.location._q, posed_shoulder.location._t)
+    assert posed_shoulder.joint.free_steps()[0].value == 90.0
+
+    # 'pc info -a robot' shows it.
+    info = posed.info()
+    assert info["Joints"]["shoulder-base_link"]["free"][0]["range"] == "-179.909 to 179.909 deg"
+    assert info["Joints"]["shoulder-base_link"]["free"][0]["value"] == 90.0
+
+
 def test_convert_assy_to_urdf(tmp_path):
     """An ASSY assembly becomes a URDF one, with an STL per shape in it."""
     root = sandbox(tmp_path, ASSY_EXAMPLE_PACKAGES)

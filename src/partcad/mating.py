@@ -95,6 +95,34 @@ class Mating:
         # default: none
         self.how = self._how(config.get("how"))
 
+        # option: "motion"
+        # description: which degrees of freedom every connection that joins
+        #              these two interfaces keeps, whatever each interface would
+        #              do with another partner: a 6 mm pin turns in an H7 bore
+        #              and is fixed in a press-fit one. The same 'motion:' an
+        #              interface states (see 'partcad.motion'); 'axis' is in the
+        #              frame of the port of the interface that declares the
+        #              mating, and a 'dof' name means that parameter on either
+        #              interface. A connection's own 'motion' outranks it, and it
+        #              outranks the two interfaces'. See 'partcad.joint'.
+        # values: the name of a kind of joint, or a section
+        # default: none
+        self.motion = config.get("motion")
+        # option: "physics"
+        # description: what moving such a connection costs - its damping,
+        #              friction, effort and velocity limits - when it is a joint.
+        #              Outranks the two interfaces', which is how a pairing
+        #              whose interfaces disagree says what the pair really does.
+        # values: a section
+        # default: none
+        self.physics = config.get("physics")
+        if self.physics is not None and not isinstance(self.physics, dict):
+            pc_logging.error(
+                "%s -> %s: a mating's 'physics' must be a section, ignoring it"
+                % (getattr(source, "full_name", "?"), getattr(target, "full_name", "?"))
+            )
+            self.physics = None
+
         if "sourcePortSelector" in config:
             if reverse:
                 self.target_port_selector = config["sourcePortSelector"]

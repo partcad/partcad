@@ -149,6 +149,51 @@ PARAM_MOVE = "move"
 PARAM_TURN = "turn"
 
 
+def movement_offset(kind, direction, value):
+    """The rigid transform one freedom-of-movement parameter at 'value' stands for, or None.
+
+    A "move" is a pure translation along 'direction', 'value' millimetres per
+    unit of it; a "turn" is a rotation of 'value' degrees about 'direction'
+    through the origin. Zero is no transform at all rather than the identity,
+    because the placement composition skips it instead of multiplying by one.
+
+    The one spelling of this arithmetic. 'InterfaceParameter.get_offsets' is
+    what a connection's placement composes, and a joint's free step is the same
+    parameter at another value (see 'partcad.joint'): two copies of these few
+    lines would be two answers to where a part is, and the joint model promises
+    that the product of its steps *is* the child's placement, to the last bit.
+    It is a pc.Location built with pure-Python math - no OCP.
+    """
+    if value == 0:
+        return None
+    if kind == PARAM_MOVE:
+        return Location(
+            (direction[0] * value, direction[1] * value, direction[2] * value),
+            (0, 0, 1),
+            0,
+        )
+    if kind == PARAM_TURN:
+        return Location((0, 0, 0), (direction[0], direction[1], direction[2]), value)
+    return None
+
+
+def declares_bounds(declaration) -> bool:
+    """Whether a freedom-of-movement declaration says how far it may go.
+
+    A parameter declared by name alone - 'parameters: [turnZ]', 'turnZ:', or a
+    custom one with only a 'dir' and a 'type' - says that a connection may move
+    along that axis and nothing about how far, which normalization nevertheless
+    has to write down as '0..0'. The difference matters once the parameter is a
+    degree of freedom: a joint over 0..0 is locked, and one with no bounds is
+    unlimited. A value of its own, a list or a 'min'/'max'/'default' is a bound.
+    """
+    if declaration is None:
+        return False
+    if isinstance(declaration, dict):
+        return any(key in declaration for key in ("min", "max", "default"))
+    return True
+
+
 class InterfaceParameter:
     """One of the parameters provided by the interface,
     either explicitly (inside "parameters:")
@@ -160,6 +205,10 @@ class InterfaceParameter:
     min: float
     max: float
     default: float
+    # Whether the declaration said nothing about how far it may go; see
+    # 'declares_bounds()'. Read only where the parameter becomes a degree of
+    # freedom of a joint: as a placement adjustment it is '0..0' either way.
+    unbounded: bool = False
 
     def __init__(self, config: dict = {}):
         self.name = config.get("name", "param")
@@ -168,6 +217,7 @@ class InterfaceParameter:
         self.min = config.get("min", 0.0)
         self.max = config.get("max", 0.0)
         self.default = config.get("default", 0.0)
+        self.unbounded = False
 
     def __repr__(self):
         return f"<Parameter: {self.name}, default: {self.default}, min:{self.min}, max:{self.max}, dir:{self.dir}, type:{self.type}>"
@@ -250,22 +300,10 @@ class InterfaceParameter:
             pc_logging.warning("Parameter %s: value above maximum: %f" % (self.name, value))
 
         # The freedom-of-movement offset is a rigid transform that the assembly
-        # connection logic composes into the connection location. It is a
-        # pc.Location built with pure-Python math - no OCP. A "move" is a pure
-        # translation; a "turn" is a rotation about 'dir' through the origin.
-        if self.type == PARAM_MOVE:
-            if value != 0:
-                return [
-                    Location(
-                        (self.dir[0] * value, self.dir[1] * value, self.dir[2] * value),
-                        (0, 0, 1),
-                        0,
-                    )
-                ]
-        elif self.type == PARAM_TURN:
-            if value != 0:
-                return [Location((0, 0, 0), (self.dir[0], self.dir[1], self.dir[2]), value)]
-        return []
+        # connection logic composes into the connection location; see
+        # 'movement_offset()' for what it is and why there is one copy of it.
+        offset = movement_offset(self.type, self.dir, value)
+        return [] if offset is None else [offset]
 
 
 # TODO(clairbee): introduce "Entity" as a shared parent to Shape and Interface
@@ -349,18 +387,23 @@ class Interface:
         self.abstract = config.get("abstract", False)
         self.lead_port = config.get("leadPort", None)
 
-        # What this connection allows and what it costs. 'motion' states the
-        # freedom of movement (type, axis, position and soft limits, mimic) and
-        # 'physics' what moving it costs (effort and velocity limits, damping,
-        # friction, spring and solver parameters). Both are closed sets of named
-        # properties in PartCAD's own units - degrees and millimetres, SI for
-        # the rest - defined in partcad_utils/schema/partcad.json; a format that states
-        # something outside them fails the import rather than being carried
-        # under a name of its own.
+        # What this connection allows and what it costs. 'motion' states which
+        # of the freedom-of-movement 'parameters' below stay free once a
+        # connection is made - by naming them ('dof'), or by naming a kind of
+        # joint ('type', with its axis and limits) that implies them - plus its
+        # soft limits and what it mimics; 'physics' what moving it costs (effort
+        # and velocity limits, damping, friction, spring and solver parameters).
+        # Both are closed sets of named properties in PartCAD's own units -
+        # degrees and millimetres, SI for the rest - defined in
+        # partcad_utils/schema/partcad.json; a format that states something
+        # outside them fails the import rather than being carried under a name
+        # of its own.
         #
-        # 'parameters' below is the executable counterpart: where 'motion' is a
-        # record, a parameter actually moves the parts when a connection names
-        # it. A URDF import writes both, so the joint is described *and* usable.
+        # A parameter is what moves the parts when a connection names it, and
+        # 'motion' is what makes one of them a joint's degree of freedom rather
+        # than an adjustment. A URDF import writes both. Read through
+        # 'get_motion()'/'get_physics()', which inherit them, and resolved
+        # against a connection by 'partcad.joint'.
         self.motion = config.get("motion", None)
         self.physics = config.get("physics", None)
 
@@ -418,11 +461,17 @@ class Interface:
                 raise Exception("Invalid 'parameters' section in the interface '%s'" % self.name)
 
             for param_name, param_config in self.declared_movement_params(config).items():
-                param_config = InterfaceParameter.config_normalize(param_config)
+                unbounded = not declares_bounds(param_config)
+                param_config = InterfaceParameter.config_normalize({} if param_config is None else param_config)
                 param_config["name"] = param_name
                 param_config = InterfaceParameter.config_finalize(param_config)
                 self._check_movement_range(param_name, param_config)
                 self.params[param_name] = InterfaceParameter(param_config)
+                # Set on the object rather than written into 'param_config':
+                # normalization works on the declaration in place, and the
+                # declaration is part of the key of every assembly connecting
+                # through this interface (see 'add_interfaces_to_key').
+                self.params[param_name].unbounded = unbounded
 
         self.lock = threading.RLock()
 
@@ -662,6 +711,43 @@ class Interface:
     def get_self_screw(self):
         """Whether this interface cuts its own thread, its own setting or inherited."""
         return bool(self._inherited("self_screw"))
+
+    def get_motion(self):
+        """What this interface's 'motion:' says, its own or the one it is a drop-in for.
+
+        Its own declaration wins. Without one it is inherited, but only from an
+        interface this one is a *drop-in* for - one parent, inherited once
+        ('compatible_with'), which is also what an 'alias:' is spelled as - and
+        not from every interface it is assembled out of. A bolt pattern inherits
+        four pins; the pins turn and the pattern does not, and reading the first
+        pin's 'revolute' as the pattern's would make a joint out of four pins in
+        four holes. A drop-in is the parent under another name, so it moves as
+        the parent does.
+        """
+        return self._from_drop_in("motion")
+
+    def get_physics(self):
+        """What this interface's 'physics:' says, inherited the way 'get_motion()' is."""
+        return self._from_drop_in("physics")
+
+    def _from_drop_in(self, attribute, seen=None):
+        value = getattr(self, attribute, None)
+        if value is not None:
+            return value
+        if seen is None:
+            seen = set()
+        if self.full_name in seen:
+            return None
+        seen.add(self.full_name)
+        parents = self.get_parents() or {}
+        for name in sorted(self._compatible_with):
+            parent = getattr(parents.get(name), "interface", None)
+            if parent is None:
+                continue
+            inherited = parent._from_drop_in(attribute, seen)
+            if inherited is not None:
+                return inherited
+        return None
 
     def get_multi_connect(self):
         """Whether one instance of this interface may take more than one item.

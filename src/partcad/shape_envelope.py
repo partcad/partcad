@@ -21,8 +21,8 @@ point of the split:
 
 A single shape is '{"name", "label", "brep"}'; an assembly is
 '{"name", "label", "assembly": [...]}'. Either may also carry an optional
-"location", an optional "properties" and an optional "metadata" (see the keys
-below).
+"location", an optional "properties", an optional "joint" and an optional
+"metadata" (see the keys below).
 
 The two names answer different questions and a reader needs both. "name" is the
 *object*: '<package>:<object>', what the node holds, shared by every node that
@@ -114,6 +114,15 @@ KEY_LOCATION = "location"
 # small and everything that identifies an object travels beside its name. Like
 # the placement, it is data the core carries opaquely and never interprets.
 KEY_PROPERTIES = "properties"
+# Optional on a node placed by connecting it to a sibling that it then moves
+# against: the joint, as plain data - its name, the two links by their labels,
+# the ordered steps the placement is the product of (fixed ones, and free ones
+# with their kind, axis, range and starting value) and its physics. Stamped by
+# the assembly placing the node (see 'Assembly._place' and 'Joint.to_envelope'),
+# because it belongs to the placement and not to the object: one part may sit
+# rigidly in one place and on a hinge in another. Carried opaquely by the core,
+# like the properties beside it, for an exporter that walks the tree.
+KEY_JOINT = "joint"
 # Optional metadata on a shape object: everything learnt about the shape by
 # whatever produced it, at the moment it was produced. This is *the* channel for
 # such knowledge - there is no second one - and it travels beside the BREP, is
