@@ -13,6 +13,8 @@ files were touched, not for the line endings a checkout chose.
 
 import os
 import shutil
+import stat
+import sys
 
 import pygit2
 import pytest
@@ -259,10 +261,23 @@ def test_a_revision_is_read_once_per_package(tmp_path, monkeypatch):
     assert opened == []
 
 
+def _remove_tree(path):
+    """'shutil.rmtree', for a tree git wrote: its object files are read-only, and Windows refuses those."""
+
+    def writable_then_again(function, target, _error):
+        os.chmod(target, stat.S_IWRITE)
+        function(target)
+
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=writable_then_again)
+    else:
+        shutil.rmtree(path, onerror=writable_then_again)
+
+
 def test_a_git_package_whose_repository_is_gone_is_still_keyed_on_its_files(tmp_path):
     origin, _commit_id = _origin(tmp_path)
     package = _imported(tmp_path, origin)
-    shutil.rmtree(os.path.join(package.config_dir, ".git"))
+    _remove_tree(os.path.join(package.config_dir, ".git"))
     assert source_key.package_key(package) == source_key.directory_key(package.config_dir)
 
 
