@@ -392,8 +392,9 @@ Object commands
   solid. An assembly's are its parts' added up, in the assembly's own frame: the masses summed, the centres
   combined, and each part's inertia moved to the combined centre and added. A part whose mass is not
   known — it states none, and is made of nothing that states a density — is reported as such rather than
-  given one, and an assembly says which of its parts those were. These are the values an export is handed,
-  so what ``pc info`` says a part weighs is what a simulation of it weighs. See :ref:`properties`.
+  given one, and an assembly says which of its parts those were. These are the values an export whose file
+  type declares ``properties: true`` is handed -- URDF, and the simulation formats the plugins write -- so
+  what ``pc info`` says a part weighs is what a simulation of it weighs. See :ref:`properties`.
 
   For anything with geometry it also reports what PartCAD **measured** when it built it:
   ``BoundingBox`` as ``min``, ``max`` and ``size`` in millimetres, and -- for anything holding a solid --

@@ -159,9 +159,10 @@ PartCAD's ``wrappers/`` directory -- on the path of every implementation -- adds
 them up. Only shapes that declare something, or have a mass worked out for
 them, appear.
 
-A part that states no density and is made of nothing that does is weighed at
-the file type's ``density`` parameter, in kg/m³, or at 2700 kg/m³ (aluminium)
-where the file type declares none. That makes ``density``, after ``properties``
+A part that states no mass and no density, and is made of nothing that states
+a density, is weighed at the file type's ``density`` parameter, in kg/m³, or at
+2700 kg/m³ (aluminium) where the file type declares none. A part that states
+its mass keeps it, and the fallback decides nothing about it. That makes ``density``, after ``properties``
 itself, the one other parameter PartCAD reads on an implementation's behalf
 when ``properties: true`` is declared; it is still passed through as well.
 

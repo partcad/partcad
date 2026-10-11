@@ -187,10 +187,27 @@ def test_a_body_that_is_one_unplaced_part_is_that_part_as_stated():
 
 
 def test_a_body_that_states_its_own_mass_beats_the_sum_of_its_parts():
-    own = {"mass": 5.0, "centerOfMass": [1.0, 2.0, 3.0]}
-    parts = [(_solid_physics(_box(), STEEL), None), (_solid_physics(_box(), FOAM), [[50.0, 0, 0], [0, 0, 1], 0])]
+    """What it states wins; what its parts add up to fills in the rest, scaled to it."""
+    apart = [[50.0, 0, 0], [0, 0, 1], 0]
+    parts = [(_solid_physics(_box(), STEEL), None), (_solid_physics(_box(), FOAM), apart)]
+    summed = mass_properties.combined([mass_properties.placed(p, location) for p, location in parts])
 
-    assert mass_properties.of_body(parts, own=own) is own
+    # A stated mass alone: spread the way the parts are, at the stated weight -
+    # what 'pc info' reports for the same assembly - rather than a point mass.
+    body = mass_properties.of_body(parts, own={"mass": 5.0})
+    assert body["mass"] == 5.0
+    assert body["centerOfMass"] == pytest.approx(summed["centerOfMass"])
+    ratio = 5.0 / summed["mass"]
+    assert body["inertia"]["iyy"] == pytest.approx(summed["inertia"]["iyy"] * ratio)
+
+    # A stated centre and tensor are kept as stated.
+    stated = {"mass": 5.0, "centerOfMass": [1.0, 2.0, 3.0], "inertia": {"ixx": 1.0, "iyy": 1.0, "izz": 1.0}}
+    body = mass_properties.of_body(parts, own=stated)
+    assert body["centerOfMass"] == [1.0, 2.0, 3.0]
+    assert body["inertia"] == stated["inertia"]
+
+    # And over pieces with nothing to add up, the body is what it states.
+    assert mass_properties.of_body([({}, None), ({}, apart)], own={"mass": 5.0}) == {"mass": 5.0}
 
 
 def test_a_part_with_no_mass_adds_nothing_and_a_body_of_nothing_weighs_nothing():

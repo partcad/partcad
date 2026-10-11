@@ -226,7 +226,11 @@ def of_body(parts, own=None):
     placement in the body's frame or None. 'own' is what the body states about
     itself when it is not simply one of its parts: a sub-assembly that is one
     link of several shapes, and that states its own mass, is taken at its word
-    - a measured link beats the sum of its pieces.
+    - a measured link beats the sum of its pieces. What its pieces add up to
+    still says how that mass is spread: their combined centre and inertia,
+    scaled to the stated mass, under whatever else the body states - the way
+    'pc info' totals such an assembly, so that the two agree. A body that states
+    a mass over pieces with nothing to add up is what it states.
 
     A body that is one part, unplaced, *is* that part, and comes back exactly as
     the part states it - inertiaOrientation and all - so that what was read from
@@ -234,9 +238,18 @@ def of_body(parts, own=None):
 
     None when nothing here has a mass.
     """
-    if own and weighs(own):
-        return own
     parts = list(parts)
+    if own and weighs(own):
+        derived = combined([placed(physics, location) for physics, location in parts if physics])
+        if not derived:
+            return own
+        result = with_mass(derived, own["mass"])
+        if any(key in own for key in ("inertia", "inertiaOrientation")):
+            # A stated tensor is stated in a frame of its own, and the derived
+            # one must not be left beside it to be read as the same thing.
+            result.pop("inertia", None)
+        result.update({key: own[key] for key in MASS_KEYS if key in own})
+        return result
     if len(parts) == 1 and parts[0][1] is None:
         physics = parts[0][0]
         return physics if weighs(physics) else None

@@ -766,9 +766,11 @@ property           where it comes from, first one that applies
 =================  ==========================================================
 
 So a part that states its mass and nothing else still turns the way its solid
-says it does, at the weight it says it is; and the centre of mass and the
-inertia come from the same density as the mass, so the three agree. A part
-that states no density and is made of nothing that does has no known mass, and
+says it does, at the weight it says it is. The centre of mass is the solid's
+centroid whatever it is made of -- a homogeneous solid balances there at any
+density -- and the inertia is the solid's at the density that makes it weigh
+its mass, stated or derived, so the three agree. A part that states no mass,
+states no density and is made of nothing that does has no known mass, and
 ``pc info`` says so rather than inventing one; an export weighs it at the
 export's ``density`` parameter, or at aluminium's 2700 kg/m³, because a
 simulator handed a body with no mass makes one up regardless.
