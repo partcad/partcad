@@ -48,7 +48,7 @@ def test_a_package_and_a_release_are_two_answers(click_runner, installed, tmp_pa
     package = tmp_path / "p.vsix"
     package.write_bytes(b"PK")
     result = click_runner.invoke(cli, ["--no-ansi", "ide", "install", "--vsix", str(package), "--version", "1"])
-    assert result.exit_code != 0
+    assert result.exit_code == 2, result.output
     assert installed == []
 
 

@@ -273,4 +273,31 @@ suite('The tab strips', () => {
         // Still what the user is taken to want, as a click would be.
         assert.strictEqual(tabs.current, 'cfd');
     });
+
+    test('a click withdraws a request that is still waiting', () => {
+        const { tabs, bar, panes } = strip();
+        tabs.setTabs(specs(panes, { fea: true, cfd: false }));
+        tabs.request('cfd');
+        button(bar, 'FEA').click();
+
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }));
+        assert.strictEqual(tabs.current, 'fea');
+    });
+
+    test('a rebuild the user caused keeps them where they are, and withdraws the request', () => {
+        // Moving a switch on Build vs Buy rebuilds the strip with 'keepCurrent',
+        // and can enable the tab a request is waiting for: the user is working
+        // on the tab they are on, and stays there.
+        const { tabs, panes } = strip();
+        tabs.setTabs(specs(panes, { fea: true, cfd: false }));
+        tabs.request('cfd');
+
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }), { keepCurrent: true });
+        assert.strictEqual(tabs.current, 'fea');
+        // What was asked for is still the preference -- a request is taken as
+        // a click would be -- so the next object opens on it, by the ordinary
+        // rule rather than by the request.
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }));
+        assert.strictEqual(tabs.current, 'cfd');
+    });
 });

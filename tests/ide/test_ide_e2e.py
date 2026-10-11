@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""The PartCAD extension, end to end, in a real editor: `pc ide install`, `pc ide open`, `pc ide view`.
+"""The PartCAD extension, end to end, in a real editor: `pc ide install`, `pc ide workspace`, `pc ide view`.
 
 What a person does on a first afternoon, done by the commands a person types:
 

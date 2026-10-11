@@ -122,7 +122,7 @@ export function registerWorkbenchRequests(context: vscode.ExtensionContext): voi
             return;
         }
         if (taken) {
-            traceVerbose('PartCAD: showing the workbench, as `pc ide open` asked');
+            traceVerbose('PartCAD: showing the workbench, as `pc ide workspace` asked');
             void vscode.commands.executeCommand(WORKBENCH_COMMAND);
         }
     };

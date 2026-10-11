@@ -169,6 +169,14 @@ def test_show_without_a_tab_sends_no_tab_key(ide):
     assert protocol.KEY_TAB not in message
 
 
+def test_show_takes_reply_timeout_where_it_always_was(ide):
+    """`tab` came after it, so a caller passing the timeout by position is not reading it as a tab."""
+    client.show(protocol.make_node(b"glTF"), "//pkg:beam", "part", "//pkg", False, 30.0)
+
+    (message,) = ide.received
+    assert protocol.KEY_TAB not in message
+
+
 def test_show_refuses_a_tab_the_viewer_does_not_have(ide):
     with pytest.raises(ValueError, match="not a PartCAD Viewer tab"):
         client.show(protocol.make_node(b"glTF"), name="//pkg:beam", tab="buy")

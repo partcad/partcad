@@ -63,7 +63,8 @@ export class Tabs {
      * it is 'secondary', and it waits through a rebuild that does not offer it -
      * the Manufacturing strip disables Build and Buy until it knows what is
      * built and what is bought, and a request for Buy has to land on Buy when
-     * that answer arrives. Opened once, and then forgotten.
+     * that answer arrives. Opened once, and then forgotten -- and withdrawn by
+     * anything the user does first: a click, or a change on the tab they are on.
      */
     private requested: TabId | undefined;
     /**
@@ -120,7 +121,14 @@ export class Tabs {
         for (const pane of this.known) {
             pane.hidden = true;
         }
-        const keep = options.keepCurrent && this.enabled(this.selected) ? this.selected : this.choose();
+        const keepCurrent = options.keepCurrent === true && this.enabled(this.selected);
+        if (keepCurrent) {
+            // A rebuild the user caused, by changing something on the tab they
+            // are on: a request still waiting gives way to that, as it does to
+            // a click, rather than pulling them off the tab they are using.
+            this.requested = undefined;
+        }
+        const keep = keepCurrent ? this.selected : this.choose();
 
         empty(this.bar);
         // One tab is not a choice; the strip would be a title bar for a view
@@ -172,6 +180,8 @@ export class Tabs {
         if (!this.enabled(id)) {
             return;
         }
+        // The user has chosen: a request still waiting for its tab is withdrawn.
+        this.requested = undefined;
         this.preferred = id;
         this.select(id);
     }

@@ -197,8 +197,8 @@ def show(
     kind=None,
     package=None,
     keep_camera=False,
-    tab=None,
     reply_timeout: float = REPLY_TIMEOUT,
+    tab=None,
 ) -> dict:
     """Display one already-tessellated object in the IDE's PartCAD Viewer.
 

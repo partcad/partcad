@@ -49,7 +49,7 @@ def test_a_file_is_not_a_workspace(click_runner, opened, tmp_path):
     part = tmp_path / "cube.step"
     part.write_text("")
     result = click_runner.invoke(cli, ["--no-ansi", "ide", "workspace", str(part)])
-    assert result.exit_code != 0
+    assert result.exit_code == 2, result.output
     assert opened == []
 
 
