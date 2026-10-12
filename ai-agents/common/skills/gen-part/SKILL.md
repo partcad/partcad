@@ -1,6 +1,6 @@
 ---
 name: gen-part
-description: Generate a PartCAD part from a natural-language description (and optional reference images/requirements) by authoring a CAD script and validating it with the PartCAD CLI. Use for /pc:gen-part or when the user asks to generate, create, or model a single mechanical part.
+description: Generate a PartCAD part from a natural-language description (and optional reference images/requirements) by writing down what it is required to be, authoring a CAD script, and validating it with the PartCAD CLI. Use for /pc:gen-part or when the user asks to generate, create, or model a single mechanical part.
 ---
 
 # pc:gen-part
@@ -24,6 +24,11 @@ warrants, but always finish by validating.
 - Work in millimeters and degrees unless told otherwise.
 - Put the origin where the part rests: a part that stands on its own has its
   base on z = 0, which is the floor of the scene it is simulated in.
+- Separate **what the part is required to be** from how you are going to model
+  it. The first is what the user said — "holds a 2 kg shelf", "four M3 holes on
+  a 40 mm square", "under 50 g" — and it is written down in §5 as the part's
+  `requirements:`, before the design is judged against it. The second is your
+  choice, and stays out of them.
 
 ## 2. Make sure PartCAD is available
 
@@ -78,6 +83,52 @@ parts:
     manufacturable: false
 ```
 
+### Write down what it is required to be
+
+Then add `requirements:` to the same declaration — what the description asked
+for, in the description's own terms, *not* the design you chose. It is what
+`pc test` checks the model against and what `/pc:validate` judges it by, and
+the IDE shows it as the part's Requirements tab:
+
+```yaml
+    requirements:
+      features:                       # everything asked for, a name and a sentence each
+        mounting: Four M3 clearance holes on a 40 mm square, reachable from the top
+        shelf-load: Holds a 2 kg shelf at its free end without visible bending
+      physics:                        # only what the description bounds
+        mass: "<0.05"                 # kg
+```
+
+- **`features:`** is where most of it goes. One per thing asked for — a
+  dimension that matters, a feature that has to be there, something it has to
+  survive — named so it can be referred to, and stated the way the user stated
+  it.
+- **`physics:`** is any field of a `physics:` section, required as a value
+  (`0.05`), a comparison (`"<0.05"`, `">0,<=1"`), or alternatives (`"1,2"`).
+  Only what the description actually bounds. A mass is worked out from the
+  measured volume and the part's material (`properties: material:`), so require
+  one only where the part names a material with a density, or states its mass;
+  a requirement PartCAD cannot evaluate fails as "not known".
+- **`ports:`** and **`interfaces:`** are for a part that connects to something
+  (a bolt pattern, a plug, a rail), naming what it has to have and as much of
+  where as matters — anything may be `null`, and most of it should be:
+
+  ```yaml
+      ports:
+        top: [null, [0, 0, 1], null]    # a port called 'top', anywhere, facing up (+Z)
+      interfaces:
+        m3-thru: null                   # implements it (or something inheriting it), anywhere
+  ```
+
+  The middle element is the way the port *faces* (its Z axis), not the axis its
+  location is rotated about. Write these only when the description says how the
+  part connects; `/pc:add-interfaces` then adds the ports that meet them.
+- If the part declares a `simulate:` entry that demonstrates one of the
+  features, say which with `feature: <name>` on that entry.
+
+Leave out what the description did not ask for. A requirement you invented is a
+design decision written where nobody will question it.
+
 If the part was modelled from reference images — a drawing, a photo, a sketch —
 name them under `images:` as well, as paths relative to the package. That is what
 puts them beside the part in the README `pc render` writes, so a reader sees what
@@ -122,7 +173,9 @@ PartCAD (fixed in partcad/partcad#470).
 
 `pc test` is the build gate: with `manufacturable: false`, its CAD check passes
 only if the geometry instantiates cleanly, and the manufacturability checks are
-skipped.
+skipped. Its `requirements` check holds the model to the `ports:`, `interfaces:`
+and `physics:` you wrote down in §5, and says which one is not met and what it
+found instead; `pc --no-ansi -v test -f requirements <name>` lists every one.
 
 ```sh
 pc --no-ansi test <name>
@@ -182,7 +235,8 @@ against the description and any reference images:
 - every dimension the description states — each is measurable in one of the
   orthographic views, and a dimension no view confirms is one still assumed;
 - every feature that was asked for, on the face it was asked for, and nothing
-  present that was not.
+  present that was not — the `features:` you wrote down in §5 are the list to
+  go through.
 
 Add `back`, `left` or `bottom` whenever the part is not symmetric about the axis
 in question: an asymmetric part has a face you have not seen, and a face you have
@@ -197,12 +251,13 @@ need checking, `/pc:describe` renders a dimensioned drawing of it.
 ## 8. Finalize
 
 Summarize what you built — key dimensions, material and mass, and assumptions —
-and how to view it: `pc ide view <name>`.
+and how to view it: `pc ide view <name>`. Offer `/pc:validate <name>` for a
+verdict on every requirement, the features included.
 
 If the description claims something physical of the part on its own — it rests
 without rolling, it floats — declare that claim as a `simulate:` and check it
 with `pc sim`. A part takes the same section an assembly does; `/pc:gen-assembly`
-§7 shows how.
+§7 shows how. Name the feature it demonstrates with `feature: <name>`.
 
 If the part is meant to connect to something — a bolt pattern, a plug, a rail —
 say so and offer `/pc:add-interfaces`, which adds the ports and interfaces that

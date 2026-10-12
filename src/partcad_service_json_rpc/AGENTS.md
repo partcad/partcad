@@ -208,6 +208,13 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   on a request that names an object already means a walk over packages, and is refused), `build_parts`,
   `choices` (or `bvb`, every object's, for a client that cannot resolve the name -- `pc instructions`) and,
   with `format`, the document written down as PDF or HTML, as bytes for the client to save on its side.
+* `requirements.check`, behind the Digital Thread's Requirements tab: an object's `requirements:` as data -- the features,
+  each with the `simulate:` entries that name it (`feature:`), and a line per required port, interface and
+  physical property. Without `verify` nothing is built and every verdict is `null`, which is what lets the
+  extension ask on every show whether there is a tab to offer at all; with it each line carries the verdict
+  `pc test`'s `requirements` check reaches, by the same code (`partcad/requirements.py`). An assembly is staged
+  only when a physical property is to be checked, because that is what builds it -- what it weighs is worked out
+  from the tree it is built as (`partcad/physics.py`), while its ports are read off a tree that needs no build.
 
 Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,

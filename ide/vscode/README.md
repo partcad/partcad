@@ -28,13 +28,15 @@ terminal. Set `PARTCAD_IDE_PORT` to move both ends off the default port.
 
 The panel is a strip of tabs over the one object, not just a canvas: groups, **Design** (the object
 itself), **Analysis** (analysing it) and **Manufacturing** (making it), each with tabs of its own, then
-**Validation** and **Operations**, which are always disabled for now. Every group
+**Validation** and **Operations**, which are always disabled for now. An object that declares
+`requirements:` has a **Requirements** tab in front of all of them. Every group
 shows all of its tabs, disabling what does not apply, and Analysis and Manufacturing are disabled
 themselves when none of theirs does - hovering over a disabled group says why; each opens on the tab last opened in it while that one applies,
 and on the first that does otherwise.
 
 | tab | what it shows |
 | --- | --- |
+| **Requirements** | For an object that declares `requirements:`: each port, interface and physical property it requires, with a green or a red mark from what `pc test` finds, then its features - what each one is, and what validates it: a banner for every simulation that names it, and an **LLM** banner whose tooltip says to validate it with `/pc-validate`. |
 | **Design → 3D** | The shape, drawn here from what arrived over the socket above. |
 | **Design → 2D** | The object rendered to a PNG, JPEG or SVG picture, as `pc render` renders it, with **Save…**. |
 | **Design → Draft** | For a part or an assembly: a dimensioned technical drawing by `//pub/feature/render/draftwright`, in the formats it offers (PDF, SVG, DXF), with **Save…**. |

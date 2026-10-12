@@ -3029,6 +3029,56 @@ def cae_defaults(session, params):
     return {analysis: config.cae_implementation(analysis) for analysis in pc.cae.ANALYSES}
 
 
+def requirements_check(session, params):
+    """What an object is required to be and, with ``verify``, whether the model is it.
+
+    What the IDE's Requirements tab is drawn from: the features, each with the
+    ``simulate:`` entries that name it, and a line per port, interface and
+    physical property required (see ``partcad.requirements``). Without
+    ``verify`` nothing is built and every verdict is ``null`` -- a read of the
+    declaration, cheap enough to ask on every show, which is how the tab knows
+    whether there is anything to show at all. With it each requirement is
+    checked by the code ``pc test``'s ``requirements`` test runs, so the two
+    cannot disagree.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    kind = params.get("kind") or "part"
+    getters = {"part": ctx.get_part, "assembly": ctx.get_assembly, "scene": ctx.get_scene, "sketch": ctx.get_sketch}
+    if kind not in getters:
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "Only parts, assemblies, scenes and sketches declare requirements; '%s' is none of them" % kind,
+        )
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, name = resolved
+    path = _qualified(package, name)
+    obj = getters[kind](path)
+    if obj is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+
+    from partcad import requirements
+
+    verify = bool(params.get("verify"))
+    if verify and kind == "assembly":
+        declaration = requirements.of_shape(obj)
+        if declaration is not None and declaration.physics:
+            # What an assembly weighs is worked out from the tree it is built
+            # as (see 'physics.resolved_async'), so checking a physical
+            # requirement builds it: phase one first, as for every request that
+            # ends in one. Its ports are read off its tree, which needs no build.
+            _stage_subassemblies(session, ctx, obj)
+    with pc.logging.Process("Requirements", package, name):
+        report = asyncio.run(requirements.check_async(ctx, obj, verify=verify))
+    return report.to_dict()
+
+
 def cae_analyze(session, params):
     """Run a CAE analysis on a part and return the model it wrote and its findings.
 

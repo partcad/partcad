@@ -318,9 +318,14 @@ Object commands
   (``manufacturability`` and the methods below it), whether an assembly's connection instructions can be
   followed (``connect``; see "Testing the instructions" in :doc:`assy`), whether the route a machine would cut
   it with can be produced (``cam``; see :ref:`pc cam <cam>`), whether the engineering analyses a part asks
-  for come back clean (``fea`` and ``cfd``; see :ref:`pc cae <cae>`), and whether a part or an assembly does
-  what its ``simulate:`` section says it does (``sim``; see ``pc sim`` below). Those last four apply only to
-  an object that declares the matching section, so a package that declares none pays nothing for them.
+  for come back clean (``fea`` and ``cfd``; see :ref:`pc cae <cae>`), whether a part or an assembly does
+  what its ``simulate:`` section says it does (``sim``; see ``pc sim`` below), and whether the object has the
+  ports, interfaces and physical properties its ``requirements:`` say it has to (``requirements``; see
+  :ref:`requirements`). Those last five apply only to an object that declares the matching section, so a
+  package that declares none pays nothing for them. ``requirements`` fails a requirement on something it
+  cannot find out -- a mass with no material to work it out from -- rather than passing it, and says, for each
+  requirement not met, what it found instead. The features a section lists are prose, and are for the
+  ``/pc:validate`` agent skill to judge.
 
   ``manufacturability`` answered to the name ``cam`` until :ref:`pc cam <cam>` existed, at which point one word
   was answering two questions -- "can this be made at all" and "here is the program that makes it". They are

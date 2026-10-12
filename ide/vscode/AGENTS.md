@@ -134,7 +134,9 @@ send (`PartcadViewer`). `src/webview/` is what runs *inside* that webview: `view
 
 **The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA and CFD for a part, then
 Manufacturing: what is built and what is bought, how to build it, the bill of materials, where to buy it and the
-assembly instructions. Only the 3D
+assembly instructions. In front of all of them, for an object that declares `requirements:`, a Requirements tab:
+asked about on every show (`requirements.check`, a declaration read) and verified when opened, by the same code
+as `pc test -f requirements`. Only the 3D
 view comes over the viewer protocol; every other tab is a question about `<package>:<name>` that the renderer
 cannot ask itself -- the CSP forbids network access and the daemon is behind the host's JSON-RPC connection --
 so it asks the host (`fetchTab`) and the host answers (`tabData`), on first look. Which is why the show

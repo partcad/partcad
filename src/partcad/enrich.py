@@ -72,8 +72,8 @@ ENRICH_IGNORED_PROPERTIES = frozenset(
         "fileHash",
         "url",
         "dependencies",
-        # What it is built with
-        "requirements",
+        # What it is built with. Not 'requirements', which is what the object
+        # an enrich produces is required to be, and describes it like 'desc'.
         "pythonRequirements",
         "javascriptRequirements",
         "javascriptVersion",

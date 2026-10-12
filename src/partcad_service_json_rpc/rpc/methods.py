@@ -59,6 +59,9 @@ _OPERATIONS = {
     "manufacturing.details": operations.manufacturing_details,
     "manufacturing.plan": operations.manufacturing_plan,
     "supply.quote": operations.supply_quote,
+    # Not a CLI command: what the IDE's Requirements tab is drawn from. Its
+    # verdicts are 'pc test -f requirements', by the same code.
+    "requirements.check": operations.requirements_check,
     "cae.analyze": operations.cae_analyze,
     "cae.defaults": operations.cae_defaults,
     "cam.route": operations.cam_route,

@@ -248,6 +248,17 @@ The plugin folder is named `claude`, but the command namespace comes from
   (`pc render --with-all`) and by mating two instances in a throwaway assembly
   and rendering that. The part has to pass `pc test` and the validation assembly
   has to come out correctly connected.
+- **`/pc:validate <object>`** — decides whether an object is what its
+  `requirements:` say it has to be. The ports, interfaces and physical
+  properties are `pc test`'s verdict (its `requirements` check), reported as
+  they are; the features are prose, and the agent judges each from evidence it
+  gathers and names: every simulation (a `simulate:` entry says which feature it
+  demonstrates with `feature:`), renders from every angle a feature needs with
+  the ports and interfaces drawn, and for an assembly the bill of materials and
+  the assembly instructions. A feature nothing shows is "cannot tell", never
+  "met". The IDE's Requirements tab puts an "LLM" banner on every feature that
+  points here. `/pc:gen-part` and `/pc:gen-assembly` write the requirements down
+  before they model anything.
 - **`/pc:search <query>`** — finds existing parts and assemblies in the catalog
   whose name, description, or source matches the query (`pc search parts` /
   `pc search assemblies`), lists the matches, and can inspect or render a chosen

@@ -10,8 +10,8 @@
 // instructions, and anything that can be bought has suppliers and prices, so the
 // panel is a strip of tabs over one object rather than a canvas:
 //
-//     Design           |  Analysis   |  Manufacturing                                                    |  Validation  |  Operations
-//       3D | 2D | Draft     FEA | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly
+//     (Requirements)  |  Design           |  Analysis   |  Manufacturing                                                    |  Validation  |  Operations
+//                           3D | 2D | Draft     FEA | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly
 //
 // Three groups, each a strip of its own. Design is the object itself: turned in
 // 3D, rendered to a picture, drawn as a dimensioned drawing. Analysis is what
@@ -20,11 +20,18 @@
 // is made of, where to buy it, how it goes together. Validation and Operations
 // hold nothing yet, and are always disabled.
 //
+// Requirements comes before all of them, and only for an object that declares
+// a 'requirements:' section: it is what the object was asked to be, which is
+// read before what it is. Whether there is one is a question for the daemon, so
+// it is asked on every show - a read of the declaration, nothing built - and the
+// strip is rebuilt when the answer arrives. Opening the tab is what asks for the
+// verdicts, which are 'pc test -f requirements' (see 'requirements.ts').
+//
 // Every group always shows all of its tabs and disables the ones that do not
 // apply, and a group none of whose tabs apply is itself disabled; see 'Tabs'
-// for which tab each strip then opens on. Design and its 3D view are always the
-// first and always enabled, because that is what "show this part" means - and
-// what an empty panel, before anything has been selected, opens on.
+// for which tab each strip then opens on. Design and its 3D view are always
+// enabled and are what a show opens on, because that is what "show this part"
+// means - and what an empty panel, before anything has been selected, opens on.
 //
 // This file is the shell: it owns the tab strips and the panes, routes what the
 // extension host posts in, and asks for the contents of a tab the first time it
@@ -84,6 +91,7 @@ import {
     RENDER_TABS,
     RenderData,
     RenderFormat,
+    RequirementsData,
     ShowMessage,
     StateReplyMessage,
     SupplyData,
@@ -92,6 +100,7 @@ import {
     isRenderTab,
 } from './messages';
 import { Choice, RenderView } from './render';
+import { RequirementsView } from './requirements';
 import { spaceMouse } from './spacemouse';
 import { controlValues, snapshot } from './state';
 import { SupplyView } from './supply';
@@ -99,6 +108,7 @@ import { TabSpec, Tabs } from './tabs';
 import { LinkFilter, OverlayRequest, Selection, Tree, filterIsEmpty } from './tree';
 
 const panes: Record<TabId, HTMLElement> = {
+    requirements: byId('pane-requirements'),
     design: byId('pane-design'),
     analysis: byId('pane-analysis'),
     manufacturing: byId('pane-manufacturing'),
@@ -138,6 +148,7 @@ const caeViews: Partial<Record<TabId, CaeView>> = {};
 for (const tab of ANALYSIS_TABS) {
     caeViews[tab] = new CaeView(panes[tab], tab, (implementation) => runAnalysis(tab, implementation));
 }
+const requirementsView = new RequirementsView(panes.requirements);
 const tabs = new Tabs(byId('tabs'), onTabSelected);
 const designTabs = new Tabs(byId('design-tabs'), (tab) => onInnerSelected('design', tab));
 const analysisTabs = new Tabs(byId('analysis-tabs'), (tab) => onInnerSelected('analysis', tab));
@@ -418,6 +429,31 @@ const DETAILS_BATCH = 6;
 /** Which half of the Build tab is in flight: the plan, or the pages. */
 let buildPhase: 'plan' | 'document' = 'plan';
 
+/** The kinds of object that can declare requirements. */
+const REQUIRED_KINDS = ['part', 'assembly', 'scene', 'sketch'];
+
+/**
+ * What the object on screen is required to be, once the daemon has said, and
+ * which object that was ('identify'). Undefined until then, and for an object
+ * that cannot declare any.
+ *
+ * Kept across a show of the same object - an edit saved and re-rendered - until
+ * the new answer replaces it, so that the tab the reader is on does not vanish
+ * for the moment it takes to ask again.
+ */
+let requirements: { object: string; data: RequirementsData } | undefined;
+
+/** What a show is about, as one string: the same object shown again is the same string. */
+function identify(message: ShowMessage | undefined): string {
+    return message === undefined ? '' : `${message.package ?? ''}\n${message.name ?? ''}\n${message.kind ?? ''}`;
+}
+
+/** The requirements of the object on screen, if it declares any. */
+function requirementsShown(): RequirementsData | undefined {
+    const known = requirements !== undefined && requirements.object === identify(shown) ? requirements : undefined;
+    return known !== undefined && known.data.defined ? known.data : undefined;
+}
+
 function byId(id: string): HTMLElement {
     return document.getElementById(id) as HTMLElement;
 }
@@ -441,7 +477,15 @@ function reset(tab: TabId): HTMLElement {
  * of its tabs is.
  */
 function tabsFor(message: ShowMessage | undefined): TabSpec[] {
+    // In front of the rest, and only when there is something to show: an
+    // object that states no requirements has nothing for the tab to say, and a
+    // disabled tab in front of the strip would only push the others along.
+    const required: TabSpec[] =
+        message !== undefined && requirementsShown() !== undefined
+            ? [{ id: 'requirements', label: 'Requirements', pane: panes.requirements }]
+            : [];
     return [
+        ...required,
         { id: 'design', label: 'Design', pane: panes.design },
         {
             id: 'analysis',
@@ -647,6 +691,19 @@ async function show(message: ShowMessage): Promise<void> {
         requested.add('bvb');
         request('bvb');
     }
+    // So is whether there is a Requirements tab at all: a read of the
+    // declaration. The verdicts wait for the tab to be opened.
+    if (requirements !== undefined && requirements.object !== identify(message)) {
+        requirements = undefined;
+    }
+    if (requirements === undefined) {
+        requirementsView.setBusy('Asking PartCAD what this is required to be…');
+    }
+    if (message.package && REQUIRED_KINDS.includes(message.kind ?? '')) {
+        request('requirements', { verify: false });
+    } else {
+        requirements = undefined;
+    }
 
     // Set up viewer configuration on the window object for access by scene.ts
     if (message.config) {
@@ -732,6 +789,8 @@ function clear(): void {
     }
     resetRenderTabs('Nothing to render.');
     resetManufacturing('Nothing to show.');
+    requirements = undefined;
+    requirementsView.setBusy('Nothing to show.');
     setAllTabs(undefined);
 }
 
@@ -958,6 +1017,11 @@ function choicesOf(formats: RenderFormat[]): Choice[] {
 
 /** The panel's strip opened a group: open whichever of its tabs it is on. */
 function onTabSelected(tab: TabId): void {
+    if (tab === 'requirements') {
+        // A tab of its own, with no strip under it.
+        onLeafSelected(tab);
+        return;
+    }
     const inner = groups[tab]?.current;
     if (inner !== undefined) {
         onLeafSelected(inner);
@@ -994,6 +1058,10 @@ function onLeafSelected(tab: TabId): void {
         pumpDetails();
     }
     if (requested.has(tab)) {
+        return;
+    }
+    if (tab === 'requirements') {
+        verifyRequirements();
         return;
     }
     if (tab === 'draft') {
@@ -1062,6 +1130,10 @@ function onTabData(
 
     if (tab === 'bvb') {
         onBvb(data as BvbData | undefined, error);
+        return;
+    }
+    if (tab === 'requirements') {
+        onRequirements(data as RequirementsData | undefined, error);
         return;
     }
     if (tab === 'build') {
@@ -1154,6 +1226,67 @@ function onBvb(data: BvbData | undefined, error: string | undefined): void {
     }
     if (shown !== undefined) {
         manufacturingTabs.setTabs(manufacturingTabsFor(shown));
+    }
+}
+
+/**
+ * Ask whether the model meets its requirements: what opening the tab does.
+ *
+ * What is already known is drawn meanwhile, every mark pending, so that the
+ * reader sees what is required while the model is being measured against it.
+ */
+function verifyRequirements(): void {
+    if (shown === undefined) {
+        return;
+    }
+    requested.add('requirements');
+    const known = requirementsShown();
+    if (known !== undefined) {
+        requirementsView.show({ ...known, verified: false, requirements: pending(known) }, true);
+    } else {
+        requirementsView.setBusy('Checking the requirements…');
+    }
+    request('requirements', { verify: true });
+}
+
+/** The checks with their verdicts taken back: a new check is under way, and the old marks are not its answer. */
+function pending(data: RequirementsData): RequirementsData['requirements'] {
+    return data.requirements.map((check) => ({ ...check, passed: null, detail: null }));
+}
+
+/**
+ * What the object is required to be has arrived: remember it, draw it, and
+ * rebuild the strip it decides.
+ *
+ * Asked on every show, so a refusal on the way to deciding whether there is a
+ * tab - a daemon too old to know the question - means no tab rather than an
+ * error. Once the tab has been opened, a refusal is the tab's answer.
+ *
+ * Not with 'keepCurrent', as for Build vs Buy: a reader who chose this tab for
+ * the last object lands on it again for this one, once it is known to be there.
+ */
+function onRequirements(data: RequirementsData | undefined, error: string | undefined): void {
+    if (shown === undefined) {
+        return;
+    }
+    const offered = requirementsShown() !== undefined;
+    if (error !== undefined || data === undefined || data === null) {
+        if (requested.has('requirements')) {
+            requirementsView.showError(error ?? 'PartCAD had nothing to say about what this is required to be.');
+            return;
+        }
+        requirements = undefined;
+    } else {
+        requirements = { object: identify(shown), data };
+        try {
+            requirementsView.show(data, requested.has('requirements') && !data.verified);
+        } catch (e: unknown) {
+            requirementsView.showError(`Failed to display this: ${e}`);
+            reportError(`failed to render the 'requirements' tab: ${e}`);
+        }
+    }
+    if ((requirementsShown() !== undefined) !== offered) {
+        tabs.setTabs(tabsFor(shown));
     }
 }
 
