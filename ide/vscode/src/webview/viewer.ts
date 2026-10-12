@@ -3,7 +3,7 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The PartCAD Viewer panel, inside the webview.
+// The Digital Thread panel, inside the webview.
 //
 // Geometry is only the first of what the panel has to say about what is on
 // screen. An assembly also has a bill of materials and a set of assembly
@@ -652,7 +652,7 @@ async function show(message: ShowMessage): Promise<void> {
     if (message.config) {
         (window as any).partcadConfig = message.config;
         if (message.config?.viewer?.performanceDebug) {
-            console.log('[PartCAD Viewer] Config set:', message.config);
+            console.log('[Digital Thread] Config set:', message.config);
         }
     }
 
@@ -1245,7 +1245,7 @@ async function answerState(token: number): Promise<void> {
     const reply: StateReplyMessage = { type: 'state', token, state };
     const on = (state.subTab ?? state.tab) as TabId | null | undefined;
     if (!on) {
-        reply.screenshotError = 'nothing is on screen in the PartCAD Viewer';
+        reply.screenshotError = 'nothing is on screen in the Digital Thread';
     } else {
         try {
             reply.screenshot = await snapshot(panes[on], (canvas) => {

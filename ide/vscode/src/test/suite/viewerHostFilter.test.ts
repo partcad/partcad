@@ -13,7 +13,7 @@ import * as vscode from 'vscode';
 
 import { PartcadViewer } from '../../viewer/PartcadViewer';
 
-suite('The PartCAD Viewer host, asked to render', () => {
+suite('The Digital Thread host, asked to render', () => {
     const sent: Record<string, unknown>[] = [];
     let registration: vscode.Disposable | undefined;
 

@@ -114,7 +114,7 @@ async function waitFor(condition: () => boolean, what: string, ms = 5000): Promi
     }
 }
 
-suite('PartCAD Viewer SpaceMouse', () => {
+suite('Digital Thread SpaceMouse', () => {
     test('3Dconnexion devices are recognised by their USB ids, and nothing else is', () => {
         assert.ok(isSpaceMouse('SpaceMouse Compact (Vendor: 256f Product: c635)'));
         assert.ok(isSpaceMouse('Wireless Receiver (Vendor: 256f Product: c652)'));

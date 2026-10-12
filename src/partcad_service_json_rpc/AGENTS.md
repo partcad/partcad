@@ -213,7 +213,7 @@ Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,
 `stats`, `terminal`, `execute`, and the `*Done`/lifecycle signals).
 
-Five of them answer the tabs of the IDE's PartCAD Viewer, which is a webview with no file system and no
+Five of them answer the tabs of the IDE's Digital Thread, which is a webview with no file system and no
 network in reach: `bom`, `assembly.guide`, `supply.quote` and the pair behind the FEA and CFD tabs,
 `cae.analyze` and `cae.defaults`. The first three are the CLI's own operation returning **data**
 rather than writing a file -- `assembly.guide` is the instruction book `pc render -t html|pdf` writes, as

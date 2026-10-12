@@ -95,7 +95,7 @@ interface RenderedFile {
 const ANALYSIS_TABS = new Set(['fea', 'cfd']);
 
 /**
- * The "PartCAD Viewer" editor tab.
+ * The "Digital Thread" editor tab.
  *
  * A webview panel rather than a view in the side bar: a 3D model wants the whole
  * editor area, and it has to survive being switched away from, which is what
@@ -104,7 +104,7 @@ const ANALYSIS_TABS = new Set(['fea', 'cfd']);
  */
 export class PartcadViewer implements vscode.Disposable {
     public static readonly viewType = 'partcadViewer';
-    public static readonly title = 'PartCAD Viewer';
+    public static readonly title = 'Digital Thread';
 
     private panel: vscode.WebviewPanel | undefined;
     private lastShow: ViewerMessage | undefined;
@@ -195,8 +195,8 @@ export class PartcadViewer implements vscode.Disposable {
         try {
             object = message.object ? inflate(message.object) : null;
         } catch (error: any) {
-            traceError(`PartCAD Viewer: failed to decode the geometry: ${error.message}`);
-            void vscode.window.showErrorMessage(`PartCAD Viewer: failed to decode the geometry: ${error.message}`);
+            traceError(`Digital Thread: failed to decode the geometry: ${error.message}`);
+            void vscode.window.showErrorMessage(`Digital Thread: failed to decode the geometry: ${error.message}`);
             return;
         }
 
@@ -214,7 +214,7 @@ export class PartcadViewer implements vscode.Disposable {
         try {
             performanceDebug = getViewerPerformanceDebugFromSetting('partcad');
         } catch (error: any) {
-            traceVerbose(`PartCAD Viewer: failed to read performanceDebug setting: ${error?.message ?? error}`);
+            traceVerbose(`Digital Thread: failed to read performanceDebug setting: ${error?.message ?? error}`);
         }
 
         void this.panel?.webview.postMessage({
@@ -365,7 +365,7 @@ export class PartcadViewer implements vscode.Disposable {
             }
             post({ data: await vscode.commands.executeCommand(command, args) });
         } catch (error: any) {
-            traceError(`PartCAD Viewer: failed to fetch the '${tab}' tab: ${error?.message ?? error}`);
+            traceError(`Digital Thread: failed to fetch the '${tab}' tab: ${error?.message ?? error}`);
             post({ error: `${error?.message ?? error}` });
         }
     }
@@ -382,7 +382,7 @@ export class PartcadViewer implements vscode.Disposable {
                 { formats?: unknown } | undefined;
             post({ formats: answer?.formats ?? [] });
         } catch (error: any) {
-            traceError(`PartCAD Viewer: failed to ask ${plugin} for its formats: ${error?.message ?? error}`);
+            traceError(`Digital Thread: failed to ask ${plugin} for its formats: ${error?.message ?? error}`);
             post({ error: `${error?.message ?? error}` });
         }
     }
@@ -405,7 +405,7 @@ export class PartcadViewer implements vscode.Disposable {
             })) as { items?: unknown } | undefined;
             post({ items: answer?.items ?? [] });
         } catch (error: any) {
-            traceError(`PartCAD Viewer: failed to fetch the Build vs Buy details: ${error?.message ?? error}`);
+            traceError(`Digital Thread: failed to fetch the Build vs Buy details: ${error?.message ?? error}`);
             post({ error: `${error?.message ?? error}` });
         }
     }
@@ -433,7 +433,7 @@ export class PartcadViewer implements vscode.Disposable {
         } catch (error: any) {
             // Not text - a STEP file opens as one, but a binary 3MF does not:
             // hand it to whatever VS Code opens such a file with.
-            traceVerbose(`PartCAD Viewer: ${file} is not a text document: ${error?.message ?? error}`);
+            traceVerbose(`Digital Thread: ${file} is not a text document: ${error?.message ?? error}`);
             await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(file), vscode.ViewColumn.One);
         }
     }
@@ -443,7 +443,7 @@ export class PartcadViewer implements vscode.Disposable {
         try {
             writeChoices(object, choices);
         } catch (error: any) {
-            traceError(`PartCAD Viewer: failed to save the Build vs Buy choices: ${error?.message ?? error}`);
+            traceError(`Digital Thread: failed to save the Build vs Buy choices: ${error?.message ?? error}`);
             void vscode.window.showErrorMessage(`Could not save the Build vs Buy choices: ${error?.message ?? error}`);
         }
     }
@@ -464,7 +464,7 @@ export class PartcadViewer implements vscode.Disposable {
         } catch (error: any) {
             // Shown all the same: the picture is in the message. Only Save needs
             // the file, and it says so if there is none.
-            traceError(`PartCAD Viewer: failed to keep the rendered file: ${error?.message ?? error}`);
+            traceError(`Digital Thread: failed to keep the rendered file: ${error?.message ?? error}`);
         }
     }
 
@@ -499,7 +499,7 @@ export class PartcadViewer implements vscode.Disposable {
             await vscode.workspace.fs.copy(vscode.Uri.file(kept.file), target, { overwrite: true });
             vscode.window.setStatusBarMessage(`PartCAD: saved ${target.fsPath}`, 5000);
         } catch (error: any) {
-            traceError(`PartCAD Viewer: failed to save ${target.fsPath}: ${error?.message ?? error}`);
+            traceError(`Digital Thread: failed to save ${target.fsPath}: ${error?.message ?? error}`);
             void vscode.window.showErrorMessage(`Could not save ${target.fsPath}: ${error?.message ?? error}`);
         }
     }
@@ -519,7 +519,7 @@ export class PartcadViewer implements vscode.Disposable {
                 this.caeDefaults =
                     ((await vscode.commands.executeCommand('partcad.caeDefaults')) as Record<string, string>) ?? {};
             } catch (error: any) {
-                traceVerbose(`PartCAD Viewer: no CAE defaults: ${error?.message ?? error}`);
+                traceVerbose(`Digital Thread: no CAE defaults: ${error?.message ?? error}`);
                 this.caeDefaults = {};
             }
         }
@@ -560,7 +560,7 @@ export class PartcadViewer implements vscode.Disposable {
         });
         const base = { open: true, visible: panel.visible };
         if (reply === undefined) {
-            return { ...base, error: `the PartCAD Viewer did not answer within ${VIEWER_STATE_REPLY_MS / 1000}s` };
+            return { ...base, error: `the Digital Thread did not answer within ${VIEWER_STATE_REPLY_MS / 1000}s` };
         }
         const { screenshot, screenshotError, state } = reply;
         let written: string | null = null;
@@ -611,7 +611,7 @@ export class PartcadViewer implements vscode.Disposable {
                 if (message.type === 'state') {
                     this.stateReplies.get(message.token ?? 0)?.(message as ViewerStateReply);
                 } else if (message.type === 'error') {
-                    traceError(`PartCAD Viewer: ${message.message}`);
+                    traceError(`Digital Thread: ${message.message}`);
                 } else if (message.type === 'ready') {
                     this.postSpaceMouseState();
                     if (this.lastShow !== undefined) {
@@ -637,7 +637,7 @@ export class PartcadViewer implements vscode.Disposable {
                 } else if (message.type === 'save') {
                     void this.saveRendered(message.tab ?? '');
                 } else {
-                    traceVerbose(`PartCAD Viewer: ${message.type}`);
+                    traceVerbose(`Digital Thread: ${message.type}`);
                 }
             },
         );
@@ -657,7 +657,7 @@ export class PartcadViewer implements vscode.Disposable {
             const client = new SpacenavClient();
             client.onDidChangeState(() => {
                 traceVerbose(
-                    `PartCAD Viewer: spacenavd ${client.connected ? `connected, device ${client.device}` : 'disconnected'}`,
+                    `Digital Thread: spacenavd ${client.connected ? `connected, device ${client.device}` : 'disconnected'}`,
                 );
                 if (client.missing) {
                     this.hintSpacenav(client.paths);
@@ -695,7 +695,7 @@ export class PartcadViewer implements vscode.Disposable {
         }
         this.spacenavHinted = true;
         traceInfo(
-            `PartCAD Viewer: no spacenavd at ${paths.join(' or ')} where this workspace runs ` +
+            `Digital Thread: no spacenavd at ${paths.join(' or ')} where this workspace runs ` +
                 `(${vscode.env.remoteName}). A SpaceMouse on a Linux machine reaches the viewer only through ` +
                 `spacenavd's socket, so forward it from there to one of those paths - see "3Dconnexion SpaceMouse" ` +
                 `in the PartCAD extension's README. On Windows and macOS the viewer reads the device itself.`,
@@ -723,7 +723,7 @@ export class PartcadViewer implements vscode.Disposable {
             performanceDebug = getViewerPerformanceDebugFromSetting('partcad');
         } catch (error) {
             traceVerbose(
-                `PartCAD Viewer: failed to read performanceDebug setting: ${(error as Error)?.message ?? error}`,
+                `Digital Thread: failed to read performanceDebug setting: ${(error as Error)?.message ?? error}`,
             );
         }
         void this.panel?.webview.postMessage({
@@ -838,7 +838,7 @@ function removeQuietly(target: string): void {
     try {
         fs.rmSync(target, { recursive: true, force: true });
     } catch (error: any) {
-        traceVerbose(`PartCAD Viewer: could not remove ${target}: ${error?.message ?? error}`);
+        traceVerbose(`Digital Thread: could not remove ${target}: ${error?.message ?? error}`);
     }
 }
 

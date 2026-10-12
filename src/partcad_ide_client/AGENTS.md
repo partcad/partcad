@@ -1,7 +1,7 @@
 # partcad_ide_client
 
-The Python half of the socket protocol that connects `partcad` to the PartCAD IDE extension's **PartCAD
-Viewer**. Source: `./src/partcad_ide_client`. Tests: `./tests/partcad_ide_client`. Run all commands below from
+The Python half of the socket protocol that connects `partcad` to the PartCAD IDE extension's **Digital
+Thread**. Source: `./src/partcad_ide_client`. Tests: `./tests/partcad_ide_client`. Run all commands below from
 the repo root unless noted.
 
 **A package, not a distribution.** Nothing is published under this name: it is one of the packages inside the

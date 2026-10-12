@@ -884,7 +884,7 @@ Object commands
 Interacting with IDE
 ********************
 
-Putting an object in front of a person, in one of two windows -- the IDE's own **PartCAD Viewer**
+Putting an object in front of a person, in one of two windows -- the IDE's own **Digital Thread**
 (``pc ide view``), or **another application** on this machine (``pc ide open``, which is also what the editor
 extension's "Open in..." menu runs) -- and asking the IDE what it is showing (``pc ide state``). None of them
 leaves anything new in the package: that is what ``pc export`` and ``pc render`` are for. ``pc ide view`` and
@@ -892,7 +892,7 @@ leaves anything new in the package: that is what ``pc export`` and ``pc render``
 and print a note on stderr saying what to type instead.
 
 ``pc ide view``
-  View a part, assembly, or scene in the PartCAD Viewer. Use ``-V`` for a verbal (text) description instead of a visual
+  View a part, assembly, or scene in the Digital Thread. Use ``-V`` for a verbal (text) description instead of a visual
   one, and ``-p <name>=<value>`` to set parameters.
 
 ``pc ide state``
@@ -910,7 +910,7 @@ and print a note on stderr saying what to type instead.
     what the field holds **now** (``value``), and what the object was last shown with (``applied``). The two
     differ when a value has been typed and Update not pressed. ``live: false`` says the Inspector's panel could
     not be asked -- it is collapsed -- and the values are the applied ones.
-  * ``viewer`` -- the PartCAD Viewer: the ``tab`` and ``subTab`` on screen (``design``/``2d``), what every tab
+  * ``viewer`` -- the Digital Thread: the ``tab`` and ``subTab`` on screen (``design``/``2d``), what every tab
     strip offers and which tabs are disabled, and for **each sub-tab** its ``filters`` -- what it would send
     ``pc render --filter``, or ``null`` for the whole object -- and its ``selections``: the boxes ticked in its
     tree, the port overlays on the 2D tab, and the value of every control in its pane (format, drawing package,

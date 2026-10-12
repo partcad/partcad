@@ -279,7 +279,7 @@ pc --no-ansi cae fea --json :cantilever   # [] when the part is fine
 ```
 
 The model itself is written beside the package as `cantilever.fea.glb` — and as
-`pipe.cfd.glb` for whoever restores the `cfd:` block — and the PartCAD Viewer's
+`pipe.cfd.glb` for whoever restores the `cfd:` block — and the Digital Thread's
 FEA and CFD tabs show the same thing with the findings under it.
 
 ### Two things that will waste your time

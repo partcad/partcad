@@ -216,11 +216,11 @@ export function noWebGL(message: string): string {
 }
 
 window.addEventListener('error', (event: ErrorEvent) => {
-    report('The PartCAD Viewer failed to start', describe(event.error ?? event.message));
+    report('The Digital Thread failed to start', describe(event.error ?? event.message));
 });
 
 window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
-    report('The PartCAD Viewer hit an error', describe(event.reason));
+    report('The Digital Thread hit an error', describe(event.reason));
 });
 
 /** Answer `pc ide state` (see 'state.ts'). */

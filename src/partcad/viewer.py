@@ -71,7 +71,7 @@ def context(ctx, name=None):
 
 
 async def show(ctx, tree, name=None, kind=None, package=None):
-    """Display one shape tree in the IDE's PartCAD Viewer.
+    """Display one shape tree in the IDE's Digital Thread.
 
     'tree' is the object as 'Shape.get_representation(ctx, "gltf")' returns it:
     nodes carrying tessellated geometry, their placements, and the ports and
@@ -104,14 +104,14 @@ async def show(ctx, tree, name=None, kind=None, package=None):
         keep_camera = _previously_displayed == name
         _previously_displayed = name
 
-        pc_logging.info('Visualizing in "PartCAD Viewer"...')
+        pc_logging.info('Visualizing in "Digital Thread"...')
         client.show(tree, name=name, kind=kind, package=package, keep_camera=keep_camera)
         return True
     except client.ViewerNotAvailable as e:
         pc_logging.warning("%s" % e)
-        pc_logging.warning("No PartCAD IDE with an open PartCAD Viewer detected.")
+        pc_logging.warning("No PartCAD IDE with an open Digital Thread detected.")
         return False
     except Exception as e:
         pc_logging.warning(e)
-        pc_logging.warning("Failed to show '%s' in the PartCAD Viewer." % (name or "the shape"))
+        pc_logging.warning("Failed to show '%s' in the Digital Thread." % (name or "the shape"))
         return False

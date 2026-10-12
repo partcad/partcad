@@ -10,7 +10,7 @@ rem  is a named pipe too, "\\.\pipe\openssh-ssh-agent", which is not a thing a
 rem  Linux container can be handed as a unix socket; SSH_AUTH_SOCK is normally
 rem  unset on Windows for that very reason, so there is nothing here to link
 rem  and nothing lost by not linking it. spacenavd is a Unix daemon, and on
-rem  Windows the PartCAD Viewer reads a SpaceMouse itself, in the editor's own
+rem  Windows the Digital Thread reads a SpaceMouse itself, in the editor's own
 rem  window, wherever the extension runs. Succeed and say nothing.
 rem
 rem  This file is a polyglot on purpose. "initializeCommand" runs in the host's

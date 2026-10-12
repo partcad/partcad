@@ -170,7 +170,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
         (`load:`) in terms of its own interfaces, so the boundary conditions survive a change of geometry
   - [x] `pc cae cfd`, computational fluid dynamics, the same way
   - [x] The solver is a package, not part of this wheel — `//pub/feature/cae/openfoam` for CFD — and the
-        **FEA** and **CFD** tabs of the PartCAD Viewer run it on the object on screen
+        **FEA** and **CFD** tabs of the Digital Thread run it on the object on screen
 - Materials — what a part is made of, as an object of a package
   - [x] A `materials:` section, and standard catalogues to inherit from rather than restate:
         `//pub/std/manufacturing/material/plastic` and `.../metal`, named by designation and temper

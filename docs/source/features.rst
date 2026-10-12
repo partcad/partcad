@@ -35,7 +35,7 @@ Objects
 
 - **Add** a part, assembly, scene, sketch, or interface.
 - **Import** a part, assembly, scene, or sketch from an existing file.
-- **Display** (inspect) a part, assembly, scene, sketch, or interface in the ``PartCAD Viewer``; parts can
+- **Display** (inspect) a part, assembly, scene, sketch, or interface in the ``Digital Thread``; parts can
   also be opened for display and editing together, or their source edited directly.
 - **Test** a part, assembly, or scene.
 - **Open in >** — Open the object's own source file in the application that made it: **FreeCAD** or
@@ -50,13 +50,13 @@ Objects
   brought back into the object's own file, converted back when it had been converted.
 
 The Explorer also lists the ``software`` a package ships. Selecting one shows its path and its ``fileHash``
-in the Inspector and leaves the ``PartCAD Viewer`` as it is: software is a file, not geometry, so there is
+in the Inspector and leaves the ``Digital Thread`` as it is: software is a file, not geometry, so there is
 nothing to render.
 
-The PartCAD Viewer
+The Digital Thread
 ------------------
 
-Displaying an object opens the ``PartCAD Viewer``, which is a strip of tabs over that one object rather than
+Displaying an object opens the ``Digital Thread``, which is a strip of tabs over that one object rather than
 a bare canvas: groups of tabs, each with tabs of its own -- **Design**, **Analysis** and **Manufacturing**,
 followed by **Validation** and **Operations**, which have nothing in them yet and are always disabled. Design
 is always the first:

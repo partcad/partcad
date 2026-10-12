@@ -126,11 +126,11 @@ msgstr ""
 #: ../../source/features.rst:38
 msgid ""
 "**Display** (inspect) a part, assembly, scene, sketch, or interface in "
-"the ``PartCAD Viewer``; parts can also be opened for display and editing "
+"the ``Digital Thread``; parts can also be opened for display and editing "
 "together, or their source edited directly."
 msgstr ""
 "**Display** (просмотр) детали, сборки, сцены, эскиза или интерфейса в "
-"``PartCAD Viewer``; детали также можно открыть для одновременного "
+"``Digital Thread``; детали также можно открыть для одновременного "
 "отображения и редактирования или редактировать их исходный код напрямую."
 
 #: ../../source/features.rst:40
@@ -174,27 +174,27 @@ msgstr ""
 msgid ""
 "The Explorer also lists the ``software`` a package ships. Selecting one "
 "shows its path and its ``fileHash`` in the Inspector and leaves the "
-"``PartCAD Viewer`` as it is: software is a file, not geometry, so there "
+"``Digital Thread`` as it is: software is a file, not geometry, so there "
 "is nothing to render."
 msgstr ""
 "Explorer перечисляет также ``software``, которое поставляет пакет. При "
 "выборе такого элемента в инспекторе показываются его путь и его "
-"``fileHash``, а ``PartCAD Viewer`` остаётся как есть: программное "
+"``fileHash``, а ``Digital Thread`` остаётся как есть: программное "
 "обеспечение — это файл, а не геометрия, поэтому отрисовывать нечего."
 
 #: ../../source/features.rst:57
-msgid "The PartCAD Viewer"
-msgstr "PartCAD Viewer"
+msgid "The Digital Thread"
+msgstr "Digital Thread"
 
 #: ../../source/features.rst:59
 msgid ""
-"Displaying an object opens the ``PartCAD Viewer``, which is a strip of "
+"Displaying an object opens the ``Digital Thread``, which is a strip of "
 "tabs over that one object rather than a bare canvas: groups of tabs, each"
 " with tabs of its own -- **Design**, **Analysis** and **Manufacturing**, "
 "followed by **Validation** and **Operations**, which have nothing in them"
 " yet and are always disabled. Design is always the first:"
 msgstr ""
-"Отображение объекта открывает ``PartCAD Viewer``, который представляет собой полосу вкладок над этим одним объектом, а не голый холст: группы вкладок, в каждой из которых есть собственные вкладки, — **Design**, **Analysis** и **Manufacturing**, а за ними **Validation** и **Operations**, в которых пока ничего нет и которые всегда отключены. Design всегда идёт первой:"
+"Отображение объекта открывает ``Digital Thread``, который представляет собой полосу вкладок над этим одним объектом, а не голый холст: группы вкладок, в каждой из которых есть собственные вкладки, — **Design**, **Analysis** и **Manufacturing**, а за ними **Validation** и **Operations**, в которых пока ничего нет и которые всегда отключены. Design всегда идёт первой:"
 
 #: ../../source/features.rst:64
 msgid "**Design** — the object itself, three ways, in tabs of its own:"

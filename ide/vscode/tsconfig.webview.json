@@ -1,4 +1,4 @@
-// The PartCAD Viewer's renderer is compiled differently from the extension.
+// The Digital Thread's renderer is compiled differently from the extension.
 //
 // The extension host is CommonJS ("module": "Node16" in the base config), but
 // the viewer runs in a webview and is bundled by webpack, and three.js ships its

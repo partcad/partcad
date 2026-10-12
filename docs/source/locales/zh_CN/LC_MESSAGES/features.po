@@ -110,10 +110,10 @@ msgstr "从已有文件 **导入** 一个零件、装配体、场景或草图。
 #: ../../source/features.rst:38
 msgid ""
 "**Display** (inspect) a part, assembly, scene, sketch, or interface in "
-"the ``PartCAD Viewer``; parts can also be opened for display and editing "
+"the ``Digital Thread``; parts can also be opened for display and editing "
 "together, or their source edited directly."
 msgstr ""
-"在 ``PartCAD Viewer`` 中 **显示** "
+"在 ``Digital Thread`` 中 **显示** "
 "（查看）零件、装配体、场景、草图或接口；此外，零件还可以打开以同时进行显示和编辑，或者直接编辑其源代码。"
 
 #: ../../source/features.rst:40
@@ -150,25 +150,25 @@ msgstr ""
 msgid ""
 "The Explorer also lists the ``software`` a package ships. Selecting one "
 "shows its path and its ``fileHash`` in the Inspector and leaves the "
-"``PartCAD Viewer`` as it is: software is a file, not geometry, so there "
+"``Digital Thread`` as it is: software is a file, not geometry, so there "
 "is nothing to render."
 msgstr ""
 "Explorer 还会列出包所附带的 ``software`` 。选中其中一项，Inspector 中会显示它的路径和 ``fileHash`` "
-"，而 ``PartCAD Viewer`` 保持原样：软件是文件而不是几何体，没有什么可渲染的。"
+"，而 ``Digital Thread`` 保持原样：软件是文件而不是几何体，没有什么可渲染的。"
 
 #: ../../source/features.rst:57
-msgid "The PartCAD Viewer"
-msgstr "PartCAD Viewer"
+msgid "The Digital Thread"
+msgstr "Digital Thread"
 
 #: ../../source/features.rst:59
 msgid ""
-"Displaying an object opens the ``PartCAD Viewer``, which is a strip of "
+"Displaying an object opens the ``Digital Thread``, which is a strip of "
 "tabs over that one object rather than a bare canvas: groups of tabs, each"
 " with tabs of its own -- **Design**, **Analysis** and **Manufacturing**, "
 "followed by **Validation** and **Operations**, which have nothing in them"
 " yet and are always disabled. Design is always the first:"
 msgstr ""
-"显示一个对象会打开 ``PartCAD Viewer`` 。它不是一块空白画布，而是围绕这一个对象铺开的一排标签：若干标签组，每组下面又有自己的标签—— **设计** 、 **分析** 和 **制造** ，其后是 **验证** 和 **运维** ，后两组目前还是空的，始终处于禁用状态。设计组永远排在第一位："
+"显示一个对象会打开 ``Digital Thread`` 。它不是一块空白画布，而是围绕这一个对象铺开的一排标签：若干标签组，每组下面又有自己的标签—— **设计** 、 **分析** 和 **制造** ，其后是 **验证** 和 **运维** ，后两组目前还是空的，始终处于禁用状态。设计组永远排在第一位："
 
 #: ../../source/features.rst:64
 msgid "**Design** — the object itself, three ways, in tabs of its own:"

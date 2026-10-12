@@ -199,7 +199,7 @@ def show(
     keep_camera=False,
     reply_timeout: float = REPLY_TIMEOUT,
 ) -> dict:
-    """Display one already-tessellated object in the IDE's PartCAD Viewer.
+    """Display one already-tessellated object in the IDE's Digital Thread.
 
     'obj' is the root node of the object's tree, as PartCAD's
     'Shape.get_representation(ctx, "gltf")' produces it: nodes carrying geometry,
