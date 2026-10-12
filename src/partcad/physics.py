@@ -27,6 +27,11 @@ One order, for every value, and the same everywhere:
                  that states its mass and nothing else turns the way its solid
                  says it does, at the weight it says it is
   friction       stated, else the material's 'mu'
+  volume         measured, never stated: what the solid encloses, in mm^3. Not a
+                 property any format writes - it is what a body displaces of
+                 the fluid a scene is filled with, which is how a simulation
+                 buoys it (see 'partcad.scene_world') - and it is handed over
+                 so that no exporter has to measure the geometry to find it
 
 Every density is in kg/m^3: a material's, a part's and an export's are one unit,
 so nothing here converts one. The arithmetic - a volume and a density into a
@@ -103,7 +108,11 @@ DERIVED_KEY = "mass"
 # that changing what an entry holds moves every entry to a new key rather than
 # reading an old one back under new rules - the same arrangement as
 # 'cache_hash.VERSION', for an entry that version does not describe.
-_DERIVED_FORMAT = 1
+#
+#   1: mass, centre of mass and inertia.
+#   2: and the 'volume' the solid encloses, which a simulation buoys it by. An
+#      entry written under 1 has none, and read back would buoy nothing.
+_DERIVED_FORMAT = 2
 
 # What a derivation reads besides the geometry: the density it weighs the solid
 # at, and every stated value that stands in for a derived one. Each goes into
@@ -236,6 +245,12 @@ def _derive(physics, measurements):
     unit_inertia = measured.get(shape_envelope.METADATA_UNIT_INERTIA)
     if volume is None:
         return derived, sources, None
+    # What the solid displaces, whatever it weighs: a float states its mass and
+    # still pushes aside its whole volume of water. Measured, so never one a
+    # part states, and never derived from a mass and a density, which for a
+    # part that states its mass would be the volume of something else.
+    derived[mass_properties.VOLUME_KEY] = volume
+    sources[mass_properties.VOLUME_KEY] = "measured"
 
     density = _positive(physics.get("density"))
     if "mass" not in physics and density is not None:

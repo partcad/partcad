@@ -80,6 +80,38 @@ pc export -a -t sim-mujoco:mjcf -O ./ unstable
 pc ide open --with mujoco ./unstable.xml
 ```
 
+### `float` and `block` in a tank of water
+
+A scene says what its world is like as well as where things are in it: the
+`gravity:` in it, and the `medium:` it is filled with, which is a material
+like any other. `tank` is filled with `water`, and holds whatever is
+simulated in it 100 mm above its floor.
+
+```shell
+pc sim -f sinks block    # the aluminium block sinks to the bottom of the tank
+pc sim float             # the float rises -- and, in the default scene, falls
+```
+
+`float` is the same 20 mm cube as `block`, standing for a sealed float that
+weighs 3 g: less than the 8 g of water it displaces. Its `simulate:` runs it
+twice, in the tank and in the default scene, and the two validations are
+opposite claims about the same part. The default scene is a vacuum, as every
+scene that states no `medium:` is, so there the float falls like anything
+else.
+
+The float states its own `mass` because it is hollow, which its geometry
+does not say; PartCAD works out the rest -- its centre of mass and its
+inertia, from its solid, scaled to that mass -- and so does the volume of
+water it displaces. MuJoCo models a fluid as drag alone; the buoyancy is
+written by the MJCF exporter, and the water has no surface, so the float
+rises for as long as the run lasts rather than coming to rest at a
+waterline. See
+[partcad-sim-mujoco](https://github.com/partcad/partcad-sim-mujoco) for what
+is and is not modelled.
+
+`water` is declared below so that this example stays self-contained; the
+standard catalogue's is `//pub/std/manufacturing/material/fluid:water`.
+
 
 ## Sub-Packages
 
@@ -125,6 +157,12 @@ pc ide open --with mujoco ./unstable.xml
 <li>material: :ptfe</li>
 </ul>
 </td>
+</tr></table>
+
+### float
+<table><tr>
+<td valign=top><a href="block.py"><img src="././float.svg" alt="float" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>A sealed float - a 20 mm cube that weighs 3 g, less than the 8 g of water it displaces</td>
 </tr></table>
 
 <br/><br/>
