@@ -55,13 +55,27 @@ the graphics card back.
 
 ### 3Dconnexion SpaceMouse
 
-The 3D view can be navigated with a 3Dconnexion SpaceMouse: the cap moves the model the way it is pushed and
-twisted, and the **Fit** button (the right-hand one on a two-button device) frames it again. On Windows and
-macOS the viewer reads the device on its own — move the cap once with the viewer open for the editor to notice
-it. On Linux it reads it from [spacenavd](https://spacenav.sourceforge.net/), which has to be installed and
-running (`sudo apt install spacenavd`, for example). Only the viewer in the focused window moves.
-`partcad.spaceMouse.sensitivity` sets the speed, `partcad.spaceMouse.invert` reverses individual axes, and
-`partcad.spaceMouse.enabled` turns it off.
+The 3D view, and the model of an FEA or CFD result, can be navigated with a 3Dconnexion SpaceMouse: the cap moves
+the model the way it is pushed and twisted, and the **Fit** button (the right-hand one on a two-button device)
+frames it again. On Windows and macOS the viewer reads the device on its own — move the cap once with the viewer
+open for the editor to notice it. On Linux it reads it from [spacenavd](https://spacenav.sourceforge.net/), which
+has to be installed and running (`sudo apt install spacenavd`, for example). Only the viewer in the focused
+window moves, and only the tab on screen. `partcad.spaceMouse.sensitivity` sets the speed,
+`partcad.spaceMouse.invert` reverses individual axes, and `partcad.spaceMouse.enabled` turns it off.
+
+On Linux, spacenavd is read by the part of the extension that runs where the workspace is. In a remote window —
+a container, an SSH host — that is not the machine the SpaceMouse is plugged into, so spacenavd's socket has to
+be brought there; the `PartCAD` output says so when a remote window finds none. PartCAD's own development
+container binds the host's (restart the container after restarting spacenavd). Over Remote-SSH, forward it in
+`~/.ssh/config`, where `1000` is your user id on the remote machine (`id -u` there):
+
+```text
+Host my-workstation
+    RemoteForward /run/user/1000/spnav.sock /var/run/spnav.sock
+```
+
+`StreamLocalBindUnlink yes` in the remote machine's `sshd_config` lets a reconnection replace the socket a
+dropped one left behind.
 
 ## The PartCAD terminal
 
@@ -178,11 +192,12 @@ in a tool that draws, next to what the extension does with it.
   already one (a STEP file, a CadQuery script) is converted to STL first and Blender is given that; an STL, an
   OBJ or a glTF is imported as it is. The converted copy lives under PartCAD's own directory for this
   workspace, never beside your file, and is reused until the object changes.
-* **Gazebo**, for a scene that *is* a Gazebo world -- one of type `world`, which is also what
-  **Export > Gazebo world...** writes out of any scene.
-* **MuJoCo**, for a scene held in a simulator's format -- one of type `mjcf` or `world`. MuJoCo reads MJCF
-  and no other model format, so a world is written out as MJCF first and MuJoCo is given that, the same way
-  a solid is converted for Blender.
+* **Gazebo**, for a scene that *is* a Gazebo world -- one of type `sim-gazebo:world`, which is also what
+  `pc export -S -t sim-gazebo:world` writes out of any scene.
+* **MuJoCo**, for a scene that *is* an MJCF model -- one of type `sim-mujoco:mjcf`, which is also what
+  `pc export -S -t sim-mujoco:mjcf` writes out of any scene. MuJoCo reads MJCF and no other model format, and
+  nothing converts a world into it on the way: MJCF is written by the MuJoCo plugin package, which the file
+  handed to MuJoCo has no package around it to reach.
 * **KiCad**, for a part of type `kicad`. What is opened is the board (`.kicad_pro`) beside the STEP the part
   is, because that is the file KiCad has anything to say about.
 

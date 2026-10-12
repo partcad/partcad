@@ -132,13 +132,18 @@ Any other is converted to the first one on the list that PartCAD can write, and
 changed, it is converted back into the object's own format and written over its
 source, where that source is a file (a STEP, an STL...) rather than a script.
 
-Two more are how an application that cannot read what it was handed still gets
-to open something. ``companions:`` names the extensions the application really
-opens, for a file that sits beside the one PartCAD was pointed at -- a ``kicad``
-part *is* the STEP file KiCad's CLI writes, and the board is the project next to
-it. ``sceneType:`` says which description language an application reads, for
-one that reads an arrangement rather than geometry: MuJoCo reads MJCF, so a
-Gazebo world it is pointed at is written out as MJCF first.
+Two more are about what an application is really handed. ``companions:`` names
+the extensions the application really opens, for a file that sits beside the one
+PartCAD was pointed at -- a ``kicad`` part *is* the STEP file KiCad's CLI writes,
+and the board is the project next to it. ``sceneType:`` says which description
+language an application reads, for one that reads an arrangement rather than
+geometry, and ``sceneExtensions:`` the extensions a file in it is stored in:
+MuJoCo reads MJCF, kept in ``.xml``. A scene in that language -- by its declared
+type, or else by one of those extensions, since the file itself is not read --
+is handed over as it is, and one in any other is refused rather than converted,
+with the export that writes it -- the language is the engine plugin's, and a
+file handed to ``pc ide open`` has no package around it to reach that plugin
+through.
 
 ``container:`` has the shape a plugin's implementation gives it -- ``image``, and
 ``python`` for an image whose ``python3`` is not on ``PATH`` -- and the container
@@ -259,8 +264,10 @@ release cycle of its own, so PartCAD ships the concept -- this section, the
 sandbox a plugin runs in, and the export a scene reaches it through -- and a
 package supplies the physics.
 `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the
-MuJoCo one: it is handed the scene as MJCF, steps it under gravity for
-``duration`` seconds of simulated time, and reports each body's position (in
+MuJoCo one: it is handed the scene as MJCF, steps it -- under the scene's
+gravity and through the fluid it is filled with, when it states either (see
+:ref:`scenes`) -- for ``duration`` seconds of simulated time, and reports each
+body's position (in
 millimetres) and orientation before and after. Running it needs no MuJoCo on the
 machine, since the plugin runs in a PartCAD sandbox that installs one.
 

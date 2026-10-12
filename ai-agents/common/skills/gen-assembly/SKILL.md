@@ -25,7 +25,9 @@ pc --no-ansi list parts          # what already exists to reuse
 ```
 
 Reuse existing parts; generate any missing component with the `/pc:gen-part`
-flow. Each part must pass `pc test` on its own before you compose it.
+flow. Each part must pass `pc test` on its own before you compose it, and name
+the material it is made of (`/pc:gen-part` §5): the assembly's mass is its
+parts' added up, and a part with none is simply left out of the sum.
 
 ## 3. Author the ASSY
 
@@ -497,11 +499,113 @@ assembly that uses it.
 Then adjust the placements or mates, re-test, and re-render. Iterate until every
 view matches. `pc ide view -a <name>` gives an interactive view.
 
-## 7. Finalize
+## 7. Make it ready to simulate
 
-Summarize the structure — parts, sub-assemblies, key placements — and how to view
-it (`pc ide view -a <name>`, or `pc render -a -t png --with-all <name>` for a
-picture with the connection metadata on it).
+An assembly that looks right in every view can still tip over, slide apart or
+sink, and nothing above notices. `pc sim` places it in a world, runs a physics
+engine and checks a claim about what happens; what it needs from you are the
+facts the engine cannot guess.
+
+**Weigh it.** `pc --no-ansi info -a <name>` adds up `MassProperties` over the
+parts — the total `mass` (kg), the combined `centerOfMass` (mm) and the inertia —
+and names any part whose mass is not known. Check the total against the real
+product, and that the centre of mass is where it has to be: over the footprint
+of whatever it stands on, and low for anything that must not tip. Fix a wrong
+mass in the part (`/pc:gen-part` §6), not by stating one on the assembly.
+
+**Put it on the floor.** A scene's floor is the plane z = 0, and the default
+scene places the assembly's origin there. Built from parts whose base is on
+z = 0 it needs nothing; whatever reaches below z = 0 needs an `offset:` that
+lifts it by exactly that much — more and it starts with a drop, less and it
+starts inside the floor.
+
+**State the claim the description makes.** When the user's intent is physical —
+it stands, it does not tip, it floats, it holds a load — write it as a
+`simulate:` with a `validation:`:
+
+```yaml
+dependencies:
+  sim-mujoco:   # PartCAD implements no simulator; this package is MuJoCo's
+    type: git
+    url: https://github.com/partcad/partcad-sim-mujoco.git
+
+assemblies:
+  <name>:
+    simulate:
+      stands:
+        desc: Set down on the floor, nothing slides, sinks or tips over
+        simulation: sim-mujoco:mujoco
+        offset: [[0, 0, 10], [0, 0, 1], 0]   # only if it reaches 10 mm below z = 0
+        validation: |
+          all(
+              max(abs(a - b) for a, b in zip(after["bodies"][n]["pos"], before["bodies"][n]["pos"])) < 5.0
+              and abs(sum(a * b for a, b in zip(after["bodies"][n]["quat"], before["bodies"][n]["quat"]))) > 0.996
+              for n in before["bodies"]
+          )
+```
+
+`before` and `after` give every body's `pos` (mm) and `quat` (`w x y z`) at the
+start and the end of the run, ten seconds by default. This one says no body
+moved more than 5 mm or turned more than 10° (`|q₀·q₁| > cos 5°`). Put each
+threshold between what settling does — a millimetre or so of contact softness —
+and what failure does: a part that falls moves its own size. The other claims
+are the same pattern:
+
+- *it floats*: in a scene filled with water (below), every body rises —
+  `min(after[...]["pos"][2] - before[...]["pos"][2] ...) > 20.0`. The water has
+  no surface, so a floating body rises for as long as the run lasts.
+- *it holds a load*: add the load as a part that states its `mass`, placed where
+  it bears, and claim that nothing moves.
+- *it falls*, *it slides off*, *it sinks*, where that is the point: the opposite
+  inequality.
+
+When a claim fails, fix the design, not the threshold.
+
+**Only gravity, contact and friction hold it together.** Every body in a run is
+free: `connect:` places the parts but does not fasten them, and `motion:` on an
+interface records the freedom a joint is meant to have without making it one.
+So something that stands only because it is fastened together — a cantilever, a
+wall bracket, a post fixed to its base — comes apart in the run. Report that as
+the limit it is; do not loosen the validation until it passes.
+
+**Under water, in the air, off Earth.** The default scene is Earth's gravity in a
+vacuum. Anything else is a scene that says so, which the `simulate:` names with
+`scene: :<scene>`:
+
+```yaml
+scenes:
+  underwater:
+    type: assy
+    path: underwater.assy
+    medium: //pub/std/manufacturing/material/fluid:seawater   # or fluid:water, fluid:air
+    gravity: [0, 0, -9.81]   # m/s^2: Moon -1.62, Mars -3.72, orbit 0
+    parameters:
+      subject: { type: string, default: <name> }      # pc sim sets this
+      subject_kind: { type: string, default: assembly } # or part
+```
+
+```yaml
+# underwater.assy -- it places the subject itself, so the simulate: has no offset:
+links:
+  - {{ param_subject_kind }}: "{{ param_subject }}"
+    name: subject
+    location: [[0, 0, 100], [0, 0, 1], 0]
+```
+
+**Run it:**
+
+```sh
+pc --no-ansi sim -a <name>          # every claim; exits non-zero when one fails
+pc --no-ansi sim --json -a <name>   # what the engine reported, before and after
+pc --no-ansi test -a <name>         # runs the same claims as its `sim` check
+```
+
+## 8. Finalize
+
+Summarize the structure — parts, sub-assemblies, key placements, total mass and
+what `pc sim` found — and how to view it (`pc ide view -a <name>`, or
+`pc render -a -t png --with-all <name>` for a picture with the connection
+metadata on it).
 
 Say what is still placed by coordinates and why, one reason per case. "The rest
 use `location:`" tells the next reader nothing; "these four sit where nothing

@@ -336,6 +336,23 @@ SCRIPT_KEY = "__script__"
 # sandbox and cannot import this.
 PROPERTIES_KEY = "properties"
 
+# The request key a scene's world travels to an implementation under: the
+# gravity it states and the fluid it is filled with (see 'Scene.world_facts()').
+#
+# Only beside 'properties: true', and only for a scene that states either. The
+# file types that declare 'properties' are the ones that state physics -- URDF,
+# SDFormat, MJCF -- and the world is physics too; every other file type (a
+# drawing, a STEP file) has nowhere to write a gravity, and asking it to carry
+# one would mean resolving the medium's material, and loading the package that
+# catalogues it, for a picture. A scene that states neither sends nothing, so an
+# exporter that has never heard of this key writes exactly what it always did.
+#
+# A plain key rather than a reserved '__world__', for the reason
+# 'PROPERTIES_KEY' is one: it is meant to be read by the implementation, and its
+# twin, 'wrapper_export.WORLD_KEY', is spelled out there because a wrapper runs
+# in a sandbox and cannot import this.
+WORLD_KEY = "world"
+
 # The request key that says whether the sandbox rebuilds the shape and assembly
 # envelopes into live OCCT geometry before the implementation sees them. The
 # wrapper has to know before it deserializes anything, which is why it travels
@@ -648,6 +665,29 @@ class Implementation:
             environment_requirements(self.project, {"pythonRequirements": self.python_requirements}),
             image=container.get("image") or self.docker_image,
         )
+
+    def source_cache_key(self) -> str:
+        """The code this implementation runs, as its package holds it.
+
+        The other half of what a cached answer of it is keyed on, beside
+        'environment_cache_key()': not only the script 'path' names but every
+        module it can import from its package -- the 'mujoco_common.py' beside
+        the MuJoCo plugin's scripts -- and, for a package PartCAD fetched from
+        git, the commit it is at. Without it a plugin release that changed only
+        a helper was answered with what the old helper produced. See
+        'partcad.source_key' for what is read, what is left out and why, and
+        what it costs.
+
+        Like the environment, it describes the package and never the machine:
+        relative paths, normalised line endings, no modification times.
+
+        Requires 'project', which 'materialize_script()' fills in.
+        """
+        from . import source_key
+
+        if self.project is None:
+            raise ValueError("The '%s' implementation has no package to key its sources on" % self.format_name)
+        return source_key.package_key(self.project)
 
 
 def normalize(config) -> dict:

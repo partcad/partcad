@@ -54,6 +54,7 @@ currency
 cut
 cuts
 cwd
+cylindrical
 damper
 damping
 decode
@@ -70,6 +71,7 @@ display
 distance
 docker
 docs
+dof
 drill
 dropped
 duplicates
@@ -187,6 +189,7 @@ material
 materials
 mates
 max
+medium
 mesh
 metal
 method
@@ -327,6 +330,7 @@ torque
 turn
 type
 types
+universal
 unless
 upper
 urdf
@@ -338,6 +342,7 @@ velocity
 vendor
 version
 via
+viscosity
 visibility
 volume
 width

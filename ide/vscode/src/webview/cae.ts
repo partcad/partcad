@@ -37,6 +37,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { el, empty, placeholder } from './dom';
 import { IMAGE_TYPES, ImageView, decodeBase64 } from './image';
 import { CaeData, CaeFinding } from './messages';
+import { Navigable, onScreen, spaceMouse } from './spacemouse';
 import {
     SOFTWARE_TRIANGLE_BUDGET,
     Surface,
@@ -84,6 +85,8 @@ class MeshView {
     private readonly scene = new THREE.Scene();
     private readonly camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100000);
     private controls: OrbitControls | undefined;
+    /** This view as the SpaceMouse moves it, for as long as the view exists. */
+    private navigable: Navigable | undefined;
     private observer: ResizeObserver | undefined;
     private notice: HTMLElement | undefined;
     private model: THREE.Object3D | undefined;
@@ -123,6 +126,21 @@ class MeshView {
             this.dirty = true;
         });
         this.controls = controls;
+
+        // A result is turned with the SpaceMouse as the 3D tab's model is, while
+        // its tab is on screen, and "Fit" frames it the way it was first shown.
+        this.navigable = {
+            camera: this.camera,
+            target: controls.target,
+            shown: () => onScreen(this.host),
+            fit: () => {
+                if (this.model !== undefined) {
+                    this.frame(this.model);
+                }
+            },
+            moving: (moving) => controls.dispatchEvent({ type: moving ? 'start' : 'end' }),
+        };
+        spaceMouse.attach(this.navigable);
 
         // The painter has no pi in its Lambert term (see 'painter.ts').
         const scale = this.software ? 1 / Math.PI : 1;
@@ -202,6 +220,9 @@ class MeshView {
         }
         const tick = () => {
             this.frameRequest = requestAnimationFrame(tick);
+            if (this.navigable !== undefined) {
+                spaceMouse.drive(this.navigable, performance.now());
+            }
             this.controls?.update();
             if (this.surface === undefined || (this.software && !this.dirty)) {
                 // The painter's picture on screen is still the picture: a frame
@@ -243,6 +264,10 @@ class MeshView {
             this.frameRequest = undefined;
         }
         this.observer?.disconnect();
+        if (this.navigable !== undefined) {
+            spaceMouse.detach(this.navigable);
+            this.navigable = undefined;
+        }
         this.controls?.dispose();
         this.drop();
         this.notice?.remove();

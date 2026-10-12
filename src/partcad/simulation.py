@@ -38,6 +38,15 @@ holding the subject, which is what "does this part stand up on its own" means
 and is most of what anybody asks. ``simulation`` does: PartCAD implements no
 simulator (see 'output.SIMULATE'), so a package imports one and says which.
 
+What the world is *like* is the scene's to say, not the declaration's: the
+gravity in it and the fluid it is filled with (see 'partcad.scene_world'). The
+built-in scene states neither -- Earth's gravity as the engine has it, in a
+vacuum -- and a package that wants its part simulated under water writes a scene
+that says so, the way it would for a fixture to drop the part onto. The one
+override is the plugin's: a ``params: {gravity: ...}`` is handed to the plugin
+like any other of its parameters and applied over the scene's for that run, so
+the order is that, then the scene, then the engine's own default.
+
 What is deliberately *not* here: PartCAD does not know what a simulation
 result means. It exports the scene, starts the plugin, hands the two objects the
 plugin produced to the expression the package wrote, and reports what the
@@ -54,7 +63,7 @@ import typing
 
 from . import cache_artifacts
 from . import logging as pc_logging
-from . import output, shape_envelope, wrapper
+from . import output, shape_envelope, source_key, wrapper
 from .process_crash import describe_exit_code
 from .utils import resolve_resource_path
 
@@ -451,6 +460,14 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration, r
             impl = _resolve_plugin_of(ctx, shape, declaration)
             result.plugin = impl
             scene = _resolve_scene_of(ctx, shape, kind, declaration)
+            # The gravity the scene states and the fluid it is filled with,
+            # worked out before anything is exported: a medium nothing answers
+            # to is a mistake in the declaration, and saying so here says it
+            # with the scene's name on it instead of as a file that was never
+            # written. The same facts are what the exporter is handed, and part
+            # of what the answer is cached under -- see '_artifact_hash'.
+            await scene.prepare_async()
+            world = scene.world_facts(ctx)
 
             directory = run_directory(ctx, object_name, declaration.name)
             # What the directory holds is this run's and nothing else's: the
@@ -465,7 +482,7 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration, r
             # and is evaluated below either way, so editing it re-judges the
             # run rather than repeating it.
             cache = getattr(ctx, "cache_artifacts", None)
-            artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind)
+            artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind, world)
             result.artifact_key = artifact.get() if artifact is not None else None
             result.result = await cache_artifacts.restore_async(cache, artifact, directory=directory)
             if result.result is None:
@@ -543,10 +560,15 @@ async def question_key_async(ctx, shape, kind: str, declaration: SimulationDecla
     try:
         impl = _resolve_plugin_of(ctx, shape, declaration)
         scene = _resolve_scene_of(ctx, shape, kind, declaration)
+        # The scene's world is part of what 'run_async' keys a run on, so it is
+        # part of this key too; a world that cannot be made sense of is a run
+        # that will fail, and nothing is remembered about one.
+        await scene.prepare_async()
+        world = scene.world_facts(ctx)
     except Exception as e:  # pylint: disable=broad-except
         pc_logging.debug("%s: the simulation '%s' has no key: %s" % (object_name, declaration.name, e))
         return None
-    artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind)
+    artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind, world)
     return artifact.get() if artifact is not None else None
 
 
@@ -578,14 +600,22 @@ def _scene_export(ctx, scene, impl, directory: str):
     return format_name, export_impl, scene_project
 
 
-async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str):
+async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str, world=None):
     """The cache key of one simulation's answer, or None when it has none.
 
     The scene's own key - which covers the subject, since the subject is a
     parameter of the scene and the scene is keyed on what it links to - and
     everything the run adds to it: the plugin, its resolved options and its
     sandbox, what the declaration hands it, how the scene is written for it,
-    and the content of both scripts and of the wrappers that run them.
+    and the content of both scripts and of the wrappers that run them -- and of
+    every module those can import from their packages ('source_key'), since a
+    plugin release that changes only 'mujoco_common.py' changes the answer.
+
+    And the scene's world as the facts it resolved to ('world'), not as the
+    declaration that names them. The scene's key covers its 'medium:' only as
+    the reference it is written as; the density behind that reference lives in
+    another package, which can be corrected without this one changing at all.
+    A run in water whose density was fixed is a different run.
 
     Never raises. A key that cannot be worked out is a run that is not cached,
     and the run itself is what reports why.
@@ -615,7 +645,17 @@ async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str)
             "format": format_name,
             "export": export_impl.config,
             "export_environment": export_impl.environment_cache_key(),
+            # What the two scripts import from their packages, and the
+            # revision a fetched one is at -- not only the scripts themselves,
+            # which 'files' already holds. See 'partcad.source_key'.
+            "source": impl.source_cache_key(),
+            "export_source": export_impl.source_cache_key(),
+            "wrappers": source_key.wrappers_key(),
         }
+        if world:
+            # Only when there is one, so that a scene that states neither keeps
+            # the key - and the cached answer - it had before scenes could.
+            question["world"] = world
         return cache_artifacts.question_hash("%s#%s" % (subject, declaration.name), subject_key, question, files)
     except Exception as e:  # pylint: disable=broad-except
         pc_logging.debug("%s: the simulation '%s' will not be cached: %s" % (subject, declaration.name, e))

@@ -572,7 +572,8 @@ can do applies to it. What it is, is a set of facts about a substance:
       full: <(optional) the full name, e.g. "Polylactic Acid">
       desc: <(optional) textual description>
       url: <(optional) where to read about it>
-      density: <(optional) density in g/mm^3>
+      density: <(optional) density in kg/m^3>
+      viscosity: <(optional) dynamic viscosity in Pa*s>
       mu: <(optional) coefficient of sliding friction, dimensionless>
       tags: <(optional) a list of free-form tags, or a single tag>
 
@@ -583,12 +584,48 @@ The short form gives the full name and nothing else:
   materials:
     nylon: Nylon
 
-Density is in ``g/mm^3``, the units every length in PartCAD is already in, so
-that a mass falls out of a volume without a conversion nobody remembers to
-apply. Datasheets quote ``g/cm^3``, which is 1000 times larger: PLA at
-1.32 g/cm^3 is declared as ``0.00132``. A material that states no density
-reports no mass, rather than a mass of zero -- nothing downstream could tell an
-invented figure apart from a stated one.
+Density is in ``kg/m^3``. It is the one unit PartCAD has for a density -- a
+material's, a part's own ``density`` property and an export's ``density``
+parameter are all in it, and so is every simulation format a part is written
+into -- so a density is never converted on its way anywhere, and there is no
+second spelling of it for a number to be mistaken for. Datasheets often quote
+``g/cm^3``, which is 1000 times smaller: PLA at 1.32 g/cm^3 is declared as
+``1320``. A material that states no density reports no mass, rather than a
+mass of zero -- nothing downstream could tell an invented figure apart from a
+stated one.
+
+A part made of a material is weighed at its density. Its mass, its centre of
+mass and its inertia are worked out from its solid and that density unless the
+part states them itself, and they are what ``pc info`` reports as
+``MassProperties`` and what every exporter writes -- the URDF one, and the
+simulation formats a plugin writes. See :ref:`properties` for the order.
+
+.. warning::
+
+  PartCAD used to take a material's density in ``g/mm^3``, a million times
+  smaller than the same density in ``kg/m^3``. A catalogue written for the old
+  unit makes every part made of its materials weigh a millionth of what it
+  should; one written for the new unit makes them weigh a million times too
+  much under a PartCAD that predates it. The catalogues PartCAD publishes
+  declare ``partcad: ">=..."`` for the first release that reads kg/m³, so an
+  older PartCAD refuses them rather than weighing anything wrong, and a
+  catalogue of your own should say the same.
+
+``viscosity`` is what a *fluid* states: how hard it resists being sheared, which
+is what a simulator drags a body moving through it with. It is the **dynamic**
+viscosity, in ``Pa*s``: water at 15 C is ``0.001138``, the number its datasheet
+prints and the one MuJoCo is handed. A part is rarely made of a fluid; a
+:ref:`scene <scenes>` is often filled with one, and names it as its ``medium``.
+
+.. note::
+
+  **Every physical quantity PartCAD states is SI, except lengths and angles.**
+  Lengths are millimetres and angles degrees, as everywhere else in PartCAD;
+  everything else -- a density (``kg/m^3``), a viscosity (``Pa*s``), a mass
+  (``kg``), an inertia (``kg*m^2``), a force (``N``), the gravity of a scene
+  (``m/s^2``) -- is in the SI unit for it, with no prefix. That is the rule the
+  ``how:`` section of an assembly already follows (see :doc:`assy`), and it is
+  what lets a value go into a simulation format as it was written.
 
 ``tags`` is free-form on purpose. There is no controlled vocabulary of material
 properties that survives contact with real catalogues, and imposing one would
@@ -613,8 +650,9 @@ List what a package catalogues with ``pc list materials`` (and
 Standard catalogues
 -------------------
 
-The PartCAD index publishes two families of standard materials, so that a part
-made of something ordinary need not restate any of the above:
+The PartCAD index publishes three families of standard materials, so that a part
+made of something ordinary -- or a scene filled with it -- need not restate any
+of the above:
 
 - ``//pub/std/manufacturing/material/plastic`` -- polymers: the commodity and
   printable thermoplastics (``pla``, ``abs``, ``asa``, ``petg``, ``pc``), the
@@ -627,6 +665,11 @@ made of something ordinary need not restate any of the above:
   their standard designation and temper: ``al-5052-h32``, ``al-6061-t6``,
   ``al-7075-t6``, ``steel-4130``, ``ss-316l``, ``ti-6al-4v``, ``inconel-718``
   and the rest of what robotics, aviation and automotive parts are made of.
+
+- ``//pub/std/manufacturing/material/fluid`` -- what a scene is filled with:
+  ``air`` (the ICAO standard atmosphere at sea level), ``water`` (fresh) and
+  ``seawater`` (standard seawater), each at 15 C with its density and its
+  viscosity. There is no ``vacuum``: a scene that names no medium is one.
 
 An alloy is named ``<metal>-<designation>-<temper>`` rather than by the bare
 designation for two reasons: ``5052:`` in YAML is the *number* 5052 rather than

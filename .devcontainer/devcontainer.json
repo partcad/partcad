@@ -1,6 +1,6 @@
 {
   "name": "PartCAD Development Environment",
-  "image": "ghcr.io/partcad/partcad-devcontainer:0.8.168",
+  "image": "ghcr.io/partcad/partcad-devcontainer:0.8.180",
   "remoteEnv": {
     // TODO: @alexanderilyin do not patch PATH here but make `mamba` discoverable.
     "PATH": "${containerEnv:PATH}:/home/vscode/miniforge3/bin",
@@ -61,8 +61,17 @@
     // directory and nothing here bridges it -- see host-sockets-init.cmd. That
     // costs Windows nothing it had: the editor forwards its own agent there as
     // everywhere, and CI runs this job on ubuntu.
-    "-v", "/tmp/partcad-devcontainer-${localEnv:USER}/ssh-agent.sock:/run/host-ssh-agent.sock"
-    // All three are "-v" rather than "mounts" entries deliberately: "mounts"
+    "-v", "/tmp/partcad-devcontainer-${localEnv:USER}/ssh-agent.sock:/run/host-ssh-agent.sock",
+    // spacenavd, resolved by the same script, so that a SpaceMouse plugged into a
+    // Linux host moves the PartCAD Viewer: the extension reading it runs in here,
+    // and spacenavd out there. Bound where every spacenavd client looks first, so
+    // nothing in here has to be told where. Docker binds the socket the link names
+    // when the container starts, so a spacenavd restarted on the host is reached
+    // again once the container has been restarted too. Where there is no spacenavd
+    // the script leaves an empty file rather than nothing -- its comment says why.
+    // On Windows and macOS the viewer reads the device itself and needs none of it.
+    "-v", "/tmp/partcad-devcontainer-${localEnv:USER}/spnav.sock:/var/run/spnav.sock"
+    // All four are "-v" rather than "mounts" entries deliberately: "mounts"
     // turns into "--mount", which aborts `devcontainer up` when the source does
     // not exist, whereas "-v" leaves an empty directory in its place, which the
     // container side reads as "nothing here" and passes over in silence.

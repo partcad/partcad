@@ -280,10 +280,14 @@ Four things about it are load-bearing:
 
 **A SpaceMouse arrives by two roads, and `src/webview/spacemouse.ts` is the only file that knows what its axes
 mean.** On Windows and macOS the renderer reads it through the Gamepad API; on Linux the extension host reads
-spacenavd's socket (`src/viewer/spacenav.ts`) and forwards the events untouched, because Chromium does not see
-the device there. Do not convert spacenavd's values in the host: the test that holds the two roads to each other
-(`src/test/suite/viewerSpaceMouse.test.ts`) can only do so while both conversions sit side by side. See "A
-SpaceMouse" in [docs/partcad-viewer.md](./docs/partcad-viewer.md).
+spacenavd's socket (`src/viewer/spacenav.ts`) and forwards the events untouched, because spacenavd holds the
+device and Chromium sees nothing of it. Do not convert spacenavd's values in the host: the test that holds the
+two roads to each other (`src/test/suite/viewerSpaceMouse.test.ts`) can only do so while both conversions sit
+side by side. The extension host runs where the workspace is, so in this repository's dev container spacenavd
+is the host's, bound in by `.devcontainer/host-sockets-init.sh`. Every 3D pane attaches to the panel's one
+`spaceMouse` as a `Navigable` and drives it from its own render loop, and only the pane on screen moves; a new
+3D pane that does not attach is one the device does nothing in. See "A SpaceMouse" in
+[docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 Geometry reaches the viewer already tessellated: `partcad` renders to binary glTF in a sandbox and sends it
 compressed, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party
@@ -623,7 +627,7 @@ applications, each offered for the objects it can actually open:
 | FreeCAD | `partcad.openInFreeCAD` | parts and assemblies |
 | Blender | `partcad.openInBlender` | parts and assemblies |
 | Gazebo | `partcad.openInGazebo` | scenes of type `world` (`viewItem == sceneWorld`) |
-| MuJoCo | `partcad.openInMuJoCo` | scenes of type `mjcf` or `world` (`viewItem == sceneMjcf` or `sceneWorld`) |
+| MuJoCo | `partcad.openInMuJoCo` | scenes of type `mjcf` (`viewItem == sceneMjcf`) |
 | KiCad | `partcad.openInKiCad` | parts of type `kicad` (`viewItem == partKicad`) |
 
 The narrow ones are why `PartcadItem` gives those objects a context value of their own: `viewItem` is one
@@ -631,9 +635,10 @@ string compared exactly, so "a scene Gazebo can open" and "a part KiCad can open
 values. Each is then added back to every other clause that names their kind, because a world scene is a scene
 everywhere else and a KiCad part is a part.
 
-MuJoCo is offered for both scene formats and Gazebo for only one, which is not an oversight: `pc ide open`
-converts a world to MJCF on the way (a scene conversion, the counterpart of the mesh one it does for
-Blender) and nothing converts the other way yet.
+Each engine is offered for its own scene format and not the other's, which is not an oversight: `pc ide open`
+converts no scene. MJCF and SDFormat are written by the engines' plugin packages, and a file handed to
+`pc ide open` has no package around it to reach either through, so a world sent to MuJoCo is refused with
+the export that writes MJCF. Offering the entry there would offer a refusal.
 
 **It never reaches the daemon, and there is no RPC method for it** -- a stronger version of the rule
 `pc lint --file` follows. A daemon can be remote: "open this in FreeCAD" sent to one would put a window on

@@ -105,15 +105,21 @@ def test_no_tags_is_an_empty_list_not_none(root):
 #
 
 
-def test_density_is_in_the_units_partcad_measures_in(root):
-    pla = root.get_material("pla")
-    assert pla.density == pytest.approx(0.00132)
-    # Datasheets quote g/cm^3, which is 1000x larger.
-    assert pla.density_g_cm3 == pytest.approx(1.32)
+def test_density_is_in_kg_per_cubic_metre(root):
+    """The one unit PartCAD has for a density: a datasheet's 1.32 g/cm^3 is 1320."""
+    assert root.get_material("pla").density == pytest.approx(1320.0)
+    assert root.get_material("abs").density == pytest.approx(1070.0)
 
 
-def test_mass_is_volume_times_density(root):
-    assert root.get_material("pla").mass(1000.0) == pytest.approx(1.32)
+def test_mass_is_volume_times_density_in_kilograms(root):
+    """A litre of water weighs a kilogram; a cubic centimetre of PLA 1.32 grams.
+
+    Pinned against numbers worked out by hand rather than against a constant,
+    so that the exponent being the wrong way round is what fails.
+    """
+    water = pc_material.Material("water", "//", {"density": 1000.0})
+    assert water.mass(1.0e6) == pytest.approx(1.0)
+    assert root.get_material("pla").mass(1000.0) == pytest.approx(0.00132)
 
 
 def test_a_material_with_no_density_reports_no_mass(root):
@@ -121,7 +127,6 @@ def test_a_material_with_no_density_reports_no_mass(root):
     # invented mass apart from a stated one.
     mystery = root.get_material("mystery")
     assert mystery.density is None
-    assert mystery.density_g_cm3 is None
     assert mystery.mass(1000.0) is None
 
 
@@ -177,17 +182,24 @@ def test_what_a_material_lends_a_shape_is_stated_in_shape_terms(root):
     """So merging it into a shape's own physics is an update, not a translation."""
     from partcad import material as pc_material
 
-    assert pc_material.physics_of(root.get_material("pla")) == {"friction": 0.35}
+    # The density as it was declared: a part's 'density' and a material's are
+    # one unit, so lending one is a copy.
+    assert pc_material.physics_of(root.get_material("pla")) == {
+        "friction": 0.35,
+        "density": pytest.approx(1320.0),
+    }
+    assert pc_material.physics_of(root.get_material("abs")) == {"density": pytest.approx(1070.0)}
     # A material that states nothing this table carries lends nothing, which is
-    # different from lending a default: the simulator's own is what is left.
-    assert pc_material.physics_of(root.get_material("abs")) == {}
+    # different from lending a default: the simulator's own friction and the
+    # export's own density are what is left.
+    assert pc_material.physics_of(root.get_material("mystery")) == {}
+    assert pc_material.physics_of(root.get_material("nylon")) == {}
 
 
-def test_info_reports_both_density_units(root):
+def test_info_reports_the_density_in_kg_per_cubic_metre(root):
     info = root.get_material("pla").info()
     assert info["Formal"] == "PLA"
-    assert "g/mm^3" in info["Density"]
-    assert "g/cm^3" in info["Density"]
+    assert info["Density"] == "1320 kg/m^3"
 
 
 def test_info_omits_what_was_not_declared(root):
@@ -240,9 +252,8 @@ def test_a_shape_reports_what_it_is_made_of(ctx, root):
     material = info["Material"]
     assert material["Formal"] == "PLA"
     assert material["Full"] == "Polylactic Acid"
-    # Both units, the same way 'pc info' on the material itself reports them.
-    assert "0.00132 g/mm^3" in material["Density"]
-    assert "1.32 g/cm^3" in material["Density"]
+    # The way 'pc info' on the material itself reports it.
+    assert material["Density"] == "1320 kg/m^3"
     assert material["Mu"] == "0.35"
     assert material["Tags"] == "low-cost, biodegradable"
 
