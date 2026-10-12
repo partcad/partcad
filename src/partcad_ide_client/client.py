@@ -169,7 +169,7 @@ def _send(message: dict, reply_timeout: float = REPLY_TIMEOUT) -> dict:
                 if attempt == 1:
                     raise
         # Unreachable: the loop either returns or raises.
-        raise ViewerNotAvailable("failed to reach the Digital Thread")
+        raise ViewerNotAvailable("failed to reach the Digital Thread")  # pragma: no cover - unreachable, see above
 
 
 def disconnect():
