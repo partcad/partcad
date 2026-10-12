@@ -649,6 +649,29 @@ class Implementation:
             image=container.get("image") or self.docker_image,
         )
 
+    def source_cache_key(self) -> str:
+        """The code this implementation runs, as its package holds it.
+
+        The other half of what a cached answer of it is keyed on, beside
+        'environment_cache_key()': not only the script 'path' names but every
+        module it can import from its package -- the 'mujoco_common.py' beside
+        the MuJoCo plugin's scripts -- and, for a package PartCAD fetched from
+        git, the commit it is at. Without it a plugin release that changed only
+        a helper was answered with what the old helper produced. See
+        'partcad.source_key' for what is read, what is left out and why, and
+        what it costs.
+
+        Like the environment, it describes the package and never the machine:
+        relative paths, normalised line endings, no modification times.
+
+        Requires 'project', which 'materialize_script()' fills in.
+        """
+        from . import source_key
+
+        if self.project is None:
+            raise ValueError("The '%s' implementation has no package to key its sources on" % self.format_name)
+        return source_key.package_key(self.project)
+
 
 def normalize(config) -> dict:
     """A file type's configuration as a dict.

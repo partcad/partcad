@@ -25,7 +25,7 @@ from . import logging as pc_logging
 from . import material as pc_material
 from . import output, render_overlay
 from . import runtime as pc_runtime
-from . import sandbox_versions, shape_ports, wrapper
+from . import sandbox_versions, shape_ports, source_key, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import ShapeConfiguration
@@ -2406,7 +2406,10 @@ class Shape(ShapeConfiguration):
         conditions as the user wrote them and where they landed, a route's job
         and the machine it is for, every resolved option, the shape's material
         facts), which implementation it is, the sandbox it runs in, and the
-        content of its script and of the meta-wrapper that runs it. What the
+        content of its script and of the meta-wrapper that runs it -- and of
+        every module either can import from where it lives ('source_key'): a
+        solver package that keeps its mesher settings in a helper module is
+        another solver when only the helper changed. What the
         request carries the geometry in is left out, because the shape's key
         already covers it and the payload is the one thing in there that is not
         a description.
@@ -2432,6 +2435,11 @@ class Shape(ShapeConfiguration):
                 "reproducible": impl.reproducible,
                 # Declared, never observed: see 'Implementation.environment_cache_key'.
                 "environment": impl.environment_cache_key(),
+                # What the script imports from its package, and the revision a
+                # fetched one is at; and the wrappers 'wrapper_export.py'
+                # imports. See 'partcad.source_key'.
+                "source": impl.source_cache_key(),
+                "wrappers": source_key.wrappers_key(),
             }
             return cache_artifacts.question_hash(
                 "%s:%s#%s" % (self.project_name, self.name, label),

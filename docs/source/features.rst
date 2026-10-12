@@ -843,7 +843,13 @@ asks for them and runs nothing. The ``fea``, ``cfd`` and ``cam`` checks of
 The question is the object's own cache key plus everything the run adds to it:
 the boundary conditions and where they landed, a route's job and the machine it
 is cut on, the implementation and every option it resolved to, the sandbox it
-runs in, and the content of its script. Changing any of those runs it again. A simulation's ``validation:`` is not part
+runs in, the content of its script, and every Python module of the package it
+comes from -- the helper a plugin's scripts share as much as the scripts -- with
+the commit that package is at when it was fetched from a repository. Changing
+any of those runs it again, so a plugin release that changed only a helper is
+seen. What a run writes into a package, a model or a picture, is not part of the
+question, and neither is where the package is on disk or when its files were
+last touched. A simulation's ``validation:`` is not part
 of the question: it is evaluated again on every run, so editing it re-judges the
 cached run rather than repeating it.
 
