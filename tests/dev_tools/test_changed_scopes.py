@@ -259,6 +259,31 @@ def test_paths_land_in_the_bucket_they_belong_to(tmp_path, path, expected_bucket
     assert buckets == {expected_bucket}
 
 
+@pytest.mark.parametrize("path", ["src/partcad_utils/schema/assy.json", "src/partcad_utils/schema/partcad.json"])
+def test_a_schema_change_runs_the_extension_tests(tmp_path, path):
+    """The schemas are source, and also what the extension's dictionary is made of.
+
+    "ide/vscode/cspell/generate.js" writes "cspell/partcad.txt" from them, and
+    "spelling.test.ts" fails while that file is out of date. Classified as plain
+    "code", a schema change skipped "npm test" on its own pull request and left
+    "devel" red until another pull request happened to regenerate the file.
+
+    Not the IDE: the ".vsix" carries the generated dictionary, not the schemas.
+    """
+    subjects, buckets = classify(tmp_path, [path])
+    assert buckets == {"schema", "code"}
+    assert subjects["vsix"]
+    assert subjects["pytest"] and subjects["behave"] and subjects["wheel"]
+    assert not subjects["ide"]
+    assert not subjects["bundle"]
+
+
+def test_the_rest_of_partcad_utils_does_not_run_the_extension_tests(tmp_path):
+    subjects, buckets = classify(tmp_path, ["src/partcad_utils/assy_lint.py"])
+    assert buckets == {"code"}
+    assert not subjects["vsix"]
+
+
 def test_documentation_alone_runs_only_the_documentation(tmp_path):
     subjects, _ = classify(tmp_path, ["docs/source/index.rst", "README.md"])
     assert subjects["docs"]

@@ -12,6 +12,8 @@ on:
       - devel
     paths:
       - ide/vscode/**
+      # "cspell/partcad.txt" is generated from these, and a test checks it.
+      - src/partcad_utils/schema/**
 
 # As in "test.yml" and "build.yml": a pull request is re-run on every push to it,
 # and there is no reason to keep three runners busy on a revision nobody is
