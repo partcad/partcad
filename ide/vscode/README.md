@@ -178,11 +178,12 @@ in a tool that draws, next to what the extension does with it.
   already one (a STEP file, a CadQuery script) is converted to STL first and Blender is given that; an STL, an
   OBJ or a glTF is imported as it is. The converted copy lives under PartCAD's own directory for this
   workspace, never beside your file, and is reused until the object changes.
-* **Gazebo**, for a scene that *is* a Gazebo world -- one of type `world`, which is also what
-  **Export > Gazebo world...** writes out of any scene.
-* **MuJoCo**, for a scene held in a simulator's format -- one of type `mjcf` or `world`. MuJoCo reads MJCF
-  and no other model format, so a world is written out as MJCF first and MuJoCo is given that, the same way
-  a solid is converted for Blender.
+* **Gazebo**, for a scene that *is* a Gazebo world -- one of type `sim-gazebo:world`, which is also what
+  `pc export -S -t sim-gazebo:world` writes out of any scene.
+* **MuJoCo**, for a scene that *is* an MJCF model -- one of type `sim-mujoco:mjcf`, which is also what
+  `pc export -S -t sim-mujoco:mjcf` writes out of any scene. MuJoCo reads MJCF and no other model format, and
+  nothing converts a world into it on the way: MJCF is written by the MuJoCo plugin package, which the file
+  handed to MuJoCo has no package around it to reach.
 * **KiCad**, for a part of type `kicad`. What is opened is the board (`.kicad_pro`) beside the STEP the part
   is, because that is the file KiCad has anything to say about.
 

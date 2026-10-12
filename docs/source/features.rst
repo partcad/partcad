@@ -831,7 +831,7 @@ uncached too.
 Analyses, routes and simulations
 --------------------------------
 
-What ``pc cae fea``/``pc cae cfd``, ``pc cam`` and ``pc simulate`` produce is
+What ``pc cae fea``/``pc cae cfd``, ``pc cam`` and ``pc sim`` produce is
 cached in the same tiers: the result (the findings, what the route
 implementation counted, or what the simulator reported) together with the files
 the run wrote -- the analysis model, the route program, or the whole run

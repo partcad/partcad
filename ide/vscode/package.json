@@ -1080,7 +1080,7 @@
         },
         {
           "command": "partcad.openInMuJoCo",
-          "when": "view == partcadExplorer && (viewItem == sceneWorld || viewItem == sceneMjcf)"
+          "when": "view == partcadExplorer && viewItem == sceneMjcf"
         },
         {
           "command": "partcad.openInKiCad",
