@@ -117,19 +117,29 @@ switches off has to be its own buffer to be hideable.
 
 ### A SpaceMouse
 
-A 3Dconnexion SpaceMouse moves the camera in 3Dconnexion's **object mode**, the one its own driver defaults
-to: the cap is the model. Push it left and the model goes left, push it in and the model goes away, twist or
-tilt it and the model turns about what the camera is looking at. The second button — the right one of two, or
-the key labelled **Fit** — frames the model again. Moving the cap pauses the Animate rotation without unticking
-it. `partcad.spaceMouse.enabled`, `partcad.spaceMouse.sensitivity` and `partcad.spaceMouse.invert` (a list of
-the axes to reverse: `tx`, `ty`, `tz`, `rx`, `ry`, `rz`) tune it.
+A 3Dconnexion SpaceMouse moves the camera of the 3D tab, and of the model an FEA or CFD analysis returned, in
+3Dconnexion's **object mode**, the one its own driver defaults to: the cap is the model. Push it left and the
+model goes left, push it in and the model goes away, twist or tilt it and the model turns about what the camera
+is looking at. The second button — the right one of two, or the key labelled **Fit** — frames the model again.
+Moving the cap pauses the Animate rotation without unticking it. `partcad.spaceMouse.enabled`,
+`partcad.spaceMouse.sensitivity` and `partcad.spaceMouse.invert` (a list of the axes to reverse: `tx`, `ty`,
+`tz`, `rx`, `ry`, `rz`) tune it.
 
 The device reaches the renderer by one of two roads, and the platform picks, not the user:
 
 | Where | Road |
 | --- | --- |
 | Windows, macOS | The **Gamepad API**, inside the webview. Chromium enumerates HID multi-axis controllers as gamepads there and does not blocklist 3Dconnexion's ids, and VS Code's webview iframe needs no `allow="gamepad"` because Chromium's default allowlist for it is `*`. No driver is needed, and it works for a remote workspace too, because the webview is always drawn locally. Chromium reveals a gamepad to a page only after it has been moved once with that page open. |
-| Linux | **spacenavd**, read by the extension host over its socket (`/var/run/spnav.sock`, then `$XDG_RUNTIME_DIR/spnav.sock`) and forwarded over `postMessage`. The kernel reports a SpaceMouse as relative motion rather than as a joystick, so Chromium never offers it as a gamepad there. The extension host is on the workspace's machine, so over Remote-SSH or in a container this road finds nothing. |
+| Linux | **spacenavd**, read by the extension host over its socket (`/var/run/spnav.sock`, then `$XDG_RUNTIME_DIR/spnav.sock`) and forwarded over `postMessage`. spacenavd is how every Linux application reads the device, and it takes it for itself (`grab`, on by default in `spacenavd.conf`), so Chromium receives nothing from it while it runs; an older device reports relative motion besides, which is not a joystick at all. |
+
+The extension host is on the workspace's machine, which in a remote window is not the one the SpaceMouse is
+plugged into. Its spacenavd socket has to be brought there: this repository's dev container binds the host's at
+`/var/run/spnav.sock` (`.devcontainer/host-sockets-init.sh` resolves it, and leaves an empty file where there is
+none, because a bind that turns into a directory stops the container from starting), and over Remote-SSH a
+`RemoteForward` to `$XDG_RUNTIME_DIR/spnav.sock` does it — the README has the line. Docker binds the socket
+that is there when the container starts, so a spacenavd restarted under a running container is reached again
+only once the container has been restarted. A remote window that finds no socket says so, once, in the `PartCAD`
+output; nothing else would, since the cap is pushed and the model simply sits there.
 
 While spacenavd is connected the Gamepad API is not consulted, so a device both roads can see does not move
 the model twice. spacenavd tells every client about every push, so the host forwards its events only to a
@@ -139,6 +149,15 @@ The one place that knows what the device's axes mean is `src/webview/spacemouse.
 forwarded untouched, in its own frame and counts, and converted there (`fromSpacenav`), beside the Gamepad
 API's (`fromHid`); `src/test/suite/viewerSpaceMouse.test.ts` holds each road to the other through spacenavd's
 default axis map, because a reversed axis is plausible on screen and would not otherwise fail anything.
+
+Each 3D view of the panel — the 3D tab (`scene.ts`) and the model of an analysis (`cae.ts`) — attaches itself
+to the panel's one `spaceMouse` as a `Navigable` and asks it, once a frame from its own render loop, to move its
+camera. Only the view whose pane is on screen is moved, and **Fit** frames that one: every view goes on drawing
+while its pane is hidden, so a view that moved whenever the cap did would turn a camera nobody is looking at. A
+push starts and ends like a drag, through the orbit controls' `start` and `end` events, so the canvas painter
+draws a big model as boxes while the cap moves it too. The device's state lives with it rather than in `scene.ts`,
+because the 3D view's module finishes loading only once its surface exists, and the host can have said whether
+spacenavd is connected before then. A new 3D pane that does not attach is one the device does nothing in.
 
 Which button is **Fit** depends on the road and, for spacenavd, on the device. The Gamepad API numbers buttons
 in HID order, where the first two are Menu and Fit on every 3Dconnexion device, so Fit is always `1`.
@@ -214,7 +233,7 @@ the protocol has no authentication.
 | `src/webview/nodes.ts` | The vocabulary the renderer and the pane share about the tree |
 | `src/webview/frames.ts` | PartCAD's frame against glTF's, and the one conversion between them |
 | `src/webview/tree.ts` | The 3D view's control pane: the rows, the boxes, and what is to be drawn |
-| `src/webview/spacemouse.ts` | A SpaceMouse: which gamepad is one, what its axes mean, and how it moves the camera |
+| `src/webview/spacemouse.ts` | A SpaceMouse: which gamepad is one, what its axes mean, and how it moves the camera of the view on screen |
 | `src/viewer/spacenav.ts` | spacenavd's socket, read in the extension host for Linux |
 | `src/webview/render.ts` | The 2D and Draft tabs: the control pane, the file, and Save |
 | `src/webview/bvb.ts` | The Build vs Buy tab: which lines are needed and how many, and the table |

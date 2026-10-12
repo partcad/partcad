@@ -22,8 +22,14 @@ That is exactly how the agent came to be missing from CI in the first place, so
 these pin the joins rather than trusting the comments that describe them.
 """
 
+import os
 import pathlib
 import re
+import shutil
+import socket
+import subprocess
+import tempfile
+import uuid
 
 import pytest
 import yaml
@@ -33,6 +39,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEVCONTAINER_JSON = REPO_ROOT / ".devcontainer" / "devcontainer.json"
 INIT_SCRIPT = REPO_ROOT / ".devcontainer" / "host-sockets-init.sh"
 TEST_DEV_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "test-dev.yml"
+SPACENAV_CLIENT = REPO_ROOT / "ide" / "vscode" / "src" / "viewer" / "spacenav.ts"
 
 # The host directory both sides spell, the one in shell and the other in
 # devcontainer.json's own variable syntax.
@@ -73,7 +80,7 @@ def _link_names():
     return set(re.findall(r"^link_first_socket\s+(\S+)", text, re.MULTILINE))
 
 
-@pytest.mark.parametrize("link_name", ["docker.sock", "ssh-agent.sock"])
+@pytest.mark.parametrize("link_name", ["docker.sock", "ssh-agent.sock", "spnav.sock"])
 def test_every_link_the_host_writes_is_bound_into_the_container(link_name):
     """A link nothing binds is a link nobody ever sees."""
     assert link_name in _link_names(), f"{INIT_SCRIPT} no longer writes {link_name}"
@@ -85,6 +92,57 @@ def test_every_link_the_host_writes_is_bound_into_the_container(link_name):
         f"it binds {sources}. A link the host writes and nothing binds is invisible "
         f"in the container, and `-v` reports no error for the other half of the mistake."
     )
+
+
+def test_spacenavd_is_bound_where_the_extension_looks_first():
+    """The PartCAD extension finds the host's spacenavd without being told.
+
+    Its client (`socketPaths` in the extension's `spacenav.ts`) looks at a fixed
+    list of paths, the way libspnav does, and nothing else; a bind anywhere else
+    is a SpaceMouse that does nothing, with no message to say why.
+    """
+    target = dict(_binds())[f"{HOST_LINK_DIR_JSON}/spnav.sock"]
+    paths = re.search(r"const paths = \[([^\]]*)\]", SPACENAV_CLIENT.read_text(encoding="utf-8"))
+    assert paths is not None, f"{SPACENAV_CLIENT} no longer lists its paths as 'const paths = [...]'"
+    assert f"'{target}'" in paths.group(1), (
+        f"{DEVCONTAINER_JSON} binds spacenavd at {target}, which is not among the paths "
+        f"{SPACENAV_CLIENT.name} looks at first: {paths.group(1)}"
+    )
+
+
+@pytest.mark.skipif(os.name == "nt" or shutil.which("bash") is None, reason="the POSIX half; needs bash")
+def test_spacenavd_link_is_never_left_missing():
+    """A host whose spacenavd went away still gets a file, never nothing.
+
+    Docker refuses to start a container when a bind source has turned from a
+    directory into anything else, or back, since the container was created, and
+    `-v` makes a directory of a source that is missing. spacenavd is a daemon
+    the user stops and starts, so a link written while it ran and absent at the
+    next start would be a dev container that does not start -- over a
+    SpaceMouse. Run twice, with spacenavd's socket there and then gone.
+    """
+    user = f"pytest-{uuid.uuid4().hex[:12]}"
+    link = pathlib.Path(f"/tmp/partcad-devcontainer-{user}") / "spnav.sock"
+    # Short, under /tmp: a unix socket's path has a length limit (104 bytes on
+    # macOS), which the per-test directories are well past.
+    runtime = pathlib.Path(tempfile.mkdtemp(dir="/tmp", prefix="pcspnav-"))
+    environment = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "USER": user, "XDG_RUNTIME_DIR": str(runtime)}
+    daemon = socket.socket(socket.AF_UNIX)
+    try:
+        daemon.bind(str(runtime / "spnav.sock"))
+        subprocess.run(["bash", str(INIT_SCRIPT)], env=environment, check=True)
+        # A link to the socket: this one, or a real spacenavd's at the default path.
+        assert link.is_symlink() and link.is_socket(), f"{link} is not a link to spacenavd's socket"
+
+        daemon.close()
+        (runtime / "spnav.sock").unlink()
+        subprocess.run(["bash", str(INIT_SCRIPT)], env=environment, check=True)
+        assert link.exists() or link.is_symlink(), f"{link} was left missing, which `-v` turns into a directory"
+        assert not link.is_dir(), f"{link} is a directory"
+    finally:
+        daemon.close()
+        shutil.rmtree(runtime, ignore_errors=True)
+        shutil.rmtree(link.parent, ignore_errors=True)
 
 
 def test_the_host_directory_is_spelled_the_same_in_both_languages():

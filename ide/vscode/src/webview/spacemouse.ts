@@ -29,9 +29,11 @@
 // turns - which is what 3Dconnexion ships as the default and what every CAD
 // package that supports the device does out of the box.
 //
-// Nothing here draws: 'scene.ts' samples this once a frame and moves the camera
-// with 'navigate'. Kept free of the renderer so that the conventions, which are
-// the part that can be wrong without anything failing, can be tested.
+// Nothing here draws. Every 3D view of the panel - the 3D tab ('scene.ts') and the
+// model of an analysis ('cae.ts') - attaches itself as a 'Navigable', and asks the
+// device once a frame to move its camera; only the view on screen is moved. Kept
+// free of the renderers so that the conventions, which are the part that can be
+// wrong without anything failing, can be tested.
 //
 
 import * as THREE from 'three';
@@ -260,7 +262,41 @@ export function spacenavFit(device: number | null): number {
 }
 
 /**
- * The device, whichever road it arrives by, sampled once a frame.
+ * A view the device moves: an orbit camera, and how to frame what it shows.
+ *
+ * The panel has more than one - the 3D tab, and the model of each analysis - and
+ * each draws in a loop of its own, so each asks the device once a frame
+ * ('SpaceMouse.drive'). Only the one on screen is moved. The others go on drawing
+ * in hidden panes, and a push meant for the model in front of the user that turns
+ * a camera behind it instead is a push lost twice.
+ */
+export interface Navigable {
+    readonly camera: THREE.Camera;
+    /** What the camera orbits about; a pan moves it along with the camera. */
+    readonly target: THREE.Vector3;
+    /** Whether the view is the one on screen (see 'onScreen'). */
+    shown(): boolean;
+    /** What the "Fit" key does here. */
+    fit(): void;
+    /**
+     * The cap started or stopped moving this view, the way a drag starts and
+     * ends. A view that draws differently while its camera moves - the painter
+     * draws a big model as boxes - hears about the device as it does about a
+     * mouse.
+     */
+    moving?(moving: boolean): void;
+}
+
+/** Whether an element is laid out at all, which a pane the tabs have hidden is not. */
+export function onScreen(element: Element): boolean {
+    return element.isConnected && element.getClientRects().length > 0;
+}
+
+/** The longest frame a push is applied over, so that a stall does not fling the model. */
+const MAX_FRAME_SECONDS = 0.1;
+
+/**
+ * The device, whichever road it arrives by, and the views it moves.
  *
  * The host says which road is open: while spacenavd is connected the Gamepad API
  * is not consulted, so a device both of them can see does not move the model
@@ -268,6 +304,11 @@ export function spacenavFit(device: number | null): number {
  * panel in the focused window - because spacenavd tells every client about every
  * push, and a SpaceMouse moving the model in a window behind this one is not
  * something anybody asked for.
+ *
+ * There is one for the panel ('spaceMouse', below), and it belongs to no view: the
+ * host says all of the above once, whichever views exist yet - the 3D view's
+ * module finishes loading only when its surface does, which can be after the host
+ * has spoken - and every view is moved by the same device.
  */
 export class SpaceMouse {
     public settings: SpaceMouseSettings = DEFAULT_SETTINGS;
@@ -281,13 +322,46 @@ export class SpaceMouse {
     private forwarded: Motion | undefined;
     private forwardedAt = 0;
     private pressed: boolean[] = [];
+    /** The views there are to move, and when each was last driven. */
+    private readonly views = new Map<Navigable, number | undefined>();
+    /** The view the cap is moving, which has been told so. */
+    private moved: Navigable | undefined;
+
+    /** Offer a view to the device, until it is detached. */
+    public attach(view: Navigable): void {
+        this.views.set(view, undefined);
+    }
+
+    /** Stop offering a view: it is going away. */
+    public detach(view: Navigable): void {
+        this.views.delete(view);
+        if (this.moved === view) {
+            this.moved = undefined;
+        }
+    }
 
     /**
-     * 'onFit' is called when the "Fit" key is pressed. The other keys of the
-     * larger devices (views, rotation lock, the programmable keys) are left alone
-     * rather than guessed at.
+     * Move 'view' as the cap says, if it is the view on screen.
+     *
+     * Called by the view's own render loop once a frame, before its controls are
+     * updated. Says whether the cap moved it, which is what pauses a turntable.
      */
-    constructor(private readonly onFit: () => void) {}
+    public drive(view: Navigable, now: number): boolean {
+        if (!this.views.has(view)) {
+            return false;
+        }
+        const last = this.views.get(view);
+        this.views.set(view, now);
+        // Clamped, so that the first frame after the panel was hidden - or after a
+        // stall - does not fling the model by however long that was.
+        const seconds = last === undefined ? 0 : Math.min(Math.max(now - last, 0) / 1000, MAX_FRAME_SECONDS);
+        const motion = view.shown() ? this.sample(now) : undefined;
+        if (motion !== undefined) {
+            navigate(view.camera, view.target, motion, seconds, this.settings.sensitivity);
+        }
+        this.setMoving(view, motion !== undefined);
+        return motion !== undefined;
+    }
 
     /** What spacenavd last said about the cap, forwarded by the host. */
     public spacenavMotion(values: readonly number[], now: number): void {
@@ -295,15 +369,44 @@ export class SpaceMouse {
         this.forwardedAt = now;
     }
 
-    /** A button spacenavd reported, forwarded by the host. */
+    /**
+     * A button spacenavd reported, forwarded by the host.
+     *
+     * Only "Fit" does anything. The other keys of the larger devices (views,
+     * rotation lock, the programmable keys) are left alone rather than guessed at.
+     */
     public spacenavButton(button: number, pressed: boolean): void {
-        if (pressed && this.active && this.settings.enabled && button === spacenavFit(this.spacenavdDevice)) {
-            this.onFit();
+        if (pressed && this.active && button === spacenavFit(this.spacenavdDevice)) {
+            this.fit();
+        }
+    }
+
+    /** "Fit" frames the model of whichever view is on screen. */
+    private fit(): void {
+        if (!this.settings.enabled) {
+            return;
+        }
+        for (const view of this.views.keys()) {
+            if (view.shown()) {
+                view.fit();
+                return;
+            }
+        }
+    }
+
+    private setMoving(view: Navigable, moving: boolean): void {
+        if (moving && this.moved !== view) {
+            this.moved?.moving?.(false);
+            this.moved = view;
+            view.moving?.(true);
+        } else if (!moving && this.moved === view) {
+            this.moved = undefined;
+            view.moving?.(false);
         }
     }
 
     /** How the cap is being moved right now, or undefined when it is at rest. */
-    public sample(now: number): Motion | undefined {
+    private sample(now: number): Motion | undefined {
         if (!this.active) {
             return undefined;
         }
@@ -333,8 +436,8 @@ export class SpaceMouse {
                 continue;
             }
             pad.buttons.forEach((button, index) => {
-                if (button.pressed && !this.pressed[index] && this.settings.enabled && index === GAMEPAD_FIT) {
-                    this.onFit();
+                if (button.pressed && !this.pressed[index] && index === GAMEPAD_FIT) {
+                    this.fit();
                 }
                 this.pressed[index] = button.pressed;
             });
@@ -346,3 +449,6 @@ export class SpaceMouse {
 
 /** How long a forwarded spacenavd value is believed without being repeated. */
 const STALE_MS = 500;
+
+/** The panel's SpaceMouse: 'viewer.ts' hands it what the host says, and each 3D view attaches to it. */
+export const spaceMouse = new SpaceMouse();
