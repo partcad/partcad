@@ -66,7 +66,7 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 The ``assy`` type is used to define assemblies in `Assembly YAML` format, and
 the ``step`` type reads the structure out of a STEP file (see :ref:`assembly_step`).
 The ``urdf`` type reads a robot description as an assembly directly
-(see :doc:`simulation`). A format an engine's plugin package implements is named
+(see :ref:`assembly-urdf`). A format an engine's plugin package implements is named
 through that package -- ``sim-mujoco:mjcf`` for a MuJoCo model, which is also a
 :ref:`scene <scenes>` type, the section that declares it being what decides which
 it is.
@@ -301,6 +301,8 @@ Here is an example of an assembly definition:
 
 In this example, an assembly named ``example_assembly`` is defined with a parameter ``length`` and an offset.
 
+.. _assembly-urdf:
+
 URDF
 ----
 
@@ -379,33 +381,23 @@ vocabulary is open and where an unknown setting is otherwise only reported.
 
 The geometry a link was *not* built from is kept too, as the part
 ``<assembly name>/<link name>/<visual|collision>``: defined and exportable, but
-not placed in the assembly. What cannot be represented at all (joint kinematics,
-transmissions, sensors) is counted and reported; ``pc info`` shows the tally.
-:doc:`simulation` describes the gap and what closing it would take.
+not placed in the assembly. What cannot be represented at all (the motion of a
+joint, transmissions, sensors) is counted and reported; ``pc info`` shows the
+tally.
 
 The reverse direction is ``pc export -t urdf``, which writes a ``.urdf`` file
-plus a directory of the STL files it references, from any part or assembly.
-Each node of the assembly tree becomes a link, each parent/child relation a
-fixed joint, and a shape used more than once is written out once. What a part
-states about itself is written into the URDF element that states it - the mass
-and inertia into ``<inertial>``, the friction and contact properties into a
-``<gazebo>`` block, the colour into ``<material>`` - and only a part that says
-nothing gets inertial properties computed from its geometry. A property PartCAD
-holds that URDF has no way to state is reported rather than dropped in silence
-(see :doc:`simulation`).
-
-``pc convert assembly`` goes further than exporting: it rewrites the package
-around the assembly and switches its declared type.
+plus a directory of the STL files it references, from any part or assembly, and
+``pc convert assembly`` rewrites the package around the assembly and switches
+its declared type:
 
 .. code-block:: shell
 
   pc convert assembly -t assy robot   # urdf -> assy
   pc convert assembly -t urdf logo    # assy -> urdf
 
-Converting to ASSY writes an ``stl`` part for every link, an interface pair for
-every joint, and an ``.assy`` that places its parts with ``connect:`` rather
-than with coordinates. Converting to URDF writes the ``.urdf`` and its meshes.
-Neither direction has an ad-hoc equivalent: ``pc adhoc convert`` refuses both
+What an export writes into each link, how a URDF's joints become interfaces,
+and what a round trip keeps and loses are in :ref:`sim-urdf`. Neither direction
+of the conversion has an ad-hoc equivalent: ``pc adhoc convert`` refuses both
 formats, because an ASSY file is a set of references to the parts of a package
 and a URDF becomes a part per link - neither means anything without one.
 
@@ -708,8 +700,11 @@ is Earth with Z up, ``[0, 0, -1.62]`` the Moon, ``[0, 0, 0]`` free fall. It is
 SI because every physical quantity PartCAD states is SI -- only lengths and
 angles are millimetres and degrees (see the note under :ref:`materials`) -- and
 it is also the number every reader knows, every engine states, and the unit a
-``simulate:`` passes its plugin a gravity in; see :doc:`simulation`. A scene
+``simulate:`` passes its plugin a gravity in; see :ref:`sim-scenes`. A scene
 that states none leaves it to the engine, whose own default is Earth's along -Z.
+Anything but three numbers is an error, and a gravity above 1000 m/s^2 -- a
+vector written in mm/s^2 by mistake is a thousand g -- is reported as one that
+is probably in the wrong unit.
 
 ``medium:`` names a :ref:`material <materials>`, resolved the way a part's
 material is (``:brine`` is the ``brine`` this package catalogues), and its
@@ -721,10 +716,11 @@ is what every engine assumes.
 
 Both defaults are what a scene meant before it could say either, so a scene
 that says neither simulates and exports exactly as it always did. A medium that
-names a material nothing answers to is an error rather than a vacuum, and
+names a material nothing answers to is an error rather than a vacuum, a medium
+whose material states neither a density nor a viscosity is reported, and
 ``pc info`` reports the world a scene resolved to -- the gravity and the facts of
 the material it is filled with. What each engine makes of it, and what it does
-not model, is in :doc:`simulation`.
+not model, is in :ref:`sim-engines`.
 
 Gazebo worlds
 -------------
@@ -749,8 +745,8 @@ they can be inspected, rendered and exported on their own.
 It is a best-effort reader: SDFormat describes a running simulation and a scene
 describes where things are, so joints, lights, sensors, plugins, actors, physics
 settings and the ground plane are counted and reported rather than passed over
-in silence. ``pc info`` lists what was dropped. See :doc:`simulation` for the
-whole picture.
+in silence. ``pc info`` lists what was dropped. See :ref:`sim-engine-formats`
+for the whole picture.
 
 The reverse direction is the ``sim-gazebo:world`` export file type, declared by
 the same package:
@@ -812,5 +808,6 @@ meshes it references:
   pc export -S -t sim-mujoco:mjcf :cell     # a scene
   pc export -t sim-mujoco:mjcf :arm         # or an assembly
 
-It is also the format ``pc sim`` hands a scene to MuJoCo in, and the one
-``pc ide open --with mujoco`` expects a file to already be in; see :ref:`simulate`.
+It is also the format ``pc sim`` hands a scene to MuJoCo in (see
+:ref:`sim-engines`), and the one ``pc ide open --with mujoco`` expects a file to
+already be in (see :ref:`sim-opening`).
