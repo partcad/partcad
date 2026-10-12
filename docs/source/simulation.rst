@@ -874,17 +874,44 @@ URDF                    nothing: a URDF has no world
 MuJoCo's fluid model -- the default, *inertia-box* one -- is drag and nothing
 else: quadratic in speed from the density, linear from the viscosity, acting on
 the box each body's mass and inertia describe. It has **no buoyancy**, so the
-MJCF exporter adds it with MuJoCo's own ``gravcomp``: an upward force at the
-centre of mass of rho_fluid * volume / mass of the body's weight. That is
-Archimedes with no surface -- the fluid fills the whole world, so a body lighter
-than it rises for as long as the run lasts rather than floating at a waterline
--- with the force at the centre of mass rather than the centre of buoyancy, the
-volume of the solid rather than of what a sealed cavity displaces, and no added
-mass or lift (MuJoCo's per-geom *ellipsoid* model, which needs coefficients a
-scene does not state). Gazebo's ``gz-sim-buoyancy-system`` is not written: on
-Harmonic it ignores a mesh's ``<scale>``, which would buoy PartCAD's millimetre
-meshes by 10^9 times their volume, and a world that names any system loses all
-of Gazebo's default ones. Each plugin's own documentation has the detail.
+MJCF exporter adds it, as Archimedes has it: a lift of rho_fluid * V * g, acting
+at the **centre of buoyancy** -- the centroid of the displaced volume, which for
+a wholly submerged body is the centroid of its solids. Both come from what
+PartCAD resolved and nothing is measured again: each shape is handed over with
+its ``volume`` and its ``centerOfVolume`` beside its mass, and
+``mass_properties.displacement_of()`` adds them up per body as it adds the
+masses up. The force is MuJoCo's own ``gravcomp`` -- that fraction of the body's
+weight, upward at its centre of mass, so a model opened anywhere floats -- and
+the moment it has about the centre of mass when it really acts at the centre of
+buoyancy is applied by the simulation each step, from the centre of buoyancy
+the exporter writes into the model. That moment is what rights a body whose
+weight is not centred where its volume is: a hull with a heavy keel, a float
+that states a low ``centerOfMass``. ``examples/feature_simulate``'s ``buoy`` is
+one: released tilted 60 degrees, it turns its heavy side down within a second.
+Opened outside ``pc sim``, the same model floats but does not right itself.
+
+What is not modelled:
+
+- **A surface.** The fluid fills the whole world, so a body lighter than it
+  rises for as long as the run lasts rather than floating at a waterline. A
+  waterline would mean clipping every body against a plane every step -- the
+  volume below it and that volume's centroid, out of the mesh -- which is
+  geometry the simulation would have to do itself, and which no fact PartCAD
+  hands over could answer in advance. It is the next thing this needs, not a
+  small one.
+- **Sealed cavities.** The volume displaced is the solid's, so a hollow part is
+  buoyed as if flooded. A float is drawn as the solid it displaces, and states
+  its own mass.
+- **Added mass, lift, the Magnus effect.** MuJoCo's per-geom *ellipsoid* fluid
+  model has them, and needs five coefficients per geom that a scene does not
+  state.
+
+Gazebo's ``gz-sim-buoyancy-system`` is not written: on Harmonic it ignores a
+mesh's ``<scale>``, which would buoy PartCAD's millimetre meshes by 10^9 times
+their volume, and a world that names any system loses all of Gazebo's default
+ones. A Gazebo run of a scene filled with a fluid is therefore a run in a
+vacuum -- no buoyancy, no drag, no centre of buoyancy -- and its export says so.
+Each plugin's own documentation has the detail.
 
 **Which gravity a run is under**, in order: a ``simulate:``'s own
 ``params: {gravity: ...}``, which is handed to the plugin like any other of its

@@ -122,6 +122,16 @@ waterline. See
 [partcad-sim-mujoco](https://github.com/partcad/partcad-sim-mujoco) for what
 is and is not modelled.
 
+`buoy` is the float again with its weight low down: 4 g, balanced 6 mm
+below its middle, as a float with a lead weight in its bottom would be. The
+water lifts it from its middle -- the centroid of its solid, its centre of
+buoyancy -- so its weight and the lift make a couple that turns the heavy
+side down. Released tilted 60 degrees, it is upright within a second.
+
+```shell
+pc sim buoy           # the ballasted float rights itself as it rises
+```
+
 `water` is declared below so that this example stays self-contained; the
 standard catalogue's is `//pub/std/manufacturing/material/fluid:water`.
 
@@ -170,6 +180,12 @@ standard catalogue's is `//pub/std/manufacturing/material/fluid:water`.
 <li>material: :ptfe</li>
 </ul>
 </td>
+</tr></table>
+
+### buoy
+<table><tr>
+<td valign=top><a href="block.py"><img src="././buoy.svg" alt="buoy" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>The float again, with its 4 g of weight low down - a ballasted float, which rights itself</td>
 </tr></table>
 
 ### float
