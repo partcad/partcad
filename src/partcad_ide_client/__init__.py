@@ -34,7 +34,7 @@ from .protocol import (
     make_node,
 )
 
-__version__ = "0.8.173"
+__version__ = "0.8.174"
 
 __all__ = [
     "CONNECT_TIMEOUT",
