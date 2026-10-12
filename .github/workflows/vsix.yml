@@ -7,7 +7,9 @@
 # the same version.
 #
 # Called by "build.yml" (CD) and by "deploy.yml", which uploads the packages to
-# the GitHub release. It deliberately has no "push"/"pull_request" triggers of
+# the GitHub release and then, on "main", hands this same artifact to
+# "vsix-publish.yml" for the Visual Studio Marketplace -- so what the marketplace
+# serves is what the release carries. It deliberately has no "push"/"pull_request" triggers of
 # its own: adding it to those two workflows on top would build the same package
 # twice per commit. Exactly one run owns the build -- the same arrangement
 # "build-ide-standalone.yml" documents for the command line bundles.
