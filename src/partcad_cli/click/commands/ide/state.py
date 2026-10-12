@@ -29,7 +29,7 @@ from partcad_ide_client import STATE_TIMEOUT, StateNotSupported, ViewerNotAvaila
 
 @click.command(
     help="Print what the PartCAD IDE on this machine is showing: the Explorer's selection, the Inspector's "
-    "properties and parameters, and the Viewer's tab, sub-tab, filters, selections and a screenshot."
+    "properties and parameters, and the Digital Thread's tab, sub-tab, filters, selections and a screenshot."
 )
 @click.option("--json", "as_json", is_flag=True, help="Print JSON")
 @click.option("--yaml", "as_yaml", is_flag=True, help="Print YAML (the default)")

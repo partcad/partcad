@@ -94,7 +94,7 @@ is always the first:
 
 Every group always shows all of its tabs and disables the ones that do not apply, and a group none of whose
 tabs apply is disabled itself, and says why when the mouse is over it. Design and its 3D tab are always enabled,
-and are what the Viewer shows before anything has been selected. A group opens on the tab you last had open in
+and are what the Digital Thread shows before anything has been selected. A group opens on the tab you last had open in
 it, if that one applies to the object, and on the first one that does otherwise.
 
 The 3D view arrives over the viewer protocol from whichever ``partcad`` asked for the shape to be shown; the
@@ -145,8 +145,8 @@ viewer in the focused window moves, and only the tab on screen, so a SpaceMouse 
 fight. ``partcad.spaceMouse.sensitivity`` sets the speed, ``partcad.spaceMouse.invert`` reverses individual axes,
 and ``partcad.spaceMouse.enabled`` turns it off.
 
-What the Viewer is showing can be asked of it from outside: ``pc ide state`` (see :doc:`cli`) reports the tab and
-sub-tab on screen, the filter and the selections of each sub-tab, and a screenshot of the one on screen -- together
+What the Digital Thread is showing can be asked of it from outside: ``pc ide state`` (see :doc:`cli`) reports the tab
+and sub-tab on screen, the filter and the selections of each sub-tab, and a screenshot of the one on screen -- together
 with the Explorer's selection and the Inspector's parameters. It is what an AI agent working beside you reads to
 see what you are looking at.
 

@@ -144,6 +144,6 @@ With `partcad.viewer.performanceDebug` enabled on large models in the **VS Code 
 
 ## Limitations
 
-- **Viewer-only feature:** Does not provide profiling for PartCAD CLI rendering
+- **Digital Thread only:** Does not provide profiling for PartCAD CLI rendering
 - **Browser environment only:** Requires webview (browser console access)
 - **Triangle counts on reload:** Enable the flag before loading models to see triangle counts (or reload after enabling)

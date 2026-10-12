@@ -27,7 +27,7 @@ Two properties of this package are deliberate and easy to break:
 
 **One message is a question rather than a display: `state`**, which `pc ide state` sends. The IDE answers in
 the acknowledgement it sends every message, under `state` -- the Explorer's selection, the Inspector's object
-and the Viewer's tabs, filters, selections and a screenshot path; the shape is the comment beside `MSG_STATE`.
+and the Digital Thread's tabs, filters, selections and a screenshot path; the shape is the comment beside `MSG_STATE`.
 An IDE from before it acknowledges it without a state, which is how `client.state()` tells "too old"
 (`StateNotSupported`) from "no IDE" (`ViewerNotAvailable`). It is the one asynchronous answer on the IDE's side
 -- two webviews are asked and a screenshot taken -- so `PartcadViewerServer.answerState` bounds it and fails

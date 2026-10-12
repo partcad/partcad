@@ -682,7 +682,7 @@ say what it is allowed to do. Adding a second application is a command, a menu e
 the `state` message and asks a provider wired in `extension.ts`, which collects three entries: the
 Explorer's selection straight off the `TreeView`, the Inspector's object (`PartcadInspector.state`, which asks
 its webview what each field holds *now* and falls back to the applied values when the view cannot answer), and
-the Viewer's (`PartcadViewer.state`, which asks its webview). The webview's half is `src/webview/state.ts`
+the Digital Thread's (`PartcadViewer.state`, which asks its webview). The webview's half is `src/webview/state.ts`
 plus `collectState`/`answerState` in `viewer.ts`: the tab and sub-tab on screen, what every strip offers, each
 sub-tab's `pc render --filter` and selections (its tree's rows from `Tree.rows()`, the 2D overlays, and every
 control in its pane from `controlValues`), and a screenshot. The screenshot is the pane's DOM drawn through an

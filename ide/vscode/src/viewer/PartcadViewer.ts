@@ -927,10 +927,10 @@ function getNonce(): string {
     return text;
 }
 
-/** How long the Viewer's webview has to collect its state and take the screenshot. */
+/** How long the Digital Thread's webview has to collect its state and take the screenshot. */
 const VIEWER_STATE_REPLY_MS = 10000;
 
-/** What the Viewer's webview answers a `state` with; see `webview/state.ts`. */
+/** What the Digital Thread's webview answers a `state` with; see `webview/state.ts`. */
 export interface ViewerStateReply {
     type: 'state';
     token: number;
