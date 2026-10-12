@@ -533,12 +533,27 @@ async def _tree_async(node, materials):
     stated = properties.get("physics") if isinstance(properties, dict) else None
     if stated and _positive(stated.get("mass")) is not None:
         # An assembly that states what it weighs is taken at its word, and what
-        # its parts add up to says only how that weight is spread.
-        physics = mass_properties.with_mass(derived, stated["mass"]) if derived else {}
-        physics.update(stated)
-        if "inertia" in physics and "inertia" not in stated:
+        # its parts add up to says only how that weight is spread. The rule is
+        # 'mass_properties.of_body()'s, so that 'pc info' and an export of the
+        # same assembly as one link agree: a stated mass and centre always
+        # win, and a stated tensor replaces the derived one only when it is a
+        # tensor. An empty 'inertia: {}', or an 'inertiaOrientation' with no
+        # tensor beside it, states nothing - and the orientation must not be
+        # set beside a derived tensor that 'with_mass()' has already turned.
+        if not derived:
+            sources.update({key: STATED for key in stated})
+            return dict(stated), sources, volume, parts, []
+        physics = mass_properties.with_mass(derived, stated["mass"])
+        replaces_tensor = isinstance(stated.get("inertia"), dict) and bool(stated["inertia"])
+        if replaces_tensor:
+            physics.pop("inertia", None)
+        elif "inertia" in physics:
             sources["inertia"] = "combined from its parts, scaled to the stated mass"
-        sources.update({key: STATED for key in stated})
+        for key, value in stated.items():
+            if key in ("inertia", "inertiaOrientation") and not replaces_tensor:
+                continue
+            physics[key] = value
+            sources[key] = STATED
         return physics, sources, volume, parts, []
     physics = dict(derived)
     for key, value in (stated or {}).items():
@@ -612,12 +627,24 @@ async def mass_properties_async(ctx, shape):
         return None
     missing = None
     if "mass" not in physics:
-        missing = (
-            "not known: the material %s states no density" % material_name
-            if material is not None
-            else "not known: the part states no density and names no material"
-        )
+        missing = _no_mass_reason(material, material_name, shape.material_reference())
     return _report(physics, sources, volume, "measured", missing) or None
+
+
+def _no_mass_reason(material, material_name, reference):
+    """Why a part has no mass, in the words 'pc info' prints beside it.
+
+    Three different things to fix, so three different sentences: a material
+    that states no density, a material the part names that does not resolve -
+    a typo in 'material: :alumnium' is the usual one, and saying the part names
+    no material would send its author looking for a declaration that is there -
+    and a part that says nothing at all.
+    """
+    if material is not None:
+        return "not known: the material %s states no density" % material_name
+    if reference:
+        return "not known: the material %s the part names is not found" % reference
+    return "not known: the part states no density and names no material"
 
 
 async def _part_async(ctx, shape):

@@ -242,6 +242,63 @@ def test_an_assembly_that_states_its_mass_is_taken_at_its_word(ctx, root):
     assert unweighed == []
 
 
+def test_a_stated_mass_with_an_empty_inertia_keeps_the_derived_tensor(ctx, root):
+    """'inertia: {}' states nothing, so the combined tensor, scaled, stands."""
+    pla = "%s:a" % root.name
+    parts = (_leaf(pla, ":pla"), _leaf(pla, ":pla", location=[[100.0, 0.0, 0.0], [0.0, 0.0, 1.0], 0.0]))
+    plain, _s, _v, _p, _u = asyncio.run(
+        physics._tree_async(_tree(*parts, physics_={"mass": 1.0}), physics._Materials(ctx))
+    )
+    empty, sources, _v, _p, _u = asyncio.run(
+        physics._tree_async(_tree(*parts, physics_={"mass": 1.0, "inertia": {}}), physics._Materials(ctx))
+    )
+
+    assert empty["inertia"] == pytest.approx(plain["inertia"])
+    assert empty["inertia"]
+    assert sources["inertia"] == "combined from its parts, scaled to the stated mass"
+
+
+def test_a_stated_orientation_with_no_tensor_is_not_set_beside_the_derived_one(ctx, root):
+    """'with_mass()' has already turned the derived tensor; turning it again would be wrong."""
+    pla = "%s:a" % root.name
+    parts = (_leaf(pla, ":pla"), _leaf(pla, ":pla", location=[[100.0, 0.0, 0.0], [0.0, 0.0, 1.0], 0.0]))
+    plain, _s, _v, _p, _u = asyncio.run(
+        physics._tree_async(_tree(*parts, physics_={"mass": 1.0}), physics._Materials(ctx))
+    )
+    oriented, _s, _v, _p, _u = asyncio.run(
+        physics._tree_async(
+            _tree(*parts, physics_={"mass": 1.0, "inertiaOrientation": [0.0, 0.0, 90.0]}), physics._Materials(ctx)
+        )
+    )
+
+    assert "inertiaOrientation" not in oriented
+    assert oriented["inertia"] == pytest.approx(plain["inertia"])
+
+
+def test_a_stated_tensor_replaces_the_derived_one(ctx, root):
+    pla = "%s:a" % root.name
+    stated = {"mass": 1.0, "inertia": {"ixx": 1.0, "iyy": 2.0, "izz": 3.0}, "inertiaOrientation": [0.0, 0.0, 90.0]}
+    tree = _tree(
+        _leaf(pla, ":pla"), _leaf(pla, ":pla", location=[[100.0, 0.0, 0.0], [0.0, 0.0, 1.0], 0.0]), physics_=stated
+    )
+
+    resolved, sources, _v, _p, _u = asyncio.run(physics._tree_async(tree, physics._Materials(ctx)))
+
+    assert resolved["inertia"] == stated["inertia"]
+    assert resolved["inertiaOrientation"] == stated["inertiaOrientation"]
+    assert sources["inertia"] == sources["inertiaOrientation"] == "stated"
+
+
+def test_a_part_whose_material_is_not_found_is_told_so():
+    assert physics._no_mass_reason(None, None, ":alumnium") == (
+        "not known: the material :alumnium the part names is not found"
+    )
+    assert physics._no_mass_reason(None, None, None) == "not known: the part states no density and names no material"
+    assert (
+        physics._no_mass_reason(object(), "//pkg:pla", ":pla") == "not known: the material //pkg:pla states no density"
+    )
+
+
 def test_what_pc_info_reports_carries_a_unit_and_a_source_for_every_value(root):
     resolved, sources = physics.resolve(None, root.get_material("pla"), "//:pla", BOX)
     report = physics._report(resolved, sources, BOX["volume"], "measured")
