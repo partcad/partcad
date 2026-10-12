@@ -1126,15 +1126,20 @@ input.switch:focus-visible {
 }
 
 /*
- * Build: the list of steps on the left, the selected one on the right.
+ * Build: the list of steps on the left, the selected one on the right. The
+ * Simulation tab is the same pane over a different list -- the simulations an
+ * object declares -- so it shares these rules rather than having a look of its
+ * own.
  */
 
-.pane.build {
+.pane.build,
+.pane.simulation {
     display: flex;
     overflow: hidden;
 }
 
-.build-list {
+.build-list,
+.simulation-list {
     display: flex;
     flex: 0 0 18rem;
     flex-direction: column;
@@ -1143,7 +1148,8 @@ input.switch:focus-visible {
     border-right: 1px solid var(--vscode-panel-border, transparent);
 }
 
-.build-tree {
+.build-tree,
+.simulation-items {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
@@ -1209,6 +1215,163 @@ input.switch:focus-visible {
 .build-main > .placeholder,
 .build-main > .error {
     padding: 1rem;
+}
+
+/*
+ * Simulation: the selected simulation, with the scene before it ran on the left
+ * and after on the right, and what the verdict is made of folded away under
+ * them. A page the height of the pane: the pictures take what is left, so
+ * opening a folded view shrinks them rather than pushing anything off the page.
+ */
+
+.simulation-main {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.simulation-main > .placeholder,
+.simulation-main > .error {
+    padding: 1rem;
+}
+
+.simulation-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+/* The toolbar is the Draft tab's ('.render-header'), with nothing of its own. */
+
+.simulation-desc {
+    flex: 0 0 auto;
+    margin: 0 0 0.5rem;
+    color: var(--vscode-descriptionForeground);
+    text-align: center;
+    white-space: pre-wrap;
+}
+
+.simulation-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0.75rem 1rem;
+}
+
+.simulation-body > .error {
+    padding: 0 0 0.5rem;
+}
+
+/* The verdict, before a simulation's name in the list: a symbol in its colour,
+   in a slot of one width whether or not there is one yet, so the names line
+   up. Coloured on a selected row too: the colour is what it says. */
+.simulation-mark {
+    flex: 0 0 1em;
+    font-weight: 600;
+    text-align: center;
+}
+
+.simulation-passed {
+    color: var(--vscode-testing-iconPassed, var(--vscode-charts-green, currentColor));
+}
+
+.simulation-failed {
+    color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground, currentColor));
+}
+
+.simulation-error {
+    color: var(--vscode-errorForeground, currentColor);
+}
+
+.simulation-running,
+.simulation-ran {
+    color: var(--vscode-descriptionForeground);
+}
+
+.simulation-pictures {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: stretch;
+    justify-content: center;
+    gap: 1rem;
+    min-height: 0;
+}
+
+.simulation-figure {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-width: 0;
+    min-height: 0;
+    max-width: 48%;
+    margin: 0;
+}
+
+.simulation-image {
+    min-height: 0;
+    max-width: 100%;
+    max-height: 100%;
+    border: 1px solid var(--vscode-panel-border, transparent);
+    object-fit: contain;
+}
+
+.simulation-figure figcaption {
+    flex: 0 0 auto;
+    color: var(--vscode-descriptionForeground);
+}
+
+.simulation-arrow {
+    flex: 0 0 auto;
+    align-self: center;
+    color: var(--vscode-descriptionForeground);
+    font-size: 2.5rem;
+    line-height: 1;
+}
+
+/* The folded views: their titles along the bottom, the strip the tab strips
+   above are made of, and the one that is open under them. */
+.simulation-details {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    max-height: 45%;
+    min-height: 0;
+}
+
+.simulation-detail-tabs {
+    flex: 0 0 auto;
+    padding: 0 0.5rem;
+    border-top: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.simulation-detail-chevron {
+    margin-left: 0.35em;
+}
+
+.simulation-detail {
+    flex: 1 1 auto;
+    min-height: 6rem;
+    overflow: auto;
+    padding: 0.5rem 1rem;
+}
+
+.simulation-detail > .placeholder {
+    margin: 0.25rem 0;
+}
+
+.simulation-code {
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    background: var(--vscode-textCodeBlock-background, transparent);
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: var(--vscode-editor-font-size, inherit);
+    white-space: pre;
 }
 
 /* The Assembly tab: the 2D tab's header over a paged document. */

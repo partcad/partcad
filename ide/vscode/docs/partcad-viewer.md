@@ -15,6 +15,7 @@ The panel is a strip of tabs over one object, not a canvas:
 | **Buy** | whatever is bought | the daemon's `supply.quote` (the cart `pc supply quote` fills) |
 | **Bill of Materials** | parts, assemblies | the daemon's `bom` (what `pc bom` prints) |
 | **Assembly** | assemblies | the daemon's `assembly.guide` (the book `pc instructions -t html\|pdf` writes) |
+| **Simulation** | parts, assemblies that declare `simulate:` | the daemon's `simulate.list` (what the object declares) and `simulate.run` (what `pc sim -f <name>` runs) |
 
 The 3D view is what a show opens on: "show this part" means the geometry. Requirements is the one tab in front
 of it, and only for an object that declares any — see below. The rest are questions about
@@ -248,6 +249,8 @@ the protocol has no authentication.
 | `src/partcad/requirements.py` | What a requirement means and whether the model meets it, for this tab and for `pc test` |
 | `src/common/garage.ts` | Where the Build vs Buy choices are kept, on this machine |
 | `src/webview/cae.ts` | The FEA and CFD tabs: the result model, and the findings |
+| `src/webview/simulation.ts` | The Simulation tab: the simulations declared, and the scene before and after one ran |
+| `src/partcad/simulation.py` | What `simulate:` declares, how a run goes, and the pictures a plugin is asked to take |
 | `src/partcad/cae.py` | What a part declares about an analysis, and in what units |
 | `src/partcad/assembly_guide.py` | The instruction book, built once for every format |
 | `src/partcad/document.py` | The renderer-independent document model |
@@ -436,3 +439,43 @@ where that one can be bought; a part has no list to choose from and opens on the
 A package that declares no `suppliers:` is the ordinary case, not a failure, so the lookup is skipped for its
 items rather than run and reported: in the IDE `pc_logging.error` is a modal popup, and
 `Context.find_part_suppliers()` raises one per part.
+
+The Validation group holds **Simulation** and **Process Emulation**, which has nothing in it yet and is always
+disabled -- so the group is enabled exactly when Simulation is. Simulation is offered only for an object that
+declares a simulation: whether it does is asked on every show (`simulate.list`, which reads the `simulate:`
+section and runs nothing), exactly as Build vs Buy's tree is, and the panel's strip is rebuilt when the answer
+arrives.
+
+The tab is laid out like Build: the simulations on the left, in the order the object declares them, the first
+selected; the selected one on the right. Selecting one runs it -- `simulate.run`, which is `pc sim -f <name>` --
+the first time it is looked at for this object, and the answer is kept until the next show. What comes back is
+the verdict of its `validation:` expression, said once: as a mark before the simulation's name in the list (a
+green ✓ when it held, a red ✗ when it did not, a red ! when it could not run, a muted • when there was nothing
+to check it against, … while it runs, and an empty slot of the same width before it has run, so the names line
+up). The page itself does not repeat the name or the verdict.
+
+Over the page is the Draft tab's toolbar, with the Draft tab's classes: **Simulated by**, which plugin runs it,
+and **Simulate**. The list is the two plugins `//pub/feature/simulate` registers (`SIMULATION_PLUGINS`), and the
+one the simulation names is selected -- matched by what follows its `:`, because a package usually names it
+through a dependency of its own (`sim-mujoco:mujoco`), and offered as itself, first, when it is neither. While
+that one is selected nothing is overridden; choosing another runs the simulation with it (`pc sim --plugin`),
+the way choosing a drawing package draws again, and **Simulate** runs it afresh. Answers are kept per
+simulation *and* per plugin, so switching back to one already run shows it. Under the toolbar is what the
+simulation is about, then two pictures of the scene: before anything moved on the left, after the run on the
+right, an arrow between them.
+
+Under the pictures is what the verdict is made of, folded away behind a strip of three titles: **Criteria** (the
+`validation:` expression), **Before** and **After** (the two objects the plugin reported, which are what that
+expression is evaluated over, as indented JSON with each short array of plain values on one line --
+`prettyJson` -- so a position or a quaternion reads as one). A title opens its view and, when it is the one
+open, folds it away again; the open one carries ▾. One is open at a time, the pictures shrink to make room
+rather than being pushed off the page, and which one is open is kept from one simulation to the next, so the
+*after* of several runs can be compared by clicking down the list. A strip rather than three disclosure
+triangles, because three of those open at once would leave no room for the pictures.
+
+Those pictures are taken by the simulation plugin, not drawn here. PartCAD asks every run for them, from where
+the scene is looked at when it is rendered -- `viewport_origin` and `viewport_up` of its `render: png:`,
+the scene's own over its package's, and the corner a part is drawn from when neither says -- and the plugin
+draws the scene as its simulator had it at the first instant and the last, both framed alike so that what moved
+is seen to have moved. They come back as bytes rather than paths for the reason a render does. A plugin that
+takes none -- one older than the request -- leaves the verdict standing and the tab says there are no pictures.

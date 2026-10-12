@@ -145,9 +145,10 @@ test holds it to `VIEWER_TABS` on the other side.
 
 **The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA and CFD for a part, then
 Manufacturing: what is built and what is bought, how to build it, the bill of materials, where to buy it and the
-assembly instructions. In front of all of them, for an object that declares `requirements:`, a Requirements tab:
-asked about on every show (`requirements.check`, a declaration read) and verified when opened, by the same code
-as `pc test -f requirements`. Only the 3D
+assembly instructions; then Validation: the simulations the object's `simulate:` section declares, each run and
+shown as the scene before and after. In front of all of them, for an object that declares `requirements:`, a
+Requirements tab: asked about on every show (`requirements.check`, a declaration read) and verified when opened,
+by the same code as `pc test -f requirements`. Only the 3D
 view comes over the viewer protocol; every other tab is a question about `<package>:<name>` that the renderer
 cannot ask itself -- the CSP forbids network access and the daemon is behind the host's JSON-RPC connection --
 so it asks the host (`fetchTab`) and the host answers (`tabData`), on first look. Which is why the show
@@ -205,18 +206,40 @@ loading readout is a fraction of the *table* (`totalSize`), because counting a s
 report a download that never happened; and nothing may dispose a parsed group that has been handed out, since
 its geometry is the geometry of every clone of it.
 
-None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote` and `cae.analyze` are the CLI's
-own operations (`pc bom`, the book `pc render -t html` writes, the cart `pc supply quote` fills, the analysis
-`pc cae fea`/`pc cae cfd` runs), asked for as data rather
+None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote`, `cae.analyze` and
+`simulate.run` are the CLI's own operations (`pc bom`, the book `pc render -t html` writes, the cart
+`pc supply quote` fills, the analysis `pc cae fea`/`pc cae cfd` runs, the simulation `pc sim` runs), asked for
+as data rather
 than as a file -- the same rule as everywhere else in this extension: extend the one backend, do not
 reimplement it in TypeScript.
 
-The FEA and CFD tabs are the one pair that *acts* rather than asks: selecting one runs a solver. The field
+The FEA and CFD tabs *act* rather than ask: selecting one runs a solver. The field
 over the model names which -- pre-filled from `cae.defaults` (the user configuration's
 `caeFeaImplementation`/`caeCfdImplementation`) and filled in even when the run failed, which is when a user
 most needs to see what was tried. The model is drawn by its extension, because the format is the
 implementation's choice: a mesh gets an orbit camera, a picture pans and zooms. See
 [docs/partcad-viewer.md](./docs/partcad-viewer.md).
+
+The Simulation tab acts too, and is the one tab whose *group* depends on an answer. Its sibling, Process
+Emulation, is a placeholder and always disabled, so the Validation group is enabled exactly when Simulation is.
+Three things about it are load-bearing:
+
+- **Whether Validation applies is asked on every show.** `simulate.list` reads the object's `simulate:`
+  section and runs nothing, so it is as cheap as `manufacturing.tree`, and it is asked for the same reason:
+  the group is enabled only once the daemon has said there is at least one simulation. When it arrives the
+  panel's *own* strip is rebuilt -- without `keepCurrent`, so a reader who was on Validation for the last
+  object lands on it again -- which no other answer does.
+- **A run has a token of its own, not the tab's** (`simulationRuns` in `viewer.ts`). A reader who selects one
+  simulation and then the next has asked for two runs, and each answer belongs to the simulation it is of; the
+  tab's single token would drop the first. The token also carries the plugin it was asked with ("Simulated
+  by", `pc sim --plugin`), because answers are kept by the pane per simulation *and* plugin for as long as the
+  object is on screen, so going back to one does not start a simulator again; **Simulate** is how one is
+  asked for afresh.
+- **The pictures are the plugin's, not this extension's.** PartCAD asks every run for a picture of the scene
+  before and after, from the scene's own `render: png:` viewpoint, and the plugin draws them; `simulate.run`
+  sends them back as bytes (`inline`), because the daemon may be on another machine. Before is always on the
+  left and after on the right, and a picture the plugin did not take is said to be missing in its place, so
+  the two never swap sides. See "The pictures of a run" in `src/partcad/simulation.py`.
 
 Four things about it are load-bearing:
 

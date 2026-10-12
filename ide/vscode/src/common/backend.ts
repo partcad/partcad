@@ -552,6 +552,25 @@ class JsonRpcBackend implements PartcadBackend {
             }),
         );
         reg('partcad.caeDefaults', () => this.send('cae.defaults', {}));
+        // The Validation group's Simulation tab. What an object declares under
+        // 'simulate:' is configuration, read on every show to decide whether the
+        // group applies; running one is 'pc sim -f <name>', with the pictures
+        // the plugin took of the scene sent back as bytes rather than as paths.
+        reg('partcad.simulateList', (a) =>
+            this.send('simulate.list', { package: a.pkg, object: a.name, kind: a.kind }),
+        );
+        reg('partcad.simulateRun', (a) =>
+            this.send('simulate.run', {
+                package: a.pkg,
+                object: a.name,
+                assembly: a.kind === 'assembly',
+                filter: a.scenario,
+                // Another simulation plugin than the one it names, when the
+                // panel's "Simulated by" says so.
+                plugin: a.plugin,
+                inline: true,
+            }),
+        );
         // The Design tab's 2D and Draft tabs: one object rendered to one file,
         // which comes back as bytes, since the daemon may be on another machine.
         // 'plugin' is the package that implements the file type, as 'pc render

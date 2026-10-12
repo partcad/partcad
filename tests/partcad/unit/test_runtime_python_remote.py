@@ -203,6 +203,51 @@ def test_an_output_file_is_written_where_the_caller_asked(tmp_path, monkeypatch)
         assert f.read() == b"glTF"
 
 
+def test_an_output_directory_comes_back_whole_where_the_caller_asked(tmp_path, monkeypatch):
+    """For a command whose results are whatever it wrote into a directory -- a
+    simulation plugin's pictures -- rather than a file it was told the name of."""
+    from partcad_utils import container_service
+
+    written = tmp_path / "over-there"
+    written.mkdir()
+    (written / "snapshot-after.png").write_bytes(b"PNG")
+    wanted = tmp_path / "run"
+    wanted.mkdir()
+    (wanted / "scene.xml").write_text("<mujoco/>", encoding="utf-8")
+    elsewhere = str(tmp_path / "not-asked-for")
+    archive = container_service.pack_directory(str(written))
+    service = _Service(
+        result={
+            "stdout": None,
+            "stderr": None,
+            "exit_code": 0,
+            "output_files": {},
+            "output_dirs": {str(wanted): archive, elsewhere: archive},
+        }
+    )
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
+
+    exitcode, _, _ = _runtime(tmp_path).run(["-c", "pass"], output_dirs=[str(wanted)])
+
+    assert exitcode == 0
+    assert service.params["output_dirs"] == [str(wanted)]
+    assert (wanted / "snapshot-after.png").read_bytes() == b"PNG"
+    # What was there already is left alone, and a directory nobody asked for
+    # is not written.
+    assert (wanted / "scene.xml").exists()
+    assert not os.path.exists(elsewhere)
+
+
+def test_a_command_that_asks_for_no_directory_sends_no_such_field(tmp_path, monkeypatch):
+    """So that every other request a container is sent stays exactly as it was."""
+    service = _Service()
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
+
+    _runtime(tmp_path).run(["-c", "pass"])
+
+    assert "output_dirs" not in service.params
+
+
 def test_an_error_from_the_service_is_reported_rather_than_swallowed(tmp_path, monkeypatch):
     class _Broken(_Service):
         def execute(self, command, params):

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-07 09:01-0700\n"
+"POT-Creation-Date: 2026-10-12 15:11+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -317,25 +317,62 @@ msgid ""
 "What a part states about itself is written into the URDF element that "
 "states it: mass, centre of mass and inertia into ``<inertial>``, friction"
 " and the contact parameters into a ``<gazebo>`` block, "
-"``material``/``color`` into ``<material>``. Only a part that says nothing"
-" gets computed inertial properties: OCCT gives the volume, the centre of "
-"mass and the inertia tensor about it, and a density turns those into a "
-"mass. Since PartCAD still has nowhere to record what a part is *made of*,"
-" that density is a parameter of the export with a default rather than a "
-"property of the part - the first gap this page proposes to close."
+"``material``/``color`` into ``<material>``. A part that states none of "
+"its mass properties is written no differently, because PartCAD has "
+"already worked them out: OCCT measured the solid's volume, its centroid "
+"and its inertia at unit density as the part was built, and the density of"
+" what the part is made of turns those into a mass, a centre of mass and "
+"an inertia (``partcad.physics``). They reach the exporter in the part's "
+"properties, under the names a part would state them under, and the "
+"exporter writes them - this one, and the MJCF and SDFormat ones the "
+"simulation plugins carry, all the same way, because none of them works a "
+"mass out. Every value is resolved in one order:"
 msgstr ""
-"Was ein Teil über sich selbst angibt, wird in das URDF-Element "
-"geschrieben, das es angibt: Masse, Schwerpunkt und Trägheit in "
-"``<inertial>``, Reibung und die Kontaktparameter in einen "
-"``<gazebo>``-Block, ``material``/``color`` in ``<material>``. Nur ein "
-"Teil, das nichts sagt, bekommt berechnete Trägheitseigenschaften: OCCT "
-"liefert das Volumen, den Schwerpunkt und den Trägheitstensor darum, und "
-"eine Dichte macht daraus eine Masse. Da PartCAD immer noch keinen Ort "
-"hat, um festzuhalten, *woraus* ein Teil besteht, ist diese Dichte ein "
-"Parameter des Exports mit einem Standardwert und keine Eigenschaft des "
-"Teils - die erste Lücke, die diese Seite zu schließen vorschlägt."
 
-#: ../../source/simulation.rst:133
+#: ../../source/simulation.rst:137
+msgid "what the part states, as stated;"
+msgstr ""
+
+#: ../../source/simulation.rst:138
+msgid "its ``density`` - one it states itself, or else its material's;"
+msgstr ""
+
+#: ../../source/simulation.rst:139
+msgid ""
+"for an export only, the ``density`` parameter of the export, else 2700 "
+"kg/m³ (aluminium), for a part that states no density and is made of "
+"nothing that does."
+msgstr ""
+
+#: ../../source/simulation.rst:143
+msgid ""
+"A part that states its mass and not its inertia gets its solid's inertia "
+"scaled to that mass, so it turns the way its shape says at the weight it "
+"says. The centre of mass and the inertia come from the same density as "
+"the mass, so the three cannot disagree. ``pc info`` reports the same "
+"values as ``MassProperties``, each with where it came from, so what it "
+"says a part weighs is what a simulation of it weighs."
+msgstr ""
+
+#: ../../source/simulation.rst:150
+msgid ""
+"What an exporter still does is add up a link made of several shapes - "
+"``wrist/1`` in aluminium, ``wrist/2`` in steel - each placed where the "
+"link holds it, its inertia turned with it and moved to the common centre "
+"of mass, so that the link balances where the steel pulls it. That "
+"arithmetic is ``mass_properties`` in PartCAD's ``wrappers/`` directory, "
+"beside ``urdf_common``, and it is the one copy of it: the plugins import "
+"it the way they import ``urdf_common``, and carry none of their own."
+msgstr ""
+
+#: ../../source/simulation.rst:158
+msgid ""
+"Every density is in kg/m³ - a material's, a part's and an export's - so "
+"none is ever converted on the way, and there is no factor of a million "
+"anywhere to get wrong."
+msgstr ""
+
+#: ../../source/simulation.rst:162
 msgid ""
 "A link's name, and the properties written under it, come from the shape "
 "the exporter is handed, and both travel on that shape together. This used"
@@ -366,7 +403,7 @@ msgstr ""
 "Objekts auf die Nutzlast geprägt, sodass Teile, die sich Geometrie "
 "teilen, jeweils sich selbst zurückbekommen."
 
-#: ../../source/simulation.rst:145
+#: ../../source/simulation.rst:174
 msgid ""
 "The stamp reaches the shape that was asked for and no further. Inside a "
 "cached assembly the children sit in the entry with the names, labels and "
@@ -387,7 +424,8 @@ msgstr ""
 "der Baum gecacht wurde, und es braucht eine Änderung, die die Baugruppe "
 "tatsächlich hasht, oder ``pc system reset``, um ihn neu zu bauen."
 
-#: ../../source/simulation.rst:153
+#: ../../source/simulation.rst:182
+#, fuzzy
 msgid ""
 "What a shape reports about itself is cached too, in an entry of its own "
 "beside the geometry - the geometry's key with ``-props`` appended. Both "
@@ -396,9 +434,8 @@ msgid ""
 " back out of the cache, and a cache written before that entry existed is "
 "a miss for the properties and not for the geometry. It is not what the "
 "stamp above is made of, though: that entry is keyed on the geometry, so "
-"what sits in it belongs to the geometry - which is where a *derived* "
-"property (item 2 below) would land. What the object asking reports is its"
-" own ``properties:`` section, and only that."
+"what sits in it belongs to the geometry. What the object asking reports "
+"is its own ``properties:`` section, and only that."
 msgstr ""
 "Was eine Form über sich selbst meldet, wird ebenfalls "
 "zwischengespeichert, in einem eigenen Eintrag neben der Geometrie - dem "
@@ -414,11 +451,33 @@ msgstr ""
 " anfragende Objekt meldet, ist sein eigener Abschnitt ``properties:``, "
 "und nur dieser."
 
-#: ../../source/simulation.rst:164
+#: ../../source/simulation.rst:191
+msgid ""
+"A *derived* property is not cached there either, and the reason is the "
+"same key. A mass is the solid times a density, and the density lives in a"
+" ``materials:`` section or a ``properties:`` one, neither of which the "
+"geometry's hash covers - so a mass cached beside the geometry would "
+"outlive an edit to the density it was worked out from. It has an entry of"
+" its own instead (``partcad.physics``), holding the part's volume, mass, "
+"centre of mass and inertia, under a key made of the part's own cache key "
+"- which every edit to the CAD moves - and of everything the derivation "
+"reads that the part's key does not cover: the density it was weighed at "
+"and where that came from (a stated density, the material that lent it, or"
+" an export's fallback), and every value the part states that a derived "
+"one would otherwise fill in. An edit to a material's density or to a "
+"stated mass is therefore a new entry as well, and an edit to anything "
+"that does not weigh - a material's description, a part's friction - is "
+"not. ``pc info``, an export and the IDE read the same entry, and a hit "
+"answers without the geometry. A miss works the values out from what the "
+"geometry's own entry carries: the volume, and the centroid and inertia at"
+" unit density OCCT measures as the shape is built."
+msgstr ""
+
+#: ../../source/simulation.rst:210
 msgid "Converting between the two"
 msgstr "Zwischen beiden konvertieren"
 
-#: ../../source/simulation.rst:166
+#: ../../source/simulation.rst:212
 msgid ""
 "``pc convert assembly`` rewrites the package rather than just producing a"
 " file. To URDF it writes the ``.urdf`` and its meshes and switches the "
@@ -437,11 +496,11 @@ msgstr ""
 "Koordinaten. Wie die Gelenke zu Interfaces werden, steht in `URDF joints "
 "as PartCAD interfaces`_ weiter unten."
 
-#: ../../source/simulation.rst:174
+#: ../../source/simulation.rst:220
 msgid "What the round trip preserves"
 msgstr "Was der Rundlauf bewahrt"
 
-#: ../../source/simulation.rst:176
+#: ../../source/simulation.rst:222
 msgid ""
 "``examples/produce_assembly_assy:logo`` exported to URDF and read back as"
 " a ``urdf`` assembly puts every shape back where it was, under the name "
@@ -456,61 +515,61 @@ msgstr ""
 "gehören zusammen“, außer indem sie sie verbindet. Das ist alles, was "
 "überlebt."
 
-#: ../../source/simulation.rst:186
+#: ../../source/simulation.rst:232
 msgid "Preserved"
 msgstr "Bewahrt"
 
-#: ../../source/simulation.rst:187
+#: ../../source/simulation.rst:233
 msgid "Lost"
 msgstr "Verloren"
 
-#: ../../source/simulation.rst:188
+#: ../../source/simulation.rst:234
 msgid "Every shape, at the placement it had"
 msgstr "Jede Form, an der Platzierung, die sie hatte"
 
-#: ../../source/simulation.rst:189
+#: ../../source/simulation.rst:235
 msgid "Every name (PartCAD names carry package paths; ROS names cannot)"
 msgstr "Jeder Name (PartCAD-Namen tragen Paketpfade; ROS-Namen können das nicht)"
 
-#: ../../source/simulation.rst:190
+#: ../../source/simulation.rst:236
 msgid "Placements, to full double precision"
 msgstr "Platzierungen, in voller doppelter Genauigkeit"
 
-#: ../../source/simulation.rst:191
+#: ../../source/simulation.rst:237
 msgid "Nesting: an ASSY may group its parts, a URDF's grouping is its joint tree"
 msgstr ""
 "Verschachtelung: eine ASSY darf ihre Teile gruppieren, die Gruppierung "
 "einer URDF ist ihr Gelenkbaum"
 
-#: ../../source/simulation.rst:192
+#: ../../source/simulation.rst:238
 msgid "Names of the assembly's own children"
 msgstr "Namen der eigenen Kinder der Baugruppe"
 
-#: ../../source/simulation.rst:193
+#: ../../source/simulation.rst:239
 msgid "Parametrization: an ASSY parameter, an enrich, an alias"
 msgstr "Parametrisierung: ein ASSY-Parameter, ein Enrich, ein Alias"
 
-#: ../../source/simulation.rst:194
+#: ../../source/simulation.rst:240
 msgid "Geometry, as a triangle mesh"
 msgstr "Geometrie, als Dreiecksnetz"
 
-#: ../../source/simulation.rst:195
+#: ../../source/simulation.rst:241
 msgid "Exact B-rep geometry; the mesh is a tessellation at a chosen tolerance"
 msgstr ""
 "Exakte B-Rep-Geometrie; das Netz ist eine Tessellierung mit einer "
 "gewählten Toleranz"
 
-#: ../../source/simulation.rst:196
+#: ../../source/simulation.rst:242
 msgid "Shape sharing (one mesh, many links)"
 msgstr "Gemeinsame Nutzung von Formen (ein Mesh, viele Links)"
 
-#: ../../source/simulation.rst:197
+#: ../../source/simulation.rst:243
 msgid "Which part in which package a link came from - the digital thread itself"
 msgstr ""
 "Aus welchem Teil in welchem Paket ein Link stammt - der digitale Faden "
 "selbst"
 
-#: ../../source/simulation.rst:199
+#: ../../source/simulation.rst:245
 msgid ""
 "In the other direction, reading a URDF loses less than it used to but "
 "still loses. Mass, inertia, friction, contact parameters and appearance "
@@ -539,11 +598,11 @@ msgstr ""
 " Anzahl von jedem, statt sie stillschweigend zu übergehen, sodass der "
 "Verlust zur Importzeit und in ``pc info`` sichtbar ist."
 
-#: ../../source/simulation.rst:212
+#: ../../source/simulation.rst:258
 msgid "What it took to implement"
 msgstr "Was die Umsetzung erfordert hat"
 
-#: ../../source/simulation.rst:214
+#: ../../source/simulation.rst:260
 msgid ""
 "Worth recording, because the shape of the work says something about where"
 " the gap is:"
@@ -551,7 +610,7 @@ msgstr ""
 "Festhaltenswert, weil die Gestalt der Arbeit etwas darüber aussagt, wo "
 "die Lücke liegt:"
 
-#: ../../source/simulation.rst:217
+#: ../../source/simulation.rst:263
 msgid ""
 "**No change to the assembly representation was needed.** ``Assembly``, "
 "``AssemblyChild`` and ``Part`` expressed everything the *geometric* half "
@@ -565,7 +624,7 @@ msgstr ""
 "schlechte Nachricht: die Darstellung ist genau reich genug für Formen und"
 " Platzierungen und hat für alles andere überhaupt keinen Platz."
 
-#: ../../source/simulation.rst:222
+#: ../../source/simulation.rst:268
 msgid ""
 "**The wrapper protocol had to grow a raw mode.** "
 "``ocp_serialize.decode()`` turns an assembly envelope into a single "
@@ -579,7 +638,7 @@ msgstr ""
 "diesen fatal ist - URDF *ist* der Baum. Daher "
 "``wrapper_common.handle_input(decode=False)``."
 
-#: ../../source/simulation.rst:226
+#: ../../source/simulation.rst:272
 msgid ""
 "**Units and conventions cost a module.** URDF is metres, radians and "
 "fixed-axis roll-pitch-yaw; PartCAD is millimetres, degrees and axis-"
@@ -592,7 +651,7 @@ msgstr ""
 "existiert, um diese Umrechnung an einer getesteten Stelle zu halten, "
 "statt sie über zwei Wrapper zu verteilen."
 
-#: ../../source/simulation.rst:230
+#: ../../source/simulation.rst:276
 msgid ""
 "**The parts a URDF points at have no declaration.** They are whatever the"
 " URDF names, so they are materialized into the package in memory as "
@@ -611,7 +670,7 @@ msgstr ""
 "Teile sind gewöhnliche Teile, inspizierbar und exportierbar, und kein "
 "internes Detail."
 
-#: ../../source/simulation.rst:236
+#: ../../source/simulation.rst:282
 msgid ""
 "**Mapping the robot's root link to the assembly itself was a mistake "
 "too.** It made an export come out with one link fewer, which looked like "
@@ -635,7 +694,7 @@ msgstr ""
 "dieselben vier platzierten Links zurück; der Rundlauf ist stabil, nur um "
 "einen ehrlichen Link länger."
 
-#: ../../source/simulation.rst:245
+#: ../../source/simulation.rst:291
 msgid ""
 "**A link of several shapes is a sub-assembly, and combining them was a "
 "mistake.** Merging a link's visuals into one generated shape made the "
@@ -662,7 +721,7 @@ msgstr ""
 "Kompromiss: ein digitaler Faden, der umschreibt, was ihm übergeben wurde,"
 " ist keiner."
 
-#: ../../source/simulation.rst:255
+#: ../../source/simulation.rst:301
 msgid ""
 "**Nesting a sub-assembly per joint was also a mistake, for the opposite "
 "reason.** It preserved the URDF's tree faithfully and cost an arm one "
@@ -685,8 +744,8 @@ msgstr ""
 "Baum festzuhalten ist das, was die ASSY-Konvertierung die Kinematik "
 "behalten *und* die Baugruppe flach bleiben ließ."
 
-#: ../../source/simulation.rst:263
 #, python-brace-format
+#: ../../source/simulation.rst:309
 msgid ""
 "**An opaque properties section was a mistake, and the least obvious "
 "one.** The first version carried what a URDF said under ``physics: {urdf:"
@@ -716,7 +775,7 @@ msgstr ""
 "URDF nicht angeben kann -, hält die Liste ehrlich, denn die Alternative "
 "zu einem lauten Fehlschlag ist ein stiller Verlust."
 
-#: ../../source/simulation.rst:274
+#: ../../source/simulation.rst:320
 msgid ""
 "**The same went for the link's identity.** Recording which link a part "
 "came from, and which link that link hung off, looked like cheap "
@@ -737,7 +796,7 @@ msgstr ""
 "bereits Enthaltensein bedeutet; Beziehungen zwischen zwei Dingen gehören "
 "in die Verbindung zwischen ihnen."
 
-#: ../../source/simulation.rst:281
+#: ../../source/simulation.rst:327
 msgid ""
 "**A cache entry is keyed by geometry, and carried an identity it should "
 "not have.** Two parts that read the same mesh file hash the same, so the "
@@ -754,8 +813,8 @@ msgstr ""
 "Beim Verlassen des Caches neu zu prägen, genau wie der Schreibpfad beim "
 "Hineingehen prägt, war die Lösung."
 
-#: ../../source/simulation.rst:287
 #, python-brace-format
+#: ../../source/simulation.rst:333
 msgid ""
 "**Two long-standing gaps in the interface code surfaced.** The schema has"
 " always allowed ``ports: {name:}`` and ``implements: {iface:}`` with no "
@@ -769,7 +828,7 @@ msgstr ""
 "geschrieben, weil niemand Interfaces programmatisch erzeugt hatte. Sie zu"
 " erzeugen fand es sofort."
 
-#: ../../source/simulation.rst:292
+#: ../../source/simulation.rst:338
 msgid ""
 "None of that was hard. The hard part is everything the geometry does not "
 "cover, which is the rest of this page."
@@ -777,11 +836,11 @@ msgstr ""
 "Nichts davon war schwer. Der schwere Teil ist alles, was die Geometrie "
 "nicht abdeckt, und das ist der Rest dieser Seite."
 
-#: ../../source/simulation.rst:298
+#: ../../source/simulation.rst:344
 msgid "URDF joints as PartCAD interfaces"
 msgstr "URDF-Gelenke als PartCAD-Interfaces"
 
-#: ../../source/simulation.rst:300
+#: ../../source/simulation.rst:346
 msgid ""
 "This is the part worth dwelling on, because it is where the two models "
 "actually have to be reconciled rather than translated."
@@ -790,7 +849,7 @@ msgstr ""
 "die beiden Modelle tatsächlich miteinander in Einklang gebracht und nicht"
 " bloß übersetzt werden."
 
-#: ../../source/simulation.rst:303
+#: ../../source/simulation.rst:349
 msgid ""
 "A URDF joint relates two link *frames*: at the zero configuration, the "
 "child link's frame sits at the joint's ``origin`` in the parent link's "
@@ -810,24 +869,24 @@ msgstr ""
 "Port, einer halben Drehung, den Bewegungsfreiheits-Versätzen und der "
 "Inversen des Quell-Ports."
 
-#: ../../source/simulation.rst:310
+#: ../../source/simulation.rst:356
 msgid "So one side has to carry the flip. The mapping is:"
 msgstr "Eine Seite muss also die Umkehrung tragen. Die Abbildung lautet:"
 
-#: ../../source/simulation.rst:316 ../../source/simulation.rst:659
-#: ../../source/simulation.rst:1104
+#: ../../source/simulation.rst:362 ../../source/simulation.rst:782
+#: ../../source/simulation.rst:930 ../../source/simulation.rst:1427
 msgid "URDF"
 msgstr "URDF"
 
-#: ../../source/simulation.rst:317 ../../source/simulation.rst:657
+#: ../../source/simulation.rst:363 ../../source/simulation.rst:780
 msgid "PartCAD"
 msgstr "PartCAD"
 
-#: ../../source/simulation.rst:318
+#: ../../source/simulation.rst:364
 msgid "joint (parent side)"
 msgstr "Gelenk (Elternseite)"
 
-#: ../../source/simulation.rst:319
+#: ../../source/simulation.rst:365
 msgid ""
 "a **socket** interface with one port at its origin, which the parent part"
 " implements at the joint origin, under an instance named after the joint"
@@ -836,11 +895,11 @@ msgstr ""
 "Elternteil am Gelenkursprung implementiert, unter einer nach dem Gelenk "
 "benannten Instanz"
 
-#: ../../source/simulation.rst:321
+#: ../../source/simulation.rst:367
 msgid "joint (child side)"
 msgstr "Gelenk (Kindseite)"
 
-#: ../../source/simulation.rst:322
+#: ../../source/simulation.rst:368
 msgid ""
 "a **plug** interface whose one port sits at the half turn, which the "
 "child part implements once, at its own origin"
@@ -848,20 +907,20 @@ msgstr ""
 "ein **Stecker**-Interface, dessen einziger Port an der halben Drehung "
 "sitzt und das das Kind einmal implementiert, an seinem eigenen Ursprung"
 
-#: ../../source/simulation.rst:324
+#: ../../source/simulation.rst:370
 msgid "the two are the same joint"
 msgstr "die beiden sind dasselbe Gelenk"
 
-#: ../../source/simulation.rst:325
+#: ../../source/simulation.rst:371
 msgid "``mates:`` on the plug, naming the socket"
 msgstr "``mates:`` am Stecker, das die Buchse benennt"
 
-#: ../../source/simulation.rst:326
+#: ../../source/simulation.rst:372
 msgid "``axis``, ``limit`` lower/upper"
 msgstr "``axis``, ``limit`` unten/oben"
 
-#: ../../source/simulation.rst:327
 #, python-brace-format
+#: ../../source/simulation.rst:373
 msgid ""
 "``motion: {axis, limits}``, in degrees or millimetres, plus an interface "
 "``parameter`` (``angle`` for a revolute joint, ``offset`` for a prismatic"
@@ -871,12 +930,12 @@ msgstr ""
 "Interface-``parameter`` (``angle`` für ein Drehgelenk, ``offset`` für ein"
 " Schubgelenk), der es bewegt"
 
-#: ../../source/simulation.rst:330
+#: ../../source/simulation.rst:376
 msgid "``safety_controller``, ``mimic``"
 msgstr "``safety_controller``, ``mimic``"
 
-#: ../../source/simulation.rst:331
 #, python-brace-format
+#: ../../source/simulation.rst:377
 msgid ""
 "``motion: {softLimits, mimic}`` - both bound the movement, so both are "
 "kinematics"
@@ -884,12 +943,12 @@ msgstr ""
 "``motion: {softLimits, mimic}`` - beide begrenzen die Bewegung, also sind"
 " beide Kinematik"
 
-#: ../../source/simulation.rst:333
+#: ../../source/simulation.rst:379
 msgid "``limit`` effort/velocity, ``dynamics``"
 msgstr "``limit`` Kraft/Geschwindigkeit, ``dynamics``"
 
-#: ../../source/simulation.rst:334
 #, python-brace-format
+#: ../../source/simulation.rst:380
 msgid ""
 "``physics: {maxEffort, maxVelocity, damping, friction}`` - what the "
 "movement costs"
@@ -897,20 +956,20 @@ msgstr ""
 "``physics: {maxEffort, maxVelocity, damping, friction}`` - was die "
 "Bewegung kostet"
 
-#: ../../source/simulation.rst:336
+#: ../../source/simulation.rst:382
 msgid "a joint's ``<gazebo>`` block"
 msgstr "der ``<gazebo>``-Block eines Gelenks"
 
-#: ../../source/simulation.rst:337
 #, python-brace-format
+#: ../../source/simulation.rst:383
 msgid "``physics: {springStiffness, springReference, stopCfm, ...}``"
 msgstr "``physics: {springStiffness, springReference, stopCfm, ...}``"
 
-#: ../../source/simulation.rst:338
+#: ../../source/simulation.rst:384
 msgid "``calibration``"
 msgstr "``calibration``"
 
-#: ../../source/simulation.rst:339
+#: ../../source/simulation.rst:385
 msgid ""
 "nothing: a limit-switch reference used when a real robot is commissioned,"
 " which says nothing about the model. Counted and reported"
@@ -919,12 +978,12 @@ msgstr ""
 "echten Roboters verwendet wird und über das Modell nichts aussagt. Wird "
 "gezählt und gemeldet"
 
-#: ../../source/simulation.rst:341
+#: ../../source/simulation.rst:387
 msgid "a link's attachment"
 msgstr "die Anbindung eines Links"
 
-#: ../../source/simulation.rst:342
 #, python-brace-format
+#: ../../source/simulation.rst:388
 msgid ""
 "``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: "
 "<joint>}``"
@@ -932,7 +991,7 @@ msgstr ""
 "``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: "
 "<joint>}``"
 
-#: ../../source/simulation.rst:344
+#: ../../source/simulation.rst:390
 msgid ""
 "All of this is stated in the *link* frame, which is not necessarily where"
 " a link's geometry sits: a link that is one shape placed at an "
@@ -956,7 +1015,7 @@ msgstr ""
 "Interface-Instanzen einzurechnen hätte ebenfalls funktioniert und ihn "
 "über jede Buchse und jeden Stecker in der Datei verteilt."
 
-#: ../../source/simulation.rst:353
+#: ../../source/simulation.rst:399
 msgid ""
 "Putting the flip on the plug is what keeps the *socket* readable: the "
 "parent implements it at exactly the joint origin, which is a number a "
@@ -980,7 +1039,7 @@ msgstr ""
 "Port am Gelenkursprung sitzt. Die Beschreibung bleibt lesbar; die "
 "ausführbare Hälfte bleibt richtig."
 
-#: ../../source/simulation.rst:363
+#: ../../source/simulation.rst:409
 msgid ""
 "The units change at the boundary and only there. A URDF limit is radians "
 "for a revolute joint and metres for a prismatic one; what lands in "
@@ -999,13 +1058,13 @@ msgstr ""
 " Verbraucher - der erzeugte Parameter, das Schema, ein Mensch, der die "
 "Datei liest - sieht eine Konvention."
 
-#: ../../source/simulation.rst:370
+#: ../../source/simulation.rst:416
 msgid "Two things fall out of this that are worth more than the mapping itself."
 msgstr ""
 "Zwei Dinge ergeben sich daraus, die mehr wert sind als die Abbildung "
 "selbst."
 
-#: ../../source/simulation.rst:372
+#: ../../source/simulation.rst:418
 msgid ""
 "**Interfaces are reusable, instances are not.** What varies between two "
 "joints of the same kind is *where* they are, and that lives in the "
@@ -1034,8 +1093,8 @@ msgstr ""
 "Gelenkart, wiederverwendet, wo sie übereinstimmen, ist die ehrliche "
 "Lesart."
 
-#: ../../source/simulation.rst:384
 #, python-brace-format
+#: ../../source/simulation.rst:430
 msgid ""
 "**A pose becomes expressible.** The parameter the converter generates is "
 "not decoration: ``connect: {toParams: {angle: 90}}`` in the generated "
@@ -1055,11 +1114,11 @@ msgstr ""
 "*benannte Konfiguration* der gesamten Baugruppe statt eines in eine "
 "Verbindung geschriebenen Werts -, und das ist Punkt 5 weiter unten."
 
-#: ../../source/simulation.rst:393
+#: ../../source/simulation.rst:439
 msgid "An engine's own scene format is its plugin's"
 msgstr "Das eigene Szenenformat einer Engine gehört ihrem Plugin"
 
-#: ../../source/simulation.rst:395
+#: ../../source/simulation.rst:441
 msgid ""
 "SDFormat and MJCF are read and written exactly the way URDF is -- one "
 "entry of an ``import:`` section for the reader, one of an ``export:`` "
@@ -1073,55 +1132,56 @@ msgstr ""
 "Hüllen, dieselben ``dropped``-Zähler --, aber die Einträge stecken "
 "**nicht in diesem Wheel**. Jeder gehört zum Plugin-Paket seiner Engine:"
 
-#: ../../source/simulation.rst:405
+#: ../../source/simulation.rst:451
 msgid "Engine"
 msgstr "Engine"
 
-#: ../../source/simulation.rst:406
+#: ../../source/simulation.rst:452
 msgid "Package"
 msgstr "Paket"
 
-#: ../../source/simulation.rst:407
+#: ../../source/simulation.rst:453
 msgid "Scene type"
 msgstr "Szenentyp"
 
-#: ../../source/simulation.rst:408
+#: ../../source/simulation.rst:454
 msgid "Export"
 msgstr "Export"
 
-#: ../../source/simulation.rst:409
+#: ../../source/simulation.rst:455 ../../source/simulation.rst:928
 msgid "Gazebo"
 msgstr "Gazebo"
 
-#: ../../source/simulation.rst:410
+#: ../../source/simulation.rst:456
 msgid "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
 msgstr "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
 
-#: ../../source/simulation.rst:411
+#: ../../source/simulation.rst:457
 msgid "``sim-gazebo:world``"
 msgstr "``sim-gazebo:world``"
 
-#: ../../source/simulation.rst:412
+#: ../../source/simulation.rst:458
 msgid "``pc export -S -t sim-gazebo:world``"
 msgstr "``pc export -S -t sim-gazebo:world``"
 
-#: ../../source/simulation.rst:413
+#: ../../source/simulation.rst:459 ../../source/simulation.rst:813
+#: ../../source/simulation.rst:925
 msgid "MuJoCo"
 msgstr "MuJoCo"
 
-#: ../../source/simulation.rst:414
+#: ../../source/simulation.rst:460
 msgid "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
 msgstr "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
 
-#: ../../source/simulation.rst:415
+#: ../../source/simulation.rst:461
 msgid "``sim-mujoco:mjcf``"
 msgstr "``sim-mujoco:mjcf``"
 
-#: ../../source/simulation.rst:416
+#: ../../source/simulation.rst:462
 msgid "``pc export -S -t sim-mujoco:mjcf``"
 msgstr "``pc export -S -t sim-mujoco:mjcf``"
 
-#: ../../source/simulation.rst:418
+#: ../../source/simulation.rst:464
 msgid ""
 "That is the same rule the simulator itself follows, and for the same "
 "reason. Reading a format, writing it, launching the application on it and"
@@ -1143,11 +1203,11 @@ msgstr ""
 "Format, sodass es zu importieren auf einen Schlag den Typ, den Exporter, "
 "``pc sim`` und ``pc ide open --with`` zum Funktionieren bringt."
 
-#: ../../source/simulation.rst:427
+#: ../../source/simulation.rst:473
 msgid "A package that uses one imports it and names the type through it:"
 msgstr "Ein Paket, das eines verwendet, importiert es und benennt den Typ darüber:"
 
-#: ../../source/simulation.rst:441
+#: ../../source/simulation.rst:487
 msgid ""
 "A bare ``type: world`` resolves to nothing and says so. So does ``pc "
 "export -t mjcf``: nothing in ``//builtin/export`` writes either format, "
@@ -1158,7 +1218,7 @@ msgstr ""
 "schreibt eines der beiden Formate, und die qualifizierte Schreibweise ist"
 " das, was das Paket erreicht, das es tut."
 
-#: ../../source/simulation.rst:445
+#: ../../source/simulation.rst:491
 msgid ""
 "What the readers preserve and what they cannot is documented in those "
 "repositories, beside the code -- including the parts of MJCF that are "
@@ -1181,7 +1241,7 @@ msgstr ""
 "statische Anordnung nicht festhalten kann, wird gezählt und gemeldet "
 "statt übergangen, und ``pc info`` listet es auf."
 
-#: ../../source/simulation.rst:454
+#: ../../source/simulation.rst:500
 msgid ""
 "One consequence is worth stating because it is a change and not an "
 "oversight: ``pc ide open --with mujoco`` no longer converts a scene into "
@@ -1201,11 +1261,11 @@ msgstr ""
 "Plugins, sodass sie den Exporter nicht ausführen kann, der nötig wäre; "
 "siehe :doc:`cli`."
 
-#: ../../source/simulation.rst:463
+#: ../../source/simulation.rst:509
 msgid "Every description is a Jinja2 template"
 msgstr "Jede Beschreibung ist ein Jinja2-Template"
 
-#: ../../source/simulation.rst:465
+#: ../../source/simulation.rst:511
 msgid ""
 "An ASSY file has always been rendered as a `Jinja2 "
 "<https://jinja.palletsprojects.com/>`_ template before it is parsed, "
@@ -1226,7 +1286,7 @@ msgstr ""
 "denselben Namen: ``param_<name>`` für jeden deklarierten Parameter und "
 "``name`` für den eigenen des Objekts."
 
-#: ../../source/simulation.rst:488
+#: ../../source/simulation.rst:534
 msgid ""
 "The rendered file is written under PartCAD's own state directory rather "
 "than beside the original -- rendering is derived data, and instantiating "
@@ -1248,11 +1308,11 @@ msgstr ""
 "``model://``-Include und eine ``<asset>``-Datei in einem Template "
 "funktionsfähig."
 
-#: ../../source/simulation.rst:498
+#: ../../source/simulation.rst:544
 msgid "Running a simulation"
 msgstr "Eine Simulation ausführen"
 
-#: ../../source/simulation.rst:500
+#: ../../source/simulation.rst:546
 msgid ""
 "``simulate:`` is an optional section of a part or an assembly. Each entry"
 " in it is one simulation, and states four things:"
@@ -1261,11 +1321,11 @@ msgstr ""
 "Baugruppe. Jeder Eintrag darin ist eine Simulation und gibt vier Dinge "
 "an:"
 
-#: ../../source/simulation.rst:503
+#: ../../source/simulation.rst:549
 msgid "``scene:``"
 msgstr "``scene:``"
 
-#: ../../source/simulation.rst:504
+#: ../../source/simulation.rst:550
 msgid ""
 "The scene the object is placed in, by full path. The object's own full "
 "path is assigned to that scene's ``subject`` parameter -- "
@@ -1282,22 +1342,26 @@ msgstr ""
 "Simulationsszene ist eine gewöhnliche Szene mit einem gewöhnlichen "
 "Parameter, und ein Jinja2-Template ist das, was das Subjekt platziert."
 
-#: ../../source/simulation.rst:511
+#: ../../source/simulation.rst:557
+#, fuzzy
 msgid ""
 "The default is ``//builtin/scene:subject``, an empty world holding the "
 "subject and nothing else. A package that needs more -- a fixture to drop "
-"the part onto, a conveyor to push it along -- writes a scene of its own."
+"the part onto, a conveyor to push it along, a tank of water to sink it in"
+" -- writes a scene of its own. The scene is also what says the gravity "
+"the run is under and the fluid it is filled with; see `Gravity, and the "
+"fluid a scene is filled with`_."
 msgstr ""
 "Der Standardwert ist ``//builtin/scene:subject``, eine leere Welt, die "
 "nur das Subjekt enthält. Ein Paket, das mehr braucht -- eine Vorrichtung,"
 " auf die das Teil fallen gelassen wird, ein Förderband, das es "
 "weiterschiebt --, schreibt eine eigene Szene."
 
-#: ../../source/simulation.rst:515
+#: ../../source/simulation.rst:564
 msgid "``offset:``"
 msgstr "``offset:``"
 
-#: ../../source/simulation.rst:516
+#: ../../source/simulation.rst:565
 msgid ""
 "Where in that scene the object goes, in the scene's frame. It is stated "
 "here rather than in the scene because it is a fact about *this* object --"
@@ -1309,11 +1373,11 @@ msgstr ""
 "ist -- wo sein Ursprung relativ zu dem Boden liegt, auf dem es stehen "
 "soll -- und die Szene gemeinsam genutzt wird."
 
-#: ../../source/simulation.rst:521
+#: ../../source/simulation.rst:570
 msgid "``simulation:``"
 msgstr "``simulation:``"
 
-#: ../../source/simulation.rst:522
+#: ../../source/simulation.rst:571
 msgid ""
 "The simulation plugin that runs it, by full path. There is no default: "
 "PartCAD implements no simulator, so a package imports one and says which."
@@ -1334,11 +1398,11 @@ msgstr ""
 " ein Wissensbestand, und der Simulator ist das, was entscheidet, was die "
 "Datei sagen muss."
 
-#: ../../source/simulation.rst:531
+#: ../../source/simulation.rst:580
 msgid "``validation:``"
 msgstr "``validation:``"
 
-#: ../../source/simulation.rst:532
+#: ../../source/simulation.rst:581
 msgid ""
 "A Python expression over ``before`` and ``after`` that says whether what "
 "happened is what was supposed to happen."
@@ -1346,30 +1410,36 @@ msgstr ""
 "Ein Python-Ausdruck über ``before`` und ``after``, der sagt, ob das "
 "Geschehene das ist, was geschehen sollte."
 
-#: ../../source/simulation.rst:556
+#: ../../source/simulation.rst:605
 msgid ""
 "``pc sim`` runs them -- one object, or everything a package declares, or "
 "everything a package tree declares with ``-P <package>...`` -- and exits "
 "non-zero when a validation does not hold. ``--json`` prints the whole of "
-"what each plugin reported. ``examples/feature_simulate`` has three "
-"assemblies of two blocks each: two identical but for 18 millimetres, and "
-"two identical but for the material. All three simulations pass, and no "
-"two of them end the same way."
+"what each plugin reported, ``--before`` and ``--after`` save the two "
+"states a validation is evaluated over to files, and ``--plugin`` runs a "
+"simulation with another plugin than the one it names (see :doc:`cli`). "
+"``examples/feature_simulate`` has three assemblies of two blocks each: "
+"two identical but for 18 millimetres, and two identical but for the "
+"material. All three simulations pass, and no two of them end the same "
+"way."
 msgstr ""
 "``pc sim`` führt sie aus -- ein Objekt, oder alles, was ein Paket "
-"deklariert, oder alles, was ein Paketbaum mit ``-P <package>...`` "
-"deklariert -- und endet mit einem Wert ungleich null, wenn eine "
-"Validierung nicht hält. ``--json`` gibt alles aus, was jedes Plugin "
-"gemeldet hat. ``examples/feature_simulate`` enthält drei Baugruppen aus "
-"je zwei Klötzen: zwei identische bis auf 18 Millimeter und zwei "
-"identische bis auf das Material. Alle drei Simulationen bestehen, und "
-"keine zwei davon enden gleich."
+"deklariert, oder alles, was ein Paketbaum mit ``-P <package>...`` deklariert"
+" -- und endet mit einem Wert ungleich null, wenn eine Validierung nicht "
+"hält. ``--json`` gibt alles aus, was jedes Plugin gemeldet hat, ``--before``"
+" und ``--after`` speichern die beiden Zustände, über denen eine Validierung "
+"ausgewertet wird, in Dateien, und ``--plugin`` führt eine Simulation mit "
+"einem anderen Plugin aus als dem, das sie nennt (siehe :doc:`cli`). "
+"``examples/feature_simulate`` enthält drei Baugruppen aus je zwei Klötzen: "
+"zwei identische bis auf 18 Millimeter und zwei identische bis auf das "
+"Material. Alle drei Simulationen bestehen, und keine zwei davon enden "
+"gleich."
 
-#: ../../source/simulation.rst:564
+#: ../../source/simulation.rst:616
 msgid "Simulation plugins"
 msgstr "Simulations-Plugins"
 
-#: ../../source/simulation.rst:566
+#: ../../source/simulation.rst:618
 msgid ""
 "A simulation plugin is the third kind of implementation a package can "
 "declare, beside the export and render ones, and it is declared in exactly"
@@ -1383,14 +1453,14 @@ msgstr ""
 "Skript, die Sandbox, die dieses Skript braucht, und seine Parameter. Was "
 "sich unterscheidet, ist, was es damit tut. Der Vertrag ist bewusst eng:"
 
-#: ../../source/simulation.rst:571
+#: ../../source/simulation.rst:623
 msgid ""
 "**a scene with the subject in it goes in, and JSON carrying** ``before`` "
 "**and** ``after`` **comes out.**"
 msgstr ""
 "**eine Szene mit dem Subjekt darin geht hinein, und JSON mit** ``before`` **und** ``after`` **kommt heraus.**"
 
-#: ../../source/simulation.rst:587
+#: ../../source/simulation.rst:639
 msgid ""
 "The scene arrives as a **file**, in the format ``format:`` names, because"
 " a simulator reads its own model format and PartCAD already knows how to "
@@ -1405,7 +1475,7 @@ msgstr ""
 " frei beweglich haben möchte. Das hält ein Plugin außerdem frei von OCP: "
 "ihm wird ein Pfad übergeben."
 
-#: ../../source/simulation.rst:593
+#: ../../source/simulation.rst:645
 msgid ""
 "**PartCAD implements none of these**, and that is the point of the "
 "section. A simulator is somebody's program with a release cycle of its "
@@ -1425,7 +1495,7 @@ msgstr ""
 "Wrapper, den Runner -- und ein Paket liefert die Physik, genauso wie "
 "``//pub/feature/render/draftwright`` technische Zeichnungen liefert."
 
-#: ../../source/simulation.rst:601
+#: ../../source/simulation.rst:653
 msgid ""
 "``format:`` resolves in the plugin's own package first, which is what "
 "lets a plugin name the format it implements itself. An engine's scene "
@@ -1439,7 +1509,7 @@ msgstr ""
 "SDFormat gehört Gazebo, sodass jedes Plugin das ``export:``, das es "
 "schreibt, neben dem ``simulation:`` deklariert, das es liest."
 
-#: ../../source/simulation.rst:606
+#: ../../source/simulation.rst:658
 msgid ""
 "There are two, and they are deliberately alike: `partcad-sim-mujoco "
 "<https://github.com/partcad/partcad-sim-mujoco>`_ and `partcad-sim-gazebo"
@@ -1458,7 +1528,7 @@ msgstr ""
 "Szene ist, in die Sie Teile stellen können, und eine Szene, die Sie aus "
 "Teilen gebaut haben, ein Modell ist, das die Engine ausführen kann."
 
-#: ../../source/simulation.rst:614
+#: ../../source/simulation.rst:666
 msgid ""
 "Where the simulator comes from is the one way they differ, and it is not "
 "a difference in the section. MuJoCo is a wheel, so the plugin lists it "
@@ -1475,7 +1545,7 @@ msgstr ""
 "zuerst nach einem lokalen ``gz`` sucht -- an denselben beiden Orten, an "
 "denen ``pc ide open --with gazebo`` sucht."
 
-#: ../../source/simulation.rst:621
+#: ../../source/simulation.rst:673
 msgid ""
 "``before`` and ``after`` are all PartCAD knows about a result. What is "
 "*inside* them, and anything else beside them, is the plugin's own "
@@ -1494,7 +1564,7 @@ msgstr ""
 "und meldet, was dieser sagt. Jede Beurteilung in diesem Satz gehört dem "
 "Paket."
 
-#: ../../source/simulation.rst:628
+#: ../../source/simulation.rst:680
 msgid ""
 "The MuJoCo plugin loads the MJCF, steps it for ``duration`` seconds of "
 "simulated time, and reports each body's position and orientation before "
@@ -1507,61 +1577,186 @@ msgstr ""
 "dem Rechner gebraucht: das Plugin läuft in einer PartCAD-Sandbox, die "
 "eines installiert."
 
-#: ../../source/simulation.rst:634
+#: ../../source/simulation.rst:686
+msgid "Snapshots"
+msgstr "Momentaufnahmen"
+
+#: ../../source/simulation.rst:688
+msgid ""
+"Every run is also asked for two pictures of the scene: one before "
+"anything moved and one when the run is over. They are what the IDE's "
+"**Validation → Simulation** tab shows side by side, and the one thing a "
+"reader can check a verdict against without reading numbers -- a "
+"validation that passed for the wrong reason, a block that fell *through* "
+"another rather than off it, is plain to see in them."
+msgstr ""
+"Bei jedem Lauf werden außerdem zwei Bilder der Szene angefordert: eines, "
+"bevor sich etwas bewegt hat, und eines, wenn der Lauf vorbei ist. Sie "
+"sind das, was der Tab **Validation → Simulation** der IDE nebeneinander "
+"zeigt, und das Einzige, woran ein Leser ein Urteil überprüfen kann, ohne "
+"Zahlen zu lesen -- eine Validierung, die aus dem falschen Grund bestanden"
+" hat, ein Klotz, der *durch* einen anderen hindurchgefallen ist statt von"
+" ihm herunter, ist darauf deutlich zu sehen."
+
+#: ../../source/simulation.rst:695
+msgid ""
+"They are taken from where the scene is looked at when it is rendered: the"
+" ``viewport_origin`` and ``viewport_up`` of its ``render: png:`` "
+"configuration, read exactly as ``pc render -t png`` reads them -- the "
+"scene's own, or failing that its package's -- and the corner a part is "
+"drawn from when neither says anything. So a package that has said how its"
+" world is best looked at has said it once, for both:"
+msgstr ""
+"Sie werden von dort aufgenommen, von wo aus die Szene beim Rendern "
+"betrachtet wird: aus ``viewport_origin`` und ``viewport_up`` ihrer "
+"Konfiguration ``render: png:``, genau so gelesen, wie ``pc render -t "
+"png`` sie liest -- die der Szene selbst oder, falls sie dort fehlen, die "
+"ihres Pakets --, und aus der Ecke, aus der ein Teil gezeichnet wird, wenn"
+" keine von beiden etwas sagt. Ein Paket, das gesagt hat, wie seine Welt "
+"am besten zu betrachten ist, hat es also einmal gesagt, für beides:"
+
+#: ../../source/simulation.rst:716
+msgid ""
+"The plugin is handed this in the request as ``snapshot`` -- the "
+"viewpoint, the picture's ``width`` and ``height`` (the PNG's), and the "
+"name of the file each picture goes to, relative to the directory the run "
+"may write into -- and says which it drew in its result:"
+msgstr ""
+"Das Plugin bekommt dies in der Anfrage als ``snapshot`` übergeben -- den "
+"Blickwinkel, ``width`` und ``height`` des Bildes (die des PNG) und den "
+"Namen der Datei, in die jedes Bild geschrieben wird, relativ zu dem "
+"Verzeichnis, in das der Lauf schreiben darf --, und sagt in seinem "
+"Ergebnis, welche es gezeichnet hat:"
+
+#: ../../source/simulation.rst:730
+msgid ""
+"Pictures are optional. A plugin that cannot draw on the machine it runs "
+"on, or that predates them, reports none and the run is exactly as good: "
+"the verdict never depends on a picture. ``pc sim`` says where the "
+"pictures of each run were written, and ``--json`` lists them under "
+"``snapshots``. Both plugins draw them from their simulator's own geometry"
+" at the simulator's own poses, on the CPU, so a picture needs no GPU in "
+"the sandbox."
+msgstr ""
+"Bilder sind optional. Ein Plugin, das auf dem Rechner, auf dem es läuft, "
+"nicht zeichnen kann oder das älter ist als sie, meldet keine, und der "
+"Lauf ist genauso gut: das Urteil hängt nie von einem Bild ab. ``pc sim`` "
+"sagt, wohin die Bilder jedes Laufs geschrieben wurden, und ``--json`` "
+"führt sie unter ``snapshots`` auf. Beide Plugins zeichnen sie aus der "
+"eigenen Geometrie ihres Simulators in dessen eigenen Posen, auf der CPU, "
+"sodass ein Bild keine GPU in der Sandbox braucht."
+
+#: ../../source/simulation.rst:737
+msgid ""
+"They are kept with the rest of what a run wrote, so a simulation answered"
+" from the cache brings its pictures back with it -- and a scene looked at"
+" from somewhere else is a different question, which runs again."
+msgstr ""
+"Sie werden mit allem anderen aufbewahrt, was ein Lauf geschrieben hat, "
+"sodass eine aus dem Cache beantwortete Simulation ihre Bilder mitbringt -- "
+"und eine Szene, die von anderswo betrachtet wird, ist eine andere Frage, die"
+" erneut läuft."
+
+#: ../../source/simulation.rst:742
 msgid "Friction, and why it is a material property"
 msgstr "Reibung, und warum sie eine Materialeigenschaft ist"
 
-#: ../../source/simulation.rst:636
+#: ../../source/simulation.rst:744
 msgid ""
 "Whether a stack of blocks stands up is not a property of its geometry. "
-"Two 20 mm cubes squarely stacked, ten seconds under gravity, nothing else"
-" changed:"
+"Two 20 mm cubes, one squarely on the other, on a level floor in a world "
+"whose gravity leans 15 degrees off vertical -- the ``tilted`` scene of "
+"``examples/feature_simulate``, which for sliding is a ramp with no edge "
+"-- for ten seconds in MuJoCo, through the MJCF exporter and the "
+"simulation of `partcad-sim-mujoco <https://github.com/partcad/partcad-"
+"sim-mujoco>`_, with nothing changed but the sliding friction both blocks "
+"are given:"
 msgstr ""
-"Ob ein Stapel Klötze stehen bleibt, ist keine Eigenschaft seiner "
-"Geometrie. Zwei sauber gestapelte 20-mm-Würfel, zehn Sekunden unter "
-"Schwerkraft, sonst nichts geändert:"
 
-#: ../../source/simulation.rst:640
+#: ../../source/simulation.rst:753
 msgid "sliding friction"
 msgstr "Gleitreibung"
 
-#: ../../source/simulation.rst:640
-msgid "what happens"
-msgstr "was passiert"
+#: ../../source/simulation.rst:753
+msgid "what happens to the top block"
+msgstr ""
 
-#: ../../source/simulation.rst:642
-msgid "0.04"
-msgstr "0,04"
+#: ../../source/simulation.rst:755
+msgid "0.04 (PTFE)"
+msgstr ""
 
-#: ../../source/simulation.rst:642
-msgid "the top block slides off -- 35 mm, and it ends up on the floor"
-msgstr "der obere Klotz rutscht ab -- 35 mm, und er landet auf dem Boden"
+#: ../../source/simulation.rst:755
+msgid "slides 69 mm and falls 20 mm, its own height, to the floor"
+msgstr ""
 
-#: ../../source/simulation.rst:643
+#: ../../source/simulation.rst:756
+#, fuzzy
+msgid "0.1"
+msgstr "0,5"
+
+#: ../../source/simulation.rst:756
+msgid "slides 63 mm and falls"
+msgstr ""
+
+#: ../../source/simulation.rst:757
+#, fuzzy
+msgid "0.2"
+msgstr "0,5"
+
+#: ../../source/simulation.rst:757
+msgid "slides 56 mm and falls"
+msgstr ""
+
+#: ../../source/simulation.rst:758
+#, fuzzy
+msgid "0.25"
+msgstr "0,5"
+
+#: ../../source/simulation.rst:758
+msgid "slides 32 mm and falls"
+msgstr ""
+
+#: ../../source/simulation.rst:759
+msgid "0.28"
+msgstr ""
+
+#: ../../source/simulation.rst:759
+msgid "slides 34 mm and falls"
+msgstr ""
+
+#: ../../source/simulation.rst:760
+#, fuzzy
+msgid "0.3"
+msgstr "0,5"
+
+#: ../../source/simulation.rst:760
+#, fuzzy
+msgid "stays: 0.5 mm of creep, 0.4 mm of settling"
+msgstr "er bleibt liegen -- 3 mm Setzen"
+
+#: ../../source/simulation.rst:761
 msgid "0.4"
 msgstr "0,4"
 
-#: ../../source/simulation.rst:643
+#: ../../source/simulation.rst:761 ../../source/simulation.rst:762
 msgid "the same"
 msgstr "dasselbe"
 
-#: ../../source/simulation.rst:644
-msgid "0.5"
-msgstr "0,5"
+#: ../../source/simulation.rst:762
+msgid "1.05 (aluminium)"
+msgstr ""
 
-#: ../../source/simulation.rst:644
-msgid "it stays -- 3 mm of settling"
-msgstr "er bleibt liegen -- 3 mm Setzen"
+#: ../../source/simulation.rst:765
+msgid ""
+"A block slides when its friction is below tan(15 deg), 0.268; MuJoCo's "
+"soft contacts put the line a little higher, between 0.28 and 0.3. On a "
+"level floor with gravity straight down, every one of these stays put, "
+"PTFE included: nothing pushes a block sideways, so its friction is never "
+"asked anything. The bottom block grips the floor in every row, for the "
+"reason given below."
+msgstr ""
 
-#: ../../source/simulation.rst:645
-msgid "1.05"
-msgstr "1,05"
-
-#: ../../source/simulation.rst:645
-msgid "it stays -- 1 mm"
-msgstr "er bleibt liegen -- 1 mm"
-
-#: ../../source/simulation.rst:648
+#: ../../source/simulation.rst:771
 msgid ""
 "So the answer to \"will this stand?\" is a fact about the *material*, and"
 " ``materials:`` is where a package already says what its parts are made "
@@ -1576,39 +1771,39 @@ msgstr ""
 "Koeffizienten; und der Koeffizient wird in das jeweilige Format "
 "geschrieben, in das das Objekt exportiert wird:"
 
-#: ../../source/simulation.rst:655
+#: ../../source/simulation.rst:778
 msgid "format"
 msgstr "Format"
 
-#: ../../source/simulation.rst:655
+#: ../../source/simulation.rst:778
 msgid "where it is written"
 msgstr "wo es geschrieben wird"
 
-#: ../../source/simulation.rst:657
+#: ../../source/simulation.rst:780
 msgid "the ``friction`` property of a shape"
 msgstr "die Eigenschaft ``friction`` einer Form"
 
-#: ../../source/simulation.rst:658
+#: ../../source/simulation.rst:781
 msgid "SDFormat (``.world``)"
 msgstr "SDFormat (``.world``)"
 
-#: ../../source/simulation.rst:658
+#: ../../source/simulation.rst:781
 msgid "``<collision><surface><friction><ode><mu>``"
 msgstr "``<collision><surface><friction><ode><mu>``"
 
-#: ../../source/simulation.rst:659
+#: ../../source/simulation.rst:782
 msgid "``<gazebo reference=\"...\"><mu1>``"
 msgstr "``<gazebo reference=\"...\"><mu1>``"
 
-#: ../../source/simulation.rst:660 ../../source/simulation.rst:1110
+#: ../../source/simulation.rst:783 ../../source/simulation.rst:1433
 msgid "MJCF"
 msgstr "MJCF"
 
-#: ../../source/simulation.rst:660
+#: ../../source/simulation.rst:783
 msgid "the first component of a geom's ``friction``"
 msgstr "die erste Komponente des ``friction`` eines Geoms"
 
-#: ../../source/simulation.rst:663
+#: ../../source/simulation.rst:786
 msgid ""
 "All four are the same dimensionless number, so the conversion between "
 "them is the identity -- which is the whole reason it is worth carrying, "
@@ -1619,7 +1814,7 @@ msgstr ""
 " sich lohnt, sie mitzuführen, und warum ein Material einen Koeffizienten "
 "angibt statt eines je Format."
 
-#: ../../source/simulation.rst:667
+#: ../../source/simulation.rst:790
 msgid ""
 "``friction2`` -- the coefficient in the *second* friction direction, "
 "which SDFormat and URDF both spell ``mu2`` -- travels between those two "
@@ -1642,28 +1837,77 @@ msgstr ""
 "Eigenschaft verwandelt zu werden, die es nicht gibt. Beides ist dieselbe "
 "Regel, der die URDF- und SDFormat-Leser ohnehin schon folgen."
 
-#: ../../source/simulation.rst:676
+#: ../../source/simulation.rst:799
 msgid ""
-"Two things are deliberately not done here. A material's **density** is "
-"not wired in the same way: it already has a home (``Material.mass()``), "
-"and making every part that names a material weigh what that material "
-"weighs changes the ``<inertial>`` of every existing export -- a real "
-"improvement, and a change of its own. And PartCAD writes each *body's* "
-"coefficient and says nothing about how a simulator combines the two sides"
-" of a contact, because they do not agree about it: that is the "
-"simulator's model, not the part's."
+"A material's **density** travels the same way, as the shape's ``density``"
+" property, and with it the mass, centre of mass and inertia its solid "
+"comes to -- see `Writing a URDF`_ for the order. All three formats write "
+"those as an ``<inertial>``; MJCF also writes the density on a geom of a "
+"body PartCAD could not weigh (a mesh with no solid in it), so that MuJoCo"
+" weighs it at the right density rather than at its own default of "
+"water's."
 msgstr ""
-"Zwei Dinge werden hier bewusst nicht getan. Die **Dichte** eines "
-"Materials wird nicht auf dieselbe Weise verdrahtet: sie hat bereits ein "
-"Zuhause (``Material.mass()``), und jedes Teil, das ein Material benennt, "
-"so schwer zu machen, wie dieses Material wiegt, ändert das ``<inertial>``"
-" jedes vorhandenen Exports -- eine echte Verbesserung und eine eigene "
-"Änderung. Und PartCAD schreibt den Koeffizienten jedes *Körpers* und sagt"
-" nichts darüber, wie ein Simulator die beiden Seiten eines Kontakts "
-"kombiniert, denn darüber sind sie sich nicht einig: das ist das Modell "
-"des Simulators und nicht das des Teils."
 
-#: ../../source/simulation.rst:684
+#: ../../source/simulation.rst:806
+msgid ""
+"PartCAD writes each *body's* coefficient, and a contact has two. How they"
+" combine is the simulator's model rather than the part's, and the two "
+"engines a plugin exists for do not agree about it:"
+msgstr ""
+
+#: ../../source/simulation.rst:811 ../../source/simulation.rst:923
+#, fuzzy
+msgid "engine"
+msgstr "Engine"
+
+#: ../../source/simulation.rst:811
+msgid "the coefficient of a contact between A and B"
+msgstr ""
+
+#: ../../source/simulation.rst:813
+msgid ""
+"the **larger** of the two, element-wise -- unless one geom has a higher "
+"``priority``, which no exporter here sets (`Contact parameters "
+"<https://mujoco.readthedocs.io/en/stable/modeling.html#contact-"
+"parameters>`_)"
+msgstr ""
+
+#: ../../source/simulation.rst:817
+#, fuzzy
+msgid "Gazebo (DART)"
+msgstr "Gazebo"
+
+#: ../../source/simulation.rst:817
+msgid ""
+"the **smaller** of the two (DART's ``ContactSurface``, which Gazebo "
+"Harmonic's default physics engine uses)"
+msgstr ""
+
+#: ../../source/simulation.rst:821
+msgid ""
+"So two blocks of one material meet at that material's ``mu`` in both, and"
+" that is what a stack's question -- does the top block stay on the bottom"
+" one? -- turns on. A block on the floor does not agree: the ground plane "
+"each exporter writes states no friction, which is 1.0 in both formats, so"
+" in MuJoCo every block grips the floor at 1.0 or more, and in Gazebo at "
+"its own ``mu`` or less. ``examples/feature_simulate`` asks only the first"
+" question."
+msgstr ""
+
+#: ../../source/simulation.rst:828
+msgid ""
+"MuJoCo also needs telling how hard to hold. Its contacts are soft, and a "
+"block under a steady sideways load slips at a small steady rate even well"
+" inside its friction cone; with MuJoCo's own defaults that rate is large "
+"enough that an aluminium stack (``mu`` 1.05) in a world tilted by 6 "
+"degrees -- where tan(6 deg) = 0.105 -- slid apart in ten seconds. The "
+"MJCF exporter therefore writes MuJoCo's own remedies for slow slippage "
+"into every model -- elliptic friction cones, an ``impratio`` of 10 and "
+"three NoSlip iterations -- and with them the same stack creeps half a "
+"millimetre at 15 degrees."
+msgstr ""
+
+#: ../../source/simulation.rst:837
 msgid ""
 "A part that states a ``friction`` of its own keeps it -- a measured part "
 "beats the substance it is made of -- and a part that states neither gets "
@@ -1674,11 +1918,212 @@ msgstr ""
 " keines von beidem angibt, bekommt das, was der Simulator als Standard "
 "verwendet, und das ist eine Zahl, die niemand gewählt hat."
 
-#: ../../source/simulation.rst:689
+#: ../../source/simulation.rst:842
+msgid "Gravity, and the fluid a scene is filled with"
+msgstr ""
+
+#: ../../source/simulation.rst:844
+msgid ""
+"A scene states where things are. A *simulation* scene has to state two "
+"more things, because the same arrangement comes out differently without "
+"them: which way, and how hard, things fall -- and what they fall "
+"*through*. A block dropped on the Moon and the same block dropped into a "
+"tank of seawater are the same scene in every other respect. So a scene "
+"may say both:"
+msgstr ""
+
+#: ../../source/simulation.rst:858
+msgid ""
+"``gravity:`` is a vector, so that a scene whose Z axis is not up says so "
+"rather than being rotated. ``medium:`` names a **material**, resolved "
+"exactly as a part's material is -- ``:brine`` is \"the ``brine`` this "
+"package catalogues\" -- because a fluid is a substance with a density "
+"like any other, and the one fact it states that a solid does not, its "
+"``viscosity``, belongs beside the density rather than in a scene. The "
+"index catalogues the usual three at "
+"``//pub/std/manufacturing/material/fluid``: ``air``, ``water`` (fresh) "
+"and ``seawater``, each at 15 C and sea-level pressure."
+msgstr ""
+
+#: ../../source/simulation.rst:867
+msgid ""
+"Both are optional, and the two defaults are what every scene meant before"
+" a scene could say anything: **no gravity** leaves it to the engine, "
+"whose default is Earth's along -Z (MuJoCo writes 9.81, SDFormat 9.8 -- "
+"PartCAD restates neither, so no existing result moves), and **no medium**"
+" is a vacuum, which is what every engine assumes. "
+"``//builtin/scene:subject`` states neither, and a ``simulate:`` cannot "
+"ask it for a medium: the fluid a part is simulated in is a fact about the"
+" world, like the fixture it stands on, and a package that wants its part "
+"under water writes a scene that is under water "
+"(``examples/feature_simulate`` has one, ``tank``). A ``medium`` parameter"
+" on the built-in scene would be a second way to say the same thing, "
+"spelled as a material reference inside an instance name and resolved "
+"against ``//builtin/scene`` rather than against the package that wrote "
+"it."
+msgstr ""
+
+#: ../../source/simulation.rst:881
+msgid "The units, and why they are these"
+msgstr ""
+
+#: ../../source/simulation.rst:883
+msgid ""
+"Every physical quantity a scene and a material state is **SI**, with the "
+"two exceptions PartCAD makes everywhere: lengths are millimetres and "
+"angles are degrees. So a scene's gravity is in **m/s^2** and a fluid's "
+"density and dynamic viscosity are in **kg/m^3** and **Pa*s** -- the units"
+" every engine states them in, so none of them is converted on its way "
+"into a model. That is the rule the ``how:`` section of an assembly has "
+"always followed (see :doc:`assy`), and the one a part's ``physics`` "
+"follows."
+msgstr ""
+
+#: ../../source/simulation.rst:891
+msgid ""
+"For gravity it is also the right answer on its own terms. A ``simulate:``"
+" may pass its plugin a ``gravity`` of its own in ``params:``, and both "
+"plugins have always taken that in m/s^2; two numbers where one replaces "
+"the other must not be a thousand apart for the same acceleration. And "
+"9.81, 1.62 and 3.72 are Earth, the Moon and Mars to anyone who reads the "
+"file, where 9806.65 is not recognisable as anything. The mistake it "
+"invites, a vector written in mm/s^2, is a thousand g and is reported "
+"(above 1000 m/s^2)."
+msgstr ""
+
+#: ../../source/simulation.rst:899
+msgid ""
+"Unit-suffixed strings (``\"9.81 m/s^2\"``) are not accepted: PartCAD has "
+"no unit-aware scalar yet (item 10 below), and a parser for one field "
+"would be a third dialect beside the ones ``pc cam`` and ``pc cae`` "
+"already speak."
+msgstr ""
+
+#: ../../source/simulation.rst:904
+msgid "What reaches an engine"
+msgstr ""
+
+#: ../../source/simulation.rst:906
+msgid ""
+"The scene's world is resolved by the core -- the medium is a material, "
+"and only the core can load the package that catalogues it -- and handed "
+"to every file type that declares ``properties: true`` (the ones that "
+"state physics: URDF, SDFormat, MJCF) as ``request[\"world\"]``: the "
+"gravity, and the medium as its material's name, density and viscosity. "
+"What a body displaces of that medium is its solid's volume, which PartCAD"
+" resolves beside each shape's mass (``volume``, in mm^3) and "
+"``mass_properties.volume_of()`` adds up per body, so no exporter measures"
+" or weighs anything itself. A scene that states neither sends nothing, "
+"and an export of it is byte for byte what it was. A medium nothing "
+"answers to is an error rather than a vacuum, and so is a gravity that is "
+"not three numbers: the default is a different world, and a simulation of "
+"it would answer a different question with the same confidence. Both are "
+"also part of what a simulation's answer is cached under, as the *facts* "
+"the medium resolved to: the density behind ``:water`` can be corrected in"
+" another package without this one changing."
+msgstr ""
+
+#: ../../source/simulation.rst:923
+msgid "what the scene's world becomes"
+msgstr ""
+
+#: ../../source/simulation.rst:925
+msgid ""
+"``<option gravity density viscosity>``, which turns on MuJoCo's passive "
+"fluid model, plus a ``gravcomp`` on every body for its buoyancy"
+msgstr ""
+
+#: ../../source/simulation.rst:928
+msgid "``<world><gravity>``; a medium is reported and not written"
+msgstr ""
+
+#: ../../source/simulation.rst:930
+msgid "nothing: a URDF has no world"
+msgstr ""
+
+#: ../../source/simulation.rst:933
+msgid ""
+"MuJoCo's fluid model -- the default, *inertia-box* one -- is drag and "
+"nothing else: quadratic in speed from the density, linear from the "
+"viscosity, acting on the box each body's mass and inertia describe. It "
+"has **no buoyancy**, so the MJCF exporter adds it, as Archimedes has it: "
+"a lift of rho_fluid * V * g, acting at the **centre of buoyancy** -- the "
+"centroid of the displaced volume, which for a wholly submerged body is "
+"the centroid of its solids. Both come from what PartCAD resolved and "
+"nothing is measured again: each shape is handed over with its ``volume`` "
+"and its ``centerOfVolume`` beside its mass, and "
+"``mass_properties.displacement_of()`` adds them up per body as it adds "
+"the masses up. The force is MuJoCo's own ``gravcomp`` -- that fraction of"
+" the body's weight, upward at its centre of mass, so a model opened "
+"anywhere floats -- and the moment it has about the centre of mass when it"
+" really acts at the centre of buoyancy is applied by the simulation each "
+"step, from the centre of buoyancy the exporter writes into the model. "
+"That moment is what rights a body whose weight is not centred where its "
+"volume is: a hull with a heavy keel, a float that states a low "
+"``centerOfMass``. ``examples/feature_simulate``'s ``buoy`` is one: "
+"released tilted 60 degrees, it turns its heavy side down within a second."
+" Opened outside ``pc sim``, the same model floats but does not right "
+"itself."
+msgstr ""
+
+#: ../../source/simulation.rst:952
+msgid "What is not modelled:"
+msgstr ""
+
+#: ../../source/simulation.rst:954
+msgid ""
+"**A surface.** The fluid fills the whole world, so a body lighter than it"
+" rises for as long as the run lasts rather than floating at a waterline. "
+"A waterline would mean clipping every body against a plane every step -- "
+"the volume below it and that volume's centroid, out of the mesh -- which "
+"is geometry the simulation would have to do itself, and which no fact "
+"PartCAD hands over could answer in advance. It is the next thing this "
+"needs, not a small one."
+msgstr ""
+
+#: ../../source/simulation.rst:961
+msgid ""
+"**Sealed cavities.** The volume displaced is the solid's, so a hollow "
+"part is buoyed as if flooded. A float is drawn as the solid it displaces,"
+" and states its own mass."
+msgstr ""
+
+#: ../../source/simulation.rst:964
+msgid ""
+"**Added mass, lift, the Magnus effect.** MuJoCo's per-geom *ellipsoid* "
+"fluid model has them, and needs five coefficients per geom that a scene "
+"does not state."
+msgstr ""
+
+#: ../../source/simulation.rst:968
+msgid ""
+"Gazebo's ``gz-sim-buoyancy-system`` is not written: on Harmonic it "
+"ignores a mesh's ``<scale>``, which would buoy PartCAD's millimetre "
+"meshes by 10^9 times their volume, and a world that names any system "
+"loses all of Gazebo's default ones. A Gazebo run of a scene filled with a"
+" fluid is therefore a run in a vacuum -- no buoyancy, no drag, no centre "
+"of buoyancy -- and its export says so. Each plugin's own documentation "
+"has the detail."
+msgstr ""
+
+#: ../../source/simulation.rst:975
+#, python-brace-format
+msgid ""
+"**Which gravity a run is under**, in order: a ``simulate:``'s own "
+"``params: {gravity: ...}``, which is handed to the plugin like any other "
+"of its parameters and applied over the scene's for that run; the scene's "
+"``gravity:``; the engine's default. Neither plugin's own declaration "
+"states a default ``gravity`` any more -- until a scene could state one "
+"that was harmless, and now it would beat every scene that does. An "
+"explicit ``gravity`` on the exporter itself does the same for a file "
+"written with ``pc export``."
+msgstr ""
+
+#: ../../source/simulation.rst:984
 msgid "Opening a scene in a simulator"
 msgstr "Eine Szene in einem Simulator öffnen"
 
-#: ../../source/simulation.rst:691
+#: ../../source/simulation.rst:986
 msgid ""
 "``pc ide open --with gazebo`` hands a ``.world`` file to Gazebo, and ``pc"
 " ide open --with mujoco`` hands an MJCF model to MuJoCo. Both open a "
@@ -1690,33 +2135,29 @@ msgstr ""
 "öffnen ein Fenster auf dem Rechner, auf dem der Befehl ausgeführt wurde, "
 "nie über den Daemon -- siehe ``partcad_client.external`` für den Grund."
 
-#: ../../source/simulation.rst:696
+#: ../../source/simulation.rst:991
 msgid ""
 "MuJoCo reads MJCF and no other model format, so a Gazebo world it is "
 "pointed at is not a slow way of opening a scene, it is a file it cannot "
-"read. PartCAD writes it out as MJCF first. That conversion is the one "
-"thing here that does cross the wire, for the reason converting a solid "
-"into a mesh for Blender does: it drives a CAD wrapper, whose runtime "
-"lives in the daemon's environment. An ASSY scene is refused rather than "
-"converted -- it is nothing but references to the parts of a package, and "
-"an ad-hoc conversion has no package to resolve them against."
+"read -- and PartCAD does not convert it. MJCF is written by ``partcad-"
+"sim-mujoco``'s exporter, and a file handed to ``pc ide open`` has no "
+"package around it to reach that exporter through. So MuJoCo is handed a "
+"file that already is MJCF, and anything else is refused with the export "
+"that does work (``pc export -S -t sim-mujoco:mjcf``, then open what it "
+"wrote); see `An engine's own scene format is its plugin's`_ above. What a"
+" file is, is its declared type, and otherwise its extension: PartCAD does"
+" not read the file to check, so an SDFormat world saved as ``.xml`` and "
+"opened with no type reaches MuJoCo, which reports what it cannot read. An"
+" ASSY scene is refused too, for a reason of its own -- it is nothing but "
+"references to the parts of a package, and an ad-hoc conversion has no "
+"package to resolve them against."
 msgstr ""
-"MuJoCo liest MJCF und kein anderes Modellformat, sodass eine Gazebo-Welt,"
-" auf die es gezeigt wird, kein langsamer Weg ist, eine Szene zu öffnen, "
-"sondern eine Datei, die es nicht lesen kann. PartCAD schreibt sie zuerst "
-"als MJCF heraus. Diese Konvertierung ist das Einzige hier, was "
-"tatsächlich über die Leitung geht, und zwar aus demselben Grund, aus dem "
-"das Umwandeln eines Festkörpers in ein Mesh für Blender es tut: sie "
-"steuert einen CAD-Wrapper, dessen Laufzeitumgebung in der Umgebung des "
-"Daemons liegt. Eine ASSY-Szene wird abgelehnt statt konvertiert -- sie "
-"ist nichts als Verweise auf die Teile eines Pakets, und eine Ad-hoc-"
-"Konvertierung hat kein Paket, gegen das sie sie auflösen könnte."
 
-#: ../../source/simulation.rst:707
+#: ../../source/simulation.rst:1007
 msgid "What a physical simulation actually needs"
 msgstr "Was eine physikalische Simulation tatsächlich braucht"
 
-#: ../../source/simulation.rst:709
+#: ../../source/simulation.rst:1009
 msgid ""
 "URDF is the smaller half of the story. Gazebo does not simulate URDF: it "
 "converts it to `SDF <http://sdformat.org/>`_ on load, and SDF is what "
@@ -1732,11 +2173,11 @@ msgstr ""
 "fragen aber nach denselben Informationen. Nimmt man ihre Vereinigung, "
 "braucht eine Simulation Folgendes, und PartCAD hat heute nichts davon."
 
-#: ../../source/simulation.rst:716
+#: ../../source/simulation.rst:1016
 msgid "Mass properties"
 msgstr "Masseneigenschaften"
 
-#: ../../source/simulation.rst:718
+#: ../../source/simulation.rst:1018
 msgid ""
 "Mass, centre of mass, and the inertia tensor about the centre of mass, in"
 " a stated frame. URDF requires them per link and defaults them to zero, "
@@ -1749,21 +2190,20 @@ msgstr ""
 "ein Link mit Masse null ist der mit Abstand häufigste Defekt in "
 "veröffentlichten URDFs."
 
-#: ../../source/simulation.rst:723
+#: ../../source/simulation.rst:1023
 msgid ""
-"These are *derivable* from a solid plus a density, which is exactly what "
-"the exporter does today. What is missing is the density, and behind it "
-"the notion of what a part is made of."
+"These are *derivable* from a solid plus a density, and PartCAD derives "
+"them: a part has a mass, a centre of mass and an inertia, at the density "
+"of the material it names, whether or not it states them, and ``pc info`` "
+"shows them. What is still missing is collision geometry and the rest "
+"below."
 msgstr ""
-"Diese sind aus einem Festkörper plus einer Dichte *ableitbar*, und genau "
-"das tut der Exporter heute. Was fehlt, ist die Dichte und dahinter der "
-"Begriff davon, woraus ein Teil besteht."
 
-#: ../../source/simulation.rst:728
+#: ../../source/simulation.rst:1029
 msgid "Collision geometry"
 msgstr "Kollisionsgeometrie"
 
-#: ../../source/simulation.rst:730
+#: ../../source/simulation.rst:1031
 msgid ""
 "Simulators separate the shape that is drawn from the shape that collides,"
 " because contact resolution against a hundred-thousand-triangle visual "
@@ -1781,7 +2221,7 @@ msgstr ""
 " konvexe Formen, wobei es von allem anderen stillschweigend die Hülle "
 "nimmt."
 
-#: ../../source/simulation.rst:737
+#: ../../source/simulation.rst:1038
 msgid ""
 "PartCAD has one shape per part. A part has no way to say \"collide me as "
 "this simpler thing\"."
@@ -1789,11 +2229,11 @@ msgstr ""
 "PartCAD hat eine Form je Teil. Ein Teil hat keine Möglichkeit zu sagen "
 "„kollidiere mich als dieses einfachere Ding“."
 
-#: ../../source/simulation.rst:741
+#: ../../source/simulation.rst:1042
 msgid "Contact and surface properties"
 msgstr "Kontakt- und Oberflächeneigenschaften"
 
-#: ../../source/simulation.rst:743
+#: ../../source/simulation.rst:1044
 msgid ""
 "Friction (isotropic and anisotropic - SDF's ``mu``/``mu2`` with a "
 "direction ``fdir1``, plus torsional friction), restitution, contact "
@@ -1809,11 +2249,11 @@ msgstr ""
 " ``soft_erp``). Das sind Eigenschaften einer Oberflächenpaarung, die von "
 "jeder gebräuchlichen Engine je Körper angenähert werden."
 
-#: ../../source/simulation.rst:750
+#: ../../source/simulation.rst:1051
 msgid "Kinematics"
 msgstr "Kinematik"
 
-#: ../../source/simulation.rst:752
+#: ../../source/simulation.rst:1053
 msgid ""
 "The joint: its type (fixed, revolute, continuous, prismatic, ball, "
 "planar, floating, screw, universal), its axis, the frames on the two "
@@ -1828,7 +2268,7 @@ msgstr ""
 "Reibung, Federsteifigkeit und -referenz) und Beziehungen zwischen "
 "Gelenken (``mimic``, Übersetzungsverhältnisse)."
 
-#: ../../source/simulation.rst:758
+#: ../../source/simulation.rst:1059
 msgid ""
 "URDF is restricted to a *tree*: it cannot express a closed kinematic "
 "loop, which is why four-bar linkages and parallel manipulators are "
@@ -1839,11 +2279,11 @@ msgstr ""
 "Parallelmanipulatoren in SDF oder mit einer expliziten "
 "schleifenschließenden Zwangsbedingung geschrieben werden. SDF kann es."
 
-#: ../../source/simulation.rst:763
+#: ../../source/simulation.rst:1064
 msgid "Actuation and control"
 msgstr "Antrieb und Steuerung"
 
-#: ../../source/simulation.rst:765
+#: ../../source/simulation.rst:1066
 msgid ""
 "Which joints are driven, by what, through which reduction, and what "
 "interfaces a controller sees. ROS 1 spelled this ``<transmission>``; ROS "
@@ -1857,11 +2297,11 @@ msgstr ""
 "Komponenten, Kommando-Schnittstellen und Zustands-Schnittstellen. "
 "Simulatoren möchten zusätzlich Aktuatorgrenzen und oft ein Motormodell."
 
-#: ../../source/simulation.rst:772
+#: ../../source/simulation.rst:1073
 msgid "Sensors"
 msgstr "Sensoren"
 
-#: ../../source/simulation.rst:774
+#: ../../source/simulation.rst:1075
 msgid ""
 "Cameras (with intrinsics, resolution, clipping, distortion), depth "
 "cameras, lidars (with ray patterns and ranges), IMUs, contact sensors, "
@@ -1880,11 +2320,11 @@ msgstr ""
 " dass URDF weniger ein Simulationsformat ist als ein Kinematikformat mit "
 "einem angeschraubten Simulationsformat."
 
-#: ../../source/simulation.rst:782
+#: ../../source/simulation.rst:1083
 msgid "Appearance"
 msgstr "Erscheinungsbild"
 
-#: ../../source/simulation.rst:784
+#: ../../source/simulation.rst:1085
 msgid ""
 "Colors and materials matter to simulation once a camera is in the loop: a"
 " perception stack trained in simulation is sensitive to albedo, "
@@ -1898,16 +2338,20 @@ msgstr ""
 " und Transparenz. SDF und USD tragen beide eine PBR-Materialbeschreibung;"
 " URDF trägt eine RGBA-Farbe und einen Texturdateinamen."
 
-#: ../../source/simulation.rst:790
+#: ../../source/simulation.rst:1091
 msgid "The world"
 msgstr "Die Welt"
 
-#: ../../source/simulation.rst:792
+#: ../../source/simulation.rst:1093
+#, fuzzy
 msgid ""
 "Gravity, the ground, lighting, the initial pose of every model, wind, "
 "atmosphere, and the physics engine's own parameters (step size, solver "
 "type and iteration count, contact parameters). This is SDF's ``<world>``,"
-" and it is exactly the \"scenes\" PartCAD has always intended to have."
+" and it is exactly the \"scenes\" PartCAD has always intended to have. "
+"Gravity and the fluid a scene is filled with are the first of these a "
+"scene states (see `Gravity, and the fluid a scene is filled with`_ "
+"above)."
 msgstr ""
 "Schwerkraft, der Boden, Beleuchtung, die Anfangspose jedes Modells, Wind,"
 " Atmosphäre und die Parameter der Physik-Engine selbst (Schrittweite, "
@@ -1915,11 +2359,11 @@ msgstr ""
 " von SDF, und es ist genau das, was PartCAD immer schon als „Szenen“ "
 "haben wollte."
 
-#: ../../source/simulation.rst:798
+#: ../../source/simulation.rst:1101
 msgid "Frames"
 msgstr "Frames"
 
-#: ../../source/simulation.rst:800
+#: ../../source/simulation.rst:1103
 msgid ""
 "Everything above hangs off named coordinate frames: the link frame, the "
 "joint frame, a tool centre point, a sensor mount, a grasp pose. SDF has "
@@ -1932,15 +2376,15 @@ msgstr ""
 "``relative_to`` ihnen angegeben werden. PartCAD hat Locations, aber keine"
 " benannten Frames, gegen die es sie angeben könnte."
 
-#: ../../source/simulation.rst:807
+#: ../../source/simulation.rst:1110
 msgid "Proposal"
 msgstr "Vorschlag"
 
-#: ../../source/simulation.rst:810
+#: ../../source/simulation.rst:1113
 msgid "Principles"
 msgstr "Grundsätze"
 
-#: ../../source/simulation.rst:812
+#: ../../source/simulation.rst:1115
 msgid ""
 "**Derive what can be derived; store only what cannot.** PartCAD's "
 "advantage over a hand-written URDF is that it holds the actual geometry. "
@@ -1958,7 +2402,7 @@ msgstr ""
 "Messung, ein Herstellerdatenblatt, ein Platzhalter für Inhalte, die "
 "PartCAD nicht modelliert)."
 
-#: ../../source/simulation.rst:818
+#: ../../source/simulation.rst:1121
 msgid ""
 "**Keep the CAD the source of truth.** Simulation artifacts - tessellated "
 "meshes, convex hulls, computed inertia - are derived data. They belong in"
@@ -1972,7 +2416,7 @@ msgstr ""
 "jede andere abgeleitete Form, sodass eine Änderung am CAD sie ungültig "
 "macht. Das ist es, was der digitale Faden hier bedeutet."
 
-#: ../../source/simulation.rst:823
+#: ../../source/simulation.rst:1126
 msgid ""
 "**Model the concept, not the format.** ``mu``/``mu2`` is ODE's spelling "
 "of friction. PartCAD should store friction and let each exporter spell "
@@ -1984,7 +2428,7 @@ msgstr ""
 "Exporter sie schreiben lassen. Die Formate sind sich in fast allem "
 "uneinig außer darin, was sie zu beschreiben versuchen."
 
-#: ../../source/simulation.rst:827
+#: ../../source/simulation.rst:1130
 msgid ""
 "**Lose loudly, never quietly.** The tempting version of this principle is"
 " \"lose nothing\": carry whatever PartCAD does not model as opaque, "
@@ -2016,11 +2460,11 @@ msgstr ""
 "etwas. Alles Folgende erweitert diese Liste; nichts davon öffnet den "
 "Durchreicher wieder."
 
-#: ../../source/simulation.rst:841
+#: ../../source/simulation.rst:1144
 msgid "1. Materials as first-class objects"
 msgstr "1. Materialien als vollwertige Objekte"
 
-#: ../../source/simulation.rst:843
+#: ../../source/simulation.rst:1146
 msgid ""
 "A new object kind alongside parts and sketches, so that materials are "
 "packaged, versioned and shared the way parts already are:"
@@ -2028,7 +2472,7 @@ msgstr ""
 "Eine neue Objektart neben Teilen und Skizzen, sodass Materialien so "
 "paketiert, versioniert und geteilt werden, wie Teile es bereits werden:"
 
-#: ../../source/simulation.rst:859
+#: ../../source/simulation.rst:1162
 msgid ""
 "This single addition is what turns the exporter's density parameter into "
 "a property of the model, and it does double duty: the same material "
@@ -2040,11 +2484,11 @@ msgstr ""
 "Material treibt das Rendern, die Fertigungskostenschätzung, über die "
 "``partcad`` ohnehin schon nachdenkt, und die Simulation."
 
-#: ../../source/simulation.rst:865
+#: ../../source/simulation.rst:1168
 msgid "2. Physical properties a part does not have to state"
 msgstr "2. Physikalische Eigenschaften, die ein Teil nicht angeben muss"
 
-#: ../../source/simulation.rst:867
+#: ../../source/simulation.rst:1170
 msgid ""
 "A part's ``physics:`` section already holds the modelled properties - "
 "``mass``, ``centerOfMass``, ``inertia``, ``friction``, the contact "
@@ -2060,26 +2504,19 @@ msgstr ""
 "prüfen oder einen gemessenen Wert von einer Schätzung zu unterscheiden. "
 "Drei Ergänzungen, in aufsteigender Reihenfolge ihres Werts:"
 
-#: ../../source/simulation.rst:873
+#: ../../source/simulation.rst:1176
 msgid ""
-"**Derivation.** With a material behind it (item 1), a part that states no"
-" ``mass`` has one: the solid's volume times the material's density, "
-"cached like any other derived value and invalidated when the CAD changes."
-" The same for ``centerOfMass``, ``inertia`` and the surface properties. "
-"Today the URDF exporter computes exactly this, from the ``density`` "
-"parameter of its ``export:`` configuration, and throws it away afterwards"
-" - it should be a property of the part that every consumer sees."
+"**Derivation** - *done*. With a material behind it (item 1), a part that "
+"states no ``mass`` has one: the solid's volume times the material's "
+"density. The same for ``centerOfMass``, ``inertia`` and ``friction``. The"
+" derived values are cached under the part's key and what they were "
+"derived from, so an edit to the CAD or to the material invalidates them; "
+"``pc info`` shows each value and where it came from, and every exporter "
+"is handed the same values instead of working its own out. See `Writing a "
+"URDF`_."
 msgstr ""
-"**Ableitung.** Mit einem Material dahinter (Punkt 1) hat ein Teil, das "
-"keine ``mass`` angibt, dennoch eine: das Volumen des Festkörpers mal die "
-"Dichte des Materials, zwischengespeichert wie jeder andere abgeleitete "
-"Wert und ungültig gemacht, wenn sich das CAD ändert. Dasselbe für "
-"``centerOfMass``, ``inertia`` und die Oberflächeneigenschaften. Heute "
-"berechnet der URDF-Exporter genau das aus dem Parameter ``density`` "
-"seiner ``export:``-Konfiguration und wirft es danach weg - es sollte eine"
-" Eigenschaft des Teils sein, die jeder Verbraucher sieht."
 
-#: ../../source/simulation.rst:880
+#: ../../source/simulation.rst:1183
 msgid ""
 "**Provenance.** A declared value should say why it exists, since "
 "\"measured on the bench\" and \"copied from a vendor datasheet\" and "
@@ -2089,7 +2526,7 @@ msgstr ""
 " „auf der Werkbank gemessen“, „aus einem Herstellerdatenblatt kopiert“ "
 "und „erfunden, damit die Simulation lädt“ sind nicht dieselbe Behauptung:"
 
-#: ../../source/simulation.rst:890
+#: ../../source/simulation.rst:1193
 msgid ""
 "**Checking.** ``pc lint`` should flag the classic defects, all of which "
 "are common in published URDFs and all of which load without complaint: "
@@ -2103,7 +2540,7 @@ msgstr ""
 "einer, der die Dreiecksungleichung verletzt, und eine deklarierte Masse, "
 "die um mehr als eine Toleranz von Volumen mal Dichte abweicht."
 
-#: ../../source/simulation.rst:896
+#: ../../source/simulation.rst:1199
 msgid ""
 "Anisotropic friction is the one property that needs more structure than "
 "it has today: ``friction``/``friction2``/``frictionDirection`` is ODE's "
@@ -2118,11 +2555,11 @@ msgstr ""
 "mit einer optionalen Anisotropie, und der URDF-Exporter würde das beim "
 "Hinausgehen flachlegen."
 
-#: ../../source/simulation.rst:903
+#: ../../source/simulation.rst:1206
 msgid "3. Collision geometry"
 msgstr "3. Kollisionsgeometrie"
 
-#: ../../source/simulation.rst:905
+#: ../../source/simulation.rst:1208
 msgid ""
 "A URDF's collision geometry is not lost today - a link that states both "
 "shapes is built from the collision one and the visual one becomes a part "
@@ -2137,7 +2574,7 @@ msgstr ""
 "heißen, und nichts sagt, dass das eine der vereinfachte Platzhalter für "
 "das andere ist. Ein Teil sollte das sagen können:"
 
-#: ../../source/simulation.rst:921
+#: ../../source/simulation.rst:1224
 msgid ""
 "``convexHull`` and ``convexDecomposition`` are computed in a sandbox and "
 "cached like any derived shape; ``part`` points at another PartCAD part, "
@@ -2154,11 +2591,11 @@ msgstr ""
 "einem vielsagenden Namen; ``primitive`` passt einen Quader, Zylinder, "
 "eine Kugel oder Kapsel an die Geometrie an."
 
-#: ../../source/simulation.rst:929
+#: ../../source/simulation.rst:1232
 msgid "4. Named frames"
 msgstr "4. Benannte Frames"
 
-#: ../../source/simulation.rst:940
+#: ../../source/simulation.rst:1243
 msgid ""
 "Frames are the attachment points for sensors, joints and grasp poses, and"
 " they are what an exporter needs to write ``<frame>`` or a sensor's "
@@ -2172,11 +2609,11 @@ msgstr ""
 "``ports`` beschreiben bereits benannte, verortete Merkmale an einem Teil;"
 " Frames sollten derselbe Mechanismus sein und kein paralleler."
 
-#: ../../source/simulation.rst:946
+#: ../../source/simulation.rst:1249
 msgid "5. Kinematics: a configuration, not a joint section"
 msgstr "5. Kinematik: eine Konfiguration, kein Gelenkabschnitt"
 
-#: ../../source/simulation.rst:948
+#: ../../source/simulation.rst:1251
 msgid ""
 "The obvious proposal here used to be a ``joint:`` form for an ASSY node, "
 "next to ``location:`` and ``connect:``. Building the URDF mapping above "
@@ -2200,7 +2637,7 @@ msgstr ""
 "das ist genau die Doppelung, zu deren Beseitigung der Rest von PartCAD "
 "existiert."
 
-#: ../../source/simulation.rst:957
+#: ../../source/simulation.rst:1260
 msgid ""
 "What is actually missing is one level up: the assembly has no way to name"
 " a *configuration*."
@@ -2208,7 +2645,7 @@ msgstr ""
 "Was tatsächlich fehlt, liegt eine Ebene höher: die Baugruppe hat keine "
 "Möglichkeit, eine *Konfiguration* zu benennen."
 
-#: ../../source/simulation.rst:970
+#: ../../source/simulation.rst:1273
 msgid ""
 "with the connections referring to the configuration rather than carrying "
 "a literal:"
@@ -2216,7 +2653,7 @@ msgstr ""
 "wobei die Verbindungen sich auf die Konfiguration beziehen, statt ein "
 "Literal zu tragen:"
 
-#: ../../source/simulation.rst:980
+#: ../../source/simulation.rst:1283
 msgid ""
 "Everything that exists today - a tree of rigid placements - is what you "
 "get by evaluating a configuration, so no consumer of the representation "
@@ -2231,11 +2668,11 @@ msgstr ""
 "bedeutungsvoll, die ASSY-Dateien bereits haben, und ein Exporter bekommt "
 "etwas, woraus er einen Gelenk*zustand* schreiben kann."
 
-#: ../../source/simulation.rst:986
+#: ../../source/simulation.rst:1289
 msgid "Two things this still needs, which the URDF work did not:"
 msgstr "Zwei Dinge braucht das noch, die die URDF-Arbeit nicht brauchte:"
 
-#: ../../source/simulation.rst:988
+#: ../../source/simulation.rst:1291
 msgid ""
 "**A joint identity.** ``toInstance: shoulder_pan`` names the joint today "
 "only by convention. A configuration has to address it, so the instance "
@@ -2245,7 +2682,7 @@ msgstr ""
 " heute nur per Konvention. Eine Konfiguration muss es adressieren, sodass"
 " der Instanzname im Ernst zum Namen des Gelenks werden muss."
 
-#: ../../source/simulation.rst:991
+#: ../../source/simulation.rst:1294
 msgid ""
 "**Loops.** A four-bar linkage is a connection whose child is already "
 "placed. PartCAD's tree cannot express it and neither can URDF; SDF can. "
@@ -2256,7 +2693,7 @@ msgstr ""
 "kann es auch nicht; SDF kann es. Bis dahin ist das ehrliche Verhalten, "
 "sie zu erkennen und es zu sagen."
 
-#: ../../source/simulation.rst:995
+#: ../../source/simulation.rst:1298
 msgid ""
 "There remains a genuinely attractive case for *deriving* joints from the "
 "existing interface library: a bearing bore is revolute about its own axis"
@@ -2275,15 +2712,15 @@ msgstr ""
 " verfasste Interfaces statt auf erzeugte - und deshalb gehört ``motion:``"
 " an das Interface und nicht an die Verbindung."
 
-#: ../../source/simulation.rst:1004
+#: ../../source/simulation.rst:1307
 msgid "6. Internal representation"
 msgstr "6. Interne Darstellung"
 
-#: ../../source/simulation.rst:1006
+#: ../../source/simulation.rst:1309
 msgid "The corresponding change in ``partcad.assembly`` is small and additive:"
 msgstr "Die entsprechende Änderung in ``partcad.assembly`` ist klein und additiv:"
 
-#: ../../source/simulation.rst:1008
+#: ../../source/simulation.rst:1311
 msgid ""
 "``AssemblyChild`` gains ``joint`` (the kinematic relation to its parent, "
 "or to a named sibling) and ``frames``. ``location`` stays what it is - "
@@ -2297,7 +2734,7 @@ msgstr ""
 "aktuellen Gelenkzuständen -, sodass ``Assembly._get_shape_real()``, die "
 "BREP-Hülle, der Cache und jeder Exporter unverändert weiterfunktionieren."
 
-#: ../../source/simulation.rst:1012
+#: ../../source/simulation.rst:1315
 msgid ""
 "``Assembly`` gains a ``configuration``: the map of joint name to value it"
 " was evaluated at, hashed into the cache key like any other parameter."
@@ -2306,7 +2743,7 @@ msgstr ""
 "Gelenknamen auf den Wert, bei dem sie ausgewertet wurde, in den Cache-"
 "Schlüssel gehasht wie jeder andere Parameter."
 
-#: ../../source/simulation.rst:1014
+#: ../../source/simulation.rst:1317
 msgid ""
 "``Part`` gains ``physical`` and ``collision`` accessors that resolve "
 "declared values against derived ones, computing the derived ones in a "
@@ -2316,7 +2753,7 @@ msgstr ""
 "deklarierte Werte gegen abgeleitete auflösen, die abgeleiteten bei Bedarf"
 " in einer Sandbox berechnen und sie zwischenspeichern."
 
-#: ../../source/simulation.rst:1017
+#: ../../source/simulation.rst:1320
 msgid ""
 "The BREP envelope grows a sibling channel for non-geometric data, so a "
 "wrapper can be handed the physical properties without a second round "
@@ -2326,11 +2763,11 @@ msgstr ""
 "Daten, sodass einem Wrapper die physikalischen Eigenschaften ohne einen "
 "zweiten Rundlauf übergeben werden können."
 
-#: ../../source/simulation.rst:1021
+#: ../../source/simulation.rst:1324
 msgid "7. Sensors, actuators and plugins"
 msgstr "7. Sensoren, Aktuatoren und Plugins"
 
-#: ../../source/simulation.rst:1036
+#: ../../source/simulation.rst:1339
 msgid ""
 "PartCAD should model the handful of device types that every simulator "
 "agrees on (camera, depth, lidar, imu, contact, force-torque) and treat "
@@ -2340,11 +2777,11 @@ msgstr ""
 "Simulator einig ist (Kamera, Tiefenkamera, Lidar, IMU, Kontakt, Kraft-"
 "Moment), und den Rest als Durchreicher behandeln."
 
-#: ../../source/simulation.rst:1041
+#: ../../source/simulation.rst:1344
 msgid "8. Scenes as worlds"
 msgstr "8. Szenen als Welten"
 
-#: ../../source/simulation.rst:1043
+#: ../../source/simulation.rst:1346
 msgid ""
 "The scenes PartCAD has always planned are SDF worlds: gravity, ground, "
 "lights, model instances with initial poses, and physics engine settings. "
@@ -2357,11 +2794,51 @@ msgstr ""
 "ein *an der Welt befestigtes* Gelenk gehört, und das ist das Stück, das "
 "eine einzelne Baugruppe nicht ausdrücken kann."
 
-#: ../../source/simulation.rst:1049
+#: ../../source/simulation.rst:1351
+msgid ""
+"Two of those are built: a scene states its ``gravity:`` and the "
+"``medium:`` it is filled with, as a material, and both reach the engines "
+"(see `Gravity, and the fluid a scene is filled with`_). They went first "
+"because they are what underwater and aerospace validation turn on, and "
+"because neither needed anything new below the scene: a gravity is three "
+"numbers, and a fluid is a material with one more fact on it. What is "
+"still a proposal:"
+msgstr ""
+
+#: ../../source/simulation.rst:1358
+msgid ""
+"**The ground and the lights**, which the exporters write from parameters "
+"of their own (``ground_plane``, ``light``, ``sun``) because a scene has "
+"nowhere to say them."
+msgstr ""
+
+#: ../../source/simulation.rst:1361
+msgid ""
+"**A surface.** A medium fills the whole world. A waterline -- air above, "
+"water below, and a body floating where the two meet -- is a world with "
+"regions in it, which Gazebo's graded buoyancy can express and MuJoCo's "
+"fluid model cannot."
+msgstr ""
+
+#: ../../source/simulation.rst:1365
+msgid ""
+"**Wind and current**: a velocity of the medium, which MuJoCo states as "
+"``<option wind>`` and which ``medium:`` would grow into a mapping to "
+"carry."
+msgstr ""
+
+#: ../../source/simulation.rst:1367
+msgid ""
+"**The physics engine's own parameters** -- step size, solver, iterations "
+"-- which a ``simulate:`` passes to its plugin today and which belong to "
+"an engine rather than to a world."
+msgstr ""
+
+#: ../../source/simulation.rst:1372
 msgid "9. The property tables, and keeping them honest (in place)"
 msgstr "9. Die Eigenschaftstabellen, und sie ehrlich halten (an Ort und Stelle)"
 
-#: ../../source/simulation.rst:1051
+#: ../../source/simulation.rst:1374
 msgid ""
 "This is the item that is built, and doing it first was right: it makes a "
 "URDF round trip nearly lossless while the rest of the proposal is still "
@@ -2374,7 +2851,7 @@ msgstr ""
 " PartCAD, das in einem Robotik-Arbeitsablauf brauchbar ist, und einem, "
 "das eine Einbahnstraße heraus aus einem solchen ist."
 
-#: ../../source/simulation.rst:1056
+#: ../../source/simulation.rst:1379
 msgid ""
 "A part carries a ``properties:`` section holding ``material``, ``color`` "
 "and ``physics``; an interface carries ``motion:`` and ``physics:``. Every"
@@ -2396,11 +2873,11 @@ msgstr ""
 "Eigenschaft, die URDF nicht angeben kann, wird beim Schreiben der Datei "
 "gemeldet."
 
-#: ../../source/simulation.rst:1065
+#: ../../source/simulation.rst:1388
 msgid "What is still missing:"
 msgstr "Was weiterhin fehlt:"
 
-#: ../../source/simulation.rst:1067
+#: ../../source/simulation.rst:1390
 msgid ""
 "**``<ros2_control>`` and ``<transmission>``**, which are robot-level "
 "rather than link-level, and so have nowhere to attach yet. The assembly "
@@ -2415,7 +2892,7 @@ msgstr ""
 "aber noch liest dort niemand einen, weil jede Eigenschaft bislang zu "
 "etwas gehört, das im Container steckt."
 
-#: ../../source/simulation.rst:1072
+#: ../../source/simulation.rst:1395
 msgid ""
 "**Properties that are not a link's or a joint's.** A URDF's ``<gazebo>`` "
 "blocks also carry sensors and simulator plugins, which items 7 and 8 "
@@ -2426,7 +2903,7 @@ msgstr ""
 "Plugins, und die decken die Punkte 7 und 8 ab; bis dahin werden sie "
 "gezählt und gemeldet, nicht mitgeführt."
 
-#: ../../source/simulation.rst:1075
+#: ../../source/simulation.rst:1398
 msgid ""
 "**Any check at all that a declared property still applies.** "
 "``properties:`` does not take part in the shape cache *key*, which is "
@@ -2445,11 +2922,11 @@ msgstr ""
 " den das gehört, und es braucht Punkt 2, um etwas zum Vergleichen zu "
 "haben."
 
-#: ../../source/simulation.rst:1083
+#: ../../source/simulation.rst:1406
 msgid "10. Units"
 msgstr "10. Einheiten"
 
-#: ../../source/simulation.rst:1085
+#: ../../source/simulation.rst:1408
 msgid ""
 "Simulation is SI; PartCAD is millimetres and degrees. The notation used "
 "throughout this page - ``12 N*m``, ``2 rad/s``, ``2700 kg/m^3``, "
@@ -2467,45 +2944,45 @@ msgstr ""
 " Feld steht. Das ist der kleinste Punkt der Liste und derjenige, der die "
 "größte Klasse stiller Fehler verhindert."
 
-#: ../../source/simulation.rst:1093
+#: ../../source/simulation.rst:1416
 msgid "11. Export targets"
 msgstr "11. Exportziele"
 
-#: ../../source/simulation.rst:1095
+#: ../../source/simulation.rst:1418
 msgid "With the above in place, the export matrix is:"
 msgstr "Mit dem Obigen an Ort und Stelle sieht die Exportmatrix so aus:"
 
-#: ../../source/simulation.rst:1101
+#: ../../source/simulation.rst:1424
 msgid "Target"
 msgstr "Ziel"
 
-#: ../../source/simulation.rst:1102
+#: ../../source/simulation.rst:1425
 msgid "Priority"
 msgstr "Priorität"
 
-#: ../../source/simulation.rst:1103
+#: ../../source/simulation.rst:1426
 msgid "Notes"
 msgstr "Anmerkungen"
 
-#: ../../source/simulation.rst:1105
+#: ../../source/simulation.rst:1428
 msgid "Done (geometry only)"
 msgstr "Erledigt (nur Geometrie)"
 
-#: ../../source/simulation.rst:1106
+#: ../../source/simulation.rst:1429
 msgid "The common denominator. Tree-only kinematics, sensors only via extensions."
 msgstr ""
 "Der kleinste gemeinsame Nenner. Nur baumförmige Kinematik, Sensoren nur "
 "über Erweiterungen."
 
-#: ../../source/simulation.rst:1107
+#: ../../source/simulation.rst:1430
 msgid "SDF"
 msgstr "SDF"
 
-#: ../../source/simulation.rst:1108
+#: ../../source/simulation.rst:1431
 msgid "Next"
 msgstr "Als Nächstes"
 
-#: ../../source/simulation.rst:1109
+#: ../../source/simulation.rst:1432
 msgid ""
 "What Gazebo actually simulates. Expresses everything in this proposal, "
 "worlds included, and is where a PartCAD *scene* maps naturally."
@@ -2514,27 +2991,27 @@ msgstr ""
 "aus, Welten eingeschlossen, und ist der Ort, auf den eine PartCAD-*Szene*"
 " natürlich abbildet."
 
-#: ../../source/simulation.rst:1111 ../../source/simulation.rst:1114
+#: ../../source/simulation.rst:1434 ../../source/simulation.rst:1437
 msgid "Later"
 msgstr "Später"
 
-#: ../../source/simulation.rst:1112
+#: ../../source/simulation.rst:1435
 msgid "MuJoCo. Needs convex collision geometry, which item 3 provides."
 msgstr "MuJoCo. Braucht konvexe Kollisionsgeometrie, und die liefert Punkt 3."
 
-#: ../../source/simulation.rst:1113
+#: ../../source/simulation.rst:1436
 msgid "USD"
 msgstr "USD"
 
-#: ../../source/simulation.rst:1115
+#: ../../source/simulation.rst:1438
 msgid "Isaac Sim and the wider DCC ecosystem, through the UsdPhysics schemas."
 msgstr "Isaac Sim und das weitere DCC-Ökosystem, über die UsdPhysics-Schemata."
 
-#: ../../source/simulation.rst:1118
+#: ../../source/simulation.rst:1441
 msgid "Suggested order of work"
 msgstr "Vorgeschlagene Reihenfolge der Arbeit"
 
-#: ../../source/simulation.rst:1120
+#: ../../source/simulation.rst:1443
 msgid ""
 "Each step is useful on its own, which is the test of whether the "
 "decomposition is right:"
@@ -2542,7 +3019,7 @@ msgstr ""
 "Jeder Schritt ist für sich nützlich, und das ist der Prüfstein dafür, ob "
 "die Zerlegung richtig ist:"
 
-#: ../../source/simulation.rst:1123
+#: ../../source/simulation.rst:1446
 msgid ""
 "**Passthrough** (item 9) - *done*. The URDF round trip carries what "
 "PartCAD does not model instead of dropping it."
@@ -2550,7 +3027,7 @@ msgstr ""
 "**Durchreichen** (Punkt 9) - *erledigt*. Der URDF-Rundlauf führt das mit,"
 " was PartCAD nicht modelliert, statt es zu verwerfen."
 
-#: ../../source/simulation.rst:1125
+#: ../../source/simulation.rst:1448
 msgid ""
 "**Units** (item 10). Everything after this depends on it and it gets "
 "harder to add later - the generated ``motion:`` sections already have to "
@@ -2562,19 +3039,15 @@ msgstr ""
 "bereits in Prosa ``units: rad`` angeben, weil es keine Möglichkeit gibt, "
 "es im Wert anzugeben."
 
-#: ../../source/simulation.rst:1128
+#: ../../source/simulation.rst:1451
 msgid ""
-"**Materials and physical properties** (items 1-2). Turns the exporter's "
-"density parameter into a model property and makes a computed inertial "
-"trustworthy, so that carrying one becomes the exception rather than the "
-"rule."
+"**Materials and physical properties** (items 1-2) - *partly done*. "
+"Materials exist, and a part's mass, centre of mass and inertia are "
+"derived from the one it names, so that carrying an inertial is the "
+"exception rather than the rule. Provenance and checking (item 2) remain."
 msgstr ""
-"**Materialien und physikalische Eigenschaften** (Punkte 1-2). Macht aus "
-"dem Dichteparameter des Exporters eine Modelleigenschaft und eine "
-"berechnete Trägheit vertrauenswürdig, sodass eine mitzuführen zur "
-"Ausnahme statt zur Regel wird."
 
-#: ../../source/simulation.rst:1131
+#: ../../source/simulation.rst:1455
 msgid ""
 "**Collision geometry** (item 3). Independently valuable - it also makes "
 "rendering and interference checking cheaper - and it is what would let "
@@ -2586,13 +3059,13 @@ msgstr ""
 "aus der Collision/Visual-Entscheidung, die ``ignoreCollision`` heute "
 "trifft, ein „beide behalten“ machen würde."
 
-#: ../../source/simulation.rst:1134
+#: ../../source/simulation.rst:1458
 msgid "**Frames** (item 4), folded into the existing ports/interfaces mechanism."
 msgstr ""
 "**Frames** (Punkt 4), eingefügt in den vorhandenen Ports-/Interfaces-"
 "Mechanismus."
 
-#: ../../source/simulation.rst:1135
+#: ../../source/simulation.rst:1459
 msgid ""
 "**Configurations** (items 5-6). The largest change, and the one that "
 "turns an assembly into a mechanism rather than a photograph of one."
@@ -2600,19 +3073,19 @@ msgstr ""
 "**Konfigurationen** (Punkte 5-6). Die größte Änderung und diejenige, die "
 "aus einer Baugruppe einen Mechanismus macht statt einer Fotografie davon."
 
-#: ../../source/simulation.rst:1137
+#: ../../source/simulation.rst:1461
 msgid "**SDF export**, which is the first target able to carry all of the above."
 msgstr "**SDF-Export**, das erste Ziel, das all das Obige tragen kann."
 
-#: ../../source/simulation.rst:1138
+#: ../../source/simulation.rst:1462
 msgid "**Sensors** (item 7) and **scenes** (item 8)."
 msgstr "**Sensoren** (Punkt 7) und **Szenen** (Punkt 8)."
 
-#: ../../source/simulation.rst:1141
+#: ../../source/simulation.rst:1465
 msgid "Non-goals"
 msgstr "Nicht-Ziele"
 
-#: ../../source/simulation.rst:1143
+#: ../../source/simulation.rst:1467
 msgid ""
 "PartCAD should not become a simulator, or wrap one. It should describe a "
 "product well enough that a simulator can be handed it."
@@ -2621,7 +3094,7 @@ msgstr ""
 "ein Produkt gut genug beschreiben, dass man es einem Simulator übergeben "
 "kann."
 
-#: ../../source/simulation.rst:1145
+#: ../../source/simulation.rst:1469
 msgid ""
 "PartCAD should not model every engine-specific solver parameter as a "
 "first-class concept. But the alternative is not a passthrough container: "
@@ -2634,10 +3107,214 @@ msgstr ""
 " wenn einer gesehen wird, und genau das tut der Import bei einer "
 "unbekannten ``<gazebo>``-Einstellung."
 
-#: ../../source/simulation.rst:1149
+#: ../../source/simulation.rst:1473
 msgid ""
 "Reading a URDF should not become lossless by making PartCAD's model a "
 "copy of URDF's. The point is a model that URDF, SDF, MJCF and USD are all"
 " views of."
 msgstr ""
 "Das Lesen einer URDF sollte nicht dadurch verlustfrei werden, dass PartCADs Modell zu einer Kopie des URDF-Modells gemacht wird. Der Sinn ist ein Modell, von dem URDF, SDF, MJCF und USD allesamt Sichten sind."
+
+#~ msgid ""
+#~ "What a part states about itself is"
+#~ " written into the URDF element that"
+#~ " states it: mass, centre of mass "
+#~ "and inertia into ``<inertial>``, friction "
+#~ "and the contact parameters into a "
+#~ "``<gazebo>`` block, ``material``/``color`` into "
+#~ "``<material>``. Only a part that says"
+#~ " nothing gets computed inertial properties:"
+#~ " OCCT gives the volume, the centre"
+#~ " of mass and the inertia tensor "
+#~ "about it, and a density turns "
+#~ "those into a mass. Since PartCAD "
+#~ "still has nowhere to record what a"
+#~ " part is *made of*, that density "
+#~ "is a parameter of the export with"
+#~ " a default rather than a property "
+#~ "of the part - the first gap "
+#~ "this page proposes to close."
+#~ msgstr ""
+#~ "Was ein Teil über sich selbst "
+#~ "angibt, wird in das URDF-Element "
+#~ "geschrieben, das es angibt: Masse, "
+#~ "Schwerpunkt und Trägheit in ``<inertial>``,"
+#~ " Reibung und die Kontaktparameter in "
+#~ "einen ``<gazebo>``-Block, ``material``/``color`` in"
+#~ " ``<material>``. Nur ein Teil, das "
+#~ "nichts sagt, bekommt berechnete "
+#~ "Trägheitseigenschaften: OCCT liefert das "
+#~ "Volumen, den Schwerpunkt und den "
+#~ "Trägheitstensor darum, und eine Dichte "
+#~ "macht daraus eine Masse. Da PartCAD "
+#~ "immer noch keinen Ort hat, um "
+#~ "festzuhalten, *woraus* ein Teil besteht, "
+#~ "ist diese Dichte ein Parameter des "
+#~ "Exports mit einem Standardwert und keine"
+#~ " Eigenschaft des Teils - die erste"
+#~ " Lücke, die diese Seite zu schließen"
+#~ " vorschlägt."
+
+#~ msgid ""
+#~ "Whether a stack of blocks stands "
+#~ "up is not a property of its "
+#~ "geometry. Two 20 mm cubes squarely "
+#~ "stacked, ten seconds under gravity, "
+#~ "nothing else changed:"
+#~ msgstr ""
+#~ "Ob ein Stapel Klötze stehen bleibt, "
+#~ "ist keine Eigenschaft seiner Geometrie. "
+#~ "Zwei sauber gestapelte 20-mm-Würfel, "
+#~ "zehn Sekunden unter Schwerkraft, sonst "
+#~ "nichts geändert:"
+
+#~ msgid "what happens"
+#~ msgstr "was passiert"
+
+#~ msgid "0.04"
+#~ msgstr "0,04"
+
+#~ msgid "the top block slides off -- 35 mm, and it ends up on the floor"
+#~ msgstr "der obere Klotz rutscht ab -- 35 mm, und er landet auf dem Boden"
+
+#~ msgid "1.05"
+#~ msgstr "1,05"
+
+#~ msgid "it stays -- 1 mm"
+#~ msgstr "er bleibt liegen -- 1 mm"
+
+#~ msgid ""
+#~ "Two things are deliberately not done "
+#~ "here. A material's **density** is not"
+#~ " wired in the same way: it "
+#~ "already has a home (``Material.mass()``), "
+#~ "and making every part that names a"
+#~ " material weigh what that material "
+#~ "weighs changes the ``<inertial>`` of "
+#~ "every existing export -- a real "
+#~ "improvement, and a change of its "
+#~ "own. And PartCAD writes each *body's*"
+#~ " coefficient and says nothing about "
+#~ "how a simulator combines the two "
+#~ "sides of a contact, because they "
+#~ "do not agree about it: that is "
+#~ "the simulator's model, not the part's."
+#~ msgstr ""
+#~ "Zwei Dinge werden hier bewusst nicht "
+#~ "getan. Die **Dichte** eines Materials "
+#~ "wird nicht auf dieselbe Weise "
+#~ "verdrahtet: sie hat bereits ein Zuhause"
+#~ " (``Material.mass()``), und jedes Teil, das"
+#~ " ein Material benennt, so schwer zu"
+#~ " machen, wie dieses Material wiegt, "
+#~ "ändert das ``<inertial>`` jedes vorhandenen"
+#~ " Exports -- eine echte Verbesserung "
+#~ "und eine eigene Änderung. Und PartCAD"
+#~ " schreibt den Koeffizienten jedes *Körpers*"
+#~ " und sagt nichts darüber, wie ein "
+#~ "Simulator die beiden Seiten eines "
+#~ "Kontakts kombiniert, denn darüber sind "
+#~ "sie sich nicht einig: das ist das"
+#~ " Modell des Simulators und nicht das"
+#~ " des Teils."
+
+#~ msgid ""
+#~ "MuJoCo reads MJCF and no other "
+#~ "model format, so a Gazebo world it"
+#~ " is pointed at is not a slow"
+#~ " way of opening a scene, it is"
+#~ " a file it cannot read. PartCAD "
+#~ "writes it out as MJCF first. That"
+#~ " conversion is the one thing here "
+#~ "that does cross the wire, for the"
+#~ " reason converting a solid into a "
+#~ "mesh for Blender does: it drives a"
+#~ " CAD wrapper, whose runtime lives in"
+#~ " the daemon's environment. An ASSY "
+#~ "scene is refused rather than converted"
+#~ " -- it is nothing but references "
+#~ "to the parts of a package, and "
+#~ "an ad-hoc conversion has no "
+#~ "package to resolve them against."
+#~ msgstr ""
+#~ "MuJoCo liest MJCF und kein anderes "
+#~ "Modellformat, sodass eine Gazebo-Welt, "
+#~ "auf die es gezeigt wird, kein "
+#~ "langsamer Weg ist, eine Szene zu "
+#~ "öffnen, sondern eine Datei, die es "
+#~ "nicht lesen kann. PartCAD schreibt sie"
+#~ " zuerst als MJCF heraus. Diese "
+#~ "Konvertierung ist das Einzige hier, was"
+#~ " tatsächlich über die Leitung geht, "
+#~ "und zwar aus demselben Grund, aus "
+#~ "dem das Umwandeln eines Festkörpers in"
+#~ " ein Mesh für Blender es tut: "
+#~ "sie steuert einen CAD-Wrapper, dessen"
+#~ " Laufzeitumgebung in der Umgebung des "
+#~ "Daemons liegt. Eine ASSY-Szene wird "
+#~ "abgelehnt statt konvertiert -- sie ist"
+#~ " nichts als Verweise auf die Teile"
+#~ " eines Pakets, und eine Ad-hoc-"
+#~ "Konvertierung hat kein Paket, gegen das"
+#~ " sie sie auflösen könnte."
+
+#~ msgid ""
+#~ "These are *derivable* from a solid "
+#~ "plus a density, which is exactly "
+#~ "what the exporter does today. What "
+#~ "is missing is the density, and "
+#~ "behind it the notion of what a "
+#~ "part is made of."
+#~ msgstr ""
+#~ "Diese sind aus einem Festkörper plus "
+#~ "einer Dichte *ableitbar*, und genau das"
+#~ " tut der Exporter heute. Was fehlt,"
+#~ " ist die Dichte und dahinter der "
+#~ "Begriff davon, woraus ein Teil besteht."
+
+#~ msgid ""
+#~ "**Derivation.** With a material behind "
+#~ "it (item 1), a part that states"
+#~ " no ``mass`` has one: the solid's "
+#~ "volume times the material's density, "
+#~ "cached like any other derived value "
+#~ "and invalidated when the CAD changes."
+#~ " The same for ``centerOfMass``, ``inertia``"
+#~ " and the surface properties. Today "
+#~ "the URDF exporter computes exactly this,"
+#~ " from the ``density`` parameter of "
+#~ "its ``export:`` configuration, and throws "
+#~ "it away afterwards - it should be"
+#~ " a property of the part that "
+#~ "every consumer sees."
+#~ msgstr ""
+#~ "**Ableitung.** Mit einem Material dahinter "
+#~ "(Punkt 1) hat ein Teil, das keine"
+#~ " ``mass`` angibt, dennoch eine: das "
+#~ "Volumen des Festkörpers mal die Dichte"
+#~ " des Materials, zwischengespeichert wie "
+#~ "jeder andere abgeleitete Wert und "
+#~ "ungültig gemacht, wenn sich das CAD "
+#~ "ändert. Dasselbe für ``centerOfMass``, "
+#~ "``inertia`` und die Oberflächeneigenschaften. "
+#~ "Heute berechnet der URDF-Exporter genau"
+#~ " das aus dem Parameter ``density`` "
+#~ "seiner ``export:``-Konfiguration und wirft es"
+#~ " danach weg - es sollte eine "
+#~ "Eigenschaft des Teils sein, die jeder"
+#~ " Verbraucher sieht."
+
+#~ msgid ""
+#~ "**Materials and physical properties** (items"
+#~ " 1-2). Turns the exporter's density "
+#~ "parameter into a model property and "
+#~ "makes a computed inertial trustworthy, "
+#~ "so that carrying one becomes the "
+#~ "exception rather than the rule."
+#~ msgstr ""
+#~ "**Materialien und physikalische Eigenschaften** "
+#~ "(Punkte 1-2). Macht aus dem "
+#~ "Dichteparameter des Exporters eine "
+#~ "Modelleigenschaft und eine berechnete Trägheit"
+#~ " vertrauenswürdig, sodass eine mitzuführen "
+#~ "zur Ausnahme statt zur Regel wird."

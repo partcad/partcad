@@ -367,7 +367,16 @@ Object commands
   <package>...`` or ``...:<name>`` to run everything the packages below declare too (see
   :ref:`recursive-names`), ``-f`` to run only the simulation of a given name, and
   ``--json`` to print the whole of what each simulation plugin reported. A validation that does not hold
-  exits non-zero.
+  exits non-zero. Each run also says where the two pictures its plugin took of the scene -- before and after,
+  from the scene's ``render: png:`` viewpoint -- were written.
+
+  ``--plugin <package>:<name>`` runs with another simulation plugin than the one each declaration names, such
+  as ``//pub/feature/simulate/gazebo:gazebo`` for a simulation written against MuJoCo; everything else the
+  declaration says is asked of that plugin instead. ``--before <path>`` and ``--after <path>`` save the state
+  the simulation started from and the state it ended in -- the very ``before`` and ``after`` its
+  ``validation:`` is evaluated over -- as YAML, or as JSON with ``--json`` or a path ending in ``.json``. They
+  save one simulation's state, so name the object and, when it declares several, the simulation with ``-f``.
+  The files are written on the machine the command runs on, whichever machine ran the simulation.
 
   It asks whether an object *works*: it places the object in the scene the declaration names, at the
   ``offset:`` the declaration states, runs the scene through the simulation plugin the declaration names, and

@@ -396,12 +396,19 @@ def simulated(tmp_path, monkeypatch):
             f.write("scene")
         return path
 
-    async def run(_ctx, _impl, directory, _scene_file, _declaration, _subject, _kind):
+    async def run(_ctx, _impl, directory, _scene_file, _declaration, _subject, _kind, snapshot=None):
         runs.append(directory)
         trajectory = os.path.join(directory, "trajectory.csv")
         with open(trajectory, "w") as f:
             f.write("run %d" % len(runs))
-        return {"success": True, "before": {"z": 10.0}, "after": {"z": 9.9}, "trajectory": trajectory}
+        result = {"success": True, "before": {"z": 10.0}, "after": {"z": 9.9}, "trajectory": trajectory}
+        if snapshot:
+            # A plugin that draws: the picture of how it ended, as asked.
+            name = snapshot["files"]["after"]
+            with open(os.path.join(directory, name), "w") as f:
+                f.write("picture of run %d" % len(runs))
+            result["snapshots"] = {"after": name}
+        return result
 
     monkeypatch.setattr(simulation, "_export_scene_async", export)
     monkeypatch.setattr(simulation, "_run_plugin_async", run)
@@ -436,6 +443,36 @@ def test_the_validation_is_judged_again_rather_than_remembered(simulated):
     )
     assert _run(simulation.run_async(ctx, part, "part", stricter)).passed is False
     assert len(runs) == 1
+
+
+def test_the_pictures_come_back_with_a_cached_run(simulated):
+    """They are files in the run directory, which is what the cache keeps."""
+    ctx, part, runs = simulated
+    (entry,) = simulation.of_shape(part)
+
+    _run(simulation.run_async(ctx, part, "part", entry))
+    second = _run(simulation.run_async(ctx, part, "part", entry))
+
+    assert len(runs) == 1
+    with open(second.snapshots["after"]) as f:
+        assert f.read() == "picture of run 1"
+
+
+def test_a_scene_looked_at_from_elsewhere_is_another_run(simulated, monkeypatch):
+    """The pictures are part of the answer, so where they are taken from is part
+    of the question: the old ones are not this viewpoint's."""
+    ctx, part, runs = simulated
+    (entry,) = simulation.of_shape(part)
+    _run(simulation.run_async(ctx, part, "part", entry))
+
+    asked = simulation.snapshot_request
+
+    def from_the_front(ctx, scene):
+        return dict(asked(ctx, scene), viewport_origin=[0.0, -100.0, 0.0])
+
+    monkeypatch.setattr(simulation, "snapshot_request", from_the_front)
+    _run(simulation.run_async(ctx, part, "part", entry))
+    assert len(runs) == 2
 
 
 def test_another_simulation_question_is_another_run(simulated):
