@@ -49,14 +49,27 @@ pc sim -a stable      # nothing moves
 pc sim -a slippery    # the top block slides off
 ```
 
-That is not a quirk of the simulator; it is what the two materials are.
-Aluminium on aluminium grips (`mu: 1.05` -- dry aluminium galls, which is why
-the number is above one), PTFE on PTFE does not (`mu: 0.04`), and somewhere
-between 0.4 and 0.5 a squarely stacked pair of these blocks stops standing
-up. So "will this stack stand?" is a question about the material, and
-`materials:` below is where the answer is written down. Every part that names
-one gets its `mu` written into the simulation, in the same place SDFormat
-calls `<mu>` and URDF calls `<mu1>`.
+The scene both run in is `tilted`, whose gravity leans 15 degrees off
+vertical. On a level floor nothing pushes a block sideways, so its friction
+is never asked anything and both stacks stand; a sideways pull is what makes
+the material matter. Tilting the world rather than building a ramp keeps
+the floor endless and the stacks placed exactly as they are drawn: a block
+on a level floor under a leaning gravity is, as far as sliding goes, a
+block on a 15-degree ramp.
+
+That is not a quirk of the simulator; it is what the two materials are. A
+block slides when its friction is below tan(15 deg), 0.268. Aluminium on
+aluminium grips (`mu: 1.05` -- dry aluminium galls, which is why the number
+is above one): four times what it takes. PTFE on PTFE (`mu: 0.04`) has a
+seventh of it. So "will this stack stand?" is a question about the
+material, and `materials:` below is where the answer is written down. Every
+part that names one gets its `mu` written into the simulation, in the same
+place SDFormat calls `<mu>` and URDF calls `<mu1>`.
+
+It is the top block that slides, and not the stack along the floor: MuJoCo
+meets two surfaces at the larger of their two frictions, and the floor
+states MuJoCo's default of 1.0, so every block grips the floor. Two PTFE
+blocks meet at PTFE's.
 
 Without it the simulation would answer with **MuJoCo's** default friction of
 1.0 -- a plausible number for metal, a badly wrong one for PTFE, and in
