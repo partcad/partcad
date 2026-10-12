@@ -424,7 +424,7 @@
         "properties": {
           "partcad.spaceMouse.enabled": {
             "default": true,
-            "description": "Navigate the 3D view with a 3Dconnexion SpaceMouse: the cap moves the model the way it is pushed and twisted (3Dconnexion's \"object mode\"), and the \"Fit\" button frames it again. On Windows and macOS the viewer reads the device itself; on Linux it reads it from spacenavd, which has to be running.",
+            "description": "Navigate the 3D view, and the model of an FEA or CFD result, with a 3Dconnexion SpaceMouse: the cap moves the model the way it is pushed and twisted (3Dconnexion's \"object mode\"), and the \"Fit\" button frames it again. On Windows and macOS the viewer reads the device itself; on Linux it reads it from spacenavd, which has to be running - in a remote window, with its socket forwarded to where the workspace is.",
             "type": "boolean"
           },
           "partcad.spaceMouse.sensitivity": {

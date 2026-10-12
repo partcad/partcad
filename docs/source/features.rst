@@ -134,14 +134,16 @@ The ``ports`` and ``interfaces`` lines start folded up — for an assembly they 
 unfolded they bury the hierarchy they hang off. Pointing at a part or a sub-assembly makes it **flicker** in the
 3D view, which is how to tell which of the shapes on screen a line is without moving the camera.
 
-The 3D view can also be navigated with a `3Dconnexion <https://3dconnexion.com/>`_ **SpaceMouse**: the cap moves
-the model the way it is pushed and twisted, and the device's **Fit** button (the right-hand one on a two-button
-model) frames the object again. On Windows and macOS the viewer reads the device itself -- move the cap once with
-the viewer open for the editor to notice it. On Linux it reads it through
-`spacenavd <https://spacenav.sourceforge.net/>`_, which has to be installed and running
-(``sudo apt install spacenavd``, for instance). Only the viewer in the focused window moves, so a SpaceMouse and
-two open windows do not fight. ``partcad.spaceMouse.sensitivity`` sets the speed,
-``partcad.spaceMouse.invert`` reverses individual axes, and ``partcad.spaceMouse.enabled`` turns it off.
+The 3D view, and the model of an FEA or CFD result, can also be navigated with a
+`3Dconnexion <https://3dconnexion.com/>`_ **SpaceMouse**: the cap moves the model the way it is pushed and
+twisted, and the device's **Fit** button (the right-hand one on a two-button model) frames the object again. On
+Windows and macOS the viewer reads the device itself -- move the cap once with the viewer open for the editor to
+notice it. On Linux it reads it through `spacenavd <https://spacenav.sourceforge.net/>`_, which has to be
+installed and running (``sudo apt install spacenavd``, for instance); in a remote window -- a container, an SSH
+host -- its socket has to be forwarded to where the workspace is, as the extension's README describes. Only the
+viewer in the focused window moves, and only the tab on screen, so a SpaceMouse and two open windows do not
+fight. ``partcad.spaceMouse.sensitivity`` sets the speed, ``partcad.spaceMouse.invert`` reverses individual axes,
+and ``partcad.spaceMouse.enabled`` turns it off.
 
 What the Viewer is showing can be asked of it from outside: ``pc ide state`` (see :doc:`cli`) reports the tab and
 sub-tab on screen, the filter and the selections of each sub-tab, and a screenshot of the one on screen -- together

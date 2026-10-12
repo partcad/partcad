@@ -280,10 +280,14 @@ Four things about it are load-bearing:
 
 **A SpaceMouse arrives by two roads, and `src/webview/spacemouse.ts` is the only file that knows what its axes
 mean.** On Windows and macOS the renderer reads it through the Gamepad API; on Linux the extension host reads
-spacenavd's socket (`src/viewer/spacenav.ts`) and forwards the events untouched, because Chromium does not see
-the device there. Do not convert spacenavd's values in the host: the test that holds the two roads to each other
-(`src/test/suite/viewerSpaceMouse.test.ts`) can only do so while both conversions sit side by side. See "A
-SpaceMouse" in [docs/partcad-viewer.md](./docs/partcad-viewer.md).
+spacenavd's socket (`src/viewer/spacenav.ts`) and forwards the events untouched, because spacenavd holds the
+device and Chromium sees nothing of it. Do not convert spacenavd's values in the host: the test that holds the
+two roads to each other (`src/test/suite/viewerSpaceMouse.test.ts`) can only do so while both conversions sit
+side by side. The extension host runs where the workspace is, so in this repository's dev container spacenavd
+is the host's, bound in by `.devcontainer/host-sockets-init.sh`. Every 3D pane attaches to the panel's one
+`spaceMouse` as a `Navigable` and drives it from its own render loop, and only the pane on screen moves; a new
+3D pane that does not attach is one the device does nothing in. See "A SpaceMouse" in
+[docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 Geometry reaches the viewer already tessellated: `partcad` renders to binary glTF in a sandbox and sends it
 compressed, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party

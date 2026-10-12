@@ -9,7 +9,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { readChoices, writeChoices } from '../common/garage';
-import { traceError, traceVerbose } from '../common/log/logging';
+import { traceError, traceInfo, traceVerbose } from '../common/log/logging';
 import { getViewerPerformanceDebugFromSetting } from '../common/settings';
 import * as utils from '../utils';
 import { MSG_CLEAR, MSG_SHOW, ViewerMessage, ViewerNode, decodeGltf } from './protocol';
@@ -118,6 +118,8 @@ export class PartcadViewer implements vscode.Disposable {
      * where the renderer cannot see the device itself. See 'spacenav.ts'.
      */
     private spacenav: SpacenavClient | undefined;
+    /** Whether a remote window has said why spacenavd is not there; once is enough. */
+    private spacenavHinted = false;
     private readonly disposables: vscode.Disposable[] = [];
     /**
      * What each render tab is showing, as a file on this machine.
@@ -657,6 +659,9 @@ export class PartcadViewer implements vscode.Disposable {
                 traceVerbose(
                     `PartCAD Viewer: spacenavd ${client.connected ? `connected, device ${client.device}` : 'disconnected'}`,
                 );
+                if (client.missing) {
+                    this.hintSpacenav(client.paths);
+                }
                 this.postSpaceMouseState();
             });
             client.onEvent((event) => {
@@ -672,6 +677,29 @@ export class PartcadViewer implements vscode.Disposable {
             this.spacenav = undefined;
         }
         this.postSpaceMouseState();
+    }
+
+    /**
+     * Say why a SpaceMouse does nothing in a remote window, once.
+     *
+     * The extension host runs where the workspace is - a dev container, an SSH
+     * host, WSL - and spacenavd where the device is plugged in. Nothing else in
+     * that situation says anything: the cap is pushed and the model just sits
+     * there. Locally a missing spacenavd needs no such note; the README says to
+     * install it, and on most machines that look finds nothing because there is
+     * no SpaceMouse.
+     */
+    private hintSpacenav(paths: readonly string[]): void {
+        if (this.spacenavHinted || vscode.env.remoteName === undefined) {
+            return;
+        }
+        this.spacenavHinted = true;
+        traceInfo(
+            `PartCAD Viewer: no spacenavd at ${paths.join(' or ')} where this workspace runs ` +
+                `(${vscode.env.remoteName}). A SpaceMouse on a Linux machine reaches the viewer only through ` +
+                `spacenavd's socket, so forward it from there to one of those paths - see "3Dconnexion SpaceMouse" ` +
+                `in the PartCAD extension's README. On Windows and macOS the viewer reads the device itself.`,
+        );
     }
 
     /** Whether the panel is visible in the focused window, which is where a SpaceMouse push is meant for. */

@@ -57,7 +57,7 @@ import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { reportError } from './host';
 import { ShowMessage, ShowNode } from './messages';
 import { ItemId, PORT_COLOR, PORT_OPACITY, flickerOn, nodeId, portId, totalSize } from './nodes';
-import { SpaceMouse, navigate } from './spacemouse';
+import { Navigable, onScreen, spaceMouse } from './spacemouse';
 import {
     SOFTWARE_TRIANGLE_BUDGET,
     Surface,
@@ -457,9 +457,18 @@ function fitView(): void {
     controls.update();
 }
 
-/** The SpaceMouse, sampled once a frame; 'viewer.ts' hands it what the host says. */
-export const spaceMouse = new SpaceMouse(fitView);
-let lastFrame = performance.now();
+/**
+ * The 3D view, as the SpaceMouse moves it: only while its tab is the one on
+ * screen, and a push is a drag as far as the controls' listeners are concerned.
+ */
+const navigable: Navigable = {
+    camera,
+    target: controls.target,
+    shown: () => onScreen(container),
+    fit: fitView,
+    moving: (moving) => controls.dispatchEvent({ type: moving ? 'start' : 'end' }),
+};
+spaceMouse.attach(navigable);
 
 /**
  * One node's ports: each as a triad, and as the boundary it is drawn with.
@@ -1142,17 +1151,10 @@ export function setOpacity(opacity: number): void {
 
 function animate(): void {
     const now = performance.now();
-    // Clamped, so that the first frame after the panel was hidden - or after a
-    // stall - does not fling the model by however long that was.
-    const seconds = Math.min((now - lastFrame) / 1000, 0.1);
-    lastFrame = now;
-    const motion = spaceMouse.sample(now);
-    if (motion !== undefined) {
-        navigate(camera, controls.target, motion, seconds, spaceMouse.settings.sensitivity);
-    }
+    const moved = spaceMouse.drive(navigable, now);
     // The model turning on its own while somebody is turning it by hand is two
     // hands on one wheel; it resumes when the cap is let go.
-    controls.autoRotate = autoRotate && motion === undefined;
+    controls.autoRotate = autoRotate && !moved;
     controls.update();
     if (flickering !== undefined) {
         // A flicker is a change on every frame it lasts.

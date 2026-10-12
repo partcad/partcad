@@ -55,13 +55,27 @@ the graphics card back.
 
 ### 3Dconnexion SpaceMouse
 
-The 3D view can be navigated with a 3Dconnexion SpaceMouse: the cap moves the model the way it is pushed and
-twisted, and the **Fit** button (the right-hand one on a two-button device) frames it again. On Windows and
-macOS the viewer reads the device on its own — move the cap once with the viewer open for the editor to notice
-it. On Linux it reads it from [spacenavd](https://spacenav.sourceforge.net/), which has to be installed and
-running (`sudo apt install spacenavd`, for example). Only the viewer in the focused window moves.
-`partcad.spaceMouse.sensitivity` sets the speed, `partcad.spaceMouse.invert` reverses individual axes, and
-`partcad.spaceMouse.enabled` turns it off.
+The 3D view, and the model of an FEA or CFD result, can be navigated with a 3Dconnexion SpaceMouse: the cap moves
+the model the way it is pushed and twisted, and the **Fit** button (the right-hand one on a two-button device)
+frames it again. On Windows and macOS the viewer reads the device on its own — move the cap once with the viewer
+open for the editor to notice it. On Linux it reads it from [spacenavd](https://spacenav.sourceforge.net/), which
+has to be installed and running (`sudo apt install spacenavd`, for example). Only the viewer in the focused
+window moves, and only the tab on screen. `partcad.spaceMouse.sensitivity` sets the speed,
+`partcad.spaceMouse.invert` reverses individual axes, and `partcad.spaceMouse.enabled` turns it off.
+
+On Linux, spacenavd is read by the part of the extension that runs where the workspace is. In a remote window —
+a container, an SSH host — that is not the machine the SpaceMouse is plugged into, so spacenavd's socket has to
+be brought there; the `PartCAD` output says so when a remote window finds none. PartCAD's own development
+container binds the host's (restart the container after restarting spacenavd). Over Remote-SSH, forward it in
+`~/.ssh/config`, where `1000` is your user id on the remote machine (`id -u` there):
+
+```text
+Host my-workstation
+    RemoteForward /run/user/1000/spnav.sock /var/run/spnav.sock
+```
+
+`StreamLocalBindUnlink yes` in the remote machine's `sshd_config` lets a reconnection replace the socket a
+dropped one left behind.
 
 ## The PartCAD terminal
 
