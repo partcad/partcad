@@ -332,11 +332,17 @@ export class SpaceMouse {
         this.views.set(view, undefined);
     }
 
-    /** Stop offering a view: it is going away. */
+    /**
+     * Stop offering a view: it is going away.
+     *
+     * A view that goes in the middle of a push hears the push end, as it heard it
+     * begin: whatever it changed for the drag is its to put back.
+     */
     public detach(view: Navigable): void {
         this.views.delete(view);
         if (this.moved === view) {
             this.moved = undefined;
+            view.moving?.(false);
         }
     }
 

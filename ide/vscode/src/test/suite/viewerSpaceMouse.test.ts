@@ -266,6 +266,15 @@ suite('PartCAD Viewer SpaceMouse', () => {
         done.shown = false;
         device.drive(view, 64);
         assert.deepStrictEqual(done.moving, [true, false, true, false]);
+
+        // So does a view going away in the middle of one - an analysis replaced
+        // by the next run - and only once.
+        done.shown = true;
+        pushRight(device, 80);
+        device.drive(view, 80);
+        device.detach(view);
+        device.detach(view);
+        assert.deepStrictEqual(done.moving, [true, false, true, false, true, false]);
     });
 
     test('a view that has gone is not moved, and the panel being elsewhere moves nothing', () => {
