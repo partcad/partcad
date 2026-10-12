@@ -148,6 +148,7 @@ inner
 instance
 instructions
 int
+interface
 interfaces
 interference
 interferes
@@ -200,6 +201,7 @@ mu
 multi
 multiplier
 name
+node
 noun
 obj
 object

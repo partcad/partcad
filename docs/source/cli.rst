@@ -878,9 +878,10 @@ Putting an object in front of a person, in one of two windows -- the IDE's own *
 (``pc ide view``), or **another application** on this machine (``pc ide open``, which is also what the editor
 extension's "Open in..." menu runs) -- and asking the IDE what it is showing (``pc ide state``). Two more set the
 IDE up: ``pc ide install`` puts the PartCAD extension into an editor, and ``pc ide workspace <directory>`` opens a
-package as an editor's workspace, in the PartCAD workbench. None of them
-leaves anything new in the package: that is what ``pc export`` and ``pc render`` are for. They used to be ``pc inspect`` and ``pc open``. Those names still work, are left out
-of ``pc --help``, and print a note on stderr saying what to type instead.
+package as an editor's workspace, in the PartCAD workbench. None of them leaves anything new in the package: that
+is what ``pc export`` and ``pc render`` are for. ``pc ide view`` and ``pc ide open`` used to be ``pc inspect`` and
+``pc open``; those names still work, are left out of ``pc --help``, and print a note on stderr saying what to type
+instead.
 
 ``pc ide view``
   View a part, assembly, or scene in the PartCAD Viewer. Use ``-V`` for a verbal (text) description instead of a visual
