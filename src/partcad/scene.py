@@ -78,7 +78,7 @@ class Scene(Assembly):
 
     def medium_reference(self) -> typing.Optional[str]:
         """The material this scene says it is filled with, as written, or None (vacuum)."""
-        return scene_world.medium_reference_of(self.config)
+        return scene_world.medium_reference_of(self.config, self._where())
 
     def get_medium(self, ctx):
         """The material this scene is filled with, or None for vacuum.

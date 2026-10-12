@@ -358,7 +358,11 @@ def test_the_properties_index_does_not_mistake_the_world_for_a_shape():
 
 
 def test_a_broken_world_fails_the_file_and_says_why(tmp_path, monkeypatch):
-    """Reported against the scene, with nothing written, as a bad filter is."""
+    """Reported against the scene, with nothing written - and raised, unlike a bad filter.
+
+    Raised so that a caller converting a scene in place does not read back a
+    file an earlier run left at the path as if this run had written it.
+    """
     ctx = package(tmp_path, {"tank": {"medium": "':nosuch'"}})
     tank = ctx.get_scene("//sim:tank")
     impl = types.SimpleNamespace(
@@ -375,9 +379,24 @@ def test_a_broken_world_fails_the_file_and_says_why(tmp_path, monkeypatch):
     monkeypatch.setattr(tank, "_materialize_output_script", no_script)
     monkeypatch.setattr(tank, "_run_implementation_async", must_not_run)
 
-    asyncio.run(tank._render_one_async(ctx, {"name": "envelope"}, "toy", None, None, None, None, {}))
+    with pytest.raises(scene_world.WorldError):
+        asyncio.run(tank._render_one_async(ctx, {"name": "envelope"}, "toy", None, None, None, None, {}))
 
     assert any("no material answers" in error for error in tank.errors)
+
+
+def test_an_empty_gravity_is_a_mistake_not_the_engine_s_default():
+    with pytest.raises(scene_world.WorldError, match="declared but empty"):
+        scene_world.gravity_of({"gravity": None}, "//sim:tank")
+    assert scene_world.gravity_of({}, "//sim:tank") is None
+
+
+@pytest.mark.parametrize("value", ["", "   ", 42, {"name": "water"}, None])
+def test_a_medium_that_is_not_a_reference_is_a_mistake_not_a_vacuum(value):
+    with pytest.raises(scene_world.WorldError, match="material reference"):
+        scene_world.medium_reference_of({"medium": value}, "//sim:tank")
+    assert scene_world.medium_reference_of({}, "//sim:tank") is None
+    assert scene_world.medium_reference_of({"medium": ":water"}, "//sim:tank") == ":water"
 
 
 #

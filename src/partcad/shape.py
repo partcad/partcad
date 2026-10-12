@@ -1756,9 +1756,12 @@ class Shape(ShapeConfiguration):
             # What a scene states about its world, stated wrongly: a gravity that
             # is not a vector, a medium nothing answers to. The declaration's
             # mistake rather than the implementation's, reported the way a bad
-            # filter is above and with nothing written.
+            # filter is above and with nothing written. Raised again, unlike the
+            # filter: a caller that converts a scene in place reads back the file
+            # it asked for, and one a previous run left there must not pass for
+            # this run's.
             self.error("%s: %s" % (format_name, e))
-            return
+            raise
         result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
         if result is None:
             return

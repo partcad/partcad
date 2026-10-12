@@ -100,9 +100,15 @@ def gravity_of(config: dict, where: str) -> typing.Optional[list]:
         WorldError: what is there is not three finite numbers. A boolean is not
             one, although YAML's 'true' converts to 1.0 without complaint.
     """
-    value = (config or {}).get(GRAVITY_KEY)
-    if value is None:
+    config = config or {}
+    if GRAVITY_KEY not in config:
         return None
+    value = config[GRAVITY_KEY]
+    if value is None:
+        # Present and empty is not absent: 'gravity:' with nothing after it, or
+        # 'gravity: null', is a declaration that went wrong, and running it under
+        # the engine's own gravity would answer a question nobody asked.
+        raise WorldError("%s: 'gravity' is declared but empty; state [x, y, z] in m/s^2 or leave it out" % where)
     if isinstance(value, (str, bytes)) or not isinstance(value, (list, tuple)) or len(value) != 3:
         raise WorldError(
             "%s: 'gravity' is a vector of three numbers in m/s^2, such as [0, 0, -9.81]; got %r" % (where, value)
@@ -115,10 +121,24 @@ def gravity_of(config: dict, where: str) -> typing.Optional[list]:
     return vector
 
 
-def medium_reference_of(config: dict) -> typing.Optional[str]:
-    """The material a scene's declaration says it is filled with, as written, or None."""
-    reference = (config or {}).get(MEDIUM_KEY)
-    return reference if isinstance(reference, str) and reference else None
+def medium_reference_of(config: dict, where: str = "the scene") -> typing.Optional[str]:
+    """The material a scene's declaration says it is filled with, as written, or None.
+
+    None only when the declaration says nothing about it. A 'medium' that is
+    there but is not a material reference -- empty, a number, a mapping -- is
+    the declaration's mistake, and treating it as vacuum would simulate a
+    different world from the one the scene meant.
+
+    Raises:
+        WorldError: 'medium' is present and is not a non-empty string.
+    """
+    config = config or {}
+    if MEDIUM_KEY not in config:
+        return None
+    reference = config[MEDIUM_KEY]
+    if not isinstance(reference, str) or not reference.strip():
+        raise WorldError("%s: 'medium' is a material reference, such as ':water'; got %r" % (where, reference))
+    return reference
 
 
 def resolve_medium(ctx, project_name: str, reference: str, where: str):
@@ -176,7 +196,7 @@ def facts(ctx, project_name: str, config: dict, where: str) -> typing.Optional[d
             )
         world[GRAVITY_KEY] = gravity
 
-    reference = medium_reference_of(config)
+    reference = medium_reference_of(config, where)
     if reference is not None:
         material = resolve_medium(ctx, project_name, reference, where)
         medium = {"material": "%s:%s" % (material.project_name, material.name)}
