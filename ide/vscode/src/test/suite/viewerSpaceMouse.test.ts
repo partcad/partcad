@@ -15,6 +15,10 @@
 //
 
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as net from 'net';
+import * as os from 'os';
+import * as path from 'path';
 import * as THREE from 'three';
 
 import {
@@ -22,6 +26,7 @@ import {
     REQ_CHANGE_PROTO,
     REQ_DEV_TYPE,
     REQ_TAG,
+    SpacenavClient,
     decodeMessages,
     protocolRequest,
     request,
@@ -32,7 +37,9 @@ import {
     DEFAULT_SETTINGS,
     GAMEPAD_FIT,
     Motion,
+    Navigable,
     SPACENAV_FULL_SCALE,
+    SpaceMouse,
     fromHid,
     fromSpacenav,
     isSpaceMouse,
@@ -67,6 +74,44 @@ function cameraAt(position: [number, number, number] = [0, 0, 10]): THREE.Perspe
 
 function motion(t: [number, number, number], r: [number, number, number] = [0, 0, 0]): Motion {
     return { t, r };
+}
+
+/** A view of the panel as the device sees one, and what the device did to it. */
+function fakeView(shown: boolean): { view: Navigable; done: { shown: boolean; fits: number; moving: boolean[] } } {
+    const done = { shown, fits: 0, moving: [] as boolean[] };
+    const view: Navigable = {
+        camera: cameraAt(),
+        target: new THREE.Vector3(),
+        shown: () => done.shown,
+        fit: () => {
+            done.fits += 1;
+        },
+        moving: (moving) => done.moving.push(moving),
+    };
+    return { view, done };
+}
+
+/** spacenavd saying the cap is pushed right to its stop, at 'now'. */
+function pushRight(device: SpaceMouse, now: number): void {
+    device.spacenavMotion([SPACENAV_FULL_SCALE, 0, 0, 0, 0, 0], now);
+}
+
+/** A device read through spacenavd, as on Linux. */
+function spacenavdDevice(): SpaceMouse {
+    const device = new SpaceMouse();
+    device.spacenavd = true;
+    return device;
+}
+
+/** Until 'condition' holds, or fail after 'ms'. */
+async function waitFor(condition: () => boolean, what: string, ms = 5000): Promise<void> {
+    const until = Date.now() + ms;
+    while (!condition()) {
+        if (Date.now() > until) {
+            assert.fail(`timed out waiting for ${what}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+    }
 }
 
 suite('PartCAD Viewer SpaceMouse', () => {
@@ -167,6 +212,90 @@ suite('PartCAD Viewer SpaceMouse', () => {
         navigate(fast, new THREE.Vector3(), motion([1, 0, 0]), 0.1, 2);
         assert.ok(Math.abs(fast.position.x - 2 * slow.position.x) < 1e-9);
     });
+
+    test('only the view on screen is moved, and "Fit" frames that one', () => {
+        // The 3D tab and an analysis each draw in a loop of their own, hidden or
+        // not, and each asks the device once a frame.
+        const device = spacenavdDevice();
+        const design = fakeView(true);
+        const analysis = fakeView(false);
+        device.attach(design.view);
+        device.attach(analysis.view);
+        pushRight(device, 0);
+        for (const now of [0, 16]) {
+            device.drive(design.view, now);
+            device.drive(analysis.view, now);
+        }
+        assert.ok(design.view.camera.position.x < 0, `camera went to ${design.view.camera.position.toArray()}`);
+        near(analysis.view.camera.position.toArray(), [0, 0, 10]);
+        device.spacenavButton(spacenavFit(null), true);
+        assert.deepStrictEqual([design.done.fits, analysis.done.fits], [1, 0]);
+
+        // The user switches to the analysis.
+        design.done.shown = false;
+        analysis.done.shown = true;
+        const left = design.view.camera.position.x;
+        pushRight(device, 32);
+        device.drive(design.view, 32);
+        device.drive(analysis.view, 32);
+        assert.strictEqual(design.view.camera.position.x, left);
+        assert.ok(analysis.view.camera.position.x < 0, `camera went to ${analysis.view.camera.position.toArray()}`);
+        device.spacenavButton(spacenavFit(null), true);
+        assert.deepStrictEqual([design.done.fits, analysis.done.fits], [1, 1]);
+
+        // Nothing is framed with the device turned off.
+        device.settings = { ...DEFAULT_SETTINGS, enabled: false };
+        device.spacenavButton(spacenavFit(null), true);
+        assert.deepStrictEqual([design.done.fits, analysis.done.fits], [1, 1]);
+    });
+
+    test('a view hears the cap start and stop moving it, as it would a drag', () => {
+        const device = spacenavdDevice();
+        const { view, done } = fakeView(true);
+        device.attach(view);
+        pushRight(device, 0);
+        assert.strictEqual(device.drive(view, 0), true);
+        assert.strictEqual(device.drive(view, 16), true);
+        device.spacenavMotion([0, 0, 0, 0, 0, 0], 32);
+        assert.strictEqual(device.drive(view, 32), false);
+        assert.deepStrictEqual(done.moving, [true, false]);
+
+        // A tab switched away from in the middle of a push ends the drag there.
+        pushRight(device, 48);
+        device.drive(view, 48);
+        done.shown = false;
+        device.drive(view, 64);
+        assert.deepStrictEqual(done.moving, [true, false, true, false]);
+
+        // So does a view going away in the middle of one - an analysis replaced
+        // by the next run - and only once.
+        done.shown = true;
+        pushRight(device, 80);
+        device.drive(view, 80);
+        device.detach(view);
+        device.detach(view);
+        assert.deepStrictEqual(done.moving, [true, false, true, false, true, false]);
+    });
+
+    test('a view that has gone is not moved, and the panel being elsewhere moves nothing', () => {
+        const device = spacenavdDevice();
+        const { view, done } = fakeView(true);
+        device.attach(view);
+        device.detach(view);
+        pushRight(device, 0);
+        assert.strictEqual(device.drive(view, 0), false);
+        device.spacenavButton(spacenavFit(null), true);
+        assert.strictEqual(done.fits, 0);
+
+        const other = fakeView(true);
+        device.attach(other.view);
+        device.active = false;
+        device.drive(other.view, 0);
+        device.drive(other.view, 16);
+        near(other.view.camera.position.toArray(), [0, 0, 10]);
+        device.spacenavButton(spacenavFit(null), true);
+        assert.strictEqual(other.done.fits, 0);
+    });
 });
 
 suite('spacenavd protocol', () => {
@@ -239,6 +368,32 @@ suite('spacenavd protocol', () => {
         assert.strictEqual(spacenavFit(0x20f), GAMEPAD_FIT);
         assert.strictEqual(spacenavFit(0x206), GAMEPAD_FIT);
         assert.strictEqual(spacenavFit(null), GAMEPAD_FIT);
+    });
+
+    test('a spacenavd at none of its paths is missing, and one that answers is not', async function () {
+        if (process.platform === 'win32') {
+            // spacenavd is a Unix daemon, and the extension does not look for it here.
+            this.skip();
+        }
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'spnav-'));
+        const absent = path.join(directory, 'absent.sock');
+        const present = path.join(directory, 'spnav.sock');
+        const server = net.createServer((connection) => connection.on('data', () => undefined));
+        let client = new SpacenavClient([absent]);
+        try {
+            await waitFor(() => client.missing, 'the client to give up on a socket that is not there');
+            assert.strictEqual(client.connected, false);
+            client.dispose();
+
+            await new Promise<void>((resolve) => server.listen(present, resolve));
+            client = new SpacenavClient([absent, present]);
+            await waitFor(() => client.connected, 'the client to find the second path');
+            assert.strictEqual(client.missing, false);
+        } finally {
+            client.dispose();
+            server.close();
+            fs.rmSync(directory, { recursive: true, force: true });
+        }
     });
 
     test('the socket is looked for where libspnav looks', () => {

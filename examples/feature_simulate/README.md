@@ -49,14 +49,27 @@ pc sim -a stable      # nothing moves
 pc sim -a slippery    # the top block slides off
 ```
 
-That is not a quirk of the simulator; it is what the two materials are.
-Aluminium on aluminium grips (`mu: 1.05` -- dry aluminium galls, which is why
-the number is above one), PTFE on PTFE does not (`mu: 0.04`), and somewhere
-between 0.4 and 0.5 a squarely stacked pair of these blocks stops standing
-up. So "will this stack stand?" is a question about the material, and
-`materials:` below is where the answer is written down. Every part that names
-one gets its `mu` written into the simulation, in the same place SDFormat
-calls `<mu>` and URDF calls `<mu1>`.
+The scene both run in is `tilted`, whose gravity leans 15 degrees off
+vertical. On a level floor nothing pushes a block sideways, so its friction
+is never asked anything and both stacks stand; a sideways pull is what makes
+the material matter. Tilting the world rather than building a ramp keeps
+the floor endless and the stacks placed exactly as they are drawn: a block
+on a level floor under a leaning gravity is, as far as sliding goes, a
+block on a 15-degree ramp.
+
+That is not a quirk of the simulator; it is what the two materials are. A
+block slides when its friction is below tan(15 deg), 0.268. Aluminium on
+aluminium grips (`mu: 1.05` -- dry aluminium galls, which is why the number
+is above one): four times what it takes. PTFE on PTFE (`mu: 0.04`) has a
+seventh of it. So "will this stack stand?" is a question about the
+material, and `materials:` below is where the answer is written down. Every
+part that names one gets its `mu` written into the simulation, in the same
+place SDFormat calls `<mu>` and URDF calls `<mu1>`.
+
+It is the top block that slides, and not the stack along the floor: MuJoCo
+meets two surfaces at the larger of their two frictions, and the floor
+states MuJoCo's default of 1.0, so every block grips the floor. Two PTFE
+blocks meet at PTFE's.
 
 Without it the simulation would answer with **MuJoCo's** default friction of
 1.0 -- a plausible number for metal, a badly wrong one for PTFE, and in
@@ -79,6 +92,48 @@ opened in MuJoCo:
 pc export -a -t sim-mujoco:mjcf -O ./ unstable
 pc ide open --with mujoco ./unstable.xml
 ```
+
+### `float` and `block` in a tank of water
+
+A scene says what its world is like as well as where things are in it: the
+`gravity:` in it, and the `medium:` it is filled with, which is a material
+like any other. `tank` is filled with `water`, and holds whatever is
+simulated in it 100 mm above its floor.
+
+```shell
+pc sim -f sinks block    # the aluminium block sinks to the bottom of the tank
+pc sim float             # the float rises -- and, in the default scene, falls
+```
+
+`float` is the same 20 mm cube as `block`, standing for a sealed float that
+weighs 3 g: less than the 8 g of water it displaces. Its `simulate:` runs it
+twice, in the tank and in the default scene, and the two validations are
+opposite claims about the same part. The default scene is a vacuum, as every
+scene that states no `medium:` is, so there the float falls like anything
+else.
+
+The float states its own `mass` because it is hollow, which its geometry
+does not say; PartCAD works out the rest -- its centre of mass and its
+inertia, from its solid, scaled to that mass -- and so does the volume of
+water it displaces. MuJoCo models a fluid as drag alone; the buoyancy is
+written by the MJCF exporter, and the water has no surface, so the float
+rises for as long as the run lasts rather than coming to rest at a
+waterline. See
+[partcad-sim-mujoco](https://github.com/partcad/partcad-sim-mujoco) for what
+is and is not modelled.
+
+`buoy` is the float again with its weight low down: 4 g, balanced 6 mm
+below its middle, as a float with a lead weight in its bottom would be. The
+water lifts it from its middle -- the centroid of its solid, its centre of
+buoyancy -- so its weight and the lift make a couple that turns the heavy
+side down. Released tilted 60 degrees, it is upright within a second.
+
+```shell
+pc sim buoy           # the ballasted float rights itself as it rises
+```
+
+`water` is declared below so that this example stays self-contained; the
+standard catalogue's is `//pub/std/manufacturing/material/fluid:water`.
 
 
 ## Sub-Packages
@@ -125,6 +180,18 @@ pc ide open --with mujoco ./unstable.xml
 <li>material: :ptfe</li>
 </ul>
 </td>
+</tr></table>
+
+### buoy
+<table><tr>
+<td valign=top><a href="block.py"><img src="././buoy.svg" alt="buoy" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>The float again, with its 4 g of weight low down - a ballasted float, which rights itself</td>
+</tr></table>
+
+### float
+<table><tr>
+<td valign=top><a href="block.py"><img src="././float.svg" alt="float" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>A sealed float - a 20 mm cube that weighs 3 g, less than the 8 g of water it displaces</td>
 </tr></table>
 
 <br/><br/>

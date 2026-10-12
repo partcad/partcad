@@ -161,7 +161,7 @@ materials:
       billet below, because 'AeroAssembly.step' names none: what an AP214 file
       carries is geometry, and what a part is made of is not geometry.
     url: https://en.wikipedia.org/wiki/6061_aluminium_alloy
-    density: 0.0027 # g/mm^3
+    density: 2700 # kg/m^3
     tags:
       - milled
       - formed

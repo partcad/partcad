@@ -62,8 +62,18 @@ remain importable by its siblings - which is how the PNG and DXF renderers
 reuse the SVG one.
 
 A format that declared 'properties: true' finds 'request["properties"]' holding
-what each shape reports about itself - its material, its colour, its physics -
-keyed by the full name the shape carries. See 'properties_index()'.
+what each shape reports about itself - its material, its colour, its physics,
+with every shape's mass, centre of mass, inertia, density and friction already
+resolved - keyed by the full name the shape carries. See 'properties_index()'.
+
+Such a format, handed a scene that states a gravity or a medium, also finds
+'request["world"]': the gravity as [x, y, z] in m/s^2, and the fluid the scene is
+filled with as the material it names and that material's 'density' (kg/m^3) and
+'viscosity' (Pa*s), each only when stated - SI, so it is written as it arrives.
+Absent means the
+scene states neither - Earth's gravity as the engine has it, and vacuum - and an
+implementation that writes what it always wrote in that case changes nothing for
+anybody. See WORLD_KEY.
 
 Every request carries 'request["reproducible"]', a boolean, whether or not the
 file type declared it: whether the caller needs this file to come out the same
@@ -145,15 +155,25 @@ JOINT_KEY = "joint"
 # two machines - see 'builtin/render/render_svg.py'.
 REPRODUCIBLE_KEY = "reproducible"
 
-# The key the core puts what each shape inherits from its material under, keyed
-# by the same full name the index below is keyed by. A shape says what it is
-# made of by *name*, and turning ':aluminium' into a coefficient of friction
-# means resolving it against the package that wrote it and then loading the
-# package that catalogues it - which the core can do and a sandbox cannot. So
-# the facts arrive already resolved, per shape, and are merged into the index
-# below underneath whatever each shape said about itself. See
-# 'partcad.material.physics_by_shape()'.
-MATERIALS_KEY = "__materials__"
+# The key the core puts each shape's resolved physics under, keyed by the same
+# full name the index below is keyed by: what the shape states, what its
+# material lends - a shape says what it is made of by *name*, and turning
+# ':aluminium' into a density means loading the package that catalogues it,
+# which the core can do and a sandbox cannot - and the mass, centre of mass and
+# inertia derived from those and the solid. It arrives worked out, per shape,
+# and is merged into the index below underneath whatever each shape said about
+# itself. See 'partcad.physics.physics_by_shape()', whose 'FACTS_KEY' is this
+# key's twin.
+PHYSICS_KEY = "__physics__"
+
+# What a scene says about the world it is: its gravity and the fluid it is
+# filled with, resolved by the core (the fluid is a material, named the way a
+# part names what it is made of, and only the core can load the package that
+# catalogues it). Its twin is 'partcad.output.WORLD_KEY'. Nothing here reads it:
+# it is a fact about the scene rather than about any one shape, so it reaches the
+# implementation as the core sent it, beside 'wrapped', and is not folded into
+# the properties index.
+WORLD_KEY = "world"
 
 
 def properties_index(request):
@@ -165,21 +185,25 @@ def properties_index(request):
     that walks the tree ('decode: false') *and* for one that is handed live
     geometry ('decode: true'), whose decoding throws every envelope away.
 
-    What the shape's *material* says is folded in here too, underneath what the
-    shape itself says: a part that states a friction of its own keeps it, and one
-    that only states what it is made of gets the material's. That way an exporter
-    reads 'physics' and never learns that materials exist - which is what keeps
-    all three of them (URDF, SDFormat, MJCF) agreeing about it for free.
+    What the core resolved for each shape is folded in here too, underneath
+    what the shape itself says: a part that states a friction or a mass of its
+    own keeps it, and one that only states what it is made of gets the
+    material's friction and the mass its solid weighs at the material's density.
+    That way an exporter reads 'physics' and never learns that materials,
+    densities or derivations exist - which is what keeps all three of them
+    (URDF, SDFormat, MJCF) agreeing about it for free.
 
-    Only shapes that report something appear. A shape with no name cannot be
-    looked up and is skipped, but its children are still walked.
+    Only shapes that report something, or that the core resolved something
+    for, appear. A part with no 'properties:' of its own still weighs what its
+    solid weighs, so it is indexed for its physics alone. A shape with no name
+    cannot be looked up and is skipped, but its children are still walked.
     """
     index = {}
-    materials = request.get(MATERIALS_KEY) or {}
+    resolved_physics = request.get(PHYSICS_KEY) or {}
 
     def resolved(name, properties):
-        """One shape's properties, with its material's physics under its own."""
-        facts = materials.get(name)
+        """One shape's properties, with its resolved physics under its own."""
+        facts = resolved_physics.get(name)
         if not facts:
             return properties
         physics = dict(facts)
@@ -196,8 +220,9 @@ def properties_index(request):
         is_envelope = ocp_serialize.KEY_BREP in obj or ocp_serialize.KEY_ASSEMBLY in obj
         if is_envelope:
             properties = obj.get(PROPERTIES_KEY)
+            properties = properties if isinstance(properties, dict) else {}
             name = obj.get("name")
-            if name and isinstance(properties, dict) and properties:
+            if name and (properties or resolved_physics.get(name)):
                 index[name] = resolved(name, properties)
             for child in obj.get(ocp_serialize.KEY_ASSEMBLY) or []:
                 walk(child)
@@ -205,8 +230,8 @@ def properties_index(request):
         for key, value in obj.items():
             # Never the index itself: it is keyed by name, not by anything that
             # holds an envelope, and walking it would be pointless. Nor the
-            # material table, which is keyed by reference and holds no shapes.
-            if key not in (PROPERTIES_KEY, MATERIALS_KEY):
+            # resolved physics, which is keyed by name and holds no shapes.
+            if key not in (PROPERTIES_KEY, PHYSICS_KEY):
                 walk(value)
 
     walk(request)
@@ -290,9 +315,10 @@ if __name__ == "__main__":
     if request.get(PROPERTIES_KEY) is True:
         request[PROPERTIES_KEY] = properties_index(request)
     # Read by 'properties_index' above and nothing else: an implementation is
-    # handed the physics of each shape, not a table of substances to look one up
-    # in. A format that declares no 'properties: true' never asked for either.
-    request.pop(MATERIALS_KEY, None)
+    # handed the physics of each shape in the index, not a second table to
+    # look it up in. A format that declares no 'properties: true' never asked
+    # for either.
+    request.pop(PHYSICS_KEY, None)
     if request.pop(DECODE_KEY, True) is not False:
         request = ocp_serialize.decode(request)
     if script is None:

@@ -17,7 +17,8 @@ description: >
   Code plugin. That is not a gap. Each of those is built from one fixed
   directory -- "docs/source", "ide/vscode", "ide/standalone", "ai-agents" --
   so a path outside them cannot change what they contain, and an unclassified
-  path is by definition outside them.
+  path is by definition outside them. (The extension's tests read one more,
+  "src/partcad_utils/schema", and that directory is named below.)
 
   The plugin's own directory is the one that is *also* something else: the
   wheel ships the skills under it, through symlinks in "src/partcad/ai_agents",
@@ -213,7 +214,7 @@ runs:
 
         if [ "${ALL}" = "true" ]; then
           add code; add deps; add docs; add ai; add devcontainer; add vscode
-          add ide; add packaging; add ci; add containers
+          add ide; add packaging; add ci; add containers; add schema
         else
           while IFS= read -r f; do
             [ -n "${f}" ] || continue
@@ -280,6 +281,17 @@ runs:
               # it is the one kind of change whose subject is an image rather
               # than the code that runs in one. See the "images" output.
               add containers; add code ;;
+            src/partcad_utils/schema/*)
+              # The ASSY and "partcad.yaml" schemas. Source, like the rest of
+              # "src/", and also what the VS Code extension's spelling
+              # dictionary is generated from: "ide/vscode/cspell/generate.js"
+              # reads them, and "spelling.test.ts" fails while
+              # "cspell/partcad.txt" is out of date. Matched as plain "code",
+              # a schema change skipped "npm test" on its own pull request and
+              # turned "devel" red on the next push that ran it, until some
+              # other pull request ran "npm run cspell-dictionary". Named
+              # before the rule below, which would stop at "code".
+              add schema; add code ;;
             src/*|tests/*|features/*|cad/*|tools/*|dev-tools/*|conftest.py|behave.ini)
               add code ;;
             pyproject.toml|poetry.lock|poetry.toml|requirements*.txt|requirements*.in)
@@ -353,7 +365,11 @@ runs:
         # Not "code": the IDE downloads the bundles rather than freezing them,
         # so what rebuilds it is the application around them.
         emit ide                 ci packaging vscode ide
-        emit vsix                ci vscode
+        # "schema" as well as the extension's own directory: its tests check a
+        # dictionary generated from the schemas. Not the IDE -- the ".vsix"
+        # carries the generated dictionary, not the schemas, so a schema change
+        # alone cannot change what the IDE ships.
+        emit vsix                ci vscode schema
         emit plugin              ci ai
         # The extension and what it drives, together: "ide/" on one side, the
         # source and its dependencies on the other.

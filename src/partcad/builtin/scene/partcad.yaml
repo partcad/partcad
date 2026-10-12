@@ -17,6 +17,16 @@
 # engine plugins rather than to this wheel, so the parameters that write them are
 # declared there too -- `light`/`ground_plane` on `sim-mujoco:mjcf` and
 # `sun`/`ground_plane` on `sim-gazebo:world`.
+#
+# Nor does it state a `gravity:` or a `medium:`, and that *is* what it says:
+# Earth's gravity as the engine has it, in a vacuum -- which is what every
+# simulation meant before a scene could say anything else. A `simulate:` cannot
+# ask this scene for water, deliberately. The fluid a part is simulated in is a
+# fact about the world, like the fixture it stands on, and a package that wants
+# its part under water writes a scene that is under water (see
+# `examples/feature_simulate`). A `medium` parameter here would be a second way
+# to say the same thing, spelled as a material reference inside an instance name,
+# and resolved against this package rather than the one that wrote it.
 
 name: //builtin/scene
 desc: |

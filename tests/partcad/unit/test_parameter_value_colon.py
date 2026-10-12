@@ -11,7 +11,7 @@
 name depended on who read it:
   * 'resolve_resource_path' split on every ':' and raised "too many values to
     unpack";
-  * 'reference.split' and 'material.owner_package' split on the last one, and
+  * 'reference.split' and 'material.owner_package' (now 'physics.owner_package') split on the last one, and
     named an object after the tail of the value.
 
 The first is how an enrich of a scene failed when it set the scene's medium to
@@ -26,7 +26,7 @@ import pytest
 import yaml
 
 import partcad as pc
-from partcad import assembly_factory, factory, material, part_factory, reference
+from partcad import assembly_factory, factory, part_factory, physics, reference
 from partcad.scene_factory import SceneFactoryMixin
 
 WATER = "//pub/std/materials:water"
@@ -160,7 +160,7 @@ def test_a_qualified_reference_is_split_at_its_first_colon(source, package_name,
     ],
 )
 def test_a_shape_belongs_to_the_package_before_its_first_colon(shape_name, package_name):
-    assert material.owner_package(shape_name) == package_name
+    assert physics.owner_package(shape_name) == package_name
 
 
 #

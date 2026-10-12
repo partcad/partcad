@@ -21,7 +21,7 @@ materials:
       A semi-crystalline thermoplastic, and the usual material for a 3D printed
       part.
     url: https://en.wikipedia.org/wiki/Polylactic_acid
-    density: 0.001320 # g/mm^3
+    density: 1320 # kg/m^3
     tags:
       - 3d-printed
       - low-cost

@@ -3,7 +3,7 @@
 # Runs on the HOST, before the dev container is created or started.
 #
 # Resolves the host sockets this workspace wants to reach through, into fixed
-# paths devcontainer.json can bind. Two of them:
+# paths devcontainer.json can bind. Three of them:
 #
 #   docker.sock     -- for the hosts whose Docker daemon is not at
 #                      /var/run/docker.sock: rootless Docker, a unix://
@@ -20,6 +20,13 @@
 #                      itself; `devcontainer up` does not, which is why an agent
 #                      opened this way -- an agent in CI, or one in a terminal
 #                      following AGENTS.md -- had no agent at all.
+#
+#   spnav.sock      -- spacenavd, the daemon that owns a 3Dconnexion SpaceMouse
+#                      on a Linux host. The PartCAD extension reads it from the
+#                      extension host, which in a dev container is in here,
+#                      while the device and the daemon are out there; without
+#                      this the viewer's SpaceMouse does nothing at all. See
+#                      "A SpaceMouse" in ide/vscode/docs/partcad-viewer.md.
 #
 # Docker resolves each link host-side, so the container receives the socket
 # itself.
@@ -99,5 +106,38 @@ if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
 fi
 
 link_first_socket ssh-agent.sock "${ssh_candidates[@]+"${ssh_candidates[@]}"}"
+
+# Leaves an empty file at "${link_dir}/$1" when nothing was linked there.
+#
+# For a socket that comes and goes with a daemon the user can stop. Docker
+# refuses to start a container when a bind source has turned from a directory
+# into anything else, or back, since the container was created ("Are you trying
+# to mount a directory onto a file (or vice-versa)?"), and "-v" makes a
+# directory of a source that is missing. So a socket that was there when the
+# container was made and is gone at a later start -- spacenavd stopped, or
+# uninstalled -- would be a container that no longer starts. An empty file binds
+# as a socket does, and connecting to it is refused, which is what a daemon that
+# is not running looks like anyway.
+#
+# Not for the two links above: a container made before this existed may have
+# had a directory bound there, and the same refusal would stop that one instead.
+placehold() {
+  local link="${link_dir}/$1"
+  if [[ -e "${link}" || -L "${link}" ]]; then
+    return 0
+  fi
+  : >"${link}" 2>/dev/null || true
+}
+
+# Where libspnav looks, in its order -- and the extension's, see 'socketPaths'
+# in ide/vscode/src/viewer/spacenav.ts: the default of every packaged
+# spacenavd, then the runtime directory of one started without root.
+spnav_candidates=("/var/run/spnav.sock")
+if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
+  spnav_candidates+=("${XDG_RUNTIME_DIR}/spnav.sock")
+fi
+
+link_first_socket spnav.sock "${spnav_candidates[@]}"
+placehold spnav.sock
 
 exit 0

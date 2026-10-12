@@ -49,14 +49,8 @@ def bbox(shape):
     return [xmin, ymin, zmin, xmax, ymax, zmax]
 
 
-def volumes(shape):
-    """The volume of each solid in 'shape', largest first.
-
-    Per solid rather than summed, for the reason wrapper_solidity gives: a
-    compound holding one inverted solid and a larger correct one adds up to a
-    positive number, and the inversion disappears into the total. The caller
-    adds them up knowing how many there were.
-    """
+def _solid_properties(shape):
+    """The volume properties of each solid in 'shape', as OCCT integrates them."""
     from OCP.BRepGProp import BRepGProp
     from OCP.GProp import GProp_GProps
     from OCP.TopAbs import TopAbs_SOLID
@@ -67,15 +61,64 @@ def volumes(shape):
     while explorer.More():
         props = GProp_GProps()
         BRepGProp.VolumeProperties_s(explorer.Current(), props)
-        found.append(props.Mass())
+        found.append(props)
         explorer.Next()
-    return sorted(found, reverse=True)
+    return found
+
+
+def volumes(shape):
+    """The volume of each solid in 'shape', largest first.
+
+    Per solid rather than summed, for the reason wrapper_solidity gives: a
+    compound holding one inverted solid and a larger correct one adds up to a
+    positive number, and the inversion disappears into the total. The caller
+    adds them up knowing how many there were.
+    """
+    return sorted((props.Mass() for props in _solid_properties(shape)), reverse=True)
+
+
+def distribution(solids):
+    """Where the solids' volume is and how it is spread: (centroid, unit inertia).
+
+    The centroid in millimetres, and the inertia tensor about it as a 3x3 list,
+    taken at a density of one in the shape's own units - mm^5. It is the half of
+    a mass, a centre of mass and an inertia that the geometry decides; the other
+    half is one number, a density, which the geometry knows nothing about and
+    the core multiplies in (see 'mass_properties.of_solid()'). Splitting them
+    there is what lets this half be measured once, as the shape is built, and
+    cached with the geometry it describes, while a material's density can be
+    edited without rebuilding anything.
+
+    OCCT's MatrixOfInertia() is already the tensor about the centre of mass, and
+    with its products of inertia already negated - the tensor itself rather
+    than the integrals - which is the form URDF, SDFormat and MJCF all state.
+    Adding the solids up with GProp_GProps.Add() moves each one's tensor to the
+    common centroid, so a compound of several is one distribution.
+
+    (None, None) unless every solid encloses a positive volume. A solid with its
+    faces turned inward integrates to a negative mass, and a centre of mass
+    worked out with one in the sum is a number with no meaning - the volume is
+    reported as it stands, and that is where the defect shows.
+    """
+    from OCP.GProp import GProp_GProps
+
+    if not solids or any(props.Mass() <= 0.0 for props in solids):
+        return None, None
+    total = GProp_GProps()
+    for props in solids:
+        total.Add(props)
+    centre = total.CentreOfMass()
+    matrix = total.MatrixOfInertia()
+    # Row/column indices in OCCT's gp_Mat are 1-based.
+    tensor = [[matrix.Value(row, col) for col in (1, 2, 3)] for row in (1, 2, 3)]
+    return [centre.X(), centre.Y(), centre.Z()], tensor
 
 
 def measurements(shape):
     """Everything generic that is worth knowing about a shape's size.
 
-    ``{"bbox": [...] | None, "volume": float | None, "solids": int}``.
+    ``{"bbox": [...] | None, "volume": float | None, "solids": int,
+    "centroid": [x, y, z] | None, "unitInertia": [[...], [...], [...]] | None}``.
 
     'volume' is None - rather than 0.0 - for a shape holding no solid at all: a
     sketch, a shell, a wire. A shape that encloses nothing and a shape that is
@@ -84,13 +127,23 @@ def measurements(shape):
 
     A negative volume is returned as it stands: it means the faces are oriented
     inward, which is worth seeing rather than taking the modulus of.
+
+    'centroid' and 'unitInertia' are what a mass is worked out from - see
+    'distribution()'. They are taken in the same pass over the solids as the
+    volume, so a shape that is measured at all is measured for its mass too.
     """
-    found = volumes(shape)
-    return {
+    solids = _solid_properties(shape)
+    found = sorted((props.Mass() for props in solids), reverse=True)
+    centroid, unit_inertia = distribution(solids)
+    measured = {
         "bbox": bbox(shape),
         "volume": sum(found) if found else None,
         "solids": len(found),
     }
+    if centroid is not None:
+        measured["centroid"] = centroid
+        measured["unitInertia"] = unit_inertia
+    return measured
 
 
 def measurements_or_none(shape):

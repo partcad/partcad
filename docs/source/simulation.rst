@@ -124,11 +124,40 @@ from there rather than from anything stashed on the parts.
 What a part states about itself is written into the URDF element that states it:
 mass, centre of mass and inertia into ``<inertial>``, friction and the contact
 parameters into a ``<gazebo>`` block, ``material``/``color`` into
-``<material>``. Only a part that says nothing gets computed inertial properties:
-OCCT gives the volume, the centre of mass and the inertia tensor about it, and a
-density turns those into a mass. Since PartCAD still has nowhere to record what
-a part is *made of*, that density is a parameter of the export with a default
-rather than a property of the part - the first gap this page proposes to close.
+``<material>``. A part that states none of its mass properties is written no
+differently, because PartCAD has already worked them out: OCCT measured the
+solid's volume, its centroid and its inertia at unit density as the part was
+built, and the density of what the part is made of turns those into a mass, a
+centre of mass and an inertia (``partcad.physics``). They reach the exporter in
+the part's properties, under the names a part would state them under, and the
+exporter writes them - this one, and the MJCF and SDFormat ones the simulation
+plugins carry, all the same way, because none of them works a mass out. Every
+value is resolved in one order:
+
+#. what the part states, as stated;
+#. its ``density`` - one it states itself, or else its material's;
+#. for an export only, the ``density`` parameter of the export, else 2700 kg/m³
+   (aluminium), for a part that states no density and is made of nothing that
+   does.
+
+A part that states its mass and not its inertia gets its solid's inertia scaled
+to that mass, so it turns the way its shape says at the weight it says. The
+centre of mass and the inertia come from the same density as the mass, so the
+three cannot disagree. ``pc info`` reports the same values as
+``MassProperties``, each with where it came from, so what it says a part weighs
+is what a simulation of it weighs.
+
+What an exporter still does is add up a link made of several shapes -
+``wrist/1`` in aluminium, ``wrist/2`` in steel - each placed where the link
+holds it, its inertia turned with it and moved to the common centre of mass, so
+that the link balances where the steel pulls it. That arithmetic is
+``mass_properties`` in PartCAD's ``wrappers/`` directory, beside
+``urdf_common``, and it is the one copy of it: the plugins import it the way
+they import ``urdf_common``, and carry none of their own.
+
+Every density is in kg/m³ - a material's, a part's and an export's - so none is
+ever converted on the way, and there is no factor of a million anywhere to get
+wrong.
 
 A link's name, and the properties written under it, come from the shape the
 exporter is handed, and both travel on that shape together. This used to be the
@@ -156,9 +185,26 @@ the one run that actually instantiates the shape, and they are read apart: a
 consumer after a part's material need not pull its BREP back out of the cache,
 and a cache written before that entry existed is a miss for the properties and
 not for the geometry. It is not what the stamp above is made of, though: that
-entry is keyed on the geometry, so what sits in it belongs to the geometry -
-which is where a *derived* property (item 2 below) would land. What the object
-asking reports is its own ``properties:`` section, and only that.
+entry is keyed on the geometry, so what sits in it belongs to the geometry. What
+the object asking reports is its own ``properties:`` section, and only that.
+
+A *derived* property is not cached there either, and the reason is the same
+key. A mass is the solid times a density, and the density lives in a
+``materials:`` section or a ``properties:`` one, neither of which the geometry's
+hash covers - so a mass cached beside the geometry would outlive an edit to the
+density it was worked out from. It has an entry of its own instead
+(``partcad.physics``), holding the part's volume, mass, centre of mass and
+inertia, under a key made of the part's own cache key - which every edit to the
+CAD moves - and of everything the derivation reads that the part's key does
+not cover: the density it was weighed at and where that came from (a stated
+density, the material that lent it, or an export's fallback), and every value
+the part states that a derived one would otherwise fill in. An edit to a
+material's density or to a stated mass is therefore a new entry as well, and
+an edit to anything that does not weigh - a material's description, a part's
+friction - is not. ``pc info``, an export and the IDE read the same entry, and
+a hit answers without the geometry. A miss works the values out from what the
+geometry's own entry carries: the volume, and the centroid and inertia at unit
+density OCCT measures as the shape is built.
 
 Converting between the two
 ==========================
@@ -510,7 +556,10 @@ is one simulation, and states four things:
 
    The default is ``//builtin/scene:subject``, an empty world holding the
    subject and nothing else. A package that needs more -- a fixture to drop the
-   part onto, a conveyor to push it along -- writes a scene of its own.
+   part onto, a conveyor to push it along, a tank of water to sink it in --
+   writes a scene of its own. The scene is also what says the gravity the run
+   is under and the fluid it is filled with; see `Gravity, and the fluid a
+   scene is filled with`_.
 
 ``offset:``
    Where in that scene the object goes, in the scene's frame. It is stated here
@@ -634,16 +683,31 @@ Friction, and why it is a material property
 ===========================================
 
 Whether a stack of blocks stands up is not a property of its geometry. Two 20 mm
-cubes squarely stacked, ten seconds under gravity, nothing else changed:
+cubes, one squarely on the other, on a level floor in a world whose gravity
+leans 15 degrees off vertical -- the ``tilted`` scene of
+``examples/feature_simulate``, which for sliding is a ramp with no edge --
+for ten seconds in MuJoCo, through the MJCF exporter and the simulation of
+`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_, with
+nothing changed but the sliding friction both blocks are given:
 
-=================  ==========================================
-sliding friction   what happens
-=================  ==========================================
-0.04               the top block slides off -- 35 mm, and it ends up on the floor
+=================  ==========================================================
+sliding friction   what happens to the top block
+=================  ==========================================================
+0.04 (PTFE)        slides 69 mm and falls 20 mm, its own height, to the floor
+0.1                slides 63 mm and falls
+0.2                slides 56 mm and falls
+0.25               slides 32 mm and falls
+0.28               slides 34 mm and falls
+0.3                stays: 0.5 mm of creep, 0.4 mm of settling
 0.4                the same
-0.5                it stays -- 3 mm of settling
-1.05               it stays -- 1 mm
-=================  ==========================================
+1.05 (aluminium)   the same
+=================  ==========================================================
+
+A block slides when its friction is below tan(15 deg), 0.268; MuJoCo's soft
+contacts put the line a little higher, between 0.28 and 0.3. On a level floor
+with gravity straight down, every one of these stays put, PTFE included:
+nothing pushes a block sideways, so its friction is never asked anything. The
+bottom block grips the floor in every row, for the reason given below.
 
 So the answer to "will this stand?" is a fact about the *material*, and
 ``materials:`` is where a package already says what its parts are made of. A
@@ -673,17 +737,189 @@ slot that means something else, and torsion and roll on the way in are counted
 as dropped rather than turned into a PartCAD property that does not exist. Both
 are the same rule the URDF and SDFormat readers already follow.
 
-Two things are deliberately not done here. A material's **density** is not wired
-in the same way: it already has a home (``Material.mass()``), and making every
-part that names a material weigh what that material weighs changes the
-``<inertial>`` of every existing export -- a real improvement, and a change of
-its own. And PartCAD writes each *body's* coefficient and says nothing about how
-a simulator combines the two sides of a contact, because they do not agree about
-it: that is the simulator's model, not the part's.
+A material's **density** travels the same way, as the shape's ``density``
+property, and with it the mass, centre of mass and inertia its solid comes to
+-- see `Writing a URDF`_ for the order. All three formats write those as an
+``<inertial>``; MJCF also writes the density on a geom of a body PartCAD could
+not weigh (a mesh with no solid in it), so that MuJoCo weighs it at the right
+density rather than at its own default of water's.
+
+PartCAD writes each *body's* coefficient, and a contact has two. How they
+combine is the simulator's model rather than the part's, and the two engines a
+plugin exists for do not agree about it:
+
+======================  ==================================================
+engine                  the coefficient of a contact between A and B
+======================  ==================================================
+MuJoCo                  the **larger** of the two, element-wise -- unless one
+                        geom has a higher ``priority``, which no exporter here
+                        sets (`Contact parameters
+                        <https://mujoco.readthedocs.io/en/stable/modeling.html#contact-parameters>`_)
+Gazebo (DART)           the **smaller** of the two (DART's ``ContactSurface``,
+                        which Gazebo Harmonic's default physics engine uses)
+======================  ==================================================
+
+So two blocks of one material meet at that material's ``mu`` in both, and that
+is what a stack's question -- does the top block stay on the bottom one? --
+turns on. A block on the floor does not agree: the ground plane each exporter
+writes states no friction, which is 1.0 in both formats, so in MuJoCo every
+block grips the floor at 1.0 or more, and in Gazebo at its own ``mu`` or less.
+``examples/feature_simulate`` asks only the first question.
+
+MuJoCo also needs telling how hard to hold. Its contacts are soft, and a block
+under a steady sideways load slips at a small steady rate even well inside its
+friction cone; with MuJoCo's own defaults that rate is large enough that an
+aluminium stack (``mu`` 1.05) in a world tilted by 6 degrees -- where
+tan(6 deg) = 0.105 -- slid apart in ten seconds. The MJCF exporter therefore
+writes MuJoCo's own remedies for slow slippage into every model -- elliptic
+friction cones, an ``impratio`` of 10 and three NoSlip iterations -- and with
+them the same stack creeps half a millimetre at 15 degrees.
 
 A part that states a ``friction`` of its own keeps it -- a measured part beats
 the substance it is made of -- and a part that states neither gets whatever the
 simulator defaults to, which is a number nobody chose.
+
+Gravity, and the fluid a scene is filled with
+=============================================
+
+A scene states where things are. A *simulation* scene has to state two more
+things, because the same arrangement comes out differently without them: which
+way, and how hard, things fall -- and what they fall *through*. A block dropped
+on the Moon and the same block dropped into a tank of seawater are the same
+scene in every other respect. So a scene may say both:
+
+.. code-block:: yaml
+
+  scenes:
+    tank:
+      type: assy
+      gravity: [0, 0, -9.81]                                # m/s^2, the scene's own frame
+      medium: //pub/std/manufacturing/material/fluid:water  # a material
+
+``gravity:`` is a vector, so that a scene whose Z axis is not up says so rather
+than being rotated. ``medium:`` names a **material**, resolved exactly as a
+part's material is -- ``:brine`` is "the ``brine`` this package catalogues" --
+because a fluid is a substance with a density like any other, and the one fact
+it states that a solid does not, its ``viscosity``, belongs beside the density
+rather than in a scene. The index catalogues the usual three at
+``//pub/std/manufacturing/material/fluid``: ``air``, ``water`` (fresh) and
+``seawater``, each at 15 C and sea-level pressure.
+
+Both are optional, and the two defaults are what every scene meant before a
+scene could say anything: **no gravity** leaves it to the engine, whose default
+is Earth's along -Z (MuJoCo writes 9.81, SDFormat 9.8 -- PartCAD restates neither,
+so no existing result moves), and **no medium** is a vacuum, which is what every
+engine assumes. ``//builtin/scene:subject`` states neither, and a ``simulate:``
+cannot ask it for a medium: the fluid a part is simulated in is a fact about
+the world, like the fixture it stands on, and a package that wants its part
+under water writes a scene that is under water (``examples/feature_simulate``
+has one, ``tank``). A ``medium`` parameter on the built-in scene would be a
+second way to say the same thing, spelled as a material reference inside an
+instance name and resolved against ``//builtin/scene`` rather than against the
+package that wrote it.
+
+The units, and why they are these
+---------------------------------
+
+Every physical quantity a scene and a material state is **SI**, with the two
+exceptions PartCAD makes everywhere: lengths are millimetres and angles are
+degrees. So a scene's gravity is in **m/s^2** and a fluid's density and dynamic
+viscosity are in **kg/m^3** and **Pa*s** -- the units every engine states them
+in, so none of them is converted on its way into a model. That is the rule the
+``how:`` section of an assembly has always followed (see :doc:`assy`), and the
+one a part's ``physics`` follows.
+
+For gravity it is also the right answer on its own terms. A ``simulate:`` may
+pass its plugin a ``gravity`` of its own in ``params:``, and both plugins have
+always taken that in m/s^2; two numbers where one replaces the other must not
+be a thousand apart for the same acceleration. And 9.81, 1.62 and 3.72 are
+Earth, the Moon and Mars to anyone who reads the file, where 9806.65 is not
+recognisable as anything. The mistake it invites, a vector written in mm/s^2,
+is a thousand g and is reported (above 1000 m/s^2).
+
+Unit-suffixed strings (``"9.81 m/s^2"``) are not accepted: PartCAD has no
+unit-aware scalar yet (item 10 below), and a parser for one field would be a
+third dialect beside the ones ``pc cam`` and ``pc cae`` already speak.
+
+What reaches an engine
+----------------------
+
+The scene's world is resolved by the core -- the medium is a material, and only
+the core can load the package that catalogues it -- and handed to every file
+type that declares ``properties: true`` (the ones that state physics: URDF,
+SDFormat, MJCF) as ``request["world"]``: the gravity, and the medium as its
+material's name, density and viscosity. What a body displaces of that medium is
+its solid's volume, which PartCAD resolves beside each shape's mass (``volume``,
+in mm^3) and ``mass_properties.volume_of()`` adds up per body, so no exporter
+measures or weighs anything itself. A scene that states neither sends
+nothing, and an export of it is byte for byte what it was. A medium nothing
+answers to is an error rather than a vacuum, and so is a gravity that is not
+three numbers: the default is a different world, and a simulation of it would
+answer a different question with the same confidence. Both are also part of what
+a simulation's answer is cached under, as the *facts* the medium resolved to: the
+density behind ``:water`` can be corrected in another package without this one
+changing.
+
+======================  =====================================================
+engine                  what the scene's world becomes
+======================  =====================================================
+MuJoCo                  ``<option gravity density viscosity>``, which turns on
+                        MuJoCo's passive fluid model, plus a ``gravcomp`` on
+                        every body for its buoyancy
+Gazebo                  ``<world><gravity>``; a medium is reported and not
+                        written
+URDF                    nothing: a URDF has no world
+======================  =====================================================
+
+MuJoCo's fluid model -- the default, *inertia-box* one -- is drag and nothing
+else: quadratic in speed from the density, linear from the viscosity, acting on
+the box each body's mass and inertia describe. It has **no buoyancy**, so the
+MJCF exporter adds it, as Archimedes has it: a lift of rho_fluid * V * g, acting
+at the **centre of buoyancy** -- the centroid of the displaced volume, which for
+a wholly submerged body is the centroid of its solids. Both come from what
+PartCAD resolved and nothing is measured again: each shape is handed over with
+its ``volume`` and its ``centerOfVolume`` beside its mass, and
+``mass_properties.displacement_of()`` adds them up per body as it adds the
+masses up. The force is MuJoCo's own ``gravcomp`` -- that fraction of the body's
+weight, upward at its centre of mass, so a model opened anywhere floats -- and
+the moment it has about the centre of mass when it really acts at the centre of
+buoyancy is applied by the simulation each step, from the centre of buoyancy
+the exporter writes into the model. That moment is what rights a body whose
+weight is not centred where its volume is: a hull with a heavy keel, a float
+that states a low ``centerOfMass``. ``examples/feature_simulate``'s ``buoy`` is
+one: released tilted 60 degrees, it turns its heavy side down within a second.
+Opened outside ``pc sim``, the same model floats but does not right itself.
+
+What is not modelled:
+
+- **A surface.** The fluid fills the whole world, so a body lighter than it
+  rises for as long as the run lasts rather than floating at a waterline. A
+  waterline would mean clipping every body against a plane every step -- the
+  volume below it and that volume's centroid, out of the mesh -- which is
+  geometry the simulation would have to do itself, and which no fact PartCAD
+  hands over could answer in advance. It is the next thing this needs, not a
+  small one.
+- **Sealed cavities.** The volume displaced is the solid's, so a hollow part is
+  buoyed as if flooded. A float is drawn as the solid it displaces, and states
+  its own mass.
+- **Added mass, lift, the Magnus effect.** MuJoCo's per-geom *ellipsoid* fluid
+  model has them, and needs five coefficients per geom that a scene does not
+  state.
+
+Gazebo's ``gz-sim-buoyancy-system`` is not written: on Harmonic it ignores a
+mesh's ``<scale>``, which would buoy PartCAD's millimetre meshes by 10^9 times
+their volume, and a world that names any system loses all of Gazebo's default
+ones. A Gazebo run of a scene filled with a fluid is therefore a run in a
+vacuum -- no buoyancy, no drag, no centre of buoyancy -- and its export says so.
+Each plugin's own documentation has the detail.
+
+**Which gravity a run is under**, in order: a ``simulate:``'s own
+``params: {gravity: ...}``, which is handed to the plugin like any other of its
+parameters and applied over the scene's for that run; the scene's
+``gravity:``; the engine's default. Neither plugin's own declaration states a
+default ``gravity`` any more -- until a scene could state one that was harmless,
+and now it would beat every scene that does. An explicit ``gravity`` on the
+exporter itself does the same for a file written with ``pc export``.
 
 Opening a scene in a simulator
 ==============================
@@ -725,9 +961,10 @@ stated frame. URDF requires them per link and defaults them to zero, which makes
 a model load and then behave nonsensically - a zero-mass link is the single most
 common defect in published URDFs.
 
-These are *derivable* from a solid plus a density, which is exactly what the
-exporter does today. What is missing is the density, and behind it the notion of
-what a part is made of.
+These are *derivable* from a solid plus a density, and PartCAD derives them:
+a part has a mass, a centre of mass and an inertia, at the density of the
+material it names, whether or not it states them, and ``pc info`` shows them.
+What is still missing is collision geometry and the rest below.
 
 Collision geometry
 ==================
@@ -797,7 +1034,9 @@ The world
 Gravity, the ground, lighting, the initial pose of every model, wind,
 atmosphere, and the physics engine's own parameters (step size, solver type and
 iteration count, contact parameters). This is SDF's ``<world>``, and it is
-exactly the "scenes" PartCAD has always intended to have.
+exactly the "scenes" PartCAD has always intended to have. Gravity and the fluid
+a scene is filled with are the first of these a scene states (see `Gravity, and
+the fluid a scene is filled with`_ above).
 
 Frames
 ======
@@ -875,13 +1114,13 @@ each with a PartCAD name and a PartCAD unit. What it does not do is *derive*
 any of them, check any of them, or distinguish a measured value from a guess.
 Three additions, in increasing order of how much they are worth:
 
-- **Derivation.** With a material behind it (item 1), a part that states no
-  ``mass`` has one: the solid's volume times the material's density, cached like
-  any other derived value and invalidated when the CAD changes. The same for
-  ``centerOfMass``, ``inertia`` and the surface properties. Today the URDF
-  exporter computes exactly this, from the ``density`` parameter of its
-  ``export:`` configuration, and throws it away afterwards - it should be a property of the part that every
-  consumer sees.
+- **Derivation** - *done*. With a material behind it (item 1), a part that
+  states no ``mass`` has one: the solid's volume times the material's density.
+  The same for ``centerOfMass``, ``inertia`` and ``friction``. The derived
+  values are cached under the part's key and what they were derived from, so an
+  edit to the CAD or to the material invalidates them; ``pc info`` shows each
+  value and where it came from, and every exporter is handed the same values
+  instead of working its own out. See `Writing a URDF`_.
 - **Provenance.** A declared value should say why it exists, since "measured on
   the bench" and "copied from a vendor datasheet" and "invented so the
   simulation would load" are not the same claim:
@@ -1050,6 +1289,26 @@ model instances with initial poses, and physics engine settings. A scene is also
 where a *fixed to the world* joint belongs, which is the piece a single assembly
 cannot express.
 
+Two of those are built: a scene states its ``gravity:`` and the ``medium:`` it
+is filled with, as a material, and both reach the engines (see `Gravity, and the
+fluid a scene is filled with`_). They went first because they are what
+underwater and aerospace validation turn on, and because neither needed anything
+new below the scene: a gravity is three numbers, and a fluid is a material with
+one more fact on it. What is still a proposal:
+
+- **The ground and the lights**, which the exporters write from parameters of
+  their own (``ground_plane``, ``light``, ``sun``) because a scene has nowhere
+  to say them.
+- **A surface.** A medium fills the whole world. A waterline -- air above,
+  water below, and a body floating where the two meet -- is a world with
+  regions in it, which Gazebo's graded buoyancy can express and MuJoCo's fluid
+  model cannot.
+- **Wind and current**: a velocity of the medium, which MuJoCo states as
+  ``<option wind>`` and which ``medium:`` would grow into a mapping to carry.
+- **The physics engine's own parameters** -- step size, solver, iterations --
+  which a ``simulate:`` passes to its plugin today and which belong to an
+  engine rather than to a world.
+
 9. The property tables, and keeping them honest (in place)
 ==========================================================
 
@@ -1130,9 +1389,10 @@ is right:
 1. **Units** (item 10). Everything after this depends on it and it gets harder
    to add later - the generated ``motion:`` sections already have to state
    ``units: rad`` in prose because there is no way to state it in the value.
-2. **Materials and physical properties** (items 1-2). Turns the exporter's
-   density parameter into a model property and makes a computed inertial
-   trustworthy, so that carrying one becomes the exception rather than the rule.
+2. **Materials and physical properties** (items 1-2) - *partly done*. Materials
+   exist, and a part's mass, centre of mass and inertia are derived from the
+   one it names, so that carrying an inertial is the exception rather than the
+   rule. Provenance and checking (item 2) remain.
 3. **Collision geometry** (item 3). Independently valuable - it also makes
    rendering and interference checking cheaper - and it is what would let the
    collision/visual choice ``ignoreCollision`` makes today become "keep both".

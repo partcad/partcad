@@ -7,7 +7,7 @@ materials:
     desc: |
       A semi-crystalline thermoplastic made from cornstarch or sugarcane.
     url: https://en.wikipedia.org/wiki/Polylactic_acid
-    density: 0.001320 # g/mm^3
+    density: 1320 # kg/m^3
     mu: 0.35
     tags:
       - low-cost
@@ -15,7 +15,7 @@ materials:
   abs:
     formal: ABS
     full: Acrylonitrile Butadiene Styrene
-    density: 0.00107
+    density: 1070
     tags: heat-resistant
   # The short form: the value is the full name of the substance.
   nylon: Nylon
