@@ -572,7 +572,7 @@ can do applies to it. What it is, is a set of facts about a substance:
       full: <(optional) the full name, e.g. "Polylactic Acid">
       desc: <(optional) textual description>
       url: <(optional) where to read about it>
-      density: <(optional) density in g/mm^3>
+      density: <(optional) density in kg/m^3>
       mu: <(optional) coefficient of sliding friction, dimensionless>
       tags: <(optional) a list of free-form tags, or a single tag>
 
@@ -583,12 +583,32 @@ The short form gives the full name and nothing else:
   materials:
     nylon: Nylon
 
-Density is in ``g/mm^3``, the units every length in PartCAD is already in, so
-that a mass falls out of a volume without a conversion nobody remembers to
-apply. Datasheets quote ``g/cm^3``, which is 1000 times larger: PLA at
-1.32 g/cm^3 is declared as ``0.00132``. A material that states no density
-reports no mass, rather than a mass of zero -- nothing downstream could tell an
-invented figure apart from a stated one.
+Density is in ``kg/m^3``. It is the one unit PartCAD has for a density -- a
+material's, a part's own ``density`` property and an export's ``density``
+parameter are all in it, and so is every simulation format a part is written
+into -- so a density is never converted on its way anywhere, and there is no
+second spelling of it for a number to be mistaken for. Datasheets often quote
+``g/cm^3``, which is 1000 times smaller: PLA at 1.32 g/cm^3 is declared as
+``1320``. A material that states no density reports no mass, rather than a
+mass of zero -- nothing downstream could tell an invented figure apart from a
+stated one.
+
+A part made of a material is weighed at its density. Its mass, its centre of
+mass and its inertia are worked out from its solid and that density unless the
+part states them itself, and they are what ``pc info`` reports as
+``MassProperties`` and what every exporter writes -- the URDF one, and the
+simulation formats a plugin writes. See :ref:`properties` for the order.
+
+.. warning::
+
+  PartCAD used to take a material's density in ``g/mm^3``, a million times
+  smaller than the same density in ``kg/m^3``. A catalogue written for the old
+  unit makes every part made of its materials weigh a millionth of what it
+  should; one written for the new unit makes them weigh a million times too
+  much under a PartCAD that predates it. The catalogues PartCAD publishes
+  declare ``partcad: ">=..."`` for the first release that reads kg/m³, so an
+  older PartCAD refuses them rather than weighing anything wrong, and a
+  catalogue of your own should say the same.
 
 ``tags`` is free-form on purpose. There is no controlled vocabulary of material
 properties that survives contact with real catalogues, and imposing one would

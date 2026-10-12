@@ -71,7 +71,13 @@ from . import logging as pc_logging
 #      and 7: the payload's shape rather than the key's, so an old entry would
 #      go on being served - and an exporter of the mechanism would be handed
 #      one with no joints in it, silently.
-VERSION = 8
+#   9: a shape's measurements carry where its volume is and how it is spread -
+#      its centroid and its inertia at unit density (see 'shape_envelope') -
+#      which is what a part's mass, centre of mass and inertia are worked out
+#      from. An entry written under 8 measured the volume and nothing else, and
+#      reading one back would give a part a mass with no centre and no inertia:
+#      a URDF link that weighs what it should and turns as if it were a point.
+VERSION = 9
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.
