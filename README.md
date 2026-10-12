@@ -159,6 +159,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] `simulate:` on a part or an assembly: a scene, where in it the object goes, and the condition that
         says whether it went as it should
   - [x] `pc sim`, which runs it and validates the result
+  - [x] `pc test` holds every object to it, as its `sim` check: write the claim first, then make it pass
   - [x] Simulation plugins, declared the way export and render implementations are — a scene goes in,
         `before` and `after` come out. The simulator is a package, not part of this wheel:
         [`partcad-sim-mujoco`](https://github.com/partcad/partcad-sim-mujoco) runs one in `MuJoCo` and
