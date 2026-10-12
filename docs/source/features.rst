@@ -97,7 +97,8 @@ the first:
     the simulations it declares, listed on the left with the first one selected. Selecting one runs it, as
     ``pc sim -f <name>`` does, and shows whether its ``validation:`` held, and two pictures of the scene the
     simulation plugin took -- before anything moved on the left, and when the run was over on the right --
-    from where the scene is looked at when it is rendered.
+    from where the scene is looked at when it is rendered. A plugin that takes no pictures has not failed:
+    a line says so where they would be.
 
     Whether each run held is a green or red mark before its name in the list. Above the pictures, as on the
     Draft tab, **Simulated by** chooses the plugin that runs it -- the one it names is selected, and choosing

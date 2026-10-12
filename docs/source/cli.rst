@@ -367,8 +367,8 @@ Object commands
   <package>...`` or ``...:<name>`` to run everything the packages below declare too (see
   :ref:`recursive-names`), ``-f`` to run only the simulation of a given name, and
   ``--json`` to print the whole of what each simulation plugin reported. A validation that does not hold
-  exits non-zero. Each run also says where the two pictures its plugin took of the scene -- before and after,
-  from the scene's ``render: png:`` viewpoint -- were written.
+  exits non-zero. A run whose plugin drew the scene -- before and after, from the scene's ``render: png:``
+  viewpoint -- also says where the two pictures were written; a plugin that draws none has not failed.
 
   ``--plugin <package>:<name>`` runs with another simulation plugin than the one each declaration names, such
   as ``//pub/feature/simulate/gazebo:gazebo`` for a simulation written against MuJoCo; everything else the

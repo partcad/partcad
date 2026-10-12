@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-12 15:11+0000\n"
+"POT-Creation-Date: 2026-10-12 15:54+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -394,19 +394,20 @@ msgstr ""
 #: ../../source/config_plugins.rst:232
 msgid ""
 "Every run is also asked for a picture of the scene before and after, "
-"taken from the scene's own ``render: png:`` viewpoint "
-"(``viewport_origin``, ``viewport_up``); see :doc:`simulation`."
+"taken from where the scene is rendered from: the ``viewport_origin`` and "
+"``viewport_up`` of its ``render: png:``, or of its package's when the "
+"scene states none; see :doc:`simulation`."
 msgstr ""
 "Bei jedem Lauf wird außerdem ein Bild der Szene davor und danach "
-"angefordert, aufgenommen aus dem Blickwinkel, den das eigene ``render: "
-"png:`` der Szene festlegt (``viewport_origin``, ``viewport_up``); "
-"siehe :doc:`simulation`."
+"angefordert, aufgenommen von dort, von wo die Szene gerendert wird: "
+"``viewport_origin`` und ``viewport_up`` ihres ``render: png:`` oder, wenn "
+"die Szene keine angibt, die ihres Pakets; siehe :doc:`simulation`."
 
-#: ../../source/config_plugins.rst:237
+#: ../../source/config_plugins.rst:238
 msgid "Simulation plugins"
 msgstr "Simulations-Plugins"
 
-#: ../../source/config_plugins.rst:239
+#: ../../source/config_plugins.rst:240
 msgid ""
 "A simulation plugin is the third kind of implementation a package can "
 "declare, beside the export and render ones of :ref:`output-files`, and it is "
@@ -419,7 +420,7 @@ msgstr ""
 "``path`` zu einem Skript, die Sandbox, die dieses Skript braucht, und die "
 "Parameter, die ihm übergeben werden:"
 
-#: ../../source/config_plugins.rst:257
+#: ../../source/config_plugins.rst:258
 msgid ""
 "The contract is narrow on purpose: **a scene with the subject in it goes in, "
 "as a file in the format** ``format:`` **names, and JSON carrying** "
@@ -435,7 +436,7 @@ msgstr ""
 "bereits weiß, wie es mehrere schreibt -- was zugleich ein Plugin frei von "
 "jeder CAD-Abhängigkeit hält."
 
-#: ../../source/config_plugins.rst:263
+#: ../../source/config_plugins.rst:264
 #, fuzzy
 msgid ""
 "**PartCAD ships none of these.** A simulator is somebody's program with a"
@@ -462,11 +463,11 @@ msgstr ""
 "gebraucht, da das Plugin in einer PartCAD-Sandbox läuft, die eines "
 "installiert."
 
-#: ../../source/config_plugins.rst:276
+#: ../../source/config_plugins.rst:277
 msgid "Friction is a material property"
 msgstr "Reibung ist eine Materialeigenschaft"
 
-#: ../../source/config_plugins.rst:278
+#: ../../source/config_plugins.rst:279
 msgid ""
 "Whether a stack of blocks stands up is not a property of its geometry. Two "
 "20 mm blocks squarely stacked stay put when they are aluminium (``mu: 1.05`` "
@@ -479,7 +480,7 @@ msgstr ""
 "obere rutscht herunter, wenn sie aus PTFE sind (``mu: 0.04``), und an der "
 "Anordnung ändert sich dazwischen nichts."
 
-#: ../../source/config_plugins.rst:283
+#: ../../source/config_plugins.rst:284
 msgid ""
 "So it is stated where it belongs, on the :ref:`material <materials>`, and a "
 "part that names one gets it. A part names one the way it always has -- with "
@@ -494,7 +495,7 @@ msgstr ""
 ":ref:`parameters`) --, und die Factory hält die Antwort als Eigenschaft "
 "``material`` der Form fest, und von da an wird sie von dort gelesen:"
 
-#: ../../source/config_plugins.rst:300
+#: ../../source/config_plugins.rst:301
 msgid ""
 "``mu`` then becomes the shape's ``friction`` property unless the shape "
 "states a ``friction`` of its own, and every format writes it in its own "
@@ -509,7 +510,7 @@ msgstr ""
 "nichts sagt, bekommt das, was der Simulator als Standard verwendet, und "
 "das ist eine Zahl, die niemand gewählt hat."
 
-#: ../../source/config_plugins.rst:306
+#: ../../source/config_plugins.rst:307
 msgid ""
 "Note which section that is. ``parameters:`` is what is *asked of* the type "
 "that produces the shape and is where a package writes what it wants; "
@@ -527,7 +528,7 @@ msgstr ""
 "ihrem Typ verlangt wurde. Ein Paket schreibt ``properties:`` nicht von "
 "Hand."
 
-#: ../../source/config_plugins.rst:313
+#: ../../source/config_plugins.rst:314
 msgid "See :doc:`simulation` and ``examples/feature_simulate``."
 msgstr ""
 "Siehe :doc:`simulation` und ``examples/feature_simulate``."

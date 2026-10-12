@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-12 15:11+0000\n"
+"POT-Creation-Date: 2026-10-12 15:54+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ru\n"
@@ -384,18 +384,20 @@ msgstr ""
 #: ../../source/config_plugins.rst:232
 msgid ""
 "Every run is also asked for a picture of the scene before and after, "
-"taken from the scene's own ``render: png:`` viewpoint "
-"(``viewport_origin``, ``viewport_up``); see :doc:`simulation`."
+"taken from where the scene is rendered from: the ``viewport_origin`` and "
+"``viewport_up`` of its ``render: png:``, or of its package's when the "
+"scene states none; see :doc:`simulation`."
 msgstr ""
 "У каждого запуска также запрашивается снимок сцены до и после, сделанный с "
-"точки обзора, заданной в собственном ``render: png:`` сцены "
-"(``viewport_origin``, ``viewport_up``); см. :doc:`simulation`."
+"той точки, с которой сцена отрисовывается: ``viewport_origin`` и "
+"``viewport_up`` её ``render: png:`` или, если сцена их не указывает, её "
+"пакета; см. :doc:`simulation`."
 
-#: ../../source/config_plugins.rst:237
+#: ../../source/config_plugins.rst:238
 msgid "Simulation plugins"
 msgstr "Плагины симуляции"
 
-#: ../../source/config_plugins.rst:239
+#: ../../source/config_plugins.rst:240
 msgid ""
 "A simulation plugin is the third kind of implementation a package can "
 "declare, beside the export and render ones of :ref:`output-files`, and it is "
@@ -407,7 +409,7 @@ msgstr ""
 "и объявляется он в точности в такой же форме: ``path`` к скрипту, "
 "песочница, которая этому скрипту нужна, и передаваемые ему параметры:"
 
-#: ../../source/config_plugins.rst:257
+#: ../../source/config_plugins.rst:258
 msgid ""
 "The contract is narrow on purpose: **a scene with the subject in it goes in, "
 "as a file in the format** ``format:`` **names, and JSON carrying** "
@@ -423,7 +425,7 @@ msgstr ""
 "PartCAD уже умеет записывать несколько, — и это же избавляет плагин от "
 "какой-либо зависимости от CAD."
 
-#: ../../source/config_plugins.rst:263
+#: ../../source/config_plugins.rst:264
 #, fuzzy
 msgid ""
 "**PartCAD ships none of these.** A simulator is somebody's program with a"
@@ -449,11 +451,11 @@ msgstr ""
 " и после. Для его запуска MuJoCo на машине не нужен, поскольку плагин "
 "работает в песочнице PartCAD, которая его устанавливает."
 
-#: ../../source/config_plugins.rst:276
+#: ../../source/config_plugins.rst:277
 msgid "Friction is a material property"
 msgstr "Трение — свойство материала"
 
-#: ../../source/config_plugins.rst:278
+#: ../../source/config_plugins.rst:279
 msgid ""
 "Whether a stack of blocks stands up is not a property of its geometry. Two "
 "20 mm blocks squarely stacked stay put when they are aluminium (``mu: 1.05`` "
@@ -466,7 +468,7 @@ msgstr ""
 "соскальзывает, если они из PTFE (``mu: 0.04``), а в расстановке при этом "
 "не меняется ничего."
 
-#: ../../source/config_plugins.rst:283
+#: ../../source/config_plugins.rst:284
 msgid ""
 "So it is stated where it belongs, on the :ref:`material <materials>`, and a "
 "part that names one gets it. A part names one the way it always has -- with "
@@ -481,7 +483,7 @@ msgstr ""
 "записывает ответ как свойство ``material`` формы, и дальше читается "
 "именно оно:"
 
-#: ../../source/config_plugins.rst:300
+#: ../../source/config_plugins.rst:301
 msgid ""
 "``mu`` then becomes the shape's ``friction`` property unless the shape "
 "states a ``friction`` of its own, and every format writes it in its own "
@@ -496,7 +498,7 @@ msgstr ""
 "говорит, получает то значение, которое у симулятора стоит по умолчанию, — "
 "число, которого никто не выбирал."
 
-#: ../../source/config_plugins.rst:306
+#: ../../source/config_plugins.rst:307
 msgid ""
 "Note which section that is. ``parameters:`` is what is *asked of* the type "
 "that produces the shape and is where a package writes what it wants; "
@@ -513,6 +515,6 @@ msgstr ""
 "записывающая то, что было запрошено у её типа. Вручную ``properties:`` "
 "пакет не пишет."
 
-#: ../../source/config_plugins.rst:313
+#: ../../source/config_plugins.rst:314
 msgid "See :doc:`simulation` and ``examples/feature_simulate``."
 msgstr "См. :doc:`simulation` и ``examples/feature_simulate``."

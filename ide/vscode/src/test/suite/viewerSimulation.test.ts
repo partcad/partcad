@@ -310,6 +310,24 @@ suite('Digital Thread Simulation tab', () => {
         assert.ok(pluginChoices('sim-gazebo:gazebo').find((choice) => choice.value === GAZEBO)?.configured);
     });
 
+    test("a rooted name is that package's plugin, not the registered one of the same name", () => {
+        assert.deepStrictEqual(
+            pluginChoices('//acme/sim:mujoco').map((choice) => [choice.value, choice.configured]),
+            [
+                ['//acme/sim:mujoco', true],
+                [MUJOCO, false],
+                [GAZEBO, false],
+            ],
+        );
+        assert.deepStrictEqual(
+            pluginChoices(MUJOCO).map((choice) => [choice.value, choice.configured]),
+            [
+                [MUJOCO, true],
+                [GAZEBO, false],
+            ],
+        );
+    });
+
     test('criteria, before and after are folded away until their title is clicked', () => {
         const { root, view } = pane();
         view.setScenarios(LIST);

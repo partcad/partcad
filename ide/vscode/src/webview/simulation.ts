@@ -77,12 +77,17 @@ interface PluginChoice {
  * package's ('sim-mujoco:mujoco', a dependency of that package), so it is
  * matched by what follows the ':' -- the simulation entry, which is the
  * plugin's own name for itself -- and that entry is the one marked as
- * configured. One that is neither is offered as itself, first.
+ * configured. A name rooted at '//' says which package it is, so it has to be
+ * that one exactly: '//acme/sim:mujoco' is somebody else's MuJoCo, and taking
+ * it for the registered one would show one plugin while running another. One
+ * that is neither is offered as itself, first.
  */
 export function pluginChoices(configured: string | null | undefined): PluginChoice[] {
     const entry = (spec: string) => spec.slice(spec.lastIndexOf(':') + 1);
+    const matches = (value: string, named: string) =>
+        named.startsWith('//') ? value === named : entry(value) === entry(named);
     const choices = SIMULATION_PLUGINS.map((value) => {
-        const isConfigured = Boolean(configured) && entry(value) === entry(configured as string);
+        const isConfigured = Boolean(configured) && matches(value, configured as string);
         return {
             value,
             configured: isConfigured,

@@ -192,8 +192,9 @@ and how to write one in :ref:`sim-scenes`, and what a ``validation:`` is
 evaluated over in :ref:`sim-validation`.
 
 Every run is also asked for a picture of the scene before and after, taken from
-the scene's own ``render: png:`` viewpoint (``viewport_origin``,
-``viewport_up``); see :doc:`simulation`.
+where the scene is rendered from: the ``viewport_origin`` and ``viewport_up`` of
+its ``render: png:``, or of its package's when the scene states none; see
+:doc:`simulation`.
 
 Simulation plugins
 ------------------

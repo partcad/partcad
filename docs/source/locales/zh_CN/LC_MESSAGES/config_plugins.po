@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-12 15:11+0000\n"
+"POT-Creation-Date: 2026-10-12 15:54+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -317,18 +317,19 @@ msgstr ""
 #: ../../source/config_plugins.rst:232
 msgid ""
 "Every run is also asked for a picture of the scene before and after, "
-"taken from the scene's own ``render: png:`` viewpoint "
-"(``viewport_origin``, ``viewport_up``); see :doc:`simulation`."
+"taken from where the scene is rendered from: the ``viewport_origin`` and "
+"``viewport_up`` of its ``render: png:``, or of its package's when the "
+"scene states none; see :doc:`simulation`."
 msgstr ""
-"每次运行还会被要求给出场景在运行前和运行后的图片，拍摄视角取自场景自己的 "
-"``render: png:`` （ ``viewport_origin`` 、 ``viewport_up`` ）；参"
-"见 :doc:`simulation`。"
+"每次运行还会被要求给出场景在运行前和运行后的图片，拍摄位置就是渲染该场景的位置：取自场景 ``render: png:`"
+"` 中的 ``viewport_origin`` 和 ``viewport_up`` ，场景未声明时取自其所在包的设置；"
+"参见 :doc:`simulation`。"
 
-#: ../../source/config_plugins.rst:237
+#: ../../source/config_plugins.rst:238
 msgid "Simulation plugins"
 msgstr "仿真插件"
 
-#: ../../source/config_plugins.rst:239
+#: ../../source/config_plugins.rst:240
 msgid ""
 "A simulation plugin is the third kind of implementation a package can "
 "declare, beside the export and render ones of :ref:`output-files`, and it is "
@@ -338,7 +339,7 @@ msgstr ""
 "仿真插件是包可以声明的第三类实现，另外两类是 :ref:`output-files` 中的导出实现和渲染实现；它的声明形式与那两类完全相"
 "同——指向脚本的 ``path``、该脚本所需的沙箱，以及交给它的参数："
 
-#: ../../source/config_plugins.rst:257
+#: ../../source/config_plugins.rst:258
 msgid ""
 "The contract is narrow on purpose: **a scene with the subject in it goes in, "
 "as a file in the format** ``format:`` **names, and JSON carrying** "
@@ -351,7 +352,7 @@ msgstr ""
 "** ``before`` **和** ``after`` **的 JSON。** 场景以文件形式送达，是因为仿真器读的是它自己的模型格"
 "式，而 PartCAD 已经知道如何写出好几种——这也正是插件得以不依赖任何 CAD 的原因。"
 
-#: ../../source/config_plugins.rst:263
+#: ../../source/config_plugins.rst:264
 #, fuzzy
 msgid ""
 "**PartCAD ships none of these.** A simulator is somebody's program with a"
@@ -372,11 +373,11 @@ msgstr ""
 "MJCF 表示的场景，在重力下推进 ``duration`` 秒的仿真时间，并报告每个物体在前后的位置（以毫米计）和姿态。运行它不需要机器上装有 "
 "MuJoCo，因为插件运行在一个会自行安装 MuJoCo 的 PartCAD 沙箱中。"
 
-#: ../../source/config_plugins.rst:276
+#: ../../source/config_plugins.rst:277
 msgid "Friction is a material property"
 msgstr "摩擦是材料的属性"
 
-#: ../../source/config_plugins.rst:278
+#: ../../source/config_plugins.rst:279
 msgid ""
 "Whether a stack of blocks stands up is not a property of its geometry. Two "
 "20 mm blocks squarely stacked stay put when they are aluminium (``mu: 1.05`` "
@@ -386,7 +387,7 @@ msgstr ""
 "一摞方块能不能立住，并不是它几何的属性。两个 20 mm 的方块端正地摞在一起：如果是铝（``mu: 1.05`` ——干燥的铝会咬合）"
 "，它们纹丝不动；如果是聚四氟乙烯（``mu: 0.04``），上面那个就会滑落；而这两种情形之间，布置方式没有任何变化。"
 
-#: ../../source/config_plugins.rst:283
+#: ../../source/config_plugins.rst:284
 msgid ""
 "So it is stated where it belongs, on the :ref:`material <materials>`, and a "
 "part that names one gets it. A part names one the way it always has -- with "
@@ -398,7 +399,7 @@ msgstr ""
 "往——在接受该参数的零件类型上使用 ``material`` 参数（见 :ref:`parameters`）——而工厂会把这个结果记录为"
 "形状的 ``material`` 属性，此后读取它的正是这个属性："
 
-#: ../../source/config_plugins.rst:300
+#: ../../source/config_plugins.rst:301
 msgid ""
 "``mu`` then becomes the shape's ``friction`` property unless the shape "
 "states a ``friction`` of its own, and every format writes it in its own "
@@ -410,7 +411,7 @@ msgstr ""
 "的写法把它写出来——SDFormat 的 ``<friction><ode><mu>``、URDF 的 ``<gazebo><mu1>`"
 "`、MJCF 的第一个 ``friction`` 分量。什么都没有说明的零件，拿到的是仿真器的默认值，那是一个谁也没有选过的数字。"
 
-#: ../../source/config_plugins.rst:306
+#: ../../source/config_plugins.rst:307
 msgid ""
 "Note which section that is. ``parameters:`` is what is *asked of* the type "
 "that produces the shape and is where a package writes what it wants; "
@@ -423,6 +424,6 @@ msgstr ""
 "roperties:`` 则是形状 *最终成了什么样*，由构建它的东西填入——URDF 读取器指明某个连杆的材料，STEP 读取器在文件"
 "中找到材料，或者零件工厂记录下它的类型被要求了什么。包不会手工书写 ``properties:``。"
 
-#: ../../source/config_plugins.rst:313
+#: ../../source/config_plugins.rst:314
 msgid "See :doc:`simulation` and ``examples/feature_simulate``."
 msgstr "参见 :doc:`simulation` 和 ``examples/feature_simulate``。"
