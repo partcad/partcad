@@ -263,8 +263,15 @@ at all).
   The key (`question_hash`, built by `Shape._artifact_hash()` for the two output sections) is the subject's
   `get_cache_key_async()` plus what the run adds: the request minus the geometry payload (boundary, job,
   machine, resolved options, material facts), the implementation's name and
-  `Implementation.environment_cache_key()`, and the **content** of the implementation's script and of the
-  wrapper that runs it.
+  `Implementation.environment_cache_key()`, the **content** of the implementation's script and of the
+  wrapper that runs it, and `Implementation.source_cache_key()` -- every `.py` under the implementing
+  package (its helpers: `mujoco_common.py` beside the MuJoCo plugin's scripts), plus the commit of a package
+  imported as `type: git` -- and the same for PartCAD's `wrappers/` (`source_key.wrappers_key()`).
+  `./src/partcad/source_key.py` says why those two and nothing more: a package is also where runs write
+  their models and pictures, which a key over every file would be moved by; a revision alone misses a
+  local edit. Each file is read once per process and re-read only when its size or modification time
+  changes, or while it was written in the last three seconds (the "racily clean" case) -- the
+  modification time decides whether to read, never what the key is.
 
   **Nothing in a key may describe the sandbox that runs it.** Every sandbox type -- conda, venv, none,
   docker, remote, and the ones after them -- is expected to be reproducible and equivalent, so an entry

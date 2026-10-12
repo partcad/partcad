@@ -12,7 +12,7 @@ cached the way a shape is: under a key that describes the question, in the
 same tiers ('Cache', 'ctx.cache_artifacts'), with the same switches
 ('cacheFiles', 'cacheRemote', 'cacheS3', '--cache-bypass'). A second
 `pc cae fea` of an unchanged part, the IDE's FEA tab opened again, a `pc cam`
-of an unchanged part, a `pc simulate` of an unchanged assembly: each is a read.
+of an unchanged part, a `pc sim` of an unchanged assembly: each is a read.
 
 **The key is the question, and the question is the subject plus the run.**
 'question_hash()' starts from the subject's own cache key
@@ -20,7 +20,10 @@ of an unchanged part, a `pc simulate` of an unchanged assembly: each is a read.
 files it is built from, the keys of what it is built out of and the sandbox it
 was built in; and adds what the run adds - the boundary conditions, a route's
 job and machine, the implementation's resolved options, the sandbox it runs in,
-and the *content* of its script and of the PartCAD wrapper that runs it. A
+the *content* of its script and of the PartCAD wrapper that runs it, and every
+Python module either can import from where it lives -- the implementing
+package's sources (with the commit it is at, when it was fetched), and PartCAD's
+own wrappers (see 'partcad.source_key'). A
 subject with no key ('cache: false', or made of something that says so) has no
 question to key on, and its runs are never cached.
 
