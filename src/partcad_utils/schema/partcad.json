@@ -369,7 +369,7 @@
     },
     "simulate": {
       "type": ["object", "null"],
-      "description": "The simulations this object declares: what it is supposed to do, or not do, once it is placed in a world and the world is run. 'pc sim' runs them",
+      "description": "The simulations this object declares: what it is supposed to do, or not do, once it is placed in a world and the world is run. A part, an assembly or a scene declares them, and 'pc sim' and 'pc test' run them",
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/simulate-entry" }
       },
@@ -1858,6 +1858,7 @@
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
+                "simulate": { "$ref": "#/definitions/simulate" },
                 "manufacturable": {
                   "type": "boolean",
                   "default": false,

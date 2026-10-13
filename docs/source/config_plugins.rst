@@ -167,8 +167,8 @@ for opening a file.
 Simulations
 ===========
 
-A part says what it *is*. ``simulate:`` is an optional section of a part or an
-assembly where it says what it is supposed to **do** once it is placed in a
+A part says what it *is*. ``simulate:`` is an optional section of a part, an
+assembly or a scene where it says what it is supposed to **do** once it is placed in a
 world and the world is switched on -- or, more often, what it is supposed not to
 do: not fall over, not slide off, not come apart. ``pc sim`` runs them, and
 ``pc test`` holds the object to them every time it runs, as its ``sim`` check
@@ -176,7 +176,7 @@ do: not fall over, not slide off, not come apart. ``pc sim`` runs them, and
 
 .. code-block:: yaml
 
-  parts:            # or assemblies:
+  parts:            # or assemblies:, or scenes:
     <name>:
       simulate:
         <simulation name>:

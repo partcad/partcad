@@ -3689,6 +3689,26 @@ class Project(project_config.Configuration):
                     display_name = name
                 lines += add_section(name, display_name, shape, render_cfg)
 
+        if self.scenes and "scenes" not in exclude:
+            # Listed as assemblies are, and only where something came of it, as
+            # parts are: a scene is drawn like any assembly, and a package whose
+            # stacks are arrangements rather than products (see
+            # docs/design/simulation.md, section 7) should not lose them from
+            # its README for being called what they are.
+            scene_lines = []
+            for name in declared(self.scenes):
+                shape = self.scenes[name]
+                if shape.config["type"] == "alias":
+                    source_path = self.normalize(shape.config["source_resolved"])
+                    shape = self.ctx.get_scene(source_path)
+                    display_name = name + " (alias to " + shape.name + ")"
+                else:
+                    display_name = name
+                scene_lines += add_section(name, display_name, shape, render_cfg)
+            if scene_lines:
+                lines += ["## Scenes", ""]
+                lines += scene_lines
+
         if self.parts and "parts" not in exclude:
             # Built first, and the heading only emitted if anything came of it:
             # 'add_section' skips a part with no rendered image, and a package

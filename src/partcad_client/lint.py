@@ -77,8 +77,11 @@ def detect_flavor(path: str) -> str:
     assembly as a scene costs a false error on correct code, which is worse in
     an editor and worse in CI. So anything unresolved -- no package found, a
     `partcad.yaml` that will not parse, a declaration whose path only resolves
-    with parameters -- lands on the assembly schema. The search itself is
-    `partcad_utils.lint_context`, shared with the daemon.
+    with parameters -- lands on the assembly schema. The one thing that costs is
+    a scene nobody declares that says what only a scene says (``scene:``,
+    ``fixed:``), and the finding it gets says to declare the file under
+    ``scenes:``. The search itself is `partcad_utils.lint_context`, shared with
+    the daemon.
     """
     return lint_context.describe(path).flavor or assy_lint.FLAVOR_ASSEMBLY
 

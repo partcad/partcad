@@ -156,8 +156,11 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
         (SDFormat), [`partcad-sim-mujoco`](https://github.com/partcad/partcad-sim-mujoco) for `MJCF`, each
         also declaring the reader, the exporter and the `pc ide open` entry for its engine
 - Simulation — what an object is supposed to do once the world is switched on
-  - [x] `simulate:` on a part or an assembly: a scene, where in it the object goes, and the condition that
-        says whether it went as it should
+  - [x] `simulate:` on a part, an assembly or a scene: a scene, where in it the object goes, and the
+        condition that says whether it went as it should
+  - [x] What becomes a rigid body: every element of a scene, recursively, and everything inside an assembly
+        attached to it, its connections that keep a degree of freedom joints; a scene element may be
+        `fixed: true` to the world, and a scene may place a scene
   - [x] `pc sim`, which runs it and validates the result
   - [x] `pc test` holds every object to it, as its `sim` check: write the claim first, then make it pass
   - [x] Simulation plugins, declared the way export and render implementations are — a scene goes in,

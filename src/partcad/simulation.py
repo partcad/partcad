@@ -3,12 +3,14 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Simulating a part or an assembly: what ``simulate:`` declares and how it runs.
+"""Simulating a part, an assembly or a scene: what ``simulate:`` declares and how it runs.
 
 A part says what it *is*. ``simulate:`` is where it says what it is supposed to
 *do* -- or, more often, what it is supposed not to do: not fall over, not slide
 off, not come apart. That is a claim about the part in a world, so a simulation
-is never of a part alone:
+is never of a part alone. A scene declares one the same way -- a stack of blocks
+is an arrangement, not a product -- and is placed in its world by a ``scene:``
+link:
 
     scene       the world it is placed in, by full path. The subject's own full
                 path is assigned to that scene's ``subject`` parameter,
@@ -67,7 +69,8 @@ from . import output, shape_envelope, source_key, wrapper
 from .process_crash import describe_exit_code
 from .utils import resolve_resource_path
 
-# The section of 'partcad.yaml' a part or an assembly declares its simulations in.
+# The section of 'partcad.yaml' a part, an assembly or a scene declares its
+# simulations in.
 SECTION = "simulate"
 
 # The scene a declaration that names none is run in. There is no counterpart
@@ -424,16 +427,26 @@ def run_directory(ctx, object_name: str, simulation_name: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+# What may be simulated: what may declare 'simulate:', and what a simulation
+# scene's 'subject_kind' parameter may be told the subject is - which is also
+# the key the scene's ASSY link names it with ('part:', 'assembly:', 'scene:').
+SUBJECT_KINDS = ("part", "assembly", "scene")
+
+
 def subject_kind(shape) -> typing.Optional[str]:
     """What a shape is as the subject of a simulation, or None if it cannot be one.
 
-    A part or an assembly: those are what declare ``simulate:``. Asked of the
-    shape's own ``kind`` rather than of its class, because a scene *is* an
-    assembly in the class hierarchy and is not a subject -- it is the world a
-    subject is placed in.
+    A part, an assembly or a scene: those are what declare ``simulate:``. A
+    scene is a subject like the others -- a stack of blocks is an arrangement
+    rather than a product, so it is a scene, and it is still a thing that can
+    be claimed to stand -- and it is simulated as the subject *of* a scene, the
+    default world or another one, whose link places it with ``scene:`` (see
+    docs/design/simulation.md, section 7). Asked of the shape's own ``kind``
+    rather than of its class, because a scene *is* an assembly in the class
+    hierarchy and what is placed has to be told apart from it.
     """
     kind = getattr(shape, "kind", None)
-    return kind if kind in ("part", "assembly") else None
+    return kind if kind in SUBJECT_KINDS else None
 
 
 async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration, report: bool = True) -> SimulationResult:

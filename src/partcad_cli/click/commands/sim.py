@@ -3,11 +3,11 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""`pc sim` -- run the simulations a part or an assembly declares.
+"""`pc sim` -- run the simulations a part, an assembly or a scene declares.
 
 A part says what it is; `simulate:` is where it says what it is supposed to do.
-This takes that section of a part or an assembly, places the object in the
-scene the section names, runs it through the simulation plugin the section
+This takes that section of a part, an assembly or a scene, places the object in
+the scene the section names, runs it through the simulation plugin the section
 names, and evaluates the `validation:` expression the section states over what
 came back. See `docs/source/simulation.rst` and `partcad.simulation`.
 
@@ -41,7 +41,7 @@ from ..service import run
 
 @click.command(
     help=(
-        "Run the simulations declared by a part or an assembly. "
+        "Run the simulations declared by a part, an assembly or a scene. "
         "OBJECT may be written '...:<name>' to mean every object of that name in this "
         "package and in every package below it"
     ),
@@ -70,6 +70,13 @@ from ..service import run
     help="The object is an assembly",
 )
 @click.option(
+    "--scene",
+    "-S",
+    is_flag=True,
+    show_envvar=True,
+    help="The object is a scene",
+)
+@click.option(
     "--filter",
     "-f",
     "filter_name",
@@ -86,9 +93,11 @@ from ..service import run
     help="Print the full result of every run as JSON, including what the plugin reported",
 )
 @exclude_option
-@click.argument("object", type=str, required=False)  # help="Part (default) or assembly to simulate"
+@click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to simulate"
 @click.pass_obj
-def cli(cli_ctx, package, recursive, fast_only, assembly, filter_name, as_json, exclude, object) -> None:
+def cli(cli_ctx, package, recursive, fast_only, assembly, scene, filter_name, as_json, exclude, object) -> None:
+    if assembly and scene:
+        raise click.UsageError("OBJECT is an assembly or a scene, not both")
     result = run(
         cli_ctx,
         "simulate.run",
@@ -97,6 +106,7 @@ def cli(cli_ctx, package, recursive, fast_only, assembly, filter_name, as_json, 
             "recursive": recursive,
             "fast_only": fast_only,
             "assembly": assembly,
+            "scene": scene,
             "filter": filter_name,
             "object": object,
             **exclude_params(exclude),

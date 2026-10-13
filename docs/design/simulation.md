@@ -93,8 +93,8 @@ fallback while simulation has no users to be compatible with.
 ## 3. The pipeline
 
 ```
- part / assembly                    scene (an ASSY template)             engine plugin package
- ───────────────                    ────────────────────────             ─────────────────────
+ part / assembly / scene            scene (an ASSY template)             engine plugin package
+ ───────────────────────            ────────────────────────             ─────────────────────
  simulate:                          parameters: subject,                 export:      writes the format
    <name>:                            subject_kind, subject_offset       import:      reads it
      scene      ───────────────▶    gravity:, medium:          ──┐       simulation:  runs it
@@ -125,7 +125,7 @@ nothing special is declared for it.
 
 ### 4.1 The `simulate:` declaration (built)
 
-A named section of a part or an assembly (a scene, too -- section 7). Each entry states:
+A named section of a part, an assembly or a scene (section 7). Each entry states:
 
 | Key | Meaning |
 |---|---|
@@ -180,6 +180,11 @@ format *is* the tree: every node's name, label and placement are data, not baked
 - the material facts (`mu` → `friction`);
 - for a scene that states them, the **world**: gravity and the medium's density and viscosity (section 6, built in
   #757).
+
+Whatever it asks for, every node of the tree also says what it holds -- `kind`, `part`, `assembly` or `scene` --
+every element a scene welds to the world says `fixed: true`, and a node a connection moves carries its `joint`
+(section 8). Those are what the body rule of section 7 reads, and `wrappers/kinematics.py` is that rule, for every
+exporter (built, step 9).
 
 ## 5. Physical properties
 
@@ -358,7 +363,7 @@ What else belongs to a world, and is planned:
   Section 6.1 says what PartCAD can contribute: the exact submerged volume and its centroid.
 - **Wind and current**: a velocity of the medium, which MuJoCo states as `<option wind>`; `medium:` grows from a
   material reference into a mapping to carry it.
-- **A body fixed to the world** (section 7), and the initial pose of every object.
+- **A body fixed to the world** is built (`fixed: true`, section 7); the initial pose of every object is not.
 - **Not the engine's step size, solver or iteration count.** Those belong to an engine rather than to a world; a
   `simulate:` passes them to its plugin as `params`, and a plugin documents its defaults.
 
@@ -366,11 +371,12 @@ This is SDFormat's `<world>`; a scene is where each of these belongs.
 
 ## 7. Bodies
 
-Which nodes of a tree become separate rigid bodies is the decision everything else in a simulation rests on. Today
-the scene exporters decide it with a switch (`flatten: true` makes every node with geometry its own free body),
-which is why a stack of blocks can fall over and also why every real product falls apart in simulation. **Decided:**
-it follows what PartCAD already says the two kinds of object mean (`scene.py`): an assembly is a product that was put
-together, and a scene only states where things are.
+Which nodes of a tree become separate rigid bodies is the decision everything else in a simulation rests on. Until
+step 9 the scene exporters decided it with a switch (`flatten: true` makes every node with geometry its own free
+body), which is why a stack of blocks can fall over and also why every real product falls apart in simulation.
+**Built** (step 9, this pull request): it follows what PartCAD already says the two kinds of object mean (`scene.py`): an assembly
+is a product that was put together, and a scene only states where things are. The exporters writing it is steps
+10-12; until then they keep their switches.
 
 | How a node is placed | Inside an assembly | Inside a scene |
 |---|---|---|
@@ -388,16 +394,101 @@ together, and a scene only states where things are.
   not from fixed joints.
 - **An assembly's root** is free when the assembly is placed in a scene, and the body that everything else hangs off.
 - **A body fixed to the world** -- a table, a tank's walls, a robot bolted to the floor -- is a scene element marked
-  `fixed: true` (open, section 14). Without it every element of a scene falls under gravity.
+  `fixed: true`. Without it every element of a scene falls under gravity.
 
-Consequences that come with building it:
+Consequences that came with building it:
 
-- The stacks in `examples/feature_simulate` are arrangements, not products, so they become **scenes**, and a scene can
-  therefore declare `simulate:` (it is simulated as the subject of the default world, or of another scene).
-- An ASSY link can place a **scene** (today a node places only `part:` or `assembly:`), which is what a scene inside a
-  scene, and the default world holding a scene, need.
+- The stacks in `examples/feature_simulate` are arrangements, not products, so they are **scenes**, and a scene
+  declares `simulate:` (it is simulated as the subject of the default world, or of another scene) (built).
+- An ASSY link can place a **scene** (`scene:`), which is what a scene inside a scene, and the default world holding a
+  scene, need (built).
 - The exporters' `flatten`/`static` switches go away: the tree says what is attached, and a scene element's `fixed`
-  says what is welded to the world.
+  says what is welded to the world (steps 10-12).
+
+### 7a How step 9 resolved the open details (built, this pull request)
+
+Building the rule settled what the text above left open:
+
+- **What the tree says.** Every node an assembly or a scene places carries `kind` (`part`, `assembly`, `scene`), and
+  so does the root of every assembly and scene; an element a scene fixes carries `fixed: true`, and a free one nothing
+  (`shape_envelope.KEY_KIND`, `KEY_FIXED`). Both are stamped by whatever placed the node, like the joint, so they are
+  the placement's and a part placed loose in one scene and bolted in another is one cache entry. The payload's shape
+  changed, so the cache format is 10. A tree without kinds is read by what each node carries -- children make an
+  assembly, geometry a part -- which is what a lone part has always been.
+- **A `links:` list inside a scene is a scene**: the ASSY factory builds containers of its own kind, as the imported
+  factory always has, so a scene's grouping does not weld its elements together.
+- **Refusals.** `scene:` in an assembly is an error and the link is left out; `fixed:` in an assembly, a `fixed:` that
+  is not a boolean, and one on a file's root node (which is the scene itself: whether it is fixed is said by what
+  places it) are reported and ignored. The ASSY schema states all three keys, and each flavor is derived from it --
+  the assembly flavor forbids `scene` and `fixed`, the scene flavor `how` -- so neither is a copy. A file no package
+  declares still leans to the assembly flavor; its `scene:` or `fixed:` is reported with the advice to declare it
+  under `scenes:`.
+- **What `fixed` fixes.** On a link that places an assembly it welds the assembly's root body, and the joints inside
+  still move; on a link that places a scene, or on a `links:` list, every element inside.
+- **A scene as a subject.** `simulation.subject_kind()` accepts a scene, the default world places it with `scene:` from
+  `subject_kind: scene`, `pc sim -S` names one and a package walk includes scenes, and `pc test`, which already walked
+  scenes, now runs their `sim` check. A generated README lists a package's scenes beside its assemblies, so the
+  stacks did not disappear from their example's page for becoming what they are.
+- **The helper** is `wrappers/kinematics.py`, beside `mass_properties` and importable in a sandbox the same way. Its
+  API is in its docstring; in short:
+  - `bodies(tree, properties)` -> the bodies, parents before children, with what the rule set aside in `problems`.
+    A body is named after the label of the node that placed it, made unique as joint names are (`leg`, `leg-2`); so an
+    assembly's root body is named after the link that placed the assembly, not after its first part. Its frame is that
+    node's, at the starting configuration; its parent is a body, `WORLD`, or None for a free root; its physics is its
+    parts combined by `mass_properties.of_body()`, except that an assembly welded whole into it that states its own
+    mass is taken at its word (a robot description's link of several shapes), and one whose parts span bodies is
+    weighed by its parts and reported.
+  - A body's `joint` is the node's steps re-expressed for the body pair: a fixed step of role `parentFrame` -- the
+    target node's frame in the parent body -- in front of them. The target is the first sibling of that label placed
+    before the child, as the connection found it; one that is not there leaves the joint on the container's body, and
+    says so. A sub-assembly connected through a port a `map:` exposes from deep inside it is jointed at its root body:
+    re-rooting is section 8.9's, and not done.
+  - `classify(joint)` -> the kind (section 8.8's names, plus `chain` and `fixed`), the freedoms in exporter units (mm
+    along a unit axis, degrees; a parameter whose `dir` is not of unit length is scaled, and its range, value and
+    coupling with it), and one decomposition of the joint, `origin . M_1(v_1) ... M_n(v_n) . tail`, each `M_i` about
+    its axis through its point in the frame the ones before moved -- which is MJCF's joints-in-one-body and every
+    format's single-axis joint. A native kind's points are its origin: a ball's centre, a universal joint's crossing,
+    a cylindrical, screw or planar joint's axis.
+  - Frames: `origins` (each freedom's frame against the one before; a URDF chain), `tail` (the child body in the
+    moving joint frame), `location(values)`, each freedom's axis and anchor in either body (`axis_in_child`,
+    `anchor_in_child` at the starting values are an MJCF joint's `axis` and `pos`), and `origin_in_child` (a native
+    joint's frame in the child body: an MJCF ball's `pos`).
+- **Classification details.** A turn bounded on either side is `revolute`, with None on a side that is not; one bounded
+  on neither is `continuous`, whatever its declaration called it (so `motion: revolute` with no limits anywhere is
+  continuous, as section 4.2 already reports one). A planar joint is two moves *then* the turn about their normal, the
+  order `motion: planar` implies and a native planar joint means; the other order is a chain. Only a screw is a native
+  joint with a coupling in it: a coupled pair that is not on one axis, or any other coupled set, is a chain. Lines are
+  compared at the core's merge tolerance (1e-6), so two axes the core merged are one here too.
+- **Placements.** A part's world placement is its body's times its placement in the body, by definition and so
+  exactly; composed node by node from the root it agrees to rounding, and to the bit for the node a body is rooted at.
+  So every element of a scene of parts sits where `flatten: true` put it, to the bit -- which is why the three stacks'
+  runs did not change (they reported the same positions and orientations, before and after, to the last digit). The
+  joint invariant (the product of the steps at their starting values is the child's placement) holds on the body
+  pair to rounding and not to the bit: the tree carries placements as axis and angle, whose round trip is exact to a
+  few units in the last place. Bit for bit stays the core's, where `joint.Composition` is the placement.
+- **One convention kept.** A node whose shapes are labelled under its own label (`wrist` holding `wrist/1`) is one body
+  wherever it is, scenes included, as every reader and exporter of a robot description has always taken it.
+- **What is not honoured yet.** No exporter reads any of this: every part with geometry is still a free body in a run,
+  so an assembly still comes apart and a `fixed:` element still falls. A `type: urdf` assembly fills in no joints
+  (section 8.6), so under the rule it is one body until step 11 gives its factory the joint table.
+
+What steps 10-12 take from it: call `bodies(request["wrapped"], request["properties"])` instead of walking the tree,
+write one body per `Body` with `mass_parts()` as its inertial and its parts' geometry at their `placement`, a fixed
+body's parent as the world, and its joint by `joint.kind`:
+
+- **Step 10 (MJCF)**: nest each body under its parent's at `joint.location()` (the posed configuration); a free root
+  gets a `<freejoint>`, a `WORLD` one none; a native `ball` is one `ball` at `origin_in_child()`, anything else
+  one `hinge`/`slide` per freedom with `pos`/`axis` from `anchor_in_child`/`axis_in_child`, `ref` the freedom's
+  `value` and `range` its bounds (in MJCF's angle unit); a coupling (`follows`, `ratio`, `offset`) and a `mimic` are
+  `<equality joint polycoef>`; a floating degree of freedom below the root is three slides and a ball.
+- **Step 11 (URDF)**: one link per body plus a dummy link per freedom past the first, at `joint.origins`, the child
+  link's frame being the moving joint frame and its parts at `joint.tail . placement`; `revolute`/`continuous`/
+  `prismatic`/`planar`/`floating` native, everything else a chain; the zero pose, with the starting value reported
+  lost; and the URDF factory filling `AssemblyChild.joint` from its joint table, so that a URDF round-trips its
+  kinematics.
+- **Step 12 (SDFormat)**: one link per body, a `<joint>` per joint at `classification.origin`, a native
+  `revolute` (never `continuous`), `prismatic`, `screw` (thread from the coupling), `universal` or `ball`, chains
+  through dummy links as URDF; a `WORLD` parent as a joint to `world`.
 
 ## 8. Joints
 
@@ -715,7 +806,7 @@ carrying it as passthrough. The URDF reader counts sensors, transmissions and `r
 
 ## 9. Simulations as tests
 
-`pc test` runs every `simulate:` declaration of every part and assembly as its `sim` check (`pc test -f sim`), so the
+`pc test` runs every `simulate:` declaration of every part, assembly and scene as its `sim` check (`pc test -f sim`), so the
 TDD loop is `pc test` -- red until the design does what it claims (built, #756). `pc sim` remains the command
 that runs and reports simulations; both go through one implementation.
 
@@ -895,7 +986,7 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 7f | Skills prepare generated objects for simulation | built (#759) |
 | 7g | The user documentation refactored to how to use it; this record for the design | built (#758, #764) |
 | 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and the `connect` check | built (#766) |
-| 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes | decided |
+| 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes; `wrappers/kinematics.py` | built (this pull request) |
 | 10 | **MJCF joints**, with a pendulum example checked against its closed form | decided |
 | 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics | decided |
 | 12 | **SDFormat joints** | decided |
@@ -909,8 +1000,6 @@ Each step is useful on its own, which is the test of whether the decomposition i
 
 ## 14. Open questions
 
-- **Fixed to the world.** `fixed: true` on a scene link, welding it to the world, with free as the default. Not yet
-  confirmed.
 - **`pc sim` with no `validation:`.** `pc test` skips it in a package run and fails it when the object is named. `pc sim`
   is unchanged for now, and the recommendation is to keep it so: `pc sim --json` on a declaration with no validation is
   how one sees what a plugin reports before writing the condition.

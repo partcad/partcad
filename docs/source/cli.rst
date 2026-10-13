@@ -357,12 +357,12 @@ Object commands
   obtainable and be the one that was meant. A board nobody can flash is not a board anybody can make.
 
 ``pc sim``
-  Run the simulations a part or an assembly declares in its ``simulate:`` section, and check the
-  ``validation:`` condition each of them states. Use ``-a`` when the object is an assembly, ``-P
-  <package>...`` or ``...:<name>`` to run everything the packages below declare too (see
-  :ref:`recursive-names`), ``-f`` to run only the simulation of a given name, and
-  ``--json`` to print the whole of what each simulation plugin reported. A validation that does not hold
-  exits non-zero.
+  Run the simulations a part, an assembly or a scene declares in its ``simulate:`` section, and check the
+  ``validation:`` condition each of them states. Use ``-a`` when the object is an assembly and ``-S`` when it
+  is a scene -- a stack of blocks is an arrangement rather than a product, so it is a scene (see
+  :ref:`sim-bodies`). Use ``-P <package>...`` or ``...:<name>`` to run everything the packages below declare
+  too (see :ref:`recursive-names`), ``-f`` to run only the simulation of a given name, and ``--json`` to
+  print the whole of what each simulation plugin reported. A validation that does not hold exits non-zero.
 
   It asks whether an object *works*: it places the object in the scene the declaration names, at the
   ``offset:`` the declaration states, runs the scene through the simulation plugin the declaration names, and

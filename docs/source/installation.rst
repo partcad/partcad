@@ -133,7 +133,7 @@ The commands and options supported by PartCAD CLI:
     add          Add a dependency, sketch, part, assembly, scene, or software
     import       Import a dependency, sketch, part, or assembly
     test         Run tests on a part, assembly, or scene
-    sim          Run the simulations declared by a part or an assembly
+    sim          Run the simulations declared by a part, an assembly or a scene
     info         Show detailed information about a part, assembly, or scene
     bom          Print the bill of materials of a part, an assembly or a scene
     convert      Convert parts, sketches or assemblies to another format and update their type

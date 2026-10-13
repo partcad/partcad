@@ -119,6 +119,48 @@ Feature: `pc test` command
     And STDOUT should contain "declares no simulation 'nosuch'"
 
   @success @pc-test @pc-test-sim
+  Scenario: A scene that claims something is held to it like a part
+    # A stack of blocks is an arrangement, not a product, so it is a scene --
+    # and it claims to stand like anything else. The same check, the same
+    # verdict; and it is named with '-S', as a scene is everywhere else.
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        block:
+          type: step
+          path: block.step
+      scenes:
+        stack:
+          type: assy
+          simulate:
+            stands:
+              simulation: :nosuch
+              validation: after["bodies"]["top"]["pos"][2] > 5.0
+      """
+    And a file named "stack.assy" with content:
+      """
+      links:
+        - part: block
+          name: bottom
+        - part: block
+          name: top
+          location: [[0, 0, 20], [0, 0, 1], 0]
+      """
+    And a file named "block.step" with content:
+      """
+      ISO-10303-21;
+      HEADER;
+      ENDSEC;
+      DATA;
+      ENDSEC;
+      END-ISO-10303-21;
+      """
+    When I run "pc test -S -f sim stack"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "//:stack: sim: the simulation 'stands' could not be run"
+    And STDOUT should contain "declares no simulation 'nosuch'"
+
+  @success @pc-test @pc-test-sim
   Scenario: A claim with no condition is skipped in a package and fails by name
     # Nothing is run either way -- there is nothing to judge a run by -- so the
     # plugin need not even exist. Testing the package, the claim may be one

@@ -71,8 +71,11 @@ import yaml
 LINKS = "links"
 
 # The keys that name what a node places, in the order a node's name falls back
-# through them. 'name:' wins over both; see 'link_name()'.
-PLACES = ("part", "assembly")
+# through them. 'name:' wins over all of them; see 'link_name()'. A node names
+# one at most - the schema says so - and 'scene' is only honoured in a scene
+# (an assembly refuses it), but a link is called after what it names wherever
+# it is written, so that the refusal can say which link it was.
+PLACES = ("part", "assembly", "scene")
 
 # What a link is called when neither it nor what it places gives it a name: its
 # position in the list it is written in, one-based. The '#' is deliberate -- it

@@ -19,7 +19,7 @@ from partcad_utils import assy_filter
 from . import joint as pc_joint
 from . import logging as pc_logging
 from . import telemetry
-from .assembly import Assembly, AssemblyChild
+from .assembly import AssemblyChild
 from .assembly_connect import ConnectHow, _mating_between, check_stage_sequence
 from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
@@ -178,6 +178,13 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         elif "part" in node:
             name = self.node_object_name(node, "part")
             item = await self.ctx._get_part_async(name, self.node_params(node))
+        elif "scene" in node:
+            # Resolved and keyed even where it is refused (an assembly places no
+            # scene, see 'handle_node'): this walk fetches what the file names,
+            # and a key that left a named object out would be the stale-entry
+            # bug the paragraph below describes, one refusal away.
+            name = self.node_object_name(node, "scene")
+            item = self.ctx._get_scene(name, self.node_params(node))
         else:
             return
 
@@ -225,10 +232,12 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         """The assemblies this file links to, resolved but not built.
 
         The same links 'prepare_node_async()' walks, kept rather than prepared:
-        the nodes naming an 'assembly', in the order the file names them. A
-        container node ('links:' of its own) is walked into rather than
-        collected - the sub-assembly it declares is assembled here, out of what
-        it links to, and is not an object anybody can ask for by name.
+        the nodes naming an 'assembly' or a 'scene', in the order the file names
+        them - a scene is built the way an assembly is, out of what it links
+        to, so it is staged the same way. A container node ('links:' of its
+        own) is walked into rather than collected - the sub-assembly it declares
+        is assembled here, out of what it links to, and is not an object
+        anybody can ask for by name.
 
         A link that does not resolve is left out: this decides what to build
         first, and naming what is missing is the build's to do (see
@@ -251,9 +260,14 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             self.collect_subassemblies(node["links"], found)
             return
 
-        if "assembly" not in node:
+        if "assembly" in node:
+            item = self.ctx._get_assembly(self.node_object_name(node, "assembly"), self.node_params(node))
+        elif "scene" in node and self.IS_SCENE:
+            # Only where it is placed: an assembly refuses a scene, and building
+            # one first for it would be work towards nothing.
+            item = self.ctx._get_scene(self.node_object_name(node, "scene"), self.node_params(node))
+        else:
             return
-        item = self.ctx._get_assembly(self.node_object_name(node, "assembly"), self.node_params(node))
         if item is not None:
             found.append(item)
 
@@ -371,6 +385,14 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 pc_logging.error(
                     "%s: the root node of an ASSY file has nothing to '%s' to; ignoring it" % (self.name, section)
                 )
+        if node.get("fixed") is not None:
+            # Whether a scene is welded to the world is said by the link that
+            # places it, in the scene it is placed in: the same scene may stand
+            # bolted down in one world and loose in another.
+            pc_logging.error(
+                "%s: the root node of an ASSY file is the whole of it, and has nothing to be 'fixed' to; "
+                "say 'fixed: true' on the link that places it, or on the links inside it; ignoring it" % self.name
+            )
         location = node.get("location")
         if location is None:
             return
@@ -504,6 +526,37 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 )
         return refusals
 
+    def node_fixed(self, node, name) -> bool:
+        """Whether a link says what it places is welded to the world ('fixed: true').
+
+        A scene's to say and nobody else's (see 'SceneFactoryAssy'): every
+        element of a scene is a body of its own and falls unless it is fixed,
+        while everything inside an assembly is attached to the assembly already,
+        and an assembly placed in a scene is fixed or free as a whole, by the
+        link that places it. So an assembly's 'fixed:' is reported and ignored
+        rather than honoured, the way a scene's 'how' is - the schema an editor
+        checks the file against says the same thing, in the same words.
+
+        False wherever it is not a boolean, which is reported too: 'fixed: yes'
+        quoted is a string, and reading a string as true is how a scene comes to
+        hold a table nobody bolted down.
+        """
+        value = node.get("fixed") if isinstance(node, dict) else None
+        if value is None:
+            return False
+        where = name or node.get("part") or node.get("assembly") or node.get("scene") or "<unnamed>"
+        if not isinstance(value, bool):
+            pc_logging.error("%s: '%s': 'fixed' must be true or false, ignoring: %r" % (self.name, where, value))
+            return False
+        if not self.IS_SCENE:
+            pc_logging.error(
+                "%s: '%s' is marked 'fixed', and only a scene fixes what it places to the world: everything in an "
+                "assembly is attached to the assembly. Mark the link that places the assembly in a scene instead; "
+                "ignoring it" % (self.name, where)
+            )
+            return False
+        return value
+
     def connect_how(self, node, connect, name):
         """The assembly instructions this link carries.
 
@@ -617,9 +670,18 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             connect_to_port_pattern = connect_to_port
             connect_to_port = None
 
+        fixed = self.node_fixed(node, name)
+
         # Check if this node is for an assembly
         if "links" in node and node["links"] is not None:
-            item = Assembly(
+            # The factory's own kind of object, as every other factory builds its
+            # containers (see 'AssemblyFactoryImported.handle_node'): a 'links:'
+            # list inside a scene holds elements of that scene, every one a body
+            # of its own, and inside an assembly it holds parts of that product.
+            # The tree says which with the node's kind (see 'Assembly._place'),
+            # and a reader that took every container for an assembly would weld
+            # a scene's elements together.
+            item = self.OBJECT_CLASS(
                 assembly.project_name,
                 {
                     # Every link has a name - its own, or its position in the
@@ -643,10 +705,31 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             item.instantiate = lambda x: True
             await self.handle_node_list(item, node["links"])
         else:
-            # This is a node for a part or an assembly
+            # This is a node for a part, an assembly or a scene
             params = self.node_params(node)
 
-            if "assembly" in node:
+            if "scene" in node:
+                if name is None:
+                    name = node["scene"]
+                if not self.IS_SCENE:
+                    # A product is not made of arrangements. Everything inside an
+                    # assembly is attached to it, and a scene's elements are each
+                    # free to move - so a scene inside an assembly would be both,
+                    # and the rule that decides what becomes a body has no answer
+                    # for it (docs/design/simulation.md, section 7). Refused and
+                    # left out rather than read as an assembly, which would weld
+                    # together what its author said was loose.
+                    pc_logging.error(
+                        "%s: '%s' places the scene '%s', and an assembly cannot hold a scene: everything in an "
+                        "assembly is attached to it, and nothing in a scene is. Place it in a scene, or link the "
+                        "objects it arranges here instead; it is left out" % (self.name, name, node["scene"])
+                    )
+                    return None
+                item = self.ctx._get_scene(self.node_object_name(node, "scene"), params)
+                if item is None:
+                    pc_logging.error("Scene not found: %s in %s" % (name, self.name))
+                    raise Exception("Scene not found: %s in %s" % (name, self.name))
+            elif "assembly" in node:
                 if name is None:
                     name = node["assembly"]
                 item = self.ctx._get_assembly(self.node_object_name(node, "assembly"), params)
@@ -1225,6 +1308,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 composition=composition,
                 joint=joint,
                 joint_problems=joint_problems,
+                fixed=fixed,
             )
             if joint is not None:
                 # One list, so that what is found about the joint after this -
@@ -1260,6 +1344,14 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
     # (see 'SceneFactoryAssy'). Either way the connection is resolved the same
     # way, so that one file places its parts in one place whatever reads it.
     KEEPS_JOINTS = True
+
+    # Whether what this factory builds is a scene: the two things only a scene
+    # says, a link that places another scene ('scene:') and an element welded to
+    # the world ('fixed:'), are honoured where this is true and refused where it
+    # is not. See docs/design/simulation.md, section 7, for the rule both come
+    # from - every element of a scene is a body of its own, and everything inside
+    # an assembly is attached to it.
+    IS_SCENE = False
 
     def compose_connection(
         self,

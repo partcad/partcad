@@ -298,7 +298,7 @@ documents is a Linux image, and such a daemon answers a ping and then fails ever
 pull with ``no matching manifest for windows/amd64``.
 
 The same policy, from the same code, decides ``pc test``'s ``sim`` check, which
-holds a part or an assembly to the ``simulate:`` claims it makes: a simulator
+holds a part, an assembly or a scene to the ``simulate:`` claims it makes: a simulator
 that resolved and did not run is a failure, but for the one excuse, and a
 simulation plugin that cannot be found is never excused. See "Running a
 simulation" in :doc:`simulation`.
