@@ -24,7 +24,9 @@ checked, in memory only, under names worked out from what they are --
 -- so that checking the same assembly again names the same objects, and asking
 for one by name, in any request to the same daemon, finds it. A name made up
 afresh on each run would leave every run's objects behind it and share nothing
-with the last one.
+with the last one. Each is marked 'Shape.artifact', which keeps it out of what
+lists the package's declarations: a 'pc render' that writes the README after a
+'pc test' in the same daemon would otherwise list them.
 
 Each volume is a 'brep' part read from a file under PartCAD's own state
 directory ('internalStateDir'/interference), named after a digest of its bytes:
@@ -194,6 +196,7 @@ async def restore_async(ctx, artifact: dict) -> bool:
         part = project.materialize_part_by_config(config)
         if part is None:
             return False
+        part.artifact = True
         volume_children.append(AssemblyChild(part, "volume-%d" % index, Location()))
 
     common = _in_memory(project.name, shared, "What %s share" % artifact.get("title", "the two"), volume_children)
@@ -217,4 +220,5 @@ def _in_memory(project_name: str, name: str, desc, children: list) -> Assembly:
     item.instantiate = lambda _: True
     item.children.extend(children)
     item._wrapped = None
+    item.artifact = True
     return item

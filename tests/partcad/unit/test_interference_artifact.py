@@ -129,3 +129,18 @@ def test_what_cannot_be_shown_is_not_offered(ctx):
     artifact = asyncio.run(interference_artifact.make_async(ctx, pair, _overlap()))
     os.unlink(artifact["recipe"]["volumes"][0])
     assert asyncio.run(interference_artifact.restore_async(ctx, artifact)) is False
+
+
+def test_what_is_left_behind_is_not_listed_as_what_the_package_declares(ctx, tmp_path):
+    # 'pc test' then 'pc render' in one daemon: the README is written with the
+    # artifacts still registered, and it lists declarations, which they are not.
+    pair = ctx.get_assembly("//:pair")
+    artifact = asyncio.run(interference_artifact.make_async(ctx, pair, _overlap()))
+    project = ctx.get_project("//")
+    assert artifact["name"] in project.assemblies
+
+    out = tmp_path / "out"
+    out.mkdir()
+    project.render_readme_async({}, str(out))
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    assert interference_artifact.SUBASSEMBLY not in readme
