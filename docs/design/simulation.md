@@ -725,7 +725,7 @@ is the `ref`. One classifier of free steps into joint kinds, shared by the MJCF,
 `partcad/wrappers/` beside `mass_properties`. One gap found on the way, for step 11: the URDF converter writes no `axis`
 when a joint states none, so URDF's default X axis comes out as Z.
 
-### 8.8b How the MJCF exporter resolved the open details (built, step 10, sim-mujoco #12)
+### 8.8b How the MJCF exporter resolved the open details (built, #786, sim-mujoco #12)
 
 Writing the bodies and joints out of `kinematics` (section 7a) settled what section 8.8 left to the exporter:
 
@@ -1036,7 +1036,7 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 7g | The user documentation refactored to how to use it; this record for the design | built (#758, #764) |
 | 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and the `connect` check | built (#766) |
 | 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes; `wrappers/kinematics.py` | built (#784) |
-| 10 | **MJCF joints**, with a pendulum example checked against its closed form | built (sim-mujoco #12) |
+| 10 | **MJCF joints**, with a pendulum example checked against its closed form | built (#786, sim-mujoco #12) |
 | 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics | decided |
 | 12 | **SDFormat joints** | decided |
 | 13 | Inputs: `initial:` (a configuration) and `drive:` (position, velocity or effort targets over time) on `simulate:`; temporal helpers for validations | planned |
