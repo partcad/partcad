@@ -723,7 +723,7 @@ is the `ref`. One classifier of free steps into joint kinds, shared by the MJCF,
 `partcad/wrappers/` beside `mass_properties`. One gap found on the way, for step 11: the URDF converter writes no `axis`
 when a joint states none, so URDF's default X axis comes out as Z (fixed in step 11: the reader states X).
 
-### 8.8b How the URDF export resolved the open details (built, step 11)
+### 8.8b How the URDF export resolved the open details (built, step 11, #788)
 
 Writing joints to URDF, reading them from one and converting between the two settled what 8.8 left open for URDF:
 
@@ -1027,7 +1027,7 @@ never beside the original, and references keep resolving against the directory t
 
 | Target | State |
 |---|---|
-| URDF | built: a link per body and a joint per pair (step 11) |
+| URDF | built: a link per body and a joint per pair (step 11, #788) |
 | MJCF | built, in sim-mujoco; bodies and free joints until section 8 |
 | SDFormat | built, in sim-gazebo; models and free bodies until section 8 |
 | USD (UsdPhysics) | planned: Isaac Sim and the wider DCC ecosystem; the generic six-degree-of-freedom joint maps the representation of section 8.6 one to one |
@@ -1056,7 +1056,7 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and the `connect` check | built (#766) |
 | 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes; `wrappers/kinematics.py` | built (#784) |
 | 10 | **MJCF joints**, with a pendulum example checked against its closed form | decided |
-| 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics | built |
+| 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics | built (#788) |
 | 12 | **SDFormat joints** | decided |
 | 13 | Inputs: `initial:` (a configuration) and `drive:` (position, velocity or effort targets over time) on `simulate:`; temporal helpers for validations | planned |
 | 14 | Devices: actuators (torque constant, gear ratio, rotor inertia as MJCF `armature`) and sensors (encoders, IMU, force-torque, contact; cameras later) attached to ports | planned |
