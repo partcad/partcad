@@ -58,7 +58,7 @@ suite('The Digital Thread host, asked to render', () => {
     });
 });
 
-suite('The PartCAD Viewer host, asked to analyse', () => {
+suite('The Digital Thread host, asked to analyse', () => {
     const sent: Record<string, unknown>[] = [];
     const registrations: vscode.Disposable[] = [];
     /** What 'cae.defaults' answers: the user configuration's implementation per analysis. */

@@ -54,28 +54,6 @@ part, including an image that cannot be pulled.
 > arm64 where the solver allows, are not published yet. The line comes out when
 > they are.
 
-> **A temporary arrangement, and why it is here.** The `feature/cae` packages
-> are not on the public index's `main`, which is what `examples/partcad.yaml` and
-> every `pc init` project pin — so the defaults the `cae*Implementation` options
-> name resolve to nothing. Rather than repin the whole examples tree at the
-> index's `devel`, which would drag in unrelated changes, this package depends on
-> the implementations directly and each section names one:
->
-> ```yaml
-> fea:
->   implementation: calculix:fea
-> ```
->
-> `implementation:` is a general thing — a part saying which solver it was
-> written against, outranked only by `-i` — but the `dependencies:` entries and
-> these lines exist for this reason and go away once the index carries
-> `feature/cae`. `partcad.yaml` says so where they are.
->
-> `calculix` there is relative, and resolves against *this* package, so it means
-> the same thing however deep in a tree the command is run. A relative name a
-> user types is not the same: `-i calculix:fea` means the `calculix` beside the
-> user, so it wants this directory.
-
 ## Where a condition lands
 
 A port is a coordinate frame, and a frame is a point: it can say where a bolt
@@ -291,8 +269,8 @@ pc cae thermal :cantilever
 pc cae cfd :pipe
 
 # a particular implementation, this run only (outranks the part's own)
-pc cae fea -i elmer:fea :cantilever
-pc cae cfd -i moose:cfd :pipe
+pc cae fea -i //pub/feature/cae/elmer:fea :cantilever
+pc cae cfd -i //pub/feature/cae/moose:cfd :pipe
 
 # all of them as checks that fail on any finding
 pc test

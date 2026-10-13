@@ -39,7 +39,7 @@ boundary conditions off: ElmerGrid, gmshToFoam, libMesh, a MED file and
 code_saturne all keep them by name.
 
 **The answer.** 'write_glb()' draws a surface coloured by a field as the binary
-glTF the PartCAD Viewer shows, and 'outer_triangles()' finds that surface in a
+glTF the Digital Thread shows, and 'outer_triangles()' finds that surface in a
 volume mesh.
 
 Imported by 'wrapper_export.py' for 'prepare()', and by implementation scripts
@@ -733,7 +733,7 @@ def write_glb(path, points, triangles, values, low=None, high=None):
 
     'points' are in metres and Z-up, as every solver here writes them; glTF is
     Y-up, so they are turned here -- (x, y, z) -> (x, z, -y), the rotation
-    PartCAD's glTF exporter bakes into everything else the Viewer shows.
+    PartCAD's glTF exporter bakes into everything else the Digital Thread shows.
     Written by hand rather than through a library: a glTF of one coloured mesh
     is three arrays and a page of JSON, and a dependency for it is one more
     thing a sandbox has to install on every platform.

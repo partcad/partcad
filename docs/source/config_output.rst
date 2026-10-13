@@ -668,7 +668,7 @@ analysis gets:
 makes an inlet smaller than its face a face of its own; ``faces`` index it in the
 order OCCT maps a shape's faces. ``cae_support``, beside the meta-wrapper and
 importable from any implementation script, meshes it with gmsh with those faces
-named, and draws a result as the glTF the Viewer shows -- the half of an
+named, and draws a result as the glTF the Digital Thread shows -- the half of an
 implementation that does not depend on the solver.
 
 .. _cam-section:
