@@ -12,9 +12,15 @@
 def render_cfg_merge(a: dict, b: dict, path=[]):
     for key in b:
         if key in a:
+            # One of three, and only one. This was an 'if' rather than an
+            # 'elif', so a section that had just been merged went on to the
+            # comparison below - which it failed whenever the package had said
+            # anything the shape had not, and was then replaced by the shape's.
+            # A shape setting 'viewport_origin' on 'svg' lost the package's
+            # 'prefix' for it, and the README looked for its picture elsewhere.
             if isinstance(a[key], dict) and isinstance(b[key], dict):
                 a[key] = render_cfg_merge(a[key], b[key], path + [str(key)])
-            if isinstance(a[key], list) and isinstance(b[key], list):
+            elif isinstance(a[key], list) and isinstance(b[key], list):
                 a[key].extend(b[key])
             elif a[key] != b[key]:
                 a[key] = b[key]
@@ -24,8 +30,9 @@ def render_cfg_merge(a: dict, b: dict, path=[]):
 
 
 # The named viewing directions of a 2D projection, and what each one is in the
-# terms 'partcad.yaml' already uses: 'viewport_origin' is the point the shape is
-# looked at from, 'viewport_up' is which way is up in the resulting picture.
+# terms 'partcad.yaml' already uses: 'viewport_origin' is the direction the shape
+# is looked at from, wherever the shape sits, and 'viewport_up' is which way is
+# up in the resulting picture.
 #
 # A name is nothing but shorthand for that pair, so that
 #
@@ -46,7 +53,9 @@ def render_cfg_merge(a: dict, b: dict, path=[]):
 # a shape - which is what puts the front camera on -Y and leaves +X to the right
 # of the front view. The distance is arbitrary (a viewport origin says which
 # direction to look from, and the projection is scaled to fit whatever it is
-# written into); it is spelled as 100 to match the wrapper's own defaults.
+# written into); it is spelled as 100 to match the wrapper's own defaults. See
+# 'LOOK_AT' in 'builtin/render/render_svg.py' for how a direction is turned into
+# the camera the projection needs.
 VIEWS = {
     "front": ((0, -100, 0), (0, 0, 1)),
     "back": ((0, 100, 0), (0, 0, 1)),

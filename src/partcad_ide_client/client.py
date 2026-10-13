@@ -198,6 +198,7 @@ def show(
     package=None,
     keep_camera=False,
     reply_timeout: float = REPLY_TIMEOUT,
+    tab=None,
 ) -> dict:
     """Display one already-tessellated object in the IDE's Digital Thread.
 
@@ -221,25 +222,30 @@ def show(
 
     'keep_camera' asks the viewer to leave the camera where the user put it,
     which is what makes re-showing the same part after an edit not jump.
+
+    'tab' is the tab of the viewer to open on (see 'protocol.KEY_TAB'), or None
+    to leave the viewer on the one it is on.
     """
+    if tab is not None and tab not in protocol.viewer_tab_ids():
+        raise ValueError("not a Digital Thread tab: %r (one of %s)" % (tab, ", ".join(protocol.viewer_tab_ids())))
     if not protocol.is_node(obj):
         raise TypeError(
             "not a shape tree (no %r, %r or %r key): %r"
             % (protocol.KEY_GLTF, protocol.KEY_GLTF_REF, protocol.KEY_ASSEMBLY, obj)
         )
 
-    return _send(
-        {
-            "type": protocol.MSG_SHOW,
-            "id": uuid.uuid4().hex,
-            "name": name,
-            "kind": kind,
-            "package": package,
-            "keepCamera": bool(keep_camera),
-            protocol.KEY_OBJECT: obj,
-        },
-        reply_timeout=reply_timeout,
-    )
+    message = {
+        "type": protocol.MSG_SHOW,
+        "id": uuid.uuid4().hex,
+        "name": name,
+        "kind": kind,
+        "package": package,
+        "keepCamera": bool(keep_camera),
+        protocol.KEY_OBJECT: obj,
+    }
+    if tab is not None:
+        message[protocol.KEY_TAB] = tab
+    return _send(message, reply_timeout=reply_timeout)
 
 
 def clear() -> dict:

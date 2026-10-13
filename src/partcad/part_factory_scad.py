@@ -139,6 +139,8 @@ def _build_render_args(scad_executable, stl_path, source_path, config):
 
 @telemetry.instrument()
 class PartFactoryScad(PartFactoryHomogen, PartFactoryFile):
+    WRAPPERS = ("import_mesh.py",)
+
     # The sandboxed runtime used to keep build123d out of the main process
     PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
 

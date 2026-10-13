@@ -135,6 +135,7 @@ A named section of a part, an assembly or a scene (section 7). Each entry states
 | `params` | Overrides of the plugin's parameters for this run (`duration`, `samples`, `gravity`, ...). |
 | `validation` | A Python expression over `before`, `after` and `result`. Evaluated with a fixed set of builtins and no modules -- not a security boundary (a package can declare a CadQuery part), but what keeps a validation readable as an assertion. |
 | `desc` | For whoever reads the report. |
+| `feature` | The feature (or features) of the object's `requirements:` this simulation demonstrates. Read by nothing that runs it: it is what the IDE's Requirements tab and the `/pc:validate` skill read to say which features a simulation stands behind, and `pc test`'s `requirements` check fails a name the requirements do not declare (`partcad/requirements.py`). |
 
 There is deliberately no unnamed short form: the name is what `-f` selects, what the report prints beside the verdict
 and what names the run directory.

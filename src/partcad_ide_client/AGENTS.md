@@ -33,6 +33,11 @@ An IDE from before it acknowledges it without a state, which is how `client.stat
 -- two webviews are asked and a screenshot taken -- so `PartcadViewerServer.answerState` bounds it and fails
 with a sentence rather than leave `pc` blocked.
 
+**A show can carry the viewer tab to open on** (`KEY_TAB`, one of `VIEWER_TABS`), which is how
+`pc ide view --analysis-fea` reaches the window that draws the object. `VIEWER_TABS` is mirrored by `TAB_GROUPS`
+in `ide/vscode/src/webview/messages.ts`, and `tests/partcad_ide_client/unit/test_protocol.py` reads that file
+to hold the two together.
+
 A node names its geometry (`KEY_GLTF_REF`) rather than carrying it, and the root holds one entry per distinct
 shape (`KEY_GEOMETRY`). An assembly that places the same bolt a hundred times therefore sends that bolt once and
 names it a hundred times — possible only because a node's placement was never part of its geometry, which is the

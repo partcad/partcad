@@ -30,6 +30,8 @@ def test_registry_maps_cli_shaped_names_to_operations():
     assert registry["manufacturing.tree"].__wrapped__ is operations.manufacturing_tree
     assert registry["manufacturing.details"].__wrapped__ is operations.manufacturing_details
     assert registry["manufacturing.plan"].__wrapped__ is operations.manufacturing_plan
+    # The Requirements tab.
+    assert registry["requirements.check"].__wrapped__ is operations.requirements_check
 
 
 def test_every_registry_entry_is_callable():

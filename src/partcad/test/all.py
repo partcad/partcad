@@ -24,6 +24,7 @@ from .manufacturability_forming import ManufacturabilityFormingTest
 from .manufacturability_laser import ManufacturabilityLaserTest
 from .manufacturability_sheet_metal import ManufacturabilitySheetMetalTest
 from .manufacturability_subtractive import ManufacturabilitySubtractiveTest
+from .requirements import RequirementsTest
 from .shell import ShellTest
 from .sim import SimTest
 from .solidity import SolidityTest
@@ -56,6 +57,11 @@ def tests(concurrency_cap: int) -> list[Test]:
                 ManufacturabilityCutTest(),
                 ConnectTest(),
                 ConnectivityTest(),
+                # What the object was required to be: its ports, its interfaces
+                # and its physical properties, against what 'requirements:'
+                # says. A read of the declarations, plus what the solid
+                # weighs where a physical property is required.
+                RequirementsTest(),
                 DegenerateTest(),
                 # Costs no sandbox at all: the verdict is read off the BREP
                 # bytes the core already holds (see partcad.brep_inspect), so it

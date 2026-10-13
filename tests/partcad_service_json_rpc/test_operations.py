@@ -12,6 +12,7 @@ context is replaced by a faithful fake so the operation glue (param extraction,
 event emission, formatting) is exercised without a real CAD environment.
 """
 
+import base64
 import contextlib
 import copy
 import os
@@ -176,8 +177,9 @@ class FakeShape:
         self.instantiated = True
         return {"shape": self.name}
 
-    def show(self, ctx=None):
+    def show(self, ctx=None, tab=None):
         self.shown = True
+        self.shown_on = tab
         # Which context it was shown in, and not merely that it was shown. A
         # 'show()' with none falls back to a module-level context that a daemon
         # cannot count on having, and a fake that dropped the argument is what let
@@ -233,7 +235,7 @@ class FakeObject:
         self.summarized_for = project
         return self._summary
 
-    def show(self, ctx=None):
+    def show(self, ctx=None, tab=None):
         self.shown = True
         self.shown_in = ctx
 
@@ -1602,6 +1604,41 @@ def test_a_part_is_not_staged():
     assert part.shown is True
 
 
+def test_the_viewer_tab_asked_for_goes_with_the_show():
+    """'pc ide view --analysis-fea': the tab rides on the show (see 'protocol.KEY_TAB')."""
+    session, _ = make_session()
+    part = FakeShape(name="widget")
+    session.partcad_ctx.shapes[("part", "//:widget")] = part
+
+    operations.inspect_object(session, {"package": "//", "object": "widget", "tab": "fea"})
+
+    assert part.shown is True
+    assert part.shown_on == "fea"
+
+
+def test_a_show_with_no_tab_leaves_the_viewer_where_it_is():
+    session, _ = make_session()
+    part = FakeShape(name="widget")
+    session.partcad_ctx.shapes[("part", "//:widget")] = part
+
+    operations.inspect_object(session, {"package": "//", "object": "widget"})
+
+    assert part.shown_on is None
+
+
+def test_a_tab_the_viewer_does_not_have_is_refused_before_anything_is_built():
+    session, _ = make_session()
+    part = FakeShape(name="widget")
+    session.partcad_ctx.shapes[("part", "//:widget")] = part
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.inspect_object(session, {"package": "//", "object": "widget", "tab": "buy"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "'buy'" in caught.value.message
+    assert part.shown is False
+
+
 def test_instantiate_assembly_builds_it_and_sends_back_a_status():
     session, _ = make_session()
     assembly = _assembly_with(session, "//sub:unit")
@@ -2931,6 +2968,112 @@ def test_adhoc_render_reports_a_failed_render(monkeypatch, tmp_path):
     assert not any(m.startswith("Render complete") for m in log.messages("info"))
 
 
+# ---- requirements.check ------------------------------------------------------
+#
+# The method behind the IDE's Requirements tab. What a requirement means and
+# whether the model meets it is 'partcad.requirements', tested beside it; what is
+# pinned here is which object is asked, whether the model is, and what a refusal
+# reads as.
+
+
+def _requirements_session(monkeypatch, kind="part", name="plate", physics=()):
+    asked = []
+
+    class Report:
+        def __init__(self, shape, verify):
+            self.shape = shape
+            self.verify = verify
+
+        def to_dict(self):
+            return {"object": "//:%s" % self.shape.name, "verified": self.verify}
+
+    async def check_async(ctx, shape, verify=True):
+        asked.append((shape, verify))
+        return Report(shape, verify)
+
+    def of_shape(shape):
+        return types.SimpleNamespace(physics=list(physics))
+
+    install_fake_partcad_modules(
+        monkeypatch, {"partcad.requirements": {"check_async": check_async, "of_shape": of_shape}}
+    )
+    session, _ = make_session()
+    shape = FakeObject(name, project_name="//")
+    session.partcad_ctx.shapes[(kind, "//:" + name)] = shape
+    return session, shape, asked
+
+
+def test_requirements_check_reads_the_declaration_unless_asked_to_verify(monkeypatch):
+    session, plate, asked = _requirements_session(monkeypatch)
+
+    declared = operations.requirements_check(session, {"package": "//", "object": "plate", "kind": "part"})
+    verified = operations.requirements_check(
+        session, {"package": "//", "object": "plate", "kind": "part", "verify": True}
+    )
+
+    assert asked == [(plate, False), (plate, True)]
+    assert declared == {"object": "//:plate", "verified": False}
+    assert verified == {"object": "//:plate", "verified": True}
+
+
+@pytest.mark.parametrize("kind", ["assembly", "scene", "sketch"])
+def test_requirements_check_asks_the_kind_it_was_told(monkeypatch, kind):
+    session, shape, asked = _requirements_session(monkeypatch, kind=kind, name="thing")
+
+    operations.requirements_check(session, {"package": "//", "object": "thing", "kind": kind, "verify": True})
+
+    assert asked == [(shape, True)]
+    assert session.partcad_ctx.requested[-1][:2] == (kind, "//:thing")
+
+
+def test_requirements_check_builds_an_assembly_s_sub_assemblies_first_to_weigh_it(monkeypatch):
+    """Phase one of an assembly build: what it weighs is worked out from the tree it is built as."""
+    session, _, asked = _requirements_session(monkeypatch, kind="assembly", name="robot", physics=["mass"])
+    _assembly_with(session, "//:robot", uncached=[("//", "arm")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.requirements_check(session, {"package": "//", "object": "robot", "kind": "assembly", "verify": True})
+
+    assert [entry["name"] for entry in _retry_error(caught)] == ["arm"]
+    assert asked == []
+
+
+def test_requirements_check_builds_nothing_it_does_not_need(monkeypatch):
+    """No physics required, or nothing verified: the ports are read off a tree that needs no build."""
+    session, _, asked = _requirements_session(monkeypatch, kind="assembly", name="robot")
+    robot = _assembly_with(session, "//:robot", uncached=[("//", "arm")])
+    operations.requirements_check(session, {"package": "//", "object": "robot", "kind": "assembly", "verify": True})
+
+    session, _, asked_declared = _requirements_session(monkeypatch, kind="assembly", name="robot", physics=["mass"])
+    _assembly_with(session, "//:robot", uncached=[("//", "arm")])
+    operations.requirements_check(session, {"package": "//", "object": "robot", "kind": "assembly"})
+
+    assert [verify for _, verify in asked] == [True]
+    assert asked[0][0] is robot
+    assert [verify for _, verify in asked_declared] == [False]
+
+
+def test_requirements_check_refuses_what_declares_none(monkeypatch):
+    session, _, asked = _requirements_session(monkeypatch)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.requirements_check(session, {"package": "//", "object": "m3", "kind": "interface"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "'interface'" in str(caught.value)
+    assert asked == []
+
+
+def test_requirements_check_names_what_it_could_not_find(monkeypatch):
+    session, _, asked = _requirements_session(monkeypatch)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.requirements_check(session, {"package": "//", "object": "ghost", "kind": "assembly"})
+
+    assert "Assembly //:ghost is not found" in str(caught.value)
+    assert asked == []
+
+
 # ---- cae.analyze / cae.defaults --------------------------------------------
 #
 # The two methods behind `pc cae fea|cfd` and the IDE's FEA and CFD tabs. What
@@ -3749,3 +3892,100 @@ def test_the_overlay_reader_takes_the_flags_and_the_ports(monkeypatch):
     # is asking for that port, not for each of its characters.
     operations._overlay({"with_ports": True, "ports": "only"})
     assert overlay_calls[-1]["select"] == ["only"]
+
+
+# ---- simulate.list and the snapshots of simulate.run ------------------------
+#
+# What the IDE's Validation tab is enabled by (what an object declares under
+# 'simulate:') and what its Simulation tab shows (a run's two pictures, as
+# bytes: the daemon may be on another machine).
+
+
+def install_fake_simulation(monkeypatch, declared):
+    def of_shape(shape):
+        return declared.get(shape.name, [])
+
+    install_fake_partcad_modules(monkeypatch, {"partcad.simulation": {"of_shape": of_shape}})
+
+
+def declared_simulation(name, **config):
+    return types.SimpleNamespace(
+        name=name,
+        desc=config.get("desc"),
+        scene=config.get("scene", "//builtin/scene:subject"),
+        simulation=config.get("simulation"),
+        validation=config.get("validation"),
+    )
+
+
+def test_simulate_list_names_what_an_assembly_declares_without_running_it(monkeypatch):
+    install_fake_simulation(
+        monkeypatch,
+        {"stack": [declared_simulation("stands", desc="Nothing moves", simulation="sim-mujoco:mujoco")]},
+    )
+    session, _ = make_session()
+    stack = FakeObject("stack")
+    session.partcad_ctx.shapes[("assembly", "//:stack")] = stack
+
+    result = operations.simulate_list(session, {"package": "//", "object": "stack", "kind": "assembly"})
+
+    assert result["object"] == "//:stack"
+    assert result["kind"] == "assembly"
+    assert result["simulations"] == [
+        {
+            "name": "stands",
+            "desc": "Nothing moves",
+            "scene": "//builtin/scene:subject",
+            "simulation": "sim-mujoco:mujoco",
+            "validation": None,
+        }
+    ]
+
+
+def test_simulate_list_names_what_a_scene_declares(monkeypatch):
+    """A stack of blocks is a scene, and the Validation tab lists its claims as it lists a part's."""
+    install_fake_simulation(monkeypatch, {"pile": [declared_simulation("stands", simulation="sim-mujoco:mujoco")]})
+    session, _ = make_session()
+    session.partcad_ctx.shapes[("scene", "//:pile")] = FakeObject("pile")
+
+    result = operations.simulate_list(session, {"package": "//", "object": "pile", "kind": "scene"})
+
+    assert (result["object"], result["kind"]) == ("//:pile", "scene")
+    assert [entry["name"] for entry in result["simulations"]] == ["stands"]
+
+
+def test_simulate_list_of_an_object_that_declares_nothing_is_empty_rather_than_an_error(monkeypatch):
+    install_fake_simulation(monkeypatch, {})
+    session, _ = make_session()
+    session.partcad_ctx.shapes[("part", "//:block")] = FakeObject("block")
+
+    result = operations.simulate_list(session, {"package": "//", "object": "block"})
+
+    assert result["kind"] == "part"
+    assert result["simulations"] == []
+
+
+def test_simulate_list_says_which_object_it_could_not_find(monkeypatch):
+    install_fake_simulation(monkeypatch, {})
+    session, _ = make_session()
+
+    with pytest.raises(JsonRpcError) as raised:
+        operations.simulate_list(session, {"package": "//", "object": "nope", "kind": "assembly"})
+    assert "Assembly //:nope is not found" in str(raised.value)
+
+
+def test_the_snapshots_of_a_run_come_back_as_bytes_when_asked(tmp_path):
+    (tmp_path / "snapshot-before.png").write_bytes(b"\x89PNG before")
+    session, _ = make_session()
+
+    images = operations._inline_snapshots(
+        session.partcad,
+        {"before": str(tmp_path / "snapshot-before.png"), "after": str(tmp_path / "gone.png")},
+    )
+
+    # The one that is there, named and typed; the one that is not is left out
+    # rather than failing the run it belongs to.
+    assert set(images) == {"before"}
+    assert images["before"]["filename"] == "snapshot-before.png"
+    assert images["before"]["extension"] == "png"
+    assert base64.b64decode(images["before"]["content"]) == b"\x89PNG before"

@@ -99,6 +99,23 @@ at all).
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
 
+- **What an object is required to be is one module** (`requirements.py`): the `requirements:` section of a
+  part, an assembly, a scene or a sketch -- `features` in words, and `ports`, `interfaces` and `physics` where
+  any part of each may be null and the rest is a constant or a comparison (`>0`, `!0`, joined with commas). Its
+  `check_async()` is what `pc test`'s `requirements` check runs *and* what the daemon's `requirements.check`
+  answers the IDE's Requirements tab with, so the two cannot disagree; nothing else reads the section. Two rules
+  in it are deliberate. A location requirement's middle element is the direction a frame *faces* (its Z axis),
+  not the rotation axis a port's location is written with -- "faces down" is what a requirement means, and a
+  port facing down is written as half a turn about X (`facing()` is the rule). And a requirement on something
+  PartCAD cannot find out fails rather than passes. What a physical property *is* is not decided here at all: it
+  is `physics.resolved_async()`, the resolution `pc info` reports (stated, else lent by the material, else worked
+  out from the solid, or an assembly's parts combined), so a requirement and `pc info` cannot disagree -- and an
+  assembly one of whose parts weighs nothing known has no mass to compare. Which physical properties may be required is
+  read off the schema (`requirement-physics`, which a test holds to `physics` less a connection's properties),
+  so a field added there needs nothing here. The check is never cached: what it reads -- the requirements, the
+  ports and interfaces, which can live in other packages, the material -- is mostly not what a shape's cache key
+  is made of.
+
 - **Software is not a shape** (`software.py`, `software_factory*.py`): a package's `software:` section declares
   the files a product ships with -- firmware images, binaries -- and `Software` deliberately does not inherit
   `Shape`. There is no geometry, so nothing here renders, exports, tessellates or caches a shape; what it shares
@@ -281,7 +298,8 @@ at all).
   their models and pictures, which a key over every file would be moved by; a revision alone misses a
   local edit. Each file is read once per process and re-read only when its size or modification time
   changes, or while it was written in the last three seconds (the "racily clean" case) -- the
-  modification time decides whether to read, never what the key is.
+  modification time decides whether to read, never what the key is. On top of all that, the **version**
+  the script and the wrapper report (`code_version`), the same `CACHE_VERSION` a shape is keyed on.
 
   **Nothing in a key may describe the sandbox that runs it.** Every sandbox type -- conda, venv, none,
   docker, remote, and the ones after them -- is expected to be reproducible and equivalent, so an entry
@@ -297,7 +315,10 @@ at all).
   For a simulation the subject is the *scene*, whose key covers the subject through its `subject` parameter
   and its links, plus the plugin, the declaration's `params`, how the scene is exported for it, and the
   scene's world as the facts it *resolved* to (a `medium:` is a reference into another package, whose
-  density can change without the scene's key moving). The
+  density can change without the scene's key moving), and the pictures the run is asked for
+  (`simulation.snapshot_request`: the scene's `render: png:` viewpoint and size), which are files in the run
+  directory and so come back with a hit -- a scene looked at from somewhere else is another question, not
+  last viewpoint's pictures. The
   `validation:` is deliberately not in it: it is re-evaluated on a hit, so editing it re-judges the run. A
   subject with no key (`cache: false`) is never cached, and only successes are stored, for the reason the
   verdict cache does not store an unrunnable analysis. The key is worked out without building the subject, so

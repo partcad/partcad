@@ -77,6 +77,29 @@ def test_the_key_follows_the_subject_the_question_and_the_scripts(tmp_path):
     assert key() != first
 
 
+def test_the_key_follows_the_version_the_scripts_report(tmp_path, monkeypatch):
+    """The 'CACHE_VERSION' a script states is in the key on its own, beside its content."""
+    from partcad import code_version
+
+    script = tmp_path / "solve.py"
+    script.write_text("CACHE_VERSION = 1\n")
+    first = cache_artifacts.question_hash("x", "s", {"load": 5}, [str(script)]).get()
+    monkeypatch.setattr(code_version, "declared", lambda path: 2)
+    assert cache_artifacts.question_hash("x", "s", {"load": 5}, [str(script)]).get() != first
+
+
+def test_a_script_that_states_no_version_keys_as_before_there_were_versions(tmp_path):
+    """Adopting 'CACHE_VERSION' costs nothing until a script first raises it."""
+    script = tmp_path / "solve.py"
+    script.write_text("v = 1\n")
+    expected = CacheHash("x", cache=True)
+    expected.add_string("artifact-v%d" % cache_artifacts.VERSION)
+    expected.add_string("s")
+    expected.add_dict({"load": 5})
+    expected.add_filename(str(script))
+    assert cache_artifacts.question_hash("x", "s", {"load": 5}, [str(script)]).get() == expected.get()
+
+
 # --------------------------------------------------------------------------- #
 # What is stored and what comes back                                          #
 # --------------------------------------------------------------------------- #
@@ -373,12 +396,19 @@ def simulated(tmp_path, monkeypatch):
             f.write("scene")
         return path
 
-    async def run(_ctx, _impl, directory, _scene_file, _declaration, _subject, _kind):
+    async def run(_ctx, _impl, directory, _scene_file, _declaration, _subject, _kind, snapshot=None):
         runs.append(directory)
         trajectory = os.path.join(directory, "trajectory.csv")
         with open(trajectory, "w") as f:
             f.write("run %d" % len(runs))
-        return {"success": True, "before": {"z": 10.0}, "after": {"z": 9.9}, "trajectory": trajectory}
+        result = {"success": True, "before": {"z": 10.0}, "after": {"z": 9.9}, "trajectory": trajectory}
+        if snapshot:
+            # A plugin that draws: the picture of how it ended, as asked.
+            name = snapshot["files"]["after"]
+            with open(os.path.join(directory, name), "w") as f:
+                f.write("picture of run %d" % len(runs))
+            result["snapshots"] = {"after": name}
+        return result
 
     monkeypatch.setattr(simulation, "_export_scene_async", export)
     monkeypatch.setattr(simulation, "_run_plugin_async", run)
@@ -413,6 +443,36 @@ def test_the_validation_is_judged_again_rather_than_remembered(simulated):
     )
     assert _run(simulation.run_async(ctx, part, "part", stricter)).passed is False
     assert len(runs) == 1
+
+
+def test_the_pictures_come_back_with_a_cached_run(simulated):
+    """They are files in the run directory, which is what the cache keeps."""
+    ctx, part, runs = simulated
+    (entry,) = simulation.of_shape(part)
+
+    _run(simulation.run_async(ctx, part, "part", entry))
+    second = _run(simulation.run_async(ctx, part, "part", entry))
+
+    assert len(runs) == 1
+    with open(second.snapshots["after"]) as f:
+        assert f.read() == "picture of run 1"
+
+
+def test_a_scene_looked_at_from_elsewhere_is_another_run(simulated, monkeypatch):
+    """The pictures are part of the answer, so where they are taken from is part
+    of the question: the old ones are not this viewpoint's."""
+    ctx, part, runs = simulated
+    (entry,) = simulation.of_shape(part)
+    _run(simulation.run_async(ctx, part, "part", entry))
+
+    asked = simulation.snapshot_request
+
+    def from_the_front(ctx, scene):
+        return dict(asked(ctx, scene), viewport_origin=[0.0, -100.0, 0.0])
+
+    monkeypatch.setattr(simulation, "snapshot_request", from_the_front)
+    _run(simulation.run_async(ctx, part, "part", entry))
+    assert len(runs) == 2
 
 
 def test_another_simulation_question_is_another_run(simulated):

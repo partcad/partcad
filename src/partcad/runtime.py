@@ -219,7 +219,7 @@ class Runtime:
     # that was noticed because no implementation ran in a container until now.
     # One copy of each is what keeps them from drifting again.
 
-    def _rpc_params(self, stdin, cwd, input_files, output_files, input_dirs):
+    def _rpc_params(self, stdin, cwd, input_files, output_files, input_dirs, output_dirs=None):
         """The parameters a container is asked with.
 
         'stdin' is base64 because the server decodes it as base64, which is not
@@ -232,20 +232,26 @@ class Runtime:
         for file_path in input_files:
             with open(file_path, "rb") as f:
                 file_contents[file_path] = base64.b64encode(f.read()).decode("utf-8")
-        return {
+        params = {
             "stdin": base64.b64encode(stdin.encode("utf-8")).decode("utf-8") if stdin else None,
             "cwd": cwd,
             "input_files": file_contents,
             "output_files": output_files,
             "input_dirs": {path: pack_directory(path) for path in input_dirs},
         }
+        if output_dirs:
+            params["output_dirs"] = list(output_dirs)
+        return params
 
-    def _rpc_result(self, response, output_files):
+    def _rpc_result(self, response, output_files, output_dirs=None):
         """What a container answered, as (stdout, stderr, exit code).
 
         The output files it produced are written where the caller asked for
         them, which is the point of naming them: the file was written inside the
-        container, under a name of the container's choosing.
+        container, under a name of the container's choosing. So are the output
+        directories, for a command whose results are whatever it wrote into one
+        -- a simulation plugin's pictures -- rather than a file it was told the
+        name of.
         """
         result = response["result"]
         stdout = result["stdout"]
@@ -258,6 +264,12 @@ class Runtime:
                     f.write(base64.b64decode(file_contents))
             else:
                 pc_logging.error(f"Unsolicited output file: {file_name}")
+        for directory, archive in (result.get("output_dirs") or {}).items():
+            if directory in (output_dirs or []):
+                os.makedirs(directory, exist_ok=True)
+                container_service.unpack_directory(archive, directory)
+            else:
+                pc_logging.error(f"Unsolicited output directory: {directory}")
         # What the command exited with, which the server reports. The fallback
         # is for an image built before it did, and is what this used to do for
         # every container: read any stderr at all as a failure.

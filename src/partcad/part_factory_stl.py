@@ -18,6 +18,8 @@ from .process_crash import command_failure
 
 @telemetry.instrument()
 class PartFactoryStl(PartFactoryHomogen, PartFactoryFile):
+    WRAPPERS = ("stl.py",)
+
     PYTHON_SANDBOX_VERSION = "3.11"
 
     def __init__(self, ctx, source_project, target_project, config):

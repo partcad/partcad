@@ -146,11 +146,16 @@ def check_source(assembly, ignore_manufacturability: bool = False):
 #
 
 
-# Where an illustration of the book is looked at from, as camera positions: the
-# iso views from above first - the view a picture of an object is expected to
-# be - and then a view of each side from a little above it. An exploded step is
-# drawn from whichever shows its gap best (see 'view_along'); everything else
-# from the first.
+# Which direction an illustration of the book is looked at from, as the
+# 'viewport_origin' it is drawn with: the iso views from above first - the view
+# a picture of an object is expected to be - and then a view of each side from a
+# little above it. An exploded step is drawn from whichever shows its gap best
+# (see 'view_along'); everything else from the first.
+#
+# They are directions and only directions - the renderer looks along them
+# whatever it draws and wherever that sits ('LOOK_AT' in
+# 'builtin/render/render_svg.py') - so the direction '_gap_visibility' judges is
+# the one the picture is drawn from.
 ISO_VIEWS = ((100, -100, 100), (100, 100, 100), (-100, 100, 100), (-100, -100, 100))
 SIDE_VIEWS = ((0, -100, 50), (100, 0, 50), (0, 100, 50), (-100, 0, 50))
 
@@ -171,7 +176,7 @@ def _gap_visibility(view, along) -> float:
 
 
 def view_along(along=None):
-    """The camera position an illustration is drawn from.
+    """The direction an illustration is drawn from, as a 'viewport_origin'.
 
     Chosen here rather than read from the package: a package's 'render:' says
     how *its* drawings look - a 'viewport_origin' that suits its catalogue

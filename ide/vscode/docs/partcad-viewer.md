@@ -4,6 +4,7 @@ The panel is a strip of tabs over one object, not a canvas:
 
 | Tab | Shown for | Where it comes from |
 | --- | --- | --- |
+| **Requirements** | an object that declares `requirements:` | the daemon's `requirements.check` (the verdicts `pc test -f requirements` reaches) |
 | **3D** | everything | the viewer protocol, from whichever `partcad` asked for the shape to be shown |
 | **2D** | parts, assemblies, scenes, sketches | the daemon's `render.inline` (a picture `pc render` makes) |
 | **Draft** | parts, assemblies | the daemon's `render.inline`, with a drawing package (`pc render -e`) |
@@ -14,8 +15,10 @@ The panel is a strip of tabs over one object, not a canvas:
 | **Buy** | whatever is bought | the daemon's `supply.quote` (the cart `pc supply quote` fills) |
 | **Bill of Materials** | parts, assemblies | the daemon's `bom` (what `pc bom` prints) |
 | **Assembly** | assemblies | the daemon's `assembly.guide` (the book `pc instructions -t html\|pdf` writes) |
+| **Simulation** | parts, assemblies that declare `simulate:` | the daemon's `simulate.list` (what the object declares) and `simulate.run` (what `pc sim -f <name>` runs) |
 
-The 3D view is always the first: "show this part" means the geometry. The rest are questions about
+The 3D view is what a show opens on: "show this part" means the geometry. Requirements is the one tab in front
+of it, and only for an object that declares any — see below. The rest are questions about
 `<package>:<name>` that only the extension host can put to the daemon — the panel's CSP forbids every network
 request, and the daemon is behind a JSON-RPC connection anyway — so the renderer asks (`fetchTab`) and the host
 answers (`tabData`), the first time a tab is looked at. That is also why the show message carries the object's
@@ -242,8 +245,12 @@ the protocol has no authentication.
 | `src/webview/assembly.ts` | The Assembly tab: the instructions in a format, with Save |
 | `src/webview/document.ts` | `partcad/document.py`'s model, drawn: a page, or the book paged through |
 | `src/webview/supply.ts` | The Buy tab: the list, and one item's suppliers |
+| `src/webview/requirements.ts` | The Requirements tab: the marks, and the features with what validates each |
+| `src/partcad/requirements.py` | What a requirement means and whether the model meets it, for this tab and for `pc test` |
 | `src/common/garage.ts` | Where the Build vs Buy choices are kept, on this machine |
 | `src/webview/cae.ts` | The FEA and CFD tabs: the result model, and the findings |
+| `src/webview/simulation.ts` | The Simulation tab: the simulations declared, and the scene before and after one ran |
+| `src/partcad/simulation.py` | What `simulate:` declares, how a run goes, and the pictures a plugin is asked to take |
 | `src/partcad/cae.py` | What a part declares about an analysis, and in what units |
 | `src/partcad/assembly_guide.py` | The instruction book, built once for every format |
 | `src/partcad/document.py` | The renderer-independent document model |
@@ -342,6 +349,26 @@ trip and switching back to it costs none. Every request carries the generation o
 answer for an older one is dropped: a bill of materials walks the whole assembly tree and a supply quote goes
 out to the network, so a round trip easily outlives a change of selection.
 
+**Requirements** is what the object was asked to be, which is read before what it is — so it is the one tab in
+front of Design, and it is there only for an object that declares a `requirements:` section: a tab with nothing
+to say in front of the strip would only push the others along. Whether there is one is asked on every show,
+like Build vs Buy, and it is cheap: `requirements.check` without `verify` reads the declaration and builds
+nothing. The strip is rebuilt when that answer changes whether the tab is offered, and a reader who was on the
+tab for the last object lands on it again.
+
+Opening the tab is what asks for the verdicts (`verify: true`), and they are exactly what `pc test -f
+requirements` reaches, because both are `partcad/requirements.py`. While they are on the way every mark is
+pending — a requirement nobody has measured yet is neither met nor unmet. Then each port, interface and physical
+property required gets a green or a red mark (the editor's own test-explorer colours) beside what was required and
+what was found. A `simulate:` entry naming a feature that is not declared, and a requirement that cannot be
+read, are listed after them as problems, and fail the same way.
+
+The features follow, as a table: the name, what the feature is, and what validates it — a banner per
+`simulate:` entry that names it (`feature:`), then an **LLM** banner on every feature, whose tooltip names the
+skill that does it: "Validate using /pc-validate". The LLM is on the features a simulation already stands
+behind as well, because a simulation demonstrates the claim it was written for and cannot say whether that is
+the whole of the feature.
+
 **Bill of Materials** is `Assembly.get_bom_detailed_async()` — the tree flattened and counted, with the store
 data that says what to order — in the columns `pc bom` prints it in.
 
@@ -412,3 +439,43 @@ where that one can be bought; a part has no list to choose from and opens on the
 A package that declares no `suppliers:` is the ordinary case, not a failure, so the lookup is skipped for its
 items rather than run and reported: in the IDE `pc_logging.error` is a modal popup, and
 `Context.find_part_suppliers()` raises one per part.
+
+The Validation group holds **Simulation** and **Process Emulation**, which has nothing in it yet and is always
+disabled -- so the group is enabled exactly when Simulation is. Simulation is offered only for an object that
+declares a simulation: whether it does is asked on every show (`simulate.list`, which reads the `simulate:`
+section and runs nothing), exactly as Build vs Buy's tree is, and the panel's strip is rebuilt when the answer
+arrives.
+
+The tab is laid out like Build: the simulations on the left, in the order the object declares them, the first
+selected; the selected one on the right. Selecting one runs it -- `simulate.run`, which is `pc sim -f <name>` --
+the first time it is looked at for this object, and the answer is kept until the next show. What comes back is
+the verdict of its `validation:` expression, said once: as a mark before the simulation's name in the list (a
+green ✓ when it held, a red ✗ when it did not, a red ! when it could not run, a muted • when there was nothing
+to check it against, … while it runs, and an empty slot of the same width before it has run, so the names line
+up). The page itself does not repeat the name or the verdict.
+
+Over the page is the Draft tab's toolbar, with the Draft tab's classes: **Simulated by**, which plugin runs it,
+and **Simulate**. The list is the two plugins `//pub/feature/simulate` registers (`SIMULATION_PLUGINS`), and the
+one the simulation names is selected -- matched by what follows its `:`, because a package usually names it
+through a dependency of its own (`sim-mujoco:mujoco`), and offered as itself, first, when it is neither. While
+that one is selected nothing is overridden; choosing another runs the simulation with it (`pc sim --plugin`),
+the way choosing a drawing package draws again, and **Simulate** runs it afresh. Answers are kept per
+simulation *and* per plugin, so switching back to one already run shows it. Under the toolbar is what the
+simulation is about, then two pictures of the scene: before anything moved on the left, after the run on the
+right, an arrow between them.
+
+Under the pictures is what the verdict is made of, folded away behind a strip of three titles: **Criteria** (the
+`validation:` expression), **Before** and **After** (the two objects the plugin reported, which are what that
+expression is evaluated over, as indented JSON with each short array of plain values on one line --
+`prettyJson` -- so a position or a quaternion reads as one). A title opens its view and, when it is the one
+open, folds it away again; the open one carries ▾. One is open at a time, the pictures shrink to make room
+rather than being pushed off the page, and which one is open is kept from one simulation to the next, so the
+*after* of several runs can be compared by clicking down the list. A strip rather than three disclosure
+triangles, because three of those open at once would leave no room for the pictures.
+
+Those pictures are taken by the simulation plugin, not drawn here. PartCAD asks every run for them, from where
+the scene is looked at when it is rendered -- `viewport_origin` and `viewport_up` of its `render: png:`,
+the scene's own over its package's, and the corner a part is drawn from when neither says -- and the plugin
+draws the scene as its simulator had it at the first instant and the last, both framed alike so that what moved
+is seen to have moved. They come back as bytes rather than paths for the reason a render does. A plugin that
+takes none -- one older than the request -- leaves the verdict standing and the tab says there are no pictures.

@@ -42,3 +42,7 @@ ready to simulate and checks the claim with `pc sim`.
 - Part → follow **`/pc:gen-part`**.
 - Assembly → follow **`/pc:gen-assembly`** (which itself uses `/pc:gen-part` for
   any missing components).
+
+The part and the assembly flows write down what the object is required to be
+as its `requirements:` before judging the result against them, and
+`/pc:validate` gives a verdict on every one of them afterwards.

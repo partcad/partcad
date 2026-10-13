@@ -39,6 +39,8 @@ class SolidityTest(Test):
     need checking.
     """
 
+    WRAPPERS = ("solidity.py",)
+
     def __init__(self) -> None:
         super().__init__("solidity")
 

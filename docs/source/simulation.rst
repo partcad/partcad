@@ -169,6 +169,14 @@ report prints beside the verdict -- and states:
 ``desc``
   The claim in words, for whoever reads the result.
 
+``feature``
+  The feature of the object's :ref:`requirements` that this simulation
+  demonstrates, by name, or a list of them. Nothing that runs the simulation
+  reads it: it is what lets a reader of the requirements -- the IDE's
+  Requirements tab, an agent running ``/pc:validate`` -- see which features a
+  simulation stands behind. ``pc test`` fails an object one of whose simulations
+  names a feature its requirements do not declare.
+
 An object may declare as many simulations as it likes, and two of them can
 make opposite claims about one part in two worlds: ``float`` rises in ``tank``
 and falls in the default scene, which is a vacuum.
@@ -508,8 +516,25 @@ declaration with no ``validation:`` is run and reported as having run, which is
 how to look at what a plugin reports before writing the condition. Each run
 gets a directory of its own under PartCAD's state directory, one per object and
 simulation and emptied by the next run, holding the scene file the engine was
-handed, its meshes and whatever the plugin wrote. See ``pc sim`` in :doc:`cli`
-for every option.
+handed, its meshes, whatever the plugin wrote and the pictures it took (see
+:ref:`sim-snapshots`). See ``pc sim`` in :doc:`cli` for every option.
+
+Two of those options are about what is asked and what is kept:
+
+.. code-block:: shell
+
+  # The same claim, with Gazebo instead of the engine the declaration names
+  pc sim -a stable --plugin //pub/feature/simulate/gazebo:gazebo
+  # The state the run started from and ended in, as files
+  pc sim -f sinks block --before before.yaml --after after.json
+
+``--plugin`` runs a simulation with another plugin than the one it names;
+everything else the declaration says -- the scene, the offset, the parameters,
+the validation -- is asked of that plugin instead, and the answer is cached as
+the different question it is. ``--before`` and ``--after`` write the two states
+a validation is evaluated over, as YAML, or as JSON with ``--json`` or a path
+ending in ``.json``. They write one simulation's, so name the object and, when
+it declares several, the simulation with ``-f``.
 
 .. _sim-test:
 
@@ -568,6 +593,60 @@ for every check. An object's simulations are checked where the object is tested
 in its own right, and not again for every assembly whose manufacturability
 check walks the parts it is made of.
 
+.. _sim-snapshots:
+
+Pictures of a run
+=================
+
+Every run is also asked for two pictures of the scene: one before anything
+moved and one when the run is over. They are what the IDE's **Validation →
+Simulation** tab shows side by side, and the one thing a reader can check a
+verdict against without reading numbers -- a validation that passed for the
+wrong reason, a block that fell *through* another rather than off it, is plain
+to see in them.
+
+They are taken from where the scene is looked at when it is rendered: the
+``viewport_origin`` and ``viewport_up`` of its ``render: png:`` configuration,
+read exactly as ``pc render -t png`` reads them -- the scene's own, or failing
+that its package's -- and the corner a part is drawn from when neither says
+anything. So a package that has said how its world is best looked at has said
+it once, for both:
+
+.. code-block:: yaml
+
+   scenes:
+     workcell:
+       type: assy
+       parameters:
+         subject:
+           type: string
+           default: ""
+       render:
+         png:
+           viewport_origin: [0, -100, 30]   # from the front, a little above
+           viewport_up: [0, 0, 1]
+
+The plugin is handed this in the request as ``snapshot`` -- the viewpoint, the
+picture's ``width`` and ``height`` (the PNG's), and the name of the file each
+picture goes to, relative to the directory the run may write into -- and says
+which it drew in its result:
+
+.. code-block:: python
+
+   output = {
+       "success": True,
+       "before": {...},
+       "after": {...},
+       "snapshots": {"before": "snapshot-before.png", "after": "snapshot-after.png"},
+   }
+
+Pictures are optional. A plugin that cannot draw on the machine it runs on, or
+that predates them, reports none and the run is exactly as good: no verdict
+depends on a picture. ``pc sim`` says where the pictures of each run were
+written, and ``--json`` lists them under ``snapshots``. Both plugins draw them
+from their engine's own geometry at the engine's own poses, on the CPU, so a
+picture needs no GPU in the sandbox.
+
 .. _sim-caching:
 
 Caching runs
@@ -581,10 +660,12 @@ and runs nothing, and only a run that succeeded is kept.
 For a simulation the question is the scene -- which covers the object, a
 parameter of it, and so its geometry and everything it is built from -- plus the
 plugin and every option it resolved to, its environment, the declaration's
-``params``, the exporter and its options, and the content of every script
-involved. A ``medium:`` is in it as the facts it resolved to rather than as a
-name, so a correction to the density of ``:water`` in the package that
-catalogues it runs the simulation again.
+``params``, the exporter and its options, the pictures the run is asked to
+take, and the content of every script involved. A ``medium:`` is in it as the
+facts it resolved to rather than as a name, so a correction to the density of
+``:water`` in the package that catalogues it runs the simulation again. The
+pictures come back with a cached run like any other file it wrote, and a scene
+looked at from somewhere else is a different question, which runs again.
 
 A ``validation:`` is not part of the question: editing one re-judges the cached
 run rather than repeating it, in ``pc sim`` and in ``pc test`` alike. ``pc
@@ -808,7 +889,8 @@ Writing a plugin of your own
 A simulation plugin is declared the way an export implementation is -- a script,
 the sandbox it needs, and its parameters -- and the contract is narrow: a scene
 with the object in it goes in, as a file in the format the plugin names, and
-JSON carrying ``before`` and ``after`` comes out. See :ref:`simulate`.
+JSON carrying ``before`` and ``after`` comes out -- and, if it can draw them,
+the two pictures of :ref:`sim-snapshots`. See :ref:`simulate`.
 
 The exporter that writes that file is handed the scene's tree (``decode:
 false``), and whatever it writes, which nodes are one body and how the joints

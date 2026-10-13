@@ -14,6 +14,8 @@ from .test import Test
 
 
 class ManufacturabilityAdditiveSolidTest(Test):
+    WRAPPERS = ("manufacturability.py",)
+
     def __init__(self) -> None:
         super().__init__("manufacturability-additive")
 

@@ -132,9 +132,23 @@ End-to-end walkthrough, with the data flow diagram and what each tab is:
 send (`PartcadViewer`). `src/webview/` is what runs *inside* that webview: `viewer.ts` is the shell,
 `scene.ts` the three.js renderer, and one module per tab beside it.
 
+**A show can say which tab to open on** (`tab`, from `pc ide view --design-2d` and its siblings; `KEY_TAB` in
+`src/partcad_ide_client/protocol.py`). It rides on the show rather than arriving as a message of its own,
+because the show is what decides which tabs apply, and because two windows sharing the viewer port share it
+by connection. The renderer hands it to the strips as a *request* (`Tabs.request`) before they are rebuilt for
+the object: a request is opened even when the tab is `secondary`, waits through a rebuild that does not offer
+it yet (Build and Buy, until Build vs Buy has answered; Simulation, until `simulate.list` has), and is forgotten once opened or when the next show
+asks for nothing. The user also withdraws it, by clicking a tab or by a change on the tab they are on that
+rebuilds the strip (`keepCurrent`, a Build vs Buy switch): what they did wins over what a command line asked for
+earlier, so a request waiting for Buy does not pull them off the tab they are working in. `TAB_GROUPS` in `src/webview/messages.ts` is the list of what can be asked for, and a Python
+test holds it to `VIEWER_TABS` on the other side.
+
 **The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA and CFD for a part, then
 Manufacturing: what is built and what is bought, how to build it, the bill of materials, where to buy it and the
-assembly instructions. Only the 3D
+assembly instructions; then Validation: the simulations the object's `simulate:` section declares, each run and
+shown as the scene before and after. In front of all of them, for an object that declares `requirements:`, a
+Requirements tab: asked about on every show (`requirements.check`, a declaration read) and verified when opened,
+by the same code as `pc test -f requirements`. Only the 3D
 view comes over the viewer protocol; every other tab is a question about `<package>:<name>` that the renderer
 cannot ask itself -- the CSP forbids network access and the daemon is behind the host's JSON-RPC connection --
 so it asks the host (`fetchTab`) and the host answers (`tabData`), on first look. Which is why the show
@@ -192,18 +206,40 @@ loading readout is a fraction of the *table* (`totalSize`), because counting a s
 report a download that never happened; and nothing may dispose a parsed group that has been handed out, since
 its geometry is the geometry of every clone of it.
 
-None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote` and `cae.analyze` are the CLI's
-own operations (`pc bom`, the book `pc render -t html` writes, the cart `pc supply quote` fills, the analysis
-`pc cae fea`/`pc cae cfd` runs), asked for as data rather
+None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote`, `cae.analyze` and
+`simulate.run` are the CLI's own operations (`pc bom`, the book `pc render -t html` writes, the cart
+`pc supply quote` fills, the analysis `pc cae fea`/`pc cae cfd` runs, the simulation `pc sim` runs), asked for
+as data rather
 than as a file -- the same rule as everywhere else in this extension: extend the one backend, do not
 reimplement it in TypeScript.
 
-The FEA and CFD tabs are the one pair that *acts* rather than asks: selecting one runs a solver. The field
+The FEA and CFD tabs *act* rather than ask: selecting one runs a solver. The field
 over the model names which -- pre-filled from `cae.defaults` (the user configuration's
 `caeFeaImplementation`/`caeCfdImplementation`) and filled in even when the run failed, which is when a user
 most needs to see what was tried. The model is drawn by its extension, because the format is the
 implementation's choice: a mesh gets an orbit camera, a picture pans and zooms. See
 [docs/partcad-viewer.md](./docs/partcad-viewer.md).
+
+The Simulation tab acts too, and is the one tab whose *group* depends on an answer. Its sibling, Process
+Emulation, is a placeholder and always disabled, so the Validation group is enabled exactly when Simulation is.
+Three things about it are load-bearing:
+
+- **Whether Validation applies is asked on every show.** `simulate.list` reads the object's `simulate:`
+  section and runs nothing, so it is as cheap as `manufacturing.tree`, and it is asked for the same reason:
+  the group is enabled only once the daemon has said there is at least one simulation. When it arrives the
+  panel's *own* strip is rebuilt -- without `keepCurrent`, so a reader who was on Validation for the last
+  object lands on it again -- which no other answer does.
+- **A run has a token of its own, not the tab's** (`simulationRuns` in `viewer.ts`). A reader who selects one
+  simulation and then the next has asked for two runs, and each answer belongs to the simulation it is of; the
+  tab's single token would drop the first. The token also carries the plugin it was asked with ("Simulated
+  by", `pc sim --plugin`), because answers are kept by the pane per simulation *and* plugin for as long as the
+  object is on screen, so going back to one does not start a simulator again; **Simulate** is how one is
+  asked for afresh.
+- **The pictures are the plugin's, not this extension's.** PartCAD asks every run for a picture of the scene
+  before and after, from the scene's own `render: png:` viewpoint, and the plugin draws them; `simulate.run`
+  sends them back as bytes (`inline`), because the daemon may be on another machine. Before is always on the
+  left and after on the right, and a picture the plugin did not take is said to be missing in its place, so
+  the two never swap sides. See "The pictures of a run" in `src/partcad/simulation.py`.
 
 Four things about it are load-bearing:
 
@@ -292,6 +328,18 @@ is the host's, bound in by `.devcontainer/host-sockets-init.sh`. Every 3D pane a
 Geometry reaches the viewer already tessellated: `partcad` renders to binary glTF in a sandbox and sends it
 compressed, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party
 `OCP CAD Viewer` extension, which is why that dependency is gone.
+
+## Opening a workspace from the command line
+
+`pc ide workspace <directory>` opens the folder in an editor and asks for the PartCAD workbench in the window that
+opens it. An editor's command line cannot run a command in a window, so the CLI writes a request first --
+`~/.partcad/ide/requests/<random>.json`, `{"folder", "view": "workbench", "requested"}`, renamed into place --
+and `src/workbenchRequest.ts` takes it: on activation, whenever the window gains focus (an existing window of
+that folder is brought to the front, and activates nothing), and when the workspace's folders change. The
+window whose workspace is the folder runs `workbench.view.extension.partcad-container` and deletes the file;
+an expired one (`REQUEST_TTL_S`, five minutes) is deleted unread by whoever sees it. It is registered before
+the trust gate on purpose: in Restricted Mode the workbench is where the Explorer asks for trust. The Python
+half is `partcad_client.ide`, and the file's layout is written down in both.
 
 ## What the Explorer says while starting
 
@@ -465,6 +513,15 @@ ordinary terminal and gets the tools like any other.
   the top (`TerminalOptions.message` is written into the view, not sent to the shell). Activation runs the health
   checks as a logged process, which ends in a `DONE:` line at the least, so the pair appears at every start, as
   the single terminal used to.
+- **The banner's logo is block characters, not ASCII.** `LOGO` is the logo as pixel art, a quarter of a cell
+  per letter, in its own tones: at 13 columns a line drawing of it reads as a dotted outline, and this reads as
+  the logo. Two facts hold it up. A cell can show two colours -- a quadrant character's foreground and
+  background -- which a test checks of every 2x2 square. And the terminal leaves block characters (U+2500 to
+  U+259F) out of `terminal.integrated.minimumContrastRatio`, which recolours text against the theme's background
+  and would otherwise turn a light theme's yellow into brown, tone by tone. A cell's main tone is its
+  *background* wherever it can be: the terminal draws block characters itself only with GPU acceleration on,
+  and from the font they leave seams between cells, where a background never does. Lines stay within 65
+  columns -- the logo, a gap and the longest sentence -- for the shell's half of a split panel.
 - **Closing a view keeps it closed.** `partcad.reopenTerminal` defaults to `false` now; it used to reopen the
   view on the next log line, which is fighting the user. "PartCAD: Show Terminal" and the `PartCAD` entry in the
   terminal panel's "+" menu (`contributes.terminal.profiles`, `partcad.terminal`) open one again. In Restricted
@@ -791,6 +848,33 @@ Three things the bundled run needs, all of which have already cost a debugging s
 - **A first `Display` provisions a conda environment**, which takes about three minutes on a clean machine
   against roughly two seconds warm. A test that exercises geometry needs a warmed `~/.partcad/conda` or a
   budget that admits the cold path; the 60s Mocha timeout is sized for activation, not for that.
+
+### The end-to-end test, in a real editor
+
+`tests/ide/test_ide_e2e.py` (Python, beside the other `pc` tests) does what a person does: `pc ide install` a
+`.vsix` into an editor with a profile of its own, `pc ide workspace examples`, `pc ide view --design-3d` the logo
+assembly and `pc ide view --analysis-fea` the cantilever -- and fails on anything going wrong on the way: an
+`ERROR` from the daemon in what `pc` printed, an `[error]` the extension logged, a console error or uncaught
+exception in any PartCAD webview, the viewer's error overlay, or an error in the FEA pane. It drives the editor
+over the DevTools protocol (`--remote-debugging-port`) and attaches to the webviews' own targets, because the
+viewer is an out-of-process frame inside another one, which Playwright's `connect_over_cdp` does not reach.
+
+It is off unless `PC_TEST_IDE_E2E=1`; `PC_TEST_IDE_EDITOR` and `PC_TEST_IDE_VSIX` name the editor and the package,
+or VSCodium is downloaded (Linux, macOS or Windows) and the package built from this directory. It starts an
+`Xvfb` on Linux where there is no display. The FEA step needs the CalculiX solver: from the plugin's image where a
+container runtime is running, or `ccx` on the `PATH` (`apt install calculix-ccx`) where it is not. Where there is
+neither and no runtime could have run the image, the test accepts the excuse `pc test` accepts
+(`CaeTest._verdict`) and checks the rest of the tab.
+
+CI runs it as `IDE (end to end)` in `.github/workflows/test.yml`, gated on the `ide-e2e` output of
+`changed-scopes` (a change to `ide/`, to the source or to its dependencies): on `ubuntu-latest` for a pull
+request, and on `windows-latest` and `macos-latest` as well from the merge queue up (`OSES_IDE_E2E`). The job
+fails on a skip, since running this one test is all it is for, and uploads the editor's logs and the viewer's
+screenshots (`PC_TEST_IDE_ARTIFACTS`).
+
+That test is also why `surface.ts` asks a throwaway canvas for WebGL 2 before three is asked: three
+`console.error`s three lines and then throws in a window with no GPU, and a missing GPU is a fallback to the
+painter, not an error.
 
 ## Build / package
 

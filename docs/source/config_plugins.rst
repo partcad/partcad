@@ -191,6 +191,11 @@ What each key means is in :ref:`sim-declaring`, the scene an object is placed in
 and how to write one in :ref:`sim-scenes`, and what a ``validation:`` is
 evaluated over in :ref:`sim-validation`.
 
+Every run is also asked for a picture of the scene before and after, taken from
+where the scene is rendered from: the ``viewport_origin`` and ``viewport_up`` of
+its ``render: png:``, or of its package's when the scene states none; see
+:doc:`simulation`.
+
 Simulation plugins
 ------------------
 

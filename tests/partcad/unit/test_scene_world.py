@@ -479,7 +479,7 @@ def stub_run(monkeypatch):
     async def export(_ctx, _scene, _impl, directory):
         return os.path.join(directory, "scene.tf")
 
-    async def run(_ctx, _impl, _directory, _scene_file, _declaration, _subject, _kind):
+    async def run(_ctx, _impl, _directory, _scene_file, _declaration, _subject, _kind, snapshot=None):
         return {"success": True, "before": {}, "after": {}}
 
     monkeypatch.setattr(simulation, "_export_scene_async", export)

@@ -107,6 +107,11 @@ sys.path.append(os.path.dirname(__file__))
 import ocp_serialize
 import wrapper_common
 
+# What this wrapper reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
+
 # Where the implementation script's path is: the third argument, after the two
 # 'wrapper_common.handle_input()' spends on the output path and the working
 # directory.

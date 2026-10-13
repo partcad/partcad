@@ -43,6 +43,11 @@ sys.path.append(os.path.dirname(__file__))
 import ocp_serialize
 import wrapper_common
 
+# What this wrapper reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
+
 # What is handed to export_gltf's own deflection argument once the shape has been
 # meshed here. It is not a deflection: it is "whatever is already triangulated is
 # fine", which is how export_gltf is told to leave the mesh alone. See _to_glb.

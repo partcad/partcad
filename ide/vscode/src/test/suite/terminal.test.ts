@@ -16,7 +16,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 
-import { PartcadTerminals, PartcadTerminalsOptions, ReplayBuffer, SHELL_BANNER } from '../../terminal';
+import { LOGO, PartcadTerminals, PartcadTerminalsOptions, ReplayBuffer, SHELL_BANNER } from '../../terminal';
 
 const ERASE = '\x1b[1A\x1b[2K';
 const NO_WRAP = '\x1b[?7l';
@@ -72,10 +72,27 @@ suite('PartCAD terminal: the shell banner', () => {
     test('says what the shell is for, and fits half a terminal', () => {
         const plain = SHELL_BANNER.replace(/\x1b\[[0-9;]*m/g, '');
         assert.ok(plain.includes('Start your favorite coding agent here,'));
-        assert.ok(plain.includes('side by side with the PartCAD terminal!'));
+        assert.ok(plain.includes('side by side with the PartCAD terminal log view,'));
+        assert.ok(plain.includes('or simply run "pc"!'));
         for (const line of plain.split('\r\n')) {
-            assert.ok(line.length <= 60, `too wide for a split panel: ${line}`);
+            assert.ok(line.length <= 65, `too wide for a split panel: ${line}`);
             assert.ok(!line.includes('\n'), 'a pseudoterminal-style \\r\\n, not a bare \\n');
+        }
+    });
+
+    test('the logo is whole cells, each in at most two colours', () => {
+        assert.strictEqual(LOGO.length % 2, 0);
+        for (const row of LOGO) {
+            assert.strictEqual(row.length, LOGO[0].length, `a ragged row: ${row}`);
+            assert.match(row, /^[.tsbd]+$/);
+        }
+        assert.strictEqual(LOGO[0].length % 2, 0);
+        for (let y = 0; y < LOGO.length; y += 2) {
+            for (let x = 0; x < LOGO[0].length; x += 2) {
+                const cell = new Set([LOGO[y][x], LOGO[y][x + 1], LOGO[y + 1][x], LOGO[y + 1][x + 1]]);
+                // '.' is one of the two: it is the background colour left unset.
+                assert.ok(cell.size <= 2, `cell ${x / 2},${y / 2} needs ${[...cell].join('')}`);
+            }
         }
     });
 });

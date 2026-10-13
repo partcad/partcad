@@ -96,9 +96,10 @@ the file in one (`pc import assembly`) and render it with `pc render`.
 Both commands take the same three options.
 
 `--view` names a direction — `front`, `back`, `left`, `right`, `top`, `bottom`,
-`iso`. `--viewport-origin X,Y,Z` says where to look from and `--viewport-up
-X,Y,Z` which way is up in the picture; each replaces the vector `--view`
-resolved to, so a named view can be tilted by giving one of them alone:
+`iso`. `--viewport-origin X,Y,Z` says which direction to look from — `0,-100,0`
+is the front of any object, wherever it sits — and `--viewport-up X,Y,Z` which
+way is up in the picture; each replaces the vector `--view` resolved to, so a
+named view can be tilted by giving one of them alone:
 
 ```sh
 pc --no-ansi render -t png --view front -O ./out bracket

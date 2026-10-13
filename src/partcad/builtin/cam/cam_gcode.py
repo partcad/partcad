@@ -59,6 +59,11 @@ import build123d as b3d
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 
+# What this implementation reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
+
 # Millimetres per inch. The request is in millimetres whatever the configuration
 # was written in (see 'partcad.cam'), so this is only ever used on the way out.
 MM_PER_INCH = 25.4

@@ -27,6 +27,11 @@ import dxf_metadata
 import ocp_serialize
 import wrapper_common
 
+# What this wrapper reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
+
 
 def as_wires(request):
     """What the selected layers draw, as wires, for a drawing that has no faces.

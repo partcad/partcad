@@ -177,6 +177,11 @@ export interface ViewerMessage {
      */
     package?: string | null;
     keepCamera?: boolean;
+    /**
+     * On a show: the viewer tab to open on ('3d', 'fea', 'supply', ...), or
+     * absent to stay on the one that is open. See KEY_TAB in the Python module.
+     */
+    tab?: string | null;
     /** The object itself, as the root node of its tree. */
     object?: ViewerNode | null;
 }

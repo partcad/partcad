@@ -1,6 +1,6 @@
 ---
 name: gen-assembly
-description: Generate a PartCAD assembly (an ASSY that composes parts with placement and/or mates) from a description, generating or reusing the component parts and validating the result with the PartCAD CLI. Use for /pc:gen-assembly or when the user asks to generate or create an assembly, mechanism, or multi-part product.
+description: Generate a PartCAD assembly (an ASSY that composes parts with placement and/or mates) from a description, writing down what it is required to be, generating or reusing the component parts and validating the result with the PartCAD CLI. Use for /pc:gen-assembly or when the user asks to generate or create an assembly, mechanism, or multi-part product.
 ---
 
 # pc:gen-assembly
@@ -17,6 +17,13 @@ pipeline — this capability is new.
 spatial/mechanical relationships between them: which parts, how many of each, and
 how they attach to or move relative to one another. Clarify only load-bearing
 ambiguities.
+
+Keep apart what the *product* is required to be — what it does, what it mounts
+to, how heavy it may be, what it must be made of or assembled with — from the
+decomposition, which is your design. The first is written down in §3 as the
+assembly's `requirements:`. A component that the description asks things of
+directly ("a lid that snaps on") gets those as requirements of its own when
+`/pc:gen-part` generates it.
 
 ## 2. Inventory or generate the parts
 
@@ -171,6 +178,39 @@ assemblies:
     path: <name>.assy
     manufacturable: false
 ```
+
+Then write down what the product is required to be, on the same declaration:
+
+```yaml
+assemblies:
+  <name>:
+    requirements:
+      features:                       # what the product has to do, a name and a sentence each
+        tool-free: Assembled without tools: everything snaps or slides together
+        fasteners: Uses M3 fasteners only
+        stable: Stands on a desk without tipping when the lid is open
+      interfaces:                     # how it mounts to what is outside it, where the description says
+        //pub/std/...:<interface>: null
+      physics:
+        mass: "<1.5"                  # kg: the sum of what it holds
+```
+
+- **`features:`** carries most of it, stated the way the user stated it. The
+  ones about the product as a whole — what it is made of, how it goes together,
+  how many parts — are read off the bill of materials and the instructions by
+  `/pc:validate`, so state them in words those can answer.
+- **`ports:`** and **`interfaces:`** are what the assembly offers to whatever
+  it is mounted to, which is what its `map:` externalizes (§5). Anything may be
+  `null` — `[null, [0, 0, -1], null]` is "faces down, wherever it is" — and the
+  middle element is the way a port faces, not a rotation axis.
+- **`physics:`** — a mass requirement is checked against the sum of what the
+  assembly holds, so every part in it has to state a mass or name a material
+  with a density. Require only what the description bounds.
+- A `simulate:` entry that demonstrates a feature names it with
+  `feature: <name>`.
+
+Leave out what nobody asked for: a requirement you invented is a design decision
+written where nobody will question it.
 
 Do not add a `manufacturing:` section: `assy` is the only method an assembly has
 and it comes with the type. (`additive`/`subtractive`/`forming`/`sheet_metal`
@@ -347,8 +387,13 @@ reasoning had each produced a different wrong answer.
 ## 6. Validate, render it from several angles, iterate
 
 ```sh
-pc --no-ansi test -a <name>          # build gate: geometry instantiates
+pc --no-ansi test -a <name>          # build gate: geometry instantiates, and the requirements are met
 ```
+
+Its `requirements` check holds the assembly to the `ports:`, `interfaces:` and
+`physics:` written down in §3 and says which one is not met and what it found;
+`pc --no-ansi -v test -a -f requirements <name>` lists every one. The features
+are yours to check, against the views below.
 
 ### Prove each step changed nothing
 
@@ -534,6 +579,7 @@ assemblies:
     simulate:
       stands:
         desc: Set down on the floor, nothing slides, sinks or tips over
+        feature: stable                        # the feature of its requirements (§3) this demonstrates
         simulation: sim-mujoco:mujoco
         offset: [[0, 0, 10], [0, 0, 1], 0]   # only if it reaches 10 mm below z = 0
         validation: |
@@ -610,7 +656,9 @@ pc --no-ansi test -a <name>         # runs the same claims as its `sim` check
 Summarize the structure — parts, sub-assemblies, key placements, total mass and
 what `pc sim` found — and how to view it (`pc ide view -a <name>`, or
 `pc render -a -t png --with-all <name>` for a picture with the connection
-metadata on it).
+metadata on it). Offer `/pc:validate <name>` (an assembly) for a verdict on
+every requirement, the features included: it reads the bill of materials and the
+assembly instructions as well as the renders.
 
 Say what is still placed by coordinates and why, one reason per case. "The rest
 use `location:`" tells the next reader nothing; "these four sit where nothing

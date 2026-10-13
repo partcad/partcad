@@ -474,6 +474,14 @@ shareable: a package that declares a ``partType`` is a package other people can
 import and build parts with. A ``partType`` is listed like any other object but
 is never a shape in its own right -- it is how parts are made, not one of them.
 
+A part built by a ``partType`` is cached like any other, and is keyed on the
+version the script reports as well as on the part's own configuration -- a
+module-level ``CACHE_VERSION = <int>``, read without running the script. Raise it
+whenever a change to the script changes the parts it builds; an edit that does
+not, a comment or a refactoring, then costs nobody a rebuild. A ``partType``
+served by a repository plugin reports the plugin's version instead (see
+:ref:`packages`). A script that states none keys as if it did not exist.
+
 See ``examples/produce_part_wrapper`` for the whole of the example above.
 
 Should PartCAD implement a type natively that you find yourself writing again

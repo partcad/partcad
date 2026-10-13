@@ -6,13 +6,6 @@
   "publisher": "OpenVMP",
   "license": "Apache-2.0",
   "homepage": "https://partcad.readthedocs.io/",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/partcad/partcad.git"
-  },
-  "bugs": {
-    "url": "https://github.com/partcad/partcad/issues"
-  },
   "galleryBanner": {
     "color": "#1e415e",
     "theme": "dark"
@@ -31,6 +24,6 @@
     "PartCAD.partcad-official"
   ],
   "scripts": {
-    "vsce-package": "npx --yes @vscode/vsce@3.9.2 package \"$(node -p \"require('../vscode/package.json').version\")\" --no-update-package-json --no-git-tag-version -o partcad-shim.vsix"
+    "vsce-package": "npx --yes @vscode/vsce@3.9.2 package \"$(node -p \"require('../vscode/package.json').version\")\" --no-update-package-json --no-git-tag-version --allow-missing-repository -o partcad-shim.vsix"
   }
 }

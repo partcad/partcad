@@ -17,6 +17,8 @@ from .sketch_factory_python import SketchFactoryPython
 
 @telemetry.instrument()
 class SketchFactorySvg(SketchFactoryPython):
+    WRAPPERS = ("import_svg.py",)
+
     flip_y = True
     ignore_visibility = False
     use_wires = False

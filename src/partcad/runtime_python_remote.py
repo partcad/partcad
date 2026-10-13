@@ -257,16 +257,16 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
             )
         return RuntimeJsonRpcClient(host, int(port), token=self._token(), scheme=scheme)
 
-    def _params(self, cmd, stdin, cwd, input_files, output_files, input_dirs) -> dict:
+    def _params(self, cmd, stdin, cwd, input_files, output_files, input_dirs, output_dirs=None) -> dict:
         if input_dirs is None:
             input_dirs = input_dirs_for(cmd, cwd)
-        params = self._rpc_params(stdin, cwd, input_files or [], output_files or [], input_dirs)
+        params = self._rpc_params(stdin, cwd, input_files or [], output_files or [], input_dirs, output_dirs)
         params["image"] = self.image
         params["python_version"] = self.version
         params["requirements"] = list(self.requirements)
         return params
 
-    def _answer(self, cmd, response, output_files):
+    def _answer(self, cmd, response, output_files, output_dirs=None):
         if not response:
             return self._no_response(self.name)
         if response.get("error"):
@@ -277,16 +277,26 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
             return 1, "", "The remote sandbox service answered without a result: %s" % response
         # The service answers with the container's payload rather than its
         # envelope, and '_rpc_result' reads an envelope -- so it is given one.
-        stdout, stderr, returncode = self._rpc_result({"result": response["result"]}, output_files or [])
+        stdout, stderr, returncode = self._rpc_result({"result": response["result"]}, output_files or [], output_dirs)
         return self._finished(cmd, stdout, stderr, returncode)
 
-    def run(self, cmd, stdin="", cwd=None, session=None, input_files=None, output_files=None, input_dirs=None):
+    def run(
+        self,
+        cmd,
+        stdin="",
+        cwd=None,
+        session=None,
+        input_files=None,
+        output_files=None,
+        input_dirs=None,
+        output_dirs=None,
+    ):
         # As the base class does on its way to every command: these overrides
         # skipped it, so the base stack was never asked for and every wrapper
         # died on its first import.
         self.once()
-        params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs)
-        return self._answer(cmd, self._client().execute(list(cmd), params), output_files)
+        params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs, output_dirs)
+        return self._answer(cmd, self._client().execute(list(cmd), params), output_files, output_dirs)
 
     async def run_async(
         self,
@@ -298,10 +308,11 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
         input_files=None,
         output_files=None,
         input_dirs=None,
+        output_dirs=None,
     ):
         await self.once_async()
-        params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs)
+        params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs, output_dirs)
         # The bound the caller was given, honoured. Dropped, it meant an
         # unresponsive service held the render open with nothing to wait for.
         answer = await self._client().execute_async(list(cmd), params, timeout=timeout)
-        return self._answer(cmd, answer, output_files)
+        return self._answer(cmd, answer, output_files, output_dirs)

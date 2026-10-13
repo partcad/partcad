@@ -186,12 +186,19 @@ env:
   # Python version. Dropped on the "pr" tier for the same reason as above and
   # restored in the merge queue.
   OSES_SLIM_QUEUE_ONLY: '["macos-latest"]'
+  # The IDE end-to-end job ("tests/ide/test_ide_e2e.py"): Linux on a pull
+  # request, and Windows and macOS beside it from the merge queue up. An editor,
+  # a daemon and a solver per cell is expensive, and the platform differences it
+  # can find -- a launcher, a path, a window -- are ones a merge still has to get
+  # past before it lands.
+  OSES_IDE_E2E: '["ubuntu-latest", "windows-latest", "macos-latest"]'
+  OSES_IDE_E2E_QUEUE_ONLY: '["windows-latest", "macos-latest"]'
   # Behave's Python axis: the oldest and the newest PartCAD is supported on.
   # Behave drives the command line rather than the sandbox, so what matters here
   # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
   # the public index, uses PYTHONS_SANDBOX instead.
   PYTHONS_SLIM: '["3.10", "3.14"]'
-  VERSION: 0.8.185
+  VERSION: 0.8.192
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
   PC_TELEMETRY_PERFORMANCE: false
@@ -286,6 +293,7 @@ jobs:
       ${{ needs.set-matrix.outputs.pytest == 'true'
       || needs.set-matrix.outputs.behave == 'true'
       || needs.set-matrix.outputs.examples == 'true'
+      || needs.set-matrix.outputs.ide-e2e == 'true'
       || needs.set-matrix.outputs.image-override != '' }}
     permissions:
       packages: write
@@ -577,12 +585,14 @@ jobs:
       matrix-sandbox: ${{ steps.set-matrix.outputs.matrix-sandbox }}
       matrix-slim: ${{ steps.set-matrix.outputs.matrix-slim }}
       matrix-behave: ${{ steps.set-matrix.outputs.matrix-behave }}
+      matrix-ide-e2e: ${{ steps.set-matrix.outputs.matrix-ide-e2e }}
       # Which of the jobs below this change can say anything about. Every one of
       # them reads its own name here; see ".github/actions/changed-scopes".
       deep: ${{ steps.depth.outputs.deep }}
       pytest: ${{ steps.scope.outputs.pytest }}
       behave: ${{ steps.scope.outputs.behave }}
       examples: ${{ steps.scope.outputs.examples }}
+      ide-e2e: ${{ steps.scope.outputs.ide-e2e }}
       # What tag PartCAD's own container images are built, published and pulled
       # under on this run, and whether this run may publish them. One answer,
       # read by both builders and handed to every job that runs a test, so that
@@ -703,6 +713,14 @@ jobs:
           # the largest single saving there.
           SHARDS_JSON=$(python3 -c "import json, os; print(json.dumps(list(range(1, int(os.environ['BEHAVE_SHARDS']) + 1))))")
           echo 'matrix-behave={"os": '"${OSES_SLIM}"', "python-version": ${{ env.PYTHONS_SLIM }}, "shard": '"$SHARDS_JSON"'}' >> "${GITHUB_OUTPUT}"
+          # The IDE end-to-end job: one interpreter (the newest), and the
+          # queue-only images dropped on a pull request -- which leaves Linux.
+          OSES_IDE_E2E='${{ env.OSES_IDE_E2E }}'
+          if [ "${QUEUE}" != "true" ]; then
+            OSES_IDE_E2E=$(jq -cn --argjson all "${OSES_IDE_E2E}" --argjson queue_only '${{ env.OSES_IDE_E2E_QUEUE_ONLY }}' '$all - $queue_only')
+          fi
+          echo "Operating systems (IDE end to end): ${OSES_IDE_E2E}"
+          echo 'matrix-ide-e2e={"os": '"${OSES_IDE_E2E}"', "python-version": ['"$(jq -c '.[-1]' <<< '${{ env.PYTHONS }}')"']}' >> "${GITHUB_OUTPUT}"
 
   # What this run is going to reach for, checked before it reaches for it.
   #
@@ -1085,6 +1103,110 @@ jobs:
           path: pytest-test-results/
           retention-days: 7
           coverage-data: .coverage*
+
+  # The PartCAD extension in a real editor, driven by the commands a person
+  # types: "pc ide install" this tree's ".vsix", "pc ide workspace examples",
+  # "pc ide view --design-3d" the logo assembly and "pc ide view --analysis-fea"
+  # the cantilever -- failing on an error on the daemon's side, in the
+  # extension's log, or in the viewer's JavaScript. See
+  # "tests/ide/test_ide_e2e.py", which also says what an editor needs here.
+  #
+  # Linux on a pull request; Windows and macOS beside it from the merge queue up
+  # (OSES_IDE_E2E). Gated on "ide-e2e", which a change to "ide/" or to the
+  # source turns on -- the test is about both halves at once.
+  #
+  # The analysis is only *run* where a container runtime can run the solver's
+  # Linux image: here, on Linux. On the other two the test accepts the one
+  # excuse "pc test" accepts for an analysis that came back with nothing (see
+  # "CaeTest._verdict"), and still checks everything else about the tab.
+  test-ide-e2e:
+    name: "IDE (end to end)"
+    needs:
+      - set-matrix
+      - build-containers
+    if: ${{ needs.set-matrix.outputs.ide-e2e == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix-ide-e2e) }}
+    runs-on: ${{ matrix.os }}
+    # A cold sandbox, the editor's download and a mesher and a solver: the
+    # first two are most of it, and Windows is the slowest at both.
+    timeout-minutes: 90
+    env:
+      PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
+      PC_CONTAINER_IMAGE_OWNER: ${{ needs.set-matrix.outputs.image-owner }}
+      PC_TEST_IDE_E2E: "1"
+      # Sent with the VSCodium release lookup, which a shared runner's address
+      # would otherwise be rate limited on.
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-all
+        with:
+          job: ide-e2e
+      - uses: ./.github/actions/setup-test
+        with:
+          job: ide-e2e
+
+      # The ".vsix" is built from this tree by the test itself
+      # ("npm run vsce-package"), which needs the extension's dependencies.
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ide/vscode/package-lock.json
+      - name: Install the extension's dependencies
+        working-directory: ide/vscode
+        run: npm ci
+
+      # A display for the editor's window. The test starts an Xvfb of its own
+      # where there is none; it only has to be installed.
+      - name: Xvfb
+        if: runner.os == 'Linux'
+        run: |
+          command -v Xvfb || { sudo apt-get update && sudo apt-get install --yes --no-install-recommends xvfb; }
+
+      - name: Test the IDE end to end
+        shell: bash -el {0}
+        run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+          mamba activate ${{ format('env-test-ide-e2e-{0}', matrix.python-version) }}
+
+          mkdir -pv ide-e2e-test-results
+          # The session's verdict rather than the exit code, as in "Pytest" --
+          # see the note there and the root "conftest.py".
+          marker="ide-e2e-test-results/session-verdict-$$"
+          export PYTEST_RESULT_MARKER="${marker}"
+          export PC_TEST_IDE_ARTIFACTS="ide-e2e-test-results/editor"
+          rm -f "${marker}"
+
+          rc=0
+          pytest tests/ide/test_ide_e2e.py \
+            --junitxml=ide-e2e-test-results/junit.xml --no-cov -s \
+            -p no:error-for-skips -p no:warnings --dist no || rc=$?
+
+          verdict="$(cat "${marker}" 2>/dev/null || true)"
+          rm -f "${marker}"
+          if [ "${verdict}" != "success" ]; then
+            echo "::error::pytest recorded '${verdict:-no verdict}' (process exit code ${rc})"
+            exit "$(( rc != 0 ? rc : 1 ))"
+          fi
+          # A skip is not a pass here: the job exists to run this one test.
+          if grep -q '<skipped' ide-e2e-test-results/junit.xml; then
+            echo "::error::the IDE end-to-end test was skipped"
+            grep -o '<skipped[^>]*>' ide-e2e-test-results/junit.xml
+            exit 1
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: ide-e2e-test-results-${{ matrix.os }}-${{ matrix.python-version }}
+          path: ide-e2e-test-results/
+          retention-days: 7
 
   test-behave:
     name: "Behave"
@@ -1579,9 +1701,12 @@ jobs:
         if: runner.os == 'Linux'
         uses: ./.github/actions/sandbox-image
 
-      # This exercises the whole public index (//pub/examples), most of which
-      # lives outside this repository -- 'partcad/partcad-index' and the example
-      # packages it imports. It was "continue-on-error" for eight parts none of
+      # This exercises the example packages listed in
+      # 'dev-tools/ci/examples-packages.txt' -- PartCAD's own, and the build123d
+      # and CadQuery script examples the public index imports from outside this
+      # repository -- rather than the whole of '//pub/examples', which also
+      # carries packages that are their own repositories' to test. It was
+      # "continue-on-error" for eight parts none of
       # whose files live here: seven written against build123d APIs removed in
       # 0.11 (Face.thicken, Part.find_intersection, Solid.make_solid, ...) and
       # one importing a 'path' distribution nothing declared.
@@ -1609,8 +1734,12 @@ jobs:
           cd ./examples
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
           # '--fast-only' as in "Examples (PartCAD)": see the comment there.
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r --fast-only //pub/examples
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --fast-only --package //pub/examples
+          n=0
+          for package in $(grep -v -e '^#' -e '^$' ../dev-tools/ci/examples-packages.txt); do
+            n=$((n + 1))
+            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.list${n}" -m partcad_cli.click.command --no-ansi list all -r --fast-only "${package}"
+            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.test${n}" -m partcad_cli.click.command --no-ansi test -r --fast-only --package "${package}"
+          done
           coverage combine
           # END ALL EXAMPLES
 
@@ -1646,24 +1775,15 @@ jobs:
     if: ${{ needs.set-matrix.outputs.deep == 'true' && needs.set-matrix.outputs.examples == 'true' }}
     strategy:
       fail-fast: false
-      # Reduced matrix on purpose: up to 60 minutes per job, and it hits the
-      # network for the whole public repo. See OSES_SLIM/PYTHONS_SLIM above.
+      # Reduced matrix on purpose: it renders in the sandbox, and fetches the
+      # packages it samples from their own repositories. See
+      # OSES_SLIM/PYTHONS_SLIM above.
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix-slim) }}
     runs-on: ${{ matrix.os }}
-    # 45 -> 60: Windows was already at ~35-38 min and the new stack is slower.
-    #
-    # Deliberately NOT raised again, though it was tempting: Linux and macOS
-    # finish in 9-12 minutes and Windows in 42, of which 30 are 'list all'
-    # alone. Windows costs five times what the others do because there is no
-    # socket daemon there yet -- every operation opens a one-shot service over
-    # stdio (client.connect -> _connect_stdio), so each of the six listings
-    # 'pc list all' runs gets a cold context of its own and reloads the whole
-    # index, seven 'DONE: InitCtx' lines to Linux's one. That is worth fixing
-    # rather than buying more minutes for -- and a longer budget is time a
-    # future wedge gets to burn before this job says so, which is the thing the
-    # deadline exists to prevent. The other thing that had outgrown the hour,
-    # the twenty thousand parts '//pub/universe/lego/ldraw' serves, is sampled
-    # rather than swept now (see the step below).
+    # Set when this job swept the whole public index, which took Linux and
+    # macOS 9-12 minutes and Windows 42. It samples two objects of it now (see
+    # the step below), so this is a ceiling rather than a budget, and a longer
+    # one is only time a future wedge gets to burn before this job says so.
     timeout-minutes: 60
 
     # The images this run built, where it built any. See "Pytest" above.
@@ -1680,8 +1800,8 @@ jobs:
         with:
           job: pub-repo
 
-      # The whole public index. This gates: a part that stops building here is
-      # defective code, and a step that cannot go red cannot say so.
+      # A sample of the public index. This gates: a part that stops building
+      # here is defective code, and a step that cannot go red cannot say so.
       #
       # It used to be "continue-on-error" AND to swallow both exit codes into a
       # notice, which are two separate reasons it could not fail -- removing
@@ -1714,100 +1834,92 @@ jobs:
 
           # BEGIN PUBLIC REPO
           cd ./examples
-          # Both commands run whatever the other one does, which is what 'set +e'
-          # and the captured exit codes are for: under plain 'bash -e' a failing
-          # 'list all' took the 'test' run with it, and the 'test' run is the
-          # more interesting half. Running both and deciding afterwards means one
-          # failure does not hide the other's result.
+          # A sample of the public index, named one object at a time, rather
+          # than the whole of it. The sweep over '//pub' imported every package
+          # the index lists before testing any of them, so one package anywhere
+          # in it that could not load stopped the job, and most of what it
+          # tested lives in repositories that test it themselves. These stand
+          # for the kinds of package the index carries:
           #
-          # Both codes gate. A listing that cannot enumerate the index is not a
-          # lesser failure than a part that will not build -- it is the same
-          # sweep reporting that something in '//pub' is broken.
+          # - 'link-upper-arm' of the OpenVMP robot 'don1': a sub-assembly of its
+          #   arm, goBILDA structure joined through the ports of the metric
+          #   fasteners in '//pub/std', so three packages of the index at once.
+          # - 'imperial-desk-1' in the basic workspace furniture: a parametric
+          #   assembly of parametric lumber, joined through ports.
           #
-          # Two packages are sampled rather than swept. The sweep leaves them out
-          # with '-x', and the commands in front of it test the few objects
-          # that stand for them:
+          # Not the Four Thieves Vinegar microlab, for now: it does not build -
+          # its heating unit's tube sweep comes back empty, its top level joins
+          # a port instance that is not there, and its reactor unit places one
+          # piece by coordinates among pieces that connect - and those are the
+          # package's to fix. Add it back here once they are.
           #
-          # - '//pub/universe/lego/ldraw' is the LDraw library, served by a
-          #   repository plugin: ninety-two categories, some twenty thousand
-          #   parts. The day it started serving them (0.8.60) took 'test' from
-          #   65 seconds to half an hour on Linux and past the hour everywhere
-          #   else. What those parts exercise is the plugin, and a few of them
-          #   exercise all of it: these Power Functions parts are complex meshes
-          #   that carry studs, anti-studs, Technic pin holes, axle holes and a
-          #   Technic pin between them -- each kind of interface the plugin
-          #   reads off the geometry. The LDraw parts 'lego-demo' assembles are
-          #   still built by the sweep, which does not exclude that package.
-          # - '//pub/electronics/sbcs/intel' is twenty-two board meshes of one
-          #   kind, and the NUC 12 stands for them.
+          # The example packages are walked by "Examples (All)" above, from
+          # 'dev-tools/ci/examples-packages.txt'.
           #
-          # Which sample commands failed is said again at the end, beside the
-          # result: the sweep prints thousands of lines after them, and the end
-          # of a log is the part that is read first.
+          # Every command runs whatever the others do, which is what 'set +e'
+          # and the captured exit codes are for, and every one of them gates: a
+          # listing that cannot enumerate a package is not a lesser failure than
+          # a part that will not build. Which ones failed is said again at the
+          # end, beside the result: the commands print thousands of lines after
+          # them, and the end of a log is the part that is read first.
           #
-          # '--fast-only' as in "Examples (PartCAD)": see the comment there.
-          ldraw_sample="99499c01 58121c01 26910 58123c01 87574c01"
-          sweep_exclude="-x //pub/universe/lego/ldraw -x //pub/electronics/sbcs/intel"
+          # The listings say '--fast-only' as in "Examples (PartCAD)" (see the
+          # comment there); the tests do not, because each names one object, and
+          # passing over it would leave the test with nothing to test.
+          targets=(
+            "//pub/robotics/multimodal/openvmp/robots/don1 link-upper-arm"
+            "//pub/furniture/workspace/basic imperial-desk-1"
+          )
           # The daemon every command below talks to, started first and verbose:
           # an action ends in a DONE line with its duration at DEBUG, and the
           # daemon drops a record below its own level before it forwards it.
-          # Only the sweep asks for them (see it below); the other commands
-          # stay at INFO.
+          # Only the tests ask for them (see below); the listings stay at INFO.
           python -m partcad_cli.click.command --no-ansi -v daemon start
           set +e
           sample_rc=0
-          sample_failed=""
-          n=0
-          for part in ${ldraw_sample}; do
-            n=$((n + 1))
-            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.ldraw${n}" -m partcad_cli.click.command --no-ansi --threads-max 4 test --package //pub/universe/lego/ldraw/Electric "${part}"
-            rc=$?
-            if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; sample_failed="${sample_failed} ${part}=${rc}"; fi
-          done
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.nuc -m partcad_cli.click.command --no-ansi --threads-max 4 test --package //pub/electronics/sbcs/intel nuc12
-          rc=$?
-          if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; sample_failed="${sample_failed} nuc12=${rc}"; fi
-          sample="the sample exited ${sample_rc}${sample_failed:+ (${sample_failed# })}"
-          # shellcheck disable=SC2086 # 'sweep_exclude' is several words on purpose
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r --fast-only ${sweep_exclude} //pub
-          list_rc=$?
+          failed=""
           # Verbose, for every action's DONE line, into a file, and without the
           # DEBUG lines into this job's log, which keeps the length it had.
           sweep_log=../pub-repo-test-results/sweep-verbose.log
-          # shellcheck disable=SC2086 # 'sweep_exclude' is several words on purpose
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi -v --threads-max 4 test -r --fast-only ${sweep_exclude} --package //pub 2>&1 |
-            tee "${sweep_log}" | grep --line-buffered -v " DEBUG:partcad:"
-          test_rc=${PIPESTATUS[0]}
-          # Where the sweep's time went, printed near the end so that it is in
-          # the part of the log that can be read back, and read from the
-          # sweep's own verbose output, which has every DONE line. A recursive
-          # 'pc test' runs each package as an action, so that line (no item) is
-          # when the package's tests finished, counted from the start of the
-          # run -- the packages are tested together. A 'Test' action starts
-          # when it is scheduled, so every test's duration is likewise when it
-          # finished; the second group leaves them out, and what is left --
-          # an interference check, a render, a script -- took the time it says.
-          echo "::group::When each package of the sweep finished"
-          grep -E ":DONE: Test: //pub[^: ]*: [0-9.]+s$" "${sweep_log}" | sort | cut -c1-300
+          n=0
+          for target in "${targets[@]}"; do
+            read -r package object <<<"${target}"
+            n=$((n + 1))
+            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.list${n}" -m partcad_cli.click.command --no-ansi list all -r --fast-only "${package}"
+            rc=$?
+            if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; failed="${failed} list:${package}=${rc}"; fi
+            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.test${n}" -m partcad_cli.click.command --no-ansi -v --threads-max 4 test --package "${package}" -a "${object}" 2>&1 |
+              tee -a "${sweep_log}" | grep --line-buffered -v " DEBUG:partcad:"
+            rc=${PIPESTATUS[0]}
+            if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; failed="${failed} ${object}=${rc}"; fi
+          done
+          sample="the sample exited ${sample_rc}${failed:+ (${failed# })}"
+          # Where the time went, printed near the end so that it is in the part
+          # of the log that can be read back, and read from the tests' own
+          # verbose output, which has every DONE line. A 'Test' action starts
+          # when it is scheduled, so every test's duration is when it finished;
+          # the second group leaves them out, and what is left -- an
+          # interference check, a render, a script -- took the time it says.
+          echo "::group::When each test finished"
+          grep -E ":DONE: Test: //pub[^ ]*: [0-9.]+s$" "${sweep_log}" | sort | cut -c1-300
           echo "::endgroup::"
           echo "::group::The 40 slowest actions other than tests"
           grep -E ":DONE: " "${sweep_log}" | grep -v ":DONE: Test: " | awk '{ print $NF, $0 }' | sort -rn | sed -n '1,40p' | cut -d' ' -f2- | cut -c1-300
           echo "::endgroup::"
           # Every DONE line is kept with the results, for the timings these two
           # groups leave out. The rest of the verbose output is not: it is
-          # almost all DEBUG lines, and gzipped it made each of these jobs
-          # upload 100 MB.
+          # almost all DEBUG lines.
           grep -E ":DONE: " "${sweep_log}" | gzip >../pub-repo-test-results/sweep-done.log.gz
           rm -f "${sweep_log}"
           # When anything failed, why -- again, at the end. Every command above
           # talks to the one daemon, whose own log has the errors of all of
-          # them, the sample's included; but they are printed thousands of
-          # lines up, and a sweep the client gave up on says only that it
-          # stopped hearing from the daemon. The daemon is still running at
-          # this point in that case, and so are the sandbox workers it is
-          # waiting for, so their stacks say where it stopped. (No 'pgrep' on
-          # Windows: the errors are printed there too, the stacks are not.)
-          if [ "${test_rc}" -ne 0 ] || [ "${list_rc}" -ne 0 ] || [ "${sample_rc}" -ne 0 ]; then
+          # them; but they are printed thousands of lines up, and a test the
+          # client gave up on says only that it stopped hearing from the daemon.
+          # The daemon is still running at this point in that case, and so are
+          # the sandbox workers it is waiting for, so their stacks say where it
+          # stopped. (No 'pgrep' on Windows: the errors are printed there too,
+          # the stacks are not.)
+          if [ "${sample_rc}" -ne 0 ]; then
             for log in ~/.partcad/workspaces/*/partcad.log; do
               [ -f "${log}" ] || continue
               echo "::group::Errors the daemon logged (${log})"
@@ -1826,7 +1938,7 @@ jobs:
             fi
           fi
           set -e
-          echo "::notice title=Repo //pub::${sample}, 'list all' exited ${list_rc}, 'test' exited ${test_rc}"
+          echo "::notice title=Repo //pub::${sample}"
           coverage combine
           # END PUBLIC REPO
 
@@ -1835,17 +1947,11 @@ jobs:
 
           # The step's result, and last on purpose: the coverage report and the
           # JUnit above are written before this decides anything, so a failing
-          # sweep still uploads the artifact that names which part failed.
+          # run still uploads the artifact that names which object failed.
           # Exiting the command's own code rather than 1 keeps 'bounded.sh's
           # timeout distinguishable from a part that would not build.
-          if [ "${test_rc}" -ne 0 ] || [ "${list_rc}" -ne 0 ] || [ "${sample_rc}" -ne 0 ]; then
-            echo "::error title=Repo //pub::${sample}, 'list all' exited ${list_rc}, 'test' exited ${test_rc}"
-            if [ "${test_rc}" -ne 0 ]; then
-              exit "${test_rc}"
-            fi
-            if [ "${list_rc}" -ne 0 ]; then
-              exit "${list_rc}"
-            fi
+          if [ "${sample_rc}" -ne 0 ]; then
+            echo "::error title=Repo //pub::${sample}"
             exit "${sample_rc}"
           fi
 

@@ -149,8 +149,9 @@ every projection above (and by ``dxf``), on the package or on a single object:
 Left unset, a part is drawn from the front-right-top corner (which is what makes
 it read as 3D) and a sketch head-on. PartCAD is Z-up with ``+Y`` pointing away
 from the front view, which is what puts ``+X`` on the right of it. The distance
-does not matter — the pair names a direction, and the projection is scaled to fit
-whatever it is written into.
+does not matter — the pair names a direction, so ``[0, -100, 0]`` is the front
+of any object wherever it sits, and the projection is scaled to fit whatever it
+is written into.
 
 ``pc render`` takes the same two as ``--viewport-origin``/``--viewport-up``, and
 names the common directions with ``--view`` (``front``, ``back``, ``left``,
