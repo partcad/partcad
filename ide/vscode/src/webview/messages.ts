@@ -20,10 +20,13 @@ import type { SpaceMouseSettings } from './spacemouse';
  *
  * Two levels of them. The panel's own strip is five groups, always the same
  * five: 'design', the object itself; 'analysis', what analysing it says;
- * 'manufacturing', what making it takes; and 'validation' and 'operations',
- * which have nothing in them yet and are shown disabled. Each group is a strip of its own: the
- * object as '3d' (first, always), '2d' and 'draft'; 'fea' and 'cfd'; 'bvb'
- * (Build vs Buy), 'build', 'supply' (labelled Buy), 'bom' and 'assembly'.
+ * 'manufacturing', what making it takes; 'validation', whether it does what it
+ * is supposed to; and 'operations', which has nothing in it yet and is shown
+ * disabled. Each group is a strip of its own: the object as '3d' (first,
+ * always), '2d' and 'draft'; 'fea' and 'cfd'; 'bvb' (Build vs Buy), 'build',
+ * 'supply' (labelled Buy), 'bom' and 'assembly'; and 'simulation' beside
+ * 'emulation' (Process Emulation), which has nothing in it yet and is shown
+ * disabled.
  *
  * In front of the five, and only for an object that declares any:
  * 'requirements', a tab of its own with no strip under it.
@@ -44,7 +47,9 @@ export type TabId =
     | 'supply'
     | 'assembly'
     | 'fea'
-    | 'cfd';
+    | 'cfd'
+    | 'simulation'
+    | 'emulation';
 
 /** The Design tab's own tabs. */
 export const DESIGN_TABS: TabId[] = ['3d', '2d', 'draft'];
@@ -62,6 +67,9 @@ export const TAB_GROUPS: Partial<Record<TabId, TabId[]>> = {
     design: DESIGN_TABS,
     analysis: ['fea', 'cfd'],
     manufacturing: ['bvb', 'build', 'supply', 'bom', 'assembly'],
+    // Not 'emulation' (Process Emulation) yet: it holds nothing and is always
+    // disabled, so a request for it could never be met.
+    validation: ['simulation'],
 };
 
 /** The group a tab of 'TAB_GROUPS' is in, or undefined for anything else. */
@@ -88,6 +96,13 @@ export function isRenderTab(tab: TabId): boolean {
  * 'pc render -e' uses one: see 'examples/feature_render_custom'.
  */
 export const DRAFT_PLUGINS = ['//pub/feature/render/draftwright'];
+
+/**
+ * The simulation plugins the Simulation tab offers, as '<package>:<name>': the two
+ * registered at '//pub/feature/simulate', until there are more. The one a
+ * simulation names in its 'simulation:' is the one selected; see 'simulation.ts'.
+ */
+export const SIMULATION_PLUGINS = ['//pub/feature/simulate/mujoco:mujoco', '//pub/feature/simulate/gazebo:gazebo'];
 
 /** The two tabs that run an analysis rather than ask a question about the object. */
 export const ANALYSIS_TABS: TabId[] = TAB_GROUPS.analysis!;
@@ -398,6 +413,10 @@ export interface FetchTabMessage {
      * On the Draft tab: the package whose 'render:' section implements that
      * file type, as 'pc render -e' names one. The 2D tab leaves it out and gets
      * PartCAD's own.
+     *
+     * On the Simulation tab: the simulation plugin to run it with instead of
+     * the one it names, as '<package>:<name>' -- 'pc sim --plugin'. Left out,
+     * it runs with its own.
      */
     plugin?: string;
     /**
@@ -449,6 +468,12 @@ export interface FetchTabMessage {
      * 'pc test -f requirements' checks).
      */
     verify?: boolean;
+    /**
+     * On the Simulation tab: the simulation to run, by the name the object's
+     * 'simulate:' section declares it under -- 'pc sim -f'. Left out, the tab
+     * is asking what the object declares rather than running anything.
+     */
+    scenario?: string;
 }
 
 /** Renderer to host: the thumbnails and measurements of these objects, sized 'width' x 'height'. */
@@ -806,4 +831,66 @@ export interface RequirementsData {
     verified: boolean;
     features: RequirementFeature[];
     requirements: RequirementCheck[];
+}
+
+/** One simulation an object declares, as 'simulate.list' answers: its 'simulate:' entry. */
+export interface SimulationScenario {
+    name: string;
+    desc?: string | null;
+    /** The scene it is run in, as '<package>:<name>'. */
+    scene?: string | null;
+    /** The plugin that runs it, as '<package>:<name>'. */
+    simulation?: string | null;
+    /** The Python expression over 'before' and 'after' that decides the verdict. */
+    validation?: string | null;
+}
+
+/**
+ * What an object declares under 'simulate:', without running any of it.
+ *
+ * Configuration, so it costs what reading the object costs: it is asked for on
+ * every show of a part or an assembly, because whether the Validation group
+ * applies at all depends on it.
+ */
+export interface SimulationListData {
+    object: string;
+    kind: string;
+    simulations: SimulationScenario[];
+}
+
+/** One picture of a run, as the bytes of the file the plugin wrote. */
+export interface SimulationImage {
+    filename: string;
+    extension: string;
+    /** Base64. */
+    content: string;
+}
+
+/**
+ * One run of one simulation, as 'simulate.run' reports it ('pc sim --json').
+ *
+ * 'passed' is the verdict of the 'validation:' expression: null when there is
+ * none, or when the run never got far enough to have one -- which 'error' then
+ * says. 'images' are the two pictures the plugin took of the scene, before
+ * anything moved and when the run was over, from the scene's own viewpoint; a
+ * plugin that takes none leaves them out, which is not a failure.
+ */
+export interface SimulationRun {
+    object: string;
+    simulation: string;
+    scene?: string | null;
+    plugin?: string | null;
+    validation?: string | null;
+    passed: boolean | null;
+    error?: string | null;
+    result?: Record<string, unknown>;
+    images?: { before?: SimulationImage; after?: SimulationImage };
+}
+
+/** The answer to a run: what 'pc sim -f <name>' prints with '--json'. */
+export interface SimulationRunData {
+    simulations: SimulationRun[];
+    total: number;
+    failed: number;
+    ok: boolean;
 }

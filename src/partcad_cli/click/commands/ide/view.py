@@ -28,6 +28,7 @@ _TAB_HELP = {
     "supply": "the Buy tab: where to buy what is bought",
     "bom": "the Bill of Materials tab",
     "assembly": "the Assembly tab: the assembly instructions",
+    "simulation": "the Simulation tab, which runs the first of the object's simulations",
 }
 
 

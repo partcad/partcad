@@ -53,6 +53,12 @@ override is the plugin's: a ``params: {gravity: ...}`` is handed to the plugin
 like any other of its parameters and applied over the scene's for that run, so
 the order is that, then the scene, then the engine's own default.
 
+Every run also asks the plugin for two pictures of the scene, one before
+anything moved and one when the run is over, taken from where the scene is
+looked at when it is rendered -- see 'snapshot_request'. They are what the IDE's
+Simulation tab shows side by side, and they are the one thing a reader can check
+a verdict against without reading numbers.
+
 What is deliberately *not* here: PartCAD does not know what a simulation
 result means. It exports the scene, starts the plugin, hands the two objects the
 plugin produced to the expression the package wrote, and reports what the
@@ -71,6 +77,11 @@ from . import cache_artifacts
 from . import logging as pc_logging
 from . import output, shape_envelope, source_key, wrapper
 from .process_crash import describe_exit_code
+
+# By name rather than as 'from . import render': the package exports a function
+# called 'render' too, and which of the two 'partcad.render' is depends on what
+# was imported first.
+from .render import VIEWS, resolve_viewport
 from .utils import resolve_resource_path
 
 # The section of 'partcad.yaml' a part or an assembly declares its simulations in.
@@ -99,6 +110,21 @@ SUBJECT_PARAMETER = "subject"
 # around one part) is a perfectly good scene.
 SUBJECT_KIND_PARAMETER = "subject_kind"
 SUBJECT_OFFSET_PARAMETER = "subject_offset"
+
+# The pictures a run is asked to take of the scene, and the file each is written
+# to inside the run directory. Named here rather than by the plugin, so that the
+# request says where they go and a plugin has nothing to choose.
+SNAPSHOTS = ("before", "after")
+SNAPSHOT_FORMAT = "png"
+SNAPSHOT_FILES = {moment: "snapshot-%s.%s" % (moment, SNAPSHOT_FORMAT) for moment in SNAPSHOTS}
+
+# Where the scene is looked at from when nothing says otherwise: the corner a
+# rendered part is drawn from, which is what makes a 3D arrangement read as 3D.
+SNAPSHOT_DEFAULT_VIEW = "iso"
+
+# The size of a snapshot when the scene's rendering configuration does not say,
+# which is what '//builtin/render' gives a PNG.
+SNAPSHOT_DEFAULT_SIZE = 512
 
 # The identity, as the string a scene parameter carries it in. A location
 # reaches an ASSY template as text that is substituted into the YAML, so it is
@@ -204,6 +230,10 @@ class SimulationResult:
         self.passed: typing.Optional[bool] = None
         self.result: dict = {}
         self.error: typing.Optional[str] = None
+        # The pictures the plugin took, as absolute paths keyed by the moment
+        # each is of ('before', 'after'). Empty when it took none -- a plugin
+        # that predates them, or one that could not draw on this machine.
+        self.snapshots: typing.Dict[str, str] = {}
 
         # The four below are for a caller that has to say *why*, and are kept
         # out of 'to_dict()' -- which is what 'pc sim --json' prints, and which
@@ -257,6 +287,7 @@ class SimulationResult:
             "passed": self.passed,
             "error": self.error,
             "result": self.result,
+            "snapshots": dict(self.snapshots),
         }
 
 
@@ -444,6 +475,118 @@ def run_directory(ctx, object_name: str, simulation_name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# The pictures of a run
+# ---------------------------------------------------------------------------
+
+
+def snapshot_request(ctx, scene) -> dict:
+    """What the plugin is asked to draw of the scene, and from where.
+
+    The camera is the one the scene is *rendered* from: ``viewport_origin`` and
+    ``viewport_up`` of its ``render: png:`` configuration, read exactly as
+    ``pc render -t png`` reads them -- the scene's own over its package's (see
+    'Shape.output_getopts') -- so that a package that has said how its world is
+    best looked at has said it once, for both. Nothing said anywhere is the
+    corner a rendered part is drawn from (``render.VIEWS["iso"]``), and the size
+    is the PNG's.
+
+    ``viewport_origin`` names a direction, as it does for a render: the picture
+    looks from there towards the middle of the scene, and is scaled to fit. A
+    plugin that frames both pictures alike -- on everything either of them
+    holds -- is one whose "after" can be read against its "before" at a glance.
+
+    ``files`` says where each picture goes, relative to the run directory the
+    plugin is handed as ``path``; see 'collect_snapshots' for what is done with
+    what the plugin reports.
+    """
+    options = {}
+    try:
+        scene_project = ctx.get_project(scene.project_name)
+        impl, _ = scene.output_getopts(ctx, SNAPSHOT_FORMAT, project=scene_project)
+        options = impl.parameters or {}
+    except Exception as e:  # pylint: disable=broad-except
+        # A scene that cannot say how it is rendered still simulates: the
+        # pictures are taken from the default corner, and the run is what the
+        # user asked for.
+        pc_logging.debug(
+            "The scene %s:%s says nothing usable about how it is rendered: %s" % (scene.project_name, scene.name, e)
+        )
+
+    default_origin, default_up = VIEWS[SNAPSHOT_DEFAULT_VIEW]
+    try:
+        viewport = resolve_viewport(
+            viewport_origin=options.get("viewport_origin") or default_origin,
+            viewport_up=options.get("viewport_up") or default_up,
+        )
+    except ValueError as e:
+        pc_logging.warning(
+            "The scene %s:%s is rendered from a viewpoint that cannot be used for the snapshots of a "
+            "simulation (%s); using the '%s' view" % (scene.project_name, scene.name, e, SNAPSHOT_DEFAULT_VIEW)
+        )
+        viewport = resolve_viewport(view=SNAPSHOT_DEFAULT_VIEW)
+
+    return {
+        "format": SNAPSHOT_FORMAT,
+        "files": dict(SNAPSHOT_FILES),
+        "width": _size(options.get("width")),
+        "height": _size(options.get("height")),
+        "viewport_origin": viewport["viewport_origin"],
+        "viewport_up": viewport["viewport_up"],
+    }
+
+
+def _size(value) -> int:
+    """A snapshot's width or height, in pixels."""
+    try:
+        size = int(value)
+    except (TypeError, ValueError):
+        return SNAPSHOT_DEFAULT_SIZE
+    return size if size > 0 else SNAPSHOT_DEFAULT_SIZE
+
+
+def collect_snapshots(directory: str, result: dict, object_name: str, simulation_name: str) -> dict:
+    """The pictures the plugin says it took, as absolute paths, by moment.
+
+    A plugin reports them under ``snapshots``, each as the name of a file in the
+    run directory: ``{"before": "snapshot-before.png", "after": ...}``. Only the
+    ones that are there are kept; one that names a file outside the directory or
+    a file that does not exist is reported and left out rather than handed to
+    somebody who will try to open it. A plugin that reports none has taken none,
+    which is not a failure: the verdict does not depend on a picture.
+    """
+    reported = result.get("snapshots") if isinstance(result, dict) else None
+    if not reported:
+        return {}
+    if not isinstance(reported, dict):
+        pc_logging.warning(
+            "%s: the simulation '%s' reported 'snapshots' that are not a mapping of moments to files"
+            % (object_name, simulation_name)
+        )
+        return {}
+
+    root = os.path.abspath(directory)
+    found = {}
+    for moment, name in reported.items():
+        if not isinstance(name, str) or not name:
+            continue
+        path = os.path.abspath(os.path.join(root, name))
+        if not path.startswith(root + os.sep):
+            pc_logging.warning(
+                "%s: the simulation '%s' reported a '%s' snapshot outside its run directory: %s"
+                % (object_name, simulation_name, moment, name)
+            )
+            continue
+        if not os.path.isfile(path):
+            pc_logging.warning(
+                "%s: the simulation '%s' reported a '%s' snapshot it did not write: %s"
+                % (object_name, simulation_name, moment, name)
+            )
+            continue
+        found[str(moment)] = path
+    return found
+
+
+# ---------------------------------------------------------------------------
 # Running
 # ---------------------------------------------------------------------------
 
@@ -460,7 +603,14 @@ def subject_kind(shape) -> typing.Optional[str]:
     return kind if kind in ("part", "assembly") else None
 
 
-async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration, report: bool = True) -> SimulationResult:
+async def run_async(
+    ctx,
+    shape,
+    kind: str,
+    declaration: SimulationDeclaration,
+    report: bool = True,
+    plugin: typing.Optional[str] = None,
+) -> SimulationResult:
     """Run one declared simulation of one object and validate what came back.
 
     Never raises: whatever went wrong is on the result, as text in ``error``
@@ -473,7 +623,17 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration, r
     failed run was the machine's fault and *skips* it cannot have had an
     ``ERROR`` logged in its name already, since any ``ERROR`` is what makes
     ``pc`` exit non-zero. Unreported, the same lines go to ``DEBUG``.
+
+    ``plugin`` runs it with another simulation plugin than the one it names
+    ('pc sim --plugin', the IDE's "Simulated by"), as '<package>:<name>'
+    resolved the way the declaration's own would be: everything else the
+    declaration says -- the scene, the offset, the parameters, the validation
+    -- is asked of that plugin instead. It is a different question, so it is
+    cached as one.
     """
+    if plugin:
+        declaration = copy.copy(declaration)
+        declaration.simulation = plugin
     object_name = "%s:%s" % (shape.project_name, shape.name)
     result = SimulationResult(declaration, object_name)
     say_error = pc_logging.error if report else pc_logging.debug
@@ -497,8 +657,15 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration, r
             # What the directory holds is this run's and nothing else's: the
             # whole of it is what the cache stores, and an artifact an earlier
             # run left there would be stored as this one's - or, worse, read by
-            # whoever opens the directory as what this run produced.
+            # whoever opens the directory as what this run produced. That
+            # includes last run's pictures, which would otherwise be reported as
+            # this run's when the plugin draws none.
             _empty(directory)
+
+            # The pictures to ask for. Part of the question, so that a scene
+            # looked at from somewhere else is not answered with the pictures
+            # taken from where it used to be looked at.
+            snapshot = snapshot_request(ctx, scene)
 
             # The same question asked again is a read: the directory is put
             # back as the run that answered it left it, scene and all, and the
@@ -506,7 +673,7 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration, r
             # and is evaluated below either way, so editing it re-judges the
             # run rather than repeating it.
             cache = getattr(ctx, "cache_artifacts", None)
-            artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind, world)
+            artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind, world, snapshot)
             result.artifact_key = artifact.get() if artifact is not None else None
             result.result = await cache_artifacts.restore_async(cache, artifact, directory=directory)
             if result.result is None:
@@ -514,10 +681,12 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration, r
                 _empty(directory)
                 scene_file = await _export_scene_async(ctx, scene, impl, directory)
                 result.result = await _run_plugin_async(
-                    ctx, impl, directory, scene_file, declaration, object_name, kind
+                    ctx, impl, directory, scene_file, declaration, object_name, kind, snapshot=snapshot
                 )
                 # Only an answer is remembered: a run that failed raised above.
                 await cache_artifacts.store_async(cache, artifact, result.result, directory=directory)
+            # Restored or run, the pictures are files in the directory now.
+            result.snapshots = collect_snapshots(directory, result.result, object_name, declaration.name)
         except Exception as e:  # pylint: disable=broad-except
             result.error = str(e)
             result.exception = e
@@ -568,10 +737,14 @@ async def question_key_async(ctx, shape, kind: str, declaration: SimulationDecla
     What 'run_async' asks the artifact cache with, worked out the same way and
     without building or running anything: the scene's key (which covers the
     subject), the plugin and its resolved options, its environment, the
-    declaration's 'params', how the scene is exported for it, and the content of
-    both scripts and of the wrappers. So it is the whole of what a run's
-    'before' and 'after' depend on -- and deliberately not the 'validation:',
-    which is judged over them afterwards.
+    declaration's 'params', how the scene is exported for it, the pictures it
+    is asked to take, and the content of both scripts and of the wrappers. So it
+    is the whole of what a run's 'before' and 'after' depend on -- and
+    deliberately not the 'validation:', which is judged over them afterwards.
+    The pictures are not something a verdict depends on, but they are part of
+    what the run is asked, and this key is that question's (a test holds the
+    two to be equal): a scene looked at from somewhere else is judged again
+    rather than vouched for by a run that drew it from where it used to be.
 
     For a caller that remembers something *derived* from a run, and has to be
     told when the run it was derived from would be a different one: 'pc test'
@@ -589,10 +762,11 @@ async def question_key_async(ctx, shape, kind: str, declaration: SimulationDecla
         # that will fail, and nothing is remembered about one.
         await scene.prepare_async()
         world = scene.world_facts(ctx)
+        snapshot = snapshot_request(ctx, scene)
     except Exception as e:  # pylint: disable=broad-except
         pc_logging.debug("%s: the simulation '%s' has no key: %s" % (object_name, declaration.name, e))
         return None
-    artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind, world)
+    artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind, world, snapshot)
     return artifact.get() if artifact is not None else None
 
 
@@ -624,7 +798,7 @@ def _scene_export(ctx, scene, impl, directory: str):
     return format_name, export_impl, scene_project
 
 
-async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str, world=None):
+async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str, world=None, snapshot=None):
     """The cache key of one simulation's answer, or None when it has none.
 
     The scene's own key - which covers the subject, since the subject is a
@@ -676,6 +850,8 @@ async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str,
             "source": impl.source_cache_key(),
             "export_source": export_impl.source_cache_key(),
             "wrappers": source_key.wrappers_key(),
+            # The pictures asked for: where from, how big, and into which files.
+            "snapshot": snapshot,
         }
         if world:
             # Only when there is one, so that a scene that states neither keeps
@@ -713,7 +889,9 @@ async def _export_scene_async(ctx, scene, impl, directory: str) -> str:
     return path
 
 
-async def _run_plugin_async(ctx, impl, directory: str, scene_file: str, declaration, subject: str, kind: str) -> dict:
+async def _run_plugin_async(
+    ctx, impl, directory: str, scene_file: str, declaration, subject: str, kind: str, snapshot=None
+) -> dict:
     """Start the plugin in its sandbox and return the JSON it produced."""
     script = await output.materialize_script(ctx, impl)
 
@@ -729,11 +907,18 @@ async def _run_plugin_async(ctx, impl, directory: str, scene_file: str, declarat
             "simulation": declaration.name,
         }
     )
+    if snapshot:
+        # The pictures to take, and from where; see 'snapshot_request'.
+        request["snapshot"] = snapshot
     # The same key the export wrapper reads its script path under; one
     # definition of it, in 'output', so the two wrappers cannot disagree.
     request[output.SCRIPT_KEY] = os.path.abspath(script)
 
-    runtime = ctx.get_python_runtime(version=impl.python_version())
+    # The image the plugin names, as for an export or a render implementation
+    # (see 'Shape._run_implementation_locked'): a simulator that is not a wheel
+    # - Gazebo - can only arrive in a sandbox built from an image that carries
+    # it.
+    runtime = ctx.get_python_runtime(version=impl.python_version(), image=impl.docker_image)
     await runtime.prepare_for_package(impl.project)
     # One at a time rather than with asyncio.gather(), for the reason
     # 'Shape._render_one_async' installs them that way: the order a package
@@ -749,7 +934,12 @@ async def _run_plugin_async(ctx, impl, directory: str, scene_file: str, declarat
         os.path.abspath(directory),
         os.path.abspath(impl.project.config_dir),
     ]
-    exitcode, response_serialized, errors = await runtime.run_async(command, shape_envelope.serialize(request))
+    # A sandbox that sends files rather than sharing a directory has to be told
+    # what comes back: the pictures are written into the run directory, so the
+    # run directory does. The scene goes the other way without being named,
+    # because the directory is an argument (see 'input_dirs_for').
+    extra = {"output_dirs": [os.path.abspath(directory)]} if getattr(runtime, "EXCHANGES_FILES", False) else {}
+    exitcode, response_serialized, errors = await runtime.run_async(command, shape_envelope.serialize(request), **extra)
     # Only on a non-zero exit. 'RuntimePython' clears stderr for a run it
     # considers successful, but it decides that on the raw 'returncode' -
     # *before* normalizing the two Windows fault codes it deliberately forgives

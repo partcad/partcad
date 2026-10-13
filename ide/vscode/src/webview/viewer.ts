@@ -10,15 +10,18 @@
 // instructions, and anything that can be bought has suppliers and prices, so the
 // panel is a strip of tabs over one object rather than a canvas:
 //
-//     (Requirements)  |  Design           |  Analysis   |  Manufacturing                                                    |  Validation  |  Operations
-//                           3D | 2D | Draft     FEA | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly
+//     (Requirements)  |  Design           |  Analysis   |  Manufacturing                                                    |  Validation                       |  Operations
+//                           3D | 2D | Draft     FEA | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Simulation | Process Emulation
 //
-// Three groups, each a strip of its own. Design is the object itself: turned in
+// Four groups, each a strip of its own. Design is the object itself: turned in
 // 3D, rendered to a picture, drawn as a dimensioned drawing. Analysis is what
 // engineering analysis says about it, and Manufacturing what making it takes -
 // which of its parts are made and which are ordered, how to make them, what it
-// is made of, where to buy it, how it goes together. Validation and Operations
-// hold nothing yet, and are always disabled.
+// is made of, where to buy it, how it goes together. Validation is whether it
+// does what it is supposed to: the simulations its 'simulate:' section declares,
+// run, with a picture of the scene before and after -- and, beside them, Process
+// Emulation, which holds nothing yet and is always disabled. Operations holds
+// nothing yet either, and is always disabled.
 //
 // Requirements comes before all of them, and only for an object that declares
 // a 'requirements:' section: it is what the object was asked to be, which is
@@ -36,14 +39,18 @@
 // This file is the shell: it owns the tab strips and the panes, routes what the
 // extension host posts in, and asks for the contents of a tab the first time it
 // is looked at. Each pane draws itself ('scene.ts', 'render.ts', 'bom.ts',
-// 'bvb.ts', 'build.ts', 'assembly.ts', 'supply.ts'); none of them talks to the
-// host directly.
+// 'bvb.ts', 'build.ts', 'assembly.ts', 'supply.ts', 'simulation.ts'); none of
+// them talks to the host directly.
 //
 // The Manufacturing strip is the one whose shape depends on an answer. Whether
 // anything is built (the Build tab) and whether anything is bought (the Buy tab)
 // is what the user decided on the Build vs Buy tab, over a tree only the daemon
 // can read - so that tree is asked for on every show of a part or an assembly,
-// whichever tab is open, and the strip is rebuilt when it arrives.
+// whichever tab is open, and the strip is rebuilt when it arrives. Validation is
+// the same: whether there is anything to simulate is what the object's
+// 'simulate:' section says, which only the daemon can read, so that list is
+// asked for on every show too - without running anything - and the panel's own
+// strip is rebuilt when it arrives.
 //
 // The 3D view is loaded on its own rather than imported: it needs WebGL, and a
 // window without it throws as the view is built. Imported, that took every other
@@ -93,6 +100,8 @@ import {
     RenderFormat,
     RequirementsData,
     ShowMessage,
+    SimulationListData,
+    SimulationRunData,
     StateReplyMessage,
     SupplyData,
     TabId,
@@ -102,6 +111,7 @@ import {
 } from './messages';
 import { Choice, RenderView } from './render';
 import { RequirementsView } from './requirements';
+import { SimulationView } from './simulation';
 import { spaceMouse } from './spacemouse';
 import { controlValues, snapshot } from './state';
 import { SupplyView } from './supply';
@@ -127,6 +137,8 @@ const panes: Record<TabId, HTMLElement> = {
     assembly: byId('pane-assembly'),
     fea: byId('pane-fea'),
     cfd: byId('pane-cfd'),
+    simulation: byId('pane-simulation'),
+    emulation: byId('pane-emulation'),
 };
 
 /** The tabs whose panes are rebuilt from scratch on every show. */
@@ -150,16 +162,24 @@ for (const tab of ANALYSIS_TABS) {
     caeViews[tab] = new CaeView(panes[tab], tab, (implementation) => runAnalysis(tab, implementation));
 }
 const requirementsView = new RequirementsView(panes.requirements);
+// The simulation pane keeps what each run answered for as long as the object is
+// on screen: a run is a simulator started in a sandbox, and switching back to a
+// simulation already run must not start it again.
+const simulationView = new SimulationView(panes.simulation, {
+    onRun: (scenario, plugin) => runSimulation(scenario, plugin),
+});
 const tabs = new Tabs(byId('tabs'), onTabSelected);
 const designTabs = new Tabs(byId('design-tabs'), (tab) => onInnerSelected('design', tab));
 const analysisTabs = new Tabs(byId('analysis-tabs'), (tab) => onInnerSelected('analysis', tab));
 const manufacturingTabs = new Tabs(byId('manufacturing-tabs'), (tab) => onInnerSelected('manufacturing', tab));
+const validationTabs = new Tabs(byId('validation-tabs'), (tab) => onInnerSelected('validation', tab));
 
 /** Each group of the panel's strip, and the strip of its own it holds. */
 const groups: Partial<Record<TabId, Tabs>> = {
     design: designTabs,
     analysis: analysisTabs,
     manufacturing: manufacturingTabs,
+    validation: validationTabs,
 };
 
 /** The 3D view's module, once it has loaded; undefined before, and for good if it could not. */
@@ -420,6 +440,17 @@ function request(tab: TabId, extra: Omit<FetchTabMessage, 'type' | 'tab' | 'toke
  */
 let manufacturing: { data: BvbData; result: BvbResult } | 'failed' | undefined;
 
+/**
+ * What the object on screen declares under 'simulate:', once the daemon has
+ * said: what the Validation group is enabled by. 'failed' when it could not say
+ * - a daemon too old to have been asked - which leaves the group disabled, with
+ * the reason on the Simulation tab.
+ */
+let simulations: SimulationListData | 'failed' | undefined;
+
+/** The simulation each run in flight is of, and the plugin it was asked for with, by its token. */
+const simulationRuns = new Map<number, { scenario: string; plugin: string | undefined }>();
+
 /** The thumbnails and measurements still to ask for, and the batch in flight. */
 let detailsQueue: { name: string; kind: string }[] = [];
 let detailsToken: number | undefined;
@@ -502,15 +533,18 @@ function tabsFor(message: ShowMessage | undefined): TabSpec[] {
             disabled: !Tabs.anyEnabled(manufacturingTabsFor(message)),
             hint: 'No manufacturing or procurement instructions are provided for this object',
         },
-        // Placeholders for the groups to come: in the strip so that its shape is
-        // the one it will keep, disabled because they hold no tabs yet.
         {
             id: 'validation',
             label: 'Validation',
             pane: panes.validation,
-            disabled: true,
-            hint: 'No validation instructions are provided for this object',
+            disabled: !Tabs.anyEnabled(validationTabsFor(message)),
+            hint:
+                message !== undefined && simulations === undefined && simulated(message)
+                    ? 'Asking PartCAD what this declares under simulate:…'
+                    : 'No validation instructions are provided for this object',
         },
+        // A placeholder for the group to come: in the strip so that its shape
+        // is the one it will keep, disabled because it holds no tabs yet.
         {
             id: 'operations',
             label: 'Operations',
@@ -612,6 +646,50 @@ function manufacturingTabsFor(message: ShowMessage | undefined): TabSpec[] {
     ];
 }
 
+/** Whether an object is one that can declare simulations: a part or an assembly of a known package. */
+function simulated(message: ShowMessage | undefined): boolean {
+    return Boolean(message?.package) && (message?.kind === 'part' || message?.kind === 'assembly');
+}
+
+/**
+ * Validation: the simulations the object declares, run, and Process Emulation.
+ *
+ * Simulation is enabled only once the daemon has said there is at least one: a
+ * part or an assembly with a 'simulate:' section that names a simulation.
+ * Unlike the analyses, it is not offered to every part on the chance that it
+ * says something - "this declares no simulations" is not a page anybody opens
+ * the group to read, and the strip says it in the tab's tooltip instead.
+ *
+ * Process Emulation is a placeholder, in the strip so that its shape is the one
+ * it will keep, and always disabled. So the group is enabled exactly when
+ * Simulation is, which is what 'tabsFor' reads off this strip.
+ */
+function validationTabsFor(message: ShowMessage | undefined): TabSpec[] {
+    const state = message === undefined ? undefined : simulations;
+    const declared = state !== undefined && state !== 'failed' ? state.simulations.length : 0;
+    return [
+        {
+            id: 'simulation',
+            label: 'Simulation',
+            pane: panes.simulation,
+            disabled: !simulated(message) || declared === 0,
+            hint:
+                simulated(message) && state === undefined
+                    ? 'Asking PartCAD what this declares under simulate:…'
+                    : state === 'failed'
+                      ? 'PartCAD could not say what this simulates'
+                      : "This declares no simulations: it has no 'simulate:' section",
+        },
+        {
+            id: 'emulation',
+            label: 'Process Emulation',
+            pane: panes.emulation,
+            disabled: true,
+            hint: 'Process emulation is not available yet',
+        },
+    ];
+}
+
 /** Rebuild every strip for an object: each group's own first, then the panel's. */
 function setAllTabs(message: ShowMessage | undefined): void {
     // The groups' strips first, so that the panel's, opening a group, finds the
@@ -619,6 +697,7 @@ function setAllTabs(message: ShowMessage | undefined): void {
     designTabs.setTabs(designTabsFor(message));
     analysisTabs.setTabs(analysisTabsFor(message));
     manufacturingTabs.setTabs(manufacturingTabsFor(message));
+    validationTabs.setTabs(validationTabsFor(message));
     tabs.setTabs(tabsFor(message));
 }
 
@@ -686,6 +765,7 @@ async function show(message: ShowMessage): Promise<void> {
     }
     resetRenderTabs('Select this tab to render it.');
     resetManufacturing('Asking PartCAD what this is made of…');
+    resetValidation('Asking PartCAD what this declares under simulate:…');
     // Asked for now, whichever tab is open: which Manufacturing tabs apply
     // depends on the answer. No geometry is built for it.
     if (message.package && (message.kind === 'part' || message.kind === 'assembly')) {
@@ -704,6 +784,12 @@ async function show(message: ShowMessage): Promise<void> {
         request('requirements', { verify: false });
     } else {
         requirements = undefined;
+    }
+    // And whether there is anything to validate, which is the same kind of
+    // question: the object's configuration, read, with nothing run.
+    if (simulated(message)) {
+        requested.add('simulation');
+        request('simulation');
     }
 
     // Set up viewer configuration on the window object for access by scene.ts
@@ -810,7 +896,54 @@ function clear(): void {
     resetManufacturing('Nothing to show.');
     requirements = undefined;
     requirementsView.setBusy('Nothing to show.');
+    resetValidation('Nothing to simulate.');
     setAllTabs(undefined);
+}
+
+/** Take back what the Simulation tab showed for the previous object. */
+function resetValidation(text: string): void {
+    simulations = undefined;
+    simulationRuns.clear();
+    simulationView.setBusy(text);
+}
+
+/**
+ * Run one simulation of the object on screen: 'pc sim -f <name>'.
+ *
+ * A token per run rather than the tab's one token, because several runs can be
+ * in flight for one object - a reader who selects one simulation and then the
+ * next has asked for both, and each answer belongs to the simulation it is of.
+ * The daemon runs them one after another either way.
+ */
+function runSimulation(scenario: string, plugin: string | undefined): void {
+    if (shown === undefined) {
+        return;
+    }
+    lastToken += 1;
+    simulationRuns.set(lastToken, { scenario, plugin });
+    // 'plugin' is the field the Draft tab names its drawing package in, and
+    // means the same here: who does the work instead of the default.
+    fetchTab({ type: 'fetchTab', tab: 'simulation', token: lastToken, scenario, plugin });
+}
+
+/** What the object declares under 'simulate:' has arrived: list it, and rebuild the strips it decides. */
+function onSimulations(data: SimulationListData | undefined, error: string | undefined): void {
+    if (error !== undefined || data === undefined || data === null) {
+        simulations = 'failed';
+        simulationView.showError(error ?? 'PartCAD had nothing to say about what this simulates.');
+    } else {
+        data.simulations = data.simulations ?? [];
+        simulations = data;
+        simulationView.setScenarios(data);
+    }
+    if (shown === undefined) {
+        return;
+    }
+    validationTabs.setTabs(validationTabsFor(shown));
+    // Not with 'keepCurrent': this is the first the strip learns about whether
+    // the group applies, and a reader who was on Validation for the last object
+    // lands on it again now that it does.
+    tabs.setTabs(tabsFor(shown));
 }
 
 /** Take back what the Manufacturing tabs that own their panes showed for the previous object. */
@@ -1076,6 +1209,12 @@ function onLeafSelected(tab: TabId): void {
         // The table's pictures waited for it to be looked at (see 'pumpDetails').
         pumpDetails();
     }
+    if (tab === 'simulation') {
+        // The list was asked for with the show; what selecting the tab asks for
+        // is a run of the simulation selected in it, the first time.
+        simulationView.start();
+        return;
+    }
     if (requested.has(tab)) {
         return;
     }
@@ -1123,6 +1262,17 @@ function onTabData(
     error: string | undefined,
     implementation: string | undefined,
 ): void {
+    const asked = tab === 'simulation' ? simulationRuns.get(token) : undefined;
+    if (asked !== undefined) {
+        // A run, which is answered under a token of its own: see 'runSimulation'.
+        simulationRuns.delete(token);
+        if (error !== undefined) {
+            simulationView.showRunError(asked.scenario, error, asked.plugin);
+        } else {
+            simulationView.showRun(asked.scenario, data as SimulationRunData | undefined, asked.plugin);
+        }
+        return;
+    }
     if (awaiting.get(tab) !== token) {
         // For an object that is no longer on screen, or for a run this tab has
         // since been asked to replace.
@@ -1153,6 +1303,10 @@ function onTabData(
     }
     if (tab === 'requirements') {
         onRequirements(data as RequirementsData | undefined, error);
+        return;
+    }
+    if (tab === 'simulation') {
+        onSimulations(data as SimulationListData | undefined, error);
         return;
     }
     if (tab === 'build') {
@@ -1349,8 +1503,9 @@ function render(tab: TabId, pane: HTMLElement, data: unknown): void {
  *
  * Per sub-tab because they differ by sub-tab: 3D, 2D and Draft share the boxes
  * ticked in their trees (see 'selection'), but 2D also draws port overlays and
- * has a format, Draft has a drawing package and a format of its own, and each
- * Manufacturing tab has switches nobody else has. 'filters' is what the sub-tab
+ * has a format, Draft has a drawing package and a format of its own, each
+ * Manufacturing tab has switches nobody else has, and Simulation has the
+ * simulation selected and the verdict of each run. 'filters' is what the sub-tab
  * would send 'pc render --filter' -- null for the whole object -- and is
  * reported for the three that send one.
  */
@@ -1373,6 +1528,11 @@ function collectState(): Record<string, unknown> {
             }
             if (id === '2d') {
                 selections.overlays = renderTrees['2d']!.overlay();
+            }
+            if (id === 'simulation') {
+                // Which simulation is on screen and how each run went, which
+                // no control in the pane holds: the list is rows, not a select.
+                selections.simulation = simulationView.state();
             }
             subTabs[id] = { filters: tree?.filter() ?? null, selections };
         }

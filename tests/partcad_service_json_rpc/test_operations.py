@@ -12,6 +12,7 @@ context is replaced by a faithful fake so the operation glue (param extraction,
 event emission, formatting) is exercised without a real CAD environment.
 """
 
+import base64
 import contextlib
 import copy
 import os
@@ -3891,3 +3892,88 @@ def test_the_overlay_reader_takes_the_flags_and_the_ports(monkeypatch):
     # is asking for that port, not for each of its characters.
     operations._overlay({"with_ports": True, "ports": "only"})
     assert overlay_calls[-1]["select"] == ["only"]
+
+
+# ---- simulate.list and the snapshots of simulate.run ------------------------
+#
+# What the IDE's Validation tab is enabled by (what an object declares under
+# 'simulate:') and what its Simulation tab shows (a run's two pictures, as
+# bytes: the daemon may be on another machine).
+
+
+def install_fake_simulation(monkeypatch, declared):
+    def of_shape(shape):
+        return declared.get(shape.name, [])
+
+    install_fake_partcad_modules(monkeypatch, {"partcad.simulation": {"of_shape": of_shape}})
+
+
+def declared_simulation(name, **config):
+    return types.SimpleNamespace(
+        name=name,
+        desc=config.get("desc"),
+        scene=config.get("scene", "//builtin/scene:subject"),
+        simulation=config.get("simulation"),
+        validation=config.get("validation"),
+    )
+
+
+def test_simulate_list_names_what_an_assembly_declares_without_running_it(monkeypatch):
+    install_fake_simulation(
+        monkeypatch,
+        {"stack": [declared_simulation("stands", desc="Nothing moves", simulation="sim-mujoco:mujoco")]},
+    )
+    session, _ = make_session()
+    stack = FakeObject("stack")
+    session.partcad_ctx.shapes[("assembly", "//:stack")] = stack
+
+    result = operations.simulate_list(session, {"package": "//", "object": "stack", "kind": "assembly"})
+
+    assert result["object"] == "//:stack"
+    assert result["kind"] == "assembly"
+    assert result["simulations"] == [
+        {
+            "name": "stands",
+            "desc": "Nothing moves",
+            "scene": "//builtin/scene:subject",
+            "simulation": "sim-mujoco:mujoco",
+            "validation": None,
+        }
+    ]
+
+
+def test_simulate_list_of_an_object_that_declares_nothing_is_empty_rather_than_an_error(monkeypatch):
+    install_fake_simulation(monkeypatch, {})
+    session, _ = make_session()
+    session.partcad_ctx.shapes[("part", "//:block")] = FakeObject("block")
+
+    result = operations.simulate_list(session, {"package": "//", "object": "block"})
+
+    assert result["kind"] == "part"
+    assert result["simulations"] == []
+
+
+def test_simulate_list_says_which_object_it_could_not_find(monkeypatch):
+    install_fake_simulation(monkeypatch, {})
+    session, _ = make_session()
+
+    with pytest.raises(JsonRpcError) as raised:
+        operations.simulate_list(session, {"package": "//", "object": "nope", "kind": "assembly"})
+    assert "Assembly //:nope is not found" in str(raised.value)
+
+
+def test_the_snapshots_of_a_run_come_back_as_bytes_when_asked(tmp_path):
+    (tmp_path / "snapshot-before.png").write_bytes(b"\x89PNG before")
+    session, _ = make_session()
+
+    images = operations._inline_snapshots(
+        session.partcad,
+        {"before": str(tmp_path / "snapshot-before.png"), "after": str(tmp_path / "gone.png")},
+    )
+
+    # The one that is there, named and typed; the one that is not is left out
+    # rather than failing the run it belongs to.
+    assert set(images) == {"before"}
+    assert images["before"]["filename"] == "snapshot-before.png"
+    assert images["before"]["extension"] == "png"
+    assert base64.b64decode(images["before"]["content"]) == b"\x89PNG before"

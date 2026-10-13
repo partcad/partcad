@@ -367,7 +367,16 @@ Object commands
   <package>...`` or ``...:<name>`` to run everything the packages below declare too (see
   :ref:`recursive-names`), ``-f`` to run only the simulation of a given name, and
   ``--json`` to print the whole of what each simulation plugin reported. A validation that does not hold
-  exits non-zero.
+  exits non-zero. A run whose plugin drew the scene -- before and after, from the scene's ``render: png:``
+  viewpoint -- also says where the two pictures were written; a plugin that draws none has not failed.
+
+  ``--plugin <package>:<name>`` runs with another simulation plugin than the one each declaration names, such
+  as ``//pub/feature/simulate/gazebo:gazebo`` for a simulation written against MuJoCo; everything else the
+  declaration says is asked of that plugin instead. ``--before <path>`` and ``--after <path>`` save the state
+  the simulation started from and the state it ended in -- the very ``before`` and ``after`` its
+  ``validation:`` is evaluated over -- as YAML, or as JSON with ``--json`` or a path ending in ``.json``. They
+  save one simulation's state, so name the object and, when it declares several, the simulation with ``-f``.
+  The files are written on the machine the command runs on, whichever machine ran the simulation.
 
   It asks whether an object *works*: it places the object in the scene the declaration names, at the
   ``offset:`` the declaration states, runs the scene through the simulation plugin the declaration names, and
@@ -916,10 +925,12 @@ instead.
   One flag per tab of the viewer opens it on that tab, named ``--<group>-<tab>`` the way the viewer's two strips
   read: ``--design-3d``, ``--design-2d``, ``--design-draft``; ``--analysis-fea``, ``--analysis-cfd``;
   ``--manufacturing-bvb``, ``--manufacturing-build``, ``--manufacturing-buy``, ``--manufacturing-bom``,
-  ``--manufacturing-assembly``. With none, the viewer stays on whichever tab it is on. The tab travels with the
-  shape, so it is the window that draws the object that switches; a tab that does not apply to the object (FEA
-  of an assembly) is not opened, and one that is not known yet (Build, until the viewer has worked out what is
-  built) is opened as soon as it is. Opening an analysis tab runs the analysis, as clicking it does.
+  ``--manufacturing-assembly``; ``--validation-simulation``. With none, the viewer stays on whichever tab it is
+  on. The tab travels with the shape, so it is the window that draws the object that switches; a tab that does
+  not apply to the object (FEA of an assembly) is not opened, and one that is not known yet (Build, until the
+  viewer has worked out what is built; Simulation, until it has read what the object declares under
+  ``simulate:``) is opened as soon as it is. Opening an analysis tab runs the analysis, and opening Simulation
+  runs the first simulation, as clicking them does.
 
   .. code-block:: shell
 

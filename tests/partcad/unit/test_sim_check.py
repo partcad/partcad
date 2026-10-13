@@ -682,7 +682,9 @@ def test_pc_sim_still_reports_for_itself(package, monkeypatch, caplog):
     assert result.failed
     assert "the simulation 'stays' did not validate" in caplog.text
     assert _errors(caplog)
-    # And nothing new in what '--json' prints.
+    # And nothing of the check's in what '--json' prints: the exception, the
+    # resolved plugin, the problem and the artifact key stay off it. The
+    # pictures are on it, because they are what the run produced.
     assert set(result.to_dict()) == {
         "object",
         "simulation",
@@ -692,6 +694,7 @@ def test_pc_sim_still_reports_for_itself(package, monkeypatch, caplog):
         "passed",
         "error",
         "result",
+        "snapshots",
     }
 
 

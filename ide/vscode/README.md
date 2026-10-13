@@ -27,10 +27,10 @@ Anything that can reach that port displays into the same viewer, including a `pc
 terminal. Set `PARTCAD_IDE_PORT` to move both ends off the default port.
 
 The panel is a strip of tabs over the one object, not just a canvas: groups, **Design** (the object
-itself), **Analysis** (analysing it) and **Manufacturing** (making it), each with tabs of its own, then
-**Validation** and **Operations**, which are always disabled for now. An object that declares
-`requirements:` has a **Requirements** tab in front of all of them. Every group
-shows all of its tabs, disabling what does not apply, and Analysis and Manufacturing are disabled
+itself), **Analysis** (analysing it), **Manufacturing** (making it) and **Validation** (whether it does what it
+is supposed to), each with tabs of its own, then **Operations**, which is always disabled for now. An object that
+declares `requirements:` has a **Requirements** tab in front of all of them. Every group
+shows all of its tabs, disabling what does not apply, and Analysis, Manufacturing and Validation are disabled
 themselves when none of theirs does - hovering over a disabled group says why; each opens on the tab last opened in it while that one applies,
 and on the first that does otherwise.
 
@@ -46,6 +46,8 @@ and on the first that does otherwise.
 | **Manufacturing → Buy** | For whatever is bought: where it can be bought, and a quote per supplier. |
 | **Manufacturing → Bill of Materials** | For a part or an assembly: what has to be procured to have it, as `pc bom` lists it - a made part as the stock it is made from, a sub-assembly with a vendor and an SKU as one item ordered whole. |
 | **Manufacturing → Assembly** | For an assembly: the assembly instructions as a PDF or HTML document, with **Recursive** and **Build parts** (`pc instructions -r -b`) and **Save…**. Manufacturing is disabled for a scene, a sketch or an interface. |
+| **Validation → Simulation** | For a part or an assembly with a `simulate:` section: the simulations it declares, listed on the left with the first one selected, each name led by a mark saying how its last run went (a green ✓ passed, a red ✗ failed, a red ! could not run, • ran with nothing to check). Selecting one runs it (`pc sim -f <name>`) and shows two pictures the simulation plugin took of the scene — before anything moved on the left, after the run on the right — from the viewpoint the scene is rendered from (its `render: png:` `viewport_origin`/`viewport_up`). Under them, **Criteria**, **Before** and **After** open on a click: the `validation:` expression, and the `before` and `after` objects the plugin reported, as JSON. Over them, as on the Draft tab, **Simulated by** chooses the plugin — MuJoCo or Gazebo, the one the simulation names selected; another is `pc sim --plugin` — and **Simulate** runs it afresh. Validation is disabled for anything that declares no simulation. |
+| **Validation → Process Emulation** | Nothing yet: always disabled. |
 
 Only the 3D view comes over the viewer protocol. The others are questions about `<package>:<name>` that this
 extension puts to the PartCAD daemon, fetched the first time a tab is looked at and cached until the next
