@@ -547,7 +547,7 @@ log "==> Rebranding"
 # ---------------------------------------------------------------------------
 # Software WebGL, so the 3D view works on a machine with no working GPU driver.
 #
-# The PartCAD Viewer renders with WebGL. Chromium refuses to back WebGL with
+# The Digital Thread renders with WebGL. Chromium refuses to back WebGL with
 # SwiftShader unless asked (since M136), so on a machine whose GPU process fails
 # to start -- no driver, a confined package that cannot see one, a VM, a remote
 # display -- there is no WebGL at all and the 3D view is dead. That is not a

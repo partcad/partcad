@@ -90,7 +90,7 @@
         {
           // Software is a file the package ships and not geometry, so this says
           // what the file is and where it is, and asks for no render: whatever
-          // the PartCAD Viewer is showing stays as it is.
+          // the Digital Thread is showing stays as it is.
           let contents = document.querySelector('.contents');
           if (contents) {
             let html = `<table class="inspector">`;

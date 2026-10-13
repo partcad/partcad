@@ -8,7 +8,7 @@
  * What this window is showing, for `pc ide state`.
  *
  * Three views, one document: the PartCAD Explorer's selection, the PartCAD
- * Inspector's object, and the PartCAD Viewer's tabs, filters, selections and a
+ * Inspector's object, and the Digital Thread's tabs, filters, selections and a
  * screenshot. The shape is specified once, beside `MSG_STATE` in
  * `src/partcad_ide_client/protocol.py`; this collects it, and the viewer
  * server sends it back over the socket `pc` asked on.

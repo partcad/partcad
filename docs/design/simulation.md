@@ -4,7 +4,7 @@ This is the design record for physical simulation in PartCAD: what the pieces ar
 are, what is decided, and what is planned. How to *use* any of it is the user documentation's job
 (`docs/source/simulation.rst` and the configuration reference it links to); this file is for whoever changes it.
 
-Status words used below: **built** is on `devel`; **in review** is an open pull request, named; **decided** is agreed
+Status words used below: **built** is on `devel` (with the pull request it came in, where that helps); **decided** is agreed
 and not built; **open** is not agreed.
 
 ## Contents
@@ -166,11 +166,11 @@ plugins PartCAD maintains share one, so that a validation reads the same against
 | `samples` | The same readings at evenly spaced instants, when asked for. |
 
 Free joints are not reported as joints -- the body pose already says it -- and a model with no joints reports
-`joints: {}`. Joint reporting is **in review** (sim-mujoco #6, sim-gazebo #5). What an engine cannot report is named in
+`joints: {}`. Joint reporting is **built** (sim-mujoco #6, sim-gazebo #5). What an engine cannot report is named in
 `warnings` rather than reported as zero: Gazebo's joint-state publisher never fills effort and publishes two of a ball
 joint's three coordinates.
 
-### 4.3 What an exporter is handed (built, extended in review)
+### 4.3 What an exporter is handed (built)
 
 A scene exporter is handed the assembly *tree* rather than the compound it decodes to (`decode: false`), because the
 format *is* the tree: every node's name, label and placement are data, not baked into geometry. With
@@ -178,12 +178,12 @@ format *is* the tree: every node's name, label and placement are data, not baked
 
 - the node's **resolved physics** -- stated values merged over derived ones (section 5), each with its unit;
 - the material facts (`mu` → `friction`);
-- for a scene that states them, the **world**: gravity and the medium's density and viscosity (section 6, in review in
+- for a scene that states them, the **world**: gravity and the medium's density and viscosity (section 6, built in
   #757).
 
 ## 5. Physical properties
 
-### 5.1 Materials (built; units in review in #755)
+### 5.1 Materials (built; kg/m³ since #755)
 
 `materials:` is a section of `partcad.yaml`, packaged and shared like parts. A material states `density` (kg/m³),
 `mu` (the sliding friction coefficient, dimensionless) and, for a fluid, `viscosity` (dynamic, Pa·s). A part names one
@@ -216,7 +216,7 @@ materials:
     appearance: { color: "#b8b8b8", metalness: 1.0, roughness: 0.35 }   # planned
 ```
 
-### 5.2 Resolving a part's physics (in review in #755)
+### 5.2 Resolving a part's physics (built, #755)
 
 Every exporter, `pc info` and the simulation read one resolution, in `partcad/physics.py`:
 
@@ -266,13 +266,13 @@ PartCAD writes each *body's* coefficient. How an engine combines the two sides o
 the engines differ: **MuJoCo takes the larger** of the two geoms' coefficients (unless priorities say otherwise), and
 **Gazebo's DART the smaller**. So a contact between two bodies of one material uses that material's `mu` in both, and
 in MuJoCo a body on the ground plane gets at least the plane's default of 1.0. Each plugin documents its engine's rule,
-and an example's claim has to hold under it (in review in sim-mujoco #8 and #761).
+and an example's claim has to hold under it (built, sim-mujoco #8 and #761).
 
 Contact solver settings are the plugin's to choose and to document. MuJoCo's default soft contacts let a body creep
 under a sustained tangential load -- an aluminium block (μ 1.05) crept 33 mm down a 6° slope in ten seconds, which is
 a static-friction claim answered by the solver rather than by the friction. The MuJoCo plugin therefore writes
 `cone="elliptic" impratio="10" noslip_iterations="3"`, under which the same block moves under half a millimetre at 15°
-(in review in sim-mujoco #8).
+(built, sim-mujoco #8).
 
 Contact is physically a property of a **surface pairing** -- restitution, contact stiffness and damping, slip
 compliance, and the solver knobs that go with them (`kp`, `kd`, `min_depth`, `max_vel`, `soft_cfm`, `soft_erp`) -- and
@@ -309,7 +309,7 @@ become "keep both, related".
 
 ## 6. Scenes as worlds
 
-### 6.1 Gravity and medium (in review in #757)
+### 6.1 Gravity and medium (built, #757)
 
 A scene states the world it describes:
 
@@ -336,7 +336,7 @@ What the engines make of a medium differs, and each plugin documents it:
   `mass_properties.displacement_of()` gives a body's displaced volume and its centroid. MuJoCo applies the lift through
   `gravcomp`, which acts at the centre of mass, so the exporter writes each body's centre of buoyancy into the model and
   the simulation script adds the moment `(r_b − r_m) × lift` at every step. The consequence worth knowing: the model
-  opened in MuJoCo's own viewer, without PartCAD's script, floats but does not right itself (in review in #763,
+  opened in MuJoCo's own viewer, without PartCAD's script, floats but does not right itself (built, #763,
   sim-mujoco #9, sim-gazebo #8; `examples/feature_simulate:buoy`, released at 60°, ends upright).
 - **Gazebo** writes `<world><gravity>` and reports a medium as not modelled: its buoyancy system ignores mesh
   `<scale>`, which would make PartCAD's millimetre meshes a billion times too buoyant.
@@ -401,7 +401,7 @@ Consequences that come with building it:
 
 ## 8. Joints
 
-**Decided; not built.** A connection between two interfaces becomes a joint when the connection keeps any degree of
+**The core model is built (#766); exporting joints is decided and not built.** A connection between two interfaces becomes a joint when the connection keeps any degree of
 freedom once it is made. The degrees of freedom are declared in `motion:`, on the interfaces, on the mating between
 them and on the connection, and they combine.
 
@@ -602,7 +602,7 @@ Rules the table does not show:
 - **Units** convert at the boundary only: URDF and SDFormat in radians and metres, MJCF in degrees (its default) and
   metres.
 
-### 8.8a How the core model resolved the open details (in review in #766)
+### 8.8a How the core model resolved the open details (built, #766)
 
 Building the model (`AssemblyChild.joint`, `pc info`'s "Joints", the checks) settled what the text above left open:
 
@@ -716,7 +716,7 @@ carrying it as passthrough. The URDF reader counts sensors, transmissions and `r
 ## 9. Simulations as tests
 
 `pc test` runs every `simulate:` declaration of every part and assembly as its `sim` check (`pc test -f sim`), so the
-TDD loop is `pc test` -- red until the design does what it claims (in review in #756). `pc sim` remains the command
+TDD loop is `pc test` -- red until the design does what it claims (built, #756). `pc sim` remains the command
 that runs and reports simulations; both go through one implementation.
 
 **Verdicts.**
@@ -741,7 +741,7 @@ cantilever with beam theory. The `slippery` example was a counter-example: on a 
 block sideways, so the claim that friction made it slide was false. It now stands in a `tilted` scene whose gravity
 leans 15° off the vertical -- no ramp part, no edge, every stack placed as drawn -- where a block slides when μ < 0.268:
 the aluminium stack holds to 0.46 mm against a 5 mm bound, and the PTFE one loses its top block, which slides 69 mm
-(in review in #761). The friction table in the user documentation is measured in the same scene (#762).
+(built, #761). The friction table in the user documentation is measured in the same scene (#762).
 
 **What a validation can say.** Today: positions and orientations of bodies, and joint states, at the start, at the end
 and at sampled instants. Planned: inputs (an initial configuration and joint drives, section 13) and temporal helpers
@@ -753,7 +753,7 @@ Three kinds of derived data are cached in the existing tiers (`cacheFiles`, memc
 
 - **Geometry**, keyed on the object's own configuration and everything it is built from (built).
 - **Derived physical properties** -- mass, volume, centre of mass, inertia -- keyed on the shape's key plus the density
-  and the stated values the derivation read (in review in #755).
+  and the stated values the derivation read (built, #755).
 - **Simulation runs**: the plugin's result together with the whole run directory -- the scene file, its meshes,
   whatever the plugin wrote (built, #753). The key is the scene's own key (which covers the subject, a parameter of the
   scene), plus the plugin, its resolved options, its declared environment, the declaration's `params`, the exporter and
@@ -762,8 +762,8 @@ Three kinds of derived data are cached in the existing tiers (`cacheFiles`, memc
 
 A `validation:` is not part of a run's key: editing it re-judges the cached run rather than repeating it. The
 **verdict** `pc test` records is keyed on the run's key plus the validation expressions, so that nothing stale is served
-and a validation edit costs an evaluation, not a simulation -- 0.04 s on the example, with no engine started (in review
-in #756). Skips, failed runs and declarations without a `validation:` are not recorded. `simulate:` itself is not part
+and a validation edit costs an evaluation, not a simulation -- 0.04 s on the example, with no engine started (built,
+  #756). Skips, failed runs and declarations without a `validation:` are not recorded. `simulate:` itself is not part
 of a shape's cache key: declaring or editing a simulation does not rebuild the object.
 
 **What an implementation runs has to be in the key.** #753 keys a run on the content of the implementation's script and
@@ -775,7 +775,7 @@ endings normalised), plus the commit for a package imported from git -- which al
 plugin ships -- and PartCAD's own `wrappers/` the same way. Not every file: CAE models and render outputs are written
 into packages and would change the key on every run. So a data file a *local* plugin reads is the one input still
 outside the key. No absolute path, mtime or sandbox detail enters it; each file is read once per process and then
-`stat`ed, 9.7 ms the first time for the MuJoCo plugin and 0.05 ms after (in review in #765).
+`stat`ed, 9.7 ms the first time for the MuJoCo plugin and 0.05 ms after (built, #765).
 
 ## 11. Engine plugins
 
@@ -797,12 +797,12 @@ Rules for plugins:
   arithmetic; it never resolves a density or moves an inertia tensor itself.
 - **The version requirement matches the release** that provides what the plugin uses. While PartCAD and a plugin
   change together, a plugin's CI can be red until the release exists; that is accepted. Every merge to `devel` is a
-  release, so a pin written before a chain of core pull requests lands is a guess at a number: the pins in review assume
+  release, so a pin written before a chain of core pull requests lands is a guess at a number: the pins written during review assumed
   the chain merges in order, one release each, and are corrected to the real release when it is known.
 - **Runs are isolated.** Two runs on one machine must not see each other: Gazebo runs get a per-run transport partition
   (`GZ_PARTITION`), because two worlds of the same name otherwise read each other's pose and joint messages -- which
   `pc test` running several simulations at once makes routine. A partition the user set is kept as the parent
-  (`<theirs>:partcad-<id>`); using it as is would put every run back into one partition (in review in sim-gazebo #7).
+  (`<theirs>:partcad-<id>`); using it as is would put every run back into one partition (built, sim-gazebo #7).
 - **Plugins document their engine's modelling choices**: contact combination and solver settings, what a medium does,
   what is not modelled, and what is reported in `warnings`.
 
@@ -881,20 +881,20 @@ Each step is useful on its own, which is the test of whether the decomposition i
 |---|---|---|
 | 0 | `simulate:`, plugins, `pc sim`, the default scene; property tables; URDF read/write; MJCF and SDFormat in plugins | built |
 | 1 | Cache analysis, route and simulation results across sandbox types | built (#753) |
-| 2 | Command names in the docs and plugins; the `pc ide open --with mujoco` text | in review (#754, sim-mujoco #4, sim-gazebo #3) |
-| 3 | Mass properties from materials; kg/m³; one resolution, cached; shown in `pc info` | in review (#755, sim-mujoco #5, sim-gazebo #4, the metal and plastic catalogs) |
-| 4 | Scenes state gravity and a medium; fluid materials; buoyancy | in review (#757, sim-mujoco #7, sim-gazebo #6, partcad-index #17) |
-| 5 | Joint states in `before`/`after` | in review (sim-mujoco #6, sim-gazebo #5) |
-| 6 | `pc test` runs simulations; verdicts and their cache | in review (#756), after #761 |
-| 7 | `slippery` in a tilted scene, and MuJoCo contact settings | in review (#761, sim-mujoco #8) |
-| 7a | The friction table, measured | in review (#762) |
-| 7b | Buoyancy at the centre of buoyancy | in review (#763, sim-mujoco #9, sim-gazebo #8) |
-| 7c | Per-run Gazebo partitions | in review (sim-gazebo #7) |
-| 7d | Run keys cover what an implementation package ships | in review (#765) |
-| 7e | `resolve_resource_path` and colons in parameter values | in review (#760) |
-| 7f | Skills prepare generated objects for simulation | in review (#759) |
-| 7g | The user documentation refactored to how to use it; this record for the design | in progress (with #758) |
-| 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and the `connect` check | in review (#766) |
+| 2 | Command names in the docs and plugins; the `pc ide open --with mujoco` text | built (#754, sim-mujoco #4, sim-gazebo #3) |
+| 3 | Mass properties from materials; kg/m³; one resolution, cached; shown in `pc info` | built (#755, sim-mujoco #5, sim-gazebo #4, the metal and plastic catalogs) |
+| 4 | Scenes state gravity and a medium; fluid materials; buoyancy | built (#757, sim-mujoco #7, sim-gazebo #6, partcad-index #17) |
+| 5 | Joint states in `before`/`after` | built (sim-mujoco #6, sim-gazebo #5) |
+| 6 | `pc test` runs simulations; verdicts and their cache | built (#756) |
+| 7 | `slippery` in a tilted scene, and MuJoCo contact settings | built (#761, sim-mujoco #8) |
+| 7a | The friction table, measured | built (#762) |
+| 7b | Buoyancy at the centre of buoyancy | built (#763, sim-mujoco #9, sim-gazebo #8) |
+| 7c | Per-run Gazebo partitions | built (sim-gazebo #7) |
+| 7d | Run keys cover what an implementation package ships | built (#765) |
+| 7e | `resolve_resource_path` and colons in parameter values | built (#760) |
+| 7f | Skills prepare generated objects for simulation | built (#759) |
+| 7g | The user documentation refactored to how to use it; this record for the design | built (#758, #764) |
+| 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and the `connect` check | built (#766) |
 | 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes | decided |
 | 10 | **MJCF joints**, with a pendulum example checked against its closed form | decided |
 | 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics | decided |

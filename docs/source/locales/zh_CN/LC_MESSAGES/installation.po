@@ -1186,11 +1186,11 @@ msgstr ""
 
 #: ../../source/installation.rst:608
 msgid ""
-"The PartCAD extension -- which carries the PartCAD Viewer itself -- and "
+"The PartCAD extension -- which carries the Digital Thread itself -- and "
 "the extensions PartCAD works with: Python, YAML and the rest of the list "
 "in ``.vscode/extensions.json``."
 msgstr ""
-"PartCAD 扩展——PartCAD Viewer 本身就包含在其中——以及 PartCAD 配合使用的那些扩展：Python、YAM"
+"PartCAD 扩展——Digital Thread 本身就包含在其中——以及 PartCAD 配合使用的那些扩展：Python、YAM"
 "L，还有 ``.vscode/extensions.json`` 中列出的其余扩展。"
 
 #: ../../source/installation.rst:610

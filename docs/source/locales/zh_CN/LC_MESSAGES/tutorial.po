@@ -168,8 +168,8 @@ msgid "Inspect the part"
 msgstr "检视零件"
 
 #: ../../source/tutorial.rst:130
-msgid "Once a part is created, it can be inspected in ``PartCAD Viewer``."
-msgstr "零件一旦创建完成，就可以在 ``PartCAD Viewer`` 中对其进行检视。"
+msgid "Once a part is created, it can be inspected in ``Digital Thread``."
+msgstr "零件一旦创建完成，就可以在 ``Digital Thread`` 中对其进行检视。"
 
 #: ../../source/tutorial.rst:137
 msgid "Export the part"
@@ -392,9 +392,9 @@ msgstr "浏览"
 #: ../../source/tutorial.rst:305
 msgid ""
 "Browse the imported packages in the Explorer view. Click on the parts and"
-" assemblies to see them in the ``PartCAD Viewer`` view that will appear "
+" assemblies to see them in the ``Digital Thread`` view that will appear "
 "on the right."
-msgstr "在 Explorer 视图中浏览已导入的包。点击零件和装配体，即可在右侧出现的 ``PartCAD Viewer`` 视图中查看它们。"
+msgstr "在 Explorer 视图中浏览已导入的包。点击零件和装配体，即可在右侧出现的 ``Digital Thread`` 视图中查看它们。"
 
 #: ../../source/tutorial.rst:309
 msgid ""
@@ -426,11 +426,11 @@ msgid ""
 "When you edit Python or OpenSCAD files that are used in the current "
 "PartCAD package, saving the file makes it displayed automatically. Press "
 "``Save`` (Ctrl-S or Cmd-S) to save the script and trigger an automatic "
-"inspection of the part. The ``PartCAD Viewer`` view will appear on the "
+"inspection of the part. The ``Digital Thread`` view will appear on the "
 "right."
 msgstr ""
 "当你编辑当前 PartCAD 包中使用的 Python 或 OpenSCAD 文件时，保存文件会使其自动显示。按 ``Save`` （Ctrl-S"
-" 或 Cmd-S）保存脚本，并触发对该零件的自动检视。 ``PartCAD Viewer`` 视图会出现在右侧。"
+" 或 Cmd-S）保存脚本，并触发对该零件的自动检视。 ``Digital Thread`` 视图会出现在右侧。"
 
 #: ../../source/tutorial.rst:331
 msgid "Import parts"
@@ -637,11 +637,11 @@ msgid ""
 "When you edit ASSY files in the current PartCAD package, the assembly is "
 "displayed automatically on save. Press ``Save`` (Ctrl-S or Cmd-S) to save"
 " the assembly file and trigger an automatic inspection of the assembly. "
-"The ``PartCAD Viewer`` view will appear on the right if it's not open "
+"The ``Digital Thread`` view will appear on the right if it's not open "
 "yet."
 msgstr ""
 "当你编辑当前 PartCAD 包中的 ASSY 文件时，保存时装配体会自动显示。按 ``Save`` （Ctrl-S 或 "
-"Cmd-S）保存装配体文件，并触发对该装配体的自动检视。如果 ``PartCAD Viewer`` 视图尚未打开，它会出现在右侧。"
+"Cmd-S）保存装配体文件，并触发对该装配体的自动检视。如果 ``Digital Thread`` 视图尚未打开，它会出现在右侧。"
 
 #~ msgid ""
 #~ "The ``pc import assembly`` command "

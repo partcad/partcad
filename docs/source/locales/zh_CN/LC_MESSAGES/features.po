@@ -110,10 +110,10 @@ msgstr "从已有文件 **导入** 一个零件、装配体、场景或草图。
 #: ../../source/features.rst:38
 msgid ""
 "**Display** (inspect) a part, assembly, scene, sketch, or interface in "
-"the ``PartCAD Viewer``; parts can also be opened for display and editing "
+"the ``Digital Thread``; parts can also be opened for display and editing "
 "together, or their source edited directly."
 msgstr ""
-"在 ``PartCAD Viewer`` 中 **显示** "
+"在 ``Digital Thread`` 中 **显示** "
 "（查看）零件、装配体、场景、草图或接口；此外，零件还可以打开以同时进行显示和编辑，或者直接编辑其源代码。"
 
 #: ../../source/features.rst:40
@@ -150,25 +150,25 @@ msgstr ""
 msgid ""
 "The Explorer also lists the ``software`` a package ships. Selecting one "
 "shows its path and its ``fileHash`` in the Inspector and leaves the "
-"``PartCAD Viewer`` as it is: software is a file, not geometry, so there "
+"``Digital Thread`` as it is: software is a file, not geometry, so there "
 "is nothing to render."
 msgstr ""
 "Explorer 还会列出包所附带的 ``software`` 。选中其中一项，Inspector 中会显示它的路径和 ``fileHash`` "
-"，而 ``PartCAD Viewer`` 保持原样：软件是文件而不是几何体，没有什么可渲染的。"
+"，而 ``Digital Thread`` 保持原样：软件是文件而不是几何体，没有什么可渲染的。"
 
 #: ../../source/features.rst:57
-msgid "The PartCAD Viewer"
-msgstr "PartCAD Viewer"
+msgid "The Digital Thread"
+msgstr "Digital Thread"
 
 #: ../../source/features.rst:59
 msgid ""
-"Displaying an object opens the ``PartCAD Viewer``, which is a strip of "
+"Displaying an object opens the ``Digital Thread``, which is a strip of "
 "tabs over that one object rather than a bare canvas: groups of tabs, each"
 " with tabs of its own -- **Design**, **Analysis** and **Manufacturing**, "
 "followed by **Validation** and **Operations**, which have nothing in them"
 " yet and are always disabled. Design is always the first:"
 msgstr ""
-"显示一个对象会打开 ``PartCAD Viewer`` 。它不是一块空白画布，而是围绕这一个对象铺开的一排标签：若干标签组，每组下面又有自己的标签—— **设计** 、 **分析** 和 **制造** ，其后是 **验证** 和 **运维** ，后两组目前还是空的，始终处于禁用状态。设计组永远排在第一位："
+"显示一个对象会打开 ``Digital Thread`` 。它不是一块空白画布，而是围绕这一个对象铺开的一排标签：若干标签组，每组下面又有自己的标签—— **设计** 、 **分析** 和 **制造** ，其后是 **验证** 和 **运维** ，后两组目前还是空的，始终处于禁用状态。设计组永远排在第一位："
 
 #: ../../source/features.rst:64
 msgid "**Design** — the object itself, three ways, in tabs of its own:"
@@ -279,13 +279,13 @@ msgid ""
 "Every group always shows all of its tabs and disables the ones that do "
 "not apply, and a group none of whose tabs apply is disabled itself, and "
 "says why when the mouse is over it. Design and its 3D tab are always "
-"enabled, and are what the Viewer shows before anything has been selected."
+"enabled, and are what the Digital Thread shows before anything has been selected."
 " A group opens on the tab you last had open in it, if that one applies to"
 " the object, and on the first one that does otherwise."
 msgstr ""
 "每个组始终显示它的全部标签，并把其中不适用的那些禁用掉；如果一个组的标签全都不适用，这个组本身就会被禁用，鼠标悬停在上面时会说明原因。设计组及其 "
 "3D "
-"标签始终可用，也是在尚未选中任何对象时查看器所显示的内容。打开一个组时，会回到你上次在该组中打开的那个标签——前提是它适用于当前对象，否则就定位到第一个适用的标签。"
+"标签始终可用，也是在尚未选中任何对象时 Digital Thread 所显示的内容。打开一个组时，会回到你上次在该组中打开的那个标签——前提是它适用于当前对象，否则就定位到第一个适用的标签。"
 
 #: ../../source/features.rst:100
 msgid ""
@@ -417,14 +417,14 @@ msgstr ""
 
 #: ../../source/features.rst:146
 msgid ""
-"What the Viewer is showing can be asked of it from outside: ``pc ide "
+"What the Digital Thread is showing can be asked of it from outside: ``pc ide "
 "state`` (see :doc:`cli`) reports the tab and sub-tab on screen, the "
 "filter and the selections of each sub-tab, and a screenshot of the one on"
 " screen -- together with the Explorer's selection and the Inspector's "
 "parameters. It is what an AI agent working beside you reads to see what "
 "you are looking at."
 msgstr ""
-"Viewer 正在显示什么，可以从外部询问：``pc ide state`` （参见 "
+"Digital Thread 正在显示什么，可以从外部询问：``pc ide state`` （参见 "
 ":doc:`cli`）会报告屏幕上的标签和子标签、每个子标签的过滤器和选择，以及屏幕上那个子标签的截图——连同 Explorer 中的选择和 "
 "Inspector 中的参数。在你身边工作的 AI 智能体就是读取它来看你正在看的东西。"
 

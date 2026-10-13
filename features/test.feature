@@ -86,6 +86,96 @@ Feature: `pc test` command
     Then the command should exit with a status code of "1"
     And STDOUT should contain "declares no 'fileHash'"
 
+  @success @pc-test @pc-test-sim
+  Scenario: A part that claims something no simulator can run fails `pc test`
+    # The claim is written first, which is the point of the 'sim' check: a
+    # 'simulate:' is held to by every test run. This one names a plugin the
+    # package does not declare, so it fails before anything is built -- no
+    # geometry, no scene, no sandbox -- and fails on any machine: a name that
+    # resolves to nothing is not excused by what the machine has installed.
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        block:
+          type: step
+          path: block.step
+          simulate:
+            stands:
+              simulation: :nosuch
+              validation: after["bodies"]["block"]["pos"][2] > 5.0
+      """
+    And a file named "block.step" with content:
+      """
+      ISO-10303-21;
+      HEADER;
+      ENDSEC;
+      DATA;
+      ENDSEC;
+      END-ISO-10303-21;
+      """
+    When I run "pc test -f sim block"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "//:block: sim: the simulation 'stands' could not be run"
+    And STDOUT should contain "declares no simulation 'nosuch'"
+
+  @success @pc-test @pc-test-sim
+  Scenario: A claim with no condition is skipped in a package and fails by name
+    # Nothing is run either way -- there is nothing to judge a run by -- so the
+    # plugin need not even exist. Testing the package, the claim may be one
+    # somebody is still writing, and is skipped out loud; asking about the
+    # object by name is asking whether it does what it says, and it says
+    # nothing.
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        block:
+          type: step
+          path: block.step
+          simulate:
+            drafting:
+              simulation: :nosuch
+      """
+    And a file named "block.step" with content:
+      """
+      ISO-10303-21;
+      HEADER;
+      ENDSEC;
+      DATA;
+      ENDSEC;
+      END-ISO-10303-21;
+      """
+    When I run "pc test -f sim"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "the simulation 'drafting' states no 'validation'"
+    When I run "pc test -f sim block"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "the simulation 'drafting' states no 'validation'"
+
+  @success @pc-test @pc-test-sim
+  Scenario: `pc test` passes over an object that claims nothing
+    # The same gate as 'fea', 'cfd' and 'cam': an object with no 'simulate:'
+    # has nothing to be placed in a world for, and a package of them pays
+    # nothing for the check being there.
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        bolt:
+          type: step
+          path: bolt.step
+      """
+    And a file named "bolt.step" with content:
+      """
+      ISO-10303-21;
+      HEADER;
+      ENDSEC;
+      DATA;
+      ENDSEC;
+      END-ISO-10303-21;
+      """
+    When I run "pc test -f sim bolt"
+    Then the command should exit with a status code of "0"
+    And STDOUT should not contain "Test failed"
+
   @success @pc-test @pc-test-reproducibility
   Scenario: The same part is reproducible once the download is pinned
     Given a file named "partcad.yaml" with content:

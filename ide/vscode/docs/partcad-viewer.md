@@ -1,4 +1,4 @@
-# PartCAD Viewer
+# Digital Thread
 
 The panel is a strip of tabs over one object, not a canvas:
 
@@ -224,7 +224,7 @@ the protocol has no authentication.
 | `src/partcad_ide_client/client.py` | Python client |
 | `src/viewer/protocol.ts` | The same wire format, in TypeScript |
 | `src/viewer/PartcadViewerServer.ts` | The listening socket |
-| `src/viewer/PartcadViewer.ts` | The "PartCAD Viewer" webview panel, and the tab fetches |
+| `src/viewer/PartcadViewer.ts` | The "Digital Thread" webview panel, and the tab fetches |
 | `src/webview/viewer.ts` | The panel shell inside the webview: tabs, routing |
 | `src/webview/messages.ts` | The `postMessage` contract between the two, and the daemon payloads |
 | `src/webview/scene.ts` | The three.js renderer behind the 3D tab: the node tree as groups |

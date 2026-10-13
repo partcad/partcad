@@ -136,7 +136,7 @@ report the result:
 
 Do this after the command line tools are in place, whichever mode installed
 them. The PartCAD extension puts a package's parts, assemblies and sketches in
-the sidebar and hosts the `PartCAD Viewer`; it is a JSON-RPC client of the
+the sidebar and hosts the `Digital Thread`; it is a JSON-RPC client of the
 `partcad-json-rpc` those tools just provided, so it is worth having wherever
 this session is running in an editor that can host it.
 

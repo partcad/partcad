@@ -1,10 +1,10 @@
 {
   "name": "partcad-official",
-  "displayName": "PartCAD",
+  "displayName": "PartCAD: Digital Thread",
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.8.181",
+  "version": "0.8.185",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -419,7 +419,7 @@
         }
       },
       {
-        "title": "PartCAD Viewer",
+        "title": "Digital Thread",
         "order": 5,
         "properties": {
           "partcad.spaceMouse.enabled": {
@@ -524,7 +524,7 @@
         "enablement": "!partcad.editingExternally"
       },
       {
-        "title": "Open PartCAD Viewer",
+        "title": "Open Digital Thread",
         "category": "PartCAD",
         "command": "partcad.viewer",
         "icon": "$(preview)",

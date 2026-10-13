@@ -597,6 +597,7 @@ links:
 ```sh
 pc --no-ansi sim -a <name>          # every claim; exits non-zero when one fails
 pc --no-ansi sim --json -a <name>   # what the engine reported, before and after
+pc --no-ansi test -a <name>         # runs the same claims as its `sim` check
 ```
 
 ## 8. Finalize

@@ -5,7 +5,7 @@
 //
 // A client of spacenavd, the daemon that owns a 3Dconnexion SpaceMouse on Linux.
 //
-// The PartCAD Viewer reads the device through the Gamepad API wherever Chromium
+// The Digital Thread reads the device through the Gamepad API wherever Chromium
 // offers it as one, which is Windows and macOS. On Linux it does not: the kernel
 // reports a SpaceMouse's axes as relative motion rather than as a joystick, and
 // spacenavd holds the device besides. So the extension host reads spacenavd and

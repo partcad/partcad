@@ -121,7 +121,7 @@ interface Device {
  * '.then()' and no '.catch()'. A device that is lost - which is how a window
  * whose GPU process cannot present a WebGPU canvas answers the first frame -
  * rejects every scope still open, and each rejection reached the window's trap
- * ('host.ts') as "The PartCAD Viewer hit an error", written over a view that had
+ * ('host.ts') as "The Digital Thread hit an error", written over a view that had
  * already gone on to draw without the GPU. So on a device this file made, a
  * scope that cannot be popped because the device is gone has nothing to report
  * but that, which the returned function then says.

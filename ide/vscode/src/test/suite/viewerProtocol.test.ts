@@ -33,7 +33,7 @@ function header(magic: string, version: number, kind: number, length: number): B
     return buffer;
 }
 
-suite('PartCAD Viewer protocol', () => {
+suite('Digital Thread protocol', () => {
     test('a frame round-trips', () => {
         // 'package' is what the panel's tabs beside the 3D one are about: they
         // ask the daemon about '<package>:<name>', which a name cannot spell.

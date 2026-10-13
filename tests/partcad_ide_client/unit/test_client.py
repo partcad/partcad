@@ -284,9 +284,11 @@ def test_an_ide_too_old_to_say_is_told_apart_from_no_ide(monkeypatch):
 
 
 def test_an_ide_that_failed_to_collect_its_state_says_why(monkeypatch):
-    server = _ide_answering(monkeypatch, {protocol.MSG_STATE: {"ok": False, "error": "the Viewer did not answer"}})
+    server = _ide_answering(
+        monkeypatch, {protocol.MSG_STATE: {"ok": False, "error": "the Digital Thread did not answer"}}
+    )
     try:
-        with pytest.raises(client.StateNotSupported, match="the Viewer did not answer"):
+        with pytest.raises(client.StateNotSupported, match="the Digital Thread did not answer"):
             client.state()
     finally:
         server.close()
