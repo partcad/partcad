@@ -312,7 +312,8 @@ at all).
   their models and pictures, which a key over every file would be moved by; a revision alone misses a
   local edit. Each file is read once per process and re-read only when its size or modification time
   changes, or while it was written in the last three seconds (the "racily clean" case) -- the
-  modification time decides whether to read, never what the key is.
+  modification time decides whether to read, never what the key is. On top of all that, the **version**
+  the script and the wrapper report (`code_version`), the same `CACHE_VERSION` a shape is keyed on.
 
   **Nothing in a key may describe the sandbox that runs it.** Every sandbox type -- conda, venv, none,
   docker, remote, and the ones after them -- is expected to be reproducible and equivalent, so an entry
@@ -328,7 +329,10 @@ at all).
   For a simulation the subject is the *scene*, whose key covers the subject through its `subject` parameter
   and its links, plus the plugin, the declaration's `params`, how the scene is exported for it, and the
   scene's world as the facts it *resolved* to (a `medium:` is a reference into another package, whose
-  density can change without the scene's key moving). The
+  density can change without the scene's key moving), and the pictures the run is asked for
+  (`simulation.snapshot_request`: the scene's `render: png:` viewpoint and size), which are files in the run
+  directory and so come back with a hit -- a scene looked at from somewhere else is another question, not
+  last viewpoint's pictures. The
   `validation:` is deliberately not in it: it is re-evaluated on a hit, so editing it re-judges the run. A
   subject with no key (`cache: false`) is never cached, and only successes are stored, for the reason the
   verdict cache does not store an unrunnable analysis. The key is worked out without building the subject, so

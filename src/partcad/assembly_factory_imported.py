@@ -90,6 +90,8 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
     # inherited from 'AssemblyFactory' and is what decides both which kind this
     # produces and which kind the declaration has to say it can produce.
 
+    WRAPPERS = ("import.py",)
+
     def __init__(self, ctx, source_project, target_project, config):
         self.impl = output.import_declaration(ctx, target_project, config.get("type"))
         if self.impl is None:

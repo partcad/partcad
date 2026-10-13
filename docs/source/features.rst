@@ -91,12 +91,29 @@ is always the first (see :doc:`digital_thread/index` for what each group is for)
     (``pc instructions``).
 
   Manufacturing is for a part or an assembly; for a scene, a sketch or an interface it is disabled.
-- **Validation** — whether the object is what it claims to be:
+- **Validation** — whether the object is what it claims to be, and does what it is supposed to:
 
   - **Test** — every check ``pc test`` runs, with how each came out on this object: passed, failed, warned,
     skipped, or not applicable and why. The check selected shows what it found and what it is, when it applies
     and what to do when it fails (:doc:`digital_thread/testing`). An interference leaves an assembly of the two
-    parts and what they share, to open in 3D. Always enabled.
+    parts and what they share, to open in 3D. Always the first tab, and always enabled; an object that belongs
+    to no package has nothing to ask PartCAD about, and the tab says so.
+  - **Simulation** — for a part or an assembly that declares a ``simulate:`` section (see :doc:`simulation`):
+    the simulations it declares, listed on the left with the first one selected. Selecting one runs it, as
+    ``pc sim -f <name>`` does, and shows whether its ``validation:`` held, and two pictures of the scene the
+    simulation plugin took -- before anything moved on the left, and when the run was over on the right --
+    from where the scene is looked at when it is rendered. A plugin that takes no pictures has not failed:
+    a line says so where they would be.
+
+    Whether each run held is a green or red mark before its name in the list. Above the pictures, as on the
+    Draft tab, **Simulated by** chooses the plugin that runs it -- the one it names is selected, and choosing
+    another runs it with that one, like ``pc sim --plugin`` -- and **Simulate** runs it afresh. Under the
+    pictures, **Criteria**, **Before** and **After** open on a click: the ``validation:`` expression, and the
+    ``before`` and ``after`` the plugin reported, which are what that expression is evaluated over.
+  - **Process Emulation** — nothing yet; always disabled.
+
+  Validation is always enabled, for its Test tab; Simulation is disabled for anything that declares no
+  simulation.
 
 Every group always shows all of its tabs and disables the ones that do not apply, and a group none of whose
 tabs apply is disabled itself, and says why when the mouse is over it. Design and its 3D tab are always enabled,
@@ -859,11 +876,12 @@ the boundary conditions and where they landed, a route's job and the machine it
 is cut on, the implementation and every option it resolved to, the sandbox it
 runs in, the content of its script, and every Python module of the package it
 comes from -- the helper a plugin's scripts share as much as the scripts -- with
-the commit that package is at when it was fetched from a repository. Changing
-any of those runs it again, so a plugin release that changed only a helper is
-seen. What a run writes into a package, a model or a picture, is not part of the
-question, and neither is where the package is on disk or when its files were
-last touched. A simulation's ``validation:`` is not part
+the commit that package is at when it was fetched from a repository, and the
+version its script and the wrapper that runs it report (the ``CACHE_VERSION``
+each states). Changing any of those runs it again, so a plugin release that
+changed only a helper is seen. What a run writes into a package, a model or a
+picture, is not part of the question, and neither is where the package is on
+disk or when its files were last touched. A simulation's ``validation:`` is not part
 of the question: it is evaluated again on every run, so editing it re-judges the
 cached run rather than repeating it. What a simulation's question is made of,
 and how ``pc test``'s verdict on one is kept, are in :ref:`sim-caching`.

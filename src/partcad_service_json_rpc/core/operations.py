@@ -1536,7 +1536,7 @@ def lint_run(session, params):
     return None
 
 
-async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_name, fast_only=False):
+async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_name, fast_only=False, plugin=None):
     """Run every declared simulation of what was selected, one after another.
 
     Sequentially, and deliberately: a simulation plugin is a whole simulator
@@ -1593,7 +1593,7 @@ async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_na
         for declaration in pc_simulation.of_shape(shape):
             if filter_name and declaration.name != filter_name:
                 continue
-            results.append(await pc_simulation.run_async(ctx, shape, kind, declaration))
+            results.append(await pc_simulation.run_async(ctx, shape, kind, declaration, plugin=plugin))
     return results
 
 
@@ -1642,6 +1642,9 @@ def simulate_run(session, params):
                 params.get("assembly"),
                 params.get("filter"),
                 bool(params.get("fast_only")),
+                # Another simulation plugin than the declarations name, for
+                # every simulation this runs ('pc sim --plugin').
+                params.get("plugin") or None,
             )
         )
 
@@ -1665,15 +1668,101 @@ def simulate_run(session, params):
             pc.logging.info("Nothing declares a 'simulate:' section here")
     for result in results:
         pc.logging.info(_simulation_line(result))
+        if result.snapshots:
+            # Where to look, for whoever ran this from a terminal: the run
+            # directory is under PartCAD's state directory, not the package.
+            pc.logging.info(
+                "%s: %s: snapshots: %s"
+                % (
+                    result.object_name,
+                    result.name,
+                    ", ".join("%s %s" % (moment, path) for moment, path in result.snapshots.items()),
+                )
+            )
     failed = [result for result in results if result.failed]
 
+    simulations = [result.to_dict() for result in results]
+    if params.get("inline"):
+        # The pictures as bytes as well as paths, which is what the IDE's
+        # Simulation tab needs: a webview has no file system in reach, and the
+        # daemon that wrote them may not be on the machine showing them.
+        for entry in simulations:
+            entry["images"] = _inline_snapshots(pc, entry.get("snapshots") or {})
+
     return {
-        "simulations": [result.to_dict() for result in results],
+        "simulations": simulations,
         "total": len(results),
         "failed": len(failed),
         # What the CLI exits non-zero on, said once here rather than derived
         # from the list by every caller.
         "ok": not failed and not unmatched,
+    }
+
+
+def _inline_snapshots(pc, snapshots: dict) -> dict:
+    """Each snapshot of a run, as the file's name, extension and base64 bytes."""
+    import base64
+
+    images = {}
+    for moment, path in snapshots.items():
+        try:
+            with open(path, "rb") as f:
+                content = base64.b64encode(f.read()).decode("ascii")
+        except OSError as e:
+            # The verdict stands without it; only the picture is missing.
+            pc.logging.warning("Failed to read the '%s' snapshot back: %s" % (moment, e))
+            continue
+        images[moment] = {
+            "filename": os.path.basename(path),
+            "extension": os.path.splitext(path)[1].lstrip(".").lower(),
+            "content": content,
+        }
+    return images
+
+
+def simulate_list(session, params):
+    """The simulations one part or assembly declares, without running any.
+
+    What the IDE's Validation tab is enabled by and lists: a ``simulate:``
+    section is configuration, so reading it costs what reading the object's
+    configuration costs -- nothing is built and nothing is run -- which is what
+    makes it cheap enough to ask on every show. ``kind`` says whether
+    ``object`` is a part (the default) or an assembly, as ``-a`` does for
+    ``pc sim``.
+
+    An object that declares none answers with an empty list rather than an
+    error: "nothing to simulate here" is the ordinary case.
+    """
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, object_name = resolved
+    path = _qualified(package, object_name)
+
+    kind = "assembly" if params.get("kind") == "assembly" else "part"
+    shape = ctx.get_assembly(path) if kind == "assembly" else ctx.get_part(path)
+    if shape is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+
+    from partcad import simulation as pc_simulation
+
+    return {
+        "object": path,
+        "kind": kind,
+        "simulations": [
+            {
+                "name": declaration.name,
+                "desc": declaration.desc,
+                "scene": declaration.scene,
+                "simulation": declaration.simulation,
+                "validation": declaration.validation,
+            }
+            for declaration in pc_simulation.of_shape(shape)
+        ],
     }
 
 
@@ -1868,6 +1957,9 @@ def inspect_object(session, params):
     pc = session.partcad
     # One object: the viewer shows a shape, and a verbal summary describes one.
     _refuse_recursion(params)
+    # Checked before anything is built: a misspelt tab costs a message, not a
+    # tessellation.
+    tab = _viewer_tab(params)
     package = ctx.resolve_package_path(params.get("package"))
     package_obj = ctx.get_project(package)
     if not package_obj:
@@ -1924,8 +2016,22 @@ def inspect_object(session, params):
             # and builds nothing: there is nothing to stage for a question the
             # daemon answers without instantiating anything.
             _stage_subassemblies(session, ctx, obj)
-        obj.show(ctx)
+        # Which tab of the viewer to open on ('pc ide view --design-2d'). It
+        # rides on the show itself -- see 'partcad_ide_client.protocol.KEY_TAB'.
+        obj.show(ctx, tab=tab)
     return None
+
+
+def _viewer_tab(params):
+    """The viewer tab 'inspect.object' was asked to open on, or None; refused when it is not one."""
+    tab = params.get("tab")
+    if tab is None:
+        return None
+    from partcad_ide_client.protocol import viewer_tab_ids
+
+    if tab not in viewer_tab_ids():
+        raise JsonRpcError(USAGE_ERROR, "Not a Digital Thread tab: %r (one of %s)" % (tab, ", ".join(viewer_tab_ids())))
+    return tab
 
 
 def version(session, params):
@@ -2158,7 +2264,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.186"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.192"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None

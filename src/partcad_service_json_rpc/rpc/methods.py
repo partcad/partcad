@@ -86,6 +86,9 @@ _OPERATIONS = {
     "adhoc.render": operations.adhoc_render,
     "test.run": operations.test_run,
     "simulate.run": operations.simulate_run,
+    # Not a CLI command: what an object declares under 'simulate:', read rather
+    # than run -- what the IDE's Validation tab is enabled by and lists.
+    "simulate.list": operations.simulate_list,
     "lint.run": operations.lint_run,
     "daemon.reset": operations.daemon_reset,
     "daemon.status": operations.daemon_status,

@@ -40,6 +40,8 @@ class ManufacturabilityMachineTest(Test):
     `judge()`, which is handed what `wall_alignment` measured.
     """
 
+    WRAPPERS = ("manufacturability.py",)
+
     # Which machine this check is about, as a part's 'manufacturing:' section
     # names it. Set by the subclass.
     machine: str = ""

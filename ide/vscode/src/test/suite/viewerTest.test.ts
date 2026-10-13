@@ -232,6 +232,21 @@ suite('The Test tab', () => {
         assert.strictEqual(find(root, 'test-artifact').length, 0);
     });
 
+    test('a failure before anything was listed can be tried again', () => {
+        let runs = 0;
+        const root = new FakeElement('div');
+        const view = new TestView(root as unknown as HTMLElement, { onRun: () => (runs += 1), onShow: () => {} });
+
+        view.showError('PartCAD is not connected');
+
+        const button = find(root, 'test-run')[0];
+        assert.strictEqual(button.hidden, false);
+        assert.strictEqual(button.disabled, false);
+        assert.strictEqual(button.textContent, 'Try again');
+        button.click();
+        assert.strictEqual(runs, 1);
+    });
+
     test('a failure to run keeps the list and says why', () => {
         const root = new FakeElement('div');
         const view = new TestView(root as unknown as HTMLElement, { onRun: () => {}, onShow: () => {} });

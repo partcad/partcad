@@ -64,6 +64,14 @@ and the same material the bill of materials orders; the bracket the instructions
 tell somebody to bolt on is the bracket that was analysed. Changing the design is
 changing the one record, and every answer that depended on it is asked again.
 
+One thing is deliberately left out of the package: which of the things that can
+be either built or bought a particular person chooses to build (**Build vs Buy**).
+The package says what can be bought and how what can be made is made; the choice
+between them is a decision about who has which machines, and is kept on the
+machine of whoever made it. A checkout does not carry it, so the build plan and
+the order that follow from it can differ from one person to the next while the
+product they describe does not.
+
 Every answer is computed, not stored
 ------------------------------------
 

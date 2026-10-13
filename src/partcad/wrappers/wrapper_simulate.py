@@ -52,6 +52,29 @@ field -- and so is anything else the result carries beside them. PartCAD
 neither reads nor validates the contents; it carries them to the expression and
 reports what that says.
 
+**Snapshots.** The request also carries ``snapshot``: two pictures of the scene
+PartCAD would like, one as it was before anything moved and one as it is when
+the run is over, and where to take them from::
+
+    request["snapshot"] = {
+        "format": "png",
+        "files": {"before": "snapshot-before.png", "after": "snapshot-after.png"},
+        "width": 512, "height": 512,
+        "viewport_origin": [100, -100, 100],   # looked at from this direction
+        "viewport_up": [0, 0, 1],              # and this way up in the picture
+    }
+
+The viewpoint is the scene's own -- what its ``render: png:`` configuration
+says, as for ``pc render`` -- and means what it means there: a direction to look
+from towards the middle of the scene, the picture scaled to fit. Each file is
+named relative to ``path``. A plugin that draws them says so in its result::
+
+    output = {..., "snapshots": {"before": "snapshot-before.png", "after": "snapshot-after.png"}}
+
+They are optional. A plugin that cannot draw on this machine, or does not try,
+reports none and the run is exactly as good: the verdict never depends on a
+picture. They are what the IDE's Simulation tab shows, side by side.
+
 Both '__file__' and the run name '__partcad_simulate__' are set on the script,
 so it can gate any top-level work ("if __name__ == '__partcad_simulate__':")
 and remain importable by its siblings.
@@ -63,6 +86,11 @@ import sys
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
+
+# What this wrapper reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
 
 # The key the request carries the implementation script under. Passed in the
 # request rather than on the command line for the reason 'wrapper_export' gives:
@@ -138,10 +166,29 @@ def process(script, path, request):
     return result
 
 
+def anchor(path, request):
+    """Point the request's files at where they are on this side.
+
+    The scene file is written into the run directory, and that directory is the
+    first argument -- which a sandbox that sends files rather than sharing them
+    rewrites to wherever it unpacked them. The request is one opaque string on
+    standard input and is not rewritten, so the absolute path it names is the
+    one on PartCAD's side, which does not exist here. The file is found again
+    by its name under ``path``, where it is in either case.
+    """
+    scene_file = request.get("scene_file")
+    if path and isinstance(scene_file, str) and not os.path.exists(scene_file):
+        candidate = os.path.join(path, os.path.basename(scene_file))
+        if os.path.exists(candidate):
+            request["scene_file"] = candidate
+    return request
+
+
 if __name__ == "__main__":
     # Read raw: nothing here is geometry, and decoding would need OCP in a
     # sandbox that has no reason to carry it.
     path, request = wrapper_common.handle_input(decode=False)
+    request = anchor(path, request)
     script = request.pop(SCRIPT_KEY, None)
     if script is None:
         result = _failed(Exception("No implementation script was passed to the simulation wrapper"))

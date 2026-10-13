@@ -73,6 +73,8 @@ class InterferenceTest(Test):
               minVolume: 0.01     # a tighter floor, for geometry that is exact
     """
 
+    WRAPPERS = ("interference.py",)
+
     def __init__(self) -> None:
         super().__init__("interference")
 

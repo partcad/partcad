@@ -381,7 +381,7 @@ def stub_run(monkeypatch, result):
     async def export(_ctx, _scene, _impl, directory):
         return os.path.join(directory, "scene.xml")
 
-    async def run(_ctx, _impl, _directory, _scene_file, _declaration, _subject, _kind):
+    async def run(_ctx, _impl, _directory, _scene_file, _declaration, _subject, _kind, snapshot=None):
         return result
 
     monkeypatch.setattr(simulation, "_export_scene_async", export)
@@ -447,3 +447,146 @@ def test_a_declaration_that_names_no_plugin_says_where_to_get_one(package, monke
     assert result.passed is None
     assert "names no 'simulation:'" in result.error
     assert simulation.KNOWN_SIMULATION in result.error
+
+
+#
+# The pictures of a run
+#
+
+
+def scene_package(tmp_path, package_render="", scene_render=""):
+    """A package with two scenes that can hold a subject, rendered as it says."""
+    root = tmp_path / "scenes"
+    root.mkdir()
+    for name in ("table", "floor"):
+        (root / ("%s.assy" % name)).write_text("links: []\n", encoding="utf-8")
+    (root / "partcad.yaml").write_text(
+        "name: //scenes\n" + package_render + "scenes:\n"
+        "  table:\n"
+        "    type: assy\n"
+        "    parameters:\n      subject:\n        type: string\n        default: ''\n" + scene_render + "  floor:\n"
+        "    type: assy\n"
+        "    parameters:\n      subject:\n        type: string\n        default: ''\n",
+        encoding="utf-8",
+    )
+    return pc.Context(str(root))
+
+
+def test_a_scene_that_says_nothing_is_looked_at_from_the_corner_a_part_is(ctx):
+    """The same default 'pc render' draws a part from, at the size it draws a PNG."""
+    scene = ctx.get_scene("%s:subject" % output.BUILTIN_SCENE_PACKAGE)
+
+    snapshot = simulation.snapshot_request(ctx, scene)
+
+    assert snapshot["viewport_origin"] == [100.0, -100.0, 100.0]
+    assert snapshot["viewport_up"] == [0.0, 0.0, 1.0]
+    assert (snapshot["width"], snapshot["height"]) == (512, 512)
+    assert snapshot["format"] == "png"
+    assert snapshot["files"] == {"before": "snapshot-before.png", "after": "snapshot-after.png"}
+
+
+def test_the_viewpoint_is_the_one_the_scene_is_rendered_from(tmp_path):
+    """Said once, in 'render: png:', for 'pc render' and for the snapshots alike."""
+    context = scene_package(
+        tmp_path,
+        scene_render="    render:\n      png:\n        viewport_origin: [0, -100, 0]\n        width: 300\n",
+    )
+
+    snapshot = simulation.snapshot_request(context, context.get_scene("//:table"))
+
+    assert snapshot["viewport_origin"] == [0.0, -100.0, 0.0]
+    # Only what the scene said is the scene's; the rest is still the default.
+    assert snapshot["viewport_up"] == [0.0, 0.0, 1.0]
+    assert (snapshot["width"], snapshot["height"]) == (300, 512)
+
+
+def test_a_package_says_how_every_scene_in_it_is_looked_at(tmp_path):
+    """Unless the scene says otherwise, which is the order 'pc render' reads them in."""
+    context = scene_package(
+        tmp_path,
+        package_render="render:\n  png:\n    viewport_origin: [0, 0, 100]\n    viewport_up: [0, 1, 0]\n",
+        scene_render="    render:\n      png:\n        viewport_origin: [100, 0, 0]\n        viewport_up: [0, 0, 1]\n",
+    )
+
+    from_package = simulation.snapshot_request(context, context.get_scene("//:floor"))
+    from_scene = simulation.snapshot_request(context, context.get_scene("//:table"))
+
+    assert from_package["viewport_origin"] == [0.0, 0.0, 100.0]
+    assert from_package["viewport_up"] == [0.0, 1.0, 0.0]
+    assert from_scene["viewport_origin"] == [100.0, 0.0, 0.0]
+    assert from_scene["viewport_up"] == [0.0, 0.0, 1.0]
+
+
+def test_a_viewpoint_that_names_no_orientation_falls_back_rather_than_failing_the_run(tmp_path):
+    """Up along the line of sight says nothing about which way is up."""
+    context = scene_package(
+        tmp_path,
+        scene_render="    render:\n      png:\n        viewport_origin: [0, 0, 100]\n        viewport_up: [0, 0, 1]\n",
+    )
+
+    snapshot = simulation.snapshot_request(context, context.get_scene("//:table"))
+
+    assert snapshot["viewport_origin"] == [100.0, -100.0, 100.0]
+    assert snapshot["viewport_up"] == [0.0, 0.0, 1.0]
+
+
+def test_only_the_pictures_the_plugin_wrote_inside_its_directory_are_kept(tmp_path):
+    directory = tmp_path / "run"
+    directory.mkdir()
+    (directory / "snapshot-before.png").write_bytes(b"png")
+    (tmp_path / "elsewhere.png").write_bytes(b"png")
+
+    found = simulation.collect_snapshots(
+        str(directory),
+        {"snapshots": {"before": "snapshot-before.png", "after": "snapshot-after.png", "x": "../elsewhere.png"}},
+        "//p:block",
+        "stands",
+    )
+
+    assert found == {"before": str(directory / "snapshot-before.png")}
+
+
+def test_a_plugin_that_draws_nothing_has_no_pictures_and_that_is_not_a_failure(tmp_path):
+    assert simulation.collect_snapshots(str(tmp_path), {"before": {}, "after": {}}, "//p:b", "s") == {}
+    assert simulation.collect_snapshots(str(tmp_path), {"snapshots": ["before.png"]}, "//p:b", "s") == {}
+
+
+def test_a_run_asks_for_pictures_and_reports_the_ones_it_got(package, monkeypatch):
+    context, part = package
+    asked = {}
+
+    async def export(_ctx, _scene, _impl, directory):
+        return os.path.join(directory, "scene.xml")
+
+    async def run(_ctx, _impl, directory, _scene_file, _declaration, _subject, _kind, snapshot=None):
+        asked["snapshot"] = snapshot
+        name = snapshot["files"]["after"]
+        with open(os.path.join(directory, name), "wb") as f:
+            f.write(b"png")
+        return dict(result_with(10.0, 9.9), snapshots={"after": name})
+
+    monkeypatch.setattr(simulation, "_export_scene_async", export)
+    monkeypatch.setattr(simulation, "_run_plugin_async", run)
+    (entry,) = simulation.of_shape(part)
+
+    result = asyncio.run(simulation.run_async(context, part, "part", entry))
+
+    assert result.passed is True
+    assert asked["snapshot"]["viewport_origin"] == [100.0, -100.0, 100.0]
+    assert set(result.snapshots) == {"after"}
+    assert os.path.isfile(result.snapshots["after"])
+    assert result.to_dict()["snapshots"] == result.snapshots
+
+
+def test_the_scene_is_found_where_it_was_sent(tmp_path):
+    """A sandbox that sends the run directory unpacks it somewhere else, and the
+    request -- which nothing rewrites -- still names it where it was."""
+    from partcad.wrappers import wrapper_simulate
+
+    (tmp_path / "scene.xml").write_text("<mujoco/>", encoding="utf-8")
+    request = {"scene_file": "/on/the/other/side/scene.xml"}
+
+    assert wrapper_simulate.anchor(str(tmp_path), request)["scene_file"] == str(tmp_path / "scene.xml")
+    # And a path that is there is left alone.
+    here = {"scene_file": str(tmp_path / "scene.xml")}
+    assert wrapper_simulate.anchor("/nowhere", here)["scene_file"] == str(tmp_path / "scene.xml")

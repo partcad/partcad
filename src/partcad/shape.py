@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Optional
 from . import cache_artifacts
 from . import cae as pc_cae
 from . import cam as pc_cam
+from . import code_version
 from . import logging as pc_logging
 from . import material as pc_material
 from . import output
@@ -345,6 +346,20 @@ class Shape(ShapeConfiguration):
         self.environment_cache_key = environment_cache_key
         self.hash.add_string(environment_cache_key)
 
+    def add_code_versions(self, versions: str) -> None:
+        """Key this shape on the versions the code producing it reports.
+
+        'versions' is what 'code_version.key()' made of them - the wrappers that
+        build it, the plugin that serves it, a partType's script. Raising any of
+        those versions is how that code's author has every shape it made built
+        again; see 'code_version' and 'ShapeFactory.code_versions'.
+
+        Called as the shape is created, and again from a factory's
+        'prepare_async' for the code it only knows by then. Must happen before
+        the hash is used, which both of those guarantee.
+        """
+        self.hash.add_string("code:" + versions)
+
     def matches(self, keyword: str) -> bool:
         if not keyword:
             return False
@@ -622,6 +637,11 @@ class Shape(ShapeConfiguration):
         # is the source's key with this shape's own contribution after it.
         self.hash = CacheHash(f"{self.project_name}:{self.name}", hasher=source.hash.hasher, cache=True)
         self.hash.add_dict(transform)
+        # The move or the scale is done by a wrapper (see 'get_wrapped'), whose
+        # version is part of what this entry is.
+        versions = code_version.wrappers_key(["transform.py"])
+        if versions is not None:
+            self.add_code_versions(versions)
 
     async def get_wrapped(self, ctx):
         async with self.locked():
@@ -1142,7 +1162,8 @@ class Shape(ShapeConfiguration):
         )
         return await self.convert("build123d", ctx)
 
-    async def show_async(self, ctx=None):
+    async def show_async(self, ctx=None, tab=None):
+        """Show this shape in the Digital Thread, on its tab 'tab' if one is named."""
         from . import viewer
 
         # A caller that cannot pass one gets the process-wide context; one that
@@ -1168,10 +1189,10 @@ class Shape(ShapeConfiguration):
                 pc_logging.exception(e)
 
             if tree is not None:
-                await viewer.show(ctx, tree, name=self.name, kind=self.kind, package=self.project_name)
+                await viewer.show(ctx, tree, name=self.name, kind=self.kind, package=self.project_name, tab=tab)
 
-    def show(self, ctx=None):
-        asyncio.run(self.show_async(ctx))
+    def show(self, ctx=None, tab=None):
+        asyncio.run(self.show_async(ctx, tab=tab))
 
     def shape_info(self, ctx):
         """What 'pc info' reports of any shape, whatever kind or type it is.
@@ -2466,7 +2487,8 @@ class Shape(ShapeConfiguration):
         content of its script and of the meta-wrapper that runs it -- and of
         every module either can import from where it lives ('source_key'): a
         solver package that keeps its mesher settings in a helper module is
-        another solver when only the helper changed. What the
+        another solver when only the helper changed -- and the version both
+        scripts report ('code_version'). What the
         request carries the geometry in is left out, because the shape's key
         already covers it and the payload is the one thing in there that is not
         a description.

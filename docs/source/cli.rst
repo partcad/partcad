@@ -368,7 +368,16 @@ Object commands
   <package>...`` or ``...:<name>`` to run everything the packages below declare too (see
   :ref:`recursive-names`), ``-f`` to run only the simulation of a given name, and
   ``--json`` to print the whole of what each simulation plugin reported. A validation that does not hold
-  exits non-zero.
+  exits non-zero. A run whose plugin drew the scene -- before and after, from the scene's ``render: png:``
+  viewpoint -- also says where the two pictures were written; a plugin that draws none has not failed.
+
+  ``--plugin <package>:<name>`` runs with another simulation plugin than the one each declaration names, such
+  as ``//pub/feature/simulate/gazebo:gazebo`` for a simulation written against MuJoCo; everything else the
+  declaration says is asked of that plugin instead. ``--before <path>`` and ``--after <path>`` save the state
+  the simulation started from and the state it ended in -- the very ``before`` and ``after`` its
+  ``validation:`` is evaluated over -- as YAML, or as JSON with ``--json`` or a path ending in ``.json``. They
+  save one simulation's state, so name the object and, when it declares several, the simulation with ``-f``.
+  The files are written on the machine the command runs on, whichever machine ran the simulation.
 
   It asks whether an object *works*: it places the object in the scene the declaration names, at the
   ``offset:`` the declaration states, runs the scene through the simulation plugin the declaration names, and
@@ -807,9 +816,10 @@ Object commands
 
   ``--view`` picks the direction the object is looked at from for this one run: ``front``, ``back``, ``left``,
   ``right``, ``top``, ``bottom`` or ``iso``. Each name is shorthand for a pair of vectors, which
-  ``--viewport-origin`` and ``--viewport-up`` give as ``X,Y,Z`` instead: the first is where the camera is, the
-  second is which way is up in the resulting picture. Either one replaces the vector the name resolved to, so
-  ``--view top --viewport-up 0,1,0.5`` tilts the top view without spelling the rest of it out:
+  ``--viewport-origin`` and ``--viewport-up`` give as ``X,Y,Z`` instead: the first is the direction the object is
+  looked at from (``0,-100,0`` is the front of any object, wherever it sits), the second is which way is up in the
+  resulting picture. Either one replaces the vector the name resolved to, so ``--view top --viewport-up 0,1,0.5``
+  tilts the top view without spelling the rest of it out:
 
   .. code-block:: shell
 
@@ -902,14 +912,68 @@ Interacting with IDE
 
 Putting an object in front of a person, in one of two windows -- the IDE's own **Digital Thread**
 (``pc ide view``), or **another application** on this machine (``pc ide open``, which is also what the editor
-extension's "Open in..." menu runs) -- and asking the IDE what it is showing (``pc ide state``). None of them
-leaves anything new in the package: that is what ``pc export`` and ``pc render`` are for. ``pc ide view`` and
-``pc ide open`` used to be ``pc inspect`` and ``pc open``; those names still work, are left out of ``pc --help``,
-and print a note on stderr saying what to type instead.
+extension's "Open in..." menu runs) -- and asking the IDE what it is showing (``pc ide state``). Two more set the
+IDE up: ``pc ide install`` puts the PartCAD extension into an editor, and ``pc ide workspace <directory>`` opens a
+package as an editor's workspace, in the PartCAD workbench. None of them leaves anything new in the package: that
+is what ``pc export`` and ``pc render`` are for. ``pc ide view`` and ``pc ide open`` used to be ``pc inspect`` and
+``pc open``; those names still work, are left out of ``pc --help``, and print a note on stderr saying what to type
+instead.
 
 ``pc ide view``
   View a part, assembly, or scene in the Digital Thread. Use ``-V`` for a verbal (text) description instead of a visual
   one, and ``-p <name>=<value>`` to set parameters.
+
+  One flag per tab of the viewer opens it on that tab, named ``--<group>-<tab>`` the way the viewer's two strips
+  read: ``--design-3d``, ``--design-2d``, ``--design-draft``; ``--analysis-fea``, ``--analysis-cfd``;
+  ``--manufacturing-bvb``, ``--manufacturing-build``, ``--manufacturing-buy``, ``--manufacturing-bom``,
+  ``--manufacturing-assembly``; ``--validation-test``, ``--validation-simulation``. With none, the viewer stays on whichever tab it is
+  on. The tab travels with the shape, so it is the window that draws the object that switches; a tab that does
+  not apply to the object (FEA of an assembly) is not opened, and one that is not known yet (Build, until the
+  viewer has worked out what is built; Simulation, until it has read what the object declares under
+  ``simulate:``) is opened as soon as it is. Opening an analysis tab runs the analysis, and opening Simulation
+  runs the first simulation, as clicking them does.
+
+  .. code-block:: shell
+
+    pc ide view --design-2d -a :logo           # the logo assembly, rendered to a picture
+    pc ide view --analysis-fea :cantilever     # the cantilever, with its FEA run
+
+``pc ide install``
+  Install the PartCAD extension into an editor on this machine -- the PartCAD IDE, VSCodium or Visual Studio
+  Code, whichever of ``partcad-ide``, ``codium`` and ``code`` is found first on the ``PATH``, or the one
+  ``--with`` names (by name or path). The package is the ``partcad-<version>.vsix`` published on PartCAD's
+  GitHub release -- the latest one, or the one ``--version`` names -- or a ``.vsix`` on disk given with
+  ``--vsix``. Anything after ``--`` goes on the editor's command line, which is how a profile of its own is
+  used:
+
+  .. code-block:: shell
+
+    pc ide install                                        # the latest release, into the first editor found
+    pc ide install --with codium --version 0.8.159        # a particular release, into VSCodium
+    pc ide install --vsix partcad.vsix -- --extensions-dir /tmp/ext
+
+  ``PARTCAD_BASE_URL`` replaces the release's download directory, as it does for ``pc upgrade``. Like
+  ``pc upgrade``, it changes this machine and asks no daemon anything.
+
+``pc ide workspace``
+  Open a directory -- by default the current one -- as the workspace of an editor on this machine, in the
+  **PartCAD workbench**: the window comes up on the PartCAD Explorer rather than on the files. The editor is
+  found the way ``pc ide install`` finds one, or named with ``--with``, and anything after ``--`` goes on its
+  command line.
+
+  .. code-block:: shell
+
+    pc ide workspace                                # this package, in the first editor found
+    pc ide workspace --with codium examples         # ./examples, in VSCodium
+    pc ide workspace examples -- --new-window
+
+  An editor's command line can open a folder but not run a command in the window it opens, so
+  ``pc ide workspace`` leaves a request under ``~/.partcad/ide/requests/`` first, and the PartCAD extension takes
+  it as it starts in that folder's window, or as an existing window of that folder comes to the front. A request
+  nobody takes is ignored after five minutes. The extension starts in a folder that holds PartCAD files (a
+  ``partcad.yaml``, an ASSY file, a script); any other folder is opened without the workbench. It is not
+  ``pc ide open``, which puts one object in front of a person in a design application and waits for it to come
+  back edited; this returns as soon as the editor has the folder.
 
 ``pc ide state``
   Print what the PartCAD IDE on this machine is showing, as YAML (the default) or ``--json``::

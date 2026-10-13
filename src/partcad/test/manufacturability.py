@@ -72,6 +72,9 @@ async def tolerance_is_per_feature(part) -> bool:
 
 
 class ManufacturabilityTest(Test):
+    # It runs the whole suite over everything the object is procured from.
+    WRAPPERS = ("interference.py", "manufacturability.py", "solidity.py")
+
     def __init__(self) -> None:
         super().__init__("manufacturability")
 

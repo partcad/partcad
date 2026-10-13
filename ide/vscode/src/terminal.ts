@@ -67,18 +67,108 @@ const VIEW_NAME = 'PartCAD';
 const GREETING = 'Keep an eye on this Terminal View to know what PartCAD is busy with...\r\n';
 
 /**
+ * The PartCAD logo (`resources/logo.svg`) for the top of the shell, as pixel
+ * art. Each letter is a quarter of a terminal cell -- half its width and half
+ * its height, so stepping one row per four letters is the logo's isometric
+ * angle -- and names a tone after the SVG's face classes: `t` faces point up,
+ * `b`, `s` and `d` face the light, across it, and away from it (the nut's top
+ * is `b` here, to stand out from the plate it sits on). `.` is the terminal's
+ * own background.
+ *
+ * A cell is drawn with one quadrant block character in a foreground and a
+ * background colour, so no 2x2 square here may hold more than two of those
+ * (the tests check). Block characters, unlike text, are exempt from the
+ * terminal's `minimumContrastRatio`, so the tones are drawn as given in a light
+ * theme as well as a dark one.
+ */
+export const LOGO = [
+    '......ttttt.....tt........',
+    '....ssttttttttttttttss....',
+    '....ssssssttttttssssss....',
+    '....sssss...tt...sssss....',
+    '....sssss........sssss....',
+    '....sssss........sssss....',
+    '....ssssst......tsssss....',
+    '....ssttttbbbbbbtttsss....',
+    '......ssttssbbddttss......',
+    'tttt......ssbbss......tttt',
+    'sssstttt....bd....ttttssss',
+    '....ssssttttbdttttssss....',
+    '........ssssbbttss........',
+    '......ttttsssssstttt......',
+    '..ttttssss......sssstttt..',
+    'ttssss..............sssstt',
+];
+
+/**
+ * Further apart than the SVG's, whose faces have grey outlines between them and
+ * these have none: `t` is its own, `s` takes its darkest, and `b` and `d` are
+ * brighter and darker than any it has.
+ */
+const LOGO_TONES: Record<string, string> = {
+    t: '245;187;43',
+    s: '214;162;36',
+    b: '255;210;94',
+    d: '168;124;28',
+};
+
+/** Indexed by which quarters are drawn, one bit each: upper left, upper right, lower left, lower right. */
+const QUADRANTS = ' ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█';
+
+/**
+ * `LOGO` as lines of text, one per two of its rows, each as many cells wide as
+ * the next.
+ *
+ * A cell's background colour is used wherever it can be: for its only tone, or
+ * the one covering more of it. A background fills its cell exactly, and a block
+ * character does too where the terminal draws it itself -- but with GPU
+ * acceleration off it comes from the font, and font glyphs leave seams between
+ * cells.
+ */
+function logoLines(): string[] {
+    const lines: string[] = [];
+    for (let y = 0; y < LOGO.length; y += 2) {
+        let line = '';
+        let style = '';
+        for (let x = 0; x < LOGO[y].length; x += 2) {
+            const quarters = [LOGO[y][x], LOGO[y][x + 1], LOGO[y + 1][x], LOGO[y + 1][x + 1]];
+            const tones = [...new Set(quarters)].sort(
+                (a, b) => quarters.filter((q) => q === b).length - quarters.filter((q) => q === a).length,
+            );
+            // An empty quarter is the terminal's own background, so a cell with one can only draw in front of it.
+            const [bg, fg] = tones.includes('.') ? [undefined, tones.find((q) => q !== '.')] : tones;
+            const cellStyle =
+                (fg === undefined ? '' : `\x1b[38;2;${LOGO_TONES[fg]}m`) +
+                (bg === undefined ? '' : `\x1b[48;2;${LOGO_TONES[bg]}m`);
+            if (cellStyle !== style) {
+                line += (style ? '\x1b[0m' : '') + cellStyle;
+                style = cellStyle;
+            }
+            line += QUADRANTS[quarters.reduce((bits, q) => (bits << 1) | (q === fg ? 1 : 0), 0)];
+        }
+        lines.push(line + (style ? '\x1b[0m' : ''));
+    }
+    return lines;
+}
+
+/** Beside the logo's head, starting at its second line. */
+const SHELL_INVITATION = [
+    'Start your favorite coding agent here,',
+    'side by side with the PartCAD terminal log view,',
+    'or simply run "pc"!',
+];
+
+/**
  * Written at the top of that shell when it is created (`TerminalOptions.message`
  * -- straight into the view, not to the shell, so the shell never sees it).
  */
 export const SHELL_BANNER =
     [
         '',
-        '   +--------+',
-        '  /        /|',
-        ' +--------+ |    \x1b[1mStart your favorite coding agent here,\x1b[0m',
-        ' |        | +    \x1b[1mside by side with the PartCAD terminal!\x1b[0m',
-        ' |        |/',
-        ' +--------+',
+        ...logoLines().map((logo, i) => {
+            const text = SHELL_INVITATION[i - 1];
+            return ' ' + logo + (text === undefined ? '' : `   \x1b[1m${text}\x1b[0m`);
+        }),
         '',
     ].join('\r\n') + '\r\n';
 

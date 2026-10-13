@@ -52,6 +52,8 @@ OUTSIDE_FRACTION = 1e-6
 
 
 class ManufacturabilitySubtractiveTest(Test):
+    WRAPPERS = ("manufacturability.py",)
+
     def __init__(self) -> None:
         super().__init__("manufacturability-subtractive")
 

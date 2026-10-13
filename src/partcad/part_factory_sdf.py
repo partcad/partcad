@@ -7,6 +7,8 @@ from .process_crash import describe_exit_code
 
 
 class PartFactorySdf(PartFactoryPython):
+    WRAPPERS = ("sdf.py", "transform.py")
+
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
         super().__init__(
             ctx,

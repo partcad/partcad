@@ -16,6 +16,8 @@ from .part_factory_python import PartFactoryPython
 
 @telemetry.instrument()
 class PartFactoryCadquery(PartFactoryPython):
+    WRAPPERS = ("cadquery.py",)
+
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
         python_version = source_project.python_version
         if python_version is None:

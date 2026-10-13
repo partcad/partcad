@@ -56,6 +56,18 @@ export class Tabs {
     /** The tab on screen. */
     private selected: TabId | undefined;
     /**
+     * A tab asked for from outside the panel ('pc ide view --manufacturing-buy'),
+     * not yet opened.
+     *
+     * Kept apart from 'preferred' because it is stronger: it is opened even when
+     * it is 'secondary', and it waits through a rebuild that does not offer it -
+     * the Manufacturing strip disables Build and Buy until it knows what is
+     * built and what is bought, and a request for Buy has to land on Buy when
+     * that answer arrives. Opened once, and then forgotten -- and withdrawn by
+     * anything the user does first: a click, or a change on the tab they are on.
+     */
+    private requested: TabId | undefined;
+    /**
      * Every pane this strip has ever been given.
      *
      * A pane dropped from the strip has to be hidden as it goes: the panes are
@@ -65,15 +77,9 @@ export class Tabs {
      */
     private readonly known = new Set<HTMLElement>();
 
-    /**
-     * 'alwaysShown' keeps the strip on screen when it holds a single tab, which
-     * is otherwise hidden (see 'setTabs'): for a group whose one tab is the first
-     * of the kind more will join, and whose name is what says what the pane is.
-     */
     constructor(
         private readonly bar: HTMLElement,
         private readonly onSelect: (id: TabId) => void,
-        private readonly options: { alwaysShown?: boolean } = {},
     ) {
         this.bar.setAttribute('role', 'tablist');
     }
@@ -115,13 +121,19 @@ export class Tabs {
         for (const pane of this.known) {
             pane.hidden = true;
         }
-        const keep = options.keepCurrent && this.enabled(this.selected) ? this.selected : this.choose();
+        const keepCurrent = options.keepCurrent === true && this.enabled(this.selected);
+        if (keepCurrent) {
+            // A rebuild the user caused, by changing something on the tab they
+            // are on: a request still waiting gives way to that, as it does to
+            // a click, rather than pulling them off the tab they are using.
+            this.requested = undefined;
+        }
+        const keep = keepCurrent ? this.selected : this.choose();
 
         empty(this.bar);
         // One tab is not a choice; the strip would be a title bar for a view
-        // there is no alternative to - unless the strip is to be kept (see the
-        // constructor).
-        this.bar.hidden = specs.length < (this.options.alwaysShown ? 1 : 2);
+        // there is no alternative to.
+        this.bar.hidden = specs.length < 2;
         for (const spec of specs) {
             const button = el('button', 'tab', spec.label);
             button.setAttribute('role', 'tab');
@@ -150,11 +162,26 @@ export class Tabs {
         }
     }
 
+    /**
+     * Open on 'id' at the next rebuild that offers it (see 'requested'), or forget
+     * an earlier request that never came to anything when 'id' is undefined.
+     *
+     * It is also what the user is taken to want from then on, as a click is.
+     */
+    public request(id: TabId | undefined): void {
+        this.requested = id;
+        if (id !== undefined) {
+            this.preferred = id;
+        }
+    }
+
     /** The user asked for a tab: remembered, and opened if it can be. */
     public click(id: TabId): void {
         if (!this.enabled(id)) {
             return;
         }
+        // The user has chosen: a request still waiting for its tab is withdrawn.
+        this.requested = undefined;
         this.preferred = id;
         this.select(id);
     }
@@ -176,6 +203,11 @@ export class Tabs {
     /** What a rebuilt strip opens on; see 'setTabs'. */
     private choose(): TabId | undefined {
         const open = this.specs.filter((spec) => !spec.disabled);
+        const asked = open.find((spec) => spec.id === this.requested)?.id;
+        if (asked !== undefined) {
+            this.requested = undefined;
+            return asked;
+        }
         const usable = (id: TabId | undefined) => open.find((spec) => spec.id === id && !spec.secondary)?.id;
         return (
             usable(this.preferred) ??

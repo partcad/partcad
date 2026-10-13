@@ -5,6 +5,8 @@
 #
 
 import json
+import os
+import re
 import struct
 
 import pytest
@@ -104,3 +106,44 @@ def test_decode_payload_rejects_non_object():
 def test_decode_payload_rejects_garbage():
     with pytest.raises(protocol.ProtocolError, match="valid JSON"):
         protocol.decode_payload(b"\xff\xfe not json")
+
+
+# ---- the viewer's tabs -----------------------------------------------------
+
+_MESSAGES_TS = os.path.join(
+    os.path.dirname(__file__), "..", "..", "..", "ide", "vscode", "src", "webview", "messages.ts"
+)
+
+
+def _ts_tab_groups() -> dict:
+    """'TAB_GROUPS' as 'messages.ts' writes it, read off the source."""
+    with open(_MESSAGES_TS, encoding="utf-8") as f:
+        source = f.read()
+    block = re.search(r"export const TAB_GROUPS[^=]*= \{(.*?)\n\};", source, re.S)
+    assert block, "TAB_GROUPS is not where this test looks for it in %s" % _MESSAGES_TS
+    constants = {
+        name: re.findall(r"'([^']+)'", body)
+        for name, body in re.findall(r"export const (\w+): TabId\[\] = \[([^\]]*)\]", source)
+    }
+    groups = {}
+    for group, value in re.findall(r"^\s*(\w+): (.+?),$", block.group(1), re.M):
+        groups[group] = constants[value] if value in constants else re.findall(r"'([^']+)'", value)
+    return groups
+
+
+def test_the_viewer_tabs_are_the_ones_the_extension_has():
+    """A tab 'pc ide view' can name and the viewer cannot open is a flag that does nothing."""
+    assert _ts_tab_groups() == {group: list(tabs) for group, tabs in protocol.VIEWER_TABS.items()}
+
+
+def test_every_tab_is_a_tab_id_of_the_extension():
+    with open(_MESSAGES_TS, encoding="utf-8") as f:
+        union = re.search(r"export type TabId =(.*?);", f.read(), re.S).group(1)
+    ids = set(re.findall(r"'([^']+)'", union))
+    assert set(protocol.viewer_tab_ids()) <= ids
+    assert set(protocol.VIEWER_TABS) <= ids
+
+
+def test_the_tab_ids_are_listed_group_by_group():
+    assert protocol.viewer_tab_ids()[:3] == ("3d", "2d", "draft")
+    assert len(set(protocol.viewer_tab_ids())) == len(protocol.viewer_tab_ids())

@@ -186,6 +186,11 @@ export class TestView {
         if (this.data === undefined) {
             this.setBusy('');
             this.showMain(el('p', 'error', text));
+            // Nothing else on the tab would ask again: the tab has been asked
+            // for, and reopening it does not ask twice.
+            this.runButton.textContent = 'Try again';
+            this.runButton.hidden = false;
+            this.runButton.disabled = false;
             return;
         }
         this.error = text;
@@ -249,6 +254,7 @@ export class TestView {
             return;
         }
         this.summary.textContent = summaryOf(data, this.running);
+        this.runButton.textContent = 'Run again';
         this.runButton.hidden = false;
         this.runButton.disabled = this.running;
         data.tests.forEach((result, index) => {

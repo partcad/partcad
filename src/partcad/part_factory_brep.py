@@ -9,6 +9,8 @@ from .process_crash import command_failure
 
 @telemetry.instrument()
 class PartFactoryBrep(PartFactoryFile):
+    WRAPPERS = ("brep.py",)
+
     PYTHON_SANDBOX_VERSION = "3.10"
 
     def __init__(self, ctx, source_project, target_project, config):

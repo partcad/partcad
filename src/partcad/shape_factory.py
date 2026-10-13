@@ -7,7 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from . import factory, sandbox_versions
+from . import code_version, factory, sandbox_versions
 from . import software as pc_software
 from . import telemetry
 from .file_factory import FileFactory
@@ -23,6 +23,13 @@ class ShapeFactory(factory.Factory):
     # this factory produces its shape without a sandbox at all - an alias, an
     # enrich, an assembly - and so has no environment to cache under.
     PYTHON_SANDBOX_VERSION: str | None = None
+
+    # The wrappers this factory's sandbox runs to produce its shape, by the name
+    # 'wrapper.get()' takes. What each of them reports is part of the shape's
+    # key (see 'code_versions'), so a factory that runs a wrapper has to name it
+    # here; 'tests/partcad/unit/test_code_version.py' holds every factory to
+    # that.
+    WRAPPERS: tuple[str, ...] = ()
 
     def __init__(self, ctx, project, config) -> None:
         super().__init__()
@@ -80,16 +87,44 @@ class ShapeFactory(factory.Factory):
             "python", self.PYTHON_SANDBOX_VERSION, sandbox_versions.PINNED_REQUIREMENTS
         )
 
+    def code_versions(self) -> str | None:
+        """The versions the code producing this shape reports, as one key, or None.
+
+        A shape belongs to the code that made it as much as to what it is made
+        of, and the code says when what it makes has changed by raising the
+        'CACHE_VERSION' it states (see 'code_version'). Here that is every
+        wrapper the factory runs, 'transform.py' too when the shape is moved or
+        scaled on the way out ('Shape.get_wrapped'), and the repository plugin
+        that serves the package, for every object a plugin serves: it built
+        them, or said how. None when none of them states a version, which keeps
+        the key it had before there was such a thing.
+
+        A factory whose code is only known once the shape is prepared - a
+        partType's script - adds that in its 'prepare_async'.
+        """
+        names = list(self.WRAPPERS)
+        if "offset" in self.config or "scale" in self.config:
+            names.append("transform.py")
+        versions = [(name, code_version.wrapper(name)) for name in names]
+        plugin_version = getattr(self.project, "plugin_cache_version", 0)
+        if plugin_version:
+            versions.append((self.project.plugin_ref, plugin_version))
+        return code_version.key(versions)
+
     def apply_environment_cache_key(self, shape) -> None:
-        """Stamp the environment onto a shape as it is created.
+        """Stamp the environment, and the code's versions, onto a shape as it is created.
 
         Called from every shape kind's '_create()', so a factory only has to say
-        what its environment is and never has to remember to record it. Must
-        happen before the hash is used, which creation time guarantees.
+        what its environment is and which wrappers it runs, and never has to
+        remember to record either. Must happen before the hash is used, which
+        creation time guarantees.
         """
         environment_cache_key = self.environment_cache_key()
         if environment_cache_key is not None:
             shape.set_environment_cache_key(environment_cache_key)
+        versions = self.code_versions()
+        if versions is not None:
+            shape.add_code_versions(versions)
 
     def info(self, shape):
         """This is the default implementation of the get_info method for factories."""

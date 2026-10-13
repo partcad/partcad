@@ -31,7 +31,11 @@ from . import logging as pc_logging
 
 # Bumped whenever what is stored under a thumbnail key changes: a stale entry is
 # then never looked up again rather than read back as if it were current.
-THUMBNAIL_VERSION = 1
+#
+# 2: the projection looks along the direction it asks for, rather than from a
+# point near the origin towards the centre of the shape - so every shape not
+# centred on the origin is drawn from a different angle than before.
+THUMBNAIL_VERSION = 2
 
 # The width of a line, in pixels of the picture, whatever its size.
 LINE_PIXELS = 1.25

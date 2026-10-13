@@ -105,9 +105,10 @@ def _label(path: str, other: str) -> str:
 async def make_async(ctx, assembly, overlap: dict) -> typing.Optional[dict]:
     """The artifact for one reported overlap, registered and ready to be shown; None when there is nothing to show.
 
-    'overlap' is an entry of what 'Assembly.get_interference_async(keep_common=True)'
-    returns: the two paths, the volume, the solids they share and the two
-    parts by object name and placement.
+    'overlap' is an entry of what the assembly's interference measurement
+    returns when asked to keep what each pair shares ('keep_common'): the two
+    paths, the volume, the solids they share and the two parts by object name
+    and placement.
     """
     members = overlap.get("members") or {}
     solids = overlap.get("solids") or []

@@ -64,6 +64,7 @@ class ProjectExternalRepository(ProjectPlugin):
         subfolder: str = "",
         repository=None,
         cache=None,
+        cache_version: int = 0,
         config_obj=None,
         inherited_config=None,
     ):
@@ -77,6 +78,12 @@ class ProjectExternalRepository(ProjectPlugin):
         # child forwards the same requests under its own subfolder, so a child
         # in "motors" asks for "motors/objects/part" instead of "objects/part".
         self._subfolder = subfolder
+        # The version the plugin states (see 'code_version'). It is part of the
+        # cache key of every object this package serves - the plugin built them,
+        # or said how to build them - so raising it has every one of them built
+        # again, which is the whole of what a plugin has to do when it changes
+        # what it serves (see 'ShapeFactory.code_versions').
+        self.plugin_cache_version = cache_version
         self._repository = repository
         self._cache = cache
         self._request_cache: dict[str, object] = {}
@@ -139,6 +146,11 @@ class ProjectExternalRepository(ProjectPlugin):
             if self._repository is None:
                 pc_logging.error("%s: repository plugin not found: %s" % (self.name, self._plugin_ref))
         return self._repository
+
+    @property
+    def plugin_ref(self) -> str:
+        """The '<package>:<repository>' reference to the plugin serving this package."""
+        return self._plugin_ref
 
     def _scope(self, key: str) -> str:
         """Prefix a key with this package's subfolder within the repository."""

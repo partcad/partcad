@@ -61,6 +61,11 @@ import mass_properties  # noqa: E402
 import ocp_serialize  # noqa: E402
 import urdf_common  # noqa: E402
 
+# What this implementation reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
+
 # Metres per millimetre, for the mesh 'scale' attribute: the meshes are written
 # in millimetres and URDF reads mesh coordinates as metres after scaling.
 MESH_SCALE = 1.0 / urdf_common.MM_PER_M

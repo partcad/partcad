@@ -8,12 +8,12 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import ast
 import hashlib
 import os
 import threading
 import weakref
 
+from . import code_version
 from . import logging as pc_logging
 from . import project_factory as pf
 from . import telemetry
@@ -24,7 +24,7 @@ from .project_external_repository import ProjectExternalRepository
 from .utils import resolve_resource_path
 
 # The module-level name a repository plugin states its cache version with.
-CACHE_VERSION_NAME = "CACHE_VERSION"
+CACHE_VERSION_NAME = code_version.NAME
 
 # One answer per plugin reference, per context: '(script path, its stat,
 # version)'. The root of a plugin-backed hierarchy is created before its
@@ -81,37 +81,15 @@ def _read_declared_cache_version(path: str) -> int:
     mean. It belongs to the plugin and to nobody else: a package that imports a
     plugin-backed library has no way of knowing that the library now serves its
     parts the other way up, and should not have to be told. So this is read out
-    of the plugin, not out of the configuration of whoever imports it.
+    of the plugin, not out of the configuration of whoever imports it - the way
+    every wrapper's and plugin's is (see 'code_version').
 
     It is *read* rather than asked for, because the answer is needed before the
     first question can be asked: it names both the cache the answers are kept in
-    and the directory the plugin's own files are materialized into. The script is
-    parsed, never executed - a module-level 'CACHE_VERSION = <int>' and nothing
-    else.
+    and the directory the plugin's own files are materialized into, and it is
+    part of the cache key of every object the plugin serves.
     """
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            tree = ast.parse(f.read(), filename=path)
-    except (OSError, SyntaxError, ValueError) as e:
-        pc_logging.debug("Cannot version the plugin cache: %s: %s" % (path, e))
-        return 0
-
-    for node in tree.body:
-        if isinstance(node, ast.AnnAssign):
-            targets = [node.target]
-        elif isinstance(node, ast.Assign):
-            targets = node.targets
-        else:
-            continue
-        if not any(isinstance(t, ast.Name) and t.id == CACHE_VERSION_NAME for t in targets):
-            continue
-        value = node.value
-        # 'bool' is an 'int' and 'CACHE_VERSION = True' is a typo, not a version.
-        if isinstance(value, ast.Constant) and isinstance(value.value, int) and not isinstance(value.value, bool):
-            return value.value
-        pc_logging.error("%s: %s must be an integer literal" % (path, CACHE_VERSION_NAME))
-        return 0
-    return 0
+    return code_version.declared(path)
 
 
 def declared_cache_version(ctx, parent: Project, plugin_ref: str) -> int:
@@ -214,5 +192,6 @@ class ProjectFactoryExternal(pf.ProjectFactory, ExternalImportConfiguration):
             plugin_ref=self.plugin,
             subfolder=self.subfolder,
             cache=self.cache,
+            cache_version=self.cache_version,
             inherited_config=self.inherited_config,
         )

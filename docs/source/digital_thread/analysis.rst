@@ -55,4 +55,6 @@ In the Digital Thread
 
 **Analysis** holds a tab per analysis -- **FEA** and **CFD** -- for a part. Each
 runs the analysis the part declares with the implementation typed beside it,
-and shows the model it was run on and what it found.
+and shows the model it was run on and what it found. The simulations are run
+from **Validation → Simulation**, since what a simulation answers is whether the
+object does what it says it does.

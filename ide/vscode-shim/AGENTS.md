@@ -66,6 +66,15 @@ base has moved.
   pointer file into the real extension -- so the reason above is now the only one, and it is the one that
   was always doing the work.)
 
+* **No `repository` and no `bugs`.** The marketplace refuses an extension that repeats another one's
+  identity, and that goes beyond `name` and `displayName`: the first upload of `PartCAD.partcad-official`
+  had to move its `homepage` off this entry's, and Microsoft says it also flags duplicated repository links.
+  The real extension links `github.com/partcad/partcad`, so the same two links here would be refused on the
+  upload that matters -- the one after the real extension is live. Without them the only link on the listing
+  is `homepage`, which this entry has carried since before the move (so `ide/vscode/package.json` must not
+  take it back), and the README still links the repository. `vsce` warns about a missing `repository`;
+  `--allow-missing-repository` in `vsce-package` says that is meant.
+
 ## Build
 
 ```bash

@@ -66,7 +66,13 @@ const TAB_COMMANDS: Record<string, string> = {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '2d': 'partcad.renderInline',
     draft: 'partcad.renderInline',
+    // What the object declares under 'simulate:', read rather than run; a
+    // request naming one of them runs it instead (see 'SIMULATION_RUN').
+    simulation: 'partcad.simulateList',
 };
+
+/** What the Simulation tab asks when it names a simulation: run it, 'pc sim -f <name>'. */
+const SIMULATION_RUN = 'partcad.simulateRun';
 
 /** The tabs that render the object to a file, which is then kept and can be saved. */
 const RENDER_TABS = new Set(['2d', 'draft']);
@@ -98,6 +104,8 @@ interface FetchTabRequest extends RenderRequest {
     buildParts?: boolean;
     document?: boolean;
     verify?: boolean;
+    /** On the Simulation tab: the simulation to run, by name; absent, the tab asks what there is. */
+    scenario?: string;
 }
 
 /** A file a render tab is showing, kept until the next one replaces it. */
@@ -244,6 +252,9 @@ export class PartcadViewer implements vscode.Disposable {
             // the renderer showing the 3D view alone.
             package: message.package ?? null,
             keepCamera: message.keepCamera === true,
+            // Which tab to open on, when the show asked for one. Passed as it
+            // came: the renderer is what knows its tabs, and what applies.
+            tab: typeof message.tab === 'string' ? message.tab : null,
             // The object as it arrived, geometry aside: the hierarchy, the
             // placements, the ports and the interfaces are PartCAD's account of
             // what is on screen, and this side knows nothing about assemblies,
@@ -293,7 +304,7 @@ export class PartcadViewer implements vscode.Disposable {
                 ...payload,
             });
 
-        const command = TAB_COMMANDS[tab];
+        const command = tab === 'simulation' && message.scenario ? SIMULATION_RUN : TAB_COMMANDS[tab];
         if (command === undefined) {
             post({ error: `There is nothing to fill the '${tab}' tab with.` });
             return;
@@ -344,6 +355,16 @@ export class PartcadViewer implements vscode.Disposable {
             if (tab === 'requirements' || tab === 'test') {
                 args.kind = target.kind ?? 'part';
                 args.verify = message.verify === true;
+                post({ data: await vscode.commands.executeCommand(command, args) });
+                return;
+            }
+            if (tab === 'simulation') {
+                args.kind = target.kind ?? 'part';
+                // A run carries its pictures back as bytes, for the reason a
+                // render does: the daemon may be on another machine.
+                args.scenario = message.scenario;
+                // Another plugin than the simulation names: 'pc sim --plugin'.
+                args.plugin = message.plugin;
                 post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
@@ -863,6 +884,8 @@ export class PartcadViewer implements vscode.Disposable {
 						<div id="validation-tabs" class="tabs sub-tabs" hidden></div>
 						<div class="panes">
 						<div id="pane-test" class="pane" hidden></div>
+						<div id="pane-simulation" class="pane" hidden></div>
+						<div id="pane-emulation" class="pane" hidden></div>
 						</div>
 						</div>
 						<div id="pane-operations" class="pane" hidden></div>
