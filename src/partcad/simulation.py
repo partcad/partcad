@@ -444,7 +444,8 @@ async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str)
     parameter of the scene and the scene is keyed on what it links to - and
     everything the run adds to it: the plugin, its resolved options and its
     sandbox, what the declaration hands it, how the scene is written for it,
-    and the content of both scripts and of the wrappers that run them.
+    and the version both scripts and the wrappers that run them report (see
+    'code_version').
 
     Never raises. A key that cannot be worked out is a run that is not cached,
     and the run itself is what reports why.
@@ -456,7 +457,7 @@ async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str)
         format_name, export_impl, _ = _scene_export(ctx, scene, impl, os.curdir)
         # First: resolving a script is also what tells an implementation which
         # package it lives in, and its interpreter is that package's to say.
-        files = [
+        scripts = [
             await output.materialize_script(ctx, impl),
             await output.materialize_script(ctx, export_impl),
             wrapper.get("simulate.py"),
@@ -475,7 +476,7 @@ async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str)
             "export": export_impl.config,
             "export_environment": export_impl.environment_cache_key(),
         }
-        return cache_artifacts.question_hash("%s#%s" % (subject, declaration.name), subject_key, question, files)
+        return cache_artifacts.question_hash("%s#%s" % (subject, declaration.name), subject_key, question, scripts)
     except Exception as e:  # pylint: disable=broad-except
         pc_logging.debug("%s: the simulation '%s' will not be cached: %s" % (subject, declaration.name, e))
         return None

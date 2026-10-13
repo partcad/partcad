@@ -17,6 +17,11 @@ import custom_cqgi
 import py_stubs.ocp_vscode  # Make 'sys.modules["py_stubs.ocp_vscode"]' available
 from ocp_tessellate.ocp_utils import is_vector, vertex
 
+# What this wrapper reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
+
 
 def sdf_triangles_to_topods(triangles: np.ndarray):
     """Build a triangulation-backed TopoDS_Face from a flat list of vertices.

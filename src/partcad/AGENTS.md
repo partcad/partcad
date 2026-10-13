@@ -263,8 +263,8 @@ at all).
   The key (`question_hash`, built by `Shape._artifact_hash()` for the two output sections) is the subject's
   `get_cache_key_async()` plus what the run adds: the request minus the geometry payload (boundary, job,
   machine, resolved options, material facts), the implementation's name and
-  `Implementation.environment_cache_key()`, and the **content** of the implementation's script and of the
-  wrapper that runs it.
+  `Implementation.environment_cache_key()`, and the **version** the implementation's script and the wrapper
+  that runs it report (`code_version`).
 
   **Nothing in a key may describe the sandbox that runs it.** Every sandbox type -- conda, venv, none,
   docker, remote, and the ones after them -- is expected to be reproducible and equivalent, so an entry

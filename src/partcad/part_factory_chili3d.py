@@ -47,6 +47,8 @@ def resolve_chili3d(config, source_project) -> tuple[str, bool]:
 
 @telemetry.instrument()
 class PartFactoryChili3d(PartFactoryJavaScript):
+    WRAPPERS = ("chili3d.mjs",)
+
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
         # The part's own choice first, then the package's, then the default.
         javascript_version = config.get("javascriptVersion", None)

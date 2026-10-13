@@ -43,6 +43,8 @@ class ValidityTest(Test):
               skip: true
     """
 
+    WRAPPERS = ("solidity.py",)
+
     def __init__(self) -> None:
         super().__init__("validity")
 

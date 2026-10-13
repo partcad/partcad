@@ -148,6 +148,8 @@ def _describe(annotation: dict) -> str:
 
 
 class ManufacturabilitySheetMetalTest(Test):
+    WRAPPERS = ("manufacturability.py",)
+
     def __init__(self) -> None:
         super().__init__("manufacturability-sheet-metal")
 

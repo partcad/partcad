@@ -18,6 +18,8 @@ from .process_crash import command_failure
 
 @telemetry.instrument()
 class PartFactoryStep(PartFactoryFile):
+    WRAPPERS = ("step.py",)
+
     PYTHON_SANDBOX_VERSION = "3.11"
 
     # A STEP file is where a manufacturing tolerance belongs when the file

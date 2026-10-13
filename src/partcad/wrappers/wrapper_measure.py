@@ -28,6 +28,11 @@ import ocp_serialize  # noqa: F401,E402
 import shape_measure  # noqa: E402
 import wrapper_common  # noqa: E402
 
+# What this wrapper reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
+
 # One implementation of each, in the module the *encoder* also calls, so that a
 # size measured here and a size measured as a shape was built cannot disagree.
 # Re-exported under the names this module has always used: they are what the

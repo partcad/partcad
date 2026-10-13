@@ -20,9 +20,11 @@ of an unchanged part, a `pc simulate` of an unchanged assembly: each is a read.
 files it is built from, the keys of what it is built out of and the sandbox it
 was built in; and adds what the run adds - the boundary conditions, a route's
 job and machine, the implementation's resolved options, the sandbox it runs in,
-and the *content* of its script and of the PartCAD wrapper that runs it. A
-subject with no key ('cache: false', or made of something that says so) has no
-question to key on, and its runs are never cached.
+and the version its script and the PartCAD wrapper that runs it report - the
+'CACHE_VERSION' each states (see 'code_version'), so an author who changes what
+a solver produces raises it, and an edit that changes nothing costs nobody a
+run. A subject with no key ('cache: false', or made of something that says so)
+has no question to key on, and its runs are never cached.
 
 **What is stored is the result and the files it wrote, as one entry.** One,
 because a hit has to be a hit: a result whose model went missing is worse than
@@ -51,6 +53,7 @@ import os
 import tarfile
 from typing import Optional
 
+from . import code_version
 from . import logging as pc_logging
 from .cache_backend import ARTIFACT_KEY
 from .cache_hash import CacheHash
@@ -89,14 +92,15 @@ class _BoundedBuffer(io.BytesIO):
         return super().write(data)
 
 
-def question_hash(name: str, subject_key: Optional[str], question: dict, files=()) -> Optional[CacheHash]:
+def question_hash(name: str, subject_key: Optional[str], question: dict, scripts=()) -> Optional[CacheHash]:
     """The key one run's answer is stored under, or None when it has none.
 
     'subject_key' is the cache key of the shape the run is about, 'question'
-    everything the run adds to it, and 'files' the scripts that do the work -
-    hashed by content, so a solver script that changed is a question asked
-    again. None when the subject has no key, which is what makes `cache: false`
-    on an object mean what it says for everything derived from it.
+    everything the run adds to it, and 'scripts' the scripts that do the work,
+    keyed on the version each reports ('code_version'), so a solver whose
+    author says it now answers differently is a question asked again. None when
+    the subject has no key, which is what makes `cache: false` on an object mean
+    what it says for everything derived from it.
     """
     if not subject_key:
         return None
@@ -104,8 +108,9 @@ def question_hash(name: str, subject_key: Optional[str], question: dict, files=(
     hash.add_string("artifact-v%d" % VERSION)
     hash.add_string(subject_key)
     hash.add_dict(question)
-    for filename in files:
-        hash.add_filename(filename)
+    versions = code_version.scripts_key(scripts)
+    if versions is not None:
+        hash.add_string("code:" + versions)
     return hash
 
 

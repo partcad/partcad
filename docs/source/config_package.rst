@@ -279,10 +279,19 @@ The plugin says so itself, with a module-level constant in its script::
     CACHE_VERSION = 3
 
 It is folded into the cache location, so raising it moves the whole repository
-(and every child in its hierarchy) to a fresh cache namespace at once. It
-defaults to ``0`` when the script names none, and a repository with no script of
-its own - an ``enrich`` one, which rewrites another repository's answers - has no
-code to version and stays at ``0``.
+(and every child in its hierarchy) to a fresh cache namespace at once. It is also
+part of the cache key of every object the plugin serves: the plugin built those
+objects, or said how to build them, so raising it has every one of them built
+again -- which is the whole of what a plugin has to do when it changes what it
+serves. It defaults to ``0`` when the script names none, and a ``0`` is left out
+of every key. A repository with no script of its own - an ``enrich`` one, which
+rewrites another repository's answers - has no code to version and stays at
+``0``.
+
+Every other piece of code PartCAD runs to produce something it caches reports a
+version the same way: a ``partType`` script (see :ref:`part-types`), a custom
+implementation of a file type, an analysis, a route or a simulation (see
+:ref:`output-files`), and each of PartCAD's own wrappers and implementations.
 
 The number lives in the plugin because it is the plugin's own business. A
 package that imports a plugin-backed library has no way of knowing that the

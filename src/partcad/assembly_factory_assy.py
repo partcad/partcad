@@ -56,6 +56,8 @@ def _uses_connections(node) -> bool:
 
 
 class AssemblyFactoryAssy(AssemblyFactoryFile):
+    WRAPPERS = ("measure.py",)
+
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitASSY", source_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config, extension=".assy")

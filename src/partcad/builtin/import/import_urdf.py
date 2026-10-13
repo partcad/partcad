@@ -54,6 +54,11 @@ sys.path.append(os.path.dirname(__file__))
 import primitive_shapes  # noqa: E402
 import urdf_common  # noqa: E402
 
+# What this implementation reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
+
 # Mesh formats a URDF may name, mapped to the PartCAD part type that reads them.
 # COLLADA (.dae) is deliberately absent: it is common in URDF and PartCAD has no
 # reader for it, so it is reported as skipped rather than silently ignored.

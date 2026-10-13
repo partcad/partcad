@@ -20,6 +20,11 @@ import pyexpat  # noqa: F401
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 
+# What this wrapper reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
+
 
 def free_bounds(request):
     """How many free boundaries the shape has, which is how open it is.

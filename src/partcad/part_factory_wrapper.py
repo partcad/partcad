@@ -16,6 +16,7 @@ produces the shape(s) (see wrappers/wrapper_part_type.py).
 import base64
 import os
 
+from . import code_version
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, telemetry, transform, wrapper
 from .part_factory import PartFactory
@@ -26,6 +27,8 @@ from .utils import resolve_resource_path
 
 @telemetry.instrument()
 class PartFactoryWrapper(PartFactory):
+    WRAPPERS = ("part_type.py", "transform.py")
+
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitWrapper", target_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config)
@@ -62,6 +65,38 @@ class PartFactoryWrapper(PartFactory):
             # entry (see 'sandbox_versions.environment_cache_key').
             image=self.project.docker_image_declared,
         )
+
+    async def prepare_async(self, part) -> None:
+        """Key the part on the version its partType's code reports, too.
+
+        'code_versions' has the wrappers this factory runs and the plugin that
+        serves the part, but the partType's own script is only known once its
+        package is: the package that declares it may not be this one, and
+        resolving it loads it. Its version is the plugin's when a plugin serves
+        the partType - the script is one of the plugin's files - and otherwise
+        the one the script states, as every wrapper does (see 'code_version').
+        """
+        await super().prepare_async(part)
+        versions = self._part_type_versions()
+        if versions is not None:
+            part.add_code_versions(versions)
+
+    def _part_type_versions(self):
+        pt_project = self.ctx.get_project(self.part_type_package)
+        if pt_project is None:
+            return None  # 'instantiate()' says so, where it can fail the part
+        plugin_version = getattr(pt_project, "plugin_cache_version", 0)
+        if plugin_version:
+            # Already in the key when the part is served by the same plugin -
+            # an LDraw part and the partType that builds it are.
+            if getattr(self.project, "plugin_ref", None) == pt_project.plugin_ref:
+                return None
+            return code_version.key([(pt_project.plugin_ref, plugin_version)])
+        pt_config = pt_project.get_part_type_config(self.part_type_name)
+        if pt_config is None:
+            return None
+        script = os.path.join(pt_project.config_dir, pt_config.get("path", self.part_type_name + ".py"))
+        return code_version.key([(self.part_type_ref, code_version.declared(script))])
 
     async def _materialize_wrapper_script(self, pt_project, script_rel):
         """Return the on-disk path of the partType's wrapper script.

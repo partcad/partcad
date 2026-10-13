@@ -10,6 +10,7 @@
 import copy
 from abc import ABC, abstractmethod
 
+from .. import code_version
 from .. import logging as pc_logging
 from ..concurrency import ReentrantGate
 
@@ -51,6 +52,13 @@ class Test(ABC):
     # that can reach that state.
     NOT_CACHEABLE = "not_cacheable"
 
+    # The wrappers this test runs in a sandbox to reach its verdict, by the name
+    # 'wrapper.get()' takes. The version each reports is part of the verdict's
+    # key, so raising it has every verdict it reached reached again (see
+    # 'code_version'); 'tests/partcad/unit/test_code_version.py' holds every
+    # test that runs one to naming it.
+    WRAPPERS: tuple[str, ...] = ()
+
     def __init__(self, name: str) -> None:
         self.name = name
 
@@ -88,6 +96,9 @@ class Test(ABC):
             manufacturable = int(bool(getattr(shape, "is_manufacturable", True)))
             suffix = await self.cache_key_suffix(ctx, shape)
             cache_key = f"test.{self.name}.manufacturable={manufacturable}{suffix}"
+            versions = code_version.wrappers_key(self.WRAPPERS)
+            if versions is not None:
+                cache_key += ".code=" + versions
             cached_results = await ctx.cache_tests.read_data_async(shape.hash, [cache_key])
             cached_bytes = cached_results.get(cache_key, [])
             if cached_bytes and len(cached_bytes) != 0:

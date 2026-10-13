@@ -21,6 +21,8 @@ from .sketch_factory import SketchFactory
 #                 see Face::_make_from_wires in build123d/topology.py
 @telemetry.instrument()
 class SketchFactoryBasic(SketchFactory):
+    WRAPPERS = ("sketch_basic.py",)
+
     PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
 
     def __init__(self, ctx, source_project, target_project, config):

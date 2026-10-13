@@ -61,19 +61,32 @@ def test_a_subject_with_no_key_has_no_question():
     assert cache_artifacts.question_hash("x", "", {"a": 1}) is None
 
 
-def test_the_key_follows_the_subject_the_question_and_the_scripts(tmp_path):
+def test_the_key_follows_the_subject_the_question_and_the_scripts_versions(tmp_path):
     script = tmp_path / "solve.py"
-    script.write_text("v = 1\n")
+    script.write_text("CACHE_VERSION = 1\nv = 1\n")
 
-    def key(subject="s", question=None, files=(str(script),)):
-        return cache_artifacts.question_hash("x", subject, question or {"load": 5}, files).get()
+    def key(subject="s", question=None, scripts=(str(script),)):
+        return cache_artifacts.question_hash("x", subject, question or {"load": 5}, scripts).get()
 
     first = key()
     assert key() == first
     assert key(subject="t") != first
     assert key(question={"load": 6}) != first
-    script.write_text("v = 2\n")
+    # The script says when what it produces has changed, by raising its
+    # version; an edit that does not is the same question.
+    script.write_text("CACHE_VERSION = 1\nv = 2  # the same answer, written differently\n")
+    assert key() == first
+    script.write_text("CACHE_VERSION = 2\nv = 2\n")
     assert key() != first
+
+
+def test_a_script_that_states_no_version_keys_as_none_was_given(tmp_path):
+    script = tmp_path / "solve.py"
+    script.write_text("v = 1\n")
+    assert (
+        cache_artifacts.question_hash("x", "s", {"load": 5}, [str(script)]).get()
+        == cache_artifacts.question_hash("x", "s", {"load": 5}).get()
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -310,8 +323,17 @@ def test_another_question_is_another_run(analysed):
     _run(part.analyze_async(ctx, cae.FEA, mesh_size=2.0))
     assert len(runs) == 2
 
-    # The solver changed: the question is asked again.
-    (root / "solve.py").write_text("def process(path, request):\n    return {'success': True, 'v': 2}\n")
+    # The solver was edited without saying it answers differently: the answer
+    # it gave is the answer.
+    (root / "solve.py").write_text("def process(path, request):\n    return {'success': True}  # the same\n")
+    _run(part.analyze_async(ctx, cae.FEA))
+    assert len(runs) == 2
+
+    # The solver says it does, by raising the version it reports: the question
+    # is asked again.
+    (root / "solve.py").write_text(
+        "CACHE_VERSION = 2\n\ndef process(path, request):\n    return {'success': True, 'v': 2}\n"
+    )
     _run(part.analyze_async(ctx, cae.FEA))
     assert len(runs) == 3
 
@@ -547,7 +569,10 @@ def test_another_job_is_another_route(routed):
     _run(part.route_async(ctx, feed=900))
     assert len(runs) == 2
 
-    (root / "route.py").write_text("def process(path, request):\n    return {'success': True, 'v': 2}\n")
+    # Routed differently, by the route's own account: it raised its version.
+    (root / "route.py").write_text(
+        "CACHE_VERSION = 2\n\ndef process(path, request):\n    return {'success': True, 'v': 2}\n"
+    )
     _run(part.route_async(ctx))
     assert len(runs) == 3
 

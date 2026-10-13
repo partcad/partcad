@@ -17,6 +17,8 @@ from .process_crash import command_failure
 
 @telemetry.instrument()
 class PartFactory3mf(PartFactoryFile):
+    WRAPPERS = ("import_mesh.py",)
+
     # The sandboxed runtime used to keep build123d out of the main process
     PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
 

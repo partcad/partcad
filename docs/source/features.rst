@@ -843,7 +843,8 @@ asks for them and runs nothing. The ``fea``, ``cfd`` and ``cam`` checks of
 The question is the object's own cache key plus everything the run adds to it:
 the boundary conditions and where they landed, a route's job and the machine it
 is cut on, the implementation and every option it resolved to, the sandbox it
-runs in, and the content of its script. Changing any of those runs it again. A simulation's ``validation:`` is not part
+runs in, and the version its script and the wrapper that runs it report (the
+``CACHE_VERSION`` each states). Changing any of those runs it again. A simulation's ``validation:`` is not part
 of the question: it is evaluated again on every run, so editing it re-judges the
 cached run rather than repeating it.
 
