@@ -42,6 +42,9 @@ interface WebviewNode extends Omit<ViewerNode, 'assembly' | 'sketches' | 'geomet
  * asks and this answers -- see 'fetchTab'.
  */
 const TAB_COMMANDS: Record<string, string> = {
+    // What the object is required to be, and with 'verify' whether the model is
+    // it - the verdicts 'pc test -f requirements' reaches.
+    requirements: 'partcad.requirements',
     // What the object is made of and what each part of it declares; the user's
     // choices are added here, from this machine (see 'common/garage.ts').
     bvb: 'partcad.manufacturingTree',
@@ -80,6 +83,7 @@ interface FetchTabRequest extends RenderRequest {
     recursive?: boolean;
     buildParts?: boolean;
     document?: boolean;
+    verify?: boolean;
 }
 
 /** A file a render tab is showing, kept until the next one replaces it. */
@@ -321,6 +325,12 @@ export class PartcadViewer implements vscode.Disposable {
                 // the viewer was shown under, is what the choices are kept by.
                 const object = data?.object ?? `${target.package}:${target.name}`;
                 post({ data: data ? { ...data, choices: readChoices(object) } : data });
+                return;
+            }
+            if (tab === 'requirements') {
+                args.kind = target.kind ?? 'part';
+                args.verify = message.verify === true;
+                post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
             if (tab === 'build') {
@@ -766,6 +776,7 @@ export class PartcadViewer implements vscode.Disposable {
 				<div class="panel">
 					<div id="tabs" class="tabs" hidden></div>
 					<div class="panes">
+						<div id="pane-requirements" class="pane" hidden></div>
 						<div id="pane-design" class="pane pane-group">
 						<div id="design-tabs" class="tabs sub-tabs" hidden></div>
 						<div class="panes">

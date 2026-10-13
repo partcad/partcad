@@ -103,6 +103,8 @@ extrude
 faces
 factor
 fea
+feature
+features
 feed
 feedback
 file

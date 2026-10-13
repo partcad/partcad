@@ -24,8 +24,12 @@ import type { SpaceMouseSettings } from './spacemouse';
  * which have nothing in them yet and are shown disabled. Each group is a strip of its own: the
  * object as '3d' (first, always), '2d' and 'draft'; 'fea' and 'cfd'; 'bvb'
  * (Build vs Buy), 'build', 'supply' (labelled Buy), 'bom' and 'assembly'.
+ *
+ * In front of the five, and only for an object that declares any:
+ * 'requirements', a tab of its own with no strip under it.
  */
 export type TabId =
+    | 'requirements'
     | 'design'
     | 'analysis'
     | 'manufacturing'
@@ -408,6 +412,12 @@ export interface FetchTabMessage {
     buildParts?: boolean;
     /** On the Build tab: the plan alone (false, fast), or the pages it points into as well (true). */
     document?: boolean;
+    /**
+     * On the Requirements tab: what is required alone (false, a read of the
+     * declaration), or whether the model meets it as well (true, what
+     * 'pc test -f requirements' checks).
+     */
+    verify?: boolean;
 }
 
 /** Renderer to host: the thumbnails and measurements of these objects, sized 'width' x 'height'. */
@@ -731,4 +741,38 @@ export interface PlanData {
     document?: DocumentData;
     /** Plan item id -> index into 'document.pages'. */
     pages?: Record<string, number>;
+}
+
+/**
+ * One requirement of 'requirements.check', and what the model made of it.
+ *
+ * 'section' is 'ports', 'interfaces' or 'physics' for what 'pc test' measures,
+ * and 'simulate' for a 'simulate:' entry naming a feature nobody declared.
+ * 'passed' is null until the model has been asked.
+ */
+export interface RequirementCheck {
+    section: string;
+    name: string;
+    requirement: string;
+    passed: boolean | null;
+    detail?: string | null;
+}
+
+/** One feature: its name, what it is, and the 'simulate:' entries that name it. */
+export interface RequirementFeature {
+    name: string;
+    desc: string;
+    simulations: string[];
+}
+
+/** The 'requirements' tab's data: 'partcad.requirements.Report.to_dict()'. */
+export interface RequirementsData {
+    object: string;
+    kind: string;
+    /** Whether the object declares any requirements at all: what decides whether the tab is offered. */
+    defined: boolean;
+    /** Whether the verdicts are in, or only what is required. */
+    verified: boolean;
+    features: RequirementFeature[];
+    requirements: RequirementCheck[];
 }

@@ -221,12 +221,16 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
           `/pc:gen-sketch`) -- the agent authors the CAD script and validates it by rendering
     - [x] Describe an existing object (`/pc:describe`), search the catalog (`/pc:search`), add interfaces
           (`/pc:add-interfaces`)
+    - [x] Validate an object against its `requirements:` (`/pc:validate`) -- `pc test` for the ports,
+          interfaces and physics it measures, and the agent's judgement of every feature from simulations,
+          renders, the bill of materials and the assembly instructions
     - [x] Set a project up (`/pc:init`, `/pc:setup`)
   - [x] `--no-ansi` output on every command, so an agent parses plain text rather than progress bars
   - [x] Free-form `comment:` context in `Assembly YAML`, written for whoever reads the assembly next
 - Other features
   - Object-Oriented Programming approach to maintaining part interfaces and mating information
-  - Live preview of 3D models while working in Visual Studio Code, with 2D renders, dimensioned drawings,
+  - Live preview of 3D models while working in Visual Studio Code, with the requirements an object declares
+    and whether `pc test` finds them met, 2D renders, dimensioned drawings,
     engineering analysis, the build-or-buy decision, the bill of materials, the assembly instructions and
     supplier quotes on tabs beside the 3D view — and a software fallback that still draws the model in a
     window with no `WebGL`, such as a virtual machine or a remote desktop

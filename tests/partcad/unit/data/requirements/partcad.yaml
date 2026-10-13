@@ -1,0 +1,139 @@
+desc: Objects that declare what they are required to be, met and not
+
+sketches:
+  m3:
+    type: basic
+    circle: 1.5
+
+materials:
+  steel:
+    density: 7850 # kg/m^3
+    mu: 0.6
+  air:
+    desc: Nobody said how dense
+
+interfaces:
+  m3:
+    desc: Abstract 3mm circular interface
+    abstract: True
+    ports:
+      m3:
+        sketch: m3
+  m3-thru:
+    desc: 3mm through hole
+    inherits:
+      m3: thru
+  rail:
+    desc: Something to slide along
+    ports:
+      rail:
+
+parts:
+  # Everything it is required to be, it is.
+  plate:
+    type: cadquery
+    desc: A plate with two through holes, a port on top facing down into it, and one on its side
+    properties:
+      material: :steel
+    implements:
+      m3-thru:
+        TL: [[-10.0, 10.0, 0.0], [0.0, 0.0, 1.0], 0.0]
+        TR: [[10.0, 10.0, 0.0], [1.0, 0.0, 0.0], 180.0]
+    ports:
+      top: [[0.0, 0.0, 5.0], [1.0, 0.0, 0.0], 180.0]
+      side:
+        location: [[20.0, 0.0, 2.5], [0.0, 1.0, 0.0], 90.0]
+        sketch: m3
+    requirements:
+      features:
+        holes: Two M3 clearance holes, 20 mm apart
+        flat: Sits flat on a table
+      ports:
+        top: [null, [0, 0, -1], null]
+        side:
+          position: [">0", null, null]
+          direction: [2, 0, 0]
+          sketch: m3
+      interfaces:
+        m3-thru: [TL, TR]
+        m3: [null, [0, 0, -1], null]
+      physics:
+        mass: ">0,<1"
+        friction: 0.6
+        density: 7850
+        centerOfMass: [0, 0, null]
+        inertia:
+          izz: ">0"
+    simulate:
+      on-the-table:
+        simulation: //nowhere:simulator
+        feature: flat
+
+  # The same plate, required to be what it is not.
+  plate-wrong:
+    type: cadquery
+    path: plate.py
+    properties:
+      material: :air
+    implements:
+      m3-thru:
+        TL: [[-10.0, 10.0, 0.0], [0.0, 0.0, 1.0], 0.0]
+    ports:
+      top: [[0.0, 0.0, 5.0], [0.0, 0.0, 1.0], 90.0]
+    requirements:
+      features:
+        holes: Two M3 clearance holes
+      ports:
+        top: [null, [0, 0, -1], null]
+        bottom: null
+        turned: [null, null, null]
+      interfaces:
+        m3-thru:
+          TL: [[0, 0, 0], null, null]
+          BR: null
+        rail: null
+      physics:
+        mass: "<1"
+        centerOfMass: [5, 0, null]
+        restitution: "<0.5"
+    simulate:
+      wobbles:
+        simulation: //nowhere:simulator
+        feature: [holes, stable]
+
+  # The shape the section had before it had structure.
+  legacy-text:
+    type: cadquery
+    path: plate.py
+    requirements: |
+      Has to be flat.
+  legacy-list:
+    type: cadquery
+    path: plate.py
+    requirements:
+      - Has to be flat.
+      - Has to be steel.
+  legacy-headings:
+    type: cadquery
+    path: plate.py
+    requirements:
+      mechanical: Holds 2 kg.
+      features:
+        flat: Has to be flat.
+
+  # Nothing required of it.
+  plain:
+    type: cadquery
+    path: plate.py
+
+assemblies:
+  pair:
+    type: assy
+    desc: Two plates, one above the other
+    map:
+      bottom-face: [lower, top]
+    requirements:
+      ports:
+        bottom-face: [[0, 0, 5], [0, 0, -1], null]
+      physics:
+        mass: "<2"

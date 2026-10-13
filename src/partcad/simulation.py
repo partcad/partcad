@@ -32,6 +32,12 @@ is never of a part alone:
                 *inside* ``before`` and ``after`` is the plugin's vocabulary,
                 and the expression is written by whoever knows both the part and
                 the plugin.
+    feature     the feature of the object's ``requirements:`` that this
+                simulation demonstrates, by name (or a list of them). Optional,
+                and read by nothing that runs the simulation: it is what lets a
+                reader of the requirements - the IDE's Requirements tab,
+                ``/pc:validate`` - see which of them a simulation stands behind
+                (see 'partcad.requirements').
 
 ``scene`` does not have to be named -- the default is the built-in empty world
 holding the subject, which is what "does this part stand up on its own" means
@@ -69,6 +75,9 @@ from .utils import resolve_resource_path
 
 # The section of 'partcad.yaml' a part or an assembly declares its simulations in.
 SECTION = "simulate"
+
+# The key of a declaration that names the requirement feature it demonstrates.
+FEATURE = "feature"
 
 # The scene a declaration that names none is run in. There is no counterpart
 # for the plugin: PartCAD implements no simulator (see 'output.SIMULATE'), so
@@ -178,6 +187,7 @@ class SimulationDeclaration:
         # declaration says. A 'simulate:' that wants a longer run says
         # 'params: {duration: 30}' rather than needing a plugin of its own.
         self.params = self.config.get("params") or {}
+        self.features = declared_features(self.config.get(FEATURE))
 
     def __repr__(self) -> str:
         return "<simulate %s: %s in %s>" % (self.name, self.simulation, self.scene)
@@ -248,6 +258,20 @@ class SimulationResult:
             "error": self.error,
             "result": self.result,
         }
+
+
+def declared_features(value) -> list:
+    """The feature names a declaration's ``feature:`` gives, as a list.
+
+    One name or several; anything else names none. Whether each is a feature
+    the object's requirements declare is 'partcad.requirements' to say, since
+    that is where the features are.
+    """
+    if isinstance(value, str):
+        return [value] if value else []
+    if isinstance(value, list):
+        return [str(item) for item in value if isinstance(item, str) and item]
+    return []
 
 
 def normalize_offset(offset, name: str) -> list:

@@ -398,6 +398,13 @@
         "params": {
           "type": "object",
           "description": "Parameter values handed to the simulation plugin, overriding what its own declaration defaults to (e.g. 'duration')"
+        },
+        "feature": {
+          "description": "The feature of this object's 'requirements:' that this simulation demonstrates, by name, or a list of them",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true }
+          ]
         }
       },
       "required": ["simulation"],
@@ -414,6 +421,147 @@
       "type": "string",
       "minLength": 1,
       "description": "The fluid that fills this scene, as a reference to a material ('//pub/std/manufacturing/material/fluid:water', or ':brine' for one this package catalogues). Its 'density' and 'viscosity' are what a simulation of the scene drags and buoys what moves through it with. Absent is vacuum, which is what every engine assumes"
+    },
+    "requirements": {
+      "description": "What this object is required to be, written before the design is: the features it has to have, in words, and the ports, interfaces and physical properties it has to have, which 'pc test' checks against the model (the 'requirements' test). Any part of a port, an interface or a physical property may be null, and most of it should be: null is no requirement. A required value is a constant (a number, a string or a boolean) or a comparison ('>0', '>=1', '<10', '<=1', '!0'), and several are joined with commas: constants are alternatives ('1,2,4'), comparisons all have to hold ('>0,<=1'). A paragraph, a list of paragraphs, or a mapping of headings to paragraphs is also accepted and read as features, which is the shape this section had before it had structure.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        {
+          "type": "object",
+          "properties": {
+            "features": { "$ref": "#/definitions/requirement-features" },
+            "ports": { "$ref": "#/definitions/requirement-ports" },
+            "interfaces": { "$ref": "#/definitions/requirement-interfaces" },
+            "physics": { "$ref": "#/definitions/requirement-physics" }
+          },
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      ]
+    },
+    "requirement-features": {
+      "type": ["object", "null"],
+      "description": "The features this object has to have: a name for each, and a sentence saying what it is. A 'simulate:' entry may name the one it demonstrates ('feature:'); the rest are judged by whoever reads the evidence -- see the '/pc:validate' skill",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/.%-]+$": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "requirement-value": {
+      "description": "A required value: null (no requirement), a constant, or comparisons. Numbers are compared to within 1e-6. Constants joined with commas are alternatives ('1,2,4'); comparisons ('>0', '>=1', '<10', '<=1', '!0', '=5') joined with commas all have to hold ('>0,<=1'); a value given both has to be one of the constants and meet every comparison",
+      "type": ["number", "string", "boolean", "null"]
+    },
+    "requirement-vector": {
+      "description": "Three required values, one per axis (x, y, z); null for the whole vector or for any one of them is no requirement on it",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/definitions/requirement-value" },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      ]
+    },
+    "requirement-location": {
+      "description": "Where a port or an interface instance is required to be, in the object's own frame: its 'position' (millimetres), its 'direction' -- the way its Z axis points, which is the way a port faces, and not the axis a location is rotated about -- and its 'angle', the degrees it is turned about that direction. Each may be null. Written as a mapping by those names, or as [position, direction, angle], the order a port's own location is written in. A direction of three plain numbers is compared as the unit vector it points along",
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/definitions/requirement-location-list" },
+        {
+          "type": "object",
+          "properties": {
+            "position": { "$ref": "#/definitions/requirement-vector" },
+            "direction": { "$ref": "#/definitions/requirement-vector" },
+            "angle": { "$ref": "#/definitions/requirement-value" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "requirement-location-list": {
+      "description": "A location requirement written the way a port's location is: [position, direction, angle]",
+      "type": "array",
+      "items": [
+        { "$ref": "#/definitions/requirement-vector" },
+        { "$ref": "#/definitions/requirement-vector" },
+        { "$ref": "#/definitions/requirement-value" }
+      ],
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "requirement-ports": {
+      "type": ["object", "null"],
+      "description": "The ports this object has to have, by name. Null requires only that the port is there; otherwise where it is (see 'requirement-location'), and in the long form also the sketch it is drawn with",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/.%-]+$": {
+          "oneOf": [
+            { "$ref": "#/definitions/requirement-location" },
+            {
+              "type": "object",
+              "properties": {
+                "position": { "$ref": "#/definitions/requirement-vector" },
+                "direction": { "$ref": "#/definitions/requirement-vector" },
+                "angle": { "$ref": "#/definitions/requirement-value" },
+                "sketch": { "$ref": "#/definitions/requirement-value" }
+              },
+              "required": ["sketch"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "requirement-interfaces": {
+      "type": ["object", "null"],
+      "description": "The interfaces this object has to implement, named the way 'implements:' names them; implementing one that inherits a required interface counts. Null requires any instance; a location ([position, direction, angle]) requires that some instance is there; an instance name, a list of them or a mapping of instance names to locations requires those instances ('' is the unnamed one)",
+      "patternProperties": {
+        "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+            { "$ref": "#/definitions/requirement-location-list" },
+            {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/.%-]*$": { "$ref": "#/definitions/requirement-location" }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "requirement-physics": {
+      "type": ["object", "null"],
+      "description": "The physical properties this object has to have: any field of 'physics' that a shape may state, each a required value (three of them where the field is a vector, a mapping of them where it is a mapping). Checked against what the object states, what its material says, and what PartCAD works out -- the mass, from the measured volume and the material's density, or the sum of what an assembly holds",
+      "properties": {
+        "mass": { "$ref": "#/definitions/requirement-value" },
+        "density": { "$ref": "#/definitions/requirement-value" },
+        "centerOfMass": { "$ref": "#/definitions/requirement-vector" },
+        "inertiaOrientation": { "$ref": "#/definitions/requirement-vector" },
+        "inertia": {
+          "type": ["object", "null"],
+          "properties": { "ixx": { "$ref": "#/definitions/requirement-value" }, "ixy": { "$ref": "#/definitions/requirement-value" }, "ixz": { "$ref": "#/definitions/requirement-value" }, "iyy": { "$ref": "#/definitions/requirement-value" }, "iyz": { "$ref": "#/definitions/requirement-value" }, "izz": { "$ref": "#/definitions/requirement-value" } },
+          "additionalProperties": false
+        },
+        "friction": { "$ref": "#/definitions/requirement-value" },
+        "friction2": { "$ref": "#/definitions/requirement-value" },
+        "frictionDirection": { "$ref": "#/definitions/requirement-vector" },
+        "contactStiffness": { "$ref": "#/definitions/requirement-value" },
+        "contactDamping": { "$ref": "#/definitions/requirement-value" },
+        "minContactDepth": { "$ref": "#/definitions/requirement-value" },
+        "maxContactVelocity": { "$ref": "#/definitions/requirement-value" },
+        "restitution": { "$ref": "#/definitions/requirement-value" },
+        "maxContacts": { "$ref": "#/definitions/requirement-value" },
+        "velocityDamping": { "$ref": "#/definitions/requirement-value" },
+        "selfCollide": { "$ref": "#/definitions/requirement-value" },
+        "gravity": { "$ref": "#/definitions/requirement-value" }
+      },
+      "additionalProperties": false
     },
     "link-filter": {
       "description": "Which links of an assembly or a scene a file is of: a mapping of link name to the same thing again, or a list of names. A link the filter names is kept and a link it does not name is dropped; a link named with nothing under it keeps everything inside it, and one named with children under it keeps those children only. A link is named the way the Assembly YAML file names it -- its 'name:', the part or assembly it places, or its position in its 'links:' list as 'link#2' -- which is the same name a 'connect:' uses. See docs/source/assy.rst",
@@ -1481,24 +1629,7 @@
                 },
                 "ratio": { "type": "number", "minimum": 0.5, "maximum": 1.0 },
                 "cache": { "type": "boolean", "default": true },
-                "requirements": {
-                  "oneOf": [
-                    { "type": "string", "minLength": 1 },
-                    { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "properties":{
-                          "type": "object",
-                          "properties":{
-                            "length": { "type": "number" }
-                          }
-                        }
-                      },
-                      "additionalProperties": { "type": "string", "minLength": 1 }
-                    }
-                  ]
-                },
+                "requirements": { "$ref": "#/definitions/requirements" },
                 "with": { "$ref": "#/definitions/parameter-overrides" },
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
                 "cwd": { "type": "string", "minLength": 1 },
@@ -1535,6 +1666,7 @@
                 "fea": { "$ref": "#/definitions/cae-analysis" },
                 "cfd": { "$ref": "#/definitions/cae-analysis" },
                 "simulate": { "$ref": "#/definitions/simulate" },
+                "requirements": { "$ref": "#/definitions/requirements" },
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
@@ -1752,6 +1884,7 @@
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },
+                "requirements": { "$ref": "#/definitions/requirements" },
                 "manufacturable": { "type": "boolean" },
                 "timeout": {
                   "type": "integer",
@@ -1794,6 +1927,7 @@
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },
+                "requirements": { "$ref": "#/definitions/requirements" },
                 "manufacturable": { "type": "boolean" },
                 "timeout": {
                   "type": "integer",
@@ -1846,6 +1980,7 @@
                   "uniqueItems": true,
                   "description": "Roots to resolve 'model://' references against ('world' type only)"
                 },
+                "requirements": { "$ref": "#/definitions/requirements" },
                 "source": { "type": "string", "minLength": 1 },
                 "package": { "type": "string", "minLength": 1 },
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
@@ -1899,6 +2034,7 @@
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },
+                "requirements": { "$ref": "#/definitions/requirements" },
                 "manufacturable": { "type": "boolean", "default": false },
                 "gravity": { "$ref": "#/definitions/scene-gravity" },
                 "medium": { "$ref": "#/definitions/scene-medium" },
@@ -1967,6 +2103,7 @@
             "use-faces": { "type": "boolean", "default": false },
             "ignore-visibility": { "type": "boolean", "default": false },
             "flip-y": { "type": "boolean", "default": false },
+            "requirements": { "$ref": "#/definitions/requirements" },
             "source": { "type": "string", "minLength": 1 },
             "package": { "type": "string", "minLength": 1 },
             "circle": {

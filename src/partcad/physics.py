@@ -706,6 +706,42 @@ async def part_mass_async(ctx, shape):
     return _positive(physics.get("mass"))
 
 
+async def resolved_async(ctx, shape):
+    """A part's or an assembly's physics as numbers to compare: (physics, sources, unknown); None for anything else.
+
+    What 'mass_properties_async()' reports, for a reader that compares the
+    values rather than printing them - a requirement on them (see
+    'partcad.requirements'): in full rather than rounded for a reader, and
+    every value, not only the mass properties - a friction its material lends
+    is in 'physics' too.
+
+    'unknown' says why what a part or an assembly weighs is not known, and is
+    None when it is. For an assembly some of whose parts weigh nothing PartCAD
+    knows, the total 'physics' carries is what the others add up to, which is
+    not what the assembly weighs; 'unknown' names the parts left out, and a
+    reader holding the total to a bound should not take it for the answer.
+    """
+    kind = getattr(shape, "kind", None)
+    if kind == "assembly":
+        tree = await shape.get_wrapped(ctx)
+        if not isinstance(tree, dict):
+            return None
+        physics, sources, _volume, _parts, unweighed = await _tree_async(tree, _Materials(ctx))
+        unknown = None
+        if unweighed:
+            names = ", ".join(unweighed[:5]) + (", ..." if len(unweighed) > 5 else "")
+            unknown = "%d of its parts weigh nothing PartCAD knows: %s" % (len(unweighed), names)
+        return physics, sources, unknown
+
+    if kind != "part":
+        return None
+    physics, sources, _volume, material, material_name = await _part_async(ctx, shape)
+    unknown = None
+    if "mass" not in physics:
+        unknown = _no_mass_reason(material, material_name, shape.material_reference())
+    return physics, sources, unknown
+
+
 def owner_package(shape_name: str) -> str:
     """The package a shape's full name ("//pkg:part") belongs to.
 

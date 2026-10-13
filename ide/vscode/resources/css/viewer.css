@@ -518,6 +518,81 @@ table.grid .numeric {
     white-space: nowrap;
 }
 
+/*
+ * The Requirements tab: a mark beside each measured requirement, and a banner
+ * for each thing a feature is validated by. The marks take the colours the
+ * editor's own test explorer uses for a passed and a failed test, which is what
+ * they are: the verdicts of 'pc test -f requirements'.
+ */
+/* One set of columns for every section, so that they line up from one to the next. */
+.requirements table.grid {
+    table-layout: fixed;
+}
+
+.requirement-checks th:nth-child(1) {
+    width: 1.5em;
+}
+
+.requirement-checks th:nth-child(2),
+.requirement-features th:nth-child(1) {
+    width: 18%;
+}
+
+.requirement-checks th:nth-child(3) {
+    width: 32%;
+}
+
+.requirement-features th:nth-child(3) {
+    width: 24%;
+}
+
+.requirements td {
+    overflow-wrap: anywhere;
+}
+
+.requirements .mark {
+    text-align: center;
+    font-weight: 700;
+}
+
+.requirements .mark.pass {
+    color: var(--vscode-testing-iconPassed, #73c991);
+}
+
+.requirements .mark.fail {
+    color: var(--vscode-testing-iconFailed, #f14c4c);
+}
+
+.requirements .mark.pending {
+    color: var(--vscode-descriptionForeground);
+}
+
+.requirements .detail {
+    color: var(--vscode-descriptionForeground);
+}
+
+.requirements .description {
+    white-space: pre-wrap;
+}
+
+
+.requirements .banner {
+    display: inline-block;
+    margin: 0 0.35em 0.2em 0;
+    padding: 0 0.45em;
+    border-radius: 0.8em;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    font-size: 0.85em;
+    cursor: default;
+}
+
+.requirements .banner.llm {
+    background: transparent;
+    border: 1px solid var(--vscode-badge-background, currentColor);
+    color: var(--vscode-foreground);
+}
+
 /* The rows of the supply list are the way in to one item's suppliers. */
 table.selectable tbody tr {
     cursor: pointer;

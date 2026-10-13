@@ -713,6 +713,56 @@ Feature: `pc test` command
     Then the command should exit with a status code of "1"
     And STDOUT should contain "is not flat on the bottom or the top"
 
+  @success @pc-test @pc-test-requirements
+  Scenario: A part is held to the ports and interfaces its requirements name
+    # 'requirements' only: ports and interfaces are read off the declaration, so nothing is
+    # built. A port facing down is written as half a turn about X, and that is what the
+    # requirement's direction [0, 0, -1] is met by.
+    Given a file named "plate.py" with content:
+      """
+      import cadquery as cq
+
+      show_object(cq.Workplane("XY").box(30, 30, 5))
+      """
+    And a file named "partcad.yaml" with content:
+      """
+      interfaces:
+        m3-thru:
+          ports:
+            m3:
+
+      parts:
+        plate:
+          type: cadquery
+          implements:
+            m3-thru:
+              TL: [[-10.0, 10.0, 0.0], [1.0, 0.0, 0.0], 180.0]
+          ports:
+            top: [[0.0, 0.0, 2.5], [1.0, 0.0, 0.0], 180.0]
+          requirements:
+            features:
+              flat: Sits flat on a table
+            ports:
+              top: [null, [0, 0, -1], null]
+            interfaces:
+              m3-thru: [null, [0, 0, -1], null]
+        upside-down:
+          type: cadquery
+          path: plate.py
+          ports:
+            top: [[0.0, 0.0, 2.5], [0.0, 0.0, 1.0], 0.0]
+          requirements:
+            ports:
+              top: [null, [0, 0, -1], null]
+              bottom:
+      """
+    When I run "pc test -f requirements plate"
+    Then the command should exit with a status code of "0"
+    When I run "pc test -f requirements upside-down"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "it faces [0, 0, 1], and has to face [0, 0, -1]"
+    And STDOUT should contain "there is no port 'bottom'"
+
   @wip
   Scenario: Test with invalid configuration
     Given I have an invalid PartCAD configuration

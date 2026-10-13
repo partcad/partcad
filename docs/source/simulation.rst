@@ -164,6 +164,14 @@ report prints beside the verdict -- and states:
 ``desc``
   The claim in words, for whoever reads the result.
 
+``feature``
+  The feature of the object's :ref:`requirements` that this simulation
+  demonstrates, by name, or a list of them. Nothing that runs the simulation
+  reads it: it is what lets a reader of the requirements -- the IDE's
+  Requirements tab, an agent running ``/pc:validate`` -- see which features a
+  simulation stands behind. ``pc test`` fails an object one of whose simulations
+  names a feature its requirements do not declare.
+
 An object may declare as many simulations as it likes, and two of them can
 make opposite claims about one part in two worlds: ``float`` rises in ``tank``
 and falls in the default scene, which is a vacuum.

@@ -143,34 +143,140 @@ it will be left pointing at nothing.
 Requirements
 ------------
 
-Objects may contain a list of requirements in free form (any YAML syntax works).
-These requirements help describe the object in more detail.
-They are not used by PartCAD itself, but by AI or human actors to create,
-improve, or better understand the object.
+A part, an assembly, a scene or a sketch may say what it is required to be.
+Requirements are written before the design is, from the point of view of
+whoever asked for it, and they are what the design is judged against: by
+``pc test``, by the simulations that name them, and by whoever reads the
+evidence -- a person, or an AI agent running ``/pc:validate``. The PartCAD
+extension for Visual Studio Code shows them on a tab of their own, in front of
+the others, with a mark beside each that ``pc test`` checks.
 
-The requirements are from the user’s perspective and serve to guide the design.
-Once the design is complete, it may impose further requirements (for example,
-on manufacturing), but those are not part of this section.
-This section exclusively covers the requirements used to create the design.
-
-.. code-block:: yaml
-
-  parts:
-    <part name>:
-      requirements: |
-        This part has to ...
-        ...
-        It also has to ...
-        ...
+They are from the user's perspective and serve to guide the design. Once the
+design is complete it may impose further requirements of its own -- on
+manufacturing, say -- but those are not part of this section.
 
 .. code-block:: yaml
 
   parts:
-    <part name>:
+    bracket:
+      type: build123d
       requirements:
-        - <requirement 1>
-        - <requirement 2>
-        - <requirement 3>
+        features:
+          mounting: Four M3 clearance holes on a 40 mm square, reachable from the top
+          shelf-load: Holds a 2 kg shelf at its free end without visible bending
+        ports:
+          top: [null, [0, 0, 1], null]
+        interfaces:
+          //pub/std/metric/m3:m3-thru: null
+        physics:
+          mass: "<0.05"
+
+``features``
+  What the object has to have or do: a name for each, and a sentence saying
+  what. Most of what anybody asks of a product is said this way, and PartCAD
+  does not judge it. A ``simulate:`` entry may name the feature it demonstrates
+  (``feature:``, see :doc:`simulation`); every feature, demonstrated or not, is
+  for whoever reads the evidence to judge -- the renders, the simulations, the
+  bill of materials and the assembly instructions. That is what the
+  ``/pc:validate`` agent skill does.
+
+``ports``
+  The ports the object has to have, by name, and as much of where each one is
+  as matters. ``null`` only requires that the port is there.
+
+``interfaces``
+  The interfaces the object has to implement, named the way ``implements:``
+  names them. Implementing an interface that inherits a required one counts:
+  something that implements ``m3-thru`` implements ``m3``. ``null`` requires
+  any instance, anywhere; a location requires that some instance is there; an
+  instance name, a list of them, or a mapping of instance names to locations
+  requires those instances (``""`` is the unnamed one).
+
+``physics``
+  The physical properties the object has to have: any field of a ``physics``
+  section a shape may state (see :doc:`simulation`) -- ``mass``,
+  ``centerOfMass``, ``inertia``, ``density``, ``friction`` and the rest. The
+  value checked is the one ``pc info`` reports: what the object states in
+  ``properties: physics:``; failing that, what its material lends (its
+  ``density``, and its ``mu`` as the ``friction``); failing that, what its solid
+  works out to -- the mass at that density, the centre of mass, the inertia --
+  or for an assembly what its parts add up to. A property PartCAD cannot find
+  out fails the requirement: not known is not met, and that includes the mass of
+  an assembly one of whose parts weighs nothing PartCAD knows, since what the
+  others add up to is not what it weighs.
+
+``pc test`` checks the last three against the model -- its ``requirements``
+check, ``pc test -f requirements`` to run it alone -- and says, for each one
+that is not met, what it found instead.
+
+Required values
+^^^^^^^^^^^^^^^
+
+Almost anything in a port, an interface or a physical property can be
+``null``, and most of it should be: ``null`` is no requirement. "A port called
+``top`` that faces down" is a requirement; "a port at these exact coordinates"
+is usually a design decision written down too early.
+
+What is not ``null`` is a constant -- a number, a string or a boolean -- or a
+comparison: ``>0``, ``>=1``, ``<10``, ``<=1``, ``!0`` (not 0, also ``!=0``) or
+``=5``. Several are joined with commas, and the two kinds join differently:
+constants are alternatives, comparisons all have to hold, and a value given both
+has to be one of the constants *and* meet every comparison.
+
+.. code-block:: yaml
+
+  mass: 0.5          # 0.5, to within 1e-6
+  mass: "<0.5"       # less than 0.5
+  mass: ">0,<=0.5"   # in (0, 0.5]
+  maxContacts: "1,2,4"   # one of the three
+  maxContacts: "1,2,3,!2" # 1 or 3
+
+Quote a comparison: YAML reads ``>`` and ``!`` at the start of a value as
+syntax of its own.
+
+Where a port or an interface instance is
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A location requirement is three things, each of which may be ``null``:
+
+``position``
+  Where the frame's origin is, in millimetres, in the object's own frame.
+``direction``
+  The way the frame's Z axis points -- the way a port *faces*. Three plain
+  numbers are compared as the unit vector they point along.
+``angle``
+  How far, in degrees, the frame is turned about that direction: how far its X
+  axis is from where the shortest turn from +Z to the direction leaves it. For a
+  port written as a turn about Z, that is the angle it was written with.
+
+They are written as a mapping by those names, or as a list of three in that
+order -- the order a port's own location is written in:
+
+.. code-block:: yaml
+
+  ports:
+    top: [null, [0, 0, -1], null]       # faces down, anywhere
+    side:
+      position: [">0", null, null]      # somewhere on the +X side
+      direction: [1, 0, 0]              # facing +X
+      sketch: m3                        # and drawn with the sketch 'm3'
+  interfaces:
+    m3-thru: [TL, TR]                   # these two instances, anywhere
+    rail:
+      "": [[0, 0, null], null, 90]      # the unnamed one on the Z axis, turned a quarter turn
+
+The middle element of a *port's* location is the axis it is rotated about, and
+of a requirement it is the direction the port faces. They are not the same
+thing, deliberately: a port facing down is written ``[[0, 0, 0], [1, 0, 0],
+180]`` -- half a turn about X -- and it meets the requirement ``[null, [0, 0, -1],
+null]``.
+
+Earlier spellings
+^^^^^^^^^^^^^^^^^
+
+The section used to be free-form text, and that is still read -- as features: a
+paragraph is the feature ``general``, a list is one feature per item, and a key
+of the mapping that is not one of the four above is a feature named after it.
 
 .. code-block:: yaml
 
@@ -179,8 +285,6 @@ This section exclusively covers the requirements used to create the design.
       requirements:
         mechanical: |
           The outer dimensions of the part have to be ...
-        electrical: |
-          The part has to be able to withstand ...
         esthetic: |
           The part has to look like ...
 

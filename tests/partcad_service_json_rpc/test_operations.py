@@ -2931,6 +2931,112 @@ def test_adhoc_render_reports_a_failed_render(monkeypatch, tmp_path):
     assert not any(m.startswith("Render complete") for m in log.messages("info"))
 
 
+# ---- requirements.check ------------------------------------------------------
+#
+# The method behind the IDE's Requirements tab. What a requirement means and
+# whether the model meets it is 'partcad.requirements', tested beside it; what is
+# pinned here is which object is asked, whether the model is, and what a refusal
+# reads as.
+
+
+def _requirements_session(monkeypatch, kind="part", name="plate", physics=()):
+    asked = []
+
+    class Report:
+        def __init__(self, shape, verify):
+            self.shape = shape
+            self.verify = verify
+
+        def to_dict(self):
+            return {"object": "//:%s" % self.shape.name, "verified": self.verify}
+
+    async def check_async(ctx, shape, verify=True):
+        asked.append((shape, verify))
+        return Report(shape, verify)
+
+    def of_shape(shape):
+        return types.SimpleNamespace(physics=list(physics))
+
+    install_fake_partcad_modules(
+        monkeypatch, {"partcad.requirements": {"check_async": check_async, "of_shape": of_shape}}
+    )
+    session, _ = make_session()
+    shape = FakeObject(name, project_name="//")
+    session.partcad_ctx.shapes[(kind, "//:" + name)] = shape
+    return session, shape, asked
+
+
+def test_requirements_check_reads_the_declaration_unless_asked_to_verify(monkeypatch):
+    session, plate, asked = _requirements_session(monkeypatch)
+
+    declared = operations.requirements_check(session, {"package": "//", "object": "plate", "kind": "part"})
+    verified = operations.requirements_check(
+        session, {"package": "//", "object": "plate", "kind": "part", "verify": True}
+    )
+
+    assert asked == [(plate, False), (plate, True)]
+    assert declared == {"object": "//:plate", "verified": False}
+    assert verified == {"object": "//:plate", "verified": True}
+
+
+@pytest.mark.parametrize("kind", ["assembly", "scene", "sketch"])
+def test_requirements_check_asks_the_kind_it_was_told(monkeypatch, kind):
+    session, shape, asked = _requirements_session(monkeypatch, kind=kind, name="thing")
+
+    operations.requirements_check(session, {"package": "//", "object": "thing", "kind": kind, "verify": True})
+
+    assert asked == [(shape, True)]
+    assert session.partcad_ctx.requested[-1][:2] == (kind, "//:thing")
+
+
+def test_requirements_check_builds_an_assembly_s_sub_assemblies_first_to_weigh_it(monkeypatch):
+    """Phase one of an assembly build: what it weighs is worked out from the tree it is built as."""
+    session, _, asked = _requirements_session(monkeypatch, kind="assembly", name="robot", physics=["mass"])
+    _assembly_with(session, "//:robot", uncached=[("//", "arm")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.requirements_check(session, {"package": "//", "object": "robot", "kind": "assembly", "verify": True})
+
+    assert [entry["name"] for entry in _retry_error(caught)] == ["arm"]
+    assert asked == []
+
+
+def test_requirements_check_builds_nothing_it_does_not_need(monkeypatch):
+    """No physics required, or nothing verified: the ports are read off a tree that needs no build."""
+    session, _, asked = _requirements_session(monkeypatch, kind="assembly", name="robot")
+    robot = _assembly_with(session, "//:robot", uncached=[("//", "arm")])
+    operations.requirements_check(session, {"package": "//", "object": "robot", "kind": "assembly", "verify": True})
+
+    session, _, asked_declared = _requirements_session(monkeypatch, kind="assembly", name="robot", physics=["mass"])
+    _assembly_with(session, "//:robot", uncached=[("//", "arm")])
+    operations.requirements_check(session, {"package": "//", "object": "robot", "kind": "assembly"})
+
+    assert [verify for _, verify in asked] == [True]
+    assert asked[0][0] is robot
+    assert [verify for _, verify in asked_declared] == [False]
+
+
+def test_requirements_check_refuses_what_declares_none(monkeypatch):
+    session, _, asked = _requirements_session(monkeypatch)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.requirements_check(session, {"package": "//", "object": "m3", "kind": "interface"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "'interface'" in str(caught.value)
+    assert asked == []
+
+
+def test_requirements_check_names_what_it_could_not_find(monkeypatch):
+    session, _, asked = _requirements_session(monkeypatch)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.requirements_check(session, {"package": "//", "object": "ghost", "kind": "assembly"})
+
+    assert "Assembly //:ghost is not found" in str(caught.value)
+    assert asked == []
+
+
 # ---- cae.analyze / cae.defaults --------------------------------------------
 #
 # The two methods behind `pc cae fea|cfd` and the IDE's FEA and CFD tabs. What

@@ -526,6 +526,11 @@ class JsonRpcBackend implements PartcadBackend {
                 ignore_manufacturability: a.ignoreManufacturability,
             }),
         );
+        // The Requirements tab: what the object is required to be, and with
+        // 'verify' whether the model is it ('pc test -f requirements').
+        reg('partcad.requirements', (a) =>
+            this.send('requirements.check', { package: a.pkg, object: a.name, kind: a.kind, verify: a.verify }),
+        );
         reg('partcad.supplyQuote', (a) =>
             this.send('supply.quote', { package: a.pkg, object: a.name, qos: a.qos, recursive: a.recursive }),
         );

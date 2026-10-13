@@ -99,6 +99,23 @@ at all).
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
 
+- **What an object is required to be is one module** (`requirements.py`): the `requirements:` section of a
+  part, an assembly, a scene or a sketch -- `features` in words, and `ports`, `interfaces` and `physics` where
+  any part of each may be null and the rest is a constant or a comparison (`>0`, `!0`, joined with commas). Its
+  `check_async()` is what `pc test`'s `requirements` check runs *and* what the daemon's `requirements.check`
+  answers the IDE's Requirements tab with, so the two cannot disagree; nothing else reads the section. Two rules
+  in it are deliberate. A location requirement's middle element is the direction a frame *faces* (its Z axis),
+  not the rotation axis a port's location is written with -- "faces down" is what a requirement means, and a
+  port facing down is written as half a turn about X (`facing()` is the rule). And a requirement on something
+  PartCAD cannot find out fails rather than passes. What a physical property *is* is not decided here at all: it
+  is `physics.resolved_async()`, the resolution `pc info` reports (stated, else lent by the material, else worked
+  out from the solid, or an assembly's parts combined), so a requirement and `pc info` cannot disagree -- and an
+  assembly one of whose parts weighs nothing known has no mass to compare. Which physical properties may be required is
+  read off the schema (`requirement-physics`, which a test holds to `physics` less a connection's properties),
+  so a field added there needs nothing here. The check is never cached: what it reads -- the requirements, the
+  ports and interfaces, which can live in other packages, the material -- is mostly not what a shape's cache key
+  is made of.
+
 - **Software is not a shape** (`software.py`, `software_factory*.py`): a package's `software:` section declares
   the files a product ships with -- firmware images, binaries -- and `Software` deliberately does not inherit
   `Shape`. There is no geometry, so nothing here renders, exports, tessellates or caches a shape; what it shares
