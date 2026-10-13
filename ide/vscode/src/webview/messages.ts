@@ -46,16 +46,20 @@ export type TabId =
     | 'bom'
     | 'supply'
     | 'assembly'
+    | 'fea'
+    | 'dynamic'
+    | 'thermal'
+    | 'cfd'
     | 'simulation'
-    | 'emulation'
-    | AnalysisTabId;
+    | 'emulation';
 
 /**
  * The tabs that run an analysis, each named after the analysis it runs: the
  * name 'pc cae <analysis>' takes and 'cae.analyze' is asked with, which the
- * host passes on as it is.
+ * host passes on as it is. Spelled out in 'TabId' as well, where
+ * 'tests/partcad_ide_client/unit/test_protocol.py' reads every tab id from.
  */
-export type AnalysisTabId = 'fea' | 'dynamic' | 'thermal' | 'cfd';
+export type AnalysisTabId = Extract<TabId, 'fea' | 'dynamic' | 'thermal' | 'cfd'>;
 
 /** The Design tab's own tabs. */
 export const DESIGN_TABS: TabId[] = ['3d', '2d', 'draft'];
