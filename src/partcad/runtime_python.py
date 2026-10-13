@@ -330,7 +330,21 @@ class PythonRuntime(runtime.Runtime):
         # self.python_flags += ["-X", "warn_default_encoding=1"]
 
         self.pip_flags = []
-        self.pip_install_flags = []
+        # The newest release a requirement allows that has a wheel for this
+        # machine, rather than the newest release. pip ranks a newer sdist above
+        # an older wheel, so the day a project stops publishing wheels for a
+        # platform, every sandbox there starts compiling it -- with no compiler,
+        # or without the native library the build looks for -- and fails. That
+        # is the numba gap in PIP_CONSTRAINTS, which PartCAD can bound because the
+        # CAD stack is its own; a plugin's 'pythonRequirements' are not, and this
+        # covers them. MuJoCo is the case in point: its last Intel macOS wheel is
+        # 3.10.0, and 'mujoco>=3.2,<4' built 3.14.0 there and stopped on
+        # "MUJOCO_PATH environment variable is not set".
+        #
+        # Only a preference: a requirement with no wheel at all for this machine
+        # is still built from its sdist, which is what works where there is a
+        # compiler.
+        self.pip_install_flags = ["--prefer-binary"]
         if platform.system() == "Windows":
             self.pip_install_flags += ["--no-warn-script-location"]
 

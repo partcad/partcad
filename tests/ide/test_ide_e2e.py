@@ -20,7 +20,10 @@ What a person does on a first afternoon, done by the commands a person types:
    which runs the analysis, and that has to come back without an error either --
    unless this machine has no container runtime that can run a Linux image, the
    one excuse `pc test` accepts for an analysis that could not run (macOS and
-   Windows runners; see `container_runtime`).
+   Windows runners; see `container_runtime`). Where the example's own `unless:`
+   leaves the cantilever out (64-bit Arm, Apple silicon included), there is
+   nothing to open: this step is not tried, and the test is reported as skipped
+   once everything else has passed (see `excluded_here`).
 
 The editor is driven over the Chrome DevTools protocol, which every editor built
 on Electron speaks when started with `--remote-debugging-port`. Not through
@@ -551,6 +554,9 @@ async def _close(url: str) -> None:
 
 def test_install_open_view_and_analyse_in_a_real_editor(session):
     env, devtools = session["env"], session["devtools"]
+    # Asked before anything starts: it builds a context of its own, and the
+    # daemon is not running yet to share the examples' caches with.
+    cantilever_left_out = excluded_here(CANTILEVER)
 
     # 1. The extension, from a package, into the editor's own profile.
     pc(env, "ide", "install", "--with", session["editor"], "--vsix", session["vsix"], "--", *session["profile"])
@@ -620,36 +626,39 @@ def test_install_open_view_and_analyse_in_a_real_editor(session):
     for target in devtools.partcad_webviews():
         assert js_errors(devtools.session(target)[0]) == [], target["url"]
 
-    # 4. The cantilever, on the FEA tab: selecting it runs the analysis.
-    output = pc(env, "ide", "view", "--analysis-fea", CANTILEVER)
-    assert daemon_errors(output) == []
+    # 4. The cantilever, on the FEA tab: selecting it runs the analysis -- where
+    # this machine has a cantilever to select.
+    excused = False
+    if cantilever_left_out is None:
+        output = pc(env, "ide", "view", "--analysis-fea", CANTILEVER)
+        assert daemon_errors(output) == []
 
-    def analysed():
-        found = viewer_webview()
-        if found is None:
-            return None
-        _, _, probe = found
-        fea = probe["fea"]
-        running = any(text.startswith(("Running", "Waiting", "Select this tab", "Asking")) for text in fea["busy"])
-        return None if running or not (fea["errors"] or fea["model"] or fea["severities"] or fea["busy"]) else probe
+        def analysed():
+            found = viewer_webview()
+            if found is None:
+                return None
+            _, _, probe = found
+            fea = probe["fea"]
+            running = any(text.startswith(("Running", "Waiting", "Select this tab", "Asking")) for text in fea["busy"])
+            return None if running or not (fea["errors"] or fea["model"] or fea["severities"] or fea["busy"]) else probe
 
-    probe = wait_for("the FEA result", analysed, BUILD_TIMEOUT, interval=5)
-    viewer = viewer_state()
-    assert (viewer["subject"]["name"], viewer["tab"], viewer["subTab"]) == ("cantilever", "analysis", "fea")
-    excused = probe["fea"]["errors"] and not container_runtime()
-    if excused:
-        # The one excuse `pc test` accepts for an analysis that came back with
-        # nothing (see `CaeTest._verdict`): no container runtime that can run a
-        # Linux image -- macOS, and Windows' Windows-container daemon -- so the
-        # solver the implementation's image carries could never have been had.
-        # Everything else about the tab still has to hold.
-        print("NOTE: the FEA was not run, and is excused -- no container runtime here:\n%s" % probe["fea"]["text"])
-    else:
-        assert probe["fea"]["errors"] == [], probe["fea"]["text"]
-    assert "error" not in [severity.lower() for severity in probe["fea"]["severities"]], probe["fea"]["text"]
-    assert not probe["failure"], probe["overlay"]
-    for target in devtools.partcad_webviews():
-        assert js_errors(devtools.session(target)[0]) == [], target["url"]
+        probe = wait_for("the FEA result", analysed, BUILD_TIMEOUT, interval=5)
+        viewer = viewer_state()
+        assert (viewer["subject"]["name"], viewer["tab"], viewer["subTab"]) == ("cantilever", "analysis", "fea")
+        excused = probe["fea"]["errors"] and not container_runtime()
+        if excused:
+            # The one excuse `pc test` accepts for an analysis that came back with
+            # nothing (see `CaeTest._verdict`): no container runtime that can run a
+            # Linux image -- macOS, and Windows' Windows-container daemon -- so the
+            # solver the implementation's image carries could never have been had.
+            # Everything else about the tab still has to hold.
+            print("NOTE: the FEA was not run, and is excused -- no container runtime here:\n%s" % probe["fea"]["text"])
+        else:
+            assert probe["fea"]["errors"] == [], probe["fea"]["text"]
+        assert "error" not in [severity.lower() for severity in probe["fea"]["severities"]], probe["fea"]["text"]
+        assert not probe["failure"], probe["overlay"]
+        for target in devtools.partcad_webviews():
+            assert js_errors(devtools.session(target)[0]) == [], target["url"]
 
     # What the extension heard from the daemon over the whole session -- less the
     # one line saying the excused analysis did not run, when it was excused.
@@ -657,6 +666,14 @@ def test_install_open_view_and_analyse_in_a_real_editor(session):
     if excused:
         logged = [line for line in logged if "failed to fetch the 'fea' tab" not in line]
     assert logged == []
+
+    # Last, so that everything this machine could check has been: a skip says
+    # what was not tried, and must not stand in for what was.
+    if cantilever_left_out is not None:
+        pytest.skip(
+            "%s is excluded here by 'unless' (%s), so the FEA tab was not tried; everything else passed"
+            % (CANTILEVER, cantilever_left_out)
+        )
 
 
 def editor_startup_report(user_data_dir: str) -> str:
@@ -671,6 +688,27 @@ def editor_startup_report(user_data_dir: str) -> str:
     with open(logs[-1], encoding="utf-8", errors="replace") as f:
         tail = f.readlines()[-40:]
     return "The end of %s:\n%s" % (logs[-1], "".join(tail))
+
+
+def excluded_here(path: str):
+    """The `unless:` clause that leaves the object at `path` out on this machine, or None if it is here.
+
+    PartCAD's own answer, from a context over './examples', rather than a guess
+    from `platform.machine()`: asking the declaration is what keeps this test and
+    the example from drifting apart, which is why `test_part_example_kicad` asks
+    the same way. A package left out leaves everything in it out.
+    """
+    import partcad
+
+    package, _, name = path.rpartition(":")
+    project = partcad.init(EXAMPLES).get_project(package)
+    if project.skipped:
+        return project.skipped_by
+    for kind in ("sketch", "part", "assembly", "scene"):
+        clause = project.get_skipped_object_clause(kind, name)
+        if clause is not None:
+            return clause
+    return None
 
 
 def container_runtime() -> bool:
