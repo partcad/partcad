@@ -55,6 +55,7 @@ the metres every solver's material constants are written in.
 import json
 import math
 import os
+import signal
 import struct
 import tempfile
 
@@ -408,6 +409,22 @@ class Mesh:
         return sum(len(tags) for _type, tags, _nodes in self.volumes)
 
 
+def _initialize(gmsh):
+    """Start gmsh, and give back the SIGPIPE disposition it takes away.
+
+    'gmsh.initialize()' resets SIGPIPE to its default action, which is to kill
+    the process, and 'finalize()' does not restore it -- while Python ignores
+    SIGPIPE and turns a write to a closed pipe into a BrokenPipeError. Python's
+    own record of the handler is not updated either, so nothing in the process
+    can tell. Whatever outlives the mesh in this process -- a pytest session, a
+    daemon -- then dies silently on the next write to a peer that went away.
+    """
+    previous = signal.getsignal(signal.SIGPIPE) if hasattr(signal, "SIGPIPE") else None
+    gmsh.initialize(interruptible=False)
+    if previous is not None:
+        signal.signal(signal.SIGPIPE, previous)
+
+
 def _write_brep(shape, path):
     from OCP.BRepTools import BRepTools
 
@@ -454,7 +471,7 @@ def mesh(request, groups, size=0.05, order=1, rest=None, scale=1.0 / MM_PER_M, f
         brep = os.path.join(work, "part.brep")
         _write_brep(shape, brep)
 
-        gmsh.initialize(interruptible=False)
+        _initialize(gmsh)
         try:
             gmsh.option.setNumber("General.Terminal", 0)
             gmsh.option.setNumber("General.Verbosity", 1)

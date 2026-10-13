@@ -12,8 +12,10 @@ which is an implementation's dependency rather than PartCAD's, so it is skipped
 where gmsh cannot be imported.
 """
 
+import ctypes
 import json
 import os
+import signal
 import struct
 import sys
 
@@ -195,6 +197,32 @@ def test_mesh_names_the_groups_it_was_given_and_the_rest(tmp_path):
     with open(path) as f:
         text = f.read()
     assert '"inlet0"' in text and '"wall"' in text and '"body"' in text
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGPIPE"), reason="no SIGPIPE on this platform")
+def test_meshing_leaves_sigpipe_ignored():
+    """gmsh resets SIGPIPE to 'kill the process'; meshing must not leave it so.
+
+    Asked of the C library rather than of 'signal.getsignal()', which reports
+    what Python last set and so cannot see what gmsh did behind its back. This
+    is what killed the whole pytest session, at the next test to write to a
+    closed pipe, with exit status 141 and no failing test to point at.
+    """
+    pytest.importorskip("gmsh")
+    libc = ctypes.CDLL(None)
+    libc.signal.restype = ctypes.c_void_p
+    libc.signal.argtypes = [ctypes.c_int, ctypes.c_void_p]
+
+    def disposition():
+        previous = libc.signal(int(signal.SIGPIPE), int(signal.SIG_IGN))
+        libc.signal(int(signal.SIGPIPE), previous)
+        return previous or 0
+
+    assert disposition() == int(signal.SIG_IGN)
+    request = _pipe_request()
+    cae_support.prepare(request)
+    cae_support.mesh(request, {}, size=0.2, rest="wall")
+    assert disposition() == int(signal.SIG_IGN)
 
 
 def test_points_are_matched_within_a_tolerance_not_by_rounding():
