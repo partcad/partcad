@@ -318,14 +318,14 @@ Object commands
   (``manufacturability`` and the methods below it), whether an assembly's connection instructions can be
   followed (``connect``; see "Testing the instructions" in :doc:`assy`), whether the route a machine would cut
   it with can be produced (``cam``; see :ref:`pc cam <cam>`), whether the engineering analyses a part asks
-  for come back clean (``fea`` and ``cfd``; see :ref:`pc cae <cae>`), whether a part or an assembly does
-  what its ``simulate:`` section says it does (``sim``; see ``pc sim`` below), and whether the object has the
-  ports, interfaces and physical properties its ``requirements:`` say it has to (``requirements``; see
-  :ref:`requirements`). Those last five apply only to an object that declares the matching section, so a
-  package that declares none pays nothing for them. ``requirements`` fails a requirement on something it
-  cannot find out -- a mass with no material to work it out from -- rather than passing it, and says, for each
-  requirement not met, what it found instead. The features a section lists are prose, and are for the
-  ``/pc:validate`` agent skill to judge.
+  for come back clean (``fea``, ``dynamic``, ``thermal`` and ``cfd``; see :ref:`pc cae <cae>`), whether a
+  part or an assembly does what its ``simulate:`` section says it does (``sim``; see ``pc sim`` below), and
+  whether the object has the ports, interfaces and physical properties its ``requirements:`` say it has to
+  (``requirements``; see :ref:`requirements`). Those last seven apply only to an object that declares the
+  matching section, so a package that declares none pays nothing for them. ``requirements`` fails a
+  requirement on something it cannot find out -- a mass with no material to work it out from -- rather than
+  passing it, and says, for each requirement not met, what it found instead. The features a section lists are
+  prose, and are for the ``/pc:validate`` agent skill to judge.
 
   ``manufacturability`` answered to the name ``cam`` until :ref:`pc cam <cam>` existed, at which point one word
   was answering two questions -- "can this be made at all" and "here is the program that makes it". They are
@@ -465,16 +465,25 @@ Object commands
 .. _cae:
 
 ``pc cae``
-  Run an engineering analysis on a part and report what it found. Subcommands: ``fea`` (finite element
-  analysis) and ``cfd`` (computational fluid dynamics). Both take one part::
+  Run an engineering analysis on a part and report what it found. Subcommands, each its own question:
+
+  - ``fea`` — finite element analysis: does the part hold up under what it carries;
+  - ``dynamic`` — dynamic (modal) finite element analysis: at which frequencies does it ring, held as it is;
+  - ``thermal`` — heat transfer: how hot does it get, heated and cooled as it is;
+  - ``cfd`` — computational fluid dynamics: how does a fluid flow through it.
+
+  Each takes one part::
 
       pc cae fea :bracket
+      pc cae dynamic :bracket
+      pc cae thermal :heatsink
       pc cae cfd -i //pub/feature/cae/openfoam:cfd :duct
 
-  The part says what it is held by and what it carries, in a section named after the analysis. ``fix:`` names
-  what is held still — a list of interface types, or a map from an interface type to the instances of it that
-  are held. ``load:`` names what is pulled on — a map from an interface type to one value for all of its
-  instances, or a nested map naming the instance::
+  The part declares its boundary conditions in a section named after the analysis, and each analysis reads its
+  own keys. Every key names interface types the part implements, in one of two shapes. A *set* — ``fix:``,
+  ``outlet:`` — is a list of interface types, or a map from an interface type to the instances of it meant. A
+  *value* — ``load:``, ``temperature:``, ``heat:``, ``convection:`` — is a map from an interface type to one
+  value for all of its instances, or a nested map naming the instance::
 
       parts:
         bracket:
@@ -488,13 +497,56 @@ Object commands
               rail:
                 left: 30 N        # one named instance carries this
                 right: 30 N
+          dynamic:
+            fix:
+              - m3-screw          # held, and left to ring
+          thermal:
+            temperature:
+              m3-screw: 40 C      # held at a temperature
+            heat:
+              hook: 2 W           # heat put in through the port's surface
+            convection:
+              rail: 10            # cooled by the air, W/(m^2*K)
+
+  .. list-table::
+     :header-rows: 1
+
+     * - section
+       - keys
+       - meaning
+     * - ``fea:``
+       - ``fix:``, ``load:``
+       - held still; pulled on
+     * - ``dynamic:``
+       - ``fix:``
+       - held still; the natural frequencies of the rest are found
+     * - ``thermal:``
+       - ``temperature:``, ``heat:``, ``convection:``
+       - held at a temperature; a power put in; cooled by a film coefficient against the ambient. Every other
+         surface is insulated
+     * - ``cfd:``
+       - ``load:``, ``outlet:``, ``fix:``
+       - where the flow is driven in; where it leaves, at the reference pressure; walls. The part is the fluid
+         volume, and every surface that is neither an inlet nor an outlet is a wall
+
+  An analysis refuses a key it does not read: ``outlet:`` on a stress analysis, or ``fix:`` on a heat one, would
+  read as a boundary condition and not be one.
 
   A ``load`` value is a **force**. It may be written as a number and a unit — ``n``, ``nm``, ``mn``, ``kn`` or
   ``newton`` for force, ``mg``, ``g``, ``kg``, ``ton``, ``tonne``, ``lb`` or ``pound`` for mass — matched
   case-insensitively, with or without a space in front of it and with or without a plural ``s``. A bare number
   is a **mass in kilograms**, which is what "the shelf carries 5" means. A mass is weighed into a force at
-  9.8 N/kg, so what is stored and handed to the solver is always newtons. ``cfd:`` takes the same two keys with
-  the same meaning: what is held still, and what force the flow puts on it.
+  9.8 N/kg, so what is stored and handed to the solver is always newtons. A ``temperature`` is in **degrees
+  Celsius**, and ``300 K`` or ``100 F`` are converted; a ``heat`` is a **power**, in watts (``mW`` and ``kW``
+  are understood), put in through the whole of the port's surface; a ``convection`` is a **film coefficient** in
+  W/(m²·K).
+
+  **Where a condition lands** is the surface its port stands for. A port is a coordinate frame; when its
+  interface draws it with a sketch — ``sketch:`` on the port, often a ``basic`` ``circle:`` — the sketch,
+  placed by the port's frame with Z out of the surface, is that surface. PartCAD imprints every port's sketch on
+  the part before the implementation runs and hands it the faces each port covers, and their area is what a
+  force or a power is spread over: an inlet drawn as the bore's circle is exactly the bore. A port with no
+  sketch covers the face it lies on, when it lies on one.
 
   The model the analysis produces is written to ``<part>.<analysis>.<extension>`` and saved as it stands.
   Which format that is — 3D or 2D — is the implementation's choice, and PartCAD does not convert it. The
@@ -502,9 +554,11 @@ Object commands
   printed as a table, or as the array itself with ``--json``. ``pc cae`` exits non-zero when there is at least
   one, so it can be used as a gate.
 
-  Who runs the analysis is ``<package>:<file type>``. It defaults to the ``caeFeaImplementation`` /
-  ``caeCfdImplementation`` :doc:`user configuration <configuration>` options — ``//pub/feature/cae/calculix:fea``
-  and ``//pub/feature/cae/calculix:cfd`` — and ``-i``/``--implementation`` overrides it for one run. PartCAD
+  Who runs the analysis is ``<package>:<file type>``. It defaults to the :doc:`user configuration
+  <configuration>` option named after the analysis — ``caeFeaImplementation`` (``//pub/feature/cae/calculix:fea``),
+  ``caeDynamicImplementation`` (``//pub/feature/cae/elmer:dynamic``), ``caeThermalImplementation``
+  (``//pub/feature/cae/elmer:thermal``) and ``caeCfdImplementation`` (``//pub/feature/cae/openfoam:cfd``) — and
+  ``-i``/``--implementation`` overrides it for one run. PartCAD
   ships no solver: an implementation is a package like any other, declared in a ``cae:`` section exactly as an
   export or a render implementation is declared in its own (see :ref:`output-files`), and installed as a
   dependency.
@@ -515,7 +569,7 @@ Object commands
   relayed as it stands rather than classified. The command and the check say it identically on purpose: a user
   who ran one of them and then the other must not be told two different things about the same machine.
 
-  ``pc test`` runs the same analyses. Its ``fea`` and ``cfd`` tests apply to a part that declares the matching
+  ``pc test`` runs the same analyses. Its ``fea``, ``dynamic``, ``thermal`` and ``cfd`` tests apply to a part that declares the matching
   section — and to nothing else, so a package of bolts pays nothing for them. **One thing passes: the analysis
   ran and reported no findings.** A malformed section fails; a plugin that cannot be resolved fails (the
   package is not a dependency, did not load, or declares no such file type — the configuration is wrong
@@ -649,7 +703,7 @@ Object commands
 
   ``pc test`` runs this as its ``cam`` check, and it is the same code: the check produces the route and passes
   the object only if one came back. It applies to an object that says how it is made and to nothing
-  else, so a package of bolts pays nothing for it -- the same gate the ``fea`` and ``cfd`` checks have, and
+  else, so a package of bolts pays nothing for it -- the same gate the analysis checks have, and
   the same cost model. There is one way to pass: a route was written. A malformed section fails, an
   implementation that cannot be resolved fails, and an implementation that resolved and produced nothing fails
   -- a tool bigger than the hole it was asked to cut, an outline the offset consumed, a sandbox that will not
@@ -923,14 +977,14 @@ instead.
   one, and ``-p <name>=<value>`` to set parameters.
 
   One flag per tab of the viewer opens it on that tab, named ``--<group>-<tab>`` the way the viewer's two strips
-  read: ``--design-3d``, ``--design-2d``, ``--design-draft``; ``--analysis-fea``, ``--analysis-cfd``;
-  ``--manufacturing-bvb``, ``--manufacturing-build``, ``--manufacturing-buy``, ``--manufacturing-bom``,
-  ``--manufacturing-assembly``; ``--validation-simulation``. With none, the viewer stays on whichever tab it is
-  on. The tab travels with the shape, so it is the window that draws the object that switches; a tab that does
-  not apply to the object (FEA of an assembly) is not opened, and one that is not known yet (Build, until the
-  viewer has worked out what is built; Simulation, until it has read what the object declares under
-  ``simulate:``) is opened as soon as it is. Opening an analysis tab runs the analysis, and opening Simulation
-  runs the first simulation, as clicking them does.
+  read: ``--design-3d``, ``--design-2d``, ``--design-draft``; ``--analysis-fea``, ``--analysis-dynamic``,
+  ``--analysis-thermal``, ``--analysis-cfd``; ``--manufacturing-bvb``, ``--manufacturing-build``,
+  ``--manufacturing-buy``, ``--manufacturing-bom``, ``--manufacturing-assembly``; ``--validation-simulation``.
+  With none, the viewer stays on whichever tab it is on. The tab travels with the shape, so it is the window
+  that draws the object that switches; a tab that does not apply to the object (FEA of an assembly) is not
+  opened, and one that is not known yet (Build, until the viewer has worked out what is built; Simulation,
+  until it has read what the object declares under ``simulate:``) is opened as soon as it is. Opening an
+  analysis tab runs the analysis, and opening Simulation runs the first simulation, as clicking them does.
 
   .. code-block:: shell
 

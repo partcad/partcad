@@ -24,10 +24,14 @@ The script is executed with these globals available:
                 script can adapt to what it was handed
     path     -- the absolute path of the file to write
 
-A 'cae:' implementation is run through here too, and is handed three more keys:
-'analysis' ("fea"/"cfd"), the 'fix' and 'load' the part declared, and 'boundary',
-the ports each of them landed on with their locations (see 'partcad.cae'). It
-answers with the same dict plus one key of its own:
+A 'cae:' implementation is run through here too, and is handed more keys:
+'analysis' (one of 'partcad.cae.ANALYSES'), the conditions the part declared
+under that analysis's own keys ('fix' and 'load', 'temperature', ...), and
+'boundary', the ports each of them landed on with their locations (see
+'partcad.cae'). Before it runs, 'cae_support.prepare()' imprints every port's
+sketch on the part and puts on each boundary record the faces it covers, so
+the 'wrapped' an implementation is handed is the part with its ports drawn on
+it. It answers with the same dict plus one key of its own:
 
     output = {"success": True, "findings": [...]}   # wrote the model, and found this
 
@@ -326,8 +330,25 @@ if __name__ == "__main__":
     request.pop(PHYSICS_KEY, None)
     if request.pop(DECODE_KEY, True) is not False:
         request = ocp_serialize.decode(request)
+    # An analysis has its ports turned into faces before the implementation
+    # sees it, once here rather than once per solver. What could not be done
+    # is a warning beside whatever the implementation answers, never a failure:
+    # the records then carry no faces, which an implementation already copes
+    # with.
+    prepared = []
+    if request.get("analysis") and request.get("boundary"):
+        try:
+            import cae_support
+
+            prepared = cae_support.prepare(request)
+        except Exception as e:
+            for record in request.get("boundary") or []:
+                record.pop("sketch", None)
+            prepared = ["The ports could not be turned into surfaces: %s" % wrapper_common.exception_to_str(e)]
     if script is None:
         result = _failed(Exception("No implementation script was passed to the export wrapper"))
     else:
         result = process(script, path, request)
+    if prepared:
+        result["warnings"] = prepared + list(result.get("warnings") or [])
     wrapper_common.handle_output(result)

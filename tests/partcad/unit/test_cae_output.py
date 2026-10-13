@@ -820,7 +820,7 @@ def test_an_unknown_analysis_has_no_configured_implementation():
     from partcad_utils.user_config import user_config
 
     with pytest.raises(ValueError):
-        user_config.cae_implementation("thermal")
+        user_config.cae_implementation("acoustics")
 
 
 # --------------------------------------------------------------------------- #

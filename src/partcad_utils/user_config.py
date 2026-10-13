@@ -348,6 +348,8 @@ OPTION_KEYS = (
     "useDockerKicad",
     "useDockerRemote",
     "caeFeaImplementation",
+    "caeDynamicImplementation",
+    "caeThermalImplementation",
     "caeCfdImplementation",
     "camImplementation",
     "tags",
@@ -389,9 +391,16 @@ SECTION_PATHS = (
 # both live in the public PartCAD index. They are not built into 'partcad': a
 # solver is a large third-party program, and which one to run is the user's
 # decision (see the 'caeFeaImplementation' option below).
+#
+# Each is the implementation whose answer to `examples/feature_cae` was measured
+# against the closed form: CalculiX for a static stress analysis; Elmer for the
+# two it is alone in covering with FEA as well, dynamic and thermal; OpenFOAM for
+# a flow, which is the one CalculiX's own CFD solver diverges on.
 DEFAULT_CAE_IMPLEMENTATIONS = {
     "fea": "//pub/feature/cae/calculix:fea",
-    "cfd": "//pub/feature/cae/calculix:cfd",
+    "dynamic": "//pub/feature/cae/elmer:dynamic",
+    "thermal": "//pub/feature/cae/elmer:thermal",
+    "cfd": "//pub/feature/cae/openfoam:cfd",
 }
 
 # Which implementation produces a route when nothing says otherwise. Unlike the
@@ -1160,14 +1169,26 @@ class UserConfig(vyper.Vyper):
         # values: <string>
         # default: //pub/feature/cae/calculix:fea
         #
+        # option: caeDynamicImplementation
+        # description: which implementation runs "pc cae dynamic", as
+        #              "<package>:<file type>"
+        # values: <string>
+        # default: //pub/feature/cae/elmer:dynamic
+        #
+        # option: caeThermalImplementation
+        # description: which implementation runs "pc cae thermal", as
+        #              "<package>:<file type>"
+        # values: <string>
+        # default: //pub/feature/cae/elmer:thermal
+        #
         # option: caeCfdImplementation
         # description: which implementation runs "pc cae cfd", as
         #              "<package>:<file type>"
         # values: <string>
-        # default: //pub/feature/cae/calculix:cfd
+        # default: //pub/feature/cae/openfoam:cfd
         #
         # PartCAD ships no solver, so unlike every export and render format
-        # there is no built-in implementation for these two to fall back on -
+        # there is no built-in implementation for these four to fall back on -
         # the default is a package in the public index, and this is where it is
         # named. It is user configuration rather than a constant because the
         # answer is a property of the machine and the person: which solver is
@@ -1179,15 +1200,20 @@ class UserConfig(vyper.Vyper):
         # value travels to the daemon like every other option: a key missing
         # from the copy is a key the daemon resolves from its own environment,
         # which is exactly what sending the configuration is meant to stop.
-        self.set_default("caeFeaImplementation", DEFAULT_CAE_IMPLEMENTATIONS["fea"])
-        self.set_default("caeCfdImplementation", DEFAULT_CAE_IMPLEMENTATIONS["cfd"])
-        self.bind_env("caeFeaImplementation", "PC_CAE_FEA_IMPLEMENTATION")
-        self.bind_env("caeCfdImplementation", "PC_CAE_CFD_IMPLEMENTATION")
-        # The 'or' still stands: a configuration file may carry the key with
-        # nothing under it, and an analysis with no implementation at all is a
-        # worse answer than the default one.
-        self.cae_fea_implementation = self.get_string("caeFeaImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["fea"]
-        self.cae_cfd_implementation = self.get_string("caeCfdImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["cfd"]
+        #
+        # One loop over the analyses rather than a block per option, so that the
+        # option, its environment variable and the attribute
+        # 'cae_implementation()' reads cannot be spelt three ways for one
+        # analysis: 'dynamic' is 'caeDynamicImplementation',
+        # 'PC_CAE_DYNAMIC_IMPLEMENTATION' and 'cae_dynamic_implementation'.
+        for analysis, default in DEFAULT_CAE_IMPLEMENTATIONS.items():
+            option = "cae%sImplementation" % analysis.capitalize()
+            self.set_default(option, default)
+            self.bind_env(option, "PC_CAE_%s_IMPLEMENTATION" % analysis.upper())
+            # The 'or' still stands: a configuration file may carry the key
+            # with nothing under it, and an analysis with no implementation at
+            # all is a worse answer than the default one.
+            setattr(self, "cae_%s_implementation" % analysis, self.get_string(option) or default)
 
         # option: camImplementation
         # description: which implementation produces a route for "pc cam", as
@@ -1195,7 +1221,7 @@ class UserConfig(vyper.Vyper):
         # values: <string>
         # default: //builtin/cam:gcode
         #
-        # Unlike the two above there *is* a built-in to fall back on, and the
+        # Unlike the four above there *is* a built-in to fall back on, and the
         # default names it. What this option is for is the machine at the other
         # end: a controller that wants a dialect of its own, or a shop with a
         # post-processor it already trusts, is a package declaring a file type
@@ -1207,7 +1233,7 @@ class UserConfig(vyper.Vyper):
         self.cam_implementation = self.get_string("camImplementation") or DEFAULT_CAM_IMPLEMENTATION
 
     def cae_implementation(self, analysis: str) -> str:
-        """Which implementation runs one analysis, by its name ("fea"/"cfd").
+        """Which implementation runs one analysis, by its name ("fea", "cfd", ...).
 
         Looked up rather than branched on, so that adding a third analysis is an
         entry in 'DEFAULT_CAE_IMPLEMENTATIONS' and an option key beside it, and

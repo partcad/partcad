@@ -23,10 +23,10 @@ import type { SpaceMouseSettings } from './spacemouse';
  * 'manufacturing', what making it takes; 'validation', whether it does what it
  * is supposed to; and 'operations', which has nothing in it yet and is shown
  * disabled. Each group is a strip of its own: the object as '3d' (first,
- * always), '2d' and 'draft'; 'fea' and 'cfd'; 'bvb' (Build vs Buy), 'build',
- * 'supply' (labelled Buy), 'bom' and 'assembly'; and 'simulation' beside
- * 'emulation' (Process Emulation), which has nothing in it yet and is shown
- * disabled.
+ * always), '2d' and 'draft'; 'fea', 'dynamic', 'thermal' and 'cfd'; 'bvb'
+ * (Build vs Buy), 'build', 'supply' (labelled Buy), 'bom' and 'assembly'; and
+ * 'simulation' beside 'emulation' (Process Emulation), which has nothing in it
+ * yet and is shown disabled.
  *
  * In front of the five, and only for an object that declares any:
  * 'requirements', a tab of its own with no strip under it.
@@ -46,10 +46,16 @@ export type TabId =
     | 'bom'
     | 'supply'
     | 'assembly'
-    | 'fea'
-    | 'cfd'
     | 'simulation'
-    | 'emulation';
+    | 'emulation'
+    | AnalysisTabId;
+
+/**
+ * The tabs that run an analysis, each named after the analysis it runs: the
+ * name 'pc cae <analysis>' takes and 'cae.analyze' is asked with, which the
+ * host passes on as it is.
+ */
+export type AnalysisTabId = 'fea' | 'dynamic' | 'thermal' | 'cfd';
 
 /** The Design tab's own tabs. */
 export const DESIGN_TABS: TabId[] = ['3d', '2d', 'draft'];
@@ -65,7 +71,7 @@ export const DESIGN_TABS: TabId[] = ['3d', '2d', 'draft'];
  */
 export const TAB_GROUPS: Partial<Record<TabId, TabId[]>> = {
     design: DESIGN_TABS,
-    analysis: ['fea', 'cfd'],
+    analysis: ['fea', 'dynamic', 'thermal', 'cfd'],
     manufacturing: ['bvb', 'build', 'supply', 'bom', 'assembly'],
     // Not 'emulation' (Process Emulation) yet: it holds nothing and is always
     // disabled, so a request for it could never be met.
@@ -104,11 +110,32 @@ export const DRAFT_PLUGINS = ['//pub/feature/render/draftwright'];
  */
 export const SIMULATION_PLUGINS = ['//pub/feature/simulate/mujoco:mujoco', '//pub/feature/simulate/gazebo:gazebo'];
 
-/** The two tabs that run an analysis rather than ask a question about the object. */
-export const ANALYSIS_TABS: TabId[] = TAB_GROUPS.analysis!;
+/**
+ * The tabs that run an analysis rather than ask a question about the object,
+ * in the order the Analysis strip shows them: the structural ones first, static
+ * then dynamic, then heat transfer, then flow.
+ */
+export const ANALYSIS_TABS = TAB_GROUPS.analysis as AnalysisTabId[];
 
-export function isAnalysisTab(tab: TabId): boolean {
-    return ANALYSIS_TABS.includes(tab);
+/**
+ * What each analysis is called where a person reads it: on its tab, and in its
+ * pane - the implementation field's tooltip and accessible name, and the result
+ * picture's alt text.
+ *
+ * Not derived from the id. The id is a command's word - 'pc cae dynamic' runs a
+ * modal analysis, and "DYNAMIC" is not what anybody calls one - so it stays where
+ * a person would type it ('pc cae <id> --implementation') and this is what is
+ * shown. One table for the tab and the pane, so the two cannot come to disagree.
+ */
+export const ANALYSIS_LABELS: Record<AnalysisTabId, string> = {
+    fea: 'FEA',
+    dynamic: 'Dynamic FEA',
+    thermal: 'Heat Transfer',
+    cfd: 'CFD',
+};
+
+export function isAnalysisTab(tab: TabId): tab is AnalysisTabId {
+    return (ANALYSIS_TABS as TabId[]).includes(tab);
 }
 
 /** A packed rigid placement: [[tx, ty, tz], [ax, ay, az], angleInDegrees]. */
@@ -402,7 +429,8 @@ export interface FetchTabMessage {
      * Who should run this analysis, as '<package>:<file type>'.
      *
      * Only the analysis tabs send it, and only once the user has typed one: left
-     * out, the daemon uses the configured default ('caeFeaImplementation' /
+     * out, the daemon uses the configured default ('caeFeaImplementation',
+     * 'caeDynamicImplementation', 'caeThermalImplementation' or
      * 'caeCfdImplementation'), which is the same default the CLI's
      * '--implementation' overrides.
      */
@@ -647,8 +675,8 @@ export interface CaeFinding {
 }
 
 /**
- * What one run of 'pc cae fea' / 'pc cae cfd' produced, as 'cae.analyze' returns
- * it.
+ * What one run of 'pc cae <analysis>' produced - 'fea', 'dynamic', 'thermal' or
+ * 'cfd' - as 'cae.analyze' returns it. The shape is the same whichever ran.
  *
  * 'content' is the model file itself, base64-encoded, because the panel is a
  * webview with no file system in reach: a path it cannot open is a model it

@@ -635,22 +635,41 @@ follow from an analysis not being a file type of the object:
   bottom layer to fall back on and no fallback section either: an export
   implementation cannot stand in for one, and a ``fea`` declared under
   ``export:`` is an export format that happens to be called ``fea``. Which
-  implementation runs by default is the ``caeFeaImplementation`` /
-  ``caeCfdImplementation`` user configuration option, naming a package and a
-  file type in it.
+  implementation runs by default is the user configuration option named after
+  the analysis -- ``caeFeaImplementation``, ``caeDynamicImplementation``,
+  ``caeThermalImplementation``, ``caeCfdImplementation`` -- naming a package and
+  a file type in it.
 * **``extension`` is required.** Which model format an analysis writes -- a 3D
   field, a 2D plot -- is the implementation's decision, and guessing on its
   behalf would put a name on a file whose contents are something else.
 * **The implementation reports findings.** Beside ``success`` it returns
   ``findings``, a JSON array of what it has to say about the part. An empty one
-  is a pass, and is what the ``fea`` and ``cfd`` checks of ``pc test`` require.
+  is a pass, and is what the analysis checks of ``pc test`` require.
 
 The file it writes is named after the analysis as well as the object --
 ``bracket.fea.glb`` -- because a part has as many results as it has analyses.
-What the analysis is *given* is the part's own ``fea:``/``cfd:`` section, which
-is a property of the part rather than of whoever analyses it; see
-:ref:`pc cae <cae>` for how ``fix:`` and ``load:`` are written and what units
-they are in.
+What the analysis is *given* is the part's own section -- ``fea:``,
+``dynamic:``, ``thermal:`` or ``cfd:`` -- which is a property of the part rather
+than of whoever analyses it; see :ref:`pc cae <cae>` for the keys each takes and
+what units they are in. Beside the request every implementation is handed, the
+analysis gets:
+
+* ``analysis`` -- which of the four it is;
+* the part's keys, each value in its stored unit: ``fix``/``outlet`` as
+  interface -> instances, ``load`` in newtons, ``temperature`` in Celsius,
+  ``heat`` in watts, ``convection`` in W/(m²·K);
+* ``boundary`` -- one record per port a key landed on, with the port's
+  ``location`` and the key's value on it, and ``faces``: the faces of
+  ``wrapped`` the port covers, each an ``index`` with its ``centroid``, ``area``
+  and outward ``normal`` (planar faces only), all in millimetres. ``area`` on the
+  record is their sum.
+
+``wrapped`` is the part with every port's sketch imprinted on it, which is what
+makes an inlet smaller than its face a face of its own; ``faces`` index it in the
+order OCCT maps a shape's faces. ``cae_support``, beside the meta-wrapper and
+importable from any implementation script, meshes it with gmsh with those faces
+named, and draws a result as the glTF the Viewer shows -- the half of an
+implementation that does not depend on the solver.
 
 .. _cam-section:
 

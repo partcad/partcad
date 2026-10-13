@@ -212,7 +212,7 @@ KEY_TAB = "tab"
 # for it could never open it.
 VIEWER_TABS = {
     "design": ("3d", "2d", "draft"),
-    "analysis": ("fea", "cfd"),
+    "analysis": ("fea", "dynamic", "thermal", "cfd"),
     "manufacturing": ("bvb", "build", "supply", "bom", "assembly"),
     "validation": ("simulation",),
 }

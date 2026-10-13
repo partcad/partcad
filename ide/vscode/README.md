@@ -40,7 +40,7 @@ and on the first that does otherwise.
 | **Design → 3D** | The shape, drawn here from what arrived over the socket above. |
 | **Design → 2D** | The object rendered to a PNG, JPEG or SVG picture, as `pc render` renders it, with **Save…**. |
 | **Design → Draft** | For a part or an assembly: a dimensioned technical drawing by `//pub/feature/render/draftwright`, in the formats it offers (PDF, SVG, DXF), with **Save…**. |
-| **Analysis → FEA**, **CFD** | For a part: the analysis `pc cae` runs, and what it found. |
+| **Analysis → FEA**, **Dynamic FEA**, **Heat Transfer**, **CFD** | For a part: the analysis `pc cae fea`, `pc cae dynamic`, `pc cae thermal` or `pc cae cfd` runs - stress, natural frequencies and mode shapes, temperatures, flow - and what it found. |
 | **Manufacturing → Build vs Buy** | For a part or an assembly: every part, piece of stock and sub-assembly it is made of, with a picture, a count, its size, weight and material, and a **Build**/**Buy** switch on each. A line that can only be bought or only be built has its switch fixed, saying why; a line that can be neither is marked **Incomplete**; building a line brings in what it is made of, buying it hides that. The choices are kept on this machine, in `~/.partcad/garage/default/bvb/`, and `pc instructions` reads them too. |
 | **Manufacturing → Build** | For whatever is built: the order to make it in - a part's stock first and the part last; an assembly's links, each built part preceded by the step that makes it, and with **Recursively** each built sub-assembly before the link that adds it. Selecting a step shows its page of the instructions: how to make a part (and its CAM toolpath, where it is cut), or the step that adds a link. |
 | **Manufacturing → Buy** | For whatever is bought: where it can be bought, and a quote per supplier. |
@@ -52,7 +52,7 @@ and on the first that does otherwise.
 Only the 3D view comes over the viewer protocol. The others are questions about `<package>:<name>` that this
 extension puts to the PartCAD daemon, fetched the first time a tab is looked at and cached until the next
 object is shown — so an object belonging to no package gets the 3D view alone. In a window without WebGL —
-a virtual machine, a remote desktop, a GPU the editor could not use — the 3D view and the FEA and CFD models are
+a virtual machine, a remote desktop, a GPU the editor could not use — the 3D view and the analysis models are
 drawn with WebGPU where the window has it, and without the graphics card otherwise: flat-shaded and slower, with
 a big model drawn as boxes while it is being turned. It says so in a corner, and hovering there says how to have
 the graphics card back.

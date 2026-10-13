@@ -4,7 +4,7 @@
 // Licensed under Apache License, Version 2.0.
 //
 // A picture, shown the way a browser shows one and moved the way an image
-// viewer moves one: the result plot of a 2D analysis (the FEA and CFD tabs), and
+// viewer moves one: the result plot of a 2D analysis (the Analysis tabs), and
 // an object rendered to a file (the 2D and Draft tabs).
 //
 

@@ -1,54 +1,86 @@
-desc: Two analyses whose answer is known before the solver runs.
+desc: Four analyses whose answer is known before the solver runs.
 
-# TEMPORARY, until the public index carries `feature/cae`. The CalculiX package
-# is registered on the index's `devel` branch and has not reached `main`, which
-# is what `examples/partcad.yaml` and every `pc init` project pin -- so
-# `//pub/feature/cae/calculix`, which `caeFeaImplementation` names by default,
-# resolves to nothing and both commands below answer "the package implementing
-# 'fea' is not found". Depending on it directly makes this example run today
-# without repinning the whole examples tree at the index's `devel`, which would
-# also drag in changes that have nothing to do with this.
+# TEMPORARY, until the public index carries `feature/cae`. The CAE packages are
+# not on the index's `main`, which is what `examples/partcad.yaml` and every
+# `pc init` project pin -- so `//pub/feature/cae/calculix` and its siblings,
+# which the `cae*Implementation` options name by default, resolve to nothing and
+# the commands below answer "the package implementing 'fea' is not found".
+# Depending on them directly makes this example run today without repinning the
+# whole examples tree at the index's `devel`, which would also drag in changes
+# that have nothing to do with this.
 #
-# Delete this and the two `implementation:` lines below once the index has it,
+# Delete these and the `implementation:` lines below once the index has them,
 # and the parts fall back to the user configuration like any other.
 dependencies:
   calculix:
-    desc: Finite element and fluid dynamics analysis, by CalculiX.
+    desc: Finite element analysis, by CalculiX.
     type: git
     url: https://github.com/partcad/partcad-cae-calculix.git
+  elmer:
+    desc: Finite element, modal, heat transfer and flow analysis, by Elmer.
+    type: git
+    url: https://github.com/partcad/partcad-cae-elmer.git
+  openfoam:
+    desc: Flow analysis, by OpenFOAM.
+    type: git
+    url: https://github.com/partcad/partcad-cae-openfoam.git
 
 docs:
   intro: |
-    PartCAD ships no solver, so `pc cae fea` is only ever as right as whoever
-    implements it. These two parts are how you find out: each is a textbook case
-    with a closed-form answer, so the number the solver returns can be compared
-    against arithmetic rather than against expectations.
+    PartCAD ships no solver, so `pc cae` is only ever as right as whoever
+    implements it. These two parts are how you find out: each analysis of them
+    is a textbook case with a closed-form answer, so the number the solver
+    returns can be compared against arithmetic rather than against
+    expectations.
 
-    See README.md for the derivations, the expected values, and what a given
-    disagreement would mean. Only the cantilever is declared as a check: the
-    pipe is here, with its ports and its arithmetic, but CalculiX's CFD solver
-    diverges on it and section 2 of README.md is that measurement.
+    The cantilever is analysed three ways -- for stress (`fea:`), for its
+    natural frequencies (`dynamic:`) and for heat (`thermal:`) -- and the pipe
+    for flow (`cfd:`). See README.md for the derivations, the expected values,
+    what each implementation measured, and what a given disagreement would mean.
 
   usage: |
     ```shell
-    # The default implementation, whatever `caeFeaImplementation` names
+    # The implementation each part names, or whatever the user configuration does
     pc cae fea :cantilever
+    pc cae dynamic :cantilever
+    pc cae thermal :cantilever
+    pc cae cfd :pipe
 
     # A particular one, for this run only
-    pc cae fea -i calculix:fea :cantilever
+    pc cae fea -i elmer:fea :cantilever
+
+    # All of them as checks that fail on any finding
+    pc test
 
     # Where the boundary conditions actually landed
     pc render -t svg --with-ports cantilever
     ```
 
+# A port is a coordinate frame; a sketch on it is a surface. The pipe's ends are
+# drawn with this one -- the bore's own cross-section, a circle of its radius --
+# placed by each port's frame, Z out of the end face. That is what the flow
+# analysis is driven through and leaves by: PartCAD imprints each sketch on the
+# part and hands the implementation the faces it covers, and the area those
+# faces add up to is what a `load:` is spread over.
+sketches:
+  bore:
+    type: basic
+    desc: The bore of the pipe, seen end on.
+    circle: 5
+
 interfaces:
   beam-root:
-    desc: The clamped end of the cantilever.
+    desc: |
+      The clamped end of the cantilever.
+
+      Drawn with no sketch, because it needs none: the port sits in the middle
+      of the end face, and a port with no sketch covers the face it lies on --
+      all 10x10 mm of it, which is exactly what "clamped" means here.
     ports:
       root:
 
   beam-tip:
-    desc: The free end of the cantilever, where the load is applied.
+    desc: The free end of the cantilever, where the load and the heat are applied.
     ports:
       tip:
 
@@ -56,6 +88,7 @@ interfaces:
     desc: The face the flow is driven through.
     ports:
       inlet:
+        sketch: bore
 
   pipe-outlet:
     desc: |
@@ -67,130 +100,95 @@ interfaces:
       field or a divergence rather than an error. This is that missing half.
     ports:
       outlet:
-
-  pipe-wall:
-    desc: |
-      Patches of the pipe's lateral surface, held no-slip. Twenty of them, at
-      four azimuths and five stations along the bore -- see README.md for why
-      this is a poor stand-in for "the wall" and what it costs.
-    ports:
-      px-m40:
-        location: [[5, 0, -40], [0, 0, 1], 0]
-      nx-m40:
-        location: [[-5, 0, -40], [0, 0, 1], 0]
-      py-m40:
-        location: [[0, 5, -40], [0, 0, 1], 0]
-      ny-m40:
-        location: [[0, -5, -40], [0, 0, 1], 0]
-      px-m20:
-        location: [[5, 0, -20], [0, 0, 1], 0]
-      nx-m20:
-        location: [[-5, 0, -20], [0, 0, 1], 0]
-      py-m20:
-        location: [[0, 5, -20], [0, 0, 1], 0]
-      ny-m20:
-        location: [[0, -5, -20], [0, 0, 1], 0]
-      px-p00:
-        location: [[5, 0, 0], [0, 0, 1], 0]
-      nx-p00:
-        location: [[-5, 0, 0], [0, 0, 1], 0]
-      py-p00:
-        location: [[0, 5, 0], [0, 0, 1], 0]
-      ny-p00:
-        location: [[0, -5, 0], [0, 0, 1], 0]
-      px-p20:
-        location: [[5, 0, 20], [0, 0, 1], 0]
-      nx-p20:
-        location: [[-5, 0, 20], [0, 0, 1], 0]
-      py-p20:
-        location: [[0, 5, 20], [0, 0, 1], 0]
-      ny-p20:
-        location: [[0, -5, 20], [0, 0, 1], 0]
-      px-p40:
-        location: [[5, 0, 40], [0, 0, 1], 0]
-      nx-p40:
-        location: [[-5, 0, 40], [0, 0, 1], 0]
-      py-p40:
-        location: [[0, 5, 40], [0, 0, 1], 0]
-      ny-p40:
-        location: [[0, -5, 40], [0, 0, 1], 0]
+        sketch: bore
 
 parts:
   cantilever:
     type: build123d
     desc: |
-      A 100x10x10 mm steel bar, clamped at one end and pulled down by 100 N at
-      the other. Tip deflection and peak bending stress are both closed forms.
-    # Not on 64-bit ARM Linux, where the analysis below cannot run at all: gmsh
-    # publishes no wheel for that platform and no source distribution, so the
-    # implementation cannot be installed in a Python sandbox there. It runs
-    # perfectly well in the image the plugin names -- that image is built for
-    # arm64 too -- and this line comes out the moment that image is published.
+      A 100x10x10 mm steel bar, clamped at one end. Pulled down by 100 N at the
+      other, its tip deflection and peak bending stress are both closed forms;
+      left to ring, so is its first natural frequency; and heated by 1 W at the
+      tip with the root held at 20 C, so is the temperature it reaches.
+    # Not on 64-bit ARM Linux, where the analyses below cannot all run: gmsh
+    # publishes no wheel for that platform and no source distribution, so an
+    # implementation cannot be installed in a Python sandbox there. They run
+    # perfectly well in the images the packages name -- each is built for arm64
+    # too -- and this line comes out the moment those images are published.
     #
-    # The exclusion is on the part rather than on its `fea:` section because
-    # `unless` selects declarations, and a part that declares an analysis
-    # nothing can run is a part whose check fails: `pc test` does not excuse an
-    # implementation that was asked and did not answer where a container runtime
-    # is running, which on a 64-bit ARM Linux machine it usually is.
+    # The exclusion is on the part rather than on its sections because `unless`
+    # selects declarations, and a part that declares an analysis nothing can run
+    # is a part whose check fails: `pc test` does not excuse an implementation
+    # that was asked and did not answer where a container runtime is running,
+    # which on a 64-bit ARM Linux machine it usually is.
     unless: [aarch64]
     implements:
       beam-root: [[-50, 0, 0], [0, 0, 1], 0]
       beam-tip: [[50, 0, 0], [0, 0, 1], 0]
     fea:
-      # Temporary, with the `calculix` dependency at the top of this file: the
-      # public index does not carry `feature/cae` yet, so the default
-      # `caeFeaImplementation` resolves to nothing. Delete both and this falls
+      # Temporary, with the dependencies at the top of this file: the public
+      # index does not carry `feature/cae` yet, so the default
+      # `caeFeaImplementation` resolves to nothing. Delete them and this falls
       # back to the user configuration like any other part.
       implementation: calculix:fea
       fix:
         - beam-root
       load:
         beam-tip: 100 N
+    dynamic:
+      implementation: elmer:dynamic
+      fix:
+        - beam-root
+    thermal:
+      implementation: elmer:thermal
+      temperature:
+        beam-root: 20 C
+      heat:
+        beam-tip: 1 W
 
   pipe:
     type: build123d
     desc: |
-      The bore of a 10x100 mm pipe, driven by 5 mN at the inlet and held no-slip
-      along the wall. Fully developed laminar flow: Hagen-Poiseuille.
+      The bore of a 10x100 mm pipe, driven by 5 mN at the inlet and leaving at
+      the outlet; every other surface is the wall, held no-slip. Fully developed
+      laminar flow: Hagen-Poiseuille.
     implements:
       pipe-inlet: [[0, 0, -50], [0, 0, 1], 0]
       pipe-outlet: [[0, 0, 50], [0, 0, 1], 0]
-      pipe-wall:
-    # NO `cfd:` SECTION, AND THAT IS THE MEASUREMENT.
-    #
-    # Everything needed to declare one is above -- the fluid volume, the two end
-    # ports and the wall -- and the declaration itself is four lines:
-    #
-    #     cfd:
-    #       implementation: calculix:cfd
-    #       fix:
-    #         - pipe-wall
-    #       load:
-    #         pipe-inlet: 0.005 N
-    #       outlet:            # without this there is no downstream pressure
-    #         - pipe-outlet    # reference and the field never moves
-    #
-    # It is not here because CalculiX's `*CFD` solver diverges on this problem
-    # and on a deck built by hand for it -- driven by pressure or by velocity, at
-    # reference pressures from 1 Pa to 1e5 Pa, at 178 nodes and at 808. README.md
-    # section 2 has the whole measurement and what would be needed to fix it.
-    #
-    # A section here would be an analysis that cannot answer, and `pc test` reads
-    # an analysis that cannot answer as a failure -- correctly, since a part that
-    # declares `cfd:` has asked the question. So this example would ship a red
-    # check that no change to this repository can turn green, and a check that is
-    # always red is one people stop reading. Paste the block back in when a
-    # solver converges; that is what it is written out for.
+    # No `fix:`. Every surface that is neither an inlet nor an outlet is a wall,
+    # so the bore's lateral surface is one without being named -- and it could
+    # not be named by a sketch anyway: a sketch is flat, and that surface is a
+    # cylinder.
+    cfd:
+      implementation: openfoam:cfd
+      load:
+        pipe-inlet: 0.005 N
+      outlet:
+        - pipe-outlet
+    # The drawing README.md shows: the bore, with both ports and the circle
+    # each is drawn with. Declared here rather than as a package-wide file type
+    # because it is this part's boundary that is worth looking at.
+    render:
+      svg-with-ports:
+        desc: The bore, with its ports marked and the sketch each is drawn with.
+        package: //builtin/render
+        path: render_svg.py
+        extension: ports.svg
+        with_ports: true
+        with_interfaces: true
+        # This drawing is checked in, so it has to be the same file every time
+        # it is rendered. See 'reproducible' in '//builtin/render', and the note
+        # at the top of 'examples/partcad.yaml'.
+        reproducible: true
+        precision: 4
 
 # Only the parameters, and deliberately no `path:`/`package:`: which package
-# implements the analysis is the parts' answer above, and repeating it here
+# implements each analysis is the parts' answer above, and repeating it here
 # would say it twice in a way that can disagree. A layer that names `path:` is
 # claiming to *be* the implementation -- see `output.stamp()` -- so a package
 # re-tuning someone else's parameters says neither.
 #
-# Every one of these is pinned because the closed forms in README.md assume it
-# -- most of all `self_weight`, which is on by default and which the textbook
-# cantilever does not have.
+# Every one of these is pinned because the closed forms in README.md assume it.
 cae:
   fea:
     youngs_modulus: 2.0e+11   # 200 GPa
@@ -199,23 +197,32 @@ cae:
     self_weight: false        # the closed form is the tip load alone
     mesh_order: 2
     mesh_size: 0.03
-    # 7.5 mm on a 100 mm bar: the half-diagonal of the 10x10 end face is
-    # 7.07 mm, so this is the smallest ball that clamps the whole face. It also
-    # clamps 7.5 mm of the length, which is the modelling error README.md is
-    # about.
+    # CalculiX's, and nobody else's: it applies a condition to the nodes within
+    # this fraction of the part's size of a port, where the others use the face
+    # the port covers. 7.5 mm on a 100 mm bar is the smallest ball that clamps
+    # the whole 10x10 end face (its half-diagonal is 7.07 mm). It also clamps
+    # 7.5 mm of the length, which is the modelling error README.md is about.
     port_radius: 0.075
 
-  # Nothing reads these today -- the pipe declares no `cfd:` -- and they stay
-  # written down for the same reason that declaration does: they are half of
-  # what section 2 of README.md measures, and rederiving them from the prose
-  # afterwards is how a re-run silently answers a different question.
+  dynamic:
+    youngs_modulus: 2.0e+11
+    poissons_ratio: 0.30
+    density: 7850
+    mesh_order: 2
+    mesh_size: 0.03
+    # Enough to see the first bending pair, the first torsion mode and the
+    # second bending pair.
+    modes: 6
+
+  thermal:
+    # W/(m*K), a plain carbon steel. The closed form is P*L/(k*A).
+    conductivity: 50.0
+    mesh_order: 2
+    mesh_size: 0.03
+
   cfd:
     density: 900              # a light oil, kg/m^3
     viscosity: 0.1            # Pa*s
-    # 3 mm on a 100 mm bore. It has to stay under the 5 mm radius or the wall
-    # neighbourhoods swallow the axis and hold the whole fluid still. It is also
-    # what the inlet and the outlet stand for: a port is a coordinate frame, so
-    # the area a pressure is spread over is the disc of this radius.
-    port_radius: 0.03
-    duration: 2.0
-    time_step: 0.005
+    # 0.8 mm on a 100 mm bore: about six cells across the radius, which is
+    # where the measured flow rate stops moving with the mesh.
+    mesh_size: 0.008
