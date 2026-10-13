@@ -525,7 +525,7 @@ Two of those options are about what is asked and what is kept:
 .. code-block:: shell
 
   # The same claim, with Gazebo instead of the engine the declaration names
-  pc sim -a stable --plugin //pub/feature/simulate/gazebo:gazebo
+  pc sim -S stable --plugin //pub/feature/simulate/gazebo:gazebo
   # The state the run started from and ended in, as files
   pc sim -f sinks block --before before.yaml --after after.json
 
