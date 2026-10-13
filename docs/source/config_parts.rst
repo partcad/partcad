@@ -31,6 +31,9 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
         <other interface name>: # instance name is implied to be be empty ("")
         <yet another interface>:
           <instance name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
+        <and another>:
+          <instance name>: # "" for the unnamed one, whose ports keep their names
+            location: <OCCT Location object> # or "port: <a port of this part>" instead
       # (optional) new names for ports and interface instances this part has:
       # for an enrich or an alias, those of what it points at. See
       # "New names for what an object has" under assemblies.

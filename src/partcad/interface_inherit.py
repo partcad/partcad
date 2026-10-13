@@ -29,10 +29,19 @@ class InterfaceInherits:
     # The boundary an instance draws its ports with, where it does not draw
     # them with the ones the inherited interface already has. Keyed by instance
     # name, and absent for every instance that says nothing about it - which is
-    # nearly all of them.
+    # nearly all of them. Only ever read from an interface's 'inherits:'; see
+    # 'sketch:' below for why 'implements:' does not restate one.
     sketches: dict[str, str]
 
-    def __init__(self, name, project, config: dict = {}, ports: dict = None):
+    def __init__(
+        self,
+        name,
+        project,
+        config: dict = {},
+        ports: dict = None,
+        section: str = "inherits",
+        owner: str = None,
+    ):
         self.instances = {}
         self.sketches = {}
         # The ports of the object doing the inheriting, where it has any yet.
@@ -135,8 +144,25 @@ class InterfaceInherits:
                 # a slot rather than a circle. Written as a reference like any
                 # other, so the values go in the name:
                 # 'sketch: "m-slotted;size=4,length=30"'.
+                #
+                # Only an interface restates a boundary. A part or an assembly
+                # draws the ports of what it implements as that interface draws
+                # them: the outline is part of what the interface is, and one
+                # restated here could say "slot" on a plain through hole that
+                # has no freedom to slide along it. What it implements instead
+                # is an interface that draws its ports that way - parametrized
+                # by what the outline depends on, or inheriting and restating.
                 if instance_config.get("sketch", None) is not None:
-                    self.sketches[instance_name] = instance_config["sketch"]
+                    if section == "inherits":
+                        self.sketches[instance_name] = instance_config["sketch"]
+                    else:
+                        pc_logging.error(
+                            "%s: the instance '%s' of '%s' restates the sketch its ports are drawn with, which only "
+                            "an interface's 'inherits:' may do; the sketch is ignored. Implement an interface that "
+                            "draws them that way instead: one with the outline's size as a parameter, or one that "
+                            "inherits '%s' and restates it"
+                            % (owner or self.name, instance_name, self.name, self.source_interface_name)
+                        )
 
                 params = instance_config.get("params", {})
                 for param_name, param_value in params.items():

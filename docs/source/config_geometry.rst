@@ -933,6 +933,35 @@ outline and the freedom of movement:
 replaces the boundary of every port that instance brings in; an instance that
 says nothing about it keeps the boundary the inherited interface draws with.
 
+Only an interface restates a boundary. A part or an assembly draws the ports of
+what it implements the way that interface draws them, and ``sketch:`` on an
+``implements:`` instance is an error: the outline is part of what the interface
+is, declared beside the freedom of movement that goes with it, and a part that
+restated it could draw a slot on a through hole that has no room to slide. A
+part with a slotted hole implements ``m-thru-slotted``. A part whose outline
+depends on its own parameters implements an interface parametrized by them --
+here, a nail whose head is drawn the size the nail is asked for:
+
+.. code-block:: yaml
+
+  interfaces:
+    nail-head:
+      parameters:
+        d: 8.0
+      ports:
+        head:
+          sketch: "circle;d=%d%"
+
+  parts:
+    nail:
+      type: build123d
+      parameters:
+        head_d:
+          type: float
+          default: 8.7
+      implements:
+        "nail-head;d=%head_d%": [[0, 0, 1.44], [1, 0, 0], 180]
+
 Interface aliases
 -----------------
 

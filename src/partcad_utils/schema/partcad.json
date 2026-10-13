@@ -995,42 +995,95 @@
       "description": "The interfaces this object implements, and where each instance of each of them is. Declared by a part, a sketch and an assembly alike: an assembly whose 'map:' does not fit -- a fixture whose mounting face is a coordinate rather than a port of anything inside it -- states it the way a part does.",
       "type": "object",
       "patternProperties": {
-        "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": {
-          "oneOf": [
-            { "type": "string" },
-            { "type": "null" },
-            { "$ref": "#/definitions/OCCTLocation" },
-            {
-              "type": "object",
-              "patternProperties": {
-                "^[a-zA-Z0-9_/.%-]+$": { "$ref": "#/definitions/OCCTLocation" }
-              },
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "patternProperties": {
-                "^[a-zA-Z0-9_/./-]+$": {
-                  "type": "object",
-                  "properties": {
-                    "location": { "$ref": "#/definitions/OCCTLocation" },
-                    "port": {
-                      "description": "A port of this same object to place this instance at, instead of a location. The ports of an object are known before its 'implements:' is read, so this names one of its own 'ports:' or one its 'map:' externalized.",
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "params": { "type": "object", "properties": { "offset": { "type": "number" } } }
-                  },
-                  "anyOf": [{ "required": ["location"] }, { "required": ["port"] }],
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            }
-          ]
-        }
+        "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": { "$ref": "#/definitions/implemented-instances" }
       },
       "additionalProperties": false
+    },
+    "implemented-instances": {
+      "description": "The instances of one interface that a part or an assembly implements ('implements:') or that an interface inherits ('inherited-instances', which takes the same forms): nothing, for one unnamed instance at the origin; a name, for one instance of that name at the origin; a location, for one unnamed instance there; or every instance by its name. The unnamed instance is '' and brings the interface's ports in under their own names; any other instance puts its name and a '-' in front of them.",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string" },
+        { "$ref": "#/definitions/OCCTLocation" },
+        {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_/.%-]*$": { "$ref": "#/definitions/implemented-instance" }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        }
+      ]
+    },
+    "implemented-instance": {
+      "description": "One instance of an implemented interface: nothing, for the origin; a location; or the long form.",
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/definitions/OCCTLocation" },
+        {
+          "type": "object",
+          "properties": {
+            "location": { "$ref": "#/definitions/OCCTLocation" },
+            "port": { "$ref": "#/definitions/instance-port" },
+            "sketch": {
+              "description": "A part or an assembly draws the ports of an interface it implements the way that interface draws them, so 'sketch:' is not taken here. To draw them differently, implement an interface that draws them that way: one with what the outline depends on as a parameter ('nail-head;d=%head_d%', whose port draws 'circle;d=%d%'), or one that inherits this interface and restates the boundary in its own 'inherits:' ('m-thru-slotted').",
+              "not": {}
+            },
+            "params": { "$ref": "#/definitions/instance-params" }
+          },
+          "not": { "required": ["location", "port"] },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "inherited-instances": {
+      "description": "The instances of one interface that an interface inherits ('inherits:'). The same forms as 'implemented-instances', and an instance may also restate the boundary its ports are drawn with.",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string" },
+        { "$ref": "#/definitions/OCCTLocation" },
+        {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_/.%-]*$": { "$ref": "#/definitions/inherited-instance" }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        }
+      ]
+    },
+    "inherited-instance": {
+      "description": "One instance of an inherited interface: nothing, for the origin; a location; or the long form.",
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/definitions/OCCTLocation" },
+        {
+          "type": "object",
+          "properties": {
+            "location": { "$ref": "#/definitions/OCCTLocation" },
+            "port": { "$ref": "#/definitions/instance-port" },
+            "sketch": {
+              "description": "The boundary the ports this instance brings in are drawn with, instead of the one the inherited interface draws them with. The same opening drawn differently - a slotted hole is a through hole that mates as one and keeps its port, and what tells them apart is the outline. Written as a reference like any other, so parameter values go in the name: 'm-slotted;size=4,length=30'. Only an interface restates a boundary; a part or an assembly implements an interface that draws its ports the way it wants them drawn.",
+              "$ref": "#/definitions/object-reference"
+            },
+            "params": { "$ref": "#/definitions/instance-params" }
+          },
+          "not": { "required": ["location", "port"] },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "instance-port": {
+      "description": "A port of this same object to place this instance at, instead of a location. The ports of an object are known before its 'inherits:' or 'implements:' is read, so this names one of its own 'ports:' or one its 'map:' externalized.",
+      "type": "string",
+      "minLength": 1
+    },
+    "instance-params": {
+      "description": "Values for the freedom-of-movement parameters of the interface this is an instance of, by name.",
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [{ "type": "number" }, { "$ref": "#/definitions/expression" }]
+      }
     },
     "ports-section": {
       "description": "The ports this object has in addition to the ones it inherits from the interfaces it implements.",
@@ -2231,38 +2284,7 @@
             "inherits":{
               "type": "object",
               "patternProperties":{
-                "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$":{
-                  "oneOf": [
-                    { "type": "null" },
-                    { "type": "string", "minLength": 1 },
-                    { "$ref": "#/definitions/OCCTLocation" },
-                    {
-                      "type": "object",
-                      "patternProperties": {
-                        "^[a-zA-Z0-9_/.%-]*$": { "$ref": "#/definitions/OCCTLocation" }
-                      },
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "patternProperties": {
-                        "^[a-zA-Z0-9_/.%-]*$": {
-                          "type": "object",
-                          "properties": {
-                            "sketch": {
-                              "description": "The boundary the ports this instance brings in are drawn with, instead of the one the inherited interface draws them with. The same opening drawn differently - a slotted hole is a through hole that mates as one and keeps its port, and what tells them apart is the outline. Written as a reference like any other, so parameter values go in the name: 'm-slotted;size=4,length=30'.",
-                              "$ref": "#/definitions/object-reference"
-                            },
-                            "location": { "$ref": "#/definitions/OCCTLocation" },
-                            "params": { "type": "object" }
-                          },
-                          "additionalProperties": false
-                        }
-                      },
-                      "additionalProperties": false
-                    }
-                  ]
-                }
+                "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": { "$ref": "#/definitions/inherited-instances" }
               },
               "additionalProperties": false
             },

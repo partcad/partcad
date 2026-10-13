@@ -854,7 +854,14 @@ class Interface:
             for interface_name, inherited_config in inherits_config.items():
                 interface_name = expr.resolve(interface_name, names, self.full_name)
 
-                inherit = InterfaceInherits(interface_name, self.project, inherited_config, ports=self.ports)
+                inherit = InterfaceInherits(
+                    interface_name,
+                    self.project,
+                    inherited_config,
+                    ports=self.ports,
+                    section=self.config_section,
+                    owner=self.full_name,
+                )
                 if inherit.interface is None:
                     pc_logging.error("Failed to inherit interface: %s" % interface_name)
                     continue

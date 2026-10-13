@@ -330,6 +330,108 @@ def test_schema_a_mating_does_not_take_what_it_cannot_mean(mating):
     failure({"interfaces": {"a": {"mates": {"b": mating}}}})
 
 
+# The instances of an interface that an interface inherits, or that a part or an
+# assembly implements. One class reads both sections ('InterfaceInherits'), and
+# they take the same forms - every case below runs against each of them - but
+# for one key: 'sketch:', which only an interface restates. 'implements:' used
+# to take less than the loader reads, no unnamed instance '' among it, so a part
+# that worked failed its own 'pc lint'.
+LOCATION = [[0, 0, 1.44], [1, 0, 0], 180]
+INSTANCES = {
+    "inherits": lambda instances: {"interfaces": {"slotted": {"inherits": {"thru": instances}}}},
+    "implements": lambda instances: {"parts": {"nail": {"type": "build123d", "implements": {"head": instances}}}},
+}
+
+
+@pytest.mark.parametrize("section", INSTANCES.keys())
+@pytest.mark.parametrize(
+    "instances",
+    [
+        None,
+        "",
+        "top",
+        LOCATION,
+        {"": LOCATION},
+        {"": None},
+        {"": {"location": LOCATION}},
+        {"top": {"port": "face"}},
+        {"L": LOCATION, "R": {"location": LOCATION, "params": {"offset": -15}}, "C": None},
+        {"slotted-%width%": {"location": LOCATION, "params": {"moveX": "%width / 2%"}}},
+    ],
+    ids=[
+        "nothing",
+        "the unnamed instance by name",
+        "one named instance",
+        "one location",
+        "the unnamed instance at a location",
+        "the unnamed instance at the origin",
+        "the unnamed instance in the long form",
+        "an instance at a port",
+        "instances in different forms",
+        "a name and a value written as expressions",
+    ],
+)
+def test_schema_an_interface_instance_takes_every_form_the_loader_reads(section, instances):
+    validate(INSTANCES[section](instances))
+
+
+@pytest.mark.parametrize("section", INSTANCES.keys())
+@pytest.mark.parametrize(
+    "instances",
+    [
+        {},
+        {"top": {"location": LOCATION, "port": "face"}},
+        {"top": {"location": LOCATION, "offset": [0, 0, 1]}},
+        {"top": {"sketch": ""}},
+        {"top": {"params": {"moveX": "far"}}},
+        {"two words": LOCATION},
+    ],
+    ids=[
+        "no instance at all",
+        "both a location and a port",
+        "a key nothing reads",
+        "an empty boundary",
+        "a value that is not a number",
+        "a name with a space",
+    ],
+)
+def test_schema_an_interface_instance_refuses_what_the_loader_would_not_use(section, instances):
+    """An empty map brings nothing in, a port wins over a location (the loader
+    logs it as an error), an unknown key is ignored, and an offset is arithmetic."""
+    failure(INSTANCES[section](instances))
+
+
+RESTATED = [
+    {"": {"location": LOCATION, "sketch": "circle;d=%head_d%"}},
+    {"top": {"sketch": "m-slotted;size=4,length=30"}},
+    {"top": {"port": "face", "sketch": "circle"}},
+]
+RESTATED_IDS = [
+    "the unnamed instance at a location",
+    "a named instance at the origin",
+    "an instance at a port",
+]
+
+
+@pytest.mark.parametrize("instances", RESTATED, ids=RESTATED_IDS)
+def test_schema_an_inherited_instance_may_restate_its_boundary(instances):
+    """A slotted hole is a through hole drawn as a slot (config_geometry.rst)."""
+    validate(INSTANCES["inherits"](instances))
+
+
+@pytest.mark.parametrize("instances", RESTATED, ids=RESTATED_IDS)
+def test_schema_an_implemented_instance_does_not_restate_its_boundary(instances):
+    """A part draws what it implements the way the interface draws it, and is
+    told what to implement instead: an interface parametrized by the outline's
+    size, or one that inherits and restates it."""
+    (error,) = [
+        error
+        for error in failures(INSTANCES["implements"](instances))
+        if error.validator == "not" and list(error.path)[-1:] == ["sketch"]
+    ]
+    assert "implement an interface that draws them that way" in error.schema["description"]
+
+
 # A plugin is a script, and both kinds of plugin a package declares find theirs
 # the same way: by 'path', or as '<name>.py' beside the configuration when it
 # gives none. The loader has always read 'path'; the schema did not have it, so
