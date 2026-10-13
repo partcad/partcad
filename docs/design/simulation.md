@@ -376,8 +376,8 @@ Which nodes of a tree become separate rigid bodies is the decision everything el
 step 9 the scene exporters decided it with a switch (`flatten: true` makes every node with geometry its own free
 body), which is why a stack of blocks can fall over and also why every real product falls apart in simulation.
 **Built** (step 9, #784): it follows what PartCAD already says the two kinds of object mean (`scene.py`): an assembly
-is a product that was put together, and a scene only states where things are. The exporters writing it is steps
-10-12; until then they keep their switches.
+is a product that was put together, and a scene only states where things are. The MJCF exporter writes it (step 10,
+section 8.8b); the URDF and SDFormat exporters are steps 11-12, and keep their switches until then.
 
 | How a node is placed | Inside an assembly | Inside a scene |
 |---|---|---|
@@ -404,7 +404,8 @@ Consequences that came with building it:
 - An ASSY link can place a **scene** (`scene:`), which is what a scene inside a scene, and the default world holding a
   scene, need (built).
 - The exporters' `flatten`/`static` switches go away: the tree says what is attached, and a scene element's `fixed`
-  says what is welded to the world (steps 10-12).
+  says what is welded to the world (steps 10-12; built for MJCF, where `flatten` is gone and `static` now only says
+  whether a free root is welded, section 8.8b).
 
 ### 7a How step 9 resolved the open details (built, #784)
 
@@ -469,9 +470,10 @@ Building the rule settled what the text above left open:
   few units in the last place. Bit for bit stays the core's, where `joint.Composition` is the placement.
 - **One convention kept.** A node whose shapes are labelled under its own label (`wrist` holding `wrist/1`) is one body
   wherever it is, scenes included, as every reader and exporter of a robot description has always taken it.
-- **What is not honoured yet.** No exporter reads any of this: every part with geometry is still a free body in a run,
-  so an assembly still comes apart and a `fixed:` element still falls. A `type: urdf` assembly fills in no joints
-  (section 8.6), so under the rule it is one body until step 11 gives its factory the joint table.
+- **What is not honoured yet.** The MJCF exporter reads all of it (step 10). The SDFormat one does not: in a Gazebo
+  run every part with geometry is still a free body, so an assembly still comes apart and a `fixed:` element still
+  falls. A `type: urdf` assembly fills in no joints (section 8.6), so under the rule it is one body until step 11 gives
+  its factory the joint table.
 
 What steps 10-12 take from it: call `bodies(request["wrapped"], request["properties"])` instead of walking the tree,
 write one body per `Body` with `mass_parts()` as its inertial and its parts' geometry at their `placement`, a fixed
@@ -493,7 +495,8 @@ body's parent as the world, and its joint by `joint.kind`:
 
 ## 8. Joints
 
-**The core model is built (#766); exporting joints is decided and not built.** A connection between two interfaces becomes a joint when the connection keeps any degree of
+**The core model is built (#766), and the MJCF exporter writes it (step 10, section 8.8b); the URDF and SDFormat
+exporters are decided and not built.** A connection between two interfaces becomes a joint when the connection keeps any degree of
 freedom once it is made. The degrees of freedom are declared in `motion:`, on the interfaces, on the mating between
 them and on the connection, and they combine.
 
@@ -722,6 +725,50 @@ is the `ref`. One classifier of free steps into joint kinds, shared by the MJCF,
 `partcad/wrappers/` beside `mass_properties`. One gap found on the way, for step 11: the URDF converter writes no `axis`
 when a joint states none, so URDF's default X axis comes out as Z.
 
+### 8.8b How the MJCF exporter resolved the open details (built, step 10, sim-mujoco #12)
+
+Writing the bodies and joints out of `kinematics` (section 7a) settled what section 8.8 left to the exporter:
+
+- **The table holds as written**, every row: a hinge or a slide per freedom with `pos`/`axis` from
+  `anchor_in_child`/`axis_in_child`, `ref` the starting value and `range` the bounds; a `ball` at `origin_in_child()`;
+  a floating joint as three slides and a ball. A floating joint's ball is centred where the turns cross, which is fixed
+  in the body it turns; `origin_in_child` is that point only with the moves at zero, so the exporter reads it there --
+  a ball's own `origin_in_child()` needs no such care. Every placement MuJoCo computes from the file, at `ref` and
+  moved away from it, is where `joint.location(values)` puts the body, to 1e-9 m.
+- **Names.** A joint written as one MJCF joint is named exactly as PartCAD names it, so `after["joints"]["swing"]`
+  reads it. One written as several is `<name>.<parameter>` for each (`nut-bolt.turnZ`, `nut-bolt.moveZ`), and a
+  floating joint's ball `<name>.ball`. Bodies take `kinematics`' names, so a second body of one name is `cube-2` where
+  the exporter used to write `cube_1`.
+- **Angles are degrees** (`<compiler angle="degree">`), MJCF's default and PartCAD's unit, so a hinge's `ref`, `range`
+  and `springref` are written as declared. `polycoef` is not converted by the compiler, so a coupling is in radians and
+  metres.
+- **A bound on one side only** is written as a range whose open end is a million degrees, or a kilometre, away; MJCF
+  ranges have two ends. An MJCF ball can bound only the whole angle it turns through, so a ball's three turns' limits
+  are reported and not written.
+- **Couplings are written the way MuJoCo holds them.** MuJoCo softens a joint equality by the two joints' inverse
+  inertia, which it adds up without the polynomial's coefficient. A screw written as "the slide follows the hinge by
+  1.6 mm a radian" therefore barely held at all -- a nut on a 10 mm thread fell 800 mm and turned a quarter turn --
+  while "the hinge follows the slide by 628 radians a metre" holds to micrometres. So an equality is written with the
+  coefficient of at least one; a linear relation inverts exactly.
+- **The two bodies of a joint do not collide.** MuJoCo filters a child's contacts with its parent, except where the
+  parent is welded to the world -- a pendulum's frame, a bolted robot -- and collides each body with the convex hull of
+  the other's mesh, which fills a bore. Every joint gets a `<contact><exclude>`: without it a carriage sat on its rail.
+- **Physics.** `damping`, `friction` (as `frictionloss`) and `springStiffness` are SI per unit of the joint's own motion,
+  as MuJoCo takes them, and are written on every freedom of a joint but a coupled one (a screw's move is paid for by
+  its turn). `springReference` is converted as `ref`. `maxEffort` is not written: `actuatorfrcrange` clamps what
+  actuators apply, and there are none until step 14, which is also where `armature` (a motor's rotor inertia) comes
+  from; `maxVelocity` has no MuJoCo counterpart. Both, `softLimits` and the ODE settings are reported as unsupported.
+- **`static`** now means only "weld every body nothing holds to the world": true for a file somebody opens, false in
+  the simulation's `formatOptions`. The joints inside an assembly are written either way, so a pendulum opened in
+  MuJoCo's viewer swings. `flatten` is gone, and reported when passed.
+- **What it changed for a scene of parts: nothing.** Every element is the free body it was, at the same pose; the
+  stacks, the floats and the buoy validate as before.
+- **The example** is `examples/feature_simulate_joints`: a 300 x 20 x 10 mm bar hung by its end on `motion: revolute`,
+  in a scene that places it `fixed: true`. Released horizontal it passes the bottom at 567.410 deg/s against
+  sqrt(2 g d / (I/m)) = 567.410, and reaches it in 0.2650 s against K(sin 45°) sqrt((I/m) / (g d)) = 0.26477 (the
+  first reading past it, 1 ms apart); started 5° from the bottom its period is 0.8980 s against 2 pi sqrt((I/m) /
+  (g d)) = 0.89726 -- 0.05 % of it the amplitude, the rest the sampling.
+
 ### 8.9 What this does not cover yet
 
 - **Closed loops.** A connection's target must already be placed and a child is placed once, so a four-bar linkage
@@ -827,7 +874,8 @@ it named an image, and there is nowhere for an image to run. An implementation t
 it said it runs in an ordinary sandbox. The same rule governs the `fea` and `cfd` checks, from one shared base class.
 
 **Claims must be true.** An example's simulation is a test in CI; a claim that passes for the wrong reason, or does
-not pass, is a defect. Examples carry closed-form answers where one exists -- a pendulum's period, energy conservation,
+not pass, is a defect. Examples carry closed-form answers where one exists -- a pendulum's period
+(`examples/feature_simulate_joints`, built), energy conservation,
 a free fall, a body that floats because it is less dense than the fluid -- the way `examples/feature_cae` compares a
 cantilever with beam theory. The `slippery` example was a counter-example: on a level floor nothing pushed its top
 block sideways, so the claim that friction made it slide was false. It now stands in a `tilted` scene whose gravity
@@ -961,7 +1009,7 @@ never beside the original, and references keep resolving against the directory t
 | Target | State |
 |---|---|
 | URDF | built; joints all fixed until section 8 |
-| MJCF | built, in sim-mujoco; bodies and free joints until section 8 |
+| MJCF | built, in sim-mujoco; the bodies of section 7 and the joints of section 8 (step 10) |
 | SDFormat | built, in sim-gazebo; models and free bodies until section 8 |
 | USD (UsdPhysics) | planned: Isaac Sim and the wider DCC ecosystem; the generic six-degree-of-freedom joint maps the representation of section 8.6 one to one |
 
@@ -988,7 +1036,7 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 7g | The user documentation refactored to how to use it; this record for the design | built (#758, #764) |
 | 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and the `connect` check | built (#766) |
 | 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes; `wrappers/kinematics.py` | built (#784) |
-| 10 | **MJCF joints**, with a pendulum example checked against its closed form | decided |
+| 10 | **MJCF joints**, with a pendulum example checked against its closed form | built (sim-mujoco #12) |
 | 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics | decided |
 | 12 | **SDFormat joints** | decided |
 | 13 | Inputs: `initial:` (a configuration) and `drive:` (position, velocity or effort targets over time) on `simulate:`; temporal helpers for validations | planned |
@@ -1040,5 +1088,10 @@ where the design's boundaries are.
 - **A claim in an example is a test.** `slippery` said friction made a block slide off a level stack; nothing pushed it,
   and nothing checked until `pc test` ran simulations. An example whose claim is not checked is one readers learn to
   trust and should not.
+- **A constraint is as stiff as the way it is written.** A screw's thread written as "the slide follows the hinge"
+  and as "the hinge follows the slide" is one relation, and MuJoCo held only the second: it softens an equality by
+  inverse inertia it adds up without the coefficient. Nothing in the file was wrong, and only a run against the
+  thread's own ratio said so -- as only a run said that a carriage sat on its rail where MuJoCo's own contact filter
+  does not reach.
 - **Two units for one quantity is a defect, not a convention.** Material density was g/mm³ while the physics the
   exporters wrote was kg/m³, and the first fix added a second public spelling. Density is kg/m³ everywhere now.

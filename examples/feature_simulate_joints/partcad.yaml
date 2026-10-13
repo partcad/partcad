@@ -1,0 +1,207 @@
+desc: PartCAD example project which demonstrates simulating a mechanism, checked against its closed form.
+
+docs:
+  usage: |
+    A **mechanism** is an assembly whose parts move against each other on
+    their joints, and what it does can be worked out on paper. This package
+    states one -- a pendulum -- and holds the simulation to the answer:
+
+    ```shell
+    pc sim -a pendulum   # released horizontal, it passes the bottom at the speed its fall gives it
+    pc sim -a nudged     # swinging 5 degrees, it keeps the small-angle period
+    pc test -f sim       # both, as the check pc test runs
+    ```
+
+    `pendulum` is a 300 x 20 x 10 mm bar hung by one end from a frame. The frame implements `axle`, whose `motion: revolute` says that a
+    bar joined to it keeps its turn about the axle once it is joined; so the
+    connection in `pendulum.assy` is a **joint**, named `swing`, and the bar
+    is a rigid body of its own hanging off the frame's. Everything else in an
+    assembly is attached: there are two bodies here because there is one
+    joint. `pc info -a pendulum` lists it under `Joints`.
+
+    `toParams: {turnZ: ...}` is where the joint **starts**, and the joint's
+    zero is the parameter at zero -- here, hanging straight down. `pendulum`
+    starts at 90 degrees, horizontal, and `nudged` is the same file started at
+    5: `pc render` draws each where it starts, and the simulation starts it
+    there too, so a reading of the joint is its value as PartCAD states it.
+
+    ### The world bolts it down
+
+    An assembly placed in a scene is one tree of bodies whose root is free,
+    so in the scene PartCAD ships the whole pendulum would fall. `bolted` is a
+    scene that places its subject `fixed: true`: the root body -- the frame --
+    is welded to the world, and the joint inside it still moves.
+
+    ### The closed form
+
+    For a bar of length L and thickness h turning about the end of its
+    centre line, everything about the swing follows from L, h and g -- the
+    mass cancels, so the material does not matter:
+
+    | | Formula | Here |
+    | --- | --- | --- |
+    | moment of inertia about the axle, over the mass | I/m = L^2/3 + h^2/12 | 0.0300083 m^2 |
+    | the centre of mass, below the axle | d = L/2 | 0.15 m |
+    | speed through the bottom, released horizontal | sqrt(2 g d / (I/m)) | 9.9032 rad/s = 567.41 deg/s |
+    | time to the bottom, released horizontal | K(sin 45 deg) sqrt((I/m) / (g d)) | 0.26477 s |
+    | the small-angle period | 2 pi sqrt((I/m) / (g d)) | 0.89726 s |
+
+    K is the complete elliptic integral of the first kind; K(sin 45 deg) is
+    1.854075, which is why a pendulum released horizontal takes 18 % longer
+    to get to the bottom than the small-angle formula says. Each validation
+    below writes its formula out, and samples the run every millisecond so
+    that the instants it compares are not a matter of where a reading fell.
+
+    MuJoCo's own `before`, `after` and `samples` carry `joints.swing`, in
+    degrees and deg/s:
+
+    ```shell
+    pc sim --json -a pendulum
+    ```
+
+dependencies:
+  # The simulator, as in 'feature_simulate': PartCAD implements none.
+  sim-mujoco:
+    type: git
+    url: https://github.com/partcad/partcad-sim-mujoco.git
+
+interfaces:
+  axle:
+    desc: A horizontal pin a bar hangs from and turns about, along its port's Z axis
+    ports:
+      pin: [[0, 0, 0], [0, 0, 1], 0]
+    # What makes a connection to it a joint: the turn about the port's Z stays
+    # free once a bar is joined to it. 'revolute' implies that turn, as
+    # 'turnZ'; the limits are a stop the swing never reaches.
+    motion:
+      type: revolute
+      limits: { lower: -120, upper: 120 }
+  eye:
+    desc: The hole at the end of a bar that an axle goes through
+    ports:
+      bore: [[0, 0, 0], [0, 0, 1], 0]
+    mates:
+      axle: {}
+
+parts:
+  frame:
+    desc: A 40 mm cube, its axle on the +Y face
+    type: cadquery
+    path: frame.py
+    implements:
+      axle:
+        side: [[0, 20, 0], [1, 0, 0], -90]
+  bar:
+    desc: A 300 x 20 x 10 mm bar, its eye on the end that sits on the origin
+    type: cadquery
+    path: bar.py
+    implements:
+      eye:
+        end: [[0, -10, 0], [1, 0, 0], 90]
+
+assemblies:
+  pendulum:
+    desc: The bar hung from the frame, released horizontal
+    type: assy
+    path: pendulum.assy
+    parameters:
+      # Where the joint starts, in degrees from hanging straight down.
+      start:
+        type: float
+        default: 90
+    simulate:
+      swings_through:
+        desc: |
+          Released horizontal, the bar passes the bottom at the speed its fall
+          gives it, and gets there in a quarter of its period at that amplitude.
+        simulation: sim-mujoco:mujoco
+        scene: :bolted
+        offset: [[0, 0, 400], [0, 0, 1], 0]
+        params:
+          # Past the bottom, with a reading every millisecond - and a step of
+          # half of one, so that a reading is never more than that late.
+          duration: 0.6
+          samples: 599
+          timestep: 0.0005
+        # It starts where the assembly shows it, at 90; its fastest is
+        # sqrt(2 g d / (I/m)) in deg/s; and the first reading on the far side of
+        # the bottom is K(sin 45 deg) sqrt((I/m) / (g d)) seconds in. Each within
+        # 1 %: an axle anywhere else, a point mass instead of a bar, or the
+        # wrong units are each tens of per cent out.
+        validation: |
+          (
+              abs(before["joints"]["swing"]["pos"] - 90) < 1e-6
+              and abs(
+                  max(abs(s["joints"]["swing"]["vel"]) for s in result["samples"])
+                  / ((2 * 9.81 * 0.15 / (0.3 ** 2 / 3 + 0.01 ** 2 / 12)) ** 0.5 * 180 / 3.14159265)
+                  - 1
+              ) < 0.01
+              and abs(
+                  min(s["time"] for s in result["samples"] if s["joints"]["swing"]["pos"] <= 0)
+                  / (1.854075 * ((0.3 ** 2 / 3 + 0.01 ** 2 / 12) / (9.81 * 0.15)) ** 0.5)
+                  - 1
+              ) < 0.01
+          )
+
+  nudged:
+    desc: The same pendulum, started 5 degrees from hanging straight down
+    type: assy
+    path: pendulum.assy
+    parameters:
+      start:
+        type: float
+        default: 5
+    simulate:
+      keeps_time:
+        desc: Swinging 5 degrees either side of the bottom, the bar keeps the small-angle period
+        simulation: sim-mujoco:mujoco
+        scene: :bolted
+        offset: [[0, 0, 400], [0, 0, 1], 0]
+        params:
+          duration: 2.0
+          samples: 1999
+          timestep: 0.0005
+        # The instants it passes the bottom going the same way, a period apart:
+        # 2 pi sqrt((I/m) / (g d)) within half a per cent. A 5 degree swing is
+        # slower than the small-angle formula by 0.05 %, and a reading every
+        # millisecond places each crossing to 0.1 %.
+        validation: |
+          (
+              len(
+                  up := [
+                      b["time"]
+                      for a, b in zip(result["samples"], result["samples"][1:])
+                      if a["joints"]["swing"]["pos"] < 0 <= b["joints"]["swing"]["pos"]
+                  ]
+              ) >= 2
+              and abs(
+                  (up[1] - up[0]) / (2 * 3.14159265 * ((0.3 ** 2 / 3 + 0.01 ** 2 / 12) / (9.81 * 0.15)) ** 0.5) - 1
+              ) < 0.005
+          )
+
+scenes:
+  bolted:
+    desc: An empty world with whatever is simulated in it bolted down by its root
+    type: assy
+    path: bolted.assy
+    parameters:
+      # The three the scene PartCAD ships takes, assigned by 'pc sim'. The
+      # pendulum by default, so the scene on its own holds something to draw.
+      subject:
+        type: string
+        default: pendulum
+      subject_kind:
+        type: string
+        default: assembly
+      subject_offset:
+        type: string
+        default: "0 0 400 0 0 1 0"
+
+render:
+  readme:
+  svg:
+    # Checked in, so the same file every time it is rendered: see
+    # 'reproducible' in '//builtin/render', and the note at the top of
+    # 'examples/partcad.yaml'.
+    reproducible: true
+    prefix: ./
