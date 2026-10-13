@@ -86,7 +86,12 @@ from . import logging as pc_logging
 #      entry written under 9 would go on being served with neither - a scene
 #      placed in a scene read as one product, and a table bolted to the floor
 #      read as free to fall.
-VERSION = 10
+#  11: a node placed by a rigid connection says what it is connected to (see
+#      'shape_envelope.KEY_ATTACHED'), and a node a URDF places carries the
+#      joint its URDF states. The same case as 5, 7, 8 and 10: an entry written
+#      under 10 would go on being served without either - a part bolted to a
+#      turning arm read as bolted to the base, and a robot read as one body.
+VERSION = 11
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.

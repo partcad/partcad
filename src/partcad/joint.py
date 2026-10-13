@@ -78,10 +78,11 @@ FACING = Location((0, 0, 0), (0.71, 0.71, 0), 180)
 def facing(direction):
     """A direction in a target port's frame, in the contact frame: what the half turn does to it.
 
-    Exactly '(x, y, z) -> (y, x, -z)', which the rotation is (see
-    'actions.assembly.convert.joint_axis_in_port_frame', the URDF converter's
-    copy of the same fact); spelled out rather than rotated so that a principal
-    axis stays a principal axis without rounding noise.
+    Exactly '(x, y, z) -> (y, x, -z)', which the rotation is; spelled out
+    rather than rotated so that a principal axis stays a principal axis
+    without rounding noise. (The URDF converter puts the same half turn on the
+    socket's port, so that its contact frame is the URDF joint frame and no
+    axis of its needs mapping.)
     """
     return (direction[1], direction[0], -direction[2])
 
@@ -286,6 +287,62 @@ class Joint:
     def free_steps(self) -> list:
         return self.composition.free_steps()
 
+    @classmethod
+    def from_envelope(cls, record: dict, problems=None) -> "Joint":
+        """A joint stated as plain data, the way 'to_envelope()' writes one.
+
+        What a reader of somebody else's format hands back for a joint it knows
+        - a URDF's, which the URDF reader states as the steps from the parent
+        link's node to the child's (see 'builtin/import/import_urdf.py') - so
+        that 'AssemblyChild.joint' is filled in without any 'connect:'. The
+        composition starts at the identity: the steps relate the two nodes,
+        and the child's location stays whatever the reader placed it at, which
+        the steps at their values reproduce to rounding.
+        """
+        composition = Composition(Location())
+        steps = composition.steps
+        couplings = []
+        for entry in record.get("steps") or []:
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("type") != "free":
+                location = entry.get("location")
+                steps.append(
+                    FixedStep(Location(location) if location else Location(), entry.get("role"), entry.get("source"))
+                )
+                continue
+            step = FreeStep(
+                PARAM_TURN if entry.get("kind") == PARAM_TURN else PARAM_MOVE,
+                entry.get("axis") or (0.0, 0.0, 1.0),
+                _number(entry.get("lower")),
+                _number(entry.get("upper")),
+                _number(entry.get("value")) or 0.0,
+                [dict(source) for source in entry.get("source") or [] if isinstance(source, dict)],
+                None,
+            )
+            steps.append(step)
+            if isinstance(entry.get("coupling"), dict):
+                couplings.append((step, entry["coupling"]))
+        for step, coupling in couplings:
+            index = coupling.get("step")
+            leader = steps[index] if isinstance(index, int) and 0 <= index < len(steps) else None
+            if leader is None or not leader.free or leader is step:
+                continue
+            step.follows = leader
+            step.ratio = _number(coupling.get("ratio"))
+            step.offset = _number(coupling.get("offset")) or 0.0
+        joint = cls(
+            record.get("name"),
+            record.get("parent"),
+            record.get("child"),
+            composition,
+            record.get("physics"),
+            record.get("physicsFrom"),
+            record,
+        )
+        joint.problems = list(problems or [])
+        return joint
+
     def to_envelope(self) -> dict:
         """The joint as plain data, for the node of the child it moves.
 
@@ -349,6 +406,10 @@ def _range_text(step) -> str:
 
 def describe_source(source: dict) -> str:
     """One entry of a free step's 'source', in words."""
+    if source.get("side") is None and source.get("by"):
+        # A freedom a reader of another format stated: no interface had it,
+        # the file did ('Joint.from_envelope').
+        return "'%s', free by %s" % (source.get("parameter"), source.get("by"))
     side = {TO: "the target's", WITH: "the connected object's"}.get(source.get("side"), "a")
     interface = source.get("interface")
     owner = ("%s interface %s" % (side, interface)) if interface else ("%s side" % side)

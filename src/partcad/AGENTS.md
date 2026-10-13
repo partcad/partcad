@@ -902,9 +902,13 @@ at all).
   freedoms on one axis merge into one, ranges and values summed, and only when nothing that moves lies between
   them in a way that would turn one off the other's axis. A freedom a `type` implies uses the parameter
   along its axis or synthesizes one (`turnZ`, `angle`), which `toParams` then addresses; that is how every
-  `motion:` the URDF converter has written becomes a joint without touching the converter. `AssemblyChild.joint`
+  `motion:` the URDF converter wrote before it wrote the explicit `dof:` form became a joint. `AssemblyChild.joint`
   is None for a rigid attachment -- there are no fixed joints -- and for anything in a **scene**
-  (`SceneFactoryAssy.KEEPS_JOINTS`), whose placements are resolved identically. A joint rides to an
+  (`SceneFactoryAssy.KEEPS_JOINTS`), whose placements are resolved identically; a rigid attachment in an
+  assembly names its target instead (`AssemblyChild.attached`, `shape_envelope.KEY_ATTACHED`), which is what welds it
+  to a target that moves. A reader of another format may fill `joint` in itself: the URDF reader states each link's
+  joint in the envelope form and `AssemblyFactoryImported` builds it with `joint.Joint.from_envelope`, knowing no
+  format. A joint rides to an
   exporter on its child's envelope node (`shape_envelope.KEY_JOINT`, stamped by `Assembly._place` because it
   belongs to the placement, not the object); `pc info -a` lists them, and what resolving them found wrong
   (`AssemblyChild.joint_problems`) fails `pc test`'s `connect` check rather than `pc lint`, because it is a
@@ -919,8 +923,9 @@ at all).
   scene places a scene (`scene:`) or fixes an element to the world (`fixed:`) -- `AssemblyFactoryAssy.IS_SCENE`
   decides, a `links:` container is built as the factory's own kind so a scene's grouping stays a scene, and the
   assembly flavor of the ASSY schema (`assy_lint.assembly_schema`) forbids both the way the scene flavor forbids
-  `how`. `kinematics` is pure Python beside `mass_properties`, imported by the engine plugins' exporters from the
-  sandbox path; it turns a `decode: false` tree into `bodies()` (parts, frames, parents, joints re-expressed for the
+  `how`. `kinematics` is pure Python beside `mass_properties`, imported by the engine plugins' exporters and the
+  URDF exporter (`builtin/export/export_urdf.py`, a link per body and a joint per pair) from the sandbox path; it
+  turns a `decode: false` tree into `bodies()` (parts, frames, parents, joints re-expressed for the
   body pair, combined physics) and classifies a joint's free steps (`classify()`). Do not give an exporter a copy of
   the rule, and do not make the core depend on an exporter reading it: three exporters deciding for themselves which
   parts are one body is three answers to what falls apart. A scene is also a simulation subject

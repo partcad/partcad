@@ -164,10 +164,11 @@ export:
   urdf:
     desc: |
       Unified Robot Description Format: a URDF file plus the mesh files it
-      references. Unlike every other format here it is handed the assembly
-      *tree* itself rather than the geometry it decodes to (`decode: false`),
-      because one URDF link per assembly node - named, placed and looked up by
-      what the tree says - is what makes the export reversible.
+      references, one link per rigid body and one joint per pair of bodies
+      (see 'kinematics' in the wrappers). Unlike every other format here it is
+      handed the assembly *tree* itself rather than the geometry it decodes to
+      (`decode: false`), because which parts are one body, how the joints
+      between them move and what every link is called is what the tree says.
     path: export_urdf.py
     extension: urdf
     # 'decode: false' -- see wrappers/wrapper_export.py. The exporter walks the
@@ -187,6 +188,19 @@ export:
     # each part states, or the ones PartCAD works out from its solid and the
     # density of what it is made of (see 'partcad.physics').
     inertial: true
+    # What '<limit effort velocity>' says of a joint that states no 'maxEffort'
+    # or 'maxVelocity' of its own, which URDF requires of a revolute and a
+    # prismatic joint: N.m or N, and rad/s or m/s. Large enough to limit
+    # nothing a passive mechanism does, finite because some readers refuse an
+    # infinite one; every joint written with them is reported.
+    effort: 1000.0
+    velocity: 100.0
+    # What a dummy link weighs (kg) and how hard it turns (kg.m^2 about each
+    # axis). A joint URDF has no type for - a ball, a universal or a screw - is
+    # a chain of single-axis joints through dummy links, and the engines refuse
+    # a link that weighs nothing.
+    dummyMass: 0.001
+    dummyInertia: 0.000001
     # 'robot_name' defaults to the object's label, 'mesh_dir' to
     # '<file stem>_meshes' next to the URDF, and 'mesh_prefix' to empty (which
     # makes the mesh references relative to the URDF file; a ROS package sets it

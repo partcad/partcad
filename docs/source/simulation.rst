@@ -378,8 +378,9 @@ simulated in places it with a ``scene:`` link, which ``subject_kind`` asks for.
 The rule is PartCAD's one copy of it, in the module the engine plugins import
 for it (``kinematics.py``, beside ``mass_properties.py``): the bodies of a tree,
 each with its parts, its frame, what it hangs off and its combined mass, and each
-joint with its kind and the frames a format states one in. **No engine plugin
-writes it yet**: a run today still makes every part with geometry a free body of
+joint with its kind and the frames a format states one in. The URDF export
+writes it, a link per body and a joint per pair (:ref:`sim-urdf`). **No engine
+plugin writes it yet**: a run today still makes every part with geometry a free body of
 its own, which is the rule already for a scene of parts and not yet for the
 parts of an assembly, and a ``fixed: true`` element still falls. See
 :ref:`sim-limitations`.
@@ -1056,6 +1057,15 @@ property for stops the import, naming what it found, rather than being carried
 along unread. How links become parts, which of a link's shapes is used, and the
 declaration's options are under :ref:`assembly-urdf`.
 
+Its **joints are the assembly's**, so a ``urdf`` assembly is a mechanism as it
+is read, without converting it: each movable joint is the joint of the link it
+moves, with its axis, limits, dynamics, soft limits and mimic (``pc info -a
+robot`` lists them, as it does an ASSY assembly's), and each link on a fixed
+joint is welded to its parent -- one rigid body with it, which turns when the
+parent does (:ref:`sim-bodies`). A joint with no ``<axis>`` turns about URDF's
+default, X. A link with no geometry is no part, so the joints on either side of
+it are one joint of their freedoms together, named after the first.
+
 ``import`` converts instead, the way ``pc convert assembly -t assy`` does below,
 and leaves the package holding PartCAD's own objects with nothing pointing back
 at the URDF.
@@ -1065,26 +1075,88 @@ Writing one
 
 .. code-block:: shell
 
-  pc export -t urdf -a logo   # logo.urdf, plus a directory of the STL meshes it references
+  pc export -t urdf -a robot   # robot.urdf, plus a directory of the STL meshes it references
 
-Each node of the assembly becomes a link, each parent/child relation a fixed
-joint carrying the child's placement, and a shape used more than once is written
-once. A sub-assembly whose children are named under it -- ``wrist`` holding
-``wrist/1`` and ``wrist/2`` -- goes out as one link with a ``<visual>`` per
-shape, which is how a URDF link of several shapes survives a round trip as
-itself.
+The export writes the mechanism the assembly is: **a link per rigid body** and
+**a joint per pair of bodies**, by the rule of :ref:`sim-bodies`. Every part
+welded into a body is a ``<visual>`` and a ``<collision>`` of its link, at its
+place in the link and named after the part, so a link of several shapes -- a
+URDF's, read in, or several parts bolted together -- goes out as itself; a shape
+used more than once is written once. An assembly's root body is the URDF's root
+link, named after the one part it is made of when it is made of one (a robot's
+base) and after the assembly otherwise. A part on its own is one link, and an
+assembly in which nothing moves is one link of all its parts.
 
-Every link carries the mass, centre of mass and inertia PartCAD resolved for it
-(:ref:`sim-physics`) in ``<inertial>``, its friction and contact properties in a
-``<gazebo>`` block, and its material and colour in ``<material>``. A link of
-several parts in different materials is added up, each at its own density, so it
-balances where the heavier one pulls it. A property PartCAD holds that URDF
-cannot state is reported rather than dropped in silence.
+Every link carries the mass, centre of mass and inertia of its body -- its
+parts' added up, each at its own density, or what a measured link states about
+itself (:ref:`sim-physics`) -- in ``<inertial>``, its friction and contact
+properties in a ``<gazebo>`` block, and each shape's material and colour in its
+``<material>``.
 
-The joints all come out **fixed**, to a root link with no geometry: an assembly
-is one static configuration, and a star of fixed joints is what that is. The
-kinematic chain is kept where PartCAD can state it, in the interfaces that
-``pc convert assembly -t assy`` writes.
+Each joint is written by what its free steps are:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - The joint is
+     - In URDF
+   * - one turn, bounded on either side
+     - ``revolute``, with ``<limit>``
+   * - one turn, bounded on neither
+     - ``continuous``
+   * - one move
+     - ``prismatic``, with ``<limit>``
+   * - two moves and the turn about their normal (``planar``)
+     - ``planar``, its ``<axis>`` the normal
+   * - all six (``floating``)
+     - ``floating``
+   * - a turn and a move on one axis (``cylindrical``), two turns through a
+       point (``universal``), three (``ball``), or anything else
+     - a ``revolute``, ``continuous`` or ``prismatic`` joint per freedom, through
+       *dummy links* named ``<joint>_link1``, ``<joint>_link2`` ...
+   * - a turn and a move coupled by a thread (``screw``)
+     - the same chain, the move with ``<mimic>`` following the turn by the lead
+
+Frames and units:
+
+- **The child link's frame is the joint's moving frame**, so ``<axis>`` is the
+  freedom's own axis as its parameter's ``dir`` states it, and every part sits in
+  its link where the joint leaves the body. A URDF converted to ASSY and exported
+  again comes back with its own link frames and axes.
+- **Metres and radians** at the boundary and nowhere else: limits, velocities,
+  soft limits and a mimic's offset are converted from millimetres and degrees;
+  ``<dynamics>`` (``damping``, ``friction``) is already per radian or per metre
+  in SI, as PartCAD states it (:ref:`assy-joints`). ``maxEffort`` and
+  ``maxVelocity`` are ``<limit effort velocity>``, a joint's ``softLimits`` its
+  ``<safety_controller>``, its ``mimic`` a ``<mimic>``, and the solver settings
+  of its ``physics:`` (``springStiffness``, ``stopCfm``...) its ``<gazebo>``
+  block.
+- **The root.** A free root body is the URDF's root link, placed where the tree
+  places it. A body welded to the world (a scene element marked ``fixed: true``)
+  hangs off a link named ``world`` by a ``fixed`` joint, which is how a URDF says
+  "bolted down"; and since a URDF has one root, the free bodies of a scene of
+  several hang off ``world`` by ``floating`` joints.
+
+What a URDF cannot state is **reported**, never dropped in silence:
+
+- **the starting value** of a joint (what ``toParams`` sets it to): URDF has no
+  starting position, so the robot is written with every joint at zero;
+- **a dummy link** and the chain it is part of, each of ``dummyMass`` kg (0.001)
+  and ``dummyInertia`` kg·m² (1e-6) about each axis, because the engines that
+  read a URDF refuse a link that weighs nothing; and a screw, as approximate,
+  since few simulators honour a ``<mimic>``;
+- **a default**: URDF requires ``<limit effort velocity>`` on a ``revolute`` and a
+  ``prismatic`` joint, and one that states no ``maxEffort`` or ``maxVelocity``
+  gets the export's ``effort`` (1000 N·m or N) and ``velocity`` (100 rad/s or
+  m/s) -- large enough to limit nothing a passive mechanism does. A bound open on
+  one side is written a million degrees or millimetres away;
+- the bounds of a ``planar`` or a ``floating`` joint's freedoms, the soft limits
+  or mimic of a joint written as a chain, and a property PartCAD holds that URDF
+  has no element for.
+
+All four numbers are parameters of the export, set in a package's own
+``export:`` entry for ``urdf`` like any other (:ref:`output-files`).
 
 Converting
 ----------
@@ -1121,9 +1193,13 @@ is connected to its parent through them:
      - a **plug** interface, which the child part implements at its own origin,
        with ``mates:`` naming the socket
    * - ``axis``, ``limit`` lower and upper
-     - ``motion: {axis, limits}``, in degrees or millimetres, and an interface
-       parameter that moves the connection: ``angle`` for a revolute joint,
-       ``offset`` for a prismatic one
+     - a freedom-of-movement parameter of the socket per degree of freedom --
+       ``angle`` for a revolute or continuous joint, ``offset`` for a prismatic
+       one, ``moveX``, ``moveY`` and ``turnZ`` for a planar one about Z, all six
+       for a floating one -- whose ``dir`` is the URDF axis and whose range is
+       the limits in degrees or millimetres; and ``motion: {dof: [...]}``
+       naming them. A continuous joint's parameter states no range, which is
+       what makes it unlimited.
    * - ``safety_controller``, ``mimic``
      - ``motion: {softLimits, mimic}``
    * - ``limit`` effort and velocity, ``dynamics``
@@ -1134,12 +1210,17 @@ is connected to its parent through them:
      - nothing: a reference for commissioning a real robot, which says nothing
        about the model; counted and reported
    * - the child link's attachment
-     - ``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: <joint>}``
+     - ``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: <joint>,
+       joint: <joint>}``, so the joint keeps the URDF's name
 
-The socket's port sits exactly at the joint's origin, so the numbers in the
-``.assy`` can be checked against the URDF; the half turn that makes two
-connected ports face each other is on the plug's side. Limits are converted from
-radians and metres once, on the way in.
+The parent implements the socket exactly at the joint's origin, so the numbers in
+the ``.assy`` can be checked against the URDF. The socket's port is the half turn
+that two connected ports face each other by, which a connection undoes: the frame
+the parameters are read in is the URDF joint frame itself, so each ``dir`` is the
+URDF axis as the URDF states it -- URDF's default of X where it states none -- and
+an export writes the URDF's own frames back. Limits are converted from radians and
+metres once, on the way in. A fixed joint's socket declares ``dof: []``, and its
+child is welded to its parent.
 
 Joints of one kind -- the same type, axis, limits, dynamics and mimic -- share
 one interface pair, since what differs between them is where they are, which is
@@ -1147,48 +1228,62 @@ the instance's location: a four-wheeled robot gets one pair for its wheels.
 Nothing is matched against the library of real interfaces, because a URDF joint
 says nothing about the hardware that implements it.
 
-The generated parameter is what lets the assembly be **posed**:
-``connect: {toParams: {angle: 90}}`` places the child where the URDF joint at 90
-degrees would, and everything below it follows. It is a pose and not a joint:
-the connection is still one rigid placement, and ``motion:`` and ``physics:``
-are a record that nothing yet runs (see :ref:`interfaces`).
+The parameters are what let the assembly be **posed**: ``connect: {toParams:
+{angle: 90}}`` places the child where the URDF joint at 90 degrees would, and
+everything below it follows; it is also the joint's starting value
+(:ref:`assy-joints`).
 
 .. _sim-urdf-round-trip:
 
 What a round trip keeps
 -----------------------
 
-An ASSY assembly exported to URDF and read back as a ``urdf`` assembly puts
-every shape back where it was, under the name it had, built from the same
-geometry -- flattened, because a URDF has no way to say "these parts belong
-together" other than by joining them:
+A URDF read as a ``urdf`` assembly and exported, or converted to ASSY and
+exported, is the robot it was: every movable joint under its name, with its
+type, its frame, its axis, its limits, its dynamics, its soft limits and what it
+mimics, and every shape where it was. An ASSY assembly exported and read back is
+the mechanism it was, joint for joint. What changes is what PartCAD and URDF
+mean by a link:
 
 .. list-table::
    :header-rows: 1
    :widths: 40 60
 
    * - Kept
-     - Lost
-   * - every shape, at the placement it had, to full double precision
-     - every name that carries a package path, which a ROS name cannot
-   * - the names of the assembly's own children
-     - nesting: an ASSY may group its parts; a URDF's only grouping is its joint
-       tree
+     - Lost, or changed
+   * - every movable joint: name, type, frame, axis, limits, effort, velocity,
+       dynamics, soft limits, mimic, and the joint's ``<gazebo>`` settings
+     - the starting value of a joint, which URDF has no place for; the URDF is
+       the robot at zero
+   * - every link that is a rigid body of its own, under its name
+     - a link on a fixed joint: it is one body with its parent, so it comes back
+       as a shape of the parent's link, where it was
+   * - the kinematics of a chain through a link with no geometry
+     - that link's name: the chain comes back through a dummy link named after
+       the joint
+   * - a cylindrical, universal, ball or screw joint, as a chain URDF can state,
+       read back as the joint it was
+     - the joint's single native element; and a screw's coupling is a
+       ``<mimic>`` few simulators honour
+   * - every shape, at the placement it had, under the name of its part within
+       its link
+     - every name that carries a package path, which a ROS name cannot; nesting:
+       an ASSY may group its parts, and a URDF's only grouping is its links
    * - geometry, as a triangle mesh
      - exact B-rep geometry; the mesh is a tessellation at a chosen tolerance
    * - shape sharing: one mesh, many links
      - parametrization: an ASSY parameter, an enrich, an alias
-   * - mass, inertia, friction, contact settings and appearance
+   * - mass, inertia, friction, contact settings and appearance -- per body,
+       combined from its parts
      - which part in which package a link came from -- the digital thread itself
 
-Reading a URDF keeps every link's physics as properties and, through ``pc
-convert assembly -t assy``, every joint's type, axis, limits and dynamics as
-interfaces; the geometry a link was not built from becomes a part of its own,
-``<assembly>/<link>/<visual|collision>``. What is gone is the *motion* of a
-joint -- an assembly is one configuration, so a movable joint is a placement --
-along with transmissions, sensors and ``ros2_control`` blocks. Each is counted
-and reported at import and in ``pc info``, so the loss is visible rather than
-silent.
+``pc convert assembly -t assy`` keeps all of that as interfaces and connections,
+with one more loss: a chain of joints through a link with no geometry is folded
+into the placement of the last of them, and said to be. The geometry a link was
+not built from becomes a part of its own, ``<assembly>/<link>/<visual|collision>``,
+and what an assembly cannot hold -- transmissions, sensors, ``ros2_control``
+blocks -- is counted and reported at import and in ``pc info``, so the loss is
+visible rather than silent.
 
 .. _sim-engine-formats:
 

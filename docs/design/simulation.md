@@ -376,8 +376,8 @@ Which nodes of a tree become separate rigid bodies is the decision everything el
 step 9 the scene exporters decided it with a switch (`flatten: true` makes every node with geometry its own free
 body), which is why a stack of blocks can fall over and also why every real product falls apart in simulation.
 **Built** (step 9, #784): it follows what PartCAD already says the two kinds of object mean (`scene.py`): an assembly
-is a product that was put together, and a scene only states where things are. The exporters writing it is steps
-10-12; until then they keep their switches.
+is a product that was put together, and a scene only states where things are. The URDF export writes it (step 11,
+section 8.8b); the engines' exporters are steps 10 and 12, and keep their switches until then.
 
 | How a node is placed | Inside an assembly | Inside a scene |
 |---|---|---|
@@ -469,9 +469,9 @@ Building the rule settled what the text above left open:
   few units in the last place. Bit for bit stays the core's, where `joint.Composition` is the placement.
 - **One convention kept.** A node whose shapes are labelled under its own label (`wrist` holding `wrist/1`) is one body
   wherever it is, scenes included, as every reader and exporter of a robot description has always taken it.
-- **What is not honoured yet.** No exporter reads any of this: every part with geometry is still a free body in a run,
-  so an assembly still comes apart and a `fixed:` element still falls. A `type: urdf` assembly fills in no joints
-  (section 8.6), so under the rule it is one body until step 11 gives its factory the joint table.
+- **What is not honoured yet.** No engine's exporter reads any of this: every part with geometry is still a free body in
+  a run, so an assembly still comes apart and a `fixed:` element still falls. (The URDF export reads it, and a `type:
+  urdf` assembly fills in its joints: step 11, section 8.8b.)
 
 What steps 10-12 take from it: call `bodies(request["wrapped"], request["properties"])` instead of walking the tree,
 write one body per `Body` with `mass_parts()` as its inertial and its parts' geometry at their `placement`, a fixed
@@ -493,7 +493,8 @@ body's parent as the world, and its joint by `joint.kind`:
 
 ## 8. Joints
 
-**The core model is built (#766); exporting joints is decided and not built.** A connection between two interfaces becomes a joint when the connection keeps any degree of
+**The core model is built (#766), and the URDF export writes joints (step 11, section 8.8b); MJCF and SDFormat are
+steps 10 and 12.** A connection between two interfaces becomes a joint when the connection keeps any degree of
 freedom once it is made. The degrees of freedom are declared in `motion:`, on the interfaces, on the mating between
 them and on the connection, and they combine.
 
@@ -720,7 +721,65 @@ adjustments, free steps, source port⁻¹); the steps before a free one place it
 screw's coupling (`ratio`, `offset`) and a `mimic` are joint equalities; an unlimited bound is `None`; the starting value
 is the `ref`. One classifier of free steps into joint kinds, shared by the MJCF, URDF and SDFormat exporters, belongs in
 `partcad/wrappers/` beside `mass_properties`. One gap found on the way, for step 11: the URDF converter writes no `axis`
-when a joint states none, so URDF's default X axis comes out as Z.
+when a joint states none, so URDF's default X axis comes out as Z (fixed in step 11: the reader states X).
+
+### 8.8b How the URDF export resolved the open details (built, step 11)
+
+Writing joints to URDF, reading them from one and converting between the two settled what 8.8 left open for URDF:
+
+- **The exporter is `kinematics` and nothing else.** `export_urdf.py` calls `bodies()` and writes a link per body and a
+  joint per body pair by `classify()`, through a plain-data `Planner` that the tests move through configurations and
+  compare with the joint's own `location()`, row by row of the table in 8.8: `revolute`, `continuous`, `prismatic`,
+  `planar` (its `<axis>` the third freedom's, the normal, at `classification.origin`) and `floating` are native; a
+  cylindrical, universal, ball or screw joint and a chain are one single-axis joint per freedom at `joint.origins`
+  through dummy links `<joint>_link1` ..., the child link at `inverse(joint.tail)`. A screw's follower is `<mimic>` of
+  its turn by the lead (`ratio`, converted to metres a radian), and pays no `<dynamics>`. The first joint of a chain
+  keeps the joint's name and each one after it the URDF joint its freedom was read from (a freedom's `source` says
+  `joint`), so a chain read in comes back under its own names.
+- **Links.** Each part welded into a body is a `<visual>` and a `<collision>` of its own, named after the part when the
+  link has several (what reading it back names `<assembly>/<link>/<name>` by). An assembly's root body is named after
+  the one direct child all its parts are in, when there is one (a robot's base link), and after the assembly
+  otherwise. Its physics is `body.physics` re-expressed in the link frame; its `<gazebo>` block is the body node's
+  settings, else what its parts agree on, a disagreement reported.
+- **The root.** One free root is the URDF's root link, its frame the tree's origin (so the shapes are where the tree
+  put them, and nothing welds it); a body fixed to the world hangs off a link `world` by a `fixed` joint; and with
+  several roots - a scene - every free one hangs off `world` by a `floating` joint, reported, since a URDF has one root.
+- **What URDF requires and PartCAD does not state** is a reported default and an export parameter: `effort` (1000 N·m
+  or N) and `velocity` (100 rad/s or m/s) where a joint states no `maxEffort`/`maxVelocity`, a bound open on one side
+  `OPEN_BOUND` (a million degrees or millimetres) away, a dummy link of `dummyMass` 0.001 kg and `dummyInertia` 1e-6
+  kg·m². The starting value is lost and reported once, joint by joint. A `mimic` between joints is converted both
+  ways in PartCAD's units on both sides (degrees or millimetres per degree or millimetre, which the reader now states
+  too, and which the MJCF exporter reads the same way); a joint's `<gazebo>` settings are written back as the reader
+  reads them.
+- **A rigid connection says what it is attached to.** The body rule welded a child that a `connect:` holds rigidly to
+  its *container's* body, which is wrong as soon as its target moves - a gripper bolted to a turning wrist, a URDF
+  link on a fixed joint under a moving one. A node placed by a rigid connection now carries the target's label
+  (`shape_envelope.KEY_ATTACHED`, stamped by `Assembly._place`, assemblies only), and `bodies()` welds it into the
+  target's body at the target's frame there times the two nodes' relative placement. A joint that names no sibling
+  (`parent: None`) is to the container, without a problem: what a URDF link hanging off a root link with no geometry
+  is. Those are the two additions to the helper; the payload changed, so the cache format is 11.
+- **The URDF factory fills `AssemblyChild.joint`.** The reader states each link node's joint in the envelope form
+  (`Joint.to_envelope`): the parent's shape offset undone, each URDF joint origin on the way and the freedoms it keeps
+  (`freedoms`, one list read by the factory and the converter alike), this link's shape offset - every freedom at zero;
+  and a link on a fixed joint names its parent under `attached`. `AssemblyFactoryImported` builds a
+  `partcad.joint.Joint` from it (`Joint.from_envelope`), knowing no format, so a plugin's reader can state joints the
+  same way. Links with no geometry are no nodes, so the joints through one compose into one joint of their freedoms,
+  named after the first, and a `mimic` between two of them is a coupling. `pc info -a` lists a URDF assembly's joints.
+  Movable joints are no longer counted as dropped.
+- **The converter writes the explicit form**, and the contact frame is the URDF joint frame. The half turn is on the
+  socket's port, not the plug's: the parent still implements the socket at the joint origin, the plug sits at the
+  child link's own origin, and a half turn twice is none - so every parameter's `dir` is the URDF axis verbatim
+  (`joint_axis_in_port_frame` and its `(y, x, -z)` are gone), `motion: {dof: [...]}` names the parameters, a
+  continuous joint's parameter states no range, a planar joint's are `moveX`/`moveY`/`turnZ` (or `offset`, `offset-2`,
+  `angle` off the principal axes) and a floating one's all six, and `connect: {joint:}` keeps the URDF's name. The
+  export of a converted URDF is therefore the URDF's own frames and axes back, which 8.8's "the remapped-axis wrinkle
+  disappears" needed. Interfaces are deduplicated as before, on the reader's record.
+- **What a round trip keeps**, as tests (`test_urdf_round_trip.py`): URDF -> read -> export -> read, and URDF -> ASSY ->
+  export, keep every movable joint's name, type, frame, axis, limits, effort, velocity, dynamics, soft limits and
+  mimic, and every shape to a micrometre; an ASSY's hand-written revolute, ball and screw read back as themselves. Lost:
+  the starting value; a link on a fixed joint, which is a shape of its parent's link; the name of a link with no
+  geometry, replaced by a dummy link; and, in the converter only, the kinematics of a chain through such a link, folded
+  into its last joint and reported, since one connection cannot hold freedoms about two points.
 
 ### 8.9 What this does not cover yet
 
@@ -917,12 +976,20 @@ become the `motion:` and `physics:` of the interfaces it turns into. URDF that n
 URDF is a closed vocabulary, so an unknown element means PartCAD is out of date); an unknown `<gazebo>` setting is
 reported rather than fatal unless `strict: true`.
 
-The joint mapping (`pc convert assembly -t assy`): a joint becomes a **socket** interface with one port at its origin,
-which the parent implements at the joint origin under an instance named after the joint, and a **plug** interface whose
-one port sits at the half turn, which the child implements at its own origin, with `mates:` on the plug. Putting the
-flip on the plug keeps the socket readable against the URDF. Interfaces are deduplicated on the joint's type, axis,
-limits, dynamics and mimic: a four-wheeled robot gets one interface pair for its wheels. No attempt is made to match
-the library of real interfaces: a URDF joint says nothing about the hardware that implements it.
+The joint mapping (`pc convert assembly -t assy`): a joint becomes a **socket** interface whose one port is the half
+turn, which the parent implements at the joint origin under an instance named after the joint, and a **plug**
+interface with one port at its origin, which the child implements at its own origin, with `mates:` on the plug. The
+half turn on the socket's port is what the connection undoes, so the contact frame is the URDF joint frame: the
+socket's freedom-of-movement parameters (`angle`, `offset`, or the principal names of a planar or floating joint) have
+the URDF axis as their `dir`, verbatim, and `motion: {dof: [...]}` names them (built, step 11; until then the flip was
+on the plug and every axis was remapped). Interfaces are deduplicated on the joint's type, axis, limits, dynamics and
+mimic: a four-wheeled robot gets one interface pair for its wheels. No attempt is made to match the library of real
+interfaces: a URDF joint says nothing about the hardware that implements it.
+
+A `type: urdf` assembly carries its joints without converting: each link node a movable joint moves states that
+joint, and the factory fills `AssemblyChild.joint` from it (section 8.8b). The export writes a link per rigid body and
+a joint per pair of them, so a URDF read, exported and read again, or converted to ASSY and exported, keeps its
+kinematics.
 
 Three mechanisms the URDF support needed, which the joint work builds on:
 
@@ -938,10 +1005,10 @@ Three mechanisms the URDF support needed, which the joint work builds on:
   frame before writing its mesh -- one term per link, recorded by the importer and applied in one place -- rather than
   folding it into every socket and plug, so that everything downstream may assume the part's origin is the link's.
 
-What does not survive today: names (PartCAD names carry package paths), nesting, parametrization, exact B-rep geometry,
-and the digital thread itself -- and on export, the joints, which are all written `fixed` because PartCAD holds one
-static configuration. Section 8 is what changes the last of those, and its explicit `dof:` form is what removes the one
-place a generated `motion:` still has to state its units in prose.
+What does not survive: names (PartCAD names carry package paths), nesting, parametrization, exact B-rep geometry, and
+the digital thread itself; a joint's starting value, which URDF cannot state; a link on a fixed joint as a link of its
+own, since it is one body with its parent; and the name of a link with no geometry. Until step 11 the joints did not
+survive either: every one was written `fixed`, to a root link with no geometry.
 
 ### 12.2 SDFormat and MJCF (built, in the engine plugins)
 
@@ -960,7 +1027,7 @@ never beside the original, and references keep resolving against the directory t
 
 | Target | State |
 |---|---|
-| URDF | built; joints all fixed until section 8 |
+| URDF | built: a link per body and a joint per pair (step 11) |
 | MJCF | built, in sim-mujoco; bodies and free joints until section 8 |
 | SDFormat | built, in sim-gazebo; models and free bodies until section 8 |
 | USD (UsdPhysics) | planned: Isaac Sim and the wider DCC ecosystem; the generic six-degree-of-freedom joint maps the representation of section 8.6 one to one |
@@ -989,7 +1056,7 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and the `connect` check | built (#766) |
 | 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes; `wrappers/kinematics.py` | built (#784) |
 | 10 | **MJCF joints**, with a pendulum example checked against its closed form | decided |
-| 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics | decided |
+| 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics | built |
 | 12 | **SDFormat joints** | decided |
 | 13 | Inputs: `initial:` (a configuration) and `drive:` (position, velocity or effort targets over time) on `simulate:`; temporal helpers for validations | planned |
 | 14 | Devices: actuators (torque constant, gear ratio, rotor inertia as MJCF `armature`) and sensors (encoders, IMU, force-torque, contact; cameras later) attached to ports | planned |
@@ -1042,3 +1109,11 @@ where the design's boundaries are.
   trust and should not.
 - **Two units for one quantity is a defect, not a convention.** Material density was g/mm³ while the physics the
   exporters wrote was kg/m³, and the first fix added a second public spelling. Density is kg/m³ everywhere now.
+- **"No fixed joints" is about how a weld is written, not about forgetting what is welded to what.** Step 9's body
+  rule put every child that kept no freedom into its container's body, which was right for every example it was
+  checked against and wrong for the first URDF with a fixed joint under a moving link: the forearm stayed with the
+  base while the shoulder turned. A rigid connection now says what it is attached to.
+- **A frame convention chosen for readability can cost a round trip.** The converter put the half turn on the plug to
+  keep the socket's port at the URDF origin, which made every axis a remapped one and every exported link frame a half
+  turn off the URDF's. Putting it on the socket's *port definition* keeps the implemented location at the URDF origin
+  and the axes verbatim, and the round trip exact.

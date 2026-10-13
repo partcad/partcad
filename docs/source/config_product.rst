@@ -344,9 +344,12 @@ The joint tree deliberately does not become nesting. A URDF's tree is its
 *kinematics*, and an assembly is one static configuration of it, so a link
 hanging off another says nothing that the link's own placement does not already
 say - while nesting per joint would make an arm as deep as it has joints. The
-relative placements are not lost: they are what ``pc convert assembly -t assy``
-turns into joints, below. The only nesting left is the one that means something,
-a link whose several shapes group together.
+kinematics are not lost: **every link carries the joint that moves it**, from the
+link it hangs off, with the joint's axis, limits and dynamics (``pc info -a``
+lists them), and a link on a fixed joint is welded to its parent, so the
+assembly is the robot's mechanism without being converted (see :ref:`sim-urdf`).
+The only nesting left is the one that means something, a link whose several
+shapes group together.
 
 Those parts are ordinary parts. ``pc ide view robot/forearm`` and
 ``pc export -t step robot/wrist`` work on them like on any other. They are not
@@ -381,8 +384,8 @@ vocabulary is open and where an unknown setting is otherwise only reported.
 
 The geometry a link was *not* built from is kept too, as the part
 ``<assembly name>/<link name>/<visual|collision>``: defined and exportable, but
-not placed in the assembly. What cannot be represented at all (the motion of a
-joint, transmissions, sensors) is counted and reported; ``pc info`` shows the
+not placed in the assembly. What cannot be represented at all (transmissions,
+sensors, calibration references) is counted and reported; ``pc info`` shows the
 tally.
 
 The reverse direction is ``pc export -t urdf``, which writes a ``.urdf`` file

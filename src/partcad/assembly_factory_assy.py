@@ -1309,6 +1309,13 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 )
 
         if item is not None:
+            # A connection that kept no degree of freedom welds the child to its
+            # target, which moves if the target does: said on the child, so the
+            # body rule can weld it to the target's body rather than to the
+            # container's. A scene's connection attaches nothing.
+            attached = None
+            if composition is not None and joint is None and not self.IS_SCENE:
+                attached = connect_to_name
             child = AssemblyChild(
                 item,
                 name,
@@ -1322,6 +1329,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 joint=joint,
                 joint_problems=joint_problems,
                 fixed=fixed,
+                attached=attached,
             )
             if joint is not None:
                 # One list, so that what is found about the joint after this -

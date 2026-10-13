@@ -51,6 +51,12 @@ class AssemblyChild:
     world rather than free to fall (see docs/design/simulation.md, section 7).
     Only a scene sets it. Everything inside an assembly is attached to the
     assembly already, so there is nothing for it to say there.
+
+    'attached' is the link name of the sibling a rigid connection welds this
+    child to - a 'connect:' that kept no degree of freedom, or a URDF link on a
+    fixed joint - and None for anything else. It is not a joint, and it changes
+    no placement: it says which body the child is part of when that sibling
+    moves (see 'shape_envelope.KEY_ATTACHED'). Only an assembly sets it.
     """
 
     def __init__(
@@ -67,6 +73,7 @@ class AssemblyChild:
         joint=None,
         joint_problems=None,
         fixed=False,
+        attached=None,
     ):
         self.item = item
         self.name = name
@@ -91,6 +98,7 @@ class AssemblyChild:
         self.joint = joint
         self.joint_problems = list(joint_problems or [])
         self.fixed = bool(fixed)
+        self.attached = attached
 
     def connect_info(self):
         """What the ASSY file says about connecting this child, or None.
@@ -343,6 +351,7 @@ class Assembly(Shape):
                 child.joint,
                 kind=getattr(child.item, "kind", None),
                 fixed=child.fixed,
+                attached=child.attached if child.joint is None else None,
             )
 
         if len(self.children) == 0:
@@ -418,7 +427,7 @@ class Assembly(Shape):
         name = ("%s:%s" % (project, item_name)) if project and item_name else item_name
         return name, self.link_name(index)
 
-    def _place(self, child_env, placement, name, label, joint=None, kind=None, fixed=False):
+    def _place(self, child_env, placement, name, label, joint=None, kind=None, fixed=False, attached=None):
         """The child's node re-stamped for this assembly.
 
         'shape_envelope.placed()' is the composition, and is shared with
@@ -440,6 +449,10 @@ class Assembly(Shape):
         scene, whether it is welded to the world (KEY_FIXED). The second is
         written only where it is true, so a free element's node is the node it
         always was.
+
+        A child connected rigidly to a sibling says which (KEY_ATTACHED): it is
+        welded to that sibling's body, which is its container's unless the
+        sibling moves. Only an assembly says it; a scene attaches nothing.
         """
         node = shape_envelope.placed(child_env, placement, name=name, label=label)
         if kind is not None:
@@ -448,6 +461,8 @@ class Assembly(Shape):
             node[shape_envelope.KEY_FIXED] = True
         if joint is not None:
             node[shape_envelope.KEY_JOINT] = joint.to_envelope()
+        elif attached is not None and self.kind != "scene":
+            node[shape_envelope.KEY_ATTACHED] = attached
         return node
 
     def connected_children(self):

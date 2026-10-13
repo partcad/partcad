@@ -119,6 +119,12 @@ parts:
 assemblies:
   bench:
     type: assy
+# The same blocks as a scene, where each is a rigid body of its own, and so a
+# link of its own in a URDF: in the assembly they are all one body, welded.
+scenes:
+  layout:
+    type: assy
+    path: bench.assy
 """
 
 
@@ -134,8 +140,8 @@ def weighing(tmp_path):
 
 
 def _masses(ctx, directory, **kwargs):
-    """Export the bench and read back each link's '<inertial>'."""
-    bench = ctx._get_assembly("//weighing:bench")
+    """Export the bench's blocks, each a body of its own, and read back each link's '<inertial>'."""
+    bench = ctx.get_scene("//weighing:layout")
     path = os.path.join(directory, "bench.urdf")
     asyncio.run(bench.render_async(ctx, "urdf", filepath=path, tolerance=1.0, angularTolerance=0.5, **kwargs))
     robot = ET.parse(path).getroot()
