@@ -32,7 +32,7 @@
 
 [project]
 name = "partcad"
-version = "0.8.185"
+version = "0.8.186"
 description = "Package manager for CAD models and a modelling framework"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
