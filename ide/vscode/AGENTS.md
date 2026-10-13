@@ -490,6 +490,15 @@ ordinary terminal and gets the tools like any other.
   the top (`TerminalOptions.message` is written into the view, not sent to the shell). Activation runs the health
   checks as a logged process, which ends in a `DONE:` line at the least, so the pair appears at every start, as
   the single terminal used to.
+- **The banner's logo is block characters, not ASCII.** `LOGO` is the logo as pixel art, a quarter of a cell
+  per letter, in its own tones: at 13 columns a line drawing of it reads as a dotted outline, and this reads as
+  the logo. Two facts hold it up. A cell can show two colours -- a quadrant character's foreground and
+  background -- which a test checks of every 2x2 square. And the terminal leaves block characters (U+2500 to
+  U+259F) out of `terminal.integrated.minimumContrastRatio`, which recolours text against the theme's background
+  and would otherwise turn a light theme's yellow into brown, tone by tone. A cell's main tone is its
+  *background* wherever it can be: the terminal draws block characters itself only with GPU acceleration on,
+  and from the font they leave seams between cells, where a background never does. Lines stay within 65
+  columns -- the logo, a gap and the longest sentence -- for the shell's half of a split panel.
 - **Closing a view keeps it closed.** `partcad.reopenTerminal` defaults to `false` now; it used to reopen the
   view on the next log line, which is fighting the user. "PartCAD: Show Terminal" and the `PartCAD` entry in the
   terminal panel's "+" menu (`contributes.terminal.profiles`, `partcad.terminal`) open one again. In Restricted
