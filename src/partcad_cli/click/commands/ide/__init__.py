@@ -7,7 +7,7 @@
 
 Two ways, and they differ in where the window is -- and a third command that
 asks the IDE what it is showing, `pc ide state`. `pc ide view` shows an object in
-the PartCAD Viewer -- the IDE's own window, fed by the daemon that builds the
+the Digital Thread -- the IDE's own window, fed by the daemon that builds the
 shape. `pc ide open` opens a file in a third-party application on the machine of
 whoever ran the command, waits for it to close, and brings back what was edited
 in it. Neither one produces anything a package keeps: that is `export`,
@@ -33,7 +33,7 @@ class IdeCommands(Loader):
 
 @click.command(
     cls=IdeCommands,
-    help="Show an object in the PartCAD Viewer or another application, ask the IDE what it shows, install "
+    help="Show an object in the Digital Thread or another application, ask the IDE what it shows, install "
     "the PartCAD extension, or open a package in the PartCAD workbench",
 )
 def cli() -> None:

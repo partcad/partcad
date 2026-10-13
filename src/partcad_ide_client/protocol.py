@@ -194,7 +194,7 @@ KEY_PACKAGE = "package"
 # On a node: what was learnt about its shape as it was built. PartCAD's own
 # 'shape_envelope.KEY_METADATA', carried through the tessellation untouched.
 KEY_METADATA = "metadata"
-# On a show message: the tab of the PartCAD Viewer to open on, or absent to
+# On a show message: the tab of the Digital Thread to open on, or absent to
 # stay on whichever one is open. One of the leaf ids in VIEWER_TABS -- what
 # 'pc ide view --design-2d' and its siblings ask for. It travels *with* the show
 # rather than as a message of its own because the show is what decides which

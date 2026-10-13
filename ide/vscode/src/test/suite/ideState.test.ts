@@ -156,12 +156,12 @@ suite('pc ide state: over the socket', () => {
         const server = new PartcadViewerServer(await freePort());
         await server.start();
         server.setStateProvider(async () => {
-            throw new Error('the Viewer is busy');
+            throw new Error('the Digital Thread is busy');
         });
         try {
             const reply = await ask((server as any).port);
             assert.strictEqual(reply.ok, false);
-            assert.strictEqual(reply.error, 'the Viewer is busy');
+            assert.strictEqual(reply.error, 'the Digital Thread is busy');
             assert.ok(!(KEY_STATE in reply));
         } finally {
             server.dispose();

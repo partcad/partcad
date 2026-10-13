@@ -1,6 +1,6 @@
 {
   "name": "PartCAD Development Environment",
-  "image": "ghcr.io/partcad/partcad-devcontainer:0.8.181",
+  "image": "ghcr.io/partcad/partcad-devcontainer:0.8.185",
   "remoteEnv": {
     // TODO: @alexanderilyin do not patch PATH here but make `mamba` discoverable.
     "PATH": "${containerEnv:PATH}:/home/vscode/miniforge3/bin",
@@ -63,7 +63,7 @@
     // everywhere, and CI runs this job on ubuntu.
     "-v", "/tmp/partcad-devcontainer-${localEnv:USER}/ssh-agent.sock:/run/host-ssh-agent.sock",
     // spacenavd, resolved by the same script, so that a SpaceMouse plugged into a
-    // Linux host moves the PartCAD Viewer: the extension reading it runs in here,
+    // Linux host moves the Digital Thread: the extension reading it runs in here,
     // and spacenavd out there. Bound where every spacenavd client looks first, so
     // nothing in here has to be told where. Docker binds the socket the link names
     // when the container starts, so a spacenavd restarted on the host is reached

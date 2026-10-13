@@ -303,7 +303,7 @@ def daemon_errors(output: str) -> list:
             problems.append(line)
         # Not an error to `pc` -- a show is a side effect and never fails the
         # command -- but the whole point here.
-        if "No PartCAD IDE with an open PartCAD Viewer detected" in line or "Failed to show" in line:
+        if "No PartCAD IDE with an open Digital Thread detected" in line or "Failed to show" in line:
             problems.append(line)
     return problems
 
@@ -614,7 +614,7 @@ def test_install_open_view_and_analyse_in_a_real_editor(session):
                 return target, events, probe
         return None
 
-    _, events, probe = wait_for("the PartCAD Viewer's webview", viewer_webview, WINDOW_TIMEOUT)
+    _, events, probe = wait_for("the Digital Thread's webview", viewer_webview, WINDOW_TIMEOUT)
     assert probe["drawn"], probe
     assert not probe["failure"], probe["overlay"]
     for target in devtools.partcad_webviews():

@@ -3,7 +3,7 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The PartCAD Viewer panel, inside the webview.
+// The Digital Thread panel, inside the webview.
 //
 // Geometry is only the first of what the panel has to say about what is on
 // screen. An assembly also has a bill of materials and a set of assembly
@@ -653,7 +653,7 @@ async function show(message: ShowMessage): Promise<void> {
     if (message.config) {
         (window as any).partcadConfig = message.config;
         if (message.config?.viewer?.performanceDebug) {
-            console.log('[PartCAD Viewer] Config set:', message.config);
+            console.log('[Digital Thread] Config set:', message.config);
         }
     }
 
@@ -722,7 +722,7 @@ function requestTab(tab: TabId | null | undefined): void {
     const group = groupOf(tab);
     if (tab && group === undefined) {
         // From a 'partcad' newer than this extension, most likely.
-        console.warn(`[PartCAD Viewer] there is no '${tab}' tab to open`);
+        console.warn(`[Digital Thread] there is no '${tab}' tab to open`);
     }
     for (const [id, strip] of Object.entries(groups)) {
         strip?.request(id === group ? (tab as TabId) : undefined);
@@ -1264,7 +1264,7 @@ async function answerState(token: number): Promise<void> {
     const reply: StateReplyMessage = { type: 'state', token, state };
     const on = (state.subTab ?? state.tab) as TabId | null | undefined;
     if (!on) {
-        reply.screenshotError = 'nothing is on screen in the PartCAD Viewer';
+        reply.screenshotError = 'nothing is on screen in the Digital Thread';
     } else {
         try {
             reply.screenshot = await snapshot(panes[on], (canvas) => {

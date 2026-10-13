@@ -125,6 +125,14 @@ def test_a_closed_viewer_warns_rather_than_raises(monkeypatch):
     assert asyncio.run(viewer.show(object(), TESSELLATED, name="part")) is False
 
 
+def test_a_viewer_that_fails_otherwise_warns_rather_than_raises(monkeypatch, caplog):
+    client = FakeClient(raises=RuntimeError("the IDE sent garbage"))
+    monkeypatch.setattr(viewer, "_client", lambda: client)
+
+    assert asyncio.run(viewer.show(object(), TESSELLATED, name="part")) is False
+    assert "Failed to show 'part' in the Digital Thread." in caplog.text
+
+
 def test_a_shape_shows_itself_in_the_drawable_form(monkeypatch):
     """A browser has no CAD kernel, so what it is sent is the tessellated tree."""
     _tessellates(monkeypatch)

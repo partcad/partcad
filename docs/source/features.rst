@@ -35,7 +35,7 @@ Objects
 
 - **Add** a part, assembly, scene, sketch, or interface.
 - **Import** a part, assembly, scene, or sketch from an existing file.
-- **Display** (inspect) a part, assembly, scene, sketch, or interface in the ``PartCAD Viewer``; parts can
+- **Display** (inspect) a part, assembly, scene, sketch, or interface in the ``Digital Thread``; parts can
   also be opened for display and editing together, or their source edited directly.
 - **Test** a part, assembly, or scene.
 - **Open in >** — Open the object's own source file in the application that made it: **FreeCAD** or
@@ -50,13 +50,13 @@ Objects
   brought back into the object's own file, converted back when it had been converted.
 
 The Explorer also lists the ``software`` a package ships. Selecting one shows its path and its ``fileHash``
-in the Inspector and leaves the ``PartCAD Viewer`` as it is: software is a file, not geometry, so there is
+in the Inspector and leaves the ``Digital Thread`` as it is: software is a file, not geometry, so there is
 nothing to render.
 
-The PartCAD Viewer
+The Digital Thread
 ------------------
 
-Displaying an object opens the ``PartCAD Viewer``, which is a strip of tabs over that one object rather than
+Displaying an object opens the ``Digital Thread``, which is a strip of tabs over that one object rather than
 a bare canvas: groups of tabs, each with tabs of its own -- **Design**, **Analysis** and **Manufacturing**,
 followed by **Validation** and **Operations**, which have nothing in them yet and are always disabled. Design
 is always the first:
@@ -94,7 +94,7 @@ is always the first:
 
 Every group always shows all of its tabs and disables the ones that do not apply, and a group none of whose
 tabs apply is disabled itself, and says why when the mouse is over it. Design and its 3D tab are always enabled,
-and are what the Viewer shows before anything has been selected. A group opens on the tab you last had open in
+and are what the Digital Thread shows before anything has been selected. A group opens on the tab you last had open in
 it, if that one applies to the object, and on the first one that does otherwise.
 
 The 3D view arrives over the viewer protocol from whichever ``partcad`` asked for the shape to be shown; the
@@ -145,8 +145,8 @@ viewer in the focused window moves, and only the tab on screen, so a SpaceMouse 
 fight. ``partcad.spaceMouse.sensitivity`` sets the speed, ``partcad.spaceMouse.invert`` reverses individual axes,
 and ``partcad.spaceMouse.enabled`` turns it off.
 
-What the Viewer is showing can be asked of it from outside: ``pc ide state`` (see :doc:`cli`) reports the tab and
-sub-tab on screen, the filter and the selections of each sub-tab, and a screenshot of the one on screen -- together
+What the Digital Thread is showing can be asked of it from outside: ``pc ide state`` (see :doc:`cli`) reports the tab
+and sub-tab on screen, the filter and the selections of each sub-tab, and a screenshot of the one on screen -- together
 with the Explorer's selection and the Inspector's parameters. It is what an AI agent working beside you reads to
 see what you are looking at.
 
@@ -296,6 +296,12 @@ A Docker daemon running **Windows** containers does not count as a container
 runtime for this, or for choosing a sandbox. Every image PartCAD builds, pulls or
 documents is a Linux image, and such a daemon answers a ping and then fails every
 pull with ``no matching manifest for windows/amd64``.
+
+The same policy, from the same code, decides ``pc test``'s ``sim`` check, which
+holds a part or an assembly to the ``simulate:`` claims it makes: a simulator
+that resolved and did not run is a failure, but for the one excuse, and a
+simulation plugin that cannot be found is never excused. See "Running a
+simulation" in :doc:`simulation`.
 
 ``examples/feature_cae`` is the pair of cases to check an implementation against
 — a cantilever and a pipe, each with a closed-form answer to compare the solver
@@ -839,8 +845,8 @@ implementation counted, or what the simulator reported) together with the files
 the run wrote -- the analysis model, the route program, or the whole run
 directory of a simulation, with the scene, its meshes and whatever the plugin
 left there. Asking the same question again puts the files back where that run
-asks for them and runs nothing. The ``fea``, ``cfd`` and ``cam`` checks of
-``pc test``, and the IDE's FEA and CFD tabs, go through the same cache.
+asks for them and runs nothing. The ``fea``, ``cfd``, ``cam`` and ``sim`` checks
+of ``pc test``, and the IDE's FEA and CFD tabs, go through the same cache.
 
 The question is the object's own cache key plus everything the run adds to it:
 the boundary conditions and where they landed, a route's job and the machine it
@@ -853,13 +859,19 @@ seen. What a run writes into a package, a model or a picture, is not part of the
 question, and neither is where the package is on disk or when its files were
 last touched. A simulation's ``validation:`` is not part
 of the question: it is evaluated again on every run, so editing it re-judges the
-cached run rather than repeating it.
+cached run rather than repeating it. What a simulation's question is made of,
+and how ``pc test``'s verdict on one is kept, are in :ref:`sim-caching`.
 
 Only answers are cached: an analysis, a route or a simulation that failed is run again
 next time, since installing a missing solver changes no key. The tiers' maximum
 entry sizes apply as usual -- a model larger than ``cacheFilesMaxEntrySize`` is
 not kept in ``cacheFiles`` -- but their minimum sizes do not, because no
 solver's answer is too small to be worth keeping.
+
+``pc test`` also remembers each check's verdict on each object, and a failure it
+remembers keeps what the check said about it: read back, it repeats the reason
+and says that it was remembered from an earlier run. ``pc --cache-bypass test``
+works every verdict out again.
 
 ``pc --cache-bypass <command>`` (or ``PC_CACHE_BYPASS=1``, or ``cacheBypass: True``)
 bypasses every tier for one run: nothing is read from a cache and nothing built

@@ -111,7 +111,7 @@ a CAD addon, or documentation.
 
 * [src/partcad_ide_client](./src/partcad_ide_client/AGENTS.md):
 
-  The Python side of the socket protocol `partcad` uses to display shapes in the IDE's `PartCAD Viewer`, and that
+  The Python side of the socket protocol `partcad` uses to display shapes in the IDE's `Digital Thread`, and that
   `pc ide state` uses to ask the IDE what it is showing. Lazily imported by `partcad.viewer`, and imported by
   that one command.
 
@@ -120,7 +120,7 @@ a CAD addon, or documentation.
 * [ide/vscode](./ide/vscode/AGENTS.md):
 
   Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some
-  of `partcad` functionality. Hosts the `PartCAD Viewer`. It is a **JSON-RPC client and nothing else** — it
+  of `partcad` functionality. Hosts the `Digital Thread`. It is a **JSON-RPC client and nothing else** — it
   talks to `partcad-json-rpc` and contains no Python of its own. Published as `PartCAD.partcad-official` — the
   name is not `partcad` because the shim below holds that one, and the marketplace does not let two publishers
   share an extension name.

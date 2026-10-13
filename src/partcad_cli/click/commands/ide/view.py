@@ -56,7 +56,7 @@ def tab_options(command):
         chosen = [(flag, tab) for flag, tab in flags if kwargs.pop("tab_" + tab.replace("-", "_"), False)]
         if len(chosen) > 1:
             raise click.UsageError(
-                "The PartCAD Viewer shows one tab at a time; pass one of %s."
+                "The Digital Thread shows one tab at a time; pass one of %s."
                 % ", ".join("--" + flag for flag, _ in chosen)
             )
         kwargs["tab"] = chosen[0][1] if chosen else None

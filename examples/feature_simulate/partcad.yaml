@@ -303,8 +303,11 @@ parts:
         # orientation the plugin reports (w, x, y, z) - 1 is upright, 0.5 is the
         # 60 degrees it was released at. It swings a little either side of
         # upright as it goes on rising, so "upright" is within 25 degrees.
+        # 'all()' of nothing is true, so a run that reported no body at all
+        # would pass without anything having been looked at: the buoy has to
+        # be there for its turning upright to count.
         validation: |
-          all(
+          len(before["bodies"]) > 0 and all(
               1 - 2 * (before["bodies"][name]["quat"][1] ** 2 + before["bodies"][name]["quat"][2] ** 2) < 0.6
               and 1 - 2 * (after["bodies"][name]["quat"][1] ** 2 + after["bodies"][name]["quat"][2] ** 2) > 0.9
               for name in before["bodies"]

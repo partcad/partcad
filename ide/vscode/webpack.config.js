@@ -58,7 +58,7 @@ const extensionConfig = {
 };
 
 /**
- * The PartCAD Viewer's renderer, bundled separately from the extension.
+ * The Digital Thread's renderer, bundled separately from the extension.
  *
  * It runs inside a webview, which is a browser context: it must not be built for
  * 'node' (no require, no Buffer) and it must be fully self-contained, because

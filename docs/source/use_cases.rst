@@ -71,7 +71,7 @@ The command line tools are the easiest way to browse parts:
     # Try initializing the model, print some basic info without displaying it
     pc info //pub/std/metric/cqwarehouse:fastener/hexhead-din931
 
-    # Display the model in the PartCAD Viewer
+    # Display the model in the Digital Thread
     pc ide view //pub/std/metric/cqwarehouse:fastener/hexhead-din931
 
     # Display the parametrized model
@@ -81,7 +81,7 @@ The command line tools are the easiest way to browse parts:
         //pub/std/metric/cqwarehouse:fastener/hexhead-din931
 
 The last command displays the chosen part in
-``PartCAD Viewer`` view in Visual Studio Code.
+``Digital Thread`` view in Visual Studio Code.
 There is currently no support for ``cq-server``.
 Please, let `support@partcad.org <mailto:support@partcad.org>`_ know if there is
 any other tool we should support.

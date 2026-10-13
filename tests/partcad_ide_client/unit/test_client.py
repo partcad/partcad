@@ -178,7 +178,7 @@ def test_show_takes_reply_timeout_where_it_always_was(ide):
 
 
 def test_show_refuses_a_tab_the_viewer_does_not_have(ide):
-    with pytest.raises(ValueError, match="not a PartCAD Viewer tab"):
+    with pytest.raises(ValueError, match="not a Digital Thread tab"):
         client.show(protocol.make_node(b"glTF"), name="//pkg:beam", tab="buy")
     assert ide.received == []
 
@@ -313,9 +313,11 @@ def test_an_ide_too_old_to_say_is_told_apart_from_no_ide(monkeypatch):
 
 
 def test_an_ide_that_failed_to_collect_its_state_says_why(monkeypatch):
-    server = _ide_answering(monkeypatch, {protocol.MSG_STATE: {"ok": False, "error": "the Viewer did not answer"}})
+    server = _ide_answering(
+        monkeypatch, {protocol.MSG_STATE: {"ok": False, "error": "the Digital Thread did not answer"}}
+    )
     try:
-        with pytest.raises(client.StateNotSupported, match="the Viewer did not answer"):
+        with pytest.raises(client.StateNotSupported, match="the Digital Thread did not answer"):
             client.state()
     finally:
         server.close()

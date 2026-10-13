@@ -38,7 +38,7 @@ REPLY_TIMEOUT = 60.0
 
 
 class ViewerNotAvailable(Exception):
-    """No IDE is listening on the PartCAD viewer port."""
+    """No IDE is listening on the Digital Thread port."""
 
 
 class StateNotSupported(Exception):
@@ -101,7 +101,7 @@ class Connection:
             self._socket = socket.create_connection((self.host, self.port), timeout=self.connect_timeout)
         except OSError as e:
             self._socket = None
-            raise ViewerNotAvailable("no PartCAD viewer is listening on %s:%d (%s)" % (self.host, self.port, e)) from e
+            raise ViewerNotAvailable("no Digital Thread is listening on %s:%d (%s)" % (self.host, self.port, e)) from e
         # Interactive traffic: a show should leave for the IDE as soon as it is
         # written, not wait for Nagle to fill a segment.
         try:
@@ -169,7 +169,7 @@ def _send(message: dict, reply_timeout: float = REPLY_TIMEOUT) -> dict:
                 if attempt == 1:
                     raise
         # Unreachable: the loop either returns or raises.
-        raise ViewerNotAvailable("failed to reach the PartCAD viewer")
+        raise ViewerNotAvailable("failed to reach the Digital Thread")  # pragma: no cover - unreachable, see above
 
 
 def disconnect():
@@ -200,7 +200,7 @@ def show(
     reply_timeout: float = REPLY_TIMEOUT,
     tab=None,
 ) -> dict:
-    """Display one already-tessellated object in the IDE's PartCAD Viewer.
+    """Display one already-tessellated object in the IDE's Digital Thread.
 
     'obj' is the root node of the object's tree, as PartCAD's
     'Shape.get_representation(ctx, "gltf")' produces it: nodes carrying geometry,
@@ -227,7 +227,7 @@ def show(
     to leave the viewer on the one it is on.
     """
     if tab is not None and tab not in protocol.viewer_tab_ids():
-        raise ValueError("not a PartCAD Viewer tab: %r (one of %s)" % (tab, ", ".join(protocol.viewer_tab_ids())))
+        raise ValueError("not a Digital Thread tab: %r (one of %s)" % (tab, ", ".join(protocol.viewer_tab_ids())))
     if not protocol.is_node(obj):
         raise TypeError(
             "not a shape tree (no %r, %r or %r key): %r"
@@ -254,7 +254,7 @@ def clear() -> dict:
 
 
 def state(reply_timeout: float = STATE_TIMEOUT) -> dict:
-    """What the IDE is showing: its Explorer, Inspector and Viewer (see 'protocol.MSG_STATE').
+    """What the IDE is showing: its Explorer, Inspector and Digital Thread (see 'protocol.MSG_STATE').
 
     Over a connection of its own rather than the shared one: this is a one-off
     question, usually from a process that will never show anything.
