@@ -1142,7 +1142,7 @@ a false error on correct code.
 ## The PartCAD IDE viewer client
 
 `./src/partcad_ide_client` is the Python half of the socket protocol that connects `partcad` to the PartCAD
-IDE extension's **PartCAD Viewer**. It is a sibling package in the same wheel, so `pip install partcad` makes
+IDE extension's **Digital Thread**. It is a sibling package in the same wheel, so `pip install partcad` makes
 `import partcad_ide_client` work and nothing has to install it separately.
 
 It ships that way rather than as a distribution of its own because it was never on PyPI and every process that

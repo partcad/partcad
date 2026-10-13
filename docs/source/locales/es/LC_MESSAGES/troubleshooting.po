@@ -501,12 +501,12 @@ msgstr ""
 "PartCAD que aparece en la salida del comando ``pc version``"
 
 #: ../../source/troubleshooting.rst:228
-msgid "PartCAD Viewer"
-msgstr "PartCAD Viewer"
+msgid "Digital Thread"
+msgstr "Digital Thread"
 
 #: ../../source/troubleshooting.rst:230
 msgid ""
-"The ``PartCAD Viewer`` is a tab the extension opens when a part, "
+"The ``Digital Thread`` is a tab the extension opens when a part, "
 "assembly, scene, sketch or interface is inspected. PartCAD tessellates "
 "the shape in a sandboxed runtime, and sends the result to the extension "
 "as compressed glTF over a socket on ``127.0.0.1:9137``. The Python side "
@@ -514,7 +514,7 @@ msgid ""
 "inside ``partcad`` itself -- so ``pip install partcad`` is all that is "
 "needed, and there is nothing separate to install."
 msgstr ""
-"El ``PartCAD Viewer`` es una pestaña que abre la extensión cuando se "
+"El ``Digital Thread`` es una pestaña que abre la extensión cuando se "
 "inspecciona una pieza, un ensamblaje, una escena, un boceto o una "
 "interfaz. PartCAD tesela la forma en un runtime aislado y envía el "
 "resultado a la extensión como glTF comprimido a través de un socket en "
@@ -590,8 +590,8 @@ msgstr ""
 "client`` aparte que nunca se publicó; actualizar es la solución."
 
 #: ../../source/troubleshooting.rst:276
-msgid "``No PartCAD IDE with an open PartCAD Viewer detected``"
-msgstr "``No PartCAD IDE with an open PartCAD Viewer detected``"
+msgid "``No PartCAD IDE with an open Digital Thread detected``"
+msgstr "``No PartCAD IDE with an open Digital Thread detected``"
 
 #: ../../source/troubleshooting.rst:278
 msgid ""
@@ -605,11 +605,11 @@ msgstr ""
 #: ../../source/troubleshooting.rst:280
 msgid ""
 "If two windows are open, only one of them may own the port on platforms "
-"without ``SO_REUSEPORT``. The \"PartCAD Viewer port ... is already in "
+"without ``SO_REUSEPORT``. The \"Digital Thread port ... is already in "
 "use\" message in the ``PartCAD`` output view says which case this is."
 msgstr ""
 "Si hay dos ventanas abiertas, solo una de ellas puede poseer el puerto en"
-" las plataformas sin ``SO_REUSEPORT``. El mensaje \"PartCAD Viewer port "
+" las plataformas sin ``SO_REUSEPORT``. El mensaje \"Digital Thread port "
 "... is already in use\" en la vista de salida ``PartCAD`` indica cuál de "
 "los dos casos es."
 

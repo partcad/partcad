@@ -1,4 +1,4 @@
-## The PartCAD Viewer
+## The Digital Thread
 
 Select a part in the PartCAD Explorer and it appears in the viewer: the shape
 the script produced, not a preview of the text.

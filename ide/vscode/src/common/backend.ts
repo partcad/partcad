@@ -469,7 +469,7 @@ class JsonRpcBackend implements PartcadBackend {
             this.send('inspect.assembly', { package: a.pkg, name: a.name, params: a.params }),
         );
         reg('partcad.showScene', (a) => this.send('inspect.scene', { package: a.pkg, name: a.name, params: a.params }));
-        // What the PartCAD Viewer's tabs beside the 3D one are filled from. Each
+        // What the Digital Thread's tabs beside the 3D one are filled from. Each
         // is the CLI's own operation -- 'pc bom', the assembly instruction book
         // 'pc render -t html' writes, 'pc supply quote' -- asked for as data
         // rather than as a file, because the panel has to draw it.

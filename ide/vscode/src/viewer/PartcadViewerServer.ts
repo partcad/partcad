@@ -115,18 +115,18 @@ export class PartcadViewerServer implements vscode.Disposable {
                 // window owns the viewer. Not fatal: everything except showing
                 // geometry in this window still works.
                 traceError(
-                    `PartCAD Viewer port ${this.port} is already in use. ` +
+                    `Digital Thread port ${this.port} is already in use. ` +
                         'Another window is most likely serving the viewer.',
                 );
             } else {
-                traceError(`PartCAD Viewer server error: ${error.message}`);
+                traceError(`Digital Thread server error: ${error.message}`);
             }
             this.stop();
         });
 
         await new Promise<void>((resolve) => {
             server.once('listening', () => {
-                traceLog(`PartCAD Viewer listening on ${this.host}:${this.port}`);
+                traceLog(`Digital Thread listening on ${this.host}:${this.port}`);
                 resolve();
             });
             server.once('error', () => resolve());
@@ -136,7 +136,7 @@ export class PartcadViewerServer implements vscode.Disposable {
     }
 
     private handleConnection(socket: net.Socket): void {
-        traceVerbose('PartCAD Viewer: a PartCAD process connected');
+        traceVerbose('Digital Thread: a PartCAD process connected');
         this.sockets.add(socket);
         socket.setNoDelay(true);
 
@@ -148,7 +148,7 @@ export class PartcadViewerServer implements vscode.Disposable {
             } catch (error: any) {
                 // The stream is desynchronized and there is no way back into
                 // sync, so drop it rather than keep reinterpreting garbage.
-                traceError(`PartCAD Viewer: ${error.message}`);
+                traceError(`Digital Thread: ${error.message}`);
                 socket.destroy();
                 return;
             }
@@ -159,7 +159,7 @@ export class PartcadViewerServer implements vscode.Disposable {
         });
 
         socket.on('error', (error) => {
-            traceVerbose(`PartCAD Viewer: connection error: ${error.message}`);
+            traceVerbose(`Digital Thread: connection error: ${error.message}`);
         });
         socket.on('close', () => {
             this.sockets.delete(socket);
@@ -181,14 +181,14 @@ export class PartcadViewerServer implements vscode.Disposable {
                 case MSG_PING:
                     break;
                 default:
-                    traceVerbose(`PartCAD Viewer: ignoring unknown message type '${message.type}'`);
+                    traceVerbose(`Digital Thread: ignoring unknown message type '${message.type}'`);
                     break;
             }
         } catch (error: any) {
             // Reported rather than rethrown, so that the ack below still goes
             // out: a handler that threw must not also leave the caller blocked.
             ok = false;
-            traceError(`PartCAD Viewer: failed to handle a '${message.type}' message: ${error.message}`);
+            traceError(`Digital Thread: failed to handle a '${message.type}' message: ${error.message}`);
         }
 
         // Every message is acknowledged, including the ones this build does not
@@ -231,7 +231,7 @@ export class PartcadViewerServer implements vscode.Disposable {
         } catch (error: any) {
             reply.ok = false;
             reply.error = error?.message ?? String(error);
-            traceError(`PartCAD Viewer: failed to report the state: ${reply.error}`);
+            traceError(`Digital Thread: failed to report the state: ${reply.error}`);
         }
         if (!socket.destroyed) {
             socket.write(encodeFrame(reply));

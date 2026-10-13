@@ -176,7 +176,7 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
 * `daemon.debug`, which reports where the service runs from and whether a debugger is attached. The editor
   extension asks it once, when it is being debugged from a checkout, to decide whether to replace the daemon
   with one that attaches to the debugger (`debugger.py`, `PC_DEBUGPY`).
-* `render.inline` and `render.formats`, behind the Viewer's 2D and Draft tabs. The first renders one object
+* `render.inline` and `render.formats`, behind the Digital Thread's 2D and Draft tabs. The first renders one object
   to one file type -- `pc render -t <format> [-e <package>]` for a single object -- in a temporary directory,
   and returns the file's bytes, name and extension rather than a path, since the daemon may be on another
   machine; the client keeps the file and saves it where the user says. The second lists the file types a
@@ -194,7 +194,7 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   `filter.object` is `pc filter`: a second object made of some of the links of the first. It is a daemon
   method because it writes a declaration, like every other package-mutating command -- a client doing it
   itself would leave this warm context serving the package as it was before.
-* `manufacturing.tree`, `manufacturing.details` and `manufacturing.plan`, behind the Viewer's Build vs Buy and
+* `manufacturing.tree`, `manufacturing.details` and `manufacturing.plan`, behind the Digital Thread's Build vs Buy and
   Build tabs (see `partcad/build_plan.py`). The tree is every line item an object is made of, each saying
   whether it can be bought, built, or both, and costs what `bom` costs -- nothing is built for it. The details
   are a thumbnail and the measurements of *several* objects per request, because this daemon answers one request
@@ -213,7 +213,7 @@ Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,
 `stats`, `terminal`, `execute`, and the `*Done`/lifecycle signals).
 
-Five of them answer the tabs of the IDE's PartCAD Viewer, which is a webview with no file system and no
+Five of them answer the tabs of the IDE's Digital Thread, which is a webview with no file system and no
 network in reach: `bom`, `assembly.guide`, `supply.quote` and the pair behind the FEA and CFD tabs,
 `cae.analyze` and `cae.defaults`. The first three are the CLI's own operation returning **data**
 rather than writing a file -- `assembly.guide` is the instruction book `pc render -t html|pdf` writes, as

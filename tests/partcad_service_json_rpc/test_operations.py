@@ -2119,7 +2119,7 @@ def test_load_package_contents_skips_a_child_package_it_cannot_read():
 
 # ---- the viewer's tabs -----------------------------------------------------
 #
-# What the PartCAD Viewer's panel shows beside the geometry: the assembly
+# What the Digital Thread's panel shows beside the geometry: the assembly
 # instruction book, and where to buy what an object is made of.
 
 

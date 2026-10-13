@@ -8,7 +8,7 @@ marketplace is
 
 **There is nothing to do.** This package depends on the extension in its new
 home, so installing or updating it brings the real PartCAD extension with it.
-Everything works as before: the same Explorer, the same PartCAD Viewer, the same
+Everything works as before: the same Explorer, the same Digital Thread, the same
 settings, the same commands.
 
 This package contains no code of its own. It exists only so that the marketplace

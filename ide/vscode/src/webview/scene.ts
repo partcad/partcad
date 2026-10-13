@@ -3,7 +3,7 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The PartCAD Viewer's 3D view: the renderer behind the first tab of the panel.
+// The Digital Thread's 3D view: the renderer behind the first tab of the panel.
 //
 // Runs inside the webview, not in the extension host, so it has no access to
 // 'vscode' or to node - the geometry arrives over postMessage as base64 binary
@@ -980,7 +980,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         for (const [mat, count] of materialCounts) {
             materialDistribution[`Material${materialIndex++}`] = count;
         }
-        console.log('[PartCAD Viewer] Scene Structure:', {
+        console.log('[Digital Thread] Scene Structure:', {
             totalMeshes,
             topLevelNodes,
             avgMeshesPerNode,
@@ -1036,7 +1036,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
             totalVertices: stats.vertexCount.toFixed(0),
             dataTransferredKB: (stats.bytesTransferred / 1024).toFixed(2),
         };
-        console.log('[PartCAD Viewer] Performance Stats:', perfLog);
+        console.log('[Digital Thread] Performance Stats:', perfLog);
 
         // Create on-screen stats display
         if (!(window as any).pcViewerStats) {
@@ -1204,7 +1204,7 @@ function animate(): void {
             const avg =
                 stats.frameTimeHistory.reduce((a: number, b: number) => a + b, 0) / stats.frameTimeHistory.length;
             const fps = 1000 / avg;
-            console.log(`[PartCAD Viewer] FPS: ${fps.toFixed(1)} (frame time: ${avg.toFixed(2)}ms)`);
+            console.log(`[Digital Thread] FPS: ${fps.toFixed(1)} (frame time: ${avg.toFixed(2)}ms)`);
 
             // Update on-screen display with FPS and graphics info
             const renderInfo = surface.info?.render ?? { calls: 0, triangles: 0 };
@@ -1214,7 +1214,7 @@ function animate(): void {
                 const graphicsInfo = `\nDraw Calls: ${renderInfo.calls} | Geometries: ${memInfo.geometries}`;
                 stats.statsDisplay.textContent = stats.geometryInfo + fpsInfo + graphicsInfo;
             }
-            console.log('[PartCAD Viewer] Graphics Stats:', {
+            console.log('[Digital Thread] Graphics Stats:', {
                 drawCalls: renderInfo.calls,
                 triangles: renderInfo.triangles,
                 geometries: memInfo.geometries,

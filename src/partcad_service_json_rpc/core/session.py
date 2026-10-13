@@ -165,7 +165,7 @@ class Session:
                         or module_name.startswith("partcad.")
                         or module_name.startswith("partcad_cli")
                         # Dropped with the rest: it holds the open socket to the
-                        # PartCAD Viewer, and a restart has to hand back a
+                        # Digital Thread, and a restart has to hand back a
                         # connection made by the reloaded modules.
                         or module_name.startswith("partcad_ide_client")
                     ):

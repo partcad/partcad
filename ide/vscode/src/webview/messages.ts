@@ -3,7 +3,7 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The 'postMessage' contract between the PartCAD Viewer panel (the extension
+// The 'postMessage' contract between the Digital Thread panel (the extension
 // host, 'src/viewer/PartcadViewer.ts') and the renderer that runs inside it.
 //
 // Geometry is only half of what the panel shows. The other tabs - the bill of

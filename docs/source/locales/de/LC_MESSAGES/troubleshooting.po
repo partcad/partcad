@@ -508,12 +508,12 @@ msgstr ""
 "Version in der Ausgabe des Befehls ``pc version`` übereinstimmt"
 
 #: ../../source/troubleshooting.rst:228
-msgid "PartCAD Viewer"
-msgstr "PartCAD Viewer"
+msgid "Digital Thread"
+msgstr "Digital Thread"
 
 #: ../../source/troubleshooting.rst:230
 msgid ""
-"The ``PartCAD Viewer`` is a tab the extension opens when a part, "
+"The ``Digital Thread`` is a tab the extension opens when a part, "
 "assembly, scene, sketch or interface is inspected. PartCAD tessellates "
 "the shape in a sandboxed runtime, and sends the result to the extension "
 "as compressed glTF over a socket on ``127.0.0.1:9137``. The Python side "
@@ -521,7 +521,7 @@ msgid ""
 "inside ``partcad`` itself -- so ``pip install partcad`` is all that is "
 "needed, and there is nothing separate to install."
 msgstr ""
-"Der ``PartCAD Viewer`` ist ein Tab, den die Erweiterung öffnet, wenn ein "
+"Der ``Digital Thread`` ist ein Tab, den die Erweiterung öffnet, wenn ein "
 "Teil, eine Baugruppe, eine Szene, eine Skizze oder ein Interface "
 "inspiziert wird. PartCAD tesselliert die Form in einer Sandbox-"
 "Laufzeitumgebung und sendet das Ergebnis als komprimiertes glTF über "
@@ -596,8 +596,8 @@ msgstr ""
 " Lösung."
 
 #: ../../source/troubleshooting.rst:276
-msgid "``No PartCAD IDE with an open PartCAD Viewer detected``"
-msgstr "``No PartCAD IDE with an open PartCAD Viewer detected``"
+msgid "``No PartCAD IDE with an open Digital Thread detected``"
+msgstr "``No PartCAD IDE with an open Digital Thread detected``"
 
 #: ../../source/troubleshooting.rst:278
 msgid ""
@@ -611,12 +611,12 @@ msgstr ""
 #: ../../source/troubleshooting.rst:280
 msgid ""
 "If two windows are open, only one of them may own the port on platforms "
-"without ``SO_REUSEPORT``. The \"PartCAD Viewer port ... is already in "
+"without ``SO_REUSEPORT``. The \"Digital Thread port ... is already in "
 "use\" message in the ``PartCAD`` output view says which case this is."
 msgstr ""
 "Wenn zwei Fenster geöffnet sind, kann auf Plattformen ohne "
-"``SO_REUSEPORT`` nur eines davon den Port besitzen. Die Meldung „PartCAD "
-"Viewer port ... is already in use“ in der Ausgabeansicht ``PartCAD`` "
+"``SO_REUSEPORT`` nur eines davon den Port besitzen. Die Meldung „Digital "
+"Thread port ... is already in use“ in der Ausgabeansicht ``PartCAD`` "
 "sagt, welcher Fall vorliegt."
 
 #: ../../source/troubleshooting.rst:283

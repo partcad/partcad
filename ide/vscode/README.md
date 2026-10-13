@@ -16,9 +16,9 @@ Also, make sure to visit [our website](https://partcad.org/) and browse [the rep
 
 ![Screenshot 2](https://github.com/partcad/partcad/blob/main/docs/source/images/vscode2.png?raw=true)
 
-## PartCAD Viewer
+## Digital Thread
 
-Selecting a part, assembly, scene, sketch or interface opens it in the **PartCAD Viewer** tab. PartCAD
+Selecting a part, assembly, scene, sketch or interface opens it in the **Digital Thread** tab. PartCAD
 tessellates the shape in a sandboxed runtime and sends the result to this extension as compressed glTF over a
 socket on `127.0.0.1:9137`, so the viewer needs no CAD library of its own. The Python side of that connection
 is the `partcad_ide_client` package, which ships inside `partcad` itself.
@@ -123,7 +123,7 @@ If you select a file that does not exist
 then you will be prompted for the template to use.
 
 When you edit scripts that are registered in the current PartCAD package,
-saving the file makes it displayed in the PartCAD Viewer view.
+saving the file makes it displayed in the Digital Thread view.
 
 ## Creating assemblies
 
@@ -140,7 +140,7 @@ and let VS Code use the first suggested code completion suggestion.
 This will add the selected part or assembly to the currently edited assembly.
 
 When you edit ASSY files that are registered in the current PartCAD package,
-saving the file makes it displayed in the PartCAD Viewer view.
+saving the file makes it displayed in the Digital Thread view.
 
 ### Checking assemblies while you edit
 

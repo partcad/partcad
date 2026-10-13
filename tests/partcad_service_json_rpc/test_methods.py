@@ -21,7 +21,7 @@ def test_registry_maps_cli_shaped_names_to_operations():
     assert registry["package.load"].__wrapped__ is operations.package_load
     assert registry["list.all"].__wrapped__ is operations.list_all
     assert registry["info"].__wrapped__ is operations.info
-    # What the PartCAD Viewer's tabs beside the 3D one are filled from. Wrapped
+    # What the Digital Thread's tabs beside the 3D one are filled from. Wrapped
     # like every other entry, so the command generation advances for them too.
     assert registry["bom"].__wrapped__ is operations.bom
     assert registry["assembly.guide"].__wrapped__ is operations.assembly_guide

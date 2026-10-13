@@ -1,4 +1,4 @@
-# PartCAD Viewer Performance Debug Feature
+# Digital Thread Performance Debug Feature
 
 **Scope:** VS Code IDE Extension (webview viewer only)
 
@@ -49,7 +49,7 @@ When `partcad.viewer.performanceDebug` is **enabled**, the **VS Code viewer** ca
 
 2. **Browser Console** (view via `Ctrl+Shift+P` → "Developer: Toggle Developer Tools" → Console tab):
    ```
-   [PartCAD Viewer] Performance Stats: {
+   [Digital Thread] Performance Stats: {
      Part: "reactor-unit",
      Type: "assembly",
      Package: "4tv",
@@ -57,7 +57,7 @@ When `partcad.viewer.performanceDebug` is **enabled**, the **VS Code viewer** ca
      Total vertices: "98000",
      Data transferred (KB): "234.5"
    }
-   [PartCAD Viewer] FPS: 60.0 (frame time: 16.67ms)
+   [Digital Thread] FPS: 60.0 (frame time: 16.67ms)
    ```
 
 3. **On-Screen Display** (top-right corner of VS Code viewer):
@@ -108,7 +108,7 @@ Added to `ide/vscode/package.json`:
 }
 ```
 
-Located in: `PartCAD Viewer` section of extension settings
+Located in: `Digital Thread` section of extension settings
 
 ### Code Changes
 
@@ -144,6 +144,6 @@ With `partcad.viewer.performanceDebug` enabled on large models in the **VS Code 
 
 ## Limitations
 
-- **Viewer-only feature:** Does not provide profiling for PartCAD CLI rendering
+- **Digital Thread only:** Does not provide profiling for PartCAD CLI rendering
 - **Browser environment only:** Requires webview (browser console access)
 - **Triangle counts on reload:** Enable the flag before loading models to see triangle counts (or reload after enabling)
