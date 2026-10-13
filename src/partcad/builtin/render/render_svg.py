@@ -57,10 +57,11 @@ DEFAULT_PRECISION = 10
 
 
 def viewport_origin(request):
-    """Where the shape is looked at from, when the request does not say.
+    """Which direction the shape is looked at from, when the request does not say.
 
-    A sketch is flat, so it is looked at head-on; anything else is looked at
-    from a corner, which is what makes a 3D shape read as 3D.
+    A direction, not a point: see 'LOOK_AT'. A sketch is flat, so it is looked
+    at head-on; anything else is looked at from a corner, which is what makes a
+    3D shape read as 3D.
     """
     origin = request.get("viewport_origin")
     if origin:
@@ -68,6 +69,33 @@ def viewport_origin(request):
     if request.get("shape_kind") == "sketch":
         return (0, 0, 100)
     return (100, -100, 100)
+
+
+# The point every projection looks towards: the camera is put at
+# 'viewport_origin' and looks at this.
+#
+# 'viewport_origin' is documented, and named by 'pc render --view', as the
+# direction a shape is looked at from - '[0, -100, 0]' is the front of any
+# shape, wherever it sits. The projection is told a camera position and a point
+# to look at, and looks along the line between the two; looking at the origin of
+# the coordinate system from 'viewport_origin' is looking along exactly that
+# direction. The projection is orthographic, so which point the line of sight
+# passes through moves the picture across the page and changes nothing in it.
+#
+# This used to be the centre of the shape, with 'viewport_origin' taken as a
+# point: the line of sight then ran from a point 100 mm from the origin to the
+# centre of the shape, and only a shape centred on the origin was drawn from the
+# direction asked for. A post with one corner on the origin came out of '--view
+# front' as an oblique view of three of its faces, and out of '--view back' as a
+# view of its front.
+#
+# The origin, and not the centre of the shape with the camera moved out from it
+# by 'viewport_origin', which draws the same picture: the centre is a centre of
+# mass, a numerical integral over the shape that two machines can disagree about
+# in the last bits, and every coordinate of the drawing is measured from the
+# point looked at. A drawing asked for 'reproducible' should not depend on it,
+# and now nothing does - nor does any drawing pay for working it out.
+LOOK_AT = (0.0, 0.0, 0.0)
 
 
 def viewport_up(request):
@@ -660,13 +688,13 @@ def process(path, request):
         b3d_obj = b3d.Solid.make_box(1, 1, 1)
         b3d_obj.wrapped = wrapped
 
-        origin = viewport_origin(request)
+        # The camera, from here on, for everything projected: the shape, the
+        # annotations and the overlays all have to be seen from the one place,
+        # or what is drawn on top lands somewhere else on the page. See
+        # 'LOOK_AT' for why it is the direction asked for, as a position.
+        origin = tuple(float(component) for component in viewport_origin(request))
         up = viewport_up(request)
-        # What 'project_to_viewport' would pick for itself, made explicit. It is
-        # part of the projection - the viewing direction runs from the origin to
-        # it - so anything projected separately and drawn on top has to be given
-        # the same one or it lands somewhere else on the page.
-        look_at = b3d_obj.center().to_tuple()
+        look_at = LOOK_AT
         # Whether this drawing has to come out the same every time it is drawn.
         # Always present in the request - PartCAD puts it there whether or not
         # the file type declared it - but defaulted here all the same, because

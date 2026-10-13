@@ -806,9 +806,10 @@ Object commands
 
   ``--view`` picks the direction the object is looked at from for this one run: ``front``, ``back``, ``left``,
   ``right``, ``top``, ``bottom`` or ``iso``. Each name is shorthand for a pair of vectors, which
-  ``--viewport-origin`` and ``--viewport-up`` give as ``X,Y,Z`` instead: the first is where the camera is, the
-  second is which way is up in the resulting picture. Either one replaces the vector the name resolved to, so
-  ``--view top --viewport-up 0,1,0.5`` tilts the top view without spelling the rest of it out:
+  ``--viewport-origin`` and ``--viewport-up`` give as ``X,Y,Z`` instead: the first is the direction the object is
+  looked at from (``0,-100,0`` is the front of any object, wherever it sits), the second is which way is up in the
+  resulting picture. Either one replaces the vector the name resolved to, so ``--view top --viewport-up 0,1,0.5``
+  tilts the top view without spelling the rest of it out:
 
   .. code-block:: shell
 
