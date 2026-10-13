@@ -58,10 +58,14 @@ jobs:
 
     # Two releases going out close together publish in order rather than
     # interleaved, and a publish is never cancelled halfway through, between the
-    # extension and the shim.
+    # extension and the shim. `queue: max` is the other half: by default a group
+    # holds one pending job, and a third release arriving would cancel the
+    # second's -- leaving a release on GitHub that never reached the
+    # marketplace. With it, pending publishes wait their turn in order.
     concurrency:
       group: publish-vscode-marketplace
       cancel-in-progress: false
+      queue: max
 
     env:
       PUBLISH: ${{ inputs.publish && 'true' || 'false' }}
