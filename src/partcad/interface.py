@@ -795,6 +795,16 @@ class Interface:
         return value
 
     def instantiate(self):
+        """Build what this interface (or part, sketch or assembly) has from its declaration.
+
+        Its own ports first, then every interface it takes in - those an
+        assembly's 'map:' externalizes, then the ones its 'inherits:' (or
+        'implements:', per 'config_section') names, or its 'alias:' - each
+        adopted with its ports, its instances and its freedom of movement
+        ('adopt_inherit'); then its matings. Run lazily, the first time
+        anything asks for what it builds ('get_ports()', 'get_parents()',
+        'compatible_with'), and again after 'WithPorts.set_mapped' clears it.
+        """
         self.project.ctx.stats_interfaces_instantiated += 1
         self.inherits = {}
         if self.ports is None:

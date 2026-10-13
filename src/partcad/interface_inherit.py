@@ -42,6 +42,16 @@ class InterfaceInherits:
         section: str = "inherits",
         owner: str = None,
     ):
+        """Resolve the interface 'name' and read its instances from 'config'.
+
+        'config' is what the declaration says under that name: nothing, an
+        instance name, a location, or the instances by name. 'ports' are the
+        ports of the object doing the inheriting, for an instance placed at one.
+        'section' is the section 'config' was read from - 'inherits' for an
+        interface, 'implements' for a part, a sketch or an assembly - which
+        decides whether an instance may restate its boundary ('sketch:'), and
+        'owner' is that object's name, for the error saying it may not.
+        """
         self.instances = {}
         self.sketches = {}
         # The ports of the object doing the inheriting, where it has any yet.

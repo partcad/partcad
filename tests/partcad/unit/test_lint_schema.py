@@ -372,6 +372,7 @@ INSTANCES = {
     ],
 )
 def test_schema_an_interface_instance_takes_every_form_the_loader_reads(section, instances):
+    """Each form 'InterfaceInherits' normalizes, in either section."""
     validate(INSTANCES[section](instances))
 
 
