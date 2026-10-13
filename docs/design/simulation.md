@@ -374,7 +374,7 @@ This is SDFormat's `<world>`; a scene is where each of these belongs.
 Which nodes of a tree become separate rigid bodies is the decision everything else in a simulation rests on. Until
 step 9 the scene exporters decided it with a switch (`flatten: true` makes every node with geometry its own free
 body), which is why a stack of blocks can fall over and also why every real product falls apart in simulation.
-**Built** (step 9, this pull request): it follows what PartCAD already says the two kinds of object mean (`scene.py`): an assembly
+**Built** (step 9, #784): it follows what PartCAD already says the two kinds of object mean (`scene.py`): an assembly
 is a product that was put together, and a scene only states where things are. The exporters writing it is steps
 10-12; until then they keep their switches.
 
@@ -405,7 +405,7 @@ Consequences that came with building it:
 - The exporters' `flatten`/`static` switches go away: the tree says what is attached, and a scene element's `fixed`
   says what is welded to the world (steps 10-12).
 
-### 7a How step 9 resolved the open details (built, this pull request)
+### 7a How step 9 resolved the open details (built, #784)
 
 Building the rule settled what the text above left open:
 
@@ -986,7 +986,7 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 7f | Skills prepare generated objects for simulation | built (#759) |
 | 7g | The user documentation refactored to how to use it; this record for the design | built (#758, #764) |
 | 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and the `connect` check | built (#766) |
-| 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes; `wrappers/kinematics.py` | built (this pull request) |
+| 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes; `wrappers/kinematics.py` | built (#784) |
 | 10 | **MJCF joints**, with a pendulum example checked against its closed form | decided |
 | 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics | decided |
 | 12 | **SDFormat joints** | decided |
