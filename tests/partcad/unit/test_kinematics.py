@@ -985,6 +985,17 @@ def test_the_root_of_a_scene_file_has_nothing_to_be_fixed_to(tmp_path, stand_in_
     assert any("has nothing to be 'fixed' to" in record.getMessage() for record in caplog.records)
 
 
+def test_a_scene_file_that_is_one_part_is_not_fixed_by_its_root_either(tmp_path, stand_in_geometry, caplog):
+    """A file that is one node and no 'links:' is still the whole scene, and its root says nothing of the world."""
+    ctx = _context(tmp_path, {"room.assy": "part: lid\nfixed: true\n"}, PARTS_AND_SCENES)
+    with caplog.at_level(logging.ERROR):
+        tree = _tree(ctx, ":room", "scene")
+    (lid,) = tree[shape_envelope.KEY_ASSEMBLY]
+    assert shape_envelope.KEY_FIXED not in lid
+    assert any("has nothing to be 'fixed' to" in record.getMessage() for record in caplog.records)
+    assert [body.parent for body in kinematics.bodies(tree)] == [None]
+
+
 def test_a_scene_link_is_keyed_and_staged_like_an_assembly_link(tmp_path):
     room = """
     links:

@@ -307,6 +307,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             # holding "logo:links" holding everything - which is a level nobody
             # declared, nobody can name in a 'connect:', and every reader of the
             # tree had to know to ignore.
+            assy = self.without_root_fixed(assy)
             if "links" in assy and assy["links"] is not None:
                 await self.handle_node_list(assembly, assy["links"])
                 self.apply_root_placement(assembly, assy)
@@ -364,6 +365,24 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         pc_logging.error("%s: %s: %s" % (self.name, child.name, problem))
         child.joint_problems.append(problem)
 
+    def without_root_fixed(self, node):
+        """The file's root node with any 'fixed:' reported and taken off it.
+
+        Whether a scene is welded to the world is said by the link that places
+        it, in the scene it is placed in: the same scene may stand bolted down
+        in one world and loose in another. The root node is the whole of the
+        file, so it has nothing to be fixed to - and that holds for a file whose
+        root is one part as much as for one that lists 'links:', which is why
+        both are handed the node this returns rather than the one that was read.
+        """
+        if not isinstance(node, dict) or node.get("fixed") is None:
+            return node
+        pc_logging.error(
+            "%s: the root node of an ASSY file is the whole of it, and has nothing to be 'fixed' to; "
+            "say 'fixed: true' on the link that places it, or on the links inside it; ignoring it" % self.name
+        )
+        return {key: value for key, value in node.items() if key != "fixed"}
+
     def apply_root_placement(self, assembly, node) -> None:
         """Move what the file holds by where its root node says it is.
 
@@ -387,14 +406,6 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 pc_logging.error(
                     "%s: the root node of an ASSY file has nothing to '%s' to; ignoring it" % (self.name, section)
                 )
-        if node.get("fixed") is not None:
-            # Whether a scene is welded to the world is said by the link that
-            # places it, in the scene it is placed in: the same scene may stand
-            # bolted down in one world and loose in another.
-            pc_logging.error(
-                "%s: the root node of an ASSY file is the whole of it, and has nothing to be 'fixed' to; "
-                "say 'fixed: true' on the link that places it, or on the links inside it; ignoring it" % self.name
-            )
         location = node.get("location")
         if location is None:
             return
