@@ -771,9 +771,15 @@ jobs:
             status=0
             # TODO: Use similar 'coverage run' in behave steps when calling pc
             # '--fast-only' as in test.yml's "Examples (PartCAD)": see the comment there.
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r --fast-only //pub/examples)" || status=$?
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r --fast-only --package //pub/examples)" || status=$?
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r --fast-only --package //pub/examples)" || status=$?
+            # The packages are the ones test.yml's "Examples (All)" walks, read
+            # from the same list; '--append', so that every run's coverage is
+            # kept rather than only the last one's.
+            pc="$(poetry run which pc)"
+            for package in $(grep -v -e '^#' -e '^$' dev-tools/ci/examples-packages.txt); do
+              poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run --append ${pc} --no-ansi list all -r --fast-only ${package})" || status=$?
+              poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run --append ${pc} --no-ansi test -r --fast-only --package ${package})" || status=$?
+              poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run --append ${pc} --no-ansi render -r --fast-only --package ${package})" || status=$?
+            done
             poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o pc-test-results/coverage.xml || true
             exit $status
 

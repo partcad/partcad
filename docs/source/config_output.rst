@@ -310,6 +310,15 @@ implementation reuse another:
 no built-in package implements may be declared this way too, and is then
 nameable with ``pc export -t`` / ``pc render -t`` like any other.
 
+What an implementation produces is cached where PartCAD caches it -- an analysis,
+a route, a simulation -- under a key that includes the version its script
+reports: a module-level ``CACHE_VERSION = <int>``, read without running the
+script. Raise it whenever a change to the script changes what it produces, and
+every result it produced before is produced again. Every implementation and
+wrapper PartCAD ships states one. (Those results are keyed on the Python sources
+of the package the implementation comes from as well -- see :ref:`caching` -- so
+for them an edit already runs everything again on its own.)
+
 See ``examples/feature_export_custom`` for both halves of this.
 
 Using another package's implementation

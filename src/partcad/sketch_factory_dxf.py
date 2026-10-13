@@ -18,6 +18,8 @@ from .sketch_factory_python import SketchFactoryPython
 
 @telemetry.instrument()
 class SketchFactoryDxf(SketchFactoryPython):
+    WRAPPERS = ("import_dxf.py",)
+
     tolerance = 0.000001
     include = []
     exclude = []

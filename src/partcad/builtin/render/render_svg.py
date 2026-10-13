@@ -28,6 +28,11 @@ import ocp_serialize
 import stroke_text
 import wrapper_common
 
+# What this implementation reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
+
 # Two points closer than this are the same point, as far as a drawn line goes.
 TOLERANCE = 1e-9
 

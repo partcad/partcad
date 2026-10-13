@@ -23,7 +23,8 @@ job and machine, the implementation's resolved options, the sandbox it runs in,
 the *content* of its script and of the PartCAD wrapper that runs it, and every
 Python module either can import from where it lives -- the implementing
 package's sources (with the commit it is at, when it was fetched), and PartCAD's
-own wrappers (see 'partcad.source_key'). A
+own wrappers (see 'partcad.source_key') -- and the version the script and the
+wrapper report, the 'CACHE_VERSION' each states (see 'code_version'). A
 subject with no key ('cache: false', or made of something that says so) has no
 question to key on, and its runs are never cached.
 
@@ -54,6 +55,7 @@ import os
 import tarfile
 from typing import Optional
 
+from . import code_version
 from . import logging as pc_logging
 from .cache_backend import ARTIFACT_KEY
 from .cache_hash import CacheHash
@@ -98,8 +100,9 @@ def question_hash(name: str, subject_key: Optional[str], question: dict, files=(
     'subject_key' is the cache key of the shape the run is about, 'question'
     everything the run adds to it, and 'files' the scripts that do the work -
     hashed by content, so a solver script that changed is a question asked
-    again. None when the subject has no key, which is what makes `cache: false`
-    on an object mean what it says for everything derived from it.
+    again, and keyed on the version each reports ('code_version'). None when
+    the subject has no key, which is what makes `cache: false` on an object mean
+    what it says for everything derived from it.
     """
     if not subject_key:
         return None
@@ -109,6 +112,9 @@ def question_hash(name: str, subject_key: Optional[str], question: dict, files=(
     hash.add_dict(question)
     for filename in files:
         hash.add_filename(filename)
+    versions = code_version.scripts_key(files)
+    if versions is not None:
+        hash.add_string("code:" + versions)
     return hash
 
 

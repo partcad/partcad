@@ -304,10 +304,10 @@ env:
   # leg provisions a conda sandbox and renders every package.
   EXAMPLES_CORE: >-
     [{"os": "ubuntu-24.04", "platform": "ubuntu-24.04-x86_64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true},
-    {"os": "ubuntu-24.04", "platform": "ubuntu-24.04-x86_64", "suite": "All", "package": "//pub/examples", "render": false},
+    {"os": "ubuntu-24.04", "platform": "ubuntu-24.04-x86_64", "suite": "All", "package": "", "render": false},
     {"os": "ubuntu-24.04-arm", "platform": "ubuntu-24.04-arm64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true},
     {"os": "macos-15", "platform": "macos-15-arm64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true},
-    {"os": "macos-15", "platform": "macos-15-arm64", "suite": "All", "package": "//pub/examples", "render": false}]
+    {"os": "macos-15", "platform": "macos-15-arm64", "suite": "All", "package": "", "render": false}]
   # macOS x86_64, whose bundle only a deep run has -- asking for it on a reduced
   # run would be asking to download an artifact nothing built. This is the only
   # place PartCAD runs a CAD sandbox on an Intel Mac at all, which is why it is
@@ -1119,9 +1119,17 @@ jobs:
         shell: bash -el {0}
         run: |
           # '--fast-only' as in test.yml's "Examples (PartCAD)": see the comment there.
-          cd examples
-          pc --no-ansi list all -r --fast-only ${{ matrix.package }}
-          pc --no-ansi --threads-max 4 test -r --fast-only --package ${{ matrix.package }}
-          if [ "${{ matrix.render }}" = "true" ]; then
-            pc --no-ansi --threads-max 4 render -r --fast-only --package ${{ matrix.package }}
+          # An empty 'package' is the "All" suite, which walks the packages
+          # test.yml's "Examples (All)" walks, from the same list.
+          packages="${{ matrix.package }}"
+          if [ -z "${packages}" ]; then
+            packages="$(grep -v -e '^#' -e '^$' dev-tools/ci/examples-packages.txt)"
           fi
+          cd examples
+          for package in ${packages}; do
+            pc --no-ansi list all -r --fast-only "${package}"
+            pc --no-ansi --threads-max 4 test -r --fast-only --package "${package}"
+            if [ "${{ matrix.render }}" = "true" ]; then
+              pc --no-ansi --threads-max 4 render -r --fast-only --package "${package}"
+            fi
+          done

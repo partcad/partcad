@@ -1,0 +1,13 @@
+# The example packages CI walks from ./examples, one per line, each recursively.
+#
+# Read by "Examples (All)" in test.yml, by the dev container's "pc" job in
+# test-dev.yml and by the "All" suite of "Examples via bundle" in
+# build-standalone.yml, so the three cannot come to walk different things.
+#
+# Not the whole of '//pub/examples', which also carries packages that live in
+# other repositories and are theirs to test: the examples that come with PartCAD
+# itself, and the build123d and CadQuery script examples. "Repo //pub" in
+# test.yml samples the rest of the public index by name.
+//pub/examples/partcad
+//pub/examples/script/build123d
+//pub/examples/script/cadquery

@@ -8,6 +8,8 @@ from .process_crash import command_failure
 
 
 class PartFactoryObj(PartFactoryFile):
+    WRAPPERS = ("obj.py",)
+
     PYTHON_SANDBOX_VERSION = "3.10"
 
     def __init__(self, ctx, source_project, target_project, config):

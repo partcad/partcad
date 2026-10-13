@@ -26,6 +26,11 @@ import { pathToFileURL } from "node:url";
 import { loadChili3d } from "./chili3d_kernel.mjs";
 import { combine, handleException, handleInput, handleOutput, prepareScript } from "./chili3d_common.mjs";
 
+// What this wrapper reports for what it produces (see 'partcad.code_version'):
+// raise it with any change that changes that, and everything it produced
+// before is produced again.
+export const CACHE_VERSION = 1;
+
 // Identifiers a script can define its result under when it does not call
 // show(), in the order they are looked at.
 const RESULT_EXPORTS = ["default", "shape", "result", "part"];

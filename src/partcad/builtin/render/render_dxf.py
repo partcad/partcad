@@ -21,6 +21,11 @@ sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 import render_svg
 
+# What this implementation reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
+
 # How many straight segments a curve is approximated with. DXF R2010 has no
 # general Bezier entity, so curves are flattened.
 CURVE_SEGMENTS = 20

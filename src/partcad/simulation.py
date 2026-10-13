@@ -633,7 +633,8 @@ async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str,
     sandbox, what the declaration hands it, how the scene is written for it,
     and the content of both scripts and of the wrappers that run them -- and of
     every module those can import from their packages ('source_key'), since a
-    plugin release that changes only 'mujoco_common.py' changes the answer.
+    plugin release that changes only 'mujoco_common.py' changes the answer --
+    and the version each of those scripts reports ('code_version').
 
     And the scene's world as the facts it resolved to ('world'), not as the
     declaration that names them. The scene's key covers its 'medium:' only as

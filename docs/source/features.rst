@@ -853,11 +853,12 @@ the boundary conditions and where they landed, a route's job and the machine it
 is cut on, the implementation and every option it resolved to, the sandbox it
 runs in, the content of its script, and every Python module of the package it
 comes from -- the helper a plugin's scripts share as much as the scripts -- with
-the commit that package is at when it was fetched from a repository. Changing
-any of those runs it again, so a plugin release that changed only a helper is
-seen. What a run writes into a package, a model or a picture, is not part of the
-question, and neither is where the package is on disk or when its files were
-last touched. A simulation's ``validation:`` is not part
+the commit that package is at when it was fetched from a repository, and the
+version its script and the wrapper that runs it report (the ``CACHE_VERSION``
+each states). Changing any of those runs it again, so a plugin release that
+changed only a helper is seen. What a run writes into a package, a model or a
+picture, is not part of the question, and neither is where the package is on
+disk or when its files were last touched. A simulation's ``validation:`` is not part
 of the question: it is evaluated again on every run, so editing it re-judges the
 cached run rather than repeating it. What a simulation's question is made of,
 and how ``pc test``'s verdict on one is kept, are in :ref:`sim-caching`.

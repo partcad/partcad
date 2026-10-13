@@ -22,6 +22,8 @@ from .sketch import Sketch
 # exists for.
 @telemetry.instrument()
 class PartFactoryExtrude(PartFactoryHomogen):
+    WRAPPERS = ("extrude.py",)
+
     PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
 
     depth: float

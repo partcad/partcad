@@ -17,6 +17,11 @@ import sys
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 
+# What this wrapper reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
+
 
 def process(path, request):
     try:

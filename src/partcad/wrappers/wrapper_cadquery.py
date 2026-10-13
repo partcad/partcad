@@ -19,6 +19,11 @@ import custom_cqgi
 import wrapper_common
 import py_stubs.ocp_vscode  # Make 'sys.modules["py_stub.ocp_vscode"]' available
 
+# What this wrapper reports for what it produces (see 'partcad.code_version'):
+# raise it with any change that changes that, and everything it produced
+# before is produced again.
+CACHE_VERSION = 1
+
 
 def process(path, request):
     build_parameters = {}

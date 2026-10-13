@@ -77,6 +77,29 @@ def test_the_key_follows_the_subject_the_question_and_the_scripts(tmp_path):
     assert key() != first
 
 
+def test_the_key_follows_the_version_the_scripts_report(tmp_path, monkeypatch):
+    """The 'CACHE_VERSION' a script states is in the key on its own, beside its content."""
+    from partcad import code_version
+
+    script = tmp_path / "solve.py"
+    script.write_text("CACHE_VERSION = 1\n")
+    first = cache_artifacts.question_hash("x", "s", {"load": 5}, [str(script)]).get()
+    monkeypatch.setattr(code_version, "declared", lambda path: 2)
+    assert cache_artifacts.question_hash("x", "s", {"load": 5}, [str(script)]).get() != first
+
+
+def test_a_script_that_states_no_version_keys_as_before_there_were_versions(tmp_path):
+    """Adopting 'CACHE_VERSION' costs nothing until a script first raises it."""
+    script = tmp_path / "solve.py"
+    script.write_text("v = 1\n")
+    expected = CacheHash("x", cache=True)
+    expected.add_string("artifact-v%d" % cache_artifacts.VERSION)
+    expected.add_string("s")
+    expected.add_dict({"load": 5})
+    expected.add_filename(str(script))
+    assert cache_artifacts.question_hash("x", "s", {"load": 5}, [str(script)]).get() == expected.get()
+
+
 # --------------------------------------------------------------------------- #
 # What is stored and what comes back                                          #
 # --------------------------------------------------------------------------- #

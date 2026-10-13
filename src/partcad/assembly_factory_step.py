@@ -47,6 +47,8 @@ from .part_config import PartConfiguration
 
 @telemetry.instrument()
 class AssemblyFactoryStep(AssemblyFactoryFile):
+    WRAPPERS = ("import_assy.py",)
+
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitSTEP", source_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config, extension=".step")

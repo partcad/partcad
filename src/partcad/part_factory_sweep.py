@@ -15,6 +15,8 @@ from .sketch import Sketch
 
 
 class PartFactorySweep(PartFactory):
+    WRAPPERS = ("sweep.py",)
+
     PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
 
     depth: float
