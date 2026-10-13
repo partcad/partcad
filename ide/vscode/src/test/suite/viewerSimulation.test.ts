@@ -15,7 +15,7 @@
 
 import * as assert from 'assert';
 
-import { SimulationListData, SimulationRunData } from '../../webview/messages';
+import { SimulationListData, SimulationRunData, groupOf } from '../../webview/messages';
 import { SimulationView, pluginChoices, prettyJson } from '../../webview/simulation';
 
 class FakeElement {
@@ -474,5 +474,11 @@ suite('Digital Thread Simulation tab', () => {
         assert.match(root.text(), /declares no simulations/);
         assert.strictEqual(runs.length, 1);
         assert.strictEqual(view.has('falls'), false);
+    });
+
+    test("'pc ide view --validation-simulation' opens the Validation group on Simulation", () => {
+        assert.strictEqual(groupOf('simulation'), 'validation');
+        // Process Emulation holds nothing, so nothing can ask for it.
+        assert.strictEqual(groupOf('emulation'), undefined);
     });
 });

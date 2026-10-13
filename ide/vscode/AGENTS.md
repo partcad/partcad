@@ -137,7 +137,7 @@ send (`PartcadViewer`). `src/webview/` is what runs *inside* that webview: `view
 because the show is what decides which tabs apply, and because two windows sharing the viewer port share it
 by connection. The renderer hands it to the strips as a *request* (`Tabs.request`) before they are rebuilt for
 the object: a request is opened even when the tab is `secondary`, waits through a rebuild that does not offer
-it yet (Build and Buy, until Build vs Buy has answered), and is forgotten once opened or when the next show
+it yet (Build and Buy, until Build vs Buy has answered; Simulation, until `simulate.list` has), and is forgotten once opened or when the next show
 asks for nothing. The user also withdraws it, by clicking a tab or by a change on the tab they are on that
 rebuilds the strip (`keepCurrent`, a Build vs Buy switch): what they did wins over what a command line asked for
 earlier, so a request waiting for Buy does not pull them off the tab they are working in. `TAB_GROUPS` in `src/webview/messages.ts` is the list of what can be asked for, and a Python

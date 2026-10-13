@@ -924,10 +924,12 @@ instead.
   One flag per tab of the viewer opens it on that tab, named ``--<group>-<tab>`` the way the viewer's two strips
   read: ``--design-3d``, ``--design-2d``, ``--design-draft``; ``--analysis-fea``, ``--analysis-cfd``;
   ``--manufacturing-bvb``, ``--manufacturing-build``, ``--manufacturing-buy``, ``--manufacturing-bom``,
-  ``--manufacturing-assembly``. With none, the viewer stays on whichever tab it is on. The tab travels with the
-  shape, so it is the window that draws the object that switches; a tab that does not apply to the object (FEA
-  of an assembly) is not opened, and one that is not known yet (Build, until the viewer has worked out what is
-  built) is opened as soon as it is. Opening an analysis tab runs the analysis, as clicking it does.
+  ``--manufacturing-assembly``; ``--validation-simulation``. With none, the viewer stays on whichever tab it is
+  on. The tab travels with the shape, so it is the window that draws the object that switches; a tab that does
+  not apply to the object (FEA of an assembly) is not opened, and one that is not known yet (Build, until the
+  viewer has worked out what is built; Simulation, until it has read what the object declares under
+  ``simulate:``) is opened as soon as it is. Opening an analysis tab runs the analysis, and opening Simulation
+  runs the first simulation, as clicking them does.
 
   .. code-block:: shell
 

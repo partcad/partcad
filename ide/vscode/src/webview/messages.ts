@@ -67,6 +67,9 @@ export const TAB_GROUPS: Partial<Record<TabId, TabId[]>> = {
     design: DESIGN_TABS,
     analysis: ['fea', 'cfd'],
     manufacturing: ['bvb', 'build', 'supply', 'bom', 'assembly'],
+    // Not 'emulation' (Process Emulation) yet: it holds nothing and is always
+    // disabled, so a request for it could never be met.
+    validation: ['simulation'],
 };
 
 /** The group a tab of 'TAB_GROUPS' is in, or undefined for anything else. */

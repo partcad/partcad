@@ -75,6 +75,7 @@ def shown(monkeypatch):
         ("--manufacturing-buy", "supply"),
         ("--manufacturing-bom", "bom"),
         ("--manufacturing-assembly", "assembly"),
+        ("--validation-simulation", "simulation"),
     ],
 )
 def test_a_tab_flag_asks_the_viewer_to_open_on_that_tab(click_runner, shown, flag, tab):

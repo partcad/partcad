@@ -207,11 +207,14 @@ KEY_TAB = "tab"
 # The viewer's tabs, by the group whose strip holds them, in the order they are
 # shown. 'ide/vscode/src/webview/messages.ts' ('TabId', 'TAB_GROUPS') is the
 # other copy, and 'tests/partcad_ide_client/unit/test_protocol.py' holds the two
-# to each other. 'supply' is the tab labelled "Buy".
+# to each other. 'supply' is the tab labelled "Buy". Validation's Process
+# Emulation is not here: it holds nothing yet and is always disabled, so a flag
+# for it could never open it.
 VIEWER_TABS = {
     "design": ("3d", "2d", "draft"),
     "analysis": ("fea", "cfd"),
     "manufacturing": ("bvb", "build", "supply", "bom", "assembly"),
+    "validation": ("simulation",),
 }
 
 
