@@ -145,7 +145,7 @@ The commands and options supported by PartCAD CLI:
     cam          Produce the route files of the objects that declare a 'cam:' section
 
   Interacting with IDE:
-    ide          Show an object in the PartCAD Viewer or another application, or ask the IDE
+    ide          Show an object in the Digital Thread or another application, or ask the IDE
                  what it shows (view, open, state)
 
   Workflow commands:
@@ -608,7 +608,7 @@ What is inside
 
 * The editor: `VSCodium <https://vscodium.com/>`_, the freely licensed build of the same source Visual
   Studio Code is built from, with its extensions coming from `Open VSX <https://open-vsx.org/>`_.
-* The PartCAD extension -- which carries the PartCAD Viewer itself -- and the extensions PartCAD works
+* The PartCAD extension -- which carries the Digital Thread itself -- and the extensions PartCAD works
   with: Python, YAML and the rest of the list in ``.vscode/extensions.json``.
 * The PartCAD command line tools, the same ones the standalone bundle installs, including the OpenSCAD they
   bundle -- on every platform the IDE ships for, since the one build that carries none is Linux arm64 and

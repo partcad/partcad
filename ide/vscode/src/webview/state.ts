@@ -31,7 +31,7 @@ export async function snapshot(element: HTMLElement, capture: CanvasCapture): Pr
     const width = Math.ceil(box.width);
     const height = Math.ceil(box.height);
     if (width === 0 || height === 0) {
-        throw new Error('the sub-tab on screen has no size -- the PartCAD Viewer is probably hidden');
+        throw new Error('the sub-tab on screen has no size -- the Digital Thread is probably hidden');
     }
     const clone = cloneWithStyles(element, capture);
     clone.style.margin = '0';

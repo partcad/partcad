@@ -122,7 +122,7 @@ and two more. And it could not have worked where it was shipped -- `bundled/libs
 (`pygit2`, `aiohttp` and `cffi` publish no `py3-none-any` wheel at all) while the `.vsix` is built once, on
 Linux, for one CPython. Do not reintroduce a second backend; extend this one.
 
-## The PartCAD Viewer
+## The Digital Thread
 
 End-to-end walkthrough, with the data flow diagram and what each tab is:
 [docs/partcad-viewer.md](./docs/partcad-viewer.md).
@@ -260,7 +260,7 @@ Four things about it are load-bearing:
   view's `swizzle` as a string, and Chromium 141 refuses that from every `createView`, so every frame threw),
   and one whose GPU process cannot present a WebGPU canvas, where the device is lost on the first frame. A lost
   device also rejects every error scope three left open with no `catch`, which reached `host.ts`'s trap and
-  wrote "The PartCAD Viewer hit an error" over a view that was drawing fine; `watchDevice` turns those into
+  wrote "The Digital Thread hit an error" over a view that was drawing fine; `watchDevice` turns those into
   "the device was lost". Where WebGL fails because the GPU process did, WebGPU usually fails with it -
   Chromium then offers the API and no adapter, not even the software fallback one - so the painter is what
   such a window ends up with; WebGPU is for a GPU WebGL could not use and WebGPU can.
@@ -280,10 +280,14 @@ Four things about it are load-bearing:
 
 **A SpaceMouse arrives by two roads, and `src/webview/spacemouse.ts` is the only file that knows what its axes
 mean.** On Windows and macOS the renderer reads it through the Gamepad API; on Linux the extension host reads
-spacenavd's socket (`src/viewer/spacenav.ts`) and forwards the events untouched, because Chromium does not see
-the device there. Do not convert spacenavd's values in the host: the test that holds the two roads to each other
-(`src/test/suite/viewerSpaceMouse.test.ts`) can only do so while both conversions sit side by side. See "A
-SpaceMouse" in [docs/partcad-viewer.md](./docs/partcad-viewer.md).
+spacenavd's socket (`src/viewer/spacenav.ts`) and forwards the events untouched, because spacenavd holds the
+device and Chromium sees nothing of it. Do not convert spacenavd's values in the host: the test that holds the
+two roads to each other (`src/test/suite/viewerSpaceMouse.test.ts`) can only do so while both conversions sit
+side by side. The extension host runs where the workspace is, so in this repository's dev container spacenavd
+is the host's, bound in by `.devcontainer/host-sockets-init.sh`. Every 3D pane attaches to the panel's one
+`spaceMouse` as a `Navigable` and drives it from its own render loop, and only the pane on screen moves; a new
+3D pane that does not attach is one the device does nothing in. See "A SpaceMouse" in
+[docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 Geometry reaches the viewer already tessellated: `partcad` renders to binary glTF in a sandbox and sends it
 compressed, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party
@@ -623,7 +627,7 @@ applications, each offered for the objects it can actually open:
 | FreeCAD | `partcad.openInFreeCAD` | parts and assemblies |
 | Blender | `partcad.openInBlender` | parts and assemblies |
 | Gazebo | `partcad.openInGazebo` | scenes of type `world` (`viewItem == sceneWorld`) |
-| MuJoCo | `partcad.openInMuJoCo` | scenes of type `mjcf` or `world` (`viewItem == sceneMjcf` or `sceneWorld`) |
+| MuJoCo | `partcad.openInMuJoCo` | scenes of type `mjcf` (`viewItem == sceneMjcf`) |
 | KiCad | `partcad.openInKiCad` | parts of type `kicad` (`viewItem == partKicad`) |
 
 The narrow ones are why `PartcadItem` gives those objects a context value of their own: `viewItem` is one
@@ -631,9 +635,10 @@ string compared exactly, so "a scene Gazebo can open" and "a part KiCad can open
 values. Each is then added back to every other clause that names their kind, because a world scene is a scene
 everywhere else and a KiCad part is a part.
 
-MuJoCo is offered for both scene formats and Gazebo for only one, which is not an oversight: `pc ide open`
-converts a world to MJCF on the way (a scene conversion, the counterpart of the mesh one it does for
-Blender) and nothing converts the other way yet.
+Each engine is offered for its own scene format and not the other's, which is not an oversight: `pc ide open`
+converts no scene. MJCF and SDFormat are written by the engines' plugin packages, and a file handed to
+`pc ide open` has no package around it to reach either through, so a world sent to MuJoCo is refused with
+the export that writes MJCF. Offering the entry there would offer a refusal.
 
 **It never reaches the daemon, and there is no RPC method for it** -- a stronger version of the rule
 `pc lint --file` follows. A daemon can be remote: "open this in FreeCAD" sent to one would put a window on
@@ -677,7 +682,7 @@ say what it is allowed to do. Adding a second application is a command, a menu e
 the `state` message and asks a provider wired in `extension.ts`, which collects three entries: the
 Explorer's selection straight off the `TreeView`, the Inspector's object (`PartcadInspector.state`, which asks
 its webview what each field holds *now* and falls back to the applied values when the view cannot answer), and
-the Viewer's (`PartcadViewer.state`, which asks its webview). The webview's half is `src/webview/state.ts`
+the Digital Thread's (`PartcadViewer.state`, which asks its webview). The webview's half is `src/webview/state.ts`
 plus `collectState`/`answerState` in `viewer.ts`: the tab and sub-tab on screen, what every strip offers, each
 sub-tab's `pc render --filter` and selections (its tree's rows from `Tree.rows()`, the 2D overlays, and every
 control in its pane from `controlValues`), and a screenshot. The screenshot is the pane's DOM drawn through an
@@ -835,7 +840,7 @@ in the marketplace or the editor carries an installation across.
 The `name` is the other half, and it is `partcad-official` rather than `partcad` because the marketplace does
 not let two publishers share an extension name: `partcad` belongs to the old entry, which `ide/vscode-shim`
 still publishes to, so this one cannot also be called that. `displayName` is unaffected -- the extension is
-"PartCAD" in the Extensions view either way, which is what a user searches for. Do not try `partcad_official`:
+"PartCAD: Digital Thread" in the Extensions view, which a user searching for "PartCAD" finds. Do not try `partcad_official`:
 `vsce` validates both `name` and `publisher` against `/^[a-z0-9][a-z0-9\-]*$/i` and rejects an underscore.
 
 Three things follow, and all are already done:

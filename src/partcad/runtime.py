@@ -90,8 +90,8 @@ class SandboxUnavailable(Exception):
     skip. One that declares neither said it runs in an ordinary sandbox, and a
     machine with a working sandbox is a machine it was supposed to work on, so
     the verdict is a failure. What the type buys either way is the message:
-    `CaeTest` reads it to add both remedies, which no other failure gets. See
-    `partcad.test.cae.CaeTest._verdict()`.
+    `CaeTest` and `SimTest` read it to add both remedies, which no other
+    failure gets. See `partcad.test.implementation.ImplementationTest._verdict()`.
     """
 
 

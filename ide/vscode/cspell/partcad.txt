@@ -54,6 +54,7 @@ currency
 cut
 cuts
 cwd
+cylindrical
 damper
 damping
 decode
@@ -70,6 +71,7 @@ display
 distance
 docker
 docs
+dof
 drill
 dropped
 duplicates
@@ -148,6 +150,7 @@ inner
 instance
 instructions
 int
+interface
 interfaces
 interference
 interferes
@@ -186,6 +189,7 @@ material
 materials
 mates
 max
+medium
 mesh
 metal
 method
@@ -200,6 +204,7 @@ mu
 multi
 multiplier
 name
+node
 noun
 obj
 object
@@ -325,6 +330,7 @@ torque
 turn
 type
 types
+universal
 unless
 upper
 urdf
@@ -336,6 +342,7 @@ velocity
 vendor
 version
 via
+viscosity
 visibility
 volume
 width

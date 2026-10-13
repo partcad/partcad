@@ -24,9 +24,11 @@ from . import cam as pc_cam
 from . import code_version
 from . import logging as pc_logging
 from . import material as pc_material
-from . import output, render_overlay
+from . import output
+from . import physics as pc_physics
+from . import render_overlay
 from . import runtime as pc_runtime
-from . import sandbox_versions, shape_ports, wrapper
+from . import sandbox_versions, scene_world, shape_ports, source_key, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import ShapeConfiguration
@@ -192,6 +194,16 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         # Outputs, not inputs. A part that gains a material has not become a
         # different shape (see test_shape_properties.py).
         "properties",
+        # What the object is supposed to do once it is placed in a world, not
+        # what it is. A simulation's own answer is cached under a key of its
+        # own that covers what decides it -- the scene, the plugin, its
+        # options, its 'params' -- and deliberately not the 'validation:', so
+        # that editing the claim re-judges the run rather than repeating it
+        # (see 'simulation.run_async'). Hashed here, every such edit rebuilt the
+        # object, moved the key of the scene it is placed in and ran the
+        # simulator again: the opposite of what that leaves out, and the one
+        # edit somebody writing the claim first makes over and over.
+        "simulate",
         "sku",
         "summary",
         "supplier",
@@ -839,7 +851,7 @@ class Shape(ShapeConfiguration):
         """The material this shape is made of, or None if it names none.
 
         Resolved against the package that owns *this shape*, exactly as
-        'material.physics_by_shape()' resolves it on the far side of an export:
+        'physics.physics_by_shape()' resolves it on the far side of an export:
         ':aluminium' means "in my own package", and whose package that is is a
         fact about the shape that wrote the reference rather than about the
         string. Two packages may each catalogue an 'aluminium' of their own and
@@ -856,6 +868,17 @@ class Shape(ShapeConfiguration):
         package, name = resolve_resource_path(self.project_name, reference)
         _project, found = pc_material.lookup(ctx, "%s:%s" % (package, name), quiet=quiet)
         return found
+
+    def world_facts(self, ctx) -> Optional[dict]:
+        """What this shape says about the world it is, or None: nothing, unless it is a scene.
+
+        A part or an assembly is a thing placed *in* a world and has no gravity
+        or medium of its own to state; 'Scene' overrides this. Asked of every
+        shape rather than only of scenes so that '_output_request()' below has
+        one question to ask and no kind to test for -- a filtered view of a
+        scene is a scene too, and answers the same.
+        """
+        return None
 
     async def get_cached_properties_async(self, ctx):
         """What the cache recorded beside this shape's geometry, or None.
@@ -1208,6 +1231,15 @@ class Shape(ShapeConfiguration):
                 else {"Name": material_reference, "Errors": ["The material is not found"]}
             )
 
+        # What it weighs, where it balances and how it turns, each value with
+        # where it came from - stated, lent by the material, or derived from the
+        # solid at its density. The same values an export of it is handed, by
+        # the same function, so that what 'pc info' says a part weighs is what a
+        # simulation of it weighs. See 'partcad.physics'.
+        mass_properties = asyncio.run(pc_physics.mass_properties_async(ctx, self))
+        if mass_properties:
+            info["MassProperties"] = mass_properties
+
         info["Hash"] = self.hash.get()
         if self.environment_cache_key is not None:
             # Part of that hash, and the part of it a user is most likely to be
@@ -1457,18 +1489,32 @@ class Shape(ShapeConfiguration):
         # that arrives there - see wrappers/wrapper_export.py. Nothing has to be
         # collected here, and nothing has to be instantiated to collect it.
         #
-        # A material is the exception, and only because it is a *name*: what a
-        # shape carries is ':aluminium', and turning that into a coefficient of
-        # friction means resolving it against the package that wrote it and
-        # loading the package that catalogues it - neither of which the sandbox
-        # can do. So the names are resolved here and the facts travel beside the
-        # shapes, keyed by the shape that inherits them; the wrapper merges them
-        # under what each shape said about itself. See
-        # 'partcad.material.physics_by_shape()'.
+        # What each shape's physics *resolves* to is the exception, because
+        # resolving it needs what only the core has: a material is a *name*,
+        # ':aluminium', and turning it into a density means loading the package
+        # that catalogues it; and a mass is that density times the solid, which
+        # is the one rule every exporter has to apply the same way. So it is
+        # worked out here, once, for every shape in the tree, and travels beside
+        # the shapes keyed by the shape it belongs to - stated values, what the
+        # material lends, and the mass, centre of mass and inertia derived from
+        # them, at the export's own 'density' for a part made of nothing that
+        # states one. The wrapper merges it under what each shape said about
+        # itself, and the exporter writes what it is handed. See
+        # 'partcad.physics.physics_by_shape()'.
         if request.get(output.PROPERTIES_KEY):
-            facts = pc_material.physics_by_shape(ctx, request)
+            facts = await pc_physics.physics_by_shape_async(ctx, request, pc_physics.export_fallback(request))
             if facts:
-                request[pc_material.FACTS_KEY] = facts
+                request[pc_physics.FACTS_KEY] = facts
+            # The scene's own physics, beside its shapes': the gravity it states
+            # and the fluid it is filled with, the latter resolved here for the
+            # reason a shape's material is. See 'output.WORLD_KEY' for why only a
+            # file type that asked for 'properties' is handed it. A medium that
+            # resolves to nothing raises rather than being left out: a model
+            # written in a vacuum for a scene that said it was under water is a
+            # wrong answer, not a less detailed one.
+            world = self.world_facts(ctx)
+            if world:
+                request[output.WORLD_KEY] = world
         return request
 
     async def _overlay_ports_async(self, ctx, overlay, cache):
@@ -1734,7 +1780,18 @@ class Shape(ShapeConfiguration):
                 subject_ports if subject is not self else (ports_cache if ports_cache is not None else {}),
             )
 
-        request = await subject._output_request(ctx, obj, impl, kwargs, overlay=effective_overlay, ports=ports)
+        try:
+            request = await subject._output_request(ctx, obj, impl, kwargs, overlay=effective_overlay, ports=ports)
+        except scene_world.WorldError as e:
+            # What a scene states about its world, stated wrongly: a gravity that
+            # is not a vector, a medium nothing answers to. The declaration's
+            # mistake rather than the implementation's, reported the way a bad
+            # filter is above and with nothing written. Raised again, unlike the
+            # filter: a caller that converts a scene in place reads back the file
+            # it asked for, and one a previous run left there must not pass for
+            # this run's.
+            self.error("%s: %s" % (format_name, e))
+            raise
         result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
         if result is None:
             return
@@ -2426,8 +2483,11 @@ class Shape(ShapeConfiguration):
         conditions as the user wrote them and where they landed, a route's job
         and the machine it is for, every resolved option, the shape's material
         facts), which implementation it is, the sandbox it runs in, and the
-        version its script and the meta-wrapper that runs it report (see
-        'code_version'). What the
+        content of its script and of the meta-wrapper that runs it -- and of
+        every module either can import from where it lives ('source_key'): a
+        solver package that keeps its mesher settings in a helper module is
+        another solver when only the helper changed -- and the version both
+        scripts report ('code_version'). What the
         request carries the geometry in is left out, because the shape's key
         already covers it and the payload is the one thing in there that is not
         a description.
@@ -2453,12 +2513,17 @@ class Shape(ShapeConfiguration):
                 "reproducible": impl.reproducible,
                 # Declared, never observed: see 'Implementation.environment_cache_key'.
                 "environment": impl.environment_cache_key(),
+                # What the script imports from its package, and the revision a
+                # fetched one is at; and the wrappers 'wrapper_export.py'
+                # imports. See 'partcad.source_key'.
+                "source": impl.source_cache_key(),
+                "wrappers": source_key.wrappers_key(),
             }
             return cache_artifacts.question_hash(
                 "%s:%s#%s" % (self.project_name, self.name, label),
                 subject_key,
                 question,
-                scripts=[script, wrapper.get("export.py")],
+                files=[script, wrapper.get("export.py")],
             )
         except Exception as e:
             pc_logging.debug("%s:%s: the %s result will not be cached: %s" % (self.project_name, self.name, label, e))

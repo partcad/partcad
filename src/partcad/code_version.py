@@ -11,9 +11,11 @@ what it used to mean: a repository plugin for the objects it serves, a wrapper
 for the shapes, analyses and verdicts it computes, an implementation of a file
 type, an analysis, a route or a simulation for what it writes. The number is
 part of the cache key of everything that code produces, so raising it is how
-its author has every result it produced before computed again - and nothing
-else is: an edit that does not change the result, a comment or a refactoring,
-costs nobody a rebuild.
+its author has every result it produced before computed again. For a shape or a
+test's verdict nothing else is: an edit that does not change the result, a
+comment or a refactoring, costs nobody a rebuild. An analysis, a route or a
+simulation is keyed on its package's sources as well ('source_key'), so there
+an edit already does, and the version says the same thing a second time.
 
 The number belongs to the code and to nobody else. A package that uses a
 plugin, or a shape that a wrapper builds, has no way of knowing that the code

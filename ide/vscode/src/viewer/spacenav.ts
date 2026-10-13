@@ -5,7 +5,7 @@
 //
 // A client of spacenavd, the daemon that owns a 3Dconnexion SpaceMouse on Linux.
 //
-// The PartCAD Viewer reads the device through the Gamepad API wherever Chromium
+// The Digital Thread reads the device through the Gamepad API wherever Chromium
 // offers it as one, which is Windows and macOS. On Linux it does not: the kernel
 // reports a SpaceMouse's axes as relative motion rather than as a joystick, and
 // spacenavd holds the device besides. So the extension host reads spacenavd and
@@ -30,9 +30,12 @@
 // do not - which is what libspnav does. Nothing else about the daemon is changed.
 //
 // It runs in the extension host, which is on the machine the workspace is on. On
-// a remote workspace that is not the machine the SpaceMouse is plugged into, and
-// there is no spacenavd to find; the Gamepad API is the road there, since the
-// webview is always drawn locally.
+// a remote workspace that is not the machine the SpaceMouse is plugged into, so
+// spacenavd's socket has to be brought to it: this repository's dev container
+// binds the host's at the first of 'socketPaths' ('.devcontainer'), and an SSH
+// host can be handed it by a RemoteForward to the second. On Windows and macOS
+// none of that matters - the Gamepad API is the road there, and the webview is
+// always drawn locally.
 //
 
 import * as net from 'net';
@@ -171,13 +174,15 @@ const RETRY_MS = 5000;
  * timer for as long as this exists - a connect to a socket file that does not
  * exist costs nothing. Whether it is connected, and which device it serves, are
  * state of their own: the renderer stops consulting the Gamepad API while it is
- * connected, and needs the device to know which button is "Fit".
+ * connected, and needs the device to know which button is "Fit". So is whether
+ * it was found at all, which is how a remote window can say why the device does
+ * nothing there.
  */
 export class SpacenavClient implements vscode.Disposable {
     private readonly eventEmitter = new vscode.EventEmitter<SpacenavEvent>();
     private readonly stateEmitter = new vscode.EventEmitter<void>();
     public readonly onEvent = this.eventEmitter.event;
-    /** 'connected' or 'device' changed. */
+    /** 'connected', 'device' or 'missing' changed. */
     public readonly onDidChangeState = this.stateEmitter.event;
 
     private socket: net.Socket | undefined;
@@ -185,13 +190,25 @@ export class SpacenavClient implements vscode.Disposable {
     private disposed = false;
     private _connected = false;
     private _device: number | undefined;
+    private _missing = false;
 
-    constructor(private readonly paths: string[] = socketPaths()) {
+    /** 'paths' are where spacenavd's socket is looked for, in order. */
+    constructor(public readonly paths: string[] = socketPaths()) {
         this.connect(0);
     }
 
     public get connected(): boolean {
         return this._connected;
+    }
+
+    /**
+     * Whether the last look found spacenavd at none of 'paths'.
+     *
+     * False until a look has been made, and again once one succeeds; the look
+     * goes on every few seconds regardless.
+     */
+    public get missing(): boolean {
+        return this._missing;
     }
 
     /**
@@ -209,6 +226,10 @@ export class SpacenavClient implements vscode.Disposable {
             return;
         }
         if (index >= this.paths.length) {
+            if (!this._missing) {
+                this._missing = true;
+                this.stateEmitter.fire();
+            }
             this.timer = setTimeout(() => this.connect(0), RETRY_MS);
             return;
         }
@@ -219,6 +240,7 @@ export class SpacenavClient implements vscode.Disposable {
         this.socket = socket;
         socket.on('connect', () => {
             opened = true;
+            this._missing = false;
             this.setState(true, undefined);
             socket.write(protocolRequest());
             negotiation = setTimeout(() => {

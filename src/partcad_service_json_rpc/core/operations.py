@@ -26,7 +26,12 @@ from packaging.specifiers import SpecifierSet
 
 from partcad_utils import conda as pc_conda
 from partcad_utils import config_report, staging
-from partcad_utils.utils import directory_size_mb, split_recursive_object, split_recursive_package
+from partcad_utils.utils import (
+    directory_size_mb,
+    split_recursive_object,
+    split_recursive_package,
+    split_resource_path,
+)
 
 from ..rpc.dispatcher import JsonRpcError
 from . import events
@@ -100,8 +105,10 @@ def _config_check_targets(ctx, params):
     package, object_name, recursive = _request(params)
     target = ctx.resolve_package_path(package)
     for name in (object_name, params.get("name")):
-        if isinstance(name, str) and ":" in name:
-            object_package = name.split(":", 1)[0]
+        # A ':' in a parameter value ('room;medium=//pub/std:air') names no
+        # package; only one before the parameters does.
+        object_package = split_resource_path(name)[0] if isinstance(name, str) else None
+        if object_package is not None:
             if object_package:
                 target = ctx.resolve_package_path(object_package)
             break
@@ -1348,12 +1355,21 @@ async def _test_package_async(pc, package, coroutine):
 
 
 async def _test_async(
-    ctx, pc, packages, filter_prefix, sketch, interface, assembly, scene, object_name, fast_only=False
+    ctx, pc, packages, filter_prefix, sketch, interface, assembly, scene, object_name, fast_only=False, named=False
 ):
+    """Run the checks over what was selected.
+
+    ``named`` is whether one object was asked about on its own -- an object
+    name and no walk below the package -- and reaches the checks as
+    ``Test.NAMED``. ``...:bolt`` names an object too, but every one of that name
+    in a tree, which is a walk and is tested as one.
+    """
     import asyncio
 
     from partcad.test.all import tests as all_tests
+    from partcad.test.test import Test
 
+    test_ctx = {Test.NAMED: True} if named else {}
     tasks = []
     tests_to_run = all_tests(pc.user_config.threads_max)
     if filter_prefix:
@@ -1417,7 +1433,7 @@ async def _test_async(
             elif fast_only and pc.fast_only.leaves_out(shape):
                 continue
             else:
-                tasks.extend([t.test_log_wrapper(tests_to_run, ctx, shape) for t in tests_to_run])
+                tasks.extend([t.test_log_wrapper(tests_to_run, ctx, shape, test_ctx) for t in tests_to_run])
 
     await asyncio.gather(*tasks)
 
@@ -1470,6 +1486,7 @@ def test_run(session, params):
                 params.get("scene"),
                 object_name,
                 bool(params.get("fast_only")),
+                named=bool(object_name) and not recursive,
             )
         )
     return None
@@ -2141,7 +2158,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.168"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.185"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -2864,8 +2881,9 @@ def manufacturing_details(session, params):
     ``{"name": "//pkg:obj", "kind": "part"|"assembly"}``, and each comes back
     with an SVG thumbnail ``width`` by ``height`` pixels (base64; see
     ``partcad.thumbnail``, which keeps it in PartCAD's cache under the shape's
-    key and the size), its size in millimetres, its volume, and its mass in
-    grams where its material says how dense it is.
+    key and the size), its size in millimetres, its volume, and - for a part
+    whose mass is known, stated or worked out from what it is made of - its
+    mass in grams.
 
     Several objects to one request, because the daemon answers one request at a
     time and a table of forty rows is forty pictures: one request per row would
@@ -2895,7 +2913,7 @@ def manufacturing_details(session, params):
             _stage_subassemblies(session, ctx, obj)
         resolved.append((name, kind, obj))
 
-    from partcad import thumbnail
+    from partcad import physics, thumbnail
     from partcad.sandbox_lock import process_slots
 
     async def details(name, kind, obj, budget):
@@ -2915,9 +2933,13 @@ def manufacturing_details(session, params):
             volume = measured.get("volume")
             if volume is not None:
                 item["volume"] = volume
-                material = obj.get_material(ctx) if hasattr(obj, "get_material") else None
-                if material is not None:
-                    item["mass"] = material.mass(abs(volume))
+            # What 'pc info' says the part weighs - stated, or its solid at the
+            # density of what it is made of - in kilograms, as PartCAD states a
+            # mass, and in grams on the wire, which is what this table has
+            # always been sent.
+            mass = await physics.part_mass_async(ctx, obj)
+            if mass is not None:
+                item["mass"] = mass * 1000.0
         except Exception as e:  # pylint: disable=broad-except
             item["error"] = str(e)
         return item

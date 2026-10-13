@@ -3,7 +3,7 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The PartCAD Viewer panel, inside the webview.
+// The Digital Thread panel, inside the webview.
 //
 // Geometry is only the first of what the panel has to say about what is on
 // screen. An assembly also has a bill of materials and a set of assembly
@@ -92,6 +92,7 @@ import {
     isRenderTab,
 } from './messages';
 import { Choice, RenderView } from './render';
+import { spaceMouse } from './spacemouse';
 import { controlValues, snapshot } from './state';
 import { SupplyView } from './supply';
 import { TabSpec, Tabs } from './tabs';
@@ -651,7 +652,7 @@ async function show(message: ShowMessage): Promise<void> {
     if (message.config) {
         (window as any).partcadConfig = message.config;
         if (message.config?.viewer?.performanceDebug) {
-            console.log('[PartCAD Viewer] Config set:', message.config);
+            console.log('[Digital Thread] Config set:', message.config);
         }
     }
 
@@ -1244,7 +1245,7 @@ async function answerState(token: number): Promise<void> {
     const reply: StateReplyMessage = { type: 'state', token, state };
     const on = (state.subTab ?? state.tab) as TabId | null | undefined;
     if (!on) {
-        reply.screenshotError = 'nothing is on screen in the PartCAD Viewer';
+        reply.screenshotError = 'nothing is on screen in the Digital Thread';
     } else {
         try {
             reply.screenshot = await snapshot(panes[on], (canvas) => {
@@ -1281,17 +1282,18 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
     } else if (message.type === 'details') {
         onDetails(message);
     } else if (message.type === 'spaceMouseState') {
-        if (scene !== undefined) {
-            scene.spaceMouse.settings = message.settings;
-            scene.spaceMouse.active = message.active;
-            scene.spaceMouse.spacenavd = message.spacenavd;
-            scene.spaceMouse.spacenavdDevice = message.spacenavdDevice;
-        }
+        // The device's, not the 3D view's: that view loads only once its surface
+        // exists, which can be after this has been said, and it is not the only
+        // view the device moves.
+        spaceMouse.settings = message.settings;
+        spaceMouse.active = message.active;
+        spaceMouse.spacenavd = message.spacenavd;
+        spaceMouse.spacenavdDevice = message.spacenavdDevice;
     } else if (message.type === 'spaceMouseEvent') {
         if (message.motion !== undefined) {
-            scene?.spaceMouse.spacenavMotion(message.motion, performance.now());
+            spaceMouse.spacenavMotion(message.motion, performance.now());
         } else if (message.button !== undefined) {
-            scene?.spaceMouse.spacenavButton(message.button, message.pressed === true);
+            spaceMouse.spacenavButton(message.button, message.pressed === true);
         }
     } else if (message.type === 'updateConfig') {
         (window as any).partcadConfig = message.config;

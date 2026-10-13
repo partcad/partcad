@@ -111,7 +111,7 @@
           {
             "id": "viewer",
             "title": "See it in 3D",
-            "description": "The PartCAD Viewer shows the shape the script produces, and reloads it when you save. Select a part in the PartCAD Explorer to display it.\n[Open the PartCAD Viewer](command:partcad.viewer)\n[What the workbench does](https://partcad.readthedocs.io/en/latest/features.html)",
+            "description": "The Digital Thread shows the shape the script produces, and reloads it when you save. Select a part in the PartCAD Explorer to display it.\n[Open the Digital Thread](command:partcad.viewer)\n[What the workbench does](https://partcad.readthedocs.io/en/latest/features.html)",
             "media": {
               "markdown": "media/viewer.md"
             },

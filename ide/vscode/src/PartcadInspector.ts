@@ -119,7 +119,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
      * Show what a software object is, and render nothing.
      *
      * Software is a file the package ships - a firmware image, a disk image, a
-     * binary - and not geometry, so there is nothing for the PartCAD Viewer to
+     * binary - and not geometry, so there is nothing for the Digital Thread to
      * draw and it is deliberately left alone: whatever shape it is showing stays
      * on screen. That is why this does not go through 'inspect()', which exists
      * to ask PartCAD for a render.
@@ -136,7 +136,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
     }
 
     /**
-     * Render an item and show it in the PartCAD Viewer.
+     * Render an item and show it in the Digital Thread.
      *
      * PartCAD renders the item in its own process and pushes the result to the
      * viewer over the PartCAD IDE socket; the viewer tab opens itself when that

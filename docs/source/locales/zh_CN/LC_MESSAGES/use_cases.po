@@ -98,12 +98,12 @@ msgstr "命令行工具是浏览零件的最简便方式："
 
 #: ../../source/use_cases.rst:83
 msgid ""
-"The last command displays the chosen part in ``PartCAD Viewer`` view in "
+"The last command displays the chosen part in ``Digital Thread`` view in "
 "Visual Studio Code. There is currently no support for ``cq-server``. "
 "Please, let `support@partcad.org <mailto:support@partcad.org>`_ know if "
 "there is any other tool we should support."
 msgstr ""
-"最后一条命令会在 Visual Studio Code 的 ``PartCAD Viewer`` 视图中显示所选的零件。目前尚不支持 ``cq-"
+"最后一条命令会在 Visual Studio Code 的 ``Digital Thread`` 视图中显示所选的零件。目前尚不支持 ``cq-"
 "server`` 。如果还有其他我们应当支持的工具，请告知 `support@partcad.org "
 "<mailto:support@partcad.org>`_ 。"
 

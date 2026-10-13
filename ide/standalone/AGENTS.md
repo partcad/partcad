@@ -30,7 +30,7 @@ reports what it skipped without them. Output lands in `dist/ide/`.
 The build writes `resources/app/out/partcad-main.js` and points `package.json`'s `main` at it. All it does is
 `app.commandLine.appendSwitch('enable-unsafe-swiftshader')` and then `await import('./main.js')`.
 
-The PartCAD Viewer renders with WebGL, and since Chromium M136 a machine whose GPU process fails to start gets
+The Digital Thread renders with WebGL, and since Chromium M136 a machine whose GPU process fails to start gets
 no WebGL at all rather than a software one -- `code --status` says `webgl: disabled_off`. That is not exotic: a
 confined package that cannot see the driver, an NVIDIA setup, a VM, a remote display. The IDE is the download
 for people who have no editor set up, so "the 3D view is blank and the fix is a Chromium switch" is not a

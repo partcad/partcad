@@ -159,6 +159,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] `simulate:` on a part or an assembly: a scene, where in it the object goes, and the condition that
         says whether it went as it should
   - [x] `pc sim`, which runs it and validates the result
+  - [x] `pc test` holds every object to it, as its `sim` check: write the claim first, then make it pass
   - [x] Simulation plugins, declared the way export and render implementations are — a scene goes in,
         `before` and `after` come out. The simulator is a package, not part of this wheel:
         [`partcad-sim-mujoco`](https://github.com/partcad/partcad-sim-mujoco) runs one in `MuJoCo` and
@@ -170,7 +171,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
         (`load:`) in terms of its own interfaces, so the boundary conditions survive a change of geometry
   - [x] `pc cae cfd`, computational fluid dynamics, the same way
   - [x] The solver is a package, not part of this wheel — `//pub/feature/cae/openfoam` for CFD — and the
-        **FEA** and **CFD** tabs of the PartCAD Viewer run it on the object on screen
+        **FEA** and **CFD** tabs of the Digital Thread run it on the object on screen
 - Materials — what a part is made of, as an object of a package
   - [x] A `materials:` section, and standard catalogues to inherit from rather than restate:
         `//pub/std/manufacturing/material/plastic` and `.../metal`, named by designation and temper
@@ -234,7 +235,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     installed locally, or run in a container when it is not; an object the application cannot read is
     converted on the way, and what is edited there is brought back into the object's own file when it closes
   - Ask the IDE what it is showing (`pc ide state`): the Explorer's selection, the Inspector's parameters, and
-    the Viewer's tab, filters and a screenshot — for an AI agent working beside you to look at what you see
+    the Digital Thread's tab, filters and a screenshot — for an AI agent working beside you to look at what you see
   - Render 2D projections, from any viewing angle (`--view`, or an arbitrary one), with the connection
     ports and interfaces drawn on top if asked
     - [x] `SVG`

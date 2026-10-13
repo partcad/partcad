@@ -522,7 +522,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad (0.8.168)
+  Installing the current project: partcad (0.8.185)
 
 .. warning::
 
@@ -1081,6 +1081,9 @@ and turns each subject on or off:
      - the ``CI-Dev`` container, ``Run: behave`` and ``Run: pc`` -- but not ``Run: pytest``
    * - ``ide/vscode/``, ``ide/vscode-shim/``
      - ``npm test``, ``VS Code extension``, ``IDE``
+   * - ``src/partcad_utils/schema/``
+     - the tests and the wheel, **and** ``npm test`` and ``VS Code extension`` -- the extension's spelling
+       dictionary is generated from the schemas, and a test checks it is current
    * - ``ide/standalone/``, ``.vscode/``
      - ``IDE``
    * - ``dev-tools/pyinstaller/``, ``dev-tools/snap/``, ``.snapcraft.yaml``, ``install.sh``

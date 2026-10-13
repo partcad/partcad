@@ -7,7 +7,7 @@
 
 `partcad.cache_artifacts` on its own first - what goes into an entry, what comes
 back out, and what is refused - and then the two places that use it: a second
-`pc cae` of an unchanged part and a second `pc simulate` of an unchanged object
+`pc cae` of an unchanged part and a second `pc sim` of an unchanged object
 must be reads, with the files back where the caller expects them, and anything
 that changes the question must be a run.
 
@@ -18,6 +18,7 @@ would be started, and counted.
 import asyncio
 import io
 import os
+import pathlib
 import tarfile
 import textwrap
 import types
@@ -61,32 +62,42 @@ def test_a_subject_with_no_key_has_no_question():
     assert cache_artifacts.question_hash("x", "", {"a": 1}) is None
 
 
-def test_the_key_follows_the_subject_the_question_and_the_scripts_versions(tmp_path):
+def test_the_key_follows_the_subject_the_question_and_the_scripts(tmp_path):
     script = tmp_path / "solve.py"
-    script.write_text("CACHE_VERSION = 1\nv = 1\n")
+    script.write_text("v = 1\n")
 
-    def key(subject="s", question=None, scripts=(str(script),)):
-        return cache_artifacts.question_hash("x", subject, question or {"load": 5}, scripts).get()
+    def key(subject="s", question=None, files=(str(script),)):
+        return cache_artifacts.question_hash("x", subject, question or {"load": 5}, files).get()
 
     first = key()
     assert key() == first
     assert key(subject="t") != first
     assert key(question={"load": 6}) != first
-    # The script says when what it produces has changed, by raising its
-    # version; an edit that does not is the same question.
-    script.write_text("CACHE_VERSION = 1\nv = 2  # the same answer, written differently\n")
-    assert key() == first
-    script.write_text("CACHE_VERSION = 2\nv = 2\n")
+    script.write_text("v = 2\n")
     assert key() != first
 
 
-def test_a_script_that_states_no_version_keys_as_none_was_given(tmp_path):
+def test_the_key_follows_the_version_the_scripts_report(tmp_path, monkeypatch):
+    """The 'CACHE_VERSION' a script states is in the key on its own, beside its content."""
+    from partcad import code_version
+
+    script = tmp_path / "solve.py"
+    script.write_text("CACHE_VERSION = 1\n")
+    first = cache_artifacts.question_hash("x", "s", {"load": 5}, [str(script)]).get()
+    monkeypatch.setattr(code_version, "declared", lambda path: 2)
+    assert cache_artifacts.question_hash("x", "s", {"load": 5}, [str(script)]).get() != first
+
+
+def test_a_script_that_states_no_version_keys_as_before_there_were_versions(tmp_path):
+    """Adopting 'CACHE_VERSION' costs nothing until a script first raises it."""
     script = tmp_path / "solve.py"
     script.write_text("v = 1\n")
-    assert (
-        cache_artifacts.question_hash("x", "s", {"load": 5}, [str(script)]).get()
-        == cache_artifacts.question_hash("x", "s", {"load": 5}).get()
-    )
+    expected = CacheHash("x", cache=True)
+    expected.add_string("artifact-v%d" % cache_artifacts.VERSION)
+    expected.add_string("s")
+    expected.add_dict({"load": 5})
+    expected.add_filename(str(script))
+    assert cache_artifacts.question_hash("x", "s", {"load": 5}, [str(script)]).get() == expected.get()
 
 
 # --------------------------------------------------------------------------- #
@@ -323,17 +334,8 @@ def test_another_question_is_another_run(analysed):
     _run(part.analyze_async(ctx, cae.FEA, mesh_size=2.0))
     assert len(runs) == 2
 
-    # The solver was edited without saying it answers differently: the answer
-    # it gave is the answer.
-    (root / "solve.py").write_text("def process(path, request):\n    return {'success': True}  # the same\n")
-    _run(part.analyze_async(ctx, cae.FEA))
-    assert len(runs) == 2
-
-    # The solver says it does, by raising the version it reports: the question
-    # is asked again.
-    (root / "solve.py").write_text(
-        "CACHE_VERSION = 2\n\ndef process(path, request):\n    return {'success': True, 'v': 2}\n"
-    )
+    # The solver changed: the question is asked again.
+    (root / "solve.py").write_text("def process(path, request):\n    return {'success': True, 'v': 2}\n")
     _run(part.analyze_async(ctx, cae.FEA))
     assert len(runs) == 3
 
@@ -358,7 +360,7 @@ def test_a_part_that_is_not_cached_is_analysed_every_time(analysed, monkeypatch)
 
 
 # --------------------------------------------------------------------------- #
-# `pc simulate`                                                               #
+# `pc sim`                                                                    #
 # --------------------------------------------------------------------------- #
 
 
@@ -569,10 +571,7 @@ def test_another_job_is_another_route(routed):
     _run(part.route_async(ctx, feed=900))
     assert len(runs) == 2
 
-    # Routed differently, by the route's own account: it raised its version.
-    (root / "route.py").write_text(
-        "CACHE_VERSION = 2\n\ndef process(path, request):\n    return {'success': True, 'v': 2}\n"
-    )
+    (root / "route.py").write_text("def process(path, request):\n    return {'success': True, 'v': 2}\n")
     _run(part.route_async(ctx))
     assert len(runs) == 3
 
@@ -667,3 +666,87 @@ def test_an_implementation_s_environment_is_its_declaration(analysed):
     key = impl.environment_cache_key()
     assert key.startswith("python==%s;" % impl.python_version())
     assert "image=" not in key
+
+
+# --------------------------------------------------------------------------- #
+# What the implementation imports is part of the question                     #
+# --------------------------------------------------------------------------- #
+#
+# A plugin is rarely one file. 'partcad-sim-mujoco' keeps what its exporter,
+# its reader and its simulator share in 'mujoco_common.py', and the Gazebo one
+# its picture-drawing in 'snapshot_raster.py'. A key made of the script alone
+# answered a plugin update that changed only such a module with the result
+# the old module produced, until '--cache-bypass'.
+
+HELPER_V1 = "SCALE = 1.0\n"
+HELPER_V2 = "SCALE = 2.0  # a new release of the helper\n"
+
+
+def _imports_a_helper(directory, script, helper):
+    """'script' reads its helper the way the MuJoCo plugin reads 'mujoco_common'."""
+    (directory / helper).write_text(HELPER_V1)
+    module = helper[: -len(".py")]
+    (directory / script).write_text(
+        "import os, sys\n"
+        "sys.path.append(os.path.dirname(os.path.abspath(__file__)))\n"
+        "import %s\n"
+        "def process(path, request):\n"
+        "    return {'success': True, 'scale': %s.SCALE}\n" % (module, module)
+    )
+
+
+def test_a_simulation_plugin_whose_helper_changed_is_run_again(simulated):
+    ctx, part, runs = simulated
+    root = ctx.get_project("//sim").config_dir
+    _imports_a_helper(pathlib.Path(root), "run_it.py", "sim_common.py")
+    (entry,) = simulation.of_shape(part)
+
+    _run(simulation.run_async(ctx, part, "part", entry))
+    _run(simulation.run_async(ctx, part, "part", entry))
+    assert len(runs) == 1
+
+    (pathlib.Path(root) / "sim_common.py").write_text(HELPER_V2)
+    _run(simulation.run_async(ctx, part, "part", entry))
+    assert len(runs) == 2
+
+
+def test_an_analysis_whose_solver_helper_changed_is_run_again(analysed):
+    ctx, part, runs, root = analysed
+    _imports_a_helper(root, "solve.py", "solver_common.py")
+
+    _run(part.analyze_async(ctx, cae.FEA))
+    _run(part.analyze_async(ctx, cae.FEA))
+    assert len(runs) == 1
+
+    (root / "solver_common.py").write_text(HELPER_V2)
+    _run(part.analyze_async(ctx, cae.FEA))
+    assert len(runs) == 2
+
+
+def test_a_route_whose_post_processor_helper_changed_is_produced_again(routed):
+    ctx, runs, root = routed
+    _imports_a_helper(root, "route.py", "post_common.py")
+    part = ctx.get_part("//cam-cache:panel")
+
+    _run(part.route_async(ctx))
+    _run(part.route_async(ctx))
+    assert len(runs) == 1
+
+    (root / "post_common.py").write_text(HELPER_V2)
+    _run(part.route_async(ctx))
+    assert len(runs) == 2
+
+
+def test_what_a_run_writes_into_its_package_is_not_part_of_the_question(analysed):
+    """An analysis keeps its model beside the package, and a render its pictures.
+
+    Were every file of the implementing package in the key, the run would move
+    its own key by writing its answer, and nothing would ever be found.
+    """
+    ctx, part, runs, root = analysed
+    _run(part.analyze_async(ctx, cae.FEA))
+    (root / "bracket.svg").write_text("<svg/>")
+    (root / "README.md").write_text("# rendered\n")
+    (root / "notes.txt").write_text("measured 0.1655 mm\n")
+    _run(part.analyze_async(ctx, cae.FEA))
+    assert len(runs) == 1

@@ -317,8 +317,10 @@ Object commands
   The tests cover whether the object builds (``cad``), whether it can be manufactured or purchased
   (``manufacturability`` and the methods below it), whether an assembly's connection instructions can be
   followed (``connect``; see "Testing the instructions" in :doc:`assy`), whether the route a machine would cut
-  it with can be produced (``cam``; see :ref:`pc cam <cam>`), and whether the engineering analyses a part asks
-  for come back clean (``fea`` and ``cfd``; see :ref:`pc cae <cae>`).
+  it with can be produced (``cam``; see :ref:`pc cam <cam>`), whether the engineering analyses a part asks
+  for come back clean (``fea`` and ``cfd``; see :ref:`pc cae <cae>`), and whether a part or an assembly does
+  what its ``simulate:`` section says it does (``sim``; see ``pc sim`` below). Those last four apply only to
+  an object that declares the matching section, so a package that declares none pays nothing for them.
 
   ``manufacturability`` answered to the name ``cam`` until :ref:`pc cam <cam>` existed, at which point one word
   was answering two questions -- "can this be made at all" and "here is the program that makes it". They are
@@ -362,11 +364,19 @@ Object commands
   ``--json`` to print the whole of what each simulation plugin reported. A validation that does not hold
   exits non-zero.
 
-  Where ``pc test`` asks whether a part can be *made*, this asks whether it *works*: it places the object in
-  the scene the declaration names, at the ``offset:`` the declaration states, runs the scene through the
-  simulation plugin the declaration names, and evaluates the ``validation:`` expression over the ``before``
-  and ``after`` the plugin hands back. Nothing needs installing to run one -- the plugin runs in a PartCAD
-  sandbox that installs whatever it needs.
+  It asks whether an object *works*: it places the object in the scene the declaration names, at the
+  ``offset:`` the declaration states, runs the scene through the simulation plugin the declaration names, and
+  evaluates the ``validation:`` expression over the ``before`` and ``after`` the plugin hands back. Nothing
+  needs installing to run one -- the plugin runs in a PartCAD sandbox that installs whatever it needs.
+
+  ``pc test`` asks the same thing every time it runs, as its ``sim`` check: an object passes when every
+  simulation it declares ran and every ``validation:`` held, and fails naming the simulation and the reason
+  otherwise. A simulator that could not run is a failure there, with the one excuse the ``fea`` and ``cfd``
+  checks have -- a plugin that names an image, on a machine with no container runtime -- and a plugin that
+  cannot be found is never excused. A declaration with no ``validation:`` is not run by ``pc test``: it is
+  skipped when a package is tested and fails when the object is tested by name. This command is for asking on
+  purpose: one simulation by name, and everything the plugin reported, which is why it does run such a
+  declaration and says it ran. See "Running a simulation" in :doc:`simulation`.
 
   PartCAD implements no simulator: a package imports one and names it in ``simulation:``
   (`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the MuJoCo one and
@@ -381,10 +391,20 @@ Object commands
   package with no object at all to report each package of a subtree (see :ref:`recursive-names`).
 
   Where the object says what it is made of, the material it names is resolved and reported as
-  ``Material`` — the formal and full names, the density both ways round, the coefficient of friction and
-  the tags the catalogue states — rather than as the bare reference the configuration beside it already
+  ``Material`` — the formal and full names, the density in kg/m³, the coefficient of friction and the
+  tags the catalogue states — rather than as the bare reference the configuration beside it already
   shows. A reference nothing answers to is reported as it was written, with the error, which is why no
   mass and no friction came from it. See :ref:`materials`.
+
+  A part or an assembly with a solid in it also gets ``MassProperties``: its ``volume``, ``density``,
+  ``mass``, ``centerOfMass`` and ``inertia``, each as its ``value``, its ``unit`` and its ``source`` —
+  ``stated`` where the part says so itself, the material that lent it, or how it was derived from the
+  solid. An assembly's are its parts' added up, in the assembly's own frame: the masses summed, the centres
+  combined, and each part's inertia moved to the combined centre and added. A part whose mass is not
+  known — it states none, and is made of nothing that states a density — is reported as such rather than
+  given one, and an assembly says which of its parts those were. These are the values an export whose file
+  type declares ``properties: true`` is handed -- URDF, and the simulation formats the plugins write -- so
+  what ``pc info`` says a part weighs is what a simulation of it weighs. See :ref:`properties`.
 
   For anything with geometry it also reports what PartCAD **measured** when it built it:
   ``BoundingBox`` as ``min``, ``max`` and ``size`` in millimetres, and -- for anything holding a solid --
@@ -874,14 +894,15 @@ Object commands
 Interacting with IDE
 ********************
 
-Putting an object in front of a person, in one of two windows -- the IDE's own **PartCAD Viewer**
+Putting an object in front of a person, in one of two windows -- the IDE's own **Digital Thread**
 (``pc ide view``), or **another application** on this machine (``pc ide open``, which is also what the editor
 extension's "Open in..." menu runs) -- and asking the IDE what it is showing (``pc ide state``). None of them
-leaves anything new in the package: that is what ``pc export`` and ``pc render`` are for. They used to be ``pc inspect`` and ``pc open``. Those names still work, are left out
-of ``pc --help``, and print a note on stderr saying what to type instead.
+leaves anything new in the package: that is what ``pc export`` and ``pc render`` are for. ``pc ide view`` and
+``pc ide open`` used to be ``pc inspect`` and ``pc open``; those names still work, are left out of ``pc --help``,
+and print a note on stderr saying what to type instead.
 
 ``pc ide view``
-  View a part, assembly, or scene in the PartCAD Viewer. Use ``-V`` for a verbal (text) description instead of a visual
+  View a part, assembly, or scene in the Digital Thread. Use ``-V`` for a verbal (text) description instead of a visual
   one, and ``-p <name>=<value>`` to set parameters.
 
 ``pc ide state``
@@ -899,7 +920,7 @@ of ``pc --help``, and print a note on stderr saying what to type instead.
     what the field holds **now** (``value``), and what the object was last shown with (``applied``). The two
     differ when a value has been typed and Update not pressed. ``live: false`` says the Inspector's panel could
     not be asked -- it is collapsed -- and the values are the applied ones.
-  * ``viewer`` -- the PartCAD Viewer: the ``tab`` and ``subTab`` on screen (``design``/``2d``), what every tab
+  * ``viewer`` -- the Digital Thread: the ``tab`` and ``subTab`` on screen (``design``/``2d``), what every tab
     strip offers and which tabs are disabled, and for **each sub-tab** its ``filters`` -- what it would send
     ``pc render --filter``, or ``null`` for the whole object -- and its ``selections``: the boxes ticked in its
     tree, the port overlays on the 2D tab, and the value of every control in its pane (format, drawing package,

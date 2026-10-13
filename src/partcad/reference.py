@@ -29,7 +29,7 @@ property of the declaration, so it is answered here, from the declaration.
 
 import typing
 
-from .utils import get_child_project_path
+from .utils import get_child_project_path, split_resource_path
 
 
 def source_of(source_project, target_project_name: str, config: dict, noun: str) -> str:
@@ -64,7 +64,9 @@ def source_of(source_project, target_project_name: str, config: dict, noun: str)
             package_name = get_child_project_path(target_project_name, package_name)
         return package_name + ":" + source_name
 
-    if ":" not in source_name:
+    if split_resource_path(source_name)[0] is None:
+        # A bare name, which a ':' in one of its parameter values
+        # ('room;medium=//pub/std/materials:water') does not change.
         return source_project.name + ":" + source_name
 
     # Written as a reference of its own (':widget', '../other:widget'), so the
@@ -78,12 +80,14 @@ def source_of(source_project, target_project_name: str, config: dict, noun: str)
 def split(source: str) -> typing.Tuple[str, str]:
     """A fully qualified reference as (package, object).
 
-    From the right, because a package path holds no ':' and an object name may
-    ('a:b' is not a name PartCAD gives out, but rpartition costs nothing and
-    does not have to be reasoned about).
+    At the first ':', because a package path holds none and what follows it
+    may: an assembly embedded in an ASSY file is '<file>:<assembly>', and a
+    parameter value is the user's text ('room;medium=//pub/std/materials:water').
+    It used to be split from the right, which named the object after the tail of
+    such a value. See 'split_resource_path'.
     """
-    package_name, _, object_name = source.rpartition(":")
-    return package_name, object_name
+    package_name, object_name = split_resource_path(source)
+    return package_name or "", object_name
 
 
 # The object types that are references, and so describe themselves by what they

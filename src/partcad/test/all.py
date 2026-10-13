@@ -25,6 +25,7 @@ from .manufacturability_laser import ManufacturabilityLaserTest
 from .manufacturability_sheet_metal import ManufacturabilitySheetMetalTest
 from .manufacturability_subtractive import ManufacturabilitySubtractiveTest
 from .shell import ShellTest
+from .sim import SimTest
 from .solidity import SolidityTest
 from .test import Test
 from .validity import ValidityTest
@@ -87,6 +88,13 @@ def tests(concurrency_cap: int) -> list[Test]:
                 CamTest(),
                 FeaTest(),
                 CfdTest(),
+                # The same gate again, on 'simulate:', for a part or an
+                # assembly: an object that declares none pays nothing. Last,
+                # because a simulation builds the object and a scene around it
+                # and starts a simulator, and is the most expensive question
+                # here; and because what it asks -- does this do what it says
+                # once the world is switched on -- presumes everything above.
+                SimTest(),
             ]
         )
     return _global_tests

@@ -273,6 +273,67 @@ Feature: `pc info` command
     Then the command should exit with a status code of "0"
     And STDOUT should contain "3mm thick through hole of 3mm diameter"
     And STDOUT should contain "'alias': 'm-thru;size=3,depth=3'"
+
+  @success @pc-info @joints
+  Scenario: `pc info -a` lists the joints of an assembly
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        frame:
+          type: cadquery
+          path: block.py
+          implements:
+            hinge-bore:
+              top: [[0, 0, 15], [0, 0, 1], 0]
+        door:
+          type: cadquery
+          path: block.py
+          implements:
+            hinge-pin:
+      interfaces:
+        hinge-bore:
+          ports:
+            bore:
+          parameters:
+            turnZ: [-150, 150, 0]
+          motion:
+            dof: [turnZ]
+          physics:
+            damping: 0.05
+        hinge-pin:
+          ports:
+            pin: [[0, 0, 0], [0.71, 0.71, 0], 180]
+          mates: hinge-bore
+      assemblies:
+        cabinet:
+          type: assy
+          path: cabinet.assy
+      """
+    And a file named "block.py" with content:
+      """
+      import cadquery as cq
+
+      if __name__ != "__cqgi__":
+          from cq_server.ui import ui, show_object
+
+      show_object(cq.Workplane("front").box(10, 20, 30))
+      """
+    And a file named "cabinet.assy" with content:
+      """
+      links:
+        - part: frame
+        - part: door
+          connect:
+            name: frame
+            joint: door_hinge
+            toParams: {turnZ: 30}
+      """
+    When I run "pc info -a cabinet"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Joints"
+    And STDOUT should contain "'door_hinge'"
+    And STDOUT should contain "-150 to 150 deg"
+    And STDOUT should contain "'value': 30.0"
 # And STDOUT should contain "cube" in the parts list
 # And STDOUT should contain "cylinder" in the parts list
 # And STDOUT should contain valid location coordinates

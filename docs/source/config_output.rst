@@ -150,8 +150,31 @@ file type that declares ``properties: true`` is handed, in place of the flag, an
 index of what the shapes being written declare about themselves: their
 ``physics``, ``material`` and ``color``, keyed by the full ``<package>:<name>``
 of each shape, so an implementation given a whole assembly tree can look up the
-properties belonging to each node of it. Only shapes that declare at least one
-appear.
+properties belonging to each node of it. Each shape's ``physics`` is complete:
+what it states, what its material lends, and the ``mass``, ``centerOfMass`` and
+``inertia`` its solid comes to at its ``density`` (see :ref:`properties`), so an
+implementation writes those and works none of them out. A body made of several
+shapes is the one thing left to it, and ``mass_properties.of_body()`` in
+PartCAD's ``wrappers/`` directory -- on the path of every implementation -- adds
+them up. Only shapes that declare something, or have a mass worked out for
+them, appear.
+
+With ``properties: true``, an implementation writing a :ref:`scene <scenes>`
+that states a ``gravity:`` or a ``medium:`` is also handed that scene's world,
+as ``world``: the gravity in
+m/s², and the medium as its material's full name with its ``density`` (kg/m³)
+and ``viscosity`` (Pa·s), resolved by PartCAD from the package that catalogues
+it. A scene that states neither sends no ``world`` at all, so an implementation
+that has never heard of it writes exactly what it always did. What a body
+displaces of that medium is the ``volume`` and ``centerOfVolume`` each shape
+with a solid in it is handed beside its mass (see :ref:`properties`).
+
+A part that states no mass and no density, and is made of nothing that states
+a density, is weighed at the file type's ``density`` parameter, in kg/m³, or at
+2700 kg/m³ (aluminium) where the file type declares none. A part that states
+its mass keeps it, and the fallback decides nothing about it. That makes ``density``, after ``properties``
+itself, the one other parameter PartCAD reads on an implementation's behalf
+when ``properties: true`` is declared; it is still passed through as well.
 
 .. code-block:: yaml
 
@@ -291,8 +314,10 @@ What an implementation produces is cached where PartCAD caches it -- an analysis
 a route, a simulation -- under a key that includes the version its script
 reports: a module-level ``CACHE_VERSION = <int>``, read without running the
 script. Raise it whenever a change to the script changes what it produces, and
-every result it produced before is produced again; an edit that does not costs
-nobody a run. Every implementation and wrapper PartCAD ships states one.
+every result it produced before is produced again. Every implementation and
+wrapper PartCAD ships states one. (Those results are keyed on the Python sources
+of the package the implementation comes from as well -- see :ref:`caching` -- so
+for them an edit already runs everything again on its own.)
 
 See ``examples/feature_export_custom`` for both halves of this.
 
@@ -579,7 +604,7 @@ it declares ``decode: false`` - it is handed the assembly *tree* itself, one
 URDF link per node, rather than the geometry the tree decodes to. Decoding keeps
 the shape of the tree but nothing else about it: every node's ``name`` and
 ``label`` is dropped, and its placement is baked into the geometry instead of
-staying readable as the joint origin. See :doc:`simulation`.
+staying readable as the joint origin. See :ref:`sim-urdf` for what it writes.
 
 .. _cae-section:
 

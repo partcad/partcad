@@ -3,7 +3,7 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The PartCAD Viewer's 3D view: the renderer behind the first tab of the panel.
+// The Digital Thread's 3D view: the renderer behind the first tab of the panel.
 //
 // Runs inside the webview, not in the extension host, so it has no access to
 // 'vscode' or to node - the geometry arrives over postMessage as base64 binary
@@ -57,7 +57,7 @@ import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { reportError } from './host';
 import { ShowMessage, ShowNode } from './messages';
 import { ItemId, PORT_COLOR, PORT_OPACITY, flickerOn, nodeId, portId, totalSize } from './nodes';
-import { SpaceMouse, navigate } from './spacemouse';
+import { Navigable, onScreen, spaceMouse } from './spacemouse';
 import {
     SOFTWARE_TRIANGLE_BUDGET,
     Surface,
@@ -457,9 +457,18 @@ function fitView(): void {
     controls.update();
 }
 
-/** The SpaceMouse, sampled once a frame; 'viewer.ts' hands it what the host says. */
-export const spaceMouse = new SpaceMouse(fitView);
-let lastFrame = performance.now();
+/**
+ * The 3D view, as the SpaceMouse moves it: only while its tab is the one on
+ * screen, and a push is a drag as far as the controls' listeners are concerned.
+ */
+const navigable: Navigable = {
+    camera,
+    target: controls.target,
+    shown: () => onScreen(container),
+    fit: fitView,
+    moving: (moving) => controls.dispatchEvent({ type: moving ? 'start' : 'end' }),
+};
+spaceMouse.attach(navigable);
 
 /**
  * One node's ports: each as a triad, and as the boundary it is drawn with.
@@ -971,7 +980,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         for (const [mat, count] of materialCounts) {
             materialDistribution[`Material${materialIndex++}`] = count;
         }
-        console.log('[PartCAD Viewer] Scene Structure:', {
+        console.log('[Digital Thread] Scene Structure:', {
             totalMeshes,
             topLevelNodes,
             avgMeshesPerNode,
@@ -1027,7 +1036,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
             totalVertices: stats.vertexCount.toFixed(0),
             dataTransferredKB: (stats.bytesTransferred / 1024).toFixed(2),
         };
-        console.log('[PartCAD Viewer] Performance Stats:', perfLog);
+        console.log('[Digital Thread] Performance Stats:', perfLog);
 
         // Create on-screen stats display
         if (!(window as any).pcViewerStats) {
@@ -1142,17 +1151,10 @@ export function setOpacity(opacity: number): void {
 
 function animate(): void {
     const now = performance.now();
-    // Clamped, so that the first frame after the panel was hidden - or after a
-    // stall - does not fling the model by however long that was.
-    const seconds = Math.min((now - lastFrame) / 1000, 0.1);
-    lastFrame = now;
-    const motion = spaceMouse.sample(now);
-    if (motion !== undefined) {
-        navigate(camera, controls.target, motion, seconds, spaceMouse.settings.sensitivity);
-    }
+    const moved = spaceMouse.drive(navigable, now);
     // The model turning on its own while somebody is turning it by hand is two
     // hands on one wheel; it resumes when the cap is let go.
-    controls.autoRotate = autoRotate && motion === undefined;
+    controls.autoRotate = autoRotate && !moved;
     controls.update();
     if (flickering !== undefined) {
         // A flicker is a change on every frame it lasts.
@@ -1202,7 +1204,7 @@ function animate(): void {
             const avg =
                 stats.frameTimeHistory.reduce((a: number, b: number) => a + b, 0) / stats.frameTimeHistory.length;
             const fps = 1000 / avg;
-            console.log(`[PartCAD Viewer] FPS: ${fps.toFixed(1)} (frame time: ${avg.toFixed(2)}ms)`);
+            console.log(`[Digital Thread] FPS: ${fps.toFixed(1)} (frame time: ${avg.toFixed(2)}ms)`);
 
             // Update on-screen display with FPS and graphics info
             const renderInfo = surface.info?.render ?? { calls: 0, triangles: 0 };
@@ -1212,7 +1214,7 @@ function animate(): void {
                 const graphicsInfo = `\nDraw Calls: ${renderInfo.calls} | Geometries: ${memInfo.geometries}`;
                 stats.statsDisplay.textContent = stats.geometryInfo + fpsInfo + graphicsInfo;
             }
-            console.log('[PartCAD Viewer] Graphics Stats:', {
+            console.log('[Digital Thread] Graphics Stats:', {
                 drawCalls: renderInfo.calls,
                 triangles: renderInfo.triangles,
                 geometries: memInfo.geometries,

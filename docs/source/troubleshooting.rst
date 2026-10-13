@@ -224,10 +224,10 @@ Error while loading part or assembly view: "Module ... not found"
  - Make sure that the extension version matches the PartCAD version in ``pc version`` command output
 
 ==============
-PartCAD Viewer
+Digital Thread
 ==============
 
-The ``PartCAD Viewer`` is a tab the extension opens when a part, assembly,
+The ``Digital Thread`` is a tab the extension opens when a part, assembly,
 scene, sketch or interface is inspected. PartCAD tessellates the shape in a
 sandboxed runtime, and sends the result to the extension as compressed glTF over
 a socket on ``127.0.0.1:9137``. The Python side of that connection is the
@@ -258,7 +258,7 @@ without any further setup (``partcad.addToolsToTerminalPath`` turns that off):
     # Initialize a package with the default dependency on public PartCAD repository
     pc init
 
-    # Display the part in the 'PartCAD Viewer'
+    # Display the part in the 'Digital Thread'
     pc ide view //pub/std/metric/cqwarehouse:fastener/hexhead-iso4014
 
 Typical problems
@@ -273,12 +273,12 @@ Typical problems
  - On a PartCAD older than 0.8.0 it was a separate ``partcad-ide-client``
    distribution that was never published; upgrading is the fix.
 
-``No PartCAD IDE with an open PartCAD Viewer detected``
+``No PartCAD IDE with an open Digital Thread detected``
 
  - Nothing is listening on the viewer port. Open a window with the PartCAD
    extension active; the extension starts listening when it activates.
  - If two windows are open, only one of them may own the port on platforms
-   without ``SO_REUSEPORT``. The "PartCAD Viewer port ... is already in use"
+   without ``SO_REUSEPORT``. The "Digital Thread port ... is already in use"
    message in the ``PartCAD`` output view says which case this is.
  - Set ``PARTCAD_IDE_PORT`` to move a ``partcad`` process to a different port
    if 9137 is taken by something else on the machine.

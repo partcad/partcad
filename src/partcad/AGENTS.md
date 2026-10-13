@@ -236,7 +236,10 @@ at all).
   solver, a sandbox that will not build, a crash. `CaeTest` cannot tell those apart and does not try: it
   relays whatever the implementation said, through `cae.dysfunction_report()`, which adds the two things the
   sentence usually omits and the reader always needs -- which implementation was asked, and which machine it
-  did not work on.
+  did not work on. Whether that is a failure or the one excuse -- an implementation that names a `container:`
+  or a `dockerImage`, on a machine with no container runtime; one that names neither is never excused -- is
+  `ImplementationTest._verdict()` in `./src/partcad/test/implementation.py`, which the `sim` check shares:
+  one rule for a missing solver and a missing simulator, not one per check.
 
   This was the other way round until it was found to be hiding things worth failing over: a CFD implementation
   that never converges, and a plugin that cannot be installed on a whole platform. The consequence is the
@@ -248,8 +251,15 @@ at all).
   cache key describes the question -- the shape's hash, the boundary conditions, the implementation and its
   options -- and nothing in it describes the machine, because a test cannot know what its implementation needs
   installed. Installing CalculiX therefore changes no key, and a remembered failure would go on failing a part
-  that now analyses perfectly well. `CaeTest` is the only test that reaches that state, and the flag exists
-  for it.
+  that now analyses perfectly well. `CaeTest` is the test the flag was made for; `CamTest` sets it for the
+  same reason, and so does `SimTest`, for every verdict that was not reached on a keyed run (see below).
+
+  A verdict that *is* cached keeps its reasons. The entry's first byte is the verdict -- all a pass is, and
+  all every entry was before -- and a failure carries what `failed()` said while it was reached, as JSON,
+  so a cache hit repeats the reason instead of "Failed test result loaded from cache". `failed()` collects
+  through a context variable `test_cached()` sets for its own check and shape only, because a check that
+  tests other objects on the way (an assembly's manufacturability) logs their failures too, and those are
+  theirs to remember. Test entries are outside every tier's size window (`cache_backend.SIZED_KEYS`).
 
 - **What a solver, a route implementation or a simulator produced is cached**
   (`./src/partcad/cache_artifacts.py`, `ctx.cache_artifacts`): the verdict cache above remembers one bit, and
@@ -263,8 +273,16 @@ at all).
   The key (`question_hash`, built by `Shape._artifact_hash()` for the two output sections) is the subject's
   `get_cache_key_async()` plus what the run adds: the request minus the geometry payload (boundary, job,
   machine, resolved options, material facts), the implementation's name and
-  `Implementation.environment_cache_key()`, and the **version** the implementation's script and the wrapper
-  that runs it report (`code_version`).
+  `Implementation.environment_cache_key()`, the **content** of the implementation's script and of the
+  wrapper that runs it, and `Implementation.source_cache_key()` -- every `.py` under the implementing
+  package (its helpers: `mujoco_common.py` beside the MuJoCo plugin's scripts), plus the commit of a package
+  imported as `type: git` -- and the same for PartCAD's `wrappers/` (`source_key.wrappers_key()`).
+  `./src/partcad/source_key.py` says why those two and nothing more: a package is also where runs write
+  their models and pictures, which a key over every file would be moved by; a revision alone misses a
+  local edit. Each file is read once per process and re-read only when its size or modification time
+  changes, or while it was written in the last three seconds (the "racily clean" case) -- the
+  modification time decides whether to read, never what the key is. On top of all that, the **version**
+  the script and the wrapper report (`code_version`), the same `CACHE_VERSION` a shape is keyed on.
 
   **Nothing in a key may describe the sandbox that runs it.** Every sandbox type -- conda, venv, none,
   docker, remote, and the ones after them -- is expected to be reproducible and equivalent, so an entry
@@ -278,7 +296,9 @@ at all).
   request because `manufacturing:` is outside the shape's hash: a part moved from a router to a laser keeps
   its key and must not get the router's program.
   For a simulation the subject is the *scene*, whose key covers the subject through its `subject` parameter
-  and its links, plus the plugin, the declaration's `params` and how the scene is exported for it. The
+  and its links, plus the plugin, the declaration's `params`, how the scene is exported for it, and the
+  scene's world as the facts it *resolved* to (a `medium:` is a reference into another package, whose
+  density can change without the scene's key moving). The
   `validation:` is deliberately not in it: it is re-evaluated on a hit, so editing it re-judges the run. A
   subject with no key (`cache: false`) is never cached, and only successes are stored, for the reason the
   verdict cache does not store an unrunnable analysis. The key is worked out without building the subject, so
@@ -627,6 +647,29 @@ at all).
   `simulation:` is also **not** in `output.SECTIONS`: everything that reads that tuple is asking which file
   types exist, and a simulation is not one.
 
+  **`pc test` runs `simulate:` as its `sim` check** (`./src/partcad/test/sim.py`), through
+  `simulation.run_async()` -- the code `pc sim` runs, so the two cannot come to run a simulation differently.
+  Same gate as `fea`/`cfd`/`cam` (a part or an assembly that declares the section, nothing else), same verdict
+  on a run that did not deliver (`ImplementationTest._verdict()`), and `simulation.SimulationConfigError` is
+  what keeps a plugin or a scene that cannot be found out of the one excuse. `run_async(report=False)` is how
+  the check keeps the lines that are its verdict to itself: `pc` exits non-zero on any `ERROR`, so a run that
+  logged one in its own name could not then be *skipped*.
+
+  A declaration with **no `validation:`** is not run: in a walk over a package it is skipped, and asked about
+  by name (`Test.NAMED`, which `_test_async` sets for an object named without a walk) it fails. `pc sim` still
+  runs it and reports that it ran -- there it is how somebody looks at what a plugin reports before writing the
+  condition.
+
+  **The verdict is cached** like every check's, keyed by `SimTest.cache_key_suffix()` on the declarations
+  (`validation:` included) and on each run's artifact key from `simulation.question_key_async()` -- the very
+  key `run_async` looks the run up under, so a verdict cannot outlive the run it was judged on. `simulate` is
+  in `shape._NON_GEOMETRIC_CONFIG_KEYS`, so editing a `validation:` changes the verdict key and nothing else,
+  and is re-judged from the cached run rather than by rebuilding the object and simulating again. Only a
+  verdict reached on keyed runs that came back is stored: a skip, a plugin that did not deliver, a declaration
+  that does not resolve and one with no `validation:` are worked out again every time. An object reached through
+  a manufacturability walk (`force_manufacturing`) is passed over, and `SimTest.test_cached` keeps that walk away
+  from the cache, whose key does not carry the flag.
+
   **`import:` is the fourth, and the mirror image of `export:`.** It declares who turns somebody else's
   file format *into* a PartCAD object, and it is why there is no `assembly_factory_urdf.py` any more:
   `assembly_factory_imported.py` is one factory for every such type, and the reader it runs is named by the
@@ -685,13 +728,36 @@ at all).
   tool a *package* declares needs the graph, and that is the `open.tools` method: the daemon says **which**
   applications exist, and never opens one. Do not add a method that opens a file.
 
-- **A material is a fact a simulation reads** (`material.py`): `mu` sits beside `density`, and
-  `PHYSICS_FROM_MATERIAL` is what makes it reach an exporter. A shape names its material by a *reference*
-  (`:aluminium`), and resolving one needs the package graph — which the core has and a sandbox does not. So
-  `physics_by_shape()` resolves every reference in an export request against the package of the shape that
-  wrote it (which is what lets the reference be relative), and `wrapper_export.properties_index()` merges what
-  it found *underneath* what each shape states itself. No exporter knows materials exist, which is what keeps
-  URDF's `<mu1>`, SDFormat's `<mu>` and MJCF's `friction` agreeing for free.
+- **A part's physics is resolved once, in core** (`physics.py`, `material.py`, `wrappers/mass_properties.py`). A
+  part states what it states under `properties: physics:`; `physics.resolve()` fills in the rest, in one order
+  for every reader: `density` stated, else the material's (`PHYSICS_FROM_MATERIAL` lends `mu` as `friction` and
+  `density` as `density`), else — for an export only — the export's `density` parameter, else 2700; `mass` stated,
+  else volume × density; `centerOfMass` stated, else the centroid; `inertia` stated, else the solid's scaled to
+  that mass. `pc info` shows the result as `MassProperties` with a `source` per value, an assembly's as its
+  parts' combined in its own frame; an export with `properties: true` is handed it per shape (`FACTS_KEY`,
+  merged *underneath* what each shape states by `wrapper_export.properties_index()`); the IDE's Build vs Buy
+  table shows the same mass. No exporter knows materials or densities exist.
+
+  **Every density is kg/m³** — a material's, a part's, an export's — so nothing converts one, and
+  `mass_properties.mass_of()` is the one place a volume (mm³) and a density become a mass. A part's volume,
+  mass, centre of mass and inertia are cached as one entry (`physics.DERIVED_KEY`) under `_derived_hash()`: the
+  part's own cache key plus the density, where it came from, and every stated value that stands in for a
+  derived one — because neither a material's density nor a stated mass is in the geometry's hash. So a CAD
+  edit, a material density edit and a stated-value edit each invalidate it, and nothing else does. A miss
+  derives from the geometry entry's measurements (`shape_measure.distribution()` adds the centroid and the
+  unit-density inertia). `_derived_async()` is the only reader and writer; do not cache a derived mass
+  beside the geometry (`-props`), whose key would not see a density edit.
+
+  `wrappers/mass_properties.py` is the **one copy of mass-property arithmetic**: placing a part's inertia where
+  a shape is placed, adding several shapes up into one body by the parallel-axis theorem, mm → m. The core
+  imports it for assembly totals, and every exporter that writes a body's inertia imports it from the sandbox
+  path — the URDF one here and the MJCF and SDFormat ones in the `partcad-sim-*` plugins, which require the
+  PartCAD release that ships it. Do not give an exporter a copy of its own: three copies is three answers to
+  where a robot balances.
+
+  A shape names its material by a *reference* (`:aluminium`), and resolving one needs the package graph — which
+  the core has and a sandbox does not. So `physics.physics_by_shape()` resolves every reference in an export
+  request against the package of the shape that wrote it, which is what lets the reference be relative.
 
   Which reference it reads is `properties: material:`, and **a package never writes that by hand**.
   `parameters:` is what is asked of the type that produces the shape; `properties:` is what the shape turned
@@ -700,6 +766,20 @@ at all).
   `PartFactory.record_object_type_properties()` is the instantiation code that writes it down. A `step` part
   accepts no such parameter (its file states a material per solid, and says it better), so nothing is promoted
   and the reader that read the file is what fills the property in.
+
+- **A scene's world is a fact a simulation reads too** (`scene_world.py`, `Scene.world_facts()`): a scene
+  may state its `gravity:` (a vector in **m/s^2**: physical quantities are SI, only lengths and angles are mm
+  and degrees) and the `medium:` it is filled with, which is a *material* reference resolved exactly as a
+  part's is. The core resolves it and hands the facts — gravity, the medium's `density` (kg/m^3) and
+  `viscosity` (Pa*s) — to every file type declaring `properties: true` as `request["world"]`
+  (`output.WORLD_KEY`), where they go into the engine's format unconverted. A body's buoyancy needs what it
+  displaces, which is the `volume` (mm^3) `physics` resolves beside each shape's mass and
+  `mass_properties.volume_of()` adds up per body, and where it is lifted from, the `centerOfVolume` (mm) that
+  `mass_properties.displacement_of()` combines with it. Both default to *nothing sent*, which is
+  what keeps every existing export byte-identical: the engine's own gravity, and vacuum. A bad gravity or a
+  medium nothing answers to raises `scene_world.WorldError` (it is a different world, not a less detailed
+  one), which `_render_one_async` reports against the scene. It lives in its own module because `shape.py`
+  catches it and cannot import `scene.py`, which is an `Assembly`.
 
 - **Where an object's ports are, and who has one** (`./src/partcad/shape_ports.py`,
   `./src/partcad/assembly_ports.py`): one answer, for every caller that asks. `shape_ports.own_ports()` is the
@@ -785,6 +865,30 @@ at all).
   asynchronous (`shape_ports.prepare_async()`, a no-op for everything that declares no `map:`) and every
   reader of an object's ports calls it first. It runs *before* `ports:` and `implements:` are read, which is
   what lets an `implements:` instance sit at a mapped port (`port:` on the instance).
+
+- **A connection is kept as its steps, and a joint is those steps with one left free**
+  (`./src/partcad/joint.py`, `./src/partcad/motion.py`, `AssemblyFactoryAssy.compose_connection`): `connect:`
+  places a child at *target placement · target port · half turn · target offsets · source offsets · source
+  port⁻¹*, and `joint.Composition` is that product as an ordered list of fixed and free steps. The factory
+  takes `AssemblyChild.location` **from** `Composition.location()` rather than computing it beside it, and the
+  arithmetic is the placement's own -- one grouping, left to right, the root `location:` outermost, a free
+  step at zero skipped rather than multiplied by the identity, every offset through
+  `interface.movement_offset` -- so the two are equal bit for bit. Keep it that way:
+  `tests/partcad/unit/test_joint_examples.py` compares them with `==` over every ASSY object under
+  `examples/`, because a joint that is the placement "to within rounding" is a second placement.
+
+  Which steps are free is `motion:` (`dof:` names parameters; `type:` implies them), resolved by
+  `joint.Resolution` from the connection, else the mating, else both interfaces combined -- where two
+  freedoms on one axis merge into one, ranges and values summed, and only when nothing that moves lies between
+  them in a way that would turn one off the other's axis. A freedom a `type` implies uses the parameter
+  along its axis or synthesizes one (`turnZ`, `angle`), which `toParams` then addresses; that is how every
+  `motion:` the URDF converter has written becomes a joint without touching the converter. `AssemblyChild.joint`
+  is None for a rigid attachment -- there are no fixed joints -- and for anything in a **scene**
+  (`SceneFactoryAssy.KEEPS_JOINTS`), whose placements are resolved identically. A joint rides to an
+  exporter on its child's envelope node (`shape_envelope.KEY_JOINT`, stamped by `Assembly._place` because it
+  belongs to the placement, not the object); `pc info -a` lists them, and what resolving them found wrong
+  (`AssemblyChild.joint_problems`) fails `pc test`'s `connect` check rather than `pc lint`, because it is a
+  finding about interfaces in other packages that a lint verdict, cached on one file, would serve stale.
 
 - **One shape, one tree, two forms** (`./src/partcad/shape_envelope.py`,
   `./src/partcad/shape_gltf.py`): every shape is a tree of nodes, and
@@ -1039,7 +1143,7 @@ a false error on correct code.
 ## The PartCAD IDE viewer client
 
 `./src/partcad_ide_client` is the Python half of the socket protocol that connects `partcad` to the PartCAD
-IDE extension's **PartCAD Viewer**. It is a sibling package in the same wheel, so `pip install partcad` makes
+IDE extension's **Digital Thread**. It is a sibling package in the same wheel, so `pip install partcad` makes
 `import partcad_ide_client` work and nothing has to install it separately.
 
 It ships that way rather than as a distribution of its own because it was never on PyPI and every process that

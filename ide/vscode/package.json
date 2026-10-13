@@ -1,10 +1,10 @@
 {
   "name": "partcad-official",
-  "displayName": "PartCAD",
+  "displayName": "PartCAD: Digital Thread",
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.8.168",
+  "version": "0.8.185",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -419,12 +419,12 @@
         }
       },
       {
-        "title": "PartCAD Viewer",
+        "title": "Digital Thread",
         "order": 5,
         "properties": {
           "partcad.spaceMouse.enabled": {
             "default": true,
-            "description": "Navigate the 3D view with a 3Dconnexion SpaceMouse: the cap moves the model the way it is pushed and twisted (3Dconnexion's \"object mode\"), and the \"Fit\" button frames it again. On Windows and macOS the viewer reads the device itself; on Linux it reads it from spacenavd, which has to be running.",
+            "description": "Navigate the 3D view, and the model of an FEA or CFD result, with a 3Dconnexion SpaceMouse: the cap moves the model the way it is pushed and twisted (3Dconnexion's \"object mode\"), and the \"Fit\" button frames it again. On Windows and macOS the viewer reads the device itself; on Linux it reads it from spacenavd, which has to be running - in a remote window, with its socket forwarded to where the workspace is.",
             "type": "boolean"
           },
           "partcad.spaceMouse.sensitivity": {
@@ -524,7 +524,7 @@
         "enablement": "!partcad.editingExternally"
       },
       {
-        "title": "Open PartCAD Viewer",
+        "title": "Open Digital Thread",
         "category": "PartCAD",
         "command": "partcad.viewer",
         "icon": "$(preview)",
@@ -1080,7 +1080,7 @@
         },
         {
           "command": "partcad.openInMuJoCo",
-          "when": "view == partcadExplorer && (viewItem == sceneWorld || viewItem == sceneMjcf)"
+          "when": "view == partcadExplorer && viewItem == sceneMjcf"
         },
         {
           "command": "partcad.openInKiCad",

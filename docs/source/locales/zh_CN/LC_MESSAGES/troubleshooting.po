@@ -416,12 +416,12 @@ msgid ""
 msgstr "请确保扩展的版本与 ``pc version`` 命令输出中的 PartCAD 版本一致"
 
 #: ../../source/troubleshooting.rst:228
-msgid "PartCAD Viewer"
+msgid "Digital Thread"
 msgstr ""
 
 #: ../../source/troubleshooting.rst:230
 msgid ""
-"The ``PartCAD Viewer`` is a tab the extension opens when a part, "
+"The ``Digital Thread`` is a tab the extension opens when a part, "
 "assembly, scene, sketch or interface is inspected. PartCAD tessellates "
 "the shape in a sandboxed runtime, and sends the result to the extension "
 "as compressed glTF over a socket on ``127.0.0.1:9137``. The Python side "
@@ -429,7 +429,7 @@ msgid ""
 "inside ``partcad`` itself -- so ``pip install partcad`` is all that is "
 "needed, and there is nothing separate to install."
 msgstr ""
-"``PartCAD Viewer`` 是在查看零件、装配体、场景、草图或接口时由扩展打开的一个标签页。PartCAD "
+"``Digital Thread`` 是在查看零件、装配体、场景、草图或接口时由扩展打开的一个标签页。PartCAD "
 "会在沙箱化的运行时中对形状做网格化，并通过 ``127.0.0.1:9137`` 上的套接字把结果以压缩的 glTF 形式发送给扩展。这条连接的 "
 "Python 一侧是 ``partcad_ide_client`` 包，它随 ``partcad`` 本身一起发布——因此只需要 ``pip "
 "install partcad``，没有任何需要单独安装的东西。"
@@ -489,7 +489,7 @@ msgstr ""
 "分发包，而那个分发包从未发布过；升级即可解决。"
 
 #: ../../source/troubleshooting.rst:276
-msgid "``No PartCAD IDE with an open PartCAD Viewer detected``"
+msgid "``No PartCAD IDE with an open Digital Thread detected``"
 msgstr ""
 
 #: ../../source/troubleshooting.rst:278
@@ -501,11 +501,11 @@ msgstr "没有任何程序在监听查看器端口。请打开一个启用了 Pa
 #: ../../source/troubleshooting.rst:280
 msgid ""
 "If two windows are open, only one of them may own the port on platforms "
-"without ``SO_REUSEPORT``. The \"PartCAD Viewer port ... is already in "
+"without ``SO_REUSEPORT``. The \"Digital Thread port ... is already in "
 "use\" message in the ``PartCAD`` output view says which case this is."
 msgstr ""
 "如果打开了两个窗口，在不支持 ``SO_REUSEPORT`` 的平台上只有其中一个能占有该端口。 ``PartCAD`` "
-"输出视图中的“PartCAD Viewer port ... is already in use”消息会说明属于哪种情况。"
+"输出视图中的“Digital Thread port ... is already in use”消息会说明属于哪种情况。"
 
 #: ../../source/troubleshooting.rst:283
 msgid ""
