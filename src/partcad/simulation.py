@@ -254,7 +254,6 @@ class SimulationResult:
             "scene": self.declaration.scene,
             "plugin": self.declaration.simulation,
             "validation": self.declaration.validation,
-            "features": list(self.declaration.features),
             "passed": self.passed,
             "error": self.error,
             "result": self.result,
