@@ -68,7 +68,9 @@ pc --no-ansi -v test -f requirements <object> 2>&1  # every requirement, met or 
 ```
 
 The first is the whole suite: whether the object builds, and everything else
-PartCAD asks of it. A failure there that is not a requirement still matters to
+PartCAD asks of it. Every check, what it asks and what to do when it fails, is
+listed in PartCAD's documentation (Digital Thread → Validation → Testing), and
+the IDE's Validation → Test tab shows the same verdicts check by check. A failure there that is not a requirement still matters to
 the features — a part that is a surface rather than a solid (`shell`) is not
 going to "carry a load", whatever the renders look like.
 
@@ -81,9 +83,17 @@ far as anybody can show.
 
 ## 3. Run the simulations
 
+Run `pc sim` as well as `pc test`, every time, even though `pc test` already ran
+the same simulations as its `sim` check: that check gives a verdict, and this
+gives what happened.
+
 ```sh
 pc --no-ansi sim <object> --json 2>&1               # -a for an assembly
 ```
+
+`simulate:` is declared by a part or an assembly, and `pc sim` takes those two
+kinds only. To validate a scene, run it for each part and assembly the scene
+places that declares a `simulate:`; a sketch has nothing to simulate.
 
 Every `simulate:` entry runs and its `validation:` is evaluated. A simulation
 that names a feature is evidence for that feature, and `--json` gives what
@@ -106,7 +116,8 @@ for view in front back left right top bottom iso; do
 done
 ```
 
-(`-a` before `-t` for an assembly.) View every picture. Then look specifically
+(`-a` before `-t` for an assembly, `-S` for a scene, `-s` for a sketch.) View
+every picture. Then look specifically
 at what the features talk about: a feature about a face is checked from the view
 that faces it, and a feature about a hole from along its axis
 (`--viewport-origin X,Y,Z --viewport-up X,Y,Z`, see `/pc:render`). For an

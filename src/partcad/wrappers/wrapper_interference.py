@@ -27,6 +27,8 @@ from OCP.BRepBndLib import BRepBndLib
 from OCP.BRepGProp import BRepGProp
 from OCP.Bnd import Bnd_Box
 from OCP.GProp import GProp_GProps
+from OCP.TopAbs import TopAbs_SOLID
+from OCP.TopExp import TopExp_Explorer
 
 sys.path.append(os.path.dirname(__file__))
 import ocp_serialize
@@ -45,6 +47,21 @@ def _volume(shape):
     props = GProp_GProps()
     BRepGProp.VolumeProperties_s(shape, props)
     return props.Mass()
+
+
+def _solids(shape):
+    """The solids of what two parts share: each is one volume to look at.
+
+    The whole result where it holds no solid at all -- a common is a compound,
+    and an odd one can come back as shells -- so that what was measured is still
+    what is handed back.
+    """
+    found = []
+    explorer = TopExp_Explorer(shape, TopAbs_SOLID)
+    while explorer.More():
+        found.append(explorer.Current())
+        explorer.Next()
+    return found or [shape]
 
 
 def _is_solid_enough_to_intersect(shape):
@@ -200,6 +217,12 @@ def process(path, request):
         # is not looked at again here. Only pairs that cross its boundary are.
         opaque = set(request.get("opaque") or [])
 
+        # Whether to hand back what each reported pair shares, as solids: what
+        # the interference test makes the parts of the assembly it leaves behind
+        # to look at (see 'test/interference.py'). Off unless asked for, since
+        # it is geometry a verdict alone does not need.
+        keep_common = bool(request.get("keep_common"))
+
         # The root's own name is on every part below it and says nothing, so
         # the paths are built from its children down: 'gearbox/shaft', not
         # 'assembly/gearbox/shaft'.
@@ -268,6 +291,7 @@ def process(path, request):
         for a, b in candidates:
             name_a, shape_a = a.path, a.shape
             name_b, shape_b = b.path, b.shape
+            common = None
             try:
                 common = BRepAlgoAPI_Common(shape_a, shape_b)
                 done = common.IsDone()
@@ -289,7 +313,12 @@ def process(path, request):
                 smaller = min(_volume(shape_a), _volume(shape_b))
                 if smaller > 0.0 and volume / smaller < min_fraction:
                     continue
-            overlaps.append({"a": name_a, "b": name_b, "volume": volume})
+            overlap = {"a": name_a, "b": name_b, "volume": volume}
+            if keep_common:
+                # Encoded on the way out like every shape a wrapper returns
+                # (see 'ocp_serialize.encode'), so each arrives as BREP bytes.
+                overlap["solids"] = _solids(common.Shape())
+            overlaps.append(overlap)
 
         overlaps.sort(key=lambda o: -o["volume"])
         return {

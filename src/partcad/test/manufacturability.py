@@ -27,7 +27,7 @@ produces the *route* -- the program a machine cuts the object with -- and this
 one is `manufacturability`. Both are computer-aided manufacturing; they differ
 in whether the answer is "yes, somebody can make this" or "here is the file that
 makes it". `pc test -f` filters by name prefix, so `-f manufacturability`
-selects this check and its three siblings and `-f cam` selects the route check
+selects this check and its seven siblings and `-f cam` selects the route check
 alone. The name is part of every cached verdict's key, so the first `pc test`
 after the rename re-runs these checks once and then caches as before.
 """
@@ -75,10 +75,14 @@ class ManufacturabilityTest(Test):
     def __init__(self) -> None:
         super().__init__("manufacturability")
 
+    def inapplicable(self, shape):
+        if not shape.is_manufacturable:
+            return "it says it is not manufacturable ('manufacturable: false')"
+        return None
+
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         if not shape.is_manufacturable and "force_manufacturing" not in test_ctx:
-            self.debug(shape, "Not supposed to be manufacturable")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         # Asked of every shape, before anything specific to one kind of them,
         # because it is not specific to one: it is about the file the object is
@@ -96,8 +100,7 @@ class ManufacturabilityTest(Test):
 
         # A sketch is the only other thing that reaches here, and reproducibility
         # is all of this test that applies to it: nothing manufactures a drawing.
-        self.debug(shape, "Not applicable")
-        return self.TEST_PASSED
+        return self.passed(shape, "reproducible; a sketch is not itself made, so nothing else is asked of it")
 
     def reproducibility_failure(self, shape) -> str | None:
         """Why this object cannot be made again, or None if it can.

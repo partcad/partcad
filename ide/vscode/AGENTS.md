@@ -136,7 +136,9 @@ send (`PartcadViewer`). `src/webview/` is what runs *inside* that webview: `view
 Manufacturing: what is built and what is bought, how to build it, the bill of materials, where to buy it and the
 assembly instructions. In front of all of them, for an object that declares `requirements:`, a Requirements tab:
 asked about on every show (`requirements.check`, a declaration read) and verified when opened, by the same code
-as `pc test -f requirements`. Only the 3D
+as `pc test -f requirements`. Validation's Test tab is every check `pc test` runs (`test.report`, listed and then
+run, by the same checks and cache), beside the text of `partcad/test/catalog.py`, which is also what the
+documentation lists the checks with -- edit a check's text there, never in TypeScript. Only the 3D
 view comes over the viewer protocol; every other tab is a question about `<package>:<name>` that the renderer
 cannot ask itself -- the CSP forbids network access and the daemon is behind the host's JSON-RPC connection --
 so it asks the host (`fetchTab`) and the host answers (`tabData`), on first look. Which is why the show

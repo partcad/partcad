@@ -11,14 +11,17 @@
 // panel is a strip of tabs over one object rather than a canvas:
 //
 //     (Requirements)  |  Design           |  Analysis   |  Manufacturing                                                    |  Validation  |  Operations
-//                           3D | 2D | Draft     FEA | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly
+//                           3D | 2D | Draft     FEA | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Test
 //
-// Three groups, each a strip of its own. Design is the object itself: turned in
+// Four groups, each a strip of its own. Design is the object itself: turned in
 // 3D, rendered to a picture, drawn as a dimensioned drawing. Analysis is what
 // engineering analysis says about it, and Manufacturing what making it takes -
 // which of its parts are made and which are ordered, how to make them, what it
-// is made of, where to buy it, how it goes together. Validation and Operations
-// hold nothing yet, and are always disabled.
+// is made of, where to buy it, how it goes together. Validation is whether it is
+// what it claims to be: its Test tab is every check 'pc test' runs on it, with
+// how each came out and what each is (see 'test.ts'), and it is always enabled,
+// since everything has checks. Operations holds nothing yet, and is always
+// disabled.
 //
 // Requirements comes before all of them, and only for an object that declares
 // a 'requirements:' section: it is what the object was asked to be, which is
@@ -36,8 +39,8 @@
 // This file is the shell: it owns the tab strips and the panes, routes what the
 // extension host posts in, and asks for the contents of a tab the first time it
 // is looked at. Each pane draws itself ('scene.ts', 'render.ts', 'bom.ts',
-// 'bvb.ts', 'build.ts', 'assembly.ts', 'supply.ts'); none of them talks to the
-// host directly.
+// 'bvb.ts', 'build.ts', 'assembly.ts', 'supply.ts', 'test.ts'); none of them
+// talks to the host directly.
 //
 // The Manufacturing strip is the one whose shape depends on an answer. Whether
 // anything is built (the Build tab) and whether anything is bought (the Buy tab)
@@ -74,6 +77,7 @@ import {
     saveChoices,
     saveRendered,
     sendState,
+    showObject,
 } from './host';
 import {
     ANALYSIS_TABS,
@@ -96,6 +100,8 @@ import {
     StateReplyMessage,
     SupplyData,
     TabId,
+    TestArtifact,
+    TestData,
     isAnalysisTab,
     isRenderTab,
 } from './messages';
@@ -105,6 +111,7 @@ import { spaceMouse } from './spacemouse';
 import { controlValues, snapshot } from './state';
 import { SupplyView } from './supply';
 import { TabSpec, Tabs } from './tabs';
+import { TestView } from './test';
 import { LinkFilter, OverlayRequest, Selection, Tree, filterIsEmpty } from './tree';
 
 const panes: Record<TabId, HTMLElement> = {
@@ -126,6 +133,7 @@ const panes: Record<TabId, HTMLElement> = {
     assembly: byId('pane-assembly'),
     fea: byId('pane-fea'),
     cfd: byId('pane-cfd'),
+    test: byId('pane-test'),
 };
 
 /** The tabs whose panes are rebuilt from scratch on every show. */
@@ -149,16 +157,23 @@ for (const tab of ANALYSIS_TABS) {
     caeViews[tab] = new CaeView(panes[tab], tab, (implementation) => runAnalysis(tab, implementation));
 }
 const requirementsView = new RequirementsView(panes.requirements);
+const testView = new TestView(panes.test, { onRun: () => runTests(), onShow: (artifact) => showArtifact(artifact) });
 const tabs = new Tabs(byId('tabs'), onTabSelected);
 const designTabs = new Tabs(byId('design-tabs'), (tab) => onInnerSelected('design', tab));
 const analysisTabs = new Tabs(byId('analysis-tabs'), (tab) => onInnerSelected('analysis', tab));
 const manufacturingTabs = new Tabs(byId('manufacturing-tabs'), (tab) => onInnerSelected('manufacturing', tab));
+// Shown though it holds one tab: Test is the first way of validating an object
+// the panel offers, and its name is what says the pane is 'pc test'.
+const validationTabs = new Tabs(byId('validation-tabs'), (tab) => onInnerSelected('validation', tab), {
+    alwaysShown: true,
+});
 
 /** Each group of the panel's strip, and the strip of its own it holds. */
 const groups: Partial<Record<TabId, Tabs>> = {
     design: designTabs,
     analysis: analysisTabs,
     manufacturing: manufacturingTabs,
+    validation: validationTabs,
 };
 
 /** The 3D view's module, once it has loaded; undefined before, and for good if it could not. */
@@ -501,15 +516,11 @@ function tabsFor(message: ShowMessage | undefined): TabSpec[] {
             disabled: !Tabs.anyEnabled(manufacturingTabsFor(message)),
             hint: 'No manufacturing or procurement instructions are provided for this object',
         },
-        // Placeholders for the groups to come: in the strip so that its shape is
-        // the one it will keep, disabled because they hold no tabs yet.
-        {
-            id: 'validation',
-            label: 'Validation',
-            pane: panes.validation,
-            disabled: true,
-            hint: 'No validation instructions are provided for this object',
-        },
+        // Always enabled: every object has checks, and 'pc test' says of every
+        // one of them whether it applies.
+        { id: 'validation', label: 'Validation', pane: panes.validation },
+        // A placeholder for the group to come: in the strip so that its shape
+        // is the one it will keep, disabled because it holds no tabs yet.
         {
             id: 'operations',
             label: 'Operations',
@@ -611,6 +622,15 @@ function manufacturingTabsFor(message: ShowMessage | undefined): TabSpec[] {
     ];
 }
 
+/**
+ * Validation: Test, the checks 'pc test' runs, first and always enabled - with
+ * nothing on screen it says so, and every object has checks, if only to say
+ * that they do not apply to it.
+ */
+function validationTabsFor(_message: ShowMessage | undefined): TabSpec[] {
+    return [{ id: 'test', label: 'Test', pane: panes.test }];
+}
+
 /** Rebuild every strip for an object: each group's own first, then the panel's. */
 function setAllTabs(message: ShowMessage | undefined): void {
     // The groups' strips first, so that the panel's, opening a group, finds the
@@ -618,6 +638,7 @@ function setAllTabs(message: ShowMessage | undefined): void {
     designTabs.setTabs(designTabsFor(message));
     analysisTabs.setTabs(analysisTabsFor(message));
     manufacturingTabs.setTabs(manufacturingTabsFor(message));
+    validationTabs.setTabs(validationTabsFor(message));
     tabs.setTabs(tabsFor(message));
 }
 
@@ -685,6 +706,9 @@ async function show(message: ShowMessage): Promise<void> {
     }
     resetRenderTabs('Select this tab to render it.');
     resetManufacturing('Asking PartCAD what this is made of…');
+    testView.setBusy(
+        message.package ? 'Select this tab to run the checks.' : 'PartCAD did not say which package this belongs to.',
+    );
     // Asked for now, whichever tab is open: which Manufacturing tabs apply
     // depends on the answer. No geometry is built for it.
     if (message.package && (message.kind === 'part' || message.kind === 'assembly')) {
@@ -789,6 +813,7 @@ function clear(): void {
     }
     resetRenderTabs('Nothing to render.');
     resetManufacturing('Nothing to show.');
+    testView.setBusy('Nothing to test: select an object.');
     requirements = undefined;
     requirementsView.setBusy('Nothing to show.');
     setAllTabs(undefined);
@@ -1064,6 +1089,10 @@ function onLeafSelected(tab: TabId): void {
         verifyRequirements();
         return;
     }
+    if (tab === 'test') {
+        listTests();
+        return;
+    }
     if (tab === 'draft') {
         startDraft();
         return;
@@ -1134,6 +1163,10 @@ function onTabData(
     }
     if (tab === 'requirements') {
         onRequirements(data as RequirementsData | undefined, error);
+        return;
+    }
+    if (tab === 'test') {
+        onTests(data as TestData | undefined, error);
         return;
     }
     if (tab === 'build') {
@@ -1288,6 +1321,70 @@ function onRequirements(data: RequirementsData | undefined, error: string | unde
     if ((requirementsShown() !== undefined) !== offered) {
         tabs.setTabs(tabsFor(shown));
     }
+}
+
+/**
+ * Opening the Test tab: list the checks first, which runs nothing, and run them
+ * once the list is on screen (see 'onTests').
+ *
+ * In two steps because the second is as slow as the slowest check - an
+ * interference builds the whole assembly, a simulation starts a simulator - and
+ * a reader who opened the tab to read what a check is should not wait for all
+ * of them to find out.
+ */
+function listTests(): void {
+    if (shown === undefined || !shown.package) {
+        return;
+    }
+    requested.add('test');
+    testView.setBusy('Asking PartCAD which checks apply…');
+    request('test', { verify: false });
+}
+
+/** "Run again": every check, through the cache, as 'pc test' runs them. */
+function runTests(): void {
+    if (shown === undefined || !shown.package) {
+        return;
+    }
+    requested.add('test');
+    testView.markRunning();
+    request('test', { verify: true });
+}
+
+/**
+ * The checks, or their verdicts, have arrived: draw them, and run the checks
+ * if this was only the list.
+ */
+function onTests(data: TestData | undefined, error: string | undefined): void {
+    if (error !== undefined || data === undefined || data === null) {
+        testView.showError(error ?? "PartCAD had nothing to say about this object's checks.");
+        return;
+    }
+    try {
+        testView.show(data, !data.verified);
+    } catch (e: unknown) {
+        testView.showError(`Failed to display this: ${e}`);
+        reportError(`failed to render the 'test' tab: ${e}`);
+        return;
+    }
+    if (!data.verified) {
+        runTests();
+    }
+}
+
+/**
+ * An artifact's button: show the object the check left behind, as the explorer
+ * would, in 3D.
+ *
+ * The panel moves to Design first, as if the reader had clicked it: an artifact
+ * is something to turn and take apart - the two parts of an interference
+ * switched off to leave what they share - and left on this tab, the next show
+ * would only start checking the artifact itself.
+ */
+function showArtifact(artifact: TestArtifact): void {
+    tabs.click('design');
+    designTabs.click('3d');
+    showObject({ type: 'showObject', package: artifact.package, name: artifact.name, kind: artifact.kind });
 }
 
 /** The Build tab's plan, or its pages: the plan is drawn, and the pages asked for after it. */

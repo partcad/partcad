@@ -17,15 +17,17 @@ class ManufacturabilityAdditiveSolidTest(Test):
     def __init__(self) -> None:
         super().__init__("manufacturability-additive")
 
-    async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+    def inapplicable(self, shape):
         if not isinstance(shape, Part):
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return "only a part is made by a manufacturing method"
+        if PartConfiguration.get_manufacturing_data(shape).method != METHOD_ADDITIVE:
+            return "it is not made by the 'additive' method ('manufacturing: method')"
+        return None
 
-        manufacturing_data = PartConfiguration.get_manufacturing_data(shape)
-        if manufacturing_data.method != METHOD_ADDITIVE:
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+    async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+        reason = self.inapplicable(shape)
+        if reason is not None:
+            return self.not_applicable(shape, reason)
 
         # TODO(clairbee): Utilize the data provided in the config
 

@@ -333,6 +333,39 @@ def test_an_instance_anywhere_says_which_one_it_was(ctx):
     assert details["m3"] == "'TR-thru' is there"
 
 
+def test_an_instance_reached_by_two_paths_is_wherever_either_places_it(monkeypatch):
+    """One inherited interface, reached under one instance name through two interfaces that inherit it.
+
+    Each path places the instance where its own interface instance is, and the
+    requirement is met by whichever of them it describes - the second here.
+    """
+    up = Location([0.0, 0.0, 0.0], [0.0, 0.0, 1.0], 0.0)
+    down = Location([0.0, 0.0, 0.0], [1.0, 0.0, 0.0], 180.0)
+    monkeypatch.setattr(requirements, "implemented_interfaces", lambda shape: {"//pkg:m3": {"X-thru": [up, down]}})
+
+    async def prepared(shape, ctx):
+        return None
+
+    from partcad import shape_ports
+
+    monkeypatch.setattr(shape_ports, "prepare_async", prepared)
+
+    def verified(interfaces):
+        entries = requirements._declared_checks(requirements.parse({"interfaces": interfaces}))[requirements.INTERFACES]
+        asyncio.run(requirements._verify_interfaces(None, object(), entries))
+        return entries[0][1]
+
+    named = verified({"m3": {"X-thru": [None, [0, 0, -1], None]}})
+    assert (named.passed, named.detail) == (True, "at [0, 0, 0], facing [0, 0, -1], turned 0")
+    anywhere = verified({"m3": [None, [0, 0, -1], None]})
+    assert (anywhere.passed, anywhere.detail) == (True, "'X-thru' is there")
+
+    # Neither meeting it says where each path put it.
+    missed = verified({"m3": [None, [0, 1, 0], None]})
+    assert missed.passed is False
+    assert missed.detail.count("facing") == 2, missed.detail
+
+
 def test_the_physics_is_what_pc_info_says_it_is(ctx):
     """Stated, else lent by the material, else worked out from the solid - by 'partcad.physics'."""
     resolved = asyncio.run(

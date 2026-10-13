@@ -62,6 +62,9 @@ _OPERATIONS = {
     # Not a CLI command: what the IDE's Requirements tab is drawn from. Its
     # verdicts are 'pc test -f requirements', by the same code.
     "requirements.check": operations.requirements_check,
+    # Not a CLI command: what the IDE's Test tab is drawn from -- 'pc test
+    # <object>', one line per check rather than a log, by the same checks.
+    "test.report": operations.test_report,
     "cae.analyze": operations.cae_analyze,
     "cae.defaults": operations.cae_defaults,
     "cam.route": operations.cam_route,

@@ -29,13 +29,17 @@ class RequirementsTest(Test):
     def __init__(self) -> None:
         super().__init__("requirements")
 
+    def inapplicable(self, shape):
+        if not requirements.anything_to_check(shape):
+            return "it requires no port, interface or physical property ('requirements:'), and no simulation names a feature"
+        return None
+
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         test_ctx[self.NOT_CACHEABLE] = True
 
         report = await requirements.check_async(ctx, shape)
         if not report.checks:
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         for check in report.checks:
             if check.passed is False:

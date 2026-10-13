@@ -73,8 +73,7 @@ class ManufacturabilityCutTest(ManufacturabilityMachineTest):
         """Cut the stock where the part says, and compare what is left with it."""
         machine = self._machine_of(shape)
         if machine is None:
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         manufacturing_data = PartConfiguration.get_manufacturing_data(shape)
         if not manufacturing_data.source:

@@ -43,20 +43,25 @@ class DegenerateTest(Test):
     def __init__(self) -> None:
         super().__init__("degenerate")
 
+    def inapplicable(self, shape):
+        if isinstance(shape, Sketch):
+            return "a sketch is flat by definition"
+        if isinstance(shape, Assembly):
+            return "an assembly is checked through its parts, each of which is tested in its own right"
+        return None
+
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         # A sketch is flat because that is what a sketch is. Measuring one
         # against a rule about having size in every direction fails it for
         # being what it was asked to be, and a check an object cannot pass and
         # should not be taking is worse than no check.
         if isinstance(shape, Sketch):
-            self.debug(shape, "Not applicable: a sketch is flat by definition")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         # An assembly is checked through its parts, each of which is tested in
         # its own right; an assembly's own box says nothing about them.
         if isinstance(shape, Assembly):
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         try:
             # A shape that did not build has no size for the same reason it has

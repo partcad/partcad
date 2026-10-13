@@ -185,3 +185,16 @@ def test_a_part_that_is_not_a_solid_is_not_checked_rather_than_checked_wrongly(m
     assert result["success"]
     assert result["unchecked"] == ["shell"]
     assert result["overlaps"] == [] and asked == []
+
+
+def test_what_each_reported_pair_shares_is_handed_back_when_asked_for():
+    """The solids of the common, for the interference test to leave behind to look at."""
+    request = _request()
+    assert all("solids" not in o for o in wrapper_interference.process(None, request)["overlaps"])
+
+    request["keep_common"] = True
+    result = wrapper_interference.process(None, request)
+    assert result["success"]
+    for overlap in result["overlaps"]:
+        assert len(overlap["solids"]) == 1
+        assert abs(wrapper_interference._volume(overlap["solids"][0]) - 200.0) < 1e-6

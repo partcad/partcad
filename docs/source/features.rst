@@ -57,9 +57,9 @@ The Digital Thread
 ------------------
 
 Displaying an object opens the ``Digital Thread``, which is a strip of tabs over that one object rather than
-a bare canvas: groups of tabs, each with tabs of its own -- **Design**, **Analysis** and **Manufacturing**,
-followed by **Validation** and **Operations**, which have nothing in them yet and are always disabled. Design
-is always the first:
+a bare canvas: groups of tabs, each with tabs of its own -- **Design**, **Analysis**, **Manufacturing** and
+**Validation**, followed by **Operations**, which has nothing in it yet and is always disabled. Design
+is always the first (see :doc:`digital_thread/index` for what each group is for):
 
 - **Design** — the object itself, three ways, in tabs of its own:
 
@@ -91,6 +91,12 @@ is always the first:
     (``pc instructions``).
 
   Manufacturing is for a part or an assembly; for a scene, a sketch or an interface it is disabled.
+- **Validation** — whether the object is what it claims to be:
+
+  - **Test** — every check ``pc test`` runs, with how each came out on this object: passed, failed, warned,
+    skipped, or not applicable and why. The check selected shows what it found and what it is, when it applies
+    and what to do when it fails (:doc:`digital_thread/testing`). An interference leaves an assembly of the two
+    parts and what they share, to open in 3D. Always enabled.
 
 Every group always shows all of its tabs and disables the ones that do not apply, and a group none of whose
 tabs apply is disabled itself, and says why when the mouse is over it. Design and its 3D tab are always enabled,
@@ -390,7 +396,7 @@ the method it declares, whether what it is made from is reproducible, whether a
 supplier could be found -- which is a different question from whether a
 post-processor can produce a program for it. One word answered both until
 ``pc cam`` existed. ``-f`` filters by name prefix, so ``-f manufacturability``
-selects that check and its three method-specific siblings and ``-f cam`` selects
+selects that check and its seven method-specific siblings and ``-f cam`` selects
 the route check alone.
 
 ``examples/feature_cam`` is the three operations on three objects, and a fourth

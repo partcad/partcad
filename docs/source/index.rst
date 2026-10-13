@@ -35,6 +35,12 @@ product development process.**
 
 .. toctree::
    :maxdepth: 2
+   :caption: Digital Thread
+
+   digital_thread/index.rst
+
+.. toctree::
+   :maxdepth: 2
    :caption: Command line
 
    cli.rst

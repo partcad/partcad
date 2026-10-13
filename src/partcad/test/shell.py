@@ -57,20 +57,25 @@ class ShellTest(Test):
     def __init__(self) -> None:
         super().__init__("shell")
 
+    def inapplicable(self, shape):
+        if isinstance(shape, Sketch):
+            return "a sketch is not a body"
+        if isinstance(shape, Assembly):
+            return "an assembly is checked through its parts, each of which is tested in its own right"
+        return None
+
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         # A sketch is made of edges, wires and faces, and a shell is not one of
         # the things it can be: the sketch factories keep the faces out of a
         # shell rather than the shell (see wrapper_common.combine). Failing one
         # for not being a body would fail it for being a sketch.
         if isinstance(shape, Sketch):
-            self.debug(shape, "Not applicable: a sketch is not a body")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         # An assembly is checked through its parts, each tested in its own
         # right; the compound of a set of parts says nothing they do not.
         if isinstance(shape, Assembly):
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         try:
             envelope = await shape.get_wrapped(ctx)

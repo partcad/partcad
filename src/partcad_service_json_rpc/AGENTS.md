@@ -215,6 +215,11 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   `pc test`'s `requirements` check reaches, by the same code (`partcad/requirements.py`). An assembly is staged
   only when a physical property is to be checked, because that is what builds it -- what it weighs is worked out
   from the tree it is built as (`partcad/physics.py`), while its ports are read off a tree that needs no build.
+* `test.report`, behind the Digital Thread's Test tab: every check `pc test <object>` runs, as a list -- each
+  with its verdict (`passed`, `failed`, `warned`, `skipped`, `not-applicable`), what it said, what it left behind
+  to be looked at, and its entry in `partcad/test/catalog.py`. Without `verify` nothing is run and only the checks
+  that do not apply have a verdict; with it the checks run through the same cache `pc test` reads, so the two
+  give the same answer (`partcad/test/report.py`). An assembly or a scene is staged first when it is run.
 
 Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,

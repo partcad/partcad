@@ -20,10 +20,12 @@ import type { SpaceMouseSettings } from './spacemouse';
  *
  * Two levels of them. The panel's own strip is five groups, always the same
  * five: 'design', the object itself; 'analysis', what analysing it says;
- * 'manufacturing', what making it takes; and 'validation' and 'operations',
- * which have nothing in them yet and are shown disabled. Each group is a strip of its own: the
- * object as '3d' (first, always), '2d' and 'draft'; 'fea' and 'cfd'; 'bvb'
- * (Build vs Buy), 'build', 'supply' (labelled Buy), 'bom' and 'assembly'.
+ * 'manufacturing', what making it takes; 'validation', whether it is what it
+ * claims to be; and 'operations', which has nothing in it yet and is shown
+ * disabled. Each group is a strip of its own: the object as '3d' (first,
+ * always), '2d' and 'draft'; 'fea' and 'cfd'; 'bvb' (Build vs Buy), 'build',
+ * 'supply' (labelled Buy), 'bom' and 'assembly'; and 'test', what 'pc test'
+ * says of it, check by check.
  *
  * In front of the five, and only for an object that declares any:
  * 'requirements', a tab of its own with no strip under it.
@@ -44,7 +46,8 @@ export type TabId =
     | 'supply'
     | 'assembly'
     | 'fea'
-    | 'cfd';
+    | 'cfd'
+    | 'test';
 
 /** The Design tab's own tabs. */
 export const DESIGN_TABS: TabId[] = ['3d', '2d', 'draft'];
@@ -63,6 +66,9 @@ export function isRenderTab(tab: TabId): boolean {
  * 'pc render -e' uses one: see 'examples/feature_render_custom'.
  */
 export const DRAFT_PLUGINS = ['//pub/feature/render/draftwright'];
+
+/** The Validation tab's own tabs. */
+export const VALIDATION_TABS: TabId[] = ['test'];
 
 /** The two tabs that run an analysis rather than ask a question about the object. */
 export const ANALYSIS_TABS: TabId[] = ['fea', 'cfd'];
@@ -415,9 +421,25 @@ export interface FetchTabMessage {
     /**
      * On the Requirements tab: what is required alone (false, a read of the
      * declaration), or whether the model meets it as well (true, what
-     * 'pc test -f requirements' checks).
+     * 'pc test -f requirements' checks). On the Test tab: the checks alone
+     * (false, nothing run), or their verdicts as well (true, 'pc test').
      */
     verify?: boolean;
+}
+
+/**
+ * Renderer to host: show this object in the panel, as if it had been selected.
+ *
+ * What a Test tab's artifact opens with: an object the check left behind to be
+ * looked at, such as the two parts an interference was found between and what
+ * they share. Shown the way the explorer shows anything, through the daemon;
+ * not remembered as the selection, since nothing declares it.
+ */
+export interface ShowObjectMessage {
+    type: 'showObject';
+    package: string;
+    name: string;
+    kind: string;
 }
 
 /** Renderer to host: the thumbnails and measurements of these objects, sized 'width' x 'height'. */
@@ -775,4 +797,54 @@ export interface RequirementsData {
     verified: boolean;
     features: RequirementFeature[];
     requirements: RequirementCheck[];
+}
+
+/** How a check came out: see 'partcad.test.report'. Null until it has been run. */
+export type TestStatus = 'passed' | 'failed' | 'warned' | 'skipped' | 'not-applicable';
+
+/** Something a check said on the way to its verdict. */
+export interface TestFinding {
+    level: 'error' | 'warning' | 'info';
+    text: string;
+}
+
+/** An object a check left behind to be looked at, shown with 'ShowObjectMessage'. */
+export interface TestArtifact {
+    kind: string;
+    package: string;
+    name: string;
+    title?: string;
+    desc?: string;
+}
+
+/** One block of a check's documentation: the markup of 'partcad.test.catalog'. */
+export type TestDocBlock =
+    | { type: 'heading'; text: string }
+    | { type: 'paragraph'; text: string }
+    | { type: 'list'; items: string[] }
+    | { type: 'code'; language: string; text: string };
+
+/** What a check is, when it applies and what to do when it fails: 'partcad.test.catalog.describe()'. */
+export interface TestDoc {
+    title: string;
+    applies: string;
+    blocks: TestDocBlock[];
+}
+
+/** One check of 'test.report', and what it decided. */
+export interface TestResult {
+    name: string;
+    status: TestStatus | null;
+    findings: TestFinding[];
+    artifacts: TestArtifact[];
+    doc: TestDoc | null;
+}
+
+/** The 'test' tab's data: 'partcad.test.report.to_dict()'. */
+export interface TestData {
+    object: string;
+    kind: string;
+    /** Whether the checks were run, or only listed. */
+    verified: boolean;
+    tests: TestResult[];
 }

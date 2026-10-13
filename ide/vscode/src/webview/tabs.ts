@@ -65,9 +65,15 @@ export class Tabs {
      */
     private readonly known = new Set<HTMLElement>();
 
+    /**
+     * 'alwaysShown' keeps the strip on screen when it holds a single tab, which
+     * is otherwise hidden (see 'setTabs'): for a group whose one tab is the first
+     * of the kind more will join, and whose name is what says what the pane is.
+     */
     constructor(
         private readonly bar: HTMLElement,
         private readonly onSelect: (id: TabId) => void,
+        private readonly options: { alwaysShown?: boolean } = {},
     ) {
         this.bar.setAttribute('role', 'tablist');
     }
@@ -113,8 +119,9 @@ export class Tabs {
 
         empty(this.bar);
         // One tab is not a choice; the strip would be a title bar for a view
-        // there is no alternative to.
-        this.bar.hidden = specs.length < 2;
+        // there is no alternative to - unless the strip is to be kept (see the
+        // constructor).
+        this.bar.hidden = specs.length < (this.options.alwaysShown ? 1 : 2);
         for (const spec of specs) {
             const button = el('button', 'tab', spec.label);
             button.setAttribute('role', 'tab');
