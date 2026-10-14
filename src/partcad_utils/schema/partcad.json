@@ -149,57 +149,118 @@
         { "type": "string", "minLength": 1 }
       ]
     },
-    "cae-analysis": {
-      "type": "object",
-      "description": "The boundary conditions one analysis is run under. 'fix:' names what is held still, 'load:' what is pulled on; both name interface types this object implements, and 'load' values are a force (or a mass, which is the default reading of a bare number - in kilograms)",
-      "properties": {
-        "desc": { "type": "string", "maxLength": 1000 },
-        "implementation": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Who runs this analysis, as '<package>:<file type>'. Overrides the 'caeFeaImplementation'/'caeCfdImplementation' user configuration for this object; '-i' on the command line overrides both. A part that names one is saying which solver it was written against"
-        },
-        "fix": {
-          "oneOf": [
-            { "type": "string", "minLength": 1 },
-            { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-            {
-              "type": "object",
-              "patternProperties": {
-                "^[a-zA-Z0-9_/./:-]+$": {
-                  "oneOf": [
-                    { "type": "null" },
-                    { "type": "string" },
-                    { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
-                  ]
-                }
-              },
-              "additionalProperties": false
-            }
-          ]
-        },
-        "load": {
+    "cae-implementation": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Who runs this analysis, as '<package>:<file type>'. Overrides the user configuration option named after the analysis ('caeFeaImplementation', 'caeDynamicImplementation', 'caeThermalImplementation', 'caeCfdImplementation') for this object; '-i' on the command line overrides both. A part that names one is saying which solver it was written against"
+    },
+    "cae-set": {
+      "description": "Interface types this object implements, each meaning every instance of it: a name, a list of names, or a map from a name to the instances meant (nothing under a name is all of them)",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        {
           "type": "object",
           "patternProperties": {
             "^[a-zA-Z0-9_/./:-]+$": {
               "oneOf": [
-                { "$ref": "#/definitions/cae-load-value" },
-                {
-                  "type": "object",
-                  "patternProperties": {
-                    "^[a-zA-Z0-9_/./-]*$": { "$ref": "#/definitions/cae-load-value" }
-                  },
-                  "additionalProperties": false,
-                  "minProperties": 1
-                }
+                { "type": "null" },
+                { "type": "string" },
+                { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
               ]
             }
           },
           "additionalProperties": false
         }
+      ]
+    },
+    "cae-values": {
+      "description": "A map from an interface type this object implements to one value for every instance of it, or to a map naming the instance",
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./:-]+$": {
+          "oneOf": [
+            { "type": ["number", "string"] },
+            {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/./-]*$": { "type": ["number", "string"] }
+              },
+              "additionalProperties": false,
+              "minProperties": 1
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "cae-fea": {
+      "type": "object",
+      "description": "The boundary conditions a static stress analysis ('pc cae fea') is run under. 'fix:' names what is held still, 'load:' what is pulled on; both name interface types this object implements, and 'load' values are a force (or a mass, which is the default reading of a bare number - in kilograms)",
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "implementation": { "$ref": "#/definitions/cae-implementation" },
+        "fix": { "$ref": "#/definitions/cae-set" },
+        "load": { "$ref": "#/definitions/cae-load-values" }
       },
       "additionalProperties": false,
       "minProperties": 1
+    },
+    "cae-cfd": {
+      "type": "object",
+      "description": "The boundary conditions a flow analysis ('pc cae cfd') is run under. The object is the fluid volume. 'load:' names where the flow is driven in, as a force over the port's surface; 'outlet:' where it leaves, held at the reference pressure; 'fix:' names walls the fluid is held still against (an implementation treats every surface no condition names as a wall)",
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "implementation": { "$ref": "#/definitions/cae-implementation" },
+        "fix": { "$ref": "#/definitions/cae-set" },
+        "load": { "$ref": "#/definitions/cae-load-values" },
+        "outlet": { "$ref": "#/definitions/cae-set" }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "cae-dynamic": {
+      "type": "object",
+      "description": "The boundary conditions a dynamic (modal) analysis ('pc cae dynamic') is run under: 'fix:' names what is held still, and the analysis asks at which frequencies the object rings held so",
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "implementation": { "$ref": "#/definitions/cae-implementation" },
+        "fix": { "$ref": "#/definitions/cae-set" }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "cae-thermal": {
+      "type": "object",
+      "description": "The boundary conditions a heat transfer analysis ('pc cae thermal') is run under. 'temperature:' names surfaces held at a temperature (a number is degrees Celsius; '300 K' and '100 F' are converted); 'heat:' surfaces heat is put in through, as a power (a number is watts; 'mW' and 'kW' are understood); 'convection:' surfaces cooled by the surrounding fluid, as a film coefficient in W/(m^2*K). Every other surface is insulated",
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "implementation": { "$ref": "#/definitions/cae-implementation" },
+        "temperature": { "$ref": "#/definitions/cae-values" },
+        "heat": { "$ref": "#/definitions/cae-values" },
+        "convection": { "$ref": "#/definitions/cae-values" }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "cae-load-values": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./:-]+$": {
+          "oneOf": [
+            { "$ref": "#/definitions/cae-load-value" },
+            {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/./-]*$": { "$ref": "#/definitions/cae-load-value" }
+              },
+              "additionalProperties": false,
+              "minProperties": 1
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "cae-load-value": {
       "description": "A force, or a mass to weigh into one. A number is a mass in kilograms; a string ends in a unit name, case-insensitively, with or without a preceding space and with or without a plural 's': n/nm/mn/kn/newton for force, mg/g/kg/ton/tonne/lb/pound for mass",
@@ -995,42 +1056,95 @@
       "description": "The interfaces this object implements, and where each instance of each of them is. Declared by a part, a sketch and an assembly alike: an assembly whose 'map:' does not fit -- a fixture whose mounting face is a coordinate rather than a port of anything inside it -- states it the way a part does.",
       "type": "object",
       "patternProperties": {
-        "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": {
-          "oneOf": [
-            { "type": "string" },
-            { "type": "null" },
-            { "$ref": "#/definitions/OCCTLocation" },
-            {
-              "type": "object",
-              "patternProperties": {
-                "^[a-zA-Z0-9_/.%-]+$": { "$ref": "#/definitions/OCCTLocation" }
-              },
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "patternProperties": {
-                "^[a-zA-Z0-9_/./-]+$": {
-                  "type": "object",
-                  "properties": {
-                    "location": { "$ref": "#/definitions/OCCTLocation" },
-                    "port": {
-                      "description": "A port of this same object to place this instance at, instead of a location. The ports of an object are known before its 'implements:' is read, so this names one of its own 'ports:' or one its 'map:' externalized.",
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "params": { "type": "object", "properties": { "offset": { "type": "number" } } }
-                  },
-                  "anyOf": [{ "required": ["location"] }, { "required": ["port"] }],
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            }
-          ]
-        }
+        "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": { "$ref": "#/definitions/implemented-instances" }
       },
       "additionalProperties": false
+    },
+    "implemented-instances": {
+      "description": "The instances of one interface that a part or an assembly implements ('implements:') or that an interface inherits ('inherited-instances', which takes the same forms): nothing, for one unnamed instance at the origin; a name, for one instance of that name at the origin; a location, for one unnamed instance there; or every instance by its name. The unnamed instance is '' and brings the interface's ports in under their own names; any other instance puts its name and a '-' in front of them.",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string" },
+        { "$ref": "#/definitions/OCCTLocation" },
+        {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_/.%-]*$": { "$ref": "#/definitions/implemented-instance" }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        }
+      ]
+    },
+    "implemented-instance": {
+      "description": "One instance of an implemented interface: nothing, for the origin; a location; or the long form.",
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/definitions/OCCTLocation" },
+        {
+          "type": "object",
+          "properties": {
+            "location": { "$ref": "#/definitions/OCCTLocation" },
+            "port": { "$ref": "#/definitions/instance-port" },
+            "sketch": {
+              "description": "A part or an assembly draws the ports of an interface it implements the way that interface draws them, so 'sketch:' is not taken here. To draw them differently, implement an interface that draws them that way: one with what the outline depends on as a parameter ('nail-head;d=%head_d%', whose port draws 'circle;d=%d%'), or one that inherits this interface and restates the boundary in its own 'inherits:' ('m-thru-slotted').",
+              "not": {}
+            },
+            "params": { "$ref": "#/definitions/instance-params" }
+          },
+          "not": { "required": ["location", "port"] },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "inherited-instances": {
+      "description": "The instances of one interface that an interface inherits ('inherits:'). The same forms as 'implemented-instances', and an instance may also restate the boundary its ports are drawn with.",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string" },
+        { "$ref": "#/definitions/OCCTLocation" },
+        {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_/.%-]*$": { "$ref": "#/definitions/inherited-instance" }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        }
+      ]
+    },
+    "inherited-instance": {
+      "description": "One instance of an inherited interface: nothing, for the origin; a location; or the long form.",
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/definitions/OCCTLocation" },
+        {
+          "type": "object",
+          "properties": {
+            "location": { "$ref": "#/definitions/OCCTLocation" },
+            "port": { "$ref": "#/definitions/instance-port" },
+            "sketch": {
+              "description": "The boundary the ports this instance brings in are drawn with, instead of the one the inherited interface draws them with. The same opening drawn differently - a slotted hole is a through hole that mates as one and keeps its port, and what tells them apart is the outline. Written as a reference like any other, so parameter values go in the name: 'm-slotted;size=4,length=30'. Only an interface restates a boundary; a part or an assembly implements an interface that draws its ports the way it wants them drawn.",
+              "$ref": "#/definitions/object-reference"
+            },
+            "params": { "$ref": "#/definitions/instance-params" }
+          },
+          "not": { "required": ["location", "port"] },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "instance-port": {
+      "description": "A port of this same object to place this instance at, instead of a location. The ports of an object are known before its 'inherits:' or 'implements:' is read, so this names one of its own 'ports:' or one its 'map:' externalized.",
+      "type": "string",
+      "minLength": 1
+    },
+    "instance-params": {
+      "description": "Values for the freedom-of-movement parameters of the interface this is an instance of, by name.",
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [{ "type": "number" }, { "$ref": "#/definitions/expression" }]
+      }
     },
     "ports-section": {
       "description": "The ports this object has in addition to the ones it inherits from the interfaces it implements.",
@@ -1663,8 +1777,10 @@
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "cae": { "$ref": "#/definitions/output-section" },
-                "fea": { "$ref": "#/definitions/cae-analysis" },
-                "cfd": { "$ref": "#/definitions/cae-analysis" },
+                "fea": { "$ref": "#/definitions/cae-fea" },
+                "dynamic": { "$ref": "#/definitions/cae-dynamic" },
+                "thermal": { "$ref": "#/definitions/cae-thermal" },
+                "cfd": { "$ref": "#/definitions/cae-cfd" },
                 "simulate": { "$ref": "#/definitions/simulate" },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "vendor": { "type": "string", "minLength": 1 },
@@ -2232,38 +2348,7 @@
             "inherits":{
               "type": "object",
               "patternProperties":{
-                "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$":{
-                  "oneOf": [
-                    { "type": "null" },
-                    { "type": "string", "minLength": 1 },
-                    { "$ref": "#/definitions/OCCTLocation" },
-                    {
-                      "type": "object",
-                      "patternProperties": {
-                        "^[a-zA-Z0-9_/.%-]*$": { "$ref": "#/definitions/OCCTLocation" }
-                      },
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "patternProperties": {
-                        "^[a-zA-Z0-9_/.%-]*$": {
-                          "type": "object",
-                          "properties": {
-                            "sketch": {
-                              "description": "The boundary the ports this instance brings in are drawn with, instead of the one the inherited interface draws them with. The same opening drawn differently - a slotted hole is a through hole that mates as one and keeps its port, and what tells them apart is the outline. Written as a reference like any other, so parameter values go in the name: 'm-slotted;size=4,length=30'.",
-                              "$ref": "#/definitions/object-reference"
-                            },
-                            "location": { "$ref": "#/definitions/OCCTLocation" },
-                            "params": { "type": "object" }
-                          },
-                          "additionalProperties": false
-                        }
-                      },
-                      "additionalProperties": false
-                    }
-                  ]
-                }
+                "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": { "$ref": "#/definitions/inherited-instances" }
               },
               "additionalProperties": false
             },

@@ -3,7 +3,10 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The FEA and CFD tabs: the model an analysis produced, and what it found.
+// The Analysis tabs - FEA, Dynamic FEA, Heat Transfer and CFD: the model an
+// analysis produced, and what it found. One pane for all four, because what
+// differs between them is which solver runs and what it writes, and both of
+// those are the implementation's.
 //
 // The pane is three bands, top to bottom:
 //
@@ -36,7 +39,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { el, empty, placeholder } from './dom';
 import { IMAGE_TYPES, ImageView, decodeBase64 } from './image';
-import { CaeData, CaeFinding } from './messages';
+import { ANALYSIS_LABELS, AnalysisTabId, CaeData, CaeFinding } from './messages';
 import { Navigable, onScreen, spaceMouse } from './spacemouse';
 import {
     SOFTWARE_TRIANGLE_BUDGET,
@@ -387,6 +390,8 @@ function dispose(object: THREE.Object3D): void {
  * Fetching is the shell's job ('viewer.ts'), the same as for every other tab.
  */
 export class CaeView {
+    /** What the analysis is called on its tab, which is what the pane calls it too. */
+    private readonly label: string;
     private readonly field = el('input', 'cae-implementation') as HTMLInputElement;
     /** Whether the user has typed in the field, which makes its value theirs. */
     private edited = false;
@@ -404,17 +409,20 @@ export class CaeView {
      */
     private shown = 0;
 
-    constructor(pane: HTMLElement, analysis: string, onRun: (implementation: string) => void) {
+    constructor(pane: HTMLElement, analysis: AnalysisTabId, onRun: (implementation: string) => void) {
+        this.label = ANALYSIS_LABELS[analysis];
         pane.classList.add('cae');
 
         const header = el('div', 'cae-header');
         this.field.type = 'text';
         this.field.spellcheck = false;
         this.field.placeholder = '<package>:<file type>';
+        // The label where a person reads it, the id where they would type it:
+        // 'pc cae thermal' is the command, "Heat Transfer" is what it does.
         this.field.title =
-            `Which implementation runs the ${analysis.toUpperCase()}, as '<package>:<file type>'. ` +
+            `Which implementation runs ${this.label}, as '<package>:<file type>'. ` +
             `The same thing 'pc cae ${analysis} --implementation' names`;
-        this.field.setAttribute('aria-label', `${analysis.toUpperCase()} implementation`);
+        this.field.setAttribute('aria-label', `${this.label} implementation`);
 
         const run = el('button', 'cae-run', 'Run');
         const fire = () => onRun(this.field.value.trim());
@@ -462,7 +470,7 @@ export class CaeView {
         this.model.appendChild(placeholder(text));
     }
 
-    /** A refusal, which for these two tabs is usually the answer itself. */
+    /** A refusal, which for these tabs is usually the answer itself. */
     public showError(message: string): void {
         this.showFindings([]);
         this.clearModel();
@@ -488,7 +496,7 @@ export class CaeView {
             this.imageView = new ImageView(this.model);
             this.imageView.show(
                 `data:${IMAGE_TYPES[extension]};base64,${data.content}`,
-                `${data.analysis.toUpperCase()} result for ${data.object}`,
+                `${this.label} result for ${data.object}`,
             );
             return;
         }

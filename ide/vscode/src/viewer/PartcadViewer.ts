@@ -54,10 +54,12 @@ const TAB_COMMANDS: Record<string, string> = {
     supply: 'partcad.supplyQuote',
     // The assembly instructions, as a document and as the file Save writes.
     assembly: 'partcad.assemblyGuide',
-    // Both analyses are the one operation; which of them is asked for travels
-    // as an argument, exactly as 'pc cae fea' and 'pc cae cfd' are one
-    // operation with the analysis in the request.
+    // Every analysis is the one operation; which of them is asked for travels
+    // as an argument, exactly as every 'pc cae <analysis>' is one operation
+    // with the analysis in the request - and the tab's id is that argument.
     fea: 'partcad.cae',
+    dynamic: 'partcad.cae',
+    thermal: 'partcad.cae',
     cfd: 'partcad.cae',
     // One object to one file: a picture PartCAD renders itself, or a drawing
     // a package renders ('pc render -e').
@@ -103,8 +105,12 @@ interface RenderedFile {
     extension: string;
 }
 
-/** The tabs that run an analysis rather than ask a question about the object. */
-const ANALYSIS_TABS = new Set(['fea', 'cfd']);
+/**
+ * The tabs that run an analysis rather than ask a question about the object,
+ * each named after the analysis it asks 'cae.analyze' for. The renderer's
+ * 'ANALYSIS_TABS' is the same list, in the order it draws the strip in.
+ */
+const ANALYSIS_TABS = new Set(['fea', 'dynamic', 'thermal', 'cfd']);
 
 /**
  * The "Digital Thread" editor tab.
@@ -822,6 +828,8 @@ export class PartcadViewer implements vscode.Disposable {
 						<div id="analysis-tabs" class="tabs sub-tabs" hidden></div>
 						<div class="panes">
 						<div id="pane-fea" class="pane" hidden></div>
+						<div id="pane-dynamic" class="pane" hidden></div>
+						<div id="pane-thermal" class="pane" hidden></div>
 						<div id="pane-cfd" class="pane" hidden></div>
 						</div>
 						</div>

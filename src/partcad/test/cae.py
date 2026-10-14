@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""The shared body of the CAE checks `pc test` runs: FEA, and CFD.
+"""The shared body of the CAE checks `pc test` runs: FEA, dynamic FEA, heat transfer and CFD.
 
 A part passes when the analysis has **no findings**. That is the whole verdict,
 and it is deliberately not a threshold PartCAD holds an opinion about: what

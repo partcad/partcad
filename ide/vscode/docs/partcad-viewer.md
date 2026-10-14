@@ -9,6 +9,8 @@ The panel is a strip of tabs over one object, not a canvas:
 | **2D** | parts, assemblies, scenes, sketches | the daemon's `render.inline` (a picture `pc render` makes) |
 | **Draft** | parts, assemblies | the daemon's `render.inline`, with a drawing package (`pc render -e`) |
 | **FEA** | parts | the daemon's `cae.analyze` (what `pc cae fea` runs) |
+| **Dynamic FEA** | parts | the daemon's `cae.analyze` (what `pc cae dynamic` runs: natural frequencies and mode shapes) |
+| **Heat Transfer** | parts | the daemon's `cae.analyze` (what `pc cae thermal` runs) |
 | **CFD** | parts | the daemon's `cae.analyze` (what `pc cae cfd` runs) |
 | **Build vs Buy** | parts, assemblies | the daemon's `manufacturing.tree` and `manufacturing.details`, and the user's choices from `~/.partcad/garage` |
 | **Build** | whatever is built | the daemon's `manufacturing.plan` (the order `pc instructions` writes its pages in) |
@@ -248,7 +250,7 @@ the protocol has no authentication.
 | `src/webview/requirements.ts` | The Requirements tab: the marks, and the features with what validates each |
 | `src/partcad/requirements.py` | What a requirement means and whether the model meets it, for this tab and for `pc test` |
 | `src/common/garage.ts` | Where the Build vs Buy choices are kept, on this machine |
-| `src/webview/cae.ts` | The FEA and CFD tabs: the result model, and the findings |
+| `src/webview/cae.ts` | The Analysis tabs (FEA, Dynamic FEA, Heat Transfer, CFD): the result model, and the findings |
 | `src/webview/simulation.ts` | The Simulation tab: the simulations declared, and the scene before and after one ran |
 | `src/partcad/simulation.py` | What `simulate:` declares, how a run goes, and the pictures a plugin is asked to take |
 | `src/partcad/cae.py` | What a part declares about an analysis, and in what units |
@@ -401,21 +403,27 @@ directory that is deleted as soon as the document is built — and because the C
 anyway. An assembly PartCAD cannot write instructions for (not an ASSY file, or not meant to be built) is
 refused with the reason, and the tab shows that.
 
-**FEA** and **CFD** are the one thing in this panel that *does* something rather than asks about
-something: selecting the tab runs a solver, through the same `Shape.analyze_async()` that `pc cae fea` and
-`pc cae cfd` run. A part with no `fea:`/`cfd:` section of its own is told so in the tab, which is why the tab
-is offered for every part rather than only for the ones that declare it -- "this part says nothing about FEA"
-is the answer somebody who went looking for the tab came to read.
+The **Analysis** tabs -- **FEA**, **Dynamic FEA**, **Heat Transfer** and **CFD**, in that order -- are the one
+thing in this panel that *does* something rather than asks about something: selecting a tab runs a solver,
+through the same `Shape.analyze_async()` that `pc cae <analysis>` runs. Each tab is named after its analysis
+on the command line -- `fea` (static), `dynamic` (modal: natural frequencies and mode shapes), `thermal`
+(steady-state heat transfer) and `cfd` -- and that id, not the label, is what the host asks `cae.analyze` for,
+so all four are one pane (`CaeView`) and one command (`partcad.cae`) and a fifth analysis is a row in
+`ANALYSIS_TABS`/`ANALYSIS_LABELS` (`src/webview/messages.ts`), a pane in the HTML and an entry in the host's
+`TAB_COMMANDS`. A part with no section of its own for the analysis (`fea:`, `dynamic:`, `thermal:`, `cfd:`) is
+told so in the tab, which is why every tab is offered for every part rather than only for the ones that
+declare it -- "this part says nothing about heat transfer" is the answer somebody who went looking for the tab
+came to read.
 
 Three things about them are worth knowing:
 
 * **Which solver ran is a field over the model, centred.** It is pre-filled with the implementation the host
-  actually asked for -- from `cae.defaults`, which is the user configuration's `caeFeaImplementation` /
-  `caeCfdImplementation` -- and it is filled in even when the analysis failed, because that is exactly when
-  the user needs to see what was tried and type something else. Editing it and pressing Run or Enter re-asks
-  with that implementation, which is the same override `pc cae fea --implementation` is. Once it has been
-  typed in, it is the user's: a later answer no longer pre-fills over it, however long the run that produced
-  the answer had been going.
+  actually asked for -- from `cae.defaults`, which is the user configuration's `caeFeaImplementation`,
+  `caeDynamicImplementation`, `caeThermalImplementation` or `caeCfdImplementation` -- and it is filled in even
+  when the analysis failed, because that is exactly when the user needs to see what was tried and type
+  something else. Editing it and pressing Run or Enter re-asks with that implementation, which is the same
+  override `pc cae <analysis> --implementation` is. Once it has been typed in, it is the user's: a later answer
+  no longer pre-fills over it, however long the run that produced the answer had been going.
 * **The model is drawn according to its extension**, because which format an analysis writes is the
   implementation's decision and not PartCAD's. `glb`/`gltf`/`stl` get an orbit camera; `png`/`jpg`/`svg` and
   the other still-image types get an image that pans and zooms (wheel to zoom about the pointer, drag to pan,
@@ -423,8 +431,8 @@ Three things about them are worth knowing:
   model was written to. The model arrives as bytes rather than as that path: a webview has no file system in
   reach, and the daemon may not even be on this machine.
 * **The findings are the bottom fifth of the pane, and only when there are any.** An analysis that found
-  nothing is a pass, and a pass gives the model the whole pane. This is also what `pc test` checks: its `fea`
-  and `cfd` tests fail a part whose analysis produced any finding.
+  nothing is a pass, and a pass gives the model the whole pane. This is also what `pc test` checks: its `fea`,
+  `dynamic`, `thermal` and `cfd` tests fail a part whose analysis produced any finding.
 
 The 3D viewer here is deliberately not `scene.ts`. That one is a studio -- an environment map, a light rig,
 auto-rotation -- and an analysis result is the opposite kind of picture: its colours are the

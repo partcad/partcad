@@ -13,7 +13,7 @@
 // falling back to the first one it can open when it does not.
 //
 // A tab can be left out, or shown and disabled. The panel's strips are fixed
-// sets - 3D, 2D and Draft; FEA beside CFD; the five Manufacturing ones - that
+// sets - 3D, 2D and Draft; the four analyses; the five Manufacturing ones - that
 // show every one of their tabs always and disable what does not apply, so that the layout does not shift
 // from one object to the next and a missing tab reads as "not for this" rather
 // than as "not there". The tab the user last opened is remembered through a

@@ -222,7 +222,7 @@ at all).
   whether a file is written twice the same.)
 
 - **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae.py`):
-  `pc cae fea`/`pc cae cfd` are a third output section, `cae:`, resolved by the very code that resolves
+  `pc cae fea`/`dynamic`/`thermal`/`cfd` are a third output section, `cae:`, resolved by the very code that resolves
   `export:` and `render:` -- same `path`/`package`, same sandbox, same meta-wrapper (`wrapper_export.py`), and
   `Shape._run_implementation_async()` is the body all three share. It is deliberately **not** in
   `output.SECTIONS`: that tuple answers "which sections does a file type of `pc export`/`pc render` live in",
@@ -232,12 +232,19 @@ at all).
 
   What is genuinely new is the two halves either side of the script. Going in, the *part* declares the
   boundary conditions in a section named after the analysis, because they belong to the part and not to
-  whoever analyses it; `cae.py` parses `fix:`/`load:`, converts the units (a bare number is a mass in
-  kilograms, weighed into newtons at `GRAVITY`; everything is stored as force), and `assign_ports()` attaches
-  them to the ports `shape_ports.ports_async()` already knows how to find -- so
-  `pc render --with-ports --with-internals` draws exactly what a solver was told. Coming back, the implementation reports **findings** beside the file
-  it wrote, a JSON array that `pc cae` prints, `pc test`'s `fea`/`cfd` checks fail on, and the IDE lists under
-  the model. `cae.py` imports nothing from `partcad`, which is what lets it be tested without a sandbox.
+  whoever analyses it. `cae.ROLES` says which keys each analysis reads and how -- a *set* (`fix:`, `outlet:`)
+  or a *value* parsed into one stored unit (`load:` in newtons, a bare number being a mass weighed at
+  `GRAVITY`; `temperature:` in Celsius; `heat:` in watts; `convection:` in W/(m^2*K)) -- so a fifth analysis
+  is a row in that table, a CLI module, a test class and a schema definition, not a new parser.
+  `assign_ports()` attaches the conditions to the ports `shape_ports.ports_async()` already knows how to find,
+  with the interfaces drawn, so each record carries its port's **sketch** -- and `pc render --with-ports
+  --with-internals` draws exactly what a solver was told. In the sandbox, before the script runs,
+  `wrappers/cae_support.prepare()` imprints every sketch on the part and puts on each record the faces of the
+  part it covers (a sketchless port covers the face it lies on); the same module meshes with gmsh with those
+  faces named and writes the result glTF, so the solver-independent half of every implementation lives here
+  once. Coming back, the implementation reports **findings** beside the file it wrote, a JSON array that
+  `pc cae` prints, `pc test`'s per-analysis checks fail on, and the IDE lists under the model. `cae.py` imports
+  nothing from `partcad`, which is what lets it be tested without a sandbox.
 
   Both checks are gated on the part *declaring* the section, and that gate is the whole cost model: a
   `pc test -r` over a package tree must not start a solver for every bolt in it, and a bolt with no `fea:` has
@@ -1059,6 +1066,15 @@ at all).
   hole *is* a through hole — it inherits one, so it mates as one and keeps its port where the plain hole would
   have been — and what tells them apart is the outline and the freedom of movement. Without it a slotted hole
   is what it used to be in `//pub/std/metric/m`: an orphan with no parents, no compatibility and no mate.
+  **Only an interface restates one.** The same class reads a part's or an assembly's `implements:`, and there
+  `sketch:` is an error and is ignored: the outline is part of what the interface is, declared beside the
+  freedom of movement that goes with it, and a part restating it could draw a slot on a through hole with no
+  room to slide. A part with a slotted hole implements `m-thru-slotted`; one whose outline depends on its own
+  parameters implements an interface parametrized by them (`nail-head;d=%head_d%`). The schema says the same
+  with two pairs of definitions, `inherited-instances` and `implemented-instances`, identical but for that key
+  (refused with a description saying what to implement instead, which `assy_lint` reports as the message).
+  Keep the two in step: they once drifted apart the other way, and `implements:` refused the unnamed instance
+  `""` that the loader reads, so a part that loaded failed its own `pc lint`.
 
   **`alias:` is what keeps a published name working.** It is spelled as inheriting exactly one interface,
   once, unnamed, at the origin — which is the shape of inheritance that leaves the ports named as the
