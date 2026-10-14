@@ -657,10 +657,13 @@ def test_which_answers_for_each_allowed_name(tmp_path, monkeypatch):
     tool.write_text("#!/bin/sh\n")
     tool.chmod(0o755)
     monkeypatch.setenv("PATH", str(tool.parent))
+    # The allowed name that is not there is not `FreeCAD`, though FreeCAD goes by
+    # that name too: on a filesystem that ignores case -- macOS's, by default --
+    # `FreeCAD` is the file `freecad` is, and finding it there is the right answer.
     answer = service.handle_which(
-        ["freecad", "FreeCAD", "rm"], allowed={"freecad": None, "FreeCAD": None, "python": sys.executable}
+        ["freecad", "freecad-daily", "rm"], allowed={"freecad": None, "freecad-daily": None, "python": sys.executable}
     )
-    assert answer == {"freecad": str(tool), "FreeCAD": None, "rm": None}
+    assert answer == {"freecad": str(tool), "freecad-daily": None, "rm": None}
 
 
 def test_which_runs_nothing_and_reveals_nothing_unallowed(allowed):

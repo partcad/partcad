@@ -118,6 +118,17 @@ def test_the_host_interpreter_is_a_real_file(ctx):
     assert os.path.exists(runtime.host_exec_path)
 
 
+def test_a_requirement_is_installed_from_a_wheel_when_one_of_its_releases_has_one(ctx):
+    """An older release with a wheel, rather than a newer one to compile.
+
+    MuJoCo publishes no Intel macOS wheel after 3.10.0, and the sandbox there
+    tried to build 3.14.0 from source -- a plugin's requirement, which nothing
+    in PIP_CONSTRAINTS can know to bound.
+    """
+    command = ctx.get_python_runtime(VERSION).pip_install_command("mujoco>=3.2,<4", False)
+    assert command.index("--prefer-binary") < command.index("mujoco>=3.2,<4")
+
+
 def test_an_unbuilt_sandbox_runs_the_host_interpreter(ctx, tmp_path):
     """Until the environment exists, the host's is what creates it.
 

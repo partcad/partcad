@@ -349,6 +349,17 @@ scenes:
   stable:
     desc: Two aluminium blocks, the upper one squarely on top of the lower one
     type: assy
+    # Not on Intel macOS, where 'stands' would get the wrong answer rather than
+    # none. MuJoCo publishes no wheel for that platform after 3.10.0, and 3.10.0
+    # meets the floor with an edge of the bottom block where later releases meet
+    # its face -- two contacts rather than four -- so the stack rocks and the top
+    # block slides off. On Linux too, given that release; every other
+    # simulation in this package comes out the same in both. This line comes
+    # out when a sandbox there can have a MuJoCo newer than 3.10.
+    #
+    # On the scene rather than on 'stands', because 'unless' selects
+    # declarations -- the choice the cantilever in feature_cae makes too.
+    unless: [[macos, x86_64]]
     simulate:
       stands:
         desc: |
@@ -423,11 +434,14 @@ scenes:
     gravity: [2.539, 0, -9.476]
     parameters:
       # The same three the scene PartCAD ships takes, assigned by 'pc sim'. The
-      # stack that stands by default, so the scene on its own holds something --
-      # and it is a scene, so the link that places it says 'scene:'.
+      # PTFE stack by default, so the scene on its own holds something: the
+      # same geometry as 'stable', and so the same picture, but declared
+      # everywhere -- 'stable' is left out on Intel macOS (see it), and a scene
+      # whose default subject is missing does not load. It is a scene, so the
+      # link that places it says 'scene:'.
       subject:
         type: string
-        default: stable
+        default: slippery
       subject_kind:
         type: string
         default: scene
