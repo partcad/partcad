@@ -1,0 +1,18 @@
+# A bar hung from a frame by one end, on the axle the frame's 'axle' interface
+# says turns.
+#
+# The frame is placed; the bar is connected to it, and since the axle keeps its
+# turn once the two are joined, the connection is a joint - named 'swing',
+# which is what a validation reads it by. 'toParams' is where the joint
+# starts: 'start' degrees from hanging straight down, which is the joint's
+# zero. The two assemblies in partcad.yaml are this file at two starts.
+links:
+  - part: frame
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: bar
+    connect:
+      name: frame
+      with: eye
+      to: axle
+      joint: swing
+      toParams: { turnZ: {{ param_start }} }

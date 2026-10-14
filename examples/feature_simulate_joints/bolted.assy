@@ -1,0 +1,14 @@
+# A world with whatever is simulated in it bolted down: the 'subject' link is
+# 'fixed', so the subject's root body - the pendulum's frame - is welded to the
+# world, and the joints inside it still move.
+#
+# Where it goes is what the 'simulate:' says with its 'offset:', in the same
+# seven numbers the scene PartCAD ships takes ('//builtin/scene:subject'; see
+# the note beside 'subject_offset' there for why they arrive without brackets
+# or commas).
+{%- set offset = param_subject_offset.split() %}
+links:
+  - {{ param_subject_kind }}: "{{ param_subject }}"
+    name: subject
+    fixed: true
+    location: [[{{ offset[0] }}, {{ offset[1] }}, {{ offset[2] }}], [{{ offset[3] }}, {{ offset[4] }}, {{ offset[5] }}], {{ offset[6] }}]
