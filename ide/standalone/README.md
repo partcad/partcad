@@ -318,6 +318,16 @@ plants a stale `partcad.partcad-<version>` directory, runs the setup program ove
 runs, and checks both halves -- the stale directory is gone, and the two directories the pattern also matches
 were put back rather than deleted on the way past.
 
+An uninstall has the mirror image of that problem: it removes what the file list installed and nothing else, and
+a directory something else has written into stays, with every directory above it -- the application directory
+included. The editor writes into one as it runs. VSCodium 1.140 ships a Node.js compile cache under
+`resources\app\node-compile-cache` and opens it on Windows asking for `readOnly`, an option the Node.js inside
+its Electron (24.21) does not have and ignores; so each editor process that exits cleanly adds entries there for
+whatever the packaged cache did not cover, PartCAD's own extension among them. `[UninstallDelete]` removes that
+directory whatever is in it. The same `Install (windows-x86_64)` job is the check: it runs the editor once,
+uninstalls, and fails if the application directory is still there -- printing what was left in it and the
+uninstaller's log.
+
 `AppId` in the script is the identity Windows recognizes an upgrade and an uninstall by. It is fixed for the
 life of the product: regenerating it turns the next release into a second application installed beside this
 one.
