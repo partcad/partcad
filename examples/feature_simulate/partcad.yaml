@@ -338,10 +338,13 @@ scenes:
     gravity: [2.539, 0, -9.476]
     parameters:
       # The same three the scene PartCAD ships takes, assigned by 'pc sim'. The
-      # stack that stands by default, so the scene on its own holds something.
+      # PTFE stack by default, so the scene on its own holds something: the
+      # same geometry as 'stable', and so the same picture, but declared
+      # everywhere -- 'stable' is left out on Intel macOS (see it), and a scene
+      # whose default subject is missing does not load.
       subject:
         type: string
-        default: stable
+        default: slippery
       subject_kind:
         type: string
         default: assembly
