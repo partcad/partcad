@@ -587,6 +587,70 @@ and there is no container runtime here.
 the user setting `caeFeaImplementation`.
 """,
     ),
+    "dynamic": Entry(
+        "Vibration analysis (Dynamic FEA)",
+        "parts that declare a `dynamic:` section",
+        """
+Whether a part, held as its `dynamic:` section says, rings only where it may:
+the modal analysis is run by the implementation configured, and the part passes
+when it ran and found nothing - the same analysis as `pc cae dynamic`. A natural
+frequency is a property of the part and how it is held, not of what it carries,
+so the section says only where it is held.
+
+### When it does not apply
+
+Anything but a part, and a part that declares no `dynamic:` section.
+
+### When it fails
+
+- A sentence about the section (`'dynamic:' declares none of 'fix:'`, a key it
+  does not take, such as `load:`): fix the section.
+- `DYNAMIC could not be run by ...`: the solver or the mesher is not installed,
+  or failed; the report says which. Install it, or name another implementation.
+- `DYNAMIC findings: ...`: the analysis ran and found a problem - a mode where
+  the part must not ring. Change how it is held, or its stiffness or mass.
+
+It is skipped, with a warning, only where the implementation runs in a container
+and there is no container runtime here.
+
+### Settings
+
+`dynamic: fix:` (the interfaces it is held by) and `implementation:`; the user
+setting `caeDynamicImplementation`.
+""",
+    ),
+    "thermal": Entry(
+        "Heat transfer",
+        "parts that declare a `thermal:` section",
+        """
+Whether a part, heated and cooled as its `thermal:` section says, stays as cool
+as it has to: the analysis is run by the implementation configured, and the part
+passes when it ran and found nothing - the same analysis as `pc cae thermal`.
+
+### When it does not apply
+
+Anything but a part, and a part that declares no `thermal:` section.
+
+### When it fails
+
+- A sentence about the section (`'thermal:' declares none of 'temperature:',
+  'heat:', 'convection:'`, a key it does not take): fix the section.
+- `THERMAL could not be run by ...`: the solver or the mesher is not installed,
+  or failed; the report says which. Install it, or name another implementation.
+- `THERMAL findings: ...`: the analysis ran and found a problem - a temperature
+  the part must not reach - at the place named. Change the design, how it is
+  cooled, or the heat if the heat is what is wrong.
+
+It is skipped, with a warning, only where the implementation runs in a container
+and there is no container runtime here.
+
+### Settings
+
+`thermal: temperature:` (held at, in Celsius), `heat:` (put in, in watts),
+`convection:` (a film coefficient, in W/(m^2*K)) and `implementation:`; the user
+setting `caeThermalImplementation`.
+""",
+    ),
     "cfd": Entry(
         "Flow analysis (CFD)",
         "parts that declare a `cfd:` section",
@@ -617,7 +681,7 @@ and there is no container runtime here.
     ),
     "sim": Entry(
         "Does what its simulations say",
-        "parts and assemblies that declare `simulate:`",
+        "parts, assemblies and scenes that declare `simulate:`",
         """
 Whether the object does what its `simulate:` section says it does: each
 simulation is run - the object placed in its scene and handed to the simulation
@@ -627,7 +691,8 @@ same runs as `pc sim`, which also prints everything the plugin reported
 
 ### When it does not apply
 
-Anything but a part or an assembly, and one that declares no simulation.
+Anything but a part, an assembly or a scene, and one that declares no
+simulation.
 
 ### When it fails
 

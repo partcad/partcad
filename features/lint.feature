@@ -663,7 +663,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "partcad.yaml:6:9: {'invalid_field': True} is not valid under any of the given schemas"
+    And STDOUT should contain "partcad.yaml:6:24: True is not valid under any of the given schemas"
 
   @success
   Scenario: Valid ASSY file passes lint check

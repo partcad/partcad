@@ -5,9 +5,9 @@
 #
 """The `sim` check `pc test` runs: an object does what its `simulate:` says.
 
-`simulate:` is where a part or an assembly states what it is supposed to do --
-or not do -- once it is placed in a world and the world is switched on: not fall
-over, not slide off. `pc sim` runs those claims on request. This runs them as a
+`simulate:` is where a part, an assembly or a scene states what it is supposed
+to do -- or not do -- once it is placed in a world and the world is switched on:
+not fall over, not slide off. `pc sim` runs those claims on request. This runs them as a
 check, so that the claim is held to every time the package is tested rather
 than whenever somebody remembers to ask -- which is what lets the claim be
 written *first*: declare what the part must do, watch `pc test` fail, and design
@@ -38,7 +38,7 @@ deserves its verdict. Asked about by name -- `pc test <object>`, which is
 `Test.NAMED` -- it **fails**: somebody asked whether this object does what it
 says, and it says nothing.
 
-Only a **part or an assembly that declares the section** is checked. A
+Only a **part, an assembly or a scene that declares the section** is checked. A
 `pc test -r` over a package tree would otherwise start a simulator for every
 bolt in it, and a bolt with no `simulate:` has nothing to be placed in a world
 for; declaring one is how a user says "check this one", which is why the check
@@ -87,7 +87,7 @@ class SimTest(ImplementationTest):
 
     def inapplicable(self, shape):
         if pc_simulation.subject_kind(shape) is None:
-            return "only a part or an assembly declares 'simulate:'"
+            return "only a part, an assembly or a scene declares 'simulate:'"
         if not pc_simulation.of_shape(shape):
             return "it declares no simulation ('simulate:')"
         return None

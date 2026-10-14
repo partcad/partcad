@@ -55,7 +55,7 @@ through the same cache, so the panel and the command line give the same answer;
 **Run again** asks once more. An object that belongs to no package -- a shape
 shown from a script -- has nothing to ask PartCAD about, and the tab says so.
 
-**Simulation**, beside it, is for a part or an assembly that declares
+**Simulation**, beside it, is for a part, an assembly or a scene that declares
 ``simulate:``: each simulation it declares, run as ``pc sim -f <name>`` runs it,
 with whether its ``validation:`` held and a picture of the scene before and after
 (see :doc:`../simulation`). **Process Emulation** holds nothing yet.

@@ -88,12 +88,11 @@ the same simulations as its `sim` check: that check gives a verdict, and this
 gives what happened.
 
 ```sh
-pc --no-ansi sim <object> --json 2>&1               # -a for an assembly
+pc --no-ansi sim <object> --json 2>&1               # -a for an assembly, -S for a scene
 ```
 
-`simulate:` is declared by a part or an assembly, and `pc sim` takes those two
-kinds only. To validate a scene, run it for each part and assembly the scene
-places that declares a `simulate:`; a sketch has nothing to simulate.
+`simulate:` is declared by a part, an assembly or a scene, and `pc sim` takes all
+three. A sketch has nothing to simulate.
 
 Every `simulate:` entry runs and its `validation:` is evaluated. A simulation
 that names a feature is evidence for that feature, and `--json` gives what

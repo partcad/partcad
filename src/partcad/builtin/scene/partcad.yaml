@@ -50,8 +50,11 @@ scenes:
       subject:
         type: string
         default: ""
-      # Which kind of object that is, since an ASSY link names a part and an
-      # assembly with different keys. `pc sim` fills it in from what it resolved.
+      # Which kind of object that is - `part`, `assembly` or `scene` - since an
+      # ASSY link names each with a key of its own. `pc sim` fills it in from
+      # what it resolved. A scene placed here keeps its elements bodies of their
+      # own, and an assembly is one articulated body tree whose root is free:
+      # this world welds nothing to itself.
       subject_kind:
         type: string
         default: assembly

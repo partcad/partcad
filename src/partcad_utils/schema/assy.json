@@ -178,10 +178,10 @@
       "additionalProperties": false
     },
     "node": {
-      "description": "A node of the assembly tree: a reference to a part, a reference to an assembly, or a container of other nodes.",
+      "description": "A node of the assembly tree: a reference to a part, a reference to an assembly, a reference to a scene (in a scene only), or a container of other nodes.",
       "type": "object",
       "properties": {
-        "type": { "type": "string", "enum": ["part", "assembly"] },
+        "type": { "type": "string", "enum": ["part", "assembly", "scene"] },
         "name": { "type": "string", "minLength": 1 },
         "description": {
           "type": "string",
@@ -189,6 +189,15 @@
         },
         "part": { "type": "string", "minLength": 1 },
         "assembly": { "type": "string", "minLength": 1 },
+        "scene": {
+          "description": "A scene to place here, every element of which is a rigid body of its own in turn. Only a scene may place one: everything in an assembly is attached to it, and nothing in a scene is.",
+          "type": "string",
+          "minLength": 1
+        },
+        "fixed": {
+          "description": "Whether what this link places is welded to the world - a table, a tank's walls, a robot bolted to the floor - rather than free to fall, which is the default. A scene's to say: an assembly placed in a scene is fixed or free as a whole, by the link that places it, and fixing a scene fixes every element in it.",
+          "type": "boolean"
+        },
         "package": { "type": "string", "minLength": 1 },
         "location": { "$ref": "#/definitions/OCCTLocation" },
         "connect": { "$ref": "#/definitions/connect" },
@@ -204,6 +213,9 @@
         { "not": { "type": "object", "required": ["part", "assembly"] } },
         { "not": { "type": "object", "required": ["part", "links"] } },
         { "not": { "type": "object", "required": ["assembly", "links"] } },
+        { "not": { "type": "object", "required": ["scene", "part"] } },
+        { "not": { "type": "object", "required": ["scene", "assembly"] } },
+        { "not": { "type": "object", "required": ["scene", "links"] } },
         { "not": { "type": "object", "required": ["location", "connect"] } },
         { "not": { "type": "object", "required": ["location", "connectPorts"] } },
         { "not": { "type": "object", "required": ["connect", "connectPorts"] } },
@@ -211,7 +223,8 @@
           "anyOf": [
             { "required": ["links"] },
             { "required": ["part"] },
-            { "required": ["assembly"] }
+            { "required": ["assembly"] },
+            { "required": ["scene"] }
           ]
         }
       ]

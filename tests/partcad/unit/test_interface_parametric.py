@@ -21,6 +21,7 @@ import pytest
 import partcad as pc
 from partcad import expr
 from partcad.consts import CAD_CONSTANTS
+from partcad_utils.assy_lint import PARTCAD_SCHEMA, get_schema, validate_source
 
 PACKAGE = "tests/partcad/unit/data/parametric_interfaces/partcad.yaml"
 
@@ -579,3 +580,85 @@ def test_a_part_gets_the_ports_of_the_interface_it_implements(ctx):
         "TL-thru-opening-m",
         "TR-thru-opening-m",
     ]
+
+
+def test_a_part_draws_what_it_implements_the_way_the_interface_draws_it(ctx):
+    """A plate with a slotted hole implements the slotted hole.
+
+    The interface draws the slot, as wide as the plate is asked for, and it
+    declares the freedom to slide along the slot in the same place. That is why
+    a part does not restate the boundary of what it implements: it implements
+    an interface that draws it that way.
+    """
+    plate = ctx.get_part(":slotted-plate")
+    ((name, port),) = plate.with_ports.get_ports().items()
+    assert name == "slotted-10-thru-opening-m"
+    assert port.sketch.name == "m-slot;size=3,width=10"
+    assert port.location.as_packed() == [[0, 0, 3], [1, 0, 0], 180]
+
+    # What 'pc info' shows, and what a drawing of the part's ports draws with.
+    assert plate.with_ports.info()["ports"][name]["sketch"] == "//:m-slot;size=3,width=10"
+    assert "//:m-thru-slotted;size=3,width=10" in plate.with_ports.get_interfaces()
+
+    wider = ctx.get_part(":slotted-plate;width=20")
+    (port,) = wider.with_ports.get_ports().values()
+    assert port.sketch.name == "m-slot;size=3,width=20"
+
+
+RESTATED = """
+sketches:
+  circle:
+    type: basic
+    circle: "%d / 2%"
+    parameters:
+      d: 3.0
+interfaces:
+  head:
+    ports:
+      head:
+        sketch: "circle;d=6"
+parts:
+  nail:
+    type: cadquery
+    path: nail.py
+    parameters:
+      head_d:
+        type: float
+        default: 8.7
+    implements:
+      head:
+        "":
+          location: [[0, 0, 1], [1, 0, 0], 180]
+          sketch: "circle;d=%head_d%"
+"""
+
+
+def test_a_part_does_not_restate_the_boundary_of_what_it_implements(tmp_path):
+    """'sketch:' on an 'implements:' instance is an error, and is ignored.
+
+    One class reads 'inherits:' and 'implements:', and it used to take 'sketch:'
+    from either, while the schema took it only in 'inherits:'. They agree the
+    other way now: the outline is the interface's, and a part whose outline
+    depends on its own parameters implements an interface parametrized by them
+    ('head;d=%head_d%').
+    """
+    (tmp_path / "partcad.yaml").write_text(RESTATED)
+    (tmp_path / "nail.py").write_text("")
+    ctx = pc.Context(str(tmp_path))
+
+    reported = []
+    with mock.patch.object(pc.logging, "error", lambda *args: reported.append(args)):
+        ports = ctx.get_part(":nail").with_ports.get_ports()
+
+    ((message,),) = reported
+    assert "nail" in message
+    assert "only an interface's 'inherits:' may" in message
+    # Drawn the way the interface draws it, at the location the part gave.
+    assert ports["head"].sketch.name == "circle;d=6"
+    assert ports["head"].location.as_packed() == [[0, 0, 1], [1, 0, 0], 180]
+
+
+def test_the_package_these_tests_read_is_one_its_linter_accepts():
+    """What the loader reads here, 'pc lint' has to accept."""
+    with open(PACKAGE) as f:
+        assert validate_source(f.read(), get_schema(PARTCAD_SCHEMA)) == []

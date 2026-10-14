@@ -139,8 +139,24 @@ def test_what_is_left_behind_is_not_listed_as_what_the_package_declares(ctx, tmp
     project = ctx.get_project("//")
     assert artifact["name"] in project.assemblies
 
+    # Each artifact gets the picture the README would show it with, so that
+    # what keeps it out is that it is not a declaration, not that nothing was
+    # rendered for it.
     out = tmp_path / "out"
     out.mkdir()
-    project.render_readme_async({}, str(out))
+    render = {"svg": {}}
+    left = [
+        (name, item)
+        for objects in (project.assemblies, project.parts)
+        for name, item in objects.items()
+        if name.startswith(artifact["name"])
+    ]
+    assert len(left) == 3
+    for name, item in left:
+        _, image = project.readme_image_path(name, render, ".", item.config)
+        (out / image).parent.mkdir(parents=True, exist_ok=True)
+        (out / image).write_text("<svg/>", encoding="utf-8")
+
+    project.render_readme_async(render, str(out))
     readme = (out / "README.md").read_text(encoding="utf-8")
     assert interference_artifact.SUBASSEMBLY not in readme

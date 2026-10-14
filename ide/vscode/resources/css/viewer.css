@@ -974,7 +974,7 @@ a {
 }
 
 /*
- * The analysis panes: FEA and CFD.
+ * The analysis panes: FEA, Dynamic FEA, Heat Transfer and CFD.
  *
  * Three bands, and the middle one takes what is left. Which solver ran is on
  * top, centred, because it is the one thing about an analysis a user changes

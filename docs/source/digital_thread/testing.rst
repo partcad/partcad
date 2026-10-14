@@ -492,6 +492,62 @@ Settings
 
 ``fea: fix:``, ``load:`` (a force; a bare number is kilograms) and ``implementation:``; the user setting ``caeFeaImplementation``.
 
+.. _test-dynamic:
+
+``dynamic``: Vibration analysis (Dynamic FEA)
+---------------------------------------------
+
+**Applies to** parts that declare a ``dynamic:`` section. ``pc test -f dynamic <object>`` runs it alone.
+
+Whether a part, held as its ``dynamic:`` section says, rings only where it may: the modal analysis is run by the implementation configured, and the part passes when it ran and found nothing - the same analysis as ``pc cae dynamic``. A natural frequency is a property of the part and how it is held, not of what it carries, so the section says only where it is held.
+
+When it does not apply
+^^^^^^^^^^^^^^^^^^^^^^
+
+Anything but a part, and a part that declares no ``dynamic:`` section.
+
+When it fails
+^^^^^^^^^^^^^
+
+* A sentence about the section (``'dynamic:' declares none of 'fix:'``, a key it does not take, such as ``load:``): fix the section.
+* ``DYNAMIC could not be run by ...``: the solver or the mesher is not installed, or failed; the report says which. Install it, or name another implementation.
+* ``DYNAMIC findings: ...``: the analysis ran and found a problem - a mode where the part must not ring. Change how it is held, or its stiffness or mass.
+
+It is skipped, with a warning, only where the implementation runs in a container and there is no container runtime here.
+
+Settings
+^^^^^^^^
+
+``dynamic: fix:`` (the interfaces it is held by) and ``implementation:``; the user setting ``caeDynamicImplementation``.
+
+.. _test-thermal:
+
+``thermal``: Heat transfer
+--------------------------
+
+**Applies to** parts that declare a ``thermal:`` section. ``pc test -f thermal <object>`` runs it alone.
+
+Whether a part, heated and cooled as its ``thermal:`` section says, stays as cool as it has to: the analysis is run by the implementation configured, and the part passes when it ran and found nothing - the same analysis as ``pc cae thermal``.
+
+When it does not apply
+^^^^^^^^^^^^^^^^^^^^^^
+
+Anything but a part, and a part that declares no ``thermal:`` section.
+
+When it fails
+^^^^^^^^^^^^^
+
+* A sentence about the section (``'thermal:' declares none of 'temperature:', 'heat:', 'convection:'``, a key it does not take): fix the section.
+* ``THERMAL could not be run by ...``: the solver or the mesher is not installed, or failed; the report says which. Install it, or name another implementation.
+* ``THERMAL findings: ...``: the analysis ran and found a problem - a temperature the part must not reach - at the place named. Change the design, how it is cooled, or the heat if the heat is what is wrong.
+
+It is skipped, with a warning, only where the implementation runs in a container and there is no container runtime here.
+
+Settings
+^^^^^^^^
+
+``thermal: temperature:`` (held at, in Celsius), ``heat:`` (put in, in watts), ``convection:`` (a film coefficient, in W/(m^2\*K)) and ``implementation:``; the user setting ``caeThermalImplementation``.
+
 .. _test-cfd:
 
 ``cfd``: Flow analysis (CFD)
@@ -525,14 +581,14 @@ Settings
 ``sim``: Does what its simulations say
 --------------------------------------
 
-**Applies to** parts and assemblies that declare ``simulate:``. ``pc test -f sim <object>`` runs it alone.
+**Applies to** parts, assemblies and scenes that declare ``simulate:``. ``pc test -f sim <object>`` runs it alone.
 
 Whether the object does what its ``simulate:`` section says it does: each simulation is run - the object placed in its scene and handed to the simulation plugin - and its ``validation:`` condition has to hold over what came back. The same runs as ``pc sim``, which also prints everything the plugin reported (``--json``). It is the most expensive question ``pc test`` asks, and is asked last.
 
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Anything but a part or an assembly, and one that declares no simulation.
+Anything but a part, an assembly or a scene, and one that declares no simulation.
 
 When it fails
 ^^^^^^^^^^^^^

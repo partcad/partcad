@@ -3168,7 +3168,7 @@ def test_test_report_names_what_it_could_not_find(monkeypatch):
 class FakeCae:
     """The subset of ``partcad.cae`` these operations reach for."""
 
-    ANALYSES = ("fea", "cfd")
+    ANALYSES = ("fea", "dynamic", "thermal", "cfd")
     FEA = "fea"
     CFD = "cfd"
 
@@ -3246,9 +3246,9 @@ def test_cae_analyze_refuses_an_analysis_partcad_does_not_run():
     session, _ = make_cae_session()
 
     with pytest.raises(JsonRpcError) as raised:
-        operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "thermal"})
-    assert "thermal" in str(raised.value)
-    assert "fea, cfd" in str(raised.value)
+        operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "acoustics"})
+    assert "acoustics" in str(raised.value)
+    assert "fea, dynamic, thermal, cfd" in str(raised.value)
 
 
 def test_cae_analyze_says_which_part_it_could_not_find():
@@ -3332,6 +3332,8 @@ def test_cae_defaults_answers_for_every_analysis():
 
     assert operations.cae_defaults(session, {}) == {
         "fea": "//pub/feature/cae/calculix:fea",
+        "dynamic": "//pub/feature/cae/calculix:dynamic",
+        "thermal": "//pub/feature/cae/calculix:thermal",
         "cfd": "//pub/feature/cae/calculix:cfd",
     }
 
@@ -4022,6 +4024,18 @@ def test_simulate_list_names_what_an_assembly_declares_without_running_it(monkey
             "validation": None,
         }
     ]
+
+
+def test_simulate_list_names_what_a_scene_declares(monkeypatch):
+    """A stack of blocks is a scene, and the Validation tab lists its claims as it lists a part's."""
+    install_fake_simulation(monkeypatch, {"pile": [declared_simulation("stands", simulation="sim-mujoco:mujoco")]})
+    session, _ = make_session()
+    session.partcad_ctx.shapes[("scene", "//:pile")] = FakeObject("pile")
+
+    result = operations.simulate_list(session, {"package": "//", "object": "pile", "kind": "scene"})
+
+    assert (result["object"], result["kind"]) == ("//:pile", "scene")
+    assert [entry["name"] for entry in result["simulations"]] == ["stands"]
 
 
 def test_simulate_list_of_an_object_that_declares_nothing_is_empty_rather_than_an_error(monkeypatch):

@@ -44,7 +44,8 @@ declaration of the same object:
      - ``pc info``, ``pc render``, ``pc export``
      - **Design**
    * - :doc:`Analysis <analysis>`
-     - ``physics:``, materials, ``fea:``, ``cfd:``, ``simulate:``
+     - ``physics:``, materials, ``fea:``, ``dynamic:``, ``thermal:``, ``cfd:``,
+       ``simulate:``
      - ``pc info``, ``pc cae``, ``pc sim``
      - **Analysis**
    * - :doc:`Manufacturing <manufacturing>`

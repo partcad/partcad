@@ -143,11 +143,11 @@ rebuilds the strip (`keepCurrent`, a Build vs Buy switch): what they did wins ov
 earlier, so a request waiting for Buy does not pull them off the tab they are working in. `TAB_GROUPS` in `src/webview/messages.ts` is the list of what can be asked for, and a Python
 test holds it to `VIEWER_TABS` on the other side.
 
-**The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA and CFD for a part, then
-Manufacturing: what is built and what is bought, how to build it, the bill of materials, where to buy it and the
-assembly instructions; then Validation: every check `pc test` runs, check by check (Test, first), and the
-simulations the object's `simulate:` section declares, each run and shown as the scene before and after. In front
-of all of them, for an object that declares `requirements:`, a Requirements tab: asked about on every show
+**The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA, Dynamic FEA, Heat Transfer and
+CFD for a part, then Manufacturing: what is built and what is bought, how to build it, the bill of materials, where
+to buy it and the assembly instructions; then Validation: every check `pc test` runs, check by check (Test, first),
+and the simulations the object's `simulate:` section declares, each run and shown as the scene before and after. In
+front of all of them, for an object that declares `requirements:`, a Requirements tab: asked about on every show
 (`requirements.check`, a declaration read) and verified when opened, by the same code as `pc test -f
 requirements`. Validation's Test tab is `test.report`, listed and then run by the same checks and cache as `pc
 test`, beside the text of `partcad/test/catalog.py`, which is also what the documentation lists the checks with --
@@ -211,16 +211,25 @@ its geometry is the geometry of every clone of it.
 
 None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote`, `cae.analyze` and
 `simulate.run` are the CLI's own operations (`pc bom`, the book `pc render -t html` writes, the cart
-`pc supply quote` fills, the analysis `pc cae fea`/`pc cae cfd` runs, the simulation `pc sim` runs), asked for
+`pc supply quote` fills, the analysis `pc cae <analysis>` runs, the simulation `pc sim` runs), asked for
 as data rather
 than as a file -- the same rule as everywhere else in this extension: extend the one backend, do not
 reimplement it in TypeScript.
 
-The FEA and CFD tabs *act* rather than ask: selecting one runs a solver. The field
-over the model names which -- pre-filled from `cae.defaults` (the user configuration's
-`caeFeaImplementation`/`caeCfdImplementation`) and filled in even when the run failed, which is when a user
-most needs to see what was tried. The model is drawn by its extension, because the format is the
-implementation's choice: a mesh gets an orbit camera, a picture pans and zooms. See
+The Analysis tabs -- FEA, Dynamic FEA, Heat Transfer and CFD -- are the ones that *act* rather than ask:
+selecting one runs a solver. Each is named after its analysis on the command line (`fea`, `dynamic`,
+`thermal`, `cfd`), which is the id the host asks `cae.analyze` for; the label a person reads is
+`ANALYSIS_LABELS` in `src/webview/messages.ts`, and it is never derived from the id -- "DYNAMIC" is not what
+anybody calls a modal analysis. The field over the model names which solver -- pre-filled from `cae.defaults`
+(the user configuration's `cae<Analysis>Implementation`: `caeFeaImplementation`, `caeDynamicImplementation`,
+`caeThermalImplementation`, `caeCfdImplementation`) and filled in even when the run failed, which is when a
+user most needs to see what was tried. The model is drawn by its extension, because the format is the
+implementation's choice: a mesh gets an orbit camera, a picture pans and zooms. An analysis is added on both
+sides of the panel at once -- the renderer's `TAB_GROUPS` (which `ANALYSIS_TABS` is read from) and
+`ANALYSIS_LABELS`, and the host's `TAB_COMMANDS`, `ANALYSIS_TABS` and the pane in its HTML
+(`src/viewer/PartcadViewer.ts`) -- and `viewerHostFilter.test.ts` fails for a renderer tab the host does not
+know. `VIEWER_TABS` in `src/partcad_ide_client/protocol.py` is the third place, held to `TAB_GROUPS` by a test,
+and is what gives `pc ide view` its `--analysis-<id>` flags. See
 [docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 The Simulation tab acts too. It sits in the Validation group after Test, which is always enabled -- every
@@ -272,7 +281,7 @@ Four things about it are load-bearing:
   the reason in the overlay; it lives there because every webview module imports it, and a module's
   dependencies are evaluated before its own body, so it is installed before anything can throw.
 - **No WebGL is not no 3D view -- in any pane.** Every pane that draws in 3D -- the 3D view (`scene.ts`) and the
-  FEA/CFD result model (`cae.ts`) -- gets what it draws with from `surface.ts` (`createSurface`), the first of
+  analysis result model (`cae.ts`) -- gets what it draws with from `surface.ts` (`createSurface`), the first of
   three backends the window can give: WebGL; else WebGPU, through three's `WebGPURenderer` (loaded from
   `three/webgpu` only then, which shares `three.core.js` with the `three` build the scene is made of, so the
   same meshes and materials draw); else the **canvas painter** (`painter.ts`), which projects the scene on the
@@ -894,6 +903,46 @@ more, so one build serves every platform.
 
 The same workflow packages `ide/vscode-shim` beside it, into the same artifact and onto the same release. That
 is the marketplace entry this extension used to be published under -- see "The marketplace identity" below.
+
+## Publishing to the Marketplace
+
+A release publishes both packages to the Visual Studio Marketplace by itself: `deploy.yml`, on a push to `main`,
+hands the artifact it just attached to the GitHub release to `.github/workflows/vsix-publish.yml`, which
+publishes `PartCAD.partcad-official` and then `OpenVMP.partcad`, in that order (see `ide/vscode-shim/AGENTS.md`
+for why). Nothing is rebuilt for it, and `--skip-duplicate` makes re-running a release finish what it did not.
+
+It signs in with **Microsoft Entra ID, not a personal access token**. `vsce` takes a PAT only if it was created
+for "All accessible organizations", which makes it a global PAT, and Azure DevOps stops accepting global PATs on
+2026-12-01. There is no secret to store or rotate: GitHub's OIDC token is exchanged for an Entra token through a
+federated credential, and that credential is bound to the `vscode-marketplace` environment, which only `main`
+may enter.
+
+One-time setup, for a maintainer who owns both the `PartCAD` and the `OpenVMP` publishers:
+
+1. **An app registration.** In the Azure portal, Microsoft Entra ID → App registrations → New registration
+   (single tenant, no redirect URI). Note its *Application (client) ID* and *Directory (tenant) ID*. It needs
+   no API permissions, no client secret and no Azure subscription.
+2. **A federated credential on it.** Certificates & secrets → Federated credentials → Add credential →
+   "GitHub Actions deploying Azure resources": organization `partcad`, repository `partcad`, entity type
+   *Environment*, environment `vscode-marketplace`. The subject it shows is
+   `repo:partcad/partcad:environment:vscode-marketplace`, and the audience stays `api://AzureADTokenExchange`.
+3. **The GitHub environment.** Settings → Environments → New environment `vscode-marketplace`. Under
+   *Deployment branches and tags* choose "Selected branches and tags" and add `main`. Under *Environment
+   variables* add `AZURE_CLIENT_ID` and `AZURE_TENANT_ID` from step 1. These are variables, not secrets:
+   neither is a credential, and the federated credential's subject is what keeps anyone else from signing in.
+   (A required reviewer here would make every release wait for a click, like `pypi` does; leave it out unless
+   that is wanted.)
+4. **The identity's profile ID.** A publisher takes a member by its Azure DevOps profile ID, and that can only
+   be read while signed in as the identity. Running `Extension (publish)` by hand (Actions → Run workflow, on
+   `main`) prints it -- *"Azure DevOps profile ID: ..."* -- and publishes nothing. Before this workflow is on
+   `main`, add `devel` to the environment's branches for the duration and run it on `devel`.
+5. **Membership of both publishers.** On <https://marketplace.visualstudio.com/manage/publishers/partcad> and
+   on <https://marketplace.visualstudio.com/manage/publishers/openvmp>: Members → Add → paste the profile ID →
+   role *Contributor*. Run the workflow by hand again; it checks both (`vsce verify-pat --azure-credential`)
+   and goes green. Take `devel` back out of the environment if step 4 put it there.
+
+A release whose environment is not set up fails this one job after everything else has been released, with an
+error saying what is missing; re-run the job once it is fixed.
 
 ## The icon
 

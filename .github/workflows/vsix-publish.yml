@@ -1,0 +1,202 @@
+# The VS Code extension, published to the Visual Studio Marketplace.
+#
+# Called by "deploy.yml" on a release (a push to "main"), after the GitHub
+# release is complete, with the two ".vsix" packages "vsix.yml" built in that
+# same run: "PartCAD.partcad-official", then the "OpenVMP.partcad" transition
+# shim. Nothing is built here -- what goes to the marketplace is byte for byte
+# what is attached to the release.
+#
+# Run by hand ("workflow_dispatch"), it publishes nothing: it signs in, prints
+# the identity's Azure DevOps profile ID and checks that identity may publish to
+# both publishers. That is the bootstrap -- the profile ID is what a publisher's
+# "Members" page asks for, and it can only be read while signed in as the
+# identity -- and the way to find out a release would fail before one does.
+#
+# It signs in with Microsoft Entra ID, not with a personal access token. A
+# Marketplace token has to be created for "All accessible organizations", which
+# makes it a *global* PAT, and Azure DevOps stops honouring those on
+# 2026-12-01. So there is no secret here at all: "azure/login" trades this job's
+# GitHub OIDC token for an Entra token through a federated credential on an app
+# registration, and that credential names the "vscode-marketplace" environment
+# as its subject -- only a job inside that environment can sign in as it, and
+# the environment admits only "main". "vsce --azure-credential" then picks the
+# Azure CLI session up. The setup is "Publishing to the Marketplace" in
+# "ide/vscode/AGENTS.md".
+name: Extension (publish) # Keep the action badge icon short
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      publish:
+        description: Publish the packages, rather than only check the sign-in
+        type: boolean
+        default: true
+
+# No "concurrency" block at the workflow level, for the reason "vsix.yml" gives:
+# a called workflow evaluates `github.workflow` as the caller's name. The job
+# below serializes itself instead.
+
+jobs:
+  publish:
+    name: Publish to the Visual Studio Marketplace
+    runs-on: ubuntu-24.04
+    # Where AZURE_CLIENT_ID and AZURE_TENANT_ID live, as environment variables
+    # rather than secrets: neither is a credential -- what stops anyone else
+    # signing in as the app is the federated credential's subject, which is this
+    # environment -- and a variable is readable in the log when it is wrong.
+    environment:
+      name: vscode-marketplace
+      url: https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official
+    # `id-token: write` is the OIDC token "azure/login" exchanges. The caller
+    # has to grant it as well -- a called workflow cannot hold a scope its
+    # caller's job does not -- which is why "deploy.yml" names it on the job
+    # that calls this.
+    permissions:
+      contents: read
+      id-token: write
+
+    # Two releases going out close together publish in order rather than
+    # interleaved, and a publish is never cancelled halfway through, between the
+    # extension and the shim. `queue: max` is the other half: by default a group
+    # holds one pending job, and a third release arriving would cancel the
+    # second's -- leaving a release on GitHub that never reached the
+    # marketplace. With it, pending publishes wait their turn in order.
+    concurrency:
+      group: publish-vscode-marketplace
+      cancel-in-progress: false
+      queue: max
+
+    env:
+      PUBLISH: ${{ inputs.publish && 'true' || 'false' }}
+
+    steps:
+      # Two files, not the tree: the release version, to pick the packages by
+      # name, and the lockfile, for the "vsce" that packaged them.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            dev-tools/bumpversion.toml
+            ide/vscode/package-lock.json
+          sparse-checkout-cone-mode: false
+
+      - name: Check the environment is set up
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+        run: |
+          missing=0
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::${name} is not set on the 'vscode-marketplace' environment"
+              missing=1
+            fi
+          done
+          if [ "${missing}" != 0 ]; then
+            echo "::error::See 'Publishing to the Marketplace' in ide/vscode/AGENTS.md."
+          fi
+          exit "${missing}"
+
+      - name: Determine the versions
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^current_version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+            dev-tools/bumpversion.toml)"
+          # The "vsce" that packaged the extension, so that what checks and
+          # publishes a package is what made it. "ide/vscode-shim" pins the
+          # same version in its script.
+          vsce="$(jq -r '.packages["node_modules/@vscode/vsce"].version // empty' \
+            ide/vscode/package-lock.json)"
+          if [ -z "${version}" ] || [ -z "${vsce}" ]; then
+            echo "::error::cannot read the release version (${version:-none}) or the vsce version (${vsce:-none})"
+            exit 1
+          fi
+          echo "RELEASE_VERSION=${version}" >> "${GITHUB_ENV}"
+          echo "VSCE=@vscode/vsce@${vsce}" >> "${GITHUB_ENV}"
+          echo "Release ${version}, vsce ${vsce}."
+
+      - name: Download the VS Code extension
+        if: env.PUBLISH == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-vsix
+          path: release/vsix
+
+      # Before signing in, so that a missing package fails on what is missing
+      # rather than after a sign-in that then publishes half a release.
+      - name: Check both packages are here
+        if: env.PUBLISH == 'true'
+        run: |
+          missing=0
+          for package in "partcad" "partcad-shim"; do
+            if [ ! -f "release/vsix/${package}-${RELEASE_VERSION}.vsix" ]; then
+              echo "::error::no release/vsix/${package}-${RELEASE_VERSION}.vsix"
+              missing=1
+            fi
+          done
+          ls -l release/vsix
+          exit "${missing}"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # No subscription: an app registration lives in the tenant and needs
+      # none, and nothing here touches an Azure resource.
+      - name: Sign in to Microsoft Entra ID
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      # The ID a publisher's "Members" page takes for this identity. Printed on
+      # every run, not only on a failure, because it is the one value the setup
+      # cannot get anywhere else. "499b84ac-..." is Azure DevOps' resource ID,
+      # the audience of every Marketplace token. It is an identifier, not a
+      # credential.
+      - name: Show the Azure DevOps profile ID
+        run: |
+          id="$(az rest --method get \
+            --url "https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1" \
+            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+            --query id --output tsv || true)"
+          echo "PROFILE_ID=${id}" >> "${GITHUB_ENV}"
+          echo "Azure DevOps profile ID: ${id:-<could not be read>}"
+
+      # Both publishers before either package. The shim's publisher is a
+      # different one, and an identity that is a member of only "PartCAD" would
+      # otherwise publish the extension and then fail on the shim.
+      - name: Check the identity may publish
+        run: |
+          failed=0
+          for publisher in PartCAD OpenVMP; do
+            if ! npx --yes "${VSCE}" verify-pat --azure-credential "${publisher}"; then
+              echo "::error::cannot publish as '${publisher}': add profile ID ${PROFILE_ID:-<above>} to" \
+                "https://marketplace.visualstudio.com/manage/publishers/${publisher,,} as a Contributor"
+              failed=1
+            fi
+          done
+          exit "${failed}"
+
+      # The extension first: the shim's "extensionDependencies" names it, and
+      # the editor fails an install whose dependency cannot be resolved. See
+      # "ide/vscode-shim/AGENTS.md".
+      #
+      # "--skip-duplicate" so that re-running a release that got as far as one
+      # of these finishes the other instead of failing on the first. It also
+      # makes re-running an old release a no-op rather than an error.
+      - name: Publish PartCAD.partcad-official
+        if: env.PUBLISH == 'true'
+        run: |
+          npx --yes "${VSCE}" publish --azure-credential --skip-duplicate \
+            --packagePath "release/vsix/partcad-${RELEASE_VERSION}.vsix"
+
+      - name: Publish OpenVMP.partcad (the transition shim)
+        if: env.PUBLISH == 'true'
+        run: |
+          npx --yes "${VSCE}" publish --azure-credential --skip-duplicate \
+            --packagePath "release/vsix/partcad-shim-${RELEASE_VERSION}.vsix"

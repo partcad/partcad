@@ -240,12 +240,74 @@ def test_an_object_that_declares_nothing_is_passed_over_without_running_anything
     assert _check(package, _part(package, "bolt")) is Test.TEST_PASSED
 
 
-def test_a_scene_is_not_a_subject():
-    """A scene is an assembly to the class hierarchy, and the world a subject goes in to everything else."""
-    assert simulation.subject_kind(types.SimpleNamespace(kind="scene")) is None
+def test_a_part_an_assembly_and_a_scene_are_subjects_and_nothing_else_is():
+    """A stack of blocks is an arrangement, so it is a scene - and it still claims to stand.
+
+    Asked of the kind rather than of the class: a scene is an assembly to the
+    class hierarchy, and what a simulation scene's link places has to be told
+    apart from it ('scene:' rather than 'assembly:').
+    """
+    assert simulation.subject_kind(types.SimpleNamespace(kind="scene")) == "scene"
     assert simulation.subject_kind(types.SimpleNamespace(kind="sketch")) is None
+    assert simulation.subject_kind(types.SimpleNamespace(kind="interface")) is None
     assert simulation.subject_kind(types.SimpleNamespace(kind="part")) == "part"
     assert simulation.subject_kind(types.SimpleNamespace(kind="assembly")) == "assembly"
+
+
+SCENE_PACKAGE = PACKAGE + """
+scenes:
+  stack:
+    type: assy
+    simulate:
+      stays:
+        desc: Nothing in the stack moves
+        simulation: :stub
+        validation: after["bodies"]["block"]["pos"][2] > 5.0
+"""
+
+
+def test_a_scene_that_claims_something_is_held_to_it(tmp_path, monkeypatch, plugin_runs):
+    """A stack of blocks is a scene, and 'pc test' runs its claim the way it runs a part's.
+
+    In the built-in world, which places it with a 'scene:' link - so what the
+    plugin was asked about is the scene, placed as one.
+    """
+    root = tmp_path / "workspace"
+    write_package(root, SCENE_PACKAGE)
+    (root / "stack.assy").write_text("links:\n  - part: block\n", encoding="utf-8")
+    ctx = pc.Context(str(root))
+    _equip(ctx, tmp_path, monkeypatch)
+    stack = ctx.get_project("//sim").get_scene("stack")
+
+    assert _check(ctx, stack) is Test.TEST_PASSED
+    assert plugin_runs == [1]
+    (declaration,) = simulation.of_shape(stack)
+    world = simulation._resolve_scene_of(ctx, stack, "scene", declaration)
+    asyncio.run(world.do_instantiate())
+    (subject,) = world.children
+    assert (subject.name, subject.item.kind, subject.item.name) == ("subject", "scene", "stack")
+
+
+def test_pc_sim_names_a_scene_and_walks_them(tmp_path, monkeypatch):
+    """'pc sim -S stack' runs the scene's claims, and 'pc sim' over the package runs them with the rest."""
+    from partcad_service_json_rpc.core import operations
+
+    root = tmp_path / "workspace"
+    write_package(root, SCENE_PACKAGE)
+    (root / "stack.assy").write_text("links:\n  - part: block\n", encoding="utf-8")
+    ctx = pc.Context(str(root))
+    asked = []
+
+    async def run(_ctx, shape, kind, declaration, report=True, plugin=None):
+        asked.append((kind, shape.name, declaration.name))
+        return simulation.SimulationResult(declaration, "%s:%s" % (shape.project_name, shape.name))
+
+    monkeypatch.setattr(simulation, "run_async", run)
+    asyncio.run(operations._simulate_async(ctx, pc, ["//sim"], "stack", "scene", None))
+    assert asked == [("scene", "stack", "stays")]
+    asked.clear()
+    asyncio.run(operations._simulate_async(ctx, pc, ["//sim"], None, "part", None))
+    assert asked == [("part", "block", "stays"), ("scene", "stack", "stays")]
 
 
 # --------------------------------------------------------------------------- #

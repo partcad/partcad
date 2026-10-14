@@ -21,8 +21,8 @@ point of the split:
 
 A single shape is '{"name", "label", "brep"}'; an assembly is
 '{"name", "label", "assembly": [...]}'. Either may also carry an optional
-"location", an optional "properties", an optional "joint" and an optional
-"metadata" (see the keys below).
+"location", an optional "properties", an optional "joint", an optional "kind",
+an optional "fixed" and an optional "metadata" (see the keys below).
 
 The two names answer different questions and a reader needs both. "name" is the
 *object*: '<package>:<object>', what the node holds, shared by every node that
@@ -123,6 +123,21 @@ KEY_PROPERTIES = "properties"
 # rigidly in one place and on a hinge in another. Carried opaquely by the core,
 # like the properties beside it, for an exporter that walks the tree.
 KEY_JOINT = "joint"
+# On every node an assembly or a scene places, and on the root of an assembly or
+# a scene: what the node holds - "part", "assembly" or "scene", the object's own
+# 'kind'. It is what decides which nodes of a tree are rigid bodies (see
+# docs/design/simulation.md, section 7, and 'wrappers/kinematics.py'): every
+# element of a scene is a body of its own, and everything inside an assembly is
+# attached to it. A node without one is read by what it carries - children make
+# it an assembly, geometry a part - which is what a lone part has always been and
+# what a tree written before this said about everything.
+KEY_KIND = "kind"
+# On a node a scene places with 'fixed: true': welded to the world rather than
+# free to fall. Absent means free, which is what every element of a scene was
+# before a scene could say otherwise. Stamped by the scene placing the node, like
+# the joint above, because it belongs to the placement and not to the object: one
+# table may stand bolted down in one scene and loose in another.
+KEY_FIXED = "fixed"
 # Optional metadata on a shape object: everything learnt about the shape by
 # whatever produced it, at the moment it was produced. This is *the* channel for
 # such knowledge - there is no second one - and it travels beside the BREP, is

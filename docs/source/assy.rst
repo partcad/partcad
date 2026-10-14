@@ -14,7 +14,8 @@ Syntax
 
 Each Assembly YAML (ASSY) file is a YAML file consisting of a tree of nodes.
 Each node is either a reference to an external part, a reference to an
-external assembly, or a container for such references.
+external assembly, a reference to an external scene (in a scene only, see
+:ref:`assy-scenes`), or a container for such references.
 
 Containers
 ----------
@@ -199,7 +200,9 @@ adjustment fixed at its value.
 
 A connection that keeps no degree of freedom attaches the part rigidly: there are
 no fixed joints. A scene's connections make no joints at all - a scene states
-where things are, and every element of one moves on its own.
+where things are, and every element of one moves on its own. Which parts are one
+rigid body, and which move against which, follows from that: see
+:ref:`sim-bodies`.
 
 `pc info -a <assembly>` lists the joints under ``Joints``: the two links each one
 joins, every degree of freedom it keeps - its kind, axis, range, starting value,
@@ -252,6 +255,9 @@ The following syntax is used to create a node that places an assembly in the ass
 
     assembly: <name of an assembly from this package or a global path "{/package}:{assembly}">
     ... # same as for parts
+
+A scene places a scene the same way, with ``scene:``, and may mark what any of
+its links places ``fixed:``; an assembly may do neither (see :ref:`assy-scenes`).
 
 Description
 -----------
@@ -665,7 +671,7 @@ in between, and nothing about the file itself says which it is.
     workcell:
       type: assy
 
-Everything above applies, with one exception: **a scene may not use** ``how``.
+Everything above applies, but for one thing it may not say: **a scene may not use** ``how``.
 An assembly is a product and says how it is put together, which is what the
 assembly instruction book is generated from. A scene states only an end state,
 and nothing in it was assembled, so there is nothing to say about the
@@ -675,13 +681,38 @@ being built and in the editor.
 The ``connect`` and ``connectPorts`` sections themselves stay. Placing a
 gripper against the fixture it holds is a statement about where things are, and
 saying it with the ports the two objects declare is better than saying it with
-coordinates somebody worked out by hand.
+coordinates somebody worked out by hand. They place; they do not attach, and a
+connection that keeps a degree of freedom makes no joint in a scene.
+
+Two things a scene may say that an assembly may not, and both follow from the
+same difference -- everything in an assembly is attached to it, and every element
+of a scene is a rigid body of its own (see :ref:`sim-bodies`):
+
+  .. code-block:: yaml
+
+    scene: <name of a scene from this package or a global path "{/package}:{scene}">
+    fixed: <(optional) true to weld what this link places to the world; false by default>
+    ... # the rest as for parts
+
+* ``scene:`` places another scene. Every element of it is a body of its own in
+  turn, as every element of this one is. An assembly cannot hold one: a product
+  is not made of arrangements, and an assembly that tried would be attached and
+  loose at once. It is refused while the assembly is built, and in the editor.
+* ``fixed: true`` welds what the link places to the world -- a table, a tank's
+  walls, a robot bolted to the floor -- where otherwise it would fall. On a link
+  that places an assembly it welds that assembly's root body, and the joints
+  inside it still move; on a link that places a scene, or on a ``links:`` list,
+  it fixes every element inside. In an assembly it is reported and ignored:
+  everything there is attached to the assembly already. Only a ``true`` or a
+  ``false`` is read, and it is not taken from the file's top-level node, which
+  is the scene itself: whether a scene is fixed is said by whatever places it.
 
   .. code-block:: yaml
 
     links:
       - part: //pub/robotics:bench
         name: bench
+        fixed: true
 
       - assembly: //pub/robotics:gripper
         name: gripper
@@ -690,6 +721,9 @@ coordinates somebody worked out by hand.
           with: mount
           to: rail
           # 'how' would be an error here
+
+      - scene: //pub/robotics:parts_tray
+        location: [[400, 0, 800], [0, 0, 1], 0]
 
 .. _assy-filter:
 
@@ -849,7 +883,7 @@ ASSY files are checked against a JSON schema
 (``src/partcad_utils/schema/assy.json``) that describes the
 document *after* Jinja2 rendering: the node keys above, the shape of an OCCT
 location, and the fact that ``location``, ``connectPorts`` and ``connect`` -- or
-``part``, ``assembly`` and ``links`` -- exclude one another.
+``part``, ``assembly``, ``scene`` and ``links`` -- exclude one another.
 
 One thing is checked beside the schema, because no schema can describe it: a
 ``connect:``/``connectPorts:`` names a link of the **same** ``links:`` list,
@@ -858,9 +892,10 @@ assembly is built. So does every name in a connection's ``interferes:``, which
 may be anywhere in the file. A name that is wrong would otherwise be answered,
 much later, with "Target part not found" and a part at the origin.
 
-A file read as a **scene** is checked against the same schema with ``how``
-forbidden. The scene schema is derived from the one above rather than kept
-beside it, so the two cannot drift apart; only the one rule differs.
+A file read as a **scene** is checked against that schema with ``how``
+forbidden, and one read as an **assembly** with ``scene`` and ``fixed``
+forbidden. Both are derived from the one schema rather than kept beside it, so
+the two cannot drift apart; only those rules differ.
 
 Because the file on disk is a template rather than the YAML it renders to, the
 checker **renders it** first, the way PartCAD does: with the parameters its
@@ -940,7 +975,10 @@ an editor checks the buffer on screen:
 Whether a single file is checked as an assembly or as a scene is not something
 the file says, so ``pc lint --file`` works it out from the ``partcad.yaml``
 files around it: a file at least one scene declares and no assembly declares is
-a scene. Say so outright with ``--schema``:
+a scene, and a file no package declares is checked as an assembly -- so a scene
+nobody has declared yet is told its ``scene:`` and ``fixed:`` are an assembly's
+mistake, with the advice to declare it under ``scenes:``. Say so outright with
+``--schema``:
 
   .. code-block:: shell
 

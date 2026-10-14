@@ -510,6 +510,26 @@ jobs:
           user: __token__
           password: "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY || secrets.TEST_PYPI_KEY }}"
 
+  # The VS Code extension on the Visual Studio Marketplace: the two ".vsix"
+  # packages attached to the release above, extension first and then the
+  # "OpenVMP.partcad" shim that depends on it. What the editor offers as an
+  # update is this; the release asset is what someone installs by hand.
+  #
+  # After the release and only on "main", for the same reason as the plugin
+  # branch below: an installation follows the marketplace without asking, so
+  # it should move only to a release that is complete. Its sign-in, and how to
+  # set it up, is in "vsix-publish.yml".
+  publish-vscode-marketplace:
+    needs: publish-to-pypi
+    if: github.ref == 'refs/heads/main'
+    # Naming permissions on a job that calls a workflow sets what that workflow
+    # may be granted, and drops everything unnamed to `none`. `id-token: write`
+    # is the one it needs and the top of this file does not grant.
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/vsix-publish.yml
+
   # The rolling marketplace branch: this release's plugin, symlink-free, at the
   # root of a branch, which is what `/plugin marketplace add
   # partcad/partcad@plugin-dist` reads. It is the "latest" everyone who
