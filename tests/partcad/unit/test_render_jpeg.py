@@ -207,6 +207,31 @@ def test_invalid_background_color_is_rejected():
         _raster_implementation().parse_background("#ff")
 
 
+def test_what_the_projection_warns_about_is_said_about_the_raster_too(tmp_path):
+    """A PNG or a JPEG is drawn from the SVG projection, and so are its warnings.
+
+    The projection warns about a part whose colour is not one (see
+    'appearance'); the picture drawn from it is that same part in goldenrod, and
+    without the warning nothing would say why.
+    """
+    raster = _raster_implementation()
+    warning = "Ignoring the colour 'red' of :bolt, which is not #RRGGBB or #RRGGBBAA"
+    raster.render_svg.process = lambda path, request: {"success": True, "exception": None, "warnings": [warning]}
+
+    class Drawing:
+        width = height = 10.0
+
+        def scale(self, x, y):
+            pass
+
+    raster.svglib.svg2rlg = lambda path: Drawing()
+    raster.renderPM.drawToFile = lambda *args, **kwargs: None
+
+    result = raster.process(str(tmp_path / "picture.png"), {}, "PNG")
+
+    assert result == {"success": True, "exception": None, "warnings": [warning]}
+
+
 def _readme_text(tmp_path):
     """The generated README, with path separators normalized.
 

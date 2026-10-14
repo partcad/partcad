@@ -45,11 +45,11 @@ millimetres; an angle is degrees. Each exporter converts at its own boundary --
 URDF and SDFormat to metres and radians, MJCF to metres and its own angles.
 
 ``bodies(tree, properties=None) -> Bodies``
-    The rigid bodies of a 'decode: false' tree, parents before children, as a
-    list with a 'problems' attribute (what the tree said that the rule ignores:
-    a 'fixed' inside an assembly, a joint inside a scene). 'properties' is the
-    request's properties index ('request["properties"]'), which every body's
-    physics is read from.
+    The rigid bodies of a shape tree - the 'shape_tree' every implementation is
+    handed - parents before children, as a list with a 'problems' attribute
+    (what the tree said that the rule ignores: a 'fixed' inside an assembly, a
+    joint inside a scene). 'properties' is the request's properties index
+    ('request["properties"]'), which every body's physics is read from.
 
 ``Body``
     'name' (unique in the list: the label of the node that placed it, then
@@ -829,7 +829,7 @@ class Bodies(list):
 
 
 def bodies(tree, properties=None) -> Bodies:
-    """The rigid bodies of a 'decode: false' tree, parents before children.
+    """The rigid bodies of a shape tree ('shape_tree'), parents before children.
 
     'properties' is the request's properties index: full name -> what that
     shape reports about itself, its resolved physics among it (see

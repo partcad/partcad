@@ -292,7 +292,7 @@ Four things about it are load-bearing:
   costs), which is why it is ours rather than theirs. It is a different renderer with different limits, and
   the panes say where they differ: it draws only when something changed (`invalidate`), not every frame; the
   model does not turn on its own until asked; it lights with ambient, hemisphere and directional lights only,
-  without three's 1/pi Lambert term and with no environment map, so the 3D view replaces its rig with a light
+  without three's 1/pi Lambert term and with no light probe, so the 3D view replaces its rig with a light
   that moves with the camera and the analysis view gives it the same flat light over pi; a solid (and an
   analysis result, which is the surface of a part) is drawn front-side only, because it orders whole triangles
   by depth and a far face would stripe the near one; a face is one colour, so a result's per-vertex colours
@@ -302,8 +302,8 @@ Four things about it are load-bearing:
   moves. The advice for getting the GPU back (`host.ts` `noWebGL`) is the tooltip of every such pane's
   `softwareNotice`. A WebGPU adapter is asked for before three is, because `WebGPURenderer` falls back to
   WebGL 2 by itself, and there is none. **An adapter and a successful `init()` do not make a WebGPU renderer
-  that draws**, so `surface.ts` draws a probe first -- each kind of material the panes make, lines, an
-  environment map, inside a validation error scope -- and takes the painter if it fails. Two windows fail it
+  that draws**, so `surface.ts` draws a probe first -- each kind of material the panes make, lines, each kind
+  of light, inside a validation error scope -- and takes the painter if it fails. Two windows fail it
   for real: a Chromium older than the WebGPU specification three is written against (r185 sends a texture
   view's `swizzle` as a string, and Chromium 141 refuses that from every `createView`, so every frame threw),
   and one whose GPU process cannot present a WebGPU canvas, where the device is lost on the first frame. A lost
@@ -312,6 +312,20 @@ Four things about it are load-bearing:
   "the device was lost". Where WebGL fails because the GPU process did, WebGPU usually fails with it -
   Chromium then offers the API and no adapter, not even the software fallback one - so the painter is what
   such a window ends up with; WebGPU is for a GPU WebGL could not use and WebGPU can.
+- **A shape is drawn in its own colour, and in goldenrod when it has none -- in every 3D pane, on every
+  backend.** The colour is a node's `properties.color` (`#RRGGBB`, or `#RRGGBBAA` for a see-through one), or
+  the nearest ancestor's, and `appearance.ts` decides it; a node that nothing colours is `DEFAULT_COLOR`,
+  `0xdaa520` -- OCCT's `Quantity_NOC_GOLDENROD`, and the colour PartCAD's own 2D projections draw an
+  uncoloured shape in. That constant is the twin of `DEFAULT_COLOR` in `src/partcad/wrappers/appearance.py`,
+  and a test on the Python side reads `appearance.ts` to hold the two together: change both. The 3D view
+  keeps one material per colour per show (`Geometry.faceMaterial`), and paints every node as it is handed
+  out, because geometry is shared between instances and the colour belongs to the instance. The FEA/CFD view
+  gives the default to a mesh that brings no colour (an STL, a glTF primitive with no material) and leaves a
+  result's own colours alone. Two things keep the colour *the* colour rather than one near it, and both were
+  measured, not guessed: the 3D view tone-maps with PBR Neutral, because ACES Filmic paled goldenrod to yellow,
+  and it is lit by a light probe of three's `RoomEnvironment` (`ROOM_LIGHT`) rather than by
+  `scene.environment`, because three's WebGL renderer lights a Phong material with an environment and its
+  WebGPU renderer only reflects it -- the same model was half as bright under WebGPU.
 - **Nothing is escaped on its way into a pane.** What the tabs display is text out of a package's
   configuration -- a description, a part name, a supplier's answer, the name of a port -- so every pane builds
   its DOM node by node through `src/webview/dom.ts` rather than assigning `innerHTML`. `textContent` cannot be

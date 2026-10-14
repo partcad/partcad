@@ -7,6 +7,12 @@
 
 'render_png.py' and 'render_dxf.py' both start from what this produces, so they
 import 'process()' from here rather than duplicating the projection.
+
+Every part is drawn in the colour it states, and in goldenrod when it states
+none (see 'appearance'). The colours are read off 'shape_tree', which every
+implementation is handed beside the geometry; a drawing in several colours is
+still projected in one go and split by colour only afterwards, so that one part
+hides another whatever colour either is: see 'project_by_color'.
 """
 
 import os
@@ -23,6 +29,7 @@ import pyexpat  # noqa: F401
 import build123d as b3d
 
 sys.path.append(os.path.dirname(__file__))
+import appearance
 import label_layout
 import ocp_serialize
 import stroke_text
@@ -31,16 +38,32 @@ import wrapper_common
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 # Two points closer than this are the same point, as far as a drawn line goes.
 TOLERANCE = 1e-9
 
+# What build123d repairs the curves of a projected edge to, which the projection
+# of several shapes at once ('_project_exact_each') does exactly as
+# 'project_to_viewport' does it for one.
+CURVE_TOLERANCE = 1e-6
+
+# The layer the shape is drawn on. A shape drawn in several colours gets a layer
+# per colour (see 'appearance'), each one '<g>' with one 'stroke': this one for
+# whatever is drawn in the default colour, and '<this>-<RRGGBB>' for each other.
+VISIBLE_LAYER = "Visible"
+
 # The colours the overlays "pc render --with-ports"/"--with-interfaces" are
-# drawn in. Both have to read against the green the geometry is drawn in and
-# against each other.
+# drawn in. Both have to read against the goldenrod the geometry is drawn in
+# when it states no colour of its own ('appearance.DEFAULT_COLOR') and against
+# each other. The interfaces were orange while the geometry was green; against
+# goldenrod, orange is a neighbour rather than a contrast, so they are violet -
+# the colour opposite goldenrod, and nowhere near the ports' blue.
 PORTS_COLOR = (32, 96, 224)
-INTERFACES_COLOR = (216, 118, 24)
+INTERFACES_COLOR = (176, 48, 192)
+
+# The colour an annotation is drawn in, dashed.
+ANNOTATIONS_COLOR = (192, 64, 64)
 
 # How big the port markers and their labels are, as a fraction of the
 # projection's largest dimension - so that they are the same size on the picture
@@ -419,7 +442,7 @@ def _interface_shapes(request):
                 collect(item)
         elif obj is not None and not isinstance(obj, (dict, str, bytes, int, float, bool)):
             # Anything else is geometry. A dict here would mean the request was
-            # not decoded, which a 'render:' file type never asks for - but a
+            # never decoded, and the export wrapper always decodes it - but a
             # sketch that failed to build leaves a null behind, and that is
             # ordinary.
             shapes.append(obj)
@@ -554,6 +577,112 @@ def _project_polygonal(shape, origin, up, look_at):
     return edges
 
 
+def _visible_of(to_shape, shape):
+    """The edges of 'shape' that 'to_shape' found visible, as OCCT edges.
+
+    The same three kinds '_project_polygonal' draws, asked for one of the shapes
+    the algorithm was given rather than for all of them. Both of OCCT's
+    extractors answer that question, and answer it after hiding every shape the
+    algorithm holds: what is returned is what is left of this one once the
+    others have stood in front of it.
+    """
+    from OCP.TopAbs import TopAbs_ShapeEnum
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    edges = []
+    for compound in (
+        to_shape.VCompound(shape),
+        to_shape.Rg1LineVCompound(shape),
+        to_shape.OutLineVCompound(shape),
+    ):
+        if compound is None or compound.IsNull():
+            continue
+        explorer = TopExp_Explorer(compound, TopAbs_ShapeEnum.TopAbs_EDGE)
+        while explorer.More():
+            edges.append(TopoDS.Edge_s(explorer.Current()))
+            explorer.Next()
+    return edges
+
+
+def _project_exact_each(shapes, origin, up, look_at):
+    """'_project_exact', of several shapes at once, answered shape by shape.
+
+    One hidden-line removal over all of them, so that a part behind another is
+    hidden by it exactly as it is when the two are one compound, and the visible
+    edges then read back per shape. What is done to each edge is what
+    'project_to_viewport' does to it, curves rebuilt to the same tolerance, so a
+    shape drawn this way is drawn as it would be on its own - only with the
+    other shapes in front of it.
+    """
+    from OCP.BRepLib import BRepLib
+    from OCP.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape
+
+    algo = HLRBRep_Algo()
+    for shape in shapes:
+        algo.Add(shape)
+    algo.Projector(_projector(origin, up, look_at))
+    algo.Update()
+    algo.Hide()
+
+    to_shape = HLRBRep_HLRToShape(algo)
+    projected = []
+    for shape in shapes:
+        edges = _visible_of(to_shape, shape)
+        for edge in edges:
+            BRepLib.BuildCurves3d_s(edge, CURVE_TOLERANCE)
+        projected.append([b3d.Edge(edge) for edge in edges])
+    return projected
+
+
+def _project_polygonal_each(whole, shapes, origin, up, look_at):
+    """'_project_polygonal', of several shapes at once, answered shape by shape.
+
+    'whole' is all of 'shapes' together. It is what is triangulated, once and to
+    one deflection worked out from its size, so that every part of the picture
+    is as fine as every other; the triangulation lives on the faces, which the
+    shapes share with it.
+    """
+    from OCP.BRepMesh import BRepMesh_IncrementalMesh
+    from OCP.HLRBRep import HLRBRep_PolyAlgo, HLRBRep_PolyHLRToShape
+
+    BRepMesh_IncrementalMesh(whole, _deflection(whole)).Perform()
+
+    algo = HLRBRep_PolyAlgo()
+    for shape in shapes:
+        algo.Load(shape)
+    algo.Projector(_projector(origin, up, look_at))
+    algo.Update()
+
+    to_shape = HLRBRep_PolyHLRToShape()
+    to_shape.Update(algo)
+    return [[b3d.Edge(edge) for edge in _visible_of(to_shape, shape)] for shape in shapes]
+
+
+def project_by_color(whole, groups, origin, up, look_at, reproducible=False):
+    """The visible edges of each colour of the shape, as '[(colour, edges), ...]'.
+
+    'groups' is what 'appearance.split_by_color' answers: the shape split by the
+    colour each part of it is drawn in, and 'whole' all of it.
+
+    A shape in one colour is projected exactly as it always was, by 'project()'.
+    A shape in several is projected in one go, all of its colours together, so
+    that a red part in front of a goldenrod one hides it just as it would if
+    both were goldenrod: projecting each colour on its own would draw every part
+    as though nothing stood in front of it.
+    """
+    if len(groups) == 1:
+        carrier = b3d.Solid.make_box(1, 1, 1)
+        carrier.wrapped = whole
+        return [(groups[0][0], project(carrier, origin, up, look_at, reproducible))]
+    shapes = [shape for _color, shape in groups]
+    if reproducible:
+        projected = _project_exact_each(shapes, origin, up, look_at)
+    else:
+        projected = _project_polygonal_each(whole, shapes, origin, up, look_at)
+    return [(color, edges) for (color, _shape), edges in zip(groups, projected)]
+
+
 def project(shape, origin, up, look_at, reproducible=False):
     """The visible edges of 'shape' seen from 'origin', as build123d edges.
 
@@ -587,7 +716,7 @@ def _canonical_number(text, precision):
     """One number, written to 'precision' decimal places and no further.
 
     Integers are left exactly as they are. Every one of them in this file is a
-    count or a name rather than a measurement - the channels of 'rgb(64,192,64)',
+    count or a name rather than a measurement - the channels of 'rgb(218,165,32)',
     the '1' and '-1' of the flip transform, the arc flags, the '2000' in the SVG
     namespace URL - and turning those into '64.0' would be rewriting something
     that was never a coordinate.
@@ -679,14 +808,58 @@ def _add_projected(exporter, layer, shapes, origin, up, look_at, reproducible=Fa
         wrapper_common.handle_exception(e)
 
 
+def line_color(color):
+    """A colour as 'ExportSVG' has to be handed it to write exactly that colour.
+
+    'color' is an '(red, green, blue)' of integers from 0 to 255, or a colour
+    string 'appearance.parse' reads.
+
+    'ExportSVG' turns each channel into a fraction of 255 and, writing the file,
+    back into an integer by truncating it - and a fraction of 255 does not always
+    come back to what it was: half of the 256 channel values come out one lower,
+    goldenrod's 165 among them. So it is handed each channel half a step above
+    what is meant, which truncates to exactly that.
+    """
+    if isinstance(color, str):
+        red, green, blue, alpha = appearance.parse(color)
+    else:
+        (red, green, blue), alpha = color, 1.0
+    return b3d.Color(*(min(channel + 0.5, 255) / 255.0 for channel in (red, green, blue)), alpha)
+
+
+def visible_layer(color):
+    """The layer the parts of a shape drawn in 'color' are drawn on."""
+    if color == appearance.DEFAULT_COLOR:
+        return VISIBLE_LAYER
+    return "%s-%s" % (VISIBLE_LAYER, color.lstrip("#"))
+
+
+def _by_color(request, warnings):
+    """The shape to draw and the same shape split by colour, as '(whole, groups)'.
+
+    'groups' is what 'appearance.split_by_color' answers. The colours are read
+    off 'shape_tree', which the export wrapper hands every implementation beside
+    the geometry (see 'wrapper_export.py'). A caller that hands this module the
+    geometry alone - a script of a package's own that imports it, a test - has
+    said nothing about any colour, and everything is drawn in the default one.
+    """
+    whole = request["wrapped"]
+    tree = request.get("shape_tree")
+    if tree is None:
+        return whole, [(appearance.DEFAULT_COLOR, whole)]
+    return whole, appearance.split_by_color(tree, whole, warnings)
+
+
 def process(path, request):
     try:
-        wrapped = request["wrapped"]
+        warnings = []
+        whole, groups = _by_color(request, warnings)
         if needs_mesh_normalization(request):
-            wrapped = _normalize_mesh(wrapped)
-
-        b3d_obj = b3d.Solid.make_box(1, 1, 1)
-        b3d_obj.wrapped = wrapped
+            groups = [(color, _normalize_mesh(shape)) for color, shape in groups]
+            if len(groups) == 1:
+                whole = groups[0][1]
+            else:
+                whole = ocp_serialize.compound_of(shape for _color, shape in groups)
 
         # The camera, from here on, for everything projected: the shape, the
         # annotations and the overlays all have to be seen from the one place,
@@ -701,7 +874,8 @@ def process(path, request):
         # this module is also imported and called directly by the other
         # renderers and by drawings other packages declare against it.
         reproducible = bool(request.get("reproducible", False))
-        visible = project(b3d_obj, origin, up, look_at, reproducible)
+        layers = project_by_color(whole, groups, origin, up, look_at, reproducible)
+        visible = [edge for _color, edges in layers for edge in edges]
         max_dimension = max(*b3d.Compound(children=visible).bounding_box().size)
         if max_dimension == 0:
             max_dimension = 4
@@ -711,20 +885,27 @@ def process(path, request):
             precision=precision(request),
         )
         line_weight = request.get("line_weight", 1.0)
-        exporter.add_layer(
-            "Visible",
-            line_color=(64, 192, 64),
-            line_weight=line_weight,
-        )
-        # A projection that cannot be added still leaves an SVG behind - an empty
-        # one. That predates this package and is deliberately kept, because it is
-        # what the shapes that hit it currently produce; what is new is that the
-        # reason no longer disappears silently (it was a bare 'except: pass', so
-        # it also swallowed KeyboardInterrupt).
-        try:
-            exporter.add_shape(visible, layer="Visible")
-        except Exception as e:
-            wrapper_common.handle_exception(e)
+        for color, edges in layers:
+            # A part hidden behind the others altogether has nothing to draw,
+            # and a layer of nothing is only noise in the file. A shape in one
+            # colour always gets its layer, empty or not, as it always did.
+            if not edges and len(layers) > 1:
+                continue
+            layer = visible_layer(color)
+            exporter.add_layer(
+                layer,
+                line_color=line_color(color),
+                line_weight=line_weight,
+            )
+            # A projection that cannot be added still leaves an SVG behind - an
+            # empty one. That predates this package and is deliberately kept,
+            # because it is what the shapes that hit it currently produce; what
+            # is new is that the reason no longer disappears silently (it was a
+            # bare 'except: pass', so it also swallowed KeyboardInterrupt).
+            try:
+                exporter.add_shape(edges, layer=layer)
+            except Exception as e:
+                wrapper_common.handle_exception(e)
 
         # The annotations go through the very same projection, so that a line
         # pointing at a feature of the shape still points at it once both are
@@ -735,7 +916,7 @@ def process(path, request):
         if edges:
             exporter.add_layer(
                 "Annotations",
-                line_color=(192, 64, 64),
+                line_color=line_color(ANNOTATIONS_COLOR),
                 line_weight=line_weight,
                 line_type=b3d.LineType.ISO_DASH,
             )
@@ -764,7 +945,7 @@ def process(path, request):
                     layer_shapes = layer_edges + shapes.get(layer, [])
                     if not layer_shapes:
                         continue
-                    exporter.add_layer(layer, line_color=color, line_weight=line_weight)
+                    exporter.add_layer(layer, line_color=line_color(color), line_weight=line_weight)
                     _add_projected(exporter, layer, layer_shapes, origin, up, look_at, reproducible)
             except Exception as e:
                 wrapper_common.handle_exception(e)
@@ -773,7 +954,13 @@ def process(path, request):
         if reproducible:
             _normalize(path, precision(request))
 
-        return {"success": True, "exception": None}
+        result = {"success": True, "exception": None}
+        # A colour a part states that is not one: drawn in the colour it would
+        # have had without it, and said here, because the picture alone cannot
+        # tell anybody why the red part came out goldenrod.
+        if warnings:
+            result["warnings"] = warnings
+        return result
     except Exception as e:
         wrapper_common.handle_exception(e)
         return {"success": False, "exception": wrapper_common.exception_to_str(e)}

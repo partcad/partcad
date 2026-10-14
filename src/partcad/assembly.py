@@ -428,8 +428,8 @@ class Assembly(Shape):
 
         A child that moves against its target carries its joint on the node as
         well (KEY_JOINT), beside the properties its object reports, so that an
-        exporter walking the tree ('decode: false') finds the mechanism where it
-        finds the parts. It is this assembly's account of the child, like the
+        exporter walking the tree (an implementation's 'shape_tree') finds the
+        mechanism where it finds the parts. It is this assembly's account of the child, like the
         label, so it is stamped here rather than by the child: one part may be
         placed rigidly once and on a hinge twice.
 

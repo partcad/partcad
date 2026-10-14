@@ -702,14 +702,12 @@ def test_parameters_exclude_the_reserved_fields():
             "package": "//p",
             "pythonRequirements": [],
             "extension": "step",
-            "decode": False,
             "comment": "x",
         },
     )
     assert impl.parameters == {"comment": "x"}
     assert impl.extension("brep") == "step"
     assert impl.python_version() == sandbox_versions.DEFAULT_PYTHON_VERSION
-    assert impl.decode is False
 
 
 class _ImplementingPackage:
@@ -790,24 +788,21 @@ def test_the_builtin_implementations_still_get_their_own_requirements(ctx):
     assert "cadquery-ocp==%s" % sandbox_versions.CADQUERY_OCP.split("==")[1] in impl.python_requirements
 
 
-def test_a_format_decodes_its_envelopes_unless_it_declares_otherwise(ctx):
-    """'decode' is off for the tree exporter, and it may not lose it silently.
+def test_no_file_type_chooses_how_it_is_handed_the_shape(ctx):
+    """Every implementation is handed the shape both ways; none asks for one.
 
-    The URDF exporter is handed the assembly tree, one link per node; decoded
-    geometry carries no node names, labels or separate placements to build those
-    from, so it rejects it outright and the export fails with "needs a shape or
-    an assembly to export". It is the only built-in format that asks for that --
-    the engine scene exporters that also did are their plugins' now -- so this
-    guards the other direction too.
+    There used to be a 'decode: false' for an implementation to be handed the
+    tree instead of the geometry - the URDF exporter's links, a drawing's
+    colours - and every one that needed the tree had to know to ask, while one
+    that did not ask lost what the tree said without a word. The tree is handed
+    to all of them now ('shape_tree'), and a built-in declaring 'decode' again
+    would be declaring something nothing reads.
     """
-    off = set()
     for section in output.SECTIONS:
         project = ctx.get_project(output.BUILTIN_PACKAGES[section])
         for format_name, config in project.config_obj[section].items():
-            impl = output.Implementation(section, format_name, config)
-            if not impl.decode:
-                off.add(format_name)
-    assert off == {"urdf"}
+            assert "decode" not in (config or {}), "%s:%s" % (section, format_name)
+    assert "decode" not in output.IMPLEMENTATION_KEYS
 
 
 # --------------------------------------------------------------------------- #
@@ -851,6 +846,51 @@ def wrapper_export():
             del sys.modules["wrapper_common"]
         else:
             sys.modules["wrapper_common"] = saved
+
+
+def test_every_implementation_is_handed_the_tree_beside_the_geometry(wrapper_export):
+    """'wrapped' is the object as live geometry and 'shape_tree' what it was decoded from.
+
+    The tree keeps everything a node says about itself as data - its name, its
+    label, its location, its properties - and carries each shape's own geometry
+    too, in its own frame, so that nothing walking it has to decode it again.
+    """
+    import build123d as bd
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    from OCP.TopoDS import TopoDS_Shape
+
+    def bounds(shape):
+        box = Bnd_Box()
+        BRepBndLib.Add_s(shape, box)
+        return box.Get()
+
+    ocp_serialize = wrapper_export.ocp_serialize
+    box = ocp_serialize.encode(bd.Box(10, 10, 10).wrapped)
+    red = dict(box, name=":red", label="red", properties={"color": "#FF0000"}, location=[[20, 0, 0], [0, 0, 1], 0])
+    tree = {"name": ":pair", "label": None, "assembly": [dict(box, name=":plain", label="plain"), red]}
+    sketch = ocp_serialize.encode(bd.Box(1, 1, 1).wrapped)
+
+    request = wrapper_export.decode({"wrapped": tree, "ports": [{"sketch": sketch}], "comment": "kept"})
+
+    assert isinstance(request["wrapped"], TopoDS_Shape)
+    x_min, _y_min, _z_min, x_max, _y_max, _z_max = bounds(request["wrapped"])
+    assert (x_min, x_max) == pytest.approx((-5, 25), abs=1e-3)
+    # Everything else is decoded as it always was, and nothing else gets a tree.
+    assert isinstance(request["ports"][0]["sketch"], TopoDS_Shape)
+    assert request["comment"] == "kept"
+
+    shape_tree = request["shape_tree"]
+    assert shape_tree["name"] == ":pair"
+    plain, placed = shape_tree["assembly"]
+    assert (placed["name"], placed["label"]) == (":red", "red")
+    assert placed["properties"] == {"color": "#FF0000"}
+    assert placed["location"] == [[20, 0, 0], [0, 0, 1], 0]
+    # Its own geometry, in its own frame: the location is data beside it.
+    assert bounds(placed["shape"])[0] == pytest.approx(-5, abs=1e-3)
+    # The envelope is still an envelope, for whatever reads it as one.
+    assert placed["brep"] == red["brep"]
+    assert "shape" not in red, "the request it came from is left as it was"
 
 
 def _script(tmp_path, body):
@@ -1134,7 +1174,7 @@ def test_a_reproducible_drawing_is_normalized_and_an_ordinary_one_is_not(tmp_pat
 
     drawn = (
         '<svg width="444.40500673690001mm" version="1.1" xmlns="http://www.w3.org/2000/svg">\n'
-        '  <g stroke="rgb(64,192,64)" stroke-width="0.03189439769248931">\n'
+        '  <g stroke="rgb(218,165,32)" stroke-width="0.03189439769248931">\n'
         '    <line x1="-0.0" y1="-8.1649658093" />\n'
         '    <path d="M 10.0,5.576189073395618 A 10.0,5.0 5.660461030554823e-16 0,1 1.0,2.0" />\n'
         "  </g>\n"
@@ -1150,7 +1190,7 @@ def test_a_reproducible_drawing_is_normalized_and_an_ordinary_one_is_not(tmp_pat
     assert "A 10.0,5.0 0.0 0,1 1.0,2.0" in written
     assert 'width="444.4050067369mm"' in written
     # Untouched: the colour channels, the version, the namespace, the flags.
-    assert 'stroke="rgb(64,192,64)"' in written
+    assert 'stroke="rgb(218,165,32)"' in written
     assert 'version="1.1"' in written
     assert 'xmlns="http://www.w3.org/2000/svg"' in written
     # Idempotent, which is what makes it safe to run over a drawing twice.

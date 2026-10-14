@@ -15,18 +15,19 @@
 // web, so that a part looks the same in the IDE as it does on partcad.org:
 //
 //   * an auto-rotating orbit camera, framed on the model;
-//   * drei's <Stage> lighting - an environment map plus an ambient/spot/point
+//   * drei's <Stage> lighting - an environment's light plus an ambient/spot/point
 //     trio scaled from the model's size;
-//   * the hemisphere and point lights Part.js adds on top of Stage;
+//   * the hemisphere and point lights Part.js adds on top of Stage (the
+//     hemisphere white here rather than green - see below);
 //   * MeshPhongMaterial (double-sided here: a sketch is one face, and Part.js
 //     never has to draw one);
 //   * a loading overlay showing the model size and progress.
 //
 // Two deliberate departures from Part.js, both forced by the webview: React and
 // react-three-fiber are not used (a lot of bundle for one canvas), and the
-// environment is three's procedural RoomEnvironment rather than drei's
-// environment="city" preset, which is an HDRI fetched from a CDN that the CSP
-// blocks and that would not work offline.
+// environment is three's procedural RoomEnvironment (as a light probe - see
+// ROOM_LIGHT) rather than drei's environment="city" preset, which is an HDRI
+// fetched from a CDN that the CSP blocks and that would not work offline.
 //
 // A fourth departure: no shadows. <Stage shadows="contact"> puts a catcher under
 // the model and the lights cast onto it, which is a studio's floor - and a CAD
@@ -35,6 +36,15 @@
 // thing it was catching the shadow of and shadowed itself, which is why one could
 // not be seen at all. So the catcher, the shadow map and every cast/receive flag
 // are gone rather than worked around.
+//
+// A fifth departure is the colour. Part.js draws every model in one colour of its
+// own - a sky-blue material under a green hemisphere light, which together come
+// out green - whatever the model is. This view draws a shape in the colour it
+// says it is ('properties: color'), and one that says nothing in goldenrod: the
+// colour OCCT draws an uncoloured shape in, and the colour PartCAD's own 2D
+// projections draw one in, so that the 3D tab and the 2D tab beside it show the
+// same part (see 'appearance.ts'). A coloured light would turn every one of those
+// colours into another, so the hemisphere light is white.
 //
 // A third difference is not a choice. Part.js loads OBJ, a format with no scene
 // graph and no units, so it has to rotate the model by -90 degrees about X
@@ -49,8 +59,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
+import { Appearance, DEFAULT_APPEARANCE, appearanceKey, appearanceOf, edgeColor } from './appearance';
 import { calloutsOf } from './callouts';
 import { el } from './dom';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
@@ -70,6 +80,22 @@ import {
 
 // Part.js: <Stage intensity={0.5}> and MeshPhongMaterial with no arguments.
 const STAGE_INTENSITY = 0.5;
+
+/**
+ * The diffuse light of three's RoomEnvironment, as the coefficients of a
+ * 'SphericalHarmonics3' - three's order, each band's red, green and blue.
+ *
+ * Worked out with three's own tools rather than by hand: the room rendered into a
+ * floating point cube map from its centre, by a cube camera with the near and far
+ * planes 'PMREMGenerator.fromScene' uses (0.1 and 100), and handed to
+ * 'LightProbeGenerator.fromCubeRenderTarget'. A 256- and a 512-pixel cube agree to
+ * within a percent. The room is white, so each band's three are one number; the
+ * second band, brighter above than below, is what makes it a room rather than a
+ * fog. Fixed numbers rather than worked out at load, because working them out
+ * reads the cube back from the GPU, which each renderer does its own way and the
+ * software renderer cannot do at all.
+ */
+const ROOM_LIGHT = [3.78, 1.73, 1.59, 0.26, 0.19, 1.03, 1.19, -0.34, -0.63].flatMap((band) => [band, band, band]);
 // Part.js: <OrbitControls autoRotate={true} autoRotateSpeed={5.0} />
 const AUTO_ROTATE_SPEED = 5.0;
 const container = document.getElementById('viewer') as HTMLDivElement;
@@ -84,8 +110,17 @@ const overlay = document.getElementById('overlay') as HTMLDivElement;
  * file says where it differs: it draws only when something changed
  * ('invalidate'), and a big model is drawn as boxes while the camera is being
  * moved ('proxies').
+ *
+ * Tone-mapped with Khronos' PBR Neutral, because a shape is drawn in the colour
+ * it says it is and this is the tone mapper made for showing one: below the
+ * highlights it leaves a colour alone, so a face the light falls on squarely
+ * comes out as the colour that was asked for. ACES Filmic, which this used to be
+ * when every model was one colour of the viewer's choosing, bends every
+ * saturated colour toward yellow and white as it brightens it: measured on the
+ * same face, goldenrod came out as a paler, yellower gold, and a red as a lighter
+ * and pinker one.
  */
-const surface: Surface = await createSurface('the 3D view', { toneMapping: THREE.ACESFilmicToneMapping });
+const surface: Surface = await createSurface('the 3D view', { toneMapping: THREE.NeutralToneMapping });
 
 /** Which of the three draws the 3D view (see 'Surface'). */
 export const backend = surface.backend;
@@ -140,15 +175,23 @@ controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
 // model on its own - is a new picture.
 controls.addEventListener('change', invalidate);
 
-// An environment map stands in for drei's <Environment preset="...">: image
-// based lighting is what makes a machined surface read as one. RoomEnvironment
-// is generated in code, so it costs no asset and works offline.
-// It is rendered on the GPU, so only where there is one; the software renderer
-// lights the model with the lights below and nothing else.
-if (surface.environment !== undefined) {
-    scene.environment = surface.environment(new RoomEnvironment()) ?? null;
-    scene.environmentIntensity = STAGE_INTENSITY;
-}
+// The light of a room stands in for drei's <Environment preset="...">: light
+// from every direction, brighter from above, is what makes a machined surface
+// read as one. The room is three's RoomEnvironment, and what of it lights the
+// model is its diffuse light - which is a light probe: the room's light as nine
+// spherical harmonics, worked out once (see ROOM_LIGHT) rather than shipped.
+//
+// A light probe and not the room as 'scene.environment', which is what this
+// used to be, because the two GPU renderers do not read an environment the same
+// way. Three's WebGL renderer lights a Phong material with it, as a light from
+// every direction; its WebGPU renderer only reflects it - a Phong material there
+// is lit by the lights alone, which measured on the same face was half as
+// bright, and a goldenrod part came out the brown of an old coin. A light probe
+// is a light, and every renderer lights every lit material with it the same
+// way. The software renderer lights with its own rig and ignores it (see
+// below).
+const roomLight = new THREE.LightProbe(new THREE.SphericalHarmonics3().fromArray(ROOM_LIGHT), STAGE_INTENSITY);
+scene.add(roomLight);
 
 // <Stage>'s light rig, plus the two lights Part.js adds itself. Positions are
 // set from the model's size in frame(), because a rig scaled for a 10 mm part
@@ -165,8 +208,11 @@ if (surface.environment !== undefined) {
 const ambientLight = new THREE.AmbientLight(0xffffff, STAGE_INTENSITY / 3);
 const spotLight = new THREE.SpotLight(0xffffff, 2 * STAGE_INTENSITY, 0, Math.PI / 4, 1, 0);
 const stagePointLight = new THREE.PointLight(0xffffff, STAGE_INTENSITY, 0, 0);
-// Part.js: <hemisphereLight color="#40c040" intensity={0.7} groundColor="black" />
-const hemisphereLight = new THREE.HemisphereLight(0x40c040, 0x000000, 0.7);
+// Part.js: <hemisphereLight color="#40c040" intensity={0.7} groundColor="black" />,
+// but white: Part.js's green sky is what made every model it draws green, and a
+// shape here is drawn in its own colour (see the header). The intensity is
+// Part.js's, so a face turned up to the sky is as bright as it was there.
+const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x000000, 0.7);
 // Part.js: <pointLight intensity={1} />, at the scene origin.
 const partPointLight = new THREE.PointLight(0xffffff, 1, 0, 0);
 scene.add(ambientLight, spotLight, stagePointLight, hemisphereLight, partPointLight);
@@ -179,7 +225,7 @@ scene.add(ambientLight, spotLight, stagePointLight, hemisphereLight, partPointLi
 // away from it darken as they turn, and enough ambient light that none goes
 // black.
 if (software) {
-    scene.remove(spotLight, stagePointLight, hemisphereLight, partPointLight);
+    scene.remove(roomLight, spotLight, stagePointLight, hemisphereLight, partPointLight);
     ambientLight.intensity = 0.2;
     const headlight = new THREE.DirectionalLight(0xffffff, 0.85);
     // From above and to the left of the viewer rather than from the viewer: a
@@ -206,6 +252,9 @@ export function setShowMetadata(enabled: boolean): void {
 
 /** Everything the current show put on the stage; replaced wholesale by the next. */
 let content: THREE.Group | undefined;
+
+/** What 'content' was built from, whose materials go when it does (see 'Geometry.disposeMaterials'). */
+let shownGeometry: Geometry | undefined;
 
 /**
  * What each item of the control tree put on the stage, by item id.
@@ -385,6 +434,8 @@ export function clearGeometry(): void {
         disposeTree(content);
         content = undefined;
     }
+    shownGeometry?.disposeMaterials();
+    shownGeometry = undefined;
     drawnBy.clear();
     visibleItems = undefined;
     flickering = undefined;
@@ -493,6 +544,7 @@ function addPorts(
     size: number,
     sketches: Map<string, THREE.Group>,
     material: THREE.Material,
+    lineMaterial: THREE.Material,
 ): void {
     const ports = node.ports ?? [];
     if (ports.length === 0) {
@@ -523,11 +575,16 @@ function addPorts(
         // Cloned per port, so forty holes drawn with one circle upload one
         // geometry and draw forty instances of it.
         const boundary = transformed(placement(port.location));
+        // Its lines too: a boundary drawn as an outline - a sketch of edges
+        // alone - is as much the port's as a filled one, and in the model's
+        // colour it would read as part of the model.
         const drawn = sketch.clone();
         drawn.traverse((child) => {
-            const mesh = child as THREE.Mesh;
-            if (mesh.isMesh) {
+            const mesh = child as THREE.Mesh | THREE.Line;
+            if ((mesh as THREE.Mesh).isMesh) {
                 mesh.material = material;
+            } else if ((mesh as THREE.Line).isLine) {
+                mesh.material = lineMaterial;
             }
         });
         boundary.add(drawn);
@@ -575,28 +632,36 @@ function addCallouts(parent: THREE.Group, node: ShowNode, path: number[]): void 
 }
 
 /**
- * Give what a glTF draws the materials this viewer draws everything with.
+ * Give what a glTF draws the materials this viewer draws everything with, in the
+ * colour 'appearance' says.
  *
  * Part.js replaces whatever material the file carries with a plain
  * MeshPhongMaterial, which is what gives every PartCAD model the same look
- * regardless of how it was authored. Lines get one of their own: an edge that
- * bounds no face - the bend lines of a sheet metal drawing - arrives as glTF line
- * segments, and a lit material means nothing to a line.
+ * regardless of how it was authored; the colour is the one thing a shape gets a
+ * say in, through its properties rather than through its file. Lines get one of
+ * their own: an edge that bounds no face - the bend lines of a sheet metal drawing
+ * - arrives as glTF line segments, and a lit material means nothing to a line.
+ *
+ * 'replacing' says whether what is being replaced is the file's own material,
+ * which nothing else holds and which goes with it, or one of 'geometry's, which
+ * every other instance of the shape is still drawn with and must not.
  */
-function restyle(group: THREE.Group, mesh: THREE.Material, line: THREE.Material): void {
+function paint(group: THREE.Object3D, geometry: Geometry, appearance: Appearance, replacing: boolean): void {
     group.traverse((child) => {
         const drawable = child as THREE.Mesh | THREE.Line;
         let material: THREE.Material;
         if ((drawable as THREE.Mesh).isMesh) {
-            material = mesh;
+            material = geometry.faceMaterial(appearance);
         } else if ((drawable as THREE.Line).isLine) {
-            material = line;
+            material = geometry.lineMaterial(appearance);
         } else {
             return;
         }
         const previous = drawable.material as THREE.Material | THREE.Material[] | undefined;
         drawable.material = material;
-        disposeMaterials(previous);
+        if (replacing) {
+            disposeMaterials(previous);
+        }
     });
 }
 
@@ -615,18 +680,78 @@ function restyle(group: THREE.Group, mesh: THREE.Material, line: THREE.Material)
  * here: every group handed out ends up under the content group, and 'disposeTree'
  * frees it from there when the show is replaced.
  *
- * One material for all of it, for the same reason: every part of every PartCAD
- * model is drawn in this one blue, and a material per node is a material per node
- * for the renderer to set up.
+ * One material per colour for all of it, for the same reason: a material per node
+ * is a material per node for the renderer to set up, and an assembly of a hundred
+ * uncoloured parts is drawn with one. A node is painted in its colour as it is
+ * handed out (see 'buildNode') rather than here, because the colour belongs to the
+ * node - the same bolt can be stated red in one place and nothing in another - and
+ * the geometry is shared between them.
  */
 class Geometry {
     private readonly parsed = new Map<string, THREE.Group>();
     private readonly used = new Set<string>();
-    readonly material = new THREE.MeshPhongMaterial({ color: 0x87ceeb, side: THREE.DoubleSide });
-    // A deeper blue than the faces, so that a line lying on one - a bend line
-    // across the blank it bends - reads against it, and unlit and not tone-mapped
-    // so that it is that blue on a light theme and a dark one alike.
-    readonly lineMaterial = new THREE.LineBasicMaterial({ color: 0x2f80ed, toneMapped: false });
+    /** The face and line materials of every colour this show has drawn in, by 'appearanceKey'. */
+    private readonly faces = new Map<string, THREE.MeshPhongMaterial>();
+    private readonly lines = new Map<string, THREE.LineBasicMaterial>();
+    /** Any other material the show made, to be freed with these. */
+    private readonly owned: THREE.Material[] = [];
+
+    /**
+     * 'side' is which sides of a face are drawn: both, unless the painter draws a
+     * solid (see 'showGeometry').
+     */
+    constructor(private readonly side: THREE.Side) {}
+
+    /**
+     * The material the faces of a shape of this appearance are drawn with.
+     *
+     * Made the first time a colour is asked for, and only then, so a show makes
+     * exactly the materials it draws with - and every one of them ends up on a
+     * mesh under the content group, where 'disposeTree' finds it.
+     *
+     * A see-through colour is drawn transparent at its own opacity, and remembers
+     * that opacity in 'userData.alpha' so the Opacity slider can take it as the
+     * part's full strength rather than replacing it (see 'setOpacity').
+     */
+    faceMaterial(appearance: Appearance): THREE.Material {
+        const key = appearanceKey(appearance);
+        let material = this.faces.get(key);
+        if (material === undefined) {
+            material = new THREE.MeshPhongMaterial({
+                color: appearance.color,
+                side: this.side,
+                transparent: appearance.opacity < 1,
+                opacity: appearance.opacity,
+            });
+            material.userData.alpha = appearance.opacity;
+            this.faces.set(key, material);
+        }
+        return material;
+    }
+
+    /**
+     * The material a line across a shape of this appearance is drawn with.
+     *
+     * A deeper shade of the face colour ('edgeColor'), so that a line lying on a
+     * face - a bend line across the blank it bends - reads against it, and unlit
+     * and not tone-mapped so that it is that shade on a light theme and a dark one
+     * alike.
+     */
+    lineMaterial(appearance: Appearance): THREE.Material {
+        const key = appearanceKey(appearance);
+        let material = this.lines.get(key);
+        if (material === undefined) {
+            material = new THREE.LineBasicMaterial({
+                color: edgeColor(appearance.color),
+                toneMapped: false,
+                transparent: appearance.opacity < 1,
+                opacity: appearance.opacity,
+            });
+            material.userData.alpha = appearance.opacity;
+            this.lines.set(key, material);
+        }
+        return material;
+    }
 
     /** Parse the table, reporting progress as it goes. Returns what failed to parse. */
     async load(root: ShowNode, total: number, superseded: () => boolean): Promise<number> {
@@ -636,7 +761,8 @@ class Geometry {
             try {
                 const group = await parseGltf(base64ToArrayBuffer(entry.gltf));
                 // Done here, once per distinct geometry, rather than per node that
-                // draws it; see 'restyle'.
+                // draws it: the file's own materials go, and the default colour
+                // stands in until a node is painted in its own (see 'paint').
                 //
                 // Both sides of every face. A part is a closed solid and would look
                 // the same either way, but a sketch and a port's boundary are
@@ -644,7 +770,7 @@ class Geometry {
                 // camera is not drawn at all, and the camera orbits past both sides
                 // of it. Nothing says which way a sketch's one face points - the
                 // ones in 'examples' happen to point up.
-                restyle(group, this.material, this.lineMaterial);
+                paint(group, this, DEFAULT_APPEARANCE, true);
                 this.parsed.set(digest, group);
             } catch (error: any) {
                 reportError(`failed to parse a shape of this object: ${error}`);
@@ -683,9 +809,8 @@ class Geometry {
      *
      * What *was* handed out is not touched: its geometry is the geometry of every
      * clone of it, and those are under the content group, which 'disposeTree' frees
-     * when the show is replaced. The material goes here because on this path
-     * nothing is left holding it; 'dispose()' is idempotent, so the case where a
-     * discarded group has already taken it with it costs nothing.
+     * when the show is replaced. The materials go here because on this path
+     * nothing is left holding them.
      */
     dispose(): void {
         for (const [digest, group] of this.parsed) {
@@ -694,8 +819,31 @@ class Geometry {
             }
         }
         this.parsed.clear();
-        this.material.dispose();
-        this.lineMaterial.dispose();
+        this.disposeMaterials();
+    }
+
+    /**
+     * Every material this show made, whether or not anything is still drawn with it.
+     *
+     * 'disposeTree' frees the ones on a mesh of the content group, and that is all
+     * of them but one kind: the default material a shape was given as it was
+     * parsed, when every node naming it was then painted in a colour of its own.
+     * Nothing holds that one, so it is freed here, when the show is replaced.
+     * 'dispose()' is idempotent, so a material 'disposeTree' already freed costs
+     * nothing.
+     */
+    disposeMaterials(): void {
+        this.faces.forEach((material) => material.dispose());
+        this.lines.forEach((material) => material.dispose());
+        this.owned.forEach((material) => material.dispose());
+        this.faces.clear();
+        this.lines.clear();
+        this.owned.length = 0;
+    }
+
+    /** Free 'material' with the rest of this show's (see 'disposeMaterials'). */
+    own(material: THREE.Material): void {
+        this.owned.push(material);
     }
 }
 
@@ -724,9 +872,9 @@ async function parseSketches(node: ShowNode, geometry: Geometry): Promise<Map<st
         }
         try {
             const group = await parseGltf(base64ToArrayBuffer(sketch.gltf));
-            // Its lines drawn like every other line; its faces are given the
-            // boundary material per port, in 'addPorts'.
-            restyle(group, geometry.material, geometry.lineMaterial);
+            // The file's materials go; its faces and its lines are given the
+            // boundary's per port, in 'addPorts'.
+            paint(group, geometry, DEFAULT_APPEARANCE, true);
             parsed.set(reference, group);
         } catch (error: any) {
             reportError(`failed to parse the port sketch '${reference}': ${error}`);
@@ -759,6 +907,10 @@ interface Loaded {
  * way PartCAD states them and the way the BREP form realizes them - nothing is
  * baked into the geometry. Returns null once a newer show has superseded this
  * one, having disposed whatever it had built.
+ *
+ * 'inherited' is what the node holding this one is drawn as. A node that states a
+ * colour of its own is drawn in it, and hands it on to its children in turn (see
+ * 'appearance.ts').
  */
 async function buildNode(
     node: ShowNode,
@@ -766,9 +918,11 @@ async function buildNode(
     superseded: () => boolean,
     loaded: Loaded,
     geometry: Geometry,
+    inherited: Appearance = DEFAULT_APPEARANCE,
 ): Promise<THREE.Group | null> {
     const group = transformed(placement(node.location));
     group.name = node.label || node.name || nodeId(path);
+    const appearance = appearanceOf(node, inherited);
 
     // Already parsed: the geometry of every node arrived in one table and was
     // parsed before the tree was walked, so what is left here is to take an
@@ -779,13 +933,18 @@ async function buildNode(
         if (drawn === undefined) {
             // Its entry failed to parse; reported once, where that happened.
             loaded.failed += 1;
+        } else {
+            // Every instance, the default-coloured ones included: a clone is
+            // cloned from the first instance handed out, materials and all, so a
+            // bolt cloned after a red one would otherwise come out red too.
+            paint(drawn, geometry, appearance, false);
         }
     } else if (node.gltf !== undefined) {
         // A node carrying its geometry outright, which PartCAD no longer sends and
         // a hand-written message still can.
         try {
             drawn = await parseGltf(base64ToArrayBuffer(node.gltf));
-            restyle(drawn, geometry.material, geometry.lineMaterial);
+            paint(drawn, geometry, appearance, true);
         } catch (error: any) {
             reportError(`failed to parse '${node.name ?? group.name}': ${error}`);
             loaded.failed += 1;
@@ -806,7 +965,7 @@ async function buildNode(
 
     const children = node.assembly ?? [];
     for (let index = 0; index < children.length; index++) {
-        const child = await buildNode(children[index], [...path, index], superseded, loaded, geometry);
+        const child = await buildNode(children[index], [...path, index], superseded, loaded, geometry, appearance);
         if (child === null) {
             disposeTree(group);
             return null;
@@ -838,16 +997,14 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // Parsed before the tree is walked, and once per distinct shape: this is where
     // the time of opening a large assembly goes, and it is the step that does not
     // grow with the number of times a shape is placed.
-    const geometry = new Geometry();
-    if (software && message.kind !== 'sketch') {
-        // The software renderer orders whole triangles by their depth rather than
-        // each pixel, and a long thin triangle on the far side of a solid is
-        // drawn over the near side often enough to stripe it. A solid is closed,
-        // so its far side is never what is seen: drawn front-side only, it is not
-        // drawn at all. A sketch is a lamina that is seen from both sides, and
-        // keeps both (see 'Geometry.load').
-        geometry.material.side = THREE.FrontSide;
-    }
+    //
+    // The software renderer orders whole triangles by their depth rather than each
+    // pixel, and a long thin triangle on the far side of a solid is drawn over the
+    // near side often enough to stripe it. A solid is closed, so its far side is
+    // never what is seen: drawn front-side only, it is not drawn at all. A sketch
+    // is a lamina that is seen from both sides, and keeps both (see
+    // 'Geometry.load').
+    const geometry = new Geometry(software && message.kind !== 'sketch' ? THREE.FrontSide : THREE.DoubleSide);
     const failedToParse = await geometry.load(object, total, superseded);
     if (superseded()) {
         return;
@@ -885,7 +1042,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // Unlit and not tone-mapped, which is what makes it the same blue as the Z axis
     // beside it rather than merely the same number: 'AxesHelper' sets
     // 'toneMapped: false' on its own material, and this scene tone-maps
-    // (ACESFilmic) everything that does not say otherwise. A lit material would
+    // (PBR Neutral) everything that does not say otherwise. A lit material would
     // shade it away from the axis as well.
     const boundaryMaterial = new THREE.MeshBasicMaterial({
         color: PORT_COLOR,
@@ -911,13 +1068,22 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // What keeps the Opacity slider off it: a boundary is drawn on the model rather
     // than being part of it. See 'setOpacity'.
     boundaryMaterial.userData.annotation = true;
+    // The same, for a boundary drawn as an outline: the port's blue, unlit, and
+    // left alone by the slider.
+    const boundaryLineMaterial = new THREE.LineBasicMaterial({ color: PORT_COLOR, toneMapped: false });
+    boundaryLineMaterial.userData.annotation = true;
+    // Owned by the show's geometry, so that whichever of the two no port turned
+    // out to draw with is freed with the rest of the show's materials.
+    geometry.own(boundaryMaterial);
+    geometry.own(boundaryLineMaterial);
     for (const { node, path, group: into } of loaded.built) {
-        addPorts(into, node, path, size, sketches, boundaryMaterial);
+        addPorts(into, node, path, size, sketches, boundaryMaterial, boundaryLineMaterial);
         addCallouts(into, node, path);
     }
 
     if (superseded()) {
         disposeTree(group);
+        geometry.dispose();
         return;
     }
 
@@ -925,6 +1091,8 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         scene.remove(content);
         disposeTree(content);
     }
+    shownGeometry?.disposeMaterials();
+    shownGeometry = geometry;
     content = group;
     scene.add(group);
     // Framed on everything the show carries, whether or not it is switched on:
@@ -1121,6 +1289,10 @@ export function setAutoRotate(enabled: boolean): void {
  * material that says it is an annotation is therefore left alone; otherwise
  * touching the slider at all would take that 50% away, and putting it back to 100%
  * would hide every hole behind a solid blue disc.
+ *
+ * A part that states a see-through colour ("#RRGGBBAA") is a part whose full
+ * strength is that, and the slider scales it rather than replacing it: at 100% it
+ * is as see-through as it says, and at 50% half as opaque again.
  */
 export function setOpacity(opacity: number): void {
     if (content === undefined) {
@@ -1130,8 +1302,9 @@ export function setOpacity(opacity: number): void {
         if (material.userData.annotation === true) {
             return;
         }
+        const alpha = typeof material.userData.alpha === 'number' ? material.userData.alpha : 1;
         material.transparent = true;
-        material.opacity = opacity;
+        material.opacity = opacity * alpha;
         material.needsUpdate = true;
     };
     content.traverse((node) => {
@@ -1235,13 +1408,16 @@ function dropProxies(): void {
     }
 }
 
-/** On the software renderer, and for a model over the budget: a box per mesh, in place. */
+/**
+ * On the software renderer, and for a model over the budget: a box per mesh, in
+ * place, each in the colour of the part it stands for.
+ */
 function buildProxies(group: THREE.Group): void {
     dropProxies();
     if (!software || trianglesOf(group) <= SOFTWARE_TRIANGLE_BUDGET) {
         return;
     }
-    proxies = boxesOf(group, 0x40c040);
+    proxies = boxesOf(group);
     scene.add(proxies);
 }
 

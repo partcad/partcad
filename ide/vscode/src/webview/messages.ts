@@ -252,6 +252,25 @@ export interface ShowNode {
      * 'callouts.ts') - and nothing else.
      */
     metadata?: ShowMetadata;
+    /**
+     * What this node's shape reports about itself, where it reports anything.
+     *
+     * PartCAD's 'properties:' section, passed through untouched (see
+     * 'KEY_PROPERTIES' in 'partcad/shape_envelope.py'): what it is made of, its
+     * colour, its physics. The viewer reads 'color' - "#RRGGBB" or "#RRGGBBAA" -
+     * and draws the node, and everything under it that states no colour of its
+     * own, in it (see 'appearance.ts'); nothing else.
+     */
+    properties?: ShowProperties | null;
+}
+
+/** The part of a node's properties the viewer reads. */
+export interface ShowProperties {
+    /** "#RRGGBB", or "#RRGGBBAA" for a shape that is see-through. */
+    color?: string | null;
+    /** The name of the material it is made of. Not read by the viewer: a material states no colour. */
+    material?: string | null;
+    [property: string]: unknown;
 }
 
 /** The part of a node's metadata the viewer reads. */

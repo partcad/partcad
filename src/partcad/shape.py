@@ -1584,13 +1584,6 @@ class Shape(ShapeConfiguration):
 
     async def _run_implementation_locked(self, ctx, impl, script, request, final_filepath):
         """The body of '_run_implementation_async', with the shape held still."""
-        # Whether the sandbox rebuilds the envelopes into live geometry before
-        # the implementation sees them. Off for an implementation that needs what
-        # the envelopes say about each node (the URDF exporter names every link
-        # and places every joint from that), none of which decoding carries over
-        # into the geometry it builds.
-        request[output.DECODE_KEY] = impl.decode
-
         # Whether the file has to come out the same every time it is produced.
         # Set here rather than left to whatever the configuration happened to
         # carry, so that it is in *every* request and an implementation - one
@@ -2540,7 +2533,6 @@ class Shape(ShapeConfiguration):
                 "implementation": implementation,
                 "options": impl.config,
                 "request": {key: value for key, value in request.items() if key != "wrapped"},
-                "decode": impl.decode,
                 "reproducible": impl.reproducible,
                 # Declared, never observed: see 'Implementation.environment_cache_key'.
                 "environment": impl.environment_cache_key(),

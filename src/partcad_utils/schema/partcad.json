@@ -649,11 +649,6 @@
             "pythonRequirements": { "type": "array", "items": { "type": "string" } },
             "pythonVersion": { "type": "string", "minLength": 1 },
             "dockerImage": { "type": "string", "minLength": 1 },
-            "decode": {
-              "type": "boolean",
-              "default": true,
-              "description": "Whether the shape and assembly envelopes are rebuilt into live CAD geometry before the implementation sees them. Set to false by an implementation that needs the assembly tree's structure rather than the single compound it decodes to (the built-in URDF exporter is the one that does)"
-            },
             "reproducible": {
               "type": "boolean",
               "default": false,
