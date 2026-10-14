@@ -676,8 +676,13 @@ def test_the_joint_rides_on_the_node_of_the_child_it_moves(tmp_path):
     assert product.translation == pytest.approx(placed.translation)
 
 
-def test_a_decode_false_exporter_is_handed_the_joints(tmp_path, wrapper_export):
-    """The request travels as the core serializes it and is read raw, as the wrapper reads it."""
+def test_an_exporter_walking_the_tree_is_handed_the_joints(tmp_path, wrapper_export):
+    """The tree travels as the core serializes it, and reaches the script as 'shape_tree'.
+
+    The BREP here is a stand-in, so the tree is handed over as it arrived rather
+    than through 'wrapper_export.decode()', which would decode it: that keeps every
+    key of every node and adds the shape beside them (see 'test_output.py').
+    """
     bore = "motion: revolute"
     assembly = _rig(tmp_path, _links(), bore=bore)
 
@@ -687,7 +692,8 @@ def test_a_decode_false_exporter_is_handed_the_joints(tmp_path, wrapper_export):
     for child in assembly.children:
         child.item.get_wrapped = fake_wrapped
     tree = asyncio.run(assembly._get_shape_real(None))
-    request = shape_envelope.loads(shape_envelope.serialize({"wrapped": tree, "__decode__": False}))
+    request = shape_envelope.loads(shape_envelope.serialize({"wrapped": tree}))
+    request["shape_tree"] = request.pop("wrapped")
 
     script = tmp_path / "joints.py"
     script.write_text(textwrap.dedent("""
@@ -700,7 +706,7 @@ def test_a_decode_false_exporter_is_handed_the_joints(tmp_path, wrapper_export):
                         found.append(node[request_key]["name"])
                     for child in node.get("assembly") or []:
                         walk(child)
-                walk(request["wrapped"])
+                walk(request["shape_tree"])
                 with open(path, "w") as f:
                     json.dump(found, f)
                 return {"success": True}

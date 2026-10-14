@@ -48,6 +48,13 @@ interface is a node per port. A node is
                     element, each with "points" in the node's own frame and the
                     key/value "metadata" said about it) and pins them to the
                     elements as text callouts
+      "properties": what this node's shape reports about itself, or absent -
+                    its "material", its "color" and its "physics", passed through
+                    exactly as 'partcad.shape_envelope' carries them. The viewer
+                    reads "color" ("#RRGGBB" or "#RRGGBBAA") and draws the node,
+                    and everything under it that states no colour of its own, in
+                    it; a node under nothing that states one is drawn in
+                    goldenrod, the colour OCCT draws an uncoloured shape in
     }
 
 Placements are **not** baked into the geometry. A node's "gltf" is its own shape

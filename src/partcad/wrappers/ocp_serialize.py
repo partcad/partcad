@@ -191,6 +191,12 @@ KEY_BYTES = "__bytes__"
 # Optional on a shape/assembly object: the placement, as the packed
 # [[tx,ty,tz], [ax,ay,az], angle] form, applied when the object is decoded.
 KEY_LOCATION = "location"
+# On a shape object of a tree 'decode_tree()' hands back, and never on one that
+# travels: the shape's own geometry, decoded, in its own frame - KEY_LOCATION
+# beside it still says where it sits in its parent. Put there beside KEY_BREP
+# rather than in place of it, so what reads a node as an envelope (decoding it
+# again, or keying a mesh by its payload) reads it as it always did.
+KEY_SHAPE = "shape"
 # Optional on a shape object: everything learnt about this shape by whatever
 # produced it, at the moment it was produced. The one channel for such
 # knowledge; the core's twin of this constant, and of the three section names
@@ -477,6 +483,39 @@ def decode_shape(obj):
     if is_assembly_object(obj):
         compound = compound_of(decode_shape(child) for child in obj[KEY_ASSEMBLY])
         return _apply_location(compound, obj.get(KEY_LOCATION))
+    raise ValueError("Not a shape or assembly object: %r" % (list(obj) if isinstance(obj, dict) else type(obj)))
+
+
+def decode_tree(obj):
+    """'decode_shape(obj)', and the tree it was decoded from, in one pass.
+
+    Returns '(shape, tree)'. 'shape' is exactly what 'decode_shape(obj)' returns:
+    the whole object as one piece of live geometry. 'tree' is 'obj' as it was -
+    every node's name, label, location, properties, joint and metadata still
+    there to be read as data - with every shape object also carrying its own
+    geometry, decoded, under KEY_SHAPE.
+
+    Both are built from the one decoding of each BREP, which is what makes
+    handing out the two together cost no more than handing out the first. That
+    is what 'wrapper_export' does for every implementation it runs: the
+    geometry is what most of them write, and the tree is what says what each
+    part of it *is* - which link of a robot, which colour - and decoding the
+    geometry is exactly what throws that away.
+
+    The nodes are copies; 'obj' is left as it was.
+    """
+    _ensure_ocp()
+    if is_shape_object(obj):
+        own = _shape_from_b64(obj[KEY_BREP])
+        node = dict(obj)
+        node[KEY_SHAPE] = own
+        return _apply_location(own, obj.get(KEY_LOCATION)), node
+    if is_assembly_object(obj):
+        decoded = [decode_tree(child) for child in obj[KEY_ASSEMBLY]]
+        node = dict(obj)
+        node[KEY_ASSEMBLY] = [child for _shape, child in decoded]
+        compound = compound_of(shape for shape, _child in decoded)
+        return _apply_location(compound, obj.get(KEY_LOCATION)), node
     raise ValueError("Not a shape or assembly object: %r" % (list(obj) if isinstance(obj, dict) else type(obj)))
 
 

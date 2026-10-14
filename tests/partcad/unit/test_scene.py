@@ -232,8 +232,9 @@ def test_an_engine_scene_format_is_not_a_file_type_this_wheel_knows(tmp_path):
     'sim-gazebo:world', reaches the package that does implement it.
 
     'urdf' is the counterpart that stays: it describes a robot rather than any
-    one engine's world, and it is still handed the tree rather than the geometry
-    it decodes to.
+    one engine's world, and it is still written from the tree rather than from the
+    geometry the tree decodes to - the 'shape_tree' every implementation is
+    handed, without having to declare anything to get it.
     """
     from partcad import output
 
@@ -245,9 +246,8 @@ def test_an_engine_scene_format_is_not_a_file_type_this_wheel_knows(tmp_path):
     config = output.builtin_formats(ctx, output.EXPORT)["urdf"]
     implementation = output.Implementation(output.EXPORT, "urdf", config)
     assert implementation.extension("bin") == "urdf"
-    # Handed the tree rather than the geometry it decodes to: the links, the
-    # poses and the properties are all built from what it says.
-    assert implementation.decode is False
+    # Nothing to declare to be handed the tree: every implementation is.
+    assert "decode" not in config
 
 
 def test_a_scene_asks_for_the_output_files_a_scene_excludes(project):

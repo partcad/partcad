@@ -31,12 +31,19 @@
 // Two renderers with opposite jobs are clearer than one with a mode switch, and
 // this one is built only once something 3D actually arrives.
 //
+// What the two do share is the colour of a shape that has none: a model whose
+// file gives it no colour of its own - an STL, or a glTF primitive with no
+// material - is drawn in the goldenrod the 3D view draws an uncoloured part in
+// (see 'appearance.ts'), so the part reads as the same part on both tabs. A model
+// that does carry colours keeps them, because they are the finding.
+//
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
+import { DEFAULT_COLOR } from './appearance';
 import { el, empty, placeholder } from './dom';
 import { IMAGE_TYPES, ImageView, decodeBase64 } from './image';
 import { ANALYSIS_LABELS, AnalysisTabId, CaeData, CaeFinding } from './messages';
@@ -189,7 +196,7 @@ class MeshView {
         this.model = object;
         this.scene.add(object);
         if (this.software && trianglesOf(object) > SOFTWARE_TRIANGLE_BUDGET) {
-            this.boxes = boxesOf(object, 0xbfc4c9);
+            this.boxes = boxesOf(object, DEFAULT_COLOR);
             this.scene.add(this.boxes);
         }
         this.frame(object);
@@ -339,14 +346,55 @@ function paintable(object: THREE.Object3D): void {
 function loadStl(bytes: Uint8Array): THREE.Object3D {
     const geometry = new STLLoader().parse(toArrayBuffer(bytes));
     geometry.computeVertexNormals();
-    // 'vertexColors' costs nothing when the file carries none, and a result mesh
-    // that does carry them is a result mesh whose colours are the finding.
-    const material = new THREE.MeshLambertMaterial({
-        color: 0xbfc4c9,
-        vertexColors: geometry.hasAttribute('color'),
+    return new THREE.Mesh(geometry, resultMaterial(geometry));
+}
+
+/**
+ * What a mesh with no material of its own is drawn with: an STL, or a glTF
+ * primitive that names none.
+ *
+ * Flat light's material, Lambert, in the default colour - unless the mesh carries
+ * colours per vertex. A result mesh that does is a result mesh whose colours are
+ * the finding, and they are drawn as they are: over white, which multiplies them
+ * by nothing, rather than over a colour that would tint every one of them.
+ */
+function resultMaterial(geometry: THREE.BufferGeometry): THREE.Material {
+    const colored = geometry.hasAttribute('color');
+    return new THREE.MeshLambertMaterial({
+        color: colored ? 0xffffff : DEFAULT_COLOR,
+        vertexColors: colored,
         side: THREE.DoubleSide,
     });
-    return new THREE.Mesh(geometry, material);
+}
+
+/**
+ * Give every primitive of a glTF that names no material the one an STL gets.
+ *
+ * glTF lets a primitive leave its material out, and the loader then draws it with
+ * a default of its own: white, fully metallic and fully rough, which under this
+ * view's light - no environment for a metal to reflect - is a dark grey whatever
+ * the part is. Which material is that default is told by the parser rather than
+ * by a name: every material the file defines is associated with its index in the
+ * file, and the default, which the file never defined, is associated with none.
+ * A material the file does define is kept as it is.
+ */
+function ownMaterials(gltf: GLTF): void {
+    gltf.scene.traverse((node) => {
+        const mesh = node as THREE.Mesh;
+        if (!mesh.isMesh) {
+            return;
+        }
+        // The default is shared by every primitive the loader gave it to, and held
+        // by nothing once each has its own; freeing it more than once is harmless.
+        const own = (material: THREE.Material) => {
+            if (gltf.parser.associations.get(material)?.materials !== undefined) {
+                return material;
+            }
+            material.dispose();
+            return resultMaterial(mesh.geometry);
+        };
+        mesh.material = Array.isArray(mesh.material) ? mesh.material.map(own) : own(mesh.material);
+    });
 }
 
 async function loadGltf(bytes: Uint8Array, extension: string): Promise<THREE.Object3D> {
@@ -358,7 +406,15 @@ async function loadGltf(bytes: Uint8Array, extension: string): Promise<THREE.Obj
             // has no way to fetch - and must not try to: the CSP forbids it. The
             // empty resource path makes any such reference fail as the error it
             // is, rather than as a silent half-loaded model.
-            loader.parse(buffer, '', (gltf) => resolve(gltf.scene), reject);
+            loader.parse(
+                buffer,
+                '',
+                (gltf) => {
+                    ownMaterials(gltf);
+                    resolve(gltf.scene);
+                },
+                reject,
+            );
         } catch (error: unknown) {
             reject(error instanceof Error ? error : new Error(`${extension}: ${error}`));
         }

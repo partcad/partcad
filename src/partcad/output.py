@@ -291,9 +291,7 @@ def is_document_format(format_name: str, section_obj) -> bool:
 # The first group picks the implementation, the second places the output file.
 # What is left over is what the implementation is handed, so adding a field here
 # hides it from every implementation - including the ones packages write.
-IMPLEMENTATION_KEYS = frozenset(
-    {"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "decode", "container"}
-)
+IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "container"})
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 
@@ -352,16 +350,6 @@ PROPERTIES_KEY = "properties"
 # twin, 'wrapper_export.WORLD_KEY', is spelled out there because a wrapper runs
 # in a sandbox and cannot import this.
 WORLD_KEY = "world"
-
-# The request key that says whether the sandbox rebuilds the shape and assembly
-# envelopes into live OCCT geometry before the implementation sees them. The
-# wrapper has to know before it deserializes anything, which is why it travels
-# in the request rather than being read off the configuration. Declared on a file type as 'decode: false',
-# which is what an implementation asks for when it needs what an envelope says
-# *about* a node: decoding mirrors the assembly tree in nested compounds, but
-# geometry is all it keeps - every node's 'name' and 'label' is dropped, and its
-# placement is baked into the shape instead of staying readable as data.
-DECODE_KEY = "__decode__"
 
 # The request key that says whether this file has to come out the same every
 # time it is produced, from the same object.
@@ -461,10 +449,6 @@ class Implementation:
         self.config = config
         self.project = project
         self.script = config.get("path")
-        # Whether the sandbox decodes the envelopes into live geometry for this
-        # implementation. Off for one that needs the assembly tree's structure
-        # rather than the compound it decodes to.
-        self.decode = config.get("decode", True) is not False
 
     @property
     def reproducible(self) -> bool:

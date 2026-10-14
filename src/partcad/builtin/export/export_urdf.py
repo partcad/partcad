@@ -7,16 +7,16 @@
 
 Writes a PartCAD shape or assembly as a URDF file plus its mesh files.
 
-Unlike the other exporters, this one is handed the assembly *tree* itself
-rather than the geometry it decodes to - which is what 'decode: false' on this
-format's declaration asks for, see wrapper_export.DECODE_KEY. Decoding would
-keep the tree's shape, and nothing else about it: every node's 'name' and
-'label' is dropped and its placement is baked into the geometry rather than
-staying readable as data. This exporter needs all three - the link names, the
-mesh names, the properties lookup and every joint origin come from them. Each
-node becomes a link, each parent/child edge a fixed joint carrying that child's
-placement, and each node that has geometry gets a mesh written next to the URDF
-and referenced from its ``<visual>`` and ``<collision>``.
+Unlike the other exporters, this one writes the assembly *tree* rather than
+the geometry it decodes to - 'request["shape_tree"]', which every implementation
+is handed beside the geometry (see 'wrapper_export.py'). The geometry keeps the
+tree's shape and nothing else about it: every node's 'name' and 'label' is gone
+and its placement is baked in rather than staying readable as data. This
+exporter needs all three - the link names, the mesh names, the properties
+lookup and every joint origin come from them. Each node becomes a link, each
+parent/child edge a fixed joint carrying that child's placement, and each node
+that has geometry gets a mesh written next to the URDF and referenced from its
+``<visual>`` and ``<collision>``.
 
 The URDF is built with ROS's own 'urdf_parser_py' and serialized by it, so what
 lands on disk is what the ROS toolchain itself would write and reads back
@@ -57,6 +57,7 @@ import sys
 import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
+import appearance  # noqa: E402
 import mass_properties  # noqa: E402
 import ocp_serialize  # noqa: E402
 import urdf_common  # noqa: E402
@@ -150,13 +151,13 @@ class NameAllocator:
 def node_geometry(node):
     """The node's own shape as a live TopoDS_Shape, in its own frame, or None.
 
-    The placement carried by the node is deliberately left off: it becomes the
-    origin of the joint above the link, not part of the geometry.
+    Decoded already: 'shape_tree' carries it on the node. The placement carried
+    by the node is deliberately not applied: it becomes the origin of the joint
+    above the link, not part of the geometry.
     """
     if not ocp_serialize.is_shape_object(node):
         return None
-    without_placement = {key: value for key, value in node.items() if key != ocp_serialize.KEY_LOCATION}
-    return ocp_serialize.decode_shape(without_placement)
+    return node[ocp_serialize.KEY_SHAPE]
 
 
 def write_mesh(shape, path, options):
@@ -218,17 +219,17 @@ def carried_material(properties, state):
 
 
 def color_rgba(text, state):
-    """A PartCAD colour string as URDF's ``rgba``, or None if it is not one."""
-    digits = str(text).lstrip("#")
-    if len(digits) not in (6, 8):
+    """A PartCAD colour string as URDF's ``rgba``, or None if it is not one.
+
+    Read by 'appearance.parse', which is what reads it for every drawing of the
+    part as well: a colour the URDF takes is a colour the part is drawn in.
+    """
+    parsed = appearance.parse(str(text))
+    if parsed is None:
         state["warnings"].append("Ignoring the colour '%s', which is not #RRGGBB or #RRGGBBAA" % text)
         return None
-    try:
-        values = [int(digits[i : i + 2], 16) / 255.0 for i in range(0, len(digits), 2)]
-    except ValueError:
-        state["warnings"].append("Ignoring the colour '%s', which is not #RRGGBB or #RRGGBBAA" % text)
-        return None
-    return [round(v, 6) for v in values] + ([1.0] if len(values) == 3 else [])
+    red, green, blue, alpha = parsed
+    return [round(channel / 255.0, 6) for channel in (red, green, blue)] + [round(alpha, 6)]
 
 
 def gazebo_element(link_name, physics, state):
@@ -382,7 +383,7 @@ def emit(node, parent_link, pose, state):
 def process(path, request):
     from urdf_parser_py.urdf import URDF
 
-    root = request["wrapped"]
+    root = request.get("shape_tree")
     if not isinstance(root, dict) or not (
         ocp_serialize.is_shape_object(root) or ocp_serialize.is_assembly_object(root)
     ):

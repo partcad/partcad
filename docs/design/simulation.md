@@ -173,8 +173,9 @@ joint's three coordinates.
 
 ### 4.3 What an exporter is handed (built)
 
-A scene exporter is handed the assembly *tree* rather than the compound it decodes to (`decode: false`), because the
-format *is* the tree: every node's name, label and placement are data, not baked into geometry. With
+A scene exporter writes the assembly *tree* (`shape_tree`, which every implementation is handed beside the compound it
+decodes to), because the format *is* the tree: every node's name, label and placement are data, not baked into
+geometry. With
 `properties: true` it is also handed, per node:
 
 - the node's **resolved physics** -- stated values merged over derived ones (section 5), each with its unit;
@@ -1017,7 +1018,9 @@ where the design's boundaries are.
   expressed everything on the first try -- which is the good news and the bad: the representation is exactly rich
   enough for shapes and placements and had no place at all for anything else.
 - **An exporter of a tree has to be handed the tree.** Decoding an envelope into one compound is right for every other
-  exporter and fatal for a robot description; hence `decode: false`.
+  exporter and fatal for a robot description. It was first an opt-in (`decode: false`), which left every exporter that
+  did not opt in unable to read anything a node said about itself -- a drawing could not know a part's colour. Every
+  implementation is now handed both, `wrapped` and `shape_tree`, out of one decoding of each shape.
 - **An opaque properties section was the least obvious mistake.** The first version carried what a URDF said under
   `physics: {urdf: ...}`. It round-tripped perfectly and told PartCAD nothing: a mass was a mass only to the URDF
   exporter. Copying each value into a named property with a PartCAD unit is more code and a closed list to maintain,

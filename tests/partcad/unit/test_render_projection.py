@@ -101,6 +101,7 @@ def _svg_implementation():
     b3d.ExportSVG = _Exporter
     b3d.Edge = types.SimpleNamespace(make_line=lambda start, end: ("edge", start, end))
     b3d.LineType = types.SimpleNamespace(ISO_DASH="ISO_DASH")
+    b3d.Color = lambda *channels: channels
 
     wrapper_common = types.ModuleType("wrapper_common")
 
@@ -118,16 +119,22 @@ def _svg_implementation():
         "label_layout": types.ModuleType("label_layout"),
         "stroke_text": types.ModuleType("stroke_text"),
     }
-    saved = {key: sys.modules.get(key) for key in stubs}
+    saved = {key: sys.modules.get(key, None) for key in list(stubs) + ["appearance"]}
     sys.modules.update(stubs)
     try:
+        # The real one: it is plain Python, and it is what says what colour the
+        # shape is drawn in. It imports 'ocp_serialize', which is the stub above.
+        spec = importlib.util.spec_from_file_location("appearance", os.path.join(WRAPPERS_DIR, "appearance.py"))
+        appearance = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(appearance)
+        sys.modules["appearance"] = appearance
         spec = importlib.util.spec_from_file_location(MODULE_NAME, os.path.join(RENDER_DIR, "render_svg.py"))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
     finally:
         for key, value in saved.items():
             if value is None:
-                del sys.modules[key]
+                sys.modules.pop(key, None)
             else:
                 sys.modules[key] = value
     return module

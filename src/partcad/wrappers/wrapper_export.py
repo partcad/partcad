@@ -21,8 +21,22 @@ The script is executed with these globals available:
     request  -- the shape ('request["wrapped"]') plus every export parameter
                 declared for this format (see '//builtin/export/partcad.yaml'),
                 along with 'shape_name', 'shape_kind' and 'shape_type' so the
-                script can adapt to what it was handed
+                script can adapt to what it was handed, and 'shape_tree' - see
+                below
     path     -- the absolute path of the file to write
+
+Every implementation is handed the object two ways at once. 'wrapped' is the
+whole of it as live OCCT geometry, which is what a file of geometry is written
+from. 'shape_tree' is the tree it was decoded from, one node per object placed
+in it, nested as deeply as it goes: each node's 'name' and 'label', its
+'location' as data (the packed '[[x, y, z], [ax, ay, az], angle]' form) rather
+than baked into the geometry, what it says about itself under 'properties' -
+its 'color', its 'material', its 'physics' - and its 'joint' and 'metadata'
+where it has them; and on every shape node its own geometry, decoded, in its own
+frame, under 'shape'. It is what the URDF exporter makes a link of each node
+out of, and what a drawing reads the colour of each part from. Both are built
+from one decoding of each shape, so the second costs nothing an implementation
+that ignores it would notice.
 
 A 'cae:' implementation is run through here too, and is handed more keys:
 'analysis' (one of 'partcad.cae.ANALYSES'), the conditions the part declared
@@ -86,14 +100,14 @@ implementation with nothing to decide ignores it; one that would otherwise stamp
 the file with the clock, or reach for the quicker of two algorithms that do not
 agree to the last bit, reads it and does the other thing. See REPRODUCIBLE_KEY.
 
-A format handed the tree ('decode: false') finds, on every node an assembly
-placed by connecting it to a sibling it then moves against, that node's joint
-under JOINT_KEY: its name, the labels of the two siblings it joins, the ordered
-steps the node's placement is the product of - 'fixed' ones and 'free' ones,
-each free one with its kind ("turn" or "move"), axis, range, starting value and
-the parameters it came from - and its physics. A node placed rigidly carries
-none: there are no fixed joints. It is the core's 'Joint.to_envelope()', and
-decoding the tree throws it away with every other envelope.
+Every node of 'shape_tree' that an assembly placed by connecting it to a
+sibling it then moves against carries that node's joint under JOINT_KEY: its
+name, the labels of the two siblings it joins, the ordered steps the node's
+placement is the product of - 'fixed' ones and 'free' ones, each free one with
+its kind ("turn" or "move"), axis, range, starting value and the parameters it
+came from - and its physics. A node placed rigidly carries none: there are no
+fixed joints. It is the core's 'Joint.to_envelope()', and 'wrapped' has no room
+for it: decoding into geometry keeps the shape and nothing said about it.
 
 Every node an assembly or a scene placed also says what it holds, under "kind"
 ("part", "assembly" or "scene"), and so does the root of an assembly or a scene;
@@ -130,15 +144,13 @@ CACHE_VERSION = 1
 # sent it and would be a path to nothing here.
 SCRIPT_ARGUMENT = 3
 
-# The key that says whether the envelopes are rebuilt into live OCCT geometry
-# before the implementation sees them. It has to travel in the request and be
-# read before anything is decoded, which is why the request is always read raw
-# here and decoded afterwards. An implementation that needs what an envelope
-# says *about* a node (the URDF exporter names each link after the node and
-# reads its location as a joint origin) declares 'decode: false', because
-# decoding keeps the tree's shape but only its geometry: names and labels are
-# gone and placements are baked in rather than left as data.
-DECODE_KEY = "__decode__"
+# Where the object is handed to the implementation as live geometry, and where
+# the tree it was decoded from is handed beside it. Both always: what each node
+# of the tree says about itself - its name, its colour, where it sits - is not
+# something an implementation should have to ask for in order to be told, and
+# decoding the geometry is exactly what loses it.
+WRAPPED_KEY = "wrapped"
+SHAPE_TREE_KEY = "shape_tree"
 
 # The parameter a file type sets to 'true' to be handed what the shapes it is
 # given report about themselves, keyed by the full name ("<package>:<name>")
@@ -148,9 +160,9 @@ DECODE_KEY = "__decode__"
 PROPERTIES_KEY = "properties"
 
 # The key a node's joint rides under, beside its properties. Not a parameter of
-# anything - nothing has to ask for it - and spelled out here, rather than
-# imported, for the reason DECODE_KEY is: its twin is
-# 'partcad.shape_envelope.KEY_JOINT', and a wrapper cannot import 'partcad'.
+# anything - nothing has to ask for it - and spelled out here rather than
+# imported because its twin is 'partcad.shape_envelope.KEY_JOINT', and a
+# wrapper runs in a sandbox and cannot import 'partcad'.
 JOINT_KEY = "joint"
 
 # Whether the file this implementation is about to write has to come out
@@ -161,7 +173,7 @@ JOINT_KEY = "joint"
 # 'request["reproducible"]' without first asking whether the key exists, and
 # means by it what every other implementation means. Its twin is
 # 'partcad.output.REPRODUCIBLE_KEY', spelled out separately for the reason
-# DECODE_KEY is - a wrapper runs in a sandbox and cannot import 'partcad'.
+# JOINT_KEY is - a wrapper runs in a sandbox and cannot import 'partcad'.
 #
 # A plain parameter rather than a reserved one, so a package declares it as
 # 'reproducible: true' on a file type like any other field, and so an
@@ -195,11 +207,10 @@ WORLD_KEY = "world"
 def properties_index(request):
     """Full name -> what that shape reports about itself, over the whole request.
 
-    Built from the request as it arrives, before anything is decoded, and that
-    ordering is the point. The properties ride on the envelopes, beside the very
-    name an exporter looks a node up by, so they are here for an implementation
-    that walks the tree ('decode: false') *and* for one that is handed live
-    geometry ('decode: true'), whose decoding throws every envelope away.
+    Built from the request as it arrives, before anything is decoded. The
+    properties ride on the envelopes, beside the very name an exporter looks a
+    node up by, and every envelope in the request is walked - not only the
+    object's, but any shape another parameter carries.
 
     What the core resolved for each shape is folded in here too, underneath
     what the shape itself says: a part that states a friction or a mass of its
@@ -320,10 +331,26 @@ def process(script, path, request):
     return result
 
 
+def decode(request):
+    """The request as the implementation is handed it: every envelope in it decoded.
+
+    The object itself is decoded into both of the forms it is handed in -
+    'wrapped' and 'shape_tree' - out of one decoding of each of its shapes.
+    Anything else that is a shape (the sketch of a port, say) becomes live
+    geometry, as it always has.
+    """
+    wrapped = request.pop(WRAPPED_KEY, None)
+    request = ocp_serialize.decode(request)
+    if ocp_serialize.is_shape_object(wrapped) or ocp_serialize.is_assembly_object(wrapped):
+        request[WRAPPED_KEY], request[SHAPE_TREE_KEY] = ocp_serialize.decode_tree(wrapped)
+    elif wrapped is not None:
+        request[WRAPPED_KEY] = ocp_serialize.decode(wrapped)
+    return request
+
+
 if __name__ == "__main__":
-    # Read raw, then decode unless the implementation asked not to: whether the
-    # envelopes become live geometry is the implementation's choice, and that
-    # choice travels inside the request itself.
+    # Read raw and decoded below rather than on the way in, because the
+    # properties index is read off the envelopes, and decoding consumes them.
     path, request = wrapper_common.handle_input(decode=False)
     script = sys.argv[SCRIPT_ARGUMENT] if len(sys.argv) > SCRIPT_ARGUMENT else None
     # Before the decode, while the envelopes - and so the properties they carry
@@ -335,8 +362,7 @@ if __name__ == "__main__":
     # look it up in. A format that declares no 'properties: true' never asked
     # for either.
     request.pop(PHYSICS_KEY, None)
-    if request.pop(DECODE_KEY, True) is not False:
-        request = ocp_serialize.decode(request)
+    request = decode(request)
     # An analysis has its ports turned into faces before the implementation
     # sees it, once here rather than once per solver. What could not be done
     # is a warning beside whatever the implementation answers, never a failure:
