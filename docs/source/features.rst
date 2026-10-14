@@ -75,7 +75,8 @@ the first:
   a DXF cannot be shown there, and is saved and opened in another program instead.
 - **Analysis** — what engineering analysis says about the object:
 
-  - **FEA** and **CFD** — for a part: the analysis :ref:`pc cae <cae>` runs, and what it found.
+  - **FEA**, **Dynamic FEA**, **Heat Transfer** and **CFD** — for a part: the analysis :ref:`pc cae <cae>`
+    runs, and what it found.
 - **Manufacturing** — what making it takes:
 
   - **Build vs Buy** — for a part or an assembly: every part, piece of stock and sub-assembly it is made of,
@@ -93,7 +94,7 @@ the first:
   Manufacturing is for a part or an assembly; for a scene, a sketch or an interface it is disabled.
 - **Validation** — whether the object does what it is supposed to:
 
-  - **Simulation** — for a part or an assembly that declares a ``simulate:`` section (see :doc:`simulation`):
+  - **Simulation** — for a part, an assembly or a scene that declares a ``simulate:`` section (see :doc:`simulation`):
     the simulations it declares, listed on the left with the first one selected. Selecting one runs it, as
     ``pc sim -f <name>`` does, and shows whether its ``validation:`` held, and two pictures of the scene the
     simulation plugin took -- before anything moved on the left, and when the run was over on the right --
@@ -118,7 +119,7 @@ The 3D view arrives over the viewer protocol from whichever ``partcad`` asked fo
 other tabs are questions put to the PartCAD daemon, fetched the first time the tab is looked at and cached
 until the next object is shown. An object that belongs to no package gets the 3D view alone.
 
-The 3D view and the **FEA** and **CFD** models use the graphics card where the window can (WebGL, else WebGPU). In a
+The 3D view and the analysis models use the graphics card where the window can (WebGL, else WebGPU). In a
 window that cannot -- a virtual machine, a remote desktop, a graphics driver the editor could not use -- they draw
 the model without it instead: flat-shaded and slower, and a big model is drawn as boxes while it is being turned. A
 note in the corner of the view says so, and hovering over it says how to have the graphics card back.
@@ -209,12 +210,14 @@ implements it, so it is named through that package and exported from the command
 Engineering analysis
 ====================
 
-A part can say what holds it and what it carries, and PartCAD can put that
-question to a solver: ``pc cae fea`` for a finite element analysis, ``pc cae
-cfd`` for computational fluid dynamics. The conditions live on the part, in a
-section named after the analysis, because they are a property of the part rather
-than of whoever analyses it -- a bracket is bolted down at the same holes
-whichever solver is asked about it:
+A part can say what holds it, what it carries, how it is heated and where a
+fluid goes through it, and PartCAD can put that question to a solver. There are
+four questions, each its own command: ``pc cae fea`` for a finite element
+analysis, ``pc cae dynamic`` for its natural frequencies, ``pc cae thermal`` for
+heat transfer, and ``pc cae cfd`` for computational fluid dynamics. The
+conditions live on the part, in a section named after the analysis, because they
+are a property of the part rather than of whoever analyses it -- a bracket is
+bolted down at the same holes whichever solver is asked about it:
 
 .. code-block:: yaml
 
@@ -232,24 +235,70 @@ whichever solver is asked about it:
           rail:
             left: 30 N      # or one named instance at a time
             right: 30 N
+      dynamic:
+        fix:
+          - m3-screw        # held there, and left to ring
+      thermal:
+        temperature:
+          m3-screw: 40 C    # held at a temperature
+        heat:
+          hook: 2 W         # heat put in through the port's surface
 
-``fix:`` and ``load:`` name :ref:`interfaces <interfaces>` the part implements,
-so the same declaration that says where a part connects also says where it is
-held and pulled. A ``load`` is a force: write a number and a unit, or a bare
-number for a mass in kilograms, which PartCAD weighs into newtons at 9.8 N/kg.
-``cfd:`` takes the same two keys with the same meaning.
+Every key names :ref:`interfaces <interfaces>` the part implements, so the same
+declaration that says where a part connects also says where it is held, pulled,
+heated and cooled. A ``load`` is a force: write a number and a unit, or a bare
+number for a mass in kilograms, which PartCAD weighs into newtons at 9.8 N/kg. A
+``temperature`` is in Celsius, a ``heat`` a power in watts, a ``convection`` a
+film coefficient in W/(m²·K). ``cfd:`` reads ``load:`` as where the flow is
+driven in and ``outlet:`` as where it leaves; every other surface of the fluid
+volume is a wall. :ref:`pc cae <cae>` lists every key each analysis takes.
+
+A condition lands on the **surface its port stands for**. A port is a coordinate
+frame, and a frame cannot say how wide an inlet is; a sketch can. An interface
+that draws a port with a sketch -- a ``basic`` ``circle:`` for the end of a bore
+-- has that sketch placed by the port's frame, Z out of the surface, and PartCAD
+imprints it on the part before the solver runs: the implementation is handed the
+faces each port covers, and a force or a power is spread over exactly their area.
+A port with no sketch covers the face it lies on.
 
 PartCAD ships no solver. The analysis is run by an implementation package,
 declared in a ``cae:`` section exactly as an export or a render implementation is
-declared in its own (see :ref:`cae-section`), and named by the
-``caeFeaImplementation`` / ``caeCfdImplementation`` user configuration options --
-``//pub/feature/cae/calculix:fea`` and ``//pub/feature/cae/calculix:cfd`` by
-default, which are `CalculiX <https://www.calculix.de/>`_ (see
-`partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_ for
-what it needs and what every parameter means -- it names a ``dockerImage``
-carrying its solver and mesher, so a container runtime is all it asks of a host
-that has neither installed). ``pc cae fea --implementation`` overrides it for one run, and so does
-the field over the model in the IDE's FEA tab.
+declared in its own (see :ref:`cae-section`), and named by the user
+configuration option named after the analysis: ``caeFeaImplementation``,
+``caeDynamicImplementation``, ``caeThermalImplementation`` and
+``caeCfdImplementation``. The defaults, and the other implementations there are:
+
+.. list-table::
+   :header-rows: 1
+
+   * - package
+     - solver
+     - analyses
+   * - `partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_
+     - `CalculiX <https://www.calculix.de/>`_
+     - ``fea`` (the default)
+   * - `partcad-cae-elmer <https://github.com/partcad/partcad-cae-elmer>`_
+     - `Elmer <https://www.elmerfem.org/>`_
+     - ``fea``, ``dynamic`` (the default), ``thermal`` (the default), ``cfd``
+   * - `partcad-cae-openfoam <https://github.com/partcad/partcad-cae-openfoam>`_
+     - `OpenFOAM <https://www.openfoam.com/>`_
+     - ``cfd`` (the default)
+   * - `partcad-cae-code-aster <https://github.com/partcad/partcad-cae-code-aster>`_
+     - `Code_Aster <https://www.code-aster.org/>`_
+     - ``fea``, ``dynamic``, ``thermal``
+   * - `partcad-cae-moose <https://github.com/partcad/partcad-cae-moose>`_
+     - `MOOSE <https://mooseframework.inl.gov/>`_
+     - ``fea``, ``dynamic``, ``thermal``, ``cfd``
+   * - `partcad-cae-code-saturne <https://github.com/partcad/partcad-cae-code-saturne>`_
+     - `code_saturne <https://www.code-saturne.org/>`_
+     - ``cfd``
+
+Each package's README says what it needs and what every parameter means. Each
+names a ``dockerImage`` carrying its solver and mesher, so a container runtime is
+all it asks of a host that has neither installed -- and each also runs a solver
+installed on the host, when there is no container runtime or it is turned off.
+``pc cae fea --implementation`` overrides the choice for one run, and so does the
+field over the model in the IDE's analysis tabs.
 
 A part may also name its own, which is what it was written against:
 
@@ -277,7 +326,8 @@ or more packages below.
 What comes back is two things: the model, written to
 ``<part>.<analysis>.<extension>`` in whichever format the implementation chose,
 and the **findings** -- a JSON array of what the analysis has to say about the
-part. ``pc test`` gains an ``fea`` and a ``cfd`` check that fail a part whose
+part. ``pc test`` gains a check per analysis -- ``fea``, ``dynamic``,
+``thermal``, ``cfd`` -- that fails a part whose
 analysis produced any finding, and they apply only to a part that declares the
 matching section, so a package of bolts pays nothing for them. There is one way to pass -- the
 analysis ran and reported nothing -- and everything else **fails**: a malformed
@@ -315,19 +365,17 @@ documents is a Linux image, and such a daemon answers a ping and then fails ever
 pull with ``no matching manifest for windows/amd64``.
 
 The same policy, from the same code, decides ``pc test``'s ``sim`` check, which
-holds a part or an assembly to the ``simulate:`` claims it makes: a simulator
+holds a part, an assembly or a scene to the ``simulate:`` claims it makes: a simulator
 that resolved and did not run is a failure, but for the one excuse, and a
 simulation plugin that cannot be found is never excused. See "Running a
 simulation" in :doc:`simulation`.
 
-``examples/feature_cae`` is the pair of cases to check an implementation against
-— a cantilever and a pipe, each with a closed-form answer to compare the solver
-with. Against CalculiX the cantilever reads 0.1655 mm where the model predicts
-0.16-0.18 mm. The pipe declares no ``cfd:`` section: CalculiX's CFD solver
-diverges on it, a part that declares a section has asked a question, and an
-example that ships a check nothing can turn green is one readers learn to scroll
-past. The declaration is written out beside the part, and that example's
-``README.md`` has the measurement.
+``examples/feature_cae`` is the set of cases to check an implementation against
+-- a cantilever analysed for stress, for its natural frequencies and for heat,
+and a pipe for flow, each with a closed-form answer to compare the solver with.
+The pipe's inlet and outlet are drawn with the bore's circle, so the pressure
+driving it is the inlet's force over exactly the bore's area. That example's
+``README.md`` has what each implementation measured.
 
 See :ref:`pc cae <cae>` for the command and the units it accepts.
 
@@ -856,14 +904,14 @@ uncached too.
 Analyses, routes and simulations
 --------------------------------
 
-What ``pc cae fea``/``pc cae cfd``, ``pc cam`` and ``pc sim`` produce is
+What ``pc cae``, ``pc cam`` and ``pc sim`` produce is
 cached in the same tiers: the result (the findings, what the route
 implementation counted, or what the simulator reported) together with the files
 the run wrote -- the analysis model, the route program, or the whole run
 directory of a simulation, with the scene, its meshes and whatever the plugin
 left there. Asking the same question again puts the files back where that run
-asks for them and runs nothing. The ``fea``, ``cfd``, ``cam`` and ``sim`` checks
-of ``pc test``, and the IDE's FEA and CFD tabs, go through the same cache.
+asks for them and runs nothing. The analysis, ``cam`` and ``sim`` checks of
+``pc test``, and the IDE's analysis tabs, go through the same cache.
 
 The question is the object's own cache key plus everything the run adds to it:
 the boundary conditions and where they landed, a route's job and the machine it

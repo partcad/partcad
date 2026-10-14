@@ -156,8 +156,11 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
         (SDFormat), [`partcad-sim-mujoco`](https://github.com/partcad/partcad-sim-mujoco) for `MJCF`, each
         also declaring the reader, the exporter and the `pc ide open` entry for its engine
 - Simulation — what an object is supposed to do once the world is switched on
-  - [x] `simulate:` on a part or an assembly: a scene, where in it the object goes, and the condition that
-        says whether it went as it should
+  - [x] `simulate:` on a part, an assembly or a scene: a scene, where in it the object goes, and the
+        condition that says whether it went as it should
+  - [x] What becomes a rigid body: every element of a scene, recursively, and everything inside an assembly
+        attached to it, its connections that keep a degree of freedom joints; a scene element may be
+        `fixed: true` to the world, and a scene may place a scene
   - [x] `pc sim`, which runs it and validates the result
   - [x] `pc test` holds every object to it, as its `sim` check: write the claim first, then make it pass
   - [x] Simulation plugins, declared the way export and render implementations are — a scene goes in,
@@ -169,9 +172,11 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 - Engineering analysis — what the part does before anything is cut
   - [x] `pc cae fea`, finite element analysis: the part says what holds it (`fix:`) and what pulls on it
         (`load:`) in terms of its own interfaces, so the boundary conditions survive a change of geometry
-  - [x] `pc cae cfd`, computational fluid dynamics, the same way
-  - [x] The solver is a package, not part of this wheel — `//pub/feature/cae/openfoam` for CFD — and the
-        **FEA** and **CFD** tabs of the Digital Thread run it on the object on screen
+  - [x] `pc cae dynamic`, modal analysis: the natural frequencies of a part, held as it is
+  - [x] `pc cae thermal`, heat transfer: what is held at a temperature, heated and cooled
+  - [x] `pc cae cfd`, computational fluid dynamics: where the flow goes in and out, the rest a wall
+  - [x] The **FEA**, **Dynamic FEA**, **Heat Transfer** and **CFD** tabs of the Digital Thread run them on the
+        object on screen
 - Materials — what a part is made of, as an object of a package
   - [x] A `materials:` section, and standard catalogues to inherit from rather than restate:
         `//pub/std/manufacturing/material/plastic` and `.../metal`, named by designation and temper

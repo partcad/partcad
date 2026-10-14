@@ -177,7 +177,10 @@ _SCHEMA_BY_EXTENSION = {
 # What an ASSY file is being read as. The same document means slightly
 # different things depending on which section of a package points at it:
 #
-#   FLAVOR_ASSEMBLY -- an entry in `assemblies:`. The full ASSY schema.
+#   FLAVOR_ASSEMBLY -- an entry in `assemblies:`. The ASSY schema with `scene`
+#                      and `fixed` forbidden: everything in an assembly is
+#                      attached to it, so it neither holds an arrangement nor
+#                      welds anything to the world (see `assembly_schema`).
 #   FLAVOR_SCENE    -- an entry in `scenes:`. The same schema with `how`
 #                      forbidden: a scene states where things are, not how they
 #                      got there (see `partcad.scene`).
@@ -185,6 +188,8 @@ _SCHEMA_BY_EXTENSION = {
 # Which one a given file is is not a property of the file, so nothing here can
 # work it out; the caller says, and both callers answer it best effort (see
 # `partcad_client.lint.detect_flavor` and the extension's `PartcadLint`).
+# `assy.json` itself is the format both are read from, and states all three
+# keys; neither flavor is that document unchanged.
 FLAVOR_ASSEMBLY = "assembly"
 FLAVOR_SCENE = "scene"
 FLAVORS = (FLAVOR_ASSEMBLY, FLAVOR_SCENE)
@@ -195,6 +200,23 @@ FLAVORS = (FLAVOR_ASSEMBLY, FLAVOR_SCENE)
 SCENE_NO_HOW = (
     "'how' is not allowed in a scene: a scene states where things are, "
     "not how they got there. Declare it in an assembly instead"
+)
+
+# What an assembly is told when it says what only a scene says. The same
+# arrangement as SCENE_NO_HOW, the other way round, and for the rule section 7
+# of docs/design/simulation.md states: everything inside an assembly is attached
+# to it, and every element of a scene is a body of its own. A file no package
+# declares is read as an assembly (see `partcad_client.lint.detect_flavor`), so
+# each message also says what to do if the file was meant as a scene.
+ASSEMBLY_NO_SCENE = (
+    "'scene' is not allowed in an assembly: everything in an assembly is attached to it, and nothing in a "
+    "scene is. Place the scene in a scene, or link what it arranges here; if this file is a scene, declare it "
+    "under 'scenes:'"
+)
+ASSEMBLY_NO_FIXED = (
+    "'fixed' is not allowed in an assembly: everything in an assembly is attached to it already, and only a "
+    "scene welds what it places to the world. Mark the link that places the assembly in a scene instead; if "
+    "this file is a scene, declare it under 'scenes:'"
 )
 
 # What this checker is, for a cache key to hash.
@@ -392,6 +414,35 @@ def scene_schema(schema: dict) -> dict:
     return result
 
 
+def assembly_schema(schema: dict) -> dict:
+    """The assembly flavor of the ASSY schema: ``schema`` with ``scene`` and ``fixed`` forbidden.
+
+    The mirror image of 'scene_schema()', derived for the same reason: one
+    format read for two purposes, and a copy per purpose is a copy that drifts.
+    A node may place a scene and weld what it places to the world only in a
+    scene, because both are statements about which things are bodies of their
+    own, and inside an assembly nothing is (docs/design/simulation.md, section
+    7). Forbidden with a sentence rather than dropped, so that the finding says
+    why instead of reading as a typo; the build refuses the same two keys (see
+    'AssemblyFactoryAssy.node_fixed' and its handling of 'scene:').
+    """
+    result = copy.deepcopy(schema)
+    properties = result.get("definitions", {}).get("node", {}).get("properties")
+    if isinstance(properties, dict):
+        if "scene" in properties:
+            properties["scene"] = {"not": {}, "description": ASSEMBLY_NO_SCENE}
+        if "fixed" in properties:
+            properties["fixed"] = {"not": {}, "description": ASSEMBLY_NO_FIXED}
+    return result
+
+
+# How each flavor is derived from the format both are read from.
+_FLAVOR_DERIVATIONS = {
+    FLAVOR_ASSEMBLY: assembly_schema,
+    FLAVOR_SCENE: scene_schema,
+}
+
+
 def schema_for_file(path: str, flavor: str = FLAVOR_ASSEMBLY):
     """The schema that governs ``path`` when read as ``flavor``, or None.
 
@@ -401,18 +452,25 @@ def schema_for_file(path: str, flavor: str = FLAVOR_ASSEMBLY):
     --schema scene` naming a configuration by mistake) gets the configuration
     schema rather than a scene-flavored derivative of it, which would be a
     schema forbidding a `how` no package configuration has.
+
+    An ASSY file is checked against one flavor or the other and never against
+    `assy.json` as it stands, which states what either may say. A flavor this
+    module does not know is read as an assembly, which is what the callers
+    lean towards whenever they cannot tell.
     """
     name = schema_name_for_file(path)
     if name is None:
         return None
-    if flavor != FLAVOR_SCENE or name != ASSY_SCHEMA:
+    if name != ASSY_SCHEMA:
         return get_schema(name)
+    if flavor not in _FLAVOR_DERIVATIONS:
+        flavor = FLAVOR_ASSEMBLY
     # Cached like the file-backed schemas beside it: an editor checks the same
     # document on every keystroke, and deriving it each time would deep-copy
     # the whole schema for nothing.
-    key = (name, FLAVOR_SCENE)
+    key = (name, flavor)
     if key not in _schema_cache:
-        _schema_cache[key] = scene_schema(get_schema(name))
+        _schema_cache[key] = _FLAVOR_DERIVATIONS[flavor](get_schema(name))
     return _schema_cache[key]
 
 

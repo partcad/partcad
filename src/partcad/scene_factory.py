@@ -13,12 +13,19 @@ is deliberate and is the whole point -- an ASSY file read as a scene and the
 same file read as an assembly must produce the same tree, and two readers of
 one format would eventually stop doing that.
 
-Only two things are actually different, and both live in 'SceneFactoryAssy':
+Only a few things are actually different, and all of them live in
+'SceneFactoryAssy':
 
   * a scene rejects the ``how:`` section of a ``connect:``. A scene states an
     end state, not the steps that reach it (see 'partcad.scene').
-  * a scene's source file is checked against the scene-simplified ASSY schema,
-    which is the same schema without ``how`` (see 'partcad_utils.assy_lint').
+  * a scene makes no joints, and may say two things an assembly may not: a link
+    may place another scene (``scene:``), and an element may be welded to the
+    world (``fixed: true``). Both follow from one rule -- every element of a
+    scene is a rigid body of its own, and everything inside an assembly is
+    attached to it (docs/design/simulation.md, section 7).
+  * a scene's source file is checked against the scene flavour of the ASSY
+    schema, which forbids ``how`` and allows ``scene:`` and ``fixed:`` (see
+    'partcad_utils.assy_lint').
 """
 
 from . import logging as pc_logging
@@ -63,6 +70,11 @@ class SceneFactoryAssy(SceneFactoryMixin, AssemblyFactoryAssy):
     # the parameters a 'motion:' brings - so one file puts its parts in one
     # place whichever kind of object reads it.
     KEEPS_JOINTS = False
+
+    # So a scene may place another scene, whose elements are bodies of their
+    # own in turn, and may weld any of its elements to the world. An assembly
+    # may do neither: see 'AssemblyFactoryAssy.IS_SCENE'.
+    IS_SCENE = True
 
     def connect_how(self, node, connect, name):
         """A scene has no assembly instructions, and says so rather than ignoring them.

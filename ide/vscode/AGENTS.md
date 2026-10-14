@@ -143,9 +143,9 @@ rebuilds the strip (`keepCurrent`, a Build vs Buy switch): what they did wins ov
 earlier, so a request waiting for Buy does not pull them off the tab they are working in. `TAB_GROUPS` in `src/webview/messages.ts` is the list of what can be asked for, and a Python
 test holds it to `VIEWER_TABS` on the other side.
 
-**The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA and CFD for a part, then
-Manufacturing: what is built and what is bought, how to build it, the bill of materials, where to buy it and the
-assembly instructions; then Validation: the simulations the object's `simulate:` section declares, each run and
+**The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA, Dynamic FEA, Heat Transfer and
+CFD for a part, then Manufacturing: what is built and what is bought, how to build it, the bill of materials, where
+to buy it and the assembly instructions; then Validation: the simulations the object's `simulate:` section declares, each run and
 shown as the scene before and after. In front of all of them, for an object that declares `requirements:`, a
 Requirements tab: asked about on every show (`requirements.check`, a declaration read) and verified when opened,
 by the same code as `pc test -f requirements`. Only the 3D
@@ -208,16 +208,25 @@ its geometry is the geometry of every clone of it.
 
 None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote`, `cae.analyze` and
 `simulate.run` are the CLI's own operations (`pc bom`, the book `pc render -t html` writes, the cart
-`pc supply quote` fills, the analysis `pc cae fea`/`pc cae cfd` runs, the simulation `pc sim` runs), asked for
+`pc supply quote` fills, the analysis `pc cae <analysis>` runs, the simulation `pc sim` runs), asked for
 as data rather
 than as a file -- the same rule as everywhere else in this extension: extend the one backend, do not
 reimplement it in TypeScript.
 
-The FEA and CFD tabs *act* rather than ask: selecting one runs a solver. The field
-over the model names which -- pre-filled from `cae.defaults` (the user configuration's
-`caeFeaImplementation`/`caeCfdImplementation`) and filled in even when the run failed, which is when a user
-most needs to see what was tried. The model is drawn by its extension, because the format is the
-implementation's choice: a mesh gets an orbit camera, a picture pans and zooms. See
+The Analysis tabs -- FEA, Dynamic FEA, Heat Transfer and CFD -- are the ones that *act* rather than ask:
+selecting one runs a solver. Each is named after its analysis on the command line (`fea`, `dynamic`,
+`thermal`, `cfd`), which is the id the host asks `cae.analyze` for; the label a person reads is
+`ANALYSIS_LABELS` in `src/webview/messages.ts`, and it is never derived from the id -- "DYNAMIC" is not what
+anybody calls a modal analysis. The field over the model names which solver -- pre-filled from `cae.defaults`
+(the user configuration's `cae<Analysis>Implementation`: `caeFeaImplementation`, `caeDynamicImplementation`,
+`caeThermalImplementation`, `caeCfdImplementation`) and filled in even when the run failed, which is when a
+user most needs to see what was tried. The model is drawn by its extension, because the format is the
+implementation's choice: a mesh gets an orbit camera, a picture pans and zooms. An analysis is added on both
+sides of the panel at once -- the renderer's `TAB_GROUPS` (which `ANALYSIS_TABS` is read from) and
+`ANALYSIS_LABELS`, and the host's `TAB_COMMANDS`, `ANALYSIS_TABS` and the pane in its HTML
+(`src/viewer/PartcadViewer.ts`) -- and `viewerHostFilter.test.ts` fails for a renderer tab the host does not
+know. `VIEWER_TABS` in `src/partcad_ide_client/protocol.py` is the third place, held to `TAB_GROUPS` by a test,
+and is what gives `pc ide view` its `--analysis-<id>` flags. See
 [docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 The Simulation tab acts too, and is the one tab whose *group* depends on an answer. Its sibling, Process
@@ -269,7 +278,7 @@ Four things about it are load-bearing:
   the reason in the overlay; it lives there because every webview module imports it, and a module's
   dependencies are evaluated before its own body, so it is installed before anything can throw.
 - **No WebGL is not no 3D view -- in any pane.** Every pane that draws in 3D -- the 3D view (`scene.ts`) and the
-  FEA/CFD result model (`cae.ts`) -- gets what it draws with from `surface.ts` (`createSurface`), the first of
+  analysis result model (`cae.ts`) -- gets what it draws with from `surface.ts` (`createSurface`), the first of
   three backends the window can give: WebGL; else WebGPU, through three's `WebGPURenderer` (loaded from
   `three/webgpu` only then, which shares `three.core.js` with the `three` build the scene is made of, so the
   same meshes and materials draw); else the **canvas painter** (`painter.ts`), which projects the scene on the

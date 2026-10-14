@@ -14,6 +14,7 @@ from .cfd import CfdTest
 from .connect import ConnectTest
 from .connectivity import ConnectivityTest
 from .degenerate import DegenerateTest
+from .dynamic import DynamicTest
 from .fea import FeaTest
 from .interference import InterferenceTest
 from .manufacturability import ManufacturabilityTest
@@ -29,6 +30,7 @@ from .shell import ShellTest
 from .sim import SimTest
 from .solidity import SolidityTest
 from .test import Test
+from .thermal import ThermalTest
 from .validity import ValidityTest
 
 _global_tests: list[Test] = []
@@ -83,8 +85,8 @@ def tests(concurrency_cap: int) -> list[Test]:
                 InterferenceTest(),
                 # Only ever run for an object that declares the matching
                 # section; see 'test/cae.py' and 'test/cam.py'. A package with
-                # no 'fea:'/'cfd:'/'cam:' in it pays nothing for these three
-                # being here.
+                # no 'cam:' and no analysis section in it pays nothing for
+                # these being here.
                 #
                 # 'cam' is the route -- can this object's post-processor produce
                 # the program a machine cuts it with -- and emphatically not the
@@ -93,6 +95,8 @@ def tests(concurrency_cap: int) -> list[Test]:
                 # the name 'cam' until 'pc cam' existed.
                 CamTest(),
                 FeaTest(),
+                DynamicTest(),
+                ThermalTest(),
                 CfdTest(),
                 # The same gate again, on 'simulate:', for a part or an
                 # assembly: an object that declares none pays nothing. Last,

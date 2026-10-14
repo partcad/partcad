@@ -10,8 +10,8 @@
 // instructions, and anything that can be bought has suppliers and prices, so the
 // panel is a strip of tabs over one object rather than a canvas:
 //
-//     (Requirements)  |  Design           |  Analysis   |  Manufacturing                                                    |  Validation                       |  Operations
-//                           3D | 2D | Draft     FEA | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Simulation | Process Emulation
+//     (Requirements)  |  Design           |  Analysis                                 |  Manufacturing                                                    |  Validation                       |  Operations
+//                           3D | 2D | Draft     FEA | Dynamic FEA | Heat Transfer | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Simulation | Process Emulation
 //
 // Four groups, each a strip of its own. Design is the object itself: turned in
 // 3D, rendered to a picture, drawn as a dimensioned drawing. Analysis is what
@@ -38,9 +38,9 @@
 //
 // This file is the shell: it owns the tab strips and the panes, routes what the
 // extension host posts in, and asks for the contents of a tab the first time it
-// is looked at. Each pane draws itself ('scene.ts', 'render.ts', 'bom.ts',
-// 'bvb.ts', 'build.ts', 'assembly.ts', 'supply.ts', 'simulation.ts'); none of
-// them talks to the host directly.
+// is looked at. Each pane draws itself ('scene.ts', 'render.ts', 'cae.ts',
+// 'bom.ts', 'bvb.ts', 'build.ts', 'assembly.ts', 'supply.ts', 'simulation.ts');
+// none of them talks to the host directly.
 //
 // The Manufacturing strip is the one whose shape depends on an answer. Whether
 // anything is built (the Build tab) and whether anything is bought (the Buy tab)
@@ -83,6 +83,7 @@ import {
     sendState,
 } from './host';
 import {
+    ANALYSIS_LABELS,
     ANALYSIS_TABS,
     BomData,
     BvbData,
@@ -136,6 +137,8 @@ const panes: Record<TabId, HTMLElement> = {
     supply: byId('pane-supply'),
     assembly: byId('pane-assembly'),
     fea: byId('pane-fea'),
+    dynamic: byId('pane-dynamic'),
+    thermal: byId('pane-thermal'),
     cfd: byId('pane-cfd'),
     simulation: byId('pane-simulation'),
     emulation: byId('pane-emulation'),
@@ -414,8 +417,8 @@ let generation = 0;
  * is dropped rather than painted over what is now on screen. The same reason
  * 'scene.ts' keeps a generation of its own.
  *
- * A token per *request* rather than per object, because the two analysis tabs
- * are asked more than once for the same object: a user who runs FEA, retypes the
+ * A token per *request* rather than per object, because the analysis tabs are
+ * asked more than once for the same object: a user who runs FEA, retypes the
  * implementation and runs it again has two solvers in flight over one part, and
  * the first to finish is not the one they asked last.
  */
@@ -463,6 +466,12 @@ let buildPhase: 'plan' | 'document' = 'plan';
 
 /** The kinds of object that can declare requirements. */
 const REQUIRED_KINDS = ['part', 'assembly', 'scene', 'sketch'];
+
+/**
+ * The kinds of object that can declare simulations. A scene is one: a stack of
+ * blocks is an arrangement rather than a product, and claims to stand.
+ */
+const SIMULATED_KINDS = ['part', 'assembly', 'scene'];
 
 /**
  * What the object on screen is required to be, once the daemon has said, and
@@ -556,7 +565,9 @@ function tabsFor(message: ShowMessage | undefined): TabSpec[] {
 }
 
 /**
- * Analysis: FEA and CFD, both always shown, enabled for a part.
+ * Analysis: FEA, Dynamic FEA, Heat Transfer and CFD, all four always shown,
+ * enabled for a part, in the order and under the names 'ANALYSIS_TABS' and
+ * 'ANALYSIS_LABELS' give them.
  *
  * Everything but the 3D view is a question put to the daemon about
  * '<package>:<name>', so an object whose package the sender did not tell us
@@ -565,17 +576,14 @@ function tabsFor(message: ShowMessage | undefined): TabSpec[] {
  *
  * Only a part is analysed. An assembly is a set of parts that each have boundary
  * conditions of their own, and a load on the whole of one says nothing about
- * which member carries it - so 'pc cae' takes a part, and so does this. Both are
- * enabled whether or not the part declares 'fea:'/'cfd:', because "this part
- * says nothing about FEA" is the answer somebody looking for the tab came to
- * read.
+ * which member carries it - so 'pc cae' takes a part, and so does this. Each is
+ * enabled whether or not the part declares a section for it ('fea:',
+ * 'dynamic:', 'thermal:', 'cfd:'), because "this part says nothing about heat
+ * transfer" is the answer somebody looking for the tab came to read.
  */
 function analysisTabsFor(message: ShowMessage | undefined): TabSpec[] {
     const analysed = Boolean(message?.package) && message?.kind === 'part';
-    return [
-        { id: 'fea', label: 'FEA', pane: panes.fea, disabled: !analysed },
-        { id: 'cfd', label: 'CFD', pane: panes.cfd, disabled: !analysed },
-    ];
+    return ANALYSIS_TABS.map((id) => ({ id, label: ANALYSIS_LABELS[id], pane: panes[id], disabled: !analysed }));
 }
 
 /**
@@ -646,16 +654,16 @@ function manufacturingTabsFor(message: ShowMessage | undefined): TabSpec[] {
     ];
 }
 
-/** Whether an object is one that can declare simulations: a part or an assembly of a known package. */
+/** Whether an object is one that can declare simulations: a part, an assembly or a scene of a known package. */
 function simulated(message: ShowMessage | undefined): boolean {
-    return Boolean(message?.package) && (message?.kind === 'part' || message?.kind === 'assembly');
+    return Boolean(message?.package) && SIMULATED_KINDS.includes(message?.kind ?? '');
 }
 
 /**
  * Validation: the simulations the object declares, run, and Process Emulation.
  *
  * Simulation is enabled only once the daemon has said there is at least one: a
- * part or an assembly with a 'simulate:' section that names a simulation.
+ * part, an assembly or a scene with a 'simulate:' section that names a simulation.
  * Unlike the analyses, it is not offered to every part on the chance that it
  * says something - "this declares no simulations" is not a page anybody opens
  * the group to read, and the strip says it in the tab's tooltip instead.

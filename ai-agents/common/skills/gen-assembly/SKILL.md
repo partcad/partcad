@@ -612,7 +612,12 @@ free: `connect:` places the parts but does not fasten them, and `motion:` on an
 interface records the freedom a joint is meant to have without making it one.
 So something that stands only because it is fastened together — a cantilever, a
 wall bracket, a post fixed to its base — comes apart in the run. Report that as
-the limit it is; do not loosen the validation until it passes.
+the limit it is; do not loosen the validation until it passes. That is the
+engine plugins not writing PartCAD's own rule yet, which is that everything in
+an assembly is attached and every element of a *scene* is free; so when what you were asked
+for is an arrangement rather than a product — a stack of blocks, a workcell —
+declare it under `scenes:` instead, with the same `simulate:`, and run it with
+`pc sim -S <name>`.
 
 **Under water, in the air, off Earth.** The default scene is Earth's gravity in a
 vacuum. Anything else is a scene that says so, which the `simulate:` names with
@@ -627,7 +632,7 @@ scenes:
     gravity: [0, 0, -9.81]   # m/s^2: Moon -1.62, Mars -3.72, orbit 0
     parameters:
       subject: { type: string, default: <name> }      # pc sim sets this
-      subject_kind: { type: string, default: assembly } # or part
+      subject_kind: { type: string, default: assembly } # or part, or scene
 ```
 
 ```yaml

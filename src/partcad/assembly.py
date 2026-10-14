@@ -46,6 +46,11 @@ class AssemblyChild:
     fixed joints. A reader that knows its joints some other way (a URDF does)
     may fill 'joint' in directly. 'joint_problems' is what resolving the joint
     found wrong with the declarations it read, which 'pc test' reports.
+
+    'fixed' is a scene's 'fixed: true': what this child places is welded to the
+    world rather than free to fall (see docs/design/simulation.md, section 7).
+    Only a scene sets it. Everything inside an assembly is attached to the
+    assembly already, so there is nothing for it to say there.
     """
 
     def __init__(
@@ -61,6 +66,7 @@ class AssemblyChild:
         composition=None,
         joint=None,
         joint_problems=None,
+        fixed=False,
     ):
         self.item = item
         self.name = name
@@ -84,6 +90,7 @@ class AssemblyChild:
         self.composition = composition
         self.joint = joint
         self.joint_problems = list(joint_problems or [])
+        self.fixed = bool(fixed)
 
     def connect_info(self):
         """What the ASSY file says about connecting this child, or None.
@@ -328,7 +335,15 @@ class Assembly(Shape):
                 self.error(msg)
                 raise Exception(msg)
             name, label = self._child_name_label(child, index)
-            return self._place(envelope, child.location, name, label, child.joint)
+            return self._place(
+                envelope,
+                child.location,
+                name,
+                label,
+                child.joint,
+                kind=getattr(child.item, "kind", None),
+                fixed=child.fixed,
+            )
 
         if len(self.children) == 0:
             pc_logging.warning("The assembly %s:%s is empty" % (self.project_name, self.name))
@@ -359,6 +374,12 @@ class Assembly(Shape):
         """
         name = ("%s:%s" % (self.project_name, self.name)) if self.name else self.project_name
         metadata = {"name": name, "label": self.name}
+        # What this is, which a reader of the tree cannot tell from its shape:
+        # an assembly and a scene are the same tree, and what decides whether
+        # its children are one body or bodies of their own is which of the two
+        # it is (see 'shape_envelope.KEY_KIND'). The nodes below carry their
+        # own, stamped by whatever placed them (see '_place').
+        metadata[shape_envelope.KEY_KIND] = self.kind
         properties = self._shape_properties()
         if properties:
             metadata[shape_envelope.KEY_PROPERTIES] = properties
@@ -397,7 +418,7 @@ class Assembly(Shape):
         name = ("%s:%s" % (project, item_name)) if project and item_name else item_name
         return name, self.link_name(index)
 
-    def _place(self, child_env, placement, name, label, joint=None):
+    def _place(self, child_env, placement, name, label, joint=None, kind=None, fixed=False):
         """The child's node re-stamped for this assembly.
 
         'shape_envelope.placed()' is the composition, and is shared with
@@ -411,8 +432,20 @@ class Assembly(Shape):
         finds the parts. It is this assembly's account of the child, like the
         label, so it is stamped here rather than by the child: one part may be
         placed rigidly once and on a hinge twice.
+
+        So are the two facts the body rule reads (see docs/design/simulation.md,
+        section 7): what the child is (KEY_KIND) - an assembly has stamped its
+        own already, a part has not, and the reader should not have to guess
+        which of the two a node without one was - and, for an element of a
+        scene, whether it is welded to the world (KEY_FIXED). The second is
+        written only where it is true, so a free element's node is the node it
+        always was.
         """
         node = shape_envelope.placed(child_env, placement, name=name, label=label)
+        if kind is not None:
+            node[shape_envelope.KEY_KIND] = kind
+        if fixed:
+            node[shape_envelope.KEY_FIXED] = True
         if joint is not None:
             node[shape_envelope.KEY_JOINT] = joint.to_envelope()
         return node

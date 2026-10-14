@@ -18,6 +18,8 @@ import threading
 import warnings
 from typing import TYPE_CHECKING, Optional
 
+from partcad_utils import timeouts
+
 from . import cache_artifacts
 from . import cae as pc_cae
 from . import cam as pc_cam
@@ -2158,11 +2160,11 @@ class Shape(ShapeConfiguration):
 
         * 'implementation' is this *run's* answer: 'pc cae fea -i', the IDE's
           field. It wins, because it is the most specific thing anybody said.
-        * 'declared' is the object's own, from 'implementation:' in its 'fea:' or
-          'cfd:' section - a statement about the part, naming the solver its
-          numbers were produced with.
-        * failing both, the user configuration
-          ('caeFeaImplementation'/'caeCfdImplementation'), which is what makes
+        * 'declared' is the object's own, from 'implementation:' in its analysis
+          section - a statement about the part, naming the solver its numbers
+          were produced with.
+        * failing both, the user configuration option named after the analysis
+          ('caeFeaImplementation', 'caeCfdImplementation', ...), which is what makes
           'pc cae fea :bracket' work in a package that says nothing about
           solvers.
 
@@ -2237,11 +2239,18 @@ class Shape(ShapeConfiguration):
         a projection and look at them. All the way down rather than to the first
         boundary: a load is carried by a face of something, and on an assembly
         that something is one of the parts inside it.
+
+        With the interfaces as well as the ports, which is what puts each port's
+        sketch on its record: the circle of a bore, the outline of a pad. A
+        frame says where a condition lands and the sketch says on how much of
+        the surface, and the sandbox turns the two into faces before the
+        implementation runs (see 'wrappers/cae_support.py'). A port drawn with
+        no sketch travels as the frame it always was.
         """
         from .render_overlay import Overlay, collect_async
 
         try:
-            records = await collect_async(self, ctx, Overlay(ports=True, internals=True))
+            records = await collect_async(self, ctx, Overlay(ports=True, interfaces=True, internals=True))
         except Exception as e:
             raise pc_cae.CaeConfigError(
                 "Failed to locate the ports the '%s:' section names: %s" % (config.analysis, e)
@@ -2279,8 +2288,9 @@ class Shape(ShapeConfiguration):
 
         Args:
             ctx: Execution context.
-            analysis: "fea" or "cfd" - which section of the object holds the
-                boundary conditions, and what the output file is named after.
+            analysis: one of 'partcad.cae.ANALYSES' - which section of the object
+                holds the boundary conditions, and what the output file is named
+                after.
             implementation: '<package>:<file type>' naming who runs it,
                 overriding the user configuration's default for this run.
             project: The package the object belongs to, whose 'cae:' section
@@ -2370,82 +2380,93 @@ class Shape(ShapeConfiguration):
             )
             final_filepath = os.path.abspath(final_filepath)
 
-            # Clearing the path, writing it and reading the answer back are one
-            # operation on one file, and the path is derived from the shape --
-            # so a second run over the same shape resolves to the same path and
-            # would otherwise interleave with this one: its 'os.remove' landing
-            # between this run's write and this run's check, or its model being
-            # the one handed back here. Held for all three, and the nested
-            # 'get_wrapped' and '_run_implementation_async' take the same lock
-            # again without waiting for it.
-            #
-            # What this does not make it is a snapshot. The path below is the
-            # shape's model file, not this call's, and a later run of the same
-            # analysis on the same shape replaces it once this one has returned
-            # -- the same contract 'pc render' and 'pc export' have, and the
-            # reason the IDE and the CLI can both name the file without being
-            # told where it went. A caller that needs the bytes to outlive the
-            # next run copies them; giving each run its own path instead would
-            # take that name away from everyone who relies on it.
-            async with self.locked():
-                ctx.ensure_dirs_for_file(final_filepath)
-                # A model is the answer to *this* run, and the path it goes to
-                # is stable -- '<part>.<analysis>.<extension>', beside the
-                # package. So one an earlier run left there would satisfy the
-                # check below and be handed back as the new result: last week's
-                # stresses under today's load, with nothing to say they are not
-                # today's. Removed before the implementation is asked, which
-                # makes the file's existence afterwards mean what it is read as
-                # meaning.
-                if os.path.exists(final_filepath):
-                    os.remove(final_filepath)
+            # A solve is a long silence: the sandbox says nothing between
+            # starting the solver and the solver finishing, and a client gives
+            # up on a daemon that says nothing for its default five minutes. An
+            # implementation that knows it can take longer says so with
+            # 'timeout:' (seconds) among its parameters -- a CFD package, a
+            # fine mesh re-tuned by the package using it -- and the daemon
+            # announces that window for as long as the analysis runs, exactly as
+            # it does for an assembly that declares one (see
+            # 'partcad_utils.timeouts').
+            window = timeouts.seconds((impl.parameters or {}).get(timeouts.KEY))
+            with pc_logging.Timeout(window, self.project_name, self.name):
+                # Clearing the path, writing it and reading the answer back are one
+                # operation on one file, and the path is derived from the shape --
+                # so a second run over the same shape resolves to the same path and
+                # would otherwise interleave with this one: its 'os.remove' landing
+                # between this run's write and this run's check, or its model being
+                # the one handed back here. Held for all three, and the nested
+                # 'get_wrapped' and '_run_implementation_async' take the same lock
+                # again without waiting for it.
+                #
+                # What this does not make it is a snapshot. The path below is the
+                # shape's model file, not this call's, and a later run of the same
+                # analysis on the same shape replaces it once this one has returned
+                # -- the same contract 'pc render' and 'pc export' have, and the
+                # reason the IDE and the CLI can both name the file without being
+                # told where it went. A caller that needs the bytes to outlive the
+                # next run copies them; giving each run its own path instead would
+                # take that name away from everyone who relies on it.
+                async with self.locked():
+                    ctx.ensure_dirs_for_file(final_filepath)
+                    # A model is the answer to *this* run, and the path it goes to
+                    # is stable -- '<part>.<analysis>.<extension>', beside the
+                    # package. So one an earlier run left there would satisfy the
+                    # check below and be handed back as the new result: last week's
+                    # stresses under today's load, with nothing to say they are not
+                    # today's. Removed before the implementation is asked, which
+                    # makes the file's existence afterwards mean what it is read as
+                    # meaning.
+                    if os.path.exists(final_filepath):
+                        os.remove(final_filepath)
 
-                obj = await self.get_wrapped(ctx)
-                if obj is None:
-                    raise Exception("Cannot analyse '%s': shape is empty" % self.name)
+                    obj = await self.get_wrapped(ctx)
+                    if obj is None:
+                        raise Exception("Cannot analyse '%s': shape is empty" % self.name)
 
-                boundary = await self._analysis_boundary_async(ctx, config)
-                script = await self._materialize_output_script(ctx, impl)
+                    boundary = await self._analysis_boundary_async(ctx, config)
+                    script = await self._materialize_output_script(ctx, impl)
 
-                request = await self._output_request(ctx, obj, impl, kwargs)
-                request.update(config.to_data())
-                # The ports each condition landed on, in the shape's own
-                # coordinate system. 'fix' and 'load' above say what the user
-                # wrote; this says where it goes, which is what a solver needs.
-                request["boundary"] = boundary
+                    request = await self._output_request(ctx, obj, impl, kwargs)
+                    request.update(config.to_data())
+                    # The ports each condition landed on, in the shape's own
+                    # coordinate system. 'fix' and 'load' above say what the user
+                    # wrote; this says where it goes, which is what a solver needs.
+                    request["boundary"] = boundary
 
-                # The same question asked again is a read: the model goes back
-                # where this run would have written it, and the findings come
-                # with it. Asked here, once the request is complete, because the
-                # request is most of the question.
-                cache = getattr(ctx, "cache_artifacts", None)
-                artifact = await self._artifact_hash(
-                    output.CAE, analysis, impl, script, request, "%s:%s" % (options_project.name, format_name)
-                )
-                model = {"model": final_filepath}
-                result = await cache_artifacts.restore_async(cache, artifact, files=model)
-                cached = result is not None
-                if not cached:
-                    result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
-
-                if result is None:
-                    raise Exception("The '%s' implementation reported nothing: %s" % (format_name, script))
-                if not result.get("success", False):
-                    raise Exception(
-                        "%s failed for %s:%s: %s%s"
-                        % (
-                            analysis.upper(),
-                            self.project_name,
-                            self.name,
-                            result.get("exception", "Unknown error"),
-                            sandbox_note(ctx, impl),
-                        )
+                    # The same question asked again is a read: the model goes back
+                    # where this run would have written it, and the findings come
+                    # with it. Asked here, once the request is complete, because the
+                    # request is most of the question.
+                    cache = getattr(ctx, "cache_artifacts", None)
+                    artifact = await self._artifact_hash(
+                        output.CAE, analysis, impl, script, request, "%s:%s" % (options_project.name, format_name)
                     )
-                written = os.path.exists(final_filepath)
-                if written and not cached:
-                    # Only an answer is remembered: everything that failed has
-                    # raised by now (see 'partcad.cache_artifacts').
-                    await cache_artifacts.store_async(cache, artifact, result, files=model)
+                    model = {"model": final_filepath}
+                    result = await cache_artifacts.restore_async(cache, artifact, files=model)
+                    cached = result is not None
+                    if not cached:
+                        result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+
+                    if result is None:
+                        raise Exception("The '%s' implementation reported nothing: %s" % (format_name, script))
+                    if not result.get("success", False):
+                        raise Exception(
+                            "%s failed for %s:%s: %s%s"
+                            % (
+                                analysis.upper(),
+                                self.project_name,
+                                self.name,
+                                result.get("exception", "Unknown error"),
+                                sandbox_note(ctx, impl),
+                            )
+                        )
+                    written = os.path.exists(final_filepath)
+                    if written and not cached:
+                        # Only an answer is remembered: everything that failed has
+                        # raised by now (see 'partcad.cache_artifacts').
+                        await cache_artifacts.store_async(cache, artifact, result, files=model)
 
         if not written:
             # The meta-wrapper reports what the script returned and does not look
@@ -2470,7 +2491,10 @@ class Shape(ShapeConfiguration):
             "filepath": final_filepath,
             "extension": os.path.splitext(final_filepath)[1].lstrip("."),
             "findings": pc_cae.normalize_findings(result.get("findings")),
-            "boundary": boundary,
+            # Without the sketches: they are geometry for the sandbox, and a
+            # client -- the CLI's '--json', the IDE's tab -- is told where each
+            # condition landed, not handed a BREP of every port outline.
+            "boundary": [{key: value for key, value in record.items() if key != "sketch"} for record in boundary],
         }
 
     async def _artifact_hash(self, section: str, label: str, impl, script: str, request: dict, implementation: str):

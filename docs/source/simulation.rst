@@ -2,8 +2,8 @@
 Simulation
 ##########
 
-A part or an assembly can say what it is supposed to *do* once it is placed in a
-world and the world is switched on -- stand, stay stacked, sink, float, turn its
+A part, an assembly or a scene can say what it is supposed to *do* once it is
+placed in a world and the world is switched on -- stand, stay stacked, sink, float, turn its
 heavy side down -- and PartCAD can check that claim by simulating it, the same
 way ``pc test`` checks that it can be made. This page is how to use that:
 declaring a simulation, the world it runs in, the physical properties it reads,
@@ -34,7 +34,7 @@ rises, a hull that turns its keel down. None of that can be read off the
 geometry, and a claim that nobody checks is one readers learn to trust and
 should not.
 
-So a part or an assembly states the claim, in a ``simulate:`` section -- the
+So a part, an assembly or a scene states the claim, in a ``simulate:`` section -- the
 world it is placed in, where it goes, the engine that runs it, and a condition
 over what happened -- and PartCAD runs it and judges it:
 
@@ -70,9 +70,9 @@ checked, run in MuJoCo through `partcad-sim-mujoco`_. From that directory:
 
 .. code-block:: shell
 
-  pc sim -a stable      # two aluminium blocks, squarely stacked: nothing moves
-  pc sim -a unstable    # the top block 18 mm off the edge: it falls off
-  pc sim -a slippery    # 'stable' in PTFE, in a tilted world: the top block slides off
+  pc sim -S stable      # two aluminium blocks, squarely stacked: nothing moves
+  pc sim -S unstable    # the top block 18 mm off the edge: it falls off
+  pc sim -S slippery    # 'stable' in PTFE, in a tilted world: the top block slides off
   pc sim block          # an aluminium cube rests on the floor, and sinks in water
   pc sim float          # a sealed 3 g cube rises in water, and falls in a vacuum
   pc sim buoy           # the float with its weight low down rights itself
@@ -91,7 +91,7 @@ This is ``stable``:
       type: git
       url: https://github.com/partcad/partcad-sim-mujoco.git
 
-  assemblies:
+  scenes:
     stable:
       type: assy
       simulate:
@@ -106,10 +106,15 @@ This is ``stable``:
                 for name in before["bodies"]
             ) < 5.0
 
-The validation says that no block moved 5 mm in any direction. ``pc sim -a
-stable`` says whether it held; ``pc sim --json -a stable`` prints everything
+The validation says that no block moved 5 mm in any direction. ``pc sim -S
+stable`` says whether it held; ``pc sim --json -S stable`` prints everything
 the engine reported as well, which is where to look before writing a validation
 of your own.
+
+``stable`` is a **scene** rather than an assembly, and so are the other two
+stacks: two blocks set one on another are an arrangement, not a product, so
+each block is a body of its own, free to slide and to fall. See
+:ref:`sim-bodies`.
 
 The rest of the example reads the same way. ``stable`` and ``unstable`` are the
 same two blocks and differ by 18 mm. ``stable`` and ``slippery`` differ by one
@@ -126,7 +131,7 @@ sealed float is hollow and its geometry does not say so. The example's
 Declaring a simulation
 ======================
 
-``simulate:`` is an optional section of a part or an assembly. Each entry is one
+``simulate:`` is an optional section of a part, an assembly or a scene. Each entry is one
 simulation under a name of its own -- the name is what ``-f`` selects and what a
 report prints beside the verdict -- and states:
 
@@ -216,8 +221,9 @@ a scene that is to hold the object declares them:
   serve every object that names it.
 
 ``subject_kind``
-  ``part`` or ``assembly``, because an ASSY link names the two with different
-  keys.
+  ``part``, ``assembly`` or ``scene``, because an ASSY link names each with a
+  key of its own (``part:``, ``assembly:``, ``scene:``). A scene placed in the
+  world keeps every element of it a body of its own (see :ref:`sim-bodies`).
 
 ``subject_offset``
   The declaration's ``offset``, as seven numbers separated by spaces -- the
@@ -254,7 +260,7 @@ something:
           default: stable
         subject_kind:
           type: string
-          default: assembly
+          default: scene
         subject_offset:
           type: string
           default: "0 0 10 0 0 1 0"
@@ -299,6 +305,84 @@ the package that wrote it.
 **Which gravity a run is under**, in order: the declaration's own
 ``params: {gravity: [...]}``, for that run; the scene's ``gravity:``; the
 engine's default (MuJoCo's 9.81 m/s², SDFormat's 9.8, both along -Z).
+
+.. _sim-bodies:
+
+===================
+What becomes a body
+===================
+
+Which parts of a world move together is the decision everything in a simulation
+rests on, and PartCAD makes it from what the two kinds of arrangement already
+mean: an **assembly** is a product somebody put together, and a **scene** only
+states where things are.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 33 33
+
+   * - How a link is placed
+     - Inside an assembly
+     - Inside a scene
+   * - ``location:``
+     - attached to what holds it
+     - a body of its own
+   * - ``connect:`` that keeps no degree of freedom
+     - attached to what it is connected to
+     - a body of its own
+   * - ``connect:`` that keeps one (see :ref:`assy-joints`)
+     - a joint to what it is connected to
+     - a body of its own
+   * - an assembly
+     - attached or jointed by its link, as a part is; its own joints still move
+     - one tree of bodies, its root free
+   * - a scene (``scene:``)
+     - not allowed
+     - every element a body of its own, recursively
+
+- **Every element of a scene is a body of its own**, and so is every element of a
+  scene placed inside it. A scene's ``connect:`` places one object against
+  another and attaches nothing, which is what makes a stack of blocks a scene:
+  each block is where it is, and nothing holds it there.
+- **Everything inside an assembly is attached.** Parts attached to each other are
+  *one* rigid body -- there are no fixed joints -- whose mass, centre of mass and
+  inertia are its parts' added up (see :ref:`sim-physics`). A connection that
+  keeps a degree of freedom is a joint between two bodies, so an assembly is one
+  body, or a tree of them on its joints.
+- **An assembly placed in a scene** is one tree of bodies, and its root body is
+  free.
+- **An element marked** ``fixed: true`` is welded to the world -- a table, a
+  tank's walls, a robot bolted to the floor. Free is the default, so without it
+  every element of a scene falls under gravity. ``fixed:`` is a scene's to say:
+  an assembly is fixed or free as a whole, by the link that places it in a scene,
+  and fixing a scene fixes every element of it.
+
+.. code-block:: yaml
+
+  # workcell.assy, declared under 'scenes:'
+  links:
+    - part: bench
+      fixed: true                  # stays where it is
+    - assembly: robot              # one tree of bodies, its root bolted down
+      fixed: true                  # where the bench's mount puts it - a scene's
+      connect: {name: bench, with: base, to: mount}   # 'connect:' only places
+    - scene: parts_tray            # every part in it a body of its own
+      location: [[400, 0, 800], [0, 0, 1], 0]
+
+A scene that is itself the claim -- a stack that stands, a pile that does not
+slide -- declares ``simulate:`` the way a part does, and the world it is
+simulated in places it with a ``scene:`` link, which ``subject_kind`` asks for.
+``pc sim -S`` and ``pc test -S`` name one. The ASSY keys are under
+:ref:`assy-scenes`.
+
+The rule is PartCAD's one copy of it, in the module the engine plugins import
+for it (``kinematics.py``, beside ``mass_properties.py``): the bodies of a tree,
+each with its parts, its frame, what it hangs off and its combined mass, and each
+joint with its kind and the frames a format states one in. **No engine plugin
+writes it yet**: a run today still makes every part with geometry a free body of
+its own, which is the rule already for a scene of parts and not yet for the
+parts of an assembly, and a ``fixed: true`` element still falls. See
+:ref:`sim-limitations`.
 
 .. _sim-physics:
 
@@ -421,11 +505,11 @@ Running a simulation
 .. code-block:: shell
 
   pc sim block                # every simulation the part 'block' declares
-  pc sim -a stable            # an assembly
+  pc sim -S stable            # a scene; -a names an assembly
   pc sim -f sinks block       # one simulation, by name
   pc sim                      # everything this package declares
   pc sim -P ...               # and everything in the packages below it
-  pc sim --json -a slippery   # and the whole of what the engine reported
+  pc sim --json -S slippery   # and the whole of what the engine reported
 
 It exits non-zero when a validation does not hold or a run cannot be made. A
 declaration with no ``validation:`` is run and reported as having run, which is
@@ -440,7 +524,7 @@ Two of those options are about what is asked and what is kept:
 .. code-block:: shell
 
   # The same claim, with Gazebo instead of the engine the declaration names
-  pc sim -a stable --plugin //pub/feature/simulate/gazebo:gazebo
+  pc sim -S stable --plugin //pub/feature/simulate/gazebo:gazebo
   # The state the run started from and ended in, as files
   pc sim -f sinks block --before before.yaml --after after.json
 
@@ -463,8 +547,8 @@ is checked whenever the package is tested rather than whenever somebody
 remembers to ask. It runs a simulation through the same code ``pc sim`` does,
 and shares its cache.
 
-It applies to a part or an assembly that declares ``simulate:`` and to nothing
-else, so a package of bolts pays nothing for it. The verdicts:
+It applies to a part, an assembly or a scene that declares ``simulate:`` and to
+nothing else, so a package of bolts pays nothing for it. The verdicts:
 
 .. list-table::
    :header-rows: 1
@@ -501,7 +585,7 @@ A declaration with no ``validation:`` has nothing to be judged by, so ``pc
 test`` does not run it, and what that costs depends on what was asked. Testing a
 package, it is skipped with a ``WARNING`` saying why: the claim may be one
 somebody is still writing, and the rest of the package deserves its verdict.
-Testing the object by name -- ``pc test -a stable`` -- it fails: somebody asked
+Testing the object by name -- ``pc test -S stable`` -- it fails: somebody asked
 whether this object does what it says, and it says nothing.
 
 ``--fast-only`` passes over an object that declares a ``timeout:``, as it does
@@ -636,12 +720,13 @@ The plugin is handed that file, steps it for ``duration`` seconds of simulated
 time, and reports the state of the world before and after (see
 :ref:`sim-validation`).
 
-**Every body in a run is free.** The plugin asks the export for that, through
-the ``formatOptions`` of its declaration -- ``static: false`` and
+**Every body in a run is still free.** The plugin asks the export for that,
+through the ``formatOptions`` of its declaration -- ``static: false`` and
 ``flatten: true`` for MJCF, ``static: false`` for SDFormat -- so every part with
 geometry becomes a rigid body of its own, with nothing holding it to anything.
-That is what lets a stack of blocks fall over, and it holds for the parts of an
-assembly too, which are not attached to each other in a run (see
+For a scene of parts, such as a stack of blocks, that is exactly what
+:ref:`sim-bodies` says it is. For the parts of an assembly it is not yet: they
+are not attached to each other in a run, and nothing is fixed to the world (see
 :ref:`sim-limitations`). Each exporter also writes a ground plane under the
 world and a light over it.
 
@@ -806,6 +891,13 @@ the sandbox it needs, and its parameters -- and the contract is narrow: a scene
 with the object in it goes in, as a file in the format the plugin names, and
 JSON carrying ``before`` and ``after`` comes out -- and, if it can draw them,
 the two pictures of :ref:`sim-snapshots`. See :ref:`simulate`.
+
+The exporter that writes that file is handed the scene's tree (``decode:
+false``), and whatever it writes, which nodes are one body and how the joints
+between them move are not its to work out: ``kinematics.bodies()`` -- importable
+in its sandbox the way ``mass_properties`` is -- answers both, the same way for
+every format, from what each node of the tree says it holds (``kind``), whether
+it is ``fixed``, and its ``joint``.
 
 .. _sim-validation:
 
@@ -1234,15 +1326,17 @@ Limitations
 
 What a run does not model today, so that a claim is not written against it:
 
-- **Every body is free.** Nothing in a run is attached to anything: the parts of
-  an assembly are separate bodies that come apart under gravity, and nothing in
-  a scene is fixed to the world -- a fixture is held by the floor under it and
-  by nothing else. Keep claims to things that are separate bodies in reality --
-  a stack, a part on a floor, a float -- or to a single part. An interface's
-  ``motion:`` declares an assembly's joints, and ``pc info -a`` lists them (see
-  :ref:`assy-joints`), but no exporter writes a joint yet. Writing them out, and
-  attaching what an assembly bolts together, is the next step; see the
-  `design record`_.
+- **Every body is free, whatever the rule says.** PartCAD decides what becomes
+  a body (see :ref:`sim-bodies`), and the engine plugins do not write it yet:
+  every part with geometry is still a free body of its own in a run. For a scene
+  of parts that is the rule; for an assembly it is not -- its parts are separate
+  bodies that come apart under gravity, its joints (``pc info -a`` lists them,
+  see :ref:`assy-joints`) are not written, and an element marked
+  ``fixed: true`` is not fixed: a fixture is held by the floor under it and by
+  nothing else. Keep claims to things that are separate bodies in reality -- a
+  stack, a part on a floor, a float -- which is what a scene is for. Writing the
+  bodies, the welds and the joints out is the next step for each engine's
+  exporter; see the `design record`_.
 - **No inputs.** A run starts at rest, where the scene places everything, and
   nothing moves it but gravity, contact and the fluid: no initial velocity, no
   motor, no controller, no sensor.

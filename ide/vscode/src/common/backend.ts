@@ -534,9 +534,10 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.supplyQuote', (a) =>
             this.send('supply.quote', { package: a.pkg, object: a.name, qos: a.qos, recursive: a.recursive }),
         );
-        // The FEA and CFD tabs. One command for both analyses, as one operation
-        // backs both 'pc cae fea' and 'pc cae cfd': which one is asked for is an
-        // argument, not a method.
+        // The Analysis tabs - FEA, Dynamic FEA, Heat Transfer and CFD. One
+        // command for all of them, as one operation backs every
+        // 'pc cae <analysis>' (fea, dynamic, thermal, cfd): which one is asked
+        // for is an argument, not a method.
         reg('partcad.cae', (a) =>
             this.send('cae.analyze', {
                 package: a.pkg,
@@ -564,6 +565,8 @@ class JsonRpcBackend implements PartcadBackend {
                 package: a.pkg,
                 object: a.name,
                 assembly: a.kind === 'assembly',
+                // A stack of blocks is a scene, and declares 'simulate:' too.
+                scene: a.kind === 'scene',
                 filter: a.scenario,
                 // Another simulation plugin than the one it names, when the
                 // panel's "Simulated by" says so.

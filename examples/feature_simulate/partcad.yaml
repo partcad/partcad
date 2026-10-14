@@ -1,4 +1,4 @@
-desc: PartCAD example project which demonstrates simulating a part or an assembly.
+desc: PartCAD example project which demonstrates simulating a part or a scene.
 
 docs:
   usage: |
@@ -6,8 +6,8 @@ docs:
     to **do** -- or, as here, what it is supposed not to do:
 
     ```shell
-    pc sim -a stable      # the stack stands; the validation passes
-    pc sim -a unstable    # the top block falls off; that validation passes too
+    pc sim -S stable      # the stack stands; the validation passes
+    pc sim -S unstable    # the top block falls off; that validation passes too
     pc sim                # every simulation this package declares
     ```
 
@@ -17,6 +17,14 @@ docs:
     static distinguishes them -- both render, export and list the same way --
     and neither does anything PartCAD can check by looking. What separates them
     is what happens when the world is switched on.
+
+    Both are **scenes**, not assemblies. An assembly is a product somebody put
+    together, and everything in it is attached to it; a stack of blocks is an
+    arrangement -- each block is where it is, and nothing holds it there -- so
+    each block is a rigid body of its own, free to slide and to fall. That is
+    the rule PartCAD decides what becomes a body by. A scene declares
+    `simulate:` exactly as a part does, and is placed in the world it is
+    simulated in by that world's `scene:` link.
 
     Each `simulate:` states five things: the `scene:` the object is placed in
     (here the default, `//builtin/scene:subject`, an empty world holding the
@@ -44,8 +52,8 @@ docs:
     simulation -- and the top block ends up on the floor.
 
     ```shell
-    pc sim -a stable      # nothing moves
-    pc sim -a slippery    # the top block slides off
+    pc sim -S stable      # nothing moves
+    pc sim -S slippery    # the top block slides off
     ```
 
     The scene both run in is `tilted`, whose gravity leans 15 degrees off
@@ -80,7 +88,7 @@ docs:
     every body was before and after:
 
     ```shell
-    pc sim --json -a slippery
+    pc sim --json -S slippery
     ```
 
     The scene reaches the simulator as the MJCF PartCAD writes. That is an
@@ -88,7 +96,7 @@ docs:
     opened in MuJoCo:
 
     ```shell
-    pc export -a -t sim-mujoco:mjcf -O ./ unstable
+    pc export -S -t sim-mujoco:mjcf -O ./ unstable
     pc ide open --with mujoco ./unstable.xml
     ```
 
@@ -211,9 +219,9 @@ parts:
         type: string
         default: ":aluminium"
     simulate:
-      # A part declares these exactly as an assembly does. One block on a floor
+      # A part declares these exactly as a scene does. One block on a floor
       # has nowhere to fall, which is the point: it is the control the three
-      # assemblies below are read against.
+      # stacks below are read against.
       rests:
         desc: A block set down on the floor stays where it was put
         simulation: sim-mujoco:mujoco
@@ -327,61 +335,17 @@ parts:
         default: ":ptfe"
 
 scenes:
-  tilted:
-    desc: An empty world whose gravity leans 15 degrees off vertical, towards +X - a ramp with no edge
-    type: assy
-    path: tilted.assy
-    # 9.81 m/s^2, 15 degrees off -Z towards +X: (9.81 sin 15, 0, -9.81 cos 15).
-    # Everything in it is pulled sideways by a quarter of its weight, which is
-    # what makes its friction matter: a block slides when its friction is below
-    # tan(15 deg) = 0.268.
-    gravity: [2.539, 0, -9.476]
-    parameters:
-      # The same three the scene PartCAD ships takes, assigned by 'pc sim'. The
-      # PTFE stack by default, so the scene on its own holds something: the
-      # same geometry as 'stable', and so the same picture, but declared
-      # everywhere -- 'stable' is left out on Intel macOS (see it), and a scene
-      # whose default subject is missing does not load.
-      subject:
-        type: string
-        default: slippery
-      subject_kind:
-        type: string
-        default: assembly
-      subject_offset:
-        type: string
-        default: "0 0 10 0 0 1 0"
-
-  tank:
-    desc: A tank of fresh water, holding whatever is simulated in it 100 mm above its floor
-    type: assy
-    path: tank.assy
-    # The fluid the scene is filled with, as a material: its density and
-    # viscosity are what a simulation of the scene drags and buoys what moves
-    # through it with. A scene that names none is a vacuum.
-    medium: :water
-    # Earth's, along -Z, in m/s^2 - which is also what a scene that states no
-    # gravity gets from the engine. Stated here only to show where it goes: on
-    # the scene, and in m/s^2, the units every reader of 9.81 already knows.
-    gravity: [0, 0, -9.81]
-    parameters:
-      # The object being simulated, assigned by 'pc sim' as a full path. The
-      # float by default, so that the tank on its own holds something to draw.
-      subject:
-        type: string
-        default: float
-      # Which kind of object that is, since an ASSY link names a part and an
-      # assembly with different keys.
-      subject_kind:
-        type: string
-        default: part
-      # Where it goes - seven numbers, as the scene PartCAD ships takes them,
-      # from the 'offset:' of the simulation that names this scene.
-      subject_offset:
-        type: string
-        default: "0 0 100 0 0 1 0"
-
-assemblies:
+  # The three stacks are scenes rather than assemblies. An assembly is a
+  # product somebody put together, and everything in it is attached to it - one
+  # rigid body, or several on the joints its connections keep. Two blocks set
+  # one on another are an arrangement: nothing holds either where it is, so
+  # every block is a body of its own, free to slide and to fall, which is the
+  # whole of what these three are about. See "What becomes a body" in
+  # docs/source/simulation.rst.
+  #
+  # A scene declares 'simulate:' exactly as a part does, and is placed in the
+  # world it is simulated in -- 'tilted' below, or the scene PartCAD ships -- by
+  # that world's 'scene:' link, which 'pc sim' asks for with 'subject_kind'.
   stable:
     desc: Two aluminium blocks, the upper one squarely on top of the lower one
     type: assy
@@ -393,7 +357,7 @@ assemblies:
     # simulation in this package comes out the same in both. This line comes
     # out when a sandbox there can have a MuJoCo newer than 3.10.
     #
-    # On the assembly rather than on 'stands', because 'unless' selects
+    # On the scene rather than on 'stands', because 'unless' selects
     # declarations -- the choice the cantilever in feature_cae makes too.
     unless: [[macos, x86_64]]
     simulate:
@@ -458,6 +422,61 @@ assemblies:
               before["bodies"][name]["pos"][2] - after["bodies"][name]["pos"][2]
               for name in before["bodies"]
           ) > 5.0
+
+  tilted:
+    desc: An empty world whose gravity leans 15 degrees off vertical, towards +X - a ramp with no edge
+    type: assy
+    path: tilted.assy
+    # 9.81 m/s^2, 15 degrees off -Z towards +X: (9.81 sin 15, 0, -9.81 cos 15).
+    # Everything in it is pulled sideways by a quarter of its weight, which is
+    # what makes its friction matter: a block slides when its friction is below
+    # tan(15 deg) = 0.268.
+    gravity: [2.539, 0, -9.476]
+    parameters:
+      # The same three the scene PartCAD ships takes, assigned by 'pc sim'. The
+      # PTFE stack by default, so the scene on its own holds something: the
+      # same geometry as 'stable', and so the same picture, but declared
+      # everywhere -- 'stable' is left out on Intel macOS (see it), and a scene
+      # whose default subject is missing does not load. It is a scene, so the
+      # link that places it says 'scene:'.
+      subject:
+        type: string
+        default: slippery
+      subject_kind:
+        type: string
+        default: scene
+      subject_offset:
+        type: string
+        default: "0 0 10 0 0 1 0"
+
+  tank:
+    desc: A tank of fresh water, holding whatever is simulated in it 100 mm above its floor
+    type: assy
+    path: tank.assy
+    # The fluid the scene is filled with, as a material: its density and
+    # viscosity are what a simulation of the scene drags and buoys what moves
+    # through it with. A scene that names none is a vacuum.
+    medium: :water
+    # Earth's, along -Z, in m/s^2 - which is also what a scene that states no
+    # gravity gets from the engine. Stated here only to show where it goes: on
+    # the scene, and in m/s^2, the units every reader of 9.81 already knows.
+    gravity: [0, 0, -9.81]
+    parameters:
+      # The object being simulated, assigned by 'pc sim' as a full path. The
+      # float by default, so that the tank on its own holds something to draw.
+      subject:
+        type: string
+        default: float
+      # Which kind of object that is - a part, an assembly or a scene - since an
+      # ASSY link names each with a key of its own.
+      subject_kind:
+        type: string
+        default: part
+      # Where it goes - seven numbers, as the scene PartCAD ships takes them,
+      # from the 'offset:' of the simulation that names this scene.
+      subject_offset:
+        type: string
+        default: "0 0 100 0 0 1 0"
 
 render:
   readme:

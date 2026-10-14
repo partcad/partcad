@@ -3,9 +3,9 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Unit tests for the CAE boundary conditions: units, `fix:`/`load:`, findings.
+"""Unit tests for the CAE boundary conditions: units, the keys of each analysis, findings.
 
-Everything here is the part of `pc cae fea` / `pc cae cfd` that runs before any
+Everything here is the part of `pc cae <analysis>` that runs before any
 solver does, and it is the part that is easy to get quietly wrong: a load written
 "5" and a load written "5 kg" have to be the same force, "2 lb" has to be pounds
 and not two of something ending in "b", and a `fix:` naming an interface the part
@@ -237,7 +237,7 @@ def test_config_of_is_none_when_nothing_is_declared():
 def test_config_of_refuses_an_analysis_partcad_does_not_run():
     """Asking about an analysis that does not exist is a caller's bug."""
     with pytest.raises(CaeConfigError):
-        cae.config_of(FakeShape({}), "thermal")
+        cae.config_of(FakeShape({}), "acoustics")
 
 
 def test_to_data_is_json_and_names_the_analysis():
@@ -507,3 +507,117 @@ def test_an_instance_load_and_an_interface_wide_one_are_both_accounted_for():
     assert by_port["a"]["load"] == pytest.approx(2.0)
     assert by_port["b"]["load"] == pytest.approx(1.0)
     assert unmatched == []
+
+
+# ---- dynamic: and thermal: ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "value,celsius",
+    [
+        # A bare number is Celsius: "held at 40" means forty degrees.
+        (40, 40.0),
+        ("40", 40.0),
+        ("40 C", 40.0),
+        ("40c", 40.0),
+        ("40 °C", 40.0),
+        ("40 degC", 40.0),
+        ("313.15 K", 40.0),
+        ("313.15 kelvin", 40.0),
+        ("104 F", 40.0),
+        ("-40 F", -40.0),
+        ("-273.15 C", -273.15),
+    ],
+)
+def test_parse_temperature(value, celsius):
+    """Every spelling of one temperature lands on the same number of degrees Celsius."""
+    assert cae.parse_temperature(value) == pytest.approx(celsius)
+
+
+@pytest.mark.parametrize("value", ["-300 C", "-1 K", True, "warm", "40 R", None, ""])
+def test_parse_temperature_refuses_nonsense(value):
+    """Below absolute zero is a kelvin written as Celsius, not a cryostat."""
+    with pytest.raises(CaeConfigError):
+        cae.parse_temperature(value)
+
+
+@pytest.mark.parametrize(
+    "value,watts",
+    [(5, 5.0), ("5 W", 5.0), ("5w", 5.0), ("250 mW", 0.25), ("1.5 kW", 1500.0), ("-2 W", -2.0), ("3 watts", 3.0)],
+)
+def test_parse_power(value, watts):
+    """A heat input is a power, and a negative one is heat taken out."""
+    assert cae.parse_power(value) == pytest.approx(watts)
+
+
+@pytest.mark.parametrize("value,coefficient", [(10, 10.0), ("10", 10.0), ("10 W/m2K", 10.0), ("25 W/(m^2*K)", 25.0)])
+def test_parse_film_coefficient(value, coefficient):
+    """The one unit a film coefficient has, written any of the usual ways."""
+    assert cae.parse_film_coefficient(value) == pytest.approx(coefficient)
+
+
+def test_a_negative_film_coefficient_is_refused():
+    """A surface that heats up by being cooled is a typo."""
+    with pytest.raises(CaeConfigError, match="negative"):
+        cae.parse_film_coefficient(-5)
+
+
+def test_dynamic_reads_fix_alone():
+    """A natural frequency is a property of the part and how it is held."""
+    config = AnalysisConfig("dynamic", {"fix": ["root"]})
+    assert config.fixtures == {"root": [EVERY_INSTANCE]}
+    assert config.to_data() == {"analysis": "dynamic", "fix": {"root": [EVERY_INSTANCE]}}
+    with pytest.raises(CaeConfigError, match="does not take load"):
+        AnalysisConfig("dynamic", {"fix": ["root"], "load": {"tip": "1 N"}})
+    with pytest.raises(CaeConfigError, match="declares none of 'fix:'"):
+        AnalysisConfig("dynamic", {"desc": "nothing held"})
+
+
+def test_thermal_reads_its_three_keys_in_their_units():
+    """Temperatures in Celsius, heat in watts, film coefficients as written."""
+    config = AnalysisConfig(
+        "thermal",
+        {
+            "temperature": {"root": "293.15 K"},
+            "heat": {"pad": {"left": "500 mW", "right": 2}},
+            "convection": {"fins": 12},
+        },
+    )
+    data = config.to_data()
+    assert data["analysis"] == "thermal"
+    assert data["temperature"] == {"root": {EVERY_INSTANCE: pytest.approx(20.0)}}
+    assert data["heat"] == {"pad": {"left": pytest.approx(0.5), "right": pytest.approx(2.0)}}
+    assert data["convection"] == {"fins": {EVERY_INSTANCE: 12.0}}
+    assert json.loads(json.dumps(data)) == data
+
+
+def test_thermal_takes_nothing_a_structural_analysis_takes():
+    """`fix:` on a heat problem would read as a condition and not be one."""
+    with pytest.raises(CaeConfigError, match="does not take fix"):
+        AnalysisConfig("thermal", {"fix": ["root"], "heat": {"tip": "1 W"}})
+    with pytest.raises(CaeConfigError, match="declares none of 'temperature:', 'heat:', 'convection:'"):
+        AnalysisConfig("thermal", {})
+
+
+def test_thermal_conditions_land_on_their_ports_with_every_key_present():
+    """A newer analysis tells the implementation every key it reads, set or not."""
+    config = AnalysisConfig("thermal", {"temperature": {"root": 20}, "heat": {"tip": "1 W"}})
+    assigned, unmatched = cae.assign_ports(config, [_port("//p:root"), _port("//p:tip"), _port("//p:other")])
+    assert unmatched == []
+    assert [(entry["interface"], entry["temperature"], entry["heat"], entry["convection"]) for entry in assigned] == [
+        ("//p:root", 20.0, None, None),
+        ("//p:tip", None, 1.0, None),
+    ]
+
+
+def test_dynamic_fixtures_land_without_a_load_default():
+    """There is no load in a modal analysis, so its records do not pretend there is."""
+    config = AnalysisConfig("dynamic", {"fix": ["root"]})
+    assigned, _unmatched = cae.assign_ports(config, [_port("//p:root")])
+    assert assigned[0]["fix"] is True
+    assert "load" not in assigned[0]
+
+
+def test_every_analysis_has_a_label_and_roles():
+    """What `pc cae`, the IDE and the schema enumerate has to agree."""
+    assert set(cae.ANALYSES) == set(cae.ROLES) == set(cae.LABELS)
