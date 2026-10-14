@@ -275,6 +275,23 @@ def test_a_part_in_front_hides_the_one_behind_it_whatever_colour_either_is(real_
 
 
 @pytest.mark.parametrize("reproducible", [True, False])
+def test_a_colour_nothing_of_is_seen_gets_no_layer(real_svg, tmp_path, reproducible):
+    """A part hidden behind the others altogether has nothing to draw.
+
+    Its layer would be an empty '<g>' in the file - noise, and a colour listed
+    for a drawing that shows none of it. A drawing in one colour keeps its one
+    layer whatever is in it, as it always has.
+    """
+    plate = _box(100, 10, 100)
+    hidden = _box(20, 10, 20, x=40, y=50, z=40)
+    hidden["properties"] = {"color": "#FF0000"}
+
+    layers, _result = _draw(real_svg, tmp_path, _assembly(plate, hidden), reproducible)
+
+    assert {layer: stroke for layer, (stroke, _lines) in layers.items()} == {"Visible": GOLDENROD}
+
+
+@pytest.mark.parametrize("reproducible", [True, False])
 def test_a_sub_assembly_is_drawn_where_it_is_placed(real_svg, tmp_path, reproducible):
     """Decoding a leaf at a time keeps every location above it."""
     moved = _assembly(_box(10, 10, 10), location=[[100, 0, 0], [0, 0, 1], 0], color="#00ff00")
