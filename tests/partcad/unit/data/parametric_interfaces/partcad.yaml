@@ -184,6 +184,21 @@ parts:
     implements:
       "m-screw;size=3,length=6": [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], 180.0]
 
+  # A plate with a slotted hole implements the slotted hole, as wide as the plate
+  # is asked for. The slot is drawn by the interface, which is where the outline
+  # and the freedom to slide along it are declared together; a part does not
+  # restate the boundary of what it implements (see 'InterfaceInherits').
+  slotted-plate:
+    type: cadquery
+    desc: A plate with one slotted M3 hole through it
+    path: plate.py
+    parameters:
+      width:
+        type: float
+        default: 10.0
+    implements:
+      "m-thru-slotted;size=3,width=%width%": [[0, 0, 3], [1, 0, 0], 180]
+
   # An instance of the plate at a thickness of its own. An enrich declares no
   # parameters - it asks for them in 'with' - so its ports are written in terms
   # of those.

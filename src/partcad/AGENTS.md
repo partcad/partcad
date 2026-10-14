@@ -1061,6 +1061,15 @@ at all).
   hole *is* a through hole — it inherits one, so it mates as one and keeps its port where the plain hole would
   have been — and what tells them apart is the outline and the freedom of movement. Without it a slotted hole
   is what it used to be in `//pub/std/metric/m`: an orphan with no parents, no compatibility and no mate.
+  **Only an interface restates one.** The same class reads a part's or an assembly's `implements:`, and there
+  `sketch:` is an error and is ignored: the outline is part of what the interface is, declared beside the
+  freedom of movement that goes with it, and a part restating it could draw a slot on a through hole with no
+  room to slide. A part with a slotted hole implements `m-thru-slotted`; one whose outline depends on its own
+  parameters implements an interface parametrized by them (`nail-head;d=%head_d%`). The schema says the same
+  with two pairs of definitions, `inherited-instances` and `implemented-instances`, identical but for that key
+  (refused with a description saying what to implement instead, which `assy_lint` reports as the message).
+  Keep the two in step: they once drifted apart the other way, and `implements:` refused the unnamed instance
+  `""` that the loader reads, so a part that loaded failed its own `pc lint`.
 
   **`alias:` is what keeps a published name working.** It is spelled as inheriting exactly one interface,
   once, unnamed, at the origin — which is the shape of inheritance that leaves the ports named as the
