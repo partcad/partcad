@@ -382,6 +382,17 @@ assemblies:
   stable:
     desc: Two aluminium blocks, the upper one squarely on top of the lower one
     type: assy
+    # Not on Intel macOS, where 'stands' would get the wrong answer rather than
+    # none. MuJoCo publishes no wheel for that platform after 3.10.0, and 3.10.0
+    # meets the floor with an edge of the bottom block where later releases meet
+    # its face -- two contacts rather than four -- so the stack rocks and the top
+    # block slides off. On Linux too, given that release; every other
+    # simulation in this package comes out the same in both. This line comes
+    # out when a sandbox there can have a MuJoCo newer than 3.10.
+    #
+    # On the assembly rather than on 'stands', because 'unless' selects
+    # declarations -- the choice the cantilever in feature_cae makes too.
+    unless: [[macos, x86_64]]
     simulate:
       stands:
         desc: |
