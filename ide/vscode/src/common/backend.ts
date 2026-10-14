@@ -564,6 +564,8 @@ class JsonRpcBackend implements PartcadBackend {
                 package: a.pkg,
                 object: a.name,
                 assembly: a.kind === 'assembly',
+                // A stack of blocks is a scene, and declares 'simulate:' too.
+                scene: a.kind === 'scene',
                 filter: a.scenario,
                 // Another simulation plugin than the one it names, when the
                 // panel's "Simulated by" says so.

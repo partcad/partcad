@@ -669,7 +669,7 @@ at all).
 
   **`pc test` runs `simulate:` as its `sim` check** (`./src/partcad/test/sim.py`), through
   `simulation.run_async()` -- the code `pc sim` runs, so the two cannot come to run a simulation differently.
-  Same gate as `fea`/`cfd`/`cam` (a part or an assembly that declares the section, nothing else), same verdict
+  Same gate as `fea`/`cfd`/`cam` (a part, an assembly or a scene that declares the section, nothing else), same verdict
   on a run that did not deliver (`ImplementationTest._verdict()`), and `simulation.SimulationConfigError` is
   what keeps a plugin or a scene that cannot be found out of the one excuse. `run_async(report=False)` is how
   the check keeps the lines that are its verdict to itself: `pc` exits non-zero on any `ERROR`, so a run that
@@ -909,6 +909,22 @@ at all).
   belongs to the placement, not the object); `pc info -a` lists them, and what resolving them found wrong
   (`AssemblyChild.joint_problems`) fails `pc test`'s `connect` check rather than `pc lint`, because it is a
   finding about interfaces in other packages that a lint verdict, cached on one file, would serve stale.
+
+- **What becomes a rigid body is one rule, read off the tree** (`./src/partcad/wrappers/kinematics.py`,
+  docs/design/simulation.md section 7): every element of a scene is a body of its own, recursively, and everything
+  inside an assembly is attached to it -- welded where nothing is free, jointed where a connection keeps a degree of
+  freedom, and an assembly placed in a scene one tree whose root is free. The tree carries what the rule reads, as
+  the joint does: `Assembly._place` stamps each placed node's `kind` (`shape_envelope.KEY_KIND`) and a scene
+  element's `fixed: true` (`KEY_FIXED`, only where true), and `Assembly.get_cache_metadata` the root's kind. Only a
+  scene places a scene (`scene:`) or fixes an element to the world (`fixed:`) -- `AssemblyFactoryAssy.IS_SCENE`
+  decides, a `links:` container is built as the factory's own kind so a scene's grouping stays a scene, and the
+  assembly flavor of the ASSY schema (`assy_lint.assembly_schema`) forbids both the way the scene flavor forbids
+  `how`. `kinematics` is pure Python beside `mass_properties`, imported by the engine plugins' exporters from the
+  sandbox path; it turns a `decode: false` tree into `bodies()` (parts, frames, parents, joints re-expressed for the
+  body pair, combined physics) and classifies a joint's free steps (`classify()`). Do not give an exporter a copy of
+  the rule, and do not make the core depend on an exporter reading it: three exporters deciding for themselves which
+  parts are one body is three answers to what falls apart. A scene is also a simulation subject
+  (`simulation.SUBJECT_KINDS`), placed in its world by a `scene:` link.
 
 - **One shape, one tree, two forms** (`./src/partcad/shape_envelope.py`,
   `./src/partcad/shape_gltf.py`): every shape is a tree of nodes, and
@@ -1153,7 +1169,9 @@ over the file it has just written. Like everything else here it stays quiet abou
 unknowable: a templated name, or a loop around the `links:` list, silences the level it is on.
 
 The **scene** schema is that same schema with `how` forbidden, derived from it by
-`assy_lint.scene_schema()` rather than kept beside it as a second file — a copy is a copy that stops matching.
+`assy_lint.scene_schema()` rather than kept beside it as a second file — a copy is a copy that stops matching —
+and the **assembly** schema is it with `scene` and `fixed` forbidden (`assy_lint.assembly_schema()`): `assy.json`
+states what either may say, and neither flavor is that document unchanged.
 Which of the two a given `.assy` is checked against is not a property of the file but of what points at it, so
 the package half reads the declaration (exact) and each client works it out best effort: `pc lint --file` from
 the `partcad.yaml` files around the file, the VS Code extension from the package contents it has already

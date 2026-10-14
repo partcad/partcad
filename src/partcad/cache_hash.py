@@ -77,7 +77,16 @@ from . import logging as pc_logging
 #      from. An entry written under 8 measured the volume and nothing else, and
 #      reading one back would give a part a mass with no centre and no inertia:
 #      a URDF link that weighs what it should and turns as if it were a point.
-VERSION = 9
+#  10: every node an assembly or a scene places says what it holds - a part,
+#      an assembly or a scene - and so does the root of every assembly and
+#      scene; a scene's element marked 'fixed: true' says so too (see
+#      'shape_envelope.KEY_KIND' and 'KEY_FIXED'). Those are what decide which
+#      nodes are rigid bodies (docs/design/simulation.md, section 7). The same
+#      case as 5, 7 and 8: the payload's shape rather than the key's, and an
+#      entry written under 9 would go on being served with neither - a scene
+#      placed in a scene read as one product, and a table bolted to the floor
+#      read as free to fall.
+VERSION = 10
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.

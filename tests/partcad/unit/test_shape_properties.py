@@ -227,9 +227,12 @@ def test_the_metadata_a_shape_is_stamped_with_carries_its_properties():
 
 
 def test_an_assembly_is_stamped_the_same_way():
+    # And with what it is: an assembly and a scene are the same tree, and which
+    # of the two it is decides what becomes a rigid body (shape_envelope.KEY_KIND).
     assert _Assembly("rig", BRASS).get_cache_metadata() == {
         "name": "pkg:rig",
         "label": "rig",
+        "kind": "assembly",
         "properties": BRASS,
     }
 

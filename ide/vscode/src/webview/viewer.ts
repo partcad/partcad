@@ -465,6 +465,12 @@ let buildPhase: 'plan' | 'document' = 'plan';
 const REQUIRED_KINDS = ['part', 'assembly', 'scene', 'sketch'];
 
 /**
+ * The kinds of object that can declare simulations. A scene is one: a stack of
+ * blocks is an arrangement rather than a product, and claims to stand.
+ */
+const SIMULATED_KINDS = ['part', 'assembly', 'scene'];
+
+/**
  * What the object on screen is required to be, once the daemon has said, and
  * which object that was ('identify'). Undefined until then, and for an object
  * that cannot declare any.
@@ -646,16 +652,16 @@ function manufacturingTabsFor(message: ShowMessage | undefined): TabSpec[] {
     ];
 }
 
-/** Whether an object is one that can declare simulations: a part or an assembly of a known package. */
+/** Whether an object is one that can declare simulations: a part, an assembly or a scene of a known package. */
 function simulated(message: ShowMessage | undefined): boolean {
-    return Boolean(message?.package) && (message?.kind === 'part' || message?.kind === 'assembly');
+    return Boolean(message?.package) && SIMULATED_KINDS.includes(message?.kind ?? '');
 }
 
 /**
  * Validation: the simulations the object declares, run, and Process Emulation.
  *
  * Simulation is enabled only once the daemon has said there is at least one: a
- * part or an assembly with a 'simulate:' section that names a simulation.
+ * part, an assembly or a scene with a 'simulate:' section that names a simulation.
  * Unlike the analyses, it is not offered to every part on the chance that it
  * says something - "this declares no simulations" is not a page anybody opens
  * the group to read, and the strip says it in the tab's tooltip instead.

@@ -115,6 +115,58 @@ def test_a_scene_is_still_checked_for_everything_else():
 def test_the_derived_schema_is_only_built_once():
     first = assy_lint.schema_for_file("x.assy", assy_lint.FLAVOR_SCENE)
     assert assy_lint.schema_for_file("y.assy", assy_lint.FLAVOR_SCENE) is first
+    assembly = assy_lint.schema_for_file("x.assy", assy_lint.FLAVOR_ASSEMBLY)
+    assert assy_lint.schema_for_file("y.assy", assy_lint.FLAVOR_ASSEMBLY) is assembly
+
+
+ARRANGED = """\
+links:
+  - scene: pile
+    name: stack
+  - part: cube
+    name: table
+    fixed: true
+"""
+
+
+def test_only_a_scene_places_a_scene_or_fixes_what_it_places():
+    """The other way round from 'how': an assembly attaches everything, so neither means anything there."""
+    assert check(ARRANGED, assy_lint.FLAVOR_SCENE) == []
+
+    findings = check(ARRANGED, assy_lint.FLAVOR_ASSEMBLY)
+    assert [(f.message, f.line, f.column) for f in findings] == [
+        (assy_lint.ASSEMBLY_NO_SCENE, 1, 4),
+        (assy_lint.ASSEMBLY_NO_FIXED, 5, 4),
+    ]
+    assert all(f.severity == assy_lint.SEVERITY_ERROR for f in findings)
+
+
+def test_the_assembly_flavor_is_derived_from_the_format_too():
+    """'assy.json' states what either flavor may say; neither is it unchanged."""
+    document = assy_lint.get_schema(assy_lint.ASSY_SCHEMA)
+    assembly = assy_lint.assembly_schema(document)
+    node = assembly["definitions"]["node"]["properties"]
+    assert node["scene"] == {"not": {}, "description": assy_lint.ASSEMBLY_NO_SCENE}
+    assert node["fixed"] == {"not": {}, "description": assy_lint.ASSEMBLY_NO_FIXED}
+    assert set(node) == set(document["definitions"]["node"]["properties"])
+    # And the document it was derived from is not modified.
+    assert document["definitions"]["node"]["properties"]["fixed"] == {
+        "description": document["definitions"]["node"]["properties"]["fixed"]["description"],
+        "type": "boolean",
+    }
+
+
+@pytest.mark.parametrize(
+    "node, message",
+    [
+        ("  - scene: pile\n    part: cube\n", "'scene', 'part' are mutually exclusive; use only one of them"),
+        ("  - scene: pile\n    links: []\n", "'scene', 'links' are mutually exclusive; use only one of them"),
+        ("  - part: cube\n    fixed: 'yes'\n", "'yes' is not of type 'boolean'"),
+    ],
+)
+def test_a_scene_link_is_one_kind_of_link_and_fixed_is_a_yes_or_no(node, message):
+    findings = check("links:\n" + node, assy_lint.FLAVOR_SCENE)
+    assert [f.message for f in findings] == [message]
 
 
 #

@@ -134,6 +134,39 @@ def test_render_assembly_readme():
     assert "## Sub-Assemblies" not in lines
 
 
+def test_the_package_readme_lists_its_scenes(tmp_path):
+    """A scene is drawn like any assembly and listed like one, under a heading of its own.
+
+    The stacks of 'examples/feature_simulate' became scenes - arrangements, not
+    products - and would otherwise have disappeared from their own README. Like
+    a part, a scene with no picture is left out, and so is the heading with
+    nothing under it.
+    """
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "partcad.yaml").write_text(
+        "scenes:\n"
+        "  stack:\n    type: assy\n    desc: Two blocks, one on the other\n"
+        "  bare:\n    type: assy\n"
+        "render:\n  readme:\n  svg:\n    prefix: ./\n"
+    )
+    for name in ("stack", "bare"):
+        (package / ("%s.assy" % name)).write_text("links: []\n")
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "stack.svg").write_text("<svg/>")
+    prj = pc.Context(str(package)).get_project("//")
+
+    prj.render_readme_async(prj.config_obj.get("render"), str(out))
+    lines = (out / "README.md").read_text().splitlines()
+    assert "## Scenes" in lines
+    assert "### stack" in lines and "### bare" not in lines
+    assert any("Two blocks, one on the other" in line for line in lines)
+
+    prj.render_readme_async(dict(prj.config_obj.get("render"), readme={"exclude": ["scenes"]}), str(out))
+    assert "## Scenes" not in (out / "README.md").read_text().splitlines()
+
+
 def test_render_assembly_readme_from_config():
     """An assembly asks for a document of its own in the package configuration"""
     ctx = pc.init("examples")

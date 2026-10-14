@@ -133,10 +133,12 @@ def _describe(target: str, package_name: str, include_paths: list, parameter_ove
             for name, declaration in _declarations(config, section):
                 if _declared_path(package_dir, name, declaration) == target:
                     declarations[section_flavor].append((name, declaration, configs[depth:]))
-    # One assembly is enough: the file has to satisfy the full schema for that
-    # assembly to be readable, whatever else also points at it. Unknown leans
-    # the same way, because reading an assembly as a scene puts a false error
-    # on correct code.
+    # One assembly is enough: the file has to satisfy the assembly schema for
+    # that assembly to be readable, whatever else also points at it. Unknown
+    # leans the same way, because reading an assembly as a scene puts a false
+    # error on every 'how:'. The cost the other way is a scene nobody declares
+    # being told its 'scene:' or 'fixed:' is an assembly's mistake - which the
+    # finding answers by saying to declare the file under 'scenes:'.
     if not declarations[assy_lint.FLAVOR_ASSEMBLY] and declarations[assy_lint.FLAVOR_SCENE]:
         flavor = assy_lint.FLAVOR_SCENE
     chosen = declarations[flavor]

@@ -93,7 +93,7 @@ the first:
   Manufacturing is for a part or an assembly; for a scene, a sketch or an interface it is disabled.
 - **Validation** — whether the object does what it is supposed to:
 
-  - **Simulation** — for a part or an assembly that declares a ``simulate:`` section (see :doc:`simulation`):
+  - **Simulation** — for a part, an assembly or a scene that declares a ``simulate:`` section (see :doc:`simulation`):
     the simulations it declares, listed on the left with the first one selected. Selecting one runs it, as
     ``pc sim -f <name>`` does, and shows whether its ``validation:`` held, and two pictures of the scene the
     simulation plugin took -- before anything moved on the left, and when the run was over on the right --
@@ -315,7 +315,7 @@ documents is a Linux image, and such a daemon answers a ping and then fails ever
 pull with ``no matching manifest for windows/amd64``.
 
 The same policy, from the same code, decides ``pc test``'s ``sim`` check, which
-holds a part or an assembly to the ``simulate:`` claims it makes: a simulator
+holds a part, an assembly or a scene to the ``simulate:`` claims it makes: a simulator
 that resolved and did not run is a failure, but for the one excuse, and a
 simulation plugin that cannot be found is never excused. See "Running a
 simulation" in :doc:`simulation`.

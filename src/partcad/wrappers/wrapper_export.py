@@ -90,6 +90,13 @@ each free one with its kind ("turn" or "move"), axis, range, starting value and
 the parameters it came from - and its physics. A node placed rigidly carries
 none: there are no fixed joints. It is the core's 'Joint.to_envelope()', and
 decoding the tree throws it away with every other envelope.
+
+Every node an assembly or a scene placed also says what it holds, under "kind"
+("part", "assembly" or "scene"), and so does the root of an assembly or a scene;
+an element a scene welds to the world says "fixed": true. Those three keys and
+the joint are what decide which nodes are rigid bodies, and that rule is
+'kinematics.bodies()', beside this file - which is what an exporter of bodies
+and joints calls rather than walking the tree for itself.
 """
 
 import os

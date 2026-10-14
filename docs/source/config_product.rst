@@ -647,6 +647,7 @@ Declare scenes
       manufacturable: <(optional) false by default; a scene is not a product to be made>
       gravity: <(optional) [x, y, z] in m/s^2; the engine's own, Earth's along -Z, by default>
       medium: <(optional) the material the scene is filled with; a vacuum by default>
+      simulate: <(optional) what the scene is supposed to do once the world is switched on; see "Simulate a scene" below>
 
       # 'sim-gazebo:world' only -- the reader's own parameters, declared by the
       # package that implements it and passed straight through to it
@@ -679,6 +680,38 @@ Scenes take parameters, aliases and enriches exactly as assemblies do:
       source: :workcell
       with:
         spacing: 900
+
+A scene's ASSY file may place another scene (``scene:``) and weld what a link
+places to the world (``fixed: true``), and neither is allowed in an assembly: in
+a scene every element is a rigid body of its own, and in an assembly everything
+is attached to it. See :ref:`assy-scenes` for the keys and :ref:`sim-bodies` for
+the rule.
+
+Simulate a scene
+----------------
+
+A scene can be the thing a claim is about, not only the world it is tested in:
+a stack of blocks that stands, a pile that does not slide. It declares
+``simulate:`` exactly as a part or an assembly does (see :ref:`sim-declaring`),
+and is simulated as the subject of a world -- the built-in one, or a scene of the
+package's own -- whose link places it with ``scene:``, since PartCAD hands that
+world ``subject_kind: scene``:
+
+.. code-block:: yaml
+
+  scenes:
+    stable:
+      type: assy                      # two blocks, one set on the other
+      simulate:
+        stands:
+          simulation: sim-mujoco:mujoco
+          offset: [[0, 0, 10], [0, 0, 1], 0]
+          validation: |
+            max(abs(after["bodies"][n]["pos"][2] - before["bodies"][n]["pos"][2]) for n in before["bodies"]) < 5.0
+
+``pc sim -S stable`` runs it, and ``pc test`` holds the scene to it as its
+``sim`` check like any other object. ``examples/feature_simulate`` declares its
+three stacks this way.
 
 Gravity, and the fluid a scene is filled with
 ---------------------------------------------

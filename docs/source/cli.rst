@@ -362,13 +362,14 @@ Object commands
   obtainable and be the one that was meant. A board nobody can flash is not a board anybody can make.
 
 ``pc sim``
-  Run the simulations a part or an assembly declares in its ``simulate:`` section, and check the
-  ``validation:`` condition each of them states. Use ``-a`` when the object is an assembly, ``-P
-  <package>...`` or ``...:<name>`` to run everything the packages below declare too (see
-  :ref:`recursive-names`), ``-f`` to run only the simulation of a given name, and
-  ``--json`` to print the whole of what each simulation plugin reported. A validation that does not hold
-  exits non-zero. A run whose plugin drew the scene -- before and after, from the scene's ``render: png:``
-  viewpoint -- also says where the two pictures were written; a plugin that draws none has not failed.
+  Run the simulations a part, an assembly or a scene declares in its ``simulate:`` section, and check the
+  ``validation:`` condition each of them states. Use ``-a`` when the object is an assembly and ``-S`` when it
+  is a scene -- a stack of blocks is an arrangement rather than a product, so it is a scene (see
+  :ref:`sim-bodies`). Use ``-P <package>...`` or ``...:<name>`` to run everything the packages below declare
+  too (see :ref:`recursive-names`), ``-f`` to run only the simulation of a given name, and ``--json`` to
+  print the whole of what each simulation plugin reported. A validation that does not hold exits non-zero.
+  A run whose plugin drew the scene -- before and after, from the scene's ``render: png:`` viewpoint -- also
+  says where the two pictures were written; a plugin that draws none has not failed.
 
   ``--plugin <package>:<name>`` runs with another simulation plugin than the one each declaration names, such
   as ``//pub/feature/simulate/gazebo:gazebo`` for a simulation written against MuJoCo; everything else the

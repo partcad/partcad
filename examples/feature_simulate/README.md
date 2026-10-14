@@ -1,14 +1,14 @@
 # //pub/examples/partcad/feature_simulate
 
-PartCAD example project which demonstrates simulating a part or an assembly.
+PartCAD example project which demonstrates simulating a part or a scene.
 
 ## Usage
 A part says what it *is*. `simulate:` is where it says what it is supposed
 to **do** -- or, as here, what it is supposed not to do:
 
 ```shell
-pc sim -a stable      # the stack stands; the validation passes
-pc sim -a unstable    # the top block falls off; that validation passes too
+pc sim -S stable      # the stack stands; the validation passes
+pc sim -S unstable    # the top block falls off; that validation passes too
 pc sim                # every simulation this package declares
 ```
 
@@ -18,6 +18,14 @@ off the edge, so its centre of mass is past the corner it rests on. Nothing
 static distinguishes them -- both render, export and list the same way --
 and neither does anything PartCAD can check by looking. What separates them
 is what happens when the world is switched on.
+
+Both are **scenes**, not assemblies. An assembly is a product somebody put
+together, and everything in it is attached to it; a stack of blocks is an
+arrangement -- each block is where it is, and nothing holds it there -- so
+each block is a rigid body of its own, free to slide and to fall. That is
+the rule PartCAD decides what becomes a body by. A scene declares
+`simulate:` exactly as a part does, and is placed in the world it is
+simulated in by that world's `scene:` link.
 
 Each `simulate:` states five things: the `scene:` the object is placed in
 (here the default, `//builtin/scene:subject`, an empty world holding the
@@ -45,8 +53,8 @@ instead of aluminium. Same geometry, same locations, same scene, same
 simulation -- and the top block ends up on the floor.
 
 ```shell
-pc sim -a stable      # nothing moves
-pc sim -a slippery    # the top block slides off
+pc sim -S stable      # nothing moves
+pc sim -S slippery    # the top block slides off
 ```
 
 The scene both run in is `tilted`, whose gravity leans 15 degrees off
@@ -81,7 +89,7 @@ either case a number nobody chose.
 every body was before and after:
 
 ```shell
-pc sim --json -a slippery
+pc sim --json -S slippery
 ```
 
 The scene reaches the simulator as the MJCF PartCAD writes. That is an
@@ -89,7 +97,7 @@ ordinary export, so the same file can be written out and looked at -- or
 opened in MuJoCo:
 
 ```shell
-pc export -a -t sim-mujoco:mjcf -O ./ unstable
+pc export -S -t sim-mujoco:mjcf -O ./ unstable
 pc ide open --with mujoco ./unstable.xml
 ```
 
@@ -140,7 +148,7 @@ standard catalogue's is `//pub/std/manufacturing/material/fluid:water`.
 
 ### [sim-mujoco](https://github.com/partcad/partcad-sim-mujoco.git)
 
-## Assemblies
+## Scenes
 
 ### slippery
 <table><tr>
@@ -152,6 +160,30 @@ standard catalogue's is `//pub/std/manufacturing/material/fluid:water`.
 <table><tr>
 <td valign=top><a href="stable.assy"><img src="././stable.svg" alt="stable" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Two aluminium blocks, the upper one squarely on top of the lower one</td>
+</tr></table>
+
+### tank
+<table><tr>
+<td valign=top><a href="tank.assy"><img src="././tank.svg" alt="tank" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>A tank of fresh water, holding whatever is simulated in it 100 mm above its floor</td>
+<td valign=top>Parameters:<br/><ul>
+<li>subject: float</li>
+<li>subject_kind: part</li>
+<li>subject_offset: 0 0 100 0 0 1 0</li>
+</ul>
+</td>
+</tr></table>
+
+### tilted
+<table><tr>
+<td valign=top><a href="tilted.assy"><img src="././tilted.svg" alt="tilted" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>An empty world whose gravity leans 15 degrees off vertical, towards +X - a ramp with no edge</td>
+<td valign=top>Parameters:<br/><ul>
+<li>subject: stable</li>
+<li>subject_kind: scene</li>
+<li>subject_offset: 0 0 10 0 0 1 0</li>
+</ul>
+</td>
 </tr></table>
 
 ### unstable

@@ -1536,7 +1536,7 @@ def lint_run(session, params):
     return None
 
 
-async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_name, fast_only=False, plugin=None):
+async def _simulate_async(ctx, pc, packages, object_name, kind, filter_name, fast_only=False, plugin=None):
     """Run every declared simulation of what was selected, one after another.
 
     Sequentially, and deliberately: a simulation plugin is a whole simulator
@@ -1545,6 +1545,11 @@ async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_na
     both slower and neither more informative. It is also what keeps the log
     readable, which for a command whose whole output is a verdict per run is
     most of what it is for.
+
+    ``kind`` is what a named object is - "part", "assembly" or "scene" - since
+    the three are separate namespaces of a package. Walking a package takes all
+    three: a stack of blocks is an arrangement, so it is a scene, and it claims
+    to stand like anything else.
     """
     from partcad import simulation as pc_simulation
 
@@ -1567,13 +1572,15 @@ async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_na
             prj = ctx.get_project(target)
             if prj is None:
                 raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % target)
-            if is_assembly:
-                shape, kind = prj.get_assembly(name), "assembly"
+            if kind == "assembly":
+                shape = prj.get_assembly(name)
+            elif kind == "scene":
+                shape = prj.get_scene(name)
             else:
                 # Awaited, not 'get_part()': this is a coroutine, and a part a URDF,
                 # MJCF or STEP assembly produces has to have that assembly built
                 # before it exists. See 'Project.get_part_async()'.
-                shape, kind = await prj.get_part_async(name), "part"
+                shape = await prj.get_part_async(name)
             if shape is None:
                 raise JsonRpcError(USAGE_ERROR, "%s is not found" % _qualified(target, name))
             targets.append((kind, shape))
@@ -1584,6 +1591,7 @@ async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_na
                 continue
             targets.extend(("part", shape) for shape in list(prj.parts.values()))
             targets.extend(("assembly", shape) for shape in list(prj.assemblies.values()))
+            targets.extend(("scene", shape) for shape in list(prj.scenes.values()))
 
     if fast_only:
         targets = [(kind, shape) for kind, shape in targets if not pc.fast_only.leaves_out(shape)]
@@ -1598,7 +1606,7 @@ async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_na
 
 
 def simulate_run(session, params):
-    """Run the simulations a part or an assembly declares, and validate them."""
+    """Run the simulations a part, an assembly or a scene declares, and validate them."""
     import asyncio
 
     ctx = _ctx(session, params)
@@ -1620,11 +1628,11 @@ def simulate_run(session, params):
         else:
             packages = [package]
 
+        kind = "scene" if params.get("scene") else ("assembly" if params.get("assembly") else "part")
         if recursive and object_name:
             # Only the packages that have such an object, so that walking a
             # subtree for one name is the simulations of the objects that
             # answer to it rather than a failure per package that does not.
-            kind = "assembly" if params.get("assembly") else "part"
             targets = _targets(ctx, pc, packages, object_name, kind)
             if not targets:
                 # A usage error, the way naming one object that does not exist
@@ -1639,7 +1647,7 @@ def simulate_run(session, params):
                 pc,
                 packages,
                 object_name,
-                params.get("assembly"),
+                kind,
                 params.get("filter"),
                 bool(params.get("fast_only")),
                 # Another simulation plugin than the declarations name, for
@@ -1653,7 +1661,7 @@ def simulate_run(session, params):
     # identical here - an empty result list - and only the request tells them
     # apart, so it is the request that is consulted. Without this, 'pc sim -a'
     # on a name that does not exist reports success and exits 0.
-    asked_for = [object_name, params.get("assembly"), params.get("filter")]
+    asked_for = [object_name, params.get("assembly"), params.get("scene"), params.get("filter")]
     named_one = any(value for value in asked_for)
 
     unmatched = False
@@ -1721,14 +1729,15 @@ def _inline_snapshots(pc, snapshots: dict) -> dict:
 
 
 def simulate_list(session, params):
-    """The simulations one part or assembly declares, without running any.
+    """The simulations one part, assembly or scene declares, without running any.
 
     What the IDE's Validation tab is enabled by and lists: a ``simulate:``
     section is configuration, so reading it costs what reading the object's
     configuration costs -- nothing is built and nothing is run -- which is what
     makes it cheap enough to ask on every show. ``kind`` says whether
-    ``object`` is a part (the default) or an assembly, as ``-a`` does for
-    ``pc sim``.
+    ``object`` is a part (the default), an assembly or a scene, as ``-a`` and
+    ``-S`` do for ``pc sim``: a stack of blocks is an arrangement, so it is a
+    scene, and it declares what it is supposed to do like anything else.
 
     An object that declares none answers with an empty list rather than an
     error: "nothing to simulate here" is the ordinary case.
@@ -1743,8 +1752,9 @@ def simulate_list(session, params):
     package, object_name = resolved
     path = _qualified(package, object_name)
 
-    kind = "assembly" if params.get("kind") == "assembly" else "part"
-    shape = ctx.get_assembly(path) if kind == "assembly" else ctx.get_part(path)
+    kind = params.get("kind") if params.get("kind") in ("assembly", "scene") else "part"
+    getter = {"part": ctx.get_part, "assembly": ctx.get_assembly, "scene": ctx.get_scene}[kind]
+    shape = getter(path)
     if shape is None:
         raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
 

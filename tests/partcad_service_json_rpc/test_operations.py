@@ -3942,6 +3942,18 @@ def test_simulate_list_names_what_an_assembly_declares_without_running_it(monkey
     ]
 
 
+def test_simulate_list_names_what_a_scene_declares(monkeypatch):
+    """A stack of blocks is a scene, and the Validation tab lists its claims as it lists a part's."""
+    install_fake_simulation(monkeypatch, {"pile": [declared_simulation("stands", simulation="sim-mujoco:mujoco")]})
+    session, _ = make_session()
+    session.partcad_ctx.shapes[("scene", "//:pile")] = FakeObject("pile")
+
+    result = operations.simulate_list(session, {"package": "//", "object": "pile", "kind": "scene"})
+
+    assert (result["object"], result["kind"]) == ("//:pile", "scene")
+    assert [entry["name"] for entry in result["simulations"]] == ["stands"]
+
+
 def test_simulate_list_of_an_object_that_declares_nothing_is_empty_rather_than_an_error(monkeypatch):
     install_fake_simulation(monkeypatch, {})
     session, _ = make_session()
