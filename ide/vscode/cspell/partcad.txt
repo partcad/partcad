@@ -47,6 +47,7 @@ contact
 contacts
 container
 continuous
+convection
 conventional
 count
 cover
@@ -76,6 +77,7 @@ drill
 dropped
 duplicates
 dxf
+dynamic
 effort
 elif
 endautoescape
@@ -131,6 +133,7 @@ globs
 gltf
 gravity
 hash
+heat
 height
 hold
 how
@@ -219,6 +222,7 @@ operation
 optimize
 options
 orientation
+outlet
 output
 own
 package
@@ -321,6 +325,8 @@ sweep
 tags
 tar
 target
+temperature
+thermal
 thread
 threejs
 timeout

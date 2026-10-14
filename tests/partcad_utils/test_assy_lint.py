@@ -367,6 +367,43 @@ def test_the_linter_still_wants_a_direction_for_a_name_it_does_not_know():
     assert validate_source(source, get_schema(PARTCAD_SCHEMA)) != []
 
 
+NAIL = """
+parts:
+  common/16d:
+    type: build123d
+    parameters:
+      head_d: {type: float, default: 8.7376}
+    implements:
+      nail-head:
+        "":
+          location: [[0, 0, 1.44], [1, 0, 0], 180]
+          %s: "nail-circle;d=%%head_d%%"
+"""
+
+
+def test_the_linter_tells_a_part_restating_a_boundary_what_to_implement_instead():
+    """A nail that draws its head at the size its own parameters say.
+
+    Only an interface restates the boundary of what it inherits. A part draws the
+    ports of what it implements the way the interface draws them, so this is
+    refused on the line of the `sketch:`, saying what to write instead -- not as
+    "not valid under any of the given schemas" for the whole interface.
+    """
+    (diagnostic,) = validate_source(NAIL % "sketch", get_schema(PARTCAD_SCHEMA))
+    assert diagnostic.message.startswith("A part or an assembly draws the ports of an interface it implements")
+    assert "'nail-head;d=%head_d%'" in diagnostic.message
+    assert diagnostic.line == 10  # the `sketch:` line, counted from 0
+
+
+def test_a_misspelled_key_on_an_implemented_instance_is_reported_by_name():
+    """The forms an instance takes are told apart by type, so a mistake in one
+    is reported as that mistake rather than as "not valid under any of the given
+    schemas" for the whole interface."""
+    (diagnostic,) = validate_source(NAIL % "skecth", get_schema(PARTCAD_SCHEMA))
+    assert "'skecth' was unexpected" in diagnostic.message
+    assert diagnostic.line == 9
+
+
 def test_the_schemas_ship_with_the_package():
     schema = get_schema(ASSY_SCHEMA)
     assert schema["$schema"].startswith("http://json-schema.org/draft-07/")

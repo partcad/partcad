@@ -89,4 +89,5 @@ out of `../vscode/package.json`.
 
 **Publish `PartCAD.partcad-official` before this.** The editor fails an install whose `extensionDependencies`
 cannot be resolved, so releasing this against a publisher that has nothing under it yet would break the very
-installations it is meant to carry over.
+installations it is meant to carry over. `.github/workflows/vsix-publish.yml`, which publishes both on a
+release, does them in that order, and checks it may publish to both publishers before it publishes either.

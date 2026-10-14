@@ -73,7 +73,7 @@ These examples showcase particular PartCAD features:
 - [Convert sketch inside a package or standalone (ad-hoc)](./feature_convert_sketch)
 - [Import parts or assemblies (with optional format conversion)](./feature_import)
 - [Interfaces and mating](./feature_interface)
-- [Engineering analysis (FEA and CFD), against cases whose answer is known](./feature_cae)
+- [Engineering analysis (FEA, dynamic FEA, heat transfer and CFD), against cases whose answer is known](./feature_cae)
 - [Route files: the program a machine cuts an object with](./feature_cam)
 - [Simulate a part or an assembly, validate what happened, and let the material decide it](./feature_simulate)
 - [Simulate a mechanism on its joints, and hold it to its closed form](./feature_simulate_joints)

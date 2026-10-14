@@ -236,7 +236,7 @@ a socket on ``127.0.0.1:9137``. The Python side of that connection is the
 install.
 
 Beside the 3D view the panel carries tabs for the questions that are about the
-object rather than its shape -- **FEA** and **CFD** under **Analysis**, and
+object rather than its shape -- **FEA**, **Dynamic FEA**, **Heat Transfer** and **CFD** under **Analysis**, and
 **Build vs Buy**, **Build**, **Buy**, **Bill of Materials** and **Assembly** under
 **Manufacturing**, each enabled where it applies -- and, beside the 3D view on the **Design** tab,
 **2D** and **Draft**, which render the object to a file. Those
@@ -286,7 +286,7 @@ Typical problems
 "Drawn without a graphics card" in the corner of the 3D view or an analysis
 
  - VS Code could not use the graphics card, so the window has no WebGL, and the 3D
-   view and the **FEA** and **CFD** tabs draw the model on the processor instead:
+   view and the analysis tabs draw the model on the processor instead:
    flat-shaded, and slower for a big model, which is drawn as boxes while it is
    being turned. Hover over the note for how to start VS Code so that it has WebGL
    again (drawn in software by Chromium itself, which looks like the usual view),

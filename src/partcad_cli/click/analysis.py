@@ -5,13 +5,14 @@
 #
 """The options every `pc cae` analysis takes, and the request it turns into.
 
-`pc cae fea` and `pc cae cfd` differ in one word: which section of the part holds
-the boundary conditions, and what the model file is named after. Everything else
--- where the object comes from, who runs the analysis, where the model goes, how
-the findings are printed -- is the same for both, and has to be: a user who has
-learned one of them has learned the other.
+`pc cae fea`, `pc cae dynamic`, `pc cae thermal` and `pc cae cfd` differ in one
+word: which section of the part holds the boundary conditions, and what the model
+file is named after. Everything else -- where the object comes from, who runs the
+analysis, where the model goes, how the findings are printed -- is the same for
+all of them, and has to be: a user who has learned one of them has learned the
+others.
 
-So the two command modules are a name and a docstring each, and this is the
+So the command modules are a name and a docstring each, and this is the
 command. The same reason `viewport.py` holds the three options `pc render` and
 `pc adhoc render` share.
 """
@@ -35,8 +36,9 @@ _OPTIONS = (
         "--implementation",
         help=(
             "Who runs the analysis, as '<package>:<file type>'. Overrides the default "
-            "for this run only; the default itself is the 'caeFeaImplementation'/"
-            "'caeCfdImplementation' user configuration option"
+            "for this run only; the default itself is the user configuration option named "
+            "after the analysis: 'caeFeaImplementation', 'caeDynamicImplementation', "
+            "'caeThermalImplementation' or 'caeCfdImplementation'"
         ),
         type=str,
         show_envvar=True,
