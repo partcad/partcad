@@ -1491,13 +1491,27 @@ jobs:
 
           # Inno Setup's uninstaller relaunches itself from the temp directory
           # and the process started here returns before the work is done, so
-          # this waits for the result rather than for the process.
+          # this waits for the result rather than for the process. The log is
+          # given an absolute path for the same reason: the process writing it
+          # does not run where this one does.
+          $uninstallLog = Join-Path $env:RUNNER_TEMP "uninstall.log"
           Start-Process -FilePath (Join-Path $app "unins000.exe") `
-            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART"
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/LOG=$uninstallLog"
           $deadline = (Get-Date).AddMinutes(5)
           while ((Test-Path $app) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 5 }
           if (Test-Path $app) {
             Get-Running | Format-Table Id, ProcessName, Path -AutoSize | Out-String -Width 400 | Write-Host
+            # What it left is what says why: the uninstaller removes only what
+            # it installed, so a file the application wrote as it ran keeps its
+            # directory, and every directory above it, on disk -- with nothing
+            # left running to point at. The editor's compile cache was left
+            # that way ("[UninstallDelete]" in partcad-ide.iss), and the only
+            # thing this step said about it was the line thrown below.
+            Write-Host "--- left in ${app}:"
+            Get-ChildItem $app -Recurse -Force | Select-Object -First 40 |
+              ForEach-Object { $_.FullName.Substring($app.Length + 1) } | Write-Host
+            Write-Host "--- the uninstaller said:"
+            Get-Content $uninstallLog -Tail 40 -ErrorAction SilentlyContinue
             throw "$app is still there after uninstalling"
           }
           $left = @(Get-Running)

@@ -141,7 +141,11 @@ its own result, and the `install` job in that workflow, which installs the archi
   command line (`AppDir`, `LicenseFile`, `Branding`); the `#ifndef` fallbacks beside them are for compiling
   the script by hand and are wrong the next time the file moves. Its `[InstallDelete]` clears PartCAD's own
   extension directories before the files are copied, because an upgrade only overwrites and the extension has
-  changed its id once already -- `README.md` explains what that leaves behind if it does not.
+  changed its id once already -- `README.md` explains what that leaves behind if it does not. Its
+  `[UninstallDelete]` is the same problem the other way round: the uninstaller removes only what it installed,
+  and the editor writes a compile cache into `resources\app\node-compile-cache` as it runs, which kept the
+  whole application directory on disk. Anything else the editor starts writing under the application directory
+  needs an entry there too; the `Install (windows-x86_64)` job fails, listing what was left, when one is missing.
 - **The VSCodium release**: `build.sh --vscodium-version <tag> --record`, then restore the comments `--record`
   strips from `vscodium.json`.
 
