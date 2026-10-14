@@ -62,10 +62,15 @@ class ConnectivityTest(Test):
             bool(getattr(shape, "is_manufacturable", False)),
         )
 
-    async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+    def inapplicable(self, shape):
         if not isinstance(shape, Assembly):
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return "only an assembly or a scene places items to be connected"
+        return None
+
+    async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+        reason = self.inapplicable(shape)
+        if reason is not None:
+            return self.not_applicable(shape, reason)
 
         config = (shape.config or {}).get("connectivity") or {}
 

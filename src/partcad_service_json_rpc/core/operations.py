@@ -3195,6 +3195,56 @@ def requirements_check(session, params):
     return report.to_dict()
 
 
+def test_report(session, params):
+    """Every check ``pc test <object>`` runs on one object and, with ``verify``, its verdict.
+
+    What the IDE's Test tab is drawn from: one line per check, in the order ``pc
+    test`` runs them, each with its verdict, what it said, what it left behind to
+    be looked at -- the assembly the interference check puts together of two
+    parts that overlap, say -- and what the check is and how to act on it (see
+    ``partcad.test.report`` and ``partcad.test.catalog``). Without ``verify``
+    nothing is run: the list, with the checks that do not apply saying why, which
+    is cheap enough to draw the tab with while the rest are running.
+
+    The checks are run as ``pc test <object>`` runs them, through the same cache,
+    so a verdict here and one on the command line are the same verdict. An
+    assembly or a scene is staged first, as every request that builds one is.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    kind = params.get("kind") or "part"
+    getters = {
+        "part": ctx.get_part,
+        "assembly": ctx.get_assembly,
+        "scene": ctx.get_scene,
+        "sketch": ctx.get_sketch,
+        "interface": ctx.get_interface,
+    }
+    if kind not in getters:
+        raise JsonRpcError(USAGE_ERROR, "'%s' is not a kind of object 'pc test' tests" % kind)
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, name = resolved
+    path = _qualified(package, name)
+    obj = getters[kind](path)
+    if obj is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+
+    from partcad.test import report
+
+    verify = bool(params.get("verify"))
+    if verify and kind in ("assembly", "scene"):
+        _stage_subassemblies(session, ctx, obj)
+    with pc.logging.Process("Test", package, name):
+        results = asyncio.run(report.run_async(ctx, obj, verify=verify))
+    return report.to_dict(path, kind, results, verify)
+
+
 def cae_analyze(session, params):
     """Run a CAE analysis on a part and return the model it wrote and its findings.
 

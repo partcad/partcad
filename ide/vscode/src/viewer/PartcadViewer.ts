@@ -45,6 +45,8 @@ const TAB_COMMANDS: Record<string, string> = {
     // What the object is required to be, and with 'verify' whether the model is
     // it - the verdicts 'pc test -f requirements' reaches.
     requirements: 'partcad.requirements',
+    // Every check 'pc test' runs on the object, and with 'verify' its verdict.
+    test: 'partcad.testReport',
     // What the object is made of and what each part of it declares; the user's
     // choices are added here, from this machine (see 'common/garage.ts').
     bvb: 'partcad.manufacturingTree',
@@ -76,6 +78,18 @@ const SIMULATION_RUN = 'partcad.simulateRun';
 
 /** The tabs that render the object to a file, which is then kept and can be saved. */
 const RENDER_TABS = new Set(['2d', 'draft']);
+
+/**
+ * What shows an object of each kind, as the explorer does: what the panel asks
+ * for when it wants another object on screen (see 'showObject').
+ */
+const INSPECT_COMMANDS: Record<string, string> = {
+    part: 'partcad.inspectPart',
+    assembly: 'partcad.inspectAssembly',
+    scene: 'partcad.inspectScene',
+    sketch: 'partcad.inspectSketch',
+    interface: 'partcad.inspectInterface',
+};
 
 /** The tabs whose answer carries a file to keep for Save: the render tabs, and the assembly instructions. */
 const FILE_TABS = new Set([...RENDER_TABS, 'assembly']);
@@ -344,7 +358,7 @@ export class PartcadViewer implements vscode.Disposable {
                 post({ data: data ? { ...data, choices: readChoices(object) } : data });
                 return;
             }
-            if (tab === 'requirements') {
+            if (tab === 'requirements' || tab === 'test') {
                 args.kind = target.kind ?? 'part';
                 args.verify = message.verify === true;
                 post({ data: await vscode.commands.executeCommand(command, args) });
@@ -472,6 +486,32 @@ export class PartcadViewer implements vscode.Disposable {
             // hand it to whatever VS Code opens such a file with.
             traceVerbose(`Digital Thread: ${file} is not a text document: ${error?.message ?? error}`);
             await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(file), vscode.ViewColumn.One);
+        }
+    }
+
+    /**
+     * Show another object in the panel, as the explorer would: what a Test tab
+     * artifact opens with (an interference's two parts and what they share).
+     *
+     * Through the explorer's own command, so that it is shown the one way
+     * anything is - by the daemon, which pushes it in here - and not remembered
+     * as the selection ('doNotMemorize'): nothing declares such an object, so a
+     * window reopened on it might find nothing to show.
+     */
+    private async showObject(
+        pkg: string | undefined,
+        name: string | undefined,
+        kind: string | undefined,
+    ): Promise<void> {
+        const command = INSPECT_COMMANDS[kind ?? ''];
+        if (!pkg || !name || command === undefined) {
+            traceError(`Digital Thread: cannot show '${pkg}:${name}', a '${kind}'`);
+            return;
+        }
+        try {
+            await vscode.commands.executeCommand(command, { name, pkg }, {}, true);
+        } catch (error: any) {
+            void vscode.window.showErrorMessage(`PartCAD could not show ${pkg}:${name}: ${error?.message ?? error}`);
         }
     }
 
@@ -640,6 +680,9 @@ export class PartcadViewer implements vscode.Disposable {
                     message?: string;
                     object?: string;
                     path?: string;
+                    package?: string;
+                    name?: string;
+                    kind?: string;
                     objects?: unknown;
                     width?: number;
                     height?: number;
@@ -673,6 +716,8 @@ export class PartcadViewer implements vscode.Disposable {
                     void this.fetchFormats(message.token ?? 0, message.plugin ?? '');
                 } else if (message.type === 'save') {
                     void this.saveRendered(message.tab ?? '');
+                } else if (message.type === 'showObject') {
+                    void this.showObject(message.package, message.name, message.kind);
                 } else {
                     traceVerbose(`Digital Thread: ${message.type}`);
                 }
@@ -846,6 +891,7 @@ export class PartcadViewer implements vscode.Disposable {
 						<div id="pane-validation" class="pane pane-group" hidden>
 						<div id="validation-tabs" class="tabs sub-tabs" hidden></div>
 						<div class="panes">
+						<div id="pane-test" class="pane" hidden></div>
 						<div id="pane-simulation" class="pane" hidden></div>
 						<div id="pane-emulation" class="pane" hidden></div>
 						</div>

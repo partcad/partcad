@@ -3074,6 +3074,88 @@ def test_requirements_check_names_what_it_could_not_find(monkeypatch):
     assert asked == []
 
 
+# ---- test.report -------------------------------------------------------------
+#
+# The method behind the IDE's Test tab. What each check decides is the checks'
+# own, tested beside them, and how what they say becomes a report is
+# 'partcad.test.report', tested beside it; what is pinned here is which object
+# is asked, whether anything is run, and what a refusal reads as.
+
+
+def _report_session(monkeypatch, kind="part", name="plate"):
+    asked = []
+
+    async def run_async(ctx, shape, verify=True):
+        asked.append((shape, verify))
+        return ["results of %s" % shape.name]
+
+    def to_dict(object_name, kind, results, verified):
+        return {"object": object_name, "kind": kind, "tests": results, "verified": verified}
+
+    install_fake_partcad_modules(monkeypatch, {"partcad.test.report": {"run_async": run_async, "to_dict": to_dict}})
+    session, _ = make_session()
+    shape = FakeObject(name, project_name="//")
+    session.partcad_ctx.shapes[(kind, "//:" + name)] = shape
+    return session, shape, asked
+
+
+def test_test_report_lists_the_checks_unless_asked_to_run_them(monkeypatch):
+    session, plate, asked = _report_session(monkeypatch)
+
+    listed = operations.test_report(session, {"package": "//", "object": "plate", "kind": "part"})
+    run = operations.test_report(session, {"package": "//", "object": "plate", "kind": "part", "verify": True})
+
+    assert asked == [(plate, False), (plate, True)]
+    assert listed == {"object": "//:plate", "kind": "part", "tests": ["results of plate"], "verified": False}
+    assert run["verified"] is True
+
+
+@pytest.mark.parametrize("kind", ["assembly", "scene", "sketch", "interface"])
+def test_test_report_asks_the_kind_it_was_told(monkeypatch, kind):
+    session, shape, asked = _report_session(monkeypatch, kind=kind, name="thing")
+
+    operations.test_report(session, {"package": "//", "object": "thing", "kind": kind})
+
+    assert asked == [(shape, False)]
+    assert session.partcad_ctx.requested[-1][:2] == (kind, "//:thing")
+
+
+def test_test_report_builds_an_assembly_s_sub_assemblies_first_when_it_runs_the_checks(monkeypatch):
+    """The checks build the assembly, so phase one comes first, as for every request that ends in one."""
+    session, _, asked = _report_session(monkeypatch, kind="assembly", name="robot")
+    _assembly_with(session, "//:robot", uncached=[("//", "arm")])
+
+    operations.test_report(session, {"package": "//", "object": "robot", "kind": "assembly"})
+    assert [verify for _, verify in asked] == [False]
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.test_report(session, {"package": "//", "object": "robot", "kind": "assembly", "verify": True})
+    assert [entry["name"] for entry in _retry_error(caught)] == ["arm"]
+    assert [verify for _, verify in asked] == [False]
+
+
+def test_test_report_refuses_what_pc_test_does_not_test(monkeypatch):
+    session, _, asked = _report_session(monkeypatch)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.test_report(session, {"package": "//", "object": "box", "kind": "package"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "'package'" in str(caught.value)
+    assert asked == []
+
+
+def test_test_report_names_what_it_could_not_find(monkeypatch):
+    session, _, asked = _report_session(monkeypatch)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.test_report(session, {"package": "//", "object": "missing", "kind": "part"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "//:missing" in str(caught.value)
+    assert asked == []
+
+
 # ---- cae.analyze / cae.defaults --------------------------------------------
 #
 # The two methods behind `pc cae fea|cfd` and the IDE's FEA and CFD tabs. What

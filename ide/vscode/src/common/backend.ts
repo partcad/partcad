@@ -531,6 +531,11 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.requirements', (a) =>
             this.send('requirements.check', { package: a.pkg, object: a.name, kind: a.kind, verify: a.verify }),
         );
+        // The Test tab: every check 'pc test' runs on one object, and with
+        // 'verify' how each came out.
+        reg('partcad.testReport', (a) =>
+            this.send('test.report', { package: a.pkg, object: a.name, kind: a.kind, verify: a.verify }),
+        );
         reg('partcad.supplyQuote', (a) =>
             this.send('supply.quote', { package: a.pkg, object: a.name, qos: a.qos, recursive: a.recursive }),
         );

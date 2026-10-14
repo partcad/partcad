@@ -3560,8 +3560,17 @@ class Project(project_config.Configuration):
             what it resolves to: an alias reports the source's configuration
             below, where its 'orig_name' is the source's name and not the
             alias's.
+
+            An artifact is not a declaration either: a check registers it in
+            the package so it can be asked for by name, and what is there
+            depends on which checks ran in this process before the README was
+            written ('Shape.artifact').
             """
-            return sorted(name for name in objects if objects[name].config.get("orig_name", name) == name)
+            return sorted(
+                name
+                for name in objects
+                if objects[name].config.get("orig_name", name) == name and not getattr(objects[name], "artifact", False)
+            )
 
         def add_section(name, display_name, shape, render_cfg):
             config = shape.config

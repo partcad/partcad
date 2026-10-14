@@ -213,15 +213,19 @@ class ManufacturabilitySheetMetalTest(Test):
             declared.append("%s:%s@%s" % (kind, reference, key or ""))
         return ".sheet-metal=" + hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]
 
-    async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+    def inapplicable(self, shape):
         if not isinstance(shape, Part):
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return "only a part is made by a manufacturing method"
+        if PartConfiguration.get_manufacturing_data(shape).method != METHOD_SHEET_METAL:
+            return "it is not made by the 'sheet_metal' method ('manufacturing: method')"
+        return None
+
+    async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+        reason = self.inapplicable(shape)
+        if reason is not None:
+            return self.not_applicable(shape, reason)
 
         manufacturing_data = PartConfiguration.get_manufacturing_data(shape)
-        if manufacturing_data.method != METHOD_SHEET_METAL:
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
 
         missing = manufacturing_data.missing_fields()
         if missing:

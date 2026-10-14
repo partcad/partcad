@@ -738,12 +738,17 @@ def _instance_full_name(state: str, instance: str) -> str:
 
 
 def implemented_interfaces(shape) -> dict:
-    """{interface full name: {instance name: Location}} of everything 'shape' implements.
+    """{interface full name: {instance name: [Location]}} of everything 'shape' implements.
 
     Every level of the inheritance, abstract interfaces included, each instance
     placed where it is in the object's own frame: implementing 'm3-thru' is
     implementing 'm3' as well, which is what "has an M3 hole" means to
     'pc search --interface' too (see 'shape_ports.interface_closure').
+
+    A list per instance, because one inherited interface can be reached under
+    the same instance name by more than one path - two interfaces that both
+    inherit it - and each path places it where its own instance is. Keeping only
+    the first would fail a location the second meets.
     """
     from .shape_ports import port_carrier
 
@@ -762,7 +767,7 @@ def implemented_interfaces(shape) -> dict:
                 full = _instance_full_name(state, instance)
                 placed = placement * (location if location is not None else Location())
                 for name in names:
-                    found.setdefault(name, {}).setdefault(full, placed)
+                    found.setdefault(name, {}).setdefault(full, []).append(placed)
                 key = (interface.full_name, full)
                 if key not in seen:
                     walk(interface.get_parents(), full, placed, seen | {key})
@@ -1050,8 +1055,8 @@ async def _verify_interfaces(ctx, shape, entries) -> None:
         names = _matching_interfaces(shape, requirement.name, implemented)
         instances = {}
         for name in names:
-            for instance_name, placed in implemented[name].items():
-                instances.setdefault(instance_name, placed)
+            for instance_name, placements in implemented[name].items():
+                instances.setdefault(instance_name, []).extend(placements)
         if not instances:
             check.passed = False
             check.detail = "it does not implement '%s'" % requirement.name
@@ -1062,7 +1067,11 @@ async def _verify_interfaces(ctx, shape, entries) -> None:
                 check.passed = True
                 check.detail = "implemented: %s" % _instance_list(instances)
                 continue
-            fitting = [name for name, placed in instances.items() if requirement.anywhere.mismatch(placed) is None]
+            fitting = [
+                name
+                for name, placements in instances.items()
+                if any(requirement.anywhere.mismatch(placed) is None for placed in placements)
+            ]
             check.passed = bool(fitting)
             if fitting:
                 check.detail = "%s %s there" % (
@@ -1072,21 +1081,34 @@ async def _verify_interfaces(ctx, shape, entries) -> None:
             else:
                 check.detail = "no instance is at %s: %s" % (
                     requirement.anywhere.describe(),
-                    "; ".join("%s %s" % (_instance_name(name), _where(placed)) for name, placed in instances.items()),
+                    "; ".join(
+                        "%s %s" % (_instance_name(name), _where_any(placements))
+                        for name, placements in instances.items()
+                    ),
                 )
             continue
 
-        placed = instances.get(instance)
-        if placed is None:
+        placements = instances.get(instance)
+        if not placements:
             check.passed = False
             check.detail = "there is no %s: %s" % (
                 "instance '%s'" % instance if instance else "unnamed instance",
                 _instance_list(instances),
             )
             continue
-        problem = location.mismatch(placed) if location is not None else None
-        check.passed = problem is None
-        check.detail = problem if problem is not None else _where(placed)
+        if location is None:
+            check.passed = True
+            check.detail = _where(placements[0])
+            continue
+        problems = [location.mismatch(placed) for placed in placements]
+        fitting = [placed for placed, problem in zip(placements, problems) if problem is None]
+        check.passed = bool(fitting)
+        check.detail = _where(fitting[0]) if fitting else "; ".join(dict.fromkeys(problems))
+
+
+def _where_any(placements: list) -> str:
+    """Where an instance is, by every path that places it: once, if they all agree."""
+    return " and ".join(dict.fromkeys(_where(placed) for placed in placements))
 
 
 def _instance_name(name: str) -> str:
@@ -1144,17 +1166,13 @@ async def _verify_physics(ctx, shape, entries) -> None:
         check.detail = "%s (%s)" % (_quantity(requirement.path, value), source)
 
 
-async def check_async(ctx, shape, verify: bool = True) -> Report:
-    """The requirements of one object, and - when 'verify' - whether the model meets each.
+def _declared(shape):
+    """The report on 'shape' with nothing verified, and its checks by section.
 
-    Without 'verify' nothing is asked of the model: the report lists what is
-    required and leaves every verdict None. That costs a declaration read, which
-    is what lets the IDE decide on every show whether there is a Requirements
-    tab to offer at all.
-
-    A section the model cannot be asked about - its ports would not resolve, it
-    would not build - fails every requirement in it, saying why, rather than
-    failing the report: the other sections still have something to say.
+    Every check a verified report will hold is already in it - the
+    declarations that cannot be read, a 'simulate:' entry naming a feature
+    nobody declares, and a line per port, interface and physical property -
+    so whether there is anything to check is known before anything is built.
     """
     object_name = "%s:%s" % (shape.project_name, shape.name)
     declaration = of_shape(shape)
@@ -1167,12 +1185,35 @@ async def check_async(ctx, shape, verify: bool = True) -> Report:
             )
     _feature_references(shape, declaration, report)
     if declaration is None:
-        report.verified = verify
-        return report
-
+        return report, None
     sections = _declared_checks(declaration)
     for section in STRUCTURED:
         report.checks.extend(check for _, check in sections[section])
+    return report, sections
+
+
+def anything_to_check(shape) -> bool:
+    """Whether 'pc test' has anything to check 'shape' against: what its 'requirements' test applies to."""
+    return bool(_declared(shape)[0].checks)
+
+
+async def check_async(ctx, shape, verify: bool = True) -> Report:
+    """The requirements of one object, and - when 'verify' - whether the model meets each.
+
+    Without 'verify' nothing is asked of the model: the report lists what is
+    required and leaves every verdict None. That costs a declaration read, which
+    is what lets the IDE decide on every show whether there is a Requirements
+    tab to offer at all.
+
+    A section the model cannot be asked about - its ports would not resolve, it
+    would not build - fails every requirement in it, saying why, rather than
+    failing the report: the other sections still have something to say.
+    """
+    report, sections = _declared(shape)
+    object_name = report.object_name
+    if report.declaration is None:
+        report.verified = verify
+        return report
     if not verify:
         return report
 

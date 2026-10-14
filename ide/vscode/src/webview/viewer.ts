@@ -10,18 +10,21 @@
 // instructions, and anything that can be bought has suppliers and prices, so the
 // panel is a strip of tabs over one object rather than a canvas:
 //
-//     (Requirements)  |  Design           |  Analysis                                 |  Manufacturing                                                    |  Validation                       |  Operations
-//                           3D | 2D | Draft     FEA | Dynamic FEA | Heat Transfer | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Simulation | Process Emulation
+//     (Requirements)  |  Design           |  Analysis                                 |  Manufacturing                                                    |  Validation                              |  Operations
+//                           3D | 2D | Draft     FEA | Dynamic FEA | Heat Transfer | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Test | Simulation | Process Emulation
 //
 // Four groups, each a strip of its own. Design is the object itself: turned in
 // 3D, rendered to a picture, drawn as a dimensioned drawing. Analysis is what
 // engineering analysis says about it, and Manufacturing what making it takes -
 // which of its parts are made and which are ordered, how to make them, what it
-// is made of, where to buy it, how it goes together. Validation is whether it
-// does what it is supposed to: the simulations its 'simulate:' section declares,
-// run, with a picture of the scene before and after -- and, beside them, Process
-// Emulation, which holds nothing yet and is always disabled. Operations holds
-// nothing yet either, and is always disabled.
+// is made of, where to buy it, how it goes together. Validation is whether it is
+// what it claims to be and does what it is supposed to: Test, first, is every
+// check 'pc test' runs on it, with how each came out and what each is (see
+// 'test.ts'); Simulation is the simulations its 'simulate:' section declares,
+// run, with a picture of the scene before and after; and Process Emulation
+// holds nothing yet and is always disabled. Validation is always enabled, since
+// every object has checks. Operations holds nothing yet either, and is always
+// disabled.
 //
 // Requirements comes before all of them, and only for an object that declares
 // a 'requirements:' section: it is what the object was asked to be, which is
@@ -39,7 +42,8 @@
 // This file is the shell: it owns the tab strips and the panes, routes what the
 // extension host posts in, and asks for the contents of a tab the first time it
 // is looked at. Each pane draws itself ('scene.ts', 'render.ts', 'cae.ts',
-// 'bom.ts', 'bvb.ts', 'build.ts', 'assembly.ts', 'supply.ts', 'simulation.ts');
+// 'bom.ts', 'bvb.ts', 'build.ts', 'assembly.ts', 'supply.ts', 'test.ts',
+// 'simulation.ts');
 // none of them talks to the host directly.
 //
 // The Manufacturing strip is the one whose shape depends on an answer. Whether
@@ -81,6 +85,7 @@ import {
     saveChoices,
     saveRendered,
     sendState,
+    showObject,
 } from './host';
 import {
     ANALYSIS_LABELS,
@@ -106,6 +111,8 @@ import {
     StateReplyMessage,
     SupplyData,
     TabId,
+    TestArtifact,
+    TestData,
     groupOf,
     isAnalysisTab,
     isRenderTab,
@@ -117,6 +124,7 @@ import { spaceMouse } from './spacemouse';
 import { controlValues, snapshot } from './state';
 import { SupplyView } from './supply';
 import { TabSpec, Tabs } from './tabs';
+import { TestView } from './test';
 import { LinkFilter, OverlayRequest, Selection, Tree, filterIsEmpty } from './tree';
 
 const panes: Record<TabId, HTMLElement> = {
@@ -140,6 +148,7 @@ const panes: Record<TabId, HTMLElement> = {
     dynamic: byId('pane-dynamic'),
     thermal: byId('pane-thermal'),
     cfd: byId('pane-cfd'),
+    test: byId('pane-test'),
     simulation: byId('pane-simulation'),
     emulation: byId('pane-emulation'),
 };
@@ -165,6 +174,7 @@ for (const tab of ANALYSIS_TABS) {
     caeViews[tab] = new CaeView(panes[tab], tab, (implementation) => runAnalysis(tab, implementation));
 }
 const requirementsView = new RequirementsView(panes.requirements);
+const testView = new TestView(panes.test, { onRun: () => runTests(), onShow: (artifact) => showArtifact(artifact) });
 // The simulation pane keeps what each run answered for as long as the object is
 // on screen: a run is a simulator started in a sandbox, and switching back to a
 // simulation already run must not start it again.
@@ -542,16 +552,10 @@ function tabsFor(message: ShowMessage | undefined): TabSpec[] {
             disabled: !Tabs.anyEnabled(manufacturingTabsFor(message)),
             hint: 'No manufacturing or procurement instructions are provided for this object',
         },
-        {
-            id: 'validation',
-            label: 'Validation',
-            pane: panes.validation,
-            disabled: !Tabs.anyEnabled(validationTabsFor(message)),
-            hint:
-                message !== undefined && simulations === undefined && simulated(message)
-                    ? 'Asking PartCAD what this declares under simulate:…'
-                    : 'No validation instructions are provided for this object',
-        },
+        // Always enabled: every object has checks, and 'pc test' says of every
+        // one of them whether it applies - so the group is, whatever the
+        // object simulates.
+        { id: 'validation', label: 'Validation', pane: panes.validation },
         // A placeholder for the group to come: in the strip so that its shape
         // is the one it will keep, disabled because it holds no tabs yet.
         {
@@ -660,7 +664,12 @@ function simulated(message: ShowMessage | undefined): boolean {
 }
 
 /**
- * Validation: the simulations the object declares, run, and Process Emulation.
+ * Validation: Test, the checks 'pc test' runs; the simulations the object
+ * declares, run; and Process Emulation.
+ *
+ * Test is first and always enabled - with nothing on screen it says so, and
+ * every object has checks, if only to say that they do not apply to it - so it
+ * is what the group opens on, and the group is always enabled.
  *
  * Simulation is enabled only once the daemon has said there is at least one: a
  * part, an assembly or a scene with a 'simulate:' section that names a simulation.
@@ -669,13 +678,13 @@ function simulated(message: ShowMessage | undefined): boolean {
  * the group to read, and the strip says it in the tab's tooltip instead.
  *
  * Process Emulation is a placeholder, in the strip so that its shape is the one
- * it will keep, and always disabled. So the group is enabled exactly when
- * Simulation is, which is what 'tabsFor' reads off this strip.
+ * it will keep, and always disabled.
  */
 function validationTabsFor(message: ShowMessage | undefined): TabSpec[] {
     const state = message === undefined ? undefined : simulations;
     const declared = state !== undefined && state !== 'failed' ? state.simulations.length : 0;
     return [
+        { id: 'test', label: 'Test', pane: panes.test },
         {
             id: 'simulation',
             label: 'Simulation',
@@ -774,6 +783,9 @@ async function show(message: ShowMessage): Promise<void> {
     resetRenderTabs('Select this tab to render it.');
     resetManufacturing('Asking PartCAD what this is made of…');
     resetValidation('Asking PartCAD what this declares under simulate:…');
+    testView.setBusy(
+        message.package ? 'Select this tab to run the checks.' : 'PartCAD did not say which package this belongs to.',
+    );
     // Asked for now, whichever tab is open: which Manufacturing tabs apply
     // depends on the answer. No geometry is built for it.
     if (message.package && (message.kind === 'part' || message.kind === 'assembly')) {
@@ -902,6 +914,7 @@ function clear(): void {
     }
     resetRenderTabs('Nothing to render.');
     resetManufacturing('Nothing to show.');
+    testView.setBusy('Nothing to test: select an object.');
     requirements = undefined;
     requirementsView.setBusy('Nothing to show.');
     resetValidation('Nothing to simulate.');
@@ -1230,6 +1243,10 @@ function onLeafSelected(tab: TabId): void {
         verifyRequirements();
         return;
     }
+    if (tab === 'test') {
+        listTests();
+        return;
+    }
     if (tab === 'draft') {
         startDraft();
         return;
@@ -1311,6 +1328,10 @@ function onTabData(
     }
     if (tab === 'requirements') {
         onRequirements(data as RequirementsData | undefined, error);
+        return;
+    }
+    if (tab === 'test') {
+        onTests(data as TestData | undefined, error);
         return;
     }
     if (tab === 'simulation') {
@@ -1469,6 +1490,70 @@ function onRequirements(data: RequirementsData | undefined, error: string | unde
     if ((requirementsShown() !== undefined) !== offered) {
         tabs.setTabs(tabsFor(shown));
     }
+}
+
+/**
+ * Opening the Test tab: list the checks first, which runs nothing, and run them
+ * once the list is on screen (see 'onTests').
+ *
+ * In two steps because the second is as slow as the slowest check - an
+ * interference builds the whole assembly, a simulation starts a simulator - and
+ * a reader who opened the tab to read what a check is should not wait for all
+ * of them to find out.
+ */
+function listTests(): void {
+    if (shown === undefined || !shown.package) {
+        return;
+    }
+    requested.add('test');
+    testView.setBusy('Asking PartCAD which checks apply…');
+    request('test', { verify: false });
+}
+
+/** "Run again": every check, through the cache, as 'pc test' runs them. */
+function runTests(): void {
+    if (shown === undefined || !shown.package) {
+        return;
+    }
+    requested.add('test');
+    testView.markRunning();
+    request('test', { verify: true });
+}
+
+/**
+ * The checks, or their verdicts, have arrived: draw them, and run the checks
+ * if this was only the list.
+ */
+function onTests(data: TestData | undefined, error: string | undefined): void {
+    if (error !== undefined || data === undefined || data === null) {
+        testView.showError(error ?? "PartCAD had nothing to say about this object's checks.");
+        return;
+    }
+    try {
+        testView.show(data, !data.verified);
+    } catch (e: unknown) {
+        testView.showError(`Failed to display this: ${e}`);
+        reportError(`failed to render the 'test' tab: ${e}`);
+        return;
+    }
+    if (!data.verified) {
+        runTests();
+    }
+}
+
+/**
+ * An artifact's button: show the object the check left behind, as the explorer
+ * would, in 3D.
+ *
+ * The panel moves to Design first, as if the reader had clicked it: an artifact
+ * is something to turn and take apart - the two parts of an interference
+ * switched off to leave what they share - and left on this tab, the next show
+ * would only start checking the artifact itself.
+ */
+function showArtifact(artifact: TestArtifact): void {
+    tabs.click('design');
+    designTabs.click('3d');
+    showObject({ type: 'showObject', package: artifact.package, name: artifact.name, kind: artifact.kind });
 }
 
 /** The Build tab's plan, or its pages: the plan is drawn, and the pages asked for after it. */

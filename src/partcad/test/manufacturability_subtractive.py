@@ -90,6 +90,13 @@ class ManufacturabilitySubtractiveTest(Test):
         ]
         return ".subtractive=" + hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]
 
+    def inapplicable(self, shape):
+        if not isinstance(shape, Part):
+            return "only a part is made by a manufacturing method"
+        if PartConfiguration.get_manufacturing_data(shape).method != METHOD_SUBTRACTIVE:
+            return "it is not made by the 'subtractive' method ('manufacturing: method')"
+        return None
+
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         """The three questions, in the order that makes the report readable.
 
@@ -98,14 +105,11 @@ class ManufacturabilitySubtractiveTest(Test):
         that rather than being handed a verdict about a shape, and nothing is
         built for a declaration that was never going to be measured.
         """
-        if not isinstance(shape, Part):
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+        reason = self.inapplicable(shape)
+        if reason is not None:
+            return self.not_applicable(shape, reason)
 
         manufacturing_data = PartConfiguration.get_manufacturing_data(shape)
-        if manufacturing_data.method != METHOD_SUBTRACTIVE:
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
 
         missing = manufacturing_data.missing_fields()
         if missing:

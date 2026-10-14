@@ -44,18 +44,23 @@ class SolidityTest(Test):
     def __init__(self) -> None:
         super().__init__("solidity")
 
+    def inapplicable(self, shape):
+        if isinstance(shape, Sketch):
+            return "a sketch has no solid"
+        if isinstance(shape, Assembly):
+            return "an assembly is checked through its parts, each of which is tested in its own right"
+        return None
+
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         # A sketch has no solid to be the wrong way out, and asking costs a
         # sandbox each time. Answered here rather than by measuring.
         if isinstance(shape, Sketch):
-            self.debug(shape, "Not applicable: a sketch has no solid")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         # An assembly is checked through its parts, each tested in its own
         # right; the compound of a set of parts says nothing they do not.
         if isinstance(shape, Assembly):
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         try:
             result = await shape.get_solidity_async(ctx)

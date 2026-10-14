@@ -48,17 +48,22 @@ class ValidityTest(Test):
     def __init__(self) -> None:
         super().__init__("validity")
 
+    def inapplicable(self, shape):
+        if isinstance(shape, Sketch):
+            return "a sketch is not a body"
+        if isinstance(shape, Assembly):
+            return "an assembly is checked through its parts, each of which is tested in its own right"
+        return None
+
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         # A sketch is edges, wires and faces; 'well formed solid' is not a
         # question it has an answer to.
         if isinstance(shape, Sketch):
-            self.debug(shape, "Not applicable: a sketch is not a body")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         # An assembly is checked through its parts, each in its own right.
         if isinstance(shape, Assembly):
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         try:
             result = await shape.get_solidity_async(ctx)

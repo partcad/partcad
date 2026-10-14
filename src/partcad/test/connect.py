@@ -24,10 +24,15 @@ class ConnectTest(Test):
     def __init__(self) -> None:
         super().__init__("connect")
 
-    async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+    def inapplicable(self, shape):
         if not isinstance(shape, Assembly):
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return "only an assembly or a scene has connection instructions to follow"
+        return None
+
+    async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+        reason = self.inapplicable(shape)
+        if reason is not None:
+            return self.not_applicable(shape, reason)
 
         try:
             problems = await shape.get_connect_problems()

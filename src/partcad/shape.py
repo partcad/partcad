@@ -256,6 +256,12 @@ class Shape(ShapeConfiguration):
 
     errors: list[str]
 
+    # Made by PartCAD for somebody to look at, rather than declared by the
+    # package it is registered in: what a check leaves behind (see
+    # 'test/interference_artifact.py'). It is found by name like any other
+    # object, and left out of what lists the package's declarations.
+    artifact = False
+
     def __init__(self, project_name: str, config: dict) -> None:
         super().__init__(config)
         self.project_name = project_name

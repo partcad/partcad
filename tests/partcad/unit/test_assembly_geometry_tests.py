@@ -46,7 +46,9 @@ class _Shape:
             raise self._raises
         return self._box
 
-    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0, expected=(), opaque=()):
+    async def get_interference_async(
+        self, ctx, min_volume=0.05, min_fraction=0.0, expected=(), opaque=(), keep_common=False
+    ):
         if self._raises:
             raise self._raises
         self.asked_with = (min_volume, min_fraction)
@@ -631,9 +633,9 @@ def test_the_pairs_the_joints_account_for_are_handed_to_the_check(monkeypatch):
     shape = _Assembly(overlaps=[{"a": "beam", "b": "pin", "volume": 5.0}])
     original = shape.get_interference_async
 
-    async def _spy(ctx, min_volume=0.05, min_fraction=0.0, expected=(), opaque=()):
+    async def _spy(ctx, min_volume=0.05, min_fraction=0.0, expected=(), opaque=(), keep_common=False):
         seen["expected"] = list(expected)
-        return await original(ctx, min_volume, min_fraction, expected, opaque)
+        return await original(ctx, min_volume, min_fraction, expected, opaque, keep_common)
 
     shape.get_interference_async = _spy
     # Still filtered from the answer, whether or not the wrapper skipped it.
@@ -699,7 +701,9 @@ def test_the_expected_pairs_are_read_from_an_assembly_that_is_not_instantiated_y
                 ),
             ]
 
-        async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0, expected=(), opaque=()):
+        async def get_interference_async(
+            self, ctx, min_volume=0.05, min_fraction=0.0, expected=(), opaque=(), keep_common=False
+        ):
             self.seen = list(expected)
             return await super().get_interference_async(ctx, min_volume, min_fraction, expected, opaque)
 

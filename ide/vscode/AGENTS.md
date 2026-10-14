@@ -145,10 +145,13 @@ test holds it to `VIEWER_TABS` on the other side.
 
 **The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA, Dynamic FEA, Heat Transfer and
 CFD for a part, then Manufacturing: what is built and what is bought, how to build it, the bill of materials, where
-to buy it and the assembly instructions; then Validation: the simulations the object's `simulate:` section declares, each run and
-shown as the scene before and after. In front of all of them, for an object that declares `requirements:`, a
-Requirements tab: asked about on every show (`requirements.check`, a declaration read) and verified when opened,
-by the same code as `pc test -f requirements`. Only the 3D
+to buy it and the assembly instructions; then Validation: every check `pc test` runs, check by check (Test, first),
+and the simulations the object's `simulate:` section declares, each run and shown as the scene before and after. In
+front of all of them, for an object that declares `requirements:`, a Requirements tab: asked about on every show
+(`requirements.check`, a declaration read) and verified when opened, by the same code as `pc test -f
+requirements`. Validation's Test tab is `test.report`, listed and then run by the same checks and cache as `pc
+test`, beside the text of `partcad/test/catalog.py`, which is also what the documentation lists the checks with --
+edit a check's text there, never in TypeScript. Only the 3D
 view comes over the viewer protocol; every other tab is a question about `<package>:<name>` that the renderer
 cannot ask itself -- the CSP forbids network access and the daemon is behind the host's JSON-RPC connection --
 so it asks the host (`fetchTab`) and the host answers (`tabData`), on first look. Which is why the show
@@ -229,13 +232,13 @@ know. `VIEWER_TABS` in `src/partcad_ide_client/protocol.py` is the third place, 
 and is what gives `pc ide view` its `--analysis-<id>` flags. See
 [docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
-The Simulation tab acts too, and is the one tab whose *group* depends on an answer. Its sibling, Process
-Emulation, is a placeholder and always disabled, so the Validation group is enabled exactly when Simulation is.
-Three things about it are load-bearing:
+The Simulation tab acts too. It sits in the Validation group after Test, which is always enabled -- every
+object has checks -- so the group always is, and opens on Test; Process Emulation, after Simulation, is a
+placeholder and always disabled. Three things about Simulation are load-bearing:
 
-- **Whether Validation applies is asked on every show.** `simulate.list` reads the object's `simulate:`
+- **Whether Simulation applies is asked on every show.** `simulate.list` reads the object's `simulate:`
   section and runs nothing, so it is as cheap as `manufacturing.tree`, and it is asked for the same reason:
-  the group is enabled only once the daemon has said there is at least one simulation. When it arrives the
+  the tab is enabled only once the daemon has said there is at least one simulation. When it arrives the
   panel's *own* strip is rebuilt -- without `keepCurrent`, so a reader who was on Validation for the last
   object lands on it again -- which no other answer does.
 - **A run has a token of its own, not the tab's** (`simulationRuns` in `viewer.ts`). A reader who selects one

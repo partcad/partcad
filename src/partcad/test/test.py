@@ -41,6 +41,17 @@ _reasons: contextvars.ContextVar = contextvars.ContextVar("partcad.test.reasons"
 # short report; this is a bound on a pathological one, not a budget.
 _MAX_REASONS_BYTES = 64 * 1024
 
+# What one object's report is collecting while a check works out its verdict for
+# it: (test, shape, notes), where 'notes' is a list of (level, text) the check
+# said -- 'error' for 'failed()', 'warning' for 'warned()', 'info', 'skipped',
+# 'not-applicable', and 'passed' for what a pass said about itself -- and of
+# ('artifact', dict) for what it left behind to be looked at. Set by
+# 'partcad.test.report', which is what the IDE's Test tab is drawn from; a
+# check run any other way is collected by nobody. Like '_reasons', it notes only
+# what the check says about that shape, not about the objects it tests on the
+# way.
+_report: contextvars.ContextVar = contextvars.ContextVar("partcad.test.report", default=None)
+
 
 def semaphore_wrapper(f):
     async def wrapper(*args, **kwargs):
@@ -128,7 +139,7 @@ class Test(ABC):
             cached_results = await ctx.cache_tests.read_data_async(shape.hash, [cache_key])
             cached_bytes = cached_results.get(cache_key, [])
             if cached_bytes and len(cached_bytes) != 0:
-                return self._replay(shape, bytes(cached_bytes))
+                return await self._replay_async(ctx, shape, bytes(cached_bytes))
 
         token = _reasons.set((self, shape, []))
         try:
@@ -159,31 +170,51 @@ class Test(ABC):
             return bytes([result])
         payload = json.dumps(reasons).encode("utf-8")
         if len(payload) > _MAX_REASONS_BYTES:
-            payload = json.dumps([reason[:1024] for reason in reasons[:16]]).encode("utf-8")
+            # The artifacts are kept whole, and first: each is a few names, and
+            # a verdict read back without them has lost what it pointed at.
+            artifacts = [reason for reason in reasons if isinstance(reason, dict)][:16]
+            said = [reason[:1024] for reason in reasons if isinstance(reason, str)][:16]
+            payload = json.dumps(artifacts + said).encode("utf-8")
         return bytes([result]) + payload
 
-    def _replay(self, shape, cached: bytes) -> bool:
-        """A stored verdict, read back and said again."""
+    async def _replay_async(self, ctx, shape, cached: bytes) -> bool:
+        """A stored verdict, read back and said again, with what it left behind."""
         result = bool(cached[0])
         if result == self.TEST_PASSED:
             if len(cached) != 1:
                 return self.failed(shape, "Invalid cached data")
             return result
-        reasons = []
+        entries = []
         if len(cached) > 1:
             try:
-                reasons = [str(reason) for reason in json.loads(cached[1:].decode("utf-8"))]
+                entries = list(json.loads(cached[1:].decode("utf-8")))
             except Exception:  # pylint: disable=broad-except
                 # Not ours to interpret: the verdict still stands, and the
                 # sentence below says less than it could rather than nothing.
-                reasons = []
+                entries = []
+        reasons = [str(entry) for entry in entries if not isinstance(entry, dict)]
         if not reasons:
             # An entry written before reasons were kept, or a failure that
             # said nothing in the check's own name.
             self.failed(shape, "Failed test result loaded from cache")
         for reason in reasons:
             self.failed(shape, "%s (remembered from an earlier run; 'pc --cache-bypass test' checks again)", reason)
+        for entry in entries:
+            artifact = entry.get("artifact") if isinstance(entry, dict) else None
+            if isinstance(artifact, dict) and await self.restore_artifact_async(ctx, shape, artifact):
+                self.artifact(shape, artifact)
         return result
+
+    async def restore_artifact_async(self, ctx, shape, artifact: dict) -> bool:
+        """Make an artifact a cached verdict names showable again, in this context.
+
+        What a check leaves behind is usually an object it made rather than one
+        a package declares (see 'artifact()'), so a verdict read back in a
+        context that has never run the check names something that is not there
+        yet. A check that leaves such things behind puts them back here, and
+        says whether it could: an artifact that cannot be shown is not offered.
+        """
+        return True
 
     @abstractmethod
     async def test(self, tests_to_run: list["Test"], ctx, shape, test_ctx: dict = {}) -> bool:
@@ -222,6 +253,7 @@ class Test(ABC):
         """
         message = self._log_message_prepare(*args)
         pc_logging.info(f"Test: {shape.project_name}:{shape.name}: {self.name}{message}")
+        self._note(shape, "info", message)
 
     def warned(self, shape, *args) -> bool:
         """What the check found, on an object nobody is going to make.
@@ -235,6 +267,7 @@ class Test(ABC):
         """
         message = self._log_message_prepare(*args)
         pc_logging.warning(f"Test: {shape.project_name}:{shape.name}: {self.name}{message}")
+        self._note(shape, "warning", message)
         return self.TEST_PASSED
 
     def failed(self, shape, *args) -> bool:
@@ -246,6 +279,7 @@ class Test(ABC):
         """
         message = self._log_message_prepare(*args)
         pc_logging.error(f"Test failed: {shape.project_name}:{shape.name}: {self.name}{message}")
+        self._note(shape, "error", message)
         collecting = _reasons.get()
         if collecting is not None and collecting[0] is self and collecting[1] is shape and message:
             # Without the ": " '_log_message_prepare' puts in front of it.
@@ -256,6 +290,7 @@ class Test(ABC):
         """This methods works like logging.error() but prepends the message with the test name and the shape name."""
         message = self._log_message_prepare(*args)
         pc_logging.debug(f"Test passed: {shape.project_name}:{shape.name}: {self.name}{message}")
+        self._note(shape, "passed", message)
         return self.TEST_PASSED
 
     def skipped(self, shape, *args) -> bool:
@@ -279,4 +314,57 @@ class Test(ABC):
         """
         message = self._log_message_prepare(*args)
         pc_logging.warning(f"Test skipped: {shape.project_name}:{shape.name}: {self.name}{message}")
+        self._note(shape, "skipped", message)
         return self.TEST_PASSED
+
+    def not_applicable(self, shape, *args) -> bool:
+        """Nothing to ask of this object: a pass that says why it is one.
+
+        Logged at DEBUG, as it always was -- a check that does not apply is the
+        usual case and says nothing a reader of the run needs -- and noted for a
+        report (see 'partcad.test.report'), which shows it as "not applicable"
+        rather than as a pass the object did nothing to earn.
+        """
+        if args and args[0] is None:
+            # 'inapplicable()' had no reason to give: say nothing rather than "None".
+            args = ()
+        message = self._log_message_prepare(*args)
+        pc_logging.debug(f"Test: {shape.project_name}:{shape.name}: {self.name}: Not applicable{message}")
+        self._note(shape, "not-applicable", message)
+        return self.TEST_PASSED
+
+    def inapplicable(self, shape):
+        """Why this check has nothing to ask of 'shape', or None when it applies.
+
+        Answered from what the object *is* and what it declares, without
+        building or measuring anything and without the cache: what a report
+        asks before deciding whether to run the check at all, so that a check
+        that does not apply is shown as such even where an earlier run left a
+        pass for it in the cache. A check whose 'test()' begins by asking the
+        same question asks it here, so that the two cannot disagree.
+        """
+        return None
+
+    def artifact(self, shape, artifact: dict) -> None:
+        """Leave something behind for whoever reads the verdict to look at.
+
+        An object PartCAD can show -- {'kind', 'package', 'name', 'title',
+        'desc'} -- such as the assembly the interference check puts together of
+        two parts that overlap and what they share (see 'test/interference.py').
+        Noted for a report, and kept with a failure in the cache like what it
+        said, so that a verdict read back from there still has it.
+        """
+        self._note(shape, "artifact", artifact)
+        collecting = _reasons.get()
+        if collecting is not None and collecting[0] is self and collecting[1] is shape:
+            collecting[2].append({"artifact": artifact})
+
+    def _note(self, shape, level: str, message) -> None:
+        """Hand what was said to the report collecting for this check and this shape, if one is."""
+        collecting = _report.get()
+        if collecting is None or collecting[0] is not self or collecting[1] is not shape:
+            return
+        if isinstance(message, str):
+            # Without the ": " '_log_message_prepare' puts in front of it.
+            message = message[2:] if message.startswith(": ") else message
+        collecting[2].append((level, message))

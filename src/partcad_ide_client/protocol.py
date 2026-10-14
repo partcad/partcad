@@ -214,7 +214,7 @@ VIEWER_TABS = {
     "design": ("3d", "2d", "draft"),
     "analysis": ("fea", "dynamic", "thermal", "cfd"),
     "manufacturing": ("bvb", "build", "supply", "bom", "assembly"),
-    "validation": ("simulation",),
+    "validation": ("test", "simulation"),
 }
 
 

@@ -593,6 +593,183 @@ table.grid .numeric {
     color: var(--vscode-foreground);
 }
 
+/*
+ * The Test tab (Validation): every check 'pc test' runs on the left, with a mark
+ * in the colours the editor's own test explorer uses, and the check selected in
+ * the middle - laid out like the Build tab, a list beside a page.
+ */
+.pane.test {
+    display: flex;
+    overflow: hidden;
+}
+
+.test-list {
+    display: flex;
+    flex: 0 0 16rem;
+    flex-direction: column;
+    max-width: 40%;
+    min-height: 0;
+    border-right: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.test-summary {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0.4rem 0.6rem;
+    color: var(--vscode-descriptionForeground);
+    border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.test-rows {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.3rem 0;
+}
+
+.test-run {
+    flex: 0 0 auto;
+    margin: 0.4rem 0.6rem;
+}
+
+.test-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0.6rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.test-row:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.test-row.selected {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.test-row:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.test-row.not-applicable .test-title {
+    color: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+}
+
+.test-row.selected .test-title {
+    color: inherit;
+}
+
+.test-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.test .mark {
+    flex: 0 0 1.2em;
+    text-align: center;
+    font-weight: 700;
+}
+
+.test .mark.passed {
+    color: var(--vscode-testing-iconPassed, #73c991);
+}
+
+.test .mark.failed {
+    color: var(--vscode-testing-iconFailed, #f14c4c);
+}
+
+.test .mark.warned,
+.test .mark.skipped {
+    color: var(--vscode-testing-iconQueued, #cca700);
+}
+
+.test .mark.not-applicable,
+.test .mark.pending,
+.test .mark.unknown {
+    color: var(--vscode-descriptionForeground);
+}
+
+.test-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: auto;
+}
+
+.test-main > .placeholder,
+.test-main > .error {
+    padding: 1rem;
+}
+
+.test-verdict {
+    margin: 0.6rem 0 1rem;
+    padding: 0.5rem 0.8rem;
+    border-left: 3px solid var(--vscode-descriptionForeground);
+    background: var(--vscode-textBlockQuote-background, transparent);
+}
+
+.test-verdict.passed {
+    border-left-color: var(--vscode-testing-iconPassed, #73c991);
+}
+
+.test-verdict.failed {
+    border-left-color: var(--vscode-testing-iconFailed, #f14c4c);
+}
+
+.test-verdict.warned,
+.test-verdict.skipped {
+    border-left-color: var(--vscode-testing-iconQueued, #cca700);
+}
+
+.test-status {
+    margin: 0;
+    font-weight: 600;
+}
+
+.test-findings {
+    margin: 0.4rem 0 0;
+    padding-left: 1.2rem;
+}
+
+.test-findings li {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.test-findings li.error {
+    color: var(--vscode-errorForeground);
+}
+
+.test-findings li.warning {
+    color: var(--vscode-editorWarning-foreground, inherit);
+}
+
+.test-artifact {
+    margin: 0.4rem 0;
+}
+
+.test-artifact p {
+    margin: 0.1rem 0;
+}
+
+.test-artifact .description {
+    color: var(--vscode-descriptionForeground);
+}
+
+.test-doc h3 {
+    margin: 1rem 0 0.3rem;
+    font-size: 1em;
+}
+
+.test-doc pre {
+    padding: 0.4rem 0.6rem;
+    overflow: auto;
+    background: var(--vscode-textCodeBlock-background, transparent);
+}
+
 /* The rows of the supply list are the way in to one item's suppliers. */
 table.selectable tbody tr {
     cursor: pointer;

@@ -75,6 +75,7 @@ def shown(monkeypatch):
         ("--manufacturing-buy", "supply"),
         ("--manufacturing-bom", "bom"),
         ("--manufacturing-assembly", "assembly"),
+        ("--validation-test", "test"),
         ("--validation-simulation", "simulation"),
     ],
 )

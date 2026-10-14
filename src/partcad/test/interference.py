@@ -7,6 +7,7 @@
 from partcad_utils import assy_filter
 
 from ..assembly import Assembly
+from . import interference_artifact
 from .test import Test
 
 # The floor that separates a boolean's arithmetic noise from a real overlap.
@@ -85,10 +86,18 @@ class InterferenceTest(Test):
             config.get("minFraction", 0.0),
         )
 
-    async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+    def inapplicable(self, shape):
         if not isinstance(shape, Assembly):
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return "only an assembly or a scene has parts to overlap"
+        return None
+
+    async def restore_artifact_async(self, ctx, shape, artifact: dict) -> bool:
+        return await interference_artifact.restore_async(ctx, artifact)
+
+    async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+        reason = self.inapplicable(shape)
+        if reason is not None:
+            return self.not_applicable(shape, reason)
 
         config = (shape.config or {}).get("interference") or {}
 
@@ -122,6 +131,9 @@ class InterferenceTest(Test):
                 min_fraction=float(config.get("minFraction", 0.0)),
                 expected=sorted(expected),
                 opaque=sorted(set(plan.opaque)),
+                # What each pair shares, to leave behind for whoever has to
+                # see where it is (see 'interference_artifact').
+                keep_common=True,
             )
         except Exception as e:
             # Not a pass. An assembly that will not realize returns None below
@@ -188,6 +200,11 @@ class InterferenceTest(Test):
                 "'%s' and '%s' share %.3f mm^3" % (overlap["a"], overlap["b"], overlap["volume"]),
             )
             verdict = verdict and said
+            # The two parts and what they share, as an assembly to turn in the
+            # Digital Thread: where the overlap is, which a volume does not say.
+            artifact = await interference_artifact.make_async(ctx, shape, overlap)
+            if artifact is not None:
+                self.artifact(shape, artifact)
         return verdict
 
 
