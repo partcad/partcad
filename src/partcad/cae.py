@@ -9,8 +9,15 @@ Computer-aided *engineering* is the third thing PartCAD does with a shape, besid
 writing it out (`export:`) and drawing it (`render:`). It has the same shape as
 those two and is configured the same way -- a `cae:` section whose subsections are
 file types, each naming the package and script that implements it -- and it is run
-by `pc cae fea` / `pc cae cfd`. What it adds is a second output beside the file:
-the **findings**, a JSON array of what the analysis has to say about the part.
+by `pc cae <analysis>`. What it adds is a second output beside the file: the
+**findings**, a JSON array of what the analysis has to say about the part.
+
+PartCAD runs four analyses, each its own question with its own command:
+
+* `fea` -- does the part hold up under what it carries (`pc cae fea`);
+* `dynamic` -- at what frequencies does it ring, held as it is (`pc cae dynamic`);
+* `thermal` -- how hot does it get, heated and cooled as it is (`pc cae thermal`);
+* `cfd` -- how does a fluid flow through it (`pc cae cfd`).
 
 The boundary conditions are not part of that configuration. They belong to the
 part, because they are a property of the part rather than of whoever analyses it:
@@ -30,17 +37,51 @@ analysis::
             hook:
               left: 30 N         # one named instance carries this
               right: 30 N
+        dynamic:
+          fix:
+            - m3-screw           # held where it is bolted down, and left to ring
+        thermal:
+          temperature:
+            heatsink: 40 C       # held at a temperature
+          heat:
+            chip: 5 W            # heat put in through the port's surface
+          convection:
+            fins: 10             # cooled by the air around it, in W/(m^2*K)
 
-`fix:` names what is held still: either a list of interface types, or a map from
-an interface type to the list of its instances that are held. `load:` names what
-is pulled on: a map from an interface type to one value for all of its instances,
-or a nested map naming the instance. `cfd:` takes the same two keys, with the
-same meaning -- what is held still, and what force the flow puts on it.
+Every key names interfaces the part implements, in one of two shapes. A *set*
+(`fix:`, `outlet:`) is a list of interface types, or a map from an interface type
+to the list of its instances. A *value* (`load:`, `temperature:`, `heat:`,
+`convection:`) is a map from an interface type to one value for all of its
+instances, or a nested map naming the instance. `ROLES` says which analysis reads
+which key and how each is read; an analysis is refused a key it does not read,
+because a key taken silently would read as a boundary condition and not be one.
 
-`load` values are **forces**, stored in newtons. A value may be a bare number or
-a string ending in a unit name (see `parse_force`), and a bare number is read as
-a *mass* in kilograms -- which is what a user writing "the shelf carries 5"
-means. A mass becomes a force by weighing it: `GRAVITY` newtons per kilogram.
+`fea:` takes `fix:` and `load:`. `cfd:` takes the same two -- the walls the fluid
+is held still against, and the force driving it in -- and `outlet:`, where it
+leaves. `dynamic:` takes `fix:` alone: a natural frequency is a property of the
+part and how it is held, not of what it carries. `thermal:` takes
+`temperature:`, `heat:` and `convection:`.
+
+The values are stored in one unit each, whatever unit they were written in:
+
+* `load` values are **forces**, in newtons. A value may be a bare number or a
+  string ending in a unit name (see `parse_force`), and a bare number is read as
+  a *mass* in kilograms -- which is what a user writing "the shelf carries 5"
+  means. A mass becomes a force by weighing it: `GRAVITY` newtons per kilogram.
+* `temperature` values are in **degrees Celsius**; a bare number is one, and
+  "300 K" or "100 F" are converted (see `parse_temperature`).
+* `heat` values are a **power**, in watts, put in through the whole of the
+  port's surface (see `parse_power`).
+* `convection` values are a **film coefficient**, in W/(m^2*K), against the
+  ambient temperature the implementation is configured with (see
+  `parse_film_coefficient`).
+
+Where a condition lands is a port, and a port is a coordinate frame -- and,
+when its interface draws it with a sketch, a surface: the circle of a bore, the
+outline of a mounting pad. The sketch travels with the port to the sandbox, where
+it is imprinted on the part and turned into the faces the condition is applied
+to (see `wrappers/cae_support.py`). A port with no sketch is applied to the face
+it lies on, when it lies on one.
 
 Nothing here imports a CAD library or touches geometry. It reads the
 configuration, converts the units, and hands the result to an implementation that
@@ -51,14 +92,27 @@ from __future__ import annotations
 
 import platform
 import re
-from typing import Optional
+from typing import Callable, Optional
 
-# The two analyses. Each is a file type of the `cae:` section (so an
-# implementation is declared exactly as an `export:` or `render:` one is) and a
-# section a part declares its boundary conditions in.
+# The analyses. Each is a file type of the `cae:` section (so an implementation
+# is declared exactly as an `export:` or `render:` one is), a section a part
+# declares its boundary conditions in, and a `pc cae` subcommand.
 FEA = "fea"
 CFD = "cfd"
-ANALYSES = (FEA, CFD)
+DYNAMIC = "dynamic"
+THERMAL = "thermal"
+# In the order a reader meets them: the structural pair, then heat, then flow.
+# Which is also the order the IDE lays its tabs out in.
+ANALYSES = (FEA, DYNAMIC, THERMAL, CFD)
+
+# What each analysis is called where there is room for words: in a report, a
+# heading, a tab. The name above is what is typed; this is what is read.
+LABELS = {
+    FEA: "FEA",
+    DYNAMIC: "Dynamic FEA",
+    THERMAL: "Heat Transfer",
+    CFD: "CFD",
+}
 
 # Newtons per kilogram. The task this was written for names 9.8 rather than
 # 9.80665; a fraction of a percent means nothing to a finding, and reproducing
@@ -180,6 +234,127 @@ def parse_force(value, what: str = "value") -> float:
     )
 
 
+def _number_and_unit(value, what: str, units, default: Optional[str], kind: str):
+    """A value as (number, unit), with `units` the spellings it may end in.
+
+    The common half of every parser below. A bare number carries `default`; a
+    string is a number followed by one of `units`, matched case-insensitively,
+    longest first, with or without a space in front of it. What a string ends in
+    that is not a unit is a sentence naming the field and what it takes, because
+    that sentence is what `pc cae` prints and the IDE's tab shows.
+    """
+    if isinstance(value, bool):
+        raise CaeConfigError("%s is not a number: %r" % (what, value))
+    if isinstance(value, (int, float)):
+        return float(value), default
+    if not isinstance(value, str) or not value.strip():
+        raise CaeConfigError("%s is not %s: %r" % (what, kind, value))
+
+    text = value.strip()
+    if _NUMBER.match(text):
+        return float(text), default
+    compact = text.lower().replace(" ", "")
+    for unit in sorted(units, key=len, reverse=True):
+        if compact.endswith(unit):
+            number = compact[: len(compact) - len(unit)]
+            if _NUMBER.match(number):
+                return float(number), unit
+    raise CaeConfigError(
+        "%s is not %s: %r. Write a number, or a number and a unit (%s)" % (what, kind, value, ", ".join(sorted(units)))
+    )
+
+
+# Temperature units, as the offset and scale that make each one Celsius. Only
+# these three: a Rankine or a Reaumur in a part file is far likelier to be a typo
+# than a temperature.
+_TEMPERATURE_UNITS = {
+    "c": "c",
+    "°c": "c",
+    "degc": "c",
+    "celsius": "c",
+    "k": "k",
+    "kelvin": "k",
+    "f": "f",
+    "°f": "f",
+    "degf": "f",
+    "fahrenheit": "f",
+}
+
+# The temperature below which nothing is: a held temperature under it is a typo
+# (a kelvin written as Celsius), not a cryostat.
+ABSOLUTE_ZERO = -273.15
+
+
+def parse_temperature(value, what: str = "value") -> float:
+    """One `temperature:` value, in degrees Celsius.
+
+    A bare number is Celsius, because that is what a person writing "the
+    heatsink is held at 40" means. "313 K" and "104 F" are converted. A value
+    below absolute zero is refused rather than solved: it is always a kelvin
+    figure written without its unit, or a sign that should not be there.
+    """
+    number, unit = _number_and_unit(value, what, _TEMPERATURE_UNITS, "c", "a temperature")
+    kind = _TEMPERATURE_UNITS.get(unit, "c")
+    if kind == "k":
+        celsius = number + ABSOLUTE_ZERO
+    elif kind == "f":
+        celsius = (number - 32.0) * 5.0 / 9.0
+    else:
+        celsius = number
+    if celsius < ABSOLUTE_ZERO:
+        raise CaeConfigError("%s is below absolute zero: %r" % (what, value))
+    return celsius
+
+
+_POWER_UNITS = {
+    "w": 1.0,
+    "watt": 1.0,
+    "watts": 1.0,
+    "mw": 1e-3,
+    "kw": 1e3,
+}
+
+
+def parse_power(value, what: str = "value") -> float:
+    """One `heat:` value, in watts: the power put in through the port's surface.
+
+    A power rather than a flux, for the reason `load:` is a force rather than a
+    pressure: it is what a datasheet says about the thing at the port -- a chip
+    dissipates 5 W, whatever the size of the pad it sits on. The implementation
+    divides it by the area it lands on. A negative value is heat taken out,
+    which is a thing a Peltier element does, so it is allowed.
+    """
+    number, unit = _number_and_unit(value, what, _POWER_UNITS, "w", "a power")
+    return number * _POWER_UNITS.get(unit, 1.0)
+
+
+# The ways a film coefficient's unit gets written. Accepted so that a value can
+# say what it is; there is nothing to convert, since this is the only unit.
+_FILM_UNITS = {
+    "w/m2k": 1.0,
+    "w/m^2k": 1.0,
+    "w/m²k": 1.0,
+    "w/(m2k)": 1.0,
+    "w/(m2*k)": 1.0,
+    "w/(m^2*k)": 1.0,
+    "w/(m²·k)": 1.0,
+    "w/m2/k": 1.0,
+}
+
+
+def parse_film_coefficient(value, what: str = "value") -> float:
+    """One `convection:` value: a film coefficient, in W/(m^2*K).
+
+    Roughly 5-25 for still air, 25-250 for moving air, hundreds to thousands
+    for a liquid. A negative one would be a surface that heats up by being
+    cooled, so it is refused.
+    """
+    number, _unit = _number_and_unit(value, what, _FILM_UNITS, None, "a film coefficient")
+    if number < 0:
+        raise CaeConfigError("%s is a negative film coefficient: %r" % (what, value))
+    return number
+
+
 def _instance_names(value, what: str) -> list[str]:
     """The instances a `fix:` entry names: a name, a list of them, or all."""
     if value is None:
@@ -199,22 +374,82 @@ def _instance_names(value, what: str) -> list[str]:
     raise CaeConfigError("%s is neither an interface instance nor a list of them: %r" % (what, value))
 
 
+# The two shapes a boundary condition comes in. A *set* names where something is
+# true -- held still, open to the outside -- and is a list or a map of instances.
+# A *value* says how much of something lands there -- a force, a temperature --
+# and is a map to a number or to a map of numbers per instance. Nothing else:
+# every key any analysis takes is one of the two, which is what lets one parser,
+# one matcher and one schema shape serve them all.
+SET = None
+
+
+class Role:
+    """One key of an analysis section: its name, its shape, how it is read.
+
+    Attributes:
+        key: the key as a part writes it, `fix` or `temperature`.
+        parse: None for a set; for a value, the function turning what was
+            written into the stored unit (`parse_force`, `parse_temperature`).
+        attribute: where `AnalysisConfig` keeps it, for the three keys that
+            predate this table and are read by name -- `fixtures`, `loads`,
+            `outlets`.
+    """
+
+    def __init__(self, key: str, parse: Optional[Callable] = SET, attribute: Optional[str] = None) -> None:
+        """Describe one key; see the class docstring for the fields."""
+        self.key = key
+        self.parse = parse
+        self.attribute = attribute or key
+
+    @property
+    def is_set(self) -> bool:
+        """Whether the key names where (a set) rather than how much (a value)."""
+        return self.parse is SET
+
+
+_FIX = Role("fix", attribute="fixtures")
+_LOAD = Role("load", parse_force, attribute="loads")
+_OUTLET = Role("outlet", attribute="outlets")
+
+# Which keys each analysis reads, in the order a reader of an error meets them.
+#
+# `dynamic:` reads `fix:` and nothing else on purpose: a natural frequency is a
+# property of the part and of how it is held. What it carries changes it too --
+# a mass bolted on rings lower -- but `load:` is a force, and a force is not a
+# mass to vibrate; a key for carried masses is a change of its own.
+#
+# `thermal:` shares no key with the others, because nothing in a heat problem is
+# "held" or "pulled": a surface is held at a temperature, heated, or cooled.
+ROLES = {
+    FEA: (_FIX, _LOAD),
+    CFD: (_FIX, _LOAD, _OUTLET),
+    DYNAMIC: (_FIX,),
+    THERMAL: (
+        Role("temperature", parse_temperature),
+        Role("heat", parse_power),
+        Role("convection", parse_film_coefficient),
+    ),
+}
+
+
 class AnalysisConfig:
     """The boundary conditions one part declares for one analysis.
 
-    Both members are keyed by the interface type as the part spelled it -- short
+    Every member is keyed by the interface type as the part spelled it -- short
     or fully qualified, exactly as `implements:` and `connect:` spell it -- and
     matched against a part's resolved interfaces by `assign_ports()`.
 
     Attributes:
-        analysis: "fea" or "cfd".
-        fixtures: interface type -> the instances held still. `["*"]` for every
-            instance of it.
-        loads: interface type -> instance -> newtons. The instance `"*"` is every
-            instance of that interface.
-        outlets: interface type -> the instances the fluid leaves through, in
-            the same shape as `fixtures`. `cfd:` only -- a stress analysis has
-            nothing to let out.
+        analysis: one of `ANALYSES`.
+        conditions: key -> interface type -> the instances (a set) or
+            instance -> value (a value), for every key `ROLES` gives this
+            analysis, whether or not the part used it. The instance `"*"` is
+            every instance of that interface.
+        fixtures: `conditions["fix"]`: interface type -> the instances held
+            still. Empty for an analysis that takes no `fix:`.
+        loads: `conditions["load"]`: interface type -> instance -> newtons.
+        outlets: `conditions["outlet"]`: the instances the fluid leaves through.
+            `cfd:` only -- a stress analysis has nothing to let out.
         implementation: who runs this analysis, as `<package>:<file type>`, or
             None to leave it to the user configuration. A part that names one is
             saying "this is the solver I was written against", which is a
@@ -224,19 +459,20 @@ class AnalysisConfig:
     """
 
     def __init__(self, analysis: str, config: Optional[dict]) -> None:
-        """Read one `fea:`/`cfd:` section, converting every load to newtons.
+        """Read one analysis section, converting every value to its stored unit.
 
         Raises:
             CaeConfigError: the section is absent, is not a mapping, names a key
-                that is neither `fix:` nor `load:`, or holds a value that is not
-                a force. Every one of those is a sentence rather than a code,
-                because it is what `pc cae` prints and what the IDE's tab shows
-                where the results would have been.
+                this analysis does not read, declares none it does, or holds a
+                value that is not what its key takes. Every one of those is a
+                sentence rather than a code, because it is what `pc cae` prints
+                and what the IDE's tab shows where the results would have been.
         """
+        if analysis not in ROLES:
+            raise CaeConfigError("Unknown analysis '%s'; PartCAD runs %s" % (analysis, ", ".join(ANALYSES)))
         self.analysis = analysis
-        self.fixtures: dict[str, list[str]] = {}
-        self.loads: dict[str, dict[str, float]] = {}
-        self.outlets: dict[str, list[str]] = {}
+        self.roles = ROLES[analysis]
+        self.conditions: dict[str, dict] = {role.key: {} for role in self.roles}
         self.implementation: Optional[str] = None
 
         if config is None:
@@ -244,10 +480,10 @@ class AnalysisConfig:
         if not isinstance(config, dict):
             raise CaeConfigError("'%s:' is not a section: %r" % (analysis, config))
 
-        # 'outlet:' is CFD's and only CFD's. A stress analysis has nothing to
-        # let out, and accepting the word there would let a part say something
-        # that reads as a boundary condition and is not one.
-        keys = ["fix", "load", "desc", "implementation"] + (["outlet"] if analysis == CFD else [])
+        # A key another analysis reads is refused here as firmly as a misspelt
+        # one. `outlet:` on a stress analysis, or `fix:` on a heat one, would
+        # read as a boundary condition and not be one.
+        keys = [role.key for role in self.roles] + ["desc", "implementation"]
         unknown = [key for key in config if key not in keys]
         if unknown:
             raise CaeConfigError(
@@ -255,17 +491,40 @@ class AnalysisConfig:
                 % (
                     analysis,
                     ", ".join(sorted(unknown)),
-                    ", ".join("'%s:'" % key for key in keys if key not in ("desc", "implementation")),
+                    ", ".join("'%s:'" % role.key for role in self.roles),
                 )
             )
 
         self._parse_implementation(config.get("implementation"))
-        self._parse_fix(config.get("fix"))
-        self._parse_load(config.get("load"))
-        self._parse_outlet(config.get("outlet"))
+        for role in self.roles:
+            if role.is_set:
+                self._parse_set(role, config.get(role.key))
+            else:
+                self._parse_values(role, config.get(role.key))
 
-        if not self.fixtures and not self.loads:
-            raise CaeConfigError("'%s:' declares neither 'fix:' nor 'load:'" % analysis)
+        if not any(self.conditions.values()):
+            if analysis in (FEA, CFD):
+                # The sentence these two always said, and that their tests and
+                # the IDE's tab still look for.
+                raise CaeConfigError("'%s:' declares neither 'fix:' nor 'load:'" % analysis)
+            raise CaeConfigError(
+                "'%s:' declares none of %s" % (analysis, ", ".join("'%s:'" % role.key for role in self.roles))
+            )
+
+    @property
+    def fixtures(self) -> dict[str, list[str]]:
+        """What is held still: interface type -> the instances held."""
+        return self.conditions.get("fix", {})
+
+    @property
+    def loads(self) -> dict[str, dict[str, float]]:
+        """What is pulled on: interface type -> instance -> newtons."""
+        return self.conditions.get("load", {})
+
+    @property
+    def outlets(self) -> dict[str, list[str]]:
+        """Where a fluid leaves: interface type -> the instances it leaves by."""
+        return self.conditions.get("outlet", {})
 
     def _parse_implementation(self, implementation) -> None:
         """Read `implementation:`, which names who runs this analysis.
@@ -284,108 +543,92 @@ class AnalysisConfig:
             )
         self.implementation = implementation.strip()
 
-    def _parse_fix(self, fix) -> None:
-        """Read `fix:`, which comes in three shapes that mean two things.
+    def _parse_set(self, role: Role, value) -> None:
+        """Read a set -- `fix:`, `outlet:` -- which comes in three shapes that mean two things.
 
         A bare name and a list of them say "every instance of these interfaces";
         a mapping says which instances, and an entry with nothing under it means
         the whole of that interface again. All three normalize to the same
         `interface -> instances` mapping, so nothing downstream has to know
         which spelling the package used.
+
+        `outlet:` is a set because an incompressible flow is posed by
+        *differences* in pressure. `load:` says what drives the flow in; with
+        nothing saying where it goes, the problem has no downstream reference
+        and a solver answers it with a dead field or with a divergence -- which
+        is what it did, and what that key was added for.
         """
-        if fix is None:
+        if value is None:
             return
-        if isinstance(fix, str):
+        found = self.conditions[role.key]
+        if isinstance(value, str):
             # One interface type, held whole. The degenerate case of the list.
-            self.fixtures[fix] = [EVERY_INSTANCE]
+            found[value] = [EVERY_INSTANCE]
             return
-        if isinstance(fix, list):
-            for entry in fix:
+        if isinstance(value, list):
+            for entry in value:
                 if not isinstance(entry, str):
-                    raise CaeConfigError("'fix:' names an interface that is not a name: %r" % (entry,))
-                self.fixtures[entry] = [EVERY_INSTANCE]
+                    raise CaeConfigError("'%s:' names an interface that is not a name: %r" % (role.key, entry))
+                found[entry] = [EVERY_INSTANCE]
             return
-        if isinstance(fix, dict):
-            for interface, instances in fix.items():
-                self.fixtures[interface] = _instance_names(instances, "'fix: %s:'" % interface)
+        if isinstance(value, dict):
+            for interface, instances in value.items():
+                found[interface] = _instance_names(instances, "'%s: %s:'" % (role.key, interface))
             return
-        raise CaeConfigError("'fix:' is neither a list of interfaces nor a map of them: %r" % (fix,))
+        raise CaeConfigError("'%s:' is neither a list of interfaces nor a map of them: %r" % (role.key, value))
 
-    def _parse_outlet(self, outlet) -> None:
-        """Read `outlet:`, which names where the fluid leaves.
-
-        The same three shapes as `fix:`, and for the same reason: it names
-        interfaces and, where it matters, which instances of them.
-
-        It exists because an incompressible flow is posed by *differences* in
-        pressure. `load:` says what drives the flow in; with nothing saying
-        where it goes, the problem has no downstream reference and a solver
-        answers it with a dead field or with a divergence -- which is what it
-        did, and what this key was added for. A part that names an inlet and no
-        outlet is not asking a harder question, it is asking one that has no
-        answer.
-        """
-        if outlet is None:
-            return
-        if isinstance(outlet, str):
-            self.outlets[outlet] = [EVERY_INSTANCE]
-            return
-        if isinstance(outlet, list):
-            for entry in outlet:
-                if not isinstance(entry, str):
-                    raise CaeConfigError("'outlet:' names an interface that is not a name: %r" % (entry,))
-                self.outlets[entry] = [EVERY_INSTANCE]
-            return
-        if isinstance(outlet, dict):
-            for interface, instances in outlet.items():
-                self.outlets[interface] = _instance_names(instances, "'outlet: %s:'" % interface)
-            return
-        raise CaeConfigError("'outlet:' is neither a list of interfaces nor a map of them: %r" % (outlet,))
-
-    def _parse_load(self, load) -> None:
-        """Read `load:`, converting every value to a force in newtons.
+    def _parse_values(self, role: Role, value) -> None:
+        """Read a value -- `load:`, `temperature:` -- converting each to its stored unit.
 
         Flat (`hook: 5 kg`) applies to every instance of the interface; nested
-        (`rail: {left: 30 N}`) names the instance. Unlike `fix:` there is no
-        list form -- a list of interfaces would say what is loaded without
-        saying with what, which is not a boundary condition.
+        (`rail: {left: 30 N}`) names the instance. Unlike a set there is no list
+        form -- a list of interfaces would say where without saying how much,
+        which is not a boundary condition.
         """
-        if load is None:
+        if value is None:
             return
-        if not isinstance(load, dict):
-            raise CaeConfigError("'load:' is not a map of interfaces to forces: %r" % (load,))
-        for interface, value in load.items():
-            if isinstance(value, dict):
+        if not isinstance(value, dict):
+            raise CaeConfigError("'%s:' is not a map of interfaces to values: %r" % (role.key, value))
+        found = self.conditions[role.key]
+        for interface, amount in value.items():
+            if isinstance(amount, dict):
                 # The nested form: one value per named instance.
-                if not value:
-                    raise CaeConfigError("'load: %s:' names no instance" % interface)
-                self.loads[interface] = {
-                    instance: parse_force(amount, "'load: %s: %s:'" % (interface, instance))
-                    for instance, amount in value.items()
+                if not amount:
+                    raise CaeConfigError("'%s: %s:' names no instance" % (role.key, interface))
+                found[interface] = {
+                    instance: role.parse(each, "'%s: %s: %s:'" % (role.key, interface, instance))
+                    for instance, each in amount.items()
                 }
             else:
-                self.loads[interface] = {EVERY_INSTANCE: parse_force(value, "'load: %s:'" % interface)}
+                found[interface] = {EVERY_INSTANCE: role.parse(amount, "'%s: %s:'" % (role.key, interface))}
 
     @property
     def interfaces(self) -> list[str]:
         """Every interface type this analysis has something to say about."""
-        names = list(self.fixtures)
-        names.extend(name for name in self.loads if name not in names)
-        names.extend(name for name in self.outlets if name not in names)
+        names = []
+        for role in self.roles:
+            names.extend(name for name in self.conditions[role.key] if name not in names)
         return names
 
     def to_data(self) -> dict:
-        """This configuration as the plain data an implementation is handed."""
-        data = {
-            "analysis": self.analysis,
-            "fix": {name: list(instances) for name, instances in self.fixtures.items()},
-            "load": {name: dict(values) for name, values in self.loads.items()},
-        }
-        if self.outlets:
-            # Only when there is one: an implementation that has never heard of
-            # outlets is handed the request it always was, and a part that names
-            # none is not told it has an empty one.
-            data["outlet"] = {name: list(instances) for name, instances in self.outlets.items()}
+        """This configuration as the plain data an implementation is handed.
+
+        `fix` and `load` are always there for the two analyses that have always
+        sent them, empty or not, so an implementation written against them
+        reads exactly what it always read. Every other key is there only when
+        the part used it: an implementation that has never heard of outlets is
+        handed the request it always was, and a part that names none is not told
+        it has an empty one.
+        """
+        data = {"analysis": self.analysis}
+        for role in self.roles:
+            found = self.conditions[role.key]
+            if not found and not (self.analysis in (FEA, CFD) and role.key in ("fix", "load")):
+                continue
+            if role.is_set:
+                data[role.key] = {name: list(instances) for name, instances in found.items()}
+            else:
+                data[role.key] = {name: dict(values) for name, values in found.items()}
         if self.implementation is not None:
             # Carried so that `pc test`'s cache key changes when the part is
             # re-pointed at another solver: two solvers are two answers, and the
@@ -394,12 +637,10 @@ class AnalysisConfig:
         return data
 
     def __repr__(self) -> str:
-        """The parsed conditions, with the loads as the newtons they became."""
-        return "AnalysisConfig(%r, fix=%r, load=%r, outlet=%r)" % (
+        """The parsed conditions, with every value in the unit it became."""
+        return "AnalysisConfig(%r, %s)" % (
             self.analysis,
-            self.fixtures,
-            self.loads,
-            self.outlets,
+            ", ".join("%s=%r" % (role.key, self.conditions[role.key]) for role in self.roles),
         )
 
 
@@ -412,7 +653,7 @@ def config_of(shape, analysis: str) -> Optional[AnalysisConfig]:
     wants to hear about.
     """
     if analysis not in ANALYSES:
-        raise CaeConfigError("Unknown analysis '%s'; PartCAD runs %s" % (analysis, " and ".join(ANALYSES)))
+        raise CaeConfigError("Unknown analysis '%s'; PartCAD runs %s" % (analysis, ", ".join(ANALYSES)))
     get_final_config = getattr(shape, "get_final_config", None)
     config = get_final_config() if callable(get_final_config) else getattr(shape, "config", None)
     if not isinstance(config, dict) or analysis not in config:
@@ -421,7 +662,7 @@ def config_of(shape, analysis: str) -> Optional[AnalysisConfig]:
 
 
 def _matches(record_interface: Optional[str], declared_name: str) -> bool:
-    """Whether a port's interface is the one a `fix:`/`load:` entry names.
+    """Whether a port's interface is the one a boundary condition names.
 
     A part names an interface the way it names one everywhere else: short for one
     of its own package's, qualified for anyone else's. The resolved records carry
@@ -442,16 +683,18 @@ def assign_ports(config: AnalysisConfig, records: list) -> tuple[list, list[str]
     """Attach the boundary conditions to the ports they name.
 
     `records` is what `render_overlay.collect_async()` produces: one entry per
-    port of the shape, carrying the interface it belongs to, the instance, and
-    where it is. Each record that a `fix:` or a `load:` names comes back with a
-    `fix` flag and/or a `load` in newtons on it; the ones nothing names are left
-    out, because an implementation is being told where to hold the part and where
-    to pull it, not what the part's other ports are.
+    port of the shape, carrying the interface it belongs to, the instance, where
+    it is, and the sketch it is drawn with if it has one. Each record that a
+    condition names comes back with that condition on it, under the condition's
+    own key: `True` for a set (`fix`, `outlet`), the value in its stored unit
+    for a value (`load` in newtons, `temperature` in Celsius, ...). The ones
+    nothing names are left out, because an implementation is being told where
+    to hold the part and where to pull it, not what the part's other ports are.
 
-    A load written for every instance of an interface is applied to every
+    A value written for every instance of an interface is applied to every
     instance of it -- **not** divided between them. "This interface carries 5 kg"
     reads as each of them carrying it, which is the conservative reading and the
-    one a user checking a bracket wants.
+    one a user checking a bracket wants; "this pad dissipates 2 W" likewise.
 
     Returns the assigned records and the declarations nothing matched, as
     `(name, reason)` pairs. The reason matters: an interface the part does not
@@ -482,58 +725,57 @@ def assign_ports(config: AnalysisConfig, records: list) -> tuple[list, list[str]
             if _matches(interface, name):
                 interfaces_seen.add(name)
 
-        for name, instances in config.fixtures.items():
-            if not _matches(interface, name):
-                continue
-            # Both spellings are recorded when both apply, because both are
-            # declarations a user could have got wrong on their own.
-            held = [one for one in (EVERY_INSTANCE, instance) if one in instances]
-            if not held:
-                continue
-            matched.update(("fix", name, one) for one in held)
-            entry = entry or dict(record)
-            entry["fix"] = True
-
-        for name, values in config.loads.items():
-            if not _matches(interface, name):
-                continue
-            # The instance's own value wins over the interface-wide one, so it
-            # is the one that counts as used.
-            declared = instance if instance in values else EVERY_INSTANCE
-            amount = values.get(declared)
-            if amount is None:
-                continue
-            matched.add(("load", name, declared))
-            entry = entry or dict(record)
-            entry["load"] = amount
-
-        for name, instances in config.outlets.items():
-            if not _matches(interface, name):
-                continue
-            opened = [one for one in (EVERY_INSTANCE, instance) if one in instances]
-            if not opened:
-                continue
-            matched.update(("outlet", name, one) for one in opened)
-            entry = entry or dict(record)
-            entry["outlet"] = True
+        for role in config.roles:
+            for name, declared in config.conditions[role.key].items():
+                if not _matches(interface, name):
+                    continue
+                if role.is_set:
+                    # Both spellings are recorded when both apply, because both
+                    # are declarations a user could have got wrong on their own.
+                    named = [one for one in (EVERY_INSTANCE, instance) if one in declared]
+                    if not named:
+                        continue
+                    matched.update((role.key, name, one) for one in named)
+                    entry = entry or dict(record)
+                    entry[role.key] = True
+                else:
+                    # The instance's own value wins over the interface-wide one,
+                    # so it is the one that counts as used.
+                    one = instance if instance in declared else EVERY_INSTANCE
+                    amount = declared.get(one)
+                    if amount is None:
+                        continue
+                    matched.add((role.key, name, one))
+                    entry = entry or dict(record)
+                    entry[role.key] = amount
 
         if entry is not None:
-            entry.setdefault("fix", False)
-            entry.setdefault("load", 0.0)
-            # Only where the part has outlets at all, so that a record handed to
-            # an implementation that has never heard of them looks exactly as it
-            # always did.
-            if config.outlets:
-                entry.setdefault("outlet", False)
+            if config.analysis in (FEA, CFD):
+                # What a record handed to a stress or a flow implementation has
+                # always carried, so one written before the others existed reads
+                # it exactly as it did.
+                entry.setdefault("fix", False)
+                entry.setdefault("load", 0.0)
+                # Only where the part has outlets at all, so that a record
+                # handed to an implementation that has never heard of them
+                # looks exactly as it always did.
+                if config.outlets:
+                    entry.setdefault("outlet", False)
+            else:
+                # The newer analyses are told about every key they read, set or
+                # not, so an implementation reads `record["heat"]` rather than
+                # guessing whether an absent key means zero.
+                for role in config.roles:
+                    entry.setdefault(role.key, False if role.is_set else None)
             assigned.append(entry)
 
     unmatched = []
-    for key, declared in (("fix", config.fixtures), ("load", config.loads), ("outlet", config.outlets)):
-        for name, wanted in declared.items():
-            # `fix:` and `outlet:` hold a list of instance names and `load:` a
-            # map of them to forces; iterating any of them yields the names,
-            # which is all this needs.
-            missing = [one for one in wanted if (key, name, one) not in matched]
+    for role in config.roles:
+        for name, wanted in config.conditions[role.key].items():
+            # A set holds a list of instance names and a value a map of them to
+            # amounts; iterating either yields the names, which is all this
+            # needs.
+            missing = [one for one in wanted if (role.key, name, one) not in matched]
             if not missing:
                 continue
             if name not in interfaces_seen:

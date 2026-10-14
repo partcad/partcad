@@ -3086,7 +3086,7 @@ def test_requirements_check_names_what_it_could_not_find(monkeypatch):
 class FakeCae:
     """The subset of ``partcad.cae`` these operations reach for."""
 
-    ANALYSES = ("fea", "cfd")
+    ANALYSES = ("fea", "dynamic", "thermal", "cfd")
     FEA = "fea"
     CFD = "cfd"
 
@@ -3164,9 +3164,9 @@ def test_cae_analyze_refuses_an_analysis_partcad_does_not_run():
     session, _ = make_cae_session()
 
     with pytest.raises(JsonRpcError) as raised:
-        operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "thermal"})
-    assert "thermal" in str(raised.value)
-    assert "fea, cfd" in str(raised.value)
+        operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "acoustics"})
+    assert "acoustics" in str(raised.value)
+    assert "fea, dynamic, thermal, cfd" in str(raised.value)
 
 
 def test_cae_analyze_says_which_part_it_could_not_find():
@@ -3250,6 +3250,8 @@ def test_cae_defaults_answers_for_every_analysis():
 
     assert operations.cae_defaults(session, {}) == {
         "fea": "//pub/feature/cae/calculix:fea",
+        "dynamic": "//pub/feature/cae/calculix:dynamic",
+        "thermal": "//pub/feature/cae/calculix:thermal",
         "cfd": "//pub/feature/cae/calculix:cfd",
     }
 

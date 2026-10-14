@@ -22,6 +22,8 @@ _TAB_HELP = {
     "2d": "the 2D tab: the object rendered to a picture",
     "draft": "the Draft tab: a dimensioned drawing",
     "fea": "the FEA tab, which runs the part's structural analysis",
+    "dynamic": "the Dynamic FEA tab, which finds the part's natural frequencies",
+    "thermal": "the Heat Transfer tab, which runs the part's thermal analysis",
     "cfd": "the CFD tab, which runs the part's flow analysis",
     "bvb": "the Build vs Buy tab",
     "build": "the Build tab: how what is built is made",

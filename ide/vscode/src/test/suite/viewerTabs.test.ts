@@ -14,7 +14,7 @@
 
 import * as assert from 'assert';
 
-import { TabId } from '../../webview/messages';
+import { ANALYSIS_LABELS, ANALYSIS_TABS, TabId, isAnalysisTab } from '../../webview/messages';
 import { TabSpec, Tabs } from '../../webview/tabs';
 
 class FakeElement {
@@ -62,7 +62,10 @@ class FakeElement {
     }
 }
 
-/** A strip of FEA and CFD, and everything it announced. */
+/**
+ * A strip of two of the Analysis tabs, FEA and CFD, and everything it announced.
+ * Two is all the behaviour below needs; what the real strip holds is the last test.
+ */
 function strip(): { tabs: Tabs; bar: FakeElement; panes: Record<string, FakeElement>; opened: TabId[] } {
     const bar = new FakeElement('div');
     const opened: TabId[] = [];
@@ -299,5 +302,45 @@ suite('The tab strips', () => {
         // rule rather than by the request.
         tabs.setTabs(specs(panes, { fea: true, cfd: true }));
         assert.strictEqual(tabs.current, 'cfd');
+    });
+
+    test('the Analysis strip is FEA, Dynamic FEA, Heat Transfer and CFD, in that order', () => {
+        // The id is what 'pc cae' and 'cae.analyze' call the analysis; the label
+        // is what the tab, and the field over its model, call it.
+        assert.deepStrictEqual(
+            ANALYSIS_TABS.map((id) => [id, ANALYSIS_LABELS[id]]),
+            [
+                ['fea', 'FEA'],
+                ['dynamic', 'Dynamic FEA'],
+                ['thermal', 'Heat Transfer'],
+                ['cfd', 'CFD'],
+            ],
+        );
+        // A label for an analysis the strip does not show is one nobody reads.
+        assert.deepStrictEqual(Object.keys(ANALYSIS_LABELS).sort(), [...ANALYSIS_TABS].sort());
+        for (const tab of ANALYSIS_TABS) {
+            assert.strictEqual(isAnalysisTab(tab), true, tab);
+        }
+        assert.strictEqual(isAnalysisTab('3d'), false);
+        assert.strictEqual(isAnalysisTab('analysis'), false);
+
+        // Built into a strip the way the panel builds it, every one is a tab of
+        // its own, under its label, opening on the first.
+        const bar = new FakeElement('div');
+        const tabs = new Tabs(bar as unknown as HTMLElement, () => undefined);
+        tabs.setTabs(
+            ANALYSIS_TABS.map((id) => ({
+                id,
+                label: ANALYSIS_LABELS[id],
+                pane: new FakeElement('div') as unknown as HTMLElement,
+            })),
+        );
+        assert.deepStrictEqual(
+            bar.children.map((child) => child.textContent),
+            ['FEA', 'Dynamic FEA', 'Heat Transfer', 'CFD'],
+        );
+        assert.strictEqual(tabs.current, 'fea');
+        button(bar, 'Heat Transfer').click();
+        assert.strictEqual(tabs.current, 'thermal');
     });
 });
