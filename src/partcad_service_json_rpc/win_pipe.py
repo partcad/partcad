@@ -138,11 +138,30 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
 
     async def handle(reader, writer):
         def sink(event, payload):
+            # On the loop's thread only: an asyncio transport is not thread-safe.
             write_frame(writer, {"jsonrpc": "2.0", "method": event, "params": payload})
 
         def notify(event, payload):
-            # From the drain's thread, so onto the loop rather than written here.
-            loop.call_soon_threadsafe(sink, event, payload)
+            # From another thread -- the worker a request is dispatched on, or
+            # the drain's -- so onto the loop rather than written here.
+            #
+            # The worker used to write through 'sink' itself. The proactor's
+            # write transport keeps its state in plain attributes and carries
+            # each write on from a callback on the loop's thread, so a worker
+            # writing while that callback ran left the two disagreeing about
+            # which write was in flight, and the connection was not safe to use
+            # after that. The editor walks into it on every connection: it asks
+            # for 'log.mode' and then 'activate', so the first event 'activate'
+            # emits arrives while the answer to 'log.mode' is still being
+            # written -- and on Windows each of its connections closed within
+            # milliseconds of that answer.
+            #
+            # Queued in order, and ahead of the request's own answer: that is
+            # handed back to the loop the same way, once the worker returns.
+            with contextlib.suppress(RuntimeError):
+                # The loop has closed: the daemon is on its way out, and there
+                # is nobody left to tell.
+                loop.call_soon_threadsafe(sink, event, payload)
 
         token = connections.add(notify)
         try:
@@ -174,7 +193,7 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
 
                 def _run():
                     with dispatch_lock:
-                        session.emitter.set_sink(sink)
+                        session.emitter.set_sink(notify)
                         try:
                             return dispatcher.dispatch(request, session)
                         finally:
