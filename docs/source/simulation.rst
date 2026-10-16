@@ -1299,8 +1299,10 @@ everything below it follows; it is also the joint's starting value
 What a round trip keeps
 -----------------------
 
-A URDF read as a ``urdf`` assembly and exported, or converted to ASSY and
-exported, is the robot it was: every movable joint under its name, with its
+A URDF read as a ``urdf`` assembly and exported is the robot it was, and so is
+one converted to ASSY and exported, except that the converter folds a chain of
+movable joints through a link with no geometry into its last joint, and says so:
+every movable joint under its name, with its
 type, its frame, its axis, its limits, its dynamics, its soft limits and what it
 mimics, and every shape where it was. An ASSY assembly exported and read back is
 the mechanism it was, joint for joint. What changes is what PartCAD and URDF
@@ -1319,9 +1321,10 @@ mean by a link:
    * - every link that is a rigid body of its own, under its name
      - a link on a fixed joint: it is one body with its parent, so it comes back
        as a shape of the parent's link, where it was
-   * - the kinematics of a chain through a link with no geometry
+   * - the kinematics of a chain through a link with no geometry, read as a
+       ``urdf`` assembly
      - that link's name: the chain comes back through a dummy link named after
-       the joint
+       the joint; converted to ASSY, the chain is folded into its last joint
    * - a cylindrical, universal, ball or screw joint, as a chain URDF can state,
        read back as the joint it was
      - the joint's single native element; and a screw's coupling is a
