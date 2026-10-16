@@ -59,12 +59,6 @@ docs:
     pc sim --json -a pendulum
     ```
 
-dependencies:
-  # The simulator, as in 'feature_simulate': PartCAD implements none.
-  sim-mujoco:
-    type: git
-    url: https://github.com/partcad/partcad-sim-mujoco.git
-
 interfaces:
   axle:
     desc: A horizontal pin a bar hangs from and turns about, along its port's Z axis
@@ -114,7 +108,7 @@ assemblies:
         desc: |
           Released horizontal, the bar passes the bottom at the speed its fall
           gives it, and gets there in a quarter of its period at that amplitude.
-        simulation: sim-mujoco:mujoco
+        simulation: //pub/feature/simulate/mujoco:mujoco
         scene: :bolted
         offset: [[0, 0, 400], [0, 0, 1], 0]
         params:
@@ -154,7 +148,7 @@ assemblies:
     simulate:
       keeps_time:
         desc: Swinging 5 degrees either side of the bottom, the bar keeps the small-angle period
-        simulation: sim-mujoco:mujoco
+        simulation: //pub/feature/simulate/mujoco:mujoco
         scene: :bolted
         offset: [[0, 0, 400], [0, 0, 1], 0]
         params:
