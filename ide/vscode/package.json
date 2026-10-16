@@ -285,7 +285,7 @@
           },
           "partcad.installOnOpen": {
             "default": "false",
-            "description": "Whether to download the package's dependencies (as `pc install` does) the first time a workspace directory is opened. The package installed is the one `partcad.packagePath` points at. Off by default: this downloads the whole transitive dependency closure with force-update on -- for a package that imports the public index that is around a hundred packages and several minutes -- and the daemon serialises every request behind it, so the window stays unresponsive for the duration. Run \"PartCAD: Install the package dependencies\" when you want it.",
+            "description": "Whether to download the package's dependencies (as `pc install` does) the first time a workspace directory is opened. The package installed is the one `partcad.packagePath` points at. Off by default: this downloads the whole transitive dependency closure -- for a package that imports the public index that is around a hundred packages and several minutes -- and the daemon serialises every request behind it, so the window stays unresponsive for the duration. Run \"PartCAD: Install the package dependencies\" when you want it.",
             "enum": [
               "true",
               "false"
@@ -299,14 +299,14 @@
           },
           "partcad.forceUpdate": {
             "default": "false",
-            "description": "Whether to update all dependencies on each run, instead of once a day.",
+            "description": "Force auto-update: whether to fetch every git dependency again each time a package is loaded, following each one's `track:` branch past its pinned `revision:`. Off, a dependency stays at the commit it was downloaded at until `pc update` moves its pin.",
             "enum": [
               "true",
               "false"
             ],
             "enumDescriptions": [
-              "Update all dependencies on each run.",
-              "Update dependencies once a day."
+              "Fetch every git dependency on each load, at the newest commit of the branch it tracks.",
+              "Use each git dependency as downloaded; `pc update` moves the pins."
             ],
             "scope": "machine",
             "type": "string"

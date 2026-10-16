@@ -403,6 +403,14 @@ class Context:
         self.stats_memory = 0
         self.stats_git_ops = 0
 
+        # Whether an import downloaded before is fetched again as it is loaded.
+        # Off: loading never moves a dependency (see
+        # 'ProjectFactoryGit._wants_refresh'). 'pc update' turns it on for the
+        # one pass that follows the pins it has just moved, and on this context
+        # rather than in the user configuration, which a daemon shares between
+        # every context it keeps warm.
+        self.refresh_imports = False
+
         self.mates = {}
         # self.projects contains all projects known to this context
         self.projects = {}
@@ -580,6 +588,29 @@ class Context:
             if not changed:
                 return []
 
+            dropped = self._drop_packages(changed, root_changed)
+
+        pc_logging.info("Reloaded the packages whose configuration changed: %s" % ", ".join(sorted(changed)))
+        return dropped
+
+    def reload_all_packages(self) -> list[str]:
+        """Forget every loaded package, and load the root again from disk.
+
+        'reload_changed_packages' for a caller that knows better than a stat
+        whether anything changed, and that needs every import resolved anew
+        rather than only the ones below a changed file: 'pc update', which has
+        just rewritten the pins in some 'partcad.yaml' files and then has every
+        dependency fetched again - including those a warm context loaded long
+        before, which it would otherwise go on answering from.
+
+        Returns the names of the packages dropped.
+        """
+        with self.lock:
+            return self._drop_packages([consts.ROOT if self.root is None else self.root.name], True)
+
+    def _drop_packages(self, changed: list[str], root_changed: bool) -> list[str]:
+        """Drop the packages 'changed' and everything under them; reload the root if it is one."""
+        with self.lock:
             if root_changed:
                 # Everything but the built-in packages, which are PartCAD's own
                 # files: including the 'onlyInRoot' dependencies, which are
@@ -613,7 +644,6 @@ class Context:
                     self.root = None
                     raise
 
-        pc_logging.info("Reloaded the packages whose configuration changed: %s" % ", ".join(sorted(changed)))
         return dropped
 
     def _config_check_scope(self, packages, recursive: bool) -> list[str]:

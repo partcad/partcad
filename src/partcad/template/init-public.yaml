@@ -12,13 +12,16 @@ dependencies:
   #   path: <relative path>                     # type:local only
   #   url: <url of the package>                 # type:git|tar only
   #   relPath: <relative path within the repo>  # type:git|tar only
-  #   revision: <branch, tag or commit>         # type:git only
+  #   track: <branch to follow>                 # type:git only
+  #   revision: <commit>                        # type:git only, written by `pc update`
   #   web: <package's or maintainer's url>      # optional
   #   poc: <maintainer's email>                 # optional
+  # Run `pc update` to pin `revision:` to where `track:` is now, and again
+  # whenever you want what is newer. Nothing else moves it.
   pub:
     type: git
     url: https://github.com/partcad/partcad-index.git
-    revision: main
+    track: main
 
 sketches:
   # Add sketches here

@@ -13,6 +13,7 @@ import hashlib
 import os
 import re
 import shutil
+import tempfile
 import threading
 import time
 from dataclasses import dataclass
@@ -677,21 +678,167 @@ class _AmbientConfigGuard:
 _ambient_config_guard = _AmbientConfigGuard()
 
 
+def git_config_params(user_config) -> dict[str, str]:
+    """The user's 'git.config' settings, as written into every repository PartCAD makes."""
+    params = {}
+    for key, value in user_config.git_config.items():
+        if key.find("url") != -1 and key.find("insteadOf") != -1:
+            continue
+
+        params[key] = str(value)
+    return params
+
+
+def remote_heads(repo_url, git_config=(), user_config=None) -> list:
+    """What 'repo_url' advertises: every branch and tag, and the commit each is at.
+
+    This is 'git ls-remote', and it is all 'pc update' needs to learn where a
+    tracked branch is: the advertisement is the first thing a server sends, so
+    nothing is downloaded. libgit2 can only ask through a repository, so a
+    throwaway one is made for the question, configured the way a clone would be
+    (a proxy in 'git.config' has to apply here too).
+    """
+    with tempfile.TemporaryDirectory(prefix="partcad-ls-remote-", ignore_cleanup_errors=True) as path:
+        repo = pygit2.init_repository(path, bare=True)
+        try:
+            _apply_git_config(repo, git_config)
+            return repo.remotes.create_anonymous(repo_url).list_heads(callbacks=GitCallbacks(user_config), proxy=True)
+        finally:
+            # Let go of the repository before its directory is removed, which
+            # on Windows cannot happen while a handle is open.
+            repo.free()
+
+
+def default_branch_of(heads) -> str | None:
+    """The branch a remote's 'HEAD' points at, out of what 'remote_heads' returned."""
+    for head in heads:
+        if head.name == "HEAD" and head.symref_target:
+            return head.symref_target.removeprefix("refs/heads/")
+    return None
+
+
+def branch_commit(heads, branch: str) -> str | None:
+    """The commit 'branch' is at, out of what 'remote_heads' returned."""
+    for head in heads:
+        if head.name == "refs/heads/" + branch:
+            return str(head.oid)
+    return None
+
+
+def query_remote(user_config, repo_url, describe: str):
+    """'remote_heads' for 'repo_url', with an import's timeout and retries.
+
+    'describe' says what the question is for, in the messages a failure leaves.
+    """
+    _apply_git_timeout(user_config.git_clone_timeout)
+    max_retries = user_config.get_int("git.clone.retry.max")
+    patience = user_config.get_float("git.clone.retry.patience")
+    git_config = git_config_params(user_config)
+    attempt = 0
+    while True:
+        try:
+            with _ambient_config_guard.honoring_ambient_config():
+                return remote_heads(repo_url, git_config, user_config)
+        except GIT_ERRORS as e:
+            if is_retryable(e) and attempt < max_retries:
+                pc_logging.warning(
+                    "Failed to reach %s for %s. Retrying (%d/%d) in %d secs...",
+                    repo_url,
+                    describe,
+                    attempt + 1,
+                    max_retries,
+                    patience,
+                )
+                time.sleep(patience)
+                attempt += 1
+                continue
+            if is_auth_failure(e):
+                # As for a clone: most often a 'url.*.insteadOf' rewrite in the
+                # ambient git config, so ask once more with it ignored.
+                try:
+                    with _ambient_config_guard.ignoring_ambient_config():
+                        return remote_heads(repo_url, git_config, user_config)
+                except GIT_ERRORS:
+                    pass
+            raise
+
+
+def tracked_commit(user_config, url: str, track: str | None = None) -> tuple[str, str]:
+    """Where branch 'track' of the repository at 'url' is now, as (branch, commit id).
+
+    With no 'track', the branch is the one the remote calls its default. 'url'
+    is the one a dependency declares: the user's 'dependencies.overrides.url'
+    applies here as it does to the import, so the two ask the same server.
+    """
+    repo_url = overridden_url(user_config, url)
+    heads = query_remote(user_config, repo_url, "branch '%s'" % track if track else "its default branch")
+    if not track:
+        track = default_branch_of(heads)
+        if not track:
+            raise pygit2.GitError("%s does not say which branch is its default, so name one to track" % url)
+    commit = branch_commit(heads, track)
+    if commit is None:
+        raise pygit2.GitError("There is no branch '%s' in %s" % (track, url))
+    return track, commit
+
+
+def overridden_url(user_config, url: str) -> str:
+    """'url' as 'dependencies.overrides.url' in the user configuration rewrites it.
+
+    Every reader of a git dependency's URL goes through this - the import that
+    clones it and 'pc update' asking where its branch is - so that the two never
+    talk to different servers about the same dependency.
+    """
+    url_override = user_config.get("dependencies.overrides.url")
+    if url_override:
+        for key, value in url_override.items():
+            if value in url:
+                url = url.replace(value, key)
+    return url
+
+
 class GitImportConfiguration:
+    """What a 'type: git' dependency asks for, after the user configuration has had its say.
+
+    A dependency names its revision two ways, and they mean different things:
+
+    * 'revision:' is the **pin**: a commit id (or, the old way, a branch or a
+      tag) that is checked out, and once it has been downloaded it is never
+      fetched again by loading the package.
+    * 'track:' is the **branch the pin follows**. Loading does not read it at
+      all while there is a pin; 'pc update' does, and moves 'revision:' to
+      where that branch is now. A 'track:' with no 'revision:' yet is checked
+      out at the branch, once, and stays where it landed until 'pc update' pins
+      it.
+
+    The one setting that changes that is 'forceUpdate' -- the "force auto-update"
+    -- under which loading follows 'track:' past the pin, to the branch's
+    newest commit, every time.
+    """
+
     def __init__(self):
         self.import_config_url = self.config_obj.get("url")
         self.import_revision = self.config_obj.get("revision")
+        self.import_track = self.config_obj.get("track")
         self.import_rel_path = self.config_obj.get("relPath")
 
+        self._apply_track()
         self._apply_import_overrides()
 
+    def _apply_track(self):
+        """Decide between the pin and the branch it tracks.
+
+        Before the overrides below, so that 'develIndex' still has the last word
+        on which revision of the public index is used, whatever the dependency
+        says it tracks.
+        """
+        if not self.import_track:
+            return
+        if self.import_revision is None or self.ctx.user_config.force_update:
+            self.import_revision = self.import_track
+
     def _apply_import_overrides(self):
-        # applying url overrides
-        url_override = self.ctx.user_config.get("dependencies.overrides.url")
-        if url_override:
-            for key, value in url_override.items():
-                if value in self.import_config_url:
-                    self.import_config_url = self.import_config_url.replace(value, key)
+        self.import_config_url = overridden_url(self.ctx.user_config, self.import_config_url)
 
         self._apply_devel_index_override()
 
@@ -699,9 +846,9 @@ class GitImportConfiguration:
         """Point the public index at its unreleased branch when asked to.
 
         The public index lives in a repository of its own, and a package
-        imports it at 'main': the revision 'pc init' writes into the dependency,
-        and the default branch a plain import lands on anyway. Either way that is
-        the released state.
+        imports it at 'main': the branch 'pc init' has the dependency track, and
+        the commit 'pc update' pins it to from there. Either way that is the
+        released state.
         'develIndex' is how the staged state is exercised instead, and it names no
         dependency: the index is recognized by the repository its URL points at,
         so it is redirected wherever in the dependency tree it appears and under
@@ -726,13 +873,7 @@ class GitImportConfiguration:
         self.import_revision = consts.DEVEL_INDEX_REVISION
 
     def _git_config(self) -> dict[str, str]:
-        params = {}
-        for key, value in self.ctx.user_config.git_config.items():
-            if key.find("url") != -1 and key.find("insteadOf") != -1:
-                continue
-
-            params[key] = str(value)
-        return params
+        return git_config_params(self.ctx.user_config)
 
 
 @telemetry.instrument()
@@ -839,9 +980,67 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         pc_logging.info("Cloned %s with the ambient git config ignored", self.import_config_url)
         return True
 
+    def _wants_refresh(self) -> bool:
+        """Whether a copy that was downloaded already is to be fetched again.
+
+        Never on its own. A dependency downloaded once is what the package is
+        built from until somebody asks for newer, which is one of two things:
+        'pc update', which moves the pins and then fetches what they name (it
+        sets 'Context.refresh_imports' for the duration), or the "force
+        auto-update" setting, 'forceUpdate', under which every load fetches every
+        branch again.
+
+        There used to be a third: any copy older than a day was refreshed by
+        whatever loaded it next. That is gone on purpose. A dependency that moves
+        while nobody changed anything is a package that builds differently today
+        from yesterday with nothing in it to say why -- and two machines that
+        happened to refresh on different days building different things from
+        the same commit.
+        """
+        return bool(self.ctx.user_config.force_update or getattr(self.ctx, "refresh_imports", False))
+
+    def _refresh(self, cache_path, guard_path):
+        """Move a downloaded copy to the newest commit of what it follows.
+
+        A commit id follows nothing: it names one commit for good, so there is
+        nothing newer to fetch, and asking a server for a commit by its id again
+        is a request not every server serves. A branch or a tag is fetched by
+        name, and no revision at all means the remote's default branch.
+        """
+        revision = self.import_revision
+        if revision is not None and looks_like_commit_id(revision):
+            return
+
+        repo = pygit2.Repository(cache_path)
+        # head.target, not the active branch: checking out a tag or a commit id
+        # leaves HEAD detached, and there is no branch to read there. HEAD works
+        # either way.
+        before = repo.head.target
+        with _ambient_config_guard.honoring_ambient_config():
+            if revision is None:
+                # If there is more than 1 remote branch, we have to explicitly
+                # specify the branch to pull.
+                revision = _default_branch(repo)
+            pc_logging.debug("Refreshing the GIT revision: %s" % revision)
+            with telemetry.start_as_current_span("*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"):
+                fetched = _fetch(repo, revision, user_config=self.ctx.user_config)
+                repo.reset(fetched, ResetMode.HARD)
+        self.ctx.stats_git_ops += 1
+
+        after = repo.head.target
+        if before != after:
+            pc_logging.info("Updated the GIT repo: %s" % self.import_config_url)
+        with open(guard_path, "w") as f:
+            f.write(str(after) if self.import_revision is None else self.import_revision)
+
     def _clone_or_update_repo(self, repo_url, cache_dir=None):
         """
-        Clones a Git repository to a local directory and keeps it up-to-date.
+        Make the revision this dependency names available locally.
+
+        A copy is downloaded once and then used as it is: loading a package does
+        not ask the remote whether anything moved since, so the network is
+        reached only to download a revision that is not here yet, or when a
+        refresh was asked for (see '_wants_refresh').
 
         Args:
           repo_url: URL of the Git repository to clone.
@@ -877,161 +1076,108 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         os.makedirs(cache_dir, exist_ok=True)
         repo_file_lock = FileLock(os.path.join(cache_dir, repo_hash + ".lock"))
 
+        # Written last, once the revision is checked out, so it is what tells a
+        # copy that was downloaded from one that only started to be.
         guard_path = os.path.join(cache_path, ".partcad.git.cloned")
 
         with cache_lock, repo_file_lock:
-            attempt = 0
-            # Bound every network operation below. Without this a stalled
-            # remote hangs forever, and the retry loop never helps because a
-            # hang raises nothing for it to catch.
-            _apply_git_timeout(self.ctx.user_config.git_clone_timeout)
-            max_retries = self.ctx.user_config.get_int("git.clone.retry.max")
-            patience = self.ctx.user_config.get_float("git.clone.retry.patience")
-            while attempt <= max_retries and self.ctx.is_connected():
-                # Check if the repository is already cached.
-                if os.path.exists(cache_path):
-                    # Update the repository if it is already cached.
-                    try:
-                        before = None
-                        now = time.time()
+            if os.path.exists(cache_path) and not os.path.exists(guard_path):
+                # A download that never finished: a process killed mid-clone, a
+                # disk that filled up. Whatever part of the tree arrived is not
+                # the revision, so it is downloaded again rather than built from.
+                pc_logging.warning("Discarding an incomplete copy of %s" % self.import_config_url)
+                shutil.rmtree(cache_path, ignore_errors=True)
 
-                        # Try to open the existing repository and update it.
-                        if self.import_revision is None:
-                            # Import the default branch
-                            if self.ctx.user_config.force_update or (now - os.path.getmtime(guard_path) > 24 * 3600):
-                                repo = pygit2.Repository(cache_path)
-                                before = repo.head.target
+            if os.path.exists(guard_path) and not self._wants_refresh():
+                # Downloaded already, and nobody asked for anything newer. This
+                # is the common case, and it needs no network at all -- not even
+                # the connectivity probe, which is why it is decided up here.
+                pass
+            else:
+                self._download_or_refresh(repo_url, cache_path, guard_path)
 
-                                # If there is more than 1 remote branch, we have to
-                                # explicitly specify the branch to pull.
-                                with _ambient_config_guard.honoring_ambient_config():
-                                    short_branch_name = _default_branch(repo)
-                                    pc_logging.debug("Refreshing the GIT branch: %s" % short_branch_name)
-                                    with telemetry.start_as_current_span(
-                                        "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
-                                    ):
-                                        fetched = _fetch(repo, short_branch_name, user_config=self.ctx.user_config)
-                                        repo.reset(fetched, ResetMode.HARD)
-                                self.ctx.stats_git_ops += 1
-                                os.utime(guard_path, (now, now))
-                        else:
-                            # Import a specific revision
-                            if self.ctx.user_config.force_update:
-                                # Ensure "before" doesn't match the desired revision
-                                before = ""
-                            else:
-                                # Read the revision name from the guard file
-                                with open(guard_path, "r") as f:
-                                    before = f.read()
-
-                            stale = now - os.path.getmtime(guard_path) > 24 * 3600
-                            if looks_like_commit_id(self.import_revision):
-                                # A commit id names one immutable commit, so a
-                                # periodic re-check has nothing to find and
-                                # would only ask the server for a commit id by
-                                # name again, which not every server serves.
-                                # An explicit force_update still gets through,
-                                # because it empties "before" above.
-                                stale = False
-
-                            if before != self.import_revision or stale:
-                                repo = pygit2.Repository(cache_path)
-                                # head.target, not the active branch: checking
-                                # out a tag or a commit id leaves HEAD detached,
-                                # and there is no branch to read there. HEAD
-                                # works either way.
-                                before = repo.head.target
-                                # Need to check for updates
-                                with _ambient_config_guard.honoring_ambient_config():
-                                    with telemetry.start_as_current_span(
-                                        "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
-                                    ):
-                                        fetched = _fetch(repo, self.import_revision, user_config=self.ctx.user_config)
-                                        repo.reset(fetched, ResetMode.HARD)
-
-                                self.ctx.stats_git_ops += 1
-                                os.utime(guard_path, (now, now))
-                            else:
-                                # No update was performed
-                                before = None
-
-                        if before is not None:
-                            # Update was performed
-                            after = repo.head.target
-                            if before != after:
-                                pc_logging.info("Updated the GIT repo: %s" % self.import_config_url)
-                            if before != after or self.ctx.user_config.force_update:
-                                with open(guard_path, "w") as f:
-                                    if self.import_revision is None:
-                                        f.write(str(after))
-                                    else:
-                                        f.write(self.import_revision)
-                        break
-                    except GIT_ERRORS as e:
-                        # Check if the error is a transient network failure
-                        if is_retryable(e) and attempt < max_retries:
-                            pc_logging.warning(
-                                "Failed to update repo. Retrying (%d/%d) in %d secs...",
-                                attempt + 1,
-                                max_retries,
-                                patience,
-                            )
-                            time.sleep(patience)
-                        else:
-                            pc_logging.error(
-                                "Failed to update repo %s after %d retries: %s",
-                                self.import_config_url,
-                                attempt,
-                                str(e),
-                            )
-                            # Fall back to using the previous copy
-                else:
-                    # Clone the repository if it's not cached yet.
-                    try:
-                        pc_logging.info("Cloning the GIT repo: %s" % self.import_config_url)
-                        clone_options = get_clone_options(self.import_revision)
-                        with _ambient_config_guard.honoring_ambient_config():
-                            with telemetry.start_as_current_span(
-                                "*ProjectFactoryGit._clone_or_update_repo.{clone_repository}"
-                            ):
-                                repo = self._clone_repo(repo_url, cache_path, clone_options)
-                        self.ctx.stats_git_ops += 1
-                        if self.import_revision is not None:
-                            after = self.import_revision
-                        else:
-                            after = repo.head.target
-
-                        with open(guard_path, "w") as f:
-                            f.write(str(after))
-                        break
-                    except GIT_ERRORS as e:
-                        # Check if the error is a transient network failure
-                        if is_retryable(e) and attempt < max_retries:
-                            pc_logging.warning(
-                                "Failed to clone repo. Retrying (%d/%d) in %d secs...",
-                                attempt + 1,
-                                max_retries,
-                                patience,
-                            )
-                            time.sleep(patience)
-                        else:
-                            # An authentication failure here is most often a
-                            # 'url.*.insteadOf' rewrite in the ambient git config
-                            # sending this anonymous clone to a transport whose
-                            # credentials are not available. Try once more with
-                            # that config ignored, using the URL as written,
-                            # before giving up. Other definitive failures (a 404,
-                            # a missing ref) are reported as-is.
-                            if is_auth_failure(e) and self._clone_ignoring_ambient_config(
-                                repo_url, cache_path, clone_options, guard_path
-                            ):
-                                break
-                            pc_logging.error(
-                                "Failed to clone repo %s after %d retries", self.import_config_url, attempt
-                            )
-                            raise RuntimeError(f"Failed to clone repo: {e}") from e
-                attempt += 1
         if self.import_rel_path is not None:
             cache_path = os.path.join(cache_path, self.import_rel_path)
 
         return cache_path
+
+    def _download_or_refresh(self, repo_url, cache_path, guard_path):
+        """Clone the revision, or refresh the copy there is, retrying what is worth it."""
+        attempt = 0
+        # Bound every network operation below. Without this a stalled
+        # remote hangs forever, and the retry loop never helps because a
+        # hang raises nothing for it to catch.
+        _apply_git_timeout(self.ctx.user_config.git_clone_timeout)
+        max_retries = self.ctx.user_config.get_int("git.clone.retry.max")
+        patience = self.ctx.user_config.get_float("git.clone.retry.patience")
+        while attempt <= max_retries and self.ctx.is_connected():
+            # Check if the repository is already cached.
+            if os.path.exists(cache_path):
+                # Update the repository if it is already cached.
+                try:
+                    self._refresh(cache_path, guard_path)
+                    break
+                except GIT_ERRORS as e:
+                    # Check if the error is a transient network failure
+                    if is_retryable(e) and attempt < max_retries:
+                        pc_logging.warning(
+                            "Failed to update repo. Retrying (%d/%d) in %d secs...",
+                            attempt + 1,
+                            max_retries,
+                            patience,
+                        )
+                        time.sleep(patience)
+                    else:
+                        pc_logging.error(
+                            "Failed to update repo %s after %d retries: %s",
+                            self.import_config_url,
+                            attempt,
+                            str(e),
+                        )
+                        # Fall back to using the previous copy, which is
+                        # complete: only a refresh gets here.
+                        break
+            else:
+                # Clone the repository if it's not cached yet.
+                try:
+                    pc_logging.info("Cloning the GIT repo: %s" % self.import_config_url)
+                    clone_options = get_clone_options(self.import_revision)
+                    with _ambient_config_guard.honoring_ambient_config():
+                        with telemetry.start_as_current_span(
+                            "*ProjectFactoryGit._clone_or_update_repo.{clone_repository}"
+                        ):
+                            repo = self._clone_repo(repo_url, cache_path, clone_options)
+                    self.ctx.stats_git_ops += 1
+                    if self.import_revision is not None:
+                        after = self.import_revision
+                    else:
+                        after = repo.head.target
+
+                    with open(guard_path, "w") as f:
+                        f.write(str(after))
+                    break
+                except GIT_ERRORS as e:
+                    # Check if the error is a transient network failure
+                    if is_retryable(e) and attempt < max_retries:
+                        pc_logging.warning(
+                            "Failed to clone repo. Retrying (%d/%d) in %d secs...",
+                            attempt + 1,
+                            max_retries,
+                            patience,
+                        )
+                        time.sleep(patience)
+                    else:
+                        # An authentication failure here is most often a
+                        # 'url.*.insteadOf' rewrite in the ambient git config
+                        # sending this anonymous clone to a transport whose
+                        # credentials are not available. Try once more with
+                        # that config ignored, using the URL as written,
+                        # before giving up. Other definitive failures (a 404,
+                        # a missing ref) are reported as-is.
+                        if is_auth_failure(e) and self._clone_ignoring_ambient_config(
+                            repo_url, cache_path, clone_options, guard_path
+                        ):
+                            break
+                        pc_logging.error("Failed to clone repo %s after %d retries", self.import_config_url, attempt)
+                        raise RuntimeError(f"Failed to clone repo: {e}") from e
+            attempt += 1

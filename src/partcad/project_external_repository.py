@@ -183,11 +183,12 @@ class ProjectExternalRepository(ProjectPlugin):
             if scoped in self._request_cache:
                 return self._request_cache[scoped]
 
-        # 2. On-disk cache. Skipped on a forced refresh, but consulted anyway
-        #    when offline (there is no way to refresh), mirroring the git/tar
-        #    dependency factories.
+        # 2. On-disk cache. Skipped on a forced refresh - 'forceUpdate', or the
+        #    pass 'pc update' makes - but consulted anyway when offline (there
+        #    is no way to refresh), mirroring the git dependency factory.
         offline = self.ctx.user_config.offline
-        if self._cache is not None and (not self.ctx.user_config.force_update or offline):
+        refresh = self.ctx.user_config.force_update or getattr(self.ctx, "refresh_imports", False)
+        if self._cache is not None and (not refresh or offline):
             cached = await self._read_cache(scoped)
             if cached is not _MISSING:
                 with self._request_lock:

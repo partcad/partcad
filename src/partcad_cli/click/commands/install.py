@@ -11,7 +11,8 @@ from ..service import run
 
 @click.command(help="""Download everything the package needs to be built.
 
-    Fetches all imported packages, then prepares every sketch, part and assembly:
+    Fetches all imported packages, at the revisions they are pinned to -- moving
+    a dependency is 'pc update' -- then prepares every sketch, part and assembly:
     each object's cache key is computed, which downloads the files behind
     'fileFrom' and resolves cross-package references, pulling in the packages the
     objects really depend on. Nothing is built. This is the PartCAD counterpart of

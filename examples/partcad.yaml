@@ -74,9 +74,14 @@ cover:
   package: feature_interface
 
 dependencies:
+  # Tracked, the way every git dependency should be declared, but deliberately
+  # not pinned: CI renders these examples against what the index and the
+  # plugins hold now, which is how a change there that breaks one is noticed.
+  # A package of your own runs 'pc update' to write a 'revision:' under
+  # 'track:', and is then built against that commit until it runs it again.
   pub:
     onlyInRoot: true
     type: git
     url: https://github.com/partcad/partcad-index.git
-    revision: main
+    track: main
   # NOTE: The subdirectories automatically become dependencies of the "local" type

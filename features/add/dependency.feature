@@ -27,19 +27,12 @@ Feature: `pc add dep` command
     And a file named "partcad.yaml" should be created
     When I run "partcad add dep OpenVMP-robots https://github.com/openvmp/openvmp-models.git"
     Then the command should exit with a status code of "0"
-    # And the package structure should be valid
-    And a file named "partcad.yaml" should have YAML content:
-      """
-      private: true
-      partcad: ">=\\d+\\.\\d+\\.\\d+"
-      dependencies:
-        OpenVMP-robots:
-          url: https://github.com/openvmp/openvmp-models.git
-          type: git
-      sketches:
-      parts:
-      assemblies:
-      """
+    # Added pinned: tracking the repository's default branch, at the commit it
+    # is at now -- which moves, so the commit itself cannot be written down here.
+    And a file named "partcad.yaml" should contain "url: https://github.com/openvmp/openvmp-models.git"
+    And a file named "partcad.yaml" should contain "type: git"
+    And a file named "partcad.yaml" should contain "track: main"
+    And a file named "partcad.yaml" should contain "revision: "
     When I run "partcad install"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "https://github.com/openvmp/openvmp-models.git"

@@ -9,14 +9,21 @@ Common options, such as ``-v``/``-q`` (verbosity), ``--no-ansi`` (plain-text log
 
 ``--devel-index`` is one of those common options, and is worth calling out. The public index (the ``pub``
 dependency, published at `partcad-index <https://github.com/partcad/partcad-index>`_) lives in a repository of
-its own, and a package imports it at ``main``: the revision ``pc init`` writes into the dependency, and the
-default branch a plain import lands on anyway. Either way that is the released state. ``--devel-index`` imports
+its own, and a package imports it at ``main``: the branch ``pc init`` has the dependency track, and the one
+``pc update`` pins it to the newest commit of. That is the released state. ``--devel-index`` imports
 its ``devel`` branch instead — the branch that a release fast-forwards ``main`` to — so a change staged there
 can be exercised before it is released. It replaces the revision a package names rather than deferring to it,
 which is what it exists to do. The redirect follows the repository rather than the dependency name, so it
 applies wherever the index appears in the dependency tree and leaves every other dependency alone. The same
 switch is available as the ``PC_DEVEL_INDEX`` environment variable, as ``develIndex`` in the user configuration,
 and as the ``partcad.develIndex`` setting of the VS Code extension.
+
+``--force-update`` is another, and is the "force auto-update" setting. Loading a package never moves a ``git``
+dependency it has downloaded before -- ``pc update`` does that, by rewriting the dependency's ``revision:`` (see
+:ref:`pinning-dependencies`). With ``--force-update`` every load fetches every ``git`` dependency again, and one
+that has ``track:`` is used at the newest commit of that branch instead of at its ``revision:``, without anything
+being written down. The same switch is ``PC_FORCE_UPDATE`` in the environment, ``forceUpdate`` in the user
+configuration, and the ``partcad.forceUpdate`` setting of the VS Code extension.
 
 Every boolean ``PC_*`` variable (``PC_DEVEL_INDEX``, ``PC_FORCE_UPDATE``, ``PC_OFFLINE``, ``PC_CACHE_FILES``, the
 ``PC_TELEMETRY_*`` switches, …) is read the same way: ``1``, ``true``, ``yes``, ``on`` turn it on, and ``0``,
@@ -255,7 +262,8 @@ Package commands
 
 ``pc install``
   Download everything the current package needs to be built - the PartCAD counterpart of ``npm install``.
-  It fetches all imported packages, then prepares every sketch, part and assembly by computing its cache key:
+  It fetches all imported packages at the revisions they are pinned to -- a dependency downloaded before is not
+  moved, which is ``pc update``'s job -- then prepares every sketch, part and assembly by computing its cache key:
   that downloads the files behind ``fileFrom`` and resolves each alias, enrich, compound and assembly link,
   which loads the packages the objects really depend on. Every piece of :ref:`software` is prepared too, by
   fetching its file - it has no cache key, being a file rather than something built out of one. Nothing is
@@ -264,8 +272,13 @@ Package commands
   it too (see :ref:`recursive-names`).
 
 ``pc update``
-  Force update all imported packages to their latest versions. This updates the packages a package imports;
-  to upgrade the PartCAD installation itself, use ``pc upgrade``.
+  Move every ``git`` dependency that has ``track: <branch>`` to the newest commit of that branch, by rewriting its
+  ``revision:`` in ``partcad.yaml``, then fetch every imported package again. It is the one command that moves a
+  dependency: loading a package never does (see :ref:`pinning-dependencies`). Only the packages of this workspace
+  are edited -- the root and the ``local`` packages under it -- never one that was imported. A dependency that
+  tracks nothing but names a branch, or no revision at all, is fetched to that branch's newest commit, with
+  nothing written down. This updates the packages a package imports; to upgrade the PartCAD installation itself,
+  use ``pc upgrade``.
 
 ``pc lint``
   Run linting checks on the files within packages. Name the package as ``-P <package>...`` to check the
@@ -290,6 +303,10 @@ Object commands
 ``pc add``
   Add an object to a package. Subcommands: ``dep`` (a dependency), ``sketch``, ``part``, ``assembly``,
   ``scene``, and ``software``.
+
+  ``pc add dep <name> <url>`` adds a ``git`` dependency pinned, the way ``pc update`` leaves one: tracking the
+  branch the repository calls its default (``--track <branch>`` names another), at the commit that branch is at
+  now. Finding that commit needs the repository, and a dependency it cannot be found for is not added.
 
   Each object subcommand takes a file the package already has, **or an http(s) URL**. Given a URL, the file is
   fetched once so that the declaration can be written with the ``fileHash`` of what came back -- an object

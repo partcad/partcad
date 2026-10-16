@@ -57,7 +57,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-q", "--quiet", action="store_true", help="Decrease logging verbosity.")
     # Dependency management options.
     parser.add_argument("--offline", action="store_true", help="Do not fetch anything from the network.")
-    parser.add_argument("--force-update", action="store_true", help="Force refresh of cached dependencies.")
+    parser.add_argument(
+        "--force-update",
+        action="store_true",
+        help="Force auto-update: fetch every git dependency again as it is loaded, following 'track:' past the pin.",
+    )
     parser.add_argument(
         "--devel-index",
         action="store_true",

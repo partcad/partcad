@@ -35,6 +35,7 @@ docs:
       sim-gazebo:
         type: git
         url: https://github.com/partcad/partcad-sim-gazebo.git
+        track: main
 
     scenes:
       warehouse:

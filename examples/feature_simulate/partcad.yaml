@@ -152,6 +152,7 @@ dependencies:
   sim-mujoco:
     type: git
     url: https://github.com/partcad/partcad-sim-mujoco.git
+    track: main
 
 # What the blocks are made of. A material is not a shape - there is nothing to
 # render or export - it is a set of facts about a substance that the parts refer

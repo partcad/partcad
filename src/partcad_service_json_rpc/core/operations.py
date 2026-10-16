@@ -2217,14 +2217,11 @@ def install(session, params):
     # "this" (not the package name) is what this process has always been
     # labelled with, and what scripts watching for "DONE: Install: this:" match.
     with pc.logging.Process("Install", "this"):
-        # Restore force_update afterwards: the daemon keeps this context warm,
-        # so leaving it set would make every later command re-fetch everything.
-        saved = ctx.user_config.force_update
-        ctx.user_config.force_update = True
-        try:
-            all_packages = ctx.get_all_packages()
-        finally:
-            ctx.user_config.force_update = saved
+        # What the pins name, and nothing newer: downloading a dependency is an
+        # install, moving one is 'pc update'. This used to force a refresh of
+        # every import, which made installing the same package on two days two
+        # different installs.
+        all_packages = ctx.get_all_packages()
         if ctx.stats_git_ops:
             session.emitter.info("Git operations: %s" % ctx.stats_git_ops)
 
@@ -2249,22 +2246,34 @@ def install(session, params):
 
 
 def update(session, params):
-    """Force update all imported packages to their latest versions."""
+    """Move every tracked dependency's 'revision:' to its branch, then fetch every import again.
+
+    See 'partcad.actions.package.update'. The refresh it makes is scoped to this
+    call on the context itself ('Context.refresh_imports'), never left in the
+    user configuration a warm daemon shares with every other context it keeps.
+    """
     ctx = _ctx(session, params)
     if ctx is None:
         return None
-    # As in install(): scope force_update to this call so the warm context does
-    # not stay in force-update mode for every subsequent command.
-    saved = ctx.user_config.force_update
-    ctx.user_config.force_update = True
-    try:
-        packages = list(ctx.get_all_packages())
-    finally:
-        ctx.user_config.force_update = saved
+    pc = session.partcad
+    with pc.logging.Process("Update", "this"):
+        try:
+            stats = pc.actions.package.update(ctx)
+        except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
+            # The files are read again after the pins are written, so a file
+            # that does not parse is reported here as 'context.create' would.
+            raise JsonRpcError(INVALID_CONFIG, "Invalid configuration file", data={"detail": str(e)}) from e
     if ctx.stats_git_ops:
         session.emitter.info("Git operations: %s" % ctx.stats_git_ops)
-    session.emitter.info("Successfully updated %d packages" % len(packages))
-    return {"count": len(packages)}
+    if stats["pinned"] or stats["current"]:
+        session.emitter.info(
+            "Pinned %d tracked dependencies to the tip of their branch, %d were there already"
+            % (stats["pinned"], stats["current"])
+        )
+    if stats["failed"]:
+        session.emitter.error("Failed to update %d tracked dependencies" % stats["failed"])
+    session.emitter.info("Successfully updated %d packages" % stats["count"])
+    return stats
 
 
 # ---- lifecycle -------------------------------------------------------------
@@ -2356,17 +2365,18 @@ def package_load(session, params):
 
 
 def package_refresh(session, params):
-    """Force-refresh all packages and reload the contents."""
+    """Load every package not loaded yet, and report the contents again."""
     if session.partcad is None:
         session.emitter.error("Refreshing packages while PartCAD is not loaded")
         return None
     try:
         session.emitter.info("Beginning to refresh the packages...")
         with session.partcad.logging.Process("Refresh", "this"):
-            saved = session.partcad.user_config.force_update
-            session.partcad.user_config.force_update = True
+            # Loads what is not loaded yet, at what the pins name. It used to
+            # force a refresh of every import as well, which is 'pc update' --
+            # and that moves a dependency by editing 'partcad.yaml', which is
+            # not what a button that says "Reload the package" should do.
             session.partcad_ctx.get_all_packages()
-            session.partcad.user_config.force_update = saved
         _load_package_contents(session)
         session.emitter.info("Completed refreshing the packages")
     except session.partcad.exception.NeedsUpdateException:

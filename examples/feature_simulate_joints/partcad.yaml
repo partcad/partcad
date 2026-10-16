@@ -64,6 +64,7 @@ dependencies:
   sim-mujoco:
     type: git
     url: https://github.com/partcad/partcad-sim-mujoco.git
+    track: main
 
 interfaces:
   axle:

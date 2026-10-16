@@ -1162,6 +1162,28 @@ at all).
   seed is honored on every version) on whichever version is running, so both branches are covered by the CI
   matrix rather than by a comment.
 
+- **Loading never moves a git dependency** (`project_factory_git.py`). A copy is downloaded once, marked done
+  by `.partcad.git.cloned` (written last, so a copy without it is an interrupted clone and is downloaded again),
+  and then used as it is — no network, not even the connectivity probe. Only two things refetch one, both via
+  `ProjectFactoryGit._wants_refresh()`: the "force auto-update" setting `forceUpdate`, and `Context.refresh_imports`,
+  which `pc update` sets on its own context for one pass. There used to be a third — any copy older than a day
+  was refreshed by whatever loaded it next — and it is gone on purpose: it made one commit of a package build
+  differently on different days. Do not bring back a timer.
+
+  A dependency's `revision:` is its pin and `track:` the branch the pin follows (`GitImportConfiguration`).
+  Loading reads `track:` only when there is no `revision:` yet, or under `forceUpdate`, which follows the
+  branch past the pin; `develIndex` is applied after both and still wins. `pc update`
+  (`actions/package/update.py`) is what moves a pin: it asks each tracked branch's remote where it is
+  (`tracked_commit()`, an `ls-remote` — nothing downloaded), writes the commit into `revision:`, then reloads
+  every package (`Context.reload_all_packages()`) and fetches them all under `refresh_imports`. It edits only
+  the workspace — the root and what is reached from it through `local` dependencies and subfolders — never a
+  package that was imported. The edit is one line of text (`dependency_pin.py`), not a YAML round trip, because
+  `partcad.yaml` is a Jinja2 template a person wrote; where one line is not unambiguous it refuses and says what
+  to write by hand. `pc add dep` writes a git dependency already pinned (`Project.add_import()`), and `pc
+  install` fetches what the pins name and moves nothing. Keep `refresh_imports` on the context: a daemon shares
+  one user configuration between every context it keeps warm, which is how `pc install` once left every later
+  command in force-update mode.
+
 ## Schemas and linting
 
 **Neither schema is here.** Both `partcad_utils/schema/partcad.json` (the `partcad.yaml` schema) and

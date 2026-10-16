@@ -353,6 +353,7 @@ installed by hand:
       onlyInRoot: true
       type: git
       url: https://github.com/partcad/partcad-index.git
+      track: main
 
   render:
     pdf:

@@ -984,7 +984,11 @@ class UserConfig(vyper.Vyper):
         self.log_level = self.get_string("logLevel")
 
         # option: forceUpdate
-        # description: update all repositories even if they are fresh
+        # description: the "force auto-update": fetch every git dependency
+        #              again each time a package is loaded, and use one that
+        #              has 'track:' at the newest commit of that branch rather
+        #              than at its 'revision:'. Off, a dependency is used as it
+        #              was first downloaded until 'pc update' moves its pin.
         # values: [True | False]
         # default: False
         self.bind_env("forceUpdate", "PC_FORCE_UPDATE")
