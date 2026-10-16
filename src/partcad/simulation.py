@@ -920,8 +920,10 @@ async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str,
         question = {
             "kind": "simulation",
             "plugin": "%s:%s" % (impl.project.name, impl.format_name),
-            "options": impl.config,
-            "params": declaration.params,
+            # Without the budget: it bounds the run and does not change its
+            # answer, so giving a run longer is no reason to run it again.
+            "options": without_budget(impl.config),
+            "params": without_budget(declaration.params),
             "subject": subject,
             "subject_kind": kind,
             # Declared, never observed: see 'Implementation.environment_cache_key'.
@@ -1022,6 +1024,18 @@ def run_budget(ctx, impl, declaration) -> typing.Tuple[float, str]:
         TIMEOUT_PER_SIMULATED_SECOND,
         duration,
     )
+
+
+def without_budget(mapping) -> dict:
+    """'mapping' without the run's budget in it, for a cache key.
+
+    A budget bounds a run and does not change its answer, so it is in no key:
+    neither the run's ('_artifact_hash') nor the verdict's
+    ('SimTest.cache_key_suffix'). Raising one after a run timed out runs it
+    again anyway -- a timeout is never stored -- and raising one after it
+    answered has nothing to run again for.
+    """
+    return {key: value for key, value in (mapping or {}).items() if key != TIMEOUT_KEY}
 
 
 # What to say about raising the budget, beside every timeout.

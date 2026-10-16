@@ -319,6 +319,34 @@ def test_the_plugin_is_handed_the_budget_it_is_held_to(package, monkeypatch):
     assert seen["timeout"] == 4 + simulation.TIMEOUT_GRACE
 
 
+def _keys(ctx, **params):
+    part = _part(ctx)
+    (declaration,) = simulation.of_shape(part)
+    declaration.params = params
+    run = asyncio.run(simulation.question_key_async(ctx, part, "part", declaration))
+    verdict = asyncio.run(SimTest().cache_key_suffix(ctx, _declared(part, params)))
+    return run, verdict
+
+
+def _declared(part, params):
+    """The part, declaring its simulation with 'params', as an edit to 'partcad.yaml' would."""
+    config = dict(part.config)
+    stays = dict(config["simulate"]["stays"], params=params)
+    config["simulate"] = {"stays": stays}
+    part.config = config
+    return part
+
+
+def test_a_budget_is_in_no_key_so_giving_a_run_longer_runs_nothing_again(package):
+    """A budget bounds a run and does not change its answer."""
+    short, long_ = _keys(package, timeout=5), _keys(package, timeout=500)
+    none = _keys(package)
+
+    assert short[0] is not None
+    assert short == long_ == none
+    assert _keys(package, duration=5.0) != none  # what does change the answer does change the key
+
+
 # --------------------------------------------------------------------------- #
 # A run that does not finish                                                  #
 # --------------------------------------------------------------------------- #

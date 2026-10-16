@@ -136,7 +136,12 @@ class SimTest(ImplementationTest):
         kind = pc_simulation.subject_kind(shape)
         entries = []
         for declaration in declarations:
-            entry = {"name": declaration.name, "config": declaration.config}
+            # The declaration as written, but for the run's budget, which is
+            # in no key (see 'simulation.without_budget').
+            config = dict(declaration.config)
+            if isinstance(config.get("params"), dict):
+                config["params"] = pc_simulation.without_budget(config["params"])
+            entry = {"name": declaration.name, "config": config}
             if declaration.validation:
                 run = await pc_simulation.question_key_async(ctx, shape, kind, declaration)
                 entry["run"] = run if run is not None else "unkeyed-%s" % uuid.uuid4().hex
