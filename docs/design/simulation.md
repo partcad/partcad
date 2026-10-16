@@ -488,7 +488,7 @@ body's parent as the world, and its joint by `joint.kind`:
   link's frame being the moving joint frame and its parts at `joint.tail . placement`; `revolute`/`continuous`/
   `prismatic`/`planar`/`floating` native, everything else a chain; the zero pose, with the starting value reported
   lost; and the URDF factory filling `AssemblyChild.joint` from its joint table, so that a URDF round-trips its
-  kinematics.
+  kinematics (through ASSY too, but for chains folded through links with no geometry; section 8.8c).
 - **Step 12 (SDFormat)**: one link per body, a `<joint>` per joint at `classification.origin`, a native
   `revolute` (never `continuous`), `prismatic`, `screw` (thread from the coupling), `universal` or `ball`, chains
   through dummy links as URDF; a `WORLD` parent as a joint to `world`.
@@ -820,9 +820,10 @@ Writing joints to URDF, reading them from one and converting between the two set
   `angle` off the principal axes) and a floating one's all six, and `connect: {joint:}` keeps the URDF's name. The
   export of a converted URDF is therefore the URDF's own frames and axes back, which 8.8's "the remapped-axis wrinkle
   disappears" needed. Interfaces are deduplicated as before, on the reader's record.
-- **What a round trip keeps**, as tests (`test_urdf_round_trip.py`): URDF -> read -> export -> read, and URDF -> ASSY ->
-  export, keep every movable joint's name, type, frame, axis, limits, effort, velocity, dynamics, soft limits and
-  mimic, and every shape to a micrometre; an ASSY's hand-written revolute, ball and screw read back as themselves. Lost:
+- **What a round trip keeps**, as tests (`test_urdf_round_trip.py`): URDF -> read -> export -> read keeps every
+  movable joint's name, type, frame, axis, limits, effort, velocity, dynamics, soft limits and mimic, and every shape to
+  a micrometre; URDF -> ASSY -> export keeps the same for every joint except one in a chain of movable joints through a
+  link with no geometry, which the converter folds into its last joint (below); an ASSY's hand-written revolute, ball and screw read back as themselves. Lost:
   the starting value; a link on a fixed joint, which is a shape of its parent's link; the name of a link with no
   geometry, replaced by a dummy link; and, in the converter only, the kinematics of a chain through such a link, folded
   into its last joint and reported, since one connection cannot hold freedoms about two points.
@@ -1035,8 +1036,9 @@ interfaces: a URDF joint says nothing about the hardware that implements it.
 
 A `type: urdf` assembly carries its joints without converting: each link node a movable joint moves states that
 joint, and the factory fills `AssemblyChild.joint` from it (section 8.8c). The export writes a link per rigid body and
-a joint per pair of them, so a URDF read, exported and read again, or converted to ASSY and exported, keeps its
-kinematics.
+a joint per pair of them, so a URDF read, exported and read again keeps its kinematics, and so does one converted to
+ASSY and exported, except where the converter folds a chain of movable joints through a link with no geometry into its
+last joint (section 8.8c).
 
 Three mechanisms the URDF support needed, which the joint work builds on:
 
@@ -1103,7 +1105,7 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and the `connect` check | built (#766) |
 | 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes; `wrappers/kinematics.py` | built (#784) |
 | 10 | **MJCF joints**, with a pendulum example checked against its closed form | built (#786, sim-mujoco #12) |
-| 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics | built (#788) |
+| 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics, but for chains the converter folds | built (#788) |
 | 12 | **SDFormat joints** | decided |
 | 13 | Inputs: `initial:` (a configuration) and `drive:` (position, velocity or effort targets over time) on `simulate:`; temporal helpers for validations | planned |
 | 14 | Devices: actuators (torque constant, gear ratio, rotor inertia as MJCF `armature`) and sensors (encoders, IMU, force-torque, contact; cameras later) attached to ports | planned |

@@ -318,3 +318,56 @@ def test_a_chain_read_from_several_urdf_joints_gives_them_their_names_back():
     planned = plan(two_bodies([first, fixed((0, 0, 20)), second], record={"name": "roll"}))
     assert [joint.name for joint in planned.joints] == ["roll", "pitch"]
     assert [link.name for link in planned.links] == ["base", "roll_link1", "arm"]
+
+
+def test_a_link_with_no_geometry_still_states_what_its_body_does(monkeypatch):
+    """A body with nothing to draw keeps its stated mass and its Gazebo settings, and is not warned about.
+
+    'build_link' builds 'urdf_parser_py' objects, which are not installed where
+    these tests run, so the few it uses are stood in for by records of their
+    keyword arguments - which is all that is read back here.
+    """
+    import types
+
+    urdf = types.ModuleType("urdf_parser_py.urdf")
+
+    class _Record:
+        KEYS = ("ixx", "ixy", "ixz", "iyy", "iyz", "izz")
+
+        def __init__(self, *args, **kwargs):
+            self.args, self.__dict__["inertial"] = args, None
+            self.__dict__.update(kwargs)
+
+        def add_aggregate(self, kind, value):
+            raise AssertionError("a link with no geometry was given a %s" % kind)
+
+    for name in ("Link", "Collision", "Mesh", "Visual", "Inertial", "Inertia", "Pose", "Color", "LinkMaterial"):
+        setattr(urdf, name, type(name, (_Record,), {}))
+    package = types.ModuleType("urdf_parser_py")
+    package.urdf = urdf
+    monkeypatch.setitem(sys.modules, "urdf_parser_py", package)
+    monkeypatch.setitem(sys.modules, "urdf_parser_py.urdf", urdf)
+
+    physics = {"mass": 2.0, "centerOfMass": [0.0, 0.0, 10.0], "inertia": {"ixx": 1e-3, "iyy": 1e-3, "izz": 2e-3}}
+    body = types.SimpleNamespace(parts=[], physics=physics, node={"name": "pkg:hub"})
+    state = {
+        "options": {"inertial": True},
+        "planner": types.SimpleNamespace(options={}),
+        "gazebo": [],
+        "unsupported": set(),
+        "properties": {"pkg:hub": {"physics": dict(physics, friction=0.4)}},
+        "warnings": [],
+    }
+
+    link = export_urdf.build_link(export_urdf.LinkPlan("hub", body=body), state)
+
+    assert link.inertial is not None and link.inertial.mass == 2.0
+    assert link.inertial.origin.xyz == [0.0, 0.0, 0.01]
+    assert len(state["gazebo"]) == 1 and "mu1" in __import__("xml.etree.ElementTree").etree.ElementTree.tostring(
+        state["gazebo"][0], encoding="unicode"
+    )
+    assert state["warnings"] == []
+
+    # And the 'world', which is no body at all, states nothing.
+    world = export_urdf.build_link(export_urdf.LinkPlan("world"), dict(state, gazebo=[]))
+    assert world.inertial is None

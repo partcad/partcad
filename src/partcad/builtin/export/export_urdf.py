@@ -835,8 +835,17 @@ def build_link(plan, state):
         link.inertial = carried_inertial(plan.inertial(state["planner"].options))
         return link
     if not placed:
-        # A frame that carries children, with no geometry of its own - the
-        # 'world', or a root that holds nothing but what moves against it.
+        # A link with no geometry of its own - the 'world', or a body that holds
+        # nothing but what moves against it. A body still states what it says
+        # about itself: a measured mass, a Gazebo setting. There is nothing to
+        # weigh, though, so having no mass is not worth a warning here.
+        if plan.body is not None:
+            if state["options"]["inertial"]:
+                link.inertial = carried_inertial(plan.inertial(state["planner"].options))
+            gazebo = gazebo_element(plan.name, link_physics(plan.body, state))
+            if gazebo is not None:
+                state["gazebo"].append(gazebo)
+            state["unsupported"].update(set(physics_of(plan.body.node, state)) - URDF_STATED)
         return link
 
     if state["options"]["inertial"]:
