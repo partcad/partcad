@@ -144,7 +144,13 @@ def process(path, request, fmt, config_pil=None):
             configPIL=config_pil,
         )
 
-        return {"success": True, "exception": None}
+        result = {"success": True, "exception": None}
+        # What the projection had to say about the shape - a colour a part
+        # states that is not one - is said about this picture too, which is
+        # drawn from it.
+        if svg_response.get("warnings"):
+            result["warnings"] = svg_response["warnings"]
+        return result
     except Exception as e:
         wrapper_common.handle_exception(e)
         return {"success": False, "exception": wrapper_common.exception_to_str(e)}

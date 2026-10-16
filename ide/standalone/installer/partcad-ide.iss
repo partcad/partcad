@@ -136,6 +136,18 @@ Name: "addtopath"; Description: "Add ""partcad-ide"" and ""pc"" to PATH (needs a
 [InstallDelete]
 Type: filesandordirs; Name: "{app}\resources\app\extensions\partcad.partcad-*"
 
+; The uninstaller removes what [Files] installed and nothing else, and leaves
+; every directory something else has written into -- {app} itself included. The
+; editor writes into one as it runs: VSCodium 1.140 ships a Node.js compile cache
+; under "resources\app\node-compile-cache" and opens it on Windows asking for
+; "readOnly", which the Node.js inside its Electron (24.21) does not know and
+; ignores, so every editor process that exits cleanly adds an entry there for
+; each module the packaged cache did not cover -- the extension host does, for
+; PartCAD's own extension. It is only a cache, the editor's own, and it goes
+; with the application.
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}\resources\app\node-compile-cache"
+
 [Files]
 Source: "{#AppDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 

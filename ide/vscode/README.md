@@ -27,10 +27,10 @@ Anything that can reach that port displays into the same viewer, including a `pc
 terminal. Set `PARTCAD_IDE_PORT` to move both ends off the default port.
 
 The panel is a strip of tabs over the one object, not just a canvas: groups, **Design** (the object
-itself), **Analysis** (analysing it), **Manufacturing** (making it) and **Validation** (whether it does what it
-is supposed to), each with tabs of its own, then **Operations**, which is always disabled for now. An object that
-declares `requirements:` has a **Requirements** tab in front of all of them. Every group
-shows all of its tabs, disabling what does not apply, and Analysis, Manufacturing and Validation are disabled
+itself), **Analysis** (analysing it), **Manufacturing** (making it) and **Validation** (whether it is what it
+claims to be, and does what it is supposed to), each with tabs of its own, then **Operations**, which is always
+disabled for now. An object that declares `requirements:` has a **Requirements** tab in front of all of them. Every group
+shows all of its tabs, disabling what does not apply, and Analysis and Manufacturing are disabled
 themselves when none of theirs does - hovering over a disabled group says why; each opens on the tab last opened in it while that one applies,
 and on the first that does otherwise.
 
@@ -46,7 +46,8 @@ and on the first that does otherwise.
 | **Manufacturing → Buy** | For whatever is bought: where it can be bought, and a quote per supplier. |
 | **Manufacturing → Bill of Materials** | For a part or an assembly: what has to be procured to have it, as `pc bom` lists it - a made part as the stock it is made from, a sub-assembly with a vendor and an SKU as one item ordered whole. |
 | **Manufacturing → Assembly** | For an assembly: the assembly instructions as a PDF or HTML document, with **Recursive** and **Build parts** (`pc instructions -r -b`) and **Save…**. Manufacturing is disabled for a scene, a sketch or an interface. |
-| **Validation → Simulation** | For a part, an assembly or a scene with a `simulate:` section: the simulations it declares, listed on the left with the first one selected, each name led by a mark saying how its last run went (a green ✓ passed, a red ✗ failed, a red ! could not run, • ran with nothing to check). Selecting one runs it (`pc sim -f <name>`) and shows two pictures the simulation plugin took of the scene — before anything moved on the left, after the run on the right — from the viewpoint the scene is rendered from (its `render: png:` `viewport_origin`/`viewport_up`). Under them, **Criteria**, **Before** and **After** open on a click: the `validation:` expression, and the `before` and `after` objects the plugin reported, as JSON. Over them, as on the Draft tab, **Simulated by** chooses the plugin — MuJoCo or Gazebo, the one the simulation names selected; another is `pc sim --plugin` — and **Simulate** runs it afresh. Validation is disabled for anything that declares no simulation. |
+| **Validation → Test** | Always, and first: for an object of a package, every check `pc test` runs on the object, in the order it runs them, each marked passed, failed, warned, skipped or not applicable (saying why), and the one selected in the middle - what it found, what it is, when it applies and what to do when it fails, the same text as the documentation's list of checks. A failure that left something to look at offers it: an interference shows the two parts and what they share, in 3D. **Run again** asks once more. |
+| **Validation → Simulation** | For a part, an assembly or a scene with a `simulate:` section: the simulations it declares, listed on the left with the first one selected, each name led by a mark saying how its last run went (a green ✓ passed, a red ✗ failed, a red ! could not run, • ran with nothing to check). Selecting one runs it (`pc sim -f <name>`) and shows two pictures the simulation plugin took of the scene — before anything moved on the left, after the run on the right — from the viewpoint the scene is rendered from (its `render: png:` `viewport_origin`/`viewport_up`). Under them, **Criteria**, **Before** and **After** open on a click: the `validation:` expression, and the `before` and `after` objects the plugin reported, as JSON. Over them, as on the Draft tab, **Simulated by** chooses the plugin — MuJoCo or Gazebo, the one the simulation names selected; another is `pc sim --plugin` — and **Simulate** runs it afresh. Simulation is disabled for anything that declares no simulation; Validation itself never is, for its Test tab. |
 | **Validation → Process Emulation** | Nothing yet: always disabled. |
 
 Only the 3D view comes over the viewer protocol. The others are questions about `<package>:<name>` that this

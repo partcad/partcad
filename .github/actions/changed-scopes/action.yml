@@ -256,6 +256,13 @@ runs:
               add packaging ;;
             docs/*|.readthedocs.yaml)
               add docs ;;
+            dev-tools/screenshots/*)
+              # What retakes the screenshots under "docs/source/images", by
+              # driving a VS Code on somebody's desktop. Nothing in CI runs it
+              # and nothing that ships imports it: what it changes is pictures
+              # in the documentation. Named before "dev-tools/*" below, which
+              # would count it as source.
+              add docs ;;
             examples/*)
               # Named before the extension rules below, and before the
               # "AGENTS.md" rule, so that a rendered "README.md" under

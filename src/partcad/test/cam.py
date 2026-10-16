@@ -56,6 +56,18 @@ class CamTest(Test):
         """`pc test -f cam` selects it, and nothing else now starts with `cam`."""
         super().__init__("cam")
 
+    def inapplicable(self, shape):
+        if not isinstance(shape, (Part, Sketch)):
+            return "only a part or a sketch is cut on a machine"
+        try:
+            config = self._config(shape)
+        except pc_cam.CamConfigError:
+            # It asked, and asked wrong: that is the check's to fail.
+            return None
+        if config is None:
+            return "it names no machine to route it on ('cnc:', 'laser:' or 'drill:' under 'manufacturing:')"
+        return None
+
     def _config(self, shape):
         """The job the object declares, or None when this test does not apply.
 
@@ -188,8 +200,7 @@ class CamTest(Test):
             return self.failed(shape, "%s", e)
 
         if config is None:
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         try:
             # Resolved separately from running it, so that failing to resolve

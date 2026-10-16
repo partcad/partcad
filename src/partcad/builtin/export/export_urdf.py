@@ -92,6 +92,7 @@ import sys
 import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
+import appearance  # noqa: E402
 import kinematics  # noqa: E402
 import mass_properties  # noqa: E402
 import ocp_serialize  # noqa: E402
@@ -649,13 +650,13 @@ class Planner:
 def node_geometry(node):
     """The node's own shape as a live TopoDS_Shape, in its own frame, or None.
 
-    The placement carried by the node is deliberately left off: where the part
-    sits in its link is the visual's origin, not part of the geometry.
+    Decoded already: 'shape_tree' carries it on the node. The placement carried
+    by the node is deliberately left off: where the part sits in its link is the
+    visual's origin, not part of the geometry.
     """
     if not ocp_serialize.is_shape_object(node):
         return None
-    without_placement = {key: value for key, value in node.items() if key != ocp_serialize.KEY_LOCATION}
-    return ocp_serialize.decode_shape(without_placement)
+    return node[ocp_serialize.KEY_SHAPE]
 
 
 def write_mesh(shape, path, options):
@@ -717,17 +718,17 @@ def carried_material(properties, state):
 
 
 def color_rgba(text, state):
-    """A PartCAD colour string as URDF's ``rgba``, or None if it is not one."""
-    digits = str(text).lstrip("#")
-    if len(digits) not in (6, 8):
+    """A PartCAD colour string as URDF's ``rgba``, or None if it is not one.
+
+    Read by 'appearance.parse', which is what reads it for every drawing of the
+    part as well: a colour the URDF takes is a colour the part is drawn in.
+    """
+    parsed = appearance.parse(str(text))
+    if parsed is None:
         state["warnings"].append("Ignoring the colour '%s', which is not #RRGGBB or #RRGGBBAA" % text)
         return None
-    try:
-        values = [int(digits[i : i + 2], 16) / 255.0 for i in range(0, len(digits), 2)]
-    except ValueError:
-        state["warnings"].append("Ignoring the colour '%s', which is not #RRGGBB or #RRGGBBAA" % text)
-        return None
-    return [round(v, 6) for v in values] + ([1.0] if len(values) == 3 else [])
+    red, green, blue, alpha = parsed
+    return [round(channel / 255.0, 6) for channel in (red, green, blue)] + [round(alpha, 6)]
 
 
 def gazebo_element(reference, physics, table=None):
@@ -884,7 +885,7 @@ def build_joint(plan, state):
 def process(path, request):
     from urdf_parser_py.urdf import URDF
 
-    root = request["wrapped"]
+    root = request.get("shape_tree")
     if not isinstance(root, dict) or not (
         ocp_serialize.is_shape_object(root) or ocp_serialize.is_assembly_object(root)
     ):

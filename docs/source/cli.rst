@@ -322,7 +322,8 @@ Object commands
   part or an assembly does what its ``simulate:`` section says it does (``sim``; see ``pc sim`` below), and
   whether the object has the ports, interfaces and physical properties its ``requirements:`` say it has to
   (``requirements``; see :ref:`requirements`). Those last seven apply only to an object that declares the
-  matching section, so a package that declares none pays nothing for them. ``requirements`` fails a
+  matching section, so a package that declares none pays nothing for them. Every check is listed, with when it
+  applies and what to do when it fails, in :doc:`digital_thread/testing`. ``requirements`` fails a
   requirement on something it cannot find out -- a mass with no material to work it out from -- rather than
   passing it, and says, for each requirement not met, what it found instead. The features a section lists are
   prose, and are for the ``/pc:validate`` agent skill to judge.
@@ -330,7 +331,7 @@ Object commands
   ``manufacturability`` answered to the name ``cam`` until :ref:`pc cam <cam>` existed, at which point one word
   was answering two questions -- "can this be made at all" and "here is the program that makes it". They are
   different checks now, and ``-f`` filters by name *prefix*: ``-f manufacturability`` selects that check and its
-  three method-specific siblings, and ``-f cam`` selects the route check alone.
+  seven method-specific siblings, and ``-f cam`` selects the route check alone.
 
   Three of them ask something else: not whether the object built, but whether what was built is what
   somebody meant. ``shell`` fails a part that came back as a *surface* rather than as a body -- a set of
@@ -980,12 +981,13 @@ instead.
   One flag per tab of the viewer opens it on that tab, named ``--<group>-<tab>`` the way the viewer's two strips
   read: ``--design-3d``, ``--design-2d``, ``--design-draft``; ``--analysis-fea``, ``--analysis-dynamic``,
   ``--analysis-thermal``, ``--analysis-cfd``; ``--manufacturing-bvb``, ``--manufacturing-build``,
-  ``--manufacturing-buy``, ``--manufacturing-bom``, ``--manufacturing-assembly``; ``--validation-simulation``.
-  With none, the viewer stays on whichever tab it is on. The tab travels with the shape, so it is the window
-  that draws the object that switches; a tab that does not apply to the object (FEA of an assembly) is not
-  opened, and one that is not known yet (Build, until the viewer has worked out what is built; Simulation,
-  until it has read what the object declares under ``simulate:``) is opened as soon as it is. Opening an
-  analysis tab runs the analysis, and opening Simulation runs the first simulation, as clicking them does.
+  ``--manufacturing-buy``, ``--manufacturing-bom``, ``--manufacturing-assembly``; ``--validation-test``,
+  ``--validation-simulation``. With none, the viewer stays on whichever tab it is on. The tab travels with the
+  shape, so it is the window that draws the object that switches; a tab that does not apply to the object (FEA
+  of an assembly) is not opened, and one that is not known yet (Build, until the viewer has worked out what is
+  built; Simulation, until it has read what the object declares under ``simulate:``) is opened as soon as it
+  is. Opening an analysis tab runs the analysis, and opening Simulation runs the first simulation, as clicking
+  them does.
 
   .. code-block:: shell
 

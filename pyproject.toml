@@ -32,7 +32,7 @@
 
 [project]
 name = "partcad"
-version = "0.8.195"
+version = "0.8.200"
 description = "Package manager for CAD models and a modelling framework"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
@@ -207,12 +207,15 @@ pythonpath = [
 # measurement of it there can be, and they counted for nothing. That is the same
 # defect as the five missing package names above, one level down.
 #
-# The eighth is the same again for `builtin/`: the scripts a built-in file type,
-# reader or route is implemented by (`builtin/export/export_urdf.py`,
-# `builtin/import/import_urdf.py` ...) are run by the sandbox from directories
-# with no `__init__.py`, and a unit test reaches them the way it reaches a
-# wrapper. Unlisted, a change to one read as entirely untested however well its
-# tests covered it.
+# The eighth is a path for the same reason. `builtin/` holds the implementations
+# PartCAD ships - every file type `pc render` and `pc export` write, the CAM
+# route, the importers - as scripts the sandbox runs by path, and none of its
+# directories has an `__init__.py` either. Their tests load them in-process
+# (`render_svg.py` drawn with the real kernel, the URDF exporter's arithmetic),
+# and until this entry the report counted every one of those files as never run:
+# `render_svg.py`, `render_raster.py` and `export_urdf.py` all at nought percent
+# with their tests passing, and a pull request changing them told its patch was
+# untested.
 #
 # Keep the list here, above the string -- `addopts` is a TOML string, so a '#'
 # line inside it is passed to pytest as an argument rather than ignored.

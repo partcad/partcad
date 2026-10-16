@@ -161,6 +161,9 @@ a CAD addon, or documentation.
 
   Human-friendly documentation. `docs/source` is the Sphinx tree published to
   [Read the Docs](https://partcad.readthedocs.io/); `docs/source/index.rst` has its table of contents.
+  The screenshots in `docs/source/images` are retaken by a script, `dev-tools/screenshots/shoot.mjs`;
+  [docs/notes/screenshots.md](./docs/notes/screenshots.md) says how, and what each one is of. Retake the ones a
+  change makes wrong - a change to what the IDE draws makes most of them wrong.
 
 ## Development process
 

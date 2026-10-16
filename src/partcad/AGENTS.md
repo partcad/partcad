@@ -99,6 +99,20 @@ at all).
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
 
+- **One object's `pc test` as data is `test/report.py`, and what each check is, `test/catalog.py`.** The report
+  runs the checks `pc test <object>` runs, through `test_cached()`, and only listens: every `failed()`,
+  `warned()`, `info()`, `skipped()`, `not_applicable()` and `artifact()` a check makes is handed to the report
+  collecting for that check and that object (`test._report`). A check says whether it applies in
+  `inapplicable()` -- from what the object is and declares, without building it or reading the cache -- and its
+  `test()` asks the same method, so the two cannot disagree. The catalog is the text of every check, read by
+  the IDE's Test tab and generated into `docs/source/digital_thread/testing.rst`
+  (`python -m partcad.test.catalog --write`); a test fails when a check has no entry or the page is stale. The
+  interference check leaves an assembly behind for each pair it reports (`test/interference_artifact.py`): the
+  two parts where the assembly places them and a sub-assembly `interference` of what they share, as `brep`
+  parts read from content-addressed files under `internalStateDir`, all registered in memory under names worked
+  out from the pair -- so they are found by name and cached like any part -- and kept with a cached failure so
+  that a verdict read back puts them back.
+
 - **What an object is required to be is one module** (`requirements.py`): the `requirements:` section of a
   part, an assembly, a scene or a sketch -- `features` in words, and `ports`, `interfaces` and `physics` where
   any part of each may be null and the rest is a constant or a comparison (`>0`, `!0`, joined with commas). Its
@@ -210,10 +224,10 @@ at all).
   One field of a file type is not a parameter of any one format but a field of the **protocol**:
   `reproducible` (`output.REPRODUCIBLE_KEY`), a boolean defaulting to `false`. It says whether this file has
   to come out byte-for-byte the same every time it is written from the same object, and
-  `Shape._run_implementation_locked()` puts it into *every* request beside `__decode__`, declared or not — so
-  an implementation reads `request["reproducible"]` without asking whether the key exists, and a package that
-  publishes a `render:` implementation of its own means by it what `//builtin/render` means. Unlike `decode`
-  it is not reserved: it has to reach the script. What it costs is why it is off by default — the SVG
+  `Shape._run_implementation_locked()` puts it into *every* request, declared or not — so an implementation
+  reads `request["reproducible"]` without asking whether the key exists, and a package that publishes a
+  `render:` implementation of its own means by it what `//builtin/render` means. It is not reserved: it has to
+  reach the script. What it costs is why it is off by default — the SVG
   projection takes OpenCASCADE's exact hidden-line algorithm over the polygonal one, which is much the slower
   on anything large and is the one that reads past the end of an OCCT allocation. It is a floor and not a
   promise: it settles what PartCAD chooses and leaves the kernel's own arithmetic, on which two architectures
@@ -932,7 +946,7 @@ at all).
   assembly flavor of the ASSY schema (`assy_lint.assembly_schema`) forbids both the way the scene flavor forbids
   `how`. `kinematics` is pure Python beside `mass_properties`, imported by the engine plugins' exporters and the
   URDF exporter (`builtin/export/export_urdf.py`, a link per body and a joint per pair) from the sandbox path; it
-  turns a `decode: false` tree into `bodies()` (parts, frames, parents, joints re-expressed for the
+  turns the shape tree every implementation is handed (`shape_tree`) into `bodies()` (parts, frames, parents, joints re-expressed for the
   body pair, combined physics) and classifies a joint's free steps (`classify()`). Do not give an exporter a copy of
   the rule, and do not make the core depend on an exporter reading it: three exporters deciding for themselves which
   parts are one body is three answers to what falls apart. A scene is also a simulation subject

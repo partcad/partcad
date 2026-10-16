@@ -34,6 +34,7 @@
 
 import * as THREE from 'three';
 
+import { DEFAULT_COLOR } from './appearance';
 import { el } from './dom';
 import { noWebGL, reportError } from './host';
 import { CanvasPainter } from './painter';
@@ -45,8 +46,6 @@ export interface Surface {
     readonly domElement: HTMLElement;
     setSize(width: number, height: number): void;
     render(scene: THREE.Scene, camera: THREE.Camera): void;
-    /** Image-based lighting, where the backend can make it; undefined where it cannot. */
-    environment?(scene: THREE.Scene): THREE.Texture | undefined;
     /** Draw every frame, through the backend's own loop. Absent for the painter, which draws on demand. */
     setAnimationLoop?(callback: (() => void) | null): void;
     /** What the performance readout reports, where the backend counts it. */
@@ -129,7 +128,6 @@ function webglSurface(options: SurfaceOptions): Surface | undefined {
         domElement: renderer.domElement,
         setSize: (width, height) => renderer.setSize(width, height, false),
         render: (scene, camera) => renderer.render(scene, camera),
-        environment: (scene) => new THREE.PMREMGenerator(renderer).fromScene(scene, 0.04).texture,
         setAnimationLoop: (callback) => renderer.setAnimationLoop(callback),
         info: renderer.info,
         dispose: () => {
@@ -181,7 +179,8 @@ function watchDevice(device: Device): () => string | undefined {
 
 /**
  * Draw, once and out of sight, what the panes draw: every kind of material they
- * make, lines, and an environment map.
+ * make - a see-through one among them, which is how a part stating "#RRGGBBAA" is
+ * drawn - lines, and every kind of light, the room's light probe included.
  *
  * An adapter and a renderer that initialised do not make a renderer that draws.
  * three's WebGPU build is written against the specification as it is now, and a
@@ -193,12 +192,7 @@ function watchDevice(device: Device): () => string | undefined {
  * accepted only once it has drawn this - with whatever the GPU validates
  * asynchronously caught as well - and the next of the three is used otherwise.
  */
-async function probe(
-    webgpu: WebGPUModule,
-    renderer: WebGPURenderer,
-    device: Device,
-    lost: () => string | undefined,
-): Promise<void> {
+async function probe(renderer: WebGPURenderer, device: Device, lost: () => string | undefined): Promise<void> {
     device.pushErrorScope('validation');
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 10);
@@ -207,6 +201,7 @@ async function probe(
     box.setAttribute('color', new THREE.BufferAttribute(new Float32Array(box.getAttribute('position').count * 3), 3));
     const materials: THREE.Material[] = [
         new THREE.MeshPhongMaterial({ side: THREE.DoubleSide }),
+        new THREE.MeshPhongMaterial({ transparent: true, opacity: 0.5 }),
         new THREE.MeshLambertMaterial({ vertexColors: true }),
         new THREE.MeshStandardMaterial(),
         new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.5 }),
@@ -215,15 +210,17 @@ async function probe(
     const axes = new THREE.AxesHelper();
     axes.material = lines;
     scene.add(...materials.map((material) => new THREE.Mesh(box, material)), axes);
-    scene.add(new THREE.AmbientLight(), new THREE.DirectionalLight(), new THREE.HemisphereLight());
-    const generator = new webgpu.PMREMGenerator(renderer);
-    const environment = generator.fromScene(new THREE.Scene(), 0.04);
-    scene.environment = environment.texture;
+    scene.add(
+        new THREE.AmbientLight(),
+        new THREE.DirectionalLight(),
+        new THREE.HemisphereLight(),
+        new THREE.PointLight(),
+        new THREE.SpotLight(),
+        new THREE.LightProbe(),
+    );
     try {
         renderer.render(scene, camera);
     } finally {
-        environment.dispose();
-        generator.dispose();
         box.dispose();
         axes.geometry.dispose();
         lines.dispose();
@@ -264,7 +261,7 @@ async function webgpuSurface(what: string, options: SurfaceOptions): Promise<Sur
         gpuRenderer.toneMapping = options.toneMapping ?? THREE.NoToneMapping;
         gpuRenderer.outputColorSpace = THREE.SRGBColorSpace;
         if (!webgpuProven) {
-            await probe(WEBGPU, gpuRenderer, device, lost);
+            await probe(gpuRenderer, device, lost);
             webgpuProven = true;
         }
         // Proven is not promised: a frame that throws after all is said once,
@@ -285,7 +282,6 @@ async function webgpuSurface(what: string, options: SurfaceOptions): Promise<Sur
                     reportError(`${what} stopped drawing with WebGPU: ${error}`);
                 }
             },
-            environment: (scene) => new WEBGPU.PMREMGenerator(gpuRenderer).fromScene(scene, 0.04).texture,
             setAnimationLoop: (callback) => void gpuRenderer.setAnimationLoop(callback),
             info: gpuRenderer.info as unknown as Surface['info'],
             dispose: () => {
@@ -379,8 +375,12 @@ export function trianglesOf(object: THREE.Object3D): number {
  * What a big model is drawn as by the painter while the camera moves. The group
  * is meant to be added to the scene itself, not under 'object', and is placed in
  * world coordinates; 'disposeBoxes' frees it.
+ *
+ * Every box is drawn in 'color' when one is given, and otherwise in the colour of
+ * the mesh it stands for - so that a red part moved about is a red box, and one
+ * whose material has no colour to give is a box of the default one.
  */
-export function boxesOf(object: THREE.Object3D, color: THREE.ColorRepresentation): THREE.Group {
+export function boxesOf(object: THREE.Object3D, color?: THREE.ColorRepresentation): THREE.Group {
     object.updateMatrixWorld(true);
     const boxes = new THREE.Group();
     boxes.visible = false;
@@ -391,10 +391,17 @@ export function boxesOf(object: THREE.Object3D, color: THREE.ColorRepresentation
         }
         const box = new THREE.Box3().setFromObject(mesh);
         if (!box.isEmpty()) {
-            boxes.add(new THREE.Box3Helper(box, color));
+            boxes.add(new THREE.Box3Helper(box, color ?? colorOf(mesh)));
         }
     });
     return boxes;
+}
+
+/** The colour a mesh's (first) material is drawn in, or the default when it has none. */
+function colorOf(mesh: THREE.Mesh): THREE.ColorRepresentation {
+    const material = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as
+        THREE.MeshBasicMaterial | undefined;
+    return material?.color instanceof THREE.Color ? material.color : DEFAULT_COLOR;
 }
 
 export function disposeBoxes(boxes: THREE.Group): void {

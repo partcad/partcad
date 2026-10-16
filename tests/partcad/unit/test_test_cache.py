@@ -145,8 +145,8 @@ def test_an_entry_from_before_reasons_were_kept_reads_as_it_always_did(caplog):
     check = _FailTest()
     shape = _FakeShape(True)
     with caplog.at_level(logging.ERROR):
-        assert check._replay(shape, bytes([False])) is Test.TEST_FAILED
-        assert check._replay(shape, bytes([True])) is Test.TEST_PASSED
+        assert asyncio.run(check._replay_async(None, shape, bytes([False]))) is Test.TEST_FAILED
+        assert asyncio.run(check._replay_async(None, shape, bytes([True]))) is Test.TEST_PASSED
     assert "Failed test result loaded from cache" in caplog.text
 
 
@@ -155,10 +155,84 @@ def test_a_reason_that_will_not_decode_still_leaves_the_verdict(caplog):
 
     check = _FailTest()
     with caplog.at_level(logging.ERROR):
-        assert check._replay(_FakeShape(True), bytes([False]) + b"\xff not json") is Test.TEST_FAILED
+        assert (
+            asyncio.run(check._replay_async(None, _FakeShape(True), bytes([False]) + b"\xff not json"))
+            is Test.TEST_FAILED
+        )
     assert "Failed test result loaded from cache" in caplog.text
 
 
 def test_a_pathological_reason_is_bounded():
     entry = Test._record(Test.TEST_FAILED, ["x" * 200000])
     assert len(entry) < 4096
+
+
+# --------------------------------------------------------------------------- #
+# A remembered failure keeps what it left behind                              #
+# --------------------------------------------------------------------------- #
+
+
+class _ArtifactTest(Test):
+    """Fails, leaving one thing behind to look at; restores it only while 'restorable'."""
+
+    def __init__(self):
+        super().__init__("leaves")
+        self.restorable = True
+        self.restored = []
+
+    async def test(self, tests_to_run, ctx, shape, test_ctx={}):
+        self.artifact(shape, {"kind": "assembly", "package": "pkg", "name": "bracket/overlap"})
+        return self.failed(shape, "it overlaps")
+
+    async def restore_artifact_async(self, ctx, shape, artifact):
+        self.restored.append(artifact["name"])
+        return self.restorable
+
+
+def _collected(check, ctx, shape):
+    """Run 'check' through its cache with a report collecting, as 'partcad.test.report' does."""
+    from partcad.test.test import _report
+
+    notes = []
+
+    async def run():
+        token = _report.set((check, shape, notes))
+        try:
+            return await check.test_cached([], ctx, shape)
+        finally:
+            _report.reset(token)
+
+    return asyncio.run(run()), notes
+
+
+def test_a_remembered_failure_keeps_what_it_left_behind():
+    Test.MAX_CONCURRENT_TESTS = 8
+    check = _ArtifactTest()
+    ctx = _FakeCtx()
+    ctx.cache_tests = _MemoryCache()
+    shape = _FakeShape(True)
+
+    first, notes = _collected(check, ctx, shape)
+    assert first is Test.TEST_FAILED
+    assert ("artifact", {"kind": "assembly", "package": "pkg", "name": "bracket/overlap"}) in notes
+
+    # Read back: the reason is said again, and the artifact is put back first.
+    again, notes = _collected(check, ctx, shape)
+    assert again is Test.TEST_FAILED
+    assert check.restored == ["bracket/overlap"]
+    assert [level for level, _ in notes] == ["error", "artifact"]
+
+    # One that can no longer be put back is not offered.
+    check.restorable = False
+    _, notes = _collected(check, ctx, shape)
+    assert [level for level, _ in notes] == ["error"]
+
+
+def test_the_artifacts_survive_a_failure_too_long_to_keep_whole():
+    reasons = ["x" * 2048] * 100 + [{"artifact": {"name": "overlap"}}]
+    recorded = Test._record(Test.TEST_FAILED, reasons)
+    import json
+
+    kept = json.loads(recorded[1:].decode("utf-8"))
+    assert kept[0] == {"artifact": {"name": "overlap"}}
+    assert all(len(reason) == 1024 for reason in kept[1:])

@@ -85,6 +85,13 @@ class SimTest(ImplementationTest):
         """Named "sim", after `pc sim`: `pc test -f sim` selects it, and nothing else starts with it."""
         super().__init__("sim")
 
+    def inapplicable(self, shape):
+        if pc_simulation.subject_kind(shape) is None:
+            return "only a part, an assembly or a scene declares 'simulate:'"
+        if not pc_simulation.of_shape(shape):
+            return "it declares no simulation ('simulate:')"
+        return None
+
     def _declarations(self, shape) -> list:
         """The simulations this object declares, or nothing when the check does not apply."""
         if pc_simulation.subject_kind(shape) is None:
@@ -158,8 +165,7 @@ class SimTest(ImplementationTest):
 
         declarations = self._declarations(shape)
         if not declarations:
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         if test_ctx.get(FORCE_MANUFACTURING):
             # Reached through another object -- an assembly's manufacturability

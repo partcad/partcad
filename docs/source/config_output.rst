@@ -136,16 +136,22 @@ is looked at from, and ``viewport_up``, which way is up in the picture -- are
 common directions (see :doc:`cli`). Passed that way they layer on top of
 everything below, package and object alike, for that run only.
 
-Three names are not entirely the package's own.
+Two names are not entirely the package's own, and the request has two keys of
+PartCAD's own beside them.
 
-``decode`` is not a parameter at all. It is one of the fields PartCAD reads
-itself -- it says whether the sandbox rebuilds the shape and assembly envelopes
-into live geometry before the implementation sees them (see ``urdf`` under
-`Built-in implementations`_) -- so no package can declare an export parameter
-named ``decode``: a ``decode:`` in a file type's configuration is always that
-flag.
+Every implementation is handed the object it writes twice over, and asks for
+neither. ``wrapped`` is the whole of it as live geometry, which is what a file of
+geometry is written from. ``shape_tree`` is the tree that geometry was decoded
+from, one node per object placed in it, nested as deeply as the assembly goes:
+each node's ``name`` and ``label``, its ``location`` as data rather than baked
+into the geometry, what it says about itself under ``properties`` (its
+``color``, its ``material``, its ``physics``), the ``joint`` it moves on where
+it has one, and on every part its own geometry, decoded, in its own frame, under
+``shape``. Both come out of one decoding of each shape, so the second costs
+nothing an implementation that ignores it would notice. A parameter of a
+package's own cannot be called ``wrapped`` or ``shape_tree``.
 
-``properties`` is the other way round, and it is a parameter -- with a caveat. A
+``properties`` is a parameter -- with a caveat. A
 file type that declares ``properties: true`` is handed, in place of the flag, an
 index of what the shapes being written declare about themselves: their
 ``physics``, ``material`` and ``color``, keyed by the full ``<package>:<name>``
@@ -188,8 +194,8 @@ have been served from the cache has to be built anyway, so that its children
 exist to be walked. An implementation with no use for the properties should not
 pay for that. ``urdf`` is the one built-in file type that asks.
 
-The caveat is that ``properties``, unlike ``decode``, is *not* a reserved field
-name, and PartCAD intercepts it by value rather than by declaration: a package
+The caveat is that ``properties`` is *not* a reserved field name, and PartCAD
+intercepts it by value rather than by declaration: a package
 that declares an ordinary export parameter of its own named ``properties`` and
 gives it the value ``true`` will find that value replaced by the index before
 its implementation sees it. Any other value is passed through untouched, but the
@@ -599,12 +605,24 @@ which package this is.
 
 ``urdf`` is the one built-in file type that is not a single file: it writes a
 ``.urdf`` plus the directory of mesh files it references, which is why
-``Shape.convert()`` refuses it (there is no single payload to hand back) and why
-it declares ``decode: false`` - it is handed the assembly *tree* itself, one
-URDF link per node, rather than the geometry the tree decodes to. Decoding keeps
-the shape of the tree but nothing else about it: every node's ``name`` and
-``label`` is dropped, and its placement is baked into the geometry instead of
-staying readable as the joint origin. See :ref:`sim-urdf` for what it writes.
+``Shape.convert()`` refuses it (there is no single payload to hand back). It is
+written from ``shape_tree`` rather than from the geometry, one URDF link per
+node: the geometry keeps the shape of the tree but nothing else about it, and
+the link names, the mesh names and every joint origin come from what each node
+says. See :ref:`sim-urdf` for what it writes.
+
+``svg``, ``png`` and ``jpeg`` read one thing off ``shape_tree``: what colour each
+part is drawn in. A part is drawn in the ``color`` it states (see
+:ref:`properties`), a part inside an assembly that states one in the assembly's,
+and anything that states none in goldenrod, ``#DAA520`` -- the colour OCCT draws
+a shape nobody coloured, and the colour the IDE's Digital Thread draws it in as
+well. A drawing of several colours is still one hidden-line drawing: a red part
+in front of a goldenrod one hides it. Each colour is a layer of the SVG of its
+own, ``Visible`` for goldenrod and ``Visible-RRGGBB`` for any other, and a
+``color`` that is not ``#RRGGBB`` or ``#RRGGBBAA`` is drawn in goldenrod with a
+warning saying so. That holds as much for a file type of a package's own that
+names ``render_svg.py`` as its implementation, as ``examples/feature_interface``
+does. ``dxf`` carries no colour at all.
 
 .. _cae-section:
 

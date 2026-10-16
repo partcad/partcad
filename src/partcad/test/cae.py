@@ -57,6 +57,16 @@ class CaeTest(ImplementationTest):
         super().__init__(analysis)
         self.analysis = analysis
 
+    def inapplicable(self, shape):
+        if not isinstance(shape, Part):
+            return "only a part is analysed"
+        try:
+            config = self._config(shape)
+        except pc_cae.CaeConfigError:
+            # It asked, and asked wrong: that is the check's to fail.
+            return None
+        return "it declares no '%s:' section" % self.analysis if config is None else None
+
     def _config(self, shape):
         """The boundary conditions, or None when this test does not apply.
 
@@ -189,8 +199,7 @@ class CaeTest(ImplementationTest):
             return self.failed(shape, "%s", e)
 
         if config is None:
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         try:
             # Resolved here, and separately, so that failing to resolve it

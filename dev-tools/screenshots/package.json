@@ -1,0 +1,12 @@
+{
+  "name": "partcad-screenshots",
+  "private": true,
+  "description": "Retakes the screenshots under docs/source/images. See docs/notes/screenshots.md.",
+  "type": "module",
+  "scripts": {
+    "shoot": "node shoot.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "1.49.1"
+  }
+}

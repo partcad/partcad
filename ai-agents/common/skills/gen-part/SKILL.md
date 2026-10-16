@@ -86,9 +86,10 @@ parts:
 ### Write down what it is required to be
 
 Then add `requirements:` to the same declaration — what the description asked
-for, in the description's own terms, *not* the design you chose. It is what
-`pc test` checks the model against and what `/pc:validate` judges it by, and
-the IDE shows it as the part's Requirements tab:
+for, in the description's own terms, *not* the design you chose. `pc test`
+checks the model against what it can measure — the `ports:`, `interfaces:` and
+`physics:` — and `/pc:validate` judges the `features:`, which are prose; the
+IDE shows both as the part's Requirements tab:
 
 ```yaml
     requirements:

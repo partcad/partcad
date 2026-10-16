@@ -750,6 +750,15 @@ a cached assembly are part of that assembly's cached tree, and editing them does
 not invalidate it any more than renaming a part does. ``pc system reset``, or a
 change to something the assembly does hash, is what picks them up.
 
+``color`` is what a shape is drawn in: by ``pc render``'s ``svg``, ``png`` and
+``jpeg`` (see :doc:`config_output`) and by the IDE's Digital Thread, in every
+pane that draws the shape in 3D. An assembly that states one colours everything
+inside it that states none, and a part inside it that states its own keeps it.
+A shape that states no colour -- most of them -- is drawn in goldenrod,
+``#DAA520``, which is the colour OCCT draws a shape nobody coloured. A
+``material`` says nothing about how a part looks, so a part made of one and
+stating no colour is goldenrod too.
+
 Every ``physics`` property has a PartCAD name and a PartCAD unit, and the set of
 them is closed. Lengths are millimetres and angles degrees, as everywhere else
 in PartCAD; everything else is SI, so a mass is kilograms, a density kg/m³ and

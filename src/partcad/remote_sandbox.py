@@ -171,9 +171,13 @@ class Environments:
             )
 
     def _install(self, image: str, version: str, requirement: str) -> None:
+        # '--prefer-binary' for the reason every other sandbox installs with it
+        # (see 'pip_install_flags' in 'runtime_python'): a newer release with no
+        # wheel for the image is a compile that fails, an older one with a wheel
+        # is an install that works.
         exitcode, _, stderr = self._run(
             image,
-            [interpreter_path(version), "-m", "pip", "install", "--no-input", requirement],
+            [interpreter_path(version), "-m", "pip", "install", "--no-input", "--prefer-binary", requirement],
             lock_for(version, exclusive=True),
         )
         if exitcode != 0:

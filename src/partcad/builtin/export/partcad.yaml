@@ -171,11 +171,6 @@ export:
       between them move and what every link is called is what the tree says.
     path: export_urdf.py
     extension: urdf
-    # 'decode: false' -- see wrappers/wrapper_export.py. The exporter walks the
-    # assembly envelopes itself; decoding them into live geometry would keep the
-    # tree's shape but drop every node's name and label and bake its placement
-    # in, leaving nothing to name, group or joint the links by.
-    decode: false
     pythonRequirements:
       - cadquery-ocp==7.9.3.1.1
       - urdf-parser-py==0.0.4

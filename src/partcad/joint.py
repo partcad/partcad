@@ -346,8 +346,8 @@ class Joint:
     def to_envelope(self) -> dict:
         """The joint as plain data, for the node of the child it moves.
 
-        This is what an exporter that walks the tree ('decode: false') reads
-        beside the node's properties. The steps relate the parent's placement to
+        This is what an exporter that walks the tree (an implementation's
+        'shape_tree') reads beside the node's properties. The steps relate the parent's placement to
         the child's: the child node sits at the parent node's placement times
         their product at their values.
         """

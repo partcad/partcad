@@ -219,6 +219,10 @@ def test_only_the_root_dependency_files_are_dependencies(tmp_path, path):
         (".devcontainer/AGENTS.md", "devcontainer"),
         (".claude/skills/steward/SKILL.md", "docs"),
         ("openspec/whatever.md", "docs"),
+        ("docs/notes/screenshots.md", "docs"),
+        # What retakes the screenshots in the documentation: a tool under
+        # "dev-tools/" that nothing in CI runs, so not source.
+        ("dev-tools/screenshots/shoot.mjs", "docs"),
         # The Claude Code plugin, which is Markdown that ships.
         (".claude-plugin/marketplace.json", "ai"),
         ("ai-agents/scripts/materialize.sh", "ai"),

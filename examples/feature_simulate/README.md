@@ -179,7 +179,7 @@ standard catalogue's is `//pub/std/manufacturing/material/fluid:water`.
 <td valign=top><a href="tilted.assy"><img src="././tilted.svg" alt="tilted" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>An empty world whose gravity leans 15 degrees off vertical, towards +X - a ramp with no edge</td>
 <td valign=top>Parameters:<br/><ul>
-<li>subject: stable</li>
+<li>subject: slippery</li>
 <li>subject_kind: scene</li>
 <li>subject_offset: 0 0 10 0 0 1 0</li>
 </ul>

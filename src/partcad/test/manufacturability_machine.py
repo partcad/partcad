@@ -109,6 +109,14 @@ class ManufacturabilityMachineTest(Test):
             return None
         return machine
 
+    def inapplicable(self, shape):
+        if self._machine_of(shape) is None:
+            return (
+                "it is not made on a '%s:' machine (a 'manufacturing:' section with 'method: subtractive' naming one)"
+                % (self.machine)
+            )
+        return None
+
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         """Measure how the faces lie against the axis, and let 'judge()' decide.
 
@@ -120,8 +128,7 @@ class ManufacturabilityMachineTest(Test):
         """
         machine = self._machine_of(shape)
         if machine is None:
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
+            return self.not_applicable(shape, self.inapplicable(shape))
 
         envelope = await shape.get_wrapped(ctx)
         if envelope is None:

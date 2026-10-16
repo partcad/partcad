@@ -125,6 +125,10 @@ never asked anything. ``tank`` is a scene filled with water. ``float`` and
 sealed float is hollow and its geometry does not say so. The example's
 ``README.md`` walks through each of them.
 
+``examples/feature_simulate_joints`` is the other half: an assembly whose parts
+move on a joint -- a pendulum -- held to its closed form. See
+:ref:`sim-mechanisms`.
+
 .. _sim-declaring:
 
 ======================
@@ -378,12 +382,66 @@ simulated in places it with a ``scene:`` link, which ``subject_kind`` asks for.
 The rule is PartCAD's one copy of it, in the module the engine plugins import
 for it (``kinematics.py``, beside ``mass_properties.py``): the bodies of a tree,
 each with its parts, its frame, what it hangs off and its combined mass, and each
-joint with its kind and the frames a format states one in. The URDF export
-writes it, a link per body and a joint per pair (:ref:`sim-urdf`). **No engine
-plugin writes it yet**: a run today still makes every part with geometry a free body of
-its own, which is the rule already for a scene of parts and not yet for the
-parts of an assembly, and a ``fixed: true`` element still falls. See
-:ref:`sim-limitations`.
+joint with its kind and the frames a format states one in. **MuJoCo writes
+it**: `partcad-sim-mujoco`_ makes one MJCF body per body of the rule, welds a
+``fixed: true`` element to the world, and writes every joint (see
+:ref:`sim-mechanisms`), and so does the URDF export, a link per body and a
+joint per pair (:ref:`sim-urdf`). **Gazebo does not yet**: a Gazebo run still makes every
+part with geometry a free body of its own, which is the rule for a scene of
+parts and not for the parts of an assembly. See :ref:`sim-limitations`.
+
+.. _sim-mechanisms:
+
+Mechanisms
+==========
+
+An assembly whose connections keep a degree of freedom is a **mechanism**, and
+what it does can often be worked out on paper -- which makes it the kind of
+claim a simulation is best at checking. ``examples/feature_simulate_joints`` is
+a pendulum, checked against its closed form:
+
+.. code-block:: shell
+
+  pc sim -a pendulum   # released horizontal, it passes the bottom at sqrt(2 g d / (I/m))
+  pc sim -a nudged     # swinging 5 degrees, its period is 2 pi sqrt((I/m) / (g d))
+
+Three things make one, and each is a declaration PartCAD already reads:
+
+- **A joint.** A connection whose interfaces keep a freedom once joined --
+  ``motion: revolute`` on the frame's ``axle`` interface, here -- is a joint
+  between two bodies (see :ref:`assy-joints`). Name it with ``joint:``, since the
+  name is what a validation reads: ``after["joints"]["swing"]["pos"]``.
+- **Where it starts.** ``toParams`` places the joint where the run starts, and
+  the parameter at zero is the joint's zero. The engine is told the same, so a
+  reading of a joint is its value as PartCAD states it: the pendulum starts at
+  ``90`` and passes ``0`` at the bottom.
+- **What holds it.** An assembly placed in a scene is one tree of bodies whose
+  root is free, so a pendulum in the scene PartCAD ships falls, frame and all.
+  Simulate it in a scene that places it ``fixed: true`` -- the example's
+  ``bolted`` -- and the root is welded to the world while the joints still
+  move.
+
+.. code-block:: yaml
+
+  # bolted.assy, declared under 'scenes:', with the parameters the default scene takes
+  links:
+    - {{ param_subject_kind }}: "{{ param_subject }}"
+      name: subject
+      fixed: true
+      location: ...
+
+How each kind of joint is written -- a hinge or a slide per freedom, a ball,
+an equality for a screw's thread or a ``mimic``; what of a joint's ``physics:``
+is written and what is reported -- is in the plugin's documentation. Two things
+are worth knowing when writing a claim:
+
+- **Sample the run finely enough for the claim.** A validation that asks when
+  something happened reads ``result["samples"]``; ``params: {samples: ...}``
+  sets how many, and ``timestep`` how finely the engine steps between them. The
+  pendulum reads every millisecond on a half-millisecond step, so that each
+  instant it compares is placed to a tenth of a per cent.
+- **The two bodies of a joint do not collide with each other.** A pin sits in
+  its bore by design, and the engine is told so.
 
 .. _sim-physics:
 
@@ -721,15 +779,15 @@ The plugin is handed that file, steps it for ``duration`` seconds of simulated
 time, and reports the state of the world before and after (see
 :ref:`sim-validation`).
 
-**Every body in a run is still free.** The plugin asks the export for that,
-through the ``formatOptions`` of its declaration -- ``static: false`` and
-``flatten: true`` for MJCF, ``static: false`` for SDFormat -- so every part with
-geometry becomes a rigid body of its own, with nothing holding it to anything.
-For a scene of parts, such as a stack of blocks, that is exactly what
-:ref:`sim-bodies` says it is. For the parts of an assembly it is not yet: they
-are not attached to each other in a run, and nothing is fixed to the world (see
-:ref:`sim-limitations`). Each exporter also writes a ground plane under the
-world and a light over it.
+**What is free in a run is free to move.** The plugin asks the export for
+that, through the ``formatOptions`` of its declaration -- ``static: false`` --
+since a file written to be looked at welds every body to the world instead. In
+MuJoCo, the bodies are the ones :ref:`sim-bodies` says: every element of a scene
+is a body of its own, an assembly is one tree of bodies on its joints, and an
+element marked ``fixed: true`` is welded to the world. In Gazebo every part with
+geometry is still a rigid body of its own, which is the rule for a scene of
+parts and not yet for the parts of an assembly (see :ref:`sim-limitations`).
+Each exporter also writes a ground plane under the world and a light over it.
 
 The parameters both plugins take, as fields of the plugin's declaration or for
 one run in a declaration's ``params:``:
@@ -959,8 +1017,11 @@ and made unique where two would collide. Walking every body, ``for name in
 before["bodies"]``, is the robust form, and the one every example uses.
 
 A free body is not reported as a joint, since ``bodies`` already says where it
-is, and every body in a run today is free; so ``joints`` is ``{}``. It is there
-so that a validation of a mechanism reads the same once joints exist.
+is; so a scene of parts reports ``joints: {}``. A mechanism's joints are
+reported under the names PartCAD gives them (see :ref:`sim-mechanisms`), and
+a joint the engine writes as several -- a screw's turn and move -- as
+``<name>.<parameter>`` each. A joint's ``pos`` is its value as PartCAD states
+it: the ``toParams`` it starts at, and nought at its zero.
 
 Beside ``before`` and ``after``, ``result`` carries ``samples`` -- a list of the
 same readings at evenly spaced instants, when the run asked for any -- and what
@@ -1421,17 +1482,21 @@ Limitations
 
 What a run does not model today, so that a claim is not written against it:
 
-- **Every body is free, whatever the rule says.** PartCAD decides what becomes
-  a body (see :ref:`sim-bodies`), and the engine plugins do not write it yet:
-  every part with geometry is still a free body of its own in a run. For a scene
-  of parts that is the rule; for an assembly it is not -- its parts are separate
-  bodies that come apart under gravity, its joints (``pc info -a`` lists them,
-  see :ref:`assy-joints`) are not written, and an element marked
-  ``fixed: true`` is not fixed: a fixture is held by the floor under it and by
-  nothing else. Keep claims to things that are separate bodies in reality -- a
-  stack, a part on a floor, a float -- which is what a scene is for. Writing the
-  bodies, the welds and the joints out is the next step for each engine's
-  exporter; see the `design record`_.
+- **Mechanisms in MuJoCo only.** PartCAD decides what becomes a body (see
+  :ref:`sim-bodies`), and the MuJoCo plugin writes it -- the bodies, the welds
+  and the joints. The Gazebo plugin does not yet: in a Gazebo run every part
+  with geometry is still a free body of its own, so an assembly's parts come
+  apart under gravity, its joints are not written and a ``fixed: true`` element
+  is held by nothing but the floor under it. Writing them there is the next step
+  for its exporter; see the `design record`_.
+- **No closed loops.** A link is placed once, against a link already placed,
+  so a four-bar linkage cannot be stated (see :ref:`assy-joints`).
+- **Joints are what their interfaces say, and no more.** A joint's damping,
+  friction and spring are written; its ``maxEffort`` and ``maxVelocity`` are
+  not, because nothing drives a joint yet. A ball joint's limits, and a
+  ``mimic`` between joints of more than one freedom, are reported rather than
+  written. A coupling -- a screw's thread, a ``mimic`` -- is held as MuJoCo holds
+  every constraint: very nearly, and a little softly under load.
 - **No inputs.** A run starts at rest, where the scene places everything, and
   nothing moves it but gravity, contact and the fluid: no initial velocity, no
   motor, no controller, no sensor.

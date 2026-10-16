@@ -437,8 +437,8 @@ class Assembly(Shape):
 
         A child that moves against its target carries its joint on the node as
         well (KEY_JOINT), beside the properties its object reports, so that an
-        exporter walking the tree ('decode: false') finds the mechanism where it
-        finds the parts. It is this assembly's account of the child, like the
+        exporter walking the tree (an implementation's 'shape_tree') finds the
+        mechanism where it finds the parts. It is this assembly's account of the child, like the
         label, so it is stamped here rather than by the child: one part may be
         placed rigidly once and on a hinge twice.
 
@@ -559,7 +559,9 @@ class Assembly(Shape):
         )
         return self._bounding_box
 
-    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0, expected=(), opaque=()):
+    async def get_interference_async(
+        self, ctx, min_volume=0.05, min_fraction=0.0, expected=(), opaque=(), keep_common=False
+    ):
         """The pairs of parts in this assembly whose solids share space.
 
         Returned as {"overlaps": [{"a", "b", "volume"}, ...], "unchecked": [...],
@@ -587,6 +589,13 @@ class Assembly(Shape):
         'opaque' names the declared sub-assemblies under this one whose inside
         has a verdict of its own already. Only what crosses the boundary of one
         is examined; what lies wholly inside it is that sub-assembly's business.
+
+        'keep_common' asks for what each reported pair shares as well: every
+        overlap then carries 'solids', the solids of the boolean common as shape
+        envelopes, and 'members', each of the two as {'object', 'location'} --
+        the object placed there and where, in the frame the solids are in. That
+        is what the interference test builds the assembly it leaves behind out
+        of (see 'test/interference_artifact.py').
         """
         obj = await self.get_wrapped(ctx)
         if obj is None:
@@ -613,6 +622,7 @@ class Assembly(Shape):
                     "min_fraction": min_fraction,
                     "expected": [list(pair) for pair in expected],
                     "opaque": list(opaque),
+                    "keep_common": bool(keep_common),
                 }
             )
 
@@ -642,8 +652,13 @@ class Assembly(Shape):
                     % (self.project_name, self.name, result.get("exception", "Unknown error"))
                 )
                 return None
+            overlaps = result.get("overlaps", [])
+            if keep_common:
+                leaves = placed_leaves(obj)
+                for overlap in overlaps:
+                    overlap["members"] = {side: leaves.get(overlap.get(side)) for side in ("a", "b")}
             return {
-                "overlaps": result.get("overlaps", []),
+                "overlaps": overlaps,
                 "unchecked": result.get("unchecked", []),
                 "indeterminate": result.get("indeterminate", []),
                 "parts": result.get("parts", 0),
@@ -1183,3 +1198,37 @@ def _bom_detailed_merge(bom: dict, other: dict):
             bom[name]["count"] += entry["count"]
         else:
             bom[name] = dict(entry)
+
+
+def placed_leaves(tree) -> dict:
+    """{path: {'object', 'location'}} of every part in an assembly's tree, named and placed as the interference wrapper does.
+
+    The paths are link names from the root's children down ('tub/battery'),
+    each node named by its label before its object name, and a node's placement
+    applies to everything under it, the root's own last -- which is what
+    'wrapper_interference._node' does with the same tree, so a part's placement
+    here is the frame the solids the wrapper hands back are in. 'object' is the
+    object placed there ('//pkg:battery'), the identity 'Assembly._place' stamps
+    on every node.
+    """
+    found = {}
+
+    def walk(node, prefix, outer):
+        label = node.get("label") or node.get("name") or ""
+        path = "%s/%s" % (prefix, label) if prefix else label
+        own = node.get(shape_envelope.KEY_LOCATION)
+        here = outer * Location(own) if own is not None else outer
+        if shape_envelope.is_assembly_object(node):
+            for child in node[shape_envelope.KEY_ASSEMBLY]:
+                walk(child, path, here)
+        elif shape_envelope.is_shape_object(node):
+            found[path] = {"object": node.get("name"), "location": here.as_packed()}
+
+    root_location = tree.get(shape_envelope.KEY_LOCATION) if isinstance(tree, dict) else None
+    root = Location(root_location) if root_location is not None else Location()
+    if shape_envelope.is_assembly_object(tree):
+        for child in tree[shape_envelope.KEY_ASSEMBLY]:
+            walk(child, "", root)
+    elif isinstance(tree, dict):
+        walk(tree, "", root)
+    return found

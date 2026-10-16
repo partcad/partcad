@@ -182,6 +182,15 @@ def test_requirements_are_installed_with_the_environments_own_interpreter():
     assert install[-1] == "numpy==2.4.1"
 
 
+def test_a_requirement_is_installed_from_a_wheel_when_one_of_its_releases_has_one():
+    """As in every other sandbox: an older release with a wheel beats a newer one to compile."""
+    run = _Recorder()
+    remote_sandbox.Environments(run).ensure("ghcr.io/x/a:1", "3.11", ["mujoco>=3.2,<4"])
+
+    install = run.builds()[-1]
+    assert install.index("--prefer-binary") < install.index("mujoco>=3.2,<4")
+
+
 def test_a_requirement_already_installed_is_not_installed_again():
     """pip is idempotent and slow; a round trip per part is what this avoids."""
     run = _Recorder()

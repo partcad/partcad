@@ -17,6 +17,7 @@ The panel is a strip of tabs over one object, not a canvas:
 | **Buy** | whatever is bought | the daemon's `supply.quote` (the cart `pc supply quote` fills) |
 | **Bill of Materials** | parts, assemblies | the daemon's `bom` (what `pc bom` prints) |
 | **Assembly** | assemblies | the daemon's `assembly.guide` (the book `pc instructions -t html\|pdf` writes) |
+| **Test** | everything | the daemon's `test.report` (the checks `pc test <object>` runs, and `partcad/test/catalog.py`) |
 | **Simulation** | parts, assemblies that declare `simulate:` | the daemon's `simulate.list` (what the object declares) and `simulate.run` (what `pc sim -f <name>` runs) |
 
 The 3D view is what a show opens on: "show this part" means the geometry. Requirements is the one tab in front
@@ -248,6 +249,9 @@ the protocol has no authentication.
 | `src/webview/document.ts` | `partcad/document.py`'s model, drawn: a page, or the book paged through |
 | `src/webview/supply.ts` | The Buy tab: the list, and one item's suppliers |
 | `src/webview/requirements.ts` | The Requirements tab: the marks, and the features with what validates each |
+| `src/webview/test.ts` | The Test tab: every check with its mark, and the one selected - its verdict, findings, artifacts and text |
+| `src/partcad/test/report.py` | One object's `pc test` as a list of verdicts, for this tab |
+| `src/partcad/test/catalog.py` | What each check is and what to do when it fails, for this tab and for the documentation |
 | `src/partcad/requirements.py` | What a requirement means and whether the model meets it, for this tab and for `pc test` |
 | `src/common/garage.ts` | Where the Build vs Buy choices are kept, on this machine |
 | `src/webview/cae.ts` | The Analysis tabs (FEA, Dynamic FEA, Heat Transfer, CFD): the result model, and the findings |
@@ -345,6 +349,20 @@ named by the path of those labels and then the port (`head:head_half_1:TL-m3`), 
 PartCAD reports it under, so both sides compose one string from the same parts.
 
 ## The tabs beside the 3D view
+
+**Test**, under Validation, is every check `pc test` runs, and is always enabled and first: every object has
+checks, if only to say that they do not apply to it. An object that belongs to no package - a shape shown from a
+script - has nothing to ask the daemon about, and the tab says so rather than offering a list. Opening it asks twice, in a row: `test.report` without `verify`, which
+runs nothing and lists every check with those that do not apply saying why, and then with it, which runs the
+checks as `pc test <object>` runs them and through the same cache, so the panel and the command line give the
+same verdicts. The list is on screen, every other mark pending, for as long as the second takes. It opens on the
+first failure, or else the first finding, or else the first check that applies, and keeps the one the reader
+clicks. What each check is - when it applies and what to do when it fails - is its entry in
+`partcad/test/catalog.py`, the same text the documentation's list of checks is generated from. A check that left
+something behind to look at offers it with **Show in the Digital Thread**, which moves the panel to Design and
+shows that object the way the explorer would (`showObject`, then the explorer's `partcad.inspect*` command,
+without remembering it as the selection): for an interference, the two parts where the assembly places them and
+a sub-assembly `interference` of what they share, registered by the daemon under a name worked out from the pair.
 
 Each non-3D tab is fetched on first look and cached until the next show, so opening one costs one daemon round
 trip and switching back to it costs none. Every request carries the generation of the object it was made for and an
@@ -448,9 +466,9 @@ A package that declares no `suppliers:` is the ordinary case, not a failure, so 
 items rather than run and reported: in the IDE `pc_logging.error` is a modal popup, and
 `Context.find_part_suppliers()` raises one per part.
 
-The Validation group holds **Simulation** and **Process Emulation**, which has nothing in it yet and is always
-disabled -- so the group is enabled exactly when Simulation is. Simulation is offered only for an object that
-declares a simulation: whether it does is asked on every show (`simulate.list`, which reads the `simulate:`
+The Validation group holds **Test** (above), **Simulation** and **Process Emulation**, which has nothing in it
+yet and is always disabled -- so the group is always enabled, for Test, and opens on it. Simulation is offered
+only for an object that declares a simulation: whether it does is asked on every show (`simulate.list`, which reads the `simulate:`
 section and runs nothing), exactly as Build vs Buy's tree is, and the panel's strip is rebuilt when the answer
 arrives.
 
