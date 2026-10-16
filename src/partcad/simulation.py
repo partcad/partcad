@@ -61,6 +61,13 @@ looked at when it is rendered -- see 'snapshot_request'. They are what the IDE's
 Simulation tab shows side by side, and they are the one thing a reader can check
 a verdict against without reading numbers.
 
+Every run has a wall-clock **budget** (see 'run_budget'), and a run that does
+not finish within it is stopped -- with everything it started -- and fails as
+'SimulationTimeout'. A plugin that dies instead, or answers with something that
+is not an answer, fails as 'SimulationCrash', carrying the end of what it wrote
+to standard error. Neither is ever a hang, and neither is cached: only a run
+that answered is.
+
 What is deliberately *not* here: PartCAD does not know what a simulation
 result means. It exports the scene, starts the plugin, hands the two objects the
 plugin produced to the expression the package wrote, and reports what the
@@ -69,11 +76,14 @@ expression said. Every judgement in that sentence belongs to the package.
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import hashlib
 import os
 import shutil
 import typing
+
+from partcad_utils import timeouts
 
 from . import cache_artifacts
 from . import logging as pc_logging
@@ -186,6 +196,68 @@ class SimulationConfigError(Exception):
     `ImplementationTest._verdict`). The same split `CaeConfigError` and
     `CamConfigError` make for the analyses and the routes.
     """
+
+
+# The parameter a run's wall-clock budget is stated and handed over under, in
+# seconds -- by a declaration's 'params:', by a plugin's own declaration, and in
+# the request the plugin is handed. 'wrappers/wrapper_simulate.TIMEOUT_KEY' is
+# its twin, and the wrapper is what holds the run to it.
+TIMEOUT_KEY = "timeout"
+
+# The key of a plugin's answer that says its budget was spent, carrying the
+# seconds; written by the wrapper, never by a plugin.
+# 'wrappers/wrapper_simulate.TIMED_OUT_KEY' is its twin.
+TIMED_OUT_KEY = "timed_out"
+
+# The budget of a run nothing states one for: the larger of these two -- five
+# minutes, and ten wall-clock seconds for every second of simulated time. Five
+# minutes is the bound the Gazebo plugin had always waited for its server,
+# which covers starting an engine in a container on a cold machine; ten times
+# the duration is what keeps a long run from being cut short by it. An engine
+# that runs at its real-time factor -- Gazebo's is about one -- needs about the
+# duration itself; MuJoCo needs a fraction of it.
+DEFAULT_TIMEOUT = 300.0
+TIMEOUT_PER_SIMULATED_SECOND = 10.0
+
+# How much longer than the budget PartCAD itself waits before it kills the
+# sandbox, in seconds. The wrapper inside the sandbox stops the run when the
+# budget is spent and says so (see 'wrappers/wrapper_simulate.py'); this is for
+# the run so wedged that the wrapper cannot act -- an interpreter held in native
+# code -- and for the time a sandbox takes to hand an answer back.
+TIMEOUT_GRACE = 30.0
+
+# How much of what a plugin wrote to standard error a failure carries: the end
+# of it, which is where a traceback ends and a crash says what killed it.
+STDERR_TAIL_LINES = 30
+STDERR_TAIL_CHARACTERS = 4000
+
+
+class SimulationTimeout(Exception):
+    """A run that did not finish within its budget, and was stopped.
+
+    A failure and not a skip (see `partcad.test.sim`): a run that hangs is a
+    defect -- in the plugin, in the model it was handed, or in how long the
+    package says the run takes -- and calling it unanswered would report it as
+    checked. The message names the plugin, the budget and where the budget came
+    from, and how to raise it; the object and the simulation are named by
+    whoever reports it.
+    """
+
+    def __init__(self, message: str, budget: float, plugin: str):
+        super().__init__(message)
+        self.budget = budget
+        self.plugin = plugin
+
+
+class SimulationCrash(Exception):
+    """A plugin that ended without an answer: an exit status, a signal, or output that is not one.
+
+    Carries the end of what it wrote to standard error, which is what says why.
+    """
+
+    def __init__(self, message: str, exitcode=None):
+        super().__init__(message)
+        self.exitcode = exitcode
 
 
 class SimulationDeclaration:
@@ -902,11 +974,136 @@ async def _export_scene_async(ctx, scene, impl, directory: str) -> str:
     return path
 
 
+def run_budget(ctx, impl, declaration) -> typing.Tuple[float, str]:
+    """How long one run may take, in wall-clock seconds, and what said so.
+
+    The first of these that states a positive number of seconds:
+
+    1. ``simulation.timeout`` in the user configuration (``PC_SIMULATION_TIMEOUT``).
+       It is about this machine rather than about the run, and it is the one
+       knob for somebody who cannot edit the package -- a slow runner, or a CI
+       job that would rather fail fast -- so it is over everything else.
+    2. ``params: {timeout: ...}`` of the ``simulate:`` declaration: this run is
+       known to be slow, or known to be quick.
+    3. ``timeout:`` in the plugin's own declaration: this engine is.
+    4. The default, which grows with the run: the larger of ``DEFAULT_TIMEOUT``
+       and ``TIMEOUT_PER_SIMULATED_SECOND`` for every second of the
+       ``duration`` the run is handed.
+
+    Anything else -- nought, a negative number, text -- states nothing and is
+    passed over, so the bound can be moved and never switched off: a run with
+    no bound is a run that can hang forever, and that is what this is for.
+
+    The budget is the run's, from the moment the sandbox interpreter starts.
+    Not the sandbox's provisioning before that -- building an environment and
+    installing an engine into it is shared with every other run and takes
+    minutes on a cold machine, which is why 'PythonRuntime.run_async_onced'
+    bounds the interpreter alone -- and not the export of the scene, which is
+    a build like any other.
+
+    The second value is the sentence a timeout carries, so that whoever reads
+    it is told what to change.
+    """
+    configured = timeouts.seconds(getattr(getattr(ctx, "user_config", None), "simulation_timeout", None))
+    if configured is not None:
+        return configured, "'simulation.timeout' (PC_SIMULATION_TIMEOUT) in this machine's configuration"
+    declared = timeouts.seconds((declaration.params or {}).get(TIMEOUT_KEY))
+    if declared is not None:
+        return declared, "the 'timeout' in the 'params:' of the simulation"
+    parameters = dict(impl.parameters or {})
+    plugin_declared = timeouts.seconds(parameters.get(TIMEOUT_KEY))
+    if plugin_declared is not None:
+        return plugin_declared, "the 'timeout' the plugin declares"
+    parameters.update(declaration.params or {})
+    duration = timeouts.seconds(parameters.get("duration")) or 0.0
+    budget = max(DEFAULT_TIMEOUT, TIMEOUT_PER_SIMULATED_SECOND * duration)
+    return budget, "the default: the larger of %g s and %g s for each of the %g s simulated" % (
+        DEFAULT_TIMEOUT,
+        TIMEOUT_PER_SIMULATED_SECOND,
+        duration,
+    )
+
+
+# What to say about raising the budget, beside every timeout.
+RAISE_THE_BUDGET = (
+    "If the run is simply slow, give it longer: 'params: {timeout: <seconds>}' on the simulation, or "
+    "'simulation.timeout' / PC_SIMULATION_TIMEOUT for every run on this machine"
+)
+
+
+def timeout_report(plugin: str, budget: float, source: str, killed: bool = False) -> str:
+    """The sentence a run that used up its budget fails with."""
+    if killed:
+        how = (
+            "did not stop when its budget was spent, so PartCAD killed it, with everything it started, %g s later"
+            % TIMEOUT_GRACE
+        )
+    else:
+        how = "was stopped, with everything it started"
+    return "timed out after %g s: %s did not finish within its budget of %g s (%s) and %s. %s" % (
+        budget,
+        plugin,
+        budget,
+        source,
+        how,
+        RAISE_THE_BUDGET,
+    )
+
+
+def stderr_tail(errors) -> str:
+    """The end of what a plugin wrote to standard error, which is where it says why it stopped."""
+    text = (errors or "").strip()
+    if not text:
+        return ""
+    lines = text.splitlines()
+    tail = "\n".join(lines[-STDERR_TAIL_LINES:])
+    if len(tail) > STDERR_TAIL_CHARACTERS:
+        tail = tail[-STDERR_TAIL_CHARACTERS:]
+    if tail != text:
+        tail = "...\n" + tail
+    return tail
+
+
+def crash_report(plugin: str, what: str, errors) -> str:
+    """The sentence a plugin that ended without an answer fails with, and the end of its stderr."""
+    tail = stderr_tail(errors)
+    if not tail:
+        return "%s %s, and wrote nothing to standard error" % (plugin, what)
+    return "%s %s. The end of what it wrote to standard error:\n%s" % (plugin, what, tail)
+
+
+def read_answer(response_serialized: str):
+    """What a plugin answered, as a dict; None for no answer at all.
+
+    Raises ValueError, with the beginning of what came back, for an answer that
+    is not one -- text that is not JSON, or JSON that is not an object.
+    """
+    if not (response_serialized or "").strip():
+        return None
+    try:
+        answer = shape_envelope.deserialize(response_serialized)
+    except Exception as e:  # pylint: disable=broad-except
+        raise ValueError("%s, beginning %r" % (e, response_serialized.strip()[:200]))
+    if not isinstance(answer, dict):
+        raise ValueError(
+            "a %s rather than an object, beginning %r" % (type(answer).__name__, response_serialized.strip()[:200])
+        )
+    return answer
+
+
 async def _run_plugin_async(
     ctx, impl, directory: str, scene_file: str, declaration, subject: str, kind: str, snapshot=None
 ) -> dict:
-    """Start the plugin in its sandbox and return the JSON it produced."""
+    """Start the plugin in its sandbox and return the JSON it produced.
+
+    Never waits longer than the run's budget (see 'run_budget') and a grace
+    period beside it, and never returns anything but an answer: a run that did
+    not finish raises 'SimulationTimeout', a plugin that ended without an answer
+    'SimulationCrash'.
+    """
     script = await output.materialize_script(ctx, impl)
+    plugin_name = "%s:%s" % (impl.project.name, impl.format_name) if impl.project is not None else impl.format_name
+    budget, budget_source = run_budget(ctx, impl, declaration)
 
     request = dict(impl.parameters)
     request.update(declaration.params)
@@ -918,6 +1115,9 @@ async def _run_plugin_async(
             "subject": subject,
             "subject_kind": kind,
             "simulation": declaration.name,
+            # The run's budget as it was resolved, whatever stated it: the
+            # wrapper holds the run to it, and a plugin can see how long it has.
+            TIMEOUT_KEY: budget,
         }
     )
     if snapshot:
@@ -952,7 +1152,34 @@ async def _run_plugin_async(
     # run directory does. The scene goes the other way without being named,
     # because the directory is an argument (see 'input_dirs_for').
     extra = {"output_dirs": [os.path.abspath(directory)]} if getattr(runtime, "EXCHANGES_FILES", False) else {}
-    exitcode, response_serialized, errors = await runtime.run_async(command, shape_envelope.serialize(request), **extra)
+    try:
+        exitcode, response_serialized, errors = await runtime.run_async(
+            command,
+            shape_envelope.serialize(request),
+            # Longer than the budget: the wrapper stops the run when the budget
+            # is spent and says so, which is the better report, and this is for
+            # the run it could not stop. 'communicate' kills the process tree.
+            timeout=budget + TIMEOUT_GRACE,
+            **extra,
+        )
+    except (asyncio.TimeoutError, TimeoutError):
+        raise SimulationTimeout(timeout_report(plugin_name, budget, budget_source, killed=True), budget, plugin_name)
+
+    try:
+        result = read_answer(response_serialized)
+    except ValueError as e:
+        # Read before the exit status: an answer that is not one is the more
+        # specific thing to say, and the status of a run that wrote one is
+        # usually the wrapper failing over it.
+        if exitcode == 0:
+            raise SimulationCrash(
+                crash_report(plugin_name, "answered with something that is not a result (%s)" % e, errors)
+            )
+        result = None
+    if result is not None and result.get(TIMED_OUT_KEY):
+        # The wrapper's own answer for a run whose budget it saw spent; it
+        # stopped everything the plugin had started, inside the sandbox.
+        raise SimulationTimeout(timeout_report(plugin_name, budget, budget_source), budget, plugin_name)
     # Only on a non-zero exit. 'RuntimePython' clears stderr for a run it
     # considers successful, but it decides that on the raw 'returncode' -
     # *before* normalizing the two Windows fault codes it deliberately forgives
@@ -961,11 +1188,12 @@ async def _run_plugin_async(
     # run the runtime just decided to let through. A wrapper that really failed
     # says so in its result, which the 'success' check below reads.
     if exitcode != 0:
-        raise Exception(errors or "the simulation failed: %s" % describe_exit_code(exitcode))
-
-    if not response_serialized.strip():
-        raise Exception("the simulation produced no result")
-    result = shape_envelope.deserialize(response_serialized)
+        raise SimulationCrash(
+            crash_report(plugin_name, "ended without an answer: %s" % describe_exit_code(exitcode), errors),
+            exitcode,
+        )
+    if result is None:
+        raise SimulationCrash(crash_report(plugin_name, "exited cleanly and produced no result", errors), exitcode)
     if not result.get("success", False):
         raise Exception(result.get("exception") or "the simulation failed")
     for warning in result.get("warnings") or []:

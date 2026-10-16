@@ -36,6 +36,8 @@ remoteSandbox: client.example:5050
 remoteSandboxToken: client-secret
 cacheFiles: false
 logLevel: error
+simulation:
+  timeout: 900
 git:
   clone:
     timeout: 42
@@ -66,6 +68,8 @@ remoteSandbox: daemon.example:5050
 remoteSandboxToken: daemon-secret
 cacheFiles: true
 logLevel: debug
+simulation:
+  timeout: 60
 git:
   clone:
     retry:
@@ -192,6 +196,9 @@ def test_an_unset_option_is_left_out_rather_than_sent_as_null(tmp_path, monkeypa
         ("cache", False),
         ("log_level", "error"),
         ("git_clone_timeout", 42),
+        # How long a simulation may run is the caller's machine's to say, not
+        # the daemon's.
+        ("simulation_timeout", 900.0),
     ],
 )
 def test_the_caller_s_options_win_over_the_rebuilding_process_own(homes, attribute, expected):
