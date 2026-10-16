@@ -155,9 +155,6 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
             # emits arrives while the answer to 'log.mode' is still being
             # written -- and on Windows each of its connections closed within
             # milliseconds of that answer.
-            #
-            # Queued in order, and ahead of the request's own answer: that is
-            # handed back to the loop the same way, once the worker returns.
             with contextlib.suppress(RuntimeError):
                 # The loop has closed: the daemon is on its way out, and there
                 # is nobody left to tell.
@@ -191,6 +188,18 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
                         await writer.drain()
                     continue
 
+                # Set from the loop's queue behind the request's last event, and
+                # awaited before its answer is written: the POSIX server writes
+                # every event before the answer, and a client reading them as
+                # the request's own is owed the same here. The worker's return
+                # reaching this coroutine is queued too, but asyncio does not
+                # promise that it runs after the callbacks queued before it.
+                emitted = loop.create_future()
+
+                def _all_emitted():
+                    if not emitted.done():
+                        emitted.set_result(None)
+
                 def _run():
                     with dispatch_lock:
                         session.emitter.set_sink(notify)
@@ -198,10 +207,13 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
                             return dispatcher.dispatch(request, session)
                         finally:
                             session.emitter.set_sink(None)
+                            with contextlib.suppress(RuntimeError):
+                                loop.call_soon_threadsafe(_all_emitted)
 
                 connections.begin(token)
                 try:
                     response = await loop.run_in_executor(None, _run)
+                    await emitted
                     if response is not None:
                         write_frame(writer, response)
                         await writer.drain()
