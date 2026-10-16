@@ -150,11 +150,9 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
             # each write on from a callback on the loop's thread, so a worker
             # writing while that callback ran left the two disagreeing about
             # which write was in flight, and the connection was not safe to use
-            # after that. The editor walks into it on every connection: it asks
-            # for 'log.mode' and then 'activate', so the first event 'activate'
-            # emits arrives while the answer to 'log.mode' is still being
-            # written -- and on Windows each of its connections closed within
-            # milliseconds of that answer.
+            # after that. A client reaches it as soon as an event arrives while
+            # an answer is still being written: the editor asks for 'log.mode'
+            # and then 'activate', whose first event comes straight after.
             with contextlib.suppress(RuntimeError):
                 # The loop has closed: the daemon is on its way out, and there
                 # is nobody left to tell.
@@ -221,6 +219,9 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
                     connections.end(token)
         finally:
             connections.remove(token)
+            # Ours to close: asyncio's stream protocol keeps a connection open
+            # past the client's end of it, for a handler that has more to write.
+            writer.close()
 
     def begin_restart():
         # Closing the server stops it offering new pipe instances; the ones
@@ -241,7 +242,7 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
 
     async def _serve():
         [server] = await loop.start_serving_pipe(  # type: ignore[attr-defined]
-            lambda: _PipeProtocol(handle, loop), name
+            lambda: _connection_protocol(handle), name
         )
         servers.append(server)
         await stop_event.wait()
@@ -256,20 +257,15 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
         loop.close()
 
 
-class _PipeProtocol(asyncio.Protocol):
-    """Adapts an incoming pipe connection to the StreamReader/Writer handler."""
+def _connection_protocol(handler) -> asyncio.Protocol:
+    """The protocol one pipe connection is served by: ``handler(reader, writer)`` runs as its task.
 
-    def __init__(self, handler, loop):
-        self._handler = handler
-        self._loop = loop
-        self._reader = asyncio.StreamReader(loop=loop)
-
-    def connection_made(self, transport):
-        writer = asyncio.StreamWriter(transport, self, self._reader, self._loop)
-        self._loop.create_task(self._handler(self._reader, writer))
-
-    def data_received(self, data):
-        self._reader.feed_data(data)
-
-    def connection_lost(self, exc):
-        self._reader.feed_eof()
+    asyncio's own, rather than an ``asyncio.Protocol`` of this module's. A
+    ``StreamWriter`` asks its protocol to wait out a full write buffer, and
+    ``drain()`` does so through ``_drain_helper``, which only asyncio's stream
+    protocols have. The one this replaces lacked it, so the first ``drain()``
+    after an answer raised AttributeError and ended the connection's task:
+    every client got exactly one answer and then lost the connection -- the
+    editor, which keeps one open, on every Windows run of "IDE (end to end)".
+    """
+    return asyncio.StreamReaderProtocol(asyncio.StreamReader(), handler)

@@ -5,21 +5,24 @@
 #
 """Serving the Windows named-pipe daemon: what a client sees on one connection.
 
-The daemon dispatches each request on a worker thread, and a request emits
-events while it runs. Those used to be written to the pipe from that thread,
-through an asyncio transport that only the loop's own thread may write to, and
-the two threads' writes raced: the editor's connections closed within
-milliseconds of the first event, every time, on every Windows run of
-"IDE (end to end)". Nothing short of a real pipe and a real event loop shows
-that, so this serves one -- which only Windows can, and CI runs Windows.
+Every connection to it used to end after its first answer. Each one was served
+by an ``asyncio.Protocol`` of the module's own, and ``StreamWriter.drain()``
+needs a method only asyncio's stream protocols have, so the first ``drain()``
+raised and took the connection's task with it. The editor, which keeps one
+connection open, lost it within milliseconds on every Windows run of
+"IDE (end to end)"; ``pc``, which opens one per command, never noticed.
 
-The client does what the editor does: a quick request sent back to back with
-one whose worker emits, so that the loop is still writing the first answer when
-the first event arrives. And then the same again, on the same
-connection, because the failure was a connection that did not survive.
+The first test below pins the protocol on any platform, over a socket: drain()
+is not Windows-specific, only the pipe is. The second serves a real pipe, which
+only Windows can, and does what the editor does -- a quick request sent back to
+back with one that emits as it runs, three rounds on one connection. The events
+are written from the request's worker thread, which an asyncio transport does
+not allow either, so they also have to arrive whole, in order, and before the
+answer.
 """
 
 import asyncio
+import socket
 import sys
 import threading
 import time
@@ -32,8 +35,6 @@ from partcad_service_json_rpc import config_restart
 from partcad_service_json_rpc import win_pipe as service_win_pipe
 from partcad_service_json_rpc.core import events
 from partcad_utils import win_pipe as rendezvous
-
-pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="serves a real named pipe")
 
 # Enough that the worker is still writing while the loop finishes each write
 # before it: the race needs the two to overlap, and a handful rarely did.
@@ -48,6 +49,38 @@ def _chatty(session, params):
 
 
 REGISTRY = {"rpc.discover": lambda session, params: {"methods": []}, "chatty": _chatty}
+
+
+def test_a_connection_is_served_past_its_first_answer():
+    async def run():
+        loop = asyncio.get_running_loop()
+        served = loop.create_future()
+
+        async def handler(reader, writer):
+            # What 'serve_pipe' does with each request: answer, then drain.
+            try:
+                for _ in range(3):
+                    request = await rendezvous.read_frame(reader)
+                    rendezvous.write_frame(writer, {"jsonrpc": "2.0", "id": request["id"], "result": {}})
+                    await writer.drain()
+                served.set_result(None)
+            except Exception as e:  # pylint: disable=broad-except
+                served.set_exception(e)
+
+        ours, theirs = socket.socketpair()
+        await loop.connect_accepted_socket(lambda: service_win_pipe._connection_protocol(handler), ours)
+        reader, writer = await asyncio.open_connection(sock=theirs)
+        try:
+            for request_id in (1, 2, 3):
+                rendezvous.write_frame(writer, {"jsonrpc": "2.0", "id": request_id, "method": "x"})
+                await writer.drain()
+                answer = await asyncio.wait_for(rendezvous.read_frame(reader), TIMEOUT)
+                assert answer is not None and answer["id"] == request_id, (request_id, answer)
+            await asyncio.wait_for(served, TIMEOUT)
+        finally:
+            writer.close()
+
+    asyncio.run(run())
 
 
 async def _rounds(name: str, rounds: int) -> list:
@@ -102,6 +135,7 @@ def pipe(monkeypatch):
         server.join(TIMEOUT)
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="serves a real named pipe")
 def test_a_request_s_events_arrive_in_order_before_its_answer_and_the_connection_stays(pipe):
     rounds = asyncio.run(_rounds(pipe, 3))
 
