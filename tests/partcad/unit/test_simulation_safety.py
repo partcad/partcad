@@ -573,6 +573,39 @@ def test_the_bound_holds_when_the_event_loop_itself_is_held_up(monkeypatch, tmp_
     assert _gone(int(pids.read_text()))
 
 
+@pytest.mark.skipif(not POSIX, reason="what blocks the loop here is a waitpid on a stopped child, a POSIX notion")
+def test_the_backstop_asks_for_the_run_again_when_it_could_not_be_had_at_the_start(monkeypatch):
+    monkeypatch.setattr(pc_runtime, "BACKSTOP", 0.5)
+    real = pc_runtime.process_owner
+    asked = []
+
+    def first_time_nothing(p):
+        asked.append(p.pid)
+        return None if len(asked) == 1 else real(p)
+
+    monkeypatch.setattr(pc_runtime, "process_owner", first_time_nothing)
+
+    async def main():
+        p = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-c",
+            "import time; time.sleep(600)",
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            **pc_runtime.bounded_spawn_options(0.5),
+        )
+        asyncio.get_running_loop().call_later(0.1, _gone, p.pid, 30.0)
+        with pytest.raises((asyncio.TimeoutError, TimeoutError)):
+            await pc_runtime.communicate(p, b"", timeout=0.5)
+        await asyncio.wait_for(p.wait(), 10)
+
+    started = time.monotonic()
+    asyncio.run(main())
+    assert time.monotonic() - started < 10
+    assert len(asked) >= 2
+
+
 @pytest.mark.skipif(not POSIX, reason="a reused process group id is a POSIX notion")
 def test_a_kill_that_finds_its_run_gone_spares_whatever_has_its_number_now():
     """A reaped run's pid, and the group id it led, can be handed to anything.

@@ -188,8 +188,12 @@ async def communicate(p, stdin: bytes, timeout=None):
 
         def backstop():
             fired.set()
-            if owner is not None:
-                kill_process_tree(p, from_thread=True, owner=owner)
+            # Asked again when it could not be had at the start: it is checked
+            # to be this process's child either way, so this cannot reach a
+            # process that has been given the run's number since.
+            current = owner or process_owner(p)
+            if current is not None:
+                kill_process_tree(p, from_thread=True, owner=current)
 
         timer = threading.Timer(timeout + BACKSTOP, backstop)
         timer.daemon = True
