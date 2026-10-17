@@ -33,12 +33,19 @@ started without a library.
 import os
 import signal
 import subprocess
+import sys
 import time
 
 # How long the processes are given to stop after being asked, in seconds, before
 # they are killed. Long enough for a server to close its files, short enough
 # that a run which has already used its budget is not kept much beyond it.
 GRACE = 2.0
+
+# How long a wrapper on Windows whose 'taskkill' left its tree standing stays
+# up, in seconds, before it exits all the same. Past PartCAD's own bound on the
+# run, which falls within 'simulation.TIMEOUT_GRACE' (30 s) of this one's and
+# finds the tree under this process for as long as it is alive.
+OUTLAST = 60.0
 
 
 def lead_a_group():
@@ -164,21 +171,39 @@ def stop_everything(exit_code):
 
     On Windows 'taskkill /T' takes this process along with its tree, so the
     status seen there is taskkill's rather than 'exit_code'; the answer, which
-    is what PartCAD reads, is already written either way.
+    is what PartCAD reads, is already written either way. A taskkill that
+    returns at all has not taken the tree, and leaving then would orphan what it
+    left where nothing finds it any more; so this process stays, as the root of
+    that tree, for PartCAD's own bound to find and kill it whole -- 'OUTLAST'
+    seconds at most.
     """
-    try:
-        if os.name == "nt":
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(os.getpid())],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=30,
+    if os.name == "nt":
+        try:
+            failed = (
+                "exit status %s"
+                % subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(os.getpid())],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=30,
+                ).returncode
             )
-        else:
+        except Exception as e:  # pylint: disable=broad-except
+            failed = "%s: %s" % (type(e).__name__, e)
+        try:
+            sys.stderr.write(
+                "taskkill could not stop this run's processes (%s); leaving them to PartCAD's own bound\n" % failed
+            )
+            sys.stderr.flush()
+            time.sleep(OUTLAST)
+        except Exception:  # pylint: disable=broad-except
+            pass
+    else:
+        try:
             stop_started()
-    except Exception:  # pylint: disable=broad-except
-        # The exit below is the point; nothing may stand in its way.
-        pass
+        except Exception:  # pylint: disable=broad-except
+            # The exit below is the point; nothing may stand in its way.
+            pass
     os._exit(exit_code)
 
 

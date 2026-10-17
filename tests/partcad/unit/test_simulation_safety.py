@@ -662,10 +662,31 @@ def test_stopping_everything_exits_with_the_status_asked_for_whatever_stopping_d
     monkeypatch.setattr(process_tree.os, "_exit", leave)
     monkeypatch.setattr(process_tree, "stop_started", broken)
     monkeypatch.setattr(process_tree.subprocess, "run", broken)
+    monkeypatch.setattr(process_tree.time, "sleep", lambda _seconds: None)
 
     with pytest.raises(SystemExit) as left:
         process_tree.stop_everything(124)
     assert left.value.code == 124
+
+
+def test_a_windows_wrapper_whose_taskkill_came_back_stays_for_partcad_to_stop_its_tree(monkeypatch, capsys):
+    """taskkill takes the wrapper too, so returning at all means the tree is still there."""
+    process_tree, _ = _wrappers(monkeypatch)
+    waited = []
+
+    def leave(code):
+        raise SystemExit(code)
+
+    monkeypatch.setattr(process_tree.os, "name", "nt")
+    monkeypatch.setattr(process_tree.os, "_exit", leave)
+    monkeypatch.setattr(process_tree.subprocess, "run", lambda *_a, **_k: subprocess.CompletedProcess([], 128))
+    monkeypatch.setattr(process_tree.time, "sleep", waited.append)
+
+    with pytest.raises(SystemExit) as left:
+        process_tree.stop_everything(124)
+    assert left.value.code == 124
+    assert waited == [process_tree.OUTLAST]
+    assert "exit status 128" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
