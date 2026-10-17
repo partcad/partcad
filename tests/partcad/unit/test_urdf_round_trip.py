@@ -18,7 +18,9 @@ it mimics; every link that is a rigid body is there under its name; and every
 shape is where it was, to a micrometre. What is not kept is said in the tests:
 a link on a fixed joint is one rigid body with its parent, so it is a shape of
 the parent's link, and a link with no geometry is no part of PartCAD's, so the
-chain it was in comes back through a dummy link named after the joint.
+chain it was in comes back - asked for with 'composites: massless', since a
+URDF has no type for the joint it composes into - through a link with no
+'<inertial>' named after the joint.
 """
 
 import asyncio
@@ -136,9 +138,9 @@ def _package(root, urdf):
     return pc.Context(str(root))
 
 
-def _export(ctx, assembly, directory, name="rig"):
+def _export(ctx, assembly, directory, name="rig", **options):
     path = os.path.join(str(directory), "%s.urdf" % name)
-    asyncio.run(assembly.render_async(ctx, "urdf", filepath=path, tolerance=1.0, angularTolerance=0.5))
+    asyncio.run(assembly.render_async(ctx, "urdf", filepath=path, tolerance=1.0, angularTolerance=0.5, **options))
     return path
 
 
@@ -285,12 +287,14 @@ def test_a_urdf_read_exported_and_read_again_keeps_its_kinematics(tmp_path):
     assert [step.axis for step in read["camera"].joint.free_steps()] == [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
 
     source = read_urdf(tmp_path / "source" / "rig.urdf")
-    exported_path = _export(ctx, rig, tmp_path / "out")
+    # The two joints through the gimbal are one universal joint, which a URDF
+    # has no type for: exported as the chain it was, through a massless link.
+    exported_path = _export(ctx, rig, tmp_path / "out", composites="massless")
     exported = read_urdf(exported_path)
 
     # Every link that is a body of its own, under its own name - the tool, on a
     # fixed joint, is a shape of the carriage's link - and the gimbal, which has
-    # no geometry, comes back as the dummy link between the two joints.
+    # no geometry, comes back as the massless link between the two joints.
     welded = body_of(source)
     assert set(exported["links"]) == {link for link in source["links"] if welded[link] == link} - {"gimbal"} | {
         "roll_link1"
@@ -299,6 +303,9 @@ def test_a_urdf_read_exported_and_read_again_keeps_its_kinematics(tmp_path):
     for name, joint in movable(source).items():
         assert_same_joint(name, joint, exported["joints"][name], renamed={"gimbal": "roll_link1"})
     assert_same_shapes(source, exported)
+    # It weighs nothing: a frame, as the gimbal link in the source was.
+    gimbal = ET.parse(exported_path).getroot().find("link[@name='roll_link1']")
+    assert gimbal is not None and gimbal.find("inertial") is None
 
     # And read again, it is the same mechanism.
     again_root = tmp_path / "out"
@@ -437,15 +444,22 @@ def test_hand_written_joints_go_out_as_urdf_and_come_back(tmp_path):
     kinds = {joint.name: kinematics.classify(joint.to_envelope()).kind for _, joint in rig.joints()}
     assert kinds == {"shoulder": kinematics.REVOLUTE, "wrist": kinematics.BALL, "spin": kinematics.SCREW}
 
+    # A ball and a screw have no URDF type: the export refuses them, and writes
+    # nothing...
+    refused = tmp_path / "refused"
+    refused.mkdir()
+    _export(ctx, rig, refused)
+    assert list(refused.iterdir()) == []
+    # ...unless asked to write them as chains through massless links.
     out = tmp_path / "out"
-    exported = read_urdf(_export(ctx, rig, out))
+    exported = read_urdf(_export(ctx, rig, out, composites="massless"))
     joints = exported["joints"]
     shoulder = joints["shoulder"]
     assert (shoulder["type"], shoulder["parent"], shoulder["child"]) == ("revolute", "base", "arm")
     assert (shoulder["limit"]["lower"], shoulder["limit"]["upper"]) == pytest.approx((-math.pi / 2, math.pi / 2))
     assert (shoulder["limit"]["effort"], shoulder["limit"]["velocity"]) == pytest.approx((2.0, math.pi))
     assert shoulder["dynamics"]["damping"] == pytest.approx(0.05)
-    # A ball is three turns through two dummy links, named after the joint.
+    # A ball is three turns through two massless links, named after the joint.
     wrist = [name for name, joint in joints.items() if name.startswith("wrist")]
     assert len(wrist) == 3 and {"wrist_link1", "wrist_link2"} <= set(exported["links"])
     # A screw is a turn and a move that mimics it by the lead: 2 mm a turn.

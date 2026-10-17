@@ -9,10 +9,12 @@ The module three exporters share - MJCF and SDFormat in the simulation plugins,
 URDF here - so that they cannot come to disagree about which parts of a robot
 are one body or how its joints are written. Two halves, tested apart:
 
-* **the classification** of a joint's free steps, row by row of the table in
-  section 8.8 of docs/design/simulation.md, on steps written by hand and on the
-  steps the core builds for every kind 'motion.type' names; and the frames each
-  exporter writes a joint in, checked against the joint's own product;
+* **the classification** of a joint's free steps, row by row of the canonical
+  set in section 8.13.3 of docs/design/simulation.md, on steps written by hand
+  and on the steps the core builds for every kind 'motion.type' names; the
+  frames each exporter writes a joint in, checked against the joint's own
+  product; and the same joint re-zeroed at its start, and read back from what
+  an engine would say about it (section 8.13.5);
 * **the body rule** of section 7, on trees the core builds from small packages
   of its own - instantiated and composed without any geometry, so none of this
   needs a sandbox - and over every ASSY object under examples/.
@@ -100,13 +102,13 @@ def _check_decomposition(joint):
     classification = joint.classification
     for values in _value_sets(joint):
         assert _close_pose(classification.location(values), joint.location(values)), (classification.kind, values)
-    if classification.kind not in (kinematics.CHAIN, kinematics.FIXED):
+    if classification.kind not in (kinematics.COMPOSITE, kinematics.FIXED):
         # A native joint sits at its origin: every line goes through it.
         assert all(point == (0.0, 0.0, 0.0) for point in classification.points), classification.points
 
 
 #
-# The classification table, row by row (docs/design/simulation.md, 8.8)
+# The classification table, row by row (docs/design/simulation.md, 8.13.3)
 #
 
 
@@ -114,7 +116,8 @@ TABLE = [
     ("none", [fixed((1, 2, 3))], kinematics.FIXED),
     ("one turn, limited", [free("turn", Z, -90, 90)], kinematics.REVOLUTE),
     ("one turn, bounded on one side", [free("turn", Z, None, 90)], kinematics.REVOLUTE),
-    ("one turn, unlimited", [free("turn", Z)], kinematics.CONTINUOUS),
+    # One turn is a revolute whatever its bounds: they are a property of it.
+    ("one turn, unlimited", [free("turn", Z)], kinematics.REVOLUTE),
     ("one move", [free("move", X, 0, 5)], kinematics.PRISMATIC),
     ("one move, unlimited, along a parameter twice the unit", [free("move", (0, 0, 2))], kinematics.PRISMATIC),
     (
@@ -141,6 +144,11 @@ TABLE = [
     ),
     ("three turns through a point", [free("turn", X), free("turn", Y), free("turn", Z)], kinematics.BALL),
     (
+        "three turns through a point, in another order",
+        [free("turn", Z), free("turn", X), free("turn", Y)],
+        kinematics.BALL,
+    ),
+    (
         "three turns through a point off the origin",
         [free("turn", Z), fixed((0, 0, 10), (0, 0, 1), 90), free("turn", X), free("turn", Y)],
         kinematics.BALL,
@@ -156,28 +164,52 @@ TABLE = [
         [free("move", X), free("move", Y), free("move", Z), free("turn", X), free("turn", Y), free("turn", Z)],
         kinematics.FLOATING,
     ),
-    # Anything else is a chain.
-    ("two parallel turns apart", [free("turn", Z), fixed((100, 0, 0)), free("turn", Z)], kinematics.CHAIN),
-    ("two turns that pass apart", [free("turn", Z), fixed((10, 0, 0)), free("turn", Y)], kinematics.CHAIN),
-    ("a turn and a move across it", [free("turn", Z), free("move", X)], kinematics.CHAIN),
-    ("two moves", [free("move", X), free("move", Y)], kinematics.CHAIN),
-    ("the turn before the two moves", [free("turn", Z), free("move", X), free("move", Y)], kinematics.CHAIN),
+    # The same pair in other coordinates: the turn first, the moves across it.
+    ("the turn before the two moves", [free("turn", Z), free("move", X), free("move", Y)], kinematics.PLANAR),
+    (
+        "the turn before the two moves, about a line off the origin",
+        [fixed((3, 4, 0)), free("turn", Z), fixed((10, 0, 0), (0, 0, 1), 30), free("move", X), free("move", Y)],
+        kinematics.PLANAR,
+    ),
+    # Anything else is a composite.
+    ("two parallel turns apart", [free("turn", Z), fixed((100, 0, 0)), free("turn", Z)], kinematics.COMPOSITE),
+    ("two turns that pass apart", [free("turn", Z), fixed((10, 0, 0)), free("turn", Y)], kinematics.COMPOSITE),
+    ("a turn and a move across it", [free("turn", Z), free("move", X)], kinematics.COMPOSITE),
+    ("two moves", [free("move", X), free("move", Y)], kinematics.COMPOSITE),
+    (
+        "the turn before two moves that are not across it",
+        [free("turn", Z), free("move", X), free("move", Z)],
+        kinematics.COMPOSITE,
+    ),
+    (
+        "three turns through a point, one of them bounded on its own",
+        [free("turn", X, -30, 30), free("turn", Y), free("turn", Z)],
+        kinematics.COMPOSITE,
+    ),
     (
         "three turns not through one point",
         [free("turn", X), free("turn", Y), fixed((5, 0, 0)), free("turn", Z)],
-        kinematics.CHAIN,
+        kinematics.COMPOSITE,
     ),
     (
         "a coupled pair across each other",
         [free("turn", Z), free("move", X, coupling={"step": 0, "ratio": 0.01, "offset": 0.0})],
-        kinematics.CHAIN,
+        kinematics.COMPOSITE,
     ),
     (
         "a coupled universal",
         [free("turn", Z), free("turn", X, coupling={"step": 0, "ratio": 1.0, "offset": 0.0})],
-        kinematics.CHAIN,
+        kinematics.COMPOSITE,
     ),
 ]
+
+
+def test_the_old_names_stay_for_the_plugins_and_classify_never_returns_continuous():
+    """'CHAIN' is 'COMPOSITE' under its old name, and 'CONTINUOUS' is kept only to be importable."""
+    assert kinematics.CHAIN == kinematics.COMPOSITE == "composite"
+    assert kinematics.CONTINUOUS == "continuous"
+    assert kinematics.CONTINUOUS not in {kind for _, _, kind in TABLE}
+    assert set(kinematics.NATIVE) == {kind for _, _, kind in TABLE} - {kinematics.FIXED, kinematics.COMPOSITE}
 
 
 @pytest.mark.parametrize("steps, kind", [(steps, kind) for _, steps, kind in TABLE], ids=[row[0] for row in TABLE])
@@ -197,6 +229,8 @@ def test_a_native_joint_is_centred_where_its_lines_meet():
     assert _close_vector(universal.origin[1], (0, 0, 10))
     planar = kinematics.classify([free("move", X), free("move", Y), fixed((3, 4, 0)), free("turn", Z)])
     assert _close_vector(planar.origin[1], (3, 4, 0))
+    turn_first = kinematics.classify([fixed((3, 4, 0)), free("turn", Z), free("move", X), free("move", Y)])
+    assert turn_first.kind == kinematics.PLANAR and _close_vector(turn_first.origin[1], (3, 4, 0))
     cylindrical = kinematics.classify([free("move", Z), fixed((5, 0, 0)), free("turn", Z)])
     assert _close_vector(cylindrical.origin[1], (5, 0, 0))
 
@@ -264,7 +298,7 @@ PENDULUM = [
 
 def test_the_chain_is_the_fixed_steps_between_the_freedoms():
     joint = kinematics.Joint({"name": "pendulum", "steps": PENDULUM})
-    assert joint.kind == kinematics.CHAIN
+    assert joint.kind == kinematics.COMPOSITE
     assert len(joint.origins) == 2
     assert _close_pose(joint.origin, kinematics.pose_of([[0, 0, 5], [0, 0, 1], 0]))
     assert _close_pose(joint.origins[1], kinematics.pose_of([[100, 0, 0], [0, 0, 1], 0]))
@@ -453,9 +487,9 @@ links:
     [
         ("motion: {type: revolute, limits: {lower: 0, upper: 90}}", kinematics.REVOLUTE),
         ("parameters: {turnZ: [-90, 90]}\nmotion: revolute", kinematics.REVOLUTE),
-        # A turn nothing bounds is continuous, whatever its declaration called it.
-        ("motion: revolute", kinematics.CONTINUOUS),
-        ("motion: continuous", kinematics.CONTINUOUS),
+        # A turn nothing bounds is a revolute too, and so is what 'continuous' meant.
+        ("motion: revolute", kinematics.REVOLUTE),
+        ("motion: continuous", kinematics.REVOLUTE),
         ("motion: {type: prismatic, limits: {lower: 0, upper: 5}}", kinematics.PRISMATIC),
         ("motion: cylindrical", kinematics.CYLINDRICAL),
         ("threadStep: 0.5\nmotion: screw", kinematics.SCREW),
@@ -477,7 +511,10 @@ def test_every_kind_a_motion_names_classifies_as_itself(tmp_path, stand_in_geome
     node = tree[shape_envelope.KEY_ASSEMBLY][1]
     assert kinematics.classify(node[shape_envelope.KEY_JOINT]).kind == kind
     _check_decomposition(arm.joint)
-    assert _close_pose(kinematics.compose(arm.parent.world, arm.joint.location()), arm.world)
+    assert _close_pose(kinematics.compose(arm.joint_parent.world, arm.joint.location()), arm.world)
+    # A floating joint holds nothing: the child is a free body, its joint kept.
+    assert arm.is_floating == (kind == kinematics.FLOATING)
+    assert (arm.parent is None) == (kind == kinematics.FLOATING)
 
 
 @pytest.mark.parametrize(
@@ -576,8 +613,12 @@ def _assert_placements(found, tree):
             if part.node is body.node:
                 assert part.world == flat[id(part.node)], (body.name, part.label)
         if body.joint is not None:
-            assert isinstance(body.parent, kinematics.Body)
-            assert _close_pose(kinematics.compose(body.parent.world, body.joint.location()), body.world), body.name
+            # Jointed to its parent, or - floating - read against the body it was connected to.
+            assert isinstance(body.joint_parent, kinematics.Body)
+            assert body.parent is body.joint_parent or (body.is_floating and body.parent is None)
+            assert _close_pose(
+                kinematics.compose(body.joint_parent.world, body.joint.location()), body.world
+            ), body.name
 
 
 def test_every_element_of_a_scene_is_a_body_of_its_own(tmp_path, stand_in_geometry):
@@ -691,6 +732,25 @@ def test_a_connection_that_keeps_a_freedom_is_a_joint_to_the_body_of_its_target(
     assert rig.children == [arm]
     (freedom,) = arm.joint.freedoms
     assert (freedom.lower, freedom.upper, freedom.value) == (-90.0, 90.0, 30.0)
+    _assert_placements(found, tree)
+
+
+def test_a_floating_child_is_a_free_body_read_against_the_one_it_was_connected_to(tmp_path, stand_in_geometry):
+    ctx = _context(tmp_path, {"rig.assy": RIG_ASSY}, PARTS_AND_SCENES, bore="motion: floating")
+    tree = _tree(ctx, ":rig")
+    found = kinematics.bodies(tree)
+    rig, arm = found
+    assert (arm.parent, arm.is_root, arm.is_floating, arm.joint_parent) == (None, True, True, rig)
+    assert rig.children == [] and not rig.is_floating
+    assert arm.joint.kind == kinematics.FLOATING and arm.joint.parent is rig and arm.joint.child is arm
+    assert kinematics.summary(found)[1] == {
+        "name": "arm",
+        "kind": "part",
+        "parent": None,
+        "fixed": False,
+        "parts": ["arm"],
+        "joint": {"name": "arm-base", "kind": kinematics.FLOATING, "parent": "rig"},
+    }
     _assert_placements(found, tree)
 
 

@@ -62,22 +62,34 @@ URDF and SDFormat to metres and radians, MJCF to metres and its own angles.
     'parts' (each a 'BodyPart' with 'node', 'name', 'label', 'physics',
     'placement' in the body's frame and 'world', which is
     'compose(body.world, placement)'); 'parent' (a Body, 'WORLD', or None for a
-    free root); 'fixed_to_world'; 'joint' (a 'Joint', or None for a root);
+    free body); 'fixed_to_world'; 'joint' (a 'Joint', or None for a root);
     'children'; 'physics' (the combined physics dict, or None when nothing in it
     weighs anything); 'displacement' ('mass_properties.displacement_of()' of its
     parts, or None); and 'mass_parts()', the (physics, packed placement) pairs
     'physics' was combined from.
+
+    **A floating body.** The child of a FLOATING joint is held by nothing: its
+    'parent' is None, as a free root's is, and it is in no body's 'children'.
+    It keeps its 'joint', whose 'parent' is the body it was connected to
+    ('joint_parent'), because that is what its pose is read against: a
+    reading of the joint is the child's pose in that body ('reading').
+    'is_floating' says which bodies these are. Every engine writes one as a
+    free body of its own -- MJCF a body directly in the '<worldbody>' with a
+    '<freejoint>', SDFormat a link with no joint in a model of its own -- and
+    the URDF exporter as a 'floating' joint from that body's link, URDF's
+    spelling of the same thing.
 
 ``Joint``
     The joint of a body to its parent, re-expressed for that pair: its 'steps'
     are the node's joint steps with, in front of them, the target node's frame
     in the parent body (a fixed step of role 'parentFrame', left out where it is
     the identity), so that the child body's frame is the parent body's times
-    their product. 'name', 'physics', 'soft_limits', 'mimic' and 'record' (the
-    node's joint as the tree stated it) come with it, and 'freedoms' is the free
+    their product. 'name', 'physics', 'soft_limits', 'mimic', 'turn_limit' (a
+    ball's one bound, degrees from its zero, or None) and 'record' (the node's
+    joint as the tree stated it) come with it, and 'freedoms' is the free
     steps as 'Freedom's: 'kind' (TURN or MOVE), 'axis' (a unit vector, in the
     frame the steps before it leave), 'lower'/'upper' (degrees, or millimetres
-    along the axis; None where unlimited), 'value' (the starting value, same
+    along the axis; None where open), 'value' (the starting value, same
     units), 'follows'/'ratio'/'offset' (a coupling: 'value = ratio * leader +
     offset', in those units), 'step' (its index in 'steps'), 'parameter' and
     'source' (what declared it). The frames an exporter needs, every one a pose
@@ -86,7 +98,7 @@ URDF and SDFormat to metres and radians, MJCF to metres and its own angles.
       origin                 the first freedom's frame in the parent body
       origins                each freedom's frame relative to the frame the one
                              before it leaves (the first's: the parent body) --
-                             a URDF chain through dummy links, one per freedom
+                             a URDF chain, one link per freedom
       tail                   the child body's frame relative to the frame the
                              last freedom leaves: where the child body sits in
                              the *moving* joint frame
@@ -108,30 +120,46 @@ URDF and SDFormat to metres and radians, MJCF to metres and its own angles.
 
 ``classify(joint) -> Classification``
     What the free steps of a joint (a 'Joint', a node's joint as the tree states
-    it, or a list of steps) are, as one of REVOLUTE (a turn with a bound on
-    either side), CONTINUOUS (a turn with none), PRISMATIC, CYLINDRICAL, SCREW,
-    UNIVERSAL, BALL, PLANAR, FLOATING, or CHAIN for anything else -- and FIXED
-    for steps with nothing free, which a body's joint never is. Beside the kind:
-    'freedoms'; 'origin', the native joint's frame in the frame the steps start
-    in, with every freedom at zero; per freedom its 'axes' (unit vectors) and
-    'points' in that frame; and 'tail', the child's frame relative to it, so
-    that the location at any values is
+    it, or a list of steps) are: exactly one of the canonical set of section
+    8.13.3 of the design record --
+
+      REVOLUTE     one turn, bounded on either side or on neither
+      PRISMATIC    one move, likewise
+      CYLINDRICAL  a turn and a move on one line, uncoupled, in either order
+      SCREW        the same, the move following the turn
+      UNIVERSAL    two turns whose lines cross; the first is fixed in the parent
+      BALL         three independent turns through one point, in any order, none
+                   bounded on its own: a ball is bounded by one angle, the
+                   joint's 'turn_limit'
+      PLANAR       two moves and the turn about their normal, the moves first or
+                   the turn first
+      FLOATING     three independent moves one after another, and three
+                   independent turns through one point, in any order
+      COMPOSITE    anything else: the chain of bodies a declaration leaves out
+                   (an XY stage's carriage, a gimbal's ring)
+
+    -- and FIXED for steps with nothing free, which a body's joint never is.
+    Beside the kind: 'freedoms'; 'origin', the native joint's frame in the
+    frame the steps start in, with every freedom at zero; per freedom its
+    'axes' (unit vectors) and 'points' in that frame; and 'tail', the child's
+    frame relative to it, so that the location at any values is
 
         origin . M_1(v_1) . M_2(v_2) ... M_n(v_n) . tail
 
     where M_i turns about, or moves along, axis i through point i, each in the
     frame the ones before it moved -- MJCF's joints-in-one-body, and URDF's and
-    SDFormat's single-axis joints. For every kind but CHAIN the points are the
-    origin, so a native joint sits at 'origin': a ball's centre, a universal
-    joint's crossing, a screw's or a planar joint's axis. See section 8.8 of the
-    design record for which format writes what.
+    SDFormat's single-axis joints. For every kind but COMPOSITE the points are
+    the origin, so a native joint sits at 'origin': a ball's centre, a
+    universal joint's crossing, a screw's or a planar joint's axis. See
+    section 8.13.4 of the design record for which format writes what, and
+    which refuses what.
 
 The classification table is the design record's, and the order of the freedoms
-is part of it: a planar joint is two moves *then* the turn about their normal,
-which is what 'motion: planar' implies and what a native planar joint means, and
-the other order is a chain. A coupling makes a pair a screw when the two lie on
-one axis and a chain otherwise; a 'mimic' is between joints and is the
-exporter's to write.
+is part of it only where it changes what the joint is: a planar joint is its
+two moves and its turn in either order, the same pair in other coordinates, and
+a floating one its six in any order that keeps its three moves together. A coupling makes a pair a screw when
+the two lie on one axis and a composite otherwise; a 'mimic' is between joints
+and is the exporter's to write.
 
 Placements. A part's 'world' is defined as its body's frame times its placement
 in the body, so the two always multiply to it exactly; what the tree states,
@@ -180,11 +208,12 @@ WORLD = "world"
 TURN = "turn"
 MOVE = "move"
 
-# What a joint's free steps are (see 'classify'). The names are the design
-# record's, which are 'motion.type''s, plus the two that only describe a result.
+# What a joint's free steps are (see 'classify'): one native type per physical
+# joint (docs/design/simulation.md, section 8.13.3), which are 'motion.type''s,
+# plus the two that only describe a result -- 'fixed', steps with nothing free,
+# and 'composite', a set of freedoms no native joint has.
 FIXED = "fixed"
 REVOLUTE = "revolute"
-CONTINUOUS = "continuous"
 PRISMATIC = "prismatic"
 CYLINDRICAL = "cylindrical"
 SCREW = "screw"
@@ -192,7 +221,15 @@ UNIVERSAL = "universal"
 BALL = "ball"
 PLANAR = "planar"
 FLOATING = "floating"
-CHAIN = "chain"
+COMPOSITE = "composite"
+NATIVE = (REVOLUTE, PRISMATIC, CYLINDRICAL, SCREW, UNIVERSAL, BALL, PLANAR, FLOATING)
+
+# Kept only until partcad-sim-mujoco and partcad-sim-gazebo stop using them, and
+# to be removed then: both plugins import this module, and their CI installs
+# PartCAD from 'devel'. 'classify()' never returns CONTINUOUS -- one turn is a
+# REVOLUTE whatever its bounds -- and CHAIN is COMPOSITE under its old name.
+CONTINUOUS = "continuous"
+CHAIN = COMPOSITE
 
 # The role of the fixed step a body's joint starts with: where the node it is
 # connected to sits in the parent body (see 'Joint').
@@ -476,6 +513,8 @@ class Joint:
         self.physics = dict(record.get("physics") or {})
         self.soft_limits = record.get("softLimits")
         self.mimic = record.get("mimic")
+        # A ball's one bound, in degrees: how far it turns from its zero.
+        self.turn_limit = _number(record.get("turnLimit"))
 
         steps = []
         if parent_frame is not None and parent_frame != IDENTITY:
@@ -681,51 +720,75 @@ def _independent(axes) -> bool:
     return abs(_dot(axes[0], _cross(axes[1], axes[2]))) > TOLERANCE
 
 
+def _moves_across(moves, normal) -> bool:
+    """Whether two moves span the plane across 'normal': not parallel, and each square to it."""
+    return (
+        not _parallel(moves[0], moves[1])
+        and abs(_dot(moves[0], normal)) <= TOLERANCE
+        and abs(_dot(moves[1], normal)) <= TOLERANCE
+    )
+
+
 def _kind(freedoms, axes, points):
     """The kind of a set of freedoms, and the point a native joint of it is centred on (or None)."""
     kinds = [freedom.kind for freedom in freedoms]
     coupled = [freedom for freedom in freedoms if freedom.follows is not None]
     count = len(freedoms)
     if count == 1:
-        if kinds[0] == TURN:
-            return (REVOLUTE if freedoms[0].limited else CONTINUOUS), None
-        return PRISMATIC, None
+        # One turn is a revolute whatever its bounds: a bound on either side,
+        # or on neither, is a property of the hinge and not a second kind.
+        return (REVOLUTE if kinds[0] == TURN else PRISMATIC), None
     if count == 2 and sorted(kinds) == [MOVE, TURN]:
         turn = 0 if kinds[0] == TURN else 1
         if not _parallel(axes[0], axes[1]):
-            return CHAIN, None
+            return COMPOSITE, None
         centre = _closest_to_origin(points[turn], axes[turn])
         if not coupled:
             return CYLINDRICAL, centre
         if len(coupled) == 1 and coupled[0].follows == freedoms[1 - coupled[0].index].index:
             return SCREW, centre
-        return CHAIN, None
+        return COMPOSITE, None
     if coupled:
         # A coupled freedom is not a freedom of its own, and only a screw is a
         # native joint with one in it.
-        return CHAIN, None
+        return COMPOSITE, None
     if count == 2 and kinds == [TURN, TURN]:
         centre = _meet(points[0], axes[0], points[1], axes[1])
-        return (UNIVERSAL, centre) if centre is not None else (CHAIN, None)
+        return (UNIVERSAL, centre) if centre is not None else (COMPOSITE, None)
     if count == 3 and kinds == [TURN, TURN, TURN] and _independent(axes):
         centre = _meet(points[0], axes[0], points[1], axes[1])
-        if centre is not None and _on_line(centre, points[2], axes[2]):
-            return BALL, centre
-        return CHAIN, None
-    if count == 3 and kinds == [MOVE, MOVE, TURN]:
-        normal = axes[2]
+        if centre is None or not _on_line(centre, points[2], axes[2]):
+            return COMPOSITE, None
+        if any(freedom.limited for freedom in freedoms):
+            # A ball is bounded by one angle, how far it turns from its zero
+            # (the joint's 'turn_limit'), and not turn by turn: three turns
+            # through a point each bounded on its own are the gimbal a ball
+            # has not got, which is what a composite is.
+            return COMPOSITE, None
+        return BALL, centre
+    if count == 3 and kinds == [MOVE, MOVE, TURN] and _moves_across(axes[:2], axes[2]):
+        # A planar joint, the moves first: its turn is about the line it is on.
+        return PLANAR, _closest_to_origin(points[2], axes[2])
+    if count == 3 and kinds == [TURN, MOVE, MOVE] and _moves_across(axes[1:], axes[0]):
+        # The same pair in the other order, the turn first: the moves are then
+        # across the plane in the frame the turn left, which is the same plane.
+        return PLANAR, _closest_to_origin(points[0], axes[0])
+    if count == 6 and sorted(kinds) == [MOVE] * 3 + [TURN] * 3:
+        # Six freedoms that hold nothing, in whatever order the connection
+        # named them ('toParams' puts the ones it names first): three moves
+        # one after another, so that no turn between two of them can turn one
+        # onto the other, and three turns about lines through one point.
+        moves = [index for index, kind in enumerate(kinds) if kind == MOVE]
+        turns = [index for index, kind in enumerate(kinds) if kind == TURN]
         if (
-            not _parallel(axes[0], axes[1])
-            and abs(_dot(axes[0], normal)) <= TOLERANCE
-            and abs(_dot(axes[1], normal)) <= TOLERANCE
+            moves == list(range(moves[0], moves[0] + 3))
+            and _independent([axes[i] for i in moves])
+            and _independent([axes[i] for i in turns])
         ):
-            return PLANAR, _closest_to_origin(points[2], normal)
-        return CHAIN, None
-    if count == 6 and kinds == [MOVE] * 3 + [TURN] * 3 and _independent(axes[:3]) and _independent(axes[3:]):
-        centre = _meet(points[3], axes[3], points[4], axes[4])
-        if centre is not None and _on_line(centre, points[5], axes[5]):
-            return FLOATING, centre
-    return CHAIN, None
+            centre = _meet(points[turns[0]], axes[turns[0]], points[turns[1]], axes[turns[1]])
+            if centre is not None and _on_line(centre, points[turns[2]], axes[turns[2]]):
+                return FLOATING, centre
+    return COMPOSITE, None
 
 
 def _classify(joint) -> Classification:
@@ -748,7 +811,7 @@ def _classify(joint) -> Classification:
     kind, centre = _kind(freedoms, axes, points)
     centre = _ORIGIN if centre is None else centre
     origin = compose(joint.origins[0], translation(centre))
-    if kind == CHAIN:
+    if kind == COMPOSITE:
         # Each turn's line by its point nearest the origin; a move has no line,
         # only a direction.
         points = [
@@ -811,6 +874,16 @@ class Body:
     def is_root(self) -> bool:
         """Whether nothing in the tree holds this body: it is free, or welded to the world."""
         return not isinstance(self.parent, Body)
+
+    @property
+    def is_floating(self) -> bool:
+        """Whether this is the child of a floating joint: a free body whose pose is read against another."""
+        return self.joint is not None and self.parent is None
+
+    @property
+    def joint_parent(self):
+        """The body this body's joint is to: its parent, or for a floating body the one it was connected to."""
+        return None if self.joint is None else self.joint.parent
 
     def mass_parts(self) -> list:
         """The (physics, packed placement) pairs 'physics' was combined from, placements in this body."""
@@ -978,8 +1051,17 @@ class _Builder:
                     target_body, target_frame = body, placement
                 else:
                     _, target_body, target_frame, _ = target
-                moving = self.new_body(child, child_world, child_path, target_body, False)
-                moving.joint = Joint(record, target_body, moving, target_frame)
+                joint = Joint(record, target_body, None, target_frame)
+                # A floating joint holds nothing: the child is a body of its
+                # own, free as a root is, and its joint stays only to say what
+                # its pose is read against -- the body it was connected to
+                # (section 8.13.2 of docs/design/simulation.md). Written as six
+                # freedoms under that body, a loose part would be nested in
+                # what it rests on and pass through it.
+                floating = joint.kind == FLOATING
+                moving = self.new_body(child, child_world, child_path, None if floating else target_body, False)
+                joint.child = moving
+                moving.joint = joint
                 self.fill(moving, child, IDENTITY, child_world, child_path)
                 placed.append((label, moving, IDENTITY, location))
             else:
@@ -1051,6 +1133,8 @@ def summary(found) -> list:
         }
         if body.joint is not None:
             row["joint"] = {"name": body.joint.name, "kind": body.joint.kind}
+            if body.is_floating:
+                row["joint"]["parent"] = body.joint_parent.name
         if body.physics:
             row["mass"] = body.physics.get("mass")
         rows.append(row)

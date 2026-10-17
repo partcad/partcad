@@ -235,8 +235,8 @@ def test_a_urdf_body_called_world_is_written_under_another_name_and_said_to_be()
     assert "'world' as 'world-2'" in said and "'a b' as 'a_b'" in said and "'cube'" not in said
 
 
-def test_a_dummy_link_yields_its_name_to_a_body_called_that():
-    """A chain's dummy link is '<joint>_link1', unless a body somebody named that has it."""
+def test_a_massless_link_yields_its_name_to_a_body_called_that():
+    """A chain's massless link is '<joint>_link1', unless a body somebody named that has it."""
     import urdf_common
 
     from .test_kinematics import Y, Z, free
@@ -258,8 +258,8 @@ def test_a_dummy_link_yields_its_name_to_a_body_called_that():
             },
         ],
     }
-    planned = export_urdf.Planner(kinematics.bodies(tree)).plan()
-    assert [(link.name, link.dummy) for link in planned.links] == [
+    planned = export_urdf.Planner(kinematics.bodies(tree), {"composites": "massless"}).plan()
+    assert [(link.name, link.massless) for link in planned.links] == [
         ("base", False),
         ("j_link1-2", True),
         ("j_link1", False),
