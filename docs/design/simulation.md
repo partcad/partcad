@@ -969,9 +969,10 @@ PartCAD models the handful of device types every simulator agrees on -- camera, 
 force-torque, and an actuator on a joint -- and, following section 2, reports any other device it is handed rather than
 carrying it as passthrough. The URDF reader counts sensors, transmissions and `ros2_control` blocks as dropped today.
 
-### 8.13 Native joint types, reconsidered (open)
+### 8.13 Native joint types, reconsidered (decided, being built)
 
-**Open: a proposal, not agreed and not built.** It revisits section 8.2's kinds, 7a's classification and 8.8's table,
+**Decided, not built yet.** The decisions are in 8.13.9; where one differs from what the text first proposed, the
+text says so in place. It revisits section 8.2's kinds, 7a's classification and 8.8's table,
 for two reasons. The vocabulary has pairs that name one thing, and a catch-all (`chain`) that is not a type. And two
 of the three exporters write what their format has no type for through links of 1 g that nobody built (`DUMMY_MASS`
 in `export_urdf.py` on #788 and in `export_world.py` on sim-gazebo #11), and write every joint at zero because their
@@ -1149,7 +1150,7 @@ Considered and not proposed:
 | MuJoCo free | the body's pose is `qpos0` | the body is written at its start |
 | MuJoCo, any joint | `<key qpos>`, which is copied into `mjData.qpos` only "when the simulation state is set to this keyframe": by a program, not at load | used only for a bounded ball that starts away from its zero (below) |
 | SDFormat | `<axis><initial_position>` is in 1.6 and 1.7, deprecated in 1.8 (`required="-1"`), and gone from 1.9 on. gz-sim 8 reads no starting value from a world (`SdfEntityCreator.cc`), and the system that would set one from `<model_state>` (gz-sim #2359) is an unmerged draft | re-zeroed |
-| URDF | none | re-zeroed |
+| URDF | none | kept at PartCAD's zero, and the start reported (decision 2) |
 
 **Re-zeroing.** Where an engine has no starting value, the joint is re-expressed so that the engine's zero *is*
 PartCAD's start. The child is written where the assembly shows it, and every axis is written where that configuration
@@ -1218,16 +1219,15 @@ reference configuration", and re-zeroing makes that reference the start.
 - for a free body, its parent body.
 
 The exporter writes this map and the simulator reads it. It is computed once, in `kinematics` (by `rezeroed()` and
-`reading()`), and no plugin carries a copy. Each format can carry it inside the file, so a model that is moved on its
-own still maps:
+`reading()`), and no plugin carries a copy.
 
-- MJCF, as a `<custom><text>`, which is kept in `mjModel`;
-- SDFormat, as an element of a declared namespace (`xmlns:partcad=...`), which libsdformat has preserved since
-  SDFormat 1.7 (`test/integration/custom_elems_attrs.sdf`);
-- URDF, likewise, since urdfdom ignores elements it does not know; that is how `<gazebo>` travels.
-
-The name transcoding being designed alongside this adds a map of names from the exporter to the simulator. If that map
-is a sidecar file, the joint map becomes a section of it rather than a second file.
+**Decided (6): it travels in the names sidecar** (`<file>.names.json`, `naming.write_sidecar`, #799), as each joint
+entry's `map`, beside the names it already carries -- one file from the exporter to the simulator, not two. The
+sidecar is what a simulation's `formatOptions: {names_file: true}` asks for; a file exported for somebody to open has
+none, and needs none, since nothing reads its joints back. Carrying the map inside each format instead was considered
+(MJCF `<custom><text>`, which `mjModel` keeps; an SDFormat element in a declared namespace, which libsdformat has
+preserved since 1.7; an unknown URDF element, which urdfdom ignores) and is not done: it would be three spellings of
+one map, each with its own reader.
 
 #### 8.13.6 Limits
 
@@ -1309,8 +1309,9 @@ are checked by unit tests too, rather than by examples that fail.
   - Nothing changes for the pendulum: `swing` has one freedom and reads as it did.
 - **URDF (#788):**
   - The dummy links go, and so do the `dummyMass` and `dummyInertia` options (passing one is reported).
-  - Cylindrical, screw, universal, ball and composite joints are refused.
-  - Starting values are re-zeroed, instead of being reported lost.
+  - Cylindrical, screw, universal, ball and composite joints are refused, unless `formatOptions: {composites:
+    massless}` asks for them as chains through links with no `<inertial>` (decision 1).
+  - Starting values stay at PartCAD's zero and are reported, as now (decision 2).
   - The URDF reader is unchanged: a URDF that already uses the dummy-link idiom imports as the chain it states.
 - **SDFormat (sim-gazebo #11):**
   - The dummy links go.
@@ -1329,29 +1330,40 @@ are checked by unit tests too, rather than by examples that fail.
   - A ball's bound in SDFormat, a planar joint's bounds in URDF, and any bound on a free body are warnings, as now.
   - A bounded ball that starts away from its zero in MJCF is reported, because of the keyframe.
   - `continuous` gets a lint notice.
-  - A starting value is no longer reported lost anywhere, unless URDF keeps PartCAD's zero (decision 2 below).
+  - A starting value is reported lost only by the URDF exporter, which keeps PartCAD's zero (decision 2).
 
-#### 8.13.9 What has to be decided
+#### 8.13.9 What was decided
 
-1. **Refusal, or massless links for URDF.** The proposal is to refuse. The alternative is an opt-in
-   (`formatOptions: {composites: massless}`) for a URDF that is read only for its kinematics, by ROS's
-   `robot_state_publisher` or MoveIt, where links without `<inertial>` are the idiom. Every simulator that reads such
-   a URDF then drops or refuses those links. SDFormat does not get them either way.
-2. **URDF's zero.** The proposal is to re-zero, so that any program loading the URDF starts the mechanism as the
-   assembly shows it. The cost is that a URDF of real hardware then has its joint zeros at the assembly's start, not
-   where its encoders read zero. The alternative is an option that keeps PartCAD's zero and reports the start lost,
-   until named configurations (8.11) give the start an SRDF `group_state`.
-3. **`continuous`:** a deprecated spelling (proposed), or an error.
-4. **A `type` that disagrees with its `dof`:** an error (proposed), or a report as now.
-5. **A ball's bound:** one angle, as MuJoCo bounds a ball (proposed), with per-turn ranges on a ball an error. The
+Decided on 2026-10-17. Each item says what was decided first, then what was weighed.
+
+1. **Refusal, or massless links for URDF.** *Decided: refuse by default, and offer the opt-in.* The proposal was to
+   refuse. The alternative was an opt-in (`formatOptions: {composites: massless}`) for a URDF that is read only for
+   its kinematics, by ROS's `robot_state_publisher` or MoveIt, where links without `<inertial>` are the idiom. Every
+   simulator that reads such a URDF then drops or refuses those links. SDFormat does not get them either way. Both:
+   a refusal is the default, because a URDF is most often loaded by something that simulates it, and the opt-in
+   serves the readers that do not; the refusal names the option.
+2. **URDF's zero.** *Decided: keep PartCAD's zero, and report the start.* The proposal was to re-zero, so that any
+   program loading the URDF starts the mechanism as the assembly shows it. The cost is that a URDF of real hardware
+   then has its joint zeros at the assembly's start, not where its encoders read zero. The alternative is an option
+   that keeps PartCAD's zero and reports the start lost, until named configurations (8.11) give the start an SRDF
+   `group_state`. A URDF describes the robot, and what reads it (ROS's tools, a robot's drivers) takes joint zero to
+   be the hardware's; re-zeroing stays for the engines, where the file is PartCAD's own and the plugin maps every
+   reading back.
+3. **`continuous`:** *decided: a deprecated spelling* of an unbounded `revolute`, with a `pc lint` notice, rather
+   than an error. The URDF converter stops writing it.
+4. **A `type` that disagrees with its `dof`:** *decided: an error*, from the `connect` check, rather than a report as
+   now.
+5. **A ball's bound:** *decided: one angle*, as MuJoCo bounds a ball, with per-turn ranges on a ball an error. The
    alternative is to keep per-turn ranges, which no engine can write natively.
-6. **Where the joint map travels:** inside the file (proposed), or as a section of the name work's sidecar.
-7. **Readings:** one entry per PartCAD joint, as a number or a per-parameter object (proposed), replacing
-   `<name>.<parameter>`.
-8. **`planar` in either order** (proposed), or only moves-then-turn, with the other order a composite.
-9. **Gazebo's gaps.** Cylindrical and planar pairs are common enough that refusing them in Gazebo will be felt. The
-   proposal accepts that, because the alternative is a body nobody built. Whether DART would run massless intermediate
-   links is untested, and nothing here depends on the answer.
+6. **Where the joint map travels:** *decided: as a section of the names sidecar* (8.13.5), not inside the file as
+   first proposed.
+7. **Readings:** *decided: one entry per PartCAD joint*, as a number or a per-parameter object, in PartCAD's units,
+   replacing `<name>.<parameter>`.
+8. **`planar` in either order:** *decided: either order*, rather than only moves-then-turn with the other order a
+   composite.
+9. **Gazebo's gaps.** *Decided: accepted.* Cylindrical and planar pairs are common enough that refusing them in
+   Gazebo will be felt. The proposal accepts that, because the alternative is a body nobody built. Whether DART
+   would run massless intermediate links is untested, and nothing here depends on the answer.
 
 ## 9. Simulations as tests
 
@@ -1606,8 +1618,7 @@ Each step is useful on its own, which is the test of whether the decomposition i
 - **Physics of a summed joint.** The proposal in 8.7 (agree or let the mating say) is not confirmed.
 - **The target-side sign convention** (8.3). It is today's placement behaviour; whether to keep it or change it before
   degrees of freedom make it visible in every joint's limits is open.
-- **Native joint types** (8.13): one type per physical joint, translated without dummy links, re-zeroed where an
-  engine has no starting value. A proposal; its decisions are listed in 8.13.9.
+- **Native joint types** (8.13): decided on 2026-10-17 (8.13.9), and being built.
 
 ## 15. Lessons recorded
 
