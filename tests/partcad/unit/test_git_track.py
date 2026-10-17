@@ -559,12 +559,15 @@ def test_contexts_that_agree_on_the_pin_cost_no_collection(tmp_path, upstream, u
     assert one.get_project("//dep").config_dir == two.get_project("//dep").config_dir
 
 
+@pytest.mark.timeout(300)
 def test_a_claim_goes_with_the_process_that_held_it(tmp_path, upstream, user_config):
     """Another process holds a claim until it ends, however it ends: killed, it leaves the file, not the claim."""
     first = upstream.head()
     second = upstream.commit("B")
     pinned_context(tmp_path / "one", upstream, user_config, first)  # downloaded, so the other process needs no network
 
+    log_path = tmp_path / "holder.log"
+    log = open(log_path, "w")
     holder = subprocess.Popen(
         [
             sys.executable,
@@ -585,10 +588,13 @@ def test_a_claim_goes_with_the_process_that_held_it(tmp_path, upstream, user_con
         ],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
+        # A file, not a pipe: nobody reads it until the end, and a pipe that
+        # fills up with the holder's logs would stop it before it says 'loaded'.
+        stderr=log,
         text=True,
     )
     try:
-        assert holder.stdout.readline().strip() == "loaded"
+        assert holder.stdout.readline().strip() == "loaded", log_path.read_text()
 
         pinned_context(tmp_path / "two", upstream, user_config, second)
         assert copies(user_config, upstream) == sorted(["-main", "-" + second])
@@ -598,17 +604,56 @@ def test_a_claim_goes_with_the_process_that_held_it(tmp_path, upstream, user_con
         holder.wait()
         holder.stdin.close()
         holder.stdout.close()
+        log.close()
 
     three = pinned_context(tmp_path / "three", upstream, user_config, second)
     assert head_of(Path(three.get_project("//dep").config_dir)) == second
     assert Path(three.get_project("//dep").config_dir).name == cache_dir_name(upstream.url, "main")
 
 
-def test_force_auto_update_leaves_a_copy_another_context_is_pinned_to(tmp_path, upstream, user_config, caplog):
+def test_an_unpinned_copy_another_context_is_built_from_is_not_moved_under_it(tmp_path, upstream, user_config):
+    """'pc init' tracks the index with no pin yet: the commit it was downloaded at is the one it reads from."""
+    write_package(tmp_path / "one", dependency(upstream, track="main"))
+    one = pc.Context(str(tmp_path / "one"), search_root=False, user_config=user_config)
+    assert one.get_project("//dep") is not None
+    second = upstream.commit("B")
+
+    pinned_context(tmp_path / "two", upstream, user_config, second)
+
+    assert (Path(one.get_project("//dep").config_dir) / "version.txt").read_text() == "A"
+    assert copies(user_config, upstream) == sorted(["-main", "-" + second])
+
+
+def test_force_auto_update_follows_the_branch_past_a_claimed_copy_in_one_of_its_own(tmp_path, upstream, user_config):
+    first = upstream.head()
+    one = pinned_context(tmp_path / "one", upstream, user_config, first)
+    tip = upstream.commit("B")
+
+    user_config.force_update = True
+    assert load_version(tmp_path / "one", user_config) == "B"
+
+    assert (Path(one.get_project("//dep").config_dir) / "version.txt").read_text() == "A"
+    assert copies(user_config, upstream) == sorted(["-main", "-" + tip])
+
+
+def test_force_auto_update_uses_a_claimed_copy_that_is_where_the_branch_is(tmp_path, upstream, user_config):
+    one = pinned_context(tmp_path / "one", upstream, user_config, upstream.head())
+
+    user_config.force_update = True
+    assert load_version(tmp_path / "one", user_config) == "A"
+
+    assert copies(user_config, upstream) == ["-main"]
+    assert one.get_project("//dep") is not None
+
+
+def test_force_auto_update_offline_leaves_a_claimed_copy_and_says_so(
+    tmp_path, upstream, user_config, monkeypatch, caplog
+):
     first = upstream.head()
     one = pinned_context(tmp_path / "one", upstream, user_config, first)
     upstream.commit("B")
 
+    monkeypatch.setattr(pc.Context, "is_connected", lambda self: False)
     user_config.force_update = True
     with caplog.at_level("WARNING"):
         version = load_version(tmp_path / "one", user_config)

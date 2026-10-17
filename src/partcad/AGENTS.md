@@ -1197,8 +1197,13 @@ at all).
   removed by whoever finds it. A context sits in reference cycles, so a context this process let go of goes on
   claiming until the cycle collector runs; a claim of this process's that is in the way is probed again after a
   `gc.collect()`, and only one in the way, because the daemon keeps a context per directory and most of them
-  agree. Only a commit pin claims: a branch is whatever the copy holds, so `forceUpdate`
-  (which follows the branch) claims nothing, and leaves a copy someone else claims where it is, with a warning.
+  agree. Every context built from a copy that can move claims it — a pin, and equally a branch nobody has pinned
+  yet (`pc init`'s index), which reads from the commit it was downloaded at; only a copy named after its commit
+  never moves. A claim only counts where it is in the way: one that agrees with what a load would do leaves that
+  load on its ordinary path, the check for an interrupted download included. `forceUpdate` stopped by a claim
+  follows the branch as a pin on its tip for that load (`_branch_tip`, one `ls-remote`): the claimed copy if that
+  is where the branch is, a commit-named copy if not, and — only when the tip cannot be found out, offline — the
+  claimed copy as it is, with a warning.
   `develIndex` gets a copy of its own (`-devel`) so that toggling it never moves the `main` one.
 
   Removing a copy goes through `_remove_tree`, never a bare `shutil.rmtree(..., ignore_errors=True)`, because

@@ -1334,6 +1334,18 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                 own = checkouts.get(cache_path, {}).get("claim")
         return _claimed_commits(cache_path, own, lambda commit: self._would_move(name, commit))
 
+    def _branch_tip(self, repo_url):
+        """The commit the branch this dependency follows is at now; None if it cannot be found out."""
+        if not self.ctx.is_connected():
+            return None
+        try:
+            heads = query_remote(self.ctx.user_config, repo_url, "the branch it follows")
+        except GIT_ERRORS as e:
+            pc_logging.warning("Could not find out where %s is now: %s" % (self.import_config_url, e))
+            return None
+        branch = self.import_revision or default_branch_of(heads)
+        return branch_commit(heads, branch) if branch else None
+
     def _would_move(self, name, commit) -> bool:
         """Whether this dependency would move the copy named 'name' off 'commit', were it nobody else's."""
         if name != self.import_revision:
@@ -1396,6 +1408,17 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         os.makedirs(cache_dir, exist_ok=True)
 
         cache_path = self._prepare_copy(repo_url, cache_dir, self.import_cache_name)
+        if cache_path is None and not looks_like_commit_id(self.import_revision or ""):
+            # A branch to follow past a copy another context is built from: it
+            # is followed as a pin on the commit the branch is at now - the copy
+            # as it is if that is where it is, a copy named after the commit if
+            # not - or, when where it is cannot be found out, not followed.
+            tip = self._branch_tip(repo_url)
+            if tip is None:
+                cache_path = self._prepare_copy(repo_url, cache_dir, self.import_cache_name, isolate=False)
+            else:
+                self.import_revision = tip
+                cache_path = self._prepare_copy(repo_url, cache_dir, self.import_cache_name)
         if cache_path is None:
             cache_path = self._prepare_copy(repo_url, cache_dir, self.import_revision)
 
@@ -1404,8 +1427,12 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
 
         return cache_path
 
-    def _prepare_copy(self, repo_url, cache_dir, name):
+    def _prepare_copy(self, repo_url, cache_dir, name, isolate=True):
         """Make the copy named 'name' hold this dependency's revision; None if it is in use at another.
+
+        With 'isolate', a branch to be followed past a copy another context is
+        built from also gets None, to be followed in a copy of its own; without,
+        that copy is used as it is.
 
         Returns the copy's path.
         """
@@ -1426,19 +1453,24 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
 
         with cache_lock, repo_file_lock:
             held = self._held_by_others(cache_path)
-            claimed = self._claimed_by_others(cache_path, name)
-            if held is not None or claimed:
-                others = claimed | ({held} if held is not None else set())
-                if name != self.import_revision and any(self._would_move(name, commit) for commit in others):
+            # Claims by other contexts that agree with what this one would do
+            # change nothing; only the ones in its way do.
+            blocking = {
+                commit for commit in self._claimed_by_others(cache_path, name) if self._would_move(name, commit)
+            }
+            if held is not None or blocking:
+                if name != self.import_revision and (blocking or self._would_move(name, held)):
                     # Another package, of this context or another, is built
                     # from this copy at another commit: not to be moved under it.
                     return None
                 # In use already, and at what this dependency asks for: used as
                 # it is, without a refresh moving it under the other package.
-                if any(self._would_move(name, commit) for commit in claimed):
+                if blocking:
+                    if isolate:
+                        return None
                     pc_logging.warning(
                         "Not updating %s: another PartCAD context is built from it at %s"
-                        % (self.import_config_url, ", ".join(sorted(claimed)))
+                        % (self.import_config_url, ", ".join(sorted(blocking)))
                     )
             else:
                 if os.path.exists(cache_path) and not os.path.exists(guard_path):
@@ -1462,13 +1494,9 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                         "%s is not at the commit it is pinned to, %s, which could not be fetched: "
                         "using the copy that was downloaded before" % (self.import_config_url, self.import_revision)
                     )
-            # Only a copy that moves needs claiming, and only for a pin: a copy
-            # named after its commit never moves, and a branch is whatever the
-            # copy holds.
-            self._hold(
-                cache_path,
-                claim=name != self.import_revision and looks_like_commit_id(self.import_revision or ""),
-            )
+            # Only a copy that moves needs claiming: one named after its commit
+            # never does.
+            self._hold(cache_path, claim=not looks_like_commit_id(name or ""))
 
         return cache_path
 
