@@ -1658,8 +1658,8 @@ Rules for plugins:
 ### 12.1 URDF (built)
 
 `type: urdf` reads a URDF as an assembly; `pc export -t urdf` writes one; `pc convert assembly` rewrites the package
-between URDF and ASSY. The reader parses with ROS's `urdf_parser_py` in a sandbox, walks the joint tree at zero -- each joint at its start,
-which is zero unless its limits leave zero out, and then the bound nearest it (`import_urdf.start_within`, so that no
+between URDF and ASSY. The reader parses with ROS's `urdf_parser_py` in a sandbox, walks the joint tree -- each joint at its start, which
+is zero unless its limits leave zero out, and then the bound nearest it (`import_urdf.start_within`, so that no
 joint starts against its stop; the converter writes the same start as `toParams`) -- and
 builds the same `Assembly`/`AssemblyChild` tree an ASSY file produces: **one flat list** of links at absolute
 placements -- an assembly is one configuration of the robot, so nesting a level per joint would make an arm as deep as
