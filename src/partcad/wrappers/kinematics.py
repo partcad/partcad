@@ -1198,7 +1198,9 @@ def joint_map(joint, freedoms=None, start=True, frame=None, followers=None) -> d
     body>"``, ``"origin"`` and ``"tail"`` (the native joint's frame in the
     parent body at PartCAD's zero, and the child's in its moving frame, as
     '[[w, x, y, z], [x, y, z]]' in millimetres), ``"length": 1000.0``
-    (millimetres per engine unit of a pose), and ``"moves"`` and ``"turns"``.
+    (millimetres per engine unit of a pose), and ``"sequence": [{"parameter",
+    "freedom", "axis", "start"}, ...]``, its six freedoms in the order they
+    apply, its three moves one after another.
     """
     if not isinstance(joint, Joint):
         joint = Joint(joint)
@@ -1289,12 +1291,19 @@ def turns_of(rotation, axes, near=None):
     that make every rotation, the one nearest 'near' (degrees; the starting
     values, so that a reading begins where the joint does) is returned, each
     turn unwrapped to the whole turns nearest it; at gimbal lock, where only a
-    sum is determined, the third turn is 'near''s.
+    sum is determined, the third turn is 'near''s. Anything but three axes --
+    a map that states none, as one written before its joint's turns were known
+    -- has no three turns either, and is None too; so is a 'near' of any other
+    length taken as none.
     """
+    axes = list(axes or [])
+    if len(axes) != 3:
+        return None
     n1, n2, n3 = (_unit(axis) for axis in axes)
     if None in (n1, n2, n3) or abs(_dot(n1, n2)) > TOLERANCE or abs(_dot(n2, n3)) > TOLERANCE:
         return None
-    near = [0.0, 0.0, 0.0] if near is None else [float(v) for v in near]
+    near = list(near or [])
+    near = [float(v) for v in near] if len(near) == 3 else [0.0, 0.0, 0.0]
     rotation = urdf_common.normalize(tuple(rotation))
     phi = math.degrees(math.atan2(_dot(n1, _cross(n2, n3)), _dot(n1, n3)))
     d = max(-1.0, min(1.0, _dot(n1, urdf_common.rotate_vec(rotation, n3))))
@@ -1335,6 +1344,88 @@ def _solve(columns, vector):
     ]
 
 
+def _plus(a, b):
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+
+def _scaled(vector, factor):
+    return tuple(float(v) * factor for v in vector)
+
+
+def _solvable(columns) -> bool:
+    return len(columns) == 3 and abs(_dot(columns[0], _cross(columns[1], columns[2]))) > TOLERANCE
+
+
+def _free_body_rates(entry, child, parent, rates, local, found):
+    """A free body's rates: each freedom's, by parameter, and its angular velocity in its moving joint frame.
+
+    'child' and 'parent' are the two bodies' world poses in millimetres,
+    'rates' their world twists as the engine states them -- '((linear),
+    (angular))' each, m/s of the body frame's origin and rad/s, both in the
+    world's axes -- 'local' the six freedoms' product 'M_1(v_1) ... M_6(v_6)'
+    and 'found' the turns read off it (or None). Returns '(by parameter,
+    angular)': mm/s and deg/s, the turns' only where their rates are
+    determined (not at gimbal lock), the moves' where the turns before them
+    are; and the angular velocity of the child against its parent, deg/s about
+    the axes of the moving joint frame, as a ball's is reported.
+
+    The velocity read is that of the native joint's moving origin relative to
+    the parent: the point every turn of the joint is about, which is what the
+    moves move. Its rate in the joint frame is 'd(B . A v)', B the turns before
+    the moves and A their axes, so the moves' rates are 'A^-1 B^-1 (t' - W_B x
+    t)', W_B being B's angular velocity, which is the turns' rates before the
+    moves along their axes as the turns before each leave it.
+    """
+    length = float(entry.get("length", MILLIMETRES_PER_METRE))
+    (child_linear, child_angular), (parent_linear, parent_angular) = (
+        (_scaled(twist[0], length), _scaled(twist[1], 1.0)) for twist in rates
+    )
+    origin, tail = _pose_of_data(entry["origin"]), _pose_of_data(entry["tail"])
+    # The moving origin, in the world, and its velocity against the parent's
+    # frame, stated in the parent's axes.
+    offset = rotate(child, inverse(tail)[1])
+    point = _plus(child[1], offset)
+    moving = _plus(child_linear, _cross(child_angular, offset))
+    carried = _plus(parent_linear, _cross(parent_angular, _minus(point, parent[1])))
+    to_parent = _conjugate(parent[0])
+    velocity = urdf_common.rotate_vec(to_parent, _minus(moving, carried))
+    spin = urdf_common.rotate_vec(to_parent, _minus(child_angular, parent_angular))
+    # The same in the native joint's frame at PartCAD's zero.
+    to_joint = _conjugate(origin[0])
+    velocity = urdf_common.rotate_vec(to_joint, velocity)
+    spin = urdf_common.rotate_vec(to_joint, spin)
+    angular = [v * DEGREES_PER_RADIAN for v in urdf_common.rotate_vec(_conjugate(local[0]), spin)]
+
+    by_parameter = {}
+    sequence = entry.get("sequence") or []
+    moves = [item for item in sequence if item["freedom"] == MOVE]
+    turns = [item for item in sequence if item["freedom"] == TURN]
+    first = next((index for index, item in enumerate(sequence) if item["freedom"] == MOVE), None)
+    before = [item for item in sequence[: first or 0] if item["freedom"] == TURN]
+    turn_rates = None
+    if found is not None and len(turns) == 3:
+        # Each turn's axis as the turns before it leave it, in the joint frame:
+        # what the angular velocity is the sum of, turn rate by turn rate.
+        columns, running = [], urdf_common.IDENTITY_Q
+        for item, angle in zip(turns, found):
+            columns.append(urdf_common.rotate_vec(running, item["axis"]))
+            running = urdf_common.quat_mul(running, urdf_common.axis_angle_to_quat(item["axis"], angle))
+        if _solvable(columns):
+            turn_rates = _solve(columns, spin)
+            for item, rate in zip(turns, turn_rates):
+                by_parameter[item["parameter"]] = rate * DEGREES_PER_RADIAN
+    if len(moves) == 3 and _solvable([move["axis"] for move in moves]) and (not before or turn_rates is not None):
+        swept = (0.0, 0.0, 0.0)
+        rotation = urdf_common.IDENTITY_Q
+        for index, item in enumerate(before):
+            axis = urdf_common.rotate_vec(rotation, item["axis"])
+            swept = _plus(swept, _scaled(axis, turn_rates[index]))
+            rotation = urdf_common.quat_mul(rotation, urdf_common.axis_angle_to_quat(item["axis"], found[index]))
+        along = urdf_common.rotate_vec(_conjugate(rotation), _minus(velocity, _cross(swept, local[1])))
+        by_parameter.update(zip([move["parameter"] for move in moves], _solve([m["axis"] for m in moves], along)))
+    return by_parameter, angular
+
+
 def _as_list(value):
     if isinstance(value, (int, float)):
         return [float(value)]
@@ -1352,9 +1443,13 @@ def reading(entries, positions, velocities=None) -> dict:
     z' for a ball; and for a free body the pair '(child pose, parent pose)',
     each '((w, x, y, z), (x, y, z))' in the world, metres. 'velocities' are the
     same for the rates, if any: a number or list per scalar engine joint (rad/s,
-    m/s) and a ball's angular velocity '[x, y, z]' in rad/s about the axes of
-    the frame it states its rotation in, moving with it (MuJoCo's). A free
-    body's rate is its body's, and is not read here.
+    m/s); a ball's angular velocity '[x, y, z]' in rad/s about the axes of
+    the frame it states its rotation in, moving with it (MuJoCo's); and for a
+    free body the pair '(child twist, parent twist)', each '((vx, vy, vz),
+    (wx, wy, wz))': the linear velocity of the body frame's origin in m/s and
+    the angular velocity in rad/s, both in the world's axes -- what MuJoCo's
+    'mj_objectVelocity' gives in the world's orientation, linear and angular
+    the other way round, and what Gazebo's link world velocities are.
 
     Returns the reading in PartCAD's terms (section 8.13.5 of
     docs/design/simulation.md), keyed by the joint's own names whatever the
@@ -1365,7 +1460,12 @@ def reading(entries, positions, velocities=None) -> dict:
     rotation in their joint frame from PartCAD's zero, and give their turns
     only where three turns can make a rotation ('turns_of'). 'vel' is in deg/s
     and mm/s, keyed as 'pos' is, and for a ball its angular velocity
-    '[x, y, z]' in deg/s about its moving joint frame.
+    '[x, y, z]' in deg/s about its moving joint frame. A free body's 'vel' is
+    an object: each of its six freedoms' rates by parameter, mm/s and deg/s --
+    a turn's only where its rate is determined (not at gimbal lock), and a
+    move's only where the turns before it are -- and ``"angular": [x, y, z]``,
+    the child's angular velocity against its parent in deg/s about the axes of
+    its moving joint frame, as a ball's is.
     """
     maps = [entry.get("map", entry) if isinstance(entry, dict) else {} for entry in entries]
     if not maps:
@@ -1376,6 +1476,7 @@ def reading(entries, positions, velocities=None) -> dict:
     result = {"type": kind}
     velocities = list(velocities) if velocities is not None else [None] * len(maps)
     angular = None
+    free_vel = None
     for entry, position, rate in zip(maps, positions, velocities):
         if "rotation" in entry:
             frame = tuple(entry.get("frame") or urdf_common.IDENTITY_Q)
@@ -1408,9 +1509,13 @@ def reading(entries, positions, velocities=None) -> dict:
             moves = [item for item in sequence if item["freedom"] == MOVE]
             result["quat"] = [float(v) for v in local[0]]
             found = turns_of(local[0], [turn["axis"] for turn in turns], [turn.get("start", 0.0) for turn in turns])
+            first = next((index for index, item in enumerate(sequence) if item["freedom"] == MOVE), None)
+            movable = len(moves) == 3 and _solvable([move["axis"] for move in moves])
             if found is not None:
                 pos.update(zip([turn["parameter"] for turn in turns], found))
-                first = next(index for index, item in enumerate(sequence) if item["freedom"] == MOVE)
+            if movable and (found is not None or first == 0):
+                # The moves, turned back by the turns before them -- which the
+                # moves need no turn to be read where they come first.
                 before = urdf_common.IDENTITY_Q
                 for item in sequence[:first]:
                     before = urdf_common.quat_mul(
@@ -1418,9 +1523,8 @@ def reading(entries, positions, velocities=None) -> dict:
                     )
                 along = urdf_common.rotate_vec(_conjugate(before), local[1])
                 pos.update(zip([move["parameter"] for move in moves], _solve([m["axis"] for m in moves], along)))
-            elif all(item["freedom"] == MOVE for item in sequence[:3]):
-                # The moves come first: they need no turn to be read.
-                pos.update(zip([move["parameter"] for move in moves], _solve([m["axis"] for m in moves], local[1])))
+            if rate is not None:
+                free_vel = _free_body_rates(entry, child, parent, rate, local, found)
             continue
         coordinates = entry.get("coordinates") or []
         values = _as_list(position)
@@ -1438,7 +1542,10 @@ def reading(entries, positions, velocities=None) -> dict:
 
     if pos:
         result["pos"] = next(iter(pos.values())) if count == 1 and len(pos) == 1 else pos
-    if angular is not None:
+    if free_vel is not None:
+        by_parameter, spin = free_vel
+        result["vel"] = dict(by_parameter, angular=spin)
+    elif angular is not None:
         result["vel"] = angular
     elif vel:
         result["vel"] = next(iter(vel.values())) if count == 1 and len(vel) == 1 else vel

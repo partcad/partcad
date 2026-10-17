@@ -1246,6 +1246,14 @@ reference configuration", and re-zeroing makes that reference the start.
 - A ball's three turns are reported when its axes can decompose a rotation, which needs each next pair of axes to be
   perpendicular (Davenport's condition). The turnX, turnY, turnZ that `motion: ball` implies meet it. Otherwise only
   `quat` is reported.
+- A ball's `vel` is its angular velocity, `[x, y, z]` in deg/s about the axes of its moving joint frame. A free body's
+  is an object: each of its six freedoms' rates by parameter, mm/s and deg/s, and `"angular"`, the child's angular
+  velocity against its parent in deg/s about the axes of its moving joint frame, as a ball's is. A turn's rate is left
+  out where it is not determined (at gimbal lock), and so is a move's that comes after turns whose rates are not. The
+  plugin hands in the two bodies' world velocities as its engine gives them -- each body frame origin's linear
+  velocity in m/s and its angular velocity in rad/s, both in the world's axes (MuJoCo's `mj_objectVelocity` in the
+  world's orientation, Gazebo's link world velocities) -- because the joint is read against the parent, which may
+  move too.
 - This replaces today's `<name>.<parameter>` keys, so one validation reads MuJoCo and Gazebo alike.
 
 **The joint map.** For each engine joint, the plugin needs:
@@ -1453,8 +1461,12 @@ the text above left open. What the engine plugins build on is in `kinematics`' d
   parent's world poses for a free body -- in, and `{"type", "pos", "vel", "quat"}` out, keyed by parameter where the
   joint has several freedoms. A ball's and a free body's turns are Davenport's decomposition (`turns_of`), the one of
   its two solutions nearest the start, each turn unwrapped to the whole turns nearest it, the third turn the start's
-  at gimbal lock; a ball's `vel` is its angular velocity. A free body's velocity is not read: its body's is the
-  engine's.
+  at gimbal lock; a ball's `vel` is its angular velocity. A free body's `vel` is read from the two bodies' world
+  twists (`velocities` is `(child twist, parent twist)`, each `((vx, vy, vz), (wx, wy, wz))` in m/s and rad/s): the
+  velocity of the native joint's moving origin against the parent gives the moves' rates, the relative angular
+  velocity the turns' (where their axes are not at gimbal lock), and both by parameter beside `"angular"` (8.13.5). A
+  map that states fewer than three turns has none to report: `turns_of()` is None for anything but three axes, and a
+  reading then has only `quat`.
 - **Names in a reading** are `Joint.parameter_names()`: each freedom's parameter, `-2` where two would be one name.
 - **`pc info`** shows each joint's `type`, asked of `kinematics` by the core (`partcad.joint.Joint.type`), so that it
   is the type an export writes.

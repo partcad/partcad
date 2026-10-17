@@ -618,6 +618,89 @@ def test_a_joint_reads_back_as_partcad_states_it_whatever_the_engine_wrote(steps
         )
 
 
+def test_a_map_with_no_turns_reads_only_its_rotation():
+    """A ball's or a free body's map that states no turns -- or not three -- has no turns to report, and no crash."""
+    ball = {"kind": kinematics.BALL, "freedoms": 3, "rotation": [1, 0, 0, 0], "frame": [1, 0, 0, 0]}
+    assert kinematics.reading([ball], [[1, 0, 0, 0]]) == {"type": kinematics.BALL, "quat": [1.0, 0.0, 0.0, 0.0]}
+    half = dict(ball, turns=[{"parameter": "turnX", "axis": [1, 0, 0], "start": 0.0}])
+    assert "pos" not in kinematics.reading([half], [[1, 0, 0, 0]])
+    assert kinematics.turns_of((1.0, 0.0, 0.0, 0.0), []) is None
+    assert kinematics.turns_of((1.0, 0.0, 0.0, 0.0), [X, Y]) is None
+    # A start of the wrong length is taken as none, not refused.
+    assert kinematics.turns_of((1.0, 0.0, 0.0, 0.0), [X, Y, Z], [5.0]) == pytest.approx([0.0, 0.0, 0.0])
+    free_body = {
+        "kind": kinematics.FLOATING,
+        "freedoms": 6,
+        "parent": "base",
+        "origin": [[1, 0, 0, 0], [0, 0, 0]],
+        "tail": [[1, 0, 0, 0], [0, 0, 0]],
+    }
+    pose = ((1.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.1))
+    twist = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+    read = kinematics.reading([free_body], [(pose, pose)], [(twist, twist)])
+    assert read == {"type": kinematics.FLOATING, "quat": [1.0, 0.0, 0.0, 0.0], "vel": {"angular": [0.0, 0.0, 0.0]}}
+
+
+def _world_twist(pose_at, h=1e-5):
+    """A body's world twist at t = 0, from its world poses at -h and +h: '((m/s), (rad/s))', both in the world's axes."""
+    before, after = pose_at(-h), pose_at(h)
+    linear = tuple((a - b) / (2 * h) / 1000.0 for a, b in zip(after[1], before[1]))
+    axis, angle = urdf_common.quat_to_axis_angle(urdf_common.quat_mul(after[0], _conjugate(before[0])))
+    return linear, tuple(a * math.radians(angle) / (2 * h) for a in axis)
+
+
+@pytest.mark.parametrize(
+    "steps", [steps for name, steps in STARTED if name.startswith("floating")], ids=["moves first", "a turn first"]
+)
+def test_a_free_body_reads_its_rates_from_the_engine_s_velocities(steps):
+    """Each freedom's rate by parameter, and its angular velocity in its moving joint frame -- its parent moving too."""
+    joint = _started(steps)
+    names = joint.parameter_names()
+    rates = [30.0, -20.0, 15.0, 12.0, -7.0, 25.0]
+    rates = [
+        (
+            rates[[i for i, f in enumerate(joint.freedoms) if f.kind == kinematics.MOVE].index(f.index)]
+            if f.kind == kinematics.MOVE
+            else rates[3 + [i for i, f in enumerate(joint.freedoms) if f.kind == kinematics.TURN].index(f.index)]
+        )
+        for f in joint.freedoms
+    ]
+    starts = joint.values()
+
+    def values(t):
+        return [s + r * t for s, r in zip(starts, rates)]
+
+    spin = urdf_common.axis_angle_to_quat((0.0, 1.0, 1.0), 1.0)
+
+    def parent_at(t):
+        turned = urdf_common.quat_mul(urdf_common.axis_angle_to_quat((0.0, 1.0, 1.0), math.degrees(0.3 * t)), spin)
+        return (turned, (5.0 + 10.0 * t, 6.0 + 20.0 * t, 7.0 - 5.0 * t))
+
+    def child_at(t):
+        return kinematics.compose(parent_at(t), joint.location(values(t)))
+
+    def metres(pose):
+        return (pose[0], tuple(v / 1000.0 for v in pose[1]))
+
+    parent = kinematics.Body({"label": "base"}, "base", (), parent_at(0.0), None, False)
+    joint.parent = parent
+    entry = kinematics.joint_map(joint)
+    read = kinematics.reading(
+        [entry], [(metres(child_at(0.0)), metres(parent_at(0.0)))], [(_world_twist(child_at), _world_twist(parent_at))]
+    )
+    assert _close_reading(read["pos"], dict(zip(names, starts)))
+    vel = read["vel"]
+    assert set(vel) == set(names) | {"angular"}
+    for name, rate in zip(names, rates):
+        assert vel[name] == pytest.approx(rate, abs=1e-5), name
+    # The angular velocity about the moving joint frame's axes: the turns' rotation's own rate, in it.
+    h = 1e-5
+    before, after = (_in_joint_frame(joint, values(t)) for t in (-h, h))
+    axis, angle = urdf_common.quat_to_axis_angle(urdf_common.quat_mul(_conjugate(before), after))
+    expected = [a * angle / (2 * h) for a in axis]
+    assert vel["angular"] == pytest.approx(expected, abs=1e-5)
+
+
 def test_a_reading_keeps_a_turn_past_half_a_turn():
     """The 'wound' example of 8.13.7: started at 270, it reads 270, and 360 at the bottom - not -90 or 0."""
     joint = kinematics.Joint({"name": "swing", "steps": [free("turn", Z, value=270)]})
