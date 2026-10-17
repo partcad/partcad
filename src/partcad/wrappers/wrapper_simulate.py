@@ -78,13 +78,35 @@ picture. They are what the IDE's Simulation tab shows, side by side.
 Both '__file__' and the run name '__partcad_simulate__' are set on the script,
 so it can gate any top-level work ("if __name__ == '__partcad_simulate__':")
 and remain importable by its siblings.
+
+**The run's budget.** ``request["timeout"]`` is how long the whole run may take,
+in wall-clock seconds from when this wrapper starts; PartCAD works it out (see
+'partcad.simulation.run_budget') and hands it to the plugin as it hands every
+other parameter. When it is spent, this wrapper answers for the plugin --
+``{"success": False, "timed_out": <seconds>, ...}`` -- stops everything the
+plugin started and exits with 124, the status coreutils' ``timeout`` uses. It is
+here, inside the sandbox, rather than only in PartCAD, because PartCAD may not
+be able to reach what is running: in the ``docker`` sandbox all it started is a
+``docker exec`` client (see 'process_tree.py'). PartCAD keeps a bound of its own
+a little longer than this one, for a run so wedged that this one cannot act.
+
+A plugin that wants to say more than "timed out" -- how far it got, what it was
+waiting for -- stops itself a little before the budget is spent, and reports
+that as its own ``exception``.
+
+Whatever the plugin leaves running when it returns is stopped too, on every way
+out: a process that outlives the run holds its output open, and PartCAD would
+wait for it as for a run that never finished.
 """
 
+import math
 import os
 import runpy
 import sys
+import threading
 
 sys.path.append(os.path.dirname(__file__))
+import process_tree
 import wrapper_common
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
@@ -100,6 +122,19 @@ SCRIPT_KEY = "__script__"
 # What a plugin's result has to carry. Everything else in it is the plugin's
 # own, and is passed through untouched.
 REQUIRED_KEYS = ("before", "after")
+
+# The request's key for the run's budget, in wall-clock seconds; see the
+# docstring above. 'partcad.simulation.TIMEOUT_KEY' is its twin.
+TIMEOUT_KEY = "timeout"
+
+# The result's key a spent budget is reported under, carrying the seconds.
+# 'partcad.simulation.TIMED_OUT_KEY' is its twin.
+TIMED_OUT_KEY = "timed_out"
+
+# The exit status of a run stopped because its budget was spent: the one
+# coreutils' 'timeout' exits with, so that whoever reads only the status still
+# reads it as what it is.
+TIMED_OUT_EXIT = 124
 
 
 def _failed(exception):
@@ -184,14 +219,92 @@ def anchor(path, request):
     return request
 
 
-if __name__ == "__main__":
+def budget_of(request):
+    """The run's budget in seconds, or None when the request states none that is one."""
+    value = request.get(TIMEOUT_KEY) if isinstance(request, dict) else None
+    if isinstance(value, bool):
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) and value > 0 else None
+
+
+def timed_out(seconds):
+    """The answer given for a plugin whose budget was spent."""
+    return {
+        "success": False,
+        "exception": "the plugin did not finish within its budget of %g s, and was stopped with everything it started"
+        % seconds,
+        TIMED_OUT_KEY: seconds,
+    }
+
+
+class Answer:
+    """The one answer this process gives: the run's, or the watchdog's, whichever is first."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._given = False
+
+    def give(self, result):
+        """Write 'result' as the answer; False, and nothing written, if one was already given."""
+        with self._lock:
+            if self._given:
+                return False
+            self._given = True
+        wrapper_common.handle_output(result)
+        return True
+
+
+def watch(seconds, answer):
+    """Answer for the run, and stop it, once 'seconds' have passed. Returns the timer.
+
+    A thread, so it acts whatever the plugin is doing -- stepping a model,
+    waiting on a pipe, sleeping -- short of holding the interpreter in native
+    code, which is what PartCAD's own, longer bound is for.
+    """
+
+    def expire():
+        if answer.give(timed_out(seconds)):
+            process_tree.stop_everything(TIMED_OUT_EXIT)
+
+    timer = threading.Timer(seconds, expire)
+    timer.daemon = True
+    timer.start()
+    return timer
+
+
+def main():
+    """Answer the one request on standard input, within its budget."""
     # Read raw: nothing here is geometry, and decoding would need OCP in a
     # sandbox that has no reason to carry it.
     path, request = wrapper_common.handle_input(decode=False)
     request = anchor(path, request)
     script = request.pop(SCRIPT_KEY, None)
-    if script is None:
-        result = _failed(Exception("No implementation script was passed to the simulation wrapper"))
-    else:
-        result = process(script, path, request)
-    wrapper_common.handle_output(result)
+    answer = Answer()
+    budget = budget_of(request)
+    # Before the plugin starts anything, so that everything it starts is in
+    # this process's group and can be found again.
+    process_tree.lead_a_group()
+    timer = watch(budget, answer) if budget is not None else None
+    try:
+        if script is None:
+            result = _failed(Exception("No implementation script was passed to the simulation wrapper"))
+        else:
+            result = process(script, path, request)
+        if not answer.give(result):
+            # The budget ran out first and the watchdog has answered; it is
+            # stopping everything, this thread included.
+            threading.Event().wait()
+        if timer is not None:
+            timer.cancel()
+    finally:
+        # Whatever the plugin left running, so that nothing outlives the run
+        # holding its output open -- on the way out of a run that raised, too.
+        process_tree.stop_started()
+
+
+if __name__ == "__main__":
+    main()

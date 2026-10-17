@@ -22,12 +22,23 @@ held. Everything else fails, and says which object, which simulation and why:
   not there or cannot hold a subject. Wrong wherever the package is opened, so
   no machine excuses it;
 * a plugin that resolved and did not deliver -- a sandbox that will not build, a
-  simulator that will not install on this platform, a crash. **Not running is
-  not a reason to skip**, for the reason the `fea`/`cfd` checks give: the object
-  asked a question, and calling no answer a skip reports it as checked when
-  nothing checked it. The one excuse is theirs too -- a plugin that names a
-  `container:` or a `dockerImage`, on a machine with no container runtime -- and
-  so is the code deciding it, `ImplementationTest._verdict()`;
+  simulator that will not install on this platform, a crash, a run that did not
+  finish within its budget. **Not running is not a reason to skip**, for the
+  reason the `fea`/`cfd` checks give: the object asked a question, and calling
+  no answer a skip reports it as checked when nothing checked it. The one
+  excuse is theirs too -- a plugin that names a `container:` or a
+  `dockerImage`, on a machine with no container runtime -- and so is the code
+  deciding it, `ImplementationTest._verdict()`;
+
+**A timeout is a failure**, for the same reason and with the same one excuse: a
+run that hangs is a defect -- of the plugin, of the model it was handed, or of
+how long the package says the run takes -- and a check that skipped it would
+pass a package whose claim nobody can ever check. It is reported like any other
+run that did not deliver, naming the plugin, the budget, what set the budget and
+how to raise it (`simulation.SimulationTimeout`), and so is a plugin that died
+or answered with something that is not an answer (`simulation.SimulationCrash`),
+with the end of what it wrote to standard error. Neither is remembered: only a
+verdict on a run that came back is;
 * a run whose `validation:` does not hold, or will not evaluate.
 
 A declaration with **no `validation:`** states no condition, so there is nothing
@@ -125,7 +136,12 @@ class SimTest(ImplementationTest):
         kind = pc_simulation.subject_kind(shape)
         entries = []
         for declaration in declarations:
-            entry = {"name": declaration.name, "config": declaration.config}
+            # The declaration as written, but for the run's budget, which is
+            # in no key (see 'simulation.without_budget').
+            config = dict(declaration.config)
+            if isinstance(config.get("params"), dict):
+                config["params"] = pc_simulation.without_budget(config["params"])
+            entry = {"name": declaration.name, "config": config}
             if declaration.validation:
                 run = await pc_simulation.question_key_async(ctx, shape, kind, declaration)
                 entry["run"] = run if run is not None else "unkeyed-%s" % uuid.uuid4().hex

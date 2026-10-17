@@ -696,6 +696,18 @@ at all).
   the check keeps the lines that are its verdict to itself: `pc` exits non-zero on any `ERROR`, so a run that
   logged one in its own name could not then be *skipped*.
 
+  **Every run is bounded, from both sides of the sandbox.** `simulation.run_budget()` resolves a wall-clock
+  budget (`simulation.timeout` / `PC_SIMULATION_TIMEOUT` over `params: {timeout}` over the plugin's `timeout:`
+  over `max(300 s, 10 s x duration)`) and hands it to the plugin as `request["timeout"]`. Inside the sandbox
+  `wrappers/wrapper_simulate.py` holds the run to it -- it leads a process group, answers `timed_out` and stops
+  everything the plugin started (`wrappers/process_tree.py`, stdlib only) -- because in the `docker` sandbox
+  PartCAD's own child is a `docker exec` client and killing it reaches nothing in the container. Outside,
+  `runtime.communicate` waits the budget plus `TIMEOUT_GRACE` and, on expiry or cancellation, takes the whole
+  tree with `runtime.kill_process_tree` (a bounded run starts as a session of its own:
+  `runtime.bounded_spawn_options`). A spent budget is `SimulationTimeout`; a non-zero exit, a signal or an
+  answer that is not a JSON object is `SimulationCrash` with the tail of stderr. Both reach `pc test` as a
+  run that did not deliver -- a failure, with the one excuse -- and neither is cached.
+
   A declaration with **no `validation:`** is not run: in a walk over a package it is skipped, and asked about
   by name (`Test.NAMED`, which `_test_async` sets for an object named without a walk) it fails. `pc sim` still
   runs it and reports that it ran -- there it is how somebody looks at what a plugin reports before writing the

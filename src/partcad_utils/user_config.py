@@ -11,6 +11,7 @@ import importlib._bootstrap
 import importlib._bootstrap_external
 import importlib.machinery
 import importlib.util
+import math
 import os
 import shutil
 from pathlib import Path
@@ -303,6 +304,21 @@ class TelemetryConfig(dict):
         return str({k: v for k, v in properties})
 
 
+def _positive_seconds(value):
+    """'value' as a positive, finite number of seconds, or None.
+
+    A setting read from the environment arrives as text, so text that is a
+    number is one; a boolean is not, although Python would count it as 1.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) and value > 0 else None
+
+
 # The options a user configuration resolves to, by their configuration-file
 # names. This is what travels when one process hands its configuration to
 # another; a new option belongs here, or the daemon will keep resolving it from
@@ -343,6 +359,7 @@ OPTION_KEYS = (
     "git.clone.retry.max",
     "git.clone.retry.patience",
     "plugin.query.timeout",
+    "simulation.timeout",
     "useDocker",
     "useDockerPython",
     "useDockerKicad",
@@ -1023,6 +1040,23 @@ class UserConfig(vyper.Vyper):
         if not self.plugin_query_timeout or self.plugin_query_timeout <= 0:
             # An unset or nonsensical value must not turn the bound back off
             self.plugin_query_timeout = 180
+
+        # option: simulation.timeout
+        # description: how long one simulation run may take on this machine,
+        #              in wall-clock seconds, over whatever the simulation and
+        #              its plugin declare. Unset, a run is given the 'timeout'
+        #              its 'simulate:' passes in 'params', else its plugin's,
+        #              else the larger of five minutes and ten times the
+        #              simulated 'duration' (see 'partcad.simulation.run_budget').
+        #              It is the one knob for somebody who cannot edit the
+        #              package: a slow machine, or a CI job that would rather
+        #              fail fast. It can lengthen and shorten a run alike, and
+        #              it cannot turn the bound off: zero, a negative number or
+        #              anything that is not one is no setting at all.
+        # values: <float>
+        # default: unset
+        self.bind_env("simulation.timeout", "PC_SIMULATION_TIMEOUT")
+        self.simulation_timeout = _positive_seconds(self.get("simulation.timeout"))
 
         # option: telemetry
         # description: Telemetry configuration

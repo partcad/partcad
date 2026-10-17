@@ -982,6 +982,7 @@ that runs and reports simulations; both go through one implementation.
 | the run happened and the validation holds | pass |
 | the run happened and the validation does not hold, or raises | fail |
 | the run could not be made: plugin or scene not found, a sandbox that will not build, a crash | fail |
+| the run did not finish within its budget, or the plugin crashed or answered with something that is not an answer | fail |
 | the plugin names a `container:` or `dockerImage`, and this machine has no container runtime | skip, with a warning carrying the report |
 | the declaration states no `validation:` | skip in a run over a package or a tree; fail when the object is named |
 
@@ -1000,6 +1001,13 @@ leans 15° off the vertical -- no ramp part, no edge, every stack placed as draw
 the aluminium stack holds to 0.46 mm against a 5 mm bound, and the PTFE one loses its top block, which slides 69 mm
 (built, #761). The friction table in the user documentation is measured in the same scene (#762).
 
+**A timeout is a failure.** A run that hangs is a defect -- of the plugin, of the model it was handed, or of how long
+the package says the run takes -- and a check that skipped it would pass a claim nobody can ever check. It takes the
+same one excuse as every other run that did not deliver, through the same `ImplementationTest._verdict()`, and is
+reported the same way: the object, the simulation, the plugin, the budget and what set it, and how to raise it. A
+plugin that crashed is reported with how it ended and the last lines of its standard error. See section 11 for how a
+run is bounded.
+
 **What a validation can say.** Today: positions and orientations of bodies, and joint states, at the start, at the end
 and at sampled instants. Planned: inputs (an initial configuration and joint drives, section 13) and temporal helpers
 over the samples (always, eventually, within).
@@ -1015,7 +1023,8 @@ Three kinds of derived data are cached in the existing tiers (`cacheFiles`, memc
   whatever the plugin wrote (built, #753). The key is the scene's own key (which covers the subject, a parameter of the
   scene), plus the plugin, its resolved options, its declared environment, the declaration's `params`, the exporter and
   its options, and the content of both scripts and of PartCAD's wrappers. Only successful runs are stored, since
-  installing a missing solver changes no key.
+  installing a missing solver changes no key -- and neither does giving a run longer, so a timeout or a crash is never
+  stored either. The budget a run was given is not in the key: it bounds the run and does not change its answer.
 
 A `validation:` is not part of a run's key: editing it re-judges the cached run rather than repeating it. The
 **verdict** `pc test` records is keyed on the run's key plus the validation expressions, so that nothing stale is served
@@ -1060,6 +1069,32 @@ Rules for plugins:
   (`GZ_PARTITION`), because two worlds of the same name otherwise read each other's pose and joint messages -- which
   `pc test` running several simulations at once makes routine. A partition the user set is kept as the parent
   (`<theirs>:partcad-<id>`); using it as is would put every run back into one partition (built, sim-gazebo #7).
+- **Runs are bounded, from both sides of the sandbox** (built, #797). Every run has a wall-clock budget, the first of:
+  `simulation.timeout` in the user configuration (`PC_SIMULATION_TIMEOUT`), which is the machine's and over
+  everything; `params: {timeout}` on the declaration; the plugin's own `timeout:`; else
+  `max(300 s, 10 s x duration)`. A value that is not a positive number is passed over, so the bound moves and never
+  switches off. The budget counts from when the interpreter starts: provisioning a sandbox is shared and legitimately
+  slow, and is bounded nowhere here, as for every other implementation.
+  - *Inside the sandbox*, `wrapper_simulate.py` hands the budget to the plugin as `request["timeout"]`, leads a process
+    group, and when the budget is spent answers `{"success": false, "timed_out": <s>}`, stops everything the plugin
+    started (found through `/proc` or `ps`, `wrappers/process_tree.py`; `taskkill /T` on Windows) and exits 124. It
+    has to be in there: in the `docker` sandbox PartCAD's child is a `docker exec` client, and killing that leaves the
+    interpreter and its engine running in a shared, long-lived container. On every way out, the wrapper also stops
+    whatever the plugin left running, since a leftover process holding standard error holds the run open.
+  - *Outside*, PartCAD waits the budget plus `TIMEOUT_GRACE` (30 s), for an interpreter so wedged that the wrapper's
+    watchdog thread cannot run (held in native code, stopped). A bounded run is started as a session of its own (a
+    new process group on Windows), and `runtime.kill_process_tree` kills its descendants (`psutil`), the group, and
+    the process (`taskkill /T` on Windows). Inside a container, that reaches the `docker exec` client only; the
+    wrapper is the net there.
+  - A non-zero exit, a signal, an empty answer and an answer that is not a JSON object are `SimulationCrash`, carrying
+    the last 30 lines of standard error; a spent budget is `SimulationTimeout`. Neither is a traceback, and neither is
+    cached.
+  - *The plugins* add a second line behind these, and stop a little before the budget so that what they report says
+    how far they got: MuJoCo stops a run whose state is no longer finite, or that MuJoCo itself warns has become
+    unstable, naming the time and the body or joint, and refuses an absurd `duration`, `timestep` or `samples` before
+    stepping (sim-mujoco #14); Gazebo polls its server while it waits, fails at once with the server's exit status and
+    the end of its standard error when it dies, bounds the wait for the first message, and kills the process group of
+    the server and its watchers on every way out (sim-gazebo #12).
 - **Plugins document their engine's modelling choices**: contact combination and solver settings, what a medium does,
   what is not modelled, and what is reported in `warnings`.
 
@@ -1160,6 +1195,7 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 7e | `resolve_resource_path` and colons in parameter values | built (#760) |
 | 7f | Skills prepare generated objects for simulation | built (#759) |
 | 7g | The user documentation refactored to how to use it; this record for the design | built (#758, #764) |
+| 7h | Every run bounded, inside and outside the sandbox; crashes reported with their stderr; plugins detect divergence and a dead server | built (#797, sim-mujoco #14, sim-gazebo #12) |
 | 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and the `connect` check | built (#766) |
 | 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes; `wrappers/kinematics.py` | built (#784) |
 | 10 | **MJCF joints**, with a pendulum example checked against its closed form | built (#786, sim-mujoco #12) |

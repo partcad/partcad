@@ -780,6 +780,9 @@ class PythonRuntime(runtime.Runtime):
                         env=spawn_env,
                         # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
                         cwd=spawn_cwd,
+                        # A bounded run is a process group of its own, so that
+                        # the bound stops all of it; see 'bounded_spawn_options'.
+                        **runtime.bounded_spawn_options(timeout),
                     )
                     stdout, stderr = await runtime.communicate(p, stdin.encode(), timeout)
 

@@ -623,6 +623,8 @@ nothing else, so a package of bolts pays nothing for it. The verdicts:
        that cannot be found, a simulator that will not install on this
        platform, a sandbox that will not build, a crash
      - fail
+   * - A run did not finish within its budget (see :ref:`sim-timeouts`)
+     - fail
    * - The plugin names a ``container:`` or a ``dockerImage``, and this machine
        has no container runtime
      - skip, with a ``WARNING`` carrying the whole report
@@ -638,7 +640,10 @@ image to run. MuJoCo is a wheel and its plugin names no image, so a MuJoCo run
 that fails has failed on any machine; the Gazebo plugin names one, so a Gazebo
 run that cannot be made on a machine with no container runtime is skipped. A
 plugin or a scene that cannot be found is never excused: it is wrong wherever
-the package is opened.
+the package is opened. A run that timed out is a failure for the same reason,
+with the same one excuse: a run that hangs is a defect -- of the plugin, of the
+model, or of how long the package says the run takes -- and skipping it would
+pass a claim nobody can ever check.
 
 A declaration with no ``validation:`` has nothing to be judged by, so ``pc
 test`` does not run it, and what that costs depends on what was asked. Testing a
@@ -651,6 +656,81 @@ whether this object does what it says, and it says nothing.
 for every check. An object's simulations are checked where the object is tested
 in its own right, and not again for every assembly whose manufacturability
 check walks the parts it is made of.
+
+.. _sim-timeouts:
+
+When a run hangs or crashes
+===========================
+
+Every run has a **budget**: how long it may take, in wall-clock seconds, from
+the moment the plugin's interpreter starts. Building the sandbox and installing
+the engine into it come before that and are not counted, and neither is
+exporting the scene. The budget is the first of these that says anything:
+
+#. ``simulation.timeout`` in ``~/.partcad/config.yaml``, or
+   ``PC_SIMULATION_TIMEOUT``: this machine's, over everything else -- the one
+   setting for somebody who cannot edit the package, on a slow machine or in a
+   CI job that would rather fail fast;
+#. ``timeout`` in the declaration's ``params:``, for one simulation that is
+   known to be slow (or quick);
+#. ``timeout`` in the plugin's own declaration;
+#. otherwise the larger of five minutes and ten seconds for every second of
+   simulated ``duration``.
+
+A value that is not a positive number of seconds is passed over, so the budget
+can be moved and never switched off.
+
+.. code-block:: yaml
+
+  simulate:
+    settles:
+      simulation: sim-gazebo:gazebo
+      params:
+        duration: 120.0
+        timeout: 1800        # half an hour of wall clock for two minutes simulated
+
+.. code-block:: shell
+
+  PC_SIMULATION_TIMEOUT=3600 pc test -f sim   # every run on this machine gets an hour
+
+When the budget is spent the run is **stopped, with everything it started** --
+the engine's server and whatever is watching it -- and fails, saying which
+plugin, which budget, what set it and how to raise it:
+
+.. code-block:: text
+
+  ERROR: //pkg:stack: the simulation 'stands' failed: timed out after 300 s: //pkg/gazebo:gazebo
+  did not finish within its budget of 300 s (the default: the larger of 300 s and 10 s for each
+  of the 10 s simulated) and was stopped, with everything it started. If the run is simply slow,
+  give it longer: 'params: {timeout: <seconds>}' on the simulation, or 'simulation.timeout' /
+  PC_SIMULATION_TIMEOUT for every run on this machine
+
+It is stopped from inside the sandbox, by the wrapper that runs the plugin,
+because that is where the engine is: in the ``docker`` sandbox all PartCAD
+started is a ``docker exec``. PartCAD keeps a bound of its own half a minute
+longer, for a run so wedged that nothing inside it can act, and kills the whole
+process tree when that one passes, on Windows too.
+
+A plugin that dies instead -- a non-zero exit, a signal, output that is not an
+answer -- fails with how it ended and the last lines it wrote to standard error,
+which is where a traceback ends and a crash says what killed it:
+
+.. code-block:: text
+
+  ERROR: //pkg:stack: the simulation 'stands' failed: //pkg/mujoco:mujoco ended without an
+  answer: killed by signal 11 (SIGSEGV). The end of what it wrote to standard error:
+  ...
+
+Whatever a plugin leaves running when it returns is stopped too, since a
+process that outlives the run holds its output open and the run would last as
+long as it does.
+
+Neither a timeout nor a crash is cached, and ``pc test`` remembers no verdict
+reached on one, so the next run tries again. The engine plugins add nets of
+their own and stop a little before the budget is spent, to say how far they got:
+the MuJoCo plugin stops a run whose state has diverged and names where, and the
+Gazebo plugin stops waiting the moment its server dies and quotes what the
+server said. Each one's README says what it checks.
 
 .. _sim-snapshots:
 
@@ -714,7 +794,8 @@ Caching runs
 A run is cached the way an engineering analysis is (see "Analyses, routes and
 simulations" under :ref:`caching`): what the plugin reported together with the
 whole run directory, so asking the same question again puts those files back
-and runs nothing, and only a run that succeeded is kept.
+and runs nothing, and only a run that succeeded is kept -- never one that timed
+out or crashed.
 
 For a simulation the question is the scene -- which covers the object, a
 parameter of it, and so its geometry and everything it is built from -- plus the
@@ -814,8 +895,9 @@ one run in a declaration's ``params:``:
      - Report the state at this many evenly spaced instants as well, as
        ``samples``.
    * - ``timeout``
-     - ``300.0``
-     - Gazebo only: wall-clock seconds to wait for the server before giving up.
+     - see :ref:`sim-timeouts`
+     - The run's budget, in wall-clock seconds. PartCAD stops the run when it
+       is spent; both plugins stop a little before, to say how far they got.
 
 Friction and contact
 ====================

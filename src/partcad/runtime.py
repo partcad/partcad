@@ -10,6 +10,7 @@ import asyncio
 import base64
 import contextlib
 import os
+import signal
 import subprocess
 
 import docker
@@ -20,6 +21,82 @@ from . import logging as pc_logging
 from . import sandbox_lock
 from .process_crash import describe_termination
 from .process_output import decode as decode_output
+
+
+def bounded_spawn_options(timeout=None) -> dict:
+    """What to start a process with so that its bound can take down all of it.
+
+    Nothing for a run with no bound, which starts as it always has. A run with
+    one is started as a process group of its own -- a session on POSIX, a new
+    process group on Windows -- because the bound is only as good as what it
+    stops: a sandbox interpreter that started a simulator, and the simulator a
+    server of its own, is three processes, and killing the first leaves the
+    other two running with nothing left to stop them. In a group of its own,
+    the whole of it is one thing to kill (see `kill_process_tree`), including a
+    process its parent has already left behind.
+
+    Only for a bounded run, deliberately. A process in a group of its own no
+    longer receives the terminal's Ctrl-C directly; a bounded one does not need
+    to, because the cancellation that Ctrl-C raises here is one of the ways out
+    `communicate` kills it on.
+    """
+    if timeout is None:
+        return {}
+    if os.name == "nt":
+        return {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+    return {"start_new_session": True}
+
+
+def kill_process_tree(p) -> None:
+    """Kill ``p`` and everything it started, on every platform. Never raises.
+
+    Three nets, because each catches what the others miss:
+
+    * every descendant ``p`` has right now, found through `psutil` before
+      anything is killed -- which is what reaches a child that moved itself
+      into a process group of its own, as a simulator's server may;
+    * the process group ``p`` leads, when it leads one (see
+      `bounded_spawn_options`) -- which is what reaches a process whose parent
+      has already exited, and which `psutil` can no longer place under ``p``;
+    * and ``p`` itself, which on Windows is `taskkill /T` taking its tree.
+
+    What is outside this machine is outside its reach: in the `docker` sandbox
+    ``p`` is the `docker exec` client, and the interpreter it started lives in
+    the container. That one is stopped from the inside, by the wrapper that runs
+    it (see `wrappers/process_tree.py`), which is why a bound is passed to the
+    wrapper as well as enforced out here.
+    """
+    pid = getattr(p, "pid", None)
+    if pid is None:
+        return
+    children = []
+    try:
+        import psutil
+
+        children = psutil.Process(pid).children(recursive=True)
+    except Exception:  # pylint: disable=broad-except
+        # Gone already, or a psutil that cannot see it: the group is still there.
+        pass
+    if os.name == "nt":
+        with contextlib.suppress(OSError, subprocess.SubprocessError):
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+            )
+    else:
+        with contextlib.suppress(OSError):
+            # Only a group it leads: an unbounded run shares PartCAD's own, and
+            # killing that would be killing PartCAD.
+            if os.getpgid(pid) == pid:
+                os.killpg(pid, signal.SIGKILL)
+    if getattr(p, "returncode", None) is None:
+        with contextlib.suppress(ProcessLookupError, OSError):
+            p.kill()
+    for child in children:
+        with contextlib.suppress(Exception):
+            child.kill()
 
 
 async def communicate(p, stdin: bytes, timeout=None):
@@ -37,7 +114,8 @@ async def communicate(p, stdin: bytes, timeout=None):
     running, detached from anything that would reap it, which is what the
     "Terminate orphan process: pid (7107) (python)" lines at the end of a
     cancelled Actions run are. So kill it on the way out, whatever the way out
-    is. The event loop's child watcher reaps it from there.
+    is -- and with it everything it started, which outlives it otherwise (see
+    `kill_process_tree`). The event loop's child watcher reaps it from there.
     """
     try:
         if timeout is None:
@@ -45,8 +123,7 @@ async def communicate(p, stdin: bytes, timeout=None):
         return await asyncio.wait_for(p.communicate(input=stdin), timeout)
     except BaseException:
         if p.returncode is None:
-            with contextlib.suppress(ProcessLookupError, OSError):
-                p.kill()
+            kill_process_tree(p)
         raise
 
 
@@ -453,6 +530,7 @@ class Runtime:
                     # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
                     cwd=spawn_cwd,
                     env=spawn_env,
+                    **bounded_spawn_options(timeout),
                 )
                 stdout, stderr = await communicate(p, stdin.encode(), timeout)
 
