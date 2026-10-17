@@ -935,6 +935,12 @@ at all).
   (`AssemblyChild.joint_problems`) fails `pc test`'s `connect` check rather than `pc lint`, because it is a
   finding about interfaces in other packages that a lint verdict, cached on one file, would serve stale.
 
+- **A name a file format cannot hold is transcoded, never renamed in PartCAD** (`./src/partcad/wrappers/naming.py`,
+  docs/design/simulation.md section 4.4). Each format declares its own `naming.Rules` beside its exporter -- URDF's
+  in `export_urdf.py`, MJCF's and SDFormat's in their plugins -- and writes every name through a `Transcoder`, the
+  identity wherever the name is valid. A simulation's exporter writes the mapping as `<file>.names.json`
+  (`names_file: true`), so that results come back under PartCAD's names; a scene stays `world` in PartCAD. Do not add
+  a central table of formats' rules, and do not rename a PartCAD object to suit one format.
 - **What becomes a rigid body is one rule, read off the tree** (`./src/partcad/wrappers/kinematics.py`,
   docs/design/simulation.md section 7): every element of a scene is a body of its own, recursively, and everything
   inside an assembly is attached to it -- welded where nothing is free, jointed where a connection keeps a degree of

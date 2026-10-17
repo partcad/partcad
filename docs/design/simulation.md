@@ -159,8 +159,8 @@ plugins PartCAD maintains share one, so that a validation reads the same against
 | Key | Content |
 |---|---|
 | `time` | Simulated seconds at the reading. |
-| `bodies.<name>.pos` | Body position, mm. |
-| `bodies.<name>.quat` | Body orientation, `w x y z`. |
+| `bodies.<name>.pos` | Body position, mm, in the world's frame. |
+| `bodies.<name>.quat` | Body orientation, `w x y z`, in the world's frame. |
 | `joints.<name>.type` | `revolute`, `continuous`, `prismatic` or `ball`. A turn with no finite limit is reported `continuous` whatever the file called it. |
 | `joints.<name>.pos` / `vel` | deg and deg/s for a turn; mm and mm/s for a move. A ball joint reports `quat` and an angular velocity instead. |
 | `joints.<name>.effort` | Actuator effort, N·m or N (MuJoCo's `qfrc_actuator`), when the engine reports one. |
@@ -170,6 +170,33 @@ Free joints are not reported as joints -- the body pose already says it -- and a
 `joints: {}`. Joint reporting is **built** (sim-mujoco #6, sim-gazebo #5). What an engine cannot report is named in
 `warnings` rather than reported as zero: Gazebo's joint-state publisher never fills effort and publishes two of a ball
 joint's three coordinates.
+
+**Names are PartCAD's and poses the world's (built).** Every `<name>` above is PartCAD's -- a body's from
+`kinematics` (section 7a), a joint's from section 8.4, `<joint>.<parameter>` for a joint an engine writes as several --
+whatever the file had to call it (section 4.4), and so is a name in `warnings` and the `world` a Gazebo result
+carries. A body's pose is its frame in the world's, in both engines: MuJoCo's `xpos`/`xquat`, and in Gazebo its
+model's pose composed with its link's -- Gazebo publishes a link relative to its model, and a body hanging off a
+mechanism's root was reported in its model's frame until this. What lets the plugin say either is a **sidecar** its
+exporter writes beside the scene when `formatOptions` asks for it with `names_file: true`, which both plugins do:
+
+```json
+{"version": 1, "format": "mjcf",
+ "names":  {"<kind>": {"<PartCAD name>": "<name in the file>"}},
+ "bodies": {"<PartCAD body>": {"path": ["<model>", "<link>"]}},
+ "joints": {"<reported joint>": {"path": ["<model>", "<joint>"], "joint": "<PartCAD joint>"}}}
+```
+
+`<scene file>.names.json`, in the run directory with the meshes (`naming.sidecar_path`). `names` is what the
+transcoder did, by kind (`scene`, `body`, `joint`); a `path` is the file's names from the outermost element down --
+one MJCF body, an SDFormat model and its link. An entry is an object so that what a later exporter knows about a body
+or a joint is a key added rather than a shape changed: the joint redesign (#795) is to record each joint's starting
+value there, which an engine that writes every joint at zero re-zeroes its reading by. A reader ignores keys it does
+not know; `version` changes only for one a reader of the old shape would misread. A scene file with no sidecar -- an
+override exporter, an older PartCAD -- is reported under the names in it, and Gazebo then as it publishes poses, each
+relative to its parent. The sidecar is beside the file rather than inside it because both engines would have to be
+taught to carry it (MJCF's `<custom><text>`, an SDFormat namespaced element) and Gazebo's world is copied before it
+runs (sim-gazebo `prepare_world`); a file in the run directory travels with the meshes, which `upload` sandboxes already
+send both ways.
 
 ### 4.3 What an exporter is handed (built)
 
@@ -187,6 +214,36 @@ Whatever it asks for, every node of the tree also says what it holds -- `kind`, 
 every element a scene welds to the world says `fixed: true`, and a node a connection moves carries its `joint`
 (section 8). Those are what the body rule of section 7 reads, and `wrappers/kinematics.py` is that rule, for every
 exporter (built, step 9).
+
+### 4.4 Names in a file format (built)
+
+PartCAD's names stay PartCAD's: the default world is the scene `world`, a body is `leg-2`, a joint `shoulder_pan`. A
+file format has rules of its own about names, and **each format declares them beside its own code**, as a
+`naming.Rules`: its alphabet, a length limit if it has one, whether it tells `Cube` from `cube`, and its reserved names
+and patterns. `wrappers/naming.py` -- pure Python beside `kinematics`, importable by a plugin the same way -- is the one
+mechanism they all go through: a `Transcoder` per namespace (the names that must differ from each other) maps each
+PartCAD name to an internal one, **the identity wherever the name is valid and free**, otherwise every run of
+characters the format refuses made one `_`, then `-2`, `-3` ... until it is valid and unused, exactly as PartCAD tells
+two bodies of one name apart. It is deterministic in claim order, idempotent per (kind, name), and keeps the mapping
+both ways. Names an exporter makes up itself (a model's root link, a dummy link, a mesh, the ground plane) are
+*derived* from the same pool after every PartCAD name is claimed, so a derived name is the one that yields. A name
+written differently is reported, once, as a warning naming both.
+
+| Format | Declared in | Namespaces | Alphabet | Reserved | Source |
+|---|---|---|---|---|---|
+| URDF | `export_urdf.URDF_NAMES` | links, joints (urdfdom checks each) | `A-Za-z0-9_.-` | `world`, `__*__` | urdfdom requires uniqueness and nothing else; the alphabet and the reserved names are what its readers need -- sdformat's `parser_urdf` (SDFormat's reservations; a `world` link *is* the world, as for ROS and MoveIt), ROS TF (no leading `/`) |
+| MJCF | sim-mujoco `MJCF_NAMES`, `MJCF_BODY_NAMES` | one per element type | anything an XML attribute holds, no control characters | a body called `world` (the `<worldbody>`) | MuJoCo 3.16's compiler, checked: any characters, any length, unique per type, case-sensitive |
+| SDFormat | sim-gazebo `SDF_NAMES` | one for the whole world (Gazebo reports poses by bare name) | `A-Za-z0-9_.-`, never `::` | `world`, `__*__` | libsdformat's `isReservedName` and `recursiveSiblingNoDoubleColonInNames`; the narrower alphabet is gz-transport's, since a world's and a model's names are parts of topics |
+| a file beside the file (a mesh) | `naming.FILE_NAMES` | per directory | `A-Za-z0-9_-` | Windows' device names, with any extension | compared ignoring case (Windows, macOS), 200 characters |
+
+So a scene called `world` is `world` in PartCAD and in a validation, and `world-2` only inside an SDFormat file -- the
+ad hoc `partcad_world` rename is gone. MJCF needs no change for it at all (the model is not a body), and only a *body*
+called `world` is written as `world-2` there.
+
+The other exporters need no rules, because they write no PartCAD names: glTF, 3MF, OBJ, STL, STEP, IGES, BREP and
+three.js are handed the geometry and write it unnamed (glTF's one node name is the fixed `edges`), and where a format
+does carry names they are free text -- glTF's are not even required to be unique, and a STEP string is encoded by the
+writer.
 
 ## 5. Physical properties
 
@@ -738,7 +795,8 @@ Writing the bodies and joints out of `kinematics` (section 7a) settled what sect
 - **Names.** A joint written as one MJCF joint is named exactly as PartCAD names it, so `after["joints"]["swing"]`
   reads it. One written as several is `<name>.<parameter>` for each (`nut-bolt.turnZ`, `nut-bolt.moveZ`), and a
   floating joint's ball `<name>.ball`. Bodies take `kinematics`' names, so a second body of one name is `cube-2` where
-  the exporter used to write `cube_1`.
+  the exporter used to write `cube_1`. Every name goes through MJCF's own rules since section 4.4, which keep it as it
+  is but for a body called `world`, and a run reads them back out of the sidecar.
 - **Angles are degrees** (`<compiler angle="degree">`), MJCF's default and PartCAD's unit, so a hinge's `ref`, `range`
   and `springref` are written as declared. `polycoef` is not converted by the compiler, so a coupling is in radians and
   metres.

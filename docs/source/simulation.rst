@@ -997,10 +997,11 @@ validation reads the same against either engine:
    * - ``time``
      - Simulated seconds at the reading.
    * - ``bodies.<name>.pos``
-     - The body's position, ``[x, y, z]`` in **millimetres**, in the scene's
-       frame.
+     - The body's position, ``[x, y, z]`` in **millimetres**, in the world's
+       frame -- for a body hanging off a mechanism as much as for one standing
+       free, in either engine.
    * - ``bodies.<name>.quat``
-     - The body's orientation, ``[w, x, y, z]``.
+     - The body's orientation, ``[w, x, y, z]``, in the world's frame.
    * - ``joints.<name>.type``
      - ``revolute``, ``continuous`` (a turn with no limit), ``prismatic`` or
        ``ball``.
@@ -1015,6 +1016,15 @@ validation reads the same against either engine:
 A body is named after the link that places it -- an ASSY link's ``name:`` --
 and made unique where two would collide. Walking every body, ``for name in
 before["bodies"]``, is the robust form, and the one every example uses.
+
+**A validation reads PartCAD's names**, whatever the engine's file had to call
+things. Each format has rules of its own about names -- SDFormat reserves
+``world``, which is what PartCAD's default world is called, and MJCF has a body
+called ``world`` of its own -- so a name the file cannot hold is written there
+under another one (``world-2``), the export says so in a warning, and the run
+reports it under PartCAD's name again: ``after["bodies"]["world"]`` for a body
+called ``world``, in MuJoCo and in Gazebo alike. What the engine called it is in
+``<scene file>.names.json`` in the run's directory, if you need it.
 
 A free body is not reported as a joint, since ``bodies`` already says where it
 is; so a scene of parts reports ``joints: {}``. A mechanism's joints are
@@ -1146,7 +1156,11 @@ URDF's, read in, or several parts bolted together -- goes out as itself; a shape
 used more than once is written once. An assembly's root body is the URDF's root
 link, named after the one part it is made of when it is made of one (a robot's
 base) and after the assembly otherwise. A part on its own is one link, and an
-assembly in which nothing moves is one link of all its parts.
+assembly in which nothing moves is one link of all its parts. Links and joints
+keep PartCAD's names wherever URDF's readers can hold them; a name they cannot
+-- a link called ``world``, which Gazebo, ROS and MoveIt all take to be the
+world itself, or one with a ``/`` or a space in it -- is written under the
+nearest one they can (``world-2``, ``a_b``), and the export says which.
 
 Every link carries the mass, centre of mass and inertia of its body -- its
 parts' added up, each at its own density, or what a measured link states about

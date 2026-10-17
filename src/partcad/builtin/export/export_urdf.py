@@ -95,6 +95,7 @@ sys.path.append(os.path.dirname(__file__))
 import appearance  # noqa: E402
 import kinematics  # noqa: E402
 import mass_properties  # noqa: E402
+import naming  # noqa: E402
 import ocp_serialize  # noqa: E402
 import urdf_common  # noqa: E402
 
@@ -107,9 +108,23 @@ CACHE_VERSION = 2
 # in millimetres and URDF reads mesh coordinates as metres after scaling.
 MESH_SCALE = 1.0 / urdf_common.MM_PER_M
 
-# URDF link and joint names end up as XML attributes and as ROS graph names, so
-# anything outside this set is replaced.
-_UNSAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
+# What a URDF name may be, declared here because it is URDF's (see 'naming').
+# The specification itself restricts nothing: urdfdom requires every link, every
+# joint and every robot-level material to be unique among its own kind -- three
+# namespaces -- and compares them as written. What reads a URDF restricts more,
+# and a URDF is written to be read: Gazebo converts one to SDFormat first
+# (sdformat's 'parser_urdf'), where '::' is a scope separator and 'world' and
+# every '__*__' are reserved; Gazebo, ROS and MoveIt all take a link called
+# 'world' to be the world itself, which is what this exporter's own 'world'
+# link is; and a link's name is a ROS TF frame id, which may not begin with
+# '/'. So the alphabet is the one every consumer reads verbatim, ASCII letters,
+# digits, '_', '.' and '-', and the reserved names are SDFormat's.
+URDF_NAMES = naming.Rules(
+    "URDF",
+    allowed=re.compile(r"[A-Za-z0-9_.-]"),
+    reserved=("world",),
+    reserved_patterns=(r"__.*__",),
+)
 
 TURN = kinematics.TURN
 MOVE = kinematics.MOVE
@@ -197,30 +212,12 @@ JOINT_STATED = frozenset(("maxEffort", "maxVelocity", "damping", "friction")) | 
 
 
 def sanitize_name(name, fallback):
-    """A URDF-safe name derived from a PartCAD name.
+    """A URDF-safe name derived from a PartCAD name, uniqueness aside.
 
     PartCAD names carry package paths and ':' separators ("//pub/examples:logo"),
     none of which belong in a ROS name.
     """
-    name = _UNSAFE_NAME.sub("_", str(name or "")).strip("_")
-    return name or fallback
-
-
-class NameAllocator:
-    """Hands out unique link names, since URDF requires them to be unique."""
-
-    def __init__(self):
-        self.used = set()
-
-    def take(self, name, fallback="link"):
-        base = sanitize_name(name, fallback)
-        candidate = base
-        suffix = 1
-        while candidate in self.used:
-            candidate = "%s_%d" % (base, suffix)
-            suffix += 1
-        self.used.add(candidate)
-        return candidate
+    return naming.transcode(URDF_NAMES, name, fallback)
 
 
 def per_si(kind) -> float:
@@ -375,11 +372,13 @@ class Planner:
             **{key: value for key, value in (options or {}).items() if value is not None},
         )
         self.warnings = warnings if warnings is not None else []
-        self.names = NameAllocator()
-        # Joint names live in a namespace of their own, and "<parent>_to_<child>"
-        # collides on its own: "a" -> "b_to_c" and "a_to_b" -> "c" both spell
-        # "a_to_b_to_c".
-        self.joint_names = NameAllocator()
+        # Links and joints are two namespaces, as urdfdom checks them, and
+        # "<parent>_to_<child>" collides on its own: "a" -> "b_to_c" and
+        # "a_to_b" -> "c" both spell "a_to_b_to_c". Every body's link and every
+        # joint is claimed before anything is derived (see 'plan'), so that a
+        # dummy link yields its name to a body somebody called that.
+        self.names = naming.Transcoder(URDF_NAMES)
+        self.joint_names = naming.Transcoder(URDF_NAMES)
         self.links = []
         self.joints = []
         self.unsupported = set()
@@ -395,9 +394,15 @@ class Planner:
 
     def plan(self):
         roots = [body for body in self.found if not isinstance(body.parent, kinematics.Body)]
+        for body in self.found:
+            self.names.claim(body.name, "body", "link", preferred=self.link_label(body))
+            if body.joint is not None:
+                self.joint_names.claim(body.joint.name, "joint", "joint")
         world = None
         if not (len(roots) == 1 and roots[0].parent is None):
-            world = LinkPlan(self.names.take("world", "world"))
+            # The world itself, under the name URDF's readers know it by, which
+            # no body can have (URDF_NAMES reserves it).
+            world = LinkPlan(self.names.reserve(kinematics.WORLD))
             self.links.append(world)
             free = [body.name for body in roots if body.parent is None]
             if free:
@@ -407,7 +412,7 @@ class Planner:
                 )
 
         for body in self.found:
-            name = self.names.take(self.link_label(body), "link")
+            name = self.names.claim(body.name, "body")
             if isinstance(body.parent, kinematics.Body):
                 self.jointed(body, name)
             elif world is None:
@@ -415,7 +420,7 @@ class Planner:
             else:
                 self.add_link(LinkPlan(name, body))
                 joint = JointPlan(
-                    self.joint_names.take("%s_to_%s" % (world.name, name), "joint"),
+                    self.joint_names.derive("%s_to_%s" % (world.name, name), "joint"),
                     "fixed" if body.parent == kinematics.WORLD else "floating",
                     world.name,
                     name,
@@ -425,6 +430,9 @@ class Planner:
 
         self._resolve_mimics()
         self._report()
+        renamed = naming.renamed_warning(URDF_NAMES, self.names, self.joint_names)
+        if renamed:
+            self.warnings.append(renamed)
         return self
 
     def link_label(self, body) -> str:
@@ -460,7 +468,7 @@ class Planner:
         if kind in (kinematics.PLANAR, kinematics.FLOATING):
             self.add_link(LinkPlan(name, body, kinematics.inverse(classification.tail)))
             plan = JointPlan(
-                self.joint_names.take(joint.name, "joint"),
+                self.joint_names.claim(joint.name, "joint", "joint"),
                 kind,
                 parent.name,
                 name,
@@ -501,11 +509,11 @@ class Planner:
                 child = name
                 self.add_link(LinkPlan(name, body, kinematics.inverse(joint.tail)))
             else:
-                child = self.names.take("%s_link%d" % (joint.name, index + 1), "link")
+                child = self.names.derive("%s_link%d" % (joint.name, index + 1), "link")
                 dummies.append(child)
                 self.add_link(LinkPlan(child, dummy=True))
             origin = kinematics.compose(undo, joint.origins[0]) if index == 0 else joint.origins[index]
-            plan = self.single(names[index], joint, freedom, previous, child, origin)
+            plan = self.single(names[index], joint, freedom, previous, child, origin, derived=index > 0)
             if freedom.follows is not None:
                 leader_name, leader = written[freedom.follows], freedoms[freedom.follows]
                 plan.mimic = (
@@ -555,13 +563,24 @@ class Planner:
             names.append("%s_%s" % (joint.name, freedom.parameter or index + 1))
         return names
 
-    def single(self, name, joint, freedom, parent, child, origin):
-        """One single-axis URDF joint for one freedom, with its limits and dynamics."""
+    def single(self, name, joint, freedom, parent, child, origin, derived=False):
+        """One single-axis URDF joint for one freedom, with its limits and dynamics.
+
+        'derived' for a joint of a chain past its first, which is not named by
+        PartCAD and yields its name to one that is.
+        """
         if freedom.kind == TURN:
             joint_type = "revolute" if freedom.limited else "continuous"
         else:
             joint_type = "prismatic"
-        plan = JointPlan(self.joint_names.take(name, "joint"), joint_type, parent, child, origin)
+        names = self.joint_names
+        plan = JointPlan(
+            names.derive(name, "joint") if derived else names.claim(name, "joint", "joint"),
+            joint_type,
+            parent,
+            child,
+            origin,
+        )
         plan.kind = freedom.kind
         plan.axis = freedom.axis
         physics = joint.physics
@@ -761,7 +780,7 @@ def mesh_reference(shape, node, link_name, state):
     key = node.get(ocp_serialize.KEY_BREP)
     mesh_file = state["meshes"].get(key)
     if mesh_file is None:
-        mesh_name = state["mesh_names"].take(node.get("label") or link_name, "mesh")
+        mesh_name = state["mesh_names"].derive(node.get("label") or link_name, "mesh")
         mesh_file = "%s/%s.stl" % (state["mesh_dir_name"], mesh_name)
         write_mesh(shape, os.path.join(state["mesh_dir"], "%s.stl" % mesh_name), state["options"])
         state["meshes"][key] = mesh_file
@@ -816,13 +835,13 @@ def build_link(plan, state):
     # reading it back names the part '<assembly>/<link>/<name>' by - so a part
     # labelled under its link ('wrist/1', read from such a link) is named after
     # what it is within it.
-    names = NameAllocator() if len(shapes) > 1 else None
+    names = naming.Transcoder(URDF_NAMES, "_", 1) if len(shapes) > 1 else None
     placed = 0
     for part, where, shape in shapes:
         reference = mesh_reference(shape, part.node, plan.name, state)
         geometry = Mesh(filename=reference, scale=[MESH_SCALE, MESH_SCALE, MESH_SCALE])
         origin = None if urdf_common.is_identity(where) else pose(where)
-        name = None if names is None else names.take(str(part.label or part.name or "").rpartition("/")[2], "shape")
+        name = None if names is None else names.derive(str(part.label or part.name or "").rpartition("/")[2], "shape")
         # The appearance belongs to the shape, not to the link: a link built
         # from several parts may well have a colour per part.
         material = carried_material(state["properties"].get(part.node.get("name")) or {}, state)
@@ -923,7 +942,8 @@ def process(path, request):
 
     state = {
         "planner": planner,
-        "mesh_names": NameAllocator(),
+        # A mesh's name is a file's, and a file's rules are the filesystem's.
+        "mesh_names": naming.Transcoder(naming.FILE_NAMES, "_", 1),
         "meshes": {},
         "mesh_dir": mesh_dir,
         "mesh_dir_name": mesh_dir_name,
