@@ -1169,11 +1169,18 @@ def joint_map(joint, freedoms=None, start=True, frame=None, followers=None) -> d
 
     'freedoms' are the indices of the joint's freedoms the engine joint has as
     its coordinates, in its own order: one for a hinge or a slide, two for an
-    SDFormat universal. None means all of them that follow nothing, one
-    native joint for the whole. 'followers' are the indices of the freedoms
-    that move with those coordinates and are no coordinate of any engine
-    joint -- an SDFormat screw's move; by default every follower of a
-    coordinate when 'freedoms' is None, and none otherwise.
+    SDFormat universal. None means one native joint for the whole, whose
+    coordinates are its freedoms that follow nothing -- but a screw's, which
+    is its turn whichever of its two leads (8.13.3: a screw is read by its
+    turn, as SDFormat's screw is). 'followers' are the indices of the
+    freedoms that move with those coordinates and are no coordinate of any
+    engine joint -- an SDFormat screw's move; by default, where 'freedoms' is
+    None, every freedom that follows a coordinate or that a coordinate
+    follows, and none otherwise. A follower is written as what it is in terms
+    of the coordinate it moves with: the coupling as it stands where it
+    follows the coordinate, and turned round ('value = (coordinate - offset)
+    / ratio') where the coordinate follows it. Indices that name no freedom,
+    and a follower coupled to no coordinate, raise ValueError.
 
     'start' says whether the engine's zero is PartCAD's start -- a joint
     re-zeroed ('rezeroed()'), as SDFormat's and an MJCF ball are -- or
@@ -1239,12 +1246,25 @@ def joint_map(joint, freedoms=None, start=True, frame=None, followers=None) -> d
         ]
         return entry
 
+    count = len(joint.freedoms)
     if freedoms is None:
-        indices = [freedom.index for freedom in joint.freedoms if freedom.follows is None]
+        if kind == SCREW:
+            indices = [freedom.index for freedom in joint.freedoms if freedom.kind == TURN]
+        else:
+            indices = [freedom.index for freedom in joint.freedoms if freedom.follows is None]
         if followers is None:
-            followers = [freedom.index for freedom in joint.freedoms if freedom.follows in indices]
+            followers = [
+                freedom.index
+                for freedom in joint.freedoms
+                if freedom.index not in indices
+                and (freedom.follows in indices or any(joint.freedoms[i].follows == freedom.index for i in indices))
+            ]
     else:
         indices = [int(index) for index in freedoms]
+    followers = [int(index) for index in followers or []]
+    for index in indices + followers:
+        if not 0 <= index < count:
+            raise ValueError("The joint '%s' has %d freedoms, and no freedom %d" % (joint.name, count, index))
     entry["coordinates"] = [
         {
             "parameter": names[i],
@@ -1254,18 +1274,37 @@ def joint_map(joint, freedoms=None, start=True, frame=None, followers=None) -> d
         }
         for i in indices
     ]
-    entry["followers"] = [
-        {
-            "parameter": names[i],
-            "freedom": joint.freedoms[i].kind,
-            "follows": names[joint.freedoms[i].follows],
-            "ratio": joint.freedoms[i].ratio,
-            "offset": joint.freedoms[i].offset or 0.0,
-        }
-        for i in (followers or [])
-        if joint.freedoms[i].follows is not None
-    ]
+    entry["followers"] = [_follower(joint, names, index, indices) for index in followers]
     return entry
+
+
+def _follower(joint, names, index, coordinates):
+    """A freedom that moves with one of an engine joint's coordinates, as that coordinate's function."""
+    freedom = joint.freedoms[index]
+    if freedom.follows is not None and freedom.follows in coordinates:
+        return {
+            "parameter": names[index],
+            "freedom": freedom.kind,
+            "follows": names[freedom.follows],
+            "ratio": freedom.ratio,
+            "offset": freedom.offset or 0.0,
+        }
+    # The coordinate follows this freedom ('c = r v + o'): this freedom is the
+    # coupling turned round, 'v = c / r - o / r'.
+    leader = next((joint.freedoms[i] for i in coordinates if joint.freedoms[i].follows == index), None)
+    if leader is not None and leader.ratio:
+        return {
+            "parameter": names[index],
+            "freedom": freedom.kind,
+            "follows": names[leader.index],
+            "ratio": 1.0 / leader.ratio,
+            "offset": -(leader.offset or 0.0) / leader.ratio,
+        }
+    raise ValueError(
+        "The freedom '%s' of the joint '%s' is no follower of the coordinates %s, nor followed by one: it is a "
+        "coordinate of an engine joint of its own"
+        % (names[index], joint.name, ", ".join(names[i] for i in coordinates))
+    )
 
 
 def _unwrapped(angle, near):

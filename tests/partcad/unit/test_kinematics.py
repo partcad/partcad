@@ -780,6 +780,64 @@ def test_the_joint_map_travels_in_the_names_sidecar(tmp_path):
     assert kinematics.reading([back], [[0.0, 0.0]])["pos"] == {"p": starts[0], "p-2": starts[1]}
 
 
+def _screw(move_leads):
+    """A screw of 10 mm a turn, started at 90 degrees, its move following its turn or the other way round."""
+    lead = 10.0 / 360.0
+    if move_leads:
+        # As a reader of another format might state it: the turn follows the move.
+        steps = [
+            dict(free("move", Z, value=3.5), source=[{"parameter": "moveZ"}]),
+            dict(
+                free("turn", Z, value=90.0, coupling={"step": 0, "ratio": 1.0 / lead, "offset": -36.0}),
+                source=[{"parameter": "turnZ"}],
+            ),
+        ]
+    else:
+        steps = [
+            dict(free("turn", Z, value=90.0), source=[{"parameter": "turnZ"}]),
+            dict(
+                free("move", Z, value=3.5, coupling={"step": 0, "ratio": lead, "offset": 1.0}),
+                source=[{"parameter": "moveZ"}],
+            ),
+        ]
+    joint = kinematics.Joint({"name": "nut-bolt", "steps": steps})
+    assert joint.kind == kinematics.SCREW
+    return joint
+
+
+@pytest.mark.parametrize("move_leads", [False, True], ids=["the turn leads", "the move leads"])
+def test_a_screw_is_read_by_its_turn_whichever_of_its_freedoms_leads(move_leads):
+    """8.13.3: a screw's coordinate is its turn, the move following it -- whatever the joint's own coupling says."""
+    joint = _screw(move_leads)
+    entry = kinematics.joint_map(joint)
+    assert [c["parameter"] for c in entry["coordinates"]] == ["turnZ"]
+    (follower,) = entry["followers"]
+    assert (follower["parameter"], follower["follows"]) == ("moveZ", "turnZ")
+    assert follower["ratio"] == pytest.approx(10.0 / 360.0)
+    assert follower["offset"] == pytest.approx(1.0)
+    # Re-zeroed at its start, as SDFormat's screw is: at the engine's zero it
+    # reads where it started, and a quarter turn later 2.5 mm further on.
+    assert kinematics.reading([entry], [0.0])["pos"] == {"turnZ": pytest.approx(90.0), "moveZ": pytest.approx(3.5)}
+    read = kinematics.reading([entry], [math.pi / 2], [1.0])
+    assert read["pos"] == {"turnZ": pytest.approx(180.0), "moveZ": pytest.approx(6.0)}
+    assert read["vel"] == {"turnZ": pytest.approx(180 / math.pi), "moveZ": pytest.approx(10.0 / (2 * math.pi))}
+    # And the same, asked for by name: the turn the engine's coordinate, the move its follower.
+    turn, move = (
+        next(f.index for f in joint.freedoms if f.kind == kind) for kind in (kinematics.TURN, kinematics.MOVE)
+    )
+    assert kinematics.joint_map(joint, freedoms=[turn], followers=[move]) == entry
+
+
+def test_a_joint_map_asked_for_what_the_joint_has_not_got_refuses():
+    joint = _screw(False)
+    with pytest.raises(ValueError, match="has 2 freedoms, and no freedom 5"):
+        kinematics.joint_map(joint, freedoms=[5])
+    # A follower that is no function of the coordinates is a coordinate of its own.
+    two = kinematics.Joint({"name": "j", "steps": [free("turn", Z), free("move", Z)]})
+    with pytest.raises(ValueError, match="is no follower of the coordinates p"):
+        kinematics.joint_map(two, freedoms=[0], followers=[1])
+
+
 def test_parameter_names_are_unique_within_a_joint():
     joint = kinematics.Joint({"steps": [free("turn", Z), fixed((10, 0, 0)), free("turn", Z), free("move", X)]})
     joint.freedoms[2].parameter = None

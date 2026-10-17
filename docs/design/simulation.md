@@ -1470,7 +1470,9 @@ the text above left open. What the engine plugins build on is in `kinematics`' d
   plain data for the sidecar's joint entry (`"map"`): the PartCAD joint, its kind and how many freedoms it has; each
   coordinate's parameter, kind of freedom, unit factor (degrees a radian, millimetres a metre) and start (nought for
   an MJCF hinge, whose `ref` makes the engine's value PartCAD's); the followers a coordinate moves (an SDFormat
-  screw's move); for a ball its `rotation` R_s, the `frame` the engine states its rotation in (`CHILD_FRAME` for
+  screw's move -- a screw's coordinate is its turn whichever of its two freedoms leads, and a move the turn follows is
+  written as the coupling turned round; indices that name no freedom, or a follower no coordinate is coupled to, are
+  refused); for a ball its `rotation` R_s, the `frame` the engine states its rotation in (`CHILD_FRAME` for
   MuJoCo's) and its three turns' axes; for a free body its `parent`, its native frame and tail, and its six freedoms
   in order. The sidecar's `version` stays 1: a reader of the old shape ignores the key.
 - **Readings** are `kinematics.reading(maps, positions, velocities=None)`: the maps and the engine's values of the
