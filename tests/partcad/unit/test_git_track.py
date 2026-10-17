@@ -29,7 +29,8 @@ import yaml
 
 import partcad as pc
 from partcad.actions.package.update import pin_tracked_dependencies, update, workspace_packages
-from partcad.project_factory_git import GitImportConfiguration
+from partcad.project_factory_git import GitImportConfiguration, cache_dir_name
+from partcad.revision import package_revision
 from partcad.user_config import UserConfig
 
 SIGNATURE = pygit2.Signature("test", "test@example.com")
@@ -396,6 +397,111 @@ INDEX_URL = "https://github.com/partcad/partcad-index.git"
 )
 def test_which_revision_is_checked_out(config, settings, expected):
     assert _Import(config, **settings).import_revision == expected
+
+
+@pytest.mark.parametrize(
+    "config, settings, expected",
+    [
+        ({"url": URL}, {}, None),
+        ({"url": URL, "revision": "abc1234"}, {}, "abc1234"),
+        # One copy per tracked branch, moved from pin to pin.
+        ({"url": URL, "track": "main"}, {}, "main"),
+        ({"url": URL, "track": "main", "revision": "abc1234"}, {}, "main"),
+        ({"url": URL, "track": "main", "revision": "abc1234"}, {"force_update": True}, "main"),
+        # The index under 'develIndex' has its own, so toggling it moves nothing.
+        ({"url": INDEX_URL, "track": "main", "revision": "abc1234"}, {"devel_index": True}, "devel"),
+    ],
+)
+def test_which_copy_it_is_kept_in(config, settings, expected):
+    assert _Import(config, **settings).import_cache_name == expected
+
+
+# ---- the copy of a tracked branch -----------------------------------------------
+
+
+def copies(user_config, upstream) -> list[str]:
+    """The names of the downloaded copies of 'upstream', without the hash they share."""
+    prefix = cache_dir_name(upstream.url, None)
+    git_dir = Path(user_config.internal_state_dir) / "git"
+    return sorted(p.name[len(prefix) :] for p in git_dir.glob(prefix + "*") if p.is_dir())
+
+
+def head_of(path) -> str:
+    return str(pygit2.Repository(pygit2.discover_repository(str(path))).head.target)
+
+
+def test_a_pinned_dependency_is_kept_in_the_copy_of_its_branch(tmp_path, upstream, user_config):
+    first = upstream.head()
+    upstream.commit("B")
+    workspace = tmp_path / "ws"
+    write_package(workspace, dependency(upstream, track="main", revision=first))
+
+    assert load_version(workspace, user_config) == "A"
+    assert copies(user_config, upstream) == ["-main"]
+
+
+def test_update_moves_the_copy_rather_than_adding_one(tmp_path, upstream, user_config):
+    workspace = tmp_path / "ws"
+    write_package(workspace, dependency(upstream, track="main", revision=upstream.head()))
+    assert load_version(workspace, user_config) == "A"
+
+    tip = upstream.commit("B")
+    ctx, _ = run_update(workspace, user_config)
+
+    assert copies(user_config, upstream) == ["-main"]
+    project = ctx.get_project("//dep")
+    assert (Path(project.config_dir) / "version.txt").read_text() == "B"
+    assert head_of(project.config_dir) == tip
+
+
+def test_a_warm_context_moves_the_copy_and_reports_the_new_revision(tmp_path, upstream, user_config):
+    """A daemon keeps the context, the copy keeps its path, and neither may answer with the old commit."""
+    workspace = tmp_path / "ws"
+    write_package(workspace, dependency(upstream, track="main", revision=upstream.head()))
+    ctx = pc.Context(str(workspace), search_root=False, user_config=user_config)
+    first = ctx.get_project("//dep")
+    assert package_revision(first) == upstream.head()
+
+    tip = upstream.commit("B")
+    update(ctx)
+
+    project = ctx.get_project("//dep")
+    assert project.config_dir == first.config_dir
+    assert (Path(project.config_dir) / "version.txt").read_text() == "B"
+    assert package_revision(project) == tip
+
+
+def test_loading_moves_the_copy_back_to_the_pin_after_a_forced_update(tmp_path, upstream, user_config):
+    first = upstream.head()
+    workspace = tmp_path / "ws"
+    write_package(workspace, dependency(upstream, track="main", revision=first))
+    upstream.commit("B")
+
+    user_config.force_update = True
+    assert load_version(workspace, user_config) == "B"
+    user_config.force_update = False
+    assert load_version(workspace, user_config) == "A"
+    assert copies(user_config, upstream) == ["-main"]
+
+
+def test_two_pins_of_one_branch_in_one_context_do_not_share_the_copy(tmp_path, upstream, user_config):
+    """Moving the copy for the second would change the files under the first."""
+    first = upstream.head()
+    second = upstream.commit("B")
+    workspace = tmp_path / "ws"
+    write_package(
+        workspace,
+        dependency(upstream, track="main", revision=first)
+        + dependency(upstream, track="main", revision=second).replace("  dep:", "  other:"),
+    )
+    ctx = pc.Context(str(workspace), search_root=False, user_config=user_config)
+
+    dep = ctx.get_project("//dep")
+    other = ctx.get_project("//other")
+
+    assert (Path(dep.config_dir) / "version.txt").read_text() == "A"
+    assert (Path(other.config_dir) / "version.txt").read_text() == "B"
+    assert copies(user_config, upstream) == sorted(["-main", "-" + second])
 
 
 # ---- pc add dep -----------------------------------------------------------------

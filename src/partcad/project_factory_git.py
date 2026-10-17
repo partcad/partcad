@@ -26,6 +26,7 @@ from pygit2.enums import CheckoutStrategy, ConfigLevel, CredentialType, Referenc
 from . import consts
 from . import logging as pc_logging
 from . import project_factory as pf
+from . import revision as pc_revision
 from . import telemetry
 from .project_local import ProjectLocal
 
@@ -782,6 +783,26 @@ def tracked_commit(user_config, url: str, track: str | None = None) -> tuple[str
     return track, commit
 
 
+def cache_dir_name(repo_url, name) -> str:
+    """The directory a copy of 'repo_url' is kept in, for the branch or revision 'name'.
+
+    Module level rather than a method: 'ProjectFactoryGit' is wrapped by
+    'telemetry.instrument()', which hands every callable in the class a 'self'.
+    """
+    # Generate a unique identifier for the repository based on its URL.
+    repo_hash = hashlib.sha256(repo_url.encode()).hexdigest()[:16]
+    if name is not None:
+        # Append the name to the hash instead of using it as an input to the
+        # hash function. This way we can navigate in the cache a lot easier
+        # when there are multiple revisions of the same repo.
+        display_rev = name.replace("/", "-slash-")
+        if os.name == "nt":
+            # On Windows, we need to replace backslashes as well.
+            display_rev = display_rev.replace(os.path.sep, "-sep-")
+        repo_hash += "-" + display_rev
+    return repo_hash
+
+
 def overridden_url(user_config, url: str) -> str:
     """'url' as 'dependencies.overrides.url' in the user configuration rewrites it.
 
@@ -814,6 +835,10 @@ class GitImportConfiguration:
     The one setting that changes that is 'forceUpdate' -- the "force auto-update"
     -- under which loading follows 'track:' past the pin, to the branch's
     newest commit, every time.
+
+    'import_cache_name' is what the downloaded copy is named after: the branch
+    a dependency tracks when it tracks one, so there is one copy per branch that
+    moves from pin to pin, and otherwise the revision, as it always was.
     """
 
     def __init__(self):
@@ -821,9 +846,12 @@ class GitImportConfiguration:
         self.import_revision = self.config_obj.get("revision")
         self.import_track = self.config_obj.get("track")
         self.import_rel_path = self.config_obj.get("relPath")
+        self.import_cache_name = None
 
         self._apply_track()
         self._apply_import_overrides()
+        if self.import_cache_name is None:
+            self.import_cache_name = self.import_revision
 
     def _apply_track(self):
         """Decide between the pin and the branch it tracks.
@@ -834,6 +862,7 @@ class GitImportConfiguration:
         """
         if not self.import_track:
             return
+        self.import_cache_name = self.import_track
         if self.import_revision is None or self.ctx.user_config.force_update:
             self.import_revision = self.import_track
 
@@ -871,6 +900,9 @@ class GitImportConfiguration:
             self.import_config_url,
         )
         self.import_revision = consts.DEVEL_INDEX_REVISION
+        # A copy of its own, rather than the one of the branch it tracks: turning
+        # 'develIndex' on and off must not move that one back and forth.
+        self.import_cache_name = consts.DEVEL_INDEX_REVISION
 
     def _git_config(self) -> dict[str, str]:
         return git_config_params(self.ctx.user_config)
@@ -974,9 +1006,8 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         except GIT_ERRORS:
             return False
         self.ctx.stats_git_ops += 1
-        after = self.import_revision if self.import_revision is not None else repo.head.target
         with open(guard_path, "w") as f:
-            f.write(str(after))
+            f.write(str(repo.head.target))
         pc_logging.info("Cloned %s with the ambient git config ignored", self.import_config_url)
         return True
 
@@ -999,39 +1030,121 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         """
         return bool(self.ctx.user_config.force_update or getattr(self.ctx, "refresh_imports", False))
 
-    def _refresh(self, cache_path, guard_path):
-        """Move a downloaded copy to the newest commit of what it follows.
+    def _at_revision(self, cache_path) -> bool:
+        """Whether the copy at 'cache_path' is at the commit this dependency is pinned to.
 
-        A commit id follows nothing: it names one commit for good, so there is
-        nothing newer to fetch, and asking a server for a commit by its id again
-        is a request not every server serves. A branch or a tag is fetched by
-        name, and no revision at all means the remote's default branch.
+        Always, for a revision that is not a commit id: a branch is whatever was
+        downloaded of it, until something asks for newer.
         """
         revision = self.import_revision
-        if revision is not None and looks_like_commit_id(revision):
-            return
+        if revision is None or not looks_like_commit_id(revision):
+            return True
+        try:
+            head = str(pygit2.Repository(cache_path).head.target)
+        except GIT_ERRORS:
+            return False
+        return head.startswith(revision.strip().lower())
 
+    def _refresh(self, repo_url, cache_path, guard_path):
+        """Bring a downloaded copy to what this dependency names now.
+
+        A commit id names one commit for good: a copy elsewhere -- the copy of a
+        tracked branch, which 'pc update' has since pinned somewhere else -- is
+        moved to it, and a copy at it is left alone, since there is nothing newer
+        to fetch. A branch or a tag is fetched by name, and no revision at all
+        means the remote's default branch.
+        """
+        revision = self.import_revision
         repo = pygit2.Repository(cache_path)
         # head.target, not the active branch: checking out a tag or a commit id
         # leaves HEAD detached, and there is no branch to read there. HEAD works
         # either way.
         before = repo.head.target
-        with _ambient_config_guard.honoring_ambient_config():
-            if revision is None:
-                # If there is more than 1 remote branch, we have to explicitly
-                # specify the branch to pull.
-                revision = _default_branch(repo)
-            pc_logging.debug("Refreshing the GIT revision: %s" % revision)
-            with telemetry.start_as_current_span("*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"):
-                fetched = _fetch(repo, revision, user_config=self.ctx.user_config)
-                repo.reset(fetched, ResetMode.HARD)
+        if revision is not None and looks_like_commit_id(revision):
+            if str(before).startswith(revision.strip().lower()):
+                return
+            repo = self._move_to_commit(repo_url, repo, cache_path, revision.strip())
+        else:
+            with _ambient_config_guard.honoring_ambient_config():
+                if revision is None:
+                    # If there is more than 1 remote branch, we have to
+                    # explicitly specify the branch to pull.
+                    revision = _default_branch(repo)
+                pc_logging.debug("Refreshing the GIT revision: %s" % revision)
+                with telemetry.start_as_current_span("*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"):
+                    fetched = _fetch(repo, revision, user_config=self.ctx.user_config)
+                    repo.reset(fetched, ResetMode.HARD)
         self.ctx.stats_git_ops += 1
 
         after = repo.head.target
         if before != after:
             pc_logging.info("Updated the GIT repo: %s" % self.import_config_url)
+            # The revision a package read out of this copy reports is cached by
+            # the repository's path, and the path has not changed.
+            pc_revision.reset_cache()
         with open(guard_path, "w") as f:
-            f.write(str(after) if self.import_revision is None else self.import_revision)
+            f.write(str(after))
+
+    def _move_to_commit(self, repo_url, repo, cache_path, commit) -> pygit2.Repository:
+        """Check 'commit' out in the copy at 'cache_path', fetching it if it is not there yet.
+
+        It is asked for by its id, which costs one commit's worth of download.
+        A server that will not serve a commit by its id is the one case where
+        the copy is downloaded again instead, the way a clone of that commit
+        would be - which knows how to get past such a server.
+        """
+        local = _local_commit(repo, commit)
+        if local is None:
+            try:
+                with _ambient_config_guard.honoring_ambient_config():
+                    local = _fetch(repo, commit, depth=1, user_config=self.ctx.user_config)
+            except GIT_ERRORS as e:
+                if is_retryable(e):
+                    raise  # a real network failure, let the retry loop see it
+                pc_logging.warning(
+                    "Server would not serve commit %s of %s directly (%s), downloading it again",
+                    commit,
+                    self.import_config_url,
+                    str(e).splitlines()[-1] if str(e) else e,
+                )
+                repo.free()
+                shutil.rmtree(cache_path, ignore_errors=True)
+                with _ambient_config_guard.honoring_ambient_config():
+                    return self._clone_repo(repo_url, cache_path, get_clone_options(commit))
+        repo.reset(local, ResetMode.HARD)
+        return repo
+
+    def _held_by_others(self, cache_path):
+        """The commit 'cache_path' is checked out at for another package of this context, if one is built from it.
+
+        A copy shared by every pin of a branch is moved from pin to pin, and a
+        package already loaded out of it reads its files lazily, for as long as
+        the context lives. So a copy one package is built from is not moved for
+        another: 'Context.git_checkouts' records who uses which copy, and the
+        packages are released when the context drops them.
+        """
+        checkouts = getattr(self.ctx, "git_checkouts", None)
+        if checkouts is None:
+            return None
+        with self.ctx.git_checkouts_lock:
+            entry = checkouts.get(cache_path)
+            if entry is not None and entry["holders"] - {self.name}:
+                return entry["commit"]
+        return None
+
+    def _hold(self, cache_path):
+        """Record that this package is built from the copy at 'cache_path', at the commit it is at."""
+        checkouts = getattr(self.ctx, "git_checkouts", None)
+        if checkouts is None or not os.path.isdir(cache_path):
+            return
+        try:
+            commit = str(pygit2.Repository(cache_path).head.target)
+        except GIT_ERRORS:
+            return
+        with self.ctx.git_checkouts_lock:
+            entry = checkouts.setdefault(cache_path, {"commit": commit, "holders": set()})
+            entry["commit"] = commit
+            entry["holders"].add(self.name)
 
     def _clone_or_update_repo(self, repo_url, cache_dir=None):
         """
@@ -1041,6 +1154,13 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         not ask the remote whether anything moved since, so the network is
         reached only to download a revision that is not here yet, or when a
         refresh was asked for (see '_wants_refresh').
+
+        A dependency that tracks a branch is kept in a copy named after the
+        branch, which is moved to whichever commit the dependency is pinned to:
+        'pc update' moving a pin moves that copy, rather than leaving the old
+        commit's behind. The one exception is a copy another package of this
+        context is already built from, at another commit; that pin is then kept
+        in a copy named after the commit, the way every revision used to be.
 
         Args:
           repo_url: URL of the Git repository to clone.
@@ -1052,19 +1172,23 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
 
         if cache_dir is None:
             cache_dir = os.path.join(self.ctx.user_config.internal_state_dir, "git")
+        os.makedirs(cache_dir, exist_ok=True)
 
-        # Generate a unique identifier for the repository based on its URL.
-        repo_hash = hashlib.sha256(repo_url.encode()).hexdigest()[:16]
-        if self.import_revision is not None:
-            # Append the revision to the hash instead of using it as an input
-            # to the hash function. This way we can navigate in the cache
-            # a lot easier when there are multiple revisions of the same repo.
-            display_rev = self.import_revision
-            display_rev = display_rev.replace("/", "-slash-")
-            if os.name == "nt":
-                # On Windows, we need to replace backslashes as well.
-                display_rev = display_rev.replace(os.path.sep, "-sep-")
-            repo_hash += "-" + display_rev
+        cache_path = self._prepare_copy(repo_url, cache_dir, self.import_cache_name)
+        if cache_path is None:
+            cache_path = self._prepare_copy(repo_url, cache_dir, self.import_revision)
+
+        if self.import_rel_path is not None:
+            cache_path = os.path.join(cache_path, self.import_rel_path)
+
+        return cache_path
+
+    def _prepare_copy(self, repo_url, cache_dir, name):
+        """Make the copy named 'name' hold this dependency's revision; None if it is in use at another.
+
+        Returns the copy's path.
+        """
+        repo_hash = cache_dir_name(repo_url, name)
         cache_path = os.path.join(cache_dir, repo_hash)
         cache_lock = get_cache_lock(repo_hash)
 
@@ -1073,7 +1197,6 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         # covers, so two 'pc' invocations never clone into the same directory at
         # once. The lock file is released when the process exits but left on
         # disk; the 'StaleGitLocks' healthcheck removes ones no process holds.
-        os.makedirs(cache_dir, exist_ok=True)
         repo_file_lock = FileLock(os.path.join(cache_dir, repo_hash + ".lock"))
 
         # Written last, once the revision is checked out, so it is what tells a
@@ -1081,25 +1204,47 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         guard_path = os.path.join(cache_path, ".partcad.git.cloned")
 
         with cache_lock, repo_file_lock:
-            if os.path.exists(cache_path) and not os.path.exists(guard_path):
-                # A download that never finished: a process killed mid-clone, a
-                # disk that filled up. Whatever part of the tree arrived is not
-                # the revision, so it is downloaded again rather than built from.
-                pc_logging.warning("Discarding an incomplete copy of %s" % self.import_config_url)
-                shutil.rmtree(cache_path, ignore_errors=True)
-
-            if os.path.exists(guard_path) and not self._wants_refresh():
-                # Downloaded already, and nobody asked for anything newer. This
-                # is the common case, and it needs no network at all -- not even
-                # the connectivity probe, which is why it is decided up here.
-                pass
+            held = self._held_by_others(cache_path)
+            if held is not None:
+                if name != self.import_revision and not self._accepts(held):
+                    # Another package of this context is built from this copy,
+                    # at another commit: not to be moved under it.
+                    return None
+                # In use already, and at what this dependency asks for: used as
+                # it is, without a refresh moving it under the other package.
             else:
-                self._download_or_refresh(repo_url, cache_path, guard_path)
+                if os.path.exists(cache_path) and not os.path.exists(guard_path):
+                    # A download that never finished: a process killed mid-clone, a
+                    # disk that filled up. Whatever part of the tree arrived is not
+                    # the revision, so it is downloaded again rather than built from.
+                    pc_logging.warning("Discarding an incomplete copy of %s" % self.import_config_url)
+                    shutil.rmtree(cache_path, ignore_errors=True)
 
-        if self.import_rel_path is not None:
-            cache_path = os.path.join(cache_path, self.import_rel_path)
+                if os.path.exists(guard_path) and not self._wants_refresh() and self._at_revision(cache_path):
+                    # Downloaded already, at what is asked for, and nobody asked
+                    # for anything newer. This is the common case, and it needs no
+                    # network at all -- not even the connectivity probe, which is
+                    # why it is decided up here.
+                    pass
+                else:
+                    self._download_or_refresh(repo_url, cache_path, guard_path)
+
+                if os.path.exists(guard_path) and not self._at_revision(cache_path):
+                    pc_logging.warning(
+                        "%s is not at the commit it is pinned to, %s, which could not be fetched: "
+                        "using the copy that was downloaded before" % (self.import_config_url, self.import_revision)
+                    )
+            self._hold(cache_path)
 
         return cache_path
+
+    def _accepts(self, commit) -> bool:
+        """Whether a copy at 'commit' is what this dependency asks for."""
+        revision = self.import_revision
+        if revision is None or not looks_like_commit_id(revision):
+            # A branch is whatever this context already has of it.
+            return True
+        return commit.startswith(revision.strip().lower())
 
     def _download_or_refresh(self, repo_url, cache_path, guard_path):
         """Clone the revision, or refresh the copy there is, retrying what is worth it."""
@@ -1115,7 +1260,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
             if os.path.exists(cache_path):
                 # Update the repository if it is already cached.
                 try:
-                    self._refresh(cache_path, guard_path)
+                    self._refresh(repo_url, cache_path, guard_path)
                     break
                 except GIT_ERRORS as e:
                     # Check if the error is a transient network failure
@@ -1148,13 +1293,11 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                         ):
                             repo = self._clone_repo(repo_url, cache_path, clone_options)
                     self.ctx.stats_git_ops += 1
-                    if self.import_revision is not None:
-                        after = self.import_revision
-                    else:
-                        after = repo.head.target
 
+                    # The commit, whatever the revision named: a copy named after
+                    # a branch moves from commit to commit.
                     with open(guard_path, "w") as f:
-                        f.write(str(after))
+                        f.write(str(repo.head.target))
                     break
                 except GIT_ERRORS as e:
                     # Check if the error is a transient network failure

@@ -1172,7 +1172,19 @@ at all).
 
   A dependency's `revision:` is its pin and `track:` the branch the pin follows (`GitImportConfiguration`).
   Loading reads `track:` only when there is no `revision:` yet, or under `forceUpdate`, which follows the
-  branch past the pin; `develIndex` is applied after both and still wins. `pc update`
+  branch past the pin; `develIndex` is applied after both and still wins.
+
+  A tracked dependency's copy is named after the **branch** (`<url hash>-<track>`, `import_cache_name`), not the
+  commit, so there is one per branch and it is *moved* to whatever the pin says: a load finding it elsewhere
+  checks the pin out (fetching that one commit if it has to — satisfying a pin, not updating), and `pc update`
+  and `forceUpdate` move it in place rather than leaving a copy per commit behind. Two things follow from a copy
+  that moves. A package already loaded out of it reads its files lazily, so `Context.git_checkouts` records
+  which packages are built from which copy at which commit, and a second pin of the same branch that disagrees
+  is kept in a commit-named copy instead (`_held_by_others`, released by `Context._drop_packages`). And
+  `revision.py` caches a repository's commit by its path, which no longer changes when the commit does, so a
+  move calls `revision.reset_cache()`. Nothing coordinates *processes*: two daemons with packages pinning one
+  branch at different commits can still move the copy under each other. `develIndex` gets a copy of its own
+  (`-devel`) so that toggling it never moves the `main` one. `pc update`
   (`actions/package/update.py`) is what moves a pin: it asks each tracked branch's remote where it is
   (`tracked_commit()`, an `ls-remote` — nothing downloaded), writes the commit into `revision:`, then reloads
   every package (`Context.reload_all_packages()`) and fetches them all under `refresh_imports`. It edits only
