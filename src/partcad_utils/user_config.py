@@ -429,6 +429,94 @@ DEFAULT_CAE_IMPLEMENTATIONS = {
 DEFAULT_CAM_IMPLEMENTATION = "//builtin/cam:gcode"
 
 
+# The least 'threadsMax' may be, wherever it comes from: the configuration file,
+# PC_THREADS_MAX, '--threads-max', or a configuration a client hands the daemon.
+# A lower value is raised to this, with a warning, and the same floor holds for
+# what PartCAD picks when nothing says (see 'default_threads_max').
+#
+# Four, because fewer is how 'pc render -r' came to stop for good with
+# 'threadsMax: 2'. An object built from another one -- an alias, an enrich, an
+# extrusion of a sketch -- is built on a thread of the constrained pool, and asks
+# that same pool for a thread to build its source on while it holds its own; with
+# as many such objects at once as the pool has threads, every thread waits for one
+# that none of them will give back (see 'partcad.sync_threads'). A recursive
+# render starts every object of a package at once, so two of them were always
+# going to meet. The floor makes that much less likely; it does not make it
+# impossible, and is not a substitute for building nested objects without taking
+# a second thread.
+THREADS_MAX_MINIMUM = 4
+
+
+def cpu_cores() -> int:
+    """How many CPU cores this machine has, as PartCAD counts them.
+
+    'os.cpu_count()', which is what PartCAD's sizing has always counted: the
+    cores the machine has, not the ones this process may run on -- it knows
+    nothing of an affinity mask or a container's CPU quota. One function, so
+    that the sizing, the warning below and 'pc healthcheck' cannot count two
+    different ways.
+    """
+    return os.cpu_count() or 1
+
+
+def few_cores_warning(cores: int) -> str:
+    """What a machine with fewer cores than the minimum is told.
+
+    The sizing below says it once per process, and 'pc healthcheck' says it
+    when asked (partcad.healthcheck.cpu_cores); one sentence, so that a search
+    for the one finds the other.
+    """
+    return "PartCAD needs at least %d CPU cores for optimal performance, and found %d" % (THREADS_MAX_MINIMUM, cores)
+
+
+def default_threads_max() -> int:
+    """What 'threadsMax' comes to when nothing sets it: one per core, at least the minimum.
+
+    A machine with fewer cores than that is told so, once per process: it gets
+    the minimum regardless, because fewer is the deadlock 'THREADS_MAX_MINIMUM'
+    exists for, and that is more processes than it has cores to run them.
+    """
+    cores = cpu_cores()
+    if cores < THREADS_MAX_MINIMUM:
+        pc_logging.warning_once(("cpu_cores", cores), few_cores_warning(cores))
+    return max(THREADS_MAX_MINIMUM, cores)
+
+
+def threads_max_at_least_minimum(value, origin: str = None):
+    """'value' as a 'threadsMax': a whole number no lower than the minimum, or None.
+
+    None stays None: nothing was said, and what PartCAD picks then is
+    'default_threads_max()'. A lower number is raised to the minimum, and the
+    user is told, once per process for each value -- the client resolves its
+    configuration more than once per command, and the daemon is handed one with
+    every request. 'origin' says where the value came from, when that is known.
+
+    A value that is not a whole number is not one PartCAD can run with, and is
+    ignored with a warning rather than allowed to stop the process: this runs
+    while 'partcad_utils' is imported, where a 'ValueError' is a traceback before
+    any command has started.
+    """
+    if value is None:
+        return None
+    where = " (from %s)" % origin if origin else ""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        pc_logging.warning_once(
+            ("threadsMax", repr(value)),
+            "threadsMax %r%s is not a whole number, and is ignored" % (value, where),
+        )
+        return None
+    if number < THREADS_MAX_MINIMUM:
+        pc_logging.warning_once(
+            ("threadsMax", number),
+            "threadsMax %d%s is below the minimum of %d; using %d instead"
+            % (number, where, THREADS_MAX_MINIMUM, THREADS_MAX_MINIMUM),
+        )
+        return THREADS_MAX_MINIMUM
+    return number
+
+
 class UserConfig(vyper.Vyper):
     # The sandbox before anything has been read. Both are replaced during
     # '__init__'; they exist as class attributes so that the property below
@@ -436,6 +524,40 @@ class UserConfig(vyper.Vyper):
     # through '__setattr__' before ours has run.
     _python_sandbox = None
     _python_sandbox_declared = False
+    # The same, for 'threads_max'.
+    _threads_max = None
+
+    @property
+    def threads_max(self):
+        """How much of the machine PartCAD may use: 'threadsMax', or None for "pick".
+
+        A property, so that no way of setting it gets past the floor:
+        '--threads-max' arrives by assignment after the configuration has been
+        read, and so does any caller that sets the attribute.
+        """
+        return self._threads_max
+
+    @threads_max.setter
+    def threads_max(self, value):
+        self._apply_threads_max(value)
+
+    def _apply_threads_max(self, value, origin: str = None):
+        self._threads_max = threads_max_at_least_minimum(value, origin)
+        # Into the settings as well as the attribute, so that the two cannot
+        # disagree about what stands. What travels to the daemon is read off the
+        # attribute ('to_dict'), which is the half that matters: '--threads-max'
+        # used to set the attribute alone, and so never reached a daemon at all.
+        if self._threads_max is not None:
+            self.set("threadsMax", self._threads_max)
+
+    @staticmethod
+    def _threads_max_origin(settings) -> str:
+        """Where the 'threadsMax' being read came from, in the order vyper ranks them."""
+        if settings and settings.get("threadsMax") is not None:
+            return "the caller's configuration"
+        if os.environ.get("PC_THREADS_MAX"):
+            return "PC_THREADS_MAX"
+        return UserConfig.get_config_path()
 
     @property
     def python_sandbox(self):
@@ -543,6 +665,14 @@ class UserConfig(vyper.Vyper):
             value = self.get(path)
             if value:
                 data[path] = value
+        # 'threadsMax' as it stands rather than as the layers last spelled it:
+        # raised to the minimum, a value that is not a number dropped, and
+        # whatever the command line assigned. Sent that way, the daemon has
+        # nothing to raise and nothing to warn about -- the user has been told
+        # once already, by the process that read the setting.
+        data.pop("threadsMax", None)
+        if self._threads_max is not None:
+            data["threadsMax"] = self._threads_max
         # Whether the sandbox was somebody's decision, which the value cannot
         # say: every process resolves one, so the receiving end would read the
         # startup default as a statement. See '__init__'.
@@ -767,13 +897,20 @@ class UserConfig(vyper.Vyper):
         # option: threadsMax
         # description: how much of the machine PartCAD may use. Sizes the thread
         #              pools (not a strict limit) and, strictly, how many sandbox
-        #              interpreters run at once (partcad.sandbox_lock)
-        # values: >2
-        # default: min(7, <cpu threads count - 1>) threads, <cpu threads count> sandbox processes
+        #              interpreters run at once (partcad.sandbox_lock). A daemon
+        #              sizes the latter for each request from the configuration
+        #              the request carries, so PC_THREADS_MAX and '--threads-max'
+        #              take effect on a daemon that was started without them.
+        # values: >=4 (THREADS_MAX_MINIMUM); a lower value is raised to 4 with a
+        #         warning, whether it comes from this file, PC_THREADS_MAX,
+        #         '--threads-max' or a client's configuration
+        # default: max(7, <cpu threads count - 1>) threads,
+        #          max(4, <cpu threads count>) sandbox processes
         self.bind_env("threadsMax", "PC_THREADS_MAX")
-        self.threads_max = None
         if self.is_set("threadsMax"):
-            self.threads_max = self.get_int("threadsMax")
+            self._apply_threads_max(self.get("threadsMax"), self._threads_max_origin(settings))
+        else:
+            self._threads_max = None
 
         # option: cacheFiles
         # description: enable caching of intermediate results to the filesystem

@@ -70,6 +70,18 @@ caller's command runs under; that travels with every `context.create` and is reb
 print through `partcad_utils.config_report`, which is also where the redaction lives — the daemon scrubs a
 credential before logging it, so a value the client has no business holding never reaches the wire.
 
+Building the context from the caller's configuration covers whatever the context reads. It does not cover what
+the **process** owns, and an option that sizes something process-wide has to be re-applied per request instead.
+`threadsMax` is the one so far: the sandbox process slots (`partcad.sandbox_lock`) are the daemon's, sized at
+import from its own configuration, and were deaf to every `PC_THREADS_MAX` and `--threads-max` sent afterwards.
+So `context.create` calls `pc.sandbox_lock.follow()` with the configuration it is about to build from, and `_ctx`
+calls it again with the context's own -- requests are served one at a time, and another client's may have
+moved the slots in between. A request that names no context at all carries no configuration either, and is
+served with the slots the last one left. `--http` is the exception to "one at a time": it dispatches requests
+concurrently, so there the ceiling is the one the most recent request set. The thread pools (`partcad.sync_threads`) are not resized: they are not
+a strict limit, and shrinking a warm daemon's pool under work already queued on it would invite the very
+starvation the `threadsMax` floor is there to make unlikely.
+
 ## Layout
 
 - `core/` — transport-agnostic operations shared with the legacy VS Code LSP server: `session.py` (PartCAD

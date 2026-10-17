@@ -41,7 +41,8 @@ import time
 
 from filelock import FileLock, Timeout
 
-from .user_config import user_config
+from . import logging as pc_logging
+from .user_config import THREADS_MAX_MINIMUM, default_threads_max, user_config
 
 # How long a contended acquire waits between attempts. Contention only happens
 # around an install, which takes seconds, so the upper bound costs nothing and
@@ -222,46 +223,103 @@ class ProcessSlots:
     Taken *inside* whatever environment lock the caller holds and released
     before that lock is, so the two can never wait on each other: a slot holder
     is always running, never waiting for a lock.
+
+    The ceiling can move while slots are held (see 'follow'), which is why this
+    is a count under a lock rather than a semaphore. Raised, a waiter takes the
+    new room on its next poll. Lowered, nobody is interrupted: the slots already
+    held stay held, and nobody new gets one until enough of them are given back
+    to be under the new ceiling.
     """
 
     def __init__(self, count: int):
-        self.count = count
-        self._semaphore = threading.BoundedSemaphore(count)
+        self._mutex = threading.Lock()
+        self._count = count
+        self._in_use = 0
+
+    @property
+    def count(self) -> int:
+        return self._count
+
+    def resize(self, count: int) -> None:
+        with self._mutex:
+            if count == self._count:
+                return
+            was, self._count = self._count, count
+        # Debug, and only on a change: a daemon serving clients configured
+        # differently moves this on every request, and what it is at is a
+        # question for its log, not for the user's terminal.
+        pc_logging.debug("Sandbox processes at once: %d (was %d)" % (count, was))
+
+    def _try_acquire(self) -> bool:
+        with self._mutex:
+            if self._in_use >= self._count:
+                return False
+            self._in_use += 1
+            return True
+
+    def _release(self) -> None:
+        with self._mutex:
+            self._in_use -= 1
 
     @contextlib.contextmanager
     def slot(self):
-        if not self._semaphore.acquire(blocking=False):
+        if not self._try_acquire():
             delay = _POLL_MIN
-            while not self._semaphore.acquire(blocking=False):
+            while not self._try_acquire():
                 time.sleep(delay)
                 delay = min(delay * 2, _POLL_MAX)
         try:
             yield
         finally:
-            self._semaphore.release()
+            self._release()
 
     @contextlib.asynccontextmanager
     async def slot_async(self):
-        if not self._semaphore.acquire(blocking=False):
+        if not self._try_acquire():
             delay = _POLL_MIN
-            while not self._semaphore.acquire(blocking=False):
+            while not self._try_acquire():
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, _POLL_MAX)
         try:
             yield
         finally:
-            self._semaphore.release()
+            self._release()
 
 
-def _process_slot_count() -> int:
+def process_slot_count(config=None) -> int:
     """One interpreter per core, or whatever 'threadsMax' says instead.
 
     'threadsMax' is the user's statement of how much of the machine PartCAD may
-    have; it named threads because threads were all there was to name.
+    have; it named threads because threads were all there was to name. Either
+    way it is never fewer than 'THREADS_MAX_MINIMUM': 'UserConfig' already
+    raises a configured value to that, and the floor is restated here because
+    this is the limit that is strict, and 'config' need not be a 'UserConfig'.
+
+    'config' is the configuration to size for, this process's own when None.
     """
-    if user_config.threads_max is not None:
-        return max(1, user_config.threads_max)
-    return max(2, os.cpu_count() or 1)
+    if config is None:
+        config = user_config
+    threads_max = getattr(config, "threads_max", None)
+    if threads_max is not None:
+        return max(THREADS_MAX_MINIMUM, threads_max)
+    return default_threads_max()
 
 
-process_slots = ProcessSlots(_process_slot_count())
+def follow(config) -> None:
+    """Size the process slots for the configuration the work is being done under.
+
+    The slots belong to the process, and in a daemon the process outlives every
+    configuration it serves: sized once, at import, from the daemon's own
+    configuration, they ignored the 'threadsMax' -- PC_THREADS_MAX,
+    '--threads-max' -- of every command a client sent afterwards. The daemon
+    calls this for each request with the configuration that request carries,
+    and requests are served one at a time (over the socket, the pipe and stdio;
+    '--http' serves them concurrently, and the latest one's ceiling holds), so
+    the ceiling is the one the command being served asked for. In a process
+    with one configuration, the sizing at import is already the answer and
+    nothing needs to call this.
+    """
+    process_slots.resize(process_slot_count(config))
+
+
+process_slots = ProcessSlots(process_slot_count())

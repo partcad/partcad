@@ -107,6 +107,11 @@ from . import cae  # noqa: F401
 # And 'partcad.cam', for the same reason: it is what the daemon's 'cam.route'
 # operation reaches a route through, and what 'Shape.route_async()' reads.
 from . import cam  # noqa: F401
+
+# And 'partcad.sandbox_lock': the daemon sizes the sandbox process slots for
+# each request through it ('sandbox_lock.follow'), and should not depend on the
+# runtimes having imported it first.
+from . import sandbox_lock  # noqa: F401
 from .ai_agents import install_agent_skills
 from .assembly import Assembly
 from .assembly_connect import ConnectHold, ConnectHow

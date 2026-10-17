@@ -22,7 +22,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 from . import timeouts
-from .logging import ops
+from .logging import ops, release_held_warnings
 
 # The process/action markers PartCAD emits as log records carrying a `pc_event`
 # extra (identical to what the ANSI terminal backend consumes).
@@ -178,6 +178,11 @@ def init(hook, log_file: str = None, file_level: int = logging.DEBUG) -> None:
     ops.action_end = _action_end
     ops.timeout_start = _timeout_start
     ops.timeout_end = _timeout_end
+
+    # Now that a warning reaches the client, say the ones that were held back
+    # because nothing could: the daemon finds those while importing 'partcad',
+    # which is before this runs (see 'partcad_utils.logging.warning_once').
+    release_held_warnings()
 
 
 def fini() -> None:

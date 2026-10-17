@@ -17,7 +17,7 @@ from opentelemetry import context as otel_context
 from opentelemetry.trace import Tracer
 
 from .telemetry import tracer
-from .user_config import user_config
+from .user_config import cpu_cores, user_config
 
 
 class TracedThreadPoolExecutor(ThreadPoolExecutor):
@@ -44,11 +44,16 @@ class TracedThreadPoolExecutor(ThreadPoolExecutor):
 
 class ThreadPoolManager:
     def __init__(self, threads_max: int):
-        # Calculate CPU count based on user config or system capabilities
+        # Calculate CPU count based on user config or system capabilities.
+        # A configured 'threadsMax' is at least THREADS_MAX_MINIMUM by the time
+        # it gets here ('UserConfig' raises it), and both branches have to stay
+        # at or above that: this pool is where a part built from another part
+        # waits for a second thread while holding the first, which is how
+        # 'threadsMax: 2' stopped 'pc render -r' for good.
         if threads_max is not None:
             cpu_count = threads_max
         else:
-            cpu_count = os.cpu_count() or 1  # Handle None case
+            cpu_count = cpu_cores()
             if cpu_count < 8:
                 # This is a workaround for the fact that sometimes we waste threads and
                 # we should not dead lock ourselves on a machine with a small number of cores
