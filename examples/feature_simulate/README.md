@@ -40,9 +40,10 @@ supposed to happen, and a `desc:` for whoever reads the result.
 PartCAD implements no simulator. It ships the *concept* -- the `simulate:`
 section, the `simulation:` section a plugin is declared in, the sandbox the
 plugin runs in, and the MJCF export a scene reaches it through -- and a
-package supplies the physics. This one imports
-[partcad-sim-mujoco](https://github.com/partcad/partcad-sim-mujoco) below and
-names it as `sim-mujoco:mujoco`. Nothing has to be installed by hand: PartCAD
+package supplies the physics. This one names
+[partcad-sim-mujoco](https://github.com/partcad/partcad-sim-mujoco), which
+the public index publishes at `//pub/feature/simulate/mujoco`, as
+`//pub/feature/simulate/mujoco:mujoco`. Nothing has to be installed by hand: PartCAD
 installs that package's requirements into the sandbox it runs it in, so a
 machine with no MuJoCo on it simulates just the same.
 
@@ -97,7 +98,7 @@ ordinary export, so the same file can be written out and looked at -- or
 opened in MuJoCo:
 
 ```shell
-pc export -S -t sim-mujoco:mjcf -O ./ unstable
+pc export -S -t //pub/feature/simulate/mujoco:mjcf -O ./ unstable
 pc ide open --with mujoco ./unstable.xml
 ```
 
@@ -143,10 +144,6 @@ pc sim buoy           # the ballasted float rights itself as it rises
 `water` is declared below so that this example stays self-contained; the
 standard catalogue's is `//pub/std/manufacturing/material/fluid:water`.
 
-
-## Sub-Packages
-
-### [sim-mujoco](https://github.com/partcad/partcad-sim-mujoco.git)
 
 ## Scenes
 
