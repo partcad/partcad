@@ -13,6 +13,8 @@ import hashlib
 import os
 import re
 import shutil
+import stat
+import sys
 import tempfile
 import threading
 import time
@@ -245,6 +247,30 @@ _SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 # "git@github.com:org/repo", the scp-like spelling of an ssh url. It has no
 # scheme, so urlparse cannot tell it apart from a local path.
 _SCP_LIKE_RE = re.compile(r"^[A-Za-z0-9_.+-]+@[A-Za-z0-9_.-]+:")
+
+
+def _remove_tree(path) -> None:
+    """Remove a downloaded copy, including what Windows will not let go of.
+
+    libgit2 writes a repository's objects read-only, and on Windows a read-only
+    file cannot be deleted: 'shutil.rmtree(..., ignore_errors=True)' gave up on
+    them without a word and left half a repository behind, which the next load
+    then took for a copy. Each such file is made writable and removed again;
+    whatever still refuses is left, and is what an existing directory without
+    its '.partcad.git.cloned' marker is there to catch.
+    """
+
+    def retry_writable(func, failed_path, _error):
+        try:
+            os.chmod(failed_path, stat.S_IWRITE)
+            func(failed_path)
+        except OSError:
+            pass
+
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=retry_writable)
+    else:
+        shutil.rmtree(path, onerror=retry_writable)  # 'onexc' is 3.12's spelling
 
 
 def looks_like_commit_id(revision: str) -> bool:
@@ -601,7 +627,7 @@ def clone_single_commit(repo_url, cache_path, revision, git_config=(), user_conf
             str(e).splitlines()[-1] if str(e) else e,
         )
 
-    shutil.rmtree(cache_path, ignore_errors=True)
+    _remove_tree(cache_path)
     repo = _clone(repo_url, cache_path, git_config, get_fallback_clone_options(revision), user_config)
     _checkout(repo, revision)
     return repo
@@ -960,7 +986,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
             try:
                 return download()
             except GIT_ERRORS:
-                shutil.rmtree(cache_path, ignore_errors=True)
+                _remove_tree(cache_path)
                 raise
 
         if options.single_commit:
@@ -1116,11 +1142,11 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                     str(e).splitlines()[-1] if str(e) else e,
                 )
                 download_path = cache_path + ".partcad-download"
-                shutil.rmtree(download_path, ignore_errors=True)
+                _remove_tree(download_path)
                 with _ambient_config_guard.honoring_ambient_config():
                     self._clone_repo(repo_url, download_path, get_clone_options(commit)).free()
                 repo.free()
-                shutil.rmtree(cache_path, ignore_errors=True)
+                _remove_tree(cache_path)
                 try:
                     os.replace(download_path, cache_path)
                 except OSError as replace_error:
@@ -1235,7 +1261,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                     # disk that filled up. Whatever part of the tree arrived is not
                     # the revision, so it is downloaded again rather than built from.
                     pc_logging.warning("Discarding an incomplete copy of %s" % self.import_config_url)
-                    shutil.rmtree(cache_path, ignore_errors=True)
+                    _remove_tree(cache_path)
 
                 if os.path.exists(guard_path) and not self._wants_refresh() and self._at_revision(cache_path):
                     # Downloaded already, at what is asked for, and nobody asked
@@ -1273,8 +1299,10 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         max_retries = self.ctx.user_config.get_int("git.clone.retry.max")
         patience = self.ctx.user_config.get_float("git.clone.retry.patience")
         while attempt <= max_retries and self.ctx.is_connected():
-            # Check if the repository is already cached.
-            if os.path.exists(cache_path):
+            # Check if the repository is already cached: by the marker a clone
+            # writes last, not by the directory, which a removal that did not
+            # finish can leave behind.
+            if os.path.exists(guard_path):
                 # Update the repository if it is already cached.
                 try:
                     self._refresh(repo_url, cache_path, guard_path)

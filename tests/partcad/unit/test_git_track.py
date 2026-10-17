@@ -608,3 +608,34 @@ def test_a_server_that_will_not_serve_a_commit_by_id_still_gets_the_copy_moved(t
     prefix = cache_dir_name(url, None)
     git_dir = Path(user_config.internal_state_dir) / "git"
     assert sorted(p.name[len(prefix) :] for p in git_dir.glob(prefix + "*") if p.is_dir()) == ["-main"]
+
+
+@pytest.fixture
+def windows_deletes(monkeypatch):
+    """Delete files the way Windows does: one without its write bit cannot be.
+
+    libgit2 writes a repository's objects read-only, so that is what removing a
+    copy runs into there, and what 'shutil.rmtree(..., ignore_errors=True)'
+    silently gave up on, leaving half a repository behind.
+    """
+    import stat
+
+    real_unlink = os.unlink
+
+    def unlink(path, *, dir_fd=None):
+        if not os.stat(path, dir_fd=dir_fd, follow_symlinks=False).st_mode & stat.S_IWRITE:
+            raise PermissionError(13, "Access is denied", path)
+        real_unlink(path, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "unlink", unlink)
+    monkeypatch.setattr(os, "remove", unlink)
+
+
+def test_an_unfinished_download_with_read_only_objects_is_downloaded_again(
+    tmp_path, upstream, user_config, windows_deletes
+):
+    test_an_unfinished_download_is_downloaded_again(tmp_path, upstream, user_config)
+
+
+def test_the_copy_moved_by_a_new_download_with_read_only_objects(tmp_path, user_config, windows_deletes):
+    test_a_server_that_will_not_serve_a_commit_by_id_still_gets_the_copy_moved(tmp_path, user_config)
