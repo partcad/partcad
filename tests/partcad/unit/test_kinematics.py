@@ -27,6 +27,7 @@ reproducing its child's placement).
 """
 
 import asyncio
+import json
 import logging
 import math
 import os
@@ -392,6 +393,302 @@ def test_a_screw_moves_as_its_thread_says():
     # move following by the coupling.
     lead = joint.location([360.0, move.ratio * 360.0 + move.offset])
     assert _close_vector(lead[1], (0, 0, 1))
+
+
+#
+# Starting values: re-zeroed, mapped, and read back (docs/design/simulation.md, 8.13.5)
+#
+
+# One joint of every native kind, and a composite, each started away from its
+# zero on every freedom - what every example of section 8.13.7 does - between a
+# port and a source port, so that nothing about the frames is the identity.
+STARTED = [
+    ("revolute", [free("turn", Z, -90, 120, value=30)]),
+    ("revolute, open on one side", [free("turn", (0, 1, 0), None, 30, value=-90)]),
+    ("prismatic", [free("move", (0, 0, 2), 0, 50, value=20)]),
+    ("cylindrical", [free("turn", Z, value=5), free("move", (0, 0, -1), -10, 10, value=3)]),
+    (
+        "screw",
+        # Its move where the thread puts it, as the core always starts one.
+        [
+            free("turn", Z, 0, 720, value=90),
+            free("move", Z, value=3.5, coupling={"step": 0, "ratio": 10.0 / 360.0, "offset": 1.0}),
+        ],
+    ),
+    ("universal", [free("turn", Z, value=5), fixed((0, 0, 10)), free("turn", X, -45, 45, value=-7)]),
+    ("ball", [free("turn", X, value=5), free("turn", Y, value=-12), free("turn", Z, value=90)]),
+    ("planar", [free("move", X, value=50), free("move", Y, value=100), fixed((3, 4, 0)), free("turn", Z, value=30)]),
+    ("planar, the turn first", [free("turn", Z, value=30), free("move", X, value=50), free("move", Y, value=100)]),
+    (
+        "floating",
+        [free("move", X, value=10), free("move", Y, value=-20), free("move", Z, value=100)]
+        + [free("turn", X, value=15), free("turn", Y, value=-25), free("turn", Z, value=40)],
+    ),
+    (
+        "floating, a turn named first",
+        [free("turn", Z, value=30), free("move", Y, value=-20), free("move", X, value=10), free("move", Z)]
+        + [free("turn", Y, value=-25), free("turn", X, value=15)],
+    ),
+    ("composite", [free("turn", Z, value=20), fixed((100, 0, 0)), free("turn", Z, -30, 30, value=-15)]),
+]
+
+
+def _started(steps):
+    """The steps between a port and a source port, each coupling still pointing at its leader."""
+    shifted = []
+    for step in steps:
+        coupling = step.get("coupling")
+        if coupling:
+            step = dict(step, coupling=dict(coupling, step=coupling["step"] + 1))
+        shifted.append(step)
+    return kinematics.Joint(
+        {
+            "name": "j",
+            "steps": [fixed((1, 2, 3), (1, 0, 0), 30, "port")] + shifted + [fixed((0, 5, 0), role="sourcePort")],
+        }
+    )
+
+
+def _moved(joint, values):
+    """'values' with every follower where its coupling puts it: what a joint can be at."""
+    values = list(values)
+    for freedom in joint.freedoms:
+        if freedom.follows is not None:
+            values[freedom.index] = freedom.ratio * values[freedom.follows] + freedom.offset
+    return values
+
+
+@pytest.mark.parametrize("steps", [steps for _, steps in STARTED], ids=[row[0] for row in STARTED])
+def test_a_joint_re_zeroed_at_its_start_is_the_joint_wherever_it_moves(steps):
+    joint = _started(steps)
+    shifted = kinematics.rezeroed(joint)
+    starts = [freedom.value for freedom in joint.freedoms]
+    assert shifted.starts == starts
+    for values in _value_sets(joint):
+        values = _moved(joint, joint.values(values))
+        engine = [v - s for v, s in zip(values, starts)]
+        # In series, every kind: each joint's frame absorbs its own start.
+        assert _close_pose(shifted.location(engine), joint.location(values)), values
+        if shifted.kind in (kinematics.BALL, kinematics.FLOATING):
+            continue
+        # As one native joint, every kind that is one.
+        assert _close_pose(shifted.native_location(engine), joint.location(values)), values
+    # At the engine's zero the child is where the assembly shows it.
+    assert _close_pose(shifted.location(), joint.location())
+    if shifted.kind == kinematics.FLOATING:
+        assert _close_pose(kinematics.compose(shifted.origin, shifted.native_tail), joint.location())
+    elif shifted.kind == kinematics.BALL:
+        assert _close_pose(shifted.ball_location(urdf_common.IDENTITY_Q), joint.location())
+    else:
+        assert _close_pose(shifted.native_location(), joint.location())
+
+
+def test_what_is_stated_about_a_position_shifts_with_the_start():
+    shifted = kinematics.rezeroed(_started(STARTED[0][1]))
+    (freedom,) = shifted.freedoms
+    assert (freedom.start, freedom.value, freedom.lower, freedom.upper) == (30.0, 0.0, -120.0, 90.0)
+    # An open side stays open.
+    (door,) = kinematics.rezeroed(_started(STARTED[1][1])).freedoms
+    assert (door.lower, door.upper) == (None, 120.0)
+    # A screw's move follows its turn by the same lead, from where both start.
+    turn, move = kinematics.rezeroed(_started(STARTED[4][1])).freedoms
+    assert move.ratio == pytest.approx(10.0 / 360.0) and move.offset == pytest.approx(0.0)
+    # A spring's reference, a soft limit and a mimic between two joints shift too.
+    joint = kinematics.Joint(
+        {
+            "steps": [free("turn", Z, value=30)],
+            "physics": {"springReference": 10},
+            "softLimits": {"lower": -50, "upper": 50, "kPosition": 2},
+        }
+    )
+    shifted = kinematics.rezeroed(joint)
+    assert shifted.spring_reference(0) == pytest.approx(-20.0)
+    assert shifted.soft_limits(0) == {"lower": -80.0, "upper": 20.0, "kPosition": 2}
+    assert kinematics.rezeroed_offset(1.0, 2.0, 30.0, 5.0) == pytest.approx(1.0 + 2.0 * 30.0 - 5.0)
+
+
+def test_a_native_joint_s_starts_go_where_they_commute():
+    """8.13.5: a universal's first start in its frame and its second in the child's; planar per its order."""
+    universal = kinematics.rezeroed(_started(STARTED[5][1]))
+    assert universal.split == 1
+    planar = kinematics.rezeroed(_started(STARTED[7][1]))
+    # The moves first, so their starts go in front and the turn's behind: in
+    # front of the moves it would turn the engine's moves against PartCAD's.
+    assert planar.split == 2
+    assert kinematics.rezeroed(_started(STARTED[8][1])).split == 1
+    # A screw's and a cylindrical's two commute, so both are in the joint frame.
+    assert kinematics.rezeroed(_started(STARTED[3][1])).split == 2
+    assert kinematics.rezeroed(_started(STARTED[4][1])).split == 2
+
+
+def _near_start(joint, count=6, seed=11):
+    """The starting values, and a few configurations up to 40 degrees or 40 mm from them, followers in place."""
+    generator = random.Random(seed)
+    starts = joint.values()
+    sets = [starts]
+    for _ in range(count):
+        sets.append([value + generator.uniform(-40.0, 40.0) for value in starts])
+    return [_moved(joint, values) for values in sets]
+
+
+def _in_joint_frame(joint, values):
+    """The rotation of a native joint at 'values' in its own frame: what a ball's or a free body's 'quat' is."""
+    classification = joint.classification
+    moved = kinematics.compose(
+        kinematics.compose(kinematics.inverse(classification.origin), joint.location(values)),
+        kinematics.inverse(classification.tail),
+    )
+    return moved[0]
+
+
+def _conjugate(q):
+    return (q[0], -q[1], -q[2], -q[3])
+
+
+def _same_rotation(a, b, tolerance=1e-9) -> bool:
+    return _close_pose((tuple(a), (0.0, 0.0, 0.0)), (tuple(b), (0.0, 0.0, 0.0)), tolerance)
+
+
+def _close_reading(read, expected, tolerance=1e-6):
+    if isinstance(expected, dict):
+        return set(read) == set(expected) and all(abs(read[key] - expected[key]) <= tolerance for key in expected)
+    return abs(read - expected) <= tolerance
+
+
+@pytest.mark.parametrize("steps", [steps for _, steps in STARTED], ids=[row[0] for row in STARTED])
+def test_a_joint_reads_back_as_partcad_states_it_whatever_the_engine_wrote(steps):
+    """Each way an engine writes a joint, mapped by 'joint_map' and read back by 'reading'.
+
+    Every engine value here is what that engine would hold with the joint at
+    PartCAD's values -- radians and metres, from its own zero -- and every
+    reading has to be those values, in degrees and millimetres, under PartCAD's
+    names: the joint's starting value comes back, wherever the engine's zero is.
+    """
+    joint = _started(steps)
+    kind = joint.kind
+    names = joint.parameter_names()
+    starts = joint.values()
+    shifted = kinematics.rezeroed(joint)
+    parent = kinematics.Body({"label": "base"}, "base", (), kinematics.pose_of([[5, 6, 7], [0, 1, 0], 20]), None, False)
+    joint.parent = parent
+    for values in _near_start(joint):
+        expected = values[0] if len(values) == 1 else dict(zip(names, values))
+        if kind == kinematics.FLOATING:
+            # A free body: its pose and its parent's, in the world, in metres.
+            child = kinematics.compose(parent.world, joint.location(values))
+            poses = tuple((pose[0], tuple(v / 1000.0 for v in pose[1])) for pose in (child, parent.world))
+            entry = kinematics.joint_map(joint)
+            assert (entry["parent"], entry["kind"]) == ("base", kind)
+            read = kinematics.reading([entry], [poses])
+            assert _same_rotation(read["quat"], _in_joint_frame(joint, values))
+            assert _close_reading(read["pos"], expected), (read, expected)
+            continue
+        if kind == kinematics.BALL:
+            rotation = _in_joint_frame(joint, values)
+            # Re-zeroed: the engine's rotation is the turn away from the start,
+            # in the ball's own frame (SDFormat's) or in the child body's (MuJoCo's).
+            engine = urdf_common.quat_mul(_conjugate(shifted.rotation), rotation)
+            frame = shifted.native_tail[0]
+            in_child = urdf_common.quat_mul(urdf_common.quat_mul(_conjugate(frame), engine), frame)
+            for read in (
+                kinematics.reading([kinematics.joint_map(joint)], [engine]),
+                kinematics.reading([kinematics.joint_map(joint, frame=kinematics.CHILD_FRAME)], [in_child]),
+            ):
+                assert _same_rotation(read["quat"], rotation)
+                assert _close_reading(read["pos"], expected), (read, expected)
+                # And the engine's rotation puts the child where PartCAD does.
+                assert _close_pose(shifted.ball_location(engine), joint.location(values))
+            continue
+        # One engine joint per freedom, the engine's zero PartCAD's (an MJCF
+        # hinge, whose 'ref' is the start): every follower is a joint too.
+        series = [kinematics.joint_map(joint, freedoms=[i], start=False) for i in range(len(joint.freedoms))]
+        engine = [value / kinematics.per_si(freedom.kind) for value, freedom in zip(values, joint.freedoms)]
+        read = kinematics.reading(series, engine, engine)
+        assert _close_reading(read["pos"], expected), (read, expected)
+        if kind == kinematics.COMPOSITE:
+            continue
+        # One native joint, re-zeroed at its start (SDFormat): a follower is read off its leader.
+        leaders = [freedom for freedom in joint.freedoms if freedom.follows is None]
+        engine = [(values[f.index] - starts[f.index]) / kinematics.per_si(f.kind) for f in leaders]
+        read = kinematics.reading([kinematics.joint_map(joint)], [engine], [engine])
+        assert read["type"] == kind
+        assert _close_reading(read["pos"], expected), (read, expected)
+        assert _close_pose(
+            shifted.native_location([values[i] - starts[i] for i in range(len(values))]), joint.location(values)
+        )
+
+
+def test_a_reading_keeps_a_turn_past_half_a_turn():
+    """The 'wound' example of 8.13.7: started at 270, it reads 270, and 360 at the bottom - not -90 or 0."""
+    joint = kinematics.Joint({"name": "swing", "steps": [free("turn", Z, value=270)]})
+    sdformat = kinematics.joint_map(joint)
+    assert sdformat["coordinates"] == [
+        {"parameter": "p", "freedom": "turn", "factor": pytest.approx(180 / math.pi), "start": 270.0}
+    ]
+    assert kinematics.reading([sdformat], [0.0])["pos"] == pytest.approx(270.0)
+    assert kinematics.reading([sdformat], [math.pi / 2])["pos"] == pytest.approx(360.0)
+    mujoco = kinematics.joint_map(joint, start=False)
+    assert kinematics.reading([mujoco], [2 * math.pi], [1.0]) == {
+        "type": kinematics.REVOLUTE,
+        "pos": pytest.approx(360.0),
+        "vel": pytest.approx(180 / math.pi),
+    }
+
+
+def test_a_reading_of_several_freedoms_is_keyed_by_parameter():
+    joint = kinematics.Joint(
+        {
+            "name": "nut-bolt",
+            "steps": [
+                free("turn", Z, value=30),
+                free("move", Z, value=0.83, coupling={"step": 0, "ratio": 0.01, "offset": 0.53}),
+            ],
+        }
+    )
+    joint.freedoms[0].source = [{"parameter": "turnZ"}]
+    joint.freedoms[1].source = [{"parameter": "moveZ"}]
+    joint.freedoms[0].parameter, joint.freedoms[1].parameter = "turnZ", "moveZ"
+    entry = kinematics.joint_map(joint)
+    assert [c["parameter"] for c in entry["coordinates"]] == ["turnZ"]
+    assert entry["followers"] == [
+        {"parameter": "moveZ", "freedom": "move", "follows": "turnZ", "ratio": pytest.approx(0.01), "offset": 0.53}
+    ]
+    read = kinematics.reading([entry], [0.0])
+    assert read["pos"] == {"turnZ": pytest.approx(30.0), "moveZ": pytest.approx(0.83)}
+
+
+def test_the_joint_map_travels_in_the_names_sidecar(tmp_path):
+    """Decision 6 of section 8.13.9: each joint entry's 'map', beside its names, read back as it was written."""
+    import naming
+
+    joint = _started(STARTED[5][1])
+    entry = {"path": ["j"], "joint": "j", "map": kinematics.joint_map(joint)}
+    scene = tmp_path / "scene.sdf"
+    naming.write_sidecar(str(scene), "sdformat", {}, joints={"j": entry})
+    back = naming.read_sidecar(str(scene))["joints"]["j"]
+    assert back == json.loads(json.dumps(entry))
+    starts = joint.values()
+    assert kinematics.reading([back], [[0.0, 0.0]])["pos"] == {"p": starts[0], "p-2": starts[1]}
+
+
+def test_parameter_names_are_unique_within_a_joint():
+    joint = kinematics.Joint({"steps": [free("turn", Z), fixed((10, 0, 0)), free("turn", Z), free("move", X)]})
+    joint.freedoms[2].parameter = None
+    assert joint.parameter_names() == ["p", "p-2", "move2"]
+
+
+def test_a_rotation_is_three_turns_where_the_axes_allow_it():
+    q = urdf_common.quat_mul(
+        urdf_common.quat_mul(urdf_common.axis_angle_to_quat(X, 5), urdf_common.axis_angle_to_quat(Y, -12)),
+        urdf_common.axis_angle_to_quat(Z, 200),
+    )
+    # Unwrapped to the turns nearest the start: 200, not -160.
+    assert kinematics.turns_of(q, [X, Y, Z], [5, -12, 190]) == pytest.approx([5, -12, 200])
+    # A symmetric set (Z, X, Z) decomposes too, and at gimbal lock the third is the start's.
+    q = urdf_common.quat_mul(urdf_common.axis_angle_to_quat(Z, 30), urdf_common.axis_angle_to_quat(Z, 40))
+    assert kinematics.turns_of(q, [Z, X, Z], [0, 0, 40]) == pytest.approx([30, 0, 40])
+    # Axes that are not square to the next one cannot: only the rotation is reported.
+    assert kinematics.turns_of(q, [X, (1, 1, 0), Z]) is None
 
 
 #
