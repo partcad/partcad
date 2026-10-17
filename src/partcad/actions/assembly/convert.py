@@ -67,6 +67,13 @@ def _flow(values):
     return seq
 
 
+def _flow_map(values):
+    """A mapping rendered inline, as a hand-written 'toParams: {angle: -4.6}' is."""
+    section = CommentedMap(values)
+    section.fa.set_flow_style()
+    return section
+
+
 def _location(packed):
     return _flow([_flow(packed[0]), _flow(packed[1]), packed[2]])
 
@@ -175,8 +182,10 @@ def movement_parameters(joint):
     for a fixed joint, one for a revolute, continuous or prismatic one, three
     for a planar and six for a floating one), each a freedom-of-movement
     parameter of its kind along its axis. A bounded one states its range, and
-    starts at zero - where URDF's own zero configuration puts it - or at its
-    lower bound when zero is outside it. An unbounded one (a continuous joint,
+    its default is where the joint starts: zero - where URDF's own zero
+    configuration puts it - or the bound nearest zero when the range leaves zero
+    out ('import_urdf.start_within'), which the connection then starts it at
+    ('toParams', see 'urdf_to_assy'). An unbounded one (a continuous joint,
     every freedom of a planar or a floating one) states only its kind and its
     axis, which is what makes it unlimited as a degree of freedom. 'motion:
     {dof: [...]}' names them, and a connection that names one in 'toParams'
@@ -193,7 +202,7 @@ def movement_parameters(joint):
             upper = float(upper) if upper is not None else lower
             config["min"] = round(lower, 9)
             config["max"] = round(upper, 9)
-            config["default"] = 0.0 if lower <= 0.0 <= upper else round(lower, 9)
+            config["default"] = round(min(max(0.0, lower), upper), 9)
         parameters[freedom["name"]] = config
     return parameters
 
@@ -366,6 +375,13 @@ def urdf_to_assy(project: Project, assembly_name: str, config: dict, out_dir: Pa
                 # The joint keeps the URDF's name, which is what a 'mimic' and
                 # a validation name it by, and what an export writes again.
                 connect["joint"] = joint["name"]
+            # A joint whose limits leave URDF's zero out starts at the bound
+            # nearest it, the parameter's 'default': otherwise it would start
+            # against its own stop, which fails the 'connect' check. So the
+            # assembly is drawn with that joint there, as the robot can stand.
+            starts = {f["name"]: f["start"] for f in joint.get("freedoms") or [] if f.get("start")}
+            if starts:
+                connect["toParams"] = _flow_map(starts)
             node["connect"] = connect
         assy_links.append(node)
 

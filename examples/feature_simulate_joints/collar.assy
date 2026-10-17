@@ -1,0 +1,18 @@
+# A collar with an arm, on a shaft at 30 degrees to the horizontal: the rod,
+# tilted 60 degrees from upright, and the collar on it. The connection keeps
+# both freedoms a plain bore has on a plain rod, the turn about the rod and the
+# move along it ('cylindrical'), in the contact frame, whose Z is up the rod.
+# The arm hangs straight down from the rod at a turn of nought; it starts 5
+# degrees round from there, and 260 mm up the rod.
+links:
+  - part: rod
+    name: shaft
+    location: [[0, 0, 0], [0, 1, 0], 60]
+  - part: arm
+    connect:
+      name: shaft
+      with: bore
+      to: shaft
+      joint: collar
+      motion: cylindrical
+      toParams: { turnZ: 5, moveZ: 260 }

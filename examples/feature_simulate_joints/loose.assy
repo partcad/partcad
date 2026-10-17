@@ -1,0 +1,17 @@
+# A block above its base, held by nothing: the plate laid flat, and the cube
+# connected to the middle of its top face with 'motion: floating', which keeps
+# all six freedoms and makes the cube a body of its own. The contact frame's Z
+# points into the base, so 100 mm above it is a move of -100.
+links:
+  - part: plate
+    name: base
+    location: [[0, 0, 0], [1, 0, 0], 90]
+  - part: frame
+    name: block
+    connect:
+      name: base
+      with: foot
+      to: face
+      joint: loose
+      motion: floating
+      toParams: { moveZ: -100 }

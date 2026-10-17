@@ -8,10 +8,12 @@
 The plan is plain data - links, joints, their frames, limits and dynamics, in
 URDF's units - built from what 'kinematics.bodies()' finds, so it is checked
 here without writing a file: one test per row of the classification table
-(docs/design/simulation.md, section 8.8), each moving the URDF it plans through
-a few configurations and comparing where the child body lands with where the
-joint itself puts it. That is what makes the URDF the same mechanism, and not
-only the same picture at zero.
+(docs/design/simulation.md, section 8.13.3). Each native type is written as
+URDF's own, and moved through a few configurations, where the child body lands
+where the joint itself puts it - which is what makes the URDF the same
+mechanism, and not only the same picture at zero. Every other type is refused,
+naming the joint and the ways on; and under 'composites: massless' it is a
+chain through links with no '<inertial>', which moves as the joint does too.
 
 What goes through a sandbox - writing the file and reading it back - is in
 test_urdf_round_trip.py.
@@ -101,65 +103,34 @@ def configurations(joint, count=5, seed=11):
     return sets
 
 
-# What each kind is written as: URDF's own type, or a chain of single-axis joints.
+# What each native kind is written as: URDF's own type. A revolute is URDF's
+# 'continuous' where both its bounds are open (see 'urdf_type').
 NATIVE = {
     kinematics.REVOLUTE: "revolute",
-    kinematics.CONTINUOUS: "continuous",
     kinematics.PRISMATIC: "prismatic",
     kinematics.PLANAR: "planar",
     kinematics.FLOATING: "floating",
 }
 
+# The kinds a URDF has no type for, which are refused (section 8.13.4).
+REFUSED = (kinematics.CYLINDRICAL, kinematics.SCREW, kinematics.UNIVERSAL, kinematics.BALL, kinematics.COMPOSITE)
+
 ROWS = [row for row in TABLE if row[2] != kinematics.FIXED]
 
 
-@pytest.mark.parametrize("steps, kind", [(steps, kind) for _, steps, kind in ROWS], ids=[row[0] for row in ROWS])
-def test_every_row_of_the_table_is_written_as_the_same_mechanism(steps, kind):
-    planned = plan(two_bodies(steps))
-    found = planned.found
-    base, arm = found
-    joint = arm.joint
-    assert joint.kind == kind
-    # The root is named after the one part it is made of; the URDF has no
-    # 'world', since nothing is welded to it.
-    assert [link.name for link in planned.links if not link.dummy] == ["base", "arm"]
+def urdf_type(joint):
+    if joint.kind == kinematics.REVOLUTE and not joint.freedoms[0].limited:
+        return "continuous"
+    return NATIVE[joint.kind]
 
-    if kind in NATIVE:
-        (written,) = planned.joints
-        assert (written.name, written.type, written.parent, written.child) == ("j", NATIVE[kind], "base", "arm")
-        assert not any(link.dummy for link in planned.links)
-    else:
-        # One joint per freedom, a dummy link between each two, named after
-        # the joint and weighing what an engine accepts.
-        assert len(planned.joints) == len(joint.freedoms)
-        assert planned.joints[0].name == "j"
-        dummies = [link for link in planned.links if link.dummy]
-        assert [link.name for link in dummies] == ["j_link%d" % (i + 1) for i in range(len(joint.freedoms) - 1)]
-        for dummy in dummies:
-            assert dummy.inertial(planned.options)["mass"] == export_urdf.DUMMY_MASS
-        expected = [
-            ("prismatic" if f.kind == kinematics.MOVE else ("revolute" if f.limited else "continuous"))
-            for f in joint.freedoms
-        ]
-        assert [written.type for written in planned.joints] == expected
-        assert any("has no URDF type" in warning for warning in planned.warnings)
 
-    if kind in (kinematics.PLANAR, kinematics.FLOATING):
-        # URDF's own: the joint at the native frame, the child at its tail,
-        # and a planar joint's axis the normal of its plane.
-        (written,) = planned.joints
-        assert _close_pose(written.origin, joint.classification.origin)
-        if kind == kinematics.PLANAR:
-            assert written.axis == joint.classification.axes[2]
-        poses = link_poses(planned, {})
-        assert _close_pose(
-            body_pose(planned, poses, arm),
-            kinematics.compose(base.world, joint.location([0.0] * 3 if kind == kinematics.PLANAR else [0.0] * 6)),
-        )
-        return
+def test_every_kind_is_native_or_refused():
+    assert set(NATIVE) | set(REFUSED) == set(kinematics.NATIVE) | {kinematics.COMPOSITE}
+    assert set(export_urdf.NATIVE_KINDS) == set(NATIVE)
 
-    # Every single-axis joint moved to each configuration puts the arm exactly
-    # where the joint puts it.
+
+def _moves_as_the_joint(planned, joint, base, arm):
+    """Every single-axis joint moved to each configuration puts the arm exactly where the joint puts it."""
     names = [written.name for written in planned.joints]
     for values in configurations(joint):
         urdf_values = {
@@ -168,6 +139,98 @@ def test_every_row_of_the_table_is_written_as_the_same_mechanism(steps, kind):
         poses = link_poses(planned, urdf_values)
         expected = kinematics.compose(base.world, joint.location(values))
         assert _close_pose(body_pose(planned, poses, arm), expected), values
+
+
+@pytest.mark.parametrize("steps, kind", [(steps, kind) for _, steps, kind in ROWS], ids=[row[0] for row in ROWS])
+def test_every_row_of_the_table_is_written_natively_or_refused(steps, kind):
+    tree = two_bodies(steps)
+    if kind in REFUSED:
+        with pytest.raises(export_urdf.Refused) as refused:
+            plan(tree)
+        assert refused.value.joints == [("j", kind)]
+        message = str(refused.value)
+        assert "the %s joint 'j'" % kind in message
+        # The ways on: another engine, the body the joint stands for, and the opt-in.
+        assert "MuJoCo" in message and "model the body" in message and "composites: massless" in message
+        return
+
+    planned = plan(tree)
+    base, arm = planned.found
+    joint = arm.joint
+    assert joint.kind == kind
+    # The root is named after the one part it is made of; the URDF has no
+    # 'world', since nothing is welded to it - and a floating arm is no root.
+    assert [link.name for link in planned.links] == ["base", "arm"]
+    assert not any(link.massless for link in planned.links)
+    (written,) = planned.joints
+    assert (written.name, written.type, written.parent, written.child) == ("j", urdf_type(joint), "base", "arm")
+    assert not any("has no URDF type" in warning for warning in planned.warnings)
+
+    if kind in (kinematics.PLANAR, kinematics.FLOATING):
+        # URDF's own: the joint at the native frame, the child at its tail,
+        # and a planar joint's axis the normal of its plane.
+        assert _close_pose(written.origin, joint.classification.origin)
+        if kind == kinematics.PLANAR:
+            normal = 2 if joint.freedoms[2].kind == kinematics.TURN else 0
+            assert written.axis == joint.classification.axes[normal]
+        else:
+            assert arm.is_floating and arm.joint_parent is base
+        poses = link_poses(planned, {})
+        assert _close_pose(
+            body_pose(planned, poses, arm), kinematics.compose(base.world, joint.location([0.0] * len(joint.freedoms)))
+        )
+        return
+    _moves_as_the_joint(planned, joint, base, arm)
+
+
+@pytest.mark.parametrize(
+    "steps, kind",
+    [(steps, kind) for _, steps, kind in ROWS if kind in REFUSED],
+    ids=[r[0] for r in ROWS if r[2] in REFUSED],
+)
+def test_composites_massless_writes_a_chain_through_links_with_no_inertial(steps, kind):
+    """The opt-in of decision 1 (section 8.13.9): a URDF read for its kinematics, its chain through frames."""
+    planned = plan(two_bodies(steps), composites="massless")
+    base, arm = planned.found
+    joint = arm.joint
+    # One joint per freedom, a massless link between each two, named after the joint.
+    assert len(planned.joints) == len(joint.freedoms)
+    assert planned.joints[0].name == "j"
+    frames = [link for link in planned.links if link.massless]
+    assert [link.name for link in frames] == ["j_link%d" % (i + 1) for i in range(len(joint.freedoms) - 1)]
+    assert all(link.inertial() is None and link.body is None for link in frames)
+    expected = [
+        ("prismatic" if f.kind == kinematics.MOVE else ("revolute" if f.limited else "continuous"))
+        for f in joint.freedoms
+    ]
+    assert [written.type for written in planned.joints] == expected
+    assert any("has no URDF type" in w and "no <inertial>" in w for w in planned.warnings)
+    _moves_as_the_joint(planned, joint, base, arm)
+
+
+def test_every_refused_joint_is_named_at_once():
+    tree = two_bodies([free("turn", Z), free("turn", X)])
+    tree["assembly"].append(
+        {
+            "name": "pkg:lid",
+            "label": "lid",
+            "kind": "part",
+            "brep": b"l",
+            "joint": {"name": "hinge", "parent": "arm", "child": "lid", "steps": [free("turn", Z), free("move", Z)]},
+        }
+    )
+    with pytest.raises(export_urdf.Refused) as refused:
+        plan(tree)
+    assert refused.value.joints == [("j", kinematics.UNIVERSAL), ("hinge", kinematics.CYLINDRICAL)]
+
+
+def test_the_options_that_invented_a_mass_are_gone_and_said_to_be():
+    planned = plan(two_bodies([free("turn", Z, -90, 90)]), dummyMass=0.001, dummyInertia=1e-6)
+    assert any("no 'dummyMass' or 'dummyInertia' any more" in warning for warning in planned.warnings)
+    assert "dummyMass" not in planned.options
+    # A 'composites' that is neither of its two words refuses, and says so.
+    with pytest.raises(export_urdf.Refused):
+        plan(two_bodies([free("turn", Z), free("turn", X)]), composites="dummy")
 
 
 def test_the_child_link_frame_is_the_moving_frame_and_the_axis_is_verbatim():
@@ -202,7 +265,7 @@ def test_what_urdf_requires_and_the_joint_does_not_state_is_a_reported_default()
     assert written.lower == pytest.approx(-math.radians(export_urdf.OPEN_BOUND))
     assert any("state no 'maxEffort'" in warning for warning in planned.warnings)
     assert any("open on one" in warning for warning in planned.warnings)
-    # A continuous joint needs no '<limit>' at all.
+    # A revolute joint open on both sides is URDF's continuous, which needs no '<limit>' at all.
     (spin,) = plan(two_bodies([free("turn", Z)])).joints
     assert (spin.type, spin.effort, spin.lower) == ("continuous", None, None)
 
@@ -216,10 +279,33 @@ def test_the_starting_value_is_lost_and_said_to_be():
     assert any("'j' at 30 deg" in warning for warning in planned.warnings)
 
 
+def test_a_bound_open_on_both_sides_is_a_continuous_joint_and_on_one_a_far_one():
+    (spin,) = plan(two_bodies([free("turn", Z)])).joints
+    assert spin.type == "continuous"
+    planned = plan(two_bodies([free("turn", Z, None, 30)]))
+    (door,) = planned.joints
+    assert door.type == "revolute" and door.upper == pytest.approx(math.radians(30))
+    assert any("'j' are open on one" in warning or "j are open on one" in warning for warning in planned.warnings)
+    # A prismatic joint has no 'continuous': open on both sides, it is far on both.
+    (slide,) = plan(two_bodies([free("move", X)])).joints
+    assert (slide.type, slide.lower, slide.upper) == ("prismatic", pytest.approx(-1e3), pytest.approx(1e3))
+
+
+def test_a_floating_joint_is_urdf_s_floating_from_the_body_it_was_connected_to():
+    steps = [free("move", X), free("move", Y), free("move", Z, value=100), free("turn", X), free("turn", Y)]
+    steps.append(free("turn", Z, -10, 10))
+    planned = plan(two_bodies(steps))
+    (written,) = planned.joints
+    assert (written.type, written.parent, written.child) == ("floating", "base", "arm")
+    # Written at PartCAD's zero, its start said; and a bound on a free body said too.
+    assert any("'j' at 100 mm" in warning for warning in planned.warnings)
+    assert any("has bounds on 1 of its freedoms" in warning for warning in planned.warnings)
+
+
 def test_a_screw_is_a_turn_and_a_move_that_mimics_it_by_the_lead():
     lead = 0.5 / 360.0  # mm a degree
     steps = [free("turn", Z, -720, 720), free("move", Z, coupling={"step": 0, "ratio": lead, "offset": 0.25})]
-    planned = plan(two_bodies(steps))
+    planned = plan(two_bodies(steps), composites="massless")
     turn, move = planned.joints
     assert (turn.type, move.type) == ("revolute", "prismatic")
     leader, multiplier, offset = move.mimic
@@ -315,7 +401,7 @@ def test_a_chain_read_from_several_urdf_joints_gives_them_their_names_back():
     """A joint the reader composed from two URDF joints through a link of no geometry is two joints again."""
     first = dict(free("turn", Z, -90, 90), source=[{"parameter": "angle", "joint": "roll"}])
     second = dict(free("turn", Y, -45, 45), source=[{"parameter": "angle", "joint": "pitch"}])
-    planned = plan(two_bodies([first, fixed((0, 0, 20)), second], record={"name": "roll"}))
+    planned = plan(two_bodies([first, fixed((0, 0, 20)), second], record={"name": "roll"}), composites="massless")
     assert [joint.name for joint in planned.joints] == ["roll", "pitch"]
     assert [link.name for link in planned.links] == ["base", "roll_link1", "arm"]
 
