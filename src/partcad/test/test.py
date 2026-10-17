@@ -127,6 +127,32 @@ class Test(ABC):
 
         is_cacheable = shape.get_cacheable()
         if is_cacheable:
+            # Prepared before the key below is read, because what the shape is
+            # keyed on is not all known until then: an assembly's key takes in
+            # the keys of what it links to, a compound's the key of the assembly
+            # it flattens, a part's the file a 'fileFrom' or a plugin fetches -
+            # all of it added by 'prepare_async()', which used to run only once
+            # 'test()' built the shape. By then the key had been read, so the
+            # verdict was remembered under one that covered none of it: every
+            # assembly a package-wide 'pc test' reached logged "Hash update after
+            # being used", and a check answered without building the shape kept
+            # its pass after a part the assembly links to had changed.
+            #
+            # Waiting, because every check of this shape asks at once, and only
+            # the first of them prepares it; the rest would otherwise read the
+            # key while that is still under way. And 'get_cacheable()' is asked
+            # again once it is done: preparing can find that the shape cannot be
+            # cached at all, because something it links to is not.
+            try:
+                await shape.prepare_async(wait=True)
+            except Exception:  # pylint: disable=broad-except
+                # Not this method's to report: 'test()' builds the shape, meets
+                # the same failure and says so in the check's own words. What it
+                # does mean is that there is no key to remember a verdict under.
+                is_cacheable = False
+            else:
+                is_cacheable = shape.get_cacheable()
+        if is_cacheable:
             # The manufacturability tests depend on `manufacturable`, which is
             # not part of shape.hash; fold it into the cache key so that flipping
             # the flag invalidates any previously cached result.

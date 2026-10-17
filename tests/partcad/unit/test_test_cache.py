@@ -33,6 +33,9 @@ class _FakeShape:
         self.name = "part"
         self.project_name = "pkg"
 
+    async def prepare_async(self, wait=False):
+        pass
+
     def get_cacheable(self):
         return True
 
@@ -236,3 +239,186 @@ def test_the_artifacts_survive_a_failure_too_long_to_keep_whole():
     kept = json.loads(recorded[1:].decode("utf-8"))
     assert kept[0] == {"artifact": {"name": "overlap"}}
     assert all(len(reason) == 1024 for reason in kept[1:])
+
+
+# --------------------------------------------------------------------------- #
+# A verdict is keyed on everything the shape is made of                      #
+# --------------------------------------------------------------------------- #
+
+_PACKAGE = """
+parts:
+  cube:
+    type: step
+    path: cube.step
+assemblies:
+  assembly:
+    type: assy
+"""
+
+
+def _package(tmp_path):
+    (tmp_path / "partcad.yaml").write_text(_PACKAGE)
+    (tmp_path / "assembly.assy").write_text("links:\n  - part: cube\n")
+    # Only the bytes matter here: nothing is built, only keyed.
+    (tmp_path / "cube.step").write_text("cube v1\n")
+    return tmp_path
+
+
+class _KeyedCache:
+    """A verdict cache addressed the way the real one is: by what the hash says."""
+
+    def __init__(self):
+        self.entries = {}
+        self.reads = []
+        self.writes = []
+
+    async def read_data_async(self, shape_hash, keys):
+        key = shape_hash.get()
+        self.reads.append(key)
+        return {k: self.entries.get((key, k), []) for k in keys}
+
+    async def write_data_async(self, shape_hash, data):
+        key = shape_hash.get()
+        self.writes.append(key)
+        for k, value in data.items():
+            self.entries[(key, k)] = value
+
+
+class _Context:
+    """A package's context, with a verdict cache that outlives it.
+
+    A fresh context per run is what a new command is: nothing about the
+    shapes is in memory, and what was remembered is only what the cache holds.
+    """
+
+    def __init__(self, path, cache):
+        import partcad as pc
+
+        self.ctx = pc.Context(str(path))
+        self.ctx.cache_tests = cache
+
+    def assembly(self):
+        return self.ctx._get_assembly(":assembly")
+
+
+class _DeclarationCheck(Test):
+    """A check answered from the declaration, which never builds the shape."""
+
+    def __init__(self):
+        super().__init__("declared")
+        self.runs = 0
+
+    async def test(self, tests_to_run, ctx, shape, test_ctx={}):
+        self.runs += 1
+        return self.passed(shape)
+
+
+class _BuildingCheck(Test):
+    """A check that builds the shape, which prepares it before anything else (see 'Shape.get_wrapped')."""
+
+    def __init__(self):
+        super().__init__("built")
+
+    async def test(self, tests_to_run, ctx, shape, test_ctx={}):
+        await shape.prepare_async()
+        return self.passed(shape)
+
+
+def test_a_verdict_is_not_kept_once_a_part_the_assembly_links_to_changes(tmp_path):
+    """The key a verdict is remembered under covers what the assembly links to.
+
+    It used to be read before the assembly was prepared, and an assembly's
+    preparation is what adds the keys of its links to its own. So a check that
+    reached its verdict without building the assembly - and so without
+    preparing it - remembered it under a key that left the parts out, and kept
+    handing back the pass after one of them had changed.
+    """
+    Test.MAX_CONCURRENT_TESTS = 8
+    package = _package(tmp_path)
+    cache = _KeyedCache()
+    check = _DeclarationCheck()
+
+    def run():
+        context = _Context(package, cache)
+        assert asyncio.run(check.test_cached([], context.ctx, context.assembly())) is Test.TEST_PASSED
+
+    run()
+    assert check.runs == 1
+    # Asked again about the same assembly, it is remembered ...
+    run()
+    assert check.runs == 1
+    # ... and asked once the part it links to has changed, it is checked again.
+    (package / "cube.step").write_text("cube v2\n")
+    run()
+    assert check.runs == 2
+    assert len(set(cache.writes)) == 2
+
+
+def test_a_verdict_is_read_and_written_under_one_complete_key(tmp_path, caplog):
+    """Nothing is added to the hash after the verdict's key has been read from it.
+
+    Every assembly a package-wide 'pc test' reached used to log "Hash update
+    after being used": the key was read, then the check built the assembly,
+    and building it prepared it - adding the keys of its links to a hash that
+    had already been used.
+    """
+    import logging
+
+    Test.MAX_CONCURRENT_TESTS = 8
+    package = _package(tmp_path)
+    cache = _KeyedCache()
+    context = _Context(package, cache)
+    assembly = context.assembly()
+
+    with caplog.at_level(logging.WARNING):
+        assert asyncio.run(_BuildingCheck().test_cached([], context.ctx, assembly)) is Test.TEST_PASSED
+
+    assert "Hash update after being used" not in caplog.text
+    assert cache.reads == cache.writes
+    # And that one key is the assembly's own, as anything else asking for it gets it.
+    assert cache.reads == [asyncio.run(_Context(package, _KeyedCache()).assembly().get_cache_key_async())]
+
+
+def test_every_check_waits_for_the_preparation_the_first_one_began(tmp_path, caplog):
+    """The checks of one shape all ask at once, and only the first prepares it.
+
+    The rest used to return on the flag that preparation raises as it begins,
+    and read the key while it was under way - for a part whose file is fetched,
+    before the file had arrived. A hash adds its files when it is first read,
+    so the shape went on being keyed on the file's absence for as long as the
+    process lived, and so was every verdict about it.
+    """
+    import logging
+
+    Test.MAX_CONCURRENT_TESTS = 8
+    package = _package(tmp_path)
+    fresh = _Context(package, _KeyedCache())
+    fetched = asyncio.run(fresh.ctx.get_part(":cube").get_cache_key_async())
+    expected = asyncio.run(fresh.assembly().get_cache_key_async())
+    cache = _KeyedCache()
+    context = _Context(package, cache)
+    part = context.ctx.get_part(":cube")
+    assert part is not None
+
+    # What a 'fileFrom' does: the file is not there until the preparation has
+    # fetched it, and fetching it takes a while.
+    content = (package / "cube.step").read_text()
+    (package / "cube.step").unlink()
+
+    async def fetch(shape):
+        await asyncio.sleep(0.05)
+        (package / "cube.step").write_text(content)
+
+    part._prepare = fetch
+    checks = [_DeclarationCheck() for _ in range(4)]
+
+    async def run_all():
+        return await asyncio.gather(*(check.test_cached([], context.ctx, part) for check in checks))
+
+    with caplog.at_level(logging.WARNING):
+        assert asyncio.run(run_all()) == [Test.TEST_PASSED] * len(checks)
+
+    assert "Hash update after being used" not in caplog.text
+    assert cache.reads == [fetched] * len(checks)
+    # The assembly linking it is keyed on what was fetched, too.
+    assert asyncio.run(context.assembly().get_cache_key_async()) == expected
