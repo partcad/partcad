@@ -23,6 +23,7 @@ import pytest
 
 from partcad_utils.assy_lint import (
     ASSY_SCHEMA,
+    CODE_DEPRECATED,
     CODE_LINKS,
     CODE_MANUFACTURABLE,
     CODE_SCHEMA,
@@ -851,3 +852,56 @@ def test_yaml_the_parser_raises_on_otherwise_is_a_finding_and_not_a_crash(render
     # An impossible date is a 'ValueError' out of PyYAML, not a 'YAMLError'.
     diagnostic = only_of(validate_source("desc: 2001-13-45\n", get_schema(PARTCAD_SCHEMA), renders=list(renders)))
     assert diagnostic.code == CODE_YAML
+
+
+#
+# A deprecated spelling of a kind of joint (docs/design/simulation.md, 8.13.2)
+#
+
+CONTINUOUS_INTERFACE = """interfaces:
+  bore:
+    ports:
+      hole:
+    motion: {motion}
+  pin:
+    ports:
+      tip:
+    mates:
+      bore:
+        motion: {mating}
+"""
+
+
+@pytest.mark.parametrize("renders", [(), (Render({}),)])
+def test_continuous_is_a_deprecation_warning_wherever_a_motion_is(renders):
+    """On an interface and a mating in a configuration, and on a connection in an ASSY file: never an error."""
+    text = CONTINUOUS_INTERFACE.format(motion="continuous", mating="{type: continuous, dof: [turnZ]}")
+    diagnostics = validate_source(text, get_schema(PARTCAD_SCHEMA), renders=list(renders))
+    assert [(d.severity, d.code, d.line) for d in diagnostics] == [
+        (SEVERITY_WARNING, CODE_DEPRECATED, 4),
+        (SEVERITY_WARNING, CODE_DEPRECATED, 10),
+    ]
+    assert all("'continuous' is a deprecated spelling of 'revolute'" in d.message for d in diagnostics)
+    assert diagnostics[1].column == text.splitlines()[10].index("continuous")
+    connection = "links:\n  - part: a\n  - part: b\n    connect: {name: a, motion: continuous}\n"
+    (diagnostic,) = check(connection)
+    assert (diagnostic.severity, diagnostic.code, diagnostic.path) == (
+        SEVERITY_WARNING,
+        CODE_DEPRECATED,
+        "$.links.1.connect.motion",
+    )
+
+
+def test_what_continuous_means_spelled_out_is_clean():
+    text = CONTINUOUS_INTERFACE.format(
+        motion="{type: revolute, limits: {lower: -.inf, upper: .inf}}", mating="{type: ball, limits: {upper: 30}}"
+    )
+    assert validate_source(text, get_schema(PARTCAD_SCHEMA)) == []
+
+
+def test_a_kind_of_joint_that_is_none_is_named_with_every_kind_there_is():
+    text = CONTINUOUS_INTERFACE.format(motion="hinge", mating="fixed")
+    (diagnostic,) = validate_source(text, get_schema(PARTCAD_SCHEMA))
+    assert diagnostic.severity == SEVERITY_ERROR
+    assert diagnostic.message.startswith("'hinge' is not one of ['fixed', 'revolute', 'prismatic'")
+    assert "'continuous'" in diagnostic.message
