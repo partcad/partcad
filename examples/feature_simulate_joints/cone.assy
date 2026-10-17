@@ -1,0 +1,18 @@
+# The plate stood upright on a ball 10 mm above the frame, by the middle of an
+# edge, and bounded to 20 degrees from upright - one angle, how far it may turn
+# from its zero, which is how a ball is bounded. It starts tilted 5 degrees
+# about the contact frame's X, the line along the edge it stands on.
+links:
+  - part: frame
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: plate
+    connect:
+      name: frame
+      with: edge
+      to: pivot
+      toInstance: above
+      joint: tilt
+      motion:
+        type: ball
+        limits: { upper: 20 }
+      toParams: { turnX: 5 }

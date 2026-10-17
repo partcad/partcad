@@ -1,0 +1,19 @@
+# The pendulum, locked: 'motion: fixed' on the connection keeps nothing the axle
+# would let turn, so the bar is attached to the frame rather than jointed to it,
+# and the two are one rigid body.
+#
+# Locked at the joint's zero, hanging straight down from the axle, and the frame
+# is turned a quarter turn about the axle's line instead, so that the bar is
+# level, where the pendulum is released from and where it would swing from if it
+# were free. Not 'toParams: {turnZ: 90}': the turn it would give a value to is
+# the one the axle's 'motion: revolute' implies, and 'motion: fixed' takes it
+# away, so there is nothing left for it to start.
+links:
+  - part: frame
+    location: [[0, 0, 0], [0, 1, 0], -90]
+  - part: bar
+    connect:
+      name: frame
+      with: eye
+      to: axle
+      motion: fixed

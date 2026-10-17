@@ -1,0 +1,17 @@
+# The pendulum with a stop on one side only: the connection's own 'motion:'
+# bounds the turn at 30 degrees and leaves the other side open, so the bar
+# released horizontal at -90 swings down through the bottom and up against the
+# stop.
+links:
+  - part: frame
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: bar
+    connect:
+      name: frame
+      with: eye
+      to: axle
+      joint: swing
+      motion:
+        type: revolute
+        limits: { upper: 30 }
+      toParams: { turnZ: -90 }

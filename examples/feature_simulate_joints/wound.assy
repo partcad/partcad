@@ -1,0 +1,15 @@
+# The pendulum with its stop taken off: the same bar on the same axle, with the
+# connection's own 'motion:' - which outranks the axle's - keeping the turn and
+# bounding it on neither side. It starts at 270 degrees, three quarters of a
+# turn round from hanging straight down, which is horizontal on the other side.
+links:
+  - part: frame
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: bar
+    connect:
+      name: frame
+      with: eye
+      to: axle
+      joint: swing
+      motion: revolute
+      toParams: { turnZ: 270 }

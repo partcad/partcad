@@ -126,9 +126,10 @@ never asked anything. ``tank`` is a scene filled with water. ``float`` and
 sealed float is hollow and its geometry does not say so. The example's
 ``README.md`` walks through each of them.
 
-``examples/feature_simulate_joints`` is the other half: an assembly whose parts
-move on a joint -- a pendulum -- held to its closed form. See
-:ref:`sim-mechanisms`.
+``examples/feature_simulate_joints`` is the other half: assemblies whose parts
+move on their joints -- a pendulum, and one of every other kind of joint -- each
+held to its closed form, in MuJoCo and, for every kind Gazebo builds, in Gazebo.
+See :ref:`sim-mechanisms`.
 
 .. _sim-declaring:
 
@@ -399,7 +400,8 @@ Mechanisms
 An assembly whose connections keep a degree of freedom is a **mechanism**, and
 what it does can often be worked out on paper -- which makes it the kind of
 claim a simulation is best at checking. ``examples/feature_simulate_joints`` is
-a pendulum, checked against its closed form:
+a pendulum, checked against its closed form, beside one assembly of every other
+kind of joint, checked against theirs (its ``README.md`` has the table):
 
 .. code-block:: shell
 
@@ -439,8 +441,13 @@ are worth knowing when writing a claim:
 - **Sample the run finely enough for the claim.** A validation that asks when
   something happened reads ``result["samples"]``; ``params: {samples: ...}``
   sets how many, and ``timestep`` how finely the engine steps between them. The
-  pendulum reads every millisecond on a half-millisecond step, so that each
-  instant it compares is placed to a tenth of a per cent.
+  pendulum reads every millisecond on a half-millisecond step in MuJoCo, and
+  reads the instant it reaches the bottom *between* the two readings either
+  side of it, which places it far more finely than either. That is also what
+  makes one validation hold in Gazebo, which reports a reading for each pose it
+  publishes -- about every 17 ms of a run at real time -- however many samples
+  are asked for, and whose first reading comes a few steps in: the joint
+  examples check a start against the closed form at ``before["time"]``.
 - **The two bodies of a joint do not collide with each other.** A pin sits in
   its bore by design, and the engine is told so.
 

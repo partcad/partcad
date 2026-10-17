@@ -1311,7 +1311,8 @@ PartCAD's model, and is not proposed here.
 
 #### 8.13.7 Examples
 
-There is one example per type, in `examples/feature_simulate_joints` beside the pendulum. Each one starts away from
+**Built** (all of them, in MuJoCo and wherever Gazebo builds the type in Gazebo; see the end of this section for
+what building them settled). There is one example per type, in `examples/feature_simulate_joints` beside the pendulum. Each one starts away from
 its zero, so every run checks the starting value and its mapping back, in every engine. Each is held either to a
 closed form or to a bound it cannot pass without the joint being wrong. The run lengths and sampling follow the
 pendulum's: a reading every millisecond, and a step of half a millisecond.
@@ -1321,7 +1322,7 @@ checked against where the body would be without it, not to a fraction of a degre
 
 | Assembly | Type | It checks | MuJoCo | Gazebo |
 |---|---|---|---|---|
-| `pendulum`, `nudged` (built) | `revolute`, bounded on both sides | passes the bottom at sqrt(2 g d / (I/m)), gets there in K(sin 45°) sqrt((I/m) / (g d)), and keeps the small-angle period 2 pi sqrt((I/m) / (g d)) | yes | yes, once SDFormat joints land |
+| `pendulum`, `nudged` | `revolute`, bounded on both sides | passes the bottom at sqrt(2 g d / (I/m)), gets there in K(sin 45°) sqrt((I/m) / (g d)), and keeps the small-angle period 2 pi sqrt((I/m) / (g d)) | yes | yes |
 | `wound` | `revolute`, unbounded | the same bar, started at 270°: reads 270 at the start, and 360 at the bottom at the same 567.41 deg/s. A reading wrapped into ±180, or a lost start, would read −90 or 0 | yes | yes |
 | `door` | `revolute`, bounded on one side | released at −90° with only `upper: 30`: passes the bottom at the closed-form speed (so nothing on the open side stopped it), and is turned back before 45° where it would otherwise reach 90° | yes | yes |
 | `incline` | `prismatic`, bounded on one side | a carriage on a frictionless rail at 30°, started 200 mm up, with `lower: 0`: follows 200 − ½ g sin 30° t², which is 101.9 mm at 0.2 s, and stops at the stop | yes | yes |
@@ -1334,6 +1335,36 @@ checked against where the body would be without it, not to a fraction of a degre
 | `loose` | `floating` | a block placed 100 mm above its base with `motion: floating`: falls 49.05 mm in 0.1 s, and comes to rest *on* the base. That is the contact the old three slides and a ball excluded | yes | yes |
 | `locked` | (none) | the pendulum with `connect: {motion: fixed}`: one body, `joints: {}`, and the bar stays where it started | yes | yes |
 | `stage` | `composite` | two moves in a vertical plane: falls ½ g t² and does not move sideways | yes | refused |
+
+Building them settled these, and each example's `partcad.yaml` says the same where it applies:
+
+- **One validation holds in both engines**, stated once and given to both `simulate:` entries by a YAML anchor. It
+  has to be written for it, because the Gazebo plugin's readings are not MuJoCo's. Its first reading, `before`, is
+  the first instant every joint stream has reached, 19 ms in rather than at nought, so a start is checked against the
+  closed form at `before["time"]` (nought in MuJoCo). And it reports a reading for each pose message it reads, about
+  every 17 ms of a run at real time, however many `samples` are asked for, so every instant a validation compares --
+  reaching the bottom, crossing nought -- is read between the two readings either side of it, and a distance at the
+  reading nearest a time, at that reading's own time. The pendulum's and `nudged`'s validations moved to that form
+  too, and both are held to it in Gazebo.
+- **No Gazebo run states a `timestep`.** The plugin hands it to `gz sim -z`, which is the server's update rate, not the
+  size of a step: a run that states one keeps SDFormat's 1 ms step and only runs faster than real time, with its
+  readings further apart. That step puts a free fall g t dt / 2 ahead of the closed form, 1 % at 0.1 s, so the free
+  falls allow 2 %.
+- **`bolted` states its gravity**, 9.81 m/s². A scene that states none is under each engine's own: MuJoCo's 9.81,
+  SDFormat's 9.8.
+- **Each new example states its joint on its connection**, in the contact frame, where `toParams` and the readings
+  are too; `wound`, `door` and `locked` are the pendulum's connection with its `motion:` restated.
+- **`cone` stands the 200 mm plate on its bound**, not a bar: MuJoCo softens a ball's bound by the average of its
+  three freedoms' inverse inertia, and a 300 x 20 x 10 mm bar, which barely resists turning about its own length,
+  swings through a 20° cone to 45° and settles at 31°. The plate stops at 21°.
+- **`hooke` turns about two level lines** (`axis: [1, 0, 0]`, the second turn then the port's Y). About the default Z
+  the first turn would be about the vertical line the plate hangs on, which gravity never turns.
+- **`locked` is locked at the joint's zero, with the frame turned a quarter turn about the axle** so that the bar is
+  level. `toParams: {turnZ: 90}` would give a value to the turn the axle's `motion: revolute` implies, and with
+  `motion: fixed` there is no such parameter, so the value is dropped -- without a word, which is a defect of its
+  own.
+- **The parts are named apart from the assemblies** (`ring` in `nut`, `arm` in `collar`): a part and an assembly of
+  one name are one key in an exporter's properties index, and the assembly is then read as stating the part's mass.
 
 URDF has no simulator here. Instead, `test_export_urdf_joints.py` exports each of these assemblies and checks that the
 native type is written or that the export refuses, and it checks the round trip of the native ones. Gazebo's refusals
@@ -1348,7 +1379,7 @@ are checked by unit tests too, rather than by examples that fail.
   - `universal`'s second axis changes only where `axis` is the port's X, which was degenerate before.
 - **`kinematics`** (built, #804):
   - `CONTINUOUS` goes, and `CHAIN` becomes `COMPOSITE` (both importable under their old names until the plugins
-    move, 8.13.10).
+    moved, 8.13.10, and removed with the examples once both had).
   - `classify()` gains planar's other order and the ball's single bound.
   - `rezeroed()` and `reading()` are new.
   - The plugins move with it, and require that release; section 2 rules out a compatibility fallback.
@@ -1503,11 +1534,13 @@ the text above left open. What the engine plugins build on is in `kinematics`' d
   is written -- not even the meshes' directory. `composites` is `refuse` (declared) or `massless`; `dummyMass` and
   `dummyInertia` passed by a package are reported and ignored. A planar joint's `<axis>` is its turn's, in either
   order (#788 took the third freedom's, which is the turn only when the moves come first). Its cache version is 3.
-- **`CONTINUOUS` and `CHAIN` stay importable** in `kinematics` -- `CHAIN` as `COMPOSITE` under its old name,
-  `CONTINUOUS` as a constant `classify()` never returns -- until partcad-sim-mujoco and partcad-sim-gazebo stop using
-  them. Section 2 rules out a fallback for the plugins, and this is not one: their CI installs PartCAD from `devel`,
-  and a constant removed before they move is an import error in every run of theirs.
-- **Not in this step:** the examples of 8.13.7 (a later pull request adds one per type), and the plugins' half of
+- **`CONTINUOUS` and `CHAIN` stayed importable** in `kinematics` -- `CHAIN` as `COMPOSITE` under its old name,
+  `CONTINUOUS` as a constant `classify()` never returns -- until partcad-sim-mujoco and partcad-sim-gazebo stopped
+  using them. Section 2 rules out a fallback for the plugins, and this was not one: their CI installs PartCAD from
+  `devel`, and a constant removed before they moved was an import error in every run of theirs. Both moved
+  (partcad-sim-mujoco#16, partcad-sim-gazebo#14), and the pull request that added the examples of 8.13.7 removed
+  both names.
+- **Not in this step:** the examples of 8.13.7 (built since, by a later pull request), and the plugins' half of
   8.13.8.
 
 ## 9. Simulations as tests
