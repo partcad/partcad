@@ -100,7 +100,12 @@ from . import logging as pc_logging
 #      8, 10 and 11: an entry written under 11 would go on being served with
 #      the old joints - a ball read as a composite for the ranges its turns
 #      still carried, and a start against its stop said nowhere.
-VERSION = 12
+#  13: a joint's freedoms are in their declared order, whatever order
+#      'toParams' names them in, and only a joint that is a ball carries a
+#      ball's bound. The same case again: an entry written under 12 would go
+#      on being served with a floating joint posed by a move first read as a
+#      composite, and a revolute carrying the bound of the ball it overrode.
+VERSION = 13
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.
