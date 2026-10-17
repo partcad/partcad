@@ -1494,7 +1494,10 @@ the text above left open. What the engine plugins build on is in `kinematics`' d
   apart: `limits:` are stated about the motion's axis, and on a target interface that runs the other way to the
   parameter (the target port's Z is the contact frame's -Z), so `limits: {lower: -10, upper: 30}` bound `turnZ`
   from -30 to 10, and `toParams: {turnZ: 20}` starts it outside. A freedom whose `limits` were turned round that way
-  says so on its source (`"reversed": true`), and the message says it too. No example starts outside its bounds. The
+  says so on its source (`"reversed": true`), and the message says it too. A ball's turns have no bounds of their
+  own, so its one bound is checked against the rotation they make at the start (`turned_beyond_bound`, and
+  `kinematics.outside_bounds` for a tree): `limits: {upper: 30}` with `toParams: {turnX: 60}` fails too. No example
+  starts outside its bounds. The
   joints a tree carries changed with all of this, so the cache format is 12, and 13 with the declared order and a
   ball's bound below.
 - **`pc info`** shows each joint's `type`, asked of `kinematics` by the core (`partcad.joint.Joint.type`), so that it

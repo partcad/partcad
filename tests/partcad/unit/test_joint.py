@@ -472,6 +472,18 @@ def test_a_start_outside_bounds_is_an_error_on_either_side_and_at_nought(tmp_pat
     assert _child(_rig(tmp_path / "in", _links("withParams: {moveZ: 20}"), pin=pin), "arm").joint_problems == []
 
 
+def test_a_ball_that_starts_beyond_its_bound_fails_the_connect_check(tmp_path):
+    """Its turns have no bounds of their own: what its one bound bounds is the rotation they make (CodeRabbit on #804)."""
+    bore = "motion: {type: ball, limits: {upper: 30}}"
+    arm = _child(_rig(tmp_path / "beyond", _links("toParams: {turnX: 60}"), bore=bore), "arm")
+    assert arm.joint.type == "ball" and arm.joint.turn_limit == 30.0
+    (problem,) = arm.joint_problems
+    assert problem.startswith("the ball 'arm-base' starts turned 60 deg from its zero, beyond its bound of 30 deg")
+    assert ("arm", problem) in asyncio.run(_reload(tmp_path / "beyond").get_connect_problems())
+    within = _child(_rig(tmp_path / "within", _links("toParams: {turnX: 20, turnY: 15}"), bore=bore), "arm")
+    assert within.joint_problems == []
+
+
 #
 # The type a joint is
 #

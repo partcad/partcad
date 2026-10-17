@@ -51,6 +51,7 @@ and 'AssemblyChild.joint' is None for it.
 Nothing here imports OCP.
 """
 
+import math
 import os
 import sys
 
@@ -372,6 +373,13 @@ class Joint:
         if self.turn_limit is not None:
             entry["turnLimit"] = self.turn_limit
         return entry
+
+    @property
+    def start_rotation(self):
+        """A ball's starting rotation (a quaternion, 'w x y z'), or None for a joint that is no ball."""
+        if self.type != pc_motion.BALL:
+            return None
+        return _kinematics().rezeroed(self.to_envelope()).rotation
 
     @property
     def type(self) -> str:
@@ -715,6 +723,26 @@ def outside_bounds(composition, name) -> list:
             )
         problems.append(problem)
     return problems
+
+
+def turned_beyond_bound(name, turn_limit, rotation) -> list:
+    """A ball that starts turned further from its zero than its one bound lets it, as a problem.
+
+    A ball's turns carry no range ('_ball_turn'), so 'outside_bounds' cannot
+    see it: what the bound bounds is the rotation the three turns make
+    together, 'rotation' (a quaternion, 'w x y z', the ball's start; see
+    'kinematics.Rezeroed.rotation'), whose angle has to be within
+    'turn_limit' degrees. 'kinematics.outside_bounds' says the same of a tree.
+    """
+    if turn_limit is None or rotation is None:
+        return []
+    angle = math.degrees(2.0 * math.acos(min(1.0, abs(float(rotation[0])))))
+    if angle <= turn_limit + 1e-9 * max(1.0, turn_limit):
+        return []
+    return [
+        "the ball '%s' starts turned %g deg from its zero, beyond its bound of %g deg ('limits: {upper: %g}')"
+        % (name, angle, turn_limit, turn_limit)
+    ]
 
 
 def _ball_turn(parameter, name, motion, problems) -> tuple:

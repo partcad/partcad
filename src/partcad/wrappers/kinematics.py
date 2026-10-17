@@ -1897,7 +1897,10 @@ def outside_bounds(joint, where=None) -> list:
     ('partcad.joint.outside_bounds'); this says it of a tree, wherever the tree
     came from. Where the bounds were stated by 'limits:' about an axis that
     runs the other way to the parameter (a source marked "reversed"), that is
-    said too: it is what turns '[-10, 30]' into '[-30, 10]'.
+    said too: it is what turns '[-10, 30]' into '[-30, 10]'. A ball, whose
+    turns have no bounds of their own, starts beyond its one bound
+    ('turn_limit') where the rotation its turns make at the start turns
+    further than that from its zero.
     """
     problems = []
     names = joint.parameter_names()
@@ -1926,6 +1929,16 @@ def outside_bounds(joint, where=None) -> list:
                 "port Z is the contact frame's -Z), so they bound it the other way round" % names[freedom.index]
             )
         problems.append(problem)
+    if joint.kind == BALL and joint.turn_limit is not None:
+        # A ball's bound is one angle, which none of its turns has ('Joint.turn_limit'):
+        # what it bounds is the rotation the turns make together.
+        rotation = rezeroed(joint).rotation
+        angle = math.degrees(2.0 * math.acos(min(1.0, abs(rotation[0]))))
+        if angle > joint.turn_limit + 1e-9 * max(1.0, joint.turn_limit):
+            problems.append(
+                "'%s' starts its ball '%s' turned %g deg from its zero, beyond its bound of %g deg"
+                % (where or joint.child_link or "?", joint.name, angle, joint.turn_limit)
+            )
     return problems
 
 

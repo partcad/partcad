@@ -727,6 +727,29 @@ def test_a_joint_that_starts_outside_its_bounds_is_said():
     assert "at 0 mm, outside its bounds of 10 to 50 mm" in problem and "other way" not in problem
 
 
+def test_a_ball_that_starts_beyond_its_bound_is_said():
+    """One angle, the rotation its three turns make at the start, against the joint's 'turnLimit'."""
+
+    def tree(values):
+        steps = [free("turn", axis, value=value) for axis, value in zip((X, Y, Z), values)]
+        joint = {"name": "wrist", "parent": "base", "child": "arm", "steps": steps, "turnLimit": 30.0}
+        return {
+            "name": "pkg:rig",
+            "label": "rig",
+            "kind": "assembly",
+            "assembly": [
+                {"name": "pkg:base", "label": "base", "kind": "part", "brep": b"b"},
+                {"name": "pkg:arm", "label": "arm", "kind": "part", "brep": b"a", "joint": joint},
+            ],
+        }
+
+    (problem,) = kinematics.bodies(tree([60.0, 0.0, 0.0])).problems
+    assert problem == "'arm' starts its ball 'wrist' turned 60 deg from its zero, beyond its bound of 30 deg"
+    # Two turns of 20 make one of less than 30: inside, though their sum is not.
+    assert kinematics.bodies(tree([20.0, 20.0, 0.0])).problems == []
+    assert kinematics.bodies(tree([0.0, 0.0, 0.0])).problems == []
+
+
 def test_a_reading_keeps_a_turn_past_half_a_turn():
     """The 'wound' example of 8.13.7: started at 270, it reads 270, and 360 at the bottom - not -90 or 0."""
     joint = kinematics.Joint({"name": "swing", "steps": [free("turn", Z, value=270)]})
