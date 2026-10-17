@@ -211,6 +211,16 @@ at all).
   corrected `fileHash` has to move the cache key, or `pc test` answers the new declaration with the old one's
   failure.
 
+- **A shape's key is its key only once it is prepared, and must not depend on what else is loaded.**
+  `prepare_async()` adds the keys of everything the shape is made of, and the first `hash.get()` hashes its
+  dependency files, so a key read half way through is a different key for good. Preparation therefore runs once
+  and every concurrent caller waits for it (`preparation.prepare`); only a caller inside that same preparation --
+  a reference cycle -- is let through. `Hash update after being used` in a log is this rule broken: something
+  added to a hash that had already been read. The same goes for anything a key reads from the context rather
+  than from the shape: a connected assembly keys on the mates *among the interfaces its own links implement*
+  (`AssemblyFactoryAssy.interfaces_of`), not on every mate the context happens to have registered, which grew
+  with whatever had been built before it.
+
 - **A file type may name the package that implements it** (`output.split_format`,
   `Shape._output_implementor`): `pc export -t sim-gazebo:world`, the spelling `import:`, `simulation:` and
   `pc cae --implementation` already took. It exists because there are formats PartCAD ships no implementation

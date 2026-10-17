@@ -28,7 +28,7 @@ from . import logging as pc_logging
 from . import material as pc_material
 from . import output
 from . import physics as pc_physics
-from . import render_overlay
+from . import preparation, render_overlay
 from . import runtime as pc_runtime
 from . import sandbox_versions, scene_world, shape_ports, source_key, wrapper
 from .cache_hash import CacheHash
@@ -530,22 +530,20 @@ class Shape(ShapeConfiguration):
         cross-package reference, which loads - and so downloads - the packages
         this shape really depends on. A later build then finds it all on disk.
 
-        Idempotent, and safe against reference cycles between assemblies: the
-        flag is raised before the hook runs, so a shape that (indirectly) links
-        back to itself stops here instead of recursing.
+        Idempotent, and done once however many callers ask at the same time:
+        one that arrives while another is preparing this shape waits for it to
+        finish, because the key is not this shape's key until it has. Safe
+        against reference cycles between assemblies: a shape that (indirectly)
+        links back to itself stops here instead of recursing, or waiting on
+        itself. See 'preparation'.
+
+        A preparation that failed has not happened, and is tried again by the
+        next caller: marking it done would make a warm context skip it forever
+        and then hash a file that was never downloaded.
         """
         if self._prepared:
             return
-        self._prepared = True
-        if self._prepare is not None:
-            try:
-                await self._prepare(self)
-            except BaseException:
-                # A preparation that failed has not happened: leaving the flag
-                # up would make a warm context skip it forever and then hash a
-                # file that was never downloaded.
-                self._prepared = False
-                raise
+        await preparation.prepare(self, self._prepare)
 
     async def get_cache_key_async(self) -> Optional[str]:
         """Prepare this shape and return its cache key, or None if it has none.
