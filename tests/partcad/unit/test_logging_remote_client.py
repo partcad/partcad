@@ -67,6 +67,25 @@ def test_ansi_process_event_replayed_through_ops():
         remote_client.fini()
 
 
+def test_finishing_the_ansi_renderer_gives_back_the_ops_it_took():
+    """The renderer's 'ops' outlived it, and wrote the next test's actions out as CRITICAL records
+
+    Which is what failed 'test_sim_check.py' whenever it ran after this file
+    in one interpreter: the next session of a daemon is the same thing.
+    """
+    before = {name: pc_logging.ops.__dict__.get(name) for name in remote_client.logging_ansi_terminal.OPS}
+    remote_client.init(want_ansi=True, stream=io.StringIO())
+    assert pc_logging.ops.action_start is remote_client.logging_ansi_terminal.ansi_action_start
+
+    remote_client.fini()
+
+    assert {name: pc_logging.ops.__dict__.get(name) for name in remote_client.logging_ansi_terminal.OPS} == before
+    # And installed again, it takes them over again.
+    remote_client.init(want_ansi=True, stream=io.StringIO())
+    assert pc_logging.ops.action_start is remote_client.logging_ansi_terminal.ansi_action_start
+    remote_client.fini()
+
+
 def test_an_error_forwarded_from_the_daemon_is_recorded_for_the_exit():
     """Most of the work runs in the daemon, so most errors arrive this way.
 
