@@ -1,0 +1,43 @@
+name: "Xvfb"
+description: >
+  A virtual X display for the rest of the job, on Linux: installs Xvfb if the
+  runner has none, starts it, waits until it accepts connections, and exports
+  it as DISPLAY to every later step.
+
+  Every step that starts an Electron editor (or anything else that opens a
+  window) on a Linux runner wants one, and starting it inline as
+  "Xvfb :98 & export DISPLAY=:98" races the server's startup: the editor can
+  look for the display before it is there and exit with "Missing X server or
+  $DISPLAY". See "start-xvfb.sh" for how the wait is done.
+
+  A step that runs one command under a display of its own can still use
+  "xvfb-run -a", which waits the same way; this is for a display that has to
+  outlive the command that needed it - a launcher that spawns the editor and
+  returns, say.
+
+inputs:
+  screen:
+    description: The screen's geometry and depth, as Xvfb's "-screen 0" takes it.
+    default: "1280x1024x24"
+
+outputs:
+  display:
+    description: The display it serves, ":99" say. Also exported as DISPLAY.
+    value: ${{ steps.start.outputs.display }}
+
+runs:
+  using: composite
+  steps:
+    - id: start
+      shell: bash
+      env:
+        SCREEN: ${{ inputs.screen }}
+      run: |
+        if ! command -v Xvfb >/dev/null 2>&1; then
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends xvfb
+        fi
+        display="$(bash "${GITHUB_ACTION_PATH}/start-xvfb.sh" "${SCREEN}")"
+        echo "Xvfb serves ${display}"
+        echo "DISPLAY=${display}" >>"${GITHUB_ENV}"
+        echo "display=${display}" >>"${GITHUB_OUTPUT}"
