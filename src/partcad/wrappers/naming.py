@@ -122,6 +122,16 @@ class Rules:
             re.compile(pattern, 0 if case_sensitive else re.IGNORECASE) if isinstance(pattern, str) else pattern
             for pattern in reserved_patterns
         )
+        # 'transcode' writes REPLACEMENT for what the format does not take, so
+        # rules that do not take it either could never be met: a forbidden
+        # substring found in it would be replaced by itself forever.
+        if not self.allowed.fullmatch(REPLACEMENT):
+            raise ValueError(
+                "%r does not allow %r, which is what a name it refuses is mended with" % (self, REPLACEMENT)
+            )
+        for part in self.forbidden:
+            if not part or part in REPLACEMENT:
+                raise ValueError("%r forbids %r, which no mended name could be without" % (self, part))
 
     def key(self, name):
         """What 'name' is compared as: itself, or case-folded for a format that ignores case."""
@@ -223,6 +233,10 @@ class Transcoder:
                 # in the rules rather than anything a name can do.
                 raise ValueError("%s leaves no name free for %r" % (self.rules, base))
             tail = "%s%d" % (self.separator, suffix)
+            if self.rules.max_length is not None and len(tail) > self.rules.max_length:
+                raise ValueError(
+                    "%s has no name of %d characters left for %r" % (self.rules, self.rules.max_length, base)
+                )
             head = base if self.rules.max_length is None else base[: max(0, self.rules.max_length - len(tail))]
             candidate = head + tail
             suffix += 1

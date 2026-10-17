@@ -110,10 +110,24 @@ def test_a_name_given_back_can_be_taken_again():
 
 
 def test_a_long_name_is_cut_and_still_told_apart():
-    short = naming.Rules("Short", allowed=re.compile(r"[a-z-]"), max_length=5)
+    short = naming.Rules("Short", allowed=re.compile(r"[a-z_-]"), max_length=5)
     names = naming.Transcoder(short)
     assert [names.claim("abcdefgh"), names.claim("abcdexyz"), names.claim("ab")] == ["abcde", "abc-2", "ab"]
     assert all(len(name) <= 5 for name in names.mapping()[""].values())
+
+
+def test_a_namespace_too_short_for_another_suffix_says_so_rather_than_overrun():
+    names = naming.Transcoder(naming.Rules("Two", allowed=re.compile(r"[a-z_-]"), max_length=2))
+    assert [names.claim("a")] + [names.derive("a") for _ in range(8)] == ["a"] + ["-%d" % n for n in range(2, 10)]
+    with pytest.raises(ValueError):
+        # '-10' is three characters, and every shorter name 'a' could become is taken.
+        names.derive("a")
+
+
+@pytest.mark.parametrize("rules", [dict(forbidden=("_",)), dict(forbidden=("",)), dict(allowed=re.compile(r"[a-z-]"))])
+def test_rules_that_no_mended_name_could_meet_are_refused(rules):
+    with pytest.raises(ValueError):
+        naming.Rules("Impossible", **rules)
 
 
 def test_a_format_that_ignores_case_has_cube_and_cube_as_one_name():
