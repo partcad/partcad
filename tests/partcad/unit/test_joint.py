@@ -410,6 +410,33 @@ def test_turns_bounded_one_by_one_are_named_in_dof(tmp_path):
     assert arm.joint.type == "composite" and arm.joint_problems == []
 
 
+def test_a_joint_that_starts_outside_its_bounds_fails_the_connect_check(tmp_path):
+    """'limits' about the port's Z bound the target's 'turnZ' the other way round, and a start in between says so."""
+    bore = "motion: {type: revolute, limits: {lower: -10, upper: 30}}"
+    arm = _child(_rig(tmp_path / "against", _links("toParams: {turnZ: 20}"), bore=bore), "arm")
+    (free,) = arm.joint.free_steps()
+    assert (free.lower, free.upper, free.value) == (-30.0, 10.0, 20.0)
+    assert free.source[0]["reversed"] is True
+    (problem,) = arm.joint_problems
+    assert problem.startswith("the joint 'arm-base' starts 'turnZ' at 20 deg, outside its bounds of -30 to 10 deg")
+    assert "runs the other way to 'turnZ'" in problem
+    assert ("arm", problem) in asyncio.run(_reload(tmp_path / "against").get_connect_problems())
+    # The same start, stated in the parameter's own sense, is inside.
+    assert _child(_rig(tmp_path / "within", _links("toParams: {turnZ: -20}"), bore=bore), "arm").joint_problems == []
+
+
+def test_a_start_outside_bounds_is_an_error_on_either_side_and_at_nought(tmp_path):
+    # The connected object's own port frame is the contact frame: no reversal to mention.
+    pin = "motion: {type: prismatic, limits: {lower: 10, upper: 50}}"
+    arm = _child(_rig(tmp_path / "zero", _links(), pin=pin), "arm")
+    (problem,) = arm.joint_problems
+    assert "starts 'moveZ' at 0 mm, outside its bounds of 10 to 50 mm" in problem and "other way" not in problem
+    assert "reversed" not in arm.joint.free_steps()[0].source[0]
+    arm = _child(_rig(tmp_path / "far", _links("withParams: {moveZ: 60}"), pin=pin), "arm")
+    assert any("at 60 mm" in problem for problem in arm.joint_problems)
+    assert _child(_rig(tmp_path / "in", _links("withParams: {moveZ: 20}"), pin=pin), "arm").joint_problems == []
+
+
 #
 # The type a joint is
 #

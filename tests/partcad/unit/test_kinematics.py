@@ -701,6 +701,32 @@ def test_a_free_body_reads_its_rates_from_the_engine_s_velocities(steps):
     assert vel["angular"] == pytest.approx(expected, abs=1e-5)
 
 
+def test_a_joint_that_starts_outside_its_bounds_is_said():
+    """Section 8.13.6's bounds, and a start against them: what an engine would start the joint against its stop with."""
+    step = dict(free("turn", Z, -30, 10, value=20), source=[{"side": "to", "parameter": "turnZ", "reversed": True}])
+    inside = dict(free("move", X, 0, 50, value=20), source=[{"side": "with", "parameter": "moveX"}])
+
+    def tree(steps):
+        joint = {"name": "swing", "parent": "base", "child": "arm", "steps": steps}
+        return {
+            "name": "pkg:rig",
+            "label": "rig",
+            "kind": "assembly",
+            "assembly": [
+                {"name": "pkg:base", "label": "base", "kind": "part", "brep": b"b"},
+                {"name": "pkg:arm", "label": "arm", "kind": "part", "brep": b"a", "joint": joint},
+            ],
+        }
+
+    (problem,) = kinematics.bodies(tree([step])).problems
+    assert problem.startswith("'arm' starts its joint 'swing' with 'turnZ' at 20 deg, outside its bounds of -30 to 10")
+    assert "runs the other way to 'turnZ'" in problem
+    assert kinematics.bodies(tree([inside])).problems == []
+    # Nought is a start too, where nothing gives the freedom a value.
+    (problem,) = kinematics.bodies(tree([free("move", X, 10, 50)])).problems
+    assert "at 0 mm, outside its bounds of 10 to 50 mm" in problem and "other way" not in problem
+
+
 def test_a_reading_keeps_a_turn_past_half_a_turn():
     """The 'wound' example of 8.13.7: started at 270, it reads 270, and 360 at the bottom - not -90 or 0."""
     joint = kinematics.Joint({"name": "swing", "steps": [free("turn", Z, value=270)]})

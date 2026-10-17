@@ -1788,6 +1788,8 @@ class _Builder:
                 moving = self.new_body(child, child_world, child_path, None if floating else target_body, False)
                 joint.child = moving
                 moving.joint = joint
+                for problem in outside_bounds(joint, where):
+                    self.problem(problem)
                 self.fill(moving, child, IDENTITY, child_world, child_path)
                 placed.append((label, moving, IDENTITY, location))
             else:
@@ -1843,6 +1845,48 @@ class _Builder:
         body.physics = mass_properties.of_body(entries) if entries else None
         shapes = [(part.physics, packed_of(part.placement)) for part in body.parts]
         body.displacement = mass_properties.displacement_of(shapes) if shapes else None
+
+
+def outside_bounds(joint, where=None) -> list:
+    """What a joint says that starts it outside its own bounds: one sentence per freedom that does.
+
+    The start is the freedom's value -- 'toParams', the parameter's own value
+    -- and the bounds its range in the same terms, so an engine handed both
+    starts the joint against its own stop (MuJoCo does, and pushes it back in
+    with the first step). The core's 'connect' check fails such a connection
+    ('partcad.joint.outside_bounds'); this says it of a tree, wherever the tree
+    came from. Where the bounds were stated by 'limits:' about an axis that
+    runs the other way to the parameter (a source marked "reversed"), that is
+    said too: it is what turns '[-10, 30]' into '[-30, 10]'.
+    """
+    problems = []
+    names = joint.parameter_names()
+    for freedom in joint.freedoms:
+        value, lower, upper = freedom.value, freedom.lower, freedom.upper
+        tolerance = 1e-9 * max(1.0, abs(value))
+        if not ((lower is not None and value < lower - tolerance) or (upper is not None and value > upper + tolerance)):
+            continue
+        unit = "deg" if freedom.kind == TURN else "mm"
+        shown = "%s to %s %s" % (
+            "-inf" if lower is None else "%g" % lower,
+            "+inf" if upper is None else "%g" % upper,
+            unit,
+        )
+        problem = "'%s' starts its joint '%s' with '%s' at %g %s, outside its bounds of %s" % (
+            where or joint.child_link or "?",
+            joint.name,
+            names[freedom.index],
+            value,
+            unit,
+            shown,
+        )
+        if any(isinstance(source, dict) and source.get("reversed") for source in freedom.source):
+            problem += (
+                ": its 'limits' are stated about the motion's axis, which runs the other way to '%s' (a target's "
+                "port Z is the contact frame's -Z), so they bound it the other way round" % names[freedom.index]
+            )
+        problems.append(problem)
+    return problems
 
 
 def summary(found) -> list:

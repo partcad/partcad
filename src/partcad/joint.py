@@ -658,6 +658,59 @@ def _bounded(freedom, parameter, factor, name, motion, problems) -> tuple:
     return result["lower"], result["upper"]
 
 
+def _reversed(freedom, factor) -> bool:
+    """Whether 'limits' bound this freedom about an axis that runs the other way to its parameter.
+
+    Recorded on the freedom's source ("reversed"), because it is what makes a
+    start and a bound that look consistent as written disagree as resolved: a
+    target's 'turnZ' is about the contact frame's Z, the target port's own Z
+    reversed, so 'limits: {lower: -10, upper: 30}' bound it -30 to 10.
+    """
+    return factor < 0 and any(value is not None for value in freedom.bounds.values())
+
+
+def outside_bounds(composition, name) -> list:
+    """Every degree of freedom of a joint that starts outside its own bounds, as a problem.
+
+    The start is the parameter's own value ('toParams', 'withParams', nought
+    where the connection gives none) and the bounds its range in the same
+    terms, so an engine handed both starts the joint against its own stop:
+    MuJoCo does, and its first step throws it back in. It fails the 'connect'
+    check, the message naming the joint, the parameter, the start and the
+    bounds - and, where 'limits:' were stated about an axis that runs the other
+    way to the parameter, saying so, since that is the usual way to come by
+    one. 'kinematics.outside_bounds' says the same of a tree.
+    """
+    problems = []
+    for step in composition.free_steps():
+        value = _number(step.value)
+        if value is None:
+            continue
+        tolerance = 1e-9 * max(1.0, abs(value))
+        lower, upper = step.lower, step.upper
+        if not ((lower is not None and value < lower - tolerance) or (upper is not None and value > upper + tolerance)):
+            continue
+        parameters = "+".join(str(source.get("parameter")) for source in step.source) or "?"
+        unit = "deg" if step.kind == PARAM_TURN else "mm"
+        problem = "the joint '%s' starts '%s' at %g %s, outside its bounds of %s %s" % (
+            name,
+            parameters,
+            value,
+            unit,
+            _shown_range(lower, upper),
+            unit,
+        )
+        if any(source.get("reversed") for source in step.source):
+            problem += (
+                ": its 'limits' are stated about the motion's axis, which runs the other way to '%s' (a target "
+                "interface's parameters are read in the contact frame, whose Z is the target port's Z reversed), "
+                "so they bound '%s' the other way round; state the start in the parameter's sense, or the limits "
+                "on the parameter itself" % (parameters, parameters)
+            )
+        problems.append(problem)
+    return problems
+
+
 def _ball_turn(parameter, name, motion, problems) -> tuple:
     """The range of one of a ball's turns: none, and an error where the parameter it is declares one.
 
@@ -832,6 +885,8 @@ class Resolution:
                 "by": "motion '%s'" % motion.named,
                 "synthesized": synthesized,
             }
+            if _reversed(freedom, factor):
+                source["reversed"] = True
             side.add_dof(name, lower, upper, source)
             followers[index] = (side, name, factor)
             if freedom.follows is not None:
@@ -925,7 +980,10 @@ class Resolution:
                         lower, upper = _ball_turn(parameter, name, motion, self.problems)
                     else:
                         lower, upper = _bounded(freedom, parameter, factor, name, motion, self.problems)
-                    side.dof[name] = (lower, upper, dict(source, by="'dof' and motion '%s'" % motion.named))
+                    source = dict(source, by="'dof' and motion '%s'" % motion.named)
+                    if _reversed(freedom, factor):
+                        source["reversed"] = True
+                    side.dof[name] = (lower, upper, source)
                     break
             else:
                 unmatched.append(freedom)

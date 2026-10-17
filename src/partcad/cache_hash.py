@@ -91,7 +91,16 @@ from . import logging as pc_logging
 #      joint its URDF states. The same case as 5, 7, 8 and 10: an entry written
 #      under 10 would go on being served without either - a part bolted to a
 #      turning arm read as bolted to the base, and a robot read as one body.
-VERSION = 11
+#  12: a joint is what the native joint types make of its declaration
+#      (docs/design/simulation.md, section 8.13): its bounds are the
+#      parameter's range with 'limits:' laid over it side by side, a ball's
+#      turns carry no range and the joint its one bound ('turnLimit'), a
+#      'continuous' or '.inf' side is open, and a source says when 'limits:'
+#      ran the other way to its parameter ("reversed"). The same case as 5, 7,
+#      8, 10 and 11: an entry written under 11 would go on being served with
+#      the old joints - a ball read as a composite for the ranges its turns
+#      still carried, and a start against its stop said nowhere.
+VERSION = 12
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.

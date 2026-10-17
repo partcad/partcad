@@ -1468,6 +1468,15 @@ the text above left open. What the engine plugins build on is in `kinematics`' d
   map that states fewer than three turns has none to report: `turns_of()` is None for anything but three axes, and a
   reading then has only `quat`.
 - **Names in a reading** are `Joint.parameter_names()`: each freedom's parameter, `-2` where two would be one name.
+- **A start outside its own bounds** fails the `connect` check (`partcad.joint.outside_bounds`), and `bodies()` says
+  it of any tree (`kinematics.outside_bounds`, in `problems`): an engine handed both starts the joint against its
+  stop, and MuJoCo then throws it back in with its first step. The start is the parameter's own value (`toParams`,
+  nought where nothing gives one) and the bounds its range in the same terms, which is where the two most often come
+  apart: `limits:` are stated about the motion's axis, and on a target interface that runs the other way to the
+  parameter (the target port's Z is the contact frame's -Z), so `limits: {lower: -10, upper: 30}` bound `turnZ`
+  from -30 to 10, and `toParams: {turnZ: 20}` starts it outside. A freedom whose `limits` were turned round that way
+  says so on its source (`"reversed": true`), and the message says it too. No example starts outside its bounds. The
+  joints a tree carries changed with all of this, so the cache format is 12.
 - **`pc info`** shows each joint's `type`, asked of `kinematics` by the core (`partcad.joint.Joint.type`), so that it
   is the type an export writes.
 - **The URDF export** refuses with `export_urdf.Refused`, naming every joint it cannot write at once, before anything
