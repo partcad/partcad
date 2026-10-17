@@ -973,8 +973,7 @@ at all).
   zero has to be PartCAD's start (`rezeroed()`), and maps what an engine reads back into PartCAD's names and units
   (`joint_map()`, which travels in the names sidecar, and `reading()`). Do not give an exporter a copy of
   the rule, and do not make the core depend on an exporter reading it: three exporters deciding for themselves which
-  parts are one body is three answers to what falls apart. `kinematics.CONTINUOUS` and `CHAIN` are kept only until the
-  engine plugins stop importing them -- their CI installs PartCAD from `devel` -- and nothing in this tree may use them. A scene is also a simulation subject
+  parts are one body is three answers to what falls apart. A scene is also a simulation subject
   (`simulation.SUBJECT_KINDS`), placed in its world by a `scene:` link.
 
 - **One shape, one tree, two forms** (`./src/partcad/shape_envelope.py`,
