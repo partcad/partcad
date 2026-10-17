@@ -9,6 +9,7 @@
 #
 
 import contextlib
+import gc
 import hashlib
 import os
 import re
@@ -18,6 +19,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -258,7 +260,19 @@ def _remove_tree(path) -> None:
     then took for a copy. Each such file is made writable and removed again;
     whatever still refuses is left, and is what an existing directory without
     its '.partcad.git.cloned' marker is there to catch.
+
+    Windows will not delete a file that is open either, and a repository object
+    keeps its pack files open and mapped until it is freed. So whatever opened
+    the copy has to let go of it first: '.free()' on a repository in hand, and
+    '_release(error)' when the copy is removed because something failed, whose
+    traceback keeps every repository the failed attempt opened alive. And a
+    'pygit2.Repository' nobody holds is not freed when its last reference goes:
+    it sits in a cycle with its own collections ('branches', 'references',
+    'remotes', ...), so only the cycle collector frees it - every temporary one
+    that read a 'HEAD' keeps its pack open until then. Removing a copy is rare
+    enough to collect first.
     """
+    gc.collect()
 
     def retry_writable(func, failed_path, _error):
         try:
@@ -271,6 +285,17 @@ def _remove_tree(path) -> None:
         shutil.rmtree(path, onexc=retry_writable)
     else:
         shutil.rmtree(path, onerror=retry_writable)  # 'onexc' is 3.12's spelling
+
+
+def _release(error: BaseException) -> None:
+    """Let go of everything a failed attempt still holds through 'error'.
+
+    A traceback keeps each frame it passes through alive, and with it every
+    local of those frames - the repositories and remotes the attempt opened,
+    which keep their files open. The frames themselves stay, so the error is
+    reported where it happened; only their locals go.
+    """
+    traceback.clear_frames(error.__traceback__)
 
 
 def looks_like_commit_id(revision: str) -> bool:
@@ -627,6 +652,7 @@ def clone_single_commit(repo_url, cache_path, revision, git_config=(), user_conf
             str(e).splitlines()[-1] if str(e) else e,
         )
 
+    repo.free()
     _remove_tree(cache_path)
     repo = _clone(repo_url, cache_path, git_config, get_fallback_clone_options(revision), user_config)
     _checkout(repo, revision)
@@ -985,7 +1011,8 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         def attempt(download):
             try:
                 return download()
-            except GIT_ERRORS:
+            except GIT_ERRORS as e:
+                _release(e)
                 _remove_tree(cache_path)
                 raise
 

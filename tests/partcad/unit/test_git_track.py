@@ -612,19 +612,46 @@ def test_a_server_that_will_not_serve_a_commit_by_id_still_gets_the_copy_moved(t
 
 @pytest.fixture
 def windows_deletes(monkeypatch):
-    """Delete files the way Windows does: one without its write bit cannot be.
+    """Delete files the way Windows does, which refuses two kinds of file.
 
-    libgit2 writes a repository's objects read-only, so that is what removing a
-    copy runs into there, and what 'shutil.rmtree(..., ignore_errors=True)'
-    silently gave up on, leaving half a repository behind.
+    One without its write bit: libgit2 writes a repository's objects read-only,
+    and 'shutil.rmtree(..., ignore_errors=True)' gave up on them in silence,
+    leaving half a repository behind.
+
+    And one this process has open or mapped: a repository object nobody let go
+    of keeps its pack files mapped, and removing its directory then leaves them
+    there too. Which files those are is read off '/proc/self', so that part is
+    checked where there is one; on Windows itself both rules hold anyway.
     """
     import stat
 
     real_unlink = os.unlink
+    proc = "/proc/self"
+
+    def in_use():
+        if not os.path.isdir(proc):
+            return set()
+        paths = set()
+        for fd in os.listdir(os.path.join(proc, "fd")):
+            try:
+                paths.add(os.readlink(os.path.join(proc, "fd", fd)))
+            except OSError:
+                pass
+        with open(os.path.join(proc, "maps")) as maps:
+            for line in maps:
+                fields = line.split(None, 5)
+                if len(fields) == 6 and fields[5].startswith("/"):
+                    paths.add(fields[5].strip())
+        return paths
 
     def unlink(path, *, dir_fd=None):
         if not os.stat(path, dir_fd=dir_fd, follow_symlinks=False).st_mode & stat.S_IWRITE:
             raise PermissionError(13, "Access is denied", path)
+        full = path
+        if dir_fd is not None and os.path.isdir(proc):
+            full = os.path.join(os.readlink(os.path.join(proc, "fd", str(dir_fd))), path)
+        if os.path.abspath(full) in in_use():
+            raise PermissionError(32, "The process cannot access the file because it is being used", path)
         real_unlink(path, dir_fd=dir_fd)
 
     monkeypatch.setattr(os, "unlink", unlink)
@@ -639,3 +666,40 @@ def test_an_unfinished_download_with_read_only_objects_is_downloaded_again(
 
 def test_the_copy_moved_by_a_new_download_with_read_only_objects(tmp_path, user_config, windows_deletes):
     test_a_server_that_will_not_serve_a_commit_by_id_still_gets_the_copy_moved(tmp_path, user_config)
+
+
+def test_a_pin_the_remote_does_not_have_with_files_windows_will_not_delete(
+    tmp_path, upstream, user_config, caplog, windows_deletes
+):
+    test_a_pin_the_remote_does_not_have_keeps_the_copy_and_says_why(tmp_path, upstream, user_config, caplog)
+
+
+def test_a_pin_no_server_has_leaves_no_download_behind(tmp_path, user_config, windows_deletes):
+    """Over HTTP the failed download has a pack open when it is cleared away, and must let go of it first."""
+    from git_http_server import mirror, serve_git
+
+    work = Upstream(tmp_path / "work")
+    root = tmp_path / "srv"
+    root.mkdir()
+    served = root / "upstream.git"
+    mirror(work.path, served)
+    pygit2.Repository(str(served)).config["uploadpack.allowReachableSHA1InWant"] = False
+
+    with serve_git(root, protocol_v2=False) as base_url:
+        url = "%s/upstream.git" % base_url
+        workspace = tmp_path / "ws"
+
+        def pinned(revision):
+            write_package(
+                workspace, "  dep:\n    type: git\n    url: '%s'\n    track: main\n    revision: %s\n" % (url, revision)
+            )
+
+        pinned(work.head())
+        assert load_version(workspace, user_config) == "A"
+
+        pinned("0123456789abcdef0123456789abcdef01234567")
+        assert load_version(workspace, user_config) == "A"
+
+    prefix = cache_dir_name(url, None)
+    git_dir = Path(user_config.internal_state_dir) / "git"
+    assert sorted(p.name[len(prefix) :] for p in git_dir.glob(prefix + "*") if p.is_dir()) == ["-main"]

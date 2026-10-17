@@ -1184,7 +1184,16 @@ at all).
   `revision.py` caches a repository's commit by its path, which no longer changes when the commit does, so a
   move calls `revision.reset_cache()`. Nothing coordinates *processes*: two daemons with packages pinning one
   branch at different commits can still move the copy under each other. `develIndex` gets a copy of its own
-  (`-devel`) so that toggling it never moves the `main` one. `pc update`
+  (`-devel`) so that toggling it never moves the `main` one.
+
+  Removing a copy goes through `_remove_tree`, never a bare `shutil.rmtree(..., ignore_errors=True)`, because
+  Windows refuses two things that call gave up on in silence, leaving half a repository for the next load to take
+  for a copy: libgit2's read-only object files, and any file a repository object still has open. A
+  `pygit2.Repository` sits in a reference cycle with its own collections, so one nobody holds keeps its pack
+  mapped until the *cycle collector* runs — `_remove_tree` collects first — and one somebody does hold has to be
+  `.free()`d, or released from the traceback of the attempt that failed (`_release`). The `windows_deletes`
+  fixture in `test_git_track.py` emulates both rules on Linux; what is a copy is decided by the
+  `.partcad.git.cloned` marker, never by the directory existing. `pc update`
   (`actions/package/update.py`) is what moves a pin: it asks each tracked branch's remote where it is
   (`tracked_commit()`, an `ls-remote` — nothing downloaded), writes the commit into `revision:`, then reloads
   every package (`Context.reload_all_packages()`) and fetches them all under `refresh_imports`. It edits only
