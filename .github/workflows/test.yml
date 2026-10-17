@@ -989,7 +989,16 @@ jobs:
     # dependency tree into each sandbox (~20 min on the previous stack). Measured
     # here: ubuntu ~25-31 min, Windows ~38-50 min -- the 45-minute step was still
     # catching the slower Windows runs, so give it headroom.
-    timeout-minutes: 60
+    #
+    # 60 -> 75: the suite grew into that headroom. On 2026-10-17 the Windows
+    # cells took 43-58 min, and "windows-latest, 3.10" -- the slowest -- was
+    # cancelled at 60 min twice with every test passing, at 99%. Linux takes
+    # 25-35. Windows has no Docker for PartCAD's images, so every sandbox there
+    # is a conda environment built from nothing inside the session, and that is
+    # where the difference goes: the first conversion to need each environment
+    # takes minutes ("test_convert_cad_file[stl-step]" 222 s, against 59 s on
+    # Linux), and so does each interpreter "test_runtime_python" provisions.
+    timeout-minutes: 75
 
     # The tag PartCAD addresses its own container images by, empty on a run
     # that built none of its own -- and an empty value is the release, which is
