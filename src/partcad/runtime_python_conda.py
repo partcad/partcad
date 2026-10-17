@@ -18,7 +18,7 @@ import sys
 from partcad_utils import conda as pc_conda
 
 from . import logging as pc_logging
-from . import runtime_python, sandbox_lock, sandbox_versions, telemetry
+from . import runtime, runtime_python, sandbox_lock, sandbox_versions, telemetry
 
 # Conda/mamba failures that are the machine, not the request, and that a retry
 # has been observed to clear. Matched against the stderr of "conda create".
@@ -212,7 +212,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     shell=False,
                     encoding="utf-8",
                 )
-                stdout, stderr = p.communicate()
+                stdout, stderr = runtime.communicate_sync(p)
                 if p.returncode != 0:
                     if stderr is not None and stderr.strip() != "":
                         pc_logging.warning("conda venv check error: %s" % stderr)
@@ -472,7 +472,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                             encoding="utf-8",
                             env=self.conda_command_env(),
                         )
-                        stdout, stderr = p.communicate()
+                        stdout, stderr = runtime.communicate_sync(p)
 
                     # Everything reported in here is a *warning*, however bad it
                     # reads. This is one attempt of several, and whether the
@@ -586,7 +586,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         encoding="utf-8",
                         env=self.conda_command_env(),
                     )
-                    stdout, stderr = p.communicate()
+                    stdout, stderr = runtime.communicate_sync(p)
 
                 if stderr is not None and stderr.strip() != "":
                     pc_logging.warning("conda pip install error: %s" % stderr)

@@ -270,6 +270,29 @@ def mount_sources(client, image: str):
     return _mount_sources(client, image, CONTAINER_PYTHON)
 
 
+# How many signals there are inside a container, which is always Linux.
+LINUX_SIGNALS = 64
+
+
+def exec_status(returncode):
+    """A 'docker exec' client's exit status, as the status of the process it ran.
+
+    Docker passes the process's own status through, and a process killed by a
+    signal has none: it reports 128 plus the signal instead, as a shell does.
+    That is turned back into the negative number Python gives a local process
+    killed the same way, so the one description of a death serves both. 125 to
+    127 are Docker's own (it could not run the command at all) and are left as
+    they are, as is anything past the last signal.
+
+    The number is the container's -- Linux's, whatever this host is -- so it is
+    not checked against this host's own list of signals, which on Windows has
+    no SIGKILL at all.
+    """
+    if isinstance(returncode, int) and 128 < returncode <= 128 + LINUX_SIGNALS:
+        return -(returncode - 128)
+    return returncode
+
+
 def sandbox_spec(image: str, mounts) -> containers.ContainerSpec:
     """The container a ``mount``-mode sandbox for ``image`` with ``mounts`` runs in.
 
@@ -549,6 +572,52 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         argv.append(self.container_name)
         argv += [docker_mount.rewrite(str(a), self._mounted) for a in cmd]
         return argv
+
+    def _ended(self, returncode, stderr):
+        """How the interpreter a 'docker exec' ran ended, rather than how the client did.
+
+        Two things the client's status does not say by itself.
+
+        A death by signal inside the container arrives as 128 plus the signal --
+        137 for the out-of-memory killer's SIGKILL -- the way a shell reports
+        one. Read as an exit code it named nothing, and every interpreter killed
+        in a container was reported as having failed with "exit code 137"; as
+        the signal it is, it is reported the way a local one is (see
+        `process_crash.describe_termination`).
+
+        And a failure can be the container's rather than the command's: one
+        whose service the out-of-memory killer took has stopped, and every
+        command sent to it after that fails without running. So a failure asks
+        whether the container still runs, and when it does not, the reason is
+        added to what the command said and the container is let go of --
+        `_start` brings it back for the next command, the way it brings up any
+        container (see `containers.acquire`).
+        """
+        returncode = exec_status(returncode)
+        if returncode != 0:
+            why = self._let_go_if_stopped()
+            if why:
+                note = "The '%s' sandbox container %s; it is started again for the next command." % (
+                    self.container_name,
+                    why,
+                )
+                stderr = note if not stderr else stderr.rstrip() + "\n" + note
+        return returncode, stderr
+
+    def _let_go_if_stopped(self):
+        """How this sandbox's container stopped, having forgotten it; None while it runs."""
+        container = self._container
+        if container is None:
+            return None
+        why = containers.stopped(container)
+        if why is None:
+            return None
+        with self._start_guard:
+            # Only the container this run was in: a run beside it may have
+            # found the same death first and started the next one already.
+            if self._container is container:
+                self._container = None
+        return why
 
     def _spawn(self, cmd, cwd=None, env=None):
         """The same command, run in this sandbox's container.

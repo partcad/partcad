@@ -32,6 +32,7 @@ from typing import Callable, Mapping, Optional
 
 from partcad_utils.framing import read_message, write_message
 from partcad_utils.logging_ansi_render import AnsiEventRenderer
+from partcad_utils.workspace import LIVENESS_METHOD
 
 from ..config_restart import GRACE_SECONDS, SETTINGS_METHOD, Connections, settings_differ
 from ..rpc.dispatcher import INVALID_PARAMS, Dispatcher, Handler
@@ -234,6 +235,18 @@ class SocketServer:
                                 wfile,
                                 {"jsonrpc": "2.0", "id": request["id"], "result": {"ansi": renderer[0] is not None}},
                             )
+                    continue
+
+                if isinstance(request, dict) and request.get("method") == LIVENESS_METHOD:
+                    # Answered now, outside the dispatch lock: it reads the
+                    # registry and nothing else, and a liveness probe queued
+                    # behind the request being served timed out and took this
+                    # daemon for gone -- which is what made `pc daemon stop`
+                    # say there was nothing to stop while one was busy or stuck.
+                    response = self._dispatcher.dispatch(request, self._session)
+                    if response is not None:
+                        with write_lock:
+                            write_message(wfile, response)
                     continue
 
                 # Busy from here until the answer is written: a restart waits

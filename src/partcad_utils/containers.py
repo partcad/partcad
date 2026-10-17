@@ -555,6 +555,61 @@ def _logs(container) -> str:
         return ""
 
 
+def stopped(container) -> Optional[str]:
+    """How ``container`` came to stop, said in words; None while it runs, or when that cannot be told.
+
+    Asked after a command in it failed, because a container is a sandbox
+    process too: the out-of-memory killer takes its service as readily as an
+    interpreter, and a container that has stopped fails every command sent to
+    it from then on, each one the same way. Whoever holds on to a container
+    asks this to find out that what failed was the container rather than the
+    command, says so, and lets go of it -- `acquire` starts it again, or makes
+    a new one, on the next command that needs it.
+
+    'None' rather than a guess when the daemon cannot be asked: a container
+    that may well be running is not to be let go of on a hunch.
+    """
+    reload = getattr(container, "reload", None)
+    if reload is None:
+        return None
+    try:
+        reload()
+    except Exception as e:  # pylint: disable=broad-except
+        import docker
+
+        if isinstance(e, docker.errors.NotFound):
+            return "has been removed"
+        return None
+    status = getattr(container, "status", "")
+    if status in ("running", "created", "restarting"):
+        return None
+    state = (getattr(container, "attrs", None) or {}).get("State") or {}
+    if state.get("OOMKilled"):
+        return "was stopped by the out-of-memory killer"
+    code = state.get("ExitCode")
+    if isinstance(code, int) and code - 128 in _LINUX_SIGNAL_NAMES:
+        # A container's status is its first process's, reported the way a shell
+        # reports a death by signal: 128 plus the signal.
+        return "was killed by %s (exit code %d)" % (_LINUX_SIGNAL_NAMES[code - 128], code)
+    return "has stopped (%s)" % ("exit code %s" % code if code is not None else status or "status unknown")
+
+
+# The signals a container is stopped by, by their numbers inside it -- which are
+# Linux's whatever this host is, so not this host's `signal` module, which on
+# Windows has no SIGKILL and on macOS numbers SIGBUS differently.
+_LINUX_SIGNAL_NAMES = {
+    1: "SIGHUP",
+    2: "SIGINT",
+    4: "SIGILL",
+    6: "SIGABRT",
+    7: "SIGBUS",
+    8: "SIGFPE",
+    9: "SIGKILL",
+    11: "SIGSEGV",
+    15: "SIGTERM",
+}
+
+
 def _wait_ready(container, remote_host, deadline: float, ping: Callable[[str, int], Optional[int]]):
     """The (host, port) the container's service answers on, once it does."""
     while True:
