@@ -1206,7 +1206,11 @@ Reading one
 ``add`` declares an assembly of type ``urdf``. Its links become parts named
 ``<assembly>/<link>`` -- ordinary parts, which ``pc ide view robot/forearm`` and
 ``pc export -t step robot/wrist`` work on like any other -- placed with every
-joint at zero. A link's ``<inertial>``, the friction and contact settings of its
+joint at zero, but for a joint whose limits leave zero out: a legged robot's
+knee that cannot straighten, a gripper that cannot close to nought. Such a joint
+starts at the bound nearest zero, where the robot can stand, rather than against
+its own stop, which would fail ``pc test``'s ``connect`` check; and the links
+below it are placed with it there. A link's ``<inertial>``, the friction and contact settings of its
 ``<gazebo>`` block and its ``<material>`` become named properties of its part,
 in PartCAD's units, and are written back on export. URDF that PartCAD has no
 property for stops the import, naming what it found, rather than being carried
@@ -1416,7 +1420,11 @@ says nothing about the hardware that implements it.
 The parameters are what let the assembly be **posed**: ``connect: {toParams:
 {angle: 90}}`` places the child where the URDF joint at 90 degrees would, and
 everything below it follows; it is also the joint's starting value
-(:ref:`assy-joints`).
+(:ref:`assy-joints`). The converter writes one itself for a joint whose limits
+leave URDF's zero out: such a joint starts at the bound nearest zero, which is
+its parameter's ``default`` and its connection's ``toParams``, so the converted
+assembly is drawn with that joint there -- as the robot can stand, and as a
+``urdf`` assembly reads it. Its export is still the URDF at its own zero.
 
 .. _sim-urdf-round-trip:
 
