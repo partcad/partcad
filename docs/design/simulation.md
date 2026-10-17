@@ -1036,7 +1036,7 @@ a mass nobody measured.
 | Pair | One physical joint? | Proposal |
 |---|---|---|
 | `continuous` and `revolute` with no bound | yes: a hinge, and its bounds are a property of it | `revolute`, with each bound optional. `continuous` stays as a spelling of `revolute` with both bounds open, and `pc lint` says so |
-| `floating`, a free root, a scene element | yes: a body nothing holds | `floating` makes the child a body of its own (section 7's table gains a row). Each engine writes it as its own free body, never as six freedoms under the parent |
+| `floating`, a free root, a scene element | yes: a body nothing holds | `floating` makes the child a body of its own (section 7's table gains a row). Each engine writes it as its own free body, never as six freedoms under the parent. URDF is the exception: a URDF is one tree with one root and has no free body, so there it is URDF's `floating` joint, all six freedoms relative to the parent, which keeps the declared relative motion |
 | `planar` and `dof: [moveX, moveY, turnZ]` | yes, by construction | `type` is the short form of the list (below). The other order, the turn first and then the moves, is the same pair in other coordinates, so it classifies as `planar` too |
 | `ball` and three turns | yes, for any three independent turns through one point | the three turns are only the coordinates its readings are reported in |
 | `motion.type` and `dof:` | yes | `dof` is the declaration and `type` is its short form: it expands to 8.2's list, and stated beside a `dof` it is an assertion. A disagreement is an error (today it is reported, and `dof` wins) |
@@ -1197,9 +1197,13 @@ about `qpos`, which there is PartCAD's value.
 **A bounded ball under MJCF.** Its cone is about the ball's zero (8.13.3). MuJoCo bounds a ball "relative to the
 reference configuration", and re-zeroing makes that reference the start.
 
-- A bounded ball that starts at its zero is written as above.
-- One that starts anywhere else is written at its zero orientation, with the start as a `<key>` that the plugin resets
-  to (`mj_resetDataKeyframe`). This is reported, because a file opened by hand then shows the ball at its zero.
+- A bounded ball that starts at its zero is written as above, and re-zeroing changes nothing (`R_s` is the identity).
+- One that starts anywhere else is **not** re-zeroed: re-zeroing would move the cone's centre to the start, and the
+  cone is about PartCAD's zero. The ball's frame stays `J`, and the body is written at the ball's zero orientation, so
+  MuJoCo's reference configuration is PartCAD's zero. The start goes into a `<key>`, whose `qpos` for the ball is
+  `R_s` as a quaternion in `J`, and the plugin resets to it (`mj_resetDataKeyframe`). The joint map's start for that
+  ball is the identity, because the engine's quaternion is then PartCAD's rotation itself. This is reported, because
+  a file opened by hand then shows the ball at its zero.
 
 **Readings back.** Each plugin reports a joint under PartCAD's name and in PartCAD's units, whatever it was written as.
 
