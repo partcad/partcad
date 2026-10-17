@@ -934,10 +934,29 @@ Object commands
   from above. Something used in several places is explained once, with how many to make, in the lowest-level
   assembly that holds every place it is used, so it is made before the first step that needs it. ``pc render``
   writes the complete book — every sub-assembly that is built and every part that is — and ``pc instructions``
-  below writes as much of it as is asked for. A step page shows the two items being joined, and below them an
-  exploded view of the joint with a line drawn across the gap it opens. That gap is half of the largest dimension of the two items,
-  unless the step sets ``exploded:`` in its ``connect:`` or ``connectPorts:`` section (see :doc:`assy`). The
-  last page collects
+  below writes as much of it as is asked for.
+
+  A step is what a person does at once: one item put in place, and the fasteners that hold it. A link whose
+  joint is made by going into the material — a screw cutting its own thread, a pin snapped in (``selfScrew``,
+  ``snapIn``) — and that is connected to the item of the step before it, or driven through it
+  (``interferes``), is driven in at that step rather than at a step of its own. A step page shows:
+
+  * the parts to pick out, in a box with how many of each: every fastener, and the item itself when it is
+    under a quarter of the size of the finished assembly. A board or a panel is what the pictures are of; a
+    screw is too small to find in them, and is counted here;
+  * the item going on: everything placed before the step in grey — the assembly so far, which is what the
+    reader has in front of them — and the item in blue, held off the joint, with a line drawn across the gap
+    it opens. That gap is half of the largest dimension of the item and what it is joined to, unless the step
+    sets ``exploded:`` in its ``connect:`` or ``connectPorts:`` section (see :doc:`assy`);
+  * when it is fastened, beside it, the fasteners going in: only the parts they join, in place, and the
+    fasteners pulled out of their holes along the line they go in by;
+  * the words of the ASSY file — the node's ``description`` — and below them, smaller, the model's account of
+    the joint: which ports of what meet, how it goes on, the further joints the item makes
+    (``alsoConnectPorts``), and how many fasteners go into what, through what.
+
+  Every step of an assembly is drawn from the one iso view that most of what moves in it comes out towards,
+  so that one picture follows on from the one before; the fastening of a step is drawn from the side its
+  fasteners are driven from. The last page collects
   links: to this assembly and its package, to every other package that supplies at least three of its parts,
   and to PartCAD. The HTML is one self-contained file that shows a single page at a time, with arrows on
   either side (and the arrow keys) to flip through it. As with ``readme``, an assembly can ask for either
