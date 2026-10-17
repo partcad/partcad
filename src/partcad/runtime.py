@@ -12,6 +12,7 @@ import contextlib
 import os
 import signal
 import subprocess
+import threading
 
 import docker
 
@@ -21,6 +22,10 @@ from . import logging as pc_logging
 from . import sandbox_lock
 from .process_crash import describe_termination
 from .process_output import decode as decode_output
+
+# How long after its bound a run is killed from a thread of its own, in seconds,
+# when the event loop has not done it by then (see `communicate`).
+BACKSTOP = 5.0
 
 
 def bounded_spawn_options(timeout=None) -> dict:
@@ -47,7 +52,7 @@ def bounded_spawn_options(timeout=None) -> dict:
     return {"start_new_session": True}
 
 
-def kill_process_tree(p) -> None:
+def kill_process_tree(p, from_thread=False) -> None:
     """Kill ``p`` and everything it started, on every platform. Never raises.
 
     Three nets, because each catches what the others miss:
@@ -59,6 +64,10 @@ def kill_process_tree(p) -> None:
       `bounded_spawn_options`) -- which is what reaches a process whose parent
       has already exited, and which `psutil` can no longer place under ``p``;
     * and ``p`` itself, which on Windows is `taskkill /T` taking its tree.
+
+    ``from_thread`` when called from a thread other than the event loop's: ``p``
+    is then signalled by its id rather than through ``p.kill()``, which polls
+    the process first and could reap it under the loop's own child watcher.
 
     What is outside this machine is outside its reach: in the `docker` sandbox
     ``p`` is the `docker exec` client, and the interpreter it started lives in
@@ -93,7 +102,10 @@ def kill_process_tree(p) -> None:
                 os.killpg(pid, signal.SIGKILL)
     if getattr(p, "returncode", None) is None:
         with contextlib.suppress(ProcessLookupError, OSError):
-            p.kill()
+            if from_thread and os.name != "nt":
+                os.kill(pid, signal.SIGKILL)
+            elif not from_thread:
+                p.kill()
     for child in children:
         with contextlib.suppress(Exception):
             child.kill()
@@ -116,11 +128,37 @@ async def communicate(p, stdin: bytes, timeout=None):
     cancelled Actions run are. So kill it on the way out, whatever the way out
     is -- and with it everything it started, which outlives it otherwise (see
     `kill_process_tree`). The event loop's child watcher reaps it from there.
+
+    And the bound must not need the event loop to be running, because a child
+    can stop it: on macOS, CPython's threaded child watcher (3.14.8) takes a
+    child that is *stopped* for one that has exited -- `waitid(WEXITED |
+    WNOWAIT)` reports it -- and reaps it with a blocking `waitpid` in the loop's
+    own thread, which then waits as long as the child stays stopped, timers and
+    all. So a thread of its own kills the tree `BACKSTOP` seconds after the
+    bound if nothing has by then; the child dies, the `waitpid` returns, and
+    the run is reported as the timeout it is.
     """
     try:
         if timeout is None:
             return await p.communicate(input=stdin)
-        return await asyncio.wait_for(p.communicate(input=stdin), timeout)
+        fired = threading.Event()
+
+        def backstop():
+            fired.set()
+            kill_process_tree(p, from_thread=True)
+
+        timer = threading.Timer(timeout + BACKSTOP, backstop)
+        timer.daemon = True
+        timer.start()
+        try:
+            out = await asyncio.wait_for(p.communicate(input=stdin), timeout)
+        finally:
+            timer.cancel()
+        if fired.is_set():
+            # Killed by the backstop, which the loop may have seen as an exit
+            # before it saw its own timer: it is the bound all the same.
+            raise asyncio.TimeoutError()
+        return out
     except BaseException:
         if p.returncode is None:
             kill_process_tree(p)

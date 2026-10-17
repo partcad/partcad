@@ -529,6 +529,39 @@ def test_a_wedged_process_tree_is_killed_whole(tmp_path):
     assert _gone(int(pids.read_text()))
 
 
+@pytest.mark.skipif(not POSIX, reason="what blocks the loop here is a waitpid on a stopped child, a POSIX notion")
+def test_the_bound_holds_when_the_event_loop_itself_is_held_up(monkeypatch):
+    """What macOS's child watcher does to a stopped child: blocks the loop's own thread.
+
+    Here the loop is held by a blocking wait on the child in a callback, the
+    way 'waitpid' holds it there, so wait_for's timer cannot fire; the backstop
+    thread has to kill the child for anything to happen at all.
+    """
+    monkeypatch.setattr(pc_runtime, "BACKSTOP", 0.5)
+
+    async def main():
+        p = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-c",
+            "import time; time.sleep(600)",
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            **pc_runtime.bounded_spawn_options(0.5),
+        )
+        # Polled rather than waited for, which would reap the child under the
+        # loop's own watcher; held either way until something kills it.
+        asyncio.get_running_loop().call_later(0.1, _gone, p.pid, 30.0)
+        started = time.monotonic()
+        with pytest.raises((asyncio.TimeoutError, TimeoutError)):
+            await pc_runtime.communicate(p, b"", timeout=0.5)
+        await asyncio.wait_for(p.wait(), 10)
+        return time.monotonic() - started
+
+    took = asyncio.run(main())
+    assert took < 10
+
+
 def test_an_unbounded_run_is_started_as_it_always_was():
     assert pc_runtime.bounded_spawn_options(None) == {}
     assert pc_runtime.bounded_spawn_options(5) != {}
