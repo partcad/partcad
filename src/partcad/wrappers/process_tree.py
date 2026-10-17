@@ -161,23 +161,24 @@ def stop_everything(exit_code):
 
     What a wrapper does when its bound is spent and its answer is already
     written. Never returns.
+
+    On Windows 'taskkill /T' takes this process along with its tree, so the
+    status seen there is taskkill's rather than 'exit_code'; the answer, which
+    is what PartCAD reads, is already written either way.
     """
-    if os.name == "nt":
-        try:
+    try:
+        if os.name == "nt":
             subprocess.run(
                 ["taskkill", "/F", "/T", "/PID", str(os.getpid())],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 timeout=30,
             )
-        except (OSError, subprocess.SubprocessError):
-            pass
-    else:
-        try:
+        else:
             stop_started()
-        except Exception:  # pylint: disable=broad-except
-            # The exit below is the point; nothing may stand in its way.
-            pass
+    except Exception:  # pylint: disable=broad-except
+        # The exit below is the point; nothing may stand in its way.
+        pass
     os._exit(exit_code)
 
 
