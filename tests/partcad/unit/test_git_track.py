@@ -612,7 +612,7 @@ def test_a_claim_goes_with_the_process_that_held_it(tmp_path, upstream, user_con
 
 
 def test_an_unpinned_copy_another_context_is_built_from_is_not_moved_under_it(tmp_path, upstream, user_config):
-    """'pc init' tracks the index with no pin yet: the commit it was downloaded at is the one it reads from."""
+    """'pc init' offline tracks the index with no pin yet: the commit it was downloaded at is the one it reads from."""
     write_package(tmp_path / "one", dependency(upstream, track="main"))
     one = pc.Context(str(tmp_path / "one"), search_root=False, user_config=user_config)
     assert one.get_project("//dep") is not None
@@ -707,6 +707,56 @@ def test_add_dep_adds_nothing_offline(tmp_path, upstream, user_config):
 
     assert not ok
     assert dependencies is None
+
+
+# ---- pc init --------------------------------------------------------------------
+
+INDEX_URL = "https://github.com/partcad/partcad-index.git"
+
+
+def initialized(tmp_path, user_config, upstream=None):
+    """Create a public package; the template's index is served by 'upstream', if given."""
+    if upstream is not None:
+        user_config.set("dependencies.overrides.url", {upstream.path.as_uri(): INDEX_URL})
+    config = tmp_path / "ws" / "partcad.yaml"
+    config.parent.mkdir()
+    assert pc.create_package(str(config), {"private": False}, user_config=user_config)
+    return config, yaml.safe_load(config.read_text())["dependencies"]["pub"]
+
+
+def test_init_pins_the_index_to_the_tip_of_main(tmp_path, upstream, user_config):
+    # As the real index is: its default branch is 'devel', which is ahead of or
+    # behind the released 'main' -- and 'main' is what a new package gets.
+    unreleased = upstream.repo.head.peel(pygit2.Commit)
+    released = upstream.commit("B")
+    upstream.repo.branches.local.create("devel", unreleased)
+    upstream.repo.set_head("refs/heads/devel")
+
+    config, pub = initialized(tmp_path, user_config, upstream)
+
+    # The URL the package is published with, not the one that answered.
+    assert pub == {"type": "git", "url": INDEX_URL, "track": "main", "revision": released}
+    # Written the way 'pc update' writes it, so the template's comments survive.
+    assert "track: main\n    revision: %s\n" % released in config.read_text()
+    assert "# Add dependencies here" in config.read_text()
+
+
+def test_init_offline_creates_the_package_tracking_main_unpinned(tmp_path, user_config, caplog):
+    user_config.offline = True
+
+    _, pub = initialized(tmp_path, user_config)
+
+    assert pub == {"type": "git", "url": INDEX_URL, "track": "main"}
+    assert "Run 'pc update' to pin it" in caplog.text
+
+
+def test_init_creates_the_package_unpinned_when_the_branch_cannot_be_found(tmp_path, upstream, user_config, caplog):
+    upstream.repo.branches.local["main"].rename("trunk")
+
+    _, pub = initialized(tmp_path, user_config, upstream)
+
+    assert "revision" not in pub and pub["track"] == "main"
+    assert "There is no branch 'main'" in caplog.text and "Run 'pc update' to pin it" in caplog.text
 
 
 def test_a_pin_the_remote_does_not_have_keeps_the_copy_and_says_why(tmp_path, upstream, user_config, caplog):

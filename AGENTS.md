@@ -172,6 +172,13 @@ Package-specific commands: `src/partcad/AGENTS.md`, `src/partcad_cli/AGENTS.md`,
 `src/partcad_service_json_rpc/AGENTS.md`, `src/partcad_ide_client/AGENTS.md`. Other components:
 `ide/vscode/AGENTS.md`, `ide/standalone/AGENTS.md`, `cad/freecad/AGENTS.md`.
 
+**Every pull request targets `devel`; nothing merges to `main`**, which only moves by fast-forward from `devel`
+and is the release (PyPI publishes from it). The same holds for `partcad/partcad-index`. A change that breaks
+packages in the index -- a key PartCAD stops accepting, a field read with a new meaning -- is made in the order
+"Branches, releases and breaking changes" in `docs/source/contributing.rst` gives: additive first, released, the
+index's packages migrated through the index's `devel`, the old form retired last. `examples/partcad.yaml` tracks
+the index's `main` unpinned on purpose, so CI notices; do not pin it.
+
 ### Where commands run
 
 **Validation and commits run inside the dev container, not on the host.** The container is the only environment

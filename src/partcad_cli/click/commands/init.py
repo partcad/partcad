@@ -196,11 +196,10 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
         # part of the package configuration either.
         config_options = {key: value for key, value in kwargs.items() if key != "interactive"}
         if pc.create_package(dst_path, config_options):
+            # The dependencies the template tracks are pinned already, to the
+            # commits their branches are at now -- or, where that could not be
+            # found out, a warning has said to run 'pc update'.
             pc.logging.info(f"Successfully created package at '{dst_path}'")
-            if not config_options.get("private"):
-                # Not done here, so that creating a package needs no network:
-                # the template's dependency tracks a branch and is not pinned.
-                pc.logging.info("Run 'pc update' to pin the dependencies it tracks to the commits they are at now")
             # A button to press next to the package that was just created: the
             # "Render" command, in the launch configuration of the repository
             # this was run in. It reports what it did, and a failure to add it

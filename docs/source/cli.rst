@@ -9,8 +9,8 @@ Common options, such as ``-v``/``-q`` (verbosity), ``--no-ansi`` (plain-text log
 
 ``--devel-index`` is one of those common options, and is worth calling out. The public index (the ``pub``
 dependency, published at `partcad-index <https://github.com/partcad/partcad-index>`_) lives in a repository of
-its own, and a package imports it at ``main``: the branch ``pc init`` has the dependency track, and the one
-``pc update`` pins it to the newest commit of. That is the released state. ``--devel-index`` imports
+its own, and a package imports it at ``main``: the branch ``pc init`` has the dependency track and pins to the
+commit it is at, and the one ``pc update`` moves that pin to the newest commit of. That is the released state. ``--devel-index`` imports
 its ``devel`` branch instead — the branch that a release fast-forwards ``main`` to — so a change staged there
 can be exercised before it is released. It replaces the revision a package names rather than deferring to it,
 which is what it exists to do. The redirect follows the repository rather than the dependency name, so it
@@ -241,6 +241,12 @@ Package commands
 ``pc init``
   Create a new PartCAD package (a ``partcad.yaml`` file) in the current directory. Use ``-i`` for interactive
   mode, and options such as ``--desc``, ``--url``, and ``--manufacturable`` to prefill package metadata.
+
+  Unless it is ``-p`` (private), the package depends on the public index as ``pub``, with ``track: main`` and
+  ``revision:`` pinned to the commit ``main`` is at as the package is created -- what ``pc add dep`` writes, so
+  the package builds the same way from its first commit on and ``pc update`` is what moves it (see
+  :ref:`pinning-dependencies`). With ``--offline``, or when the index cannot be reached, the package is still
+  created, without the ``revision:`` line, and a warning says to run ``pc update``.
 
   It also sets up the repository the package is in: a **Render** command in ``.vscode/launch.json``, and the
   AI agent skills that teach a coding agent to drive PartCAD -- the ``pc`` plugin in
