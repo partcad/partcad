@@ -752,6 +752,11 @@ class Resolution:
         self.thread_step = thread_step
         self.problems = []
         self.record = {}
+        # A ball's one bound, from the declaration that decided the freedoms
+        # (see '_resolve'); applied only to a joint that is a ball
+        # ('ball_bound').
+        self.turn_limit = None
+        self.turn_limit_from = None
         # The freedoms that follow another one (a screw's move), as
         # '(side, follower name, side, leader name, ratio)'.
         self.couplings = []
@@ -817,6 +822,23 @@ class Resolution:
             for level, motion, side in governing:
                 self._apply(level, motion, [side], side.to_contact, side)
 
+        # A ball's one bound bounds the freedoms its declaration implies, so it
+        # comes from a declaration that decided them - the connection's, the
+        # mating's, or the two interfaces' - and from nothing it overrides: an
+        # interface's bounded ball under 'connect: {motion: revolute}' is no
+        # bound on the revolute. Two interfaces stating two bounds for one ball
+        # are reported, and the target's is used.
+        deciding = governing[:1] if governing and governing[0][0] in (CONNECTION, MATING) else governing
+        bounds = [(motion, side) for _, motion, side in deciding if motion.type == pc_motion.BALL and motion.turn_limit]
+        for motion, side in bounds:
+            if self.turn_limit is None:
+                self.turn_limit, self.turn_limit_from = motion.turn_limit, motion.where
+            elif motion.turn_limit != self.turn_limit:
+                self.problems.append(
+                    "the two interfaces bound one ball by different angles (%g and %g degrees); the target's is used"
+                    % (self.turn_limit, motion.turn_limit)
+                )
+
         # What the declarations say about the joint as a whole - its soft limits
         # and what it mimics - comes from the most specific one that says it.
         # The two interfaces are one level, so between those two it is the
@@ -831,6 +853,25 @@ class Resolution:
                     self.problems.append(
                         "the two interfaces state different '%s' for one joint; the target's is used" % field
                     )
+
+    def ball_bound(self, joint) -> list:
+        """Give 'joint' its ball's one bound if it is a ball; the problems with it if it is not.
+
+        Called once the joint is composed and merged, since only then is it
+        known what the freedoms make: a ball declared on one interface and a
+        move on the other are a composite, which the ball's bound does not
+        bound. That bound is then dropped, and said to be.
+        """
+        if self.turn_limit is None:
+            return []
+        kind = joint.type
+        if kind == pc_motion.BALL:
+            joint.turn_limit = self.turn_limit
+            return []
+        return [
+            "%s: a ball's bound ('limits: {upper: %g}') bounds a ball, and this joint is a %s: it is not used"
+            % (self.turn_limit_from, self.turn_limit, kind)
+        ]
 
     def _apply(self, level, motion, sides, frame, default) -> None:
         """Mark what one 'motion:' declares free, on the sides it is resolved against."""

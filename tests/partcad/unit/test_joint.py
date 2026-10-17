@@ -403,6 +403,41 @@ def test_a_ball_s_one_bound_is_the_joint_s(tmp_path):
     assert joint.info()["turnLimit"] == "30 deg from its zero"
 
 
+def test_a_ball_s_bound_is_taken_only_from_what_decides_the_freedoms(tmp_path):
+    """An interface's bounded ball overridden by the connection bounds nothing (CodeRabbit on #804)."""
+    bore = "motion: {type: ball, limits: {upper: 30}}"
+    arm = _child(_rig(tmp_path / "revolute", _links("motion: revolute"), bore=bore), "arm")
+    joint = arm.joint
+    assert (joint.type, joint.turn_limit) == ("revolute", None)
+    assert "turnLimit" not in joint.to_envelope() and "turnLimit" not in joint.info()
+    assert arm.joint_problems == []
+    # And the connection's own unbounded ball is unbounded, whatever the interface said.
+    arm = _child(_rig(tmp_path / "ball", _links("motion: ball"), bore=bore), "arm")
+    assert (arm.joint.type, arm.joint.turn_limit) == ("ball", None)
+
+
+def test_a_ball_s_bound_on_what_is_no_ball_is_said_and_dropped(tmp_path):
+    # A ball on one interface and a move on the other: a composite, which the bound does not bound.
+    bore = "motion: {type: ball, limits: {upper: 30}}"
+    pin = "motion: {type: prismatic, limits: {lower: -5, upper: 5}}"
+    arm = _child(_rig(tmp_path, _links(), bore=bore, pin=pin), "arm")
+    assert (arm.joint.type, arm.joint.turn_limit) == ("composite", None)
+    (problem,) = arm.joint_problems
+    assert "a ball's bound ('limits: {upper: 30}') bounds a ball, and this joint is a composite" in problem
+    assert ("arm", problem) in asyncio.run(_reload(tmp_path).get_connect_problems())
+
+
+def test_two_interfaces_bounding_one_ball_differently_say_so(tmp_path):
+    # Two balls in series do not merge into one - the turns between them do not
+    # commute - so they are a composite as well, and the bound is dropped too.
+    bore = "motion: {type: ball, limits: {upper: 30}}"
+    pin = "motion: {type: ball, limits: {upper: 20}}"
+    arm = _child(_rig(tmp_path, _links(), bore=bore, pin=pin), "arm")
+    assert (arm.joint.type, arm.joint.turn_limit) == ("composite", None)
+    assert any("different angles (30 and 20 degrees); the target's is used" in p for p in arm.joint_problems)
+    assert any("'limits: {upper: 30}') bounds a ball, and this joint is a composite" in p for p in arm.joint_problems)
+
+
 def test_turns_bounded_one_by_one_are_named_in_dof(tmp_path):
     """What a ball cannot be, three turns each with its own range: not a ball, but a composite."""
     bore = "parameters: {turnX: [-30, 30], turnY: [-20, 20], turnZ: [-90, 90]}\nmotion: {dof: [turnX, turnY, turnZ]}"

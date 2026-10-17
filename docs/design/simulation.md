@@ -1435,8 +1435,11 @@ the text above left open. What the engine plugins build on is in `kinematics`' d
   had written no `continuous` since #788: a URDF continuous joint is a parameter with no range, which is how an open
   bound is stated.
 - **A ball's one bound** is the joint's `turnLimit` (degrees from its zero), from `limits: {upper: a}` with `0 < a <=
-  180`, a `lower` of nought allowed because it says the same. A ball matched to a parameter declared with a range is
-  an error and the turn is left open. Three turns through one point named in `dof` with a range of their own
+  180`, a `lower` of nought allowed because it says the same. It bounds the freedoms its declaration implies, so it is
+  taken only from a declaration that decides them -- the connection's, the mating's, or the two interfaces' -- and
+  given only to a joint that is a ball: an interface's bounded ball under `connect: {motion: revolute}` bounds
+  nothing, and one that combines with the other interface's move into a composite is reported and dropped. A ball
+  matched to a parameter declared with a range is an error and the turn is left open. Three turns through one point named in `dof` with a range of their own
   classify as a composite, which is what "declare the turns as a composite" in 8.13.3 needed to mean something.
 - **`universal`'s second axis** is the port's Y where `axis` is X, as the rule and not as a repair.
 - **A floating joint's order.** `toParams` puts the parameters it names first, so `motion: floating` posed by a turn

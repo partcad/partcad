@@ -484,12 +484,12 @@ class Motion:
     def joint_record(self) -> dict:
         """What this declaration says about the joint rather than about its freedoms.
 
-        A ball's one bound is the joint's ('turnLimit', degrees from its zero):
-        none of its three turns has it.
+        Not a ball's one bound ('turn_limit'), although it is the joint's and
+        none of its three turns': it bounds the freedoms this declaration
+        implies, so it is taken only from a declaration that decides them, and
+        only for a joint that is a ball ('partcad.joint.Resolution.turn_limit').
         """
         record = {}
-        if self.turn_limit is not None:
-            record["turnLimit"] = self.turn_limit
         if self.soft_limits:
             record["softLimits"] = dict(self.soft_limits)
         if self.mimic:

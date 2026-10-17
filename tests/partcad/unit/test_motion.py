@@ -121,14 +121,15 @@ def test_continuous_is_a_revolute_open_on_both_sides():
 def test_a_ball_is_bounded_by_one_angle():
     motion = Motion({"type": "ball", "limits": {"upper": 30}})
     assert motion.turn_limit == 30.0 and motion.problems == []
-    # It is the joint's, not any one turn's.
+    # It is the joint's, not any one turn's - and taken only from a declaration
+    # that decides the freedoms, so it is not in what every level contributes.
     assert all(not freedom.limited for freedom in motion.implied())
-    assert motion.joint_record() == {"turnLimit": 30.0}
+    assert motion.joint_record() == {}
     # MuJoCo spells it "0 a", and a lower bound of nought says the same.
     assert Motion({"type": "ball", "limits": {"lower": 0, "upper": 30}}).problems == []
     # Open, it is no bound at all.
     assert Motion({"type": "ball", "limits": {"upper": float("inf")}}).turn_limit is None
-    assert Motion("ball").joint_record() == {}
+    assert Motion("ball").turn_limit is None
 
 
 @pytest.mark.parametrize(

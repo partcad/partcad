@@ -1439,6 +1439,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 physics_source,
                 resolution.record,
             )
+            # A ball's one bound, if the joint is a ball.
+            problems.extend(resolution.ball_bound(joint))
             # A joint that starts against its own stop: an error, as a
             # contradiction in what the connection says is.
             problems.extend(pc_joint.outside_bounds(composition, joint.name))
