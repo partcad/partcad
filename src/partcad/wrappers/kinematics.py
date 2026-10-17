@@ -62,31 +62,44 @@ URDF and SDFormat to metres and radians, MJCF to metres and its own angles.
     'parts' (each a 'BodyPart' with 'node', 'name', 'label', 'physics',
     'placement' in the body's frame and 'world', which is
     'compose(body.world, placement)'); 'parent' (a Body, 'WORLD', or None for a
-    free root); 'fixed_to_world'; 'joint' (a 'Joint', or None for a root);
+    free body); 'fixed_to_world'; 'joint' (a 'Joint', or None for a root);
     'children'; 'physics' (the combined physics dict, or None when nothing in it
     weighs anything); 'displacement' ('mass_properties.displacement_of()' of its
     parts, or None); and 'mass_parts()', the (physics, packed placement) pairs
     'physics' was combined from.
+
+    **A floating body.** The child of a FLOATING joint is held by nothing: its
+    'parent' is None, as a free root's is, and it is in no body's 'children'.
+    It keeps its 'joint', whose 'parent' is the body it was connected to
+    ('joint_parent'), because that is what its pose is read against: a
+    reading of the joint is the child's pose in that body ('reading').
+    'is_floating' says which bodies these are. Every engine writes one as a
+    free body of its own -- MJCF a body directly in the '<worldbody>' with a
+    '<freejoint>', SDFormat a link with no joint in a model of its own -- and
+    the URDF exporter as a 'floating' joint from that body's link, URDF's
+    spelling of the same thing.
 
 ``Joint``
     The joint of a body to its parent, re-expressed for that pair: its 'steps'
     are the node's joint steps with, in front of them, the target node's frame
     in the parent body (a fixed step of role 'parentFrame', left out where it is
     the identity), so that the child body's frame is the parent body's times
-    their product. 'name', 'physics', 'soft_limits', 'mimic' and 'record' (the
-    node's joint as the tree stated it) come with it, and 'freedoms' is the free
+    their product. 'name', 'physics', 'soft_limits', 'mimic', 'turn_limit' (a
+    ball's one bound, degrees from its zero, or None) and 'record' (the node's
+    joint as the tree stated it) come with it, and 'freedoms' is the free
     steps as 'Freedom's: 'kind' (TURN or MOVE), 'axis' (a unit vector, in the
     frame the steps before it leave), 'lower'/'upper' (degrees, or millimetres
-    along the axis; None where unlimited), 'value' (the starting value, same
+    along the axis; None where open), 'value' (the starting value, same
     units), 'follows'/'ratio'/'offset' (a coupling: 'value = ratio * leader +
     offset', in those units), 'step' (its index in 'steps'), 'parameter' and
-    'source' (what declared it). The frames an exporter needs, every one a pose
-    or a vector in millimetres:
+    'source' (what declared it). 'parameter_names()' is what each freedom is
+    called in a reading, unique within the joint. The frames an exporter
+    needs, every one a pose or a vector in millimetres:
 
       origin                 the first freedom's frame in the parent body
       origins                each freedom's frame relative to the frame the one
                              before it leaves (the first's: the parent body) --
-                             a URDF chain through dummy links, one per freedom
+                             a URDF chain, one link per freedom
       tail                   the child body's frame relative to the frame the
                              last freedom leaves: where the child body sits in
                              the *moving* joint frame
@@ -108,30 +121,75 @@ URDF and SDFormat to metres and radians, MJCF to metres and its own angles.
 
 ``classify(joint) -> Classification``
     What the free steps of a joint (a 'Joint', a node's joint as the tree states
-    it, or a list of steps) are, as one of REVOLUTE (a turn with a bound on
-    either side), CONTINUOUS (a turn with none), PRISMATIC, CYLINDRICAL, SCREW,
-    UNIVERSAL, BALL, PLANAR, FLOATING, or CHAIN for anything else -- and FIXED
-    for steps with nothing free, which a body's joint never is. Beside the kind:
-    'freedoms'; 'origin', the native joint's frame in the frame the steps start
-    in, with every freedom at zero; per freedom its 'axes' (unit vectors) and
-    'points' in that frame; and 'tail', the child's frame relative to it, so
-    that the location at any values is
+    it, or a list of steps) are: exactly one of the canonical set of section
+    8.13.3 of the design record --
+
+      REVOLUTE     one turn, bounded on either side or on neither
+      PRISMATIC    one move, likewise
+      CYLINDRICAL  a turn and a move on one line, uncoupled, in either order
+      SCREW        the same, the move following the turn
+      UNIVERSAL    two turns whose lines cross; the first is fixed in the parent
+      BALL         three independent turns through one point, in any order, none
+                   bounded on its own: a ball is bounded by one angle, the
+                   joint's 'turn_limit'
+      PLANAR       two moves and the turn about their normal, the moves first or
+                   the turn first
+      FLOATING     three independent moves one after another, and three
+                   independent turns through one point, in any order
+      COMPOSITE    anything else: the chain of bodies a declaration leaves out
+                   (an XY stage's carriage, a gimbal's ring)
+
+    -- and FIXED for steps with nothing free, which a body's joint never is.
+    Beside the kind: 'freedoms'; 'origin', the native joint's frame in the
+    frame the steps start in, with every freedom at zero; per freedom its
+    'axes' (unit vectors) and 'points' in that frame; and 'tail', the child's
+    frame relative to it, so that the location at any values is
 
         origin . M_1(v_1) . M_2(v_2) ... M_n(v_n) . tail
 
     where M_i turns about, or moves along, axis i through point i, each in the
     frame the ones before it moved -- MJCF's joints-in-one-body, and URDF's and
-    SDFormat's single-axis joints. For every kind but CHAIN the points are the
-    origin, so a native joint sits at 'origin': a ball's centre, a universal
-    joint's crossing, a screw's or a planar joint's axis. See section 8.8 of the
-    design record for which format writes what.
+    SDFormat's single-axis joints. For every kind but COMPOSITE the points are
+    the origin, so a native joint sits at 'origin': a ball's centre, a
+    universal joint's crossing, a screw's or a planar joint's axis. See
+    section 8.13.4 of the design record for which format writes what, and
+    which refuses what.
+
+``rezeroed(joint) -> Rezeroed``
+    The joint re-expressed so that an engine's zero is PartCAD's start, for an
+    engine that has no starting value of its own (SDFormat; an MJCF ball):
+    the child is written where the assembly shows it, and every quantity
+    stated about a position shifts by the start, 'e = v - s' (section 8.13.5).
+    In series ('origins', 'tail', 'location(values)'), as one native joint of
+    several freedoms ('origin', 'native_tail', 'native_location(values)'), as
+    a ball ('origin', 'rotation' -- R_s --, 'ball_location(rotation)'), and as
+    a free body, written at its start. 'freedoms' are the freedoms with their
+    bounds, value and coupling offsets shifted; 'spring_reference(i)',
+    'soft_limits(i)' and 'rezeroed_offset()' (a 'mimic''s, between two joints)
+    shift the rest. See 'Rezeroed'. URDF is not re-zeroed: what reads one takes
+    joint zero to be the hardware's, so the URDF exporter keeps PartCAD's.
+
+``joint_map(joint, freedoms=None, start=True, frame=None, followers=None) -> dict``
+    What one engine joint written for 'joint' is -- which PartCAD joint and
+    parameters, the kind, the unit factor, the start 's' or 'R_s', and a free
+    body's parent -- as plain data for the names sidecar's joint entry
+    ('"map"', 'naming.write_sidecar'), which is how a run reads the engine's
+    values back without knowing how the exporter wrote anything.
+
+``reading(entries, positions, velocities=None) -> dict``
+    One PartCAD joint's reading, from the maps of the engine joints it was
+    written as and the engine's values of each: keyed by PartCAD's joint
+    name, in PartCAD's units -- a number for a joint of one freedom, an object
+    keyed by parameter for several, 'quat' too for a ball or a free body.
+    'turns_of(rotation, axes)' is the decomposition of a rotation into three
+    turns it uses, and 'per_si(kind)' the unit factor.
 
 The classification table is the design record's, and the order of the freedoms
-is part of it: a planar joint is two moves *then* the turn about their normal,
-which is what 'motion: planar' implies and what a native planar joint means, and
-the other order is a chain. A coupling makes a pair a screw when the two lie on
-one axis and a chain otherwise; a 'mimic' is between joints and is the
-exporter's to write.
+is part of it only where it changes what the joint is: a planar joint is its
+two moves and its turn in either order, the same pair in other coordinates, and
+a floating one its six in any order that keeps its three moves together. A coupling makes a pair a screw when
+the two lie on one axis and a composite otherwise; a 'mimic' is between joints
+and is the exporter's to write.
 
 Placements. A part's 'world' is defined as its body's frame times its placement
 in the body, so the two always multiply to it exactly; what the tree states,
@@ -180,11 +238,12 @@ WORLD = "world"
 TURN = "turn"
 MOVE = "move"
 
-# What a joint's free steps are (see 'classify'). The names are the design
-# record's, which are 'motion.type''s, plus the two that only describe a result.
+# What a joint's free steps are (see 'classify'): one native type per physical
+# joint (docs/design/simulation.md, section 8.13.3), which are 'motion.type''s,
+# plus the two that only describe a result -- 'fixed', steps with nothing free,
+# and 'composite', a set of freedoms no native joint has.
 FIXED = "fixed"
 REVOLUTE = "revolute"
-CONTINUOUS = "continuous"
 PRISMATIC = "prismatic"
 CYLINDRICAL = "cylindrical"
 SCREW = "screw"
@@ -192,7 +251,15 @@ UNIVERSAL = "universal"
 BALL = "ball"
 PLANAR = "planar"
 FLOATING = "floating"
-CHAIN = "chain"
+COMPOSITE = "composite"
+NATIVE = (REVOLUTE, PRISMATIC, CYLINDRICAL, SCREW, UNIVERSAL, BALL, PLANAR, FLOATING)
+
+# Kept only until partcad-sim-mujoco and partcad-sim-gazebo stop using them, and
+# to be removed then: both plugins import this module, and their CI installs
+# PartCAD from 'devel'. 'classify()' never returns CONTINUOUS -- one turn is a
+# REVOLUTE whatever its bounds -- and CHAIN is COMPOSITE under its old name.
+CONTINUOUS = "continuous"
+CHAIN = COMPOSITE
 
 # The role of the fixed step a body's joint starts with: where the node it is
 # connected to sits in the parent body (see 'Joint').
@@ -476,6 +543,8 @@ class Joint:
         self.physics = dict(record.get("physics") or {})
         self.soft_limits = record.get("softLimits")
         self.mimic = record.get("mimic")
+        # A ball's one bound, in degrees: how far it turns from its zero.
+        self.turn_limit = _number(record.get("turnLimit"))
 
         steps = []
         if parent_frame is not None and parent_frame != IDENTITY:
@@ -518,6 +587,23 @@ class Joint:
     def origin(self):
         """The first freedom's frame in the frame the steps start in, or None with nothing free."""
         return self.origins[0] if self.origins else None
+
+    def parameter_names(self) -> list:
+        """What each freedom is called in a reading of the joint, by index: unique within the joint.
+
+        Its parameter ('turnZ', or 'turnZ+turnZ' for two summed into one), or
+        its kind and index where no parameter declared it ('turn0'); a name a
+        freedom before it took is told apart as names are elsewhere ('-2', ...).
+        """
+        names = []
+        for freedom in self.freedoms:
+            base = freedom.parameter or "%s%d" % (freedom.kind, freedom.index)
+            name, suffix = base, 2
+            while name in names:
+                name = "%s-%d" % (base, suffix)
+                suffix += 1
+            names.append(name)
+        return names
 
     def values(self, values=None) -> list:
         """The freedoms' values: the starting ones, with 'values' laid over them."""
@@ -681,51 +767,76 @@ def _independent(axes) -> bool:
     return abs(_dot(axes[0], _cross(axes[1], axes[2]))) > TOLERANCE
 
 
+def _moves_across(moves, normal) -> bool:
+    """Whether two moves span the plane across 'normal': not parallel, and each square to it."""
+    return (
+        not _parallel(moves[0], moves[1])
+        and abs(_dot(moves[0], normal)) <= TOLERANCE
+        and abs(_dot(moves[1], normal)) <= TOLERANCE
+    )
+
+
 def _kind(freedoms, axes, points):
     """The kind of a set of freedoms, and the point a native joint of it is centred on (or None)."""
     kinds = [freedom.kind for freedom in freedoms]
     coupled = [freedom for freedom in freedoms if freedom.follows is not None]
     count = len(freedoms)
     if count == 1:
-        if kinds[0] == TURN:
-            return (REVOLUTE if freedoms[0].limited else CONTINUOUS), None
-        return PRISMATIC, None
+        # One turn is a revolute whatever its bounds: a bound on either side,
+        # or on neither, is a property of the hinge and not a second kind.
+        return (REVOLUTE if kinds[0] == TURN else PRISMATIC), None
     if count == 2 and sorted(kinds) == [MOVE, TURN]:
         turn = 0 if kinds[0] == TURN else 1
         if not _parallel(axes[0], axes[1]):
-            return CHAIN, None
+            return COMPOSITE, None
         centre = _closest_to_origin(points[turn], axes[turn])
         if not coupled:
             return CYLINDRICAL, centre
         if len(coupled) == 1 and coupled[0].follows == freedoms[1 - coupled[0].index].index:
             return SCREW, centre
-        return CHAIN, None
+        return COMPOSITE, None
     if coupled:
         # A coupled freedom is not a freedom of its own, and only a screw is a
         # native joint with one in it.
-        return CHAIN, None
+        return COMPOSITE, None
     if count == 2 and kinds == [TURN, TURN]:
         centre = _meet(points[0], axes[0], points[1], axes[1])
-        return (UNIVERSAL, centre) if centre is not None else (CHAIN, None)
+        return (UNIVERSAL, centre) if centre is not None else (COMPOSITE, None)
     if count == 3 and kinds == [TURN, TURN, TURN] and _independent(axes):
         centre = _meet(points[0], axes[0], points[1], axes[1])
-        if centre is not None and _on_line(centre, points[2], axes[2]):
-            return BALL, centre
-        return CHAIN, None
-    if count == 3 and kinds == [MOVE, MOVE, TURN]:
-        normal = axes[2]
+        if centre is None or not _on_line(centre, points[2], axes[2]):
+            return COMPOSITE, None
+        if any(freedom.limited for freedom in freedoms):
+            # A ball is bounded by one angle, how far it turns from its zero
+            # (the joint's 'turn_limit'), and not turn by turn: three turns
+            # through a point each bounded on its own are the gimbal a ball
+            # has not got, which is what a composite is.
+            return COMPOSITE, None
+        return BALL, centre
+    if count == 3 and kinds == [MOVE, MOVE, TURN] and _moves_across(axes[:2], axes[2]):
+        # A planar joint, the moves first: its turn is about the line it is on.
+        return PLANAR, _closest_to_origin(points[2], axes[2])
+    if count == 3 and kinds == [TURN, MOVE, MOVE] and _moves_across(axes[1:], axes[0]):
+        # The same pair in the other order, the turn first: the moves are then
+        # across the plane in the frame the turn left, which is the same plane.
+        return PLANAR, _closest_to_origin(points[0], axes[0])
+    if count == 6 and sorted(kinds) == [MOVE] * 3 + [TURN] * 3:
+        # Six freedoms that hold nothing, in whatever order they were declared
+        # (a 'dof' list may name the turns first, and a reader of another
+        # format may state them so): three moves one after another, so that no
+        # turn between two of them can turn one onto the other, and three
+        # turns about lines through one point. Anything else is a composite.
+        moves = [index for index, kind in enumerate(kinds) if kind == MOVE]
+        turns = [index for index, kind in enumerate(kinds) if kind == TURN]
         if (
-            not _parallel(axes[0], axes[1])
-            and abs(_dot(axes[0], normal)) <= TOLERANCE
-            and abs(_dot(axes[1], normal)) <= TOLERANCE
+            moves == list(range(moves[0], moves[0] + 3))
+            and _independent([axes[i] for i in moves])
+            and _independent([axes[i] for i in turns])
         ):
-            return PLANAR, _closest_to_origin(points[2], normal)
-        return CHAIN, None
-    if count == 6 and kinds == [MOVE] * 3 + [TURN] * 3 and _independent(axes[:3]) and _independent(axes[3:]):
-        centre = _meet(points[3], axes[3], points[4], axes[4])
-        if centre is not None and _on_line(centre, points[5], axes[5]):
-            return FLOATING, centre
-    return CHAIN, None
+            centre = _meet(points[turns[0]], axes[turns[0]], points[turns[1]], axes[turns[1]])
+            if centre is not None and _on_line(centre, points[turns[2]], axes[turns[2]]):
+                return FLOATING, centre
+    return COMPOSITE, None
 
 
 def _classify(joint) -> Classification:
@@ -748,7 +859,7 @@ def _classify(joint) -> Classification:
     kind, centre = _kind(freedoms, axes, points)
     centre = _ORIGIN if centre is None else centre
     origin = compose(joint.origins[0], translation(centre))
-    if kind == CHAIN:
+    if kind == COMPOSITE:
         # Each turn's line by its point nearest the origin; a move has no line,
         # only a direction.
         points = [
@@ -761,6 +872,724 @@ def _classify(joint) -> Classification:
         points = [_ORIGIN] * len(freedoms)
     tail = compose(translation((-centre[0], -centre[1], -centre[2])), prefix)
     return Classification(kind, freedoms, origin, axes, points, tail)
+
+
+#
+# Starting values: re-zeroing, the joint map, and readings
+#
+
+# PartCAD units per SI unit of a freedom: degrees a radian, millimetres a metre.
+# What every engine's joint coordinates are in (MuJoCo's 'qpos' is radians
+# whatever '<compiler angle>' says, which converts only what the file states).
+DEGREES_PER_RADIAN = math.degrees(1.0)
+MILLIMETRES_PER_METRE = urdf_common.MM_PER_M
+
+# The frame an engine may state a ball's rotation in, for 'joint_map': the child
+# body's own, which is MuJoCo's (a ball's frame there is its body's).
+CHILD_FRAME = "child"
+
+
+def per_si(kind) -> float:
+    """PartCAD units per SI unit of a freedom of 'kind': degrees a radian, or millimetres a metre."""
+    return DEGREES_PER_RADIAN if kind == TURN else MILLIMETRES_PER_METRE
+
+
+def _shifted(bound, start):
+    return None if bound is None else bound - start
+
+
+def _conjugate(q):
+    return (q[0], -q[1], -q[2], -q[3])
+
+
+def _turned(q, by):
+    """'q' seen from a frame turned by 'by': by . q . by^-1."""
+    return urdf_common.quat_mul(urdf_common.quat_mul(by, q), _conjugate(by))
+
+
+def _product(kinds, axes, values):
+    """The motions of freedoms about or along axes through the origin, one after another."""
+    pose = IDENTITY
+    for kind, axis, value in zip(kinds, axes, values):
+        moved = motion(kind, axis, value)
+        if moved is not None:
+            pose = compose(pose, moved)
+    return pose
+
+
+def _commute(kind_a, axis_a, kind_b, axis_b) -> bool:
+    """Whether two freedoms about or along lines through one point move the same way in either order."""
+    if kind_a == MOVE and kind_b == MOVE:
+        return True
+    return bool(_parallel(axis_a, axis_b))
+
+
+def _split(kinds, axes):
+    """How many leading freedoms of a native joint take their start into its frame, or None.
+
+    The starts of the freedoms before the split go into the joint frame and
+    those after it into the child's, which is right where each side is a set of
+    freedoms that commute with one another: a start in front has to move past
+    the engine's motions of the freedoms before it, and one behind past those
+    after it. The most that can go in front, so that a screw's or a
+    cylindrical's two starts are both in the joint frame, a universal joint's
+    first is and its second is not, and a planar joint's turn is wherever its
+    order puts it -- never in front of moves it does not commute with.
+    """
+    count = len(kinds)
+
+    def commuting(indices):
+        return all(_commute(kinds[i], axes[i], kinds[j], axes[j]) for i in indices for j in indices if i < j)
+
+    for split in range(count, -1, -1):
+        if commuting(range(split)) and commuting(range(split, count)):
+            return split
+    return None
+
+
+class RezeroedFreedom:
+    """One freedom of a joint as an engine whose zero is PartCAD's start states it.
+
+    The same fields as a 'Freedom' -- 'index', 'step', 'kind', 'axis',
+    'parameter', 'source', 'follows' and 'ratio' -- with every quantity that is
+    a position of the freedom shifted by 'start', its starting value: 'value'
+    (nought, where it starts), 'lower' and 'upper' (an open side stays open)
+    and the coupling's 'offset', which keeps 'value = ratio * leader + offset'
+    true in the engine's terms.
+    """
+
+    def __init__(self, freedom, starts):
+        self.index = freedom.index
+        self.step = freedom.step
+        self.kind = freedom.kind
+        self.axis = freedom.axis
+        self.scale = freedom.scale
+        self.parameter = freedom.parameter
+        self.source = freedom.source
+        self.start = freedom.value
+        self.value = 0.0
+        self.lower = _shifted(freedom.lower, freedom.value)
+        self.upper = _shifted(freedom.upper, freedom.value)
+        self.follows = freedom.follows
+        self.ratio = freedom.ratio
+        self.offset = None
+        if freedom.follows is not None:
+            self.offset = rezeroed_offset(freedom.offset or 0.0, freedom.ratio, starts[freedom.follows], freedom.value)
+
+    @property
+    def limited(self) -> bool:
+        return self.lower is not None or self.upper is not None
+
+    def motion(self, value=None):
+        return motion(self.kind, self.axis, self.value if value is None else value)
+
+    def __repr__(self):
+        return "<RezeroedFreedom %d %s from %s [%s, %s]>" % (self.index, self.kind, self.start, self.lower, self.upper)
+
+
+def rezeroed_offset(offset, multiplier, leader_start, follower_start) -> float:
+    """A coupling's offset in the terms of an engine whose zero is PartCAD's start.
+
+    'value_f = multiplier * value_l + offset' in PartCAD's values is
+    'e_f = multiplier * e_l + (offset + multiplier * s_l - s_f)' in the
+    engine's, 'e = value - s' (section 8.13.5). For a screw's move within one
+    joint, and for a 'mimic' between two, whose starts are each joint's.
+    """
+    return float(offset) + float(multiplier) * float(leader_start) - float(follower_start)
+
+
+class Rezeroed:
+    """A joint re-expressed so that an engine's zero is PartCAD's start (docs/design/simulation.md, 8.13.5).
+
+    Where an engine has no starting value of its own -- SDFormat, an MJCF ball
+    -- the joint is written so that the engine's zero *is* where the assembly
+    shows it: the child at its start, and every axis where that configuration
+    puts it. The engine's value of a freedom is then 'e = v - s', 's' its
+    start, and everything stated about a position shifts with it. Two ways to
+    write the same joint, and both are here:
+
+    **Joints in series** -- one single-axis joint per freedom, MJCF's joints in
+    one body or a chain of URDF or SDFormat joints. Each absorbs its own start:
+    'origins[i]' is 'joint.origins[i] . M_i(s_i)', freedom i's frame against
+    the one before at the engine's zero, and 'tail' is the joint's own. Every
+    axis keeps its components in its frame. 'location(values)' multiplies
+    them back out.
+
+    **One native joint** -- a joint of several freedoms written as one (an
+    SDFormat universal or screw, a URDF planar). 'origin' is the native joint's
+    frame ('classification.origin') with the starts of the freedoms that
+    commute with every freedom before them absorbed in front, and
+    'native_tail' the child's frame in its moving frame with the rest absorbed
+    behind: a universal joint's first turn in front and its second behind; a
+    planar joint's moves in front of its turn, or its turn in front of its
+    moves, as its order has them, and never a turn in front of moves it does
+    not commute with -- which would turn the engine's moves against PartCAD's.
+    The axes are 'classification.axes', unchanged. 'native_location(values)'
+    multiplies it back out. For a joint of one freedom the two ways agree.
+
+    **A ball** is a rotation, not three turns: 'origin' is its frame turned by
+    'rotation', the starting rotation R_s (a quaternion, 'w x y z'), so that
+    the engine's rotation R_e is the turn away from the start and PartCAD's is
+    R_s . R_e. 'native_tail' is the classification's. 'ball_location(R_e)'
+    multiplies it back out.
+
+    **A free body** (FLOATING) is written at its start, and its pose is the
+    engine's coordinates: 'origin' is the native frame moved and turned to the
+    start (so 'origin . native_tail' is where the child starts), and
+    'rotation' the turns' start. A reading of it is its pose against its
+    parent's ('reading').
+
+    'freedoms' are 'RezeroedFreedom's: bounds, value and couplings shifted.
+    'starts' are the starting values themselves, by index.
+    """
+
+    def __init__(self, joint):
+        self.joint = joint
+        classification = joint.classification
+        self.kind = classification.kind
+        freedoms = joint.freedoms
+        self.starts = [freedom.value for freedom in freedoms]
+        self.freedoms = [RezeroedFreedom(freedom, self.starts) for freedom in freedoms]
+
+        # In series: each freedom's frame absorbs its own start.
+        self.origins = [
+            compose(origin, freedom.motion() or IDENTITY) for origin, freedom in zip(joint.origins, freedoms)
+        ]
+        self.tail = joint.tail
+
+        self.rotation = None
+        self.split = None
+        kinds = [freedom.kind for freedom in freedoms]
+        axes = classification.axes
+        if not freedoms:
+            self.origin, self.native_tail = None, joint.tail
+        elif self.kind == BALL:
+            self.rotation = _product(kinds, axes, self.starts)[0]
+            self.origin = compose(classification.origin, (self.rotation, urdf_common.IDENTITY_T))
+            self.native_tail = classification.tail
+        elif self.kind == FLOATING:
+            turns = [index for index, kind in enumerate(kinds) if kind == TURN]
+            self.rotation = _product([TURN] * len(turns), [axes[i] for i in turns], [self.starts[i] for i in turns])[0]
+            self.origin = compose(classification.origin, _product(kinds, axes, self.starts))
+            self.native_tail = classification.tail
+        elif self.kind == COMPOSITE:
+            # No native joint: the series is the only way to write it.
+            self.origin, self.native_tail = self.origins[0], self.tail
+        else:
+            self.split = _split(kinds, axes)
+            front, back = range(self.split), range(self.split, len(freedoms))
+            self.origin = compose(
+                classification.origin, _product([kinds[i] for i in front], [axes[i] for i in front], self.starts)
+            )
+            self.native_tail = compose(
+                _product([kinds[i] for i in back], [axes[i] for i in back], [self.starts[i] for i in back]),
+                classification.tail,
+            )
+
+    def _values(self, values):
+        if values is None:
+            return [0.0] * len(self.freedoms)
+        if isinstance(values, dict):
+            result = [0.0] * len(self.freedoms)
+            for index, value in values.items():
+                result[index] = float(value)
+            return result
+        return [float(value) for value in values]
+
+    def location(self, values=None):
+        """The child's frame in the frame the steps start in, at the engine's values in series (PartCAD units)."""
+        pose = IDENTITY
+        for origin, freedom, value in zip(self.origins, self.freedoms, self._values(values)):
+            pose = compose(compose(pose, origin), freedom.motion(value) or IDENTITY)
+        return compose(pose, self.tail)
+
+    def native_location(self, values=None):
+        """The same, written as one native joint about 'classification.axes' from 'origin'.
+
+        None for a ball and a free body, whose engine coordinates are a
+        rotation and a pose ('ball_location'); a composite, which is no native
+        joint, is its series.
+        """
+        if self.kind in (BALL, FLOATING, COMPOSITE):
+            return self.location(values) if self.kind == COMPOSITE else None
+        kinds = [freedom.kind for freedom in self.freedoms]
+        moved = _product(kinds, self.joint.classification.axes, self._values(values))
+        return compose(compose(self.origin, moved), self.native_tail)
+
+    def ball_location(self, rotation):
+        """A ball's child frame at the engine's rotation 'rotation' (a quaternion: the turn away from its start)."""
+        return compose(compose(self.origin, (tuple(rotation), urdf_common.IDENTITY_T)), self.native_tail)
+
+    def spring_reference(self, index):
+        """The joint's 'springReference', for freedom 'index', in the engine's terms; None where it states none."""
+        reference = _number(self.joint.physics.get("springReference"))
+        return None if reference is None else reference - self.starts[index]
+
+    def soft_limits(self, index):
+        """The joint's 'softLimits' for freedom 'index' in the engine's terms, or None: the bounds shifted."""
+        soft = self.joint.soft_limits
+        if not isinstance(soft, dict) or not soft:
+            return None
+        shifted = dict(soft)
+        for side in ("lower", "upper"):
+            value = _number(soft.get(side))
+            if value is not None:
+                shifted[side] = value - self.starts[index]
+        return shifted
+
+    def __repr__(self):
+        return "<Rezeroed %s from %s>" % (self.kind, self.starts)
+
+
+def rezeroed(joint) -> Rezeroed:
+    """'joint' (a 'Joint', a node's joint as the tree states it, or its steps) re-zeroed at its start."""
+    if not isinstance(joint, Joint):
+        joint = Joint({"steps": list(joint)} if isinstance(joint, (list, tuple)) else joint)
+    return Rezeroed(joint)
+
+
+def _pose_data(pose):
+    return [list(pose[0]), list(pose[1])]
+
+
+def _pose_of_data(data):
+    return (tuple(float(v) for v in data[0]), tuple(float(v) for v in data[1]))
+
+
+def joint_map(joint, freedoms=None, start=True, frame=None, followers=None) -> dict:
+    """What one engine joint written for 'joint' is, for a run to read it back by: a sidecar's 'map'.
+
+    The exporter that writes a joint knows which engine joint holds which of
+    its freedoms and whether the engine's zero is PartCAD's start; the run that
+    reads the engine's values knows neither. This is what it needs, as plain
+    data, so that it travels in the names sidecar beside the joint's names
+    ('naming.write_sidecar', each joint entry's "map"; section 8.13.5 of
+    docs/design/simulation.md) and 'reading()' turns the engine's values into
+    PartCAD's. Computed here, once, so that no plugin carries a copy.
+
+    'freedoms' are the indices of the joint's freedoms the engine joint has as
+    its coordinates, in its own order: one for a hinge or a slide, two for an
+    SDFormat universal. None means one native joint for the whole, whose
+    coordinates are its freedoms that follow nothing -- but a screw's, which
+    is its turn whichever of its two leads (8.13.3: a screw is read by its
+    turn, as SDFormat's screw is). 'followers' are the indices of the
+    freedoms that move with those coordinates and are no coordinate of any
+    engine joint -- an SDFormat screw's move; by default, where 'freedoms' is
+    None, every freedom that follows a coordinate or that a coordinate
+    follows, and none otherwise. A follower is written as what it is in terms
+    of the coordinate it moves with: the coupling as it stands where it
+    follows the coordinate, and turned round ('value = (coordinate - offset)
+    / ratio') where the coordinate follows it. Indices that name no freedom,
+    and a follower coupled to no coordinate, raise ValueError.
+
+    'start' says whether the engine's zero is PartCAD's start -- a joint
+    re-zeroed ('rezeroed()'), as SDFormat's and an MJCF ball are -- or
+    PartCAD's zero, as an MJCF hinge's is, whose 'ref' makes MuJoCo's value
+    PartCAD's. 'frame' is, for a ball, the frame the engine states its rotation
+    in: None for the ball's own joint frame, CHILD_FRAME for the child body's
+    (MuJoCo's), or a quaternion turning the joint frame into it.
+
+    The entry, every quantity in PartCAD's units unless it says otherwise::
+
+        {"joint": "<PartCAD joint>", "kind": "<classify() kind>", "freedoms": <how many it has>,
+         "coordinates": [{"parameter", "freedom": "turn"|"move", "factor", "start"}, ...],
+         "followers":   [{"parameter", "freedom", "follows": "<parameter>", "ratio", "offset"}, ...]}
+
+    'factor' is PartCAD units per engine unit (degrees a radian, millimetres a
+    metre) and 'start' what to add after it: the freedom's start where the
+    engine was re-zeroed, nought where it was not. A follower is 'ratio *
+    leader + offset' in PartCAD's values. A ball adds
+    ``"rotation": [w, x, y, z]`` (R_s, or the identity where it was not
+    re-zeroed), ``"frame": [w, x, y, z]`` and ``"turns": [{"parameter",
+    "axis", "start"}, ...]``, its three turns' axes in its joint frame, which
+    its rotation is reported in. A free body adds ``"parent": "<PartCAD
+    body>"``, ``"origin"`` and ``"tail"`` (the native joint's frame in the
+    parent body at PartCAD's zero, and the child's in its moving frame, as
+    '[[w, x, y, z], [x, y, z]]' in millimetres), ``"length": 1000.0``
+    (millimetres per engine unit of a pose), and ``"sequence": [{"parameter",
+    "freedom", "axis", "start"}, ...]``, its six freedoms in the order they
+    apply, its three moves one after another.
+    """
+    if not isinstance(joint, Joint):
+        joint = Joint(joint)
+    classification = joint.classification
+    kind = classification.kind
+    names = joint.parameter_names()
+    entry = {"joint": joint.name, "kind": kind, "freedoms": len(joint.freedoms)}
+    shifted = rezeroed(joint)
+
+    def axes_of(indices):
+        return [
+            {
+                "parameter": names[i],
+                "axis": list(classification.axes[i]),
+                "start": joint.freedoms[i].value,
+            }
+            for i in indices
+        ]
+
+    if kind == BALL:
+        if frame == CHILD_FRAME:
+            frame = shifted.native_tail[0]
+        entry["rotation"] = list(shifted.rotation if start else urdf_common.IDENTITY_Q)
+        entry["frame"] = list(frame if frame is not None else urdf_common.IDENTITY_Q)
+        entry["turns"] = axes_of(range(3))
+        return entry
+    if kind == FLOATING:
+        parent = joint.parent
+        entry["parent"] = parent.name if isinstance(parent, Body) else parent
+        entry["origin"] = _pose_data(classification.origin)
+        entry["tail"] = _pose_data(classification.tail)
+        entry["length"] = MILLIMETRES_PER_METRE
+        entry["sequence"] = [
+            dict(axis, freedom=joint.freedoms[index].kind) for index, axis in enumerate(axes_of(range(6)))
+        ]
+        return entry
+
+    count = len(joint.freedoms)
+    if freedoms is None:
+        if kind == SCREW:
+            indices = [freedom.index for freedom in joint.freedoms if freedom.kind == TURN]
+        else:
+            indices = [freedom.index for freedom in joint.freedoms if freedom.follows is None]
+        if followers is None:
+            followers = [
+                freedom.index
+                for freedom in joint.freedoms
+                if freedom.index not in indices
+                and (freedom.follows in indices or any(joint.freedoms[i].follows == freedom.index for i in indices))
+            ]
+    else:
+        indices = [int(index) for index in freedoms]
+    followers = [int(index) for index in followers or []]
+    for index in indices + followers:
+        if not 0 <= index < count:
+            raise ValueError("The joint '%s' has %d freedoms, and no freedom %d" % (joint.name, count, index))
+    entry["coordinates"] = [
+        {
+            "parameter": names[i],
+            "freedom": joint.freedoms[i].kind,
+            "factor": per_si(joint.freedoms[i].kind),
+            "start": joint.freedoms[i].value if start else 0.0,
+        }
+        for i in indices
+    ]
+    entry["followers"] = [_follower(joint, names, index, indices) for index in followers]
+    return entry
+
+
+def _follower(joint, names, index, coordinates):
+    """A freedom that moves with one of an engine joint's coordinates, as that coordinate's function."""
+    freedom = joint.freedoms[index]
+    if freedom.follows is not None and freedom.follows in coordinates:
+        return {
+            "parameter": names[index],
+            "freedom": freedom.kind,
+            "follows": names[freedom.follows],
+            "ratio": freedom.ratio,
+            "offset": freedom.offset or 0.0,
+        }
+    # The coordinate follows this freedom ('c = r v + o'): this freedom is the
+    # coupling turned round, 'v = c / r - o / r'.
+    leader = next((joint.freedoms[i] for i in coordinates if joint.freedoms[i].follows == index), None)
+    if leader is not None and leader.ratio:
+        return {
+            "parameter": names[index],
+            "freedom": freedom.kind,
+            "follows": names[leader.index],
+            "ratio": 1.0 / leader.ratio,
+            "offset": -(leader.offset or 0.0) / leader.ratio,
+        }
+    raise ValueError(
+        "The freedom '%s' of the joint '%s' is no follower of the coordinates %s, nor followed by one: it is a "
+        "coordinate of an engine joint of its own"
+        % (names[index], joint.name, ", ".join(names[i] for i in coordinates))
+    )
+
+
+def _unwrapped(angle, near):
+    """'angle' (degrees) plus the whole turns that bring it nearest 'near'."""
+    return angle - 360.0 * round((angle - near) / 360.0)
+
+
+def _about(axis, vector, onto):
+    """The angle (degrees) a turn about the unit 'axis' takes 'vector' to 'onto' by."""
+    across = _cross(vector, onto)
+    along = _dot(vector, onto) - _dot(axis, vector) * _dot(axis, onto)
+    return math.degrees(math.atan2(_dot(axis, across), along))
+
+
+def turns_of(rotation, axes, near=None):
+    """Three turns about 'axes', one after another, that make the rotation 'rotation', or None.
+
+    'rotation' is a quaternion, 'w x y z'; each turn is about its axis in the
+    frame the ones before it left, as a joint's freedoms are, so that
+    'R = R_1(a_1) . R_2(a_2) . R_3(a_3)'. Davenport's generalisation of Euler
+    angles: it needs each next pair of axes square to each other (the turnX,
+    turnY, turnZ 'motion: ball' implies are), and returns None otherwise -- a
+    rotation there has no three such turns to report. Of the two sets of turns
+    that make every rotation, the one nearest 'near' (degrees; the starting
+    values, so that a reading begins where the joint does) is returned, each
+    turn unwrapped to the whole turns nearest it; at gimbal lock, where only a
+    sum is determined, the third turn is 'near''s. Anything but three axes --
+    a map that states none, as one written before its joint's turns were known
+    -- has no three turns either, and is None too; so is a 'near' of any other
+    length taken as none.
+    """
+    axes = list(axes or [])
+    if len(axes) != 3:
+        return None
+    n1, n2, n3 = (_unit(axis) for axis in axes)
+    if None in (n1, n2, n3) or abs(_dot(n1, n2)) > TOLERANCE or abs(_dot(n2, n3)) > TOLERANCE:
+        return None
+    near = list(near or [])
+    near = [float(v) for v in near] if len(near) == 3 else [0.0, 0.0, 0.0]
+    rotation = urdf_common.normalize(tuple(rotation))
+    phi = math.degrees(math.atan2(_dot(n1, _cross(n2, n3)), _dot(n1, n3)))
+    d = max(-1.0, min(1.0, _dot(n1, urdf_common.rotate_vec(rotation, n3))))
+    spread = math.degrees(math.acos(d))
+    w = urdf_common.rotate_vec(rotation, n3)
+    y = urdf_common.rotate_vec(_conjugate(rotation), n1)
+    candidates = []
+    for second in (phi + spread, phi - spread):
+        v = urdf_common.rotate_vec(urdf_common.axis_angle_to_quat(n2, second), n3)
+        if _length(_cross(n1, v)) <= 1e-9:
+            # Gimbal lock: the first and the third turn are about one line, and
+            # only what they come to together is determined.
+            third = near[2]
+            rest = urdf_common.quat_mul(
+                rotation,
+                urdf_common.quat_mul(
+                    urdf_common.axis_angle_to_quat(n3, -third), urdf_common.axis_angle_to_quat(n2, -second)
+                ),
+            )
+            probe = _unit(_cross(n1, (1.0, 0.0, 0.0))) or _unit(_cross(n1, (0.0, 1.0, 0.0)))
+            first = _about(n1, probe, urdf_common.rotate_vec(rest, probe))
+        else:
+            first = _about(n1, v, w)
+            u = urdf_common.rotate_vec(urdf_common.axis_angle_to_quat(n2, -second), n1)
+            third = -_about(n3, u, y)
+        candidates.append([_unwrapped(angle, reference) for angle, reference in zip((first, second, third), near)])
+    return min(candidates, key=lambda turns: sum(abs(a - b) for a, b in zip(turns, near)))
+
+
+def _solve(columns, vector):
+    """'x' with 'sum(x_i * columns[i]) == vector', for three independent columns (Cramer's rule)."""
+    a, b, c = columns
+    determinant = _dot(a, _cross(b, c))
+    return [
+        _dot(vector, _cross(b, c)) / determinant,
+        _dot(a, _cross(vector, c)) / determinant,
+        _dot(a, _cross(b, vector)) / determinant,
+    ]
+
+
+def _plus(a, b):
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+
+def _scaled(vector, factor):
+    return tuple(float(v) * factor for v in vector)
+
+
+def _solvable(columns) -> bool:
+    return len(columns) == 3 and abs(_dot(columns[0], _cross(columns[1], columns[2]))) > TOLERANCE
+
+
+def _free_body_rates(entry, child, parent, rates, local, found):
+    """A free body's rates: each freedom's, by parameter, and its angular velocity in its moving joint frame.
+
+    'child' and 'parent' are the two bodies' world poses in millimetres,
+    'rates' their world twists as the engine states them -- '((linear),
+    (angular))' each, m/s of the body frame's origin and rad/s, both in the
+    world's axes -- 'local' the six freedoms' product 'M_1(v_1) ... M_6(v_6)'
+    and 'found' the turns read off it (or None). Returns '(by parameter,
+    angular)': mm/s and deg/s, the turns' only where their rates are
+    determined (not at gimbal lock), the moves' where the turns before them
+    are; and the angular velocity of the child against its parent, deg/s about
+    the axes of the moving joint frame, as a ball's is reported.
+
+    The velocity read is that of the native joint's moving origin relative to
+    the parent: the point every turn of the joint is about, which is what the
+    moves move. Its rate in the joint frame is 'd(B . A v)', B the turns before
+    the moves and A their axes, so the moves' rates are 'A^-1 B^-1 (t' - W_B x
+    t)', W_B being B's angular velocity, which is the turns' rates before the
+    moves along their axes as the turns before each leave it.
+    """
+    length = float(entry.get("length", MILLIMETRES_PER_METRE))
+    (child_linear, child_angular), (parent_linear, parent_angular) = (
+        (_scaled(twist[0], length), _scaled(twist[1], 1.0)) for twist in rates
+    )
+    origin, tail = _pose_of_data(entry["origin"]), _pose_of_data(entry["tail"])
+    # The moving origin, in the world, and its velocity against the parent's
+    # frame, stated in the parent's axes.
+    offset = rotate(child, inverse(tail)[1])
+    point = _plus(child[1], offset)
+    moving = _plus(child_linear, _cross(child_angular, offset))
+    carried = _plus(parent_linear, _cross(parent_angular, _minus(point, parent[1])))
+    to_parent = _conjugate(parent[0])
+    velocity = urdf_common.rotate_vec(to_parent, _minus(moving, carried))
+    spin = urdf_common.rotate_vec(to_parent, _minus(child_angular, parent_angular))
+    # The same in the native joint's frame at PartCAD's zero.
+    to_joint = _conjugate(origin[0])
+    velocity = urdf_common.rotate_vec(to_joint, velocity)
+    spin = urdf_common.rotate_vec(to_joint, spin)
+    angular = [v * DEGREES_PER_RADIAN for v in urdf_common.rotate_vec(_conjugate(local[0]), spin)]
+
+    by_parameter = {}
+    sequence = entry.get("sequence") or []
+    moves = [item for item in sequence if item["freedom"] == MOVE]
+    turns = [item for item in sequence if item["freedom"] == TURN]
+    first = next((index for index, item in enumerate(sequence) if item["freedom"] == MOVE), None)
+    before = [item for item in sequence[: first or 0] if item["freedom"] == TURN]
+    turn_rates = None
+    if found is not None and len(turns) == 3:
+        # Each turn's axis as the turns before it leave it, in the joint frame:
+        # what the angular velocity is the sum of, turn rate by turn rate.
+        columns, running = [], urdf_common.IDENTITY_Q
+        for item, angle in zip(turns, found):
+            columns.append(urdf_common.rotate_vec(running, item["axis"]))
+            running = urdf_common.quat_mul(running, urdf_common.axis_angle_to_quat(item["axis"], angle))
+        if _solvable(columns):
+            turn_rates = _solve(columns, spin)
+            for item, rate in zip(turns, turn_rates):
+                by_parameter[item["parameter"]] = rate * DEGREES_PER_RADIAN
+    if len(moves) == 3 and _solvable([move["axis"] for move in moves]) and (not before or turn_rates is not None):
+        swept = (0.0, 0.0, 0.0)
+        rotation = urdf_common.IDENTITY_Q
+        for index, item in enumerate(before):
+            axis = urdf_common.rotate_vec(rotation, item["axis"])
+            swept = _plus(swept, _scaled(axis, turn_rates[index]))
+            rotation = urdf_common.quat_mul(rotation, urdf_common.axis_angle_to_quat(item["axis"], found[index]))
+        along = urdf_common.rotate_vec(_conjugate(rotation), _minus(velocity, _cross(swept, local[1])))
+        by_parameter.update(zip([move["parameter"] for move in moves], _solve([m["axis"] for m in moves], along)))
+    return by_parameter, angular
+
+
+def _as_list(value):
+    if isinstance(value, (int, float)):
+        return [float(value)]
+    return [float(v) for v in value]
+
+
+def reading(entries, positions, velocities=None) -> dict:
+    """What one PartCAD joint reads, from what the engine joints it was written as read.
+
+    'entries' are the joint maps ('joint_map()') of every engine joint written
+    for the joint -- each a sidecar joint entry or its "map" -- and
+    'positions' the engine's position of each, in the same order, in the
+    engine's own units: a number, or a list of one per coordinate, for an
+    engine joint of scalar coordinates (radians, metres); a quaternion 'w x y
+    z' for a ball; and for a free body the pair '(child pose, parent pose)',
+    each '((w, x, y, z), (x, y, z))' in the world, metres. 'velocities' are the
+    same for the rates, if any: a number or list per scalar engine joint (rad/s,
+    m/s); a ball's angular velocity '[x, y, z]' in rad/s about the axes of
+    the frame it states its rotation in, moving with it (MuJoCo's); and for a
+    free body the pair '(child twist, parent twist)', each '((vx, vy, vz),
+    (wx, wy, wz))': the linear velocity of the body frame's origin in m/s and
+    the angular velocity in rad/s, both in the world's axes -- what MuJoCo's
+    'mj_objectVelocity' gives in the world's orientation, linear and angular
+    the other way round, and what Gazebo's link world velocities are.
+
+    Returns the reading in PartCAD's terms (section 8.13.5 of
+    docs/design/simulation.md), keyed by the joint's own names whatever the
+    file had to call anything: ``{"type": <kind>, "pos": ..., "vel": ...}``.
+    'pos' is a number for a joint of one freedom and an object keyed by
+    parameter for one of several ('{"turnZ": 30.0, "moveZ": 0.83}'),
+    degrees and millimetres; a ball and a free body add ``"quat"``, their
+    rotation in their joint frame from PartCAD's zero, and give their turns
+    only where three turns can make a rotation ('turns_of'). 'vel' is in deg/s
+    and mm/s, keyed as 'pos' is, and for a ball its angular velocity
+    '[x, y, z]' in deg/s about its moving joint frame. A free body's 'vel' is
+    an object: each of its six freedoms' rates by parameter, mm/s and deg/s --
+    a turn's only where its rate is determined (not at gimbal lock), and a
+    move's only where the turns before it are -- and ``"angular": [x, y, z]``,
+    the child's angular velocity against its parent in deg/s about the axes of
+    its moving joint frame, as a ball's is.
+    """
+    maps = [entry.get("map", entry) if isinstance(entry, dict) else {} for entry in entries]
+    if not maps:
+        return {}
+    kind = maps[0].get("kind")
+    count = maps[0].get("freedoms")
+    pos, vel = {}, {}
+    result = {"type": kind}
+    velocities = list(velocities) if velocities is not None else [None] * len(maps)
+    angular = None
+    free_vel = None
+    for entry, position, rate in zip(maps, positions, velocities):
+        if "rotation" in entry:
+            frame = tuple(entry.get("frame") or urdf_common.IDENTITY_Q)
+            engine = urdf_common.normalize(tuple(float(v) for v in position))
+            rotation = urdf_common.quat_mul(tuple(entry["rotation"]), _turned(engine, frame))
+            result["quat"] = [float(v) for v in rotation]
+            turns = entry.get("turns") or []
+            found = turns_of(rotation, [turn["axis"] for turn in turns], [turn.get("start", 0.0) for turn in turns])
+            if found is not None:
+                pos.update(zip([turn["parameter"] for turn in turns], found))
+            if rate is not None:
+                spun = urdf_common.rotate_vec(frame, [float(v) for v in rate])
+                angular = [v * DEGREES_PER_RADIAN for v in spun]
+            continue
+        if "parent" in entry:
+            length = float(entry.get("length", MILLIMETRES_PER_METRE))
+            child, parent = (
+                (tuple(float(v) for v in pose[0]), tuple(float(v) * length for v in pose[1])) for pose in position
+            )
+            relative = compose(inverse(parent), child)
+            # The six freedoms' product, 'M_1(v_1) ... M_6(v_6)': its rotation
+            # is the turns' alone, in their order, and its translation the
+            # moves', turned by the turns before them (every turn is about a
+            # line through the native joint's origin, which no turn moves).
+            local = compose(
+                compose(inverse(_pose_of_data(entry["origin"])), relative), inverse(_pose_of_data(entry["tail"]))
+            )
+            sequence = entry.get("sequence") or []
+            turns = [item for item in sequence if item["freedom"] == TURN]
+            moves = [item for item in sequence if item["freedom"] == MOVE]
+            result["quat"] = [float(v) for v in local[0]]
+            found = turns_of(local[0], [turn["axis"] for turn in turns], [turn.get("start", 0.0) for turn in turns])
+            first = next((index for index, item in enumerate(sequence) if item["freedom"] == MOVE), None)
+            movable = len(moves) == 3 and _solvable([move["axis"] for move in moves])
+            if found is not None:
+                pos.update(zip([turn["parameter"] for turn in turns], found))
+            if movable and (found is not None or first == 0):
+                # The moves, turned back by the turns before them -- which the
+                # moves need no turn to be read where they come first.
+                before = urdf_common.IDENTITY_Q
+                for item in sequence[:first]:
+                    before = urdf_common.quat_mul(
+                        before, urdf_common.axis_angle_to_quat(item["axis"], pos[item["parameter"]])
+                    )
+                along = urdf_common.rotate_vec(_conjugate(before), local[1])
+                pos.update(zip([move["parameter"] for move in moves], _solve([m["axis"] for m in moves], along)))
+            if rate is not None:
+                free_vel = _free_body_rates(entry, child, parent, rate, local, found)
+            continue
+        coordinates = entry.get("coordinates") or []
+        values = _as_list(position)
+        rates = None if rate is None else _as_list(rate)
+        for index, coordinate in enumerate(coordinates):
+            pos[coordinate["parameter"]] = values[index] * coordinate["factor"] + coordinate.get("start", 0.0)
+            if rates is not None:
+                vel[coordinate["parameter"]] = rates[index] * coordinate["factor"]
+        for follower in entry.get("followers") or []:
+            leader = follower["follows"]
+            if leader in pos:
+                pos[follower["parameter"]] = follower["ratio"] * pos[leader] + follower.get("offset", 0.0)
+            if leader in vel:
+                vel[follower["parameter"]] = follower["ratio"] * vel[leader]
+
+    if pos:
+        result["pos"] = next(iter(pos.values())) if count == 1 and len(pos) == 1 else pos
+    if free_vel is not None:
+        by_parameter, spin = free_vel
+        result["vel"] = dict(by_parameter, angular=spin)
+    elif angular is not None:
+        result["vel"] = angular
+    elif vel:
+        result["vel"] = next(iter(vel.values())) if count == 1 and len(vel) == 1 else vel
+    return result
 
 
 #
@@ -811,6 +1640,16 @@ class Body:
     def is_root(self) -> bool:
         """Whether nothing in the tree holds this body: it is free, or welded to the world."""
         return not isinstance(self.parent, Body)
+
+    @property
+    def is_floating(self) -> bool:
+        """Whether this is the child of a floating joint: a free body whose pose is read against another."""
+        return self.joint is not None and self.parent is None
+
+    @property
+    def joint_parent(self):
+        """The body this body's joint is to: its parent, or for a floating body the one it was connected to."""
+        return None if self.joint is None else self.joint.parent
 
     def mass_parts(self) -> list:
         """The (physics, packed placement) pairs 'physics' was combined from, placements in this body."""
@@ -978,8 +1817,19 @@ class _Builder:
                     target_body, target_frame = body, placement
                 else:
                     _, target_body, target_frame, _ = target
-                moving = self.new_body(child, child_world, child_path, target_body, False)
-                moving.joint = Joint(record, target_body, moving, target_frame)
+                joint = Joint(record, target_body, None, target_frame)
+                # A floating joint holds nothing: the child is a body of its
+                # own, free as a root is, and its joint stays only to say what
+                # its pose is read against -- the body it was connected to
+                # (section 8.13.2 of docs/design/simulation.md). Written as six
+                # freedoms under that body, a loose part would be nested in
+                # what it rests on and pass through it.
+                floating = joint.kind == FLOATING
+                moving = self.new_body(child, child_world, child_path, None if floating else target_body, False)
+                joint.child = moving
+                moving.joint = joint
+                for problem in outside_bounds(joint, where):
+                    self.problem(problem)
                 self.fill(moving, child, IDENTITY, child_world, child_path)
                 placed.append((label, moving, IDENTITY, location))
             else:
@@ -1037,6 +1887,61 @@ class _Builder:
         body.displacement = mass_properties.displacement_of(shapes) if shapes else None
 
 
+def outside_bounds(joint, where=None) -> list:
+    """What a joint says that starts it outside its own bounds: one sentence per freedom that does.
+
+    The start is the freedom's value -- 'toParams', the parameter's own value
+    -- and the bounds its range in the same terms, so an engine handed both
+    starts the joint against its own stop (MuJoCo does, and pushes it back in
+    with the first step). The core's 'connect' check fails such a connection
+    ('partcad.joint.outside_bounds'); this says it of a tree, wherever the tree
+    came from. Where the bounds were stated by 'limits:' about an axis that
+    runs the other way to the parameter (a source marked "reversed"), that is
+    said too: it is what turns '[-10, 30]' into '[-30, 10]'. A ball, whose
+    turns have no bounds of their own, starts beyond its one bound
+    ('turn_limit') where the rotation its turns make at the start turns
+    further than that from its zero.
+    """
+    problems = []
+    names = joint.parameter_names()
+    for freedom in joint.freedoms:
+        value, lower, upper = freedom.value, freedom.lower, freedom.upper
+        tolerance = 1e-9 * max(1.0, abs(value))
+        if not ((lower is not None and value < lower - tolerance) or (upper is not None and value > upper + tolerance)):
+            continue
+        unit = "deg" if freedom.kind == TURN else "mm"
+        shown = "%s to %s %s" % (
+            "-inf" if lower is None else "%g" % lower,
+            "+inf" if upper is None else "%g" % upper,
+            unit,
+        )
+        problem = "'%s' starts its joint '%s' with '%s' at %g %s, outside its bounds of %s" % (
+            where or joint.child_link or "?",
+            joint.name,
+            names[freedom.index],
+            value,
+            unit,
+            shown,
+        )
+        if any(isinstance(source, dict) and source.get("reversed") for source in freedom.source):
+            problem += (
+                ": its 'limits' are stated about the motion's axis, which runs the other way to '%s' (a target's "
+                "port Z is the contact frame's -Z), so they bound it the other way round" % names[freedom.index]
+            )
+        problems.append(problem)
+    if joint.kind == BALL and joint.turn_limit is not None:
+        # A ball's bound is one angle, which none of its turns has ('Joint.turn_limit'):
+        # what it bounds is the rotation the turns make together.
+        rotation = rezeroed(joint).rotation
+        angle = math.degrees(2.0 * math.acos(min(1.0, abs(rotation[0]))))
+        if angle > joint.turn_limit + 1e-9 * max(1.0, joint.turn_limit):
+            problems.append(
+                "'%s' starts its ball '%s' turned %g deg from its zero, beyond its bound of %g deg"
+                % (where or joint.child_link or "?", joint.name, angle, joint.turn_limit)
+            )
+    return problems
+
+
 def summary(found) -> list:
     """The bodies as plain data, for a report or a test: what each is, holds, and hangs off."""
     rows = []
@@ -1051,6 +1956,8 @@ def summary(found) -> list:
         }
         if body.joint is not None:
             row["joint"] = {"name": body.joint.name, "kind": body.joint.kind}
+            if body.is_floating:
+                row["joint"]["parent"] = body.joint_parent.name
         if body.physics:
             row["mass"] = body.physics.get("mass")
         rows.append(row)

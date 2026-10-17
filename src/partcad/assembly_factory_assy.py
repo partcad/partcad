@@ -1439,6 +1439,13 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 physics_source,
                 resolution.record,
             )
+            # A ball's one bound, if the joint is a ball - and a ball started
+            # beyond it, which no one freedom's bounds can show.
+            problems.extend(resolution.ball_bound(joint))
+            problems.extend(pc_joint.turned_beyond_bound(joint.name, joint.turn_limit, joint.start_rotation))
+            # A joint that starts against its own stop: an error, as a
+            # contradiction in what the connection says is.
+            problems.extend(pc_joint.outside_bounds(composition, joint.name))
         for problem in problems:
             pc_logging.error("%s: %s: %s" % (self.name, name, problem))
         return composition, joint, problems

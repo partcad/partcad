@@ -124,16 +124,24 @@ poses it:
 interfaces:
   <female-iface>:
     parameters:
-      turnZ: { min: 0, max: 90, default: 0 }
-    motion:
-      type: revolute     # fixed|revolute|continuous|prismatic|planar|floating|ball|screw
-      axis: [0, 0, 1]    # in this interface's port frame
-      limits: { lower: 0, upper: 90 }   # degrees for a turn, mm for a move
+      turnZ: { min: 0, max: 90, default: 0 }   # the travel, and where a connection may pose it
+    motion: revolute   # the turn about the port's Z stays free once joined; its range is turnZ's
 ```
 
-`motion:` is a record of the freedom the joint is meant to have, and it is
-nothing more yet: a simulation does not make it a joint — every body there is
-free, held only by contact — so no `simulate:` claim can rest on it.
+Without `motion:` every connection is rigid: the parts it joins are one body in a
+simulation. With it the connection is a **joint**, and its child a body of its
+own. Name the physical joint, one `type` per kind (`/pc:gen-assembly` §7 has the
+table, and which engines refuse which):
+`revolute`, `prismatic`, `cylindrical`, `screw` (with `threadStep`), `universal`,
+`ball`, `planar`, `floating`, or `fixed`. Never `continuous`: it is a deprecated
+spelling of a `revolute` with both bounds open, and `pc lint` warns about it.
+
+State the travel **once**. The parameter's range is the joint's; `limits:` is the
+short form's way of stating the range of a parameter the type brings along, and
+`limits` that disagree with a declared range fail `pc test`'s `connect` check. A
+side to leave open whatever the parameter says is `-.inf` or `.inf`
+(`limits: {lower: -.inf, upper: .inf}`). A `ball` is bounded by one angle, how far
+it turns — `limits: {upper: 30}` — and never by a range on one of its turns.
 
 ## 4. Attach the interfaces to the part with `implements:`
 

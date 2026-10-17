@@ -614,17 +614,48 @@ are the same pattern:
 
 When a claim fails, fix the design, not the threshold.
 
-**Only gravity, contact and friction hold it together.** Every body in a run is
-free: `connect:` places the parts but does not fasten them, and `motion:` on an
-interface records the freedom a joint is meant to have without making it one.
-So something that stands only because it is fastened together — a cantilever, a
-wall bracket, a post fixed to its base — comes apart in the run. Report that as
-the limit it is; do not loosen the validation until it passes. That is the
-engine plugins not writing PartCAD's own rule yet, which is that everything in
-an assembly is attached and every element of a *scene* is free; so when what you were asked
-for is an arrangement rather than a product — a stack of blocks, a workcell —
-declare it under `scenes:` instead, with the same `simulate:`, and run it with
-`pc sim -S <name>`.
+**What holds it together.** Everything in an assembly is attached: a part placed
+by `location:`, or by a `connect:` that keeps no freedom, is welded to what holds
+it, and welded parts are one rigid body. A connection is a **joint** — its child a
+body of its own — only where a `motion:` keeps a freedom: on the interface
+(`/pc:add-interfaces`), on the mating, or on the connection (`connect: {motion:
+revolute}`; `motion: fixed` locks one). So a cantilever stands, and a hinge swings
+only where it is declared. When what you were asked for is an arrangement rather
+than a product — a stack of blocks, a workcell — declare it under `scenes:`
+instead, where every element is a free body, with the same `simulate:`, and run
+it with `pc sim -S <name>`.
+
+**Name the joint the mechanism has.** One `type` per physical joint:
+
+| The mechanism | `motion:` |
+|---|---|
+| a hinge, a wheel on its axle | `revolute`; a stop on one side is `limits: {upper: 30}`, none at all is no range |
+| a slide, a carriage on a rail | `prismatic` |
+| a shaft that turns and slides in a plain bore | `cylindrical` |
+| a nut on a thread | `screw`, with the interface's `threadStep` |
+| a cardan joint, a two-axis gimbal | `universal` |
+| a ball and socket | `ball`, bounded by one angle: `limits: {upper: 30}` |
+| a puck on a table, a part sliding in a plane | `planar` |
+| a part that rests on another and is not held | `floating`: a body of its own |
+
+Not `continuous`, which is a deprecated spelling of a `revolute` with no bounds.
+A set of freedoms no physical joint has — an XY stage's two moves, three turns each
+with its own range — is a *composite*: model the body it leaves out (the stage's
+carriage, the gimbal's ring) as a part, joined by native joints. `pc --no-ansi
+info -a <name>` lists the joints with the `type` each one is.
+
+**Choose what the engine writes.** MuJoCo (`sim-mujoco`) writes every type.
+Gazebo (`sim-gazebo`) refuses `cylindrical`, `planar` and composites, and cannot
+state a ball's bound. A URDF export (`pc export -t urdf`) refuses `cylindrical`,
+`screw`, `universal`, `ball` and composites; for a URDF read only for its
+kinematics (ROS, MoveIt) the export's `composites: massless` writes them through
+links with no mass, which simulators drop. A claim that must run in Gazebo, or a
+robot that must be a URDF, is built of the types those write — a cylindrical
+pair as a sleeve on a `revolute` and a carriage on a `prismatic`.
+
+**Where the joint starts.** `toParams` on the connection is where it starts, and
+the parameter at zero is its zero: the assembly is drawn there, and a simulation
+starts the mechanism there.
 
 **Under water, in the air, off Earth.** The default scene is Earth's gravity in a
 vacuum. Anything else is a scene that says so, which the `simulate:` names with

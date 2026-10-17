@@ -27,20 +27,30 @@ itself - are its ``<inertial>``. An assembly's root body takes the name of the
 one part it is made of when it is made of one (a robot's base link), and the
 assembly's name otherwise.
 
-**Joints**, by what 'kinematics.classify()' says the free steps are:
+**Joints**, by what 'kinematics.classify()' says the free steps are
+(docs/design/simulation.md, section 8.13.4):
 
-  * ``revolute`` (a turn bounded on either side), ``continuous`` (one bounded
-    on neither) and ``prismatic`` are written as URDF's own;
-  * ``planar`` is URDF's own, its ``<axis>`` the normal of the plane, and so is
-    ``floating``;
-  * everything else - a cylindrical, universal, ball or screw joint, and a
-    chain - is a chain of single-axis joints through dummy links, one per
-    freedom past the first, named after the joint and given a small mass and
-    inertia (see 'DUMMY_MASS'), because the engines that read a URDF refuse a
-    link that weighs nothing. A screw is a revolute joint and a prismatic one
-    that 'mimic's it by the lead, which is approximate: few simulators honour
-    a mimic.
+  * a ``revolute`` is URDF's ``revolute``, or its ``continuous`` where both of
+    its bounds are open, and a ``prismatic`` is URDF's own;
+  * a ``planar`` is URDF's own, its ``<axis>`` the normal of the plane (its
+    turn's, whether the moves come first or the turn does), and so is a
+    ``floating`` -- the child of which is a free body of its own, read
+    against the body it was connected to, which a URDF ``floating`` joint
+    between their links says;
+  * a cylindrical, screw, universal, ball or composite joint has no URDF type,
+    and the export **refuses** it ('Refused'), naming the joint, its type and
+    the ways on: simulate the mechanism in MuJoCo, which writes every type;
+    model the body the joint abstracts and join it by native joints; or, for a
+    URDF read only for its kinematics, ask for ``composites: massless``. That
+    writes the joint as a chain of single-axis joints through links with no
+    ``<inertial>`` -- URDF's own idiom for a frame, which ROS's kinematics
+    tools read and every simulator drops -- one per freedom past the first,
+    named after the joint. A screw is then a revolute joint and a prismatic one
+    that 'mimic's it by the lead.
 
+Nothing is written with a mass PartCAD did not derive: the 1 g dummy links
+this exporter used to write stood in for bodies a mechanism really has
+('dummyMass' and 'dummyInertia' are gone, and reported where they are passed).
 Every chain and every default is reported, never left to be found.
 
 **Frames.** A child link's frame is the joint's *moving* frame: what the joint
@@ -56,7 +66,10 @@ of several hang off it by ``floating`` joints.
 **What a URDF cannot state** is reported, and the file says the rest:
 
   * the **starting value** of a joint ('toParams'): URDF has no starting
-    position, so the robot is written at the zero pose of every joint;
+    position, and what reads one -- ROS's tools, a robot's drivers -- takes a
+    joint's zero to be where its hardware reads zero, so the robot is written
+    at PartCAD's zero of every joint and not re-zeroed at its start, which an
+    engine plugin does for a file that is its own (section 8.13.9, decision 2);
   * an open bound, which URDF's ``revolute`` and ``prismatic`` cannot leave
     open: written as 'OPEN_BOUND' away;
   * ``<limit effort velocity>``, which URDF requires: a joint's 'maxEffort' and
@@ -102,7 +115,8 @@ import urdf_common  # noqa: E402
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again. 2: a link per body and a joint per pair (step 11).
-CACHE_VERSION = 2
+# 3: native joint types; no dummy links, a refusal or 'composites: massless'.
+CACHE_VERSION = 3
 
 # Metres per millimetre, for the mesh 'scale' attribute: the meshes are written
 # in millimetres and URDF reads mesh coordinates as metres after scaling.
@@ -139,14 +153,25 @@ IDENTITY = kinematics.IDENTITY
 DEFAULT_EFFORT = 1000.0
 DEFAULT_VELOCITY = 100.0
 
-# A dummy link - one between two freedoms of a joint URDF has no single type
-# for - weighs this much (kg) and turns this hard (kg.m^2 about each axis):
-# enough for an engine to accept it, too little to matter beside a part.
-DUMMY_MASS = 1.0e-3
-DUMMY_INERTIA = 1.0e-6
+# The kinds a URDF joint states as they are. Every other kind is refused, or
+# written through massless links where 'composites: massless' asks for it.
+NATIVE_KINDS = (kinematics.REVOLUTE, kinematics.PRISMATIC, kinematics.PLANAR, kinematics.FLOATING)
+
+# What 'composites' may say: refuse a joint URDF has no type for (the default),
+# or write it as a chain through links with no '<inertial>'.
+COMPOSITES_REFUSE = "refuse"
+COMPOSITES_MASSLESS = "massless"
+COMPOSITES = (COMPOSITES_REFUSE, COMPOSITES_MASSLESS)
+
+# The options this exporter had and does not: what a link of a mass nobody
+# measured weighed. Reported where a package still passes one.
+RETIRED_OPTIONS = ("dummyMass", "dummyInertia")
 
 # How far away a bound URDF cannot leave open is written, in PartCAD's units
-# (degrees, millimetres): the MJCF exporter's choice for the same problem.
+# (degrees, millimetres). URDF's 'lower' and 'upper' default to nought and are
+# required on a revolute and a prismatic joint, so one side open - a door that
+# stops only one way - has no spelling but a bound too far away to reach; the
+# one place a sentinel stays (section 8.13.6), and reported.
 OPEN_BOUND = 1.0e6
 
 
@@ -244,26 +269,55 @@ def _shown(value, kind) -> str:
     return "%g %s" % (value, "deg" if kind == TURN else "mm")
 
 
+class Refused(ValueError):
+    """The joints a URDF has no type for, which the export will not write as something they are not.
+
+    'joints' is '(name, kind)' for each. The message names them, says why,
+    and gives the ways on.
+    """
+
+    def __init__(self, joints):
+        self.joints = list(joints)
+        super().__init__(refusal(self.joints))
+
+
+def refusal(joints) -> str:
+    """Why a URDF of these joints is not written, and what to do instead (docs/design/simulation.md, 8.13.4)."""
+    named = ", ".join("the %s joint '%s'" % (kind, name) for name, kind in joints)
+    return (
+        "URDF has no type for %s: its joints are revolute, continuous, prismatic, planar and floating, and the only "
+        "way to write another is through links of a mass nobody measured, which this export does not invent. "
+        "Either simulate the mechanism in MuJoCo (partcad-sim-mujoco), which writes every type; or model the body "
+        "the joint stands for - for a cylindrical pair a sleeve and its carriage, for a universal joint the cross "
+        "- and join it by native joints; or, for a URDF that is read only for its kinematics (robot_state_publisher, "
+        "MoveIt), export with 'composites: massless', which writes each such joint as a chain through links with no "
+        "<inertial> that every simulator drops" % named
+    )
+
+
 #
 # The plan: links and joints as plain data
 #
 
 
 class LinkPlan:
-    """One URDF link: a body, or a dummy link between two freedoms of one joint.
+    """One URDF link: a body, or a massless link between two freedoms of one joint.
 
     'frame' is the link's frame in the body's own: the identity for a body that
     is a root under 'world', the inverse of where the tree placed a free root
     (so that its link frame is the tree's origin), and the inverse of the
     joint's 'tail' for a body a joint moves (so that its link frame is the
     joint's moving frame). Its shapes and its inertia are restated in it.
+
+    A 'massless' link is a frame of a chain URDF writes for a joint it has no
+    type for, under 'composites: massless': no shape, and no '<inertial>'.
     """
 
-    def __init__(self, name, body=None, frame=IDENTITY, dummy=False):
+    def __init__(self, name, body=None, frame=IDENTITY, massless=False):
         self.name = name
         self.body = body
         self.frame = frame
-        self.dummy = dummy
+        self.massless = massless
 
     def shapes(self) -> list:
         """(part, its pose in the link) for every part of the body."""
@@ -272,19 +326,17 @@ class LinkPlan:
         undo = kinematics.inverse(self.frame)
         return [(part, kinematics.compose(undo, part.placement)) for part in self.body.parts]
 
-    def inertial(self, options):
+    def inertial(self, options=None):
         """The physics '<inertial>' states, in the link's frame, or None."""
-        if self.dummy:
-            inertia = {key: 0.0 for key in mass_properties.INERTIA_KEYS}
-            inertia.update(ixx=options["dummyInertia"], iyy=options["dummyInertia"], izz=options["dummyInertia"])
-            return {"mass": options["dummyMass"], "inertia": inertia}
+        if self.massless:
+            return None
         physics = None if self.body is None else self.body.physics
         if not physics or urdf_common.is_identity(self.frame):
             return physics
         return mass_properties.placed(physics, kinematics.packed_of(kinematics.inverse(self.frame)))
 
     def __repr__(self):
-        return "<LinkPlan %s%s>" % (self.name, " (dummy)" if self.dummy else "")
+        return "<LinkPlan %s%s>" % (self.name, " (massless)" if self.massless else "")
 
 
 class JointPlan:
@@ -362,21 +414,32 @@ class Planner:
 
     def __init__(self, found, options=None, warnings=None):
         self.found = found
-        self.options = dict(
-            {
-                "effort": DEFAULT_EFFORT,
-                "velocity": DEFAULT_VELOCITY,
-                "dummyMass": DUMMY_MASS,
-                "dummyInertia": DUMMY_INERTIA,
-            },
-            **{key: value for key, value in (options or {}).items() if value is not None},
-        )
         self.warnings = warnings if warnings is not None else []
+        options = {key: value for key, value in (options or {}).items() if value is not None}
+        retired = [key for key in RETIRED_OPTIONS if key in options]
+        if retired:
+            self.warnings.append(
+                "The URDF export has no %s any more: it writes no link of a mass nobody measured, and refuses a "
+                "joint URDF has no type for unless 'composites: massless' asks for one through links with no "
+                "<inertial>; ignoring %s" % (" or ".join("'%s'" % key for key in retired), ", ".join(retired))
+            )
+        composites = options.get("composites", COMPOSITES_REFUSE)
+        if composites not in COMPOSITES:
+            self.warnings.append(
+                "'composites' is '%s' or '%s', not %r: refusing what URDF has no type for"
+                % (COMPOSITES_REFUSE, COMPOSITES_MASSLESS, composites)
+            )
+            composites = COMPOSITES_REFUSE
+        self.options = {
+            "effort": options.get("effort", DEFAULT_EFFORT),
+            "velocity": options.get("velocity", DEFAULT_VELOCITY),
+            "composites": composites,
+        }
         # Links and joints are two namespaces, as urdfdom checks them, and
         # "<parent>_to_<child>" collides on its own: "a" -> "b_to_c" and
         # "a_to_b" -> "c" both spell "a_to_b_to_c". Every body's link and every
         # joint is claimed before anything is derived (see 'plan'), so that a
-        # dummy link yields its name to a body somebody called that.
+        # massless link yields its name to a body somebody called that.
         self.names = naming.Transcoder(URDF_NAMES)
         self.joint_names = naming.Transcoder(URDF_NAMES)
         self.links = []
@@ -387,13 +450,17 @@ class Planner:
         self._link_of = {}
         self._written = {}
         self._mimics = []
-        # What is reported once, grouped, at the end.
+        # What is reported once, grouped, at the end; and what is refused.
         self._started = []
         self._defaults = []
         self._open = []
+        self.refused = []
 
     def plan(self):
-        roots = [body for body in self.found if not isinstance(body.parent, kinematics.Body)]
+        """Plan every link and joint; raises 'Refused' for the joints a URDF has no type for."""
+        # A floating body is free, as a root is, but a URDF says so with a
+        # 'floating' joint to the link of the body it was connected to.
+        roots = [body for body in self.found if body.is_root and not body.is_floating]
         for body in self.found:
             self.names.claim(body.name, "body", "link", preferred=self.link_label(body))
             if body.joint is not None:
@@ -413,7 +480,7 @@ class Planner:
 
         for body in self.found:
             name = self.names.claim(body.name, "body")
-            if isinstance(body.parent, kinematics.Body):
+            if isinstance(body.parent, kinematics.Body) or body.is_floating:
                 self.jointed(body, name)
             elif world is None:
                 self.add_link(LinkPlan(name, body, kinematics.inverse(body.world)))
@@ -428,6 +495,8 @@ class Planner:
                 )
                 self.joints.append(joint)
 
+        if self.refused:
+            raise Refused(self.refused)
         self._resolve_mimics()
         self._report()
         renamed = naming.renamed_warning(URDF_NAMES, self.names, self.joint_names)
@@ -450,14 +519,20 @@ class Planner:
         joint = body.joint
         classification = joint.classification
         kind = classification.kind
-        parent = self._link_of[id(body.parent)]
+        if kind not in NATIVE_KINDS and self.options["composites"] != COMPOSITES_MASSLESS:
+            self.refused.append((joint.name, kind))
+            # Planned as a link of its own all the same, so that what hangs off
+            # it has a parent to be refused or planned against.
+            self.add_link(LinkPlan(name, body, kinematics.inverse(joint.tail)))
+            return
+        parent = self._link_of[id(body.joint_parent)]
         undo = kinematics.inverse(parent.frame)
         for freedom in joint.freedoms:
             if freedom.value:
                 self._started.append("'%s' at %s" % (joint.name, _shown(freedom.value, freedom.kind)))
         self.unsupported.update(set(joint.physics) - JOINT_STATED)
 
-        if kind in (kinematics.REVOLUTE, kinematics.CONTINUOUS, kinematics.PRISMATIC):
+        if kind in (kinematics.REVOLUTE, kinematics.PRISMATIC):
             (freedom,) = joint.freedoms
             self.add_link(LinkPlan(name, body, kinematics.inverse(joint.tail)))
             plan = self.single(joint.name, joint, freedom, parent.name, name, kinematics.compose(undo, joint.origin))
@@ -475,7 +550,10 @@ class Planner:
                 kinematics.compose(undo, classification.origin),
             )
             if kind == kinematics.PLANAR:
-                plan.axis = classification.axes[2]
+                # The normal of the plane: the turn's axis, which is the first
+                # freedom or the third, as the joint's order has it.
+                turn = next(freedom.index for freedom in joint.freedoms if freedom.kind == TURN)
+                plan.axis = classification.axes[turn]
             plan.damping = _number(joint.physics.get("damping"))
             plan.friction = _number(joint.physics.get("friction"))
             plan.gazebo = dict(joint.physics)
@@ -485,6 +563,11 @@ class Planner:
                 self.warnings.append(
                     "The %s joint '%s' has bounds on %d of its freedoms, and a URDF %s joint has none: they are not "
                     "written" % (kind, joint.name, len(bounded), kind)
+                )
+            if joint.turn_limit is not None:
+                self.warnings.append(
+                    "The %s joint '%s' states how far it turns, and a URDF %s joint cannot: not written"
+                    % (kind, joint.name, kind)
                 )
             if joint.soft_limits or joint.mimic:
                 self.warnings.append(
@@ -497,21 +580,28 @@ class Planner:
         self.chain(body, name, parent, undo)
 
     def chain(self, body, name, parent, undo):
-        """A joint URDF has no type for, as one single-axis joint per freedom through dummy links."""
+        """A joint URDF has no type for, as one single-axis joint per freedom through massless links.
+
+        Only where 'composites: massless' asks for it: each link between two
+        freedoms is a frame, with no shape and no '<inertial>', which is what
+        ROS's kinematics tools read a link of a chain as and what every
+        simulator that reads a URDF drops - so this is a URDF for kinematics,
+        and the warning says so.
+        """
         joint = body.joint
         freedoms = joint.freedoms
         names = self.chain_names(joint)
         previous = parent.name
         written = []
-        dummies = []
+        frames = []
         for index, freedom in enumerate(freedoms):
             if index == len(freedoms) - 1:
                 child = name
                 self.add_link(LinkPlan(name, body, kinematics.inverse(joint.tail)))
             else:
                 child = self.names.derive("%s_link%d" % (joint.name, index + 1), "link")
-                dummies.append(child)
-                self.add_link(LinkPlan(child, dummy=True))
+                frames.append(child)
+                self.add_link(LinkPlan(child, massless=True))
             origin = kinematics.compose(undo, joint.origins[0]) if index == 0 else joint.origins[index]
             plan = self.single(names[index], joint, freedom, previous, child, origin, derived=index > 0)
             if freedom.follows is not None:
@@ -531,8 +621,9 @@ class Planner:
 
         kind = joint.kind
         self.warnings.append(
-            "The %s joint '%s' has no URDF type: it is written as the joints %s through the dummy links %s, each "
-            "of %g kg" % (kind, joint.name, ", ".join(written), ", ".join(dummies), self.options["dummyMass"])
+            "The %s joint '%s' has no URDF type: as 'composites: massless' asks, it is written as the joints %s "
+            "through the links %s, which have no <inertial> - a URDF for kinematics, whose chain every simulator "
+            "drops" % (kind, joint.name, ", ".join(written), ", ".join(frames))
         )
         if kind == kinematics.SCREW:
             self.warnings.append(
@@ -545,6 +636,11 @@ class Planner:
             )
         if joint.mimic:
             self.warnings.append("The joint '%s' mimics another, and is written as several: not written" % joint.name)
+        if joint.turn_limit is not None:
+            self.warnings.append(
+                "The ball '%s' is bounded by how far it turns, which its three URDF joints cannot state: not written"
+                % joint.name
+            )
 
     def chain_names(self, joint) -> list:
         """What each joint of a chain is called: the first after the joint, the rest after what they are.
@@ -850,8 +946,8 @@ def build_link(plan, state):
         state["unsupported"].update(set(part.physics or {}) - URDF_STATED)
         placed += 1
 
-    if plan.dummy:
-        link.inertial = carried_inertial(plan.inertial(state["planner"].options))
+    if plan.massless:
+        # A frame of a chain: no '<inertial>', which is the point of it.
         return link
     if not placed:
         # A link with no geometry of its own - the 'world', or a body that holds
@@ -924,7 +1020,6 @@ def process(path, request):
     robot_name = sanitize_name(request.get("robot_name") or root.get("label") or stem, stem)
     mesh_dir_name = request.get("mesh_dir") or "%s_meshes" % stem
     mesh_dir = os.path.join(urdf_dir, mesh_dir_name)
-    os.makedirs(mesh_dir, exist_ok=True)
 
     warnings = []
     # Shape full name -> the properties its part declares ('physics',
@@ -934,11 +1029,14 @@ def process(path, request):
     properties = request.get("properties") or {}
     found = kinematics.bodies(root, properties)
     warnings.extend(found.problems)
-    planner = Planner(
-        found,
-        {key: _number(request.get(key)) for key in ("effort", "velocity", "dummyMass", "dummyInertia")},
-        warnings,
-    ).plan()
+    options = {key: _number(request.get(key)) for key in ("effort", "velocity")}
+    options["composites"] = request.get("composites")
+    for key in RETIRED_OPTIONS:
+        options[key] = request.get(key)
+    # Planned before anything is written: a refusal ('Refused') leaves nothing
+    # behind, not even an empty directory for the meshes.
+    planner = Planner(found, options, warnings).plan()
+    os.makedirs(mesh_dir, exist_ok=True)
 
     state = {
         "planner": planner,

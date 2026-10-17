@@ -22,6 +22,8 @@ import pytest
 
 import partcad as pc
 
+from .test_kinematics import _close_pose
+
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "builtin", "import"))
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "builtin", "export"))
@@ -246,3 +248,34 @@ def test_a_body_says_what_its_parts_agree_on_and_reports_where_they_do_not():
     inertial = link.inertial(planned.options)
     assert inertial["mass"] == pytest.approx(1.0)
     assert inertial["centerOfMass"] == pytest.approx([100.0, 0.0, 0.0])
+
+
+@pytest.mark.parametrize(
+    "lower, upper, start",
+    [
+        (-90.0, 90.0, 0.0),
+        # A knee that cannot straighten, and a gripper that cannot close to nought.
+        (-154.7, -4.6, -4.6),
+        (10.0, 40.0, 10.0),
+        (0.0, 40.0, 0.0),
+        (None, -5.0, -5.0),
+        (None, None, 0.0),
+    ],
+)
+def test_a_joint_starts_at_zero_or_at_the_bound_nearest_it(lower, upper, start):
+    assert import_urdf.start_within(lower, upper) == start
+
+
+def test_every_freedom_states_where_it_starts():
+    knee = import_urdf.joint_record(joint("knee", "revolute", axis=[0, 1, 0], limit=limit(-2.7, -0.08)), context())
+    (freedom,) = knee["freedoms"]
+    assert freedom["start"] == pytest.approx(math.degrees(-0.08))
+    slide = import_urdf.joint_record(joint("s", "prismatic", axis=[1, 0, 0], limit=limit(0.01, 0.04)), context())
+    assert slide["freedoms"][0]["start"] == pytest.approx(10.0)
+    for joint_type in ("continuous", "planar", "floating"):
+        record = import_urdf.joint_record(joint("j", joint_type, axis=[0, 0, 1]), context())
+        assert all(freedom["start"] == 0.0 for freedom in record["freedoms"]), joint_type
+    # Where the start puts the child: the knee turned about its axis, by its start.
+    moved = import_urdf.start_motion(joint("knee", "revolute", axis=[0, 1, 0], limit=limit(-2.7, -0.08)))
+    assert _close_pose(moved, (urdf_common.axis_angle_to_quat((0, 1, 0), math.degrees(-0.08)), (0, 0, 0)))
+    assert import_urdf.start_motion(joint("a", "revolute", axis=[0, 1, 0], limit=limit(-1, 1))) == import_urdf.IDENTITY

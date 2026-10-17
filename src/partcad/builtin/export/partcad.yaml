@@ -190,12 +190,14 @@ export:
     # infinite one; every joint written with them is reported.
     effort: 1000.0
     velocity: 100.0
-    # What a dummy link weighs (kg) and how hard it turns (kg.m^2 about each
-    # axis). A joint URDF has no type for - a ball, a universal or a screw - is
-    # a chain of single-axis joints through dummy links, and the engines refuse
-    # a link that weighs nothing.
-    dummyMass: 0.001
-    dummyInertia: 0.000001
+    # What to do with a joint URDF has no type for - a cylindrical, screw,
+    # universal, ball or composite one: 'refuse' it, naming it and the ways on,
+    # or write it as a chain of single-axis joints through links with no
+    # '<inertial>' ('massless'), which is how a URDF read only for its
+    # kinematics (robot_state_publisher, MoveIt) states one, and what every
+    # simulator that reads a URDF drops. Nothing is written with a mass nobody
+    # measured: the 'dummyMass' and 'dummyInertia' this used to take are gone.
+    composites: refuse
     # 'robot_name' defaults to the object's label, 'mesh_dir' to
     # '<file stem>_meshes' next to the URDF, and 'mesh_prefix' to empty (which
     # makes the mesh references relative to the URDF file; a ROS package sets it
