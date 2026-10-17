@@ -194,6 +194,20 @@ class FakeInstallAction:
         return dict(self.update_stats, count=count)
 
 
+class FakeSandboxLock:
+    """``partcad.sandbox_lock``: records each configuration the slots were sized for.
+
+    In order, so that a test can tell which request's configuration the slots
+    were left at -- they belong to the process, and every request moves them.
+    """
+
+    def __init__(self):
+        self.followed = []
+
+    def follow(self, config):
+        self.followed.append(config)
+
+
 class FakePartcad:
     """Stands in for the ``partcad`` module on ``session.partcad``.
 
@@ -211,6 +225,7 @@ class FakePartcad:
         self.logging = FakeLogging()
         self.actions = SimpleNamespace(package=FakeInstallAction())
         self.user_config = user_config if user_config is not None else FakeUserConfig()
+        self.sandbox_lock = FakeSandboxLock()
         self.contexts_built = []  # every context the daemon constructed, in order
         self.init_calls = []  # pc.init() must never be used to build one
         self.context_error = None  # raised by the next Context() call
@@ -923,6 +938,54 @@ def test_a_client_that_sends_no_configuration_gets_the_daemon_s_own(tmp_path):
     # And it stays reusable rather than rebuilding on every call.
     operations.context_create(session, {"url": workspace_url(tmp_path)})
     assert len(session.partcad.contexts_built) == 1
+
+
+def test_the_sandbox_slots_are_sized_for_the_caller_before_the_context_is_built(tmp_path):
+    """PC_THREADS_MAX on a daemon started without it: the slots are the process's,
+    sized once at import from the daemon's own configuration, and a client's
+    'threadsMax' used to stop at the context."""
+    session, _ = make_session()
+    built_before = []
+    follow = session.partcad.sandbox_lock.follow
+
+    def follow_noting_what_was_built(config):
+        built_before.append(len(session.partcad.contexts_built))
+        follow(config)
+
+    session.partcad.sandbox_lock.follow = follow_noting_what_was_built
+
+    create_with_config(session, tmp_path, threadsMax=6)
+
+    followed = session.partcad.sandbox_lock.followed
+    assert followed[0].settings == {"threadsMax": 6}
+    assert followed[0] is session.partcad.contexts_built[0].user_config
+    assert built_before[0] == 0
+
+
+def test_each_operation_sizes_the_slots_for_its_own_context_again(tmp_path):
+    """Requests are served one at a time, and another client's may have run in
+    between: the slots are left at whatever that one asked for."""
+    session, _ = make_session()
+    first_dir, second_dir = tmp_path / "one", tmp_path / "two"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    six = create_with_config(session, first_dir, threadsMax=6)["context"]
+    create_with_config(session, second_dir, threadsMax=8)
+
+    operations._ctx(session, {"context": six})
+
+    assert session.partcad.sandbox_lock.followed[-1] is session.contexts[six].user_config
+
+
+def test_a_client_that_sends_no_configuration_gets_the_daemon_s_own_slots(tmp_path):
+    """The VS Code extension: the daemon's own 'threadsMax', not the last CLI's."""
+    own = FakeUserConfig()
+    session, _ = make_session(own)
+    operations.context_create(session, {"url": workspace_url(tmp_path)})
+
+    operations._ctx(session, {})
+
+    assert session.partcad.sandbox_lock.followed[-1] is own
 
 
 def test_two_workspaces_keep_their_own_configurations(tmp_path):

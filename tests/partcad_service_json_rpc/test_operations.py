@@ -115,12 +115,23 @@ class FakeNeedsUpdateException(Exception):
     """Stand-in for ``partcad.exception.NeedsUpdateException``."""
 
 
+class FakeSandboxLock:
+    """``partcad.sandbox_lock``, which every operation on a context sizes its slots through."""
+
+    def __init__(self):
+        self.followed = []
+
+    def follow(self, config):
+        self.followed.append(config)
+
+
 class FakePartcad:
     __version__ = "0.7.158"
 
     def __init__(self):
         self.logging = RecordingLogging()
         self.user_config = FakeUserConfig()
+        self.sandbox_lock = FakeSandboxLock()
         self.utils = FakeUtils()
         # A real 'partcad' exposes this, and the load operations catch through
         # it to tell "PartCAD is too old" apart from an ordinary failure.

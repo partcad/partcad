@@ -94,7 +94,20 @@ at all).
   process and it is the machine, not the thread pool, that decides how many fit; `threadsMax` sizes it. Both are
   polled rather than blocked on: they are taken from several event loops at once (a part is instantiated on a
   worker thread running a loop of its own), and a task that blocked its own loop waiting for a lock the task
-  beside it is about to release would never see it released.
+  beside it is about to release would never see it released. The slots are a process-wide count that can be
+  **resized**, because a daemon outlives every configuration it serves: `sandbox_lock.follow(config)` sizes them
+  for the configuration a request carries, and the daemon calls it in `context.create` and in `_ctx` (see
+  `src/partcad_service_json_rpc/AGENTS.md`). Sized once at import, they ignored the `PC_THREADS_MAX` of every
+  command a warm daemon served.
+- **`threadsMax` is never below `THREADS_MAX_MINIMUM` (4)**, and the floor is applied where the value is read, in
+  `partcad_utils.user_config`: the file, `PC_THREADS_MAX`, a client's configuration (`from_dict`), and an
+  assignment (`--threads-max`) all go through the `threads_max` property, and what is unset is
+  `default_threads_max()` (one per core, at least 4). Fewer is the nested-pool deadlock: an alias, enrich or
+  extrusion is instantiated on a constrained-pool thread and asks the same pool for a thread to build its source
+  on (`Part.get_shape` -> `threadpool_manager.run_async`), so as many of those at once as the pool has threads
+  wait forever. The floor makes that unlikely, not impossible. Warnings about it go through
+  `pc_logging.warning_once`, which says a message once per process and holds it until a handler can render it --
+  both ends find these before their log is connected.
 - **Location/coordinate format**: 3D locations (OpenCASCADE `TopLoc_Location`) are represented as
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.

@@ -127,3 +127,40 @@ def test_building_the_session_says_this_process_serves(monkeypatch):
     assert process_role.is_daemon() is False
     m._build_session(m.parse_args([]))
     assert process_role.is_daemon() is True
+
+
+@pytest.mark.parametrize("argv, said", [([], True), (["--http"], True), (["--stdio"], False)])
+def test_what_the_service_found_in_its_own_configuration_is_not_left_for_a_client(monkeypatch, capsys, argv, said):
+    """A 'threadsMax' below the minimum in the environment the service inherited.
+
+    It is found as the configuration is read, before anything can render it,
+    and held (see 'partcad_utils.logging.warning_once'). Held any longer it would
+    be forwarded to the first client served -- which started this process from
+    the same environment, has said it already, and runs its commands under a
+    configuration of its own. So it goes to the service's own stderr (the
+    daemon's log, the terminal of whoever ran '--http'), and a '--stdio' child,
+    whose stderr is its client's terminal, does not say it again.
+    """
+    import logging
+    from unittest import mock
+
+    from partcad_utils import logging as pc_logging
+    from partcad_utils import process_role
+
+    monkeypatch.setattr(process_role, "_is_daemon", False)
+    monkeypatch.setattr(m, "Session", mock.MagicMock())
+    monkeypatch.setattr(m.config_restart, "remember", lambda: None)
+    monkeypatch.setattr(pc_logging, "_said_once", set())
+    monkeypatch.setattr(pc_logging, "_held", {"key": "threadsMax 2 is below the minimum of 4; using 4 instead"})
+    logger = logging.getLogger("partcad")
+    monkeypatch.setattr(logger, "handlers", [])
+    level = logger.level
+    logger.setLevel(logging.INFO)
+    try:
+        m._build_session(m.parse_args(argv))
+    finally:
+        logger.setLevel(level)
+
+    assert pc_logging._held == {}
+    assert "key" in pc_logging._said_once
+    assert ("threadsMax 2 is below the minimum of 4" in capsys.readouterr().err) is said

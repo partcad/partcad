@@ -38,6 +38,11 @@ that copy rather than from the configuration it was started with. So ``pc --deve
 says even when a daemon has been running since before you set it, and there is no daemon to restart after
 changing a setting.
 
+``--threads-max`` (``PC_THREADS_MAX``, ``threadsMax``) is one of those settings too: it says how many sandbox
+processes run at once, and the daemon sizes them for each command it serves. It is never lower than 4 -- a lower
+value is raised to 4 with a warning -- and when nothing sets it, it is one per CPU core, still at least 4. See
+:ref:`threads-max`.
+
 An assembly is built out of other assemblies, and the daemon builds those **one at a time, each in a request of
 its own**. So asking for an assembly whose sub-assemblies have not been built yet prints a line naming them::
 

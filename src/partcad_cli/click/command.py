@@ -235,7 +235,10 @@ click.rich_click.COMMAND_GROUPS = {
     type=int,
     default=None,
     show_envvar=True,
-    help="Maximum number of processing threads to use (not a strict limit)",
+    help=(
+        "How much of the machine to use: the size of the thread pools (not a strict limit) and how many sandbox "
+        "processes run at once. At least 4; a lower value is raised to 4"
+    ),
 )
 @click.option(
     "--cache-mem",
@@ -547,6 +550,13 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             pc_logging.setLevel(logging.DEBUG)
         else:
             pc_logging.setLevel(logging.INFO)
+
+    # What the configuration had to say before there was anywhere to say it --
+    # a 'threadsMax' below the minimum, found while 'partcad_utils.user_config'
+    # was imported or as the loop above applied '--threads-max' -- said now,
+    # through the renderer and at the verbosity just chosen (see
+    # 'partcad_utils.logging.warning_once').
+    pc_logging.release_held_warnings()
 
     # Start telemetry as soon as the config and logging are initialized
     flat_params = {k: str(v) for k, v in ctx.params.items()}
