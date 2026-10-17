@@ -989,7 +989,11 @@ jobs:
     # dependency tree into each sandbox (~20 min on the previous stack). Measured
     # here: ubuntu ~25-31 min, Windows ~38-50 min -- the 45-minute step was still
     # catching the slower Windows runs, so give it headroom.
-    timeout-minutes: 60
+    # 60 -> 75: on the version bump (the "queue"/"deep" tiers) "windows-latest,
+    # 3.10" had reached 56-57 minutes by 0.8.204, and the simulation safety tests
+    # (#797) took it past 60 at 99% on 0.8.205 -- a job cancelled at its limit
+    # uploads no coverage and says nothing about the tests it did not reach.
+    timeout-minutes: 75
 
     # The tag PartCAD addresses its own container images by, empty on a run
     # that built none of its own -- and an empty value is the release, which is

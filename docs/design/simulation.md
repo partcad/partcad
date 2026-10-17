@@ -1085,7 +1085,12 @@ Rules for plugins:
     watchdog thread cannot run (held in native code, stopped). A bounded run is started as a session of its own (a
     new process group on Windows), and `runtime.kill_process_tree` kills its descendants (`psutil`), the group, and
     the process (`taskkill /T` on Windows). Inside a container, that reaches the `docker exec` client only; the
-    wrapper is the net there.
+    wrapper is the net there. This bound must not need the event loop: on macOS, CPython's threaded child watcher
+    (3.14.8) takes a *stopped* child for an exited one and reaps it with a blocking `waitpid` in the loop's own thread,
+    which holds every timer, `wait_for`'s included, for as long as the child stays stopped. So `runtime.communicate`
+    starts a thread that kills the tree `BACKSTOP` (5 s) after the bound if nothing has, and reports that as the
+    timeout. Found by the frozen-plugin test hanging the macOS job; a pull request never runs macOS (it is in the
+    merge queue's tier), which is why it reached `devel`.
   - A non-zero exit, a signal, an empty answer and an answer that is not a JSON object are `SimulationCrash`, carrying
     the last 30 lines of standard error; a spent budget is `SimulationTimeout`. Neither is a traceback, and neither is
     cached.
