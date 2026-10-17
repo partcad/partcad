@@ -836,6 +836,17 @@ def test_the_starting_values_put_the_child_where_the_assembly_shows_it(tmp_path,
     assert _close_pose(kinematics.compose(arm.parent.world, arm.joint.location()), arm.world)
 
 
+def test_a_ball_carries_its_one_bound(tmp_path, stand_in_geometry):
+    ctx = _context(
+        tmp_path,
+        {"rig.assy": ONE_JOINT.format(params="")},
+        "assemblies:\n  rig: {type: assy}\n",
+        bore="motion: {type: ball, limits: {upper: 20}}",
+    )
+    arm = kinematics.bodies(_tree(ctx, ":rig")).by_name("arm")
+    assert (arm.joint.kind, arm.joint.turn_limit) == (kinematics.BALL, 20.0)
+
+
 #
 # The body rule (docs/design/simulation.md, section 7)
 #

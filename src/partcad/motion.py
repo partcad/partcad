@@ -22,6 +22,22 @@ stated, in one of two ways:
     port's Z axis unless 'axis:' says otherwise, between 'limits:' where those
     apply. 'KINDS' below is the list, and 'Motion.implied()' what each implies.
 
+The two say one thing (docs/design/simulation.md, section 8.13.2): 'dof' is the
+declaration and 'type' its short form, so a 'type' stated beside a 'dof' is an
+assertion about it, and one that does not hold is an error. 'limits' is how the
+short form states the range of the parameter it implies; where that parameter
+is declared with a range of its own, the two have to agree. A side of 'limits'
+it does not state is the parameter's, and an open one is stated as YAML's own
+infinity ('limits: {lower: -.inf, upper: .inf}'), which is how a freedom whose
+parameter has a range is said to have none. 'continuous' is that, spelled the
+old way: a 'revolute' open on both sides, read as one and kept only so that
+what was written with it still means what it meant ('pc lint' says so).
+
+A ball is bounded by one angle - how far it turns from its zero, 'limits:
+{upper: 30}' - because that is all a ball can be bounded by without a gimbal in
+it; a range on any one of its three turns is an error. To bound each turn,
+declare the turns themselves in 'dof', which is a composite and not a ball.
+
 This module only *reads* a declaration: it turns one into the freedoms it states
 and reports what is wrong with it. Matching those freedoms to the parameters of
 the two interfaces of a connection, combining both sides and building the joint
@@ -48,10 +64,9 @@ BALL = "ball"
 PLANAR = "planar"
 FLOATING = "floating"
 
-# Every kind of joint 'motion.type' may name. The first eight are what URDF and
-# the converter have always written; 'cylindrical' and 'universal' are the two
-# a pairing of ordinary interfaces needs that URDF has no word for - a shaft in
-# a plain bore, and a cardan joint.
+# Every kind of joint 'motion.type' may name: one per physical joint - the six
+# lower pairs, the universal (Hooke) joint, and 'fixed' and 'floating' at the two
+# ends of the range - plus 'continuous', which is not one of them.
 KINDS = (
     FIXED,
     REVOLUTE,
@@ -65,12 +80,27 @@ KINDS = (
     FLOATING,
 )
 
+# The spellings 'type' still reads and no longer means anything of its own, and
+# what each is read as. 'continuous' is a revolute open on both sides - one
+# physical joint, of which a bound on either side is a property, not a second
+# kind (section 8.13.2) - and is reported by 'pc lint' rather than by the
+# 'connect' check: it is not wrong, only old ('partcad_utils.assy_lint').
+DEPRECATED_KINDS = {CONTINUOUS: REVOLUTE}
+
 # The kinds 'limits:' bounds, and which of their freedoms it bounds. A screw's
-# limits are the turn's: the move follows the turn by the thread. Every other
+# limits are the turn's: the move follows the turn by the thread. A ball's are
+# one angle, how far it turns from its zero, and not any one turn's. Every other
 # kind has more than one freedom and no way to say which of them one 'lower'
 # and one 'upper' are about, so a range there is stated on each parameter and
 # the parameter named in 'dof:' instead.
 LIMITED_KINDS = (REVOLUTE, PRISMATIC, SCREW)
+
+# The furthest a ball can turn from its zero, in degrees: half a turn about some
+# axis reaches every orientation there is.
+BALL_LIMIT = 180.0
+
+# The two sides of a range, as 'limits:' names them.
+BOUNDS = ("lower", "upper")
 
 # The fields a 'motion:' section may state. Everything but 'dof' and
 # 'softLimits'/'mimic' describes the freedoms; those two describe the joint.
@@ -166,27 +196,43 @@ class Freedom:
     """One degree of freedom a 'motion:' implies, before it is matched to a parameter.
 
     'axis' is a unit vector in the frame the declaration is stated in - the
-    port's, for an interface - and 'lower'/'upper' are in its sense: degrees
-    about it, or millimetres along it. Both are None unless 'limits:' gave them,
-    in which case 'limited' says so; 'unlimited' is the other definite answer,
-    which 'continuous' gives. Neither means the range is whatever the parameter
-    the freedom is matched to says.
+    port's, for an interface. 'bounds' is what 'limits:' states about its
+    range, side by side: "lower" and "upper" each a number (degrees about the
+    axis, or millimetres along it) or None for a side stated open, and a side
+    not stated absent. A side it does not state is whatever the parameter the
+    freedom is matched to says, so a freedom with no 'bounds' at all ranges as
+    its parameter does.
 
     'follows' is the index of another freedom of the same declaration that this
     one is coupled to: a screw's move follows its turn by the thread.
     """
 
-    def __init__(self, kind, axis, lower=None, upper=None, limited=False, unlimited=False, follows=None):
+    def __init__(self, kind, axis, bounds=None, follows=None):
         self.kind = kind
         self.axis = axis
-        self.lower = lower
-        self.upper = upper
-        self.limited = limited
-        self.unlimited = unlimited
+        self.bounds = dict(bounds or {})
         self.follows = follows
 
+    @property
+    def lower(self):
+        return self.bounds.get("lower")
+
+    @property
+    def upper(self):
+        return self.bounds.get("upper")
+
+    @property
+    def limited(self) -> bool:
+        """Whether 'limits:' says anything about this freedom's range."""
+        return bool(self.bounds)
+
+    @property
+    def unlimited(self) -> bool:
+        """Whether 'limits:' states both sides open: what 'continuous' says outright."""
+        return all(side in self.bounds and self.bounds[side] is None for side in BOUNDS)
+
     def __repr__(self):
-        return "<Freedom %s %s [%s, %s]>" % (self.kind, self.axis, self.lower, self.upper)
+        return "<Freedom %s %s %s>" % (self.kind, self.axis, self.bounds)
 
 
 class Motion:
@@ -202,12 +248,17 @@ class Motion:
         self.where = where
         self.problems = []
         self.config = config
+        # The kind of joint, as what it is read as: 'continuous' is a
+        # 'revolute', and 'written' is what the declaration called it.
         self.type = None
+        self.written = None
         self.dof = None
         self.axis = None
-        self.lower = None
-        self.upper = None
-        self.has_limits = False
+        # What 'limits:' states, side by side: a number, or None for a side
+        # stated open. A side it does not state is not in it.
+        self.bounds = {}
+        # A ball's one bound, in degrees from its zero (None: unbounded).
+        self.turn_limit = None
         self.soft_limits = None
         self.mimic = None
 
@@ -243,13 +294,36 @@ class Motion:
             return None
         return dict(value)
 
+    @property
+    def lower(self):
+        return self.bounds.get("lower")
+
+    @property
+    def upper(self):
+        return self.bounds.get("upper")
+
+    @property
+    def has_limits(self) -> bool:
+        return bool(self.bounds)
+
+    @property
+    def named(self):
+        """The kind of joint as the declaration names it, for whoever reads a report."""
+        return self.written or self.type
+
+    @property
+    def deprecated(self):
+        """The deprecated spelling this declaration uses, or None (see 'DEPRECATED_KINDS')."""
+        return self.written if self.written in DEPRECATED_KINDS else None
+
     def _read_type(self, value):
         if value is None:
             return
         if value not in KINDS:
             self._problem("'%s' is not a kind of joint (%s); ignoring it" % (value, ", ".join(KINDS)))
             return
-        self.type = value
+        self.written = value
+        self.type = DEPRECATED_KINDS.get(value, value)
 
     def _read_dof(self, value):
         if value is None:
@@ -283,21 +357,29 @@ class Motion:
             self._problem("'limits' must be a section with 'lower' and 'upper', ignoring it")
             return
         bounds = {}
-        for field in ("lower", "upper"):
+        for field in BOUNDS:
             bound = value.get(field)
             if bound is None:
                 continue
-            if isinstance(bound, bool) or not isinstance(bound, (int, float)) or not math.isfinite(bound):
+            if isinstance(bound, bool) or not isinstance(bound, (int, float)) or math.isnan(bound):
                 # An expression that did not resolve arrives here as its text.
                 self._problem("'limits.%s' must be a number, ignoring it: %r" % (field, bound))
                 continue
+            if math.isinf(bound):
+                # YAML's own infinity is an open side, stated - but only the one
+                # that leaves the range open: a lower bound of +inf, or an upper
+                # one of -inf, leaves nothing to move through.
+                if (bound < 0) == (field == "lower"):
+                    bounds[field] = None
+                else:
+                    self._problem("'limits.%s' of %s leaves nothing to move through, ignoring it" % (field, bound))
+                continue
             bounds[field] = float(bound)
-        if "lower" in bounds and "upper" in bounds and bounds["lower"] > bounds["upper"]:
-            self._problem("'limits' run backwards, from %s to %s: ignoring them" % (bounds["lower"], bounds["upper"]))
+        lower, upper = bounds.get("lower"), bounds.get("upper")
+        if lower is not None and upper is not None and lower > upper:
+            self._problem("'limits' run backwards, from %s to %s: ignoring them" % (lower, upper))
             return
-        self.has_limits = bool(bounds)
-        self.lower = bounds.get("lower")
-        self.upper = bounds.get("upper")
+        self.bounds = bounds
 
     def _check_consistency(self):
         """What a declaration says that the kind it names cannot mean."""
@@ -312,15 +394,44 @@ class Motion:
                 self._problem("a fixed motion keeps no degree of freedom, yet 'dof' names %s" % ", ".join(self.dof))
             if self.has_limits:
                 self._problem("a fixed motion has no limits")
-        elif self.type == CONTINUOUS and self.has_limits:
-            self._problem("a continuous motion turns without limits, yet 'limits' bound it; ignoring them")
-            self.has_limits, self.lower, self.upper = False, None, None
+        elif self.written == CONTINUOUS:
+            if any(bound is not None for bound in self.bounds.values()):
+                self._problem(
+                    "a continuous motion is a revolute one with both bounds open, yet 'limits' bound it; ignoring "
+                    "them (say 'type: revolute' to bound it)"
+                )
+            # What 'continuous' has always said, and all it says.
+            self.bounds = {"lower": None, "upper": None}
+        elif self.type == BALL:
+            self._read_ball_limit()
         elif self.has_limits and self.type not in LIMITED_KINDS:
             self._problem(
                 "'limits' do not say which of a %s motion's degrees of freedom they bound; "
                 "state a range on each parameter and name them in 'dof' instead" % self.type
             )
-            self.has_limits, self.lower, self.upper = False, None, None
+            self.bounds = {}
+
+    def _read_ball_limit(self):
+        """A ball's 'limits': one angle, how far it turns from its zero, as 'upper'."""
+        bounds, self.bounds = self.bounds, {}
+        if not bounds:
+            return
+        lower = bounds.get("lower", 0.0)
+        if lower != 0.0:
+            self._problem(
+                "a ball is bounded by one angle, how far it turns from its zero ('limits: {upper: <degrees>}'), and "
+                "not by a 'lower'; ignoring it"
+            )
+        if "upper" not in bounds or bounds["upper"] is None:
+            return
+        upper = bounds["upper"]
+        if not 0.0 < upper <= BALL_LIMIT:
+            self._problem(
+                "a ball's 'limits.upper' is how far it turns from its zero, more than 0 and at most %g degrees; "
+                "ignoring %s" % (BALL_LIMIT, upper)
+            )
+            return
+        self.turn_limit = upper
 
     @property
     def declared(self) -> bool:
@@ -339,26 +450,21 @@ class Motion:
         if self.type is None or self.type == FIXED:
             return []
         axis = self.axis or Z_AXIS
-        limits = dict(lower=self.lower, upper=self.upper, limited=self.has_limits)
+        bounds = self.bounds
 
         if self.type == REVOLUTE:
-            return [Freedom(TURN, axis, **limits)]
-        if self.type == CONTINUOUS:
-            return [Freedom(TURN, axis, unlimited=True)]
+            return [Freedom(TURN, axis, bounds)]
         if self.type == PRISMATIC:
-            return [Freedom(MOVE, axis, **limits)]
+            return [Freedom(MOVE, axis, bounds)]
         if self.type == CYLINDRICAL:
             return [Freedom(TURN, axis), Freedom(MOVE, axis)]
         if self.type == SCREW:
-            return [Freedom(TURN, axis, **limits), Freedom(MOVE, axis, follows=0)]
+            return [Freedom(TURN, axis, bounds), Freedom(MOVE, axis, follows=0)]
         if self.type == UNIVERSAL:
-            second = X_AXIS
-            if parallel(axis, X_AXIS):
-                # The port's X axis is the second turn, and it is the first one
-                # here: both turns would be one, which is no universal joint.
-                self._problem("a universal motion about the port's X axis turns twice about one axis; using Y")
-                second = Y_AXIS
-            return [Freedom(TURN, axis), Freedom(TURN, second)]
+            # The port's X, unless that is 'axis' itself: two turns about one
+            # line are one turn, which the connection would merge, and no
+            # universal joint. The port's Y is then the one across it.
+            return [Freedom(TURN, axis), Freedom(TURN, Y_AXIS if parallel(axis, X_AXIS) else X_AXIS)]
         if self.type == BALL:
             return [Freedom(TURN, X_AXIS), Freedom(TURN, Y_AXIS), Freedom(TURN, Z_AXIS)]
         if self.type == PLANAR:
@@ -376,8 +482,14 @@ class Motion:
         return []
 
     def joint_record(self) -> dict:
-        """What this declaration says about the joint rather than about its freedoms."""
+        """What this declaration says about the joint rather than about its freedoms.
+
+        A ball's one bound is the joint's ('turnLimit', degrees from its zero):
+        none of its three turns has it.
+        """
         record = {}
+        if self.turn_limit is not None:
+            record["turnLimit"] = self.turn_limit
         if self.soft_limits:
             record["softLimits"] = dict(self.soft_limits)
         if self.mimic:

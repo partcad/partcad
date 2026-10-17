@@ -322,9 +322,120 @@ def test_a_screw_s_move_is_not_summed_with_a_move_along_its_axis(tmp_path):
     ]
 
 
-def test_a_contradiction_found_while_implying_freedoms_is_reported(tmp_path):
+def test_a_universal_joint_about_the_port_s_x_is_one_and_not_a_revolute(tmp_path):
+    # Its second turn is the port's Y there, so the two are not one line, and
+    # nothing merges them into a single turn.
     arm = _child(_rig(tmp_path, _links(), bore="motion: {type: universal, axis: [1, 0, 0]}"), "arm")
-    assert any("turns twice about one axis" in problem for problem in arm.joint_problems)
+    assert [step.kind for step in arm.joint.free_steps()] == ["turn", "turn"]
+    assert arm.joint.type == "universal" and arm.joint_problems == []
+
+
+def test_a_contradiction_found_while_implying_freedoms_is_reported(tmp_path):
+    # A ball matched to a declared turn with a range of its own, which no ball keeps.
+    bore = "parameters: {turnX: [-30, 30]}\nmotion: ball"
+    arm = _child(_rig(tmp_path, _links(), bore=bore), "arm")
+    assert any("a ball is bounded by one angle" in problem for problem in arm.joint_problems)
+    # The turn is the ball's, open: the range is what is wrong, not the turn.
+    assert [(step.lower, step.upper) for step in arm.joint.free_steps()] == [(None, None)] * 3
+
+
+#
+# Bounds: the parameter's range, 'limits', and an open side
+#
+
+
+def test_limits_that_agree_with_the_parameter_s_range_are_one_travel(tmp_path):
+    bore = "parameters: {turnZ: [-90, 90]}\nmotion: {type: revolute, limits: {lower: -90, upper: 90}}"
+    arm = _child(_rig(tmp_path, _links(), bore=bore), "arm")
+    (free,) = arm.joint.free_steps()
+    assert (free.lower, free.upper) == (-90.0, 90.0) and arm.joint_problems == []
+
+
+def test_limits_that_disagree_with_the_parameter_s_range_are_an_error(tmp_path):
+    """Section 8.13.2: both are a freedom's travel, so stating two of them is a contradiction."""
+    bore = "parameters: {turnZ: [-150, 150]}\nmotion: {type: revolute, limits: {lower: -150, upper: 30}}"
+    arm = _child(_rig(tmp_path, _links(), bore=bore), "arm")
+    (free,) = arm.joint.free_steps()
+    # The target's +Z is the contact frame's -Z, so 'upper: 30' is turnZ's -30 -
+    # which is not its -150. The parameter's range is the travel.
+    assert (free.lower, free.upper) == (-150.0, 150.0)
+    (problem,) = arm.joint_problems
+    assert "one travel stated twice" in problem and "'turnZ'" in problem
+    assert ("arm", problem) in asyncio.run(_reload(tmp_path).get_connect_problems())
+
+
+def test_a_side_limits_leave_unstated_is_the_parameter_s(tmp_path):
+    pin = "parameters: {turnZ: [-150, 150]}\nmotion: {type: revolute, limits: {upper: 150}}"
+    arm = _child(_rig(tmp_path, _links(), pin=pin), "arm")
+    (free,) = arm.joint.free_steps()
+    assert (free.lower, free.upper) == (-150.0, 150.0) and arm.joint_problems == []
+
+
+def test_an_open_side_is_open_whatever_the_parameter_says(tmp_path):
+    """'limits: {lower: -.inf}': how a freedom whose parameter has a range is said to have none on that side."""
+    pin = "parameters: {turnZ: [-150, 150]}\nmotion: {type: revolute, limits: {lower: -.inf}}"
+    arm = _child(_rig(tmp_path / "one", _links(), pin=pin), "arm")
+    (free,) = arm.joint.free_steps()
+    assert (free.lower, free.upper) == (None, 150.0) and arm.joint_problems == []
+    both = "parameters: {turnZ: [-150, 150]}\nmotion: {type: revolute, limits: {lower: -.inf, upper: .inf}}"
+    arm = _child(_rig(tmp_path / "both", _links(), pin=both), "arm")
+    (free,) = arm.joint.free_steps()
+    assert (free.lower, free.upper) == (None, None) and arm.joint.type == "revolute"
+
+
+def test_a_parameter_declared_open_is_open(tmp_path):
+    # Infinity as a parameter's own bound, which is a number YAML writes.
+    bore = "parameters: {turnZ: [-.inf, .inf, 0]}\nmotion: {dof: [turnZ]}"
+    arm = _child(_rig(tmp_path, _links("toParams: {turnZ: 40}"), bore=bore), "arm")
+    (free,) = arm.joint.free_steps()
+    assert (free.lower, free.upper, free.value) == (None, None, 40.0)
+
+
+def test_a_ball_s_one_bound_is_the_joint_s(tmp_path):
+    arm = _child(_rig(tmp_path, _links(), bore="motion: {type: ball, limits: {upper: 30}}"), "arm")
+    joint = arm.joint
+    assert (joint.type, joint.turn_limit) == ("ball", 30.0) and arm.joint_problems == []
+    assert all(step.lower is None and step.upper is None for step in joint.free_steps())
+    # It travels with the joint, to every exporter, and back.
+    record = joint.to_envelope()
+    assert record["turnLimit"] == 30.0
+    assert pc_joint.Joint.from_envelope(record).turn_limit == 30.0
+    assert joint.info()["turnLimit"] == "30 deg from its zero"
+
+
+def test_turns_bounded_one_by_one_are_named_in_dof(tmp_path):
+    """What a ball cannot be, three turns each with its own range: not a ball, but a composite."""
+    bore = "parameters: {turnX: [-30, 30], turnY: [-20, 20], turnZ: [-90, 90]}\nmotion: {dof: [turnX, turnY, turnZ]}"
+    arm = _child(_rig(tmp_path, _links(), bore=bore), "arm")
+    assert arm.joint.type == "composite" and arm.joint_problems == []
+
+
+#
+# The type a joint is
+#
+
+
+@pytest.mark.parametrize(
+    "bore, kind",
+    [
+        ("motion: {type: revolute, limits: {lower: 0, upper: 90}}", "revolute"),
+        # One turn is a revolute whatever its bounds: a bound is a property of it.
+        ("motion: revolute", "revolute"),
+        ("motion: continuous", "revolute"),
+        ("motion: prismatic", "prismatic"),
+        ("motion: cylindrical", "cylindrical"),
+        ("threadStep: 0.5\nmotion: screw", "screw"),
+        ("motion: universal", "universal"),
+        ("motion: ball", "ball"),
+        ("motion: planar", "planar"),
+        ("motion: floating", "floating"),
+        ("parameters: {turnZ: [-90, 90], moveX: [0, 10]}\nmotion: {dof: [turnZ, moveX]}", "composite"),
+    ],
+)
+def test_every_joint_says_the_type_it_is_and_pc_info_shows_it(tmp_path, bore, kind):
+    joint = _child(_rig(tmp_path, _links(), bore=bore), "arm").joint
+    assert joint.type == kind
+    assert joint.info()["type"] == kind
 
 
 def test_a_screw_with_no_thread_is_reported(tmp_path):
@@ -432,18 +543,27 @@ def test_the_mating_settles_what_the_two_sides_disagree_on(tmp_path):
 #
 
 
-def test_a_type_and_a_dof_that_disagree_are_reported_and_dof_wins(tmp_path):
+def test_a_type_and_a_dof_that_disagree_are_an_error_and_the_joint_is_the_dof(tmp_path):
+    """A 'type' beside a 'dof' is an assertion about it (section 8.13.2), and this one does not hold."""
     bore = "parameters: {moveZ: [0, 5]}\nmotion: {type: revolute, dof: [moveZ]}"
     arm = _child(_rig(tmp_path, _links(), bore=bore), "arm")
     assert [step.kind for step in arm.joint.free_steps()] == ["move"]
-    assert any("do not describe the same degrees of freedom" in problem for problem in arm.joint_problems)
+    (problem,) = [problem for problem in arm.joint_problems if "do not describe the same" in problem]
+    assert "one of the two is wrong" in problem
+    # It fails the 'connect' check, as every error a connection's joint has does.
+    assert ("arm", problem) in asyncio.run(_reload(tmp_path).get_connect_problems())
 
 
-def test_a_type_and_a_dof_that_agree_take_the_range_from_the_type(tmp_path):
+def test_a_type_and_a_dof_that_agree_take_the_open_sides_from_the_type(tmp_path):
+    # 'continuous' is a revolute with both sides stated open, which opens them.
     bore = "parameters: {turnZ: [-360, 360]}\nmotion: {type: continuous, dof: [turnZ]}"
     arm = _child(_rig(tmp_path, _links(), bore=bore), "arm")
     (free,) = arm.joint.free_steps()
     assert (free.lower, free.upper) == (None, None) and arm.joint_problems == []
+    # And 'limits' that disagree with the parameter 'dof' names are an error there too.
+    bore = "parameters: {turnZ: [-360, 360]}\nmotion: {type: revolute, dof: [turnZ], limits: {lower: 0}}"
+    arm = _child(_rig(tmp_path / "b", _links(), bore=bore), "arm")
+    assert any("one travel stated twice" in problem for problem in arm.joint_problems)
 
 
 def test_a_dof_naming_no_parameter_is_reported(tmp_path):
