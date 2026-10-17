@@ -67,8 +67,10 @@ import urdf_common  # noqa: E402
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again. 2: every link node states its joint, or what it is
-# attached to, and a joint with no '<axis>' turns about X.
-CACHE_VERSION = 2
+# attached to, and a joint with no '<axis>' turns about X. 3: a joint whose
+# limits leave zero out starts at the bound nearest zero, and the links below
+# it are placed there.
+CACHE_VERSION = 3
 
 # Mesh formats a URDF may name, mapped to the PartCAD part type that reads them.
 # COLLADA (.dae) is deliberately absent: it is common in URDF and PartCAD has no
@@ -444,14 +446,35 @@ def _principal(kind, axis):
     return None
 
 
+def start_within(lower, upper):
+    """Where a freedom bounded by 'lower' and 'upper' starts: URDF's zero, or the bound nearest it.
+
+    A URDF places every link with every joint at zero, and zero need not be
+    where a joint can be: a legged robot's knee bends between -2.7 and -0.08
+    rad, and a gripper's closed position is often not its zero. A joint that
+    starts outside its own bounds is one an engine starts against its stop,
+    and fails 'pc test''s 'connect' check (docs/design/simulation.md, 8.13.10),
+    so such a joint starts at the bound nearest zero instead, and the robot is
+    read - and drawn - there. Either bound may be None, for a side left open.
+    """
+    start = 0.0
+    if lower is not None and start < lower:
+        start = float(lower)
+    if upper is not None and start > upper:
+        start = float(upper)
+    return start
+
+
 def joint_freedoms(joint_type, axis, limits):
     """The degrees of freedom a URDF joint keeps, in PartCAD's terms.
 
-    Each is ``{"name", "kind", "axis", "lower", "upper"}``: a turn about, or a
-    move along, a unit 'axis' in the joint frame, between bounds in degrees or
-    millimetres (None where unlimited), under the name of the parameter it
-    becomes. One list, read both for the joint a link node carries and for the
-    interfaces 'pc convert assembly -t assy' writes, so that the two cannot
+    Each is ``{"name", "kind", "axis", "lower", "upper", "start"}``: a turn
+    about, or a move along, a unit 'axis' in the joint frame, between bounds in
+    degrees or millimetres (None where unlimited), starting at 'start' (zero,
+    unless the bounds leave zero out: see 'start_within'), under the name of
+    the parameter it becomes. One list, read for where the reader places each
+    link, for the joint a link node carries and for the interfaces and
+    connections 'pc convert assembly -t assy' writes, so that the three cannot
     come to disagree. A single freedom is 'angle' or 'offset', the names the
     converter has always written; a planar or a floating joint's are named
     after their principal axes, as 'motion: planar' and 'motion: floating'
@@ -459,11 +482,29 @@ def joint_freedoms(joint_type, axis, limits):
     """
     lower, upper = limits.get("lower"), limits.get("upper")
     if joint_type == "revolute":
-        return [{"name": "angle", "kind": TURN, "axis": axis, "lower": lower, "upper": upper}]
+        return [
+            {
+                "name": "angle",
+                "kind": TURN,
+                "axis": axis,
+                "lower": lower,
+                "upper": upper,
+                "start": start_within(lower, upper),
+            }
+        ]
     if joint_type == "continuous":
-        return [{"name": "angle", "kind": TURN, "axis": axis, "lower": None, "upper": None}]
+        return [{"name": "angle", "kind": TURN, "axis": axis, "lower": None, "upper": None, "start": 0.0}]
     if joint_type == "prismatic":
-        return [{"name": "offset", "kind": MOVE, "axis": axis, "lower": lower, "upper": upper}]
+        return [
+            {
+                "name": "offset",
+                "kind": MOVE,
+                "axis": axis,
+                "lower": lower,
+                "upper": upper,
+                "start": start_within(lower, upper),
+            }
+        ]
     if joint_type == "planar":
         u, v = plane_axes(axis)
         freedoms = [(MOVE, u, "offset"), (MOVE, v, "offset-2"), (TURN, axis, "angle")]
@@ -478,9 +519,47 @@ def joint_freedoms(joint_type, axis, limits):
             "axis": tuple(direction),
             "lower": None,
             "upper": None,
+            "start": 0.0,
         }
         for kind, direction, fallback in freedoms
     ]
+
+
+def joint_axis(joint):
+    """A URDF joint's axis as a list, URDF's default of X for one that moves along one and states none; or None."""
+    if getattr(joint, "axis", None) is not None:
+        return [float(v) for v in joint.axis]
+    if joint.type in AXIAL_TYPES:
+        return list(DEFAULT_AXIS)
+    return None
+
+
+def joint_limits(joint):
+    """A URDF joint's '<limit lower upper>' in PartCAD's units: degrees for a turn, millimetres for a move."""
+    angular = joint.type in ("revolute", "continuous")
+    to_pc = math.degrees if angular else (lambda v: v * urdf_common.MM_PER_M)
+    limit = getattr(joint, "limit", None)
+    limits = {}
+    if limit is not None:
+        for name in ("lower", "upper"):
+            value = getattr(limit, name, None)
+            if value is not None:
+                limits[name] = round(to_pc(float(value)), 9)
+    return limits
+
+
+def start_motion(joint):
+    """Where a URDF joint at its start ('start_within') puts its child, relative to the joint frame."""
+    pose = IDENTITY
+    for freedom in joint_freedoms(joint.type, _unit(joint_axis(joint) or DEFAULT_AXIS), joint_limits(joint)):
+        if not freedom["start"]:
+            continue
+        if freedom["kind"] == TURN:
+            moved = (urdf_common.axis_angle_to_quat(freedom["axis"], freedom["start"]), (0.0, 0.0, 0.0))
+        else:
+            moved = (urdf_common.IDENTITY_Q, tuple(a * freedom["start"] for a in freedom["axis"]))
+        pose = urdf_common.compose(pose, moved)
+    return pose
 
 
 def _unit_of(joint_type):
@@ -505,21 +584,16 @@ def joint_record(joint, context, robot=None):
     to_pc = math.degrees if angular else (lambda v: v * urdf_common.MM_PER_M)
 
     motion = {"type": joint.type}
-    if getattr(joint, "axis", None) is not None:
-        motion["axis"] = [float(v) for v in joint.axis]
-    elif joint.type in AXIAL_TYPES:
-        # URDF's own default, said out loud: left out, it would be read as the
-        # Z axis every PartCAD 'motion:' defaults to.
-        motion["axis"] = list(DEFAULT_AXIS)
+    # URDF's own default axis is said out loud: left out, it would be read as
+    # the Z axis every PartCAD 'motion:' defaults to.
+    axis = joint_axis(joint)
+    if axis is not None:
+        motion["axis"] = axis
 
     limit = getattr(joint, "limit", None)
     physics = {}
     if limit is not None:
-        limits = {}
-        for urdf_name, pc_name in (("lower", "lower"), ("upper", "upper")):
-            value = getattr(limit, urdf_name, None)
-            if value is not None:
-                limits[pc_name] = round(to_pc(float(value)), 9)
+        limits = joint_limits(joint)
         if limits:
             motion["limits"] = limits
         if getattr(limit, "effort", None) is not None:
@@ -590,8 +664,10 @@ def link_attachment(link_name, joints, robot, context):
     one: the parent's shape offset undone, then for each URDF joint on the way
     - more than one where links with no geometry lie between, which are no
     nodes of their own - its origin and the freedoms it keeps, then this link's
-    own shape offset. Every freedom is at zero, which is where a URDF places a
-    link, so the steps multiply out to where the walk placed it.
+    own shape offset. Every freedom is at its start - zero, where a URDF places
+    a link, or the bound nearest zero where its limits leave zero out
+    ('start_within') - which is where the walk placed it, so the steps
+    multiply out to the link's placement.
 
     It is named after its URDF joint: the first movable one, where several are
     folded into one. A 'mimic' between two joints of one such chain is a
@@ -636,7 +712,7 @@ def link_attachment(link_name, joints, robot, context):
                     "axis": [round(v, 12) for v in freedom["axis"]],
                     "lower": freedom["lower"],
                     "upper": freedom["upper"],
-                    "value": 0.0,
+                    "value": freedom["start"],
                     "source": [
                         {
                             "parameter": freedom["name"],
@@ -802,7 +878,8 @@ def walk_link(robot, link_name, relative, absolute, context, visited, ancestor):
     """Add a link's node to the flat list, then walk the links below it.
 
     **The joint chain is not nesting.** A URDF's tree is its kinematics, and an
-    assembly is one static configuration of it - every joint at zero - so a link
+    assembly is one static configuration of it - every joint at its start, which
+    is zero unless the joint's limits leave zero out ('start_within') - so a link
     hanging off another says nothing that the link's own placement does not
     already say. Nesting a sub-assembly per link would make an arm as deep as it
     has joints, for no information. So every link goes into one list at its
@@ -883,11 +960,14 @@ def walk_link(robot, link_name, relative, absolute, context, visited, ancestor):
         origin = urdf_common.from_urdf_origin(joint.origin)
         saved = context["joint_chain"]
         context["joint_chain"] = chain + [joint_name]
+        # 'relative' is what the URDF states, the joint origin, which is where
+        # the converter puts the joint; the link itself is placed at the
+        # joint's start, as its node's joint states it.
         walk_link(
             robot,
             child_name,
             urdf_common.compose(child_relative, origin),
-            urdf_common.compose(absolute, origin),
+            urdf_common.compose(urdf_common.compose(absolute, origin), start_motion(joint)),
             context,
             visited,
             child_ancestor,

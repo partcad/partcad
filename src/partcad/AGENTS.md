@@ -968,9 +968,13 @@ at all).
   `how`. `kinematics` is pure Python beside `mass_properties`, imported by the engine plugins' exporters and the
   URDF exporter (`builtin/export/export_urdf.py`, a link per body and a joint per pair) from the sandbox path; it
   turns the shape tree every implementation is handed (`shape_tree`) into `bodies()` (parts, frames, parents, joints re-expressed for the
-  body pair, combined physics) and classifies a joint's free steps (`classify()`). Do not give an exporter a copy of
+  body pair, combined physics) and classifies a joint's free steps (`classify()`) as one native type per physical
+  joint, or `composite` (docs/design/simulation.md, section 8.13). It also re-expresses a joint for an engine whose
+  zero has to be PartCAD's start (`rezeroed()`), and maps what an engine reads back into PartCAD's names and units
+  (`joint_map()`, which travels in the names sidecar, and `reading()`). Do not give an exporter a copy of
   the rule, and do not make the core depend on an exporter reading it: three exporters deciding for themselves which
-  parts are one body is three answers to what falls apart. A scene is also a simulation subject
+  parts are one body is three answers to what falls apart. `kinematics.CONTINUOUS` and `CHAIN` are kept only until the
+  engine plugins stop importing them -- their CI installs PartCAD from `devel` -- and nothing in this tree may use them. A scene is also a simulation subject
   (`simulation.SUBJECT_KINDS`), placed in its world by a `scene:` link.
 
 - **One shape, one tree, two forms** (`./src/partcad/shape_envelope.py`,

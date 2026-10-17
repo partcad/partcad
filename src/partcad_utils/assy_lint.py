@@ -61,11 +61,12 @@ lost information is dropped rather than reported. That trades a missed error for
 never underlining correct code, which is the right trade for an editor, and is
 why masking is the fallback rather than the check.
 
-Beside the schema, two things are checked that no schema can say: a link named
-by a ``connect:`` that nothing places ('check_links'), and, for what is marked
+Beside the schema, three things are checked that no schema can say: a link
+named by a ``connect:`` that nothing places ('check_links'); for what is marked
 manufacturable, an assembly item that is placed rather than connected and a part
 that nobody could make or buy ('check_manufacturable_assembly',
-'check_manufacturable_parts').
+'check_manufacturable_parts'); and a ``motion:`` that names a kind of joint by a
+deprecated spelling, as a warning ('check_motion').
 
 It lives here, next to ``framing`` and ``workspace``, because neither end owns
 it. The daemon checks a package's files when `pc lint` walks the package graph;
@@ -109,6 +110,20 @@ CODE_LINKS = "links"
 # placed by coordinates rather than connected, a part with no way to be had.
 # See 'check_manufacturable_assembly()' and 'check_manufacturable_parts()'.
 CODE_MANUFACTURABLE = "manufacturable"
+# A spelling PartCAD still reads and no longer means anything of its own: a
+# warning, never an error, since what was written with it still works. See
+# 'check_motion()'.
+CODE_DEPRECATED = "deprecated"
+
+# The 'motion.type' spellings that are deprecated, and what to write instead.
+# 'partcad.motion.DEPRECATED_KINDS' is what reads them; spelled out here because
+# this module imports nothing of 'partcad' (see the module docstring).
+DEPRECATED_MOTION_TYPES = {
+    "continuous": (
+        "'continuous' is a deprecated spelling of 'revolute' with both bounds open: write 'type: revolute', with "
+        "'limits: {lower: -.inf, upper: .inf}' where a parameter's range would otherwise bound it"
+    ),
+}
 
 # Kinds of masked region. They differ in what they are allowed to suppress:
 # an expression stands in for a *value*, a statement can add or remove *keys*.
@@ -716,6 +731,32 @@ def _required_only(subschemas):
     return names or None
 
 
+# What a branch of an anyOf/oneOf of choices may say beside its choices: what
+# it means, and whether it is deprecated. Neither changes what it accepts.
+_ANNOTATIONS = frozenset({"description", "deprecated", "type", "title"})
+
+
+def _choices_only(subschemas):
+    """The values an anyOf/oneOf whose branches are all 'enum' or 'const' accepts, or None.
+
+    How a value with a deprecated spelling is declared ('motion-type': the
+    current kinds, and 'continuous' marked deprecated beside them), which a
+    plain 'enum' cannot mark one value of.
+    """
+    values = []
+    for subschema in subschemas or []:
+        if not isinstance(subschema, dict) or not set(subschema) - _ANNOTATIONS <= {"enum", "const"}:
+            return None
+        if "enum" in subschema:
+            found = list(subschema["enum"])
+        elif "const" in subschema:
+            found = [subschema["const"]]
+        else:
+            return None
+        values.extend(value for value in found if value not in values)
+    return values or None
+
+
 def _unexpected_keys(error) -> list:
     """The property names an 'additionalProperties: false' error is about."""
     schema = error.schema if isinstance(error.schema, dict) else {}
@@ -773,6 +814,10 @@ def _describe(error):
         names = _required_only(error.validator_value)
         if names:
             return "expected at least one of %s" % _quoted(names)
+        choices = _choices_only(error.validator_value)
+        if choices:
+            # jsonschema's own wording for an 'enum', which this is spelled as more.
+            return "%r is not one of %r" % (error.instance, choices)
     if error.validator == "pattern" and error.validator_value == EXPRESSION_PATTERN:
         # A string where a number or a '%...%' expression belongs. Every use of
         # the 'expression' definition is one branch of a 'oneOf' with a number,
@@ -1110,6 +1155,53 @@ def _report_at(diagnostics, root_node, path, key, message):
     )
 
 
+def check_motion(data, root_node=None) -> list:
+    """Report every 'motion:' that names a deprecated kind of joint ('DEPRECATED_MOTION_TYPES').
+
+    A 'motion:' is on an interface and on a mating in a 'partcad.yaml' and on a
+    connection in an ASSY file, and the key means that and nothing else in
+    either schema, so every mapping key of that name is one. Whatever else is
+    wrong with a 'motion:' is the 'connect' check's to say (it depends on the
+    interfaces it is between, which a file on its own does not know); this is
+    the one thing a file says by itself. A warning: 'continuous' still means
+    what it always meant, and nothing fails over it.
+    """
+    diagnostics: list = []
+
+    def walk(node, path):
+        if isinstance(node, list):
+            for index, item in enumerate(node):
+                walk(item, path + [index])
+            return
+        if not isinstance(node, dict):
+            return
+        for key, value in node.items():
+            if key == "motion":
+                written, at = (value, path + [key]) if isinstance(value, str) else (None, None)
+                if isinstance(value, dict) and isinstance(value.get("type"), str):
+                    written, at = value["type"], path + [key, "type"]
+                if written in DEPRECATED_MOTION_TYPES:
+                    target = _resolve(root_node, at) if root_node is not None else None
+                    start, end = _node_span(target) if target is not None else ((0, 0), (0, 1))
+                    diagnostics.append(
+                        Diagnostic(
+                            SEVERITY_WARNING,
+                            DEPRECATED_MOTION_TYPES[written],
+                            start[0],
+                            start[1],
+                            end[0],
+                            end[1],
+                            code=CODE_DEPRECATED,
+                            path="$." + ".".join(str(step) for step in at),
+                        )
+                    )
+                continue
+            walk(value, path + [key])
+
+    walk(data, [])
+    return diagnostics
+
+
 def check_manufacturable_assembly(data, root_node=None) -> list:
     """Report an item of an assembly that is to be made that is not connected to anything.
 
@@ -1287,6 +1379,8 @@ def _is_configuration_schema(schema) -> bool:
 def _document_checks(data, schema, root_node, masked, manufacturable, inherited_manufacturable) -> list:
     """Everything said about a parsed document: its schema, and what no schema can say."""
     diagnostics = _validate_schema(data, schema, root_node, masked)
+    if _is_assy_schema(schema) or _is_configuration_schema(schema):
+        diagnostics.extend(check_motion(data, root_node))
     # Only for an ASSY document, and only ever as well as the schema: a link
     # that nothing places is not a shape the schema can describe, and a
     # 'partcad.yaml' has no links at all.

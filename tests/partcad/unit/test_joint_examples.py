@@ -75,6 +75,8 @@ def test_every_connected_child_of_every_example_is_the_product_of_its_steps():
                 assert (product._q, product._t) == (location._q, location._t), "%s: %s" % (path, child.name)
                 if child.joint is not None:
                     assert child.joint.composition is child.composition
+                    # No example starts a joint against its own stop.
+                    assert pc.joint.outside_bounds(child.composition, child.joint.name) == [], (path, child.name)
                 connected += 1
     # Not vacuous: the examples connect a few dozen children between them.
     assert assemblies > 10
