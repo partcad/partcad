@@ -177,6 +177,25 @@
       },
       "additionalProperties": false
     },
+    "alsoConnectPortsEntry": {
+      "description": "A further joint this object makes once it is placed: a port of it that meets a port of an object placed before it. It places nothing; 'pc test' checks that the two ports meet, and the instruction book says so at this step.",
+      "type": "object",
+      "properties": {
+        "with": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "comment": { "$ref": "#/definitions/comment" }
+      },
+      "required": ["with", "name", "to"],
+      "additionalProperties": false
+    },
+    "alsoConnectPorts": {
+      "description": "The further joints this object makes once it is placed - the other end of a rail meeting a second leg, the loop of a frame closing - one or a list of them.",
+      "oneOf": [
+        { "$ref": "#/definitions/alsoConnectPortsEntry" },
+        { "type": "array", "items": { "$ref": "#/definitions/alsoConnectPortsEntry" } }
+      ]
+    },
     "node": {
       "description": "A node of the assembly tree: a reference to a part, a reference to an assembly, a reference to a scene (in a scene only), or a container of other nodes.",
       "type": "object",
@@ -202,6 +221,7 @@
         "location": { "$ref": "#/definitions/OCCTLocation" },
         "connect": { "$ref": "#/definitions/connect" },
         "connectPorts": { "$ref": "#/definitions/connectPorts" },
+        "alsoConnectPorts": { "$ref": "#/definitions/alsoConnectPorts" },
         "params": { "$ref": "#/definitions/params" },
         "links": {
           "type": "array",

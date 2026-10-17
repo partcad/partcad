@@ -68,11 +68,23 @@ class Heading(Block):
     text: str
     level: int = 1
     url: Optional[str] = None
+    # A short line set above the heading, smaller: what the page belongs to
+    # ("End frame - make 2") over what the page is ("Step 2 of 4").
+    kicker: Optional[str] = None
+
+
+# The kinds of paragraph there are besides the plain one. A "detail" is the
+# model's account of a step - which ports meet - for whoever checks the book
+# against the model, set smaller and in grey so that it is never mistaken for
+# the instructions; a "note" is context around a step rather than the step.
+PARAGRAPH_DETAIL = "detail"
+PARAGRAPH_NOTE = "note"
 
 
 @dataclass
 class Paragraph(Block):
     text: str
+    style: Optional[str] = None
 
 
 @dataclass
@@ -92,6 +104,11 @@ class ImageRow(Block):
 
     images: list = field(default_factory=list)
     height: float = 0.4
+    # A row set apart in a box under a title of its own: the parts a step
+    # needs, shown on their own because they are too small to pick out in the
+    # step's picture.
+    boxed: bool = False
+    title: Optional[str] = None
 
 
 @dataclass
@@ -156,16 +173,19 @@ def render_markdown(document: Document) -> list:
 def _markdown_block(block: Block) -> list:
     if isinstance(block, Heading):
         text = block.text if block.url is None else "[%s](%s)" % (block.text, block.url)
-        return ["#" * block.level + " " + text, ""]
+        kicker = ["*%s*" % block.kicker, ""] if block.kicker else []
+        return kicker + ["#" * block.level + " " + text, ""]
 
     if isinstance(block, Paragraph):
+        if block.style == PARAGRAPH_DETAIL:
+            return ["<sub>%s</sub>" % block.text, ""]
         return [block.text, ""]
 
     if isinstance(block, Properties):
         return ["%s: %s" % (label, value) for label, value in block.items] + [""]
 
     if isinstance(block, ImageRow):
-        lines = []
+        lines = ["**%s**" % block.title, ""] if block.title else []
         for image in block.images:
             lines += ['<img src="%s" alt="%s" style="%s">' % (image.src or image.file, image.alt, MARKDOWN_IMAGE_STYLE)]
             if image.caption:
@@ -256,10 +276,12 @@ def _html_block(block: Block) -> str:
         text = html.escape(block.text)
         if block.url:
             text = '<a href="%s">%s</a>' % (html.escape(block.url, quote=True), text)
-        return "<h%d>%s</h%d>" % (level, text, level)
+        kicker = '<div class="kicker">%s</div>' % html.escape(block.kicker) if block.kicker else ""
+        return "%s<h%d>%s</h%d>" % (kicker, level, text, level)
 
     if isinstance(block, Paragraph):
-        return "<p>%s</p>" % html.escape(block.text).replace("\n", "<br/>")
+        style = ' class="%s"' % block.style if block.style in (PARAGRAPH_DETAIL, PARAGRAPH_NOTE) else ""
+        return "<p%s>%s</p>" % (style, html.escape(block.text).replace("\n", "<br/>"))
 
     if isinstance(block, Properties):
         items = "".join(
@@ -283,10 +305,14 @@ def _html_block(block: Block) -> str:
             )
         if not figures:
             return ""
-        return '<div class="images" style="flex-basis: %d%%">%s</div>' % (
+        row = '<div class="images" style="flex-basis: %d%%">%s</div>' % (
             int(round(block.height * 100)),
             "".join(figures),
         )
+        if not block.boxed:
+            return row
+        title = "<h4>%s</h4>" % html.escape(block.title) if block.title else ""
+        return '<div class="callout">%s%s</div>' % (title, row)
 
     if isinstance(block, Table):
         aligns = _aligns(block)
@@ -356,18 +382,28 @@ def _image_to_data(image: Image, embed: bool) -> Optional[dict]:
 
 def _block_to_data(block: Block, embed_images: bool = False) -> dict:
     if isinstance(block, Heading):
-        return {"type": "heading", "text": block.text, "level": block.level, "url": block.url}
+        data = {"type": "heading", "text": block.text, "level": block.level, "url": block.url}
+        if block.kicker:
+            data["kicker"] = block.kicker
+        return data
     if isinstance(block, Paragraph):
-        return {"type": "paragraph", "text": block.text}
+        data = {"type": "paragraph", "text": block.text}
+        if block.style:
+            data["style"] = block.style
+        return data
     if isinstance(block, Properties):
         return {"type": "properties", "items": [list(item) for item in block.items]}
     if isinstance(block, ImageRow):
         images = [_image_to_data(image, embed_images) for image in block.images]
-        return {
+        data = {
             "type": "images",
             "height": block.height,
             "images": [image for image in images if image is not None],
         }
+        if block.boxed:
+            data["boxed"] = True
+            data["title"] = block.title
+        return data
     if isinstance(block, Table):
         return {
             "type": "table",
@@ -411,6 +447,12 @@ a { color: inherit; }
 .images figure { margin: 0; flex: 1 1 0; text-align: center; min-width: 0; }
 .images img { max-width: 100%%; max-height: 60vh; height: auto; }
 figcaption { color: var(--muted); font-size: .85rem; margin-top: 6px; }
+.kicker { color: var(--muted); font-size: .9rem; text-transform: uppercase; letter-spacing: .05em; }
+p.detail { color: var(--muted); font-size: .8rem; margin: .2em 0; }
+p.note { font-style: italic; }
+.callout { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
+.callout h4 { margin: 0 0 4px 0; font-size: .9rem; }
+.callout .images img { max-height: 18vh; }
 table { border-collapse: collapse; width: 100%%; margin: 8px 0 16px 0; font-size: .9rem; }
 th, td { border-bottom: 1px solid var(--line); padding: 4px 8px; }
 ul.links { line-height: 1.8; }

@@ -416,6 +416,17 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 # The same product, one factor further out: which is what keeps
                 # the composition the location of the child it composed.
                 child.composition.place_within(placement)
+            # And where its joints are, which were worked out in the frame the
+            # file is written in and are read in the one it ends up in: the
+            # instruction book draws each step's gap from them.
+            for record in [child.connection] + list(child.also):
+                if not isinstance(record, dict):
+                    continue
+                for key in ("point", "contact"):
+                    if record.get(key) is not None:
+                        record[key] = list(placement.transform_point(record[key]))
+                if record.get("direction") is not None:
+                    record["direction"] = list(placement.rotate_vector(record["direction"]))
 
     def link_names(self, node_list) -> list:
         """What each link of one ``links:`` list is called, in file order.
@@ -466,6 +477,9 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 await wait_for_tasks()
             tasks.append((index, asyncio.create_task(self.handle_node(assembly, link, names[index]))))
         await wait_for_tasks()
+        # Every link of the list is where it goes now, so what each says it also
+        # meets can be looked at.
+        await self.resolve_also(assembly)
 
     # The three ways a link is placed, in the order 'handle_node' takes them.
     PLACEMENTS = ("location", "connect", "connectPorts")
@@ -538,6 +552,156 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     "'%s' is placed after it, so it is not there to be connected to yet; move it above" % target
                 )
         return refusals
+
+    # The section of a link that states the further joints it makes, besides
+    # the one that places it.
+    ALSO = "alsoConnectPorts"
+    ALSO_FIELDS = ("with", "name", "to", "comment")
+
+    # How far apart two ports may be and still meet, in millimetres, and how far
+    # from facing each other their Z axes may be (one minus the cosine of the
+    # angle between one and the other reversed). Both are about the arithmetic
+    # rather than the product: a frame whose loop is closed by the sizes it was
+    # given closes to within rounding.
+    ALSO_DISTANCE = 0.01
+    ALSO_FACING = 1e-6
+
+    def node_also(self, node) -> list:
+        """The entries of a link's 'alsoConnectPorts', as written: one, or a list of them."""
+        also = node.get(self.ALSO) if isinstance(node, dict) else None
+        if also is None:
+            return []
+        return list(also) if isinstance(also, list) else [also]
+
+    async def resolve_also(self, assembly) -> None:
+        """Check the further joints each link of a list says it makes, and record them.
+
+        A link is placed once, by the one connection that says where it goes. A
+        frame of four sides has a fourth joint nonetheless - the rail that is
+        placed against the left leg meets the right one too - and so does
+        anything else that closes a loop. 'alsoConnectPorts' states those, in
+        the words of 'connectPorts': a port of this link ('with'), a link
+        placed before it ('name') and a port of that one ('to').
+
+        They place nothing. They are checked once everything is placed: the two
+        ports have to be in one place, facing each other, which is what makes a
+        joint of them - and a frame whose sizes do not add up, or a port named
+        on the wrong side, is found here rather than on the bench. What fails is
+        a problem of the link's for 'pc test' (see 'report_joint_problem'); what
+        holds is recorded on it ('AssemblyChild.also'), for the instruction book
+        to say at the step that makes it.
+        """
+        children = list(assembly.children)
+        for index, child in enumerate(children):
+            if not child.also_declared:
+                continue
+            for entry in child.also_declared:
+                record = await self._also_record(children, index, child, entry)
+                if record is not None:
+                    child.also.append(record)
+
+    async def _also_record(self, children, index, child, entry):
+        """One 'alsoConnectPorts' entry checked, as the record of the joint, or None."""
+        if not isinstance(entry, dict):
+            self.report_joint_problem(
+                child, "'%s' takes sections of 'with', 'name' and 'to', not %r; it is ignored" % (self.ALSO, entry)
+            )
+            return None
+        for key in entry:
+            if key not in self.ALSO_FIELDS:
+                self.report_joint_problem(child, "'%s' has no field '%s'; it is ignored" % (self.ALSO, key))
+        missing = [key for key in ("with", "name", "to") if not isinstance(entry.get(key), str) or not entry[key]]
+        if missing:
+            self.report_joint_problem(
+                child,
+                "'%s' needs a '%s' to say which two ports meet; the entry is ignored"
+                % (self.ALSO, "', '".join(missing)),
+            )
+            return None
+        name, with_port, to_port = entry["name"], entry["with"], entry["to"]
+
+        target = next((other for other in children[:index] if other.name == name), None)
+        if target is None:
+            later = any(other.name == name for other in children[index + 1 :])
+            self.report_joint_problem(
+                child,
+                (
+                    (
+                        "it also meets '%s', which is placed after it: a joint is stated on the later of the two "
+                        "links, once both are there; move it to '%s'" % (name, name)
+                    )
+                    if later
+                    else "it also meets '%s', and no link of the same 'links:' list is called that" % name
+                ),
+            )
+            return None
+
+        frames = []
+        for side, item, port_name in ((child, child.item, with_port), (target, target.item, to_port)):
+            await prepare_ports_async(item, self.ctx)
+            ports = item.with_ports.get_ports() if getattr(item, "with_ports", None) is not None else {}
+            port = ports.get(port_name)
+            if port is None:
+                self.report_joint_problem(
+                    child,
+                    "it also meets '%s' by the port '%s' of '%s', which has no such port (it has: %s)"
+                    % (name, port_name, side.name, ", ".join(sorted(ports)) or "none"),
+                )
+                return None
+            if side.location is None:
+                # Not placed at all: whatever placing it found wrong has been
+                # reported already, and there is nowhere to compare.
+                return None
+            frames.append(side.location * port_location(port))
+
+        mine, theirs = frames
+        point = theirs.translation
+        apart = sum((a - b) ** 2 for a, b in zip(mine.translation, point)) ** 0.5
+        facing = 1.0 + sum(a * b for a, b in zip(mine.rotate_vector((0, 0, 1)), theirs.rotate_vector((0, 0, 1))))
+        if apart > self.ALSO_DISTANCE:
+            self.report_joint_problem(
+                child,
+                "its '%s' port is %.3f mm from the '%s' port of '%s' it is said to also meet: the sizes that "
+                "place them do not close the loop" % (with_port, apart, to_port, name),
+            )
+        elif facing > self.ALSO_FACING:
+            self.report_joint_problem(
+                child,
+                "its '%s' port is where the '%s' port of '%s' is, but the two do not face each other: one "
+                "of them is on the wrong face" % (with_port, to_port, name),
+            )
+        return {
+            "name": name,
+            "with": with_port,
+            "to": to_port,
+            "comment": entry.get("comment"),
+            "point": list(point),
+            "direction": list(theirs.rotate_vector((0, 0, 1))),
+            "meets": apart <= self.ALSO_DISTANCE and facing <= self.ALSO_FACING,
+        }
+
+    def implemented_interface(self, item, interface_name, link_name, problems):
+        """The name 'item' implements a connection's interface under, or None, reported.
+
+        A connection names an interface the way a package declares it, and an
+        object implements one built from parameters under the name it was built
+        with; 'WithPorts.implemented_name' is what maps the one onto the other.
+        An interface the object does not implement at all used to end the whole
+        assembly with a KeyError naming nothing but the interface.
+        """
+        with_ports = getattr(item, "with_ports", None)
+        if with_ports is None:
+            return interface_name
+        implemented = with_ports.implemented_name(interface_name)
+        if implemented is None:
+            problem = "'%s' does not implement '%s' (it implements: %s); the interface is ignored" % (
+                link_name,
+                interface_name,
+                ", ".join(sorted(with_ports.get_interfaces())) or "none",
+            )
+            pc_logging.error("%s: %s" % (self.name, problem))
+            problems.append(problem)
+        return implemented
 
     def node_fixed(self, node, name) -> bool:
         """Whether a link says what it places is welded to the world ('fixed: true').
@@ -617,6 +781,9 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         composition = None
         joint = None
         joint_problems = []
+        # What naming the two ends' interfaces found wrong, which the joint
+        # problems are added to once the connection is composed.
+        naming_problems = []
         connect_with_iface = None
         connect_with_params = None
         connect_with_instance = None
@@ -926,7 +1093,15 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                             else:
                                 pc_logging.debug("No target interfaces are candidates for connection")
 
-                    # Resolve interface names
+                    # Resolve interface names: to the one each end implements
+                    # them under, which for an interface built from parameters
+                    # is the name it was built with (see 'implemented_name').
+                    if connect_with_iface is not None:
+                        connect_with_iface = self.implemented_interface(item, connect_with_iface, name, naming_problems)
+                    if connect_to_iface is not None:
+                        connect_to_iface = self.implemented_interface(
+                            target_part, connect_to_iface, connect_to_name, naming_problems
+                        )
                     if connect_with_iface is not None:
                         source_iface = item.with_ports.get_interface(connect_with_iface)
                         source_iface_obj = self.project.ctx.get_interface(connect_with_iface)
@@ -1277,6 +1452,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         connect_with_params,
                     )
                     location = composition.location()
+                    joint_problems = naming_problems + joint_problems
                     pc_logging.debug(
                         "Connected %s of %s to %s of %s" % (connect_with_port, name, connect_to_port, connect_to_name)
                     )
@@ -1290,6 +1466,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         connect_to_iface,
                         target_part_location,
                         target_port,
+                        None if source_port is None else location * port_location(source_port),
                     )
 
                 # Now that both ends of the connection are known, the interfaces
@@ -1330,6 +1507,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 joint_problems=joint_problems,
                 fixed=fixed,
                 attached=attached,
+                also=self.node_also(node),
             )
             if joint is not None:
                 # One list, so that what is found about the joint after this -
@@ -1467,6 +1645,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         connect_to_iface,
         target_part_location,
         target_port,
+        contact=None,
     ):
         """What was connected to what, recorded as plain data on the child.
 
@@ -1480,6 +1659,12 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         being built: the point where the two ports meet, and the unit vector
         along which the item has to be moved to separate them (the port's own
         normal, since the item was mated onto it facing the other way).
+
+        'contact' is where the item's own port ended up, once the parameters of
+        the connection ('toParams', 'withParams') have moved it off the target
+        port: the screw that one port takes 1 in. in from an edge and the one it
+        takes 3-1/2 in. in are at two places of one port, which the target port
+        alone cannot tell apart.
         """
         info = {
             "target": connect_to_name,
@@ -1515,6 +1700,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             frame = target_part_location * port_location(target_port)
             info["point"] = list(frame.translation)
             info["direction"] = list(frame.rotate_vector((0, 0, 1)))
+        if contact is not None:
+            info["contact"] = list(contact.translation)
         return info
 
     def _exploded_distance(self, value, connect_to_name):
