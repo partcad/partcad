@@ -636,6 +636,31 @@ def test_a_further_joint_with_a_link_nothing_places():
     assert "nosuch" in one_link_finding(text).message
 
 
+def test_a_further_joint_with_a_link_of_another_list_says_so():
+    text = (
+        "links:\n"
+        "  - name: frame\n"
+        "    links:\n"
+        "      - part: a\n"
+        "        name: inner\n"
+        "  - part: b\n"
+        "    connectPorts: {name: frame}\n"
+        "    alsoConnectPorts: {with: x, name: inner, to: y}\n"
+    )
+    assert "same 'links:' list, so this node cannot meet it" in one_link_finding(text).message
+
+
+def test_a_further_joint_the_template_names_or_the_schema_refuses_is_left_to_them():
+    """A templated name is only known once rendered, and an entry that is not a section is the schema's"""
+    text = (
+        CHAIN
+        + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: {with: x, name: {{ which }}, to: y}\n"
+    )
+    assert link_findings(text) == []
+    text = CHAIN + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: [second]\n"
+    assert link_findings(text) == []
+
+
 def test_the_schema_takes_a_further_joint_and_only_its_three_ports_and_a_comment():
     text = (
         CHAIN

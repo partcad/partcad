@@ -1375,3 +1375,107 @@ def test_a_document_carries_its_kickers_boxes_and_details():
     assert heading["kicker"] == "widget - make 2"
     assert (box["boxed"], box["title"]) == (True, "Parts for this step")
     assert (detail["style"], note["style"]) == ("detail", "note")
+
+
+def test_how_a_step_goes_on_is_said_in_words():
+    assert assembly_guide._how_words(None) is None
+    assert assembly_guide._how_words(ConnectHow({})) is None
+    assert assembly_guide._how_words(ConnectHow({"selfScrew": True})) == "driven in, cutting its own thread"
+    assert assembly_guide._how_words(ConnectHow({"snapIn": True})) == "pushed in until it snaps"
+    assert assembly_guide._how_words(ConnectHow({"turnTorqueMax": 2})) == "turned in, up to 2 N*m"
+    assert assembly_guide._how_words(ConnectHow({"pushForceMax": 20})) == "pushed into place, up to 20 N"
+
+
+class _Box:
+    """A shape that is a box and nothing else: what the geometry of a step is worked out from."""
+
+    def __init__(self, name, box):
+        self.name = name
+        self.project_name = "//pkg"
+        self.box = box
+
+    async def get_bounding_box_async(self, ctx):
+        return self.box
+
+    async def get_max_dimension_async(self, ctx):
+        box = self.box
+        return max(box[3] - box[0], box[4] - box[1], box[5] - box[2])
+
+
+def test_a_fastener_is_pulled_out_of_its_hole_towards_its_head():
+    """Along the port it was connected to, away from what it goes into, a little more than its length"""
+    bracket = AssemblyChild(_Box("bracket", (0, 0, -50, 100, 100, 0)), "bracket", Location())
+    screw = assembly_guide.GuideFastener(
+        item=_Box("screw", (-2, -2, -30, 2, 2, 0)),
+        item_name="screw",
+        # Its head on top of the plate, its point 20 mm into the bracket.
+        location=Location([[50, 50, 10], [0, 0, 1], 0]),
+        # The port it was connected to faces down, into the bracket.
+        connection={"target": "bracket", "direction": [0, 0, -1]},
+    )
+    step = assembly_guide.GuideStep(
+        number=1,
+        item=_Box("plate", (0, 0, 0, 100, 100, 10)),
+        item_name="plate",
+        location=Location(),
+        counterpart=bracket.item,
+        counterpart_name="bracket",
+        counterpart_location=Location(),
+        connection={"target": "bracket", "direction": [0, 0, 1], "point": [50, 50, 0]},
+        context=[bracket],
+        fasteners=[screw],
+    )
+
+    asyncio.run(assembly_guide._resolve_step_geometry(None, step))
+
+    assert screw.direction == pytest.approx((0.0, 0.0, 1.0))
+    assert screw.distance == pytest.approx(assembly_guide.FASTENER_PULL * 30)
+    start, end = screw.gap
+    assert end[2] - start[2] == pytest.approx(screw.distance)
+    assert screw.exploded_location().translation == pytest.approx((50.0, 50.0, 10.0 + screw.distance))
+
+
+def test_what_fasteners_say_is_said_once():
+    """Every screw of a step may carry the same words; the page says them once"""
+    step = assembly_guide.GuideStep(
+        number=1,
+        item=make_assembly("plate"),
+        item_name="plate",
+        location=Location(),
+        counterpart=make_assembly("bracket"),
+        counterpart_name="bracket",
+        counterpart_location=Location(),
+        fasteners=[_fastener("screw-%d" % n, "bracket") for n in (1, 2)],
+    )
+    for fastener in step.fasteners:
+        fastener.description = "Drive them in\nflush."
+
+    assert [block.text for block in assembly_guide._fastener_blocks(step)] == ["Drive them in flush."]
+
+
+def test_a_section_page_says_what_goes_into_it_and_at_what_size():
+    """Its links counted by what they place, with the sizes their parameters give"""
+    children = [
+        AssemblyChild(make_assembly("leg;length=29.5", desc="Leg, a 4x4"), name, Location())
+        for name in ("leg-1", "leg-2")
+    ]
+    children.append(AssemblyChild(make_assembly("apron;length=25.0"), "apron", Location()))
+    section = assembly_guide.GuideSection(
+        assembly=make_assembly("side;apron=25.0,leg=29.5"),
+        name="side;apron=25.0,leg=29.5",
+        count=2,
+        children=children,
+    )
+    project = SimpleNamespace(name="//other", config_obj={})
+
+    page = asyncio.run(assembly_guide._section_page(project, section, assembly_guide.ImageSource()))
+
+    heading = page.blocks[0]
+    assert (heading.text, heading.kicker) == ("side", "Sub-assembly - make 2")
+    (properties,) = [block for block in page.blocks if isinstance(block, pc_document.Properties)]
+    assert ("Size", "apron 25, leg 29.5") in properties.items
+    (table,) = [block for block in page.blocks if isinstance(block, pc_document.Table)]
+    assert table.rows == [
+        ["//pkg:leg", 2, "Leg, a 4x4 (length 29.5)"],
+        ["//pkg:apron", 1, "length 25"],
+    ]

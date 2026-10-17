@@ -163,6 +163,22 @@ def test_a_further_joint_is_stated_on_the_later_link(tmp_path):
     assert "'second', which is placed after it" in problem
 
 
+def test_a_further_joint_that_is_not_a_section_is_a_problem(tmp_path):
+    beam = _child(_rig(tmp_path, _beam("[base]")), "beam")
+    (problem,) = beam.joint_problems
+    assert "takes sections of 'with', 'name' and 'to', not 'base'" in problem
+    assert beam.also == []
+
+
+def test_a_further_joint_says_which_of_its_fields_it_ignores(tmp_path):
+    """'how' belongs to the connection that places a link: a further joint places nothing"""
+    beam = _child(_rig(tmp_path, _beam("{with: q2, name: base, to: p2, how: {pushForceMax: 5}}")), "beam")
+    (problem,) = beam.joint_problems
+    assert "'alsoConnectPorts' has no field 'how'" in problem
+    # The joint itself is still checked, and still meets.
+    assert beam.also[0]["meets"] is True
+
+
 def test_a_further_joint_without_its_ports_is_a_problem(tmp_path):
     beam = _child(_rig(tmp_path, _beam("{name: base}")), "beam")
     (problem,) = beam.joint_problems
@@ -196,6 +212,20 @@ def test_an_interface_built_from_parameters_is_found_by_its_bare_name(tmp_path):
     # 15 mm along the port's X and 4 mm into the board: 'fromEdge' and 'drive'
     # are read in the contact frame, where the port's X is Y and its Z is -Z.
     assert pin.connection["contact"] == pytest.approx([15, 0, 6], abs=1e-9)
+
+
+def test_a_bare_name_stands_for_one_parametrization_only(tmp_path):
+    """A name spelled with parameters is that parametrization, or none"""
+    board = _rig(tmp_path, "links:\n  - part: board\n").children[0].item
+    (implemented,) = board.with_ports.get_interfaces()
+    bare = implemented.split(";", 1)[0]
+    assert implemented.endswith(":slab;length=40")
+    assert board.with_ports.implemented_name(bare) == implemented
+    assert board.with_ports.implemented_name(implemented) == implemented
+    assert board.with_ports.implemented_name(bare + ";length=41") is None
+    # The old spelling of an absolute name, with one slash, is read as the new one.
+    assert bare.startswith("//")
+    assert board.with_ports.implemented_name(bare[1:]) == implemented
 
 
 def test_an_interface_the_target_does_not_implement_is_a_problem(tmp_path):
