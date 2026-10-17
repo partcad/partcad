@@ -815,6 +815,14 @@ def test_a_tree_with_no_process_or_none_left_is_nothing_to_kill():
     assert pc_runtime.process_owner(types.SimpleNamespace()) is None
     assert pc_runtime.process_owner(gone) is None
     assert pc_runtime.process_owner(types.SimpleNamespace(pid=gone.pid, returncode=None)) is None
+    # Running, but somebody else's: what a reused pid would be.
+    assert pc_runtime.process_owner(types.SimpleNamespace(pid=os.getppid(), returncode=None)) is None
+    alive = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])
+    try:
+        assert pc_runtime.process_owner(alive).pid == alive.pid
+    finally:
+        alive.kill()
+        alive.wait(10)
 
 
 def test_only_the_end_of_a_long_stderr_is_carried():

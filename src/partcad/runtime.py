@@ -55,17 +55,26 @@ def bounded_spawn_options(timeout=None) -> dict:
 def process_owner(p):
     """``p`` as `psutil` knows it -- its pid *and* when it started -- or ``None``.
 
-    Taken while ``p`` is known to be ours, so that a kill later can tell ``p``
-    from a process that has been given its number since: a child watcher can
-    reap ``p`` at any moment, and the pid, and with it the process group id it
-    leads, is then free for the system to hand to anything else.
+    So that a kill later can tell ``p`` from a process that has been given its
+    number since: a child watcher can reap ``p`` at any moment, and the pid,
+    and with it the process group id it leads, is then free for the system to
+    hand to anything else.
+
+    That can already have happened by the time this is asked -- asyncio has
+    its watcher on ``p`` before ``create_subprocess_exec`` returns, and
+    ``p.returncode`` stays ``None`` until the loop hears of the exit -- so what
+    is taken is checked to be a child of *this* process. A pid the system gave
+    to somebody else since has another parent; until ``p`` is reaped, nothing
+    else can have its pid.
     """
     if getattr(p, "returncode", None) is not None or getattr(p, "pid", None) is None:
         return None
     try:
         import psutil
 
-        return psutil.Process(p.pid)
+        owner = psutil.Process(p.pid)
+        # ppid() checks once more that the pid is still the process just read.
+        return owner if owner.ppid() == os.getpid() else None
     except Exception:  # pylint: disable=broad-except
         return None
 
