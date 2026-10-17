@@ -207,8 +207,8 @@ def test_a_link_on_a_fixed_joint_is_attached_and_a_chain_through_no_geometry_is_
 
 def test_small_writing_helpers():
     assert export_urdf.sanitize_name("//pub/examples:logo", "x") == "pub_examples_logo"
-    names = export_urdf.NameAllocator()
-    assert [names.take("a"), names.take("a"), names.take("", "link")] == ["a", "a_1", "link"]
+    names = export_urdf.naming.Transcoder(export_urdf.URDF_NAMES)
+    assert [names.claim("a"), names.derive("a"), names.claim("", fallback="link")] == ["a", "a-2", "link"]
     state = {"warnings": []}
     assert export_urdf.color_rgba("#E6801A", state) == pytest.approx([0.901961, 0.501961, 0.101961, 1.0])
     assert export_urdf.color_rgba("#E6801A80", state)[3] == pytest.approx(0.501961)
