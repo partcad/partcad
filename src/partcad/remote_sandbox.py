@@ -30,6 +30,7 @@ import base64
 import threading
 from typing import Callable, Optional
 
+from partcad_utils import containers
 from partcad_utils.json_rpc_client import RuntimeJsonRpcClient
 
 from .process_crash import failure_detail
@@ -220,6 +221,29 @@ def _message(error) -> str:
     return str(error)
 
 
+def _lost(pool, lease, environments=None):
+    """How the container behind ``lease`` stopped, having let go of it; None while it runs.
+
+    Asked when a container gave no answer at all, which is what a container
+    whose service was killed -- by the out-of-memory killer, most likely, the
+    service being a process in the container like any other -- looks like from
+    here. Without it the pool went on handing that container out, and every
+    command after the one that died failed the same way until the pool retired
+    it as idle. The next request for the image starts it again (see
+    `ContainerPool.discard`).
+
+    The one place here that asks Docker anything, and only of the container
+    object the pool was handed with the lease.
+    """
+    why = containers.stopped(lease.container)
+    if why is None:
+        return None
+    pool.discard(lease)
+    if environments is not None:
+        environments.forget(lease.image)
+    return "The container serving '%s' %s; it is started again for the next command." % (lease.image, why)
+
+
 def forward(pool, image: str, command: list, params: dict = None) -> tuple:
     """Run one command in the container for ``image``, as (exit code, out, err).
 
@@ -231,7 +255,7 @@ def forward(pool, image: str, command: list, params: dict = None) -> tuple:
         host, port = lease.endpoint.rsplit(":", 1)
         answer = RuntimeJsonRpcClient(host, int(port), token=lease.token).execute(command, params or {})
         if not answer:
-            return 1, "", "The container serving '%s' returned no response" % image
+            return 1, "", _lost(pool, lease) or "The container serving '%s' returned no response" % image
         # The envelope, not the payload: the client returns what the container
         # replied with, and what is in it is base64. Reading 'exit_code' off the
         # envelope found nothing, so every command -- a provisioning command
@@ -292,7 +316,9 @@ def execute(pool, environments, params: dict, timeout: Optional[float] = None) -
             timeout=timeout,
         )
         if not answer:
-            raise RuntimeError("The container serving '%s' returned no response" % image)
+            raise RuntimeError(
+                _lost(pool, lease, environments) or "The container serving '%s' returned no response" % image
+            )
         if answer.get("error"):
             # Returned as this call's *result*, an error left the client
             # unwrapping a payload with no 'stdout' in it, so a command the

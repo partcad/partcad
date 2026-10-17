@@ -88,11 +88,14 @@ import json
 import logging
 import os
 import shutil
+import signal
 import socket
+import stat
 import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 
@@ -128,6 +131,17 @@ ENV_ALLOWED = frozenset(
 # answers inside a container is part of the container's identity, and a request
 # naming a port would be a request choosing what to talk to.
 DEFAULT_PORT = 5000
+
+# How long a command that has exited may go on holding its output open, in
+# seconds, before the wait for it ends anyway (see `communicate`). What it wrote
+# before it exited is in the pipe already and reads in milliseconds; anything
+# that keeps the pipe open past this is something the command started and left
+# behind, not the command.
+EXIT_GRACE = 2.0
+
+# How often a command that is still being waited for is looked at, in seconds.
+# Only how late a death is noticed, not how long anything waits.
+WATCH_INTERVAL = 0.25
 
 log = logging.getLogger("partcad.container_service")
 
@@ -376,6 +390,164 @@ def _held(lock):
         os.close(descriptor)
 
 
+# --------------------------------------------------------------------------- #
+# Waiting for a command                                                        #
+# --------------------------------------------------------------------------- #
+#
+# Here because this file has to stand alone -- it is copied into containers on
+# its own -- and PartCAD's own sandboxes wait for their interpreters the same
+# way, so `partcad.runtime` takes these from here rather than keeping a copy
+# that could come to disagree.
+
+
+def pipe_holders(files):
+    """The processes that can still write into these pipes, by pid: never this one.
+
+    What a process that has died leaves holding its output open. A child
+    inherits its parent's standard output and standard error, so anything a
+    sandbox interpreter started -- a helper of a user's script, a pool of
+    workers, a simulator's server -- holds the very pipes PartCAD reads the
+    interpreter's answer from, and the pipe does not reach its end until the
+    last of them has gone.
+
+    Found by the pipe itself rather than by ancestry: by the time anybody asks,
+    the parent is dead and its children belong to whatever adopts orphans, so
+    nothing leads back to it. Linux only (``/proc``), and an empty list
+    elsewhere, which leaves the caller closing its own end instead.
+    """
+    if not os.path.isdir("/proc/self/fd"):
+        return []
+    wanted = set()
+    for f in files:
+        if f is None:
+            continue
+        try:
+            status = os.fstat(f if isinstance(f, int) else f.fileno())
+        except (OSError, ValueError):
+            continue
+        if stat.S_ISFIFO(status.st_mode):
+            wanted.add("pipe:[%d]" % status.st_ino)
+    if not wanted:
+        return []
+    found = []
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit() or int(entry) == os.getpid():
+            continue
+        directory = "/proc/%s/fd" % entry
+        try:
+            descriptors = os.listdir(directory)
+        except OSError:
+            continue
+        for descriptor in descriptors:
+            try:
+                if os.readlink(os.path.join(directory, descriptor)) not in wanted:
+                    continue
+                # The writing end only. Something holding the reading end of
+                # these is a copy of the reader, not a reason it waits.
+                with open("/proc/%s/fdinfo/%s" % (entry, descriptor)) as info:
+                    flags = next((line.split()[1] for line in info if line.startswith("flags:")), "0")
+                if int(flags, 8) & os.O_ACCMODE == os.O_RDONLY:
+                    continue
+            except (OSError, ValueError, IndexError):
+                continue
+            found.append(int(entry))
+            break
+    return sorted(found)
+
+
+def stop_holders(files):
+    """Kill what can still write into these pipes, and return the pids it was.
+
+    Killed without being asked first, like the interpreter that started them:
+    their parent is dead, so there is nobody left to want what they are doing,
+    and an orphan that never writes again would otherwise never notice that
+    nobody is reading.
+    """
+    holders = pipe_holders(files)
+    for pid in holders:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+    return holders
+
+
+def communicate(process, input=None, grace=EXIT_GRACE, interval=WATCH_INTERVAL, wait_after_success=False):
+    """``process.communicate(input)``, over when the process is over.
+
+    Returns ``(stdout, stderr, left)``: what the process wrote, and -- when its
+    output did not end by itself -- the pids of whatever it had started that
+    was still holding that output open after it exited, which are killed.
+    ``left`` is None when the output ended by itself, which is nearly always;
+    an empty list means the output was cut off with nothing found to stop.
+
+    ``communicate`` on its own waits for the end of both output pipes as well as
+    for the process, and a pipe ends only when every process holding it has let
+    go -- so once a command has started something that inherits its output, the
+    wait is as long as that something lives, whatever became of the command. A
+    sandbox interpreter killed by the out-of-memory killer while its helper
+    slept on was a wait with no end, holding everything taken for it.
+
+    So the process is watched as well as its pipes: once it has exited, its
+    output is given `EXIT_GRACE` to drain, then what still holds it is stopped
+    (`stop_holders`) and given as long again, and then the pipes are closed from
+    this end whatever is left. What was read by then is what is returned.
+
+    ``wait_after_success`` keeps the old wait for a command that exited 0: its
+    output is read to the end however long that takes, and only a command that
+    failed or was killed is cut off. That is for this service's own requests,
+    which include an application opened for editing -- and an application's
+    launcher may hand the window to a child and exit, leaving the child holding
+    the output for as long as somebody is editing, which is the wait `pc ide
+    open` is there to make. A sandbox interpreter has no such child: once it has
+    exited it has answered, or never will.
+    """
+    exited = None
+    pending = input
+    stdout = stderr = None
+    while True:
+        try:
+            out, err = process.communicate(input=pending, timeout=interval)
+            return out, err, None
+        except subprocess.TimeoutExpired as e:
+            # Passed once: 'communicate' remembers it, and refuses to be handed
+            # it again once it has started writing it.
+            pending = None
+            # What has been read so far, which a timeout carries on POSIX and a
+            # retry does not lose. Windows reads on threads of its own and
+            # reports nothing until they finish.
+            stdout, stderr = e.output, e.stderr
+        returncode = process.poll()
+        if returncode is None:
+            continue
+        if returncode == 0 and wait_after_success:
+            out, err = process.communicate()
+            return out, err, None
+        now = time.monotonic()
+        if exited is None:
+            exited = now
+        elif now - exited >= grace:
+            break
+    left = stop_holders([process.stdout, process.stderr])
+    try:
+        out, err = process.communicate(timeout=grace)
+        return out, err, left
+    except subprocess.TimeoutExpired as e:
+        # Still held -- by something this could not find or could not kill.
+        # What has been read is all there is going to be.
+        if e.output is not None:
+            stdout = e.output
+        if e.stderr is not None:
+            stderr = e.stderr
+    for stream in (process.stdout, process.stderr):
+        if stream is not None:
+            try:
+                stream.close()
+            except OSError:
+                pass
+    return stdout, stderr, left
+
+
 def handle_execute_command(
     command,
     stdin=None,
@@ -506,7 +678,19 @@ def _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_
             )
         except OSError as e:
             raise ExecuteError(-32000, "Execution error: %s" % e)
-        stdout, stderr = process.communicate(input=stdin_bytes)
+        # Over when the command is, rather than when the last process holding
+        # its output lets go: a command that died here left the request open
+        # for good, and the lock on the environment with it (see `communicate`).
+        # One that exited 0 is still read to the end, for an application whose
+        # launcher handed the window on and left (see `wait_after_success`).
+        stdout, stderr, left = communicate(process, stdin_bytes, wait_after_success=True)
+        if left is not None:
+            log.warning(
+                "%s ended (exit code %s) with its output still held open; stopped %s",
+                command[0],
+                process.returncode,
+                ", ".join(str(pid) for pid in left) or "nothing that could be found",
+            )
 
         files = {}
         for name, path in produced.items():

@@ -610,7 +610,9 @@ class JavaScriptRuntime(runtime.Runtime):
                 env=self._subprocess_env(),
                 cwd=package_path,
             )
-            stdout, stderr = p.communicate(input=stdin.encode())
+            # Over when Node.js is, not when the last process holding its
+            # output lets go (see 'runtime.communicate').
+            stdout, stderr = runtime.communicate_sync(p, stdin.encode())
 
         return self._finish(argv, p.returncode, decode_output(stdout), decode_output(stderr), package_path)
 

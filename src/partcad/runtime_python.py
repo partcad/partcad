@@ -18,7 +18,7 @@ import sys
 
 from . import logging as pc_logging
 from . import runtime, sandbox_lock, sandbox_versions, telemetry
-from .process_crash import describe_exit_code, describe_termination  # noqa: F401  (re-exported)
+from .process_crash import describe_exit_code, describe_termination, killed_by_signal  # noqa: F401  (re-exported)
 from .process_output import decode as decode_output
 
 # Every session v-env directory is named this way, which is what lets the
@@ -618,18 +618,18 @@ class PythonRuntime(runtime.Runtime):
                     # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
                     cwd=spawn_cwd,
                 )
-                stdout, stderr = p.communicate(
-                    input=stdin.encode(),
-                    # TODO(clairbee): add timeout
-                )
+                # Over when the interpreter is, not when the last process
+                # holding its output lets go (see 'runtime.communicate').
+                stdout, stderr = runtime.communicate_sync(p, stdin.encode())
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
+            returncode, stderr = self._ended(p.returncode, stderr)
 
             if stdout:
                 pc_logging.debug("Output of %s: %s" % (cmd, stdout))
             if stderr:
-                if p.returncode == 0:
+                if returncode == 0:
                     pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))
                     stderr = ""
                 else:
@@ -646,7 +646,7 @@ class PythonRuntime(runtime.Runtime):
             # [Temporary Fix] Ignore exit code 3221226356(0xc0000374) and 3221225477(0xc0000005)
             # This is a known and open issue on Windows related to the cadquery import
             # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
-            exitcode = 0 if p.returncode in [3221226356, 3221225477] else p.returncode
+            exitcode = 0 if returncode in [3221226356, 3221225477] else returncode
 
             if exitcode != 0:
                 # A negative exit code means the interpreter was killed rather
@@ -661,7 +661,7 @@ class PythonRuntime(runtime.Runtime):
                 # the two things that produce it.
                 crash = describe_termination(
                     cmd,
-                    p.returncode,
+                    returncode,
                     where=path if path else self.path,
                     silent=not stdout and not stderr,
                 )
@@ -788,11 +788,12 @@ class PythonRuntime(runtime.Runtime):
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
+            returncode, stderr = self._ended(p.returncode, stderr)
 
             if stdout:
                 pc_logging.debug("Output of %s: %s" % (cmd, stdout))
             if stderr:
-                if p.returncode == 0:
+                if returncode == 0:
                     pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))
                     stderr = ""
                 else:
@@ -809,7 +810,7 @@ class PythonRuntime(runtime.Runtime):
             # [Temporary Fix] Ignore exit code 3221226356(0xc0000374) and 3221225477(0xc0000005)
             # This is a known and open issue on Windows related to the cadquery import
             # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
-            exitcode = 0 if p.returncode in [3221226356, 3221225477] else p.returncode
+            exitcode = 0 if returncode in [3221226356, 3221225477] else returncode
 
             if exitcode != 0:
                 # A negative exit code means the interpreter was killed rather
@@ -824,7 +825,7 @@ class PythonRuntime(runtime.Runtime):
                 # the two things that produce it.
                 crash = describe_termination(
                     cmd,
-                    p.returncode,
+                    returncode,
                     where=path if path else self.path,
                     silent=not stdout and not stderr,
                 )
@@ -956,15 +957,38 @@ class PythonRuntime(runtime.Runtime):
         if self.installed_onced(python_package, path, force):
             return
         with pc_logging.Action("PipInst", self.version, self.install_label(python_package, path)):
-            self.run_onced_locked(self.pip_install_command(python_package, force), path=path)
-        self.record_install(python_package, path)
+            exitcode, _, stderr = self.run_onced_locked(self.pip_install_command(python_package, force), path=path)
+        self.record_install_unless_killed(python_package, path, exitcode, stderr)
 
     async def install_async_onced_locked(self, python_package, path, force=False):
         """The asynchronous twin of install_onced_locked()."""
         if self.installed_onced(python_package, path, force):
             return
         with pc_logging.Action("PipInst", self.version, self.install_label(python_package, path)):
-            await self.run_async_onced_locked(self.pip_install_command(python_package, force), path=path)
+            exitcode, _, stderr = await self.run_async_onced_locked(
+                self.pip_install_command(python_package, force), path=path
+            )
+        self.record_install_unless_killed(python_package, path, exitcode, stderr)
+
+    def record_install_unless_killed(self, python_package, path, exitcode, stderr):
+        """Record an install that ran -- unless pip was killed while running it, which is raised instead.
+
+        A pip the out-of-memory killer took in the middle of an install has left
+        the environment half written, and recording the install anyway told
+        every run after it that the package was there: they failed on an import
+        that named nothing about the death, and nothing ever installed it again.
+        So the death is the failure of whatever needed the package, said with
+        the signal (see 'process_crash'), and nothing is recorded -- the next
+        run that needs the package installs it afresh.
+
+        A pip that ran to the end and exited with an error is recorded as it
+        always has been; whether it should be is a question of its own.
+        """
+        if killed_by_signal(exitcode):
+            raise RuntimeError(
+                "Installing '%s' into %s did not finish: %s"
+                % (python_package, path, (stderr or "").strip() or describe_exit_code(exitcode))
+            )
         self.record_install(python_package, path)
 
     def ensure_onced_locked(self, python_package, session=None, path=None, force=False):

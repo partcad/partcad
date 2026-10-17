@@ -108,6 +108,27 @@ at all).
   wait forever. The floor makes that unlikely, not impossible. Warnings about it go through
   `pc_logging.warning_once`, which says a message once per process and holds it until a handler can render it --
   both ends find these before their log is connected.
+- **A sandbox process is waited for until it is dead, not until its pipes are** (`runtime.communicate`,
+  `runtime.communicate_sync`, `partcad_utils.container_service.communicate`): `communicate()` -- asyncio's
+  and `subprocess`'s alike -- returns when stdout and stderr reach their end, and whatever a sandbox interpreter
+  starts inherits both. So an interpreter the out-of-memory killer took while a child of it lived on was
+  waited for as long as the child lived, holding its process slot, the environment's lock, the shape's lock
+  and the daemon's dispatch lock: every later command, `pc daemon status` included, stalled behind it. The
+  process is watched as well now: once it has exited, its output drains for `EXIT_GRACE` seconds, whatever
+  can still write into its pipes is found by the pipe (`pipe_holders`, through `/proc` on Linux) and killed,
+  and the pipes are closed from this end; the caller sees the signal (`process_crash.describe_termination`
+  says SIGKILL is probably out of memory) seconds after the death. Every launch point goes through one of
+  those three, and a bare `communicate()` on a sandbox process is this bug again. Nor is a pip that was killed
+  mid-install recorded as having installed anything (`record_install_unless_killed`): its death is raised as
+  the failure of whatever needed the package, and the next run installs it afresh. The container service
+  passes `wait_after_success`, because a command that exited 0 there may be an application's launcher that
+  handed its window to a child -- the wait `pc ide open` exists to make.
+
+  A container is a sandbox process too. A `docker exec` client reports a death by signal inside the
+  container as 128 plus the signal, which `runtime_python_docker.exec_status` turns back into the signal; and
+  a command that failed asks `containers.stopped` whether the *container* stopped, and if it did, says how
+  and lets go of it, so the next command starts it again (`DockerPythonRuntime._ended`, `Runtime._ended` /
+  `_endpoint_ended` for KiCad's and a plugin's container, `ContainerPool.discard` for the remote pool).
 - **Location/coordinate format**: 3D locations (OpenCASCADE `TopLoc_Location`) are represented as
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.

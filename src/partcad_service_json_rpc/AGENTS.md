@@ -91,6 +91,15 @@ starvation the `threadsMax` floor is there to make unlikely.
   registry; `rpc.discover` returns the catalog).
 - `transport/` — `framing.py` (Content-Length codec), `stdio.py`, `socket_server.py` (threaded AF_UNIX server,
   the daemon's transport), `http.py` (optional HTTP+SSE).
+
+  Requests are dispatched one at a time, under one lock, by the socket server and the pipe server alike. A few
+  are answered at the transport level instead, beside whatever is being served: `daemon.stop`,
+  `daemon.settings`, `log.mode`, and the liveness probe `rpc.discover` (`partcad_utils.workspace.LIVENESS_METHOD`).
+  The probe has to be: queued behind a long request -- or behind one that never ended, which is what a sandbox
+  process that died used to leave (see "A sandbox process is waited for until it is dead" in
+  `src/partcad/AGENTS.md`) -- it timed out, and `pc daemon stop`, which asks it first, reported that no daemon
+  was running to the user the stalled client had just told to run it. Whatever is answered there must touch no
+  session state: the emitter's sink belongs to the request holding the lock.
 - `daemon.py` — workspace root discovery, hashing, socket path, liveness (`rpc.discover` probe), stale recovery,
   double-fork/detach, `daemon.stop`. `win_pipe.py` — the Windows named-pipe counterpart.
 

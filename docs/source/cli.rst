@@ -138,6 +138,26 @@ offered by ``pc render``, ``pc export``, ``pc test``, ``pc sim``, ``pc list`` an
 and ``pc sim`` it is ``--fast-only`` alone, since ``-f`` is their ``--filter``. Every recursive run over
 ``//pub`` in PartCAD's own CI passes it.
 
+.. _sandbox-death:
+
+**********************************
+When a sandbox process is killed
+**********************************
+
+Every piece of geometry is computed in a sandbox process, and the operating system can end one -- on a large
+model, most often the out-of-memory killer. The daemon notices within a couple of seconds, even when something
+the process had started is still running, and fails the work that depended on it with the reason rather than
+going quiet::
+
+    ERROR:partcad:.../wrapper_build123d.py ... was killed by signal 9 (SIGKILL). Nothing in the sandbox chose
+    this: something outside it ended the process, which on a large model is usually the out-of-memory killer.
+
+What was held for the process is let go -- its process slot, the sandbox's lock -- and whatever it left running
+is stopped, so the commands after it run as usual (``pc daemon status`` included), and the next one that needs
+the sandbox starts a new process. In the ``docker`` and ``remote`` sandboxes a container that stopped is said
+so, and started again for the next command. If it keeps happening, run fewer sandbox processes at once:
+``--threads-max`` (``threadsMax``) caps how many run side by side.
+
 *************
 Host commands
 *************
