@@ -147,7 +147,16 @@ def set_dependency_revision(config_path: str, dependency: str, revision: str) ->
             return "its 'revision:' is a template expression"
         if value.strip("'\"") == revision:
             return None
-        lines[index] = "%s%s%s%s" % (match.group("head"), revision, match.group("tail") or "", match.group("eol") or "")
+        # Quoted the way it was quoted, if it was.
+        quote = value[0] if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"" else ""
+        lines[index] = "%s%s%s%s%s%s" % (
+            match.group("head"),
+            quote,
+            revision,
+            quote,
+            match.group("tail") or "",
+            match.group("eol") or "",
+        )
     elif "track" in fields:
         index = fields["track"][0]
         line = lines[index]

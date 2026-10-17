@@ -504,8 +504,13 @@ def _fetched_commit(repo: pygit2.Repository, revision: str) -> pygit2.Oid:
         # The requested ref is the one written to be merged. Anything the
         # server volunteered alongside it is marked "not-for-merge".
         if len(fields) < 2 or not fields[1].strip():
+            fetched = repo.get(fields[0].strip())
+            if fetched is None:
+                # Named, but nothing came down for it: what a local remote
+                # answers when asked for a commit id it does not have.
+                break
             # An annotated tag resolves to the tag object, not to a commit.
-            return repo.get(fields[0].strip()).peel(pygit2.Commit).id
+            return fetched.peel(pygit2.Commit).id
 
     local = _local_commit(repo, revision)
     if local is not None:
@@ -1091,7 +1096,10 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         It is asked for by its id, which costs one commit's worth of download.
         A server that will not serve a commit by its id is the one case where
         the copy is downloaded again instead, the way a clone of that commit
-        would be - which knows how to get past such a server.
+        would be - which knows how to get past such a server. That download goes
+        beside the copy, which makes way for it only once it has succeeded: the
+        same refusal is what a commit the remote does not have at all looks
+        like, and that is no reason to lose the copy there is.
         """
         local = _local_commit(repo, commit)
         if local is None:
@@ -1107,10 +1115,19 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                     self.import_config_url,
                     str(e).splitlines()[-1] if str(e) else e,
                 )
+                download_path = cache_path + ".partcad-download"
+                shutil.rmtree(download_path, ignore_errors=True)
+                with _ambient_config_guard.honoring_ambient_config():
+                    self._clone_repo(repo_url, download_path, get_clone_options(commit)).free()
                 repo.free()
                 shutil.rmtree(cache_path, ignore_errors=True)
-                with _ambient_config_guard.honoring_ambient_config():
-                    return self._clone_repo(repo_url, cache_path, get_clone_options(commit))
+                try:
+                    os.replace(download_path, cache_path)
+                except OSError as replace_error:
+                    raise pygit2.GitError(
+                        "Could not put the download of %s in place of %s: %s" % (commit, cache_path, replace_error)
+                    ) from replace_error
+                return pygit2.Repository(cache_path)
         repo.reset(local, ResetMode.HARD)
         return repo
 

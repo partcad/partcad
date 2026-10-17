@@ -69,10 +69,17 @@ def test_an_existing_revision_is_replaced_and_its_comment_kept(tmp_path):
     assert after == (
         "dependencies:\n"
         "    pub:\n"
-        "        revision: %s   # moved by pc update\n"
+        "        revision: '%s'   # moved by pc update\n"
         "        track: main\n"
         "        url: https://example.com/pub.git\n" % SHA
     )
+
+
+@pytest.mark.parametrize("quoted", ["%s", "'%s'", '"%s"'])
+def test_a_revision_keeps_the_quotes_it_was_written_with(tmp_path, quoted):
+    reason, after = pin(tmp_path, "dependencies:\n  pub:\n    track: main\n    revision: %s\n" % (quoted % "abc1234"))
+    assert reason is None
+    assert after == "dependencies:\n  pub:\n    track: main\n    revision: %s\n" % (quoted % SHA)
 
 
 def test_only_the_named_dependency_is_touched(tmp_path):

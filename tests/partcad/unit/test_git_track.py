@@ -548,3 +548,63 @@ def test_add_dep_adds_nothing_offline(tmp_path, upstream, user_config):
 
     assert not ok
     assert dependencies is None
+
+
+def test_a_pin_the_remote_does_not_have_keeps_the_copy_and_says_why(tmp_path, upstream, user_config, caplog):
+    """A commit that is not there cannot be checked out, and that is no reason to lose the copy that is."""
+    workspace = tmp_path / "ws"
+    config = write_package(workspace, dependency(upstream, track="main", revision=upstream.head()))
+    assert load_version(workspace, user_config) == "A"
+
+    missing = "0123456789abcdef0123456789abcdef01234567"
+    config.write_text(dependency_text(upstream, track="main", revision=missing))
+    with caplog.at_level("WARNING"):
+        version = load_version(workspace, user_config)
+
+    assert version == "A"
+    assert copies(user_config, upstream) == ["-main"]
+    assert missing in caplog.text
+
+
+def test_a_server_that_will_not_serve_a_commit_by_id_still_gets_the_copy_moved(tmp_path, user_config):
+    """The copy is downloaded again beside itself, and replaced once that has worked.
+
+    Over HTTP and protocol v0, with 'uploadpack.allowReachableSHA1InWant' off:
+    the server that refuses a commit asked for by its id. A local remote serves
+    it either way, so it could not reach this path.
+    """
+    from git_http_server import mirror, serve_git
+
+    work = Upstream(tmp_path / "work")
+    root = tmp_path / "srv"
+    root.mkdir()
+    served = root / "upstream.git"
+    mirror(work.path, served)
+    pygit2.Repository(str(served)).config["uploadpack.allowReachableSHA1InWant"] = False
+
+    with serve_git(root, protocol_v2=False) as base_url:
+        url = "%s/upstream.git" % base_url
+        workspace = tmp_path / "ws"
+
+        def pinned(revision):
+            write_package(
+                workspace, "  dep:\n    type: git\n    url: '%s'\n    track: main\n    revision: %s\n" % (url, revision)
+            )
+
+        pinned(work.head())
+        assert load_version(workspace, user_config) == "A"
+
+        # Two more commits, and the pin moves to the first: neither downloaded
+        # yet nor the tip of a branch, so nothing but its id names it.
+        wanted = work.commit("B")
+        work.commit("C")
+        pygit2.Repository(str(served)).remotes.create_anonymous(str(work.path)).fetch(
+            ["+refs/heads/main:refs/heads/main"]
+        )
+        pinned(wanted)
+
+        assert load_version(workspace, user_config) == "B"
+
+    prefix = cache_dir_name(url, None)
+    git_dir = Path(user_config.internal_state_dir) / "git"
+    assert sorted(p.name[len(prefix) :] for p in git_dir.glob(prefix + "*") if p.is_dir()) == ["-main"]
