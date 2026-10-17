@@ -1169,7 +1169,9 @@ at all).
 
 - **Loading never moves a git dependency** (`project_factory_git.py`). A copy is downloaded once, marked done
   by `.partcad.git.cloned` (written last, so a copy without it is an interrupted clone and is downloaded again),
-  and then used as it is — no network, not even the connectivity probe. Only two things refetch one, both via
+  and then used as it is — while it is at what the dependency asks for, no network, not even the connectivity
+  probe; a pin it is not at yet is fetched, which satisfies the pin rather than updating it (below). Only two
+  things refetch one, both via
   `ProjectFactoryGit._wants_refresh()`: the "force auto-update" setting `forceUpdate`, and `Context.refresh_imports`,
   which `pc update` sets on its own context for one pass. There used to be a third — any copy older than a day
   was refreshed by whatever loaded it next — and it is gone on purpose: it made one commit of a package build
@@ -1187,9 +1189,17 @@ at all).
   which packages are built from which copy at which commit, and a second pin of the same branch that disagrees
   is kept in a commit-named copy instead (`_held_by_others`, released by `Context._drop_packages`). And
   `revision.py` caches a repository's commit by its path, which no longer changes when the commit does, so a
-  move calls `revision.reset_cache()`. Nothing coordinates *processes*: two daemons with packages pinning one
-  branch at different commits can still move the copy under each other. `develIndex` gets a copy of its own
-  (`-devel`) so that toggling it never moves the `main` one.
+  move calls `revision.reset_cache()`. Other contexts are told the same through **claims**: a context built from
+  the copy at a commit it is pinned to holds `<copy>.claims/<commit>.<nonce>` *locked* (`_Claim`), and a pin that
+  disagrees with a claim gets a commit-named copy too (`_claimed_by_others`) — which is what keeps two daemons,
+  serving two workspaces pinned to two commits of one branch, from moving the copy under each other. The OS lock
+  is the claim, not the file: it goes when the process does, however it ends, and a file nobody holds locked is
+  removed by whoever finds it. A context sits in reference cycles, so a context this process let go of goes on
+  claiming until the cycle collector runs; a claim of this process's that is in the way is probed again after a
+  `gc.collect()`, and only one in the way, because the daemon keeps a context per directory and most of them
+  agree. Only a commit pin claims: a branch is whatever the copy holds, so `forceUpdate`
+  (which follows the branch) claims nothing, and leaves a copy someone else claims where it is, with a warning.
+  `develIndex` gets a copy of its own (`-devel`) so that toggling it never moves the `main` one.
 
   Removing a copy goes through `_remove_tree`, never a bare `shutil.rmtree(..., ignore_errors=True)`, because
   Windows refuses two things that call gave up on in silence, leaving half a repository for the next load to take

@@ -269,7 +269,9 @@ write for you:
   pins name. What changed is a diff in ``partcad.yaml``: review it, commit it, revert it; and every other checkout
   of your package builds against the same commits as soon as it has that commit. Running it again when nothing
   has moved changes nothing. On disk a tracked dependency is one copy per branch, which ``pc update`` moves from
-  commit to commit rather than adding a copy for every commit it has been pinned to.
+  commit to commit rather than adding a copy for every commit it has been pinned to -- unless another workspace
+  open at the same time is built from that copy at another commit, in which case the new pin gets a copy of its
+  own and the other workspace's is left where it is.
 * A dependency with ``track:`` and no ``revision:`` yet is downloaded at the newest commit of that branch the first
   time it is needed, and stays there until ``pc update`` pins it.
 * ``pc update`` never edits a package it imported. The pins in an imported package are its maintainers' to move,

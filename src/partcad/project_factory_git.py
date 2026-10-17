@@ -20,6 +20,8 @@ import tempfile
 import threading
 import time
 import traceback
+import uuid
+import weakref
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -296,6 +298,127 @@ def _release(error: BaseException) -> None:
     reported where it happened; only their locals go.
     """
     traceback.clear_frames(error.__traceback__)
+
+
+# A copy of a tracked branch is moved from pin to pin, and a package loaded out
+# of it reads its files lazily for as long as its context lives - in this
+# process, or in a daemon serving another workspace. So a context built from a
+# copy at a commit it is pinned to says so, in '<copy>.claims/<commit>.<nonce>',
+# and holds that file locked while it does; nothing moves a copy another context
+# claims at another commit (see 'ProjectFactoryGit._claimed_by_others'). The
+# lock is what makes it a claim: the operating system drops it when the process
+# ends, however it ends, so a claim file nobody holds locked is one a process
+# that went away left behind, and is removed by whoever finds it.
+_CLAIMS_SUFFIX = ".claims"
+# The claims this process holds, so that finding one of them on disk is known
+# to be about another context here, which may be garbage not yet collected.
+_claims_here = weakref.WeakValueDictionary()
+
+if sys.platform == "win32":
+    import msvcrt
+
+    def _try_lock(file) -> bool:
+        file.seek(0)
+        try:
+            msvcrt.locking(file.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            return False
+        return True
+
+    def _unlock(file) -> None:
+        file.seek(0)
+        msvcrt.locking(file.fileno(), msvcrt.LK_UNLCK, 1)
+
+else:
+    import fcntl
+
+    def _try_lock(file) -> bool:
+        try:
+            fcntl.flock(file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return False
+        return True
+
+    def _unlock(file) -> None:
+        fcntl.flock(file.fileno(), fcntl.LOCK_UN)
+
+
+class _Claim:
+    """One context's claim on the copy at 'cache_path', at 'commit'. Held until 'release()' or collection."""
+
+    def __init__(self, path, commit, file):
+        self.path = path
+        self.commit = commit
+        self._file = file
+
+    @classmethod
+    def take(cls, cache_path, commit):
+        """Claim the copy at 'cache_path'; None where files cannot be locked, which claims nothing."""
+        directory = cache_path + _CLAIMS_SUFFIX
+        try:
+            os.makedirs(directory, exist_ok=True)
+            path = os.path.join(directory, "%s.%s" % (commit, uuid.uuid4().hex))
+            file = open(path, "xb")
+        except OSError:
+            return None
+        if not _try_lock(file):
+            file.close()
+            with contextlib.suppress(OSError):
+                os.remove(path)
+            return None
+        claim = cls(path, commit, file)
+        _claims_here[path] = claim
+        return claim
+
+    def release(self) -> None:
+        with contextlib.suppress(OSError):
+            _unlock(self._file)
+        self._file.close()
+        with contextlib.suppress(OSError):
+            # Windows refuses while somebody probes it; whoever probes it next removes it.
+            os.remove(self.path)
+
+
+def _is_claimed(path) -> bool:
+    """Whether the claim file at 'path' is held by a context; removed if it is not."""
+    try:
+        file = open(path, "rb")
+    except OSError:
+        return False
+    try:
+        if not _try_lock(file):
+            return True
+        with contextlib.suppress(OSError):
+            _unlock(file)
+    finally:
+        file.close()
+    with contextlib.suppress(OSError):
+        os.remove(path)
+    return False
+
+
+def _claimed_commit(path) -> str:
+    return os.path.basename(path).split(".", 1)[0]
+
+
+def _claimed_commits(cache_path, own=None, matters=None) -> set:
+    """The commits contexts other than the one holding 'own' claim the copy at 'cache_path' at.
+
+    A claim lives as long as its context, and a context sits in reference
+    cycles: one this process let go of goes on claiming until the cycle
+    collector runs. Collecting is a pass over the whole heap, so it is paid only
+    when a claim of this process's at a commit that 'matters' is in the way.
+    """
+    directory = cache_path + _CLAIMS_SUFFIX
+    try:
+        paths = [os.path.join(directory, name) for name in os.listdir(directory)]
+    except OSError:
+        return set()
+    held = [path for path in paths if (own is None or path != own.path) and _is_claimed(path)]
+    if matters is not None and any(path in _claims_here and matters(_claimed_commit(path)) for path in held):
+        gc.collect()
+        held = [path for path in held if _is_claimed(path)]
+    return {_claimed_commit(path) for path in held}
 
 
 def looks_like_commit_id(revision: str) -> bool:
@@ -1202,8 +1325,29 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                 return entry["commit"]
         return None
 
-    def _hold(self, cache_path):
-        """Record that this package is built from the copy at 'cache_path', at the commit it is at."""
+    def _claimed_by_others(self, cache_path, name):
+        """The commits other contexts, in this process or another, claim the copy named 'name' at."""
+        own = None
+        checkouts = getattr(self.ctx, "git_checkouts", None)
+        if checkouts is not None:
+            with self.ctx.git_checkouts_lock:
+                own = checkouts.get(cache_path, {}).get("claim")
+        return _claimed_commits(cache_path, own, lambda commit: self._would_move(name, commit))
+
+    def _would_move(self, name, commit) -> bool:
+        """Whether this dependency would move the copy named 'name' off 'commit', were it nobody else's."""
+        if name != self.import_revision:
+            return not self._accepts(commit)
+        # A copy named after the revision: only a refresh of a branch moves it.
+        return self._wants_refresh() and not looks_like_commit_id(self.import_revision or "")
+
+    def _hold(self, cache_path, claim):
+        """Record that this package is built from the copy at 'cache_path', at the commit it is at.
+
+        With 'claim', other contexts are told so as well, for as long as this
+        one holds it: a copy moved under a package pinned to a commit would have
+        it read another commit's files.
+        """
         checkouts = getattr(self.ctx, "git_checkouts", None)
         if checkouts is None or not os.path.isdir(cache_path):
             return
@@ -1212,9 +1356,15 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         except GIT_ERRORS:
             return
         with self.ctx.git_checkouts_lock:
-            entry = checkouts.setdefault(cache_path, {"commit": commit, "holders": set()})
+            entry = checkouts.setdefault(cache_path, {"commit": commit, "holders": set(), "claim": None})
+            if entry["claim"] is not None and entry["claim"].commit != commit:
+                # Moved by the one package that held it, which may.
+                entry["claim"].release()
+                entry["claim"] = None
             entry["commit"] = commit
             entry["holders"].add(self.name)
+            if claim and entry["claim"] is None:
+                entry["claim"] = _Claim.take(cache_path, commit)
 
     def _clone_or_update_repo(self, repo_url, cache_dir=None):
         """
@@ -1228,8 +1378,9 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         A dependency that tracks a branch is kept in a copy named after the
         branch, which is moved to whichever commit the dependency is pinned to:
         'pc update' moving a pin moves that copy, rather than leaving the old
-        commit's behind. The one exception is a copy another package of this
-        context is already built from, at another commit; that pin is then kept
+        commit's behind. The one exception is a copy another package is already
+        built from at another commit - of this context, or of another one that
+        claimed it (a daemon serving another workspace); that pin is then kept
         in a copy named after the commit, the way every revision used to be.
 
         Args:
@@ -1275,13 +1426,20 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
 
         with cache_lock, repo_file_lock:
             held = self._held_by_others(cache_path)
-            if held is not None:
-                if name != self.import_revision and not self._accepts(held):
-                    # Another package of this context is built from this copy,
-                    # at another commit: not to be moved under it.
+            claimed = self._claimed_by_others(cache_path, name)
+            if held is not None or claimed:
+                others = claimed | ({held} if held is not None else set())
+                if name != self.import_revision and any(self._would_move(name, commit) for commit in others):
+                    # Another package, of this context or another, is built
+                    # from this copy at another commit: not to be moved under it.
                     return None
                 # In use already, and at what this dependency asks for: used as
                 # it is, without a refresh moving it under the other package.
+                if any(self._would_move(name, commit) for commit in claimed):
+                    pc_logging.warning(
+                        "Not updating %s: another PartCAD context is built from it at %s"
+                        % (self.import_config_url, ", ".join(sorted(claimed)))
+                    )
             else:
                 if os.path.exists(cache_path) and not os.path.exists(guard_path):
                     # A download that never finished: a process killed mid-clone, a
@@ -1304,7 +1462,13 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                         "%s is not at the commit it is pinned to, %s, which could not be fetched: "
                         "using the copy that was downloaded before" % (self.import_config_url, self.import_revision)
                     )
-            self._hold(cache_path)
+            # Only a copy that moves needs claiming, and only for a pin: a copy
+            # named after its commit never moves, and a branch is whatever the
+            # copy holds.
+            self._hold(
+                cache_path,
+                claim=name != self.import_revision and looks_like_commit_id(self.import_revision or ""),
+            )
 
         return cache_path
 

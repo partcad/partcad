@@ -19,7 +19,10 @@ The upstream is a repository on the local file system: none of this is about the
 transport, and the tests that are cover it over HTTP.
 """
 
+import gc
 import os
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -420,10 +423,12 @@ def test_which_copy_it_is_kept_in(config, settings, expected):
 
 
 def copies(user_config, upstream) -> list[str]:
-    """The names of the downloaded copies of 'upstream', without the hash they share."""
-    prefix = cache_dir_name(upstream.url, None)
+    """The names of the downloaded copies of 'upstream' (or of the url it is), without the hash they share."""
+    prefix = cache_dir_name(getattr(upstream, "url", upstream), None)
     git_dir = Path(user_config.internal_state_dir) / "git"
-    return sorted(p.name[len(prefix) :] for p in git_dir.glob(prefix + "*") if p.is_dir())
+    return sorted(
+        p.name[len(prefix) :] for p in git_dir.glob(prefix + "*") if p.is_dir() and not p.name.endswith(".claims")
+    )
 
 
 def head_of(path) -> str:
@@ -502,6 +507,115 @@ def test_two_pins_of_one_branch_in_one_context_do_not_share_the_copy(tmp_path, u
     assert (Path(dep.config_dir) / "version.txt").read_text() == "A"
     assert (Path(other.config_dir) / "version.txt").read_text() == "B"
     assert copies(user_config, upstream) == sorted(["-main", "-" + second])
+
+
+def pinned_context(directory: Path, upstream, user_config, revision):
+    """A warm context, as a daemon serving the workspace in 'directory' keeps one, with '//dep' loaded."""
+    write_package(directory, dependency(upstream, track="main", revision=revision))
+    ctx = pc.Context(str(directory), search_root=False, user_config=user_config)
+    assert ctx.get_project("//dep") is not None
+    return ctx
+
+
+def test_a_copy_another_context_is_pinned_to_is_not_moved_under_it(tmp_path, upstream, user_config):
+    """Two workspaces open at once, pinned to two commits of one branch, each served by a daemon of its own."""
+    first = upstream.head()
+    second = upstream.commit("B")
+    one = pinned_context(tmp_path / "one", upstream, user_config, first)
+
+    two = pinned_context(tmp_path / "two", upstream, user_config, second)
+
+    # What the first reads lazily is still the commit it is pinned to.
+    assert (Path(one.get_project("//dep").config_dir) / "version.txt").read_text() == "A"
+    assert (Path(two.get_project("//dep").config_dir) / "version.txt").read_text() == "B"
+    assert copies(user_config, upstream) == sorted(["-main", "-" + second])
+
+
+def test_a_claim_goes_with_the_context(tmp_path, upstream, user_config):
+    """A context nobody holds any more claims nothing, collected or not."""
+    first = upstream.head()
+    second = upstream.commit("B")
+    pinned_context(tmp_path / "one", upstream, user_config, first)  # and dropped
+
+    two = pinned_context(tmp_path / "two", upstream, user_config, second)
+
+    assert (Path(two.get_project("//dep").config_dir) / "version.txt").read_text() == "B"
+    assert copies(user_config, upstream) == ["-main"]
+    claims = Path(user_config.internal_state_dir) / "git" / (cache_dir_name(upstream.url, "main") + ".claims")
+    assert [p.name.split(".")[0] for p in claims.iterdir()] == [second]
+
+
+def test_contexts_that_agree_on_the_pin_cost_no_collection(tmp_path, upstream, user_config, monkeypatch):
+    """A daemon keeps a context per directory it is asked about; most of them pin what the others do."""
+    first = upstream.head()
+    one = pinned_context(tmp_path / "one", upstream, user_config, first)
+
+    collections = []
+    collect = gc.collect
+    monkeypatch.setattr(gc, "collect", lambda *args: collections.append(args) or collect(*args))
+    two = pinned_context(tmp_path / "two", upstream, user_config, first)
+
+    assert collections == []
+    assert one.get_project("//dep").config_dir == two.get_project("//dep").config_dir
+
+
+def test_a_claim_goes_with_the_process_that_held_it(tmp_path, upstream, user_config):
+    """Another process holds a claim until it ends, however it ends: killed, it leaves the file, not the claim."""
+    first = upstream.head()
+    second = upstream.commit("B")
+    pinned_context(tmp_path / "one", upstream, user_config, first)  # downloaded, so the other process needs no network
+
+    holder = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import sys\n"
+            "import partcad as pc\n"
+            "from partcad.user_config import UserConfig\n"
+            "config = UserConfig()\n"
+            "config.internal_state_dir = sys.argv[2]\n"
+            "config.force_update = False\n"
+            "config.offline = False\n"
+            "ctx = pc.Context(sys.argv[1], search_root=False, user_config=config)\n"
+            "assert ctx.get_project('//dep') is not None\n"
+            "print('loaded', flush=True)\n"
+            "sys.stdin.read()\n",
+            str(tmp_path / "one"),
+            user_config.internal_state_dir,
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert holder.stdout.readline().strip() == "loaded"
+
+        pinned_context(tmp_path / "two", upstream, user_config, second)
+        assert copies(user_config, upstream) == sorted(["-main", "-" + second])
+        assert head_of(Path(user_config.internal_state_dir) / "git" / cache_dir_name(upstream.url, "main")) == first
+    finally:
+        holder.kill()
+        holder.wait()
+        holder.stdin.close()
+        holder.stdout.close()
+
+    three = pinned_context(tmp_path / "three", upstream, user_config, second)
+    assert head_of(Path(three.get_project("//dep").config_dir)) == second
+    assert Path(three.get_project("//dep").config_dir).name == cache_dir_name(upstream.url, "main")
+
+
+def test_force_auto_update_leaves_a_copy_another_context_is_pinned_to(tmp_path, upstream, user_config, caplog):
+    first = upstream.head()
+    one = pinned_context(tmp_path / "one", upstream, user_config, first)
+    upstream.commit("B")
+
+    user_config.force_update = True
+    with caplog.at_level("WARNING"):
+        version = load_version(tmp_path / "one", user_config)
+
+    assert version == "A"
+    assert (Path(one.get_project("//dep").config_dir) / "version.txt").read_text() == "A"
+    assert "Not updating" in caplog.text and first in caplog.text
 
 
 # ---- pc add dep -----------------------------------------------------------------
@@ -605,9 +719,7 @@ def test_a_server_that_will_not_serve_a_commit_by_id_still_gets_the_copy_moved(t
 
         assert load_version(workspace, user_config) == "B"
 
-    prefix = cache_dir_name(url, None)
-    git_dir = Path(user_config.internal_state_dir) / "git"
-    assert sorted(p.name[len(prefix) :] for p in git_dir.glob(prefix + "*") if p.is_dir()) == ["-main"]
+    assert copies(user_config, url) == ["-main"]
 
 
 @pytest.fixture
@@ -700,6 +812,4 @@ def test_a_pin_no_server_has_leaves_no_download_behind(tmp_path, user_config, wi
         pinned("0123456789abcdef0123456789abcdef01234567")
         assert load_version(workspace, user_config) == "A"
 
-    prefix = cache_dir_name(url, None)
-    git_dir = Path(user_config.internal_state_dir) / "git"
-    assert sorted(p.name[len(prefix) :] for p in git_dir.glob(prefix + "*") if p.is_dir()) == ["-main"]
+    assert copies(user_config, url) == ["-main"]

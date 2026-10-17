@@ -411,11 +411,11 @@ class Context:
         # every context it keeps warm.
         self.refresh_imports = False
         # The git copies the loaded packages are built from: path -> the commit
-        # it is checked out at, and the names of the packages read out of it. A
-        # copy of a tracked branch is moved from pin to pin, and must not be
-        # while a package of this context is read out of it at another commit
-        # (see 'ProjectFactoryGit._held_by_others'). Released as packages are
-        # dropped.
+        # it is checked out at, the names of the packages read out of it, and
+        # the claim telling other contexts so. A copy of a tracked branch is
+        # moved from pin to pin, and must not be while a package is read out of
+        # it at another commit (see 'ProjectFactoryGit._held_by_others' and
+        # '_claimed_by_others'). Released as packages are dropped.
         self.git_checkouts = {}
         self.git_checkouts_lock = threading.Lock()
 
@@ -637,7 +637,9 @@ class Context:
                     holders = self.git_checkouts[path]["holders"]
                     holders.difference_update(dropped)
                     if not holders:
-                        del self.git_checkouts[path]
+                        claim = self.git_checkouts.pop(path).get("claim")
+                        if claim is not None:
+                            claim.release()
             # What those packages declared about how interfaces mate: kept, it
             # would stop a reloaded package from declaring it differently (the
             # first declaration of a pair is the one that stays).
