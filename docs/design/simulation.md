@@ -1090,7 +1090,10 @@ Rules for plugins:
     which holds every timer, `wait_for`'s included, for as long as the child stays stopped. So `runtime.communicate`
     starts a thread that kills the tree `BACKSTOP` (5 s) after the bound if nothing has, and reports that as the
     timeout. Found by the frozen-plugin test hanging the macOS job; a pull request never runs macOS (it is in the
-    merge queue's tier), which is why it reached `devel`.
+    merge queue's tier), which is why it reached `devel`. That thread, and the loop's own kill, signal nothing
+    unless the run is still the process they were given (`runtime.process_owner`: its pid and its start time, taken
+    when the wait begins): a watcher can reap the run before the loop hears of it, and the pid and group id it led
+    are then free for the system to give to an unrelated process.
   - A non-zero exit, a signal, an empty answer and an answer that is not a JSON object are `SimulationCrash`, carrying
     the last 30 lines of standard error; a spent budget is `SimulationTimeout`. Neither is a traceback, and neither is
     cached.

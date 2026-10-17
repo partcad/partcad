@@ -52,7 +52,25 @@ def bounded_spawn_options(timeout=None) -> dict:
     return {"start_new_session": True}
 
 
-def kill_process_tree(p, from_thread=False) -> None:
+def process_owner(p):
+    """``p`` as `psutil` knows it -- its pid *and* when it started -- or ``None``.
+
+    Taken while ``p`` is known to be ours, so that a kill later can tell ``p``
+    from a process that has been given its number since: a child watcher can
+    reap ``p`` at any moment, and the pid, and with it the process group id it
+    leads, is then free for the system to hand to anything else.
+    """
+    if getattr(p, "returncode", None) is not None or getattr(p, "pid", None) is None:
+        return None
+    try:
+        import psutil
+
+        return psutil.Process(p.pid)
+    except Exception:  # pylint: disable=broad-except
+        return None
+
+
+def kill_process_tree(p, from_thread=False, owner=None) -> None:
     """Kill ``p`` and everything it started, on every platform. Never raises.
 
     Three nets, because each catches what the others miss:
@@ -66,8 +84,17 @@ def kill_process_tree(p, from_thread=False) -> None:
     * and ``p`` itself, which on Windows is `taskkill /T` taking its tree.
 
     ``from_thread`` when called from a thread other than the event loop's: ``p``
-    is then signalled by its id rather than through ``p.kill()``, which polls
-    the process first and could reap it under the loop's own child watcher.
+    is then signalled through ``owner`` rather than through ``p.kill()``, which
+    polls the process first and could reap it under the loop's own child watcher.
+
+    ``owner`` is `process_owner` of ``p``, taken earlier. With it nothing is
+    signalled unless it is still that process -- running, or exited and not yet
+    reaped, which is what keeps its pid and its group id from being reused --
+    because ``p.returncode`` does not say so: between a watcher reaping ``p``
+    and the loop hearing of it, it is still ``None``, and a group id on its own
+    is only a number. That leaves the instant between asking and signalling,
+    which a reuse would need the whole pid space to wrap around in. (A Windows
+    pid is not reused while ``p`` holds a handle to its process.)
 
     What is outside this machine is outside its reach: in the `docker` sandbox
     ``p`` is the `docker exec` client, and the interpreter it started lives in
@@ -78,11 +105,15 @@ def kill_process_tree(p, from_thread=False) -> None:
     pid = getattr(p, "pid", None)
     if pid is None:
         return
+    with contextlib.suppress(Exception):
+        if owner is not None and not owner.is_running():
+            # Gone, and reaped: what has its number now is not ours.
+            return
     children = []
     try:
         import psutil
 
-        children = psutil.Process(pid).children(recursive=True)
+        children = (owner or psutil.Process(pid)).children(recursive=True)
     except Exception:  # pylint: disable=broad-except
         # Gone already, or a psutil that cannot see it: the group is still there.
         pass
@@ -101,11 +132,13 @@ def kill_process_tree(p, from_thread=False) -> None:
             if os.getpgid(pid) == pid:
                 os.killpg(pid, signal.SIGKILL)
     if getattr(p, "returncode", None) is None:
-        with contextlib.suppress(ProcessLookupError, OSError):
-            if from_thread and os.name != "nt":
-                os.kill(pid, signal.SIGKILL)
-            elif not from_thread:
+        # psutil's own errors are not OSErrors.
+        with contextlib.suppress(Exception):
+            if not from_thread:
                 p.kill()
+            elif owner is not None:
+                # psutil checks once more that the pid is still this process.
+                owner.kill()
     for child in children:
         with contextlib.suppress(Exception):
             child.kill()
@@ -138,6 +171,7 @@ async def communicate(p, stdin: bytes, timeout=None):
     bound if nothing has by then; the child dies, the `waitpid` returns, and
     the run is reported as the timeout it is.
     """
+    owner = process_owner(p)
     try:
         if timeout is None:
             return await p.communicate(input=stdin)
@@ -145,7 +179,8 @@ async def communicate(p, stdin: bytes, timeout=None):
 
         def backstop():
             fired.set()
-            kill_process_tree(p, from_thread=True)
+            if owner is not None:
+                kill_process_tree(p, from_thread=True, owner=owner)
 
         timer = threading.Timer(timeout + BACKSTOP, backstop)
         timer.daemon = True
@@ -161,7 +196,7 @@ async def communicate(p, stdin: bytes, timeout=None):
         return out
     except BaseException:
         if p.returncode is None:
-            kill_process_tree(p)
+            kill_process_tree(p, owner=owner)
         raise
 
 

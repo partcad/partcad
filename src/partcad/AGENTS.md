@@ -705,7 +705,9 @@ at all).
   `runtime.communicate` waits the budget plus `TIMEOUT_GRACE` and, on expiry or cancellation, takes the whole
   tree with `runtime.kill_process_tree` (a bounded run starts as a session of its own:
   `runtime.bounded_spawn_options`); a thread of its own does the same `BACKSTOP` seconds later, because on macOS
-  a *stopped* child blocks the event loop inside CPython's child watcher and with it every timer. A spent budget is `SimulationTimeout`; a non-zero exit, a signal or an
+  a *stopped* child blocks the event loop inside CPython's child watcher and with it every timer. Neither kills
+  by number alone: `runtime.process_owner` (pid plus start time) is checked first, because a reaped run's pid
+  and group id can belong to somebody else by then. A spent budget is `SimulationTimeout`; a non-zero exit, a signal or an
   answer that is not a JSON object is `SimulationCrash` with the tail of stderr. Both reach `pc test` as a
   run that did not deliver -- a failure, with the one excuse -- and neither is cached.
 
