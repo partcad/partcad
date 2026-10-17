@@ -773,9 +773,12 @@ Rules the table does not show:
   as the child link's frame, so `<axis>` is the parameter's `dir` verbatim and the part sits in its link at
   `source port⁻¹` -- the remapped-axis wrinkle of the converter disappears from the export. MJCF states a joint's
   `pos` and `axis` in the child body's frame, which is the part's own; the exporter maps the contact-frame axis into it.
-- **Starting position.** MJCF writes the body at the posed configuration and a hinge's or slide's `ref` at the value,
-  so that MuJoCo's zero is PartCAD's zero and the body is where the assembly shows it; a ball has no `ref`, and is
-  re-zeroed. SDFormat states no starting value from 1.9 on and gz-sim 8 reads none, so its joints are re-zeroed: the
+- **Starting position.** For a hinge and a slide, MJCF writes the body at the posed configuration and the joint's `ref`
+  at the value, so that MuJoCo's zero is PartCAD's zero and the body is where the assembly shows it. A ball has no
+  `ref`, so it is re-zeroed: the body is written at its start, and MuJoCo's rotation is the turn away from it. The one
+  exception is a bounded ball that starts away from its zero, whose bound MuJoCo takes about the configuration the
+  body is written in: it is written at its zero, with the start as a `<key>` the run resets to, and reported (8.13.5,
+  "A bounded ball under MJCF"). SDFormat states no starting value from 1.9 on and gz-sim 8 reads none, so its joints are re-zeroed: the
   child is written at its start and every axis where that puts it (`kinematics.rezeroed()`), and the joint map in the
   sidecar maps every reading back (8.13.5). URDF keeps PartCAD's zero and reports the start lost (decision 2): what
   reads a URDF takes a joint's zero to be the hardware's (a named configuration, planned, is what an SRDF `group_state`
@@ -831,7 +834,10 @@ Writing the bodies and joints out of `kinematics` (section 7a) settled what sect
   metres.
 - **A bound on one side only** is written as a range whose open end is a million degrees, or a kilometre, away; MJCF
   ranges have two ends. An MJCF ball can bound only the whole angle it turns through, so a ball's three turns' limits
-  are reported and not written.
+  were reported and not written. 8.13 superseded both: an open end is `inf` (8.13.6), and a ball is bounded by that
+  one angle (`limits: {upper: a}`, the joint's `turnLimit`), which MJCF writes as `range="0 a"`
+  (partcad/partcad-sim-mujoco#16), while a range on one of a ball's turns is an error of the `connect` check
+  (8.13.3, built #804).
 - **Couplings are written the way MuJoCo holds them.** MuJoCo softens a joint equality by the two joints' inverse
   inertia, which it adds up without the polynomial's coefficient. A screw written as "the slide follows the hinge by
   1.6 mm a radian" therefore barely held at all -- a nut on a 10 mm thread fell 800 mm and turned a quarter turn --
