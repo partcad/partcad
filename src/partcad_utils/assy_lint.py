@@ -888,6 +888,9 @@ def _fallback_span(node):
 # both.
 _CONNECT_SECTIONS = ("connect", "connectPorts")
 
+# The section that states the further joints a node makes once it is placed.
+_ALSO = "alsoConnectPorts"
+
 
 def _all_link_names(node, found=None) -> set:
     """Every name this document gives a node, at any depth.
@@ -1076,6 +1079,33 @@ def _check_connect(node, path, names, index, everywhere, report, templated) -> N
             other_path = path + [section, "interferes"] + ([position] if isinstance(interferes, list) else [])
             if not templated(other_path) and other not in everywhere:
                 report(other_path, "nothing in this file places a link called '%s'" % other)
+
+    # The further joints a node makes once placed name a link the same way, and
+    # one placed before it for the same reason: the joint is checked against
+    # where both already are (see 'AssemblyFactoryAssy.resolve_also').
+    also = node.get(_ALSO)
+    entries = also if isinstance(also, list) else [also] if isinstance(also, dict) else []
+    for position, entry in enumerate(entries):
+        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+            continue
+        target = entry["name"]
+        target_path = path + [_ALSO] + ([position] if isinstance(also, list) else []) + ["name"]
+        if templated(target_path):
+            continue
+        before = [name for name in names[:index] if name is not None]
+        after = [name for name in names[index + 1 :] if name is not None]
+        if target in before:
+            continue
+        if target in after:
+            report(
+                target_path,
+                "'%s' is placed after this node: a further joint is stated on the later of the two links, "
+                "once both are there; state it on '%s'" % (target, target),
+            )
+        elif target in everywhere:
+            report(target_path, "'%s' is not a link of the same 'links:' list, so this node cannot meet it" % target)
+        else:
+            report(target_path, "nothing in this file places a link called '%s'" % target)
 
 
 # ---- what is to be made ----------------------------------------------------

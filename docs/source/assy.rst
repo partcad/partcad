@@ -109,6 +109,11 @@ The following syntax is used to create a node that places a part in the assembly
       comment: <(optional) free form text, see "Comment" below>
       how: <(optional) assembly instructions, see "How" below>
       exploded: <(optional) the gap to show in the exploded view of this step, in mm>
+    alsoConnectPorts: # (optional) further joints this part makes once it is placed; one, or a list of them
+      with: <the name of the port in this part>
+      name: <the name of a part placed before it in this assembly>
+      to: <the name of the port in that part>
+      comment: <(optional) free form text, see "Comment" below>
     connect: # alternative to "location" and "connectPorts", used to connect by interfaces
       with: <(optional) name of the interface in this part, if more than one exists>
       withInstance: <(optional) name of the instance of the interface in this part, if more than one exists>
@@ -147,6 +152,14 @@ The `exploded` field does not affect the assembly itself: it is how far apart
 the two parts are drawn in the exploded view of this step in the assembly
 instruction book (`pc render -t pdf` and `pc render -t html`).
 Without it, the two are spaced by half of the largest dimension of the two.
+
+An interface built from parameters is implemented under the name it was built
+with - a post of one length implements
+`//pub/std/imperial/dimensional-lumber:cuboid;x=88.9,y=743.7,z=88.9` - which a
+connection to a post of any length cannot spell. So `with` and `to` may name such
+an interface without its parameters, and stand for the one parametrization of it
+that the part implements. A part that implements two of them has to be told
+which, by name.
 
 `toParams` and `withParams` give values to the freedom-of-movement parameters of
 the two interfaces (see :ref:`interface-parameters`), and both are read in the
@@ -209,9 +222,44 @@ joins, every degree of freedom it keeps - its kind, axis, range, starting value,
 and which parameter and which declaration it came from - and its physics.
 
 A link is placed once, against a link already placed, so a closed chain - a
-four-bar linkage - cannot be stated yet: closing it takes a connection whose
-target is placed after it, or a second placement of a link already placed. Both
-are refused, and `pc test` says so.
+four-bar linkage - cannot be *placed* by its connections: closing it takes a
+connection whose target is placed after it, or a second placement of a link
+already placed. Both are refused, and `pc test` says so. What closes the chain is
+stated instead, as a further joint (see "Further joints" below).
+
+.. _assy-also:
+
+Further joints
+--------------
+
+A link is placed by one connection, and many make more joints than that once
+they are where it puts them. A rail placed against the left leg of a frame
+meets the right leg too; a top placed on one leg rests on all four; anything
+that closes a loop has a joint that no connection placed. `alsoConnectPorts`
+states them, in the words of `connectPorts`:
+
+  .. code-block:: yaml
+
+    - assembly: end-frame
+      name: right-end
+      connectPorts: { with: rail-1, name: back-rail, to: end-b }
+      alsoConnectPorts:          # one of these, or a list of them
+        with: rail-2             # a port of this link
+        name: front-rail         # a link placed before it
+        to: end-a                # and a port of that one
+        comment: <(optional) free form text, see "Comment" below>
+
+It places nothing. Once every link of the list is placed, the two ports have to
+be in one place, facing each other - which is what makes a joint of them - and
+`pc test` fails the assembly where they are not: a frame whose sizes do not
+close the loop, or a port named on the wrong face. It is stated on the later of
+the two links, once both are there, and the assembly instruction book says so at
+the step that places it.
+
+A rigid assembly is all a further joint is checked for so far. A mechanism with a
+closed chain - a four-bar linkage - states it the same way, and is checked where
+it starts; a simulation does not yet hold it closed as it moves (see
+docs/design/simulation.md, section 8.9).
 
 Expected overlaps
 -----------------
@@ -279,7 +327,13 @@ It is used when the assembly is documented (`pc render -t pdf` and
 assembly instruction book says about the assembly as a whole, unless the package
 that declares the assembly gives it a `desc` of its own; the description of a
 container node is what the book says about that sub-assembly; and the
-description of a part or assembly node is shown with the step that adds it.
+description of a part or assembly node is shown with the step that adds it, as
+the instruction for that step - the book composes a sentence out of the
+connection only for a node that has no description, and sets it apart, smaller,
+for one that does. The description of a fastener that goes in at the step of the
+item it holds (see `pc render` in :doc:`cli`) is shown at that step, once
+however many fasteners say the same thing. Write it for whoever builds the
+thing: which faces meet, what is flush, how far in, which way up.
 Nothing else in PartCAD parses it or acts upon it.
 
 Comment
