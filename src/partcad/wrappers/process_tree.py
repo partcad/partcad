@@ -129,11 +129,11 @@ def started_by(root=None):
     return sorted(found & alive)
 
 
-def stop_started(grace=GRACE):
-    """Stop everything this process started: asked first, killed after 'grace' seconds.
+def stop_started(grace=GRACE, root=None):
+    """Stop everything 'root' (this process) started: asked first, killed after 'grace' seconds.
 
-    Returns how many processes there were to stop. This process is left
-    running -- it still has an answer to give, or an exit code to choose.
+    Returns how many processes there were to stop. 'root' is left running --
+    it still has an answer to give, or an exit code to choose.
     """
     if os.name == "nt":
         # 'taskkill /T' takes a process with its tree, and there is no way to
@@ -142,17 +142,17 @@ def stop_started(grace=GRACE):
         # way to make. So nothing is done here: a wrapper on Windows that has to
         # stop its run stops itself with it ('stop_everything').
         return 0
-    victims = started_by()
+    victims = started_by(root)
     if not victims:
         return 0
     _signal(victims, signal.SIGTERM)
     deadline = time.monotonic() + grace
     while time.monotonic() < deadline:
-        left = started_by()
+        left = started_by(root)
         if not left:
             return len(victims)
         time.sleep(0.05)
-    _signal(started_by() or [], signal.SIGKILL)
+    _signal(started_by(root) or [], signal.SIGKILL)
     return len(victims)
 
 

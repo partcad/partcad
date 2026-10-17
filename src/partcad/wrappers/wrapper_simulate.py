@@ -276,7 +276,8 @@ def watch(seconds, answer):
     return timer
 
 
-if __name__ == "__main__":
+def main():
+    """Answer the one request on standard input, within its budget."""
     # Read raw: nothing here is geometry, and decoding would need OCP in a
     # sandbox that has no reason to carry it.
     path, request = wrapper_common.handle_input(decode=False)
@@ -303,3 +304,7 @@ if __name__ == "__main__":
         # Whatever the plugin left running, so that nothing outlives the run
         # holding its output open -- on the way out of a run that raised, too.
         process_tree.stop_started()
+
+
+if __name__ == "__main__":
+    main()

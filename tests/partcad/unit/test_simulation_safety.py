@@ -546,3 +546,203 @@ def test_killing_a_tree_never_kills_the_group_it_did_not_start():
             p.kill()
     assert p.returncode == -signal.SIGKILL
     # And this process, in the group the child was in, is still here to say so.
+
+
+# --------------------------------------------------------------------------- #
+# The wrapper's own pieces, in this process                                   #
+#                                                                             #
+# What the stubs above prove through a subprocess, measured here too: the     #
+# wrapper runs in a sandbox interpreter that coverage does not follow.        #
+# --------------------------------------------------------------------------- #
+
+
+def _wrappers(monkeypatch):
+    from partcad import wrapper as pc_wrapper
+
+    monkeypatch.syspath_prepend(os.path.dirname(pc_wrapper.get("simulate.py")))
+    import process_tree
+    import wrapper_simulate
+
+    return process_tree, wrapper_simulate
+
+
+# A process that starts one that will not stop when asked, and reports its id.
+STUBBORN = (
+    "import signal, subprocess, sys, time\n"
+    "child = subprocess.Popen([sys.executable, '-c', "
+    "'import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); print(1, flush=True); time.sleep(600)'],"
+    " stdout=subprocess.PIPE)\n"
+    "child.stdout.readline()\n"
+    "print(child.pid, flush=True)\n"
+    "time.sleep(600)\n"
+)
+
+
+@pytest.fixture
+def stubborn():
+    parent = subprocess.Popen([sys.executable, "-c", STUBBORN], stdout=subprocess.PIPE, start_new_session=POSIX)
+    child = int(parent.stdout.readline())
+    yield parent, child
+    parent.kill()
+    parent.wait(10)
+    try:
+        os.kill(child, signal.SIGKILL)
+    except OSError:
+        pass
+
+
+@pytest.mark.skipif(not POSIX, reason="a process tree is listed through /proc or ps")
+@pytest.mark.parametrize("listing", ["proc", "ps"])
+def test_what_a_process_started_is_found_however_processes_are_listed(monkeypatch, stubborn, listing):
+    process_tree, _ = _wrappers(monkeypatch)
+    parent, child = stubborn
+    if listing == "ps":
+        monkeypatch.setattr(process_tree.os.path, "isdir", lambda _path: False)
+
+    assert child in process_tree.started_by(parent.pid)
+    assert parent.pid not in process_tree.started_by(parent.pid)
+
+
+@pytest.mark.skipif(not POSIX, reason="a process tree is listed through /proc or ps")
+def test_what_will_not_stop_when_asked_is_killed_and_the_one_that_started_it_is_spared(monkeypatch, stubborn):
+    process_tree, _ = _wrappers(monkeypatch)
+    parent, child = stubborn
+
+    assert process_tree.stop_started(grace=0.3, root=parent.pid) == 1
+
+    assert _gone(child)
+    assert parent.poll() is None
+    assert process_tree.stop_started(grace=0.3, root=parent.pid) == 0
+
+
+def test_processes_that_cannot_be_listed_are_not_guessed_at(monkeypatch):
+    process_tree, _ = _wrappers(monkeypatch)
+    monkeypatch.setattr(process_tree.os.path, "isdir", lambda _path: False)
+
+    def refuse(*_args, **_kwargs):
+        raise OSError("no ps here")
+
+    monkeypatch.setattr(process_tree.subprocess, "run", refuse)
+
+    assert process_tree.started_by() is None
+    if POSIX:
+        assert process_tree.stop_started() == 0
+
+
+@pytest.mark.skipif(not POSIX, reason="a process group is a POSIX notion")
+def test_the_wrapper_leads_a_group_unless_it_leads_one_already(monkeypatch):
+    process_tree, _ = _wrappers(monkeypatch)
+    calls = []
+    monkeypatch.setattr(process_tree.os, "setpgid", lambda *args: calls.append(args))
+
+    monkeypatch.setattr(process_tree.os, "getpgid", lambda _pid: os.getpid())
+    process_tree.lead_a_group()
+    assert calls == []
+
+    monkeypatch.setattr(process_tree.os, "getpgid", lambda _pid: 1)
+    process_tree.lead_a_group()
+    assert calls == [(0, 0)]
+
+    def refuse(*_args):
+        raise PermissionError("a session leader may not move")
+
+    monkeypatch.setattr(process_tree.os, "setpgid", refuse)
+    process_tree.lead_a_group()  # and says nothing
+
+
+def test_stopping_everything_exits_with_the_status_asked_for_whatever_stopping_did(monkeypatch):
+    process_tree, _ = _wrappers(monkeypatch)
+
+    def leave(code):
+        raise SystemExit(code)
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("could not list anything")
+
+    monkeypatch.setattr(process_tree.os, "_exit", leave)
+    monkeypatch.setattr(process_tree, "stop_started", broken)
+    monkeypatch.setattr(process_tree.subprocess, "run", broken)
+
+    with pytest.raises(SystemExit) as left:
+        process_tree.stop_everything(124)
+    assert left.value.code == 124
+
+
+@pytest.mark.parametrize(
+    "value, budget", [(5, 5.0), ("2.5", 2.5), (0, None), (-1, None), (True, None), ("soon", None), (None, None)]
+)
+def test_the_wrapper_reads_the_budget_it_is_handed(monkeypatch, value, budget):
+    _, wrapper_simulate = _wrappers(monkeypatch)
+    assert wrapper_simulate.budget_of({"timeout": value}) == budget
+    assert wrapper_simulate.budget_of(None) is None
+
+
+def test_the_wrapper_answers_once_whoever_answers_first(monkeypatch):
+    _, wrapper_simulate = _wrappers(monkeypatch)
+    written = []
+    monkeypatch.setattr(wrapper_simulate.wrapper_common, "handle_output", written.append)
+    answer = wrapper_simulate.Answer()
+
+    assert answer.give({"success": True}) is True
+    assert answer.give({"success": False}) is False
+    assert written == [{"success": True}]
+
+
+def test_the_watchdog_answers_for_a_run_whose_budget_is_spent_and_stops_it(monkeypatch):
+    process_tree, wrapper_simulate = _wrappers(monkeypatch)
+    written, stopped = [], []
+    monkeypatch.setattr(wrapper_simulate.wrapper_common, "handle_output", written.append)
+    monkeypatch.setattr(process_tree, "stop_everything", stopped.append)
+
+    timer = wrapper_simulate.watch(0.05, wrapper_simulate.Answer())
+    timer.join(5)
+
+    (said,) = written
+    assert said["success"] is False and said["timed_out"] == 0.05
+    assert stopped == [wrapper_simulate.TIMED_OUT_EXIT] == [124]
+
+
+@pytest.mark.parametrize("scripted", [True, False])
+def test_the_wrapper_runs_the_request_it_is_handed_and_cleans_up_after_it(monkeypatch, tmp_path, scripted):
+    process_tree, wrapper_simulate = _wrappers(monkeypatch)
+    script = tmp_path / "plugin.py"
+    script.write_text(STUB, encoding="utf-8")
+    request = {"how": "answer", "timeout": 60, "scene_file": str(tmp_path / "scene.txt")}
+    if scripted:
+        request[wrapper_simulate.SCRIPT_KEY] = str(script)
+    written, done = [], []
+    monkeypatch.setattr(wrapper_simulate.wrapper_common, "handle_input", lambda decode: (str(tmp_path), request))
+    monkeypatch.setattr(wrapper_simulate.wrapper_common, "handle_output", written.append)
+    monkeypatch.setattr(process_tree, "lead_a_group", lambda: done.append("led"))
+    monkeypatch.setattr(process_tree, "stop_started", lambda: done.append("stopped"))
+
+    wrapper_simulate.main()
+
+    (said,) = written
+    assert said["success"] is scripted
+    assert done == ["led", "stopped"]
+
+
+def test_a_tree_with_no_process_or_none_left_is_nothing_to_kill():
+    pc_runtime.kill_process_tree(types.SimpleNamespace())
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait(10)
+    pc_runtime.kill_process_tree(gone)
+
+
+def test_only_the_end_of_a_long_stderr_is_carried():
+    assert simulation.stderr_tail("") == ""
+    tail = simulation.stderr_tail("x" * (simulation.STDERR_TAIL_CHARACTERS * 2))
+    assert tail.startswith("...\n") and len(tail) == simulation.STDERR_TAIL_CHARACTERS + 4
+
+
+def test_a_plugin_that_failed_writing_something_else_fails_on_how_it_ended(package, monkeypatch):
+    async def run_async(command, stdin="", cwd=None, session=None, timeout=None):
+        return 1, "Traceback (most recent call last):", "the wrapper could not write its answer"
+
+    monkeypatch.setattr(HostRuntime, "run_async", staticmethod(run_async))
+    result, _ = _run(package, "answer")
+
+    assert isinstance(result.exception, simulation.SimulationCrash)
+    assert "exit code 1" in result.error
+    assert "could not write its answer" in result.error
