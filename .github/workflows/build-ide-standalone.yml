@@ -942,11 +942,14 @@ jobs:
           }
           test -f "${bootstrap}/examples/produce_part_cadquery_primitive/partcad.yaml"
 
-      # A display for the editor. Nothing here looks at what it draws; it does
-      # not start at all without one.
-      - name: Install Xvfb
+      # A display for the editor, exported as DISPLAY to every step below.
+      # Nothing here looks at what it draws; it does not start at all without
+      # one. Started once, and waited for: each step used to start an Xvfb of
+      # its own and run the editor straight after, and the editor won that race
+      # often enough to fail the job with "Missing X server or $DISPLAY".
+      - name: Start Xvfb
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes xvfb
+        uses: ./.github/actions/xvfb
 
       # The one check that runs the application the way the operating system
       # runs it, and reads what it says.
@@ -986,10 +989,9 @@ jobs:
           echo "running ${binary}"
 
           if [ "${{ runner.os }}" = "Linux" ]; then
-            Xvfb :98 -screen 0 1280x1024x24 >/dev/null 2>&1 &
-            export DISPLAY=:98
-            # The runner image restricts unprivileged user namespaces, which is
-            # what Chromium's sandbox is built on.
+            # The display is "Start Xvfb"'s, above. The runner image restricts
+            # unprivileged user namespaces, which is what Chromium's sandbox is
+            # built on.
             set -- --no-sandbox
           else
             set --
@@ -1158,11 +1160,9 @@ jobs:
           trap diagnose EXIT
 
           if [ "${{ runner.os }}" = "Linux" ]; then
-            # Started here rather than through `xvfb-run`: the launcher returns
-            # as soon as it has spawned the editor, and `xvfb-run` takes the
-            # display down with the command it was given.
-            Xvfb :99 -screen 0 1280x1024x24 >/dev/null 2>&1 &
-            export DISPLAY=:99
+            # On "Start Xvfb"'s display rather than under `xvfb-run`: the
+            # launcher returns as soon as it has spawned the editor, and
+            # `xvfb-run` takes the display down with the command it was given.
             # The runner image restricts unprivileged user namespaces, which is
             # what Chromium's sandbox is built on. A property of this machine
             # rather than of the IDE.
