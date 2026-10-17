@@ -1450,6 +1450,12 @@ the text above left open. What the engine plugins build on is in `kinematics`' d
   its own and not how its start was written. Every connected child of every ASSY example -- 35 of them, with a
   converted URDF at rest and posed -- lands bit for bit where it did, because none names a degree of freedom before
   an adjustment, or two that do not commute out of their declared order.
+- **A locked joint is welded where its `toParams` start it.** A declaration a more specific one overrides frees
+  nothing, and still brings along the parameters it would have, as adjustments: so `connect: {motion: fixed,
+  toParams: {turnZ: 90}}` on an interface whose `motion: revolute` implies `turnZ` welds the bar at 90 degrees -- the
+  `locked` example of 8.13.7, which "stays where it started". Until this the value was dropped, for want of a
+  parameter to set, and the bar sat at nought with nothing said. A declared parameter always kept its value. The
+  example placements do not move; a locked joint's does, so the cache format is 14.
 - **A floating joint's order.** Three moves one after another and three turns through one point, in any order a
   declaration states them in (a `dof` list may name the turns first). A turn between two moves would turn one onto
   the other, and is a composite: an explicit `dof` list in an order no native joint has is the composite it says.

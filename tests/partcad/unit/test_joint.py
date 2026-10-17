@@ -484,6 +484,34 @@ def test_a_ball_that_starts_beyond_its_bound_fails_the_connect_check(tmp_path):
     assert within.joint_problems == []
 
 
+def test_a_locked_joint_is_welded_where_its_toparams_start_it(tmp_path):
+    """'connect: {motion: fixed}' over a 'motion:' that brings its parameter along: the value still places the child.
+
+    The parameter is the interface's motion's, not a declared one, and the
+    connection's 'motion: fixed' decides that nothing is free; the value is
+    what the pendulum of section 8.13.7's 'locked' example starts at, so it
+    is an adjustment, where a free joint would have started.
+    """
+    bore = "motion: {type: revolute, limits: {lower: -120, upper: 120}}"
+    free = _child(_rig(tmp_path / "free", _links("toParams: {turnZ: 90}"), bore=bore), "arm")
+    locked = _child(_rig(tmp_path / "locked", _links("motion: fixed\n      toParams: {turnZ: 90}"), bore=bore), "arm")
+    assert free.joint is not None and locked.joint is None
+    assert [step.role for step in locked.composition.steps] == ["port", "facing", "adjustment", "sourcePort"]
+    assert _same(locked.location, free.location)
+    assert locked.joint_problems == []
+    # And a predefined name a 'dof' list brings along, the same way.
+    bore = "motion: {dof: [turnZ]}"
+    free = _child(_rig(tmp_path / "dof-free", _links("toParams: {turnZ: 45}"), bore=bore), "arm")
+    locked = _child(
+        _rig(tmp_path / "dof-locked", _links("motion: fixed\n      toParams: {turnZ: 45}"), bore=bore), "arm"
+    )
+    assert locked.joint is None and _same(locked.location, free.location)
+    # A mating that locks the pair does the same.
+    mating = "motion: fixed"
+    locked = _child(_rig(tmp_path / "mated", _links("toParams: {turnZ: 45}"), bore=bore, mating=mating), "arm")
+    assert locked.joint is None and _same(locked.location, free.location)
+
+
 #
 # The type a joint is
 #

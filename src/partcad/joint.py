@@ -856,13 +856,29 @@ class Resolution:
             for level, motion, side in governing:
                 self._apply(level, motion, [side], side.to_contact, side)
 
+        # A declaration a more specific one overrides frees nothing, and still
+        # brings along the parameters it would have: what the connection's
+        # 'toParams' was written against. Each is an adjustment, then, fixed
+        # at its value - so 'connect: {motion: fixed, toParams: {turnZ: 90}}'
+        # welds a pendulum at 90 degrees, where it would have started, rather
+        # than dropping the value for want of a parameter to set.
+        deciding = governing[:1] if governing and governing[0][0] in (CONNECTION, MATING) else governing
+        for entry in self.levels:
+            level, motion, side = entry
+            if not motion.declared or any(entry is decided for decided in deciding):
+                continue
+            if level == INTERFACE:
+                self._addressable(motion, [side], side.to_contact, side)
+            elif level == MATING:
+                declarer = self._declarer_side()
+                self._addressable(motion, [self.to_side, self.with_side], declarer.to_contact, declarer)
+
         # A ball's one bound bounds the freedoms its declaration implies, so it
         # comes from a declaration that decided them - the connection's, the
         # mating's, or the two interfaces' - and from nothing it overrides: an
         # interface's bounded ball under 'connect: {motion: revolute}' is no
         # bound on the revolute. Two interfaces stating two bounds for one ball
         # are reported, and the target's is used.
-        deciding = governing[:1] if governing and governing[0][0] in (CONNECTION, MATING) else governing
         bounds = [(motion, side) for _, motion, side in deciding if motion.type == pc_motion.BALL and motion.turn_limit]
         for motion, side in bounds:
             if self.turn_limit is None:
@@ -887,6 +903,39 @@ class Resolution:
                     self.problems.append(
                         "the two interfaces state different '%s' for one joint; the target's is used" % field
                     )
+
+    def _addressable(self, motion, sides, frame, default) -> None:
+        """The parameters an overridden 'motion:' would bring along, made so that 'toParams' finds them.
+
+        Matched as '_apply' matches them - a declared or an already brought
+        parameter of the same kind along the same axis is the one - and
+        brought along as it brings them where there is none; but nothing is
+        made free. A 'dof' list's predefined names are brought along the same
+        way, and its declared ones need nothing.
+        """
+        if motion.dof is not None:
+            for name in motion.dof:
+                if name in pc_motion.PREDEFINED and all(side.parameter(name) is None for side in sides):
+                    kind, axis = pc_motion.PREDEFINED[name]
+                    parameter = InterfaceParameter(
+                        {"name": name, "type": kind, "dir": list(axis), "min": None, "max": None, "default": 0.0}
+                    )
+                    parameter.unbounded = True
+                    default.synthesized[name] = parameter
+            return
+        for freedom in motion.implied():
+            direction = pc_motion.unit(frame(freedom.axis))
+            found = False
+            for side in sides:
+                for parameter in list(side.declared().values()) + list(side.synthesized.values()):
+                    axis = pc_motion.unit(parameter.dir)
+                    if _kind(parameter) == freedom.kind and axis is not None and pc_motion.parallel(axis, direction):
+                        found = True
+                        break
+                if found:
+                    break
+            if not found:
+                default.synthesize(freedom.kind, direction)
 
     def ball_bound(self, joint) -> list:
         """Give 'joint' its ball's one bound if it is a ball; the problems with it if it is not.

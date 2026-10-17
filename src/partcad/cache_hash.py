@@ -105,7 +105,12 @@ from . import logging as pc_logging
 #      ball's bound. The same case again: an entry written under 12 would go
 #      on being served with a floating joint posed by a move first read as a
 #      composite, and a revolute carrying the bound of the ball it overrode.
-VERSION = 13
+#  14: a 'motion:' that a more specific one overrides still brings along the
+#      parameters it implies, as adjustments, so a locked joint ('connect:
+#      {motion: fixed}') is welded where its 'toParams' start it. An entry
+#      written under 13 would go on being served with the value dropped and
+#      the part at nought.
+VERSION = 14
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.
