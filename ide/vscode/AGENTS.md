@@ -447,9 +447,9 @@ workspace state, so reopening the window is never a second download.
 
 **`partcad.installOnOpen` defaults to `"false"`, so this does not happen on its own.** It used to, once per
 workspace, and the cost was not what "install the dependencies" suggests: `install` begins with
-`ctx.get_all_packages()` under `force_update = True`, which is the whole transitive closure re-fetched --
-measured at 101 packages and 268 seconds for `examples/`, with a warm cache and force-update *off*, 62 of them
-the entire `//pub` index. Then every object is asked for its cache key, which resolves aliases, enriches and
+`ctx.get_all_packages()`, which is the whole transitive closure downloaded -- measured at 101 packages and 268
+seconds for `examples/`, 62 of them the entire `//pub` index. (It used to run under `force_update = True` as
+well, refetching what was there already; it no longer moves anything a pin names, see `pc update`.) Then every object is asked for its cache key, which resolves aliases, enriches and
 links and runs plugin scripts (the LDraw ones to their 180 second deadline). And `socket_server.py` holds one
 `_dispatch_lock` around every dispatch, so for the duration nothing else the window asks for - expanding a
 node, opening a part, linting - is served. The tree appears, because `install` runs after `packageLoaded`, and
@@ -463,7 +463,8 @@ backend that no longer exists, and survives only so an old command binding does 
 ## Updating PartCAD
 
 "Update PartCAD" (`partcad.update`) updates the PartCAD installation — `pc upgrade`, not `pc update`, which
-refetches a package's imports and is "Reload the package" (`partcad.refresh`) here. The extension implements
+moves the pins of a package's tracked dependencies by editing its `partcad.yaml`, and has no button here: "Reload
+the package" (`partcad.refresh`) loads what is not loaded yet and moves nothing. The extension implements
 none of it, which is the point: there is one upgrader, `partcad_client.selfupdate`, and the extension
 reaches it the same way a user would.
 

@@ -2371,7 +2371,18 @@ class Project(project_config.Configuration):
 
         self.suppliers = cfg
 
-    def add_import(self, alias, location):
+    def add_import(self, alias, location, track=None) -> bool:
+        """Declare a dependency in this package's 'partcad.yaml'.
+
+        A git dependency is added pinned: it tracks a branch ('track', or the
+        one the remote calls its default) and its 'revision' is the commit that
+        branch is at now -- what 'pc update' would write, so the dependency is
+        reproducible from the moment it exists, and 'pc update' is how it moves
+        from then on. Finding that commit means asking the remote; when that
+        fails nothing is added, because a declaration without the pin is the
+        unpinned one this exists to avoid (the same rule 'pc add part <url>'
+        follows for a file's 'fileHash').
+        """
         if ":" in location:
             location_param = "url"
             if location.endswith(".tar.gz"):
@@ -2381,6 +2392,32 @@ class Project(project_config.Configuration):
         else:
             location_param = "path"
             location_type = "local"
+
+        entry = {
+            location_param: location,
+            "type": location_type,
+        }
+        if location_type == "git":
+            # Not at the top: 'project_factory_git' imports this module.
+            from . import project_factory_git as rfg
+
+            if self.ctx.user_config.offline:
+                pc_logging.error(
+                    "Not adding %s: a git dependency is added pinned to a commit, and finding it needs the "
+                    "remote while PartCAD is configured to work offline" % alias
+                )
+                return False
+            try:
+                branch, commit = rfg.tracked_commit(self.ctx.user_config, location, track)
+            except rfg.GIT_ERRORS as e:
+                pc_logging.error("Not adding %s: failed to find the commit to pin it to: %s" % (alias, e))
+                return False
+            entry["track"] = branch
+            entry["revision"] = commit
+            pc_logging.info("Pinned %s to %s, the tip of '%s'" % (alias, commit, branch))
+        elif track:
+            pc_logging.error("Not adding %s: only a git dependency tracks a branch" % alias)
+            return False
 
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
@@ -2392,13 +2429,11 @@ class Project(project_config.Configuration):
             config["dependencies"] = config["import"]
         if config["dependencies"] is None:
             config["dependencies"] = {}
-        config["dependencies"][alias] = {
-            location_param: location,
-            "type": location_type,
-        }
+        config["dependencies"][alias] = entry
         with open(self.config_path, "w") as fp:
             yaml.dump(config, fp)
             fp.close()
+        return True
 
     def rel_path(self, path) -> str:
         """Render a filesystem path for display, relative to this package.

@@ -573,6 +573,8 @@ dependencies:
   sim-mujoco:   # PartCAD implements no simulator; this package is MuJoCo's
     type: git
     url: https://github.com/partcad/partcad-sim-mujoco.git
+    track: main
+    revision: <the commit `pc add dep` / `pc update` wrote>
 
 assemblies:
   <name>:
@@ -589,6 +591,11 @@ assemblies:
               for n in before["bodies"]
           )
 ```
+
+Add the dependency with `pc add dep sim-mujoco https://github.com/partcad/partcad-sim-mujoco.git`
+rather than by hand: it writes `track: main` and pins `revision:` to the commit
+`main` is at now. Loading never moves that pin; `pc update` does, when the user
+wants what is newer.
 
 `before` and `after` give every body's `pos` (mm) and `quat` (`w x y z`) at the
 start and the end of the run, ten seconds by default. This one says no body

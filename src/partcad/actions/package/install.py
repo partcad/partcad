@@ -6,7 +6,8 @@
 """The work behind ``pc install``: make a package ready to build, offline.
 
 ``pc install`` is to a PartCAD package what ``npm install`` is to a Node.js one.
-It downloads every package the current one imports, and then asks every sketch,
+It downloads every package the current one imports, at the revision each is
+pinned to (moving a pin is ``pc update``), and then asks every sketch,
 part and assembly for its cache key, and every piece of software for its file.
 
 Asking for the cache key is what does the rest of the work. The key hashes the

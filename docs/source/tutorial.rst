@@ -42,7 +42,16 @@ Alternatively, manually create ``partcad.yaml`` with the following content:
       pub:
         type: git
         url: https://github.com/partcad/partcad-index.git
-        revision: main
+        track: main
+
+Pin it to the commit ``main`` is at now. ``pc update`` writes that commit into a
+``revision:`` line under ``track: main``, and from then on the package is built
+against that commit, wherever ``main`` goes -- until you run ``pc update`` again
+(see :ref:`pinning-dependencies`):
+
+  .. code-block:: shell
+
+    pc update
 
 Now launch ``pc list`` to see the list of packages currently available in
 the public PartCAD repository.

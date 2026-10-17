@@ -16,8 +16,10 @@ Feature: `pc render` command
         pub:
           type: git
           url: https://github.com/partcad/partcad-index.git
-          revision: main
+          track: main
       """
+    # The tutorial's 'pc update' is left to 'update.feature': here it would load
+    # the whole public index, every plugin of it included, before the first part.
     And I run "pc --no-ansi list"
     Then the command should exit with a status code of "0"
     When a file named "test.scad" is written with content:

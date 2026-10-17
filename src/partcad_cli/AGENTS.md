@@ -29,8 +29,9 @@ the output never depends on a working directory. A package-mutating command *mus
 daemon's warm context keeps serving the pre-mutation package.
 
 **`pc update` and `pc upgrade` sit on opposite sides of this line, which is why they are two commands and not
-one command with a flag.** `pc update` refetches the packages a package imports — the package graph, so a thin
-daemon client like any other. `pc upgrade` replaces this machine's copy of PartCAD
+one command with a flag.** `pc update` moves the pins of the packages a package imports — it rewrites the
+`revision:` of every dependency with a `track:` in the workspace's `partcad.yaml` files, then refetches the
+package graph — so it mutates the package and is a thin daemon client like any other. `pc upgrade` replaces this machine's copy of PartCAD
 (`partcad_client.selfupdate`), which only the process running from it can do: a daemon can be remote,
 where "upgrade PartCAD" would mean upgrading somebody else's installation. It stays within the boundary's
 letter as well as its spirit — `selfupdate` lives in the deliberately cheap `partcad_client`, so the

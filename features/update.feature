@@ -18,6 +18,28 @@ Feature: `pc update` command
       """
     When I run "partcad update"
 
+  @success @pc-update
+  Scenario: Pin a tracked dependency to where its branch is
+    Given a file named "partcad.yaml" with content:
+      """
+      dependencies:
+        raspberrypi:
+          desc: Raspberry Pi
+          type: git
+          url: https://github.com/partcad/partcad-electronics-sbcs-raspberrypi
+          # Moved to where 'main' is by 'pc update', and by nothing else.
+          track: main
+      """
+    When I run "partcad --no-ansi update"
+    Then the command should exit with a status code of "0"
+    And STDERR should contain "Pinned //raspberrypi to "
+    And a file named "partcad.yaml" should contain "    track: main"
+    And a file named "partcad.yaml" should contain "    revision: "
+    And a file named "partcad.yaml" should contain "# Moved to where 'main' is by 'pc update', and by nothing else."
+    When I run "partcad --no-ansi update"
+    Then the command should exit with a status code of "0"
+    And STDERR should contain "1 were there already"
+
   @wip @success @pc-init @pc-update @pc-ansi
   Scenario: Update packages
     Given a file named "partcad.yaml" does not exist

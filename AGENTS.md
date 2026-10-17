@@ -86,8 +86,8 @@ a CAD addon, or documentation.
   local daemon a sane thing to do rather than a distributed algorithm.
 
   `selfupdate` itself knows nothing even about that: a caller passes `before_install`, which `pc upgrade` uses
-  to stop the local daemons and wait for them. `pc upgrade` (the host-level command; `pc update` refetches a
-  package's imports and is unrelated) ends up here, as does the VS Code extension's "Update PartCAD" — by
+  to stop the local daemons and wait for them. `pc upgrade` (the host-level command; `pc update` moves the pins of a
+  package's tracked dependencies and is unrelated) ends up here, as does the VS Code extension's "Update PartCAD" — by
   running `pc upgrade`. Nothing about daemons or upgrading is reimplemented in TypeScript.
 
   It also refuses: `pc upgrade` run inside a bundle the editor extension downloaded errors out and says to

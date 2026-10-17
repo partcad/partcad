@@ -123,7 +123,7 @@ The commands and options supported by PartCAD CLI:
   Package commands:
     init         Create a new PartCAD package in the current directory
     install      Download everything the package needs to be built
-    update       Force update all imported packages to their latest versions
+    update       Move every tracked dependency to the newest commit of its branch
     lint         Run linting checks on files within packages
 
   Object commands:

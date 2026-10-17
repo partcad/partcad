@@ -18,7 +18,7 @@ Feature: `pc init` command
         pub:
           type: git
           url: https://github.com/partcad/partcad-index.git
-          revision: main
+          track: main
       sketches:
       parts:
       assemblies:

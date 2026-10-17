@@ -374,7 +374,8 @@ click.rich_click.COMMAND_GROUPS = {
     is_flag=True,
     show_envvar=True,
     default=None,
-    help="Update all repositories even if they are fresh",
+    help="Force auto-update: fetch every git dependency again as it is loaded, following 'track:' past "
+    "the pinned 'revision:' (without it, only 'pc update' moves a dependency)",
 )
 @click.option(
     "--offline",

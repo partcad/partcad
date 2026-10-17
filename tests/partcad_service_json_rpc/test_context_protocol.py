@@ -118,11 +118,16 @@ class FakeContext:
         # 'partcad.yaml' leaves this 'None' or 'broken'.
         self.root = SimpleNamespace(broken=False, config_path=os.path.join(path, "partcad.yaml"))
         self.fail_with = None
-        # get_all_packages() records the force_update it actually ran under: the
-        # point of install/update is that the fetch *is* forced, and the point of
-        # the save/restore is that nothing else is.
+        # get_all_packages() records the force_update and the refresh it
+        # actually ran under: 'pc update' refreshes the imports of its own
+        # context for the length of the call, and nothing else may.
         self.force_update_during_fetch = None
+        self.refresh_imports = False
+        self.refresh_during_fetch = None
         self.get_all_packages_calls = 0
+        # How many times everything loaded was dropped and read again
+        # ('Context.reload_all_packages', which 'pc update' asks for).
+        self.full_reloads = 0
         # How many times a request asked for the changed packages to be
         # reloaded (see 'Context.reload_changed_packages').
         self.reloads = 0
@@ -132,9 +137,14 @@ class FakeContext:
         self.reload_targets = (packages, recursive)
         return []
 
+    def reload_all_packages(self):
+        self.full_reloads += 1
+        return list(self.packages)
+
     def get_all_packages(self, parent_name=None, has_stuff=True):
         self.get_all_packages_calls += 1
         self.force_update_during_fetch = self.user_config.force_update
+        self.refresh_during_fetch = self.refresh_imports
         if self.fail_with is not None:
             raise self.fail_with
         return [{"name": name, "desc": ""} for name in self.packages]
@@ -154,18 +164,34 @@ class FakeContext:
 class FakeInstallAction:
     """``partcad.actions.package``: records what an install was asked to prepare.
 
-    The action itself (walking a package's objects and computing their cache
-    keys) lives in ``partcad`` and is tested there; what matters here is which
-    packages the operation hands it and what it does with the counts back.
+    The actions themselves (walking a package's objects and computing their
+    cache keys; moving the pins of tracked dependencies) live in ``partcad`` and
+    are tested there; what matters here is which packages the operation hands
+    them and what it does with the counts back.
     """
 
     def __init__(self):
         self.calls = []
         self.stats = {"sketch": 0, "part": 0, "assembly": 0, "software": 0, "failed": 0, "failed_packages": 0}
+        self.update_calls = []
+        self.update_stats = {"pinned": 0, "current": 0, "failed": 0}
 
     def install(self, ctx, packages):
         self.calls.append((ctx, list(packages)))
         return dict(self.stats)
+
+    def update(self, ctx):
+        # What the real one does to the context, which is what the daemon's
+        # warm state depends on: everything read again, then fetched under a
+        # refresh that ends with the call however the call ends.
+        self.update_calls.append(ctx)
+        ctx.reload_all_packages()
+        ctx.refresh_imports = True
+        try:
+            count = len(ctx.get_all_packages())
+        finally:
+            ctx.refresh_imports = False
+        return dict(self.update_stats, count=count)
 
 
 class FakePartcad:
@@ -522,36 +548,70 @@ def test_a_request_with_nothing_loaded_is_a_silent_noop():
     assert seen == []
 
 
-# ---- warm state: force_update must not outlive the command -------------------
+# ---- warm state: neither install nor update may leave anything forced --------
 
 
-@pytest.mark.parametrize("operation", [operations.install, operations.update], ids=["install", "update"])
 @pytest.mark.parametrize("initial", [False, True], ids=["off", "on"])
-def test_fetching_packages_forces_the_update_and_then_restores_the_setting(tmp_path, operation, initial):
-    """``pc install`` used to leave force_update on, so every later command in
-    that daemon re-fetched every package."""
+def test_install_fetches_what_the_pins_name_and_forces_nothing(tmp_path, initial):
+    """``pc install`` used to force a refresh of every import, and once left it on.
+
+    Downloading a dependency is an install; moving one is ``pc update``, which
+    writes the new pin into ``partcad.yaml``. So an install runs under whatever
+    the user configured, and refreshes nothing on its own.
+    """
     session, _ = make_session(FakeUserConfig(force_update=initial))
     context_id = create_context(session, tmp_path)
     ctx = session.contexts[context_id]
 
-    operation(session, {"context": context_id})
+    operations.install(session, {"context": context_id})
 
-    assert ctx.force_update_during_fetch is True  # the fetch really was forced
-    assert ctx.user_config.force_update is initial  # ...and the daemon is back to normal
+    assert ctx.force_update_during_fetch is initial
+    assert ctx.refresh_during_fetch is False
+    assert ctx.user_config.force_update is initial
 
 
-@pytest.mark.parametrize("operation", [operations.install, operations.update], ids=["install", "update"])
-def test_force_update_is_restored_even_when_the_fetch_fails(tmp_path, operation):
-    """A failed fetch is the likeliest way to leave the daemon permanently forced."""
+@pytest.mark.parametrize("initial", [False, True], ids=["off", "on"])
+def test_update_refreshes_its_own_context_and_leaves_the_configuration_alone(tmp_path, initial):
+    """The refresh is the context's, so it cannot leak through the shared configuration."""
+    session, _ = make_session(FakeUserConfig(force_update=initial))
+    context_id = create_context(session, tmp_path)
+    ctx = session.contexts[context_id]
+
+    operations.update(session, {"context": context_id})
+
+    assert ctx.full_reloads == 1  # what the warm context had loaded is read again
+    assert ctx.refresh_during_fetch is True  # the fetch really was a refresh
+    assert ctx.refresh_imports is False  # ...for this one call
+    assert ctx.user_config.force_update is initial
+
+
+def test_the_refresh_ends_even_when_the_fetch_fails(tmp_path):
+    """A failed fetch is the likeliest way to leave a context refreshing for good."""
     session, _ = make_session(FakeUserConfig(force_update=False))
     context_id = create_context(session, tmp_path)
     ctx = session.contexts[context_id]
     ctx.fail_with = RuntimeError("network is down")
 
     with pytest.raises(RuntimeError):
-        operation(session, {"context": context_id})
+        operations.update(session, {"context": context_id})
 
+    assert ctx.refresh_imports is False
     assert ctx.user_config.force_update is False
+
+
+def test_updating_one_workspace_does_not_refresh_another(tmp_path):
+    session, _ = make_session(FakeUserConfig(force_update=False))
+    first_dir, second_dir = tmp_path / "one", tmp_path / "two"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    first = create_context(session, first_dir)
+    second = create_context(session, second_dir)
+
+    operations.update(session, {"context": first})
+
+    session.contexts[second].get_all_packages()
+    assert session.contexts[second].refresh_during_fetch is False
+    assert session.contexts[second].force_update_during_fetch is False
 
 
 def test_installing_one_workspace_does_not_force_updates_in_another(tmp_path):
@@ -646,8 +706,19 @@ def test_update_reports_the_number_of_packages_it_refreshed(tmp_path):
     context_id = create_context(session, tmp_path)
     session.contexts[context_id].packages = ["//", "//sub", "//sub/deeper"]
 
-    assert operations.update(session, {"context": context_id}) == {"count": 3}
+    assert operations.update(session, {"context": context_id}) == {"pinned": 0, "current": 0, "failed": 0, "count": 3}
     assert ("info", "Successfully updated 3 packages") in seen
+
+
+def test_update_reports_the_pins_it_moved_and_the_ones_it_could_not(tmp_path):
+    session, seen = make_session()
+    context_id = create_context(session, tmp_path)
+    session.partcad.actions.package.update_stats = {"pinned": 2, "current": 1, "failed": 1}
+
+    operations.update(session, {"context": context_id})
+
+    assert ("info", "Pinned 2 tracked dependencies to the tip of their branch, 1 were there already") in seen
+    assert ("error", "Failed to update 1 tracked dependencies") in seen
 
 
 # ---- warm state: a mutation must evict the context it changed ----------------

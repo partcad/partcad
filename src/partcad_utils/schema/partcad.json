@@ -1672,7 +1672,16 @@
             "path": { "type": "string", "minLength": 1 },
             "url": { "$ref": "#/definitions/url" },
             "relPath": { "type": "string", "minLength": 1 },
-            "revision": { "type": "string", "minLength": 1 },
+            "revision": {
+              "description": "(git only) The commit the package is read at. Write 'track:' beside it and let 'pc update' keep it current.",
+              "type": "string",
+              "minLength": 1
+            },
+            "track": {
+              "description": "(git only) The branch 'revision:' follows: 'pc update' moves 'revision:' to where this branch is now. Loading never does.",
+              "type": "string",
+              "minLength": 1
+            },
             "plugin": { "type": "string", "minLength": 1 },
             "subfolder": { "type": "string" },
             "includePaths": {

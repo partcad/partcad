@@ -1185,6 +1185,64 @@ at all).
   seed is honored on every version) on whichever version is running, so both branches are covered by the CI
   matrix rather than by a comment.
 
+- **Loading never moves a git dependency** (`project_factory_git.py`). A copy is downloaded once, marked done
+  by `.partcad.git.cloned` (written last, so a copy without it is an interrupted clone and is downloaded again),
+  and then used as it is — while it is at what the dependency asks for, no network, not even the connectivity
+  probe; a pin it is not at yet is fetched, which satisfies the pin rather than updating it (below). Only two
+  things refetch one, both via
+  `ProjectFactoryGit._wants_refresh()`: the "force auto-update" setting `forceUpdate`, and `Context.refresh_imports`,
+  which `pc update` sets on its own context for one pass. There used to be a third — any copy older than a day
+  was refreshed by whatever loaded it next — and it is gone on purpose: it made one commit of a package build
+  differently on different days. Do not bring back a timer.
+
+  A dependency's `revision:` is its pin and `track:` the branch the pin follows (`GitImportConfiguration`).
+  Loading reads `track:` only when there is no `revision:` yet, or under `forceUpdate`, which follows the
+  branch past the pin; `develIndex` is applied after both and still wins.
+
+  A tracked dependency's copy is named after the **branch** (`<url hash>-<track>`, `import_cache_name`), not the
+  commit, so there is one per branch and it is *moved* to whatever the pin says: a load finding it elsewhere
+  checks the pin out (fetching that one commit if it has to — satisfying a pin, not updating), and `pc update`
+  and `forceUpdate` move it in place rather than leaving a copy per commit behind. Two things follow from a copy
+  that moves. A package already loaded out of it reads its files lazily, so `Context.git_checkouts` records
+  which packages are built from which copy at which commit, and a second pin of the same branch that disagrees
+  is kept in a commit-named copy instead (`_held_by_others`, released by `Context._drop_packages`). And
+  `revision.py` caches a repository's commit by its path, which no longer changes when the commit does, so a
+  move calls `revision.reset_cache()`. Other contexts are told the same through **claims**: a context built from
+  the copy at a commit it is pinned to holds `<copy>.claims/<commit>.<nonce>` *locked* (`_Claim`), and a pin that
+  disagrees with a claim gets a commit-named copy too (`_claimed_by_others`) — which is what keeps two daemons,
+  serving two workspaces pinned to two commits of one branch, from moving the copy under each other. The OS lock
+  is the claim, not the file: it goes when the process does, however it ends, and a file nobody holds locked is
+  removed by whoever finds it. A context sits in reference cycles, so a context this process let go of goes on
+  claiming until the cycle collector runs; a claim of this process's that is in the way is probed again after a
+  `gc.collect()`, and only one in the way, because the daemon keeps a context per directory and most of them
+  agree. Every context built from a copy that can move claims it — a pin, and equally a branch nobody has pinned
+  yet (`pc init`'s index), which reads from the commit it was downloaded at; only a copy named after its commit
+  never moves. A claim only counts where it is in the way: one that agrees with what a load would do leaves that
+  load on its ordinary path, the check for an interrupted download included. `forceUpdate` stopped by a claim
+  follows the branch as a pin on its tip for that load (`_branch_tip`, one `ls-remote`): the claimed copy if that
+  is where the branch is, a commit-named copy if not, and — only when the tip cannot be found out, offline — the
+  claimed copy as it is, with a warning.
+  `develIndex` gets a copy of its own (`-devel`) so that toggling it never moves the `main` one.
+
+  Removing a copy goes through `_remove_tree`, never a bare `shutil.rmtree(..., ignore_errors=True)`, because
+  Windows refuses two things that call gave up on in silence, leaving half a repository for the next load to take
+  for a copy: libgit2's read-only object files, and any file a repository object still has open. A
+  `pygit2.Repository` sits in a reference cycle with its own collections, so one nobody holds keeps its pack
+  mapped until the *cycle collector* runs — `_remove_tree` collects first — and one somebody does hold has to be
+  `.free()`d, or released from the traceback of the attempt that failed (`_release`). The `windows_deletes`
+  fixture in `test_git_track.py` emulates both rules on Linux; what is a copy is decided by the
+  `.partcad.git.cloned` marker, never by the directory existing. `pc update`
+  (`actions/package/update.py`) is what moves a pin: it asks each tracked branch's remote where it is
+  (`tracked_commit()`, an `ls-remote` — nothing downloaded), writes the commit into `revision:`, then reloads
+  every package (`Context.reload_all_packages()`) and fetches them all under `refresh_imports`. It edits only
+  the workspace — the root and what is reached from it through `local` dependencies and subfolders — never a
+  package that was imported. The edit is one line of text (`dependency_pin.py`), not a YAML round trip, because
+  `partcad.yaml` is a Jinja2 template a person wrote; where one line is not unambiguous it refuses and says what
+  to write by hand. `pc add dep` writes a git dependency already pinned (`Project.add_import()`), and `pc
+  install` fetches what the pins name and moves nothing. Keep `refresh_imports` on the context: a daemon shares
+  one user configuration between every context it keeps warm, which is how `pc install` once left every later
+  command in force-update mode.
+
 ## Schemas and linting
 
 **Neither schema is here.** Both `partcad_utils/schema/partcad.json` (the `partcad.yaml` schema) and
