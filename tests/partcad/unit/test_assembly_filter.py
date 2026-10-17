@@ -275,3 +275,10 @@ def test_one_subset_is_built_once_however_many_file_types_ask_for_it():
     # No filter at all is the object itself and the tree the caller already had.
     subject, tree, _ = asyncio.run(grouped._output_subject_async(ctx, {"name": "tree"}, None, views))
     assert subject is grouped and tree == {"name": "tree"}
+
+
+def test_a_filtered_child_keeps_what_it_is_rigidly_attached_to():
+    """A sub-assembly bolted to a sibling that moves stays bolted to it once filtered (KEY_ATTACHED)."""
+    child = AssemblyChild(object(), "gripper", Location(), fixed=False, attached="wrist")
+    recast = assembly_filter._recast(child, object())
+    assert (recast.name, recast.attached) == ("gripper", "wrist")

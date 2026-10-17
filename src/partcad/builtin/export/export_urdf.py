@@ -5,47 +5,82 @@
 #
 """The built-in URDF exporter (see '//builtin/export' in partcad.yaml).
 
-Writes a PartCAD shape or assembly as a URDF file plus its mesh files.
+Writes a PartCAD shape, assembly or scene as a URDF file plus its mesh files:
+one ``<link>`` per rigid body and one ``<joint>`` per pair of bodies, so that a
+mechanism goes out as the mechanism it is.
 
-Unlike the other exporters, this one writes the assembly *tree* rather than
-the geometry it decodes to - 'request["shape_tree"]', which every implementation
-is handed beside the geometry (see 'wrapper_export.py'). The geometry keeps the
-tree's shape and nothing else about it: every node's 'name' and 'label' is gone
-and its placement is baked in rather than staying readable as data. This
-exporter needs all three - the link names, the mesh names, the properties
-lookup and every joint origin come from them. Each node becomes a link, each
-parent/child edge a fixed joint carrying that child's placement, and each node
-that has geometry gets a mesh written next to the URDF and referenced from its
-``<visual>`` and ``<collision>``.
+Unlike the other exporters, this one is handed the assembly *tree* itself
+rather than the geometry it decodes to - which is what 'decode: false' on this
+format's declaration asks for, see wrapper_export.DECODE_KEY. Which nodes of it
+are one rigid body, and how the joints between bodies move, is not decided here:
+it is PartCAD's body rule, 'kinematics.bodies()', and its classification of a
+joint's free steps, 'kinematics.classify()' - one copy shared with the MJCF and
+SDFormat exporters, so that the three cannot come to disagree about what falls
+apart (docs/design/simulation.md, sections 7 and 8.8).
+
+**Links.** Every body is a link, named after the link that placed it, and every
+part welded into it is a ``<visual>`` and a ``<collision>`` of its own, at its
+place in the link: a link of several parts is a link of several shapes, which
+is how a URDF link of several shapes was read in. The body's mass, centre of
+mass and inertia - its parts' combined, or what a measured link states about
+itself - are its ``<inertial>``. An assembly's root body takes the name of the
+one part it is made of when it is made of one (a robot's base link), and the
+assembly's name otherwise.
+
+**Joints**, by what 'kinematics.classify()' says the free steps are:
+
+  * ``revolute`` (a turn bounded on either side), ``continuous`` (one bounded
+    on neither) and ``prismatic`` are written as URDF's own;
+  * ``planar`` is URDF's own, its ``<axis>`` the normal of the plane, and so is
+    ``floating``;
+  * everything else - a cylindrical, universal, ball or screw joint, and a
+    chain - is a chain of single-axis joints through dummy links, one per
+    freedom past the first, named after the joint and given a small mass and
+    inertia (see 'DUMMY_MASS'), because the engines that read a URDF refuse a
+    link that weighs nothing. A screw is a revolute joint and a prismatic one
+    that 'mimic's it by the lead, which is approximate: few simulators honour
+    a mimic.
+
+Every chain and every default is reported, never left to be found.
+
+**Frames.** A child link's frame is the joint's *moving* frame: what the joint
+puts the child at, with every freedom at zero and the last of them applied. So
+``<axis>`` is the freedom's axis verbatim, in that frame, and every part sits in
+its link where 'kinematics' puts the body against the joint ('tail'), times its
+place in the body. A free root body is the URDF's root link, its frame the
+tree's own origin, so that every shape is where the tree put it. A body welded
+to the world hangs off a link named ``world`` by a fixed joint, which is what a
+URDF bolted down says; and since a URDF has one root, the free bodies of a scene
+of several hang off it by ``floating`` joints.
+
+**What a URDF cannot state** is reported, and the file says the rest:
+
+  * the **starting value** of a joint ('toParams'): URDF has no starting
+    position, so the robot is written at the zero pose of every joint;
+  * an open bound, which URDF's ``revolute`` and ``prismatic`` cannot leave
+    open: written as 'OPEN_BOUND' away;
+  * ``<limit effort velocity>``, which URDF requires: a joint's 'maxEffort' and
+    'maxVelocity' where it states them, and the declaration's 'effort' and
+    'velocity' (see partcad.yaml) where it does not.
+
+Units convert at the boundary and nowhere else: PartCAD's millimetres and
+degrees to URDF's metres and radians (``<dynamics>`` is per radian or per metre
+in SI already, as PartCAD states it). Meshes are written in millimetres and
+referenced with ``scale="0.001 0.001 0.001"``, which is how URDF says "these
+coordinates are millimetres"; a shape used more than once is written once.
 
 The URDF is built with ROS's own 'urdf_parser_py' and serialized by it, so what
 lands on disk is what the ROS toolchain itself would write and reads back
-through the very same parser.
+through the very same parser. Everything up to that is plain data ('Planner'),
+which is what the tests check frame by frame against 'kinematics'.
 
-Two conventions are worth stating, because they are what makes the round trip
-close:
-
-  * Meshes are written in millimetres - the unit PartCAD uses everywhere, and
-    the unit its STL exporter already writes - and referenced with
-    ``scale="0.001 0.001 0.001"``, which is how URDF says "these coordinates are
-    millimetres". Joint origins are in metres and radians, as URDF requires.
-  * Geometry is written in its own frame and placed by the joint above it, so
-    the ``<visual>`` origin stays at identity. A shape that appears more than
-    once in the assembly is written once and referenced by every link that uses
-    it, the way a URDF written by hand would.
-
-What the part states about itself wins over anything computed here: mass,
-centre of mass, inertia, friction and the contact parameters are named PartCAD
+What a part states about itself wins over anything computed here: mass, centre
+of mass, inertia, friction and the contact parameters are named PartCAD
 properties, and this writes each of them back into the URDF element that states
-it. A part that states none of them is no different: PartCAD works out its
-mass, centre of mass and inertia from its solid and the density of what it is
-made of (see 'partcad.physics'), and they arrive here in the same properties,
-under the same names, as if the part had stated them. So this writes what it is
-handed and works nothing out, except where a link is made of several shapes and
-their inertias have to be added up - which is 'mass_properties', the one copy
-of that arithmetic the MJCF and SDFormat exporters use too. A property PartCAD
+it - or, for a part that states none, what PartCAD worked out from its solid and
+the density of what it is made of (see 'partcad.physics'). A property PartCAD
 has and URDF has no spelling for is reported rather than dropped in silence -
-see URDF_STATED.
+see URDF_STATED and JOINT_STATED.
 """
 
 import math
@@ -58,14 +93,15 @@ import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
 import appearance  # noqa: E402
+import kinematics  # noqa: E402
 import mass_properties  # noqa: E402
 import ocp_serialize  # noqa: E402
 import urdf_common  # noqa: E402
 
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again.
-CACHE_VERSION = 1
+# before is produced again. 2: a link per body and a joint per pair (step 11).
+CACHE_VERSION = 2
 
 # Metres per millimetre, for the mesh 'scale' attribute: the meshes are written
 # in millimetres and URDF reads mesh coordinates as metres after scaling.
@@ -74,6 +110,29 @@ MESH_SCALE = 1.0 / urdf_common.MM_PER_M
 # URDF link and joint names end up as XML attributes and as ROS graph names, so
 # anything outside this set is replaced.
 _UNSAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
+
+TURN = kinematics.TURN
+MOVE = kinematics.MOVE
+IDENTITY = kinematics.IDENTITY
+
+# What '<limit effort velocity>' says where a joint states no 'maxEffort' or
+# 'maxVelocity' of its own: N.m or N, and rad/s or m/s. URDF requires both on a
+# revolute and a prismatic joint. These are the declaration's defaults (see
+# partcad.yaml), chosen to limit nothing a passive mechanism does while staying
+# finite, since some readers refuse an infinite one; a package sets its own with
+# 'effort:' and 'velocity:'. Every joint that gets them is reported.
+DEFAULT_EFFORT = 1000.0
+DEFAULT_VELOCITY = 100.0
+
+# A dummy link - one between two freedoms of a joint URDF has no single type
+# for - weighs this much (kg) and turns this hard (kg.m^2 about each axis):
+# enough for an engine to accept it, too little to matter beside a part.
+DUMMY_MASS = 1.0e-3
+DUMMY_INERTIA = 1.0e-6
+
+# How far away a bound URDF cannot leave open is written, in PartCAD's units
+# (degrees, millimetres): the MJCF exporter's choice for the same problem.
+OPEN_BOUND = 1.0e6
 
 
 def _bool_text(value):
@@ -100,6 +159,18 @@ GAZEBO_LINK_PHYSICS = {
     "gravity": ("gravity", _bool_text),
 }
 
+# The same for a joint: the mirror image of the reader's GAZEBO_JOINT_PHYSICS,
+# which carries each of these as it is written.
+GAZEBO_JOINT_PHYSICS = {
+    "springStiffness": ("springStiffness", repr),
+    "springReference": ("springReference", repr),
+    "stopCfm": ("stopCfm", repr),
+    "stopErp": ("stopErp", repr),
+    "fudgeFactor": ("fudgeFactor", repr),
+    "implicitSpringDamper": ("implicitSpringDamper", _bool_text),
+    "provideFeedback": ("provideFeedback", _bool_text),
+}
+
 # Every part property this exporter has a URDF spelling for. A 'physics'
 # property outside this set is one PartCAD supports and URDF does not: it is
 # reported through the response and logged at info level, which is the mirror
@@ -119,6 +190,10 @@ GAZEBO_LINK_PHYSICS = {
 URDF_STATED = frozenset(
     ("mass", "centerOfMass", "inertiaOrientation", "inertia", "density", "volume", "centerOfVolume")
 ) | frozenset(GAZEBO_LINK_PHYSICS)
+
+# Every joint physics property this exporter has a URDF spelling for: the
+# '<limit>', the '<dynamics>' and the joint's '<gazebo>' block.
+JOINT_STATED = frozenset(("maxEffort", "maxVelocity", "damping", "friction")) | frozenset(GAZEBO_JOINT_PHYSICS)
 
 
 def sanitize_name(name, fallback):
@@ -148,12 +223,436 @@ class NameAllocator:
         return candidate
 
 
+def per_si(kind) -> float:
+    """PartCAD units per SI unit of a freedom: degrees a radian, or millimetres a metre."""
+    return math.degrees(1.0) if kind == TURN else urdf_common.MM_PER_M
+
+
+def to_si(kind, value):
+    """A value of a freedom in URDF's units, or None for None."""
+    return None if value is None else float(value) / per_si(kind)
+
+
+def _number(value):
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _shown(value, kind) -> str:
+    return "%g %s" % (value, "deg" if kind == TURN else "mm")
+
+
+#
+# The plan: links and joints as plain data
+#
+
+
+class LinkPlan:
+    """One URDF link: a body, or a dummy link between two freedoms of one joint.
+
+    'frame' is the link's frame in the body's own: the identity for a body that
+    is a root under 'world', the inverse of where the tree placed a free root
+    (so that its link frame is the tree's origin), and the inverse of the
+    joint's 'tail' for a body a joint moves (so that its link frame is the
+    joint's moving frame). Its shapes and its inertia are restated in it.
+    """
+
+    def __init__(self, name, body=None, frame=IDENTITY, dummy=False):
+        self.name = name
+        self.body = body
+        self.frame = frame
+        self.dummy = dummy
+
+    def shapes(self) -> list:
+        """(part, its pose in the link) for every part of the body."""
+        if self.body is None:
+            return []
+        undo = kinematics.inverse(self.frame)
+        return [(part, kinematics.compose(undo, part.placement)) for part in self.body.parts]
+
+    def inertial(self, options):
+        """The physics '<inertial>' states, in the link's frame, or None."""
+        if self.dummy:
+            inertia = {key: 0.0 for key in mass_properties.INERTIA_KEYS}
+            inertia.update(ixx=options["dummyInertia"], iyy=options["dummyInertia"], izz=options["dummyInertia"])
+            return {"mass": options["dummyMass"], "inertia": inertia}
+        physics = None if self.body is None else self.body.physics
+        if not physics or urdf_common.is_identity(self.frame):
+            return physics
+        return mass_properties.placed(physics, kinematics.packed_of(kinematics.inverse(self.frame)))
+
+    def __repr__(self):
+        return "<LinkPlan %s%s>" % (self.name, " (dummy)" if self.dummy else "")
+
+
+class JointPlan:
+    """One URDF joint, in URDF's units: metres, radians, and SI per unit of motion."""
+
+    def __init__(self, name, joint_type, parent, child, origin):
+        self.name = name
+        self.type = joint_type
+        self.parent = parent
+        self.child = child
+        # The joint frame in the parent link's frame, millimetres (converted
+        # where the pose is written, as every other pose is).
+        self.origin = origin
+        self.axis = None
+        # The kind of freedom it is, for the units of what follows.
+        self.kind = None
+        self.lower = None
+        self.upper = None
+        self.effort = None
+        self.velocity = None
+        self.damping = None
+        self.friction = None
+        # (k_velocity, k_position, soft lower, soft upper), SI.
+        self.safety = None
+        # (joint name, multiplier, offset), SI.
+        self.mimic = None
+        # What the joint's '<gazebo>' block states, as PartCAD properties.
+        self.gazebo = {}
+
+    def motion(self, value):
+        """Where the child link is against the joint frame at 'value' (URDF units): for checking a plan."""
+        if self.type in ("revolute", "continuous"):
+            return (urdf_common.axis_angle_to_quat(self.axis, math.degrees(value)), (0.0, 0.0, 0.0))
+        if self.type == "prismatic":
+            metres = value * urdf_common.MM_PER_M
+            return kinematics.translation(tuple(a * metres for a in self.axis))
+        return IDENTITY
+
+    def __repr__(self):
+        return "<JointPlan %s %s %s -> %s>" % (self.name, self.type, self.parent, self.child)
+
+
+def _subtree(node, into):
+    into.add(id(node))
+    for child in node.get(kinematics.KEY_ASSEMBLY) or []:
+        if isinstance(child, dict):
+            _subtree(child, into)
+    return into
+
+
+def sole_child_label(body):
+    """The label of the one child of a root assembly that every part of its body is in, or None.
+
+    What a robot's base link is when the robot is an assembly: the part the rest
+    hangs off, placed at the assembly's root. A root body made of several such
+    children has no better name than the assembly's own.
+    """
+    if not body.parts or kinematics.is_geometry(body.node):
+        return None
+    for child in body.node.get(kinematics.KEY_ASSEMBLY) or []:
+        if not isinstance(child, dict) or not child.get("label"):
+            continue
+        inside = _subtree(child, set())
+        if all(id(part.node) in inside for part in body.parts):
+            return child["label"]
+    return None
+
+
+class Planner:
+    """The links and joints of a URDF for the bodies 'kinematics.bodies()' found.
+
+    Plain data, and nothing written: 'process()' turns it into the URDF, and
+    the tests check it against the joints it came from, frame by frame.
+    """
+
+    def __init__(self, found, options=None, warnings=None):
+        self.found = found
+        self.options = dict(
+            {
+                "effort": DEFAULT_EFFORT,
+                "velocity": DEFAULT_VELOCITY,
+                "dummyMass": DUMMY_MASS,
+                "dummyInertia": DUMMY_INERTIA,
+            },
+            **{key: value for key, value in (options or {}).items() if value is not None},
+        )
+        self.warnings = warnings if warnings is not None else []
+        self.names = NameAllocator()
+        # Joint names live in a namespace of their own, and "<parent>_to_<child>"
+        # collides on its own: "a" -> "b_to_c" and "a_to_b" -> "c" both spell
+        # "a_to_b_to_c".
+        self.joint_names = NameAllocator()
+        self.links = []
+        self.joints = []
+        self.unsupported = set()
+        # Body -> its LinkPlan; PartCAD joint name -> the URDF joints it became,
+        # as (name, kind of freedom) - what a 'mimic' looks its leader up in.
+        self._link_of = {}
+        self._written = {}
+        self._mimics = []
+        # What is reported once, grouped, at the end.
+        self._started = []
+        self._defaults = []
+        self._open = []
+
+    def plan(self):
+        roots = [body for body in self.found if not isinstance(body.parent, kinematics.Body)]
+        world = None
+        if not (len(roots) == 1 and roots[0].parent is None):
+            world = LinkPlan(self.names.take("world", "world"))
+            self.links.append(world)
+            free = [body.name for body in roots if body.parent is None]
+            if free:
+                self.warnings.append(
+                    "A URDF has one root link, so the free bodies %s are each joined to 'world' by a 'floating' "
+                    "joint" % ", ".join(free)
+                )
+
+        for body in self.found:
+            name = self.names.take(self.link_label(body), "link")
+            if isinstance(body.parent, kinematics.Body):
+                self.jointed(body, name)
+            elif world is None:
+                self.add_link(LinkPlan(name, body, kinematics.inverse(body.world)))
+            else:
+                self.add_link(LinkPlan(name, body))
+                joint = JointPlan(
+                    self.joint_names.take("%s_to_%s" % (world.name, name), "joint"),
+                    "fixed" if body.parent == kinematics.WORLD else "floating",
+                    world.name,
+                    name,
+                    body.world,
+                )
+                self.joints.append(joint)
+
+        self._resolve_mimics()
+        self._report()
+        return self
+
+    def link_label(self, body) -> str:
+        if body.is_root and body.kind == kinematics.ASSEMBLY:
+            return sole_child_label(body) or body.name
+        return body.name
+
+    def add_link(self, link):
+        self.links.append(link)
+        if link.body is not None:
+            self._link_of[id(link.body)] = link
+
+    def jointed(self, body, name):
+        """The joint (or chain of joints) of 'body' to its parent, and its link."""
+        joint = body.joint
+        classification = joint.classification
+        kind = classification.kind
+        parent = self._link_of[id(body.parent)]
+        undo = kinematics.inverse(parent.frame)
+        for freedom in joint.freedoms:
+            if freedom.value:
+                self._started.append("'%s' at %s" % (joint.name, _shown(freedom.value, freedom.kind)))
+        self.unsupported.update(set(joint.physics) - JOINT_STATED)
+
+        if kind in (kinematics.REVOLUTE, kinematics.CONTINUOUS, kinematics.PRISMATIC):
+            (freedom,) = joint.freedoms
+            self.add_link(LinkPlan(name, body, kinematics.inverse(joint.tail)))
+            plan = self.single(joint.name, joint, freedom, parent.name, name, kinematics.compose(undo, joint.origin))
+            self.joint_record(plan, joint, freedom)
+            self._written[joint.name] = [(plan.name, freedom.kind)]
+            return
+
+        if kind in (kinematics.PLANAR, kinematics.FLOATING):
+            self.add_link(LinkPlan(name, body, kinematics.inverse(classification.tail)))
+            plan = JointPlan(
+                self.joint_names.take(joint.name, "joint"),
+                kind,
+                parent.name,
+                name,
+                kinematics.compose(undo, classification.origin),
+            )
+            if kind == kinematics.PLANAR:
+                plan.axis = classification.axes[2]
+            plan.damping = _number(joint.physics.get("damping"))
+            plan.friction = _number(joint.physics.get("friction"))
+            plan.gazebo = dict(joint.physics)
+            self.joints.append(plan)
+            bounded = [freedom for freedom in joint.freedoms if freedom.limited]
+            if bounded:
+                self.warnings.append(
+                    "The %s joint '%s' has bounds on %d of its freedoms, and a URDF %s joint has none: they are not "
+                    "written" % (kind, joint.name, len(bounded), kind)
+                )
+            if joint.soft_limits or joint.mimic:
+                self.warnings.append(
+                    "The %s joint '%s' states soft limits or a mimic, which a URDF %s joint cannot: not written"
+                    % (kind, joint.name, kind)
+                )
+            self._written[joint.name] = [(plan.name, None)]
+            return
+
+        self.chain(body, name, parent, undo)
+
+    def chain(self, body, name, parent, undo):
+        """A joint URDF has no type for, as one single-axis joint per freedom through dummy links."""
+        joint = body.joint
+        freedoms = joint.freedoms
+        names = self.chain_names(joint)
+        previous = parent.name
+        written = []
+        dummies = []
+        for index, freedom in enumerate(freedoms):
+            if index == len(freedoms) - 1:
+                child = name
+                self.add_link(LinkPlan(name, body, kinematics.inverse(joint.tail)))
+            else:
+                child = self.names.take("%s_link%d" % (joint.name, index + 1), "link")
+                dummies.append(child)
+                self.add_link(LinkPlan(child, dummy=True))
+            origin = kinematics.compose(undo, joint.origins[0]) if index == 0 else joint.origins[index]
+            plan = self.single(names[index], joint, freedom, previous, child, origin)
+            if freedom.follows is not None:
+                leader_name, leader = written[freedom.follows], freedoms[freedom.follows]
+                plan.mimic = (
+                    leader_name,
+                    freedom.ratio * per_si(leader.kind) / per_si(freedom.kind),
+                    to_si(freedom.kind, freedom.offset or 0.0),
+                )
+                # What moving it costs is the leader's to pay: it is not a
+                # freedom of its own.
+                plan.damping = plan.friction = None
+                plan.gazebo = {}
+            written.append(plan.name)
+            previous = child
+        self._written[joint.name] = [(written[i], freedoms[i].kind) for i in range(len(freedoms))]
+
+        kind = joint.kind
+        self.warnings.append(
+            "The %s joint '%s' has no URDF type: it is written as the joints %s through the dummy links %s, each "
+            "of %g kg" % (kind, joint.name, ", ".join(written), ", ".join(dummies), self.options["dummyMass"])
+        )
+        if kind == kinematics.SCREW:
+            self.warnings.append(
+                "The screw '%s' is approximate in URDF: its move follows its turn by a <mimic>, which kinematics "
+                "tools honour and few simulators do" % joint.name
+            )
+        if joint.soft_limits:
+            self.warnings.append(
+                "The joint '%s' states soft limits for a joint URDF writes as several: not written" % joint.name
+            )
+        if joint.mimic:
+            self.warnings.append("The joint '%s' mimics another, and is written as several: not written" % joint.name)
+
+    def chain_names(self, joint) -> list:
+        """What each joint of a chain is called: the first after the joint, the rest after what they are.
+
+        The first keeps the joint's own name, so that reading the URDF back
+        names the joint the chain composes into as it was. Each one after it is
+        named after the URDF joint its freedom was read from, where it was read
+        from one, and after its parameter otherwise.
+        """
+        names = [joint.name]
+        for index, freedom in enumerate(joint.freedoms[1:], start=1):
+            read_from = {source.get("joint") for source in freedom.source if source.get("joint")}
+            if len(read_from) == 1 and next(iter(read_from)) not in names:
+                names.append(next(iter(read_from)))
+                continue
+            names.append("%s_%s" % (joint.name, freedom.parameter or index + 1))
+        return names
+
+    def single(self, name, joint, freedom, parent, child, origin):
+        """One single-axis URDF joint for one freedom, with its limits and dynamics."""
+        if freedom.kind == TURN:
+            joint_type = "revolute" if freedom.limited else "continuous"
+        else:
+            joint_type = "prismatic"
+        plan = JointPlan(self.joint_names.take(name, "joint"), joint_type, parent, child, origin)
+        plan.kind = freedom.kind
+        plan.axis = freedom.axis
+        physics = joint.physics
+        effort = _number(physics.get("maxEffort"))
+        velocity = to_si(freedom.kind, _number(physics.get("maxVelocity")))
+
+        if joint_type != "continuous":
+            lower, upper = freedom.lower, freedom.upper
+            if lower is None or upper is None:
+                self._open.append(plan.name)
+                lower = -OPEN_BOUND if lower is None else lower
+                upper = OPEN_BOUND if upper is None else upper
+            plan.lower, plan.upper = to_si(freedom.kind, lower), to_si(freedom.kind, upper)
+        if joint_type != "continuous" or effort is not None or velocity is not None:
+            # URDF requires both wherever there is a '<limit>' at all.
+            if effort is None or velocity is None:
+                self._defaults.append(plan.name)
+            plan.effort = self.options["effort"] if effort is None else effort
+            plan.velocity = self.options["velocity"] if velocity is None else velocity
+        plan.damping = _number(physics.get("damping"))
+        plan.friction = _number(physics.get("friction"))
+        plan.gazebo = dict(physics)
+        self.joints.append(plan)
+        return plan
+
+    def joint_record(self, plan, joint, freedom):
+        """What a joint of one freedom says about itself: its soft limits, and what it mimics."""
+        soft = joint.soft_limits
+        if isinstance(soft, dict) and soft:
+            plan.safety = (
+                _number(soft.get("kVelocity")) or 0.0,
+                _number(soft.get("kPosition")),
+                to_si(freedom.kind, _number(soft.get("lower"))),
+                to_si(freedom.kind, _number(soft.get("upper"))),
+            )
+            if soft.get("kVelocity") is None:
+                self.warnings.append(
+                    "The joint '%s' states soft limits and no 'kVelocity', which URDF requires: written as 0"
+                    % joint.name
+                )
+        if isinstance(joint.mimic, dict) and joint.mimic.get("joint"):
+            self._mimics.append((plan, joint.name, dict(joint.mimic)))
+
+    def _resolve_mimics(self):
+        for plan, name, mimic in self._mimics:
+            leader = self._written.get(str(mimic["joint"]))
+            if not leader or len(leader) != 1 or leader[0][1] is None:
+                self.warnings.append(
+                    "The joint '%s' mimics '%s', and URDF can say that only of a joint of one freedom following "
+                    "another: it is not written" % (name, mimic["joint"])
+                )
+                continue
+            leader_name, leader_kind = leader[0]
+            multiplier = _number(mimic.get("multiplier"))
+            multiplier = 1.0 if multiplier is None else multiplier
+            plan.mimic = (
+                leader_name,
+                multiplier * per_si(leader_kind) / per_si(plan.kind),
+                to_si(plan.kind, _number(mimic.get("offset")) or 0.0),
+            )
+
+    def _report(self):
+        if self._started:
+            self.warnings.append(
+                "A URDF states no starting position, so every joint is written at zero; these start elsewhere in "
+                "the assembly: %s" % ", ".join(self._started)
+            )
+        if self._defaults:
+            self.warnings.append(
+                "URDF requires an effort and a velocity limit, and the joints %s state no 'maxEffort' or "
+                "'maxVelocity': written as effort=%g, velocity=%g (the export's 'effort' and 'velocity')"
+                % (", ".join(self._defaults), self.options["effort"], self.options["velocity"])
+            )
+        if self._open:
+            self.warnings.append(
+                "A URDF revolute or prismatic joint is bounded on both sides, and %s are open on one: the open "
+                "side is written %g degrees or millimetres away" % (", ".join(self._open), OPEN_BOUND)
+            )
+
+
+#
+# Writing it
+#
+
+
 def node_geometry(node):
     """The node's own shape as a live TopoDS_Shape, in its own frame, or None.
 
     Decoded already: 'shape_tree' carries it on the node. The placement carried
-    by the node is deliberately not applied: it becomes the origin of the joint
-    above the link, not part of the geometry.
+    by the node is deliberately left off: where the part sits in its link is the
+    visual's origin, not part of the geometry.
     """
     if not ocp_serialize.is_shape_object(node):
         return None
@@ -232,24 +731,21 @@ def color_rgba(text, state):
     return [round(channel / 255.0, 6) for channel in (red, green, blue)] + [round(alpha, 6)]
 
 
-def gazebo_element(link_name, physics, state):
-    """The ``<gazebo reference="...">`` block a link's physics needs, or None.
+def gazebo_element(reference, physics, table=None):
+    """The ``<gazebo reference="...">`` block a link's or a joint's physics needs, or None.
 
-    The reverse of wrapper_import_urdf.GAZEBO_LINK_PHYSICS: contact and friction
-    are PartCAD properties, and Gazebo is where a URDF states them.
-
-    A property with no URDF spelling is reported rather than dropped in silence
-    - see UNSUPPORTED. When one of them grows a URDF spelling, move it into a
-    table here; do not let it disappear quietly.
+    The reverse of wrapper_import_urdf's GAZEBO_LINK_PHYSICS and
+    GAZEBO_JOINT_PHYSICS: contact, friction and a joint's solver settings are
+    PartCAD properties, and Gazebo is where a URDF states them.
     """
     from xml.etree import ElementTree
 
     element = None
-    for name, (tag, write) in GAZEBO_LINK_PHYSICS.items():
+    for name, (tag, write) in (GAZEBO_LINK_PHYSICS if table is None else table).items():
         if name not in physics:
             continue
         if element is None:
-            element = ElementTree.Element("gazebo", {"reference": link_name})
+            element = ElementTree.Element("gazebo", {"reference": reference})
         child = ElementTree.SubElement(element, tag)
         child.text = write(physics[name])
     return element
@@ -272,112 +768,127 @@ def mesh_reference(shape, node, link_name, state):
     return state["mesh_prefix"] + mesh_file
 
 
-def shape_elements(node, state):
-    """The (shape node, placement) pairs one URDF link is built from.
-
-    Usually a node is one shape and that is the whole of it. A sub-assembly
-    whose children are named *under* it - "wrist" holding "wrist/1" and
-    "wrist/2" - is one thing made of several shapes, and goes back out as one
-    link with several ``<visual>`` elements rather than as a frame link with a
-    link per shape.
-
-    The slash is the whole of the rule, and it is the only hierarchy PartCAD
-    encodes in a name. It needs nothing recorded anywhere: a URDF link with
-    several ``<visual>`` elements is imported under exactly this convention, and
-    an assembly that was never a URDF but uses it means the same thing by it.
-    """
-    if ocp_serialize.is_shape_object(node):
-        return [(node, None)], []
-
-    children = node.get(ocp_serialize.KEY_ASSEMBLY, [])
-    prefix = (node.get("label") or "") + "/"
-    if not prefix.strip("/"):
-        return [], children
-
-    def belongs(child):
-        return ocp_serialize.is_shape_object(child) and (child.get("label") or "").startswith(prefix)
-
-    own = [(child, child.get(ocp_serialize.KEY_LOCATION)) for child in children if belongs(child)]
-    return own, [child for child in children if not belongs(child)]
-
-
 def physics_of(node, state):
     """What the part behind one node of the tree states about its physics."""
     return (state["properties"].get(node.get("name")) or {}).get("physics") or {}
 
 
-def build_link(node, link_name, elements, state):
-    """The URDF ``<link>`` for one node of the assembly tree."""
-    from urdf_parser_py.urdf import Collision, Link, Mesh, Pose, Visual
+def link_physics(body, state):
+    """What a body's '<gazebo>' block states: the body's own, else what its parts agree on.
 
-    link = Link(name=link_name)
-    physics = physics_of(node, state)
-
-    placed = []
-    for shape_node, placement in elements:
-        shape = node_geometry(shape_node)
-        if shape is None:
+    A body rooted at a part says it of itself. One rooted at an assembly - a
+    robot's base, welded out of its parts - says what its parts say, and two
+    parts that say different things are reported, the first one's being used.
+    """
+    own = physics_of(body.node, state)
+    stated = {}
+    for key in GAZEBO_LINK_PHYSICS:
+        if key in own:
+            stated[key] = own[key]
             continue
-        reference = mesh_reference(shape, shape_node, link_name, state)
+        values = [part.physics[key] for part in body.parts if key in (part.physics or {})]
+        if not values:
+            continue
+        stated[key] = values[0]
+        if any(value != values[0] for value in values[1:]):
+            state["warnings"].append(
+                "The parts of the link '%s' state different '%s' (%s), and a URDF link has one: '%s' is used"
+                % (body.name, key, ", ".join(str(value) for value in values), values[0])
+            )
+    return stated
+
+
+def pose(xyz_rpy_source):
+    from urdf_parser_py.urdf import Pose
+
+    xyz, rpy = urdf_common.to_urdf_origin(xyz_rpy_source)
+    return Pose(xyz=xyz, rpy=rpy)
+
+
+def build_link(plan, state):
+    """The URDF ``<link>`` for one planned link."""
+    from urdf_parser_py.urdf import Collision, Link, Mesh, Visual
+
+    link = Link(name=plan.name)
+    shapes = [(part, where, node_geometry(part.node)) for part, where in plan.shapes()]
+    shapes = [entry for entry in shapes if entry[2] is not None]
+    # A link of several shapes names each after the part it is, which is what
+    # reading it back names the part '<assembly>/<link>/<name>' by - so a part
+    # labelled under its link ('wrist/1', read from such a link) is named after
+    # what it is within it.
+    names = NameAllocator() if len(shapes) > 1 else None
+    placed = 0
+    for part, where, shape in shapes:
+        reference = mesh_reference(shape, part.node, plan.name, state)
         geometry = Mesh(filename=reference, scale=[MESH_SCALE, MESH_SCALE, MESH_SCALE])
-        if placement is None:
-            origin = None
-        else:
-            xyz, rpy = urdf_common.to_urdf_origin(urdf_common.from_packed(placement))
-            origin = Pose(xyz=xyz, rpy=rpy)
+        origin = None if urdf_common.is_identity(where) else pose(where)
+        name = None if names is None else names.take(str(part.label or part.name or "").rpartition("/")[2], "shape")
         # The appearance belongs to the shape, not to the link: a link built
         # from several parts may well have a colour per part.
-        material = carried_material(state["properties"].get(shape_node.get("name")) or {}, state)
-        link.add_aggregate("visual", Visual(geometry=geometry, origin=origin, material=material))
-        link.add_aggregate("collision", Collision(geometry=geometry, origin=origin))
-        placed.append((physics_of(shape_node, state), placement))
+        material = carried_material(state["properties"].get(part.node.get("name")) or {}, state)
+        link.add_aggregate("visual", Visual(geometry=geometry, origin=origin, material=material, name=name))
+        link.add_aggregate("collision", Collision(geometry=geometry, origin=origin, name=name))
+        state["unsupported"].update(set(part.physics or {}) - URDF_STATED)
+        placed += 1
 
+    if plan.dummy:
+        link.inertial = carried_inertial(plan.inertial(state["planner"].options))
+        return link
     if not placed:
-        # A frame that carries children, with no geometry of its own. URDF has
-        # no other way to express one.
+        # A link with no geometry of its own - the 'world', or a body that holds
+        # nothing but what moves against it. A body still states what it says
+        # about itself: a measured mass, a Gazebo setting. There is nothing to
+        # weigh, though, so having no mass is not worth a warning here.
+        if plan.body is not None:
+            if state["options"]["inertial"]:
+                link.inertial = carried_inertial(plan.inertial(state["planner"].options))
+            gazebo = gazebo_element(plan.name, link_physics(plan.body, state))
+            if gazebo is not None:
+                state["gazebo"].append(gazebo)
+            state["unsupported"].update(set(physics_of(plan.body.node, state)) - URDF_STATED)
         return link
 
     if state["options"]["inertial"]:
-        # One shape is the link, as resolved. Several are one rigid body, each
-        # placed where the link holds it and added up - unless the link states
-        # its own mass, which beats the sum of its pieces. See
-        # 'mass_properties.of_body()'.
-        own = None if len(elements) == 1 and elements[0][0] is node else physics
-        link.inertial = carried_inertial(mass_properties.of_body(placed, own=own) or physics)
+        link.inertial = carried_inertial(plan.inertial(state["planner"].options))
         if link.inertial is None:
             state["warnings"].append(
                 "Link '%s' has no mass: it states none and has no solid to weigh (an open shell or a mesh), "
-                "so it carries no <inertial>" % link_name
+                "so it carries no <inertial>" % plan.name
             )
-    gazebo = gazebo_element(link_name, physics, state)
+    gazebo = gazebo_element(plan.name, link_physics(plan.body, state))
     if gazebo is not None:
         state["gazebo"].append(gazebo)
-    state["unsupported"].update(set(physics) - URDF_STATED)
+    state["unsupported"].update(set(physics_of(plan.body.node, state)) - URDF_STATED)
     return link
 
 
-def emit(node, parent_link, pose, state):
-    """Add 'node' and its subtree to the robot, joined to 'parent_link'."""
-    from urdf_parser_py.urdf import Joint, Pose
+def build_joint(plan, state):
+    """The URDF ``<joint>`` for one planned joint."""
+    from urdf_parser_py.urdf import Joint, JointDynamics, JointLimit, JointMimic, SafetyController
 
-    link_name = state["names"].take(node.get("label") or node.get("name"), "link")
-    elements, children = shape_elements(node, state)
-    state["robot"].add_link(build_link(node, link_name, elements, state))
-
-    if parent_link is not None:
-        xyz, rpy = urdf_common.to_urdf_origin(pose)
-        state["robot"].add_joint(
-            Joint(
-                name=state["joint_names"].take("%s_to_%s" % (parent_link, link_name), "joint"),
-                parent=parent_link,
-                child=link_name,
-                joint_type="fixed",
-                origin=Pose(xyz=xyz, rpy=rpy),
-            )
-        )
-
-    for child in children:
-        emit(child, link_name, urdf_common.from_packed(child.get(ocp_serialize.KEY_LOCATION)), state)
+    joint = Joint(
+        name=plan.name,
+        parent=plan.parent,
+        child=plan.child,
+        joint_type=plan.type,
+        origin=None if urdf_common.is_identity(plan.origin) else pose(plan.origin),
+    )
+    if plan.axis is not None and plan.type != "fixed":
+        joint.axis = [round(float(v), 15) for v in plan.axis]
+    if plan.effort is not None:
+        joint.limit = JointLimit(effort=plan.effort, velocity=plan.velocity, lower=plan.lower, upper=plan.upper)
+    if plan.damping is not None or plan.friction is not None:
+        joint.dynamics = JointDynamics(damping=plan.damping, friction=plan.friction)
+    if plan.safety is not None:
+        k_velocity, k_position, lower, upper = plan.safety
+        joint.safety_controller = SafetyController(velocity=k_velocity, position=k_position, lower=lower, upper=upper)
+    if plan.mimic is not None:
+        leader, multiplier, offset = plan.mimic
+        joint.mimic = JointMimic(joint_name=leader, multiplier=multiplier, offset=offset)
+    gazebo = gazebo_element(plan.name, plan.gazebo, GAZEBO_JOINT_PHYSICS)
+    if gazebo is not None:
+        state["gazebo"].append(gazebo)
+    return joint
 
 
 def process(path, request):
@@ -397,13 +908,21 @@ def process(path, request):
     os.makedirs(mesh_dir, exist_ok=True)
 
     warnings = []
+    # Shape full name -> the properties its part declares ('physics',
+    # 'material', 'color'), and what PartCAD resolved for it. A part that came
+    # from a URDF states the link's mass, inertia and friction here, and they go
+    # back out rather than being recomputed.
+    properties = request.get("properties") or {}
+    found = kinematics.bodies(root, properties)
+    warnings.extend(found.problems)
+    planner = Planner(
+        found,
+        {key: _number(request.get(key)) for key in ("effort", "velocity", "dummyMass", "dummyInertia")},
+        warnings,
+    ).plan()
+
     state = {
-        "robot": URDF(name=robot_name),
-        "names": NameAllocator(),
-        # Joint names live in a namespace of their own, and "<parent>_to_<child>"
-        # collides on its own: "a" -> "b_to_c" and "a_to_b" -> "c" both spell
-        # "a_to_b_to_c".
-        "joint_names": NameAllocator(),
+        "planner": planner,
         "mesh_names": NameAllocator(),
         "meshes": {},
         "mesh_dir": mesh_dir,
@@ -412,14 +931,10 @@ def process(path, request):
         # itself - what a standalone URDF wants. A ROS package sets this to
         # "package://<pkg>/" so the meshes resolve through the ROS package path.
         "mesh_prefix": request.get("mesh_prefix") or "",
-        # Shape full name -> the properties its part declares ('physics',
-        # 'material', 'color'). A part that came from a URDF states the link's
-        # mass, inertia and friction here, and they go back out rather than
-        # being recomputed.
-        "properties": request.get("properties") or {},
+        "properties": properties,
         "gazebo": [],
         # PartCAD properties URDF has no spelling for, reported once at the end.
-        "unsupported": set(),
+        "unsupported": set(planner.unsupported),
         "options": {
             "tolerance": request.get("tolerance", 0.1),
             "angularTolerance": request.get("angularTolerance", 0.1),
@@ -429,19 +944,14 @@ def process(path, request):
         "warnings": warnings,
     }
 
-    root_pose = urdf_common.from_packed(root.get(ocp_serialize.KEY_LOCATION))
-    if urdf_common.is_identity(root_pose):
-        emit(root, None, root_pose, state)
-    else:
-        # The exported object is itself placed somewhere. URDF has exactly one
-        # root link and no way to put it anywhere but the origin, so the
-        # placement becomes a joint from a 'world' link above it.
-        world = _world_link(state)
-        state["robot"].add_link(world)
-        emit(root, world.name, root_pose, state)
+    robot = URDF(name=robot_name)
+    for link in planner.links:
+        robot.add_link(build_link(link, state))
+    for joint in planner.joints:
+        robot.add_joint(build_joint(joint, state))
 
     with open(path, "w", encoding="utf-8") as f:
-        f.write(with_gazebo(state["robot"].to_xml_string(), state["gazebo"]))
+        f.write(with_gazebo(robot.to_xml_string(), state["gazebo"]))
 
     return {
         "success": True,
@@ -455,12 +965,6 @@ def process(path, request):
         # less than the package does.
         "unsupported": sorted(state["unsupported"]),
     }
-
-
-def _world_link(state):
-    from urdf_parser_py.urdf import Link
-
-    return Link(name=state["names"].take("world", "world"))
 
 
 def with_gazebo(xml, blocks):

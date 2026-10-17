@@ -21,8 +21,9 @@ point of the split:
 
 A single shape is '{"name", "label", "brep"}'; an assembly is
 '{"name", "label", "assembly": [...]}'. Either may also carry an optional
-"location", an optional "properties", an optional "joint", an optional "kind",
-an optional "fixed" and an optional "metadata" (see the keys below).
+"location", an optional "properties", an optional "joint", an optional
+"attached", an optional "kind", an optional "fixed" and an optional "metadata"
+(see the keys below).
 
 The two names answer different questions and a reader needs both. "name" is the
 *object*: '<package>:<object>', what the node holds, shared by every node that
@@ -123,6 +124,15 @@ KEY_PROPERTIES = "properties"
 # rigidly in one place and on a hinge in another. Carried opaquely by the core,
 # like the properties beside it, for an exporter that walks the tree.
 KEY_JOINT = "joint"
+# Optional on a node an assembly places by connecting it rigidly to a sibling - a
+# 'connect:' that keeps no degree of freedom, or a URDF link on a fixed joint:
+# that sibling's label. A rigid connection is no joint (PartCAD has no fixed
+# joints), but it does say what the node is welded to, and that is not always
+# its container: a gripper bolted to a wrist that turns turns with the wrist.
+# Stamped by the assembly placing the node, like the joint, and only inside an
+# assembly - a scene's 'connect:' attaches nothing. Read by the body rule
+# ('wrappers/kinematics.py').
+KEY_ATTACHED = "attached"
 # On every node an assembly or a scene places, and on the root of an assembly or
 # a scene: what the node holds - "part", "assembly" or "scene", the object's own
 # 'kind'. It is what decides which nodes of a tree are rigid bodies (see

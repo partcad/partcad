@@ -4,10 +4,11 @@
 
   It is deliberately more than PartCAD's assembly *geometry* can hold: it has
   masses and inertia tensors, materials, a revolute joint with limits and
-  dynamics, and a Gazebo block. Most of that becomes named PartCAD properties -
-  see docs/source/simulation.rst for the mapping - and what a static assembly
-  simply cannot show is counted and reported, which is the other half of the
-  point of the example.
+  dynamics, a continuous one, fixed ones, and a Gazebo block. The physics
+  becomes named PartCAD properties and the joints become the assembly's joints -
+  see docs/source/simulation.rst for the mapping - and what an assembly cannot
+  hold is counted and reported, which is the other half of the point of the
+  example.
 -->
 <robot name="partcad_urdf_example">
 
@@ -45,10 +46,10 @@
     </inertial>
   </link>
 
-  <!-- A movable joint. A PartCAD assembly is one static configuration, so the
-       shoulder is placed at this joint's zero position; the axis, the limits and
-       the dynamics become the 'motion:' and 'physics:' of the interface this
-       joint turns into under 'pc convert assembly -t assy'. -->
+  <!-- A movable joint: the shoulder's joint to the base, which the assembly
+       shows at its zero position. Its axis, limits and dynamics are the joint's
+       ('pc info -a robot' lists it), and become the 'motion:' and 'physics:' of
+       the interface it turns into under 'pc convert assembly -t assy'. -->
   <joint name="shoulder_pan" type="revolute">
     <origin xyz="0 0 0.02" rpy="0 0 0"/>
     <parent link="base_link"/>
@@ -73,6 +74,9 @@
     </inertial>
   </link>
 
+  <!-- A fixed joint keeps nothing free: the forearm is welded to the shoulder,
+       and turns with it. Both are one rigid body, so an export writes them as
+       one link of two shapes. -->
   <joint name="elbow" type="fixed">
     <origin xyz="0 0 0.06" rpy="0 0.7853981634 0"/>
     <parent link="shoulder"/>
@@ -89,10 +93,14 @@
     </visual>
   </link>
 
-  <joint name="wrist" type="fixed">
+  <!-- A joint with no limits, which turns all the way round: the wrist spins
+       about the forearm's own length. -->
+  <joint name="wrist" type="continuous">
     <origin xyz="0 0 0.12" rpy="0 0 0"/>
     <parent link="forearm"/>
     <child link="wrist"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="0.02"/>
   </joint>
 
   <!-- A link whose two shapes are told apart. Its visual geometry is two
