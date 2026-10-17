@@ -311,6 +311,13 @@ queue_handler: AnsiTerminalProgressHandler = None
 old_handlers = []
 log_queue = None
 
+# The four 'ops' this renderer takes over, and what each was before it did: an
+# attribute of 'ops' itself, or nothing - the class's default - which 'fini'
+# puts back. None while the renderer is not installed.
+OPS = ("process_start", "process_end", "action_start", "action_end")
+old_ops = None
+_UNSET = object()
+
 
 def fini():
     global listener
@@ -330,11 +337,32 @@ def fini():
         listener.stop()
         listener = None
 
+    # And the 'ops' it routed through itself, which outlived it: every
+    # process and action of whatever ran next in the same interpreter - the
+    # next session of a daemon, the next test of a worker - went on being
+    # written out as a terminal's footer, as records of level CRITICAL.
+    _restore_ops()
+    old_handlers.clear()
+
+
+def _restore_ops():
+    global old_ops
+
+    if old_ops is None:
+        return
+    for name, previous in old_ops.items():
+        if previous is _UNSET:
+            ops.__dict__.pop(name, None)
+        else:
+            setattr(ops, name, previous)
+    old_ops = None
+
 
 def init(stream=None):
     global listener
     global queue_handler
     global log_queue
+    global old_ops
 
     if log_queue is None:
         log_queue = queue.Queue(-1)
@@ -355,6 +383,8 @@ def init(stream=None):
         listener.start()
         atexit.register(fini)
 
+    if old_ops is None:
+        old_ops = {name: ops.__dict__.get(name, _UNSET) for name in OPS}
     ops.process_start = ansi_process_start
     ops.process_end = ansi_process_end
     ops.action_start = ansi_action_start

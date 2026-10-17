@@ -8,7 +8,6 @@
 import asyncio
 import os
 import re
-import sys
 import tempfile
 from types import SimpleNamespace
 
@@ -19,6 +18,7 @@ from partcad import assembly_factory_assy, assembly_guide
 from partcad import document as pc_document
 from partcad import document_pdf, shape_envelope
 from partcad.assembly import Assembly, AssemblyChild
+from partcad.assembly_connect import ConnectHow
 from partcad.exception import NotAnAssemblyFileError, NotManufacturableError
 from partcad.geom import Location
 
@@ -169,18 +169,28 @@ def test_document_to_data_embeds_images_on_request():
     assert "path" not in image
 
 
-def test_pdf_table_row_never_outgrows_the_table():
+def _wrapper_layout(monkeypatch):
+    """'wrapper_layout', the arithmetic of the wrapper that draws the PDF.
+
+    Not the wrapper itself: that imports reportlab, which is installed in the
+    sandbox the PDF is composed in and not on the host the tests run on. Found
+    next to the 'partcad' that is imported, wherever that is, and through
+    'monkeypatch' so that the path is put back afterwards.
+    """
+    monkeypatch.syspath_prepend(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
+    import wrapper_layout
+
+    return wrapper_layout
+
+
+def test_pdf_table_row_never_outgrows_the_table(monkeypatch):
     """A row wider than the table's columns stays on the page
 
     Every cell has to be drawn, and the row has to keep the width of the table:
     a cell past the right edge of the page is hidden just as surely as one that
     was dropped.
     """
-    # 'wrapper_layout', not the wrapper that draws the PDF: the latter imports
-    # reportlab, which is installed in the sandbox the PDF is composed in and
-    # not on the host the tests run on.
-    sys.path.insert(0, os.path.join("partcad", "src", "partcad", "wrappers"))
-    import wrapper_layout
+    wrapper_layout = _wrapper_layout(monkeypatch)
 
     widths, aligns = [100.0, 50.0, 200.0], ["left", "right", "left"]
     total = sum(widths)
@@ -369,9 +379,11 @@ def test_section_page_names_the_item_to_start_with():
 def test_step_page_shows_what_the_file_says_about_the_step():
     """A step's page carries the node's description and the connection's comment
 
-    The comment is marked as a note: it is context around the step and never the
-    step itself (see docs/source/assy.rst), and the reader has to be able to
-    tell which of the paragraphs is the thing to do.
+    The description is the instruction, written for whoever builds the thing,
+    so the sentence the generator would compose out of the connection is not
+    put beside it. The comment is marked as a note: it is context around the
+    step and never the step itself (see docs/source/assy.rst), and the reader
+    has to be able to tell which of the paragraphs is the thing to do.
     """
     step = assembly_guide.GuideStep(
         number=1,
@@ -391,8 +403,31 @@ def test_step_page_shows_what_the_file_says_about_the_step():
 
     assert texts == [
         "The screw that holds it down.",
-        "Add screw to bracket.",
         "Note: Start this screw by hand: the plate flexes if it is torqued down first.",
+    ]
+    assert [block.style for block in page.blocks if isinstance(block, pc_document.Paragraph)] == [
+        None,
+        pc_document.PARAGRAPH_NOTE,
+    ]
+
+
+def test_a_step_the_file_says_nothing_about_is_described_by_its_joint():
+    """Without a description, the sentence composed out of the connection is the instruction"""
+    step = assembly_guide.GuideStep(
+        number=1,
+        item=make_assembly("screw"),
+        item_name="screw",
+        location=Location(),
+        counterpart=make_assembly("bracket"),
+        counterpart_name="bracket",
+        counterpart_location=Location(),
+    )
+    section = assembly_guide.GuideSection(assembly=make_assembly("widget"), name="widget", steps=[step])
+
+    page = asyncio.run(assembly_guide._step_page(section, step, assembly_guide.ImageSource()))
+
+    assert [block.text for block in page.blocks if isinstance(block, pc_document.Paragraph)] == [
+        "Add screw to bracket."
     ]
 
 
@@ -480,7 +515,7 @@ class _CountingImages(assembly_guide.ImageSource):
         self.in_flight = 0
         self.peak = 0
 
-    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None):
+    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None, view=None):
         self.drawn.append(key or shape.name)
         self.in_flight += 1
         self.peak = max(self.peak, self.in_flight)
@@ -489,6 +524,17 @@ class _CountingImages(assembly_guide.ImageSource):
         finally:
             self.in_flight -= 1
         return pc_document.Image(file="/tmp/%s.svg" % (key or shape.name), alt=alt, caption=caption)
+
+
+def _fastener(name, target, through=None, item=None):
+    """One screw of a step, connected to 'target' and driven through 'through'."""
+    return assembly_guide.GuideFastener(
+        item=item or make_assembly("screw"),
+        item_name=name,
+        location=Location(),
+        connection={"target": target, "interferes": list(through or [])},
+        how=ConnectHow({"selfScrew": True}),
+    )
 
 
 def _section_of(step_count):
@@ -511,19 +557,22 @@ def _section_of(step_count):
 def test_a_section_is_drawn_all_at_once():
     """Every picture of every step of a section is asked for at the same time
 
-    A projection is a sandbox process, and a step's page carries three of them -
-    the item, what it is joined to, and the two pulled apart. Asking for them
-    one after another is what made a book of twenty steps cost sixty of them in
-    a row, on a machine with nothing else to do.
+    A projection is a sandbox process, and a step's page carries one of them -
+    the item going onto what is there - or, when it is fastened, three or more:
+    that, the fasteners going in, and each kind of fastener on its own. Asking
+    for them one after another is what made a book of twenty steps cost sixty
+    of them in a row, on a machine with nothing else to do.
     """
     section = _section_of(3)
+    section.steps[1].fasteners = [_fastener("screw-%d" % n, "item-2") for n in (1, 2)]
     images = _CountingImages()
 
     pages = asyncio.run(assembly_guide._section_pages(None, section, images, 1))
 
-    # The assembly's own picture, and three for each of the three steps.
-    assert len(images.drawn) == 10
-    assert images.peak == 10
+    # The assembly's own picture, one for each of the two steps with nothing
+    # to fasten, and three for the one with two screws of one kind.
+    assert len(images.drawn) == 6
+    assert images.peak == 6
     assert [page.title for page in pages] == ["widget", "widget: step 1", "widget: step 2", "widget: step 3"]
 
 
@@ -535,7 +584,9 @@ def test_the_pages_are_in_the_order_they_are_read_in():
     """
 
     class _Backwards(_CountingImages):
-        async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None):
+        async def shape_image_async(
+            self, shape, key=None, alt=None, caption=None, annotations=None, along=None, view=None
+        ):
             # The later the step, the sooner its pictures are done.
             self.delay = 0.05 / (1 + len(self.drawn))
             return await super().shape_image_async(shape, key, alt, caption, annotations)
@@ -665,11 +716,9 @@ def test_render_assembly_guide_html():
     assert titles[1] == "Bill of Materials"
     assert titles[-1] == "Links"
     assert "%s: step 1" % CONNECT_ASSEMBLY in titles
-    assert "<h1>%s: step 1 of 7</h1>" % CONNECT_ASSEMBLY in html
-    # The first step of this assembly asks for a gap of its own; the rest are
-    # spaced by half of the largest dimension of the two items.
-    assert "the two are shown 30.0mm apart" in html
-    assert "Exploded view" in html
+    # A step is titled by its number, under the name of what it belongs to: the
+    # name is often too long for a heading, and with parameters always is.
+    assert '<div class="kicker">%s</div><h1>Step 1 of 7</h1>' % CONNECT_ASSEMBLY in html
     # Every illustration is carried by the document itself.
     assert "data:image/svg+xml;base64," in html
     assert 'src="/' not in html
@@ -774,12 +823,12 @@ def test_render_assembly_guide_sub_assemblies():
         < titles.index("logo_embedded_head: step 1")
         < titles.index("logo_embedded: step 2")
     )
-    assert "<h1>Assembly: logo_embedded_head</h1>" in html
-    assert "<h1>logo_embedded_head: step 1 of 1</h1>" in html
+    assert '<div class="kicker">Sub-assembly</div><h1>logo_embedded_head</h1>' in html
+    assert '<div class="kicker">logo_embedded_head</div><h1>Step 1 of 1</h1>' in html
     # The container the root node of an ASSY file creates is not a sub-assembly
     # of its own: the top level assembly is documented once, with its own steps.
     assert titles.count("logo_embedded") == 2  # the title page and its own page
-    assert "<h1>logo_embedded: step 3 of 3</h1>" in html
+    assert '<div class="kicker">logo_embedded</div><h1>Step 3 of 3</h1>' in html
     # What the ASSY file says about its nodes: the container node's description
     # on the sub-assembly's own page, and the first item's - which no step
     # places - on the page of the assembly it starts.
@@ -1050,3 +1099,383 @@ def test_an_illustration_is_drawn_with_partcads_own_options_and_the_view_it_need
     assert view["defaults_only"] is True
     assert view["viewport_origin"] in assembly_guide.SIDE_VIEWS
     assert view["viewport_up"] == assembly_guide.VIEW_UP
+
+
+#
+# Steps as a person does them
+#
+
+
+def _content(*children):
+    content = make_assembly("widget:None", child=True)
+    content.children.extend(children)
+    return content
+
+
+def _screwed(name, target, through=None):
+    """A screw placed by connecting it to 'target', driven through 'through'."""
+    return AssemblyChild(
+        make_assembly("screw"),
+        name,
+        Location(),
+        how=ConnectHow({"selfScrew": True}),
+        connection={"target": target, "interferes": list(through or [])},
+    )
+
+
+def _pushed(item, name, target):
+    return AssemblyChild(
+        make_assembly(item), name, Location(), how=ConnectHow({"pushForceMax": 20}), connection={"target": target}
+    )
+
+
+def _sections(monkeypatch, content):
+    async def no_geometry(ctx, step):
+        """The gap between two items needs a CAD runtime; this test needs none."""
+
+    monkeypatch.setattr(assembly_guide, "_resolve_step_geometry", no_geometry)
+    return asyncio.run(assembly_guide._build_section(None, content, content))
+
+
+def test_a_fastener_is_driven_in_at_the_step_of_what_it_holds(monkeypatch):
+    """A part is positioned and then screwed down: one step, not one per screw
+
+    A screw holds the plate when it is connected to the plate or driven through
+    it into something else, and what makes it a fastener is that its joint is
+    made by going into the material ('selfScrew', 'snapIn').
+    """
+    section = _sections(
+        monkeypatch,
+        _content(
+            AssemblyChild(make_assembly("bracket"), "bracket", Location()),
+            _pushed("plate", "plate", "bracket"),
+            _screwed("screw-1", "plate"),
+            _screwed("screw-2", "bracket", through=["plate"]),
+            _pushed("cover", "cover", "plate"),
+        ),
+    )
+
+    plate, cover = section.steps
+    assert [fastener.item_name for fastener in plate.fasteners] == ["screw-1", "screw-2"]
+    assert cover.fasteners == []
+    assert section.step_of_link == {0: 0, 1: 1, 2: 1, 3: 1, 4: 2}
+    # What each step goes onto is everything placed before it.
+    assert [child.name for child in cover.context] == ["bracket", "plate", "screw-1", "screw-2"]
+
+
+def test_a_fastener_for_something_placed_before_is_a_step_of_its_own(monkeypatch):
+    """Screwing down what was positioned two steps ago is not part of the step in between"""
+    section = _sections(
+        monkeypatch,
+        _content(
+            AssemblyChild(make_assembly("bracket"), "bracket", Location()),
+            _pushed("plate", "plate", "bracket"),
+            _pushed("cover", "cover", "bracket"),
+            _screwed("screw-1", "plate"),
+            _screwed("screw-2", "plate"),
+        ),
+    )
+
+    plate, cover, screws = section.steps
+    assert cover.fasteners == []
+    # The second screw is the same thing as the first, and goes in with it.
+    assert screws.item_name == "screw-1"
+    assert [fastener.item_name for fastener in screws.fasteners] == ["screw-2"]
+    assert section.step_of_link == {0: 0, 1: 1, 2: 2, 3: 3, 4: 3}
+
+
+def test_a_part_that_is_pushed_on_is_never_a_fastener(monkeypatch):
+    section = _sections(
+        monkeypatch,
+        _content(
+            AssemblyChild(make_assembly("bracket"), "bracket", Location()),
+            _pushed("plate", "plate", "bracket"),
+            _pushed("plate", "second-plate", "plate"),
+        ),
+    )
+    assert len(section.steps) == 2
+
+
+def test_a_step_page_lays_out_what_it_adds(monkeypatch):
+    """The parts box, the item going on and the screws going in, and the model's account below
+
+    The screws are shown on their own, with how many: they are too small to
+    pick out in a picture of the whole. The two pictures are side by side, in
+    the order they are done in.
+    """
+    step = assembly_guide.GuideStep(
+        number=1,
+        item=make_assembly("plate"),
+        item_name="plate",
+        location=Location(),
+        counterpart=make_assembly("bracket"),
+        counterpart_name="bracket",
+        counterpart_location=Location(),
+        connection={"with_port": "back", "to_port": "face"},
+        item_description="Hold the plate against the bracket.",
+        how=ConnectHow({"pushForceMax": 20}),
+        also=[{"name": "frame", "with": "edge", "to": "rail"}],
+        fasteners=[_fastener("screw-%d" % n, "bracket", through=["plate"]) for n in (1, 2)],
+    )
+    section = assembly_guide.GuideSection(assembly=make_assembly("widget"), name="widget;size=2", steps=[step])
+
+    page = asyncio.run(assembly_guide._step_page(section, step, _CountingImages(delay=0)))
+
+    heading = page.blocks[0]
+    assert (heading.text, heading.kicker) == ("Step 1 of 1", "widget")
+    box, pictures = [block for block in page.blocks if isinstance(block, pc_document.ImageRow)]
+    assert (box.boxed, box.title) == (True, "Parts for this step")
+    assert [image.caption for image in box.images] == ["2 \u00d7 screw"]
+    assert [image.caption for image in pictures.images] == ["1. Put it in place", "2. Fasten it"]
+    paragraphs = [(block.text, block.style) for block in page.blocks if isinstance(block, pc_document.Paragraph)]
+    assert paragraphs == [
+        ("Hold the plate against the bracket.", None),
+        ("It also meets frame.", None),
+        ("Fasten it with 2 \u00d7 screw.", None),
+        ("Joint: plate back to bracket face, pushed into place, up to 20 N.", pc_document.PARAGRAPH_DETAIL),
+        ("Also: plate edge to frame rail.", pc_document.PARAGRAPH_DETAIL),
+        (
+            "Fasteners: 2 \u00d7 screw into bracket through plate, driven in, cutting its own thread.",
+            pc_document.PARAGRAPH_DETAIL,
+        ),
+    ]
+
+
+def test_the_picture_of_a_step_is_what_is_there_in_grey_and_the_item_in_blue():
+    """The reader has the assembly so far in front of them, not the one part it is joined to"""
+    placed = [
+        AssemblyChild(make_assembly("bracket"), "bracket", Location()),
+        AssemblyChild(make_assembly("plate"), "plate", Location()),
+    ]
+    step = assembly_guide.GuideStep(
+        number=2,
+        item=make_assembly("cover"),
+        item_name="cover",
+        location=Location(),
+        counterpart=make_assembly("plate"),
+        counterpart_name="plate",
+        counterpart_location=Location(),
+        context=placed,
+        direction=(0.0, 0.0, 1.0),
+        distance=10.0,
+    )
+    section = assembly_guide.GuideSection(assembly=make_assembly("widget"), name="widget", steps=[step])
+
+    picture = assembly_guide.exploded_assembly(section, step)
+
+    so_far, new = picture.children
+    assert so_far.item.config["properties"]["color"] == assembly_guide.CONTEXT_COLOR
+    assert [child.name for child in so_far.item.children] == ["bracket", "plate"]
+    assert new.item.config["properties"]["color"] == assembly_guide.NEW_COLOR
+    (cover,) = new.item.children
+    assert cover.location.translation == pytest.approx((0.0, 0.0, 10.0))
+
+
+def test_the_picture_of_fastening_holds_only_what_the_fasteners_join():
+    placed = [AssemblyChild(make_assembly(name), name, Location()) for name in ("bracket", "plate", "lamp")]
+    step = assembly_guide.GuideStep(
+        number=2,
+        item=make_assembly("cover"),
+        item_name="cover",
+        location=Location(),
+        counterpart=make_assembly("plate"),
+        counterpart_name="plate",
+        counterpart_location=Location(),
+        context=placed,
+        fasteners=[_fastener("screw", "plate", through=["cover"])],
+    )
+    section = assembly_guide.GuideSection(assembly=make_assembly("widget"), name="widget", steps=[step])
+
+    held, fasteners = assembly_guide.fastened_assembly(section, step).children
+
+    assert [child.name for child in held.item.children] == ["plate", "cover"]
+    assert [child.name for child in fasteners.item.children] == ["screw"]
+
+
+def test_a_view_faces_the_side_things_come_out_of():
+    """A screw pulled out of the far face of a leg is behind the leg from anywhere else"""
+    views = assembly_guide.ISO_VIEWS
+    assert assembly_guide.view_facing([]) == views[0]
+    assert assembly_guide.view_facing([(0.0, 0.0, 1.0)]) == views[0]
+    assert assembly_guide.view_facing([(-1.0, 0.0, 0.0)])[0] < 0
+    # Most of them, when they disagree.
+    assert assembly_guide.view_facing([(0, 1, 0), (0, 1, 0), (0, -1, 0)])[1] > 0
+
+
+def test_a_name_is_titled_without_its_parameters():
+    """'imperial-desk-1/side;apron=25.0,leg=29.28125' is no title; the values go beside it"""
+    assert assembly_guide._label("imperial-desk-1/side;apron=25.0,leg=29.28125") == "imperial-desk-1/side"
+    assert assembly_guide._parameters("imperial-desk-1/side;apron=25.0,leg=29.28125") == "apron 25, leg 29.28125"
+    assert assembly_guide._parameters("leg") is None
+    assert assembly_guide._parameters("top;finish=oiled") == "finish oiled"
+
+
+def test_the_cover_counts_every_step_that_is_done():
+    """A section made twice is two lots of its steps"""
+    project = SimpleNamespace(name="//pkg", config_obj={})
+    side = assembly_guide.GuideSection(assembly=make_assembly("side"), name="side", count=2)
+    side.steps = [None, None]
+    top = assembly_guide.GuideSection(assembly=make_assembly("desk"), name="desk", top=True)
+    top.steps = [None, None, None]
+
+    page = asyncio.run(
+        assembly_guide._title_page(project, make_assembly("desk"), assembly_guide.ImageSource(), [side, top])
+    )
+
+    (properties,) = [block for block in page.blocks if isinstance(block, pc_document.Properties)]
+    assert ("Steps", "7") in properties.items
+
+
+def test_a_long_name_is_broken_where_it_reads_best(monkeypatch):
+    """A name has no spaces to break at, and was drawn over the column beside it"""
+    wrapper_layout = _wrapper_layout(monkeypatch)
+
+    assert wrapper_layout.wrap("imperial-desk-1/side;apron=25.0,leg=29.28125", 20, len) == [
+        "imperial-desk-1/",
+        "side;apron=25.0,",
+        "leg=29.28125",
+    ]
+    assert wrapper_layout.wrap("An end of the desk: two legs", 20, len) == ["An end of the desk:", "two legs"]
+    assert wrapper_layout.wrap("abcdefghijklmnopqrstuvwxyz", 10, len) == ["abcdefghij", "klmnopqrst", "uvwxyz"]
+    assert wrapper_layout.wrap("", 10, len) == [""]
+
+
+def test_a_document_carries_its_kickers_boxes_and_details():
+    """The three formats and the data the IDE reads say the same thing about them"""
+    document = pc_document.Document(
+        title="widget",
+        pages=[
+            pc_document.Page(
+                blocks=[
+                    pc_document.Heading("Step 1 of 2", kicker="widget - make 2"),
+                    pc_document.ImageRow(
+                        [pc_document.Image(src="screw.svg", caption="2 \u00d7 screw")],
+                        boxed=True,
+                        title="Parts for this step",
+                    ),
+                    pc_document.Paragraph("Joint: a to b.", style=pc_document.PARAGRAPH_DETAIL),
+                    pc_document.Paragraph("Note: gently.", style=pc_document.PARAGRAPH_NOTE),
+                ]
+            )
+        ],
+    )
+
+    markdown = "\n".join(pc_document.render_markdown(document))
+    assert "*widget - make 2*" in markdown
+    assert "**Parts for this step**" in markdown
+    assert "<sub>Joint: a to b.</sub>" in markdown
+
+    html = pc_document.render_html(document)
+    assert '<div class="kicker">widget - make 2</div>' in html
+    assert '<div class="callout"><h4>Parts for this step</h4>' in html
+    assert '<p class="detail">Joint: a to b.</p>' in html
+    assert '<p class="note">Note: gently.</p>' in html
+
+    heading, box, detail, note = pc_document.to_data(document)["pages"][0]["blocks"]
+    assert heading["kicker"] == "widget - make 2"
+    assert (box["boxed"], box["title"]) == (True, "Parts for this step")
+    assert (detail["style"], note["style"]) == ("detail", "note")
+
+
+def test_how_a_step_goes_on_is_said_in_words():
+    assert assembly_guide._how_words(None) is None
+    assert assembly_guide._how_words(ConnectHow({})) is None
+    assert assembly_guide._how_words(ConnectHow({"selfScrew": True})) == "driven in, cutting its own thread"
+    assert assembly_guide._how_words(ConnectHow({"snapIn": True})) == "pushed in until it snaps"
+    assert assembly_guide._how_words(ConnectHow({"turnTorqueMax": 2})) == "turned in, up to 2 N*m"
+    assert assembly_guide._how_words(ConnectHow({"pushForceMax": 20})) == "pushed into place, up to 20 N"
+
+
+class _Box:
+    """A shape that is a box and nothing else: what the geometry of a step is worked out from."""
+
+    def __init__(self, name, box):
+        self.name = name
+        self.project_name = "//pkg"
+        self.box = box
+
+    async def get_bounding_box_async(self, ctx):
+        return self.box
+
+    async def get_max_dimension_async(self, ctx):
+        box = self.box
+        return max(box[3] - box[0], box[4] - box[1], box[5] - box[2])
+
+
+def test_a_fastener_is_pulled_out_of_its_hole_towards_its_head():
+    """Along the port it was connected to, away from what it goes into, a little more than its length"""
+    bracket = AssemblyChild(_Box("bracket", (0, 0, -50, 100, 100, 0)), "bracket", Location())
+    screw = assembly_guide.GuideFastener(
+        item=_Box("screw", (-2, -2, -30, 2, 2, 0)),
+        item_name="screw",
+        # Its head on top of the plate, its point 20 mm into the bracket.
+        location=Location([[50, 50, 10], [0, 0, 1], 0]),
+        # The port it was connected to faces down, into the bracket.
+        connection={"target": "bracket", "direction": [0, 0, -1]},
+    )
+    step = assembly_guide.GuideStep(
+        number=1,
+        item=_Box("plate", (0, 0, 0, 100, 100, 10)),
+        item_name="plate",
+        location=Location(),
+        counterpart=bracket.item,
+        counterpart_name="bracket",
+        counterpart_location=Location(),
+        connection={"target": "bracket", "direction": [0, 0, 1], "point": [50, 50, 0]},
+        context=[bracket],
+        fasteners=[screw],
+    )
+
+    asyncio.run(assembly_guide._resolve_step_geometry(None, step))
+
+    assert screw.direction == pytest.approx((0.0, 0.0, 1.0))
+    assert screw.distance == pytest.approx(assembly_guide.FASTENER_PULL * 30)
+    start, end = screw.gap
+    assert end[2] - start[2] == pytest.approx(screw.distance)
+    assert screw.exploded_location().translation == pytest.approx((50.0, 50.0, 10.0 + screw.distance))
+
+
+def test_what_fasteners_say_is_said_once():
+    """Every screw of a step may carry the same words; the page says them once"""
+    step = assembly_guide.GuideStep(
+        number=1,
+        item=make_assembly("plate"),
+        item_name="plate",
+        location=Location(),
+        counterpart=make_assembly("bracket"),
+        counterpart_name="bracket",
+        counterpart_location=Location(),
+        fasteners=[_fastener("screw-%d" % n, "bracket") for n in (1, 2)],
+    )
+    for fastener in step.fasteners:
+        fastener.description = "Drive them in\nflush."
+
+    assert [block.text for block in assembly_guide._fastener_blocks(step)] == ["Drive them in flush."]
+
+
+def test_a_section_page_says_what_goes_into_it_and_at_what_size():
+    """Its links counted by what they place, with the sizes their parameters give"""
+    children = [
+        AssemblyChild(make_assembly("leg;length=29.5", desc="Leg, a 4x4"), name, Location())
+        for name in ("leg-1", "leg-2")
+    ]
+    children.append(AssemblyChild(make_assembly("apron;length=25.0"), "apron", Location()))
+    section = assembly_guide.GuideSection(
+        assembly=make_assembly("side;apron=25.0,leg=29.5"),
+        name="side;apron=25.0,leg=29.5",
+        count=2,
+        children=children,
+    )
+    project = SimpleNamespace(name="//other", config_obj={})
+
+    page = asyncio.run(assembly_guide._section_page(project, section, assembly_guide.ImageSource()))
+
+    heading = page.blocks[0]
+    assert (heading.text, heading.kicker) == ("side", "Sub-assembly - make 2")
+    (properties,) = [block for block in page.blocks if isinstance(block, pc_document.Properties)]
+    assert ("Size", "apron 25, leg 29.5") in properties.items
+    (table,) = [block for block in page.blocks if isinstance(block, pc_document.Table)]
+    assert table.rows == [
+        ["//pkg:leg", 2, "Leg, a 4x4 (length 29.5)"],
+        ["//pkg:apron", 1, "length 25"],
+    ]

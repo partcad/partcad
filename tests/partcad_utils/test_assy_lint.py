@@ -602,6 +602,76 @@ def test_interferes_that_names_nothing():
     assert "nosuch" in one_link_finding(text).message
 
 
+def test_a_further_joint_with_a_preceding_sibling_is_clean():
+    text = (
+        CHAIN + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: {with: x, name: second, to: y}\n"
+    )
+    assert link_findings(text) == []
+    # One entry, or a list of them.
+    text = (
+        CHAIN
+        + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts:\n      - {with: x, name: second, to: y}\n"
+    )
+    assert link_findings(text) == []
+
+
+def test_a_further_joint_with_a_link_placed_later_says_so():
+    # The joint is checked once both links are placed, so it is stated on the
+    # later of the two - which the one written first is not.
+    text = (
+        "links:\n"
+        "  - part: a\n"
+        "  - part: b\n"
+        "    connectPorts: {name: a}\n"
+        "    alsoConnectPorts: {with: x, name: c, to: y}\n"
+        "  - part: c\n"
+        "    connectPorts: {name: a}\n"
+    )
+    assert "state it on 'c'" in one_link_finding(text).message
+
+
+def test_a_further_joint_with_a_link_nothing_places():
+    text = (
+        CHAIN + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: [{with: x, name: nosuch, to: y}]\n"
+    )
+    assert "nosuch" in one_link_finding(text).message
+
+
+def test_a_further_joint_with_a_link_of_another_list_says_so():
+    text = (
+        "links:\n"
+        "  - name: frame\n"
+        "    links:\n"
+        "      - part: a\n"
+        "        name: inner\n"
+        "  - part: b\n"
+        "    connectPorts: {name: frame}\n"
+        "    alsoConnectPorts: {with: x, name: inner, to: y}\n"
+    )
+    assert "same 'links:' list, so this node cannot meet it" in one_link_finding(text).message
+
+
+def test_a_further_joint_the_template_names_or_the_schema_refuses_is_left_to_them():
+    """A templated name is only known once rendered, and an entry that is not a section is the schema's"""
+    text = (
+        CHAIN
+        + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: {with: x, name: {{ which }}, to: y}\n"
+    )
+    assert link_findings(text) == []
+    text = CHAIN + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: [second]\n"
+    assert link_findings(text) == []
+
+
+def test_the_schema_takes_a_further_joint_and_only_its_three_ports_and_a_comment():
+    text = (
+        CHAIN
+        + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: {with: x, name: second, to: y, how: {}}\n"
+    )
+    assert any("how" in diagnostic.message for diagnostic in check(text))
+    text = CHAIN + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: {with: x, name: second}\n"
+    assert check(text)
+
+
 def test_the_root_node_has_nothing_to_connect_to():
     # Reported here as well as when the file is read, where
     # 'apply_root_placement' says the same thing: the root node *is* the

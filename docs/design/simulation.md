@@ -927,9 +927,11 @@ joint from the link of the body it was connected to. What follows is #788's reco
 ### 8.9 What this does not cover yet
 
 - **Closed loops.** A connection's target must already be placed and a child is placed once, so a four-bar linkage
-  cannot be stated; nor can URDF state one. The plan is an explicit loop-closing constraint between two ports of two
-  links, written as MJCF `<equality connect/weld>` and as an SDFormat joint between links of one model, and reported
-  for URDF. Until then a connection whose child is already placed is detected and refused with a message saying so.
+  cannot be placed by its connections; nor can URDF state one. The loop-closing constraint between two ports of two
+  links is now stated, as `alsoConnectPorts` (see `docs/source/assy.rst`, "Further joints"), and checked where the
+  mechanism starts: the two ports have to meet. What is left is holding it closed as it moves - writing it as MJCF
+  `<equality connect/weld>` and as an SDFormat joint between links of one model, and reporting it for URDF. A
+  connection whose child is already placed is still detected and refused with a message saying so.
 - **Couplings between joints** beyond `mimic` and `threadStep`: gear meshes, belts, rack and pinion. They are
   relations between two joints, not properties of either, and want their own declaration.
 - **Re-rooting.** A sub-assembly connected by a port that `map:` exposes from a part deep inside it has to be re-rooted

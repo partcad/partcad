@@ -16,22 +16,21 @@ import os
 import re
 import sys
 
+import svglib.svglib as svglib
 from reportlab.graphics import renderPDF
 from reportlab.lib.pagesizes import A4, letter
-from reportlab.lib.utils import simpleSplit
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas as pdf_canvas
-
-import svglib.svglib as svglib
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 from wrapper_layout import fit_row
+from wrapper_layout import wrap as layout_wrap
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 PAGE_SIZES = {"A4": A4, "letter": letter}
 
@@ -49,6 +48,15 @@ LINK_COLOR = (0.1, 0.35, 0.7)
 
 # The narrowest a table column is ever wrapped into.
 MIN_WRAP_WIDTH = 24.0
+
+# The most of the page a column is widened to so that its longest word fits.
+MAX_WORD_SHARE = 0.4
+
+# The kicker over a heading, and the box a row of parts is set in.
+KICKER_SIZE = 9
+BOX_PADDING = 8.0
+BOX_GRAY = 0.96
+BOX_LINE_GRAY = 0.75
 
 
 class Composer:
@@ -111,7 +119,7 @@ class Composer:
         if kind == "heading":
             self.heading(block)
         elif kind == "paragraph":
-            self.paragraph(block["text"])
+            self.styled_paragraph(block)
         elif kind == "properties":
             self.properties(block["items"])
         elif kind == "images":
@@ -123,31 +131,55 @@ class Composer:
 
     def heading(self, block):
         size = HEADING_SIZES.get(block.get("level", 1), BODY_SIZE)
-        self.space(size * 2.4)
-        self.y -= size * LINE_SPACING
-        self.canvas.setFont(FONT_BOLD, size)
         text = block["text"]
-        url = block.get("url")
-        if url:
-            self.canvas.setFillColorRGB(*LINK_COLOR)
-        self.canvas.drawString(MARGIN, self.y, text)
-        if url:
-            self.canvas.linkURL(
-                url,
-                (MARGIN, self.y - 2, MARGIN + stringWidth(text, FONT_BOLD, size), self.y + size),
-                relative=0,
-            )
+        # A heading is as wide as the page and no wider: a name too long for
+        # one line goes on to the next rather than off the edge of the paper.
+        lines = wrap(text, FONT_BOLD, size, self.content_width)
+        kicker = block.get("kicker")
+        self.space(size * (1.0 + LINE_SPACING * len(lines)) + (KICKER_SIZE * 1.6 if kicker else 0))
+        if kicker:
+            self.y -= KICKER_SIZE * 1.3
+            self.canvas.setFont(FONT_BOLD, KICKER_SIZE)
+            self.canvas.setFillGray(0.45)
+            for line in wrap(kicker.upper(), FONT_BOLD, KICKER_SIZE, self.content_width)[:1]:
+                self.canvas.drawString(MARGIN, self.y, line)
             self.canvas.setFillGray(0.0)
+        url = block.get("url")
+        for line in lines:
+            self.y -= size * LINE_SPACING
+            self.canvas.setFont(FONT_BOLD, size)
+            if url:
+                self.canvas.setFillColorRGB(*LINK_COLOR)
+            self.canvas.drawString(MARGIN, self.y, line)
+            if url:
+                self.canvas.linkURL(
+                    url,
+                    (MARGIN, self.y - 2, MARGIN + stringWidth(line, FONT_BOLD, size), self.y + size),
+                    relative=0,
+                )
+                self.canvas.setFillGray(0.0)
         self.y -= size * 0.5
 
-    def paragraph(self, text, size=BODY_SIZE, font=FONT):
+    def paragraph(self, text, size=BODY_SIZE, font=FONT, gray=0.0):
         for line in text.split("\n"):
-            for wrapped in simpleSplit(line, font, size, self.content_width) or [""]:
+            for wrapped in wrap(line, font, size, self.content_width) or [""]:
                 self.space(size * LINE_SPACING)
                 self.y -= size * LINE_SPACING
                 self.canvas.setFont(font, size)
+                self.canvas.setFillGray(gray)
                 self.canvas.drawString(MARGIN, self.y, wrapped)
+        self.canvas.setFillGray(0.0)
         self.y -= size * 0.5
+
+    def styled_paragraph(self, block):
+        """A paragraph in the style it says: a detail is small and grey, a note slanted."""
+        style = block.get("style")
+        if style == "detail":
+            self.paragraph(block["text"], size=SMALL_SIZE, font=FONT, gray=0.4)
+        elif style == "note":
+            self.paragraph(block["text"], font=FONT_ITALIC)
+        else:
+            self.paragraph(block["text"])
 
     def properties(self, items):
         size = BODY_SIZE
@@ -184,7 +216,16 @@ class Composer:
         if not drawings:
             return
 
-        box_width = (self.content_width - 12 * (len(drawings) - 1)) / len(drawings)
+        boxed = bool(block.get("boxed"))
+        title = block.get("title") if boxed else None
+        # A boxed row is set in from the margins by the padding of its box, and
+        # its pictures are no wider than a quarter of the page each: it is a
+        # row of small parts, and a part drawn across the page is not small.
+        inset = BOX_PADDING if boxed else 0.0
+        available = self.content_width - 2 * inset
+        box_width = (available - 12 * (len(drawings) - 1)) / len(drawings)
+        if boxed:
+            box_width = min(box_width, self.content_width / 4.0)
 
         # How much the captions actually take, not a guess of two lines: a
         # caption is wrapped into the width of its own picture, and one that
@@ -192,7 +233,7 @@ class Composer:
         # bottom margin, over whatever comes next.
         caption_lines = max(
             (
-                len(simpleSplit(image["caption"], FONT_ITALIC, SMALL_SIZE, box_width))
+                len(wrap(image["caption"], FONT_ITALIC, SMALL_SIZE, box_width))
                 for image, _ in drawings
                 if image.get("caption")
             ),
@@ -200,13 +241,29 @@ class Composer:
         )
         caption_height = caption_lines * SMALL_SIZE * 1.2
         box_height = self.height * float(block.get("height", 0.4)) - caption_height
+        title_height = BODY_SIZE * 1.6 if title else 0.0
 
         # An illustration is not worth splitting across two pages: if what is
         # left of this one cannot hold it, it starts the next one.
-        self.space(box_height + caption_height + 12)
+        self.space(box_height + caption_height + title_height + 12 + 2 * inset)
+        if boxed:
+            frame_top = self.y - 4
+            frame_height = box_height + caption_height + title_height + 2 * inset
+            self.canvas.setFillGray(BOX_GRAY)
+            self.canvas.setStrokeGray(BOX_LINE_GRAY)
+            self.canvas.roundRect(
+                MARGIN, frame_top - frame_height, self.content_width, frame_height, 6, stroke=1, fill=1
+            )
+            self.canvas.setFillGray(0.0)
+            self.y = frame_top - inset
+            if title:
+                self.y -= BODY_SIZE
+                self.canvas.setFont(FONT_BOLD, BODY_SIZE)
+                self.canvas.drawString(MARGIN + inset, self.y, title)
+                self.y -= BODY_SIZE * 0.6
         top = self.y
 
-        x = MARGIN
+        x = MARGIN + inset
         lowest = top
         for image, drawing in drawings:
             if not drawing.width or not drawing.height:
@@ -225,14 +282,14 @@ class Composer:
             if image.get("caption"):
                 self.canvas.setFont(FONT_ITALIC, SMALL_SIZE)
                 self.canvas.setFillGray(0.35)
-                for line in simpleSplit(image["caption"], FONT_ITALIC, SMALL_SIZE, box_width):
+                for line in wrap(image["caption"], FONT_ITALIC, SMALL_SIZE, box_width):
                     bottom -= SMALL_SIZE * 1.2
                     self.canvas.drawCentredString(x + box_width / 2, bottom, line)
                 self.canvas.setFillGray(0.0)
             lowest = min(lowest, bottom)
             x += box_width + 12
 
-        self.y = lowest - 12
+        self.y = lowest - 12 - inset
 
     def table(self, block):
         columns = block.get("columns") or []
@@ -262,7 +319,7 @@ class Composer:
             # single very long value would otherwise be asked to wrap text into
             # zero width, which no line ever fits into.
             cells = [
-                simpleSplit(str(cell), FONT, BODY_SIZE, max(width - 8, MIN_WRAP_WIDTH)) or [""]
+                wrap(str(cell), FONT, BODY_SIZE, max(width - 8, MIN_WRAP_WIDTH)) or [""]
                 for cell, width in zip(row, row_widths)
             ]
             height = max(len(lines) for lines in cells) * BODY_SIZE * LINE_SPACING
@@ -293,22 +350,42 @@ class Composer:
             x += width
 
 
+def wrap(text, font, size, width):
+    """'text' broken into lines no wider than 'width' when set in 'font' at 'size' (see 'wrapper_layout.wrap')."""
+    return layout_wrap(text, width, lambda piece: stringWidth(piece, font, size))
+
+
 def _column_widths(columns, rows, available):
-    """Column widths proportional to what each column has to say."""
+    """Column widths proportional to what each column has to say.
+
+    Every column gets at least its longest word - a name with no spaces in it,
+    a number - up to a share of the page ('MAX_WORD_SHARE'), and what is left
+    is shared out by how much more each column has to say. Shared out in
+    proportion to the whole text alone, a column of long descriptions took the
+    page and left a column of names too narrow for any of them.
+    """
     natural = []
+    least = []
     for index, column in enumerate(columns):
         widest = stringWidth(str(column), FONT_BOLD, BODY_SIZE)
+        word = max([stringWidth(part, FONT_BOLD, BODY_SIZE) for part in str(column).split()] or [0])
         for row in rows:
             if index < len(row):
                 widest = max(widest, stringWidth(str(row[index]), FONT, BODY_SIZE))
+                word = max([word] + [stringWidth(part, FONT, BODY_SIZE) for part in str(row[index]).split()])
         natural.append(widest + 12)
+        least.append(min(word + 12, available * MAX_WORD_SHARE))
 
     total = sum(natural)
     if total <= available:
         # Give the slack to the last column, so the table spans the page.
         natural[-1] += available - total
         return natural
-    return [width * available / total for width in natural]
+    if sum(least) >= available:
+        return [width * available / sum(least) for width in least]
+    spare = available - sum(least)
+    extra = [max(0.0, width - low) for width, low in zip(natural, least)]
+    return [low + (spare * more / sum(extra) if sum(extra) else 0.0) for low, more in zip(least, extra)]
 
 
 def _load_image(path):

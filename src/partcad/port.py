@@ -150,6 +150,26 @@ class WithPorts(Interface):
             interface_name = "/" + interface_name
         return self.get_interfaces()[interface_name]
 
+    def implemented_name(self, interface_name: str):
+        """The name this object implements 'interface_name' under, or None if it does not.
+
+        An interface built from parameters is implemented under the name of
+        what it was built with - '//pub/std/imperial/dimensional-lumber:cuboid;
+        x=88.9,y=743.7,z=88.9' for a post of one length - which a connection to
+        a part of any length cannot spell. So the bare name stands for the one
+        parametrization the object implements, as long as there is only one:
+        two would leave it to the connection to say which, by its parameters.
+        """
+        if interface_name.startswith("/") and not interface_name.startswith("//"):
+            interface_name = "/" + interface_name
+        interfaces = self.get_interfaces()
+        if interface_name in interfaces:
+            return interface_name
+        if ";" in interface_name:
+            return None
+        built = [name for name in interfaces if name.split(";", 1)[0] == interface_name]
+        return built[0] if len(built) == 1 else None
+
     def instantiate_interfaces(self):
         self.interfaces = {}
 
