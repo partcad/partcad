@@ -816,6 +816,71 @@ def test_nested_sub_assemblies_are_attached_through_and_jointed_where_they_move(
     _assert_placements(found, tree)
 
 
+def test_a_rigid_connection_welds_a_child_to_the_body_of_what_it_is_connected_to(tmp_path, stand_in_geometry):
+    """A gripper bolted to a wrist that turns turns with the wrist, not with the base.
+
+    A connection that keeps no degree of freedom is no joint, and the node says
+    what it is attached to ('shape_envelope.KEY_ATTACHED'): its target's body,
+    which is the container's own unless the target moves.
+    """
+    rig = """
+    links:
+      - part: base
+      - part: lid
+        connect: {name: base, with: pin, to: bore, toParams: {turnZ: 30}}
+      - part: arm
+        connect: {name: lid, with: pin, to: bore, motion: fixed, toParams: {turnZ: -20}}
+      - part: lid
+        name: cover
+        connect: {name: base, with: pin, to: bore, motion: fixed}
+    """
+    ctx = _context(
+        tmp_path, {"rig.assy": rig}, PARTS_AND_SCENES, bore="parameters: {turnZ: [-90, 90]}\nmotion: revolute"
+    )
+    tree = _tree(ctx, ":rig")
+    nodes = {node["label"]: node for node in tree[shape_envelope.KEY_ASSEMBLY]}
+    assert nodes["arm"][shape_envelope.KEY_ATTACHED] == "lid"
+    assert nodes["cover"][shape_envelope.KEY_ATTACHED] == "base"
+    assert shape_envelope.KEY_ATTACHED not in nodes["lid"]
+    found = kinematics.bodies(tree)
+    assert [(row["name"], row["parent"], row["parts"]) for row in kinematics.summary(found)] == [
+        ("rig", None, ["base", "cover"]),
+        ("lid", "rig", ["lid", "arm"]),
+    ]
+    assert found.problems == []
+    _assert_placements(found, tree)
+
+
+def test_a_rigid_connection_in_a_scene_attaches_nothing(tmp_path, stand_in_geometry):
+    files = {"pile.assy": ONE_JOINT.format(params=", motion: fixed")}
+    ctx = _context(tmp_path, files, PARTS_AND_SCENES)
+    tree = _tree(ctx, ":pile", "scene")
+    assert all(shape_envelope.KEY_ATTACHED not in node for node in tree[shape_envelope.KEY_ASSEMBLY])
+    assert [body.parent for body in kinematics.bodies(tree)] == [None, None]
+
+
+def test_a_joint_to_no_sibling_is_to_the_container():
+    """What a robot description says of a link hanging off a root link with no geometry, which is no node."""
+    joint = {"name": "pan", "parent": None, "child": "arm", "steps": [fixed((0, 0, 10)), free("turn", Z, -90, 90)]}
+    tree = {
+        "name": "pkg:robot",
+        "label": "robot",
+        "kind": "assembly",
+        "assembly": [
+            {"name": "pkg:arm", "label": "arm", "kind": "part", "brep": b"x", "location": [[0, 0, 10], [0, 0, 1], 0]},
+        ],
+    }
+    tree["assembly"][0]["joint"] = joint
+    found = kinematics.bodies(tree)
+    robot, arm = found
+    assert (arm.parent, arm.joint.kind, found.problems) == (robot, kinematics.REVOLUTE, [])
+    assert robot.parts == []
+    attached = dict(tree["assembly"][0], label="cover", attached="nobody")
+    del attached["joint"]
+    tree["assembly"].append(attached)
+    assert any("'cover' is attached to 'nobody'" in problem for problem in kinematics.bodies(tree).problems)
+
+
 def test_an_assembly_that_states_what_it_weighs_is_taken_at_its_word(tmp_path, stand_in_geometry):
     """A measured link of several shapes - a robot description's - beats the sum of its pieces."""
     outer = """

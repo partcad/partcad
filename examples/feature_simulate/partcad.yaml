@@ -39,9 +39,10 @@ docs:
     PartCAD implements no simulator. It ships the *concept* -- the `simulate:`
     section, the `simulation:` section a plugin is declared in, the sandbox the
     plugin runs in, and the MJCF export a scene reaches it through -- and a
-    package supplies the physics. This one imports
-    [partcad-sim-mujoco](https://github.com/partcad/partcad-sim-mujoco) below and
-    names it as `sim-mujoco:mujoco`. Nothing has to be installed by hand: PartCAD
+    package supplies the physics. This one names
+    [partcad-sim-mujoco](https://github.com/partcad/partcad-sim-mujoco), which
+    the public index publishes at `//pub/feature/simulate/mujoco`, as
+    `//pub/feature/simulate/mujoco:mujoco`. Nothing has to be installed by hand: PartCAD
     installs that package's requirements into the sandbox it runs it in, so a
     machine with no MuJoCo on it simulates just the same.
 
@@ -96,7 +97,7 @@ docs:
     opened in MuJoCo:
 
     ```shell
-    pc export -S -t sim-mujoco:mjcf -O ./ unstable
+    pc export -S -t //pub/feature/simulate/mujoco:mjcf -O ./ unstable
     pc ide open --with mujoco ./unstable.xml
     ```
 
@@ -141,17 +142,6 @@ docs:
 
     `water` is declared below so that this example stays self-contained; the
     standard catalogue's is `//pub/std/manufacturing/material/fluid:water`.
-
-dependencies:
-  # The simulator. Declared here rather than assumed: PartCAD implements no
-  # simulator, so a package that wants one imports it and says so.
-  #
-  # Not 'onlyInRoot', unlike the index dependency in the parent package: this
-  # one is needed whenever these objects are simulated, whether this package is
-  # the root or is being used from somewhere else.
-  sim-mujoco:
-    type: git
-    url: https://github.com/partcad/partcad-sim-mujoco.git
 
 # What the blocks are made of. A material is not a shape - there is nothing to
 # render or export - it is a set of facts about a substance that the parts refer
@@ -224,7 +214,7 @@ parts:
       # stacks below are read against.
       rests:
         desc: A block set down on the floor stays where it was put
-        simulation: sim-mujoco:mujoco
+        simulation: //pub/feature/simulate/mujoco:mujoco
         offset: [[0, 0, 10], [0, 0, 1], 0]
         validation: |
           max(
@@ -233,7 +223,7 @@ parts:
           ) < 5.0
       sinks:
         desc: Aluminium is denser than water, so the block goes to the bottom of the tank
-        simulation: sim-mujoco:mujoco
+        simulation: //pub/feature/simulate/mujoco:mujoco
         # A scene of this package's own, filled with water, and the block
         # released 100 mm above its floor.
         scene: :tank
@@ -261,7 +251,7 @@ parts:
     simulate:
       floats:
         desc: Lighter than the water it displaces, the float rises through the tank
-        simulation: sim-mujoco:mujoco
+        simulation: //pub/feature/simulate/mujoco:mujoco
         scene: :tank
         offset: [[0, 0, 100], [0, 0, 1], 0]
         # The water has no surface, so a float rises for as long as the run
@@ -274,7 +264,7 @@ parts:
           ) > 100.0
       falls:
         desc: The same float in the default scene, which is a vacuum, falls like anything else
-        simulation: sim-mujoco:mujoco
+        simulation: //pub/feature/simulate/mujoco:mujoco
         # Released at the height the tank releases it at, so the two runs differ
         # in the medium and in nothing else.
         offset: [[0, 0, 100], [0, 0, 1], 0]
@@ -302,7 +292,7 @@ parts:
     simulate:
       rights_itself:
         desc: Released tilted 60 degrees in the tank, the ballasted float turns its heavy side down
-        simulation: sim-mujoco:mujoco
+        simulation: //pub/feature/simulate/mujoco:mujoco
         scene: :tank
         # 100 mm above the floor and turned 60 degrees about X, so its own Z
         # axis starts half-way to horizontal.
@@ -365,7 +355,7 @@ scenes:
         desc: |
           Nothing moves, even pulled sideways by a quarter of its weight:
           aluminium grips with four times the friction it takes to hold.
-        simulation: sim-mujoco:mujoco
+        simulation: //pub/feature/simulate/mujoco:mujoco
         # A world tilted by 15 degrees, so that something pushes the top block
         # sideways and its friction is asked what it can hold.
         scene: :tilted
@@ -391,7 +381,7 @@ scenes:
     simulate:
       falls:
         desc: The top block topples off and ends up on the floor
-        simulation: sim-mujoco:mujoco
+        simulation: //pub/feature/simulate/mujoco:mujoco
         offset: [[0, 0, 10], [0, 0, 1], 0]
         # The opposite condition, on the very same simulation: something ended
         # up markedly lower than it started. The top block falls a whole block's
@@ -411,7 +401,7 @@ scenes:
         desc: |
           The same geometry as 'stable', in the same tilted world, and the
           opposite outcome, because the material is the other one.
-        simulation: sim-mujoco:mujoco
+        simulation: //pub/feature/simulate/mujoco:mujoco
         scene: :tilted
         offset: [[0, 0, 10], [0, 0, 1], 0]
         # The top block slides off the bottom one and falls its full height, 20

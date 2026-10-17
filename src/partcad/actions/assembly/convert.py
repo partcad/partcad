@@ -20,7 +20,13 @@ The second direction is where the two models actually have to be reconciled, and
 the mapping is described in docs/source/simulation.rst. In short: a URDF joint
 relates two link frames, while PartCAD relates two *ports* that face each other,
 so each joint becomes a "socket" interface the parent implements at the joint
-origin and a "plug" interface the child implements at its own origin. Joints
+origin and a "plug" interface the child implements at its own origin. The
+socket's port carries the half turn that makes two ports face each other, so
+that the frame a connection works in - the contact frame - *is* the URDF joint
+frame: every parameter's 'dir' is the URDF axis as the URDF states it, and an
+export puts every link frame back where the URDF had it. The degrees of freedom
+are declared explicitly, 'motion: {dof: [...]}' naming the parameters that stay
+free, so the units are the parameters' own and nothing is stated twice. Joints
 that say the same thing share one pair of interfaces.
 """
 
@@ -39,25 +45,12 @@ from ...utils import resolve_resource_path
 
 SUPPORTED_FORMATS = ("assy", "urdf")
 
-# PartCAD connects two ports by turning one to face the other; a URDF joint
-# instead has the two link frames coincide. The flip that reconciles them is
-# this half turn, and it is what the generated "plug" interface carries. See
-# 'joint_axis_in_port_frame' for the one other place it shows up.
+# PartCAD connects two ports by turning one to face the other ('connect:'
+# composes this half turn after the target port); a URDF joint instead has the
+# two link frames coincide. The generated "socket" interface's port is this same
+# half turn, and a half turn twice is no turn at all: the contact frame is the
+# URDF joint frame, and the "plug" sits at the child link's own origin.
 FACING = [[0.0, 0.0, 0.0], [0.71, 0.71, 0.0], 180.0]
-
-# What a joint's freedom of movement becomes as a PartCAD interface parameter.
-# 'turn' is degrees about an axis, 'move' is millimetres along one - which is
-# what the joint's 'motion' section is already stated in.
-JOINT_PARAMETERS = {
-    "revolute": "turn",
-    "continuous": "turn",
-    "prismatic": "move",
-}
-
-# How far a continuous joint is allowed to turn in the generated parameter.
-# URDF says "no limit"; a PartCAD parameter has to name a range, and a full turn
-# either way is the honest reading of one.
-CONTINUOUS_RANGE = 360.0
 
 
 def _yaml():
@@ -95,19 +88,6 @@ def is_identity(packed):
     """Whether a packed location is a no-op, within rounding noise."""
     translation, _, angle = Location(packed).as_packed()
     return all(abs(v) < 1e-9 for v in translation) and abs(angle) < 1e-9
-
-
-def joint_axis_in_port_frame(axis):
-    """A URDF joint axis, expressed in the frame the connection works in.
-
-    The generated plug carries a half turn about (1, 1, 0) so that the two ports
-    face each other the way PartCAD expects. A rotation conjugated by that half
-    turn is the same rotation about the mapped axis, and the map is
-    (x, y, z) -> (y, x, -z). Stating the axis that way is what makes
-    ``connect: {toParams: {angle: 30}}`` turn the joint by exactly 30 degrees in
-    the URDF sense.
-    """
-    return [float(axis[1]), float(axis[0]), -float(axis[2])]
 
 
 def joint_signature(joint):
@@ -151,27 +131,33 @@ def build_interfaces(assembly_name, joints, used_joints):
             joint["type"],
             joint_name,
         )
-        # One port, at the interface origin: the parent implements it at the
-        # joint origin, which is where the joint frame sits in the parent link.
-        socket_config["ports"] = CommentedMap({"joint": None})
+        # One port, which the parent implements at the joint origin. It is the
+        # half turn the connection undoes, so that the contact frame - where
+        # every parameter below is read - is the URDF joint frame.
+        socket_config["ports"] = CommentedMap({"joint": _location(FACING)})
 
-        # 'motion' is what the joint can do and 'physics' is what it costs -
-        # both already in PartCAD's names and units (degrees for a revolute
-        # joint, millimetres for a prismatic one), because the reader converted
-        # them once on the way in.
-        socket_config["motion"] = _section(joint.get("motion"))
+        # What the joint keeps free, as parameters named in 'dof': each one's
+        # kind, its axis as the URDF states it, and its range - degrees for a
+        # turn, millimetres for a move, as the reader converted them once on the
+        # way in. 'physics' is what moving it costs, in the same names.
+        parameters = movement_parameters(joint)
+        if parameters:
+            socket_config["parameters"] = parameters
+        motion = CommentedMap()
+        motion["dof"] = _flow(list(parameters))
+        for field in ("softLimits", "mimic"):
+            if (joint.get("motion") or {}).get(field):
+                motion[field] = _section(joint["motion"][field])
+        socket_config["motion"] = motion
         physics = _section(joint.get("physics"))
         if physics:
             socket_config["physics"] = physics
 
-        parameter = movement_parameter(joint)
-        if parameter is not None:
-            socket_config["parameters"] = CommentedMap({parameter[0]: parameter[1]})
-
         plug_config = CommentedMap()
         plug_config["desc"] = "URDF %s joint, as seen from the child link" % joint["type"]
-        # The half turn that makes the child's frame face the parent's port.
-        plug_config["ports"] = CommentedMap({"joint": _location(FACING)})
+        # At the child link's own origin: the socket's half turn is what makes
+        # the two face each other.
+        plug_config["ports"] = CommentedMap({"joint": None})
         plug_config["mates"] = socket
 
         interfaces[socket] = socket_config
@@ -182,37 +168,34 @@ def build_interfaces(assembly_name, joints, used_joints):
     return interfaces, by_joint
 
 
-def movement_parameter(joint):
-    """The interface parameter that makes a movable joint actually move.
+def movement_parameters(joint):
+    """The interface parameters a joint's degrees of freedom are, by name.
 
-    ``motion`` above records what the joint is; this is the executable half. A
-    connection that names it ("connect: {toParams: {angle: 30}}") places the
-    child where the joint at that value puts it.
+    One per freedom the reader found the joint to keep (its 'freedoms': none
+    for a fixed joint, one for a revolute, continuous or prismatic one, three
+    for a planar and six for a floating one), each a freedom-of-movement
+    parameter of its kind along its axis. A bounded one states its range, and
+    starts at zero - where URDF's own zero configuration puts it - or at its
+    lower bound when zero is outside it. An unbounded one (a continuous joint,
+    every freedom of a planar or a floating one) states only its kind and its
+    axis, which is what makes it unlimited as a degree of freedom. 'motion:
+    {dof: [...]}' names them, and a connection that names one in 'toParams'
+    poses the joint there.
     """
-    motion = joint.get("motion") or {}
-    kind = JOINT_PARAMETERS.get(joint["type"])
-    if kind is None or not motion.get("axis"):
-        return None
-    name = "angle" if kind == "turn" else "offset"
-
-    limits = motion.get("limits") or {}
-    if joint["type"] == "continuous":
-        lower, upper = -CONTINUOUS_RANGE, CONTINUOUS_RANGE
-    elif "lower" in limits or "upper" in limits:
-        lower = float(limits.get("lower", 0.0))
-        upper = float(limits.get("upper", 0.0))
-    else:
-        return None
-
-    config = CommentedMap()
-    config["type"] = kind
-    config["dir"] = _flow(joint_axis_in_port_frame(motion["axis"]))
-    config["min"] = round(lower, 9)
-    config["max"] = round(upper, 9)
-    # The assembly shows the joint at zero, which is where URDF's own zero
-    # configuration puts it, so that is the default.
-    config["default"] = 0.0 if lower <= 0.0 <= upper else round(lower, 9)
-    return name, config
+    parameters = CommentedMap()
+    for freedom in joint.get("freedoms") or []:
+        config = CommentedMap()
+        config["type"] = freedom["kind"]
+        config["dir"] = _flow([round(float(v), 12) for v in freedom["axis"]])
+        lower, upper = freedom.get("lower"), freedom.get("upper")
+        if lower is not None or upper is not None:
+            lower = float(lower) if lower is not None else float(upper)
+            upper = float(upper) if upper is not None else lower
+            config["min"] = round(lower, 9)
+            config["max"] = round(upper, 9)
+            config["default"] = 0.0 if lower <= 0.0 <= upper else round(lower, 9)
+        parameters[freedom["name"]] = config
+    return parameters
 
 
 def link_order(links):
@@ -379,6 +362,10 @@ def urdf_to_assy(project: Project, assembly_name: str, config: dict, out_dir: Pa
             connect["name"] = parent
             connect["to"] = socket
             connect["toInstance"] = joint["name"]
+            if joint.get("freedoms"):
+                # The joint keeps the URDF's name, which is what a 'mimic' and
+                # a validation name it by, and what an export writes again.
+                connect["joint"] = joint["name"]
             node["connect"] = connect
         assy_links.append(node)
 

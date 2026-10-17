@@ -45,6 +45,7 @@ import asyncio
 import hashlib
 import os
 
+from . import joint as pc_joint
 from . import logging as pc_logging
 from . import output, shape_envelope, telemetry, wrapper
 from .assembly import AssemblyChild
@@ -294,7 +295,20 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
         dropped = self.import_info.get("dropped") or {}
         if dropped:
             info["Dropped"] = {self.dropped_labels.get(key, key): count for key, count in sorted(dropped.items())}
+        joints = self.joints_info()
+        if joints:
+            info["Joints"] = joints
         return info
+
+    def joints_info(self) -> dict:
+        """The joints the file states, as 'pc info' shows an ASSY assembly's, without building anything."""
+        joints = {}
+        for node in (self.import_info.get("root") or {}).get("links") or []:
+            attachment = self.attachment(node) if isinstance(node, dict) else {}
+            joint = attachment.get("joint")
+            if joint is not None:
+                joints[joint.name] = joint.info()
+        return joints
 
     def _read_for_info(self):
         """Read the file just to populate 'import_info', reporting rather than raising.
@@ -372,7 +386,31 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
         if node.get("link") and node["link"] not in self._items:
             self._items[node["link"]] = item
 
-        return AssemblyChild(item, name, location)
+        return AssemblyChild(item, name, location, **self.attachment(node))
+
+    def attachment(self, node) -> dict:
+        """What holds one node to its siblings: its joint, or the sibling it is welded to.
+
+        A reader that knows its format's joints states each on the node it
+        moves - its name, the two links by name, and the steps from the
+        parent's node to the child's in the form a joint travels to an exporter
+        in ('partcad.joint.Joint.to_envelope') - so that the object is a
+        mechanism as it is read, without converting it. A node on a joint that
+        keeps no freedom names its parent under 'attached' instead: rigidly
+        attached, and to that sibling's body when it moves. Nothing here knows
+        any format; a reader that states neither is a rigid arrangement, as an
+        imported object always was. A scene keeps neither, since every element
+        of a scene is a body of its own.
+        """
+        if self.OBJECT_KIND != "assembly":
+            return {}
+        record = node.get(shape_envelope.KEY_JOINT)
+        if isinstance(record, dict) and any(
+            isinstance(step, dict) and step.get("type") == "free" for step in record.get("steps") or []
+        ):
+            return {"joint": pc_joint.Joint.from_envelope(record)}
+        attached = node.get(shape_envelope.KEY_ATTACHED)
+        return {"attached": attached} if isinstance(attached, str) and attached else {}
 
     def part_name(self, node_name):
         """The package-wide name of the part one node becomes.

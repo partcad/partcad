@@ -30,8 +30,11 @@ together, and a scene only states where things are.
     scene fixes every element in it. Free is the default.
 
 The tree says everything the rule reads: each node's "kind" ("part", "assembly"
-or "scene"), a scene element's "fixed", and a connected child's "joint" -- all
-stamped by the core as the tree is built (see 'partcad.shape_envelope'). A node
+or "scene"), a scene element's "fixed", a connected child's "joint", and the
+sibling a rigid connection welds a child to ("attached") -- all stamped by the
+core as the tree is built (see 'partcad.shape_envelope'). A joint naming no
+sibling is to the container itself, and a child attached to a sibling that
+moves is welded into that sibling's body rather than its container's. A node
 with no kind is read by what it carries, children making it an assembly and
 geometry a part, which is what a lone part always was. One convention is kept
 from before the rule: a node whose shapes are labelled under its own label
@@ -160,6 +163,7 @@ KEY_GLTF_REF = "gltfRef"
 KEY_LOCATION = "location"
 KEY_PROPERTIES = "properties"
 KEY_JOINT = "joint"
+KEY_ATTACHED = "attached"
 KEY_KIND = "kind"
 KEY_FIXED = "fixed"
 
@@ -942,6 +946,9 @@ class _Builder:
             )
             states_mass = False
 
+        # (label, the body it is in, its frame in that body, its location in
+        # this container) for every child placed so far: what a joint or an
+        # attachment to a sibling looks its target up in.
         placed = []
         for child in children:
             location = pose_of(child.get(KEY_LOCATION))
@@ -956,24 +963,43 @@ class _Builder:
             record = child.get(KEY_JOINT)
             if isinstance(record, dict):
                 # A joint is to a sibling placed before it: the first of that
-                # name, as the connection that made it looked it up.
+                # name, as the connection that made it looked it up. One that
+                # names no sibling at all is to the container itself: what a
+                # robot description says of a link hanging off a root link
+                # with no geometry, which is no node of its own.
                 target = next((entry for entry in placed if entry[0] == record.get("parent")), None)
-                if target is None:
+                if record.get("parent") is None:
+                    target_body, target_frame = body, placement
+                elif target is None:
                     self.problem(
                         "'%s' moves against '%s', which is not placed before it: it is jointed to its container"
                         % (where, record.get("parent"))
                     )
                     target_body, target_frame = body, placement
                 else:
-                    _, target_body, target_frame = target
+                    _, target_body, target_frame, _ = target
                 moving = self.new_body(child, child_world, child_path, target_body, False)
                 moving.joint = Joint(record, target_body, moving, target_frame)
                 self.fill(moving, child, IDENTITY, child_world, child_path)
-                placed.append((label, moving, IDENTITY))
+                placed.append((label, moving, IDENTITY, location))
             else:
-                child_placement = compose(placement, location)
-                self.fill(body, child, child_placement, child_world, child_path)
-                placed.append((label, body, child_placement))
+                # Welded: into the container's body, unless a rigid connection
+                # says it is welded to a sibling that moves - then into that
+                # sibling's body, where the two sit as the container holds them.
+                target_body, child_placement = body, compose(placement, location)
+                attached = child.get(KEY_ATTACHED)
+                if attached is not None:
+                    target = next((entry for entry in placed if entry[0] == attached), None)
+                    if target is None:
+                        self.problem(
+                            "'%s' is attached to '%s', which is not placed before it: it is attached to its container"
+                            % (where, attached)
+                        )
+                    elif target[1] is not body:
+                        _, target_body, target_frame, target_location = target
+                        child_placement = compose(compose(target_frame, inverse(target_location)), location)
+                self.fill(target_body, child, child_placement, child_world, child_path)
+                placed.append((label, target_body, child_placement, location))
 
         if states_mass:
             body._stated.append((placement, stated, start, len(body.parts)))
