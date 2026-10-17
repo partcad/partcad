@@ -821,10 +821,11 @@ def _kind(freedoms, axes, points):
         # across the plane in the frame the turn left, which is the same plane.
         return PLANAR, _closest_to_origin(points[0], axes[0])
     if count == 6 and sorted(kinds) == [MOVE] * 3 + [TURN] * 3:
-        # Six freedoms that hold nothing, in whatever order the connection
-        # named them ('toParams' puts the ones it names first): three moves
-        # one after another, so that no turn between two of them can turn one
-        # onto the other, and three turns about lines through one point.
+        # Six freedoms that hold nothing, in whatever order they were declared
+        # (a 'dof' list may name the turns first, and a reader of another
+        # format may state them so): three moves one after another, so that no
+        # turn between two of them can turn one onto the other, and three
+        # turns about lines through one point. Anything else is a composite.
         moves = [index for index, kind in enumerate(kinds) if kind == MOVE]
         turns = [index for index, kind in enumerate(kinds) if kind == TURN]
         if (

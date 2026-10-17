@@ -557,29 +557,35 @@ class Side:
     def steps(self) -> list:
         """This side's factors of the composition, in the order the placement composes them.
 
-        The parameters the connection names come first, in the order it names
-        them, exactly as the placement always composed them: a degree of
-        freedom as a free step at the value given, anything else as an
-        adjustment fixed at it. The degrees of freedom it does not name follow,
-        free at zero - which composes nothing, so they change no placement.
+        The adjustments the connection names come first, in the order it names
+        them, exactly as the placement always composed them, each fixed at its
+        value. The degrees of freedom follow, every one of them, in the order
+        they were declared - a 'dof' list's own order, or the order a 'type'
+        implies them in (section 8.2 of docs/design/simulation.md) - each at
+        the value the connection gives it, nought where it gives none, which
+        composes nothing. A connection's 'toParams' supplies values and never
+        order: what kind of joint the freedoms make is a property of the joint,
+        not of how its start was written, so 'motion: floating' posed as
+        '{moveZ: 100, turnX: 10}' or as '{turnX: 10, moveZ: 100}' is one free
+        body at one placement (8.13.10). An adjustment goes before them because
+        it is the fixed geometry the freedoms act in: a slot positions the
+        hinge that turns in it.
         """
         steps = []
-        named = set()
+        values = {}
         for name, value in self.values.items():
             parameter = self.parameter(name)
             if parameter is None:
                 continue
-            named.add(name)
             # Called for every named parameter, free or not: it is what reports
             # a value outside the parameter's range, as it always has.
             offsets = parameter.get_offsets(value)
             if name in self.dof:
-                steps.append(self._free(name, parameter, value))
+                values[name] = value
             else:
                 steps.extend(FixedStep(offset, ROLE_ADJUSTMENT, "%s:%s" % (self.name, name)) for offset in offsets)
         for name in self.dof:
-            if name not in named:
-                steps.append(self._free(name, self.parameter(name), 0.0))
+            steps.append(self._free(name, self.parameter(name), values.get(name, 0.0)))
         return steps
 
     def _free(self, name, parameter, value):

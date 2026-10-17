@@ -530,9 +530,8 @@ Building the rule settled what the text above left open:
   moves and the turn about their normal, the moves first or the turn first -- the same pair in other coordinates. A
   ball is three independent turns through one point, in any order, none bounded on its own: a ball is bounded by one
   angle, the joint's `turnLimit`, and three turns each with a range of their own are the gimbal a ball has not got. A
-  floating joint is three moves one after another and three turns through one point, in whatever order the
-  connection named them (`toParams` puts the ones it names first); a turn between two of its moves could turn one
-  onto the other, and makes it no free body. Whatever no native joint has is `composite` (`chain` until 8.13). Only a
+  floating joint is three moves one after another and three turns through one point, in whatever order they were
+  declared; a turn between two of its moves could turn one onto the other, and makes it no free body. Whatever no native joint has is `composite` (`chain` until 8.13). Only a
   screw is a native joint with a coupling in it: a coupled pair that is not on one axis, or any other coupled set, is
   a composite. Lines are compared at the core's merge tolerance (1e-6), so two axes the core merged are one here too.
 - **Placements.** A part's world placement is its body's times its placement in the body, by definition and so
@@ -1442,9 +1441,18 @@ the text above left open. What the engine plugins build on is in `kinematics`' d
   matched to a parameter declared with a range is an error and the turn is left open. Three turns through one point named in `dof` with a range of their own
   classify as a composite, which is what "declare the turns as a composite" in 8.13.3 needed to mean something.
 - **`universal`'s second axis** is the port's Y where `axis` is X, as the rule and not as a repair.
-- **A floating joint's order.** `toParams` puts the parameters it names first, so `motion: floating` posed by a turn
-  is a turn and then the rest: a floating joint is three moves one after another and three turns through one point,
-  in any order. A turn between two moves would turn one onto the other, and is a composite.
+- **The order of a joint's freedoms is its declaration's.** A side's adjustments come first, in the order the
+  connection names them -- the fixed geometry the freedoms act in, as a slot positions the hinge that turns in it --
+  and then its degrees of freedom, all of them, in the order a `dof` list states them or a `type` implies them (8.2),
+  each at the value `toParams` gives it. `toParams` supplies values and never order: until this, the parameters it
+  named came first, so `motion: floating` posed by `{moveZ: 100, turnX: 10}` was a composite and by `{turnX: 10,
+  moveZ: 100}` a free body, and `motion: planar` posed by `{moveX: 5, turnZ: 30}` a composite. A joint's type is
+  its own and not how its start was written. Every connected child of every ASSY example -- 35 of them, with a
+  converted URDF at rest and posed -- lands bit for bit where it did, because none names a degree of freedom before
+  an adjustment, or two that do not commute out of their declared order.
+- **A floating joint's order.** Three moves one after another and three turns through one point, in any order a
+  declaration states them in (a `dof` list may name the turns first). A turn between two moves would turn one onto
+  the other, and is a composite: an explicit `dof` list in an order no native joint has is the composite it says.
 - **A floating child in `bodies()`** has no `parent` (it is free, as a root is), is in no body's `children`, and keeps
   its `joint`, whose `parent` is the body it was connected to (`Body.joint_parent`, `is_floating`). The MJCF and
   SDFormat exporters as they stand already write such a body free -- a `<freejoint>` directly in the `<worldbody>`, a

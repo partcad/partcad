@@ -942,3 +942,53 @@ def test_the_joint_module_spells_the_half_turn_as_the_placement_did():
     # 'facing()' is the exact map of the rotation the placement composes.
     for direction in [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0), (0.3, -0.4, 0.5)]:
         assert pc_joint.FACING.rotate_vector(direction) == pytest.approx(pc_joint.facing(direction))
+
+
+#
+# The order of a joint's freedoms is its declaration's, not its start's
+#
+
+
+@pytest.mark.parametrize(
+    "bore, posed, kind",
+    [
+        ("motion: floating", ["moveZ: 100", "turnX: 10"], "floating"),
+        ("motion: planar", ["moveX: 5", "turnZ: 30"], "planar"),
+        (
+            "parameters: {turnZ: [-90, 90], moveX: [0, 20]}\nmotion: {dof: [moveX, turnZ]}",
+            ["moveX: 5", "turnZ: 30"],
+            "composite",
+        ),
+    ],
+)
+def test_the_order_toparams_names_the_freedoms_in_changes_nothing(tmp_path, bore, posed, kind):
+    """The type is the joint's, and so is its placement: 'toParams' gives values, never order."""
+    first = _child(_rig(tmp_path / "a", _links("toParams: {%s}" % ", ".join(posed)), bore=bore), "arm")
+    second = _child(_rig(tmp_path / "b", _links("toParams: {%s}" % ", ".join(reversed(posed))), bore=bore), "arm")
+    assert first.joint.type == second.joint.type == kind
+    assert [(s.kind, s.axis, s.value) for s in first.joint.free_steps()] == [
+        (s.kind, s.axis, s.value) for s in second.joint.free_steps()
+    ]
+    assert _same(first.location, second.location)
+    assert first.joint_problems == second.joint_problems == []
+
+
+def test_a_dof_list_in_an_order_no_native_joint_has_is_the_composite_it_says(tmp_path):
+    bore = "parameters: {moveX: [0, 20], moveY: [0, 20], turnZ: [-90, 90]}\nmotion: {dof: [moveX, turnZ, moveY]}"
+    arm = _child(_rig(tmp_path, _links("toParams: {moveY: 5, moveX: 5}"), bore=bore), "arm")
+    assert [step.source[0]["parameter"] for step in arm.joint.free_steps()] == ["moveX", "turnZ", "moveY"]
+    assert arm.joint.type == "composite"
+
+
+def test_an_adjustment_goes_before_the_freedoms_it_positions(tmp_path):
+    # Named after the freedom, as before it would have been composed after it.
+    bore = "parameters: {turnZ: [-150, 150], moveX: [-2, 2]}\nmotion: {dof: [turnZ]}"
+    arm = _child(_rig(tmp_path, _links("toParams: {turnZ: 30, moveX: 1}"), bore=bore), "arm")
+    assert [step.role if not step.free else "free" for step in arm.joint.steps] == [
+        "port",
+        "facing",
+        "adjustment",
+        "free",
+        "sourcePort",
+    ]
+    assert _same(arm.joint.composition.location(), arm.location)
