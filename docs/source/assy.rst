@@ -577,8 +577,11 @@ What it rejects today:
 * two interfaces that disagree about their `threadStep` with neither declaring
   `selfScrew`.
 * a `motion:` that contradicts itself - a `type` and a `dof` that describe
-  different degrees of freedom, a `fixed` motion with a `dof`, `limits` on a
-  `continuous` one - on the interfaces, the mating or the connection.
+  different degrees of freedom (the `type` is the short form of the `dof`, so
+  beside one it is an assertion about it), a `fixed` motion with a `dof`,
+  `limits` that bound a parameter declared with a different range, a range on
+  one of a `ball`'s turns (a ball is bounded by one angle) - on the interfaces,
+  the mating or the connection.
 * a `dof` naming no freedom-of-movement parameter.
 * two interfaces stating different `physics` for the joint they make together,
   when the mating states none (see :ref:`joints`).

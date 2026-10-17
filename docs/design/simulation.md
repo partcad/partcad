@@ -166,6 +166,12 @@ plugins PartCAD maintains share one, so that a validation reads the same against
 | `joints.<name>.effort` | Actuator effort, N·m or N (MuJoCo's `qfrc_actuator`), when the engine reports one. |
 | `samples` | The same readings at evenly spaced instants, when asked for. |
 
+Section 8.13.5 changes the joint rows, and the plugins are moving to it: a joint is reported once, under PartCAD's
+name, as a number for one freedom and an object keyed by parameter for several (`quat` too for a ball or a free
+body), its `type` the one `kinematics.classify()` gives (so one turn is `revolute` whatever its bounds), and every
+reading mapped back to PartCAD's zero by the joint map the sidecar carries; `kinematics.reading()` is that, built in
+the core (#NNN).
+
 Free joints are not reported as joints -- the body pose already says it -- and a model with no joints reports
 `joints: {}`. Joint reporting is **built** (sim-mujoco #6, sim-gazebo #5). What an engine cannot report is named in
 `warnings` rather than reported as zero: Gazebo's joint-state publisher never fills effort and publishes two of a ball
@@ -189,8 +195,9 @@ exporter writes beside the scene when `formatOptions` asks for it with `names_fi
 `<scene file>.names.json`, in the run directory with the meshes (`naming.sidecar_path`). `names` is what the
 transcoder did, by kind (`scene`, `body`, `joint`); a `path` is the file's names from the outermost element down --
 one MJCF body, an SDFormat model and its link. An entry is an object so that what a later exporter knows about a body
-or a joint is a key added rather than a shape changed: the joint redesign (#795) is to record each joint's starting
-value there, which an engine that writes every joint at zero re-zeroes its reading by. A reader ignores keys it does
+or a joint is a key added rather than a shape changed: the joint redesign (8.13.5, decision 6) adds each joint's
+`map` -- which PartCAD joint and parameters it is, its kind, its unit factor, the start a re-zeroed engine counts
+from, a free body's parent -- as `kinematics.joint_map()` writes it (built in the core, #NNN). A reader ignores keys it does
 not know; `version` changes only for one a reader of the old shape would misread. A scene file with no sidecar -- an
 override exporter, an older PartCAD -- is reported under the names in it, and Gazebo then as it publishes poses, each
 relative to its parent. The sidecar is beside the file rather than inside it because both engines would have to be
@@ -225,7 +232,7 @@ mechanism they all go through: a `Transcoder` per namespace (the names that must
 PartCAD name to an internal one, **the identity wherever the name is valid and free**, otherwise every run of
 characters the format refuses made one `_`, then `-2`, `-3` ... until it is valid and unused, exactly as PartCAD tells
 two bodies of one name apart. It is deterministic in claim order, idempotent per (kind, name), and keeps the mapping
-both ways. Names an exporter makes up itself (a model's root link, a dummy link, a mesh, the ground plane) are
+both ways. Names an exporter makes up itself (a model's root link, a massless link, a mesh, the ground plane) are
 *derived* from the same pool after every PartCAD name is claimed, so a derived name is the one that yields. A name
 written differently is reported, once, as a warning naming both.
 
@@ -442,6 +449,7 @@ write it (steps 10 and 11, sections 8.8b and 8.8c); the SDFormat exporter is ste
 | `location:` | rigidly attached to its container | a body of its own |
 | `connect:` with no degree of freedom | rigidly attached to its target | a body of its own |
 | `connect:` with degrees of freedom | a joint to its target (section 8) | a body of its own |
+| `connect:` with `motion: floating` | a body of its own, its pose read against its target's (8.13.2) | a body of its own |
 | an assembly | one articulated body tree | one articulated body tree, its root free |
 | a scene | -- | every element its own body, recursively |
 
@@ -452,6 +460,9 @@ write it (steps 10 and 11, sections 8.8b and 8.8c); the SDFormat exporter is ste
   format that wants a frame per part (URDF consumers expect one per link) gets it from named frames (section 8.10),
   not from fixed joints.
 - **An assembly's root** is free when the assembly is placed in a scene, and the body that everything else hangs off.
+- **A floating joint holds nothing.** Its child is a free body, as a root is, and the body it was connected to is
+  recorded, because a reading of the joint is the child's pose in that body (8.13.2; built, #NNN). It used to be six
+  freedoms under its target, which nested a loose part in what it rests on.
 - **A body fixed to the world** -- a table, a tank's walls, a robot bolted to the floor -- is a scene element marked
   `fixed: true`. Without it every element of a scene falls under gravity.
 
@@ -503,7 +514,7 @@ Building the rule settled what the text above left open:
     before the child, as the connection found it; one that is not there leaves the joint on the container's body, and
     says so. A sub-assembly connected through a port a `map:` exposes from deep inside it is jointed at its root body:
     re-rooting is section 8.9's, and not done.
-  - `classify(joint)` -> the kind (section 8.8's names, plus `chain` and `fixed`), the freedoms in exporter units (mm
+  - `classify(joint)` -> the kind (section 8.13.3's canonical set, plus `fixed`), the freedoms in exporter units (mm
     along a unit axis, degrees; a parameter whose `dir` is not of unit length is scaled, and its range, value and
     coupling with it), and one decomposition of the joint, `origin . M_1(v_1) ... M_n(v_n) . tail`, each `M_i` about
     its axis through its point in the frame the ones before moved -- which is MJCF's joints-in-one-body and every
@@ -513,12 +524,17 @@ Building the rule settled what the text above left open:
     moving joint frame), `location(values)`, each freedom's axis and anchor in either body (`axis_in_child`,
     `anchor_in_child` at the starting values are an MJCF joint's `axis` and `pos`), and `origin_in_child` (a native
     joint's frame in the child body: an MJCF ball's `pos`).
-- **Classification details.** A turn bounded on either side is `revolute`, with None on a side that is not; one bounded
-  on neither is `continuous`, whatever its declaration called it (so `motion: revolute` with no limits anywhere is
-  continuous, as section 4.2 already reports one). A planar joint is two moves *then* the turn about their normal, the
-  order `motion: planar` implies and a native planar joint means; the other order is a chain. Only a screw is a native
-  joint with a coupling in it: a coupled pair that is not on one axis, or any other coupled set, is a chain. Lines are
-  compared at the core's merge tolerance (1e-6), so two axes the core merged are one here too.
+- **Classification details** (as 8.13.3 rewrote them; built, #NNN). One turn is `revolute` whatever its bounds, with
+  None on a side that is open: a bound is a property of the hinge, not a second kind, so `classify()` returns no
+  `continuous` (until 8.13 it called an unbounded turn that, whatever its declaration said). A planar joint is two
+  moves and the turn about their normal, the moves first or the turn first -- the same pair in other coordinates. A
+  ball is three independent turns through one point, in any order, none bounded on its own: a ball is bounded by one
+  angle, the joint's `turnLimit`, and three turns each with a range of their own are the gimbal a ball has not got. A
+  floating joint is three moves one after another and three turns through one point, in whatever order the
+  connection named them (`toParams` puts the ones it names first); a turn between two of its moves could turn one
+  onto the other, and makes it no free body. Whatever no native joint has is `composite` (`chain` until 8.13). Only a
+  screw is a native joint with a coupling in it: a coupled pair that is not on one axis, or any other coupled set, is
+  a composite. Lines are compared at the core's merge tolerance (1e-6), so two axes the core merged are one here too.
 - **Placements.** A part's world placement is its body's times its placement in the body, by definition and so
   exactly; composed node by node from the root it agrees to rounding, and to the bit for the node a body is rooted at.
   So every element of a scene of parts sits where `flatten: true` put it, to the bit -- which is why the three stacks'
@@ -540,15 +556,19 @@ body's parent as the world, and its joint by `joint.kind`:
   gets a `<freejoint>`, a `WORLD` one none; a native `ball` is one `ball` at `origin_in_child()`, anything else
   one `hinge`/`slide` per freedom with `pos`/`axis` from `anchor_in_child`/`axis_in_child`, `ref` the freedom's
   `value` and `range` its bounds (in MJCF's angle unit); a coupling (`follows`, `ratio`, `offset`) and a `mimic` are
-  `<equality joint polycoef>`; a floating degree of freedom below the root is three slides and a ball.
-- **Step 11 (URDF)**: one link per body plus a dummy link per freedom past the first, at `joint.origins`, the child
-  link's frame being the moving joint frame and its parts at `joint.tail . placement`; `revolute`/`continuous`/
-  `prismatic`/`planar`/`floating` native, everything else a chain; the zero pose, with the starting value reported
-  lost; and the URDF factory filling `AssemblyChild.joint` from its joint table, so that a URDF round-trips its
-  kinematics (through ASSY too, but for chains folded through links with no geometry; section 8.8c).
-- **Step 12 (SDFormat)**: one link per body, a `<joint>` per joint at `classification.origin`, a native
-  `revolute` (never `continuous`), `prismatic`, `screw` (thread from the coupling), `universal` or `ball`, chains
-  through dummy links as URDF; a `WORLD` parent as a joint to `world`.
+  `<equality joint polycoef>`; a floating degree of freedom below the root is three slides and a ball (8.13 makes
+  that child a body of its own, directly in the `<worldbody>`).
+- **Step 11 (URDF)**: one link per body, the child link's frame being the moving joint frame and its parts at
+  `joint.tail . placement`; `revolute` (URDF's `continuous` where both bounds are open), `prismatic`, `planar` and
+  `floating` native, and every other type refused unless `composites: massless` asks for it as a chain at
+  `joint.origins` through links with no `<inertial>` (8.13.4; until 8.13, dummy links of 1 g); PartCAD's zero, with
+  the starting value reported lost; and the URDF factory filling `AssemblyChild.joint` from its joint table, so that a
+  URDF round-trips its kinematics (through ASSY too, but for chains folded through links with no geometry; section
+  8.8c).
+- **Step 12 (SDFormat)**: one link per body, a `<joint>` per joint at `classification.origin` re-zeroed at its start
+  (`kinematics.rezeroed()`, 8.13.5), a native `revolute` (never `continuous`), `prismatic`, `screw` (thread from the
+  coupling), `universal` or `ball`, a refusal for a cylindrical, planar or composite joint (8.13.4), a floating
+  child a link with no joint in a model of its own; a `WORLD` parent as a joint to `world`.
 
 ## 8. Joints
 
@@ -604,15 +624,15 @@ unless `axis:` says otherwise, between `limits:` when they are given:
 | `motion.type` | Implied degrees of freedom |
 |---|---|
 | `fixed` | none |
-| `revolute` | one turn about `axis`, within `limits` |
-| `continuous` | one turn about `axis`, unlimited |
-| `prismatic` | one move along `axis`, within `limits` |
+| `revolute` | one turn about `axis`, bounded by `limits` on either side or on neither |
+| `prismatic` | one move along `axis`, likewise |
 | `cylindrical` | one turn and one move about and along `axis` |
 | `screw` | one turn and one move about and along `axis`, coupled by the interface's `threadStep` |
-| `universal` | two turns, about `axis` and about the port's X axis |
-| `ball` | three turns about the port's origin |
+| `universal` | two turns, about `axis` and about the port's X axis -- its Y, where `axis` is X |
+| `ball` | three turns about the port's origin, bounded by one angle (`limits: {upper: <degrees>}`) |
 | `planar` | two moves across the plane normal to `axis`, and one turn about it |
-| `floating` | all six |
+| `floating` | all six: the child a body of its own |
+| `continuous` | deprecated: a `revolute` with `limits: {lower: -.inf, upper: .inf}`; `pc lint` says so |
 
 `motion: revolute` is the short form of `motion: {type: revolute}`. An implied degree of freedom uses the interface's
 freedom-of-movement parameter of the same kind along the same axis when one exists -- which is what makes it
@@ -621,9 +641,13 @@ addressable from `toParams` -- and otherwise brings its own, named as the predef
 writes. So every `motion:` the URDF converter has ever generated is an implicit declaration and keeps working; the
 converter switches to writing the explicit form.
 
-A `motion:` that states both a `type` and a `dof` list must agree with itself; a disagreement is reported and `dof`
-wins, and where they agree `type` supplies the range. `limits` apply to a revolute, a prismatic and a screw's turn; on
-any other kind they are reported and ignored.
+`dof` is the declaration and `type` its short form (8.13.2): a `type` stated beside a `dof` is an assertion about it,
+and one that does not hold is an error from the `connect` check, the joint being built from the `dof`. `limits` are
+how the short form states the range of the parameter it implies, side by side: a side they do not state is the
+parameter's, one the parameter states as well has to agree with it (an error otherwise, and the parameter's range is
+the travel), and YAML's infinity states a side open whatever the parameter says. They apply to a revolute, a
+prismatic and a screw's turn, and to a ball as its one angle, a range on any one of whose turns is an error; on any
+other kind they are reported and ignored.
 
 ### 8.3 Where it is declared, and how declarations combine
 
@@ -720,37 +744,42 @@ not in degrees; the schema does not say so today, and has to.
 
 ### 8.8 Writing joints out
 
-Each exporter classifies the free steps of each joint and writes its own types:
+Each exporter writes the type `kinematics.classify()` gives the free steps of each joint (8.13.3) in its own terms
+(8.13.4), and refuses what it has no construct for:
 
-| Free steps | URDF | MJCF | SDFormat | USD |
+| Type | URDF | MJCF | SDFormat | USD |
 |---|---|---|---|---|
-| none | parts merged into one link, a visual each | one body, a geom each | one link | one rigid body |
-| one turn, limited | `revolute` | `hinge`, `range` | `revolute` | revolute joint |
-| one turn, unlimited | `continuous` | `hinge`, unlimited | `revolute` without limits | revolute joint |
-| one move | `prismatic` | `slide` | `prismatic` | prismatic joint |
-| turn + move on one axis, coupled | revolute, plus prismatic with `mimic`, through a dummy link (reported) | `hinge` + `slide` + `<equality joint polycoef>` | `screw` | generic joint (coupling reported) |
-| turn + move on one axis | revolute + prismatic through a dummy link | `hinge` + `slide` | revolute + prismatic through a dummy link | generic joint |
-| two turns through a point | two revolutes through a dummy link | two `hinge`s | `universal` | generic joint |
-| three turns through a point | three revolutes through two dummy links | `ball` | `ball` | spherical joint |
-| two moves and the normal turn | `planar` | two `slide`s + `hinge` | chain through dummy links | generic joint |
-| anything else | chain through dummy links | the joints in order in one body | chain through dummy links | generic joint |
+| (none) | parts merged into one link, a visual each | one body, a geom each | one link | one rigid body |
+| `revolute` | `revolute`; `continuous` where both bounds are open | `hinge` | `revolute`, open bounds omitted | revolute joint |
+| `prismatic` | `prismatic` | `slide` | `prismatic` | prismatic joint |
+| `cylindrical` | refused | `hinge` + `slide` in one body | refused | generic joint |
+| `screw` | refused | `hinge` + `slide` + `<equality joint polycoef>` | `screw` | generic joint (coupling reported) |
+| `universal` | refused | two `hinge`s in one body | `universal` | generic joint |
+| `ball` | refused | `ball` | `ball` | spherical joint |
+| `planar` | `planar` | two `slide`s + `hinge`, in the declared order | refused | generic joint |
+| `floating` | `floating`, from the link of the body it was connected to | a body directly in `<worldbody>`, with a `<freejoint>` | a link with no joint, in a model of its own | a rigid body of its own |
+| `composite` | refused | its hinges and slides, in order, in one body | refused | generic joint |
 
 Rules the table does not show:
 
-- **SDFormat never gets `continuous`.** Gazebo's default physics engine (DART) silently builds a `continuous` joint as
-  fixed, so an unlimited turn is a `revolute` with no limits.
-- **MJCF needs no dummy links**: a body may hold several joints, applied in order. A free joint is allowed only on a
-  body directly under the world, so a floating degree of freedom inside a tree is written as three slides and a ball.
-- **Dummy links** in URDF and SDFormat need a small mass and inertia to be accepted by the engines; they are named
-  after the joint, and their existence is reported.
+- **SDFormat never gets `continuous`.** Gazebo's default physics engine (DART) builds a `continuous` joint as a weld
+  (with a `gzerr` line, 8.13.4), so an unlimited turn is a `revolute` with no limits.
+- **No link nobody built.** MJCF needs none: a body may hold several joints, applied in order, and a free joint is
+  allowed on a body directly under the world, which is where a floating child is. URDF and SDFormat refuse what they
+  have no type for, naming the joint, its type and the ways on (8.13.4), and never write a link of a mass PartCAD did
+  not derive; a URDF read only for its kinematics asks for a chain through links with no `<inertial>` with
+  `composites: massless` (decision 1).
 - **Frames.** URDF's child-link frame is the joint frame at zero. The URDF exporter takes the *moving* contact frame
   as the child link's frame, so `<axis>` is the parameter's `dir` verbatim and the part sits in its link at
   `source port⁻¹` -- the remapped-axis wrinkle of the converter disappears from the export. MJCF states a joint's
   `pos` and `axis` in the child body's frame, which is the part's own; the exporter maps the contact-frame axis into it.
-- **Starting position.** MJCF writes the body at the posed configuration and the joint's `ref` at the value, so that
-  MuJoCo's zero is PartCAD's zero and the body is where the assembly shows it. URDF has no starting position; the
-  exporter writes the zero pose and reports the value lost (a named configuration, planned, is what an SRDF
-  `group_state` would carry). SDFormat: to be checked per version; reported when not written.
+- **Starting position.** MJCF writes the body at the posed configuration and a hinge's or slide's `ref` at the value,
+  so that MuJoCo's zero is PartCAD's zero and the body is where the assembly shows it; a ball has no `ref`, and is
+  re-zeroed. SDFormat states no starting value from 1.9 on and gz-sim 8 reads none, so its joints are re-zeroed: the
+  child is written at its start and every axis where that puts it (`kinematics.rezeroed()`), and the joint map in the
+  sidecar maps every reading back (8.13.5). URDF keeps PartCAD's zero and reports the start lost (decision 2): what
+  reads a URDF takes a joint's zero to be the hardware's (a named configuration, planned, is what an SRDF `group_state`
+  would carry).
 - **Units** convert at the boundary only: URDF and SDFormat in radians and metres, MJCF in degrees (its default) and
   metres.
 
@@ -829,7 +858,11 @@ Writing the bodies and joints out of `kinematics` (section 7a) settled what sect
 
 ### 8.8c How the URDF export resolved the open details (built, step 11, #788)
 
-Writing joints to URDF, reading them from one and converting between the two settled what 8.8 left open for URDF:
+Writing joints to URDF, reading them from one and converting between the two settled what 8.8 left open for URDF.
+**Amended by 8.13 (built, #NNN, 8.13.10):** the dummy links and the `dummyMass` and `dummyInertia` options are gone; a
+cylindrical, screw, universal, ball or composite joint is refused unless `composites: massless` asks for it, and then
+it is the chain below through links with no `<inertial>`; a floating child is a free body, written as a `floating`
+joint from the link of the body it was connected to. What follows is #788's record.
 
 - **The exporter is `kinematics` and nothing else.** `export_urdf.py` calls `bodies()` and writes a link per body and a
   joint per body pair by `classify()`, through a plain-data `Planner` that the tests move through configurations and
@@ -969,10 +1002,10 @@ PartCAD models the handful of device types every simulator agrees on -- camera, 
 force-torque, and an actuator on a joint -- and, following section 2, reports any other device it is handed rather than
 carrying it as passthrough. The URDF reader counts sensors, transmissions and `ros2_control` blocks as dropped today.
 
-### 8.13 Native joint types, reconsidered (decided, being built)
+### 8.13 Native joint types, reconsidered (decided; core and URDF built, #NNN)
 
-**Decided, not built yet.** The decisions are in 8.13.9; where one differs from what the text first proposed, the
-text says so in place. It revisits section 8.2's kinds, 7a's classification and 8.8's table,
+**Decided, and built in the core and the URDF export (#NNN, 8.13.10); the engine plugins' half is being built.** The
+decisions are in 8.13.9; where one differs from what the text first proposed, the text says so in place. It revisits section 8.2's kinds, 7a's classification and 8.8's table,
 for two reasons. The vocabulary has pairs that name one thing, and a catch-all (`chain`) that is not a type. And two
 of the three exporters write what their format has no type for through links of 1 g that nobody built (`DUMMY_MASS`
 in `export_urdf.py` on #788 and in `export_world.py` on sim-gazebo #11), and write every joint at zero because their
@@ -1295,13 +1328,14 @@ are checked by unit tests too, rather than by examples that fail.
 
 #### 8.13.8 Migration
 
-- **`motion.type`:**
+- **`motion.type`** (built, #NNN):
   - `continuous` still reads, as `revolute` with `limits: {lower: -.inf, upper: .inf}`, and `pc lint` says so. The
     schema marks it deprecated. Every `motion:` the URDF converter has written keeps the meaning it had.
   - A `type` that disagrees with the `dof` beside it fails the `connect` check, instead of being reported.
   - `universal`'s second axis changes only where `axis` is the port's X, which was degenerate before.
-- **`kinematics`:**
-  - `CONTINUOUS` goes, and `CHAIN` becomes `COMPOSITE`.
+- **`kinematics`** (built, #NNN):
+  - `CONTINUOUS` goes, and `CHAIN` becomes `COMPOSITE` (both importable under their old names until the plugins
+    move, 8.13.10).
   - `classify()` gains planar's other order and the ball's single bound.
   - `rezeroed()` and `reading()` are new.
   - The plugins move with it, and require that release; section 2 rules out a compatibility fallback.
@@ -1311,7 +1345,7 @@ are checked by unit tests too, rather than by examples that fail.
   - A bounded ball writes `range="0 a"`, instead of reporting its three turns' bounds as dropped.
   - Readings are keyed by PartCAD joint name, with per-parameter objects, instead of `<name>.<parameter>` keys.
   - Nothing changes for the pendulum: `swing` has one freedom and reads as it did.
-- **URDF (#788):**
+- **URDF (#788; built, #NNN):**
   - The dummy links go, and so do the `dummyMass` and `dummyInertia` options (passing one is reported).
   - Cylindrical, screw, universal, ball and composite joints are refused, unless `formatOptions: {composites:
     massless}` asks for them as chains through links with no `<inertial>` (decision 1).
@@ -1324,7 +1358,7 @@ are checked by unit tests too, rather than by examples that fail.
   - The export writes SDFormat 1.11 instead of 1.9, and omits open bounds instead of writing `1e16`.
   - Starting values are re-zeroed, instead of being reported.
   - Its comment that the `SetModelState` system "is Ionic's" is corrected: it is gz-sim #2359, an unmerged draft.
-- **This record:** once this is agreed, these are rewritten to match it:
+- **This record:** once this is agreed, these are rewritten to match it (done, #NNN):
   - 8.2's table;
   - 7a's "Classification details";
   - 8.8's table, and its "Rules the table does not show" on dummy links and starting positions;
@@ -1368,6 +1402,72 @@ Decided on 2026-10-17. Each item says what was decided first, then what was weig
 9. **Gazebo's gaps.** *Decided: accepted.* Cylindrical and planar pairs are common enough that refusing them in
    Gazebo will be felt. The proposal accepts that, because the alternative is a body nobody built. Whether DART
    would run massless intermediate links is untested, and nothing here depends on the answer.
+
+#### 8.13.10 How the core resolved the open details (built, #NNN)
+
+Building the core's half -- `motion`, `joint`, `kinematics`, the URDF export, `pc lint` and `pc info` -- settled what
+the text above left open. What the engine plugins build on is in `kinematics`' docstring; in short:
+
+- **`limits:` side by side.** A side `limits` states is laid over the parameter's range and a side it does not state
+  is the parameter's, so `limits: {upper: 30}` on a parameter declared `[-150, 150]` disagrees on one side and agrees
+  on the other. A disagreement is an error and the parameter's range is used, since it is the travel. YAML's `-.inf`
+  and `.inf` are an open side whatever the parameter says (a `+inf` lower bound or a `-inf` upper one is reported and
+  ignored), and a parameter whose own `min` or `max` is infinite is open there too. Open is None everywhere past the
+  declaration, as it always was, so nothing downstream sees an infinity.
+- **`continuous`** reads as a `revolute` with both sides stated open, and is no problem of the `connect` check: it is
+  not wrong, only old. `pc lint` warns on it wherever a `motion:` is -- an interface, a mating, a connection --
+  because a warning is the mildest finding `pc lint` has; and the schema states the kinds as an `enum` beside a
+  `continuous` marked `deprecated`, `pc lint` naming every kind there is when a `type` is none of them. The converter
+  had written no `continuous` since #788: a URDF continuous joint is a parameter with no range, which is how an open
+  bound is stated.
+- **A ball's one bound** is the joint's `turnLimit` (degrees from its zero), from `limits: {upper: a}` with `0 < a <=
+  180`, a `lower` of nought allowed because it says the same. A ball matched to a parameter declared with a range is
+  an error and the turn is left open. Three turns through one point named in `dof` with a range of their own
+  classify as a composite, which is what "declare the turns as a composite" in 8.13.3 needed to mean something.
+- **`universal`'s second axis** is the port's Y where `axis` is X, as the rule and not as a repair.
+- **A floating joint's order.** `toParams` puts the parameters it names first, so `motion: floating` posed by a turn
+  is a turn and then the rest: a floating joint is three moves one after another and three turns through one point,
+  in any order. A turn between two moves would turn one onto the other, and is a composite.
+- **A floating child in `bodies()`** has no `parent` (it is free, as a root is), is in no body's `children`, and keeps
+  its `joint`, whose `parent` is the body it was connected to (`Body.joint_parent`, `is_floating`). The MJCF and
+  SDFormat exporters as they stand already write such a body free -- a `<freejoint>` directly in the `<worldbody>`, a
+  model of its own -- since that is what a body with no parent is to them.
+- **Re-zeroing** is `kinematics.rezeroed(joint)`: in series (`origins`, each freedom's frame with its start absorbed),
+  as one native joint (`origin` and `native_tail`), as a ball (`origin` turned by `rotation`, R_s) and as a free body
+  (written at its start). For one native joint of several scalar freedoms the starts are split where each side is a
+  set of freedoms that commute with one another, the most in front: a start goes into the joint frame only if it can
+  move past the engine's motions of the freedoms *before* it, and into the child's past those after it. That is the
+  precise form of 8.13.5's rule, and gives its three cases -- a universal joint's first start in front and its
+  second behind, a planar joint's moves in front of its turn or its turn in front of its moves, a screw's and a
+  cylindrical's both in front. Bounds, value and coupling offsets shift with it (`freedoms`), and
+  `spring_reference()`, `soft_limits()` and `rezeroed_offset()` (a `mimic`'s) shift the rest.
+- **The joint map** is `kinematics.joint_map(joint, freedoms=None, start=True, frame=None)`, one per engine joint, as
+  plain data for the sidecar's joint entry (`"map"`): the PartCAD joint, its kind and how many freedoms it has; each
+  coordinate's parameter, kind of freedom, unit factor (degrees a radian, millimetres a metre) and start (nought for
+  an MJCF hinge, whose `ref` makes the engine's value PartCAD's); the followers a coordinate moves (an SDFormat
+  screw's move); for a ball its `rotation` R_s, the `frame` the engine states its rotation in (`CHILD_FRAME` for
+  MuJoCo's) and its three turns' axes; for a free body its `parent`, its native frame and tail, and its six freedoms
+  in order. The sidecar's `version` stays 1: a reader of the old shape ignores the key.
+- **Readings** are `kinematics.reading(maps, positions, velocities=None)`: the maps and the engine's values of the
+  engine joints one PartCAD joint was written as -- radians and metres, a quaternion for a ball, the child's and the
+  parent's world poses for a free body -- in, and `{"type", "pos", "vel", "quat"}` out, keyed by parameter where the
+  joint has several freedoms. A ball's and a free body's turns are Davenport's decomposition (`turns_of`), the one of
+  its two solutions nearest the start, each turn unwrapped to the whole turns nearest it, the third turn the start's
+  at gimbal lock; a ball's `vel` is its angular velocity. A free body's velocity is not read: its body's is the
+  engine's.
+- **Names in a reading** are `Joint.parameter_names()`: each freedom's parameter, `-2` where two would be one name.
+- **`pc info`** shows each joint's `type`, asked of `kinematics` by the core (`partcad.joint.Joint.type`), so that it
+  is the type an export writes.
+- **The URDF export** refuses with `export_urdf.Refused`, naming every joint it cannot write at once, before anything
+  is written -- not even the meshes' directory. `composites` is `refuse` (declared) or `massless`; `dummyMass` and
+  `dummyInertia` passed by a package are reported and ignored. A planar joint's `<axis>` is its turn's, in either
+  order (#788 took the third freedom's, which is the turn only when the moves come first). Its cache version is 3.
+- **`CONTINUOUS` and `CHAIN` stay importable** in `kinematics` -- `CHAIN` as `COMPOSITE` under its old name,
+  `CONTINUOUS` as a constant `classify()` never returns -- until partcad-sim-mujoco and partcad-sim-gazebo stop using
+  them. Section 2 rules out a fallback for the plugins, and this is not one: their CI installs PartCAD from `devel`,
+  and a constant removed before they move is an import error in every run of theirs.
+- **Not in this step:** the examples of 8.13.7 (a later pull request adds one per type), and the plugins' half of
+  8.13.8.
 
 ## 9. Simulations as tests
 
@@ -1534,7 +1634,8 @@ interfaces: a URDF joint says nothing about the hardware that implements it.
 
 A `type: urdf` assembly carries its joints without converting: each link node a movable joint moves states that
 joint, and the factory fills `AssemblyChild.joint` from it (section 8.8c). The export writes a link per rigid body and
-a joint per pair of them, so a URDF read, exported and read again keeps its kinematics, and so does one converted to
+a joint per pair of them -- each one of URDF's own types, or refused (8.13.4) -- so a URDF read, exported and read
+again keeps its kinematics, and so does one converted to
 ASSY and exported, except where the converter folds a chain of movable joints through a link with no geometry into its
 last joint (section 8.8c).
 
@@ -1574,7 +1675,7 @@ never beside the original, and references keep resolving against the directory t
 
 | Target | State |
 |---|---|
-| URDF | built: a link per body and a joint per pair (step 11, #788) |
+| URDF | built: a link per body and a joint per pair (step 11, #788), each a native type or refused (8.13, #NNN) |
 | MJCF | built, in sim-mujoco; the bodies of section 7 and the joints of section 8 (step 10) |
 | SDFormat | built, in sim-gazebo; models and free bodies until section 8 |
 | USD (UsdPhysics) | planned: Isaac Sim and the wider DCC ecosystem; the generic six-degree-of-freedom joint maps the representation of section 8.6 one to one |
@@ -1604,8 +1705,8 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and the `connect` check | built (#766) |
 | 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes; `wrappers/kinematics.py` | built (#784) |
 | 10 | **MJCF joints**, with a pendulum example checked against its closed form | built (#786, sim-mujoco #12) |
-| 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics, but for chains the converter folds | built (#788) |
-| 12 | **SDFormat joints** | decided |
+| 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics, but for chains the converter folds. Native types (8.13): what URDF has no type for refused, or written through massless links on request; PartCAD's zero kept | built (#788, #NNN) |
+| 12 | **SDFormat joints**: a link per body and a joint per pair. Native types (8.13): re-zeroed at the start, a floating child a model of its own, a cylindrical, planar or composite joint refused, no dummy links | built with dummy links (sim-gazebo #11); native types being built |
 | 13 | Inputs: `initial:` (a configuration) and `drive:` (position, velocity or effort targets over time) on `simulate:`; temporal helpers for validations | planned |
 | 14 | Devices: actuators (torque constant, gear ratio, rotor inertia as MJCF `armature`) and sensors (encoders, IMU, force-torque, contact; cameras later) attached to ports | planned |
 | 15 | Controller in the loop: a `software:` object, or a Python controller stepped by the plugin; ROS 2 through Gazebo | planned |
@@ -1622,7 +1723,8 @@ Each step is useful on its own, which is the test of whether the decomposition i
 - **Physics of a summed joint.** The proposal in 8.7 (agree or let the mating say) is not confirmed.
 - **The target-side sign convention** (8.3). It is today's placement behaviour; whether to keep it or change it before
   degrees of freedom make it visible in every joint's limits is open.
-- **Native joint types** (8.13): decided on 2026-10-17 (8.13.9), and being built.
+- **Native joint types** (8.13): decided on 2026-10-17 (8.13.9); the core and the URDF export built (#NNN), the
+  engine plugins being built.
 
 ## 15. Lessons recorded
 

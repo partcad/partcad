@@ -1087,7 +1087,9 @@ validation reads the same against either engine:
      - The body's orientation, ``[w, x, y, z]``, in the world's frame.
    * - ``joints.<name>.type``
      - ``revolute``, ``continuous`` (a turn with no limit), ``prismatic`` or
-       ``ball``.
+       ``ball``. Moving to the joint's PartCAD type (:ref:`joints`), keyed by
+       PartCAD's joint name, as the engine plugins take up the native joint
+       types: ``continuous`` then reads ``revolute``.
    * - ``joints.<name>.pos``, ``joints.<name>.vel``
      - Degrees and deg/s for a turn, millimetres and mm/s for a move. A ball
        joint reports ``quat`` and an angular velocity ``[x, y, z]`` in deg/s
@@ -1224,6 +1226,8 @@ it are one joint of their freedoms together, named after the first.
 and leaves the package holding PartCAD's own objects with nothing pointing back
 at the URDF.
 
+.. _sim-urdf-export:
+
 Writing one
 -----------
 
@@ -1251,7 +1255,7 @@ itself (:ref:`sim-physics`) -- in ``<inertial>``, its friction and contact
 properties in a ``<gazebo>`` block, and each shape's material and colour in its
 ``<material>``.
 
-Each joint is written by what its free steps are:
+Each joint is written by its type (:ref:`joints`):
 
 .. list-table::
    :header-rows: 1
@@ -1259,22 +1263,40 @@ Each joint is written by what its free steps are:
 
    * - The joint is
      - In URDF
-   * - one turn, bounded on either side
+   * - ``revolute``, bounded on either side
      - ``revolute``, with ``<limit>``
-   * - one turn, bounded on neither
+   * - ``revolute``, bounded on neither
      - ``continuous``
-   * - one move
+   * - ``prismatic``
      - ``prismatic``, with ``<limit>``
-   * - two moves and the turn about their normal (``planar``)
+   * - ``planar``, the moves first or the turn first
      - ``planar``, its ``<axis>`` the normal
-   * - all six (``floating``)
-     - ``floating``
-   * - a turn and a move on one axis (``cylindrical``), two turns through a
-       point (``universal``), three (``ball``), or anything else
-     - a ``revolute``, ``continuous`` or ``prismatic`` joint per freedom, through
-       *dummy links* named ``<joint>_link1``, ``<joint>_link2`` ...
-   * - a turn and a move coupled by a thread (``screw``)
-     - the same chain, the move with ``<mimic>`` following the turn by the lead
+   * - ``floating``: a body of its own
+     - ``floating``, from the link of the body it was connected to
+   * - ``cylindrical``, ``screw``, ``universal``, ``ball`` or ``composite``
+     - **refused**: URDF has no type for it
+
+A refusal is an error that names every joint the URDF cannot hold, its type, and
+the ways on: simulate the mechanism in MuJoCo, which writes every type; or model
+the body the joint stands for -- for a cylindrical pair a sleeve and its carriage,
+for a universal joint the cross -- and join it by native joints. Nothing is
+written with a mass PartCAD did not derive.
+
+A URDF that is read **only for its kinematics** -- by ROS's
+``robot_state_publisher`` or by MoveIt -- can have them all the same:
+
+.. code-block:: yaml
+
+  export:
+    urdf:
+      composites: massless   # default: refuse
+
+writes each such joint as a ``revolute``, ``continuous`` or ``prismatic`` joint
+per freedom through links with no ``<inertial>`` named ``<joint>_link1``,
+``<joint>_link2`` ..., which is URDF's own idiom for a frame; a screw's move is a
+``<mimic>`` of its turn by the lead. Every simulator that reads a URDF drops or
+refuses those links (libsdformat leaves out a link with no ``<inertial>`` and its
+joints), so the export says so, joint by joint.
 
 Frames and units:
 
@@ -1299,22 +1321,26 @@ Frames and units:
 What a URDF cannot state is **reported**, never dropped in silence:
 
 - **the starting value** of a joint (what ``toParams`` sets it to): URDF has no
-  starting position, so the robot is written with every joint at zero;
-- **a dummy link** and the chain it is part of, each of ``dummyMass`` kg (0.001)
-  and ``dummyInertia`` kg·m² (1e-6) about each axis, because the engines that
-  read a URDF refuse a link that weighs nothing; and a screw, as approximate,
-  since few simulators honour a ``<mimic>``;
+  starting position, and what reads one -- ROS's tools, a robot's drivers --
+  takes a joint's zero to be where its hardware reads zero, so the robot is
+  written at PartCAD's zero of every joint rather than re-zeroed at its start;
+- **a chain through massless links**, under ``composites: massless``, and a screw
+  written as one, as approximate, since few simulators honour a ``<mimic>``;
 - **a default**: URDF requires ``<limit effort velocity>`` on a ``revolute`` and a
   ``prismatic`` joint, and one that states no ``maxEffort`` or ``maxVelocity``
   gets the export's ``effort`` (1000 N·m or N) and ``velocity`` (100 rad/s or
-  m/s) -- large enough to limit nothing a passive mechanism does. A bound open on
-  one side is written a million degrees or millimetres away;
-- the bounds of a ``planar`` or a ``floating`` joint's freedoms, the soft limits
-  or mimic of a joint written as a chain, and a property PartCAD holds that URDF
-  has no element for.
+  m/s) -- large enough to limit nothing a passive mechanism does. URDF has no
+  open bound: a ``revolute`` open on one side, or a ``prismatic`` on either, is
+  written a million degrees or millimetres away there;
+- the bounds of a ``planar`` or a ``floating`` joint's freedoms, a ball's one
+  bound, the soft limits or mimic of a joint written as a chain, and a property
+  PartCAD holds that URDF has no element for;
+- ``dummyMass`` or ``dummyInertia``, where a package still passes them: the
+  export took them once, for links of a mass nobody measured, and writes none.
 
-All four numbers are parameters of the export, set in a package's own
-``export:`` entry for ``urdf`` like any other (:ref:`output-files`).
+``effort``, ``velocity`` and ``composites`` are parameters of the export, set in
+a package's own ``export:`` entry for ``urdf`` like any other
+(:ref:`output-files`).
 
 Converting
 ----------
@@ -1357,7 +1383,8 @@ is connected to its parent through them:
        for a floating one -- whose ``dir`` is the URDF axis and whose range is
        the limits in degrees or millimetres; and ``motion: {dof: [...]}``
        naming them. A continuous joint's parameter states no range, which is
-       what makes it unlimited.
+       how an open bound is stated: it is a ``revolute`` open on both sides,
+       and nothing writes ``continuous`` into the package.
    * - ``safety_controller``, ``mimic``
      - ``motion: {softLimits, mimic}``
    * - ``limit`` effort and velocity, ``dynamics``
@@ -1420,12 +1447,17 @@ mean by a link:
        as a shape of the parent's link, where it was
    * - the kinematics of a chain through a link with no geometry, read as a
        ``urdf`` assembly
-     - that link's name: the chain comes back through a dummy link named after
-       the joint; converted to ASSY, the chain is folded into its last joint
-   * - a cylindrical, universal, ball or screw joint, as a chain URDF can state,
-       read back as the joint it was
-     - the joint's single native element; and a screw's coupling is a
-       ``<mimic>`` few simulators honour
+     - that link's name: it composes into a joint URDF has no type for (two
+       turns through it are a universal joint), which comes back under
+       ``composites: massless`` as the chain it was, through a massless link
+       named after the joint; converted to ASSY, the chain is folded into its
+       last joint
+   * - a cylindrical, universal, ball or screw joint, under
+       ``composites: massless``, as a chain through massless links, read back
+       as the joint it was
+     - the joint's single native element; a screw's coupling is a ``<mimic>``
+       few simulators honour; and, without the option, the export, which
+       refuses
    * - every shape, at the placement it had, under the name of its part within
        its link
      - every name that carries a package path, which a ROS name cannot; nesting:
