@@ -78,6 +78,8 @@ import zipfile
 
 import pytest
 
+from partcad_utils.workspace import workspaces_dir
+
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 EXAMPLES = os.path.join(REPO, "examples")
 EXTENSION = os.path.join(REPO, "ide", "vscode")
@@ -497,10 +499,14 @@ def session(editor, vsix, display):
         # flag for the same reason, and so does `@vscode/test-electron`.
         window.append("--no-sandbox")
 
+    # Before the daemon is stopped, so that the log of the one stopping counts
+    # as this session's too (see 'keep_artifacts').
+    started = time.time()
     # The daemon serving './examples' has to be one started with this
     # environment, or it shows on whatever port it was started with.
     pc(env, "daemon", "stop", timeout=120)
     state = {
+        "started": started,
         "editor": editor,
         "vsix": vsix,
         "env": env,
@@ -525,11 +531,19 @@ def session(editor, vsix, display):
 
 
 def keep_artifacts(state: dict) -> None:
-    """Copy the editor's logs and the viewer's screenshots to `PC_TEST_IDE_ARTIFACTS`, when it is set.
+    """Copy the editor's and the daemon's logs, and the screenshots, to `PC_TEST_IDE_ARTIFACTS` when it is set.
 
     What a red CI cell is read by: the extension's own log (what the daemon told
-    it), the editor's renderer and extension host logs, and what the viewer was
-    showing each time it was asked.
+    it), the editor's renderer and extension host logs, the daemon's own logs,
+    and what the viewer was showing each time it was asked.
+
+    The daemon's logs are the only account of a daemon that dropped the editor:
+    the extension's log says no more than that the connection closed. They are
+    found by when they were written rather than by which workspace they belong
+    to: a daemon's directory is named after the workspace path exactly as its
+    client spelled it, and the editor is the client here -- it reports this one
+    as `d:\\...` on Windows, where `EXAMPLES` says `D:\\...`. Anything written
+    since the session started is this session's.
     """
     target = os.environ.get("PC_TEST_IDE_ARTIFACTS")
     if not target:
@@ -537,6 +551,14 @@ def keep_artifacts(state: dict) -> None:
     os.makedirs(target, exist_ok=True)
     with contextlib.suppress(Exception):
         shutil.copytree(os.path.join(state["user_data_dir"], "logs"), os.path.join(target, "logs"), dirs_exist_ok=True)
+    # 'daemon.log' is what a daemon printed, a traceback it died of included;
+    # 'partcad.log' (and its rotations) is what it logged while serving.
+    for log in glob.glob(os.path.join(workspaces_dir(), "*", "*.log*")):
+        with contextlib.suppress(Exception):
+            if os.path.getmtime(log) >= state["started"]:
+                workspace = os.path.basename(os.path.dirname(log))
+                os.makedirs(os.path.join(target, "daemon", workspace), exist_ok=True)
+                shutil.copy2(log, os.path.join(target, "daemon", workspace))
     for screenshot in state["screenshots"]:
         with contextlib.suppress(Exception):
             shutil.copy2(screenshot, target)
