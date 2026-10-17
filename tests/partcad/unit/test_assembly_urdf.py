@@ -367,14 +367,13 @@ def test_urdf_reports_what_it_could_not_keep():
     assert info["RootLink"] == "base_link"
 
     dropped = info["Dropped"]
-    # What is genuinely not represented: the kinematics of a movable joint, and
-    # the geometry the links were not built from.
-    for key in ("joint_kinematics", "visual"):
-        assert dropped[DROPPED_LABELS[key]] > 0
-    # What became named properties is *not* reported as lost.
-    assert not {"inertial", "material", "joint_limits", "joint_dynamics"} & set(DROPPED_LABELS)
+    # What is genuinely not represented: the geometry the links were not built
+    # from. The movable joint is not lost: it is the shoulder's joint.
+    assert dropped[DROPPED_LABELS["visual"]] > 0
+    # What became named properties, or joints, is *not* reported as lost.
+    assert not {"inertial", "material", "joint_limits", "joint_dynamics", "joint_kinematics"} & set(DROPPED_LABELS)
 
-    assert info["UrdfMovableJoints"] == ["shoulder_pan (revolute)"]
+    assert info["UrdfMovableJoints"] == ["shoulder_pan (revolute)", "wrist (continuous)"]
 
 
 def _urdf_package(tmp_path, body, options=""):
@@ -446,22 +445,18 @@ def test_export_logo_to_urdf(tmp_path):
     robot = ET.parse(path).getroot()
     assert robot.tag == "robot"
 
-    links = {link.get("name") for link in robot.findall("link")}
-    joints = robot.findall("joint")
-    # Every link but the root is reached by exactly one joint, and every joint
-    # is fixed - a static assembly has no kinematics to express.
-    assert len(joints) == len(links) - 1
-    assert {joint.get("type") for joint in joints} == {"fixed"}
-    children = [joint.find("child").get("link") for joint in joints]
-    assert len(children) == len(set(children))
-    assert set(children) <= links
-    # Exactly one root: a link that is no joint's child.
-    assert len(links - set(children)) == 1
+    # Everything in an assembly is attached, and nothing in the logo moves: it
+    # is one rigid body, so one link, with a shape for each of its parts and no
+    # joint at all - PartCAD has no fixed joints, and neither has the export.
+    (link,) = robot.findall("link")
+    assert link.get("name") == "logo"
+    assert robot.findall("joint") == []
 
-    # The five placed parts of the logo carry meshes; the assembly's own link,
-    # which is the one structural link its tree has, does not.
+    # The five placed parts of the logo are five shapes of that link, each
+    # named after its part.
     meshes = robot.findall("link/visual/geometry/mesh")
     assert len(meshes) == 5
+    assert len({visual.get("name") for visual in link.findall("visual")}) == 5
     # Five distinct meshes, because the five placed parts are five different
     # parts. The two bones are bored differently from each other and so are the
     # two head halves - of each pair one is tapped and takes hold of the bolt's
@@ -476,12 +471,13 @@ def test_export_logo_to_urdf(tmp_path):
     # Collision geometry mirrors the visual geometry.
     assert len(robot.findall("link/collision/geometry/mesh")) == 5
 
-    # Solids have computable inertial properties, so they are written out.
-    for inertial in robot.findall("link/inertial"):
-        assert float(inertial.find("mass").get("value")) > 0.0
-        inertia = inertial.find("inertia")
-        for axis in ("ixx", "iyy", "izz"):
-            assert float(inertia.get(axis)) > 0.0
+    # Solids have computable inertial properties, so the body's - its parts'
+    # added up - is written out.
+    (inertial,) = robot.findall("link/inertial")
+    assert float(inertial.find("mass").get("value")) > 0.0
+    inertia = inertial.find("inertia")
+    for axis in ("ixx", "iyy", "izz"):
+        assert float(inertia.get(axis)) > 0.0
 
 
 def test_export_states_the_properties_a_part_carries(tmp_path):
@@ -496,15 +492,15 @@ def test_export_states_the_properties_a_part_carries(tmp_path):
     path = _export_urdf(ctx, robot, str(tmp_path), name="robot")
     exported = ET.parse(path).getroot()
 
-    # One link per link of the source, plus the frame the assembly itself
-    # becomes: an assembly is a container, and URDF needs a single root to hang
-    # its contents off. The frame has no geometry, so reading this back produces
-    # the same four placed links again.
+    # One link per rigid body: the base, the shoulder that turns on it with the
+    # forearm the URDF fixes to it as a second shape, and the wrist. The root
+    # body is named after the one part it is made of.
     links = {link.get("name"): link for link in exported.findall("link")}
-    assert set(links) == {"robot", "base_link", "shoulder", "forearm", "wrist"}
-    assert links["robot"].find("visual") is None
-    for name in ("base_link", "shoulder", "forearm", "wrist"):
-        assert links[name].find("visual") is not None
+    assert set(links) == {"base_link", "shoulder", "wrist"}
+    assert len(links["base_link"].findall("visual")) == 1
+    assert [visual.get("name") for visual in links["shoulder"].findall("visual")] == ["shoulder", "forearm"]
+    joints = {joint.get("name"): joint.get("type") for joint in exported.findall("joint")}
+    assert joints == {"shoulder_pan": "revolute", "wrist": "continuous"}
 
     # The stated mass and inertia, not ones recomputed from the geometry and a
     # density.
@@ -580,10 +576,10 @@ def test_export_reports_properties_urdf_cannot_state(tmp_path, caplog):
 def test_logo_round_trip_through_urdf(tmp_path):
     """logo.assy -> URDF + STL -> 'urdf' assembly puts the same shapes in the same places.
 
-    What survives is every shape, at the placement it had, under the name it had.
-    What does not is the *nesting*: an ASSY file may group its parts, and reading
-    a URDF back produces one flat list, because a URDF's own grouping is its
-    joint tree and that is kinematics rather than structure.
+    What survives is every shape, at the placement it had, under the name it had
+    - within the one link the logo is, since nothing in it moves. What does not
+    is the *nesting*: an ASSY file may group its parts, and a URDF's only
+    grouping is its links, which are the rigid bodies.
     """
     ctx = pc.init(EXAMPLES)
     logo = ctx._get_assembly("//produce_assembly_assy:logo")
@@ -597,7 +593,9 @@ def test_logo_round_trip_through_urdf(tmp_path):
     assert imported is not None
     asyncio.run(imported.do_instantiate())
 
-    assert absolute_placements(imported) == absolute_placements(logo)
+    # Each part is a shape of the link 'logo', named after the part it was.
+    placements = {name.rpartition("/")[2]: where for name, where in absolute_placements(imported).items()}
+    assert placements == absolute_placements(logo)
 
     # And it is still buildable geometry, not just matching placements.
     assert asyncio.run(imported.get_wrapped(imported_ctx)) is not None
@@ -642,20 +640,33 @@ def test_convert_urdf_to_assy(tmp_path):
     assert config["parts"]["robot/base_link"]["properties"]["physics"]["friction"] == pytest.approx(0.9)
     assert config["parts"]["robot/shoulder"]["properties"]["color"] == "#E6801A"
 
-    # One interface pair per distinct joint, reused where the joints agree: the
-    # two fixed joints share a pair, the revolute one gets its own.
+    # One interface pair per distinct joint, reused where the joints agree.
     interfaces = config["interfaces"]
     assert set(interfaces) == {
         "robot/fixed-socket",
         "robot/fixed-plug",
         "robot/shoulder_pan-socket",
         "robot/shoulder_pan-plug",
+        "robot/wrist-socket",
+        "robot/wrist-plug",
     }
     revolute = interfaces["robot/shoulder_pan-socket"]
-    assert revolute["motion"]["type"] == "revolute"
-    assert revolute["motion"]["axis"] == pytest.approx([0.0, 0.0, 1.0])
+    # The explicit form: the parameter that stays free, which says its kind, its
+    # axis - the URDF's, as the URDF states it - and its range itself.
+    assert revolute["motion"] == {"dof": ["angle"]}
+    angle = revolute["parameters"]["angle"]
+    assert (angle["type"], angle["dir"]) == ("turn", pytest.approx([0.0, 0.0, 1.0]))
     # 3.14 radians in the URDF, degrees here, like every other angle in PartCAD.
-    assert revolute["motion"]["limits"]["upper"] == pytest.approx(179.909, abs=1e-3)
+    assert angle["max"] == pytest.approx(179.909, abs=1e-3)
+    assert angle["min"] == pytest.approx(-179.909, abs=1e-3)
+    # The half turn is on the socket's port, so the contact frame is the joint
+    # frame, and the plug sits at the child link's own origin.
+    assert revolute["ports"]["joint"] == [[0.0, 0.0, 0.0], [0.71, 0.71, 0.0], 180.0]
+    assert interfaces["robot/shoulder_pan-plug"]["ports"]["joint"] is None
+    assert interfaces["robot/fixed-socket"]["motion"] == {"dof": []}
+    # A continuous joint's parameter states no range: unlimited, as a freedom.
+    assert interfaces["robot/wrist-socket"]["parameters"] == {"angle": {"type": "turn", "dir": [0.0, 0.0, 1.0]}}
+    assert interfaces["robot/wrist-socket"]["physics"] == {"damping": pytest.approx(0.02)}
     assert revolute["physics"]["maxEffort"] == pytest.approx(12.0)
     assert revolute["physics"]["maxVelocity"] == pytest.approx(114.592, abs=1e-3)
     assert revolute["physics"]["damping"] == pytest.approx(0.1)
@@ -696,14 +707,15 @@ def test_a_converted_joint_can_be_posed(tmp_path):
 
 
 def test_a_converted_urdf_is_a_mechanism(tmp_path):
-    """Every 'motion:' the converter writes is an implicit declaration of the joint it was.
+    """Every 'motion:' the converter writes declares the joint it was, explicitly.
 
-    The converter is unchanged: a socket interface stating 'motion: {type:
-    revolute, axis, limits}' beside an 'angle' parameter, and a plug that mates
-    with it. The revolute type implies a turn about the socket port's axis, and
-    'angle' is the parameter along it in the contact frame - so the converted
-    assembly is the robot's mechanism, with the joint's name, range and physics,
-    and the fixed URDF joints are rigid attachments, not joints.
+    A socket interface naming its 'angle' parameter in 'motion: {dof: [angle]}'
+    - the parameter states its kind, the URDF axis and the range - and a plug
+    that mates with it. The socket's port is the half turn the connection
+    undoes, so 'angle' is about the URDF axis as the URDF states it; and the
+    connection names the joint after the URDF's. So the converted assembly is
+    the robot's mechanism, with the joint's name, range and physics, and the
+    fixed URDF joints are rigid attachments, not joints.
     """
     root = sandbox(tmp_path, URDF_EXAMPLE_PACKAGES)
     package = root / "produce_assembly_urdf"
@@ -711,13 +723,17 @@ def test_a_converted_urdf_is_a_mechanism(tmp_path):
 
     robot = pc.Context(str(package))._get_assembly(":robot")
     asyncio.run(robot.do_instantiate())
-    ((prefix, joint),) = robot.joints()
-    assert (joint.name, joint.parent, joint.child) == ("shoulder-base_link", "base_link", "shoulder")
+    joints = {joint.name: joint for _, joint in robot.joints()}
+    assert set(joints) == {"shoulder_pan", "wrist"}
+    (wrist,) = joints["wrist"].free_steps()
+    assert (wrist.kind, wrist.axis, wrist.lower, wrist.upper) == ("turn", [0.0, 0.0, 1.0], None, None)
+    joint = joints["shoulder_pan"]
+    assert (joint.name, joint.parent, joint.child) == ("shoulder_pan", "base_link", "shoulder")
     (free,) = joint.free_steps()
-    assert (free.kind, free.axis, free.value) == ("turn", [0.0, 0.0, -1.0], 0.0)
+    assert (free.kind, free.axis, free.value) == ("turn", [0.0, 0.0, 1.0], 0.0)
     assert (free.lower, free.upper) == pytest.approx((-179.908747671, 179.908747671))
     (source,) = free.source
-    assert (source["parameter"], source["synthesized"], source["by"]) == ("angle", False, "motion 'revolute'")
+    assert (source["parameter"], source["synthesized"], source["by"]) == ("angle", False, "'dof'")
     assert joint.physics == pytest.approx(
         {"maxEffort": 12.0, "maxVelocity": 114.591559026, "damping": 0.1, "friction": 0.05}
     )
@@ -748,8 +764,8 @@ def test_a_converted_urdf_is_a_mechanism(tmp_path):
 
     # 'pc info -a robot' shows it.
     info = posed.info()
-    assert info["Joints"]["shoulder-base_link"]["free"][0]["range"] == "-179.909 to 179.909 deg"
-    assert info["Joints"]["shoulder-base_link"]["free"][0]["value"] == 90.0
+    assert info["Joints"]["shoulder_pan"]["free"][0]["range"] == "-179.909 to 179.909 deg"
+    assert info["Joints"]["shoulder_pan"]["free"][0]["value"] == 90.0
 
 
 def test_convert_assy_to_urdf(tmp_path):
@@ -836,6 +852,8 @@ def test_import_assembly_from_a_urdf(tmp_path):
         "robot/fixed-plug",
         "robot/shoulder_pan-socket",
         "robot/shoulder_pan-plug",
+        "robot/wrist-socket",
+        "robot/wrist-plug",
     }
 
     # And it builds, putting every link frame where the URDF put it. The parts
@@ -916,8 +934,10 @@ def test_info_reports_the_urdf_without_building_it():
 
     assert info["Robot"] == "partcad_urdf_example"
     assert info["RootLink"] == "base_link"
-    assert info["UrdfMovableJoints"] == ["shoulder_pan (revolute)"]
-    assert DROPPED_LABELS["joint_kinematics"] in info["Dropped"]
+    assert info["UrdfMovableJoints"] == ["shoulder_pan (revolute)", "wrist (continuous)"]
+    # The joint is the assembly's, and shown the way an ASSY assembly's is.
+    assert info["Joints"]["shoulder_pan"]["free"][0]["range"] == "-179.909 to 179.909 deg"
+    assert "joint_kinematics" not in DROPPED_LABELS
 
 
 def test_placement_gives_one_form_per_orientation():

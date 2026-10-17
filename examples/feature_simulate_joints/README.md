@@ -61,10 +61,6 @@ pc sim --json -a pendulum
 ```
 
 
-## Sub-Packages
-
-### [sim-mujoco](https://github.com/partcad/partcad-sim-mujoco.git)
-
 ## Assemblies
 
 ### nudged

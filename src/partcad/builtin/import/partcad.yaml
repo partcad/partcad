@@ -43,10 +43,11 @@ import:
       joints, read at its zero pose. A URDF is a product rather than an
       arrangement of products, so it is an assembly and not a scene.
 
-      It is a best-effort reader. A URDF describes a machine that moves and a
-      PartCAD tree describes where things are, so what a static arrangement
-      cannot hold -- the joints themselves above all -- is counted and reported
-      rather than passed over in silence.
+      It is a best-effort reader. Its links are placed with every joint at
+      zero, and every movable joint is kept as the joint of the link it moves,
+      so the assembly is the robot's mechanism as it is read. What an assembly
+      cannot hold -- transmissions, sensors, the geometry a link was not built
+      from -- is counted and reported rather than passed over in silence.
     path: import_urdf.py
     extension: urdf
     kinds: [assembly]
@@ -68,7 +69,6 @@ import:
     # unknown setting is otherwise only reported.
     strict: false
     dropped:
-      joint_kinematics: "movable joints (the assembly shows them at their zero position)"
       collision: "collision geometry (kept as parts of its own, but not placed)"
       visual: "visual geometry (kept as parts of its own, but not placed)"
       transmission: transmissions

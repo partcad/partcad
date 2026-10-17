@@ -28,18 +28,14 @@ docs:
     [partcad-sim-gazebo](https://github.com/partcad/partcad-sim-gazebo) and
     [partcad-sim-mujoco](https://github.com/partcad/partcad-sim-mujoco).
 
-    A package that wants one imports it and names the type through it:
+    The public index publishes them at `//pub/feature/simulate/gazebo` and
+    `//pub/feature/simulate/mujoco`, so a package that wants one names the type
+    through it:
 
     ```yaml
-    dependencies:
-      sim-gazebo:
-        type: git
-        url: https://github.com/partcad/partcad-sim-gazebo.git
-        track: main
-
     scenes:
       warehouse:
-        type: sim-gazebo:world
+        type: //pub/feature/simulate/gazebo:world
         path: warehouse.world
     ```
 
@@ -52,7 +48,7 @@ docs:
     A scene exports to an engine's format the same way:
 
     ```shell
-    pc export -S -t sim-gazebo:world -O ./ bench
+    pc export -S -t //pub/feature/simulate/gazebo:world -O ./ bench
     ```
 
 # No 'dependencies:' on purpose. A scene held in an engine's own format needs

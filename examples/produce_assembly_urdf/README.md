@@ -36,8 +36,20 @@ What each link says about its physics becomes named properties of its part -
 pc info robot/base_link
 ```
 
+Its joints are the assembly's, so it is a mechanism as it is read: the
+shoulder turns on the base within its limits, the wrist spins on the
+forearm, and the forearm, which the URDF fixes to the shoulder, turns with
+the shoulder. `pc info -a robot` lists them, with their axes, ranges and
+dynamics:
+
+```shell
+pc info -a robot
+```
+
 The reverse direction writes a URDF (plus the mesh files it references) from
-any PartCAD assembly:
+any PartCAD assembly, a link per rigid body and a joint per pair of them -
+here the base, the shoulder with the forearm as one link of two shapes, and
+the wrist:
 
 ```shell
 pc export -a -t urdf -O ./ robot

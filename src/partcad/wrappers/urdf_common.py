@@ -170,6 +170,14 @@ def from_urdf_origin(origin):
     return (rpy_to_quat(rpy), t)
 
 
+def inverse(pose):
+    """The ``(q, t)`` pose that undoes 'pose'."""
+    q, t = pose
+    conjugate = (q[0], -q[1], -q[2], -q[3])
+    moved = rotate_vec(conjugate, t)
+    return (conjugate, (-moved[0], -moved[1], -moved[2]))
+
+
 def to_urdf_origin(pose):
     """A ``(q, t)`` pose (millimetres) as the URDF ``(xyz, rpy)`` pair (metres, radians)."""
     q, t = pose

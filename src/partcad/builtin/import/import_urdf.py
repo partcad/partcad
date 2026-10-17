@@ -35,6 +35,16 @@ in-memory representation an ASSY file produces:
     part node:      {"type": "part", "name", "location", "part_file",
                      "part_type", "scale"}
 
+**The joints are kept.** Every link node that a movable joint moves carries
+that joint, in the form a joint travels to an exporter in
+('partcad.joint.Joint.to_envelope'): its name, the two links by name, and the
+steps from the parent link's node to this one - the parent's shape offset
+undone, each joint origin on the way, each degree of freedom the joint keeps,
+and this link's own shape offset - so that a ``type: urdf`` assembly is a
+mechanism as it is read. A link on a fixed joint names its parent under
+``attached`` instead: it is welded to that link, and moves with it. See
+'link_attachment'.
+
 Alongside the tree, the response carries the flat ``links`` and ``joints``
 tables that ``pc convert assembly -t assy`` needs to write an ASSY file, its
 parts and the interfaces its joints turn into.
@@ -56,8 +66,9 @@ import urdf_common  # noqa: E402
 
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again.
-CACHE_VERSION = 1
+# before is produced again. 2: every link node states its joint, or what it is
+# attached to, and a joint with no '<axis>' turns about X.
+CACHE_VERSION = 2
 
 # Mesh formats a URDF may name, mapped to the PartCAD part type that reads them.
 # COLLADA (.dae) is deliberately absent: it is common in URDF and PartCAD has no
@@ -75,9 +86,9 @@ MESH_PART_TYPES = {
 # assembly cannot hold. The counters are reported rather than the loss being
 # passed over in silence. Mass, inertia, friction, joint limits and joint
 # dynamics are *not* here: they became named PartCAD properties, and the tables
-# below are where they are read.
+# below are where they are read. Nor are the joints themselves any more: every
+# link a movable joint moves carries that joint (see 'link_attachment').
 DROPPABLE = (
-    "joint_kinematics",
     "collision",
     "visual",
     "transmission",
@@ -373,14 +384,120 @@ def gazebo_physics(reference, table, context):
     return physics
 
 
-def joint_record(joint, context):
+# The joint types that move about or along an axis, and so have one. URDF's
+# default, where a joint states none, is X - not the Z every PartCAD 'motion:'
+# defaults to - which is why it is written out rather than left implied.
+AXIAL_TYPES = ("revolute", "continuous", "prismatic", "planar")
+DEFAULT_AXIS = (1.0, 0.0, 0.0)
+
+TURN = "turn"
+MOVE = "move"
+
+# The six parameters whose axis is in their name, as 'partcad.motion' names
+# them: a degree of freedom along a principal axis is named after the one with
+# that axis, so that a connection addresses it the same way.
+PRINCIPAL = (
+    ("moveX", MOVE, (1.0, 0.0, 0.0)),
+    ("moveY", MOVE, (0.0, 1.0, 0.0)),
+    ("moveZ", MOVE, (0.0, 0.0, 1.0)),
+    ("turnX", TURN, (1.0, 0.0, 0.0)),
+    ("turnY", TURN, (0.0, 1.0, 0.0)),
+    ("turnZ", TURN, (0.0, 0.0, 1.0)),
+)
+
+
+def _unit(vector):
+    norm = math.sqrt(sum(float(v) * float(v) for v in vector))
+    return None if norm == 0.0 else tuple(float(v) / norm for v in vector)
+
+
+def _dot(a, b):
+    return sum(float(x) * float(y) for x, y in zip(a, b))
+
+
+def _cross(a, b):
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+
+
+def plane_axes(normal):
+    """Two unit vectors across 'normal' that make a right-handed frame with it.
+
+    What 'motion: planar' moves along ('partcad.motion._across'): for a
+    principal axis the other two in cyclic order - X and Y across Z - and
+    otherwise two built from the principal axis least aligned with it.
+    """
+    principal = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    for first, second, third in ((0, 1, 2), (1, 2, 0), (2, 0, 1)):
+        along = _dot(normal, principal[third])
+        if abs(abs(along) - 1.0) <= 1e-12:
+            u, v = principal[first], principal[second]
+            return (u, v) if along > 0 else (v, u)
+    least = min(principal, key=lambda e: abs(_dot(normal, e)))
+    u = _unit(_cross(least, normal))
+    return u, _cross(normal, u)
+
+
+def _principal(kind, axis):
+    for name, named_kind, named_axis in PRINCIPAL:
+        if named_kind == kind and max(abs(a - b) for a, b in zip(axis, named_axis)) <= 1e-12:
+            return name
+    return None
+
+
+def joint_freedoms(joint_type, axis, limits):
+    """The degrees of freedom a URDF joint keeps, in PartCAD's terms.
+
+    Each is ``{"name", "kind", "axis", "lower", "upper"}``: a turn about, or a
+    move along, a unit 'axis' in the joint frame, between bounds in degrees or
+    millimetres (None where unlimited), under the name of the parameter it
+    becomes. One list, read both for the joint a link node carries and for the
+    interfaces 'pc convert assembly -t assy' writes, so that the two cannot
+    come to disagree. A single freedom is 'angle' or 'offset', the names the
+    converter has always written; a planar or a floating joint's are named
+    after their principal axes, as 'motion: planar' and 'motion: floating'
+    name them. URDF bounds neither of those two.
+    """
+    lower, upper = limits.get("lower"), limits.get("upper")
+    if joint_type == "revolute":
+        return [{"name": "angle", "kind": TURN, "axis": axis, "lower": lower, "upper": upper}]
+    if joint_type == "continuous":
+        return [{"name": "angle", "kind": TURN, "axis": axis, "lower": None, "upper": None}]
+    if joint_type == "prismatic":
+        return [{"name": "offset", "kind": MOVE, "axis": axis, "lower": lower, "upper": upper}]
+    if joint_type == "planar":
+        u, v = plane_axes(axis)
+        freedoms = [(MOVE, u, "offset"), (MOVE, v, "offset-2"), (TURN, axis, "angle")]
+    elif joint_type == "floating":
+        freedoms = [(kind, named_axis, name) for name, kind, named_axis in PRINCIPAL]
+    else:
+        return []
+    return [
+        {
+            "name": _principal(kind, direction) or fallback,
+            "kind": kind,
+            "axis": tuple(direction),
+            "lower": None,
+            "upper": None,
+        }
+        for kind, direction, fallback in freedoms
+    ]
+
+
+def _unit_of(joint_type):
+    """PartCAD units per URDF unit of a joint's motion: degrees a radian, or millimetres a metre."""
+    return math.degrees(1.0) if joint_type in ("revolute", "continuous") else urdf_common.MM_PER_M
+
+
+def joint_record(joint, context, robot=None):
     """A URDF joint restated in PartCAD's terms.
 
     Returns ``{"motion": ..., "physics": ...}`` alongside the joint's identity:
     what the joint *can do* and what it *costs*, which is the same split a
-    PartCAD interface makes. ``pc convert assembly -t assy`` writes these two
-    dictionaries straight into the interface it generates, so the units are
-    converted here and nowhere else.
+    PartCAD interface makes - and ``freedoms``, what it keeps free (see
+    'joint_freedoms'). ``pc convert assembly -t assy`` writes these straight
+    into the interface it generates, and the node of the link the joint moves
+    carries them as its joint, so the units are converted here and nowhere
+    else.
     """
     angular = joint.type in ("revolute", "continuous")
     # A revolute joint's limits and velocity are angles; a prismatic joint's are
@@ -390,6 +507,10 @@ def joint_record(joint, context):
     motion = {"type": joint.type}
     if getattr(joint, "axis", None) is not None:
         motion["axis"] = [float(v) for v in joint.axis]
+    elif joint.type in AXIAL_TYPES:
+        # URDF's own default, said out loud: left out, it would be read as the
+        # Z axis every PartCAD 'motion:' defaults to.
+        motion["axis"] = list(DEFAULT_AXIS)
 
     limit = getattr(joint, "limit", None)
     physics = {}
@@ -423,10 +544,15 @@ def joint_record(joint, context):
 
     mimic = getattr(joint, "mimic", None)
     if mimic is not None and getattr(mimic, "joint", None):
-        # A joint that follows another is kinematics, not physics.
+        # A joint that follows another is kinematics, not physics. Restated in
+        # PartCAD's units on both sides - 'value = multiplier * leader +
+        # offset' in degrees or millimetres - so that a revolute joint
+        # following a prismatic one says degrees a millimetre.
         motion["mimic"] = {"joint": mimic.joint}
         if getattr(mimic, "multiplier", None) is not None:
-            motion["mimic"]["multiplier"] = float(mimic.multiplier)
+            leader = (getattr(robot, "joint_map", None) or {}).get(mimic.joint)
+            scale = _unit_of(joint.type) / _unit_of(getattr(leader, "type", joint.type))
+            motion["mimic"]["multiplier"] = round(float(mimic.multiplier) * scale, 12)
         if getattr(mimic, "offset", None) is not None:
             motion["mimic"]["offset"] = round(to_pc(float(mimic.offset)), 9)
 
@@ -451,7 +577,94 @@ def joint_record(joint, context):
         "child": joint.child,
         "motion": motion,
         "physics": physics,
+        "freedoms": joint_freedoms(joint.type, _unit(motion.get("axis") or DEFAULT_AXIS), motion.get("limits") or {}),
     }
+
+
+def link_attachment(link_name, joints, robot, context):
+    """What holds one link's node to the node of the link it hangs off.
+
+    ``{"joint": ...}`` where the joints between the two keep a degree of
+    freedom, ``{"attached": <parent link>}`` where they keep none, and nothing
+    for the root link. The joint is the steps from the parent's node to this
+    one: the parent's shape offset undone, then for each URDF joint on the way
+    - more than one where links with no geometry lie between, which are no
+    nodes of their own - its origin and the freedoms it keeps, then this link's
+    own shape offset. Every freedom is at zero, which is where a URDF places a
+    link, so the steps multiply out to where the walk placed it.
+
+    It is named after its URDF joint: the first movable one, where several are
+    folded into one. A 'mimic' between two joints of one such chain is a
+    coupling between two of its freedoms; one to any other joint stays a mimic.
+    """
+    link = context["links"][link_name]
+    parent = link.get("parent")
+    chain = link.get("joints") or []
+    movable = [name for name in chain if joints[name]["freedoms"]]
+    if not movable:
+        return {"attached": parent} if parent is not None else {}
+
+    steps = []
+
+    def fixed(pose, role):
+        if not urdf_common.is_identity(pose):
+            packed = urdf_common.round_packed(urdf_common.to_packed(pose), context["precision"])
+            steps.append({"type": "fixed", "role": role, "location": packed})
+
+    if parent is not None:
+        fixed(urdf_common.inverse(urdf_common.from_packed(context["links"][parent]["shape_origin"])), "parentShape")
+    first_step = {}
+    for name in chain:
+        record = joints[name]
+        fixed(urdf_common.from_urdf_origin(robot.joint_map[name].origin), "origin")
+        mimic = record["motion"].get("mimic") or {}
+        leader = first_step.get(mimic.get("joint"))
+        for index, freedom in enumerate(record["freedoms"]):
+            if index == 0:
+                first_step[name] = len(steps)
+            coupling = None
+            if leader is not None and len(record["freedoms"]) == 1:
+                coupling = {
+                    "step": leader,
+                    "ratio": float(mimic.get("multiplier", 1.0)),
+                    "offset": float(mimic.get("offset", 0.0)),
+                }
+            steps.append(
+                {
+                    "type": "free",
+                    "kind": freedom["kind"],
+                    "axis": [round(v, 12) for v in freedom["axis"]],
+                    "lower": freedom["lower"],
+                    "upper": freedom["upper"],
+                    "value": 0.0,
+                    "source": [
+                        {
+                            "parameter": freedom["name"],
+                            "joint": name,
+                            "by": "the URDF %s joint '%s'" % (record["type"], name),
+                        }
+                    ],
+                    "coupling": coupling,
+                }
+            )
+    fixed(urdf_common.from_packed(link["shape_origin"]), "shape")
+
+    record = joints[movable[0]]
+    if len(movable) > 1:
+        context["warnings"].append(
+            "The joints %s pass through links with no geometry, which are no parts of their own: they are one "
+            "joint '%s' with the physics of '%s'" % (", ".join(movable), movable[0], movable[0])
+        )
+    joint = {"name": movable[0], "parent": parent, "child": link_name, "steps": steps}
+    if record["physics"]:
+        joint["physics"] = dict(record["physics"])
+        joint["physicsFrom"] = "the URDF joint '%s'" % movable[0]
+    if record["motion"].get("softLimits"):
+        joint["softLimits"] = dict(record["motion"]["softLimits"])
+    mimic = record["motion"].get("mimic")
+    if mimic and mimic.get("joint") not in chain:
+        joint["mimic"] = dict(mimic)
+    return {"joint": joint}
 
 
 #
@@ -667,7 +880,6 @@ def walk_link(robot, link_name, relative, absolute, context, visited, ancestor):
 
     for joint_name, child_name in robot.child_map.get(link_name, []):
         joint = robot.joint_map[joint_name]
-        count_joint(joint, context)
         origin = urdf_common.from_urdf_origin(joint.origin)
         saved = context["joint_chain"]
         context["joint_chain"] = chain + [joint_name]
@@ -702,18 +914,6 @@ def record_link(context, link_name, ancestor, placement, shape_origin, physics, 
         "appearance": appearance,
         "joints": list(context["joint_chain"]),
     }
-
-
-def count_joint(joint, context):
-    """Count what a joint says that the assembly geometry cannot hold.
-
-    Only the kinematics: an assembly is one static configuration, so a movable
-    joint is shown at its zero position. The limits and the dynamics are *not*
-    counted as lost - they become the ``motion:`` and ``physics:`` sections of
-    the interface the joint turns into.
-    """
-    if joint.type != "fixed":
-        context["dropped"].add("joint_kinematics")
 
 
 #
@@ -834,7 +1034,11 @@ def process(path, request):  # pylint: disable=unused-argument
 
     # Before the 'dropped' tally is taken: reading a joint is what notices the
     # Gazebo settings attached to it, and a calibration block.
-    joints = {joint.name: joint_record(joint, context) for joint in robot.joints}
+    joints = {joint.name: joint_record(joint, context, robot) for joint in robot.joints}
+    # Every link node says what holds it to the link it hangs off: the joint
+    # that moves it, or the link it is welded to.
+    for node in context["nodes"]:
+        node.update(link_attachment(node["link"], joints, robot, context))
 
     # Every link is a child of the assembly, the robot's root link included -
     # see 'walk_link' for why the joint tree is not nesting. The assembly is the
