@@ -189,6 +189,14 @@ def test_the_sidecar_is_written_beside_the_file_and_read_back(tmp_path):
 #
 
 
+def test_an_export_without_a_sidecar_leaves_none_from_an_earlier_one(tmp_path):
+    path = tmp_path / "scene.xml"
+    naming.write_sidecar(path, "mjcf", {"body": {"a b": "a_b"}})
+    naming.remove_sidecar(path)
+    assert naming.read_sidecar(path) is None
+    naming.remove_sidecar(path)  # and having none is no failure
+
+
 def test_urdf_reserves_the_world_and_what_sdformat_reserves():
     rules = export_urdf.URDF_NAMES
     assert [rules.valid(name) for name in ("world", "__model__", "a b", "a/b", "base_link", "leg-2")] == [

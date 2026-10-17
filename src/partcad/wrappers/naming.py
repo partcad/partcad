@@ -344,6 +344,19 @@ def write_sidecar(path, format, names, bodies=None, joints=None):
     return sidecar
 
 
+def remove_sidecar(path):
+    """Remove the sidecar of the file at 'path', if it has one.
+
+    What an exporter writing no sidecar does: a sidecar left from an earlier
+    export to the same path names another file's bodies and joints, and a
+    reader cannot tell.
+    """
+    try:
+        os.remove(sidecar_path(path))
+    except FileNotFoundError:
+        pass
+
+
 def read_sidecar(path):
     """The sidecar of the file at 'path', or None where there is none this can read."""
     sidecar = sidecar_path(path)
