@@ -1311,8 +1311,8 @@ PartCAD's model, and is not proposed here.
 
 #### 8.13.7 Examples
 
-**Built** (all of them, in MuJoCo and wherever Gazebo builds the type in Gazebo; see the end of this section for
-what building them settled). There is one example per type, in `examples/feature_simulate_joints` beside the pendulum. Each one starts away from
+**Built, #806** (all of them, in MuJoCo and wherever Gazebo builds the type in Gazebo; see the end of this section
+for what building them settled). There is one example per type, in `examples/feature_simulate_joints` beside the pendulum. Each one starts away from
 its zero, so every run checks the starting value and its mapping back, in every engine. Each is held either to a
 closed form or to a bound it cannot pass without the joint being wrong. The run lengths and sampling follow the
 pendulum's: a reading every millisecond, and a step of half a millisecond.
@@ -1379,7 +1379,7 @@ are checked by unit tests too, rather than by examples that fail.
   - `universal`'s second axis changes only where `axis` is the port's X, which was degenerate before.
 - **`kinematics`** (built, #804):
   - `CONTINUOUS` goes, and `CHAIN` becomes `COMPOSITE` (both importable under their old names until the plugins
-    moved, 8.13.10, and removed with the examples once both had).
+    moved, 8.13.10, and removed with the examples once both had, #806).
   - `classify()` gains planar's other order and the ball's single bound.
   - `rezeroed()` and `reading()` are new.
   - The plugins move with it, and require that release; section 2 rules out a compatibility fallback.
@@ -1538,9 +1538,9 @@ the text above left open. What the engine plugins build on is in `kinematics`' d
   `CONTINUOUS` as a constant `classify()` never returns -- until partcad-sim-mujoco and partcad-sim-gazebo stopped
   using them. Section 2 rules out a fallback for the plugins, and this was not one: their CI installs PartCAD from
   `devel`, and a constant removed before they moved was an import error in every run of theirs. Both moved
-  (partcad-sim-mujoco#16, partcad-sim-gazebo#14), and the pull request that added the examples of 8.13.7 removed
-  both names.
-- **Not in this step:** the examples of 8.13.7 (built since, by a later pull request), and the plugins' half of
+  (partcad-sim-mujoco#16, partcad-sim-gazebo#14), and the pull request that added the examples of 8.13.7 (#806)
+  removed both names.
+- **Not in this step:** the examples of 8.13.7 (built since, #806), and the plugins' half of
   8.13.8.
 
 ## 9. Simulations as tests
