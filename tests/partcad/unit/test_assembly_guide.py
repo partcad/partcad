@@ -8,7 +8,6 @@
 import asyncio
 import os
 import re
-import sys
 import tempfile
 from types import SimpleNamespace
 
@@ -170,18 +169,28 @@ def test_document_to_data_embeds_images_on_request():
     assert "path" not in image
 
 
-def test_pdf_table_row_never_outgrows_the_table():
+def _wrapper_layout(monkeypatch):
+    """'wrapper_layout', the arithmetic of the wrapper that draws the PDF.
+
+    Not the wrapper itself: that imports reportlab, which is installed in the
+    sandbox the PDF is composed in and not on the host the tests run on. Found
+    next to the 'partcad' that is imported, wherever that is, and through
+    'monkeypatch' so that the path is put back afterwards.
+    """
+    monkeypatch.syspath_prepend(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
+    import wrapper_layout
+
+    return wrapper_layout
+
+
+def test_pdf_table_row_never_outgrows_the_table(monkeypatch):
     """A row wider than the table's columns stays on the page
 
     Every cell has to be drawn, and the row has to keep the width of the table:
     a cell past the right edge of the page is hidden just as surely as one that
     was dropped.
     """
-    # 'wrapper_layout', not the wrapper that draws the PDF: the latter imports
-    # reportlab, which is installed in the sandbox the PDF is composed in and
-    # not on the host the tests run on.
-    sys.path.insert(0, os.path.join("partcad", "src", "partcad", "wrappers"))
-    import wrapper_layout
+    wrapper_layout = _wrapper_layout(monkeypatch)
 
     widths, aligns = [100.0, 50.0, 200.0], ["left", "right", "left"]
     total = sum(widths)
@@ -1317,10 +1326,9 @@ def test_the_cover_counts_every_step_that_is_done():
     assert ("Steps", "7") in properties.items
 
 
-def test_a_long_name_is_broken_where_it_reads_best():
+def test_a_long_name_is_broken_where_it_reads_best(monkeypatch):
     """A name has no spaces to break at, and was drawn over the column beside it"""
-    sys.path.insert(0, os.path.join("partcad", "src", "partcad", "wrappers"))
-    import wrapper_layout
+    wrapper_layout = _wrapper_layout(monkeypatch)
 
     assert wrapper_layout.wrap("imperial-desk-1/side;apron=25.0,leg=29.28125", 20, len) == [
         "imperial-desk-1/",
