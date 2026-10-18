@@ -63,6 +63,34 @@ extensions go. All of them together take about six minutes once PartCAD's caches
 run, which fetches `//pub` and provisions the sandboxes.
 When one fails, the script leaves `failed.png` in the work directory: what the window looked like at the time.
 
+### Without a desktop
+
+The script also runs on a machine with no screen and no graphics card - a cloud agent's container, a CI runner -
+under a virtual display. Three things differ from a desktop, and each one shows up in the picture or stops the run:
+
+* **Run it as an ordinary user, not root.** VS Code started by root writes "[Superuser]" after the workspace name
+  in its title bar. Give that user a VS Code, a PartCAD install and an output directory it can read and write;
+  its own `~/.partcad` gets its sandboxes on the first run.
+* **Keep `PC_SCREENSHOT_WORK` short.** VS Code puts its single-instance socket in the profile directory, and a
+  Unix socket path longer than 107 characters fails with `listen EINVAL`; the script then reports only that "VS
+  Code did not open its DevTools port". A deep temporary directory is enough to do it. A short symlink to it
+  works.
+* **No graphics card** is handled by the script: it starts VS Code with `--enable-unsafe-swiftshader`, so the
+  Digital Thread draws with WebGL in software. Without that, it falls back to its canvas painter and says "Drawn
+  without a graphics card" in the corner of the picture.
+
+With no Docker and no conda on the machine, tell PartCAD to render in a virtual environment. On Linux, for
+example, with VS Code unpacked from Microsoft's `.deb` into `/opt/vscode` and this checkout installed into
+`/opt/pc-host`:
+
+```bash
+sudo -u shooter env PC_PYTHON_SANDBOX=venv PC_SCREENSHOT_CODE=/opt/vscode/code \
+  PC_SCREENSHOT_SERVICE=/opt/pc-host/bin/partcad-json-rpc PC_SCREENSHOT_WORK=/tmp/pcs PC_SCREENSHOT_OUT=/tmp/pcs-out \
+  xvfb-run -a -s "-screen 0 3840x2400x24" node shoot.mjs vscode1 vscode2
+```
+
+The virtual screen has to be at least the window's size in device pixels, 3584 x 2128.
+
 Look at every picture before committing it. They are PNGs, so they go through Git LFS: commit from a machine that
 has `git lfs install`ed (see the root `AGENTS.md`).
 

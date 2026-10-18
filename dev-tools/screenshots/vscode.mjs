@@ -56,6 +56,11 @@ export async function launch({ code, profile, extensions, settings, folder, env 
         '--disable-backgrounding-occluded-windows',
         '--disable-renderer-backgrounding',
         '--disable-background-timer-throttling',
+        // Let Chromium draw WebGL in software where there is no graphics card
+        // (a virtual display, a cloud machine). Without it the Digital Thread
+        // falls back to its canvas painter and says "Drawn without a graphics
+        // card" in the picture; with a GPU this changes nothing.
+        '--enable-unsafe-swiftshader',
         '--disable-workspace-trust',
         '--skip-release-notes',
         '--skip-welcome',
