@@ -1,0 +1,20 @@
+# A carriage on a rail at 30 degrees: the bar, tilted so that its far end is
+# up, and the cube standing on it. The connection keeps one move along the
+# rail - its X in the contact frame, up the slope - and stops it at nought, the
+# rail's lower end, with nothing above. It starts 200 mm up.
+links:
+  - part: bar
+    name: rail
+    location: [[0, 0, 0], [0, 1, 0], -30]
+  - part: frame
+    name: carriage
+    connect:
+      name: rail
+      with: foot
+      to: rail
+      joint: slide
+      motion:
+        type: prismatic
+        axis: [1, 0, 0]
+        limits: { lower: 0 }
+      toParams: { moveX: 200 }
