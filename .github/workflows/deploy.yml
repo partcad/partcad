@@ -530,6 +530,91 @@ jobs:
       id-token: write
     uses: ./.github/workflows/vsix-publish.yml
 
+  # The MCP Registry entry (registry.modelcontextprotocol.io): `server.json` at
+  # the root of this repository, which names the `partcad` wheel just uploaded
+  # and `pc mcp` as the way to run it, so that an MCP client installs PartCAD's
+  # server as `uvx partcad mcp`. The registry checks that the wheel is ours by
+  # finding `mcp-name: io.github.partcad/partcad` in its PyPI description --
+  # which is README.md -- so this runs after the upload, and only on "main",
+  # where the upload is to PyPI and not TestPyPI.
+  #
+  # The sign-in is GitHub's OIDC token: a workflow running in a repository owned
+  # by "partcad" is what grants the `io.github.partcad/*` namespace, so there is
+  # no secret to keep. A version, once published, cannot be changed or published
+  # again, which is why a re-run of an older release finds it there and stops.
+  publish-mcp-registry:
+    name: Publish to the MCP Registry
+    needs: publish-to-pypi
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      # Pinned, with its checksum, like every other tool a release job runs.
+      # Bump both together from the registry's releases page; an old publisher
+      # is refused by the registry with "invalid audience".
+      MCP_PUBLISHER_VERSION: v1.8.1
+      MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install mcp-publisher
+        run: |
+          set -euo pipefail
+          curl -fsSL -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum --check -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+
+      - name: Check that server.json describes this release
+        id: version
+        run: |
+          set -euo pipefail
+          # Both versions in server.json are bump-my-version's to write (see
+          # dev-tools/bumpversion.toml), and a test holds them to pyproject.toml.
+          # Said again here because a mismatch is published for good.
+          version="$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
+          python3 - "${version}" <<'EOF'
+          import json, sys
+          server = json.load(open("server.json"))
+          versions = {server["version"], *(package["version"] for package in server["packages"])}
+          if versions != {sys.argv[1]}:
+              sys.exit("::error::server.json names %s, and this release is %s" % (sorted(versions), sys.argv[1]))
+          EOF
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Wait for PyPI to serve this release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # The registry reads the package's description from PyPI, and a
+          # release just uploaded can take a few minutes to be served by its API.
+          for _ in $(seq 1 30); do
+            if curl -fsS -o /dev/null "https://pypi.org/pypi/partcad/${VERSION}/json"; then
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::PyPI does not serve partcad ${VERSION} after ten minutes"
+          exit 1
+
+      - name: Publish server.json
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          status="$(curl -sS -o /dev/null -w '%{http_code}' \
+            "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.partcad%2Fpartcad/versions/${VERSION}")"
+          if [ "${status}" = "200" ]; then
+            echo "io.github.partcad/partcad ${VERSION} is already in the MCP Registry."
+            exit 0
+          fi
+          ./mcp-publisher validate
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+
   # The rolling marketplace branch: this release's plugin, symlink-free, at the
   # root of a branch, which is what `/plugin marketplace add
   # partcad/partcad@plugin-dist` reads. It is the "latest" everyone who
@@ -578,6 +663,12 @@ jobs:
           # and installs as nothing, because there is no marketplace to add.
           if [ ! -f marketplace/.claude-plugin/marketplace.json ]; then
             echo "::error::no .claude-plugin/marketplace.json in the artifact"
+            missing=1
+          fi
+          # The plugin's MCP server, `pc mcp`, is a hidden file too, and a
+          # plugin without it still installs -- with every skill and no server.
+          if [ ! -f marketplace/pc/.mcp.json ]; then
+            echo "::error::no pc/.mcp.json in the artifact"
             missing=1
           fi
           if find marketplace -type l | grep -q .; then

@@ -39,7 +39,7 @@
     "iges"
   ],
   "engines": {
-    "vscode": "^1.82.0"
+    "vscode": "^1.101.0"
   },
   "categories": [
     "Visualization",
@@ -84,6 +84,12 @@
     "cspell-dictionary": "node cspell/generate.js"
   },
   "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "partcad.mcpServers",
+        "label": "PartCAD"
+      }
+    ],
     "languages": [
       {
         "id": "partcad-yaml",
@@ -1242,7 +1248,7 @@
     "@types/jest": "^30.0.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "18.x",
-    "@types/vscode": "1.82.0",
+    "@types/vscode": "1.101.0",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",
     "@vscode/test-cli": "^0.0.15",

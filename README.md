@@ -230,6 +230,10 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
           interfaces and physics it measures, and the agent's judgement of every feature from simulations,
           renders, the bill of materials and the assembly instructions
     - [x] Set a project up (`/pc:init`, `/pc:setup`)
+  - [x] An MCP server (`pc mcp`) any MCP client can drive PartCAD through: list, inspect, render (as an
+        image), test and export objects, and every other daemon method behind one `execute` tool -- in the
+        MCP Registry, in the `pc` plugin, registered by the VS Code extension and written into new packages by
+        `pc init`
   - [x] `--no-ansi` output on every command, so an agent parses plain text rather than progress bars
   - [x] Free-form `comment:` context in `Assembly YAML`, written for whoever reads the assembly next
 - Other features
@@ -304,6 +308,27 @@ read them out of [`ai-agents/`](./ai-agents/README.md) without the plugin. They 
 wheel, and `pc init` installs them into the repository it creates a package in: the plugin for Claude Code, and
 `pc-`-prefixed skills for Cursor. Pass `--no-skills` to skip it, or `--skills-only` to install them into a
 repository that has a package already.
+
+### MCP server
+
+`pc mcp` serves the [Model Context Protocol](https://modelcontextprotocol.io) on stdio, so that any MCP client --
+Claude Code, Claude Desktop, Cursor, VS Code -- can drive PartCAD: list what a package holds, read an object's
+declaration, look at it (renders come back as images), test it and export it, and reach every other daemon
+method through one `execute` tool. It is a client of the workspace's daemon like every other `pc` command, and
+it only touches files inside the workspace unless started with `--allow-path`.
+
+The `pc` plugin above brings it along, the VS Code extension registers it with the editor, and `pc init` writes
+it into the `.mcp.json` and `.cursor/mcp.json` of the repository it sets up. Anywhere else:
+
+```shell
+claude mcp add partcad -- pc mcp     # with PartCAD installed
+claude mcp add partcad -- uvx partcad mcp
+```
+
+It is also listed in the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.partcad/partcad`.
+See [the documentation](https://partcad.readthedocs.io/en/latest/mcp.html) for the tools and other clients.
+
+<!-- mcp-name: io.github.partcad/partcad -->
 
 ### PartCAD IDE
 

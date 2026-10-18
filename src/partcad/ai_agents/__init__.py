@@ -397,8 +397,86 @@ AGENTS = {
     "cursor": install_cursor_skills,
 }
 
+# The MCP server, `pc mcp`, under the one name PartCAD writes into an agent's
+# configuration. The entry under that name is PartCAD's and is rewritten every
+# time; every other server in the file is somebody else's and is left alone.
+MCP_SERVER_NAME = "partcad"
 
-def install_agent_skills(package_dir: str = ".", agents=None) -> bool:
+# Where each agent reads a project's MCP servers from, and how it spells "the
+# project's directory" inside that file. The server is told which package to
+# serve with `-p`, because the directory an agent starts it in is not one either
+# of them promises -- and in a repository whose package is in a subdirectory, it
+# would not be the package anyway. Claude Code sets no `CLAUDE_PROJECT_DIR` of
+# its own when it reads a project's `.mcp.json`, so the variable has a default
+# there; Cursor resolves `${workspaceFolder}` itself.
+MCP_CONFIGS = {
+    "claude": (".mcp.json", "${CLAUDE_PROJECT_DIR:-.}"),
+    "cursor": (os.path.join(".cursor", "mcp.json"), "${workspaceFolder}"),
+}
+
+
+def mcp_server_entry(agent: str, root: str, package_dir: str) -> dict:
+    """The configuration entry that starts `pc mcp` for the package in `package_dir`.
+
+    `pc`, not an absolute path to it: the file is committed with the package and
+    read on every machine that checks it out, where PartCAD is wherever that
+    machine installed it.
+    """
+    _, project = MCP_CONFIGS[agent]
+    relative = os.path.relpath(os.path.abspath(package_dir), os.path.abspath(root))
+    path = project if relative == os.curdir else project + "/" + relative.replace(os.sep, "/")
+    entry = {"command": "pc", "args": ["-p", path, "mcp"]}
+    # Claude Code reads an entry with no "type" as stdio, and says so in its
+    # documentation by always writing it out; Cursor has no such field.
+    return {"type": "stdio", **entry} if agent == "claude" else entry
+
+
+def install_mcp_config(agent: str, root: str, package_dir: str) -> bool:
+    """Add (or update) the `pc mcp` entry in `agent`'s project configuration under `root`.
+
+    The file is merged into, never replaced: it is a list of servers, and the
+    others in it belong to whoever put them there. A file that is not a JSON
+    object is left as it is, with a warning -- rewriting it would lose whatever
+    it holds -- and so is a symbolic link, for the reason `_writable_destination`
+    gives.
+    """
+    relative, _ = MCP_CONFIGS[agent]
+    path = os.path.join(root, relative)
+    if os.path.islink(path):
+        pc_logging.warning("Not adding the MCP server: '%s' is a symbolic link" % path)
+        return False
+
+    config = {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+            pc_logging.warning("Not adding the MCP server to '%s', which is not readable JSON: %s" % (path, e))
+            return False
+        if not isinstance(config, dict) or not isinstance(config.get("mcpServers", {}), dict):
+            pc_logging.warning("Not adding the MCP server to '%s': it has no 'mcpServers' object to add to" % path)
+            return False
+
+    entry = mcp_server_entry(agent, root, package_dir)
+    servers = config.setdefault("mcpServers", {})
+    if servers.get(MCP_SERVER_NAME) == entry:
+        pc_logging.debug("'%s' already starts the PartCAD MCP server" % path)
+        return True
+    servers[MCP_SERVER_NAME] = entry
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(config, f, indent=2)
+            f.write("\n")
+    except OSError as e:
+        pc_logging.warning("Failed to add the MCP server to '%s': %s" % (path, e))
+        return False
+    pc_logging.info("Added the PartCAD MCP server ('%s') to '%s'" % (MCP_SERVER_NAME, path))
+    return True
+
+
+def install_agent_skills(package_dir: str = ".", agents=None, mcp: bool = True) -> bool:
     """Install the skills for `agents`, beside the package in `package_dir`.
 
     The files go to the root of the git repository holding the package, because
@@ -409,6 +487,10 @@ def install_agent_skills(package_dir: str = ".", agents=None) -> bool:
     `agents` is the names to install for, defaulting to all of them. An unknown
     name is an error rather than a no-op: a typo that silently installs nothing
     looks exactly like an agent PartCAD does not support yet.
+
+    `mcp` also adds the MCP server, `pc mcp`, to each agent's project
+    configuration (see `install_mcp_config`): the skills say how to drive
+    PartCAD, and the server is what an agent drives it through without a shell.
 
     Returns True when anything was installed. Nothing here is a reason for
     `pc init` to fail -- the package is created either way -- so every failure
@@ -426,4 +508,6 @@ def install_agent_skills(package_dir: str = ".", agents=None) -> bool:
     # Every one of them runs: a refusal for one agent is not a reason to skip
     # the next, so this must not short-circuit the way `and`/`or` would.
     installed = [AGENTS[agent](root) for agent in agents]
+    if mcp:
+        installed += [install_mcp_config(agent, root, package_dir) for agent in agents if agent in MCP_CONFIGS]
     return any(installed)

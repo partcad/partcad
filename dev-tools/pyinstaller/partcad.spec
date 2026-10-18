@@ -229,7 +229,8 @@ add_package("vyper")
 # level, so `collect_submodules` on the whole package makes the bundle's contents
 # depend on what else the build environment happens to have installed. That is
 # how a machine with the AI SDKs on it produced a bundle 16MB larger, carrying
-# `pydantic` and `pydantic_core` that nothing in PartCAD can reach.
+# `pydantic` and `pydantic_core` that nothing in PartCAD could reach at the time
+# (`pc mcp` reaches them now, but through the `mcp` SDK, not through Sentry).
 #
 # The filter is passed to `collect_submodules` rather than applied to what it
 # returns, because `collect_submodules` imports each module it enumerates: an
@@ -343,22 +344,23 @@ EXCLUDES += ["sitecustomize", "usercustomize"]
 # a build environment that happens to have them does not produce a heavier
 # bundle than CI's.
 #
-#   cryptography, OpenSSL - `requests` and `urllib3.contrib.pyopenssl` reach for
-#     them to replace the standard library's TLS on interpreters that need it.
-#     11MB, and the bundle's TLS comes from the frozen CPython's `_ssl`.
+#   OpenSSL - `urllib3.contrib.pyopenssl` reaches for pyOpenSSL to replace the
+#     standard library's TLS on interpreters that need it, and the bundle's TLS
+#     comes from the frozen CPython's `_ssl`.
 #   httpx, httpcore - `aiobotocore` has an httpx backend beside its aiohttp one
 #     ("try: import httpx / except ImportError: httpx = None"). PartCAD does not
 #     select it, and `cache_backend_s3` only calls get_object/put_object.
-#   pydantic, pydantic_core - reachable only from Sentry's starlite integration
-#     (see below) and from a `TYPE_CHECKING` import in `yarl`, which guards its
-#     one runtime use with `find_spec("pydantic_core")`. 4.5MB.
+#
+# `cryptography`, `pydantic` and `pydantic_core` used to be on this list, as
+# optional dependencies of `requests`, Sentry and `yarl`. They are not optional
+# any more: `pc mcp` is the `mcp` SDK, and importing its server imports all
+# three (`pydantic` for every message, `cryptography` through `pyjwt`), along
+# with `httpx2` -- the SDK's own client, a different import name from the
+# `httpx` above, which stays out.
 EXCLUDES += [
-    "cryptography",
     "OpenSSL",
     "httpx",
     "httpcore",
-    "pydantic",
-    "pydantic_core",
 ]
 
 # The AI provider SDKs.
@@ -502,12 +504,7 @@ a.datas = [entry for entry in a.datas if _botocore_wanted(entry[0])]
 # what makes this safe: nothing that could read the metadata is in the bundle.
 _excluded_metadata = (
     "httpx",
-    "httpx2",
     "httpcore",
-    "httpcore2",
-    "pydantic",
-    "pydantic_core",
-    "cryptography",
     "pyOpenSSL",
     "openai",
     "ollama",

@@ -106,8 +106,8 @@ export class PartcadItem extends vscode.TreeItem {
             };
         } else if (itemType === ITEM_TYPE_PACKAGE) {
             this.iconPath = {
-                light: path.join(__filename, '..', '..', 'resources', 'light', 'file-submodule.svg'),
-                dark: path.join(__filename, '..', '..', 'resources', 'dark', 'file-submodule.svg'),
+                light: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'light', 'file-submodule.svg')),
+                dark: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'dark', 'file-submodule.svg')),
             };
             this.contextValue = itemPath === undefined ? 'package' : 'packageWithCode';
             this.command = {
@@ -117,8 +117,8 @@ export class PartcadItem extends vscode.TreeItem {
             };
         } else if (itemType === ITEM_TYPE_SKETCH) {
             this.iconPath = {
-                light: path.join(__filename, '..', '..', 'resources', 'light', 'misc.svg'),
-                dark: path.join(__filename, '..', '..', 'resources', 'dark', 'misc.svg'),
+                light: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'light', 'misc.svg')),
+                dark: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'dark', 'misc.svg')),
             };
             this.contextValue = itemPath === undefined ? 'sketch' : 'sketchWithCode';
             this.command = {
@@ -128,8 +128,8 @@ export class PartcadItem extends vscode.TreeItem {
             };
         } else if (itemType === ITEM_TYPE_INTERFACE) {
             this.iconPath = {
-                light: path.join(__filename, '..', '..', 'resources', 'light', 'interface.svg'),
-                dark: path.join(__filename, '..', '..', 'resources', 'dark', 'interface.svg'),
+                light: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'light', 'interface.svg')),
+                dark: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'dark', 'interface.svg')),
             };
             this.contextValue = itemPath === undefined ? 'interface' : 'interfaceWithCode';
             this.command = {
@@ -139,8 +139,8 @@ export class PartcadItem extends vscode.TreeItem {
             };
         } else if (itemType === ITEM_TYPE_SCENE) {
             this.iconPath = {
-                light: path.join(__filename, '..', '..', 'resources', 'light', 'globe.svg'),
-                dark: path.join(__filename, '..', '..', 'resources', 'dark', 'globe.svg'),
+                light: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'light', 'globe.svg')),
+                dark: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'dark', 'globe.svg')),
             };
             // A scene held in a simulator's own format gets a context value of
             // its own: those are the scenes another application can open,
@@ -174,8 +174,8 @@ export class PartcadItem extends vscode.TreeItem {
             };
         } else if (itemType === ITEM_TYPE_ASSEMBLY) {
             this.iconPath = {
-                light: path.join(__filename, '..', '..', 'resources', 'light', 'extensions.svg'),
-                dark: path.join(__filename, '..', '..', 'resources', 'dark', 'extensions.svg'),
+                light: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'light', 'extensions.svg')),
+                dark: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'dark', 'extensions.svg')),
             };
             this.contextValue = itemPath === undefined ? 'assembly' : 'assemblyWithCode';
             this.command = {
@@ -188,8 +188,8 @@ export class PartcadItem extends vscode.TreeItem {
             // file the package ships rather than geometry, which is what this
             // icon said about a part and says about software just as well.
             this.iconPath = {
-                light: path.join(__filename, '..', '..', 'resources', 'light', 'file-binary.svg'),
-                dark: path.join(__filename, '..', '..', 'resources', 'dark', 'file-binary.svg'),
+                light: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'light', 'file-binary.svg')),
+                dark: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'dark', 'file-binary.svg')),
             };
             // No 'WithCode' variant: a software object's file is a firmware or
             // disk image rather than source, so the explorer hands over no path
@@ -203,8 +203,12 @@ export class PartcadItem extends vscode.TreeItem {
         } else {
             if (config.type === 'alias') {
                 this.iconPath = {
-                    light: path.join(__filename, '..', '..', 'resources', 'light', 'file-symlink-file.svg'),
-                    dark: path.join(__filename, '..', '..', 'resources', 'dark', 'file-symlink-file.svg'),
+                    light: vscode.Uri.file(
+                        path.join(__filename, '..', '..', 'resources', 'light', 'file-symlink-file.svg'),
+                    ),
+                    dark: vscode.Uri.file(
+                        path.join(__filename, '..', '..', 'resources', 'dark', 'file-symlink-file.svg'),
+                    ),
                 };
             } else {
                 this.iconPath = new vscode.ThemeIcon('database');

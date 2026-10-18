@@ -300,10 +300,11 @@ entry is there because *nothing the three console programs can reach imports it*
   inside `try: ... except ImportError`. Keeping `pkg_resources` out is also what let the `setuptools<82` bound
   go from `build.sh`: PyInstaller adds the `pyi_rth_pkgres` runtime hook only when `pkg_resources` is in the
   graph, and that hook was the only reason for the pin.
-- **Optional dependencies of dependencies** — `cryptography`/`OpenSSL` (`requests` and
-  `urllib3.contrib.pyopenssl` reach for them, 11MB), `httpx`/`httpcore` (`aiobotocore` has an httpx backend
-  beside its aiohttp one), `pydantic`/`pydantic_core` (4.5MB). Each is behind a `try: import` or a `find_spec`
-  check, so their absence is a state the code already handles.
+- **Optional dependencies of dependencies** — `OpenSSL` (`urllib3.contrib.pyopenssl` reaches for it) and
+  `httpx`/`httpcore` (`aiobotocore` has an httpx backend beside its aiohttp one). Each is behind a
+  `try: import` or a `find_spec` check, so their absence is a state the code already handles. `cryptography`,
+  `pydantic` and `pydantic_core` used to be listed here too and are now carried on purpose: `pc mcp` is the `mcp`
+  SDK, whose server imports all three, plus `httpx2` (a different import name from `httpx`).
 - **Test suites and interactive-only data** — `jsonschema.tests` and `aiohttp.test_utils`, which
   `collect_all`/`collect_submodules` sweep in whole and which are what drag `unittest` into a bundle that runs
   no tests; and `pydoc_data`, the help-topic database only `help()` reads.
@@ -328,8 +329,7 @@ mechanisms were quietly breaking it before these entries existed:
    names the two that are actually used.
 
 The check is cheap: install something unrelated into the build virtualenv, freeze, and diff the bundle against
-one frozen without it. With the AI SDKs, `cryptography`, `pydantic`, `httpx` and setuptools 8x installed, the
-two are identical today.
+one frozen without it. With the AI SDKs, `httpx` and setuptools 8x installed, the two are identical today.
 
 ## conda
 
