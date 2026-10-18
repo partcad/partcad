@@ -117,7 +117,11 @@ class _HostDaemon:
         if any(source.startswith(DAEMON_TMP) for source in kwargs["volumes"]):
             return b""
         raise docker.errors.ContainerError(
-            container="probe", exit_status=1, command=kwargs.get("command"), image=image, stderr=b""
+            container="probe",
+            exit_status=runtime_python_docker._PROBE_ABSENT,
+            command=kwargs.get("command"),
+            image=image,
+            stderr=b"",
         )
 
 

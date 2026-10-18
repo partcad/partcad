@@ -214,7 +214,14 @@ def image_available(image: str, version: str = "", needed=(), mode: str = contai
     # would run it can see the directories PartCAD is going to bind -- see
     # 'mounts_are_shared'. A machine that fails this is one where every part
     # would fail later, in a way that names nothing.
-    sources = mount_sources(client, resolved)
+    try:
+        sources = mount_sources(client, resolved)
+    except ImageDoesNotRun as e:
+        # The image, and not the daemon: most often one with no build for this
+        # machine's platform. Said as what it is, since the remedy - an image
+        # built for it - has nothing to do with where the daemon is.
+        _UNAVAILABLE_REASONS[image] = e.reason
+        return False
     if sources is False:
         _UNAVAILABLE_REASONS[image] = (
             "the Docker daemon cannot see this machine's files, so nothing can be bind-mounted into a "
@@ -238,7 +245,9 @@ from partcad_utils.daemon_mounts import (  # noqa: E402,F401 - re-exported
     _CONTAINER_ID,
     _MOUNTS_SHARED,
     _MOUNTS_SHARED_GUARD,
+    _PROBE_ABSENT,
     _PROBE_FILE,
+    ImageDoesNotRun,
     _declared_sources,
     _own_container_sources,
     _probe_mounts,
@@ -471,7 +480,10 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             resolved = resolve_image(client, self.image, self.version)
         except Exception as e:
             raise runtime.SandboxUnavailable("the 'docker' sandbox cannot get %s: %s" % (self.image, e))
-        sources = mount_sources(client, resolved)
+        try:
+            sources = mount_sources(client, resolved)
+        except ImageDoesNotRun as e:
+            raise runtime.SandboxUnavailable("the 'docker' sandbox cannot run %s here: %s" % (resolved, e.reason))
         if sources is False:
             raise runtime.SandboxUnavailable(
                 "the 'docker' sandbox needs a container runtime that can see this machine's files, "

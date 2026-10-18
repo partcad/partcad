@@ -45,12 +45,46 @@ _MOUNTS_SHARED_GUARD = threading.Lock()
 # that is about to be thrown away.
 _PROBE_FILE = "partcad-mount-probe"
 
+# What the probe exits with when it ran and the file was not there: the answer
+# "this daemon has these directories somewhere else". Not 1, which is also what
+# a container exits with when its image cannot run on this machine at all
+# ("exec format error") and what the interpreter exits with on an error of its
+# own - and those say nothing about where the daemon has anything.
+_PROBE_ABSENT = 3
+
+# What the daemon and an image call the same machine, where they call it
+# differently: 'docker info' reports the kernel's name for it, an image the Go
+# one. Anything not here is taken as it is spelt.
+_ARCHITECTURES = {"x86_64": "amd64", "aarch64": "arm64", "armv7l": "arm", "i386": "386", "i686": "386"}
+
+
+class ImageDoesNotRun(Exception):
+    """The image the mount probe was asked in did not run here, so nothing was learnt about the mounts.
+
+    Not the answer ``False`` is: that one is a container that ran and did not
+    find the file, which says where the daemon has this machine's directories.
+    This says only that the image does not start - most often because it has no
+    build for this machine's platform - and a caller that reported it as a
+    daemon unable to see this machine's files would send its reader to check
+    'DOCKER_HOST' for a problem that is in the image.
+
+    ``reason`` is why, as a clause - "it has no build for linux/arm64 (it is
+    linux/amd64 only)" - for the caller to say in a sentence of its own.
+    """
+
+    def __init__(self, image: str, reason: str):
+        super().__init__("%s does not run here: %s" % (image, reason))
+        self.image = image
+        self.reason = reason
+
 
 def mounts_are_shared(client, image: str, python: str = "python3") -> bool:
     """Whether the sandbox can bind PartCAD's directories into a container at all.
 
     True where the daemon shares this filesystem, and also where it does not
     but has each directory somewhere it can say -- see :func:`mount_sources`.
+    Raises :class:`ImageDoesNotRun` where ``image`` does not run here, which
+    answers nothing about the mounts.
     """
     return mount_sources(client, image, python) is not False
 
@@ -71,6 +105,11 @@ def mount_sources(client, image: str, python: str = "python3"):
     work out.
 
     ``False`` -- neither; the sandbox cannot be used here.
+
+    And it raises :class:`ImageDoesNotRun` where the probe's container did not
+    run at all, because then it found out nothing about where anything is: an
+    image with no build for this machine's platform is not a daemon on another
+    machine, and saying it was is how the reason got lost.
 
     Every part of this sandbox rests on that. PartCAD hands the daemon its own
     paths and expects the container to open its own files there -- the wrappers,
@@ -96,27 +135,45 @@ def mount_sources(client, image: str, python: str = "python3"):
     key = (getattr(getattr(client, "api", None), "base_url", None), image)
     with _MOUNTS_SHARED_GUARD:
         if key in _MOUNTS_SHARED:
-            return _MOUNTS_SHARED[key]
+            return _answered(_MOUNTS_SHARED[key])
 
-    if _probe_mounts(client, image, python=python):
-        answer = None
-    else:
-        sources = _declared_sources()
-        if sources is None:
-            sources = _own_container_sources(client)
-        answer = sources if sources and _probe_mounts(client, image, sources, python=python) else False
-        if answer is False:
-            pc_logging.debug(
-                "The Docker daemon at %s does not share this filesystem, so the 'docker' sandbox cannot "
-                "bind PartCAD's directories into a container." % (key[0],)
-            )
-        else:
-            pc_logging.debug(
-                "The Docker daemon at %s does not share this filesystem; binding from where it has "
-                "this container's mounts: %s" % (key[0], sources)
-            )
+    try:
+        answer = _probe_answer(client, image, key, python)
+    except ImageDoesNotRun as e:
+        # Remembered for this image and this daemon alone, which is all it is
+        # about: another image on the same daemon is asked afresh, and gets the
+        # answer about the mounts that this one could not give.
+        answer = e
     with _MOUNTS_SHARED_GUARD:
         _MOUNTS_SHARED[key] = answer
+    return _answered(answer)
+
+
+def _answered(answer):
+    """'mount_sources''s answer as remembered: returned, or - an image that does not run - raised afresh."""
+    if isinstance(answer, ImageDoesNotRun):
+        raise ImageDoesNotRun(answer.image, answer.reason)
+    return answer
+
+
+def _probe_answer(client, image: str, key, python: str):
+    """'mount_sources' without the cache."""
+    if _probe_mounts(client, image, python=python):
+        return None
+    sources = _declared_sources()
+    if sources is None:
+        sources = _own_container_sources(client)
+    answer = sources if sources and _probe_mounts(client, image, sources, python=python) else False
+    if answer is False:
+        pc_logging.debug(
+            "The Docker daemon at %s does not share this filesystem, so the 'docker' sandbox cannot "
+            "bind PartCAD's directories into a container." % (key[0],)
+        )
+    else:
+        pc_logging.debug(
+            "The Docker daemon at %s does not share this filesystem; binding from where it has "
+            "this container's mounts: %s" % (key[0], sources)
+        )
     return answer
 
 
@@ -194,11 +251,23 @@ def _own_container_sources(client):
     return None
 
 
+def _probe_user():
+    """Who the probe runs as: this user on Linux, and whoever the platform decides elsewhere (see '_probe_mounts')."""
+    return ("%d:%d" % (os.getuid(), os.getgid())) if platform.system() == "Linux" else None
+
+
 def _probe_mounts(client, image: str, sources=None, python: str = "python3") -> bool:
     """One throwaway container, asked whether it can see a file made here.
 
     ``python`` is what the image's interpreter is called: what the probe runs,
     since it is the one thing every image PartCAD starts is asked to carry.
+
+    True when it found the file, and False when it ran and did not. A container
+    that did not run at all has answered neither, and is told apart by asking
+    the image to run once more with nothing mounted (see '_check_it_runs'):
+    raises :class:`ImageDoesNotRun` where it will not run at all, and is False
+    where it runs but would not take the mount - which is the daemon's answer
+    after all.
     """
     import docker
 
@@ -224,7 +293,8 @@ def _probe_mounts(client, image: str, sources=None, python: str = "python3") -> 
                 command=[
                     python,
                     "-c",
-                    "import os,sys; sys.exit(0 if os.path.isfile(%r) else 1)" % docker_mount.translate(marker),
+                    "import os,sys; sys.exit(0 if os.path.isfile(%r) else %d)"
+                    % (docker_mount.translate(marker), _PROBE_ABSENT),
                 ],
                 entrypoint=[],
                 volumes=docker_mount.mounts([probe], sources=sources),
@@ -236,17 +306,69 @@ def _probe_mounts(client, image: str, sources=None, python: str = "python3") -> 
                 # machine whose uid is not the image's, report a daemon that is
                 # right here as somewhere else, and turn this sandbox off for
                 # everybody. Every GitHub runner is such a machine.
-                user=("%d:%d" % (os.getuid(), os.getgid())) if platform.system() == "Linux" else None,
+                user=_probe_user(),
                 remove=True,
             )
             return True
-        except docker.errors.ContainerError:
-            # It ran and did not find the file: the directory it was given is
-            # not the one made above. This is the answer, not an error.
-            return False
+        except docker.errors.ContainerError as e:
+            if e.exit_status == _PROBE_ABSENT:
+                # It ran and did not find the file: the directory it was given
+                # is not the one made above. This is the answer, not an error.
+                return False
+            failure = e
         except Exception as e:
-            # Anything else -- the image will not run, the daemon refused the
-            # mount, a path that cannot be bound at all -- is a sandbox that
-            # will not work either, and the caller's fallback is the same.
-            pc_logging.debug("The 'docker' sandbox mount probe did not complete: %s" % e)
-            return False
+            failure = e
+    # Neither answer: the image did not run, or the daemon would not make the
+    # mount. The two used to be one "cannot see this machine's files", and an
+    # image with no build for this machine read as a 'DOCKER_HOST' somewhere
+    # else. A container with nothing mounted tells them apart.
+    _check_it_runs(client, image, python)
+    pc_logging.debug("The 'docker' sandbox mount probe did not complete: %s" % failure)
+    return False
+
+
+def _check_it_runs(client, image: str, python: str) -> None:
+    """Raise :class:`ImageDoesNotRun` unless ``image`` runs here with nothing mounted.
+
+    Asked only after the probe failed in a way that was not its answer, so it
+    costs a container only where something is already wrong.
+    """
+    try:
+        client.containers.run(image, command=[python, "-c", "pass"], entrypoint=[], user=_probe_user(), remove=True)
+    except Exception as e:
+        raise ImageDoesNotRun(image, _why_it_does_not_run(client, image, e))
+
+
+def _why_it_does_not_run(client, image: str, error) -> str:
+    """Why ``image`` does not start here, as a clause: the platform where that is it, the error where not."""
+    mismatch = _platform_mismatch(client, image)
+    if mismatch is not None:
+        return mismatch
+    said = str(error).strip().splitlines()
+    return "it does not start here: %s" % (said[0] if said else type(error).__name__)
+
+
+def _platform(os_name, architecture):
+    """'<os>/<architecture>' in the image's spelling, or None if either is unknown."""
+    if not os_name or not architecture:
+        return None
+    return "%s/%s" % (str(os_name).lower(), _ARCHITECTURES.get(str(architecture).lower(), str(architecture).lower()))
+
+
+def _platform_mismatch(client, image: str):
+    """ "it has no build for <daemon's platform> (it is <image's> only)", or None where they agree or cannot be told.
+
+    The commonest reason an image does not start, and one its own error says
+    badly: "exec format error" names neither platform. The image's is in what
+    the daemon pulled, the daemon's in what it says about itself.
+    """
+    try:
+        attrs = client.images.get(image).attrs or {}
+        info = client.info() or {}
+    except Exception:
+        return None
+    built_for = _platform(attrs.get("Os"), attrs.get("Architecture"))
+    here = _platform(info.get("OSType"), info.get("Architecture"))
+    if built_for is None or here is None or built_for == here:
+        return None
+    return "it has no build for %s (it is %s only)" % (here, built_for)
