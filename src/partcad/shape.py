@@ -243,6 +243,14 @@ def sandbox_note(ctx, impl) -> str:
 # over as the file holds it: a closed shell in one is reported, not converted.
 FILE_AUTHORITY_TYPES = frozenset({"step", "brep"})
 
+# How often 'Shape.prepare_async(wait=True)' looks again at a preparation that
+# somebody else has begun and not finished, in seconds: from the first value,
+# doubling to the second. Polled rather than awaited for the reason
+# 'sandbox_lock' polls - a shape is prepared from several event loops at once,
+# and there is no one loop to put a future on.
+_PREPARE_POLL_MIN = 0.002
+_PREPARE_POLL_MAX = 0.1
+
 
 @telemetry.instrument(exclude=["locked"])
 class Shape(ShapeConfiguration):
@@ -309,8 +317,11 @@ class Shape(ShapeConfiguration):
         # Set by the factory (see ShapeFactory.prepare_async): everything that has
         # to happen before this shape's cache key means anything - 'fileFrom'
         # downloads and cross-package references - without building the shape.
+        # '_prepared' is raised as the preparation begins, '_prepare_finished'
+        # once it is over (see 'prepare_async').
         self._prepare = None
         self._prepared = False
+        self._prepare_finished = False
 
         # Filesystem cache
         self.hash = CacheHash(f"{self.project_name}:{self.name}", cache=self.cacheable)
@@ -522,7 +533,7 @@ class Shape(ShapeConfiguration):
     def prepare(self):
         return asyncio.run(self.prepare_async())
 
-    async def prepare_async(self):
+    async def prepare_async(self, wait: bool = False):
         """Fetch everything the cache key depends on, without building the shape.
 
         This is what makes 'pc install' behave like 'npm install': the factory
@@ -533,9 +544,26 @@ class Shape(ShapeConfiguration):
         Idempotent, and safe against reference cycles between assemblies: the
         flag is raised before the hook runs, so a shape that (indirectly) links
         back to itself stops here instead of recursing.
+
+        That same flag is what everybody else sees while the hook is still
+        running, and by default they return on it too: the preparation has
+        begun, but what it hashes in - the keys of the objects an assembly links
+        to, the file a plugin or a 'fileFrom' fetches - may not be in the hash
+        yet. 'wait' is for a caller about to read the key that cannot take that
+        chance: it waits for a preparation begun elsewhere to finish, and if
+        that one failed, prepares the shape itself. Only for a caller holding
+        nothing a preparation could be waiting for: never from inside one, where
+        a link back to the shape being prepared would wait for itself, and never
+        under a shape's lock, whose thread lock stops a whole loop - the
+        preparer's, if it runs there (see 'locked()'). 'Test.test_cached()' is
+        such a caller.
         """
-        if self._prepared:
-            return
+        delay = _PREPARE_POLL_MIN
+        while self._prepared:
+            if self._prepare_finished or not wait:
+                return
+            await asyncio.sleep(delay)
+            delay = min(2 * delay, _PREPARE_POLL_MAX)
         self._prepared = True
         if self._prepare is not None:
             try:
@@ -546,6 +574,7 @@ class Shape(ShapeConfiguration):
                 # file that was never downloaded.
                 self._prepared = False
                 raise
+        self._prepare_finished = True
 
     async def get_cache_key_async(self) -> Optional[str]:
         """Prepare this shape and return its cache key, or None if it has none.
