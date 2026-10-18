@@ -884,8 +884,14 @@ def mesh_reference(shape, node, link_name, state):
 
 
 def physics_of(node, state):
-    """What the part behind one node of the tree states about its physics."""
-    return (state["properties"].get(node.get("name")) or {}).get("physics") or {}
+    """What the object behind one node of the tree states about its physics.
+
+    Looked up by 'kinematics.properties_of()' rather than by the node's full
+    name, which a part and an assembly may share: the assembly 'nut' holding the
+    part 'nut' would otherwise state, for the body it is the root of, the
+    part's friction.
+    """
+    return (kinematics.properties_of(state["properties"], node) or {}).get("physics") or {}
 
 
 def link_physics(body, state):

@@ -54,6 +54,13 @@ URDF and SDFormat to metres and radians, MJCF to metres and its own angles.
     joint inside a scene). 'properties' is the request's properties index
     ('request["properties"]'), which every body's physics is read from.
 
+``properties_of(properties, node) -> dict or None``
+    A node's entry in that index. Keyed by full name, except that an assembly
+    or a scene sharing its full name with a part has its own entry under its
+    kind and name ('properties_key()') - the full name is the part's - so an
+    exporter reading what a body's own node states asks this rather than
+    'properties.get(node["name"])'.
+
 ``Body``
     'name' (unique in the list: the label of the node that placed it, then
     "-2", "-3" ... in list order, as joint names are made unique); 'label';
@@ -354,6 +361,45 @@ def kind_of(node) -> str:
     if kind in KINDS:
         return kind
     return ASSEMBLY if isinstance(node, dict) and KEY_ASSEMBLY in node else PART
+
+
+def properties_key(node):
+    """The key a node's own entry is under where its full name may be another node's too.
+
+    A part and an assembly may share a name within a package - a part 'nut' and
+    the assembly 'nut' that holds it - and so share a full name, which is all
+    the properties index and the physics the core resolves were ever keyed by.
+    Whichever of the two came last took the entry, so an assembly exported with
+    its namesake part inside was handed that part's physics: it weighed what the
+    part weighs, and with a joint below it was reported as stating its own mass.
+
+    So this is the full name for a part, which keeps the key every reader has
+    always looked a part up by, and the kind and the full name for an assembly
+    or a scene: 'assembly://pkg:nut', which no part's full name is. None for a
+    node with no name, which nothing can look up.
+    """
+    name = node.get("name") if isinstance(node, dict) else None
+    if not name:
+        return None
+    kind = kind_of(node)
+    return name if kind == PART else "%s:%s" % (kind, name)
+
+
+def properties_of(properties, node):
+    """A node's entry in a properties index ('request["properties"]'), or None.
+
+    Under 'properties_key()' where the index has an entry there - which it
+    does for every assembly and scene whose full name another node in the
+    request also carries (see 'wrapper_export.properties_index()') - and under
+    the full name otherwise, which is where every other node's entry has always
+    been, and where an index made by hand keeps it.
+    """
+    if not isinstance(properties, dict):
+        return None
+    key = properties_key(node)
+    if key is not None and key in properties:
+        return properties[key]
+    return properties.get(node.get("name")) if isinstance(node, dict) else None
 
 
 def _children(node) -> list:
@@ -1700,7 +1746,7 @@ class _Builder:
 
     def physics_of(self, node) -> dict:
         if self.properties is not None:
-            entry = self.properties.get(node.get("name"))
+            entry = properties_of(self.properties, node)
         else:
             entry = node.get(KEY_PROPERTIES)
         physics = entry.get("physics") if isinstance(entry, dict) else None

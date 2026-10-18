@@ -1485,6 +1485,42 @@ def test_a_mechanism_that_states_its_mass_is_weighed_by_its_bodies_and_says_so(t
     assert any("states its own mass, and moves" in problem for problem in found.problems)
 
 
+@pytest.mark.parametrize("jointed", [False, True])
+def test_an_assembly_named_after_a_part_it_holds_is_weighed_by_its_parts(tmp_path, stand_in_geometry, jointed):
+    """The assembly 'base' holding the part 'base': one full name, and each its own physics.
+
+    Indexed by the full name alone, the part's physics were the assembly's too:
+    welded, the assembly weighed what that one part weighs, as if it stated it;
+    with a joint below it, it was reported as stating its own mass, and moving.
+    The index here is the one an export is handed, made by the export wrapper
+    from the tree and the physics the core resolved for each shape.
+    """
+    import wrapper_export
+
+    if jointed:
+        files = {"base.assy": ONE_JOINT.format(params="")}
+    else:
+        files = {"base.assy": "links:\n  - part: base\n  - part: lid\n    location: [[0, 30, 0], [0, 0, 1], 0]\n"}
+    ctx = _context(tmp_path, files, "assemblies:\n  base: {type: assy}\n", bore="motion: revolute")
+    tree = _tree(ctx, ":base")
+    base = tree[shape_envelope.KEY_ASSEMBLY][0]
+    assert tree["name"] == base["name"]
+
+    piece = {"mass": 1.0, "centerOfMass": [0.0, 0.0, 0.0], "inertia": {"ixx": 0.01, "iyy": 0.01, "izz": 0.01}}
+    facts = {child["name"]: dict(piece) for child in tree[shape_envelope.KEY_ASSEMBLY]}
+    request = {"wrapped": tree, "properties": True, wrapper_export.PHYSICS_KEY: facts}
+    found = kinematics.bodies(tree, wrapper_export.properties_index(request))
+
+    assert not any("states its own mass" in problem for problem in found.problems)
+    if jointed:
+        assert [(body.name, body.physics["mass"]) for body in found] == [("base", 1.0), ("arm", 1.0)]
+    else:
+        (body,) = found
+        # Both parts, not the one the assembly shares its name with.
+        assert body.physics["mass"] == pytest.approx(2.0)
+        assert len(body.mass_parts()) == 2
+
+
 def test_a_body_name_is_unique_the_way_a_joint_name_is():
     leg = {"name": "pkg:leg", "label": "leg", "kind": "part", "brep": b"x"}
     tree = {"name": "pkg:table", "label": "table", "kind": "scene", "assembly": [dict(leg), dict(leg), dict(leg)]}

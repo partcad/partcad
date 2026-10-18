@@ -791,7 +791,9 @@ at all).
   else volume × density; `centerOfMass` stated, else the centroid; `inertia` stated, else the solid's scaled to
   that mass. `pc info` shows the result as `MassProperties` with a `source` per value, an assembly's as its
   parts' combined in its own frame; an export with `properties: true` is handed it per shape (`FACTS_KEY`,
-  merged *underneath* what each shape states by `wrapper_export.properties_index()`); the IDE's Build vs Buy
+  merged *underneath* what each shape states by `wrapper_export.properties_index()`; keyed by
+  `kinematics.properties_key()`, and so is an assembly in the index that shares its full name with a part, so that
+  the two stay two entries); the IDE's Build vs Buy
   table shows the same mass. No exporter knows materials or densities exist.
 
   **Every density is kg/m³** — a material's, a part's, an export's — so nothing converts one, and

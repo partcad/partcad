@@ -35,6 +35,7 @@ from partcad.lint.all import get_partcad_schema
 from partcad.shape import Shape
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
+import kinematics  # noqa: E402
 import wrapper_export  # noqa: E402
 
 # Not a real BREP, but it starts the way an uncompressed payload does, which is
@@ -601,6 +602,89 @@ def test_the_material_table_is_not_walked_for_shapes():
 
     index = wrapper_export.properties_index(request)
     assert set(index) == {"pkg:leaf"}
+
+
+# A part and an assembly that share a name
+# ----------------------------------------
+
+
+def _namesake(assembly_properties=None):
+    """The assembly 'nut' holding the part 'nut' and a rod: one full name, two shapes."""
+    assembly = {
+        "name": "pkg:nut",
+        "label": "nut",
+        "kind": "assembly",
+        "assembly": [
+            {"name": "pkg:rod", "label": "rod", "kind": "part", "properties": STEEL, "brep": "AAAA"},
+            {"name": "pkg:nut", "label": "nut", "kind": "part", "properties": BRASS, "brep": "BBBB"},
+        ],
+    }
+    if assembly_properties is not None:
+        assembly["properties"] = assembly_properties
+    return assembly
+
+
+def test_a_part_and_an_assembly_that_share_a_name_each_keep_their_own():
+    """The full name is the part's; the assembly's own is under its kind and name too.
+
+    Keyed by the full name alone, whichever the walk reached last took the
+    entry - the part, inside the assembly - and an exporter weighing the
+    assembly was handed the part's mass as what the assembly states.
+    """
+    assembly = _namesake({"color": "#112233"})
+    ring, rod = assembly["assembly"][1], assembly["assembly"][0]
+    request = {
+        "wrapped": assembly,
+        "properties": True,
+        "__physics__": {
+            "pkg:nut": {"mass": 0.017},
+            "pkg:rod": {"mass": 0.05},
+            "assembly:pkg:nut": {"friction": 0.3},
+        },
+    }
+
+    index = wrapper_export.properties_index(request)
+
+    assert index["pkg:nut"] == {"material": "brass", "physics": {"mass": 0.25}}
+    assert index["assembly:pkg:nut"] == {"color": "#112233", "physics": {"friction": 0.3}}
+    assert kinematics.properties_of(index, assembly) == index["assembly:pkg:nut"]
+    assert kinematics.properties_of(index, ring) == index["pkg:nut"]
+    # A name nothing else carries is indexed as it always was.
+    assert index["pkg:rod"] == dict(STEEL, physics={"mass": 0.05})
+    assert kinematics.properties_of(index, rod) == index["pkg:rod"]
+
+
+def test_an_assembly_that_says_nothing_is_not_handed_its_namesake_s():
+    """Indexed even with nothing in it, so that the lookup does not fall through to the part."""
+    assembly = _namesake()
+    request = {"wrapped": assembly, "properties": True, "__physics__": {"pkg:nut": {"mass": 0.017}}}
+
+    index = wrapper_export.properties_index(request)
+
+    assert index["assembly:pkg:nut"] == {}
+    assert kinematics.properties_of(index, assembly) == {}
+    assert index["pkg:nut"]["physics"] == {"mass": 0.25}
+
+
+def test_the_full_name_is_the_part_s_whichever_is_walked_last():
+    """Not the walk order: an assembly reached after its namesake part does not take its name."""
+    assembly = _namesake({"color": "#112233"})
+    ring = dict(assembly["assembly"][1])
+    # Another parameter holding the part, ahead of the object in the request.
+    request = {"sketch": ring, "wrapped": assembly, "properties": True}
+
+    index = wrapper_export.properties_index(request)
+
+    assert index["pkg:nut"] == BRASS
+    assert index["assembly:pkg:nut"] == {"color": "#112233"}
+
+
+def test_an_index_made_by_hand_is_read_by_full_name():
+    """What a plugin's own tests hand 'kinematics.bodies()': no kinds in it, as before."""
+    assembly = _namesake()
+    assert kinematics.properties_of({"pkg:nut": STEEL}, assembly) == STEEL
+    assert kinematics.properties_of({}, assembly) is None
+    assert kinematics.properties_of(None, assembly) is None
 
 
 def test_a_type_that_accepts_a_material_records_what_it_was_asked_for(tmp_path):

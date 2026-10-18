@@ -185,6 +185,43 @@ def test_an_export_is_handed_every_shape_resolved_by_its_own_name(ctx, root):
     assert "%s:rig" % root.name not in facts
 
 
+@pytest.mark.parametrize("cached", [False, True])
+def test_a_part_and_an_assembly_that_share_a_name_are_resolved_apart(ctx, root, cached):
+    """The assembly 'nut' holding the part 'nut': one full name, two shapes.
+
+    Keyed by the full name alone, the part's entry took the assembly's place -
+    it is walked after it - and the export was handed the part's mass for the
+    whole assembly, and nothing of what the assembly's own material lends.
+    """
+    nut, rod = "%s:nut" % root.name, "%s:rod" % root.name
+    assembly = {
+        "name": nut,
+        "label": "nut",
+        "kind": "assembly",
+        "properties": {"material": ":pla"},
+        "assembly": [_leaf(nut), _leaf(rod)],
+    }
+    request = {"wrapped": assembly, "properties": True}
+
+    fallback = physics.export_fallback(request)
+    if cached:
+        facts = asyncio.run(physics.physics_by_shape_async(ctx, request, fallback))
+    else:
+        facts = physics.physics_by_shape(ctx, request, fallback)
+
+    # The part, under the name every reader looks a part up by, weighed at the
+    # export's fallback: it is made of nothing.
+    assert facts[nut]["mass"] == pytest.approx(2700.0 * VOLUME_M3)
+    # The assembly, under its kind and name, with what its material lends and
+    # no mass: that is the exporter's to add up from the parts.
+    own = facts["assembly:" + nut]
+    assert own["friction"] == pytest.approx(0.35)
+    assert own["density"] == pytest.approx(1320.0)
+    assert "mass" not in own
+    # Which is the key the export wrapper reads it back under.
+    assert physics.kinematics.properties_key(assembly) == "assembly:" + nut
+
+
 #
 # What an assembly weighs
 #
