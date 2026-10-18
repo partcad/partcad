@@ -729,9 +729,10 @@ see :ref:`the PartCAD IDE <partcad-ide>`.
 Running ``/pc:setup`` from a terminal inside Visual Studio Code or VSCodium installs this extension along
 with the command line tools. The rest of this section is how to do it by hand.
 
-This extension is available through the VS Code marketplace.
-The corresponding marketplace page is `here <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_.
-Install it from the Extensions view, or by id from a terminal:
+This extension is available through the `Visual Studio Marketplace
+<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_. Every PartCAD release publishes
+its new version there, so it updates the way any other extension does. Install it from the Extensions view, or by
+id from a terminal:
 
 .. code-block:: shell
 
@@ -745,9 +746,9 @@ Every `GitHub release <https://github.com/partcad/partcad/releases>`_ also carri
 
   $ code --install-extension partcad-<version>.vsix
 
-Use it to pin a particular version, to install where the marketplace is not reachable, or to try a release
-before the marketplace has it. One package serves every platform: the extension is a JSON-RPC client with no
-Python and nothing compiled in it.
+Use it to pin a particular version, or to install where the marketplace is not reachable: it is the same package
+the marketplace serves. One package serves every platform: the extension is a JSON-RPC client with no Python and
+nothing compiled in it.
 
 .. note::
 

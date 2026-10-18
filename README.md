@@ -325,8 +325,10 @@ On Windows, download and run `partcad-ide-<version>-windows-x86_64-setup.exe` fr
 Already using Visual Studio Code? Install the extension into it instead of the IDE above.
 
 This extension can be installed by searching for `PartCAD` in the VS Code extension search form, or by browsing
-[its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official). From a
-terminal it is `code --install-extension PartCAD.partcad-official`.
+[its Visual Studio Marketplace page](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official),
+where every PartCAD release publishes its new version. From a terminal it is
+`code --install-extension PartCAD.partcad-official`. It used to be published as `OpenVMP.partcad`; an installation
+of that one updates into this one by itself.
 
 Every [release](https://github.com/partcad/partcad/releases) also carries the packaged extension as
 `partcad-<version>.vsix`, to pin a version or to install where the marketplace is not reachable:
@@ -337,7 +339,8 @@ Marketplace's terms restricting that one to Microsoft's own products:
 
 `/pc:setup` above does this for you when it is run from a terminal inside the editor.
 
-Make sure to have Python configured and a [conda] environment set up in VS Code before using PartCAD.
+It needs no Python and no conda of its own: when it finds no PartCAD on the machine, it offers to download the
+standalone build.
 
 ### Add-on for FreeCAD
 

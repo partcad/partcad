@@ -917,7 +917,8 @@ first and had to run per platform because those were compiled wheels. There is n
 more, so one build serves every platform.
 
 The same workflow packages `ide/vscode-shim` beside it, into the same artifact and onto the same release. That
-is the marketplace entry this extension used to be published under -- see "The marketplace identity" below.
+is the marketplace entry this extension used to be published under -- see "The marketplace identity" below. On
+`main`, the release then publishes that same artifact to the Visual Studio Marketplace -- see the next section.
 
 ## Publishing to the Marketplace
 
@@ -925,39 +926,80 @@ A release publishes both packages to the Visual Studio Marketplace by itself: `d
 hands the artifact it just attached to the GitHub release to `.github/workflows/vsix-publish.yml`, which
 publishes `PartCAD.partcad-official` and then `OpenVMP.partcad`, in that order (see `ide/vscode-shim/AGENTS.md`
 for why). Nothing is rebuilt for it, and `--skip-duplicate` makes re-running a release finish what it did not.
+0.8.208 was the first release to go out this way. Nothing to do per release: the job runs after PyPI and the
+GitHub release, and if it fails, those have already gone out -- re-run that one job ("Re-run failed jobs").
+
+The workflow publishes to the Visual Studio Marketplace only. It does not publish to Open VSX, which is where
+VSCodium and the other editors that may not use the Marketplace look; the PartCAD IDE does not need it, since it
+carries the extension inside the application.
 
 It signs in with **Microsoft Entra ID, not a personal access token**. `vsce` takes a PAT only if it was created
 for "All accessible organizations", which makes it a global PAT, and Azure DevOps stops accepting global PATs on
 2026-12-01. There is no secret to store or rotate: GitHub's OIDC token is exchanged for an Entra token through a
-federated credential, and that credential is bound to the `vscode-marketplace` environment, which only `main`
-may enter.
+federated credential on an app registration, and that credential is bound to the `vscode-marketplace`
+environment, which only `main` may enter.
 
-One-time setup, for a maintainer who owns both the `PartCAD` and the `OpenVMP` publishers:
+### What is set up, and where
 
-1. **An app registration.** In the Azure portal, Microsoft Entra ID → App registrations → New registration
-   (single tenant, no redirect URI). Note its *Application (client) ID* and *Directory (tenant) ID*. It needs
-   no API permissions, no client secret and no Azure subscription.
-2. **A federated credential on it.** Certificates & secrets → Federated credentials → Add credential →
-   "GitHub Actions deploying Azure resources": organization `partcad`, repository `partcad`, entity type
-   *Environment*, environment `vscode-marketplace`. The subject it shows is
-   `repo:partcad/partcad:environment:vscode-marketplace`, and the audience stays `api://AzureADTokenExchange`.
-3. **The GitHub environment.** Settings → Environments → New environment `vscode-marketplace`. Under
-   *Deployment branches and tags* choose "Selected branches and tags" and add `main`. Under *Environment
-   variables* add `AZURE_CLIENT_ID` and `AZURE_TENANT_ID` from step 1. These are variables, not secrets:
-   neither is a credential, and the federated credential's subject is what keeps anyone else from signing in.
-   (A required reviewer here would make every release wait for a click, like `pypi` does; leave it out unless
-   that is wanted.)
-4. **The identity's profile ID.** A publisher takes a member by its Azure DevOps profile ID, and that can only
-   be read while signed in as the identity. Running `Extension (publish)` by hand (Actions → Run workflow, on
-   `main`) prints it -- *"Azure DevOps profile ID: ..."* -- and publishes nothing. Before this workflow is on
-   `main`, add `devel` to the environment's branches for the duration and run it on `devel`.
-5. **Membership of both publishers.** On <https://marketplace.visualstudio.com/manage/publishers/partcad> and
-   on <https://marketplace.visualstudio.com/manage/publishers/openvmp>: Members → Add → paste the profile ID →
-   role *Contributor*. Run the workflow by hand again; it checks both (`vsce verify-pat --azure-credential`)
-   and goes green. Take `devel` back out of the environment if step 4 put it there.
+All of it exists already; this is what to look at when something changes, and how to put it back.
 
-A release whose environment is not set up fails this one job after everything else has been released, with an
-error saying what is missing; re-run the job once it is fixed.
+| Where | What |
+| --- | --- |
+| Azure portal, Microsoft Entra ID → App registrations | An app registration (single tenant, no redirect URI, no API permissions, no client secret, no Azure subscription). |
+| That app → Certificates & secrets → Federated credentials | Issuer `https://token.actions.githubusercontent.com`, audience `api://AzureADTokenExchange`, subject `repo:partcad@179618328/partcad@679553008:environment:vscode-marketplace`. |
+| GitHub → Settings → Environments → `vscode-marketplace` | Deployment branches: `main` only. Environment **variables** (not secrets) `AZURE_CLIENT_ID` and `AZURE_TENANT_ID`, the app's *Application (client) ID* and *Directory (tenant) ID*. Neither is a credential: the federated credential's subject is what keeps anyone else from signing in. No required reviewer, so a release does not wait for a click the way `pypi` does. |
+| GitHub, the repository's OIDC subject setting | `use_immutable_subject: true` -- see below. |
+| <https://marketplace.visualstudio.com/manage/publishers/partcad> and <https://marketplace.visualstudio.com/manage/publishers/openvmp> → Members | The app, as a *Contributor* on both, by its Azure DevOps profile ID `76966de6-2962-605f-9d78-98aa8cf3fa9c`. |
+
+**The subject carries IDs, and that is a repository setting.** GitHub sends one of two subject formats. The
+name-only one (`repo:partcad/partcad:environment:...`) is the default for a repository created before 2026-07-15,
+as this one was; the immutable one (`repo:partcad@179618328/partcad@679553008:environment:...`, the organization
+and repository *IDs* beside their names) is the default after that date, and an older repository can opt in. The
+Azure portal's "GitHub Actions" form builds the immutable one as soon as its optional ID fields are filled in, so
+this repository is opted in to match:
+
+```bash
+gh api -X PUT repos/partcad/partcad/actions/oidc/customization/sub \
+  -F use_default=true -F use_immutable_subject=true
+gh api repos/partcad/partcad/actions/oidc/customization/sub     # read it back
+```
+
+`use_default` keeps the standard claims; only the format of the repository segment changes. Nothing else in this
+repository signs in with OIDC, so nothing else depends on the format. The IDs do not change when the organization
+or the repository is renamed, which is the point of them.
+
+**When the sign-in fails**, the `Sign in to Microsoft Entra ID` step prints the subject it presented
+(`subject claim - repo:...`). `AADSTS700213: No matching federated identity record found` means no federated
+credential on the app has exactly that subject: compare the two strings, and fix whichever side is wrong. A
+failure at `Check the identity may publish` instead means the sign-in worked and the app is not a member of that
+publisher; the step before it prints the profile ID to add.
+
+### Setting it up from nothing
+
+For a new publisher, a new app registration, or a fork. Steps 1 to 3 are the table above.
+
+1. Create the app registration and note its client and tenant IDs.
+2. Add the federated credential. In the "GitHub Actions deploying Azure resources" scenario: organization
+   `partcad`, repository `partcad`, entity type *Environment*, environment `vscode-marketplace`, and fill in the
+   organization and repository IDs, so that the subject is the immutable one above. Check the subject the form
+   shows against the one GitHub will send: if the repository has not opted in, either opt it in (above) or leave
+   the ID fields empty, which gives the name-only subject.
+3. Create the `vscode-marketplace` environment with its branch rule and its two variables.
+4. Read the app's Azure DevOps profile ID. A publisher takes a member by that ID, and it can only be read while
+   signed in as the app. Running `Extension (publish)` by hand (Actions → Run workflow, on `main`) prints it --
+   *"Azure DevOps profile ID: ..."* -- and publishes nothing. Without the workflow on `main`, add `devel` to the
+   environment's branches for the duration and run it there; or sign in as the app on your own machine, with a
+   client secret you delete straight afterwards:
+
+   ```bash
+   az login --service-principal --username <AZURE_CLIENT_ID> --tenant <AZURE_TENANT_ID> --allow-no-subscriptions
+   az rest --method get --url "https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1" \
+     --resource 499b84ac-1321-427f-aa17-267ca6975798 --query id -o tsv
+   ```
+
+5. Add that ID as a *Contributor* on both publishers. Run the workflow by hand again: it checks both
+   (`vsce verify-pat --azure-credential`) and goes green. Take `devel` back out of the environment if step 4 put
+   it there.
 
 ## The icon
 

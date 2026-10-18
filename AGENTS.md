@@ -646,7 +646,10 @@ without `#deepTest`. The
 serves every platform: the extension is a JSON-RPC client with no Python and no compiled content in it. The
 same workflow packages the transition shim beside it, under the extension's version — which the shim does not
 state anywhere, but reads at package time, so the two cannot drift. A shim older than the entry it replaces is
-one the marketplace never delivers, and a second literal to bump is how that happens. Changing
+one the marketplace never delivers, and a second literal to bump is how that happens. On `main`, `deploy.yml` then
+publishes both packages to the Visual Studio Marketplace from that same artifact, extension first, through
+`.github/workflows/vsix-publish.yml`; it signs in with Microsoft Entra ID rather than a token, and "Publishing to
+the Marketplace" in `ide/vscode/AGENTS.md` says how that is set up and what to look at when it fails. Changing
 `.vscode/extensions.json` changes what the IDE ships with — see `ide/standalone/README.md`. The plugin is built
 the same way, by `.github/workflows/plugin.yml`, and published two ways by `deploy.yml`: `pc-<version>.zip` on
 the release, and the `plugin-dist` branch, which is what `/plugin marketplace add partcad/partcad@plugin-dist`

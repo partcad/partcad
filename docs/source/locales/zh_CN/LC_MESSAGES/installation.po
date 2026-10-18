@@ -1375,14 +1375,15 @@ msgstr ""
 
 #: ../../source/installation.rst:729
 msgid ""
-"This extension is available through the VS Code marketplace. The "
-"corresponding marketplace page is `here "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
-"official>`_. Install it from the Extensions view, or by id from a "
-"terminal:"
+"This extension is available through the `Visual Studio Marketplace "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_. "
+"Every PartCAD release publishes its new version there, so it updates the "
+"way any other extension does. Install it from the Extensions view, or by "
+"id from a terminal:"
 msgstr ""
-"此扩展可通过 VS Code 市场获取，对应的市场页面在 `此处 <https://marketplace.visualstudio.c"
-"om/items?itemName=PartCAD.partcad-official>`_ 。可以在扩展视图中安装，也可以在终端里按 id 安装："
+"此扩展可通过 `Visual Studio Marketplace "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
+"获取。每个 PartCAD 发布版本都会把新版本发布到那里，因此它会像其他扩展一样自动更新。可以在扩展视图中安装，也可以在终端里按 id 安装："
 
 #: ../../source/installation.rst:737
 msgid ""
@@ -1397,13 +1398,13 @@ msgstr ""
 
 #: ../../source/installation.rst:745
 msgid ""
-"Use it to pin a particular version, to install where the marketplace is "
-"not reachable, or to try a release before the marketplace has it. One "
-"package serves every platform: the extension is a JSON-RPC client with no"
-" Python and nothing compiled in it."
+"Use it to pin a particular version, or to install where the marketplace "
+"is not reachable: it is the same package the marketplace serves. One "
+"package serves every platform: the extension is a JSON-RPC client with no "
+"Python and nothing compiled in it."
 msgstr ""
-"在需要锁定某个特定版本、在访问不到市场的环境中安装，或者想在市场上架之前先试用某个发布版本时，就用它。一个包适用于所有平台：该扩展是一个"
-" JSON-RPC 客户端，其中既没有 Python，也没有任何编译产物。"
+"在需要锁定某个特定版本，或在访问不到市场的环境中安装时，就用它：它与市场提供的是同一个包。一个包适用于所有平台：该扩展是一个 JSON-RPC "
+"客户端，其中既没有 Python，也没有任何编译产物。"
 
 #: ../../source/installation.rst:751
 msgid ""

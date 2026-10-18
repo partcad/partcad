@@ -22,6 +22,13 @@
 # the environment admits only "main". "vsce --azure-credential" then picks the
 # Azure CLI session up. The setup is "Publishing to the Marketplace" in
 # "ide/vscode/AGENTS.md".
+#
+# The subject is the immutable one, with the organization's and the
+# repository's IDs in it (`repo:partcad@179618328/partcad@679553008:...`),
+# because the repository is opted in to that format on GitHub. Change that
+# setting, or the credential in Azure, and the two have to be changed together:
+# the "Sign in" step below prints the subject it presented, which is the string
+# to compare when Entra answers AADSTS700213.
 name: Extension (publish) # Keep the action badge icon short
 
 on:

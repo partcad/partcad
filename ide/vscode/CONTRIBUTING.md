@@ -42,6 +42,11 @@ The output name is fixed rather than versioned because `ide/standalone/build.sh`
 it builds the copy of the extension that ships inside the PartCAD IDE. The release asset is a renamed copy —
 `vsix.yml` does `cp partcad.vsix "partcad-$(jq -r .version package.json).vsix"` — rather than a second build.
 
+You never publish by hand. A release — a push to `main` — attaches that `.vsix` to the GitHub release and then
+publishes it to the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official)
+as `PartCAD.partcad-official`, followed by the `OpenVMP.partcad` transition shim. How that signs in, and what to
+do when it fails, is "Publishing to the Marketplace" in [`AGENTS.md`](./AGENTS.md).
+
 One build serves every platform. The package has no compiled content left, so the `.vsix` you produce is the
 `.vsix` CI produces on its single `ubuntu-24.04` runner; this is why `vsix.yml` has a one-entry matrix and why
 there is no per-platform packaging step anywhere.
