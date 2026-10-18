@@ -156,7 +156,12 @@ file type that declares ``properties: true`` is handed, in place of the flag, an
 index of what the shapes being written declare about themselves: their
 ``physics``, ``material`` and ``color``, keyed by the full ``<package>:<name>``
 of each shape, so an implementation given a whole assembly tree can look up the
-properties belonging to each node of it. Each shape's ``physics`` is complete:
+properties belonging to each node of it. A part and an assembly (or a scene) may
+share a name, and so a full name: that one is then the part's, and the
+assembly's own entry is also under its kind and full name,
+``assembly:<package>:<name>`` (or ``scene:...``). ``kinematics.properties_of()``
+in PartCAD's ``wrappers/`` directory is the lookup that knows this, and what
+``kinematics.bodies()`` weighs every body by. Each shape's ``physics`` is complete:
 what it states, what its material lends, and the ``mass``, ``centerOfMass`` and
 ``inertia`` its solid comes to at its ``density`` (see :ref:`properties`), so an
 implementation writes those and works none of them out. A body made of several
