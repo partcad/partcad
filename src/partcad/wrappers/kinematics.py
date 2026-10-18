@@ -375,8 +375,14 @@ def properties_key(node):
 
     So this is the full name for a part, which keeps the key every reader has
     always looked a part up by, and the kind and the full name for an assembly
-    or a scene: 'assembly://pkg:nut', which no part's full name is. None for a
-    node with no name, which nothing can look up.
+    or a scene: 'assembly://pkg:nut'. None for a node with no name, which
+    nothing can look up.
+
+    A string, and not a (kind, name) pair, because the core sends the physics
+    keyed by it to the sandbox as JSON, whose keys are strings and nothing else.
+    It cannot be a part's full name: a full name is '<package>:<name>', and a
+    package's name is a path from the root, '//' (see 'partcad.consts.ROOT'), so
+    every full name begins with '/' and none begins with a kind.
     """
     name = node.get("name") if isinstance(node, dict) else None
     if not name:
