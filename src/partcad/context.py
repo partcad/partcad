@@ -1522,8 +1522,14 @@ class Context:
         return providers
 
     def select_preferred_supplier(self, suppliers: list[str]):
-        """From a list of suppliers, select the preferred one."""
-        return suppliers[0]
+        """From a list of suppliers, select the preferred one, or '' if there is none.
+
+        '' is what 'select_supplier()' records for a part its provider does not
+        have, and what the carts and quotes made from this keep apart as the
+        parts nobody supplies - rather than one such part failing the quote
+        of all the others.
+        """
+        return suppliers[0] if suppliers else ""
 
     def select_preferred_suppliers(self, suppliers_per_part: dict[str, list[str]]) -> dict[str, str]:
         """Given a list of suppliers per part, select the preferred supplier for each."""

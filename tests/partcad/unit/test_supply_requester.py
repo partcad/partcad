@@ -122,3 +122,15 @@ def test_a_store_that_cannot_be_loaded_is_passed_over(asked):
 
     assert asyncio.run(ctx.find_part_suppliers(item)) == [OWN]
     assert asked == [("own", "//kit:pin")]
+
+
+def test_a_part_nobody_supplies_is_kept_apart_from_the_quote(asked):
+    # As 'select_supplier()' keeps a part its one provider does not have: under
+    # '', so that the parts that are supplied are still quoted.
+    ctx = pc.Context(PACKAGE)
+    suppliers = asyncio.run(ctx.find_suppliers(_cart(ctx, "//lib:brick", "//kit:pin")))
+    preferred = ctx.select_preferred_suppliers(suppliers)
+
+    assert preferred == {"//lib:brick#1": "", "//kit:pin#1": OWN}
+    carts = asyncio.run(ctx.prepare_supplier_carts(preferred))
+    assert {name: list(cart.parts) for name, cart in carts.items()} == {"": ["//lib:brick"], OWN: ["//kit:pin"]}
