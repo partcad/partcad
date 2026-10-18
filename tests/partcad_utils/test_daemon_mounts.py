@@ -41,12 +41,21 @@ class _Daemon:
     daemon shares this filesystem. An image runs only where it has a build for
     the daemon's platform, and only the interpreters it carries: 'python3' in
     each, except 'NO_PYTHON', which has none. 'refuses_mounts' is a daemon that
-    will not make any bind.
+    will not make any bind, and 'emulates' one that runs another platform's
+    images (binfmt and QEMU) rather than failing them.
     """
 
-    def __init__(self, sees=True, refuses_mounts=False, architecture="aarch64", base_url="unix://var/run/docker.sock"):
+    def __init__(
+        self,
+        sees=True,
+        refuses_mounts=False,
+        architecture="aarch64",
+        base_url="unix://var/run/docker.sock",
+        emulates=False,
+    ):
         self.sees = sees
         self.refuses_mounts = refuses_mounts
+        self.emulates = emulates
         self.architecture = architecture
         self.runs = []
         self.api = types.SimpleNamespace(base_url=base_url)
@@ -73,7 +82,7 @@ class _Daemon:
     def _run(self, image, command=None, volumes=None, **kwargs):
         self.runs.append((image, volumes))
         own = {"aarch64": "arm64", "x86_64": "amd64"}[self.architecture]
-        if self.built[image].attrs["Architecture"] != own:
+        if self.built[image].attrs["Architecture"] != own and not self.emulates:
             # What a container with another platform's binary exits with.
             raise docker.errors.ContainerError(
                 container="probe",
@@ -122,6 +131,37 @@ def test_an_image_with_no_build_for_this_platform_says_so():
 
     assert raised.value.reason == "it has no build for linux/arm64 (it is linux/amd64 only)"
     assert raised.value.image == AMD64_ONLY
+
+
+def test_an_emulated_image_without_the_interpreter_says_it_is_the_interpreter():
+    """Under emulation another platform's image runs: what stopped it is what it says, not its platform."""
+    daemon = _Daemon(emulates=True)
+    daemon.interpreters[AMD64_ONLY] = set()
+
+    with pytest.raises(daemon_mounts.ImageDoesNotRun) as raised:
+        daemon_mounts.mount_sources(daemon, AMD64_ONLY)
+
+    assert raised.value.reason.startswith("it does not start here: ")
+    assert '"python3": executable file not found' in raised.value.reason
+    assert "no build for" not in raised.value.reason
+    # The platforms are still a fact worth having, beside the reason rather than as it.
+    assert raised.value.reason.endswith("(it is a linux/amd64 image, on a linux/arm64 machine)")
+
+
+def test_an_emulated_image_that_has_the_interpreter_answers_about_the_mounts():
+    assert daemon_mounts.mount_sources(_Daemon(emulates=True), AMD64_ONLY) is None
+
+
+def test_only_a_platform_failure_is_reported_as_one():
+    """In the daemon's words and the CLI's, for each way a platform stops a container."""
+    for said in (
+        "exec /usr/bin/python3: exec format error",
+        "no matching manifest for linux/arm64/v8 in the manifest list entries",
+        "The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)",
+        "image with reference x was found but does not provide the specified platform (linux/arm64)",
+    ):
+        assert daemon_mounts._is_platform_failure(said), said
+    assert not daemon_mounts._is_platform_failure('exec: "python3": executable file not found in $PATH')
 
 
 def test_the_platforms_are_compared_in_one_spelling():

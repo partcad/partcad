@@ -346,12 +346,54 @@ def _check_it_runs(client, image: str, python: str) -> None:
 
 
 def _why_it_does_not_run(client, image: str, error) -> str:
-    """Why ``image`` does not start here, as a clause: the platform where that is it, the error where not."""
-    mismatch = _platform_mismatch(client, image)
-    if mismatch is not None:
-        return mismatch
-    said = str(error).strip().splitlines()
-    return "it does not start here: %s" % (said[0] if said else type(error).__name__)
+    """Why ``image`` does not start here, as a clause: the platform where that is it, the error where not.
+
+    The platform only where the error says it was the platform. An image built
+    for another one runs where the daemon emulates it (binfmt and QEMU), and
+    one that then fails for want of the interpreter asked for has a build that
+    runs here and no interpreter: saying it had no build would send its reader
+    after the wrong thing again. There the error is the reason, and the platform
+    a fact beside it.
+    """
+    said = _error_text(error)
+    platforms = _platforms(client, image)
+    if platforms is not None and _is_platform_failure(said):
+        here, built_for = platforms
+        return "it has no build for %s (it is %s only)" % (here, built_for)
+    lines = said.strip().splitlines()
+    reason = "it does not start here: %s" % (lines[0] if lines else type(error).__name__)
+    if platforms is not None:
+        reason += " (it is a %s image, on a %s machine)" % (platforms[1], platforms[0])
+    return reason
+
+
+# How a daemon says a container failed because of its platform, in its own
+# words and in Docker's CLI's: a binary for another machine, a manifest list
+# with no entry for this one, an image pulled for another platform than the
+# one asked for.
+_PLATFORM_FAILURES = (
+    "exec format error",
+    "no matching manifest for",
+    "does not match the detected host platform",
+    "does not match the specified platform",
+    "does not provide the specified platform",
+)
+
+
+def _error_text(error) -> str:
+    """What ``error`` says, with what the container wrote to stderr when it ran far enough to write any."""
+    said = str(error)
+    stderr = getattr(error, "stderr", None)
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", "replace")
+    if stderr and stderr not in said:
+        said += "\n" + stderr
+    return said
+
+
+def _is_platform_failure(said: str) -> bool:
+    lowered = said.lower()
+    return any(marker in lowered for marker in _PLATFORM_FAILURES)
 
 
 def _platform(os_name, architecture):
@@ -361,8 +403,8 @@ def _platform(os_name, architecture):
     return "%s/%s" % (str(os_name).lower(), _ARCHITECTURES.get(str(architecture).lower(), str(architecture).lower()))
 
 
-def _platform_mismatch(client, image: str):
-    """ "it has no build for <daemon's platform> (it is <image's> only)", or None where they agree or cannot be told.
+def _platforms(client, image: str):
+    """(this daemon's platform, the image's) where they differ; None where they agree or cannot be told.
 
     The commonest reason an image does not start, and one its own error says
     badly: "exec format error" names neither platform. The image's is in what
@@ -377,4 +419,4 @@ def _platform_mismatch(client, image: str):
     here = _platform(info.get("OSType"), info.get("Architecture"))
     if built_for is None or here is None or built_for == here:
         return None
-    return "it has no build for %s (it is %s only)" % (here, built_for)
+    return here, built_for
