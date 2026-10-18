@@ -20,10 +20,20 @@ in flow style, one declared twice by two branches of a template, a revision that
 is itself a template expression - the file is left alone and the reason comes
 back, so the caller can say what to write by hand rather than write something
 that is wrong.
+
+What is written is a value 'partcad.yaml' reads back as the text it is. The file
+is read as YAML 1.1, where an unquoted value is typed by what it looks like: a
+commit id is hex, and one made of decimal digits alone is read as an int. The
+reader turns most of those back into the text they were written as, but not an
+octal-looking one -- a leading '0' and no digit above '7' -- whose text is gone
+by then (see 'project_factory_git.ref_text'). So a value that would not be read
+back as itself is quoted, and every other is written plain, as it always was.
 """
 
 import re
 import typing
+
+import yaml
 
 _TOP_LEVEL_SECTION = "dependencies"
 
@@ -38,6 +48,30 @@ _OPENS_BLOCK_RE = re.compile(r"^[ \t]*(#.*)?$")
 _REVISION_RE = re.compile(
     r"""^(?P<head>[ ]*(?P<quote>["']?)revision(?P=quote)[ \t]*:[ \t]*)(?P<value>[^#\r\n]*?)(?P<tail>[ \t]+#[^\r\n]*)?(?P<eol>\r?\n)?$"""
 )
+
+
+def plain_reads_back(value: str) -> bool:
+    """Whether 'value', written unquoted, is read back from 'partcad.yaml' as this very text.
+
+    The question is put to the reader 'partcad.yaml' is read with (PyYAML's
+    'safe_load', see 'ProjectLocal') rather than to a list of what looks
+    numeric, so the two cannot disagree.
+    """
+    try:
+        return yaml.safe_load("value: %s" % value) == {"value": value}
+    except yaml.YAMLError:
+        return False
+
+
+def yaml_scalar(value: str) -> str:
+    """'value' as it has to be written for 'partcad.yaml' to read it back as this text.
+
+    Plain where that is already so, which is every commit id with a hex letter
+    in it; single-quoted where it is not, as in "revision: '875940244746...'".
+    """
+    if plain_reads_back(value):
+        return value
+    return "'%s'" % value.replace("'", "''")
 
 
 def _eol(line: str) -> str:
@@ -145,15 +179,14 @@ def set_dependency_revision(config_path: str, dependency: str, revision: str) ->
         value = match.group("value").strip()
         if "{{" in value or "{%" in value:
             return "its 'revision:' is a template expression"
-        if value.strip("'\"") == revision:
-            return None
-        # Quoted the way it was quoted, if it was.
+        # Quoted the way it was quoted, if it was; if not, quoted only if a
+        # plain value would not be read back as itself.
         quote = value[0] if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"" else ""
-        lines[index] = "%s%s%s%s%s%s" % (
+        if value.strip("'\"") == revision and (quote or plain_reads_back(revision)):
+            return None
+        lines[index] = "%s%s%s%s" % (
             match.group("head"),
-            quote,
-            revision,
-            quote,
+            "%s%s%s" % (quote, revision, quote) if quote else yaml_scalar(revision),
             match.group("tail") or "",
             match.group("eol") or "",
         )
@@ -165,7 +198,7 @@ def set_dependency_revision(config_path: str, dependency: str, revision: str) ->
             # The last line of a file with no newline at its end.
             eol = "\n"
             lines[index] = line + eol
-        lines.insert(index + 1, "%srevision: %s%s" % (" " * _indent(line), revision, eol))
+        lines.insert(index + 1, "%srevision: %s%s" % (" " * _indent(line), yaml_scalar(revision), eol))
     else:
         return "its 'track:' is not written out in it"
 

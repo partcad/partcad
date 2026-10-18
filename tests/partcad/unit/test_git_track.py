@@ -20,6 +20,7 @@ transport, and the tests that are cover it over HTTP.
 """
 
 import gc
+import itertools
 import os
 import subprocess
 import sys
@@ -31,12 +32,29 @@ import pytest
 import yaml
 
 import partcad as pc
+from partcad import project_factory_git as rfg
 from partcad.actions.package.update import pin_tracked_dependencies, update, workspace_packages
-from partcad.project_factory_git import GitImportConfiguration, cache_dir_name
+from partcad.project_factory_git import GitImportConfiguration, cache_dir_name, get_clone_options
 from partcad.revision import package_revision
 from partcad.user_config import UserConfig
 
-SIGNATURE = pygit2.Signature("test", "test@example.com")
+# At a fixed time, so that every commit id below is the same in every run: a
+# test whose outcome depends on what an id looks like fails every time or never.
+SIGNATURE = pygit2.Signature("test", "test@example.com", 1767225600, 0)
+
+
+def digits(sha: str) -> bool:
+    """An id whose first 12 characters YAML reads as an int, and as the int they say.
+
+    About one in three hundred. 'revision: 875940244746' was read as a number,
+    which the git import then failed on as an 'int' with no 'strip'.
+    """
+    return sha[:12].isdigit() and sha[0] != "0"
+
+
+def mixed(sha: str) -> bool:
+    """An id whose first 12 characters have a hex letter in them, which YAML reads as text."""
+    return not sha[:12].isdigit()
 
 
 class Upstream:
@@ -56,14 +74,25 @@ class Upstream:
     def head(self) -> str:
         return str(self.repo.head.target)
 
-    def commit(self, text: str) -> str:
-        """Move 'main' to a new commit whose 'version.txt' says 'text'."""
+    def commit(self, text: str, shape=None) -> str:
+        """Move 'main' to a new commit whose 'version.txt' says 'text'.
+
+        With 'shape', to one whose id 'shape' accepts. An id is a hash, so one
+        of a given shape is found by asking: the message is varied until the
+        id comes out right, which takes a few hundred tries for 'digits'.
+        """
         (self.path / "version.txt").write_text(text)
         self.repo.index.add("partcad.yaml")
         self.repo.index.add("version.txt")
         self.repo.index.write()
+        tree = self.repo.index.write_tree()
         parents = [] if self.repo.head_is_unborn else [self.repo.head.target]
-        oid = self.repo.create_commit("HEAD", SIGNATURE, SIGNATURE, text, self.repo.index.write_tree(), parents)
+        for attempt in itertools.count():
+            message = text if attempt == 0 else "%s (%d)" % (text, attempt)
+            oid = self.repo.create_commit(None, SIGNATURE, SIGNATURE, message, tree, parents)
+            if shape is None or shape(str(oid)):
+                break
+        self.repo.references.create("refs/heads/main", oid, force=True)
         return str(oid)
 
 
@@ -170,6 +199,17 @@ def test_the_pin_is_what_is_loaded_not_the_branch_it_tracks(tmp_path, upstream, 
     assert load_version(workspace, user_config) == "A"
 
 
+def test_a_pin_of_digits_alone_is_the_commit_it_names(tmp_path, upstream, user_config):
+    """'revision: 875940244746' is an int to YAML, and has to be read as the commit all the same."""
+    wanted = upstream.commit("B", shape=digits)
+    upstream.commit("C")
+    workspace = tmp_path / "ws"
+    write_package(workspace, dependency(upstream, track="main", revision=wanted[:12]))
+    assert isinstance(yaml.safe_load((workspace / "partcad.yaml").read_text())["dependencies"]["dep"]["revision"], int)
+
+    assert load_version(workspace, user_config) == "B"
+
+
 def test_force_auto_update_follows_the_branch_past_the_pin(tmp_path, upstream, user_config):
     first = str(upstream.repo.head.target)
     workspace = tmp_path / "ws"
@@ -256,8 +296,10 @@ def test_update_moves_an_existing_pin(tmp_path, upstream, user_config):
     assert load_version(workspace, user_config) == "B"
 
 
-def test_update_leaves_a_current_pin_alone(tmp_path, upstream, user_config):
-    tip = str(upstream.repo.head.target)
+@pytest.mark.parametrize("shape", [mixed, digits])
+def test_update_leaves_a_current_pin_alone(tmp_path, upstream, user_config, shape):
+    """An abbreviated pin at the tip of its branch, written plain: as text, or as the int YAML reads digits as."""
+    tip = upstream.commit("B", shape=shape)
     workspace = tmp_path / "ws"
     config = write_package(workspace, dependency(upstream, track="main", revision=tip[:12]))
     before = config.read_text()
@@ -266,6 +308,51 @@ def test_update_leaves_a_current_pin_alone(tmp_path, upstream, user_config):
 
     assert stats == {"pinned": 0, "current": 1, "failed": 0, "count": stats["count"]}
     assert config.read_text() == before
+
+
+# A whole commit id of decimal digits alone: one in about 150 million, so not
+# one a test can make, but the one whose plain text YAML reads as a number.
+DIGITS = "8759402447468759402447468759402447468759"
+
+
+def test_update_writes_a_pin_of_digits_that_is_read_back_as_the_pin(tmp_path, upstream, user_config, monkeypatch):
+    workspace = tmp_path / "ws"
+    config = write_package(workspace, dependency(upstream, track="main"))
+    monkeypatch.setattr(rfg, "tracked_commit", lambda user_config, url, track=None: (track, DIGITS))
+
+    assert pin(workspace, user_config) == {"pinned": 1, "current": 0, "failed": 0}
+    assert "    revision: '%s'\n" % DIGITS in config.read_text()
+    assert yaml.safe_load(config.read_text())["dependencies"]["dep"]["revision"] == DIGITS
+
+    # And, read back, it is where the branch is: nothing to move, nothing written.
+    before = config.read_text()
+    assert pin(workspace, user_config) == {"pinned": 0, "current": 1, "failed": 0}
+    assert config.read_text() == before
+
+
+def test_update_reads_a_track_of_digits_as_the_branch_it_names(tmp_path, upstream, user_config, monkeypatch):
+    workspace = tmp_path / "ws"
+    write_package(workspace, dependency(upstream, track="2024"))
+    asked = []
+    monkeypatch.setattr(
+        rfg, "tracked_commit", lambda user_config, url, track=None: asked.append(track) or (track, DIGITS)
+    )
+
+    assert pin(workspace, user_config)["pinned"] == 1
+    assert asked == ["2024"]
+
+
+def test_update_refuses_a_track_whose_text_yaml_lost(tmp_path, upstream, user_config, caplog):
+    workspace = tmp_path / "ws"
+    config = write_package(workspace, dependency(upstream, track="1.10"))
+    before = config.read_text()
+
+    with caplog.at_level("ERROR"):
+        stats = pin(workspace, user_config)
+
+    assert stats["failed"] == 1 and stats["pinned"] == 0
+    assert config.read_text() == before
+    assert "float 1.1" in caplog.text and "quote it" in caplog.text
 
 
 def test_update_still_moves_an_old_style_branch_without_touching_the_file(tmp_path, upstream, user_config):
@@ -417,6 +504,53 @@ def test_which_revision_is_checked_out(config, settings, expected):
 )
 def test_which_copy_it_is_kept_in(config, settings, expected):
     assert _Import(config, **settings).import_cache_name == expected
+
+
+def read(text: str, **settings):
+    """What a dependency declared as 'text' asks for, read as 'ProjectLocal' reads 'partcad.yaml'."""
+    return _Import(yaml.safe_load("name: //dep\nurl: %s\n%s" % (URL, text)), **settings)
+
+
+@pytest.mark.parametrize(
+    "written, expected",
+    [
+        ("87594a244746", "87594a244746"),
+        # An int to YAML, and its decimal text is what was written.
+        ("875940244746", "875940244746"),
+        (DIGITS, DIGITS),
+        ("'875940244746'", "875940244746"),
+        # Text to YAML already, however numeric they look.
+        ("123e4567", "123e4567"),
+        ("0189abcdef", "0189abcdef"),
+    ],
+)
+def test_a_revision_is_read_as_the_text_it_was_written_as(written, expected):
+    imported = read("revision: %s\n" % written)
+    assert imported.import_revision == expected
+    assert imported.import_cache_name == expected
+    # Which is what decides how it is downloaded: by its id, as a commit.
+    assert get_clone_options(imported.import_revision).single_commit
+
+
+@pytest.mark.parametrize("written, expected", [("main", "main"), ("2024", "2024"), ("'2024'", "2024")])
+def test_a_track_is_read_as_the_text_it_was_written_as(written, expected):
+    imported = read("track: %s\n" % written)
+    assert imported.import_track == expected
+    assert imported.import_revision == expected
+    assert imported.import_cache_name == expected
+
+
+@pytest.mark.parametrize(
+    "written, read_as",
+    [("1.10", "the float 1.1"), ("yes", "the bool True"), ("2024-01-01", "the date 2024-01-01")],
+)
+@pytest.mark.parametrize("key", ["revision", "track"])
+def test_a_value_whose_text_yaml_lost_is_refused_with_the_fix(key, written, read_as):
+    with pytest.raises(ValueError) as error:
+        read("%s: %s\n" % (key, written))
+    message = str(error.value)
+    assert "'%s:' of //dep" % key in message and read_as in message
+    assert "quote it" in message
 
 
 # ---- the copy of a tracked branch -----------------------------------------------
@@ -692,6 +826,17 @@ def test_add_dep_tracks_the_branch_it_is_told_to(tmp_path, upstream, user_config
     assert ok
     assert dependencies["dep"]["track"] == "side"
     assert dependencies["dep"]["revision"] == str(side.target)
+
+
+def test_add_dep_writes_what_is_read_back_as_text(tmp_path, upstream, user_config, monkeypatch):
+    """A commit id of digits alone, and a branch YAML 1.1 reads as a bool, both written to be read as text."""
+    monkeypatch.setattr(rfg, "tracked_commit", lambda user_config, url, track=None: ("on", DIGITS))
+
+    ok, dependencies = added(tmp_path, user_config, upstream.path.as_uri())
+
+    assert ok
+    assert dependencies["dep"]["track"] == "on"
+    assert dependencies["dep"]["revision"] == DIGITS
 
 
 def test_add_dep_adds_nothing_it_could_not_pin(tmp_path, upstream, user_config):
