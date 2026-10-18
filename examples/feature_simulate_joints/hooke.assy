@@ -1,0 +1,21 @@
+# The plate hung by the middle of its top edge from a universal joint 10 mm
+# under the frame. The connection keeps two turns: about the contact frame's X,
+# which is along the edge the plate hangs by, and then about its Y, square to
+# the plate. ('axis: [1, 0, 0]' puts the first turn on X, and the second is
+# then Y; about the default Z, the first would be about the vertical line the
+# plate hangs on, which gravity never turns.) 'hooke' starts it 5 degrees round
+# the first, 'hooke_across' 5 degrees round the second.
+links:
+  - part: frame
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: plate
+    connect:
+      name: frame
+      with: edge
+      to: pivot
+      toInstance: below
+      joint: hooke
+      motion:
+        type: universal
+        axis: [1, 0, 0]
+      toParams: { turnX: {{ param_edge }}, turnY: {{ param_across }} }

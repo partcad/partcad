@@ -1,0 +1,16 @@
+# A nut on a screw: the rod, upright, and the ring on its thread. The
+# connection keeps the turn about the rod and the move along it, coupled by the
+# thread's 10 mm lead ('screw'), in the contact frame, whose Z is up the rod.
+# It starts 100 mm up, turned 45 degrees.
+links:
+  - part: rod
+    name: bolt
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: ring
+    connect:
+      name: bolt
+      with: bore
+      to: thread
+      joint: nut
+      motion: screw
+      toParams: { turnZ: 45, moveZ: 100 }
