@@ -91,6 +91,11 @@ sudo -u shooter env PC_PYTHON_SANDBOX=venv PC_SCREENSHOT_CODE=/opt/vscode/code \
 
 The virtual screen has to be at least the window's size in device pixels, 3584 x 2128.
 
+Software WebGL is good enough for `vscode1` and `vscode2`, which were last retaken this way, and not for the
+pictures that are mostly lines: in `interface-m3` and `interface-orientation` it draws a port's axes thin and
+broken where a graphics card draws them solid. Retake those on a desktop. The ASSY completion pair also came out
+with a lint squiggle under `links:` that a desktop run does not show, so look at those twice.
+
 Look at every picture before committing it. They are PNGs, so they go through Git LFS: commit from a machine that
 has `git lfs install`ed (see the root `AGENTS.md`).
 

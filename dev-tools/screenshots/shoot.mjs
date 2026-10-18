@@ -25,6 +25,7 @@ import {
     canvas,
     command,
     expand,
+    explorerTop,
     installExtension,
     launch,
     layout,
@@ -169,6 +170,8 @@ const SHOTS = {
             await layout(page, { sidebar: 330, editor: 520, panel: 250 });
             await paneHeight(page, 'Inspector', 200);
             await showStill(page, 'examples/wormgear', 5, 'examples/worm_drive');
+            // Every row down to the selected one fits in the pane from the top.
+            await explorerTop(page);
             await tidy(page);
             await shot(page, out('vscode1'));
         });

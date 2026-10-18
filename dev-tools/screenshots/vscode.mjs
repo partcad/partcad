@@ -326,6 +326,22 @@ export async function row(page, text, level, timeout = 240000) {
     }
 }
 
+/**
+ * Scroll the Explorer back to its first row.
+ *
+ * 'row' scrolls down to find a row that is not drawn yet and leaves the list
+ * wherever that took it, which differs from run to run and can leave a row
+ * half under the pinned parent at the top. A picture taken after this one
+ * starts at the top every time.
+ */
+export async function explorerTop(page) {
+    const explorer = page.locator('.pane-header[aria-label^="Explorer"] + .pane-body').first();
+    const box = await explorer.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, -100000);
+    await sleep(500);
+}
+
 /** Expand Explorer rows, one per level, each waiting for the one before it to load. */
 export async function expand(page, texts) {
     for (let i = 0; i < texts.length; i++) {
