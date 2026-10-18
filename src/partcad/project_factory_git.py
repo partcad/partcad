@@ -29,6 +29,8 @@ import pygit2
 from filelock import FileLock
 from pygit2.enums import CheckoutStrategy, ConfigLevel, CredentialType, ReferenceType, ResetMode
 
+from partcad_utils import config_yaml
+
 from . import consts
 from . import logging as pc_logging
 from . import project_factory as pf
@@ -428,38 +430,33 @@ def looks_like_commit_id(revision: str) -> bool:
 def ref_text(value, key: str, dependency=None):
     """A dependency's 'revision:' or 'track:' as the text that was written, or None if it names none.
 
-    'partcad.yaml' is read as YAML 1.1 (PyYAML's 'safe_load'), which types an
-    unquoted value by what it looks like, and every git operation here takes
-    the value as text. A commit id is hex, and an abbreviated one made of
-    decimal digits alone -- 'revision: 875940244746', about one in three hundred
-    12-character ids -- is read as an int. That one is exact: the decimal text
-    of the int is what was written, so it is given back as that.
+    'partcad.yaml' is YAML 1.1, which types an unquoted value by what it looks
+    like, and every git operation here takes the value as text. A commit id is
+    hex, and an abbreviated one made of decimal digits alone -- 'revision:
+    875940244746', about one in three hundred 12-character ids -- is an int to
+    YAML; so is a branch or a tag named '2024', '1_000', '0123', '0x1f' or
+    '1:30', and of all of those only '875940244746' and '2024' are the decimal
+    text of the int they are read as (1000, 83, 31 and 90 are not the others).
 
-    What does not survive is any other spelling YAML 1.1 reads as a number,
-    because the spelling is gone by the time the value gets here:
+    An int is therefore given back as the text it was written as, exactly:
+    'ProjectLocal' reads the file with 'partcad_utils.config_yaml', which keeps
+    that text beside every int that is not spelled as its decimal text
+    ('1_000' is not branch '1000'). An int that is not one of those was written
+    as its decimal text, or came from somewhere with no other way to write one
+    (a repository plugin's JSON).
 
-    * An int written another way arrives as an int like any other: a leading
-      zero is octal ('0123' is 83), and '0x1f', '0b101', '1_000' and '1:30' are
-      31, 5, 1000 and 90. Nothing in an int says which it was, so these come
-      back as decimal text that is not what was written, and fail later as a
-      revision the remote does not have. Of those, a commit id can only be the
-      octal kind -- a leading '0' and no digit above '7' -- since 'x', '_' and
-      ':' are not hex (and a '0b' followed by nothing but 0s and 1s is an id
-      nobody will meet). 'pc update' and 'pc add dep' quote whatever would not
-      be read back as itself (see 'dependency_pin.yaml_scalar'), so only a pin
-      written by hand can be one.
-    * Anything else that is not text is refused, with the fix named: a float
-      ('1.10' is 1.1), a bool ('yes', 'on'), a date ('2024-01-01').
-
-    A spelling that only looks numeric stays text, and needs nothing: PyYAML's
-    float wants a '.', so '1e10' and every other id with an 'e' in it is a
-    string, and so is '0189', a leading zero with an '8' or a '9' after it.
+    Anything else that is not text is refused, with the fix named: a float
+    ('1.10' is 1.1, and its text is not kept -- see 'config_yaml'), a bool
+    ('yes', 'on'), a date ('2024-01-01'). A spelling that only looks numeric is
+    text already: PyYAML's float wants a '.', so '1e10' and every other id with
+    an 'e' in it is a string, and so is '0189', a leading zero with an '8' or a
+    '9' after it.
     """
     if value is None or isinstance(value, str):
         return value
     # A bool is an int to Python, and 'yes' is not "1".
     if isinstance(value, int) and not isinstance(value, bool):
-        return str(value)
+        return config_yaml.spelling(value)
     raise ValueError(
         "The '%s:' of %s is read as the %s %s, and the text it was written as is lost by then: "
         "quote it in 'partcad.yaml', as in %s: '<as written>'"

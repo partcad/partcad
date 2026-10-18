@@ -30,6 +30,8 @@ that the next download replaces, so nothing below an import is edited.
 
 import os
 
+from partcad_utils import config_yaml
+
 from ... import consts
 from ... import logging as pc_logging
 from ... import project_factory_git as rfg
@@ -150,10 +152,10 @@ def pin_tracked_dependencies(ctx) -> dict:
             continue
 
         current = config.get("revision")
-        # 'str' rather than 'ref_text', which would refuse a pin YAML made a
-        # float or a bool of: such a pin is where no branch is, so it is moved
+        # 'spelling' rather than 'ref_text', which would refuse a pin YAML made
+        # a float or a bool of: such a pin is where no branch is, so it is moved
         # like any other, and what replaces it is written to be read as text.
-        current = None if current is None else str(current).strip()
+        current = None if current is None else config_yaml.spelling(current).strip()
         if current and rfg.looks_like_commit_id(current) and commit.startswith(current.lower()):
             pc_logging.debug("%s is at the tip of '%s' already: %s" % (dependency, track, commit))
             stats["current"] += 1
