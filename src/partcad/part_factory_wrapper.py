@@ -11,6 +11,15 @@ built-in factory. Instead the referenced partType is looked up in its package
 and used to construct the part. Only the default partType kind, 'wrapper', is
 implemented: it runs a package-supplied Python script inside the sandbox, which
 produces the shape(s) (see wrappers/wrapper_part_type.py).
+
+A partType that declares an ``extension`` reads a *file*: each part built with
+it is one file of that format, declared exactly as a STEP or an STL part is --
+``path`` relative to the part's own package, ``<name>.<extension>`` when left
+out, ``fileFrom`` to fetch it. The file is resolved against the package that
+declares the part rather than the one that declares the type, is what the
+part's cache entry depends on, and reaches the script as ``request["path"]``.
+That is what makes a format a package can teach PartCAD to read: 'fcstd' in
+'//builtin/import', and the ones a plugin package supplies.
 """
 
 import base64
@@ -18,7 +27,7 @@ import os
 
 from . import code_version
 from . import logging as pc_logging
-from . import sandbox_versions, shape_envelope, telemetry, transform, wrapper
+from . import output, sandbox_versions, shape_envelope, telemetry, transform, wrapper
 from .part_factory import PartFactory
 from .process_crash import describe_exit_code
 from .runtime_python import environment_requirements
@@ -33,15 +42,73 @@ class PartFactoryWrapper(PartFactory):
         with pc_logging.Action("InitWrapper", target_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config)
 
-            # 'type' is '<package>:<partType>' by the time we get here.
+            # 'type' is '<package>:<partType>' by the time we get here, or the
+            # bare name of a partType PartCAD ships (see 'factory.instantiate').
             self.part_type_ref = config["type"]
-            self.part_type_package, self.part_type_name = resolve_resource_path(target_project.name, self.part_type_ref)
+            builtin_package = output.builtin_part_type(ctx, self.part_type_ref)
+            if builtin_package is not None:
+                self.part_type_package, self.part_type_name = builtin_package, self.part_type_ref
+            else:
+                self.part_type_package, self.part_type_name = resolve_resource_path(
+                    target_project.name, self.part_type_ref
+                )
+
+            # The partType is resolved here when it can be, because two things
+            # are decided by it before anything is built: whether the part is a
+            # file, and which image its sandbox is built from. From the package
+            # declaring the part, which is still loading (see
+            # 'Context.get_project_from'). A package that cannot be reached yet
+            # is resolved again when the part is built, which is where its
+            # absence is reported.
+            if self.part_type_package == target_project.name:
+                # The package's own partType (':name'): the package in hand,
+                # which is not registered under its name until it has loaded.
+                pt_project = target_project
+            else:
+                try:
+                    pt_project = ctx.get_project_from(target_project, self.part_type_package)
+                except Exception as e:
+                    pc_logging.debug("%s: partType package %s: %s" % (config["name"], self.part_type_package, e))
+                    pt_project = None
+            pt_config = pt_project.get_part_type_config(self.part_type_name) if pt_project is not None else None
+            pt_config = pt_config if isinstance(pt_config, dict) else {}
+
+            # The file this part is read from, for a partType that reads one.
+            extension = pt_config.get("extension")
+            self.path = None
+            if extension:
+                self.path = os.path.join(
+                    source_project.config_dir,
+                    config.get("path") or "%s.%s" % (self.orig_name, str(extension).lstrip(".")),
+                )
+
+            # The image is the implementing package's, as it is for an output
+            # implementation (see 'Implementation.docker_image'): which
+            # environment a script needs is known to whoever wrote it. The part's
+            # own package is the last resort, for partTypes that name none.
+            self.docker_image = (
+                pt_config.get("dockerImage")
+                or (pt_project.docker_image_declared if pt_project is not None else None)
+                or self.project.docker_image_declared
+            )
 
             python_version = self.project.python_version or sandbox_versions.DEFAULT_PYTHON_VERSION
-            self.runtime = self.ctx.get_python_runtime(python_version, image=self.project.docker_image_declared)
+            self.runtime = self.ctx.get_python_runtime(python_version, image=self.docker_image)
             self.session = self.runtime.get_session(source_project.name)
 
             self._create(config)
+
+    def post_create(self) -> None:
+        if self.path:
+            self.part.path = self.path
+            self.part.cache_dependencies.append(self.path)
+        super().post_create()
+
+    async def download_file_async(self, part) -> None:
+        """Fetch what 'fileFrom' points at, for a partType that reads a file."""
+        if self.path and self.fileFactory is not None and not os.path.exists(self.path):
+            with pc_logging.Action("File", self.target_project.name, part.name):
+                await self.fileFactory.download(self.path)
 
     def environment_cache_key(self) -> str | None:
         """The interpreter and the dependency versions this part renders with.
@@ -63,7 +130,7 @@ class PartFactoryWrapper(PartFactory):
             # in - or the PartCAD release tagged on it - would key the one shape
             # differently on conda, and switching sandboxes would orphan every
             # entry (see 'sandbox_versions.environment_cache_key').
-            image=self.project.docker_image_declared,
+            image=self.docker_image,
         )
 
     async def prepare_async(self, part) -> None:
@@ -77,6 +144,9 @@ class PartFactoryWrapper(PartFactory):
         the one the script states, as every wrapper does (see 'code_version').
         """
         await super().prepare_async(part)
+        # The file has to be on disk before the cache key means anything: the
+        # key hashes its content (see 'PartFactoryFile.prepare_async').
+        await self.download_file_async(part)
         versions = self._part_type_versions()
         if versions is not None:
             part.add_code_versions(versions)
@@ -142,6 +212,16 @@ class PartFactoryWrapper(PartFactory):
                 part.error("Unsupported partType kind '%s' (only 'wrapper' is implemented)" % kind)
                 return None
 
+            if self.path:
+                try:
+                    await self.download_file_async(part)
+                except Exception as e:
+                    part.error("Failed to fetch %s: %s" % (self.path, e))
+                    return None
+                if not os.path.isfile(self.path):
+                    part.error("The part's file is not found: %s" % self.path)
+                    return None
+
             # The wrapper script: 'path' or, by default, '<name>.py'.
             script_rel = pt_config.get("path", self.part_type_name + ".py")
             try:
@@ -178,7 +258,11 @@ class PartFactoryWrapper(PartFactory):
                 "orig_name": self.orig_name,
                 "config": self.config,
                 "parameters": {},
+                # Where the partType's package keeps what it fetches for itself.
+                "cache_dir": output.package_cache_dir(self.ctx, pt_project),
             }
+            if self.path:
+                request["path"] = os.path.abspath(self.path)
             for param_name, param in (self.config.get("parameters") or {}).items():
                 request["parameters"][param_name] = param.get("default") if isinstance(param, dict) else param
             request_serialized = shape_envelope.serialize(request)

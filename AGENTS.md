@@ -151,6 +151,16 @@ a CAD addon, or documentation.
   `ide/vscode` it is a thin client of the JSON-RPC service (the standalone PyInstaller bundle), because
   FreeCAD's embedded Python cannot host `partcad` itself.
 
+* [plugins/solidcraft](./plugins/solidcraft/README.md):
+
+  A PartCAD **package**, not a Python one, staged here until it has a repository of its own and an entry in
+  the public index: file-backed `partTypes` for SolidCraft designs, Rhino `.3dm` and IGES, a `.solidcraft`
+  export, and an `open:` entry for SolidCraft itself. Its scripts run SolidCraft's command line tool, found on
+  the `PATH`, in the package's own `dockerImage`, or downloaded on first use into the package's `.cache/`.
+  Nothing in the wheel imports or ships it; `tests/partcad/unit/test_plugin_solidcraft.py` uses it the way a
+  workspace would, through a `local` dependency. Keep it self-contained -- its scripts use the standard library
+  and OCP, never `partcad` or the sandbox wrappers' modules -- so that moving it out is a move.
+
 * [dev-tools/shim/](./dev-tools/shim/pyproject.toml):
 
   The `partcad-cli` compatibility package: no modules, no entry points, one dependency on `partcad`. It exists

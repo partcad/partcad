@@ -1,0 +1,11 @@
+desc: |
+  Parts read from glTF files: a 10 x 20 x 30 mm box centred at (100, 0, 0),
+  as written by build123d's 'export_gltf' -- once as '.gltf' with its buffer
+  in 'box.bin' beside it, once as a single '.glb'.
+
+parts:
+  box:
+    type: gltf
+  box_binary:
+    type: gltf
+    path: box.glb

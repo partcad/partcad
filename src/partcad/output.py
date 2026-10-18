@@ -831,6 +831,49 @@ def section_of(ctx, format_name: str) -> Optional[str]:
     return None
 
 
+def builtin_part_type(ctx, name):
+    """The package path declaring a built-in ``partType`` called ``name``, or None.
+
+    The part types PartCAD reads through a downloaded tool rather than a factory
+    of its own -- 'fcstd' -- are declared in '//builtin/import' the way any
+    package declares one, and a part names them by the bare name as if they
+    were built in, which as far as its author is concerned they are. Asked by
+    'factory.instantiate()' only once no registered factory claimed the name, so
+    a built-in factory always wins.
+    """
+    if not isinstance(name, str) or not name or ":" in name or ctx is None:
+        return None
+    project = builtin_project(ctx, IMPORT)
+    if project is None:
+        return None
+    part_types = project.config_obj.get("partTypes")
+    if isinstance(part_types, dict) and name in part_types:
+        return project.name
+    return None
+
+
+def package_cache_dir(ctx, project) -> str:
+    """Where a package's scripts keep what they fetch for themselves, between runs.
+
+    A plugin that needs a program pip cannot install downloads it once and
+    keeps it, rather than once per part. Its own directory is the natural place
+    -- a dependency is already in PartCAD's cache, one directory per commit, so
+    a new release of the plugin is a fresh directory and a fresh download -- and
+    that is the answer for every package but the built-in ones, which live inside
+    the installation: a wheel's 'site-packages' may not be the user's to write,
+    and a frozen bundle's is unpacked anew on every start. Those keep theirs in
+    PartCAD's state directory instead.
+
+    Handed to a partType's script and an output implementation's as
+    ``request["cache_dir"]``. Not created here: the script creates what it uses.
+    """
+    name = getattr(project, "name", "") or ""
+    if name == BUILTIN_ROOT_PACKAGE or name.startswith(BUILTIN_ROOT_PACKAGE + "/"):
+        state_dir = ctx.user_config.internal_state_dir if ctx is not None else os.path.expanduser("~/.partcad")
+        return os.path.join(state_dir, *name[len("//") :].split("/"))
+    return os.path.join(os.path.abspath(project.config_dir), ".cache")
+
+
 def import_declaration(ctx, project, type_name: str):
     """The 'import:' implementation for an object type, or None if there is none.
 

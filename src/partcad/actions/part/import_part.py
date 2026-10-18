@@ -4,6 +4,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -13,6 +14,32 @@ from ... import logging as pc_logging
 from ...adhoc.convert import convert_cad_file
 from ...project import Project
 from .add import add_part_action
+
+
+def gltf_companions(source_path: Path) -> list:
+    """The files a '.gltf' file names beside itself: its buffers and its images.
+
+    A '.glb' carries them inside, and a URI that is a 'data:' URL or a web
+    address is not a file to copy; anything else is a path relative to the
+    '.gltf', and the part cannot be read without it.
+    """
+    try:
+        with open(source_path, encoding="utf-8") as f:
+            document = json.load(f)
+    except (OSError, UnicodeDecodeError, ValueError):
+        return []  # a '.glb' under the '.gltf' name, or not glTF at all
+    found = []
+    for section in ("buffers", "images"):
+        for item in document.get(section) or []:
+            uri = item.get("uri") if isinstance(item, dict) else None
+            # Only what sits at or below the '.gltf': a copy must land inside
+            # the package it is imported into.
+            if not uri or ":" in uri or uri.startswith(("/", "\\")) or ".." in Path(uri).parts:
+                continue
+            companion = (source_path.parent / uri).resolve()
+            if companion.is_file():
+                found.append(uri)
+    return found
 
 
 def import_part_action(
@@ -53,6 +80,11 @@ def import_part_action(
             shutil.copy2(source_path, target_path)
         except shutil.Error as e:
             raise ValueError(f"Failed to copy '{source_path}' -> '{target_path}': {e}")
+        if kind == "gltf":
+            for uri in gltf_companions(source_path):
+                companion_target = (target_path.parent / uri).resolve()
+                companion_target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source_path.parent / uri, companion_target)
 
     add_part_action(project, kind, str(target_path), config)
     pc_logging.info(f"Part '{name}' imported successfully.")

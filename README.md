@@ -209,9 +209,15 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `STL`
     - [x] `3MF`
     - [x] `OBJ`
+    - [x] `glTF` (`.gltf` with its buffers, or `.glb`)
   - Using file formats of third-party tools
     - [x] `KiCad EDA` (PCB)
-  - Using a part type the package defines itself (`partTypes`)
+    - [x] `FreeCAD` documents (`.FCStd`), without FreeCAD: read with [cadmpeg], downloaded on first use
+  - Using a part type the package defines itself (`partTypes`), including one that reads a file format of its
+    own
+    - [x] [SolidCraft] designs (`.solidcraft`), `Rhino` (`.3dm`) and `IGES`, from the SolidCraft plugin package
+          ([`plugins/solidcraft`](./plugins/solidcraft/README.md)), which downloads SolidCraft on first use or
+          runs in its own container image
 - Part and interface blueprints (2D)
   - Using scripting languages
     - [x] [CadQuery]
@@ -240,7 +246,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     supplier quotes on tabs beside the 3D view — and a software fallback that still draws the model in a
     window with no `WebGL`, such as a virtual machine or a remote desktop
   - Open an object in the application that made it (`pc ide open`): `FreeCAD`, `Blender`, `KiCad` — and
-    `Gazebo` or `MuJoCo` from the plugin package for that engine —
+    `Gazebo` or `MuJoCo` from the plugin package for that engine, `SolidCraft` from its plugin package —
     installed locally, or run in a container when it is not; an object the application cannot read is
     converted on the way, and what is edited there is brought back into the object's own file when it closes
   - Ask the IDE what it is showing (`pc ide state`): the Explorer's selection, the Inspector's parameters, and
@@ -265,6 +271,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `glTF`
     - [x] `URDF`
     - [x] `Gazebo` world (SDFormat) and `MJCF` (MuJoCo), from the plugin package for that engine
+    - [x] [SolidCraft] designs (`.solidcraft`), from the SolidCraft plugin package
   - Output types a package implements itself, for both `render:` and `export:`
 
 ## Installation
@@ -419,4 +426,6 @@ Give us a star for our hard work!
 [BREP]: https://en.wikipedia.org/wiki/Boundary_representation
 [OpenCASCADE]: https://www.opencascade.com/
 [KiCad EDA]: https://www.kicad.org/
+[cadmpeg]: https://github.com/cadmpeg/cadmpeg
+[SolidCraft]: https://github.com/bherbruck/solidcraft
 [Quick Start]: https://partcad.github.io/partcad/development/quick-start/

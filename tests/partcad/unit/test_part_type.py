@@ -71,3 +71,31 @@ def test_wrapper_part_instantiates():
     except Exception as e:
         pytest.skip("Sandbox unavailable for partType wrapper: %s" % e)
     assert wrapped is not None
+
+
+def test_a_part_type_with_an_extension_reads_the_part_s_file(tmp_path):
+    """A file-backed partType of the part's own package: the file is the part's."""
+    (tmp_path / "partcad.yaml").write_text(
+        "partTypes:\n"
+        "  thing:\n"
+        "    path: read_thing.py\n"
+        "    extension: thing\n"
+        "parts:\n"
+        "  default:\n"
+        '    type: ":thing"\n'
+        "  named:\n"
+        '    type: ":thing"\n'
+        "    path: files/other.thing\n"
+    )
+    ctx = pc.Context(str(tmp_path))
+
+    default = ctx.get_part(":default")
+    assert default.path == str(tmp_path / "default.thing")
+    assert default.path in default.cache_dependencies
+
+    assert ctx.get_part(":named").path == str(tmp_path / "files" / "other.thing")
+
+
+def test_a_part_type_without_an_extension_reads_no_file():
+    ctx = pc.Context(EXAMPLE)
+    assert getattr(ctx.get_part(":demo"), "path", None) is None

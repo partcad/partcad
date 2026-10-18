@@ -33,6 +33,7 @@ from .part_factory_chili3d import PartFactoryChili3d
 from .part_factory_compound import PartFactoryCompound
 from .part_factory_enrich import PartFactoryEnrich
 from .part_factory_extrude import PartFactoryExtrude
+from .part_factory_gltf import PartFactoryGltf
 from .part_factory_kicad import PartFactoryKicad
 from .part_factory_obj import PartFactoryObj
 from .part_factory_scad import PartFactoryScad
@@ -86,6 +87,7 @@ factory.register("part", "brep", PartFactoryBrep)
 factory.register("part", "stl", PartFactoryStl)
 factory.register("part", "3mf", PartFactory3mf)
 factory.register("part", "obj", PartFactoryObj)
+factory.register("part", "gltf", PartFactoryGltf)
 factory.register("part", "scad", PartFactoryScad)
 factory.register("part", "kicad", PartFactoryKicad)
 factory.register("part", "extrude", PartFactoryExtrude)

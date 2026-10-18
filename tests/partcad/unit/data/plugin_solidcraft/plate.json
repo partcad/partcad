@@ -1,0 +1,6 @@
+{"commands": [
+  {"command": "parameters.change", "params": {"name": "height", "expression": "20", "unit": "mm"}},
+  {"command": "sketch.create", "params": {"plane": "XY"}},
+  {"command": "sketch.rectangle.two_point", "params": {"p0": [0, 0], "p1": [40, 30]}},
+  {"command": "solid.extrude", "params": {"distance": "height"}}
+]}

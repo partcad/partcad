@@ -1633,6 +1633,11 @@ class Shape(ShapeConfiguration):
             if output.REPRODUCIBLE_KEY in request
             else impl.reproducible
         )
+        # Where the implementing package keeps what it fetches for itself (see
+        # 'output.package_cache_dir'). Added here, after anything has been keyed
+        # on the request, because it is a path on this machine and says nothing
+        # about what the file will contain.
+        request.setdefault("cache_dir", output.package_cache_dir(ctx, impl.project))
 
         request_serialized = shape_envelope.serialize(request)
 
