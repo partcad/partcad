@@ -81,7 +81,10 @@ async def svg_thumbnail_async(ctx, shape, width: int, height: int):
 
     cache = getattr(ctx, "cache_renders", None)
     key = cache_key(width, height)
-    cacheable = cache is not None and shape.get_cacheable() and shape.hash is not None
+    # Through the key rather than the hash: building it does not always leave
+    # the preparation over (see 'Shape.get_wrapped()'), and a hash read before
+    # then keeps what it had.
+    cacheable = cache is not None and await shape.get_cache_key_async() is not None
     if cacheable:
         found = await cache.read_data_async(shape.hash, [key])
         if found.get(key):

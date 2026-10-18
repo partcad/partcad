@@ -95,6 +95,17 @@ at all).
   polled rather than blocked on: they are taken from several event loops at once (a part is instantiated on a
   worker thread running a loop of its own), and a task that blocked its own loop waiting for a lock the task
   beside it is about to release would never see it released.
+- **A key is read once its shape is prepared** (`Shape.prepare_async(wait=True)`): a preparation hashes in what
+  a shape is made of -- the file a `fileFrom` or a plugin fetches, the keys of what an assembly links to -- and a
+  hash adds its files when it is first read, so a key read while one is under way is kept, half of it missing, for
+  the rest of the process. Every key reader (`get_cache_key_async()`, `get_wrapped()`, `Test.test_cached()`)
+  waits for a preparation begun elsewhere, and two waits are refused rather than started, because they could
+  never end: one that would close a cycle of preparations (each records what it waits for), and a thread that
+  holds a shape's lock waiting for a preparation on another thread, which that lock may be what stops. A refused
+  wait raises `PreparationInFlight`, and the caller goes on without the key, uncached; `_PREPARE_WAIT_MAX` bounds
+  the rest. `get_wrapped()` prepares before it takes its lock for the same reason. A caller that only needs the
+  preparation started passes nothing and returns at once, as before.
+
 - **Location/coordinate format**: 3D locations (OpenCASCADE `TopLoc_Location`) are represented as
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
