@@ -79,8 +79,9 @@ calls it again with the context's own -- requests are served one at a time, and 
 moved the slots in between. A request that names no context at all carries no configuration either, and is
 served with the slots the last one left. `--http` is the exception to "one at a time": it dispatches requests
 concurrently, so there the ceiling is the one the most recent request set. The thread pools (`partcad.sync_threads`) are not resized: they are not
-a strict limit, and shrinking a warm daemon's pool under work already queued on it would invite the very
-starvation the `threadsMax` floor is there to make unlikely.
+a strict limit, and nothing about them needs to follow the configuration -- nested work cannot starve a pool of
+any size (see `partcad.sync_threads`), and what does decide how much of the machine a command takes, the sandbox
+processes, already follows every request.
 
 ## Layout
 

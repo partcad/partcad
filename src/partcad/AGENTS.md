@@ -46,10 +46,27 @@ at all).
 
 - **Async naming**: every externally visible coroutine has a name ending in `_async`, paired with a synchronous
   wrapper of the same name without the suffix. Coroutines run on asyncio's event loop; CPU-heavy work runs on a
-  separate thread pool (sized to CPU cores minus 1). Tasks on the thread pool must not call coroutines that use
-  `asyncio.Lock()`. An assembly is instantiated on the *unconstrained* pool instead: it computes nothing itself,
-  it waits for its parts, and each of those takes a thread from the constrained one -- assemblies waiting there
-  is how enough of them at once run it out of threads, every one waiting for a part with nowhere left to run.
+  separate thread pool (sized by `threadsMax`, see `sync_threads.ThreadPoolManager`). Tasks on the thread pool
+  must not call coroutines that use `asyncio.Lock()`. An assembly is instantiated on the *unconstrained* pool
+  instead: it computes nothing itself, and the constrained pool's slots are for what does.
+
+- **Nested work on the thread pools** (`sync_threads`): an object built from another one -- an alias, an enrich,
+  an extrusion of a sketch, a compound of an assembly -- asks for that one from the thread it is itself being
+  built on, and a thread of a pool is a *slot*. **Work started on a slot runs on that slot**: `run_async` awaits
+  the coroutine where it is, in the loop already running there, and `run`, `run_detached` and `complete` start a
+  synchronous function at once on a thread that takes no slot. Only work asked for from outside the pools queues
+  for a slot, which is what still spreads a recursive render over the whole pool. Taking a second slot from a
+  slot is how `threadsMax: 2` stopped `pc render -r` for good -- and how pools of four and seven stopped with four
+  and seven such objects at once. **A slot waiting for a shape's lock gives the slot back** while the holder is
+  not itself working on a slot (`Shape.lock` is a `PoolAwareRLock`): the loop a command runs on holds an
+  assembly's lock while the assembly's children are built, and a part's while `get_solidity_async` asks for the
+  part inside it. `async with` on that lock polls instead of blocking the loop, as `sandbox_lock` does. And a
+  part or sketch a command asks for goes to the pool *before* its lock is taken (`Shape.get_wrapped`), so the
+  thread holding it while it is built is the one building it, and objects built from it wait for that thread
+  without giving their slots back. Together these make the pools deadlock-free at any size, which
+  `tests/partcad/unit/test_sync_threads.py` and `test_nested_build.py` check with pools of one and two threads.
+  So do not wait from a pool thread for a pool's queue (`executor.submit(...).result()` -- use
+  `threadpool_manager.complete`), and do not take a shape's lock with a blocking `with` from a coroutine.
 
 - **No two actions open under one name** (`pc_logging.Action(op, package, item, extra)`): the progress display
   tracks running actions by `op`, package and item alone (`logging_ansi_terminal.action_key`), so a second one
@@ -102,10 +119,11 @@ at all).
 - **`threadsMax` is never below `THREADS_MAX_MINIMUM` (4)**, and the floor is applied where the value is read, in
   `partcad_utils.user_config`: the file, `PC_THREADS_MAX`, a client's configuration (`from_dict`), and an
   assignment (`--threads-max`) all go through the `threads_max` property, and what is unset is
-  `default_threads_max()` (one per core, at least 4). Fewer is the nested-pool deadlock: an alias, enrich or
-  extrusion is instantiated on a constrained-pool thread and asks the same pool for a thread to build its source
-  on (`Part.get_shape` -> `threadpool_manager.run_async`), so as many of those at once as the pool has threads
-  wait forever. The floor makes that unlikely, not impossible. Warnings about it go through
+  `default_threads_max()` (one per core, at least 4). The floor is for performance: it is the least number of
+  sandbox processes PartCAD runs at once, and a recursive render spends most of its time waiting for those. It
+  was introduced against the nested-pool deadlock above, and only ever made that less likely; nesting cannot
+  deadlock a pool of any size now, so a lower value would not stop anything -- it is raised all the same. Warnings
+  about it go through
   `pc_logging.warning_once`, which says a message once per process and holds it until a handler can render it --
   both ends find these before their log is connected.
 - **A sandbox process is waited for until it is dead, not until its pipes are** (`runtime.communicate`,

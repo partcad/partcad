@@ -8,9 +8,12 @@
 There are five ways in -- the configuration file, PC_THREADS_MAX, the command
 line (which assigns the attribute), the configuration a client hands the daemon
 with every request, and nothing at all, which leaves it to the machine -- and the
-floor has to hold on every one of them, because the one it does not hold on is
-the one 'pc render -r' deadlocks through. Each is pinned here, with what the
-user is told: that the minimum is four, once.
+floor has to hold on every one of them, or it is not a floor: a value that gets
+past it on one route is the configuration PartCAD runs with for whoever takes
+that route. Each is pinned here, with what the user is told: that the minimum is
+four, once. (What the floor is for is said beside 'THREADS_MAX_MINIMUM'; it is
+no longer what keeps 'pc render -r' from deadlocking, which nested objects can
+no longer do on a pool of any size -- see 'test_sync_threads.py'.)
 """
 
 import logging

@@ -863,11 +863,19 @@ to 4, and PartCAD says so::
 
     threadsMax 2 (from PC_THREADS_MAX) is below the minimum of 4; using 4 instead
 
-Fewer than four is how ``pc render -r`` came to stop making progress altogether
-with ``threadsMax: 2``: an object built from another one -- an alias, an
-enrich, an extrusion of a sketch -- waits for that other object to be built on
-the same thread pool it is holding a thread of, and a recursive render starts
-enough of them at once for every thread to end up waiting.
+Four is the least PartCAD runs with, for performance: a recursive render starts
+every object of a package at once and spends most of its time waiting for
+sandbox processes, so it is how many of those run side by side that decides how
+long it takes.
+
+It used to be the least PartCAD *could* run with. ``pc render -r`` once stopped
+making progress altogether with ``threadsMax: 2``: an object built from another
+one -- an alias, an enrich, an extrusion of a sketch -- held a thread of the
+pool while it waited for a second one to build the other object on, and a
+recursive render started enough of them at once for every thread to end up
+waiting. Nothing waits like that any more: an object built from another one
+builds it on the thread it already has, on a pool of any size. A lower value
+would no longer stop anything; it is raised to four all the same.
 
 When nothing sets it, PartCAD runs one sandbox process per CPU core -- and still
 never fewer than four, so on a machine with fewer cores than that it says, once::

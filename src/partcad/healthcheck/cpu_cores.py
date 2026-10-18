@@ -6,10 +6,10 @@
 """Whether this machine has the cores PartCAD sizes itself for.
 
 PartCAD never runs with fewer than 'THREADS_MAX_MINIMUM' threads and sandbox
-processes, whatever the machine: fewer is how a recursive render deadlocked (see
-'partcad_utils.user_config'). On a machine with fewer cores than that, those run
-on cores they have to share, so everything works and everything is slower --
-which is a warning, not a failure.
+processes, whatever the machine: that is the least it does at once, for the
+reasons given in 'partcad_utils.user_config'. On a machine with fewer cores than
+that, those run on cores they have to share, so everything works and everything
+is slower -- which is a warning, not a failure.
 
 The same sentence is said once by whatever sizes the sandbox slots on such a
 machine; this is the place a user goes looking for it.

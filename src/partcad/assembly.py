@@ -276,20 +276,23 @@ class Assembly(Shape):
         # one loop out: an RLock is re-entrant per *thread*, and tasks of a loop
         # share one, so every one of them passes it. Hence the task lock inside
         # it, which is only ever contended within a single thread because the
-        # thread lock is what excludes the others.
-        with self.lock:
+        # thread lock is what excludes the others. Taken with 'async with',
+        # which waits by polling rather than by blocking this loop (see
+        # 'sync_threads.PoolAwareRLock'), and so do the other places below that
+        # take it from a coroutine.
+        async with self.lock:
             async with self.get_async_instantiate_lock():
                 if len(self.children) != 0:
                     return
                 self._wrapped = None  # Invalidate if any
                 # Detached, not constrained: an assembly does not compute
-                # anything itself, it waits for the parts it is made of - and
-                # each of those takes a thread out of the constrained pool.
-                # Assemblies waiting in that same pool is how a render of enough
-                # of them at once runs it out of threads, with every one of them
-                # waiting for a part that has nowhere left to run. Now that a
-                # recursive render admits several packages at a time, that is no
-                # longer hypothetical.
+                # anything itself, and the constrained pool's slots are for what
+                # does. Assemblies waiting in that pool for the parts they are
+                # made of used to be how a render of enough of them at once ran
+                # it out of threads, every one of them waiting for a part with
+                # nowhere left to run. Work started on a slot now runs on that
+                # slot (see 'sync_threads'), so that is no longer a deadlock,
+                # but every one of them would still be a slot no part could use.
                 await threadpool_manager.run_detached(self.instantiate, self)
                 if len(self.children) == 0:
                     pc_logging.warning(f"The assembly {self.project_name}:{self.name} is empty")
@@ -757,7 +760,7 @@ class Assembly(Shape):
         return info
 
     async def get_bom(self):
-        with self.lock:
+        async with self.lock:
             async with self.get_async_lock():
                 await self.do_instantiate()
                 if hasattr(self, "project_name"):
@@ -829,7 +832,7 @@ class Assembly(Shape):
         what has to be *had*, bought or made, and is what the manufacturability
         test walks, because a made part is something it has to test too.
         """
-        with self.lock:
+        async with self.lock:
             async with self.get_async_lock():
                 await self.do_instantiate()
                 if hasattr(self, "project_name"):
@@ -895,7 +898,7 @@ class Assembly(Shape):
         return asyncio.run(self.get_bom_grouped_async(ctx))
 
     async def _get_bom_grouped_locked(self, ctx=None):
-        with self.lock:
+        async with self.lock:
             async with self.get_async_lock():
                 await self.do_instantiate()
                 return await self._get_bom_grouped_real(ctx)
@@ -970,7 +973,7 @@ class Assembly(Shape):
         return asyncio.run(self.get_bom_detailed_async(ctx, stop_at_purchasable))
 
     async def _get_bom_detailed_locked(self, ctx):
-        with self.lock:
+        async with self.lock:
             async with self.get_async_lock():
                 await self.do_instantiate()
                 return await self._get_bom_detailed_real(ctx)

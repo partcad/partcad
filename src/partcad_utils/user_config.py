@@ -434,16 +434,26 @@ DEFAULT_CAM_IMPLEMENTATION = "//builtin/cam:gcode"
 # A lower value is raised to this, with a warning, and the same floor holds for
 # what PartCAD picks when nothing says (see 'default_threads_max').
 #
-# Four, because fewer is how 'pc render -r' came to stop for good with
-# 'threadsMax: 2'. An object built from another one -- an alias, an enrich, an
-# extrusion of a sketch -- is built on a thread of the constrained pool, and asks
-# that same pool for a thread to build its source on while it holds its own; with
-# as many such objects at once as the pool has threads, every thread waits for one
-# that none of them will give back (see 'partcad.sync_threads'). A recursive
-# render starts every object of a package at once, so two of them were always
-# going to meet. The floor makes that much less likely; it does not make it
-# impossible, and is not a substitute for building nested objects without taking
-# a second thread.
+# Four is a floor on how much PartCAD does at once, kept for performance. What
+# 'threadsMax' sizes strictly is how many sandbox processes run at the same time
+# ('partcad.sandbox_lock'), and with them the constrained thread pool they are
+# waited for from; a recursive render starts every object of a package at once
+# and spends most of its time waiting for those processes, so it is the number
+# of them that decides how long it takes. Four is the least PartCAD runs with.
+#
+# It is no longer what keeps a render going. It was introduced when
+# 'threadsMax: 2' stopped 'pc render -r' for good: an object built from another
+# one -- an alias, an enrich, an extrusion of a sketch -- held a thread of the
+# constrained pool while it waited for a second one to build its source on, and
+# as many of those at once as the pool had threads held them all. Raising the
+# floor only made that less likely: pools of four and seven stopped the same
+# way, with four and seven such objects at once. Work started on a slot of the
+# pools now runs on that slot, and a slot waiting for a lock held by something
+# that waits for the pool gives the slot back, so a pool of any size -- one
+# thread included -- builds nested objects to the end (see
+# 'partcad.sync_threads'). A lower value would no longer stop anything, and is
+# raised all the same: the floor is about how much PartCAD does at once, not
+# about whether it finishes.
 THREADS_MAX_MINIMUM = 4
 
 
@@ -473,8 +483,9 @@ def default_threads_max() -> int:
     """What 'threadsMax' comes to when nothing sets it: one per core, at least the minimum.
 
     A machine with fewer cores than that is told so, once per process: it gets
-    the minimum regardless, because fewer is the deadlock 'THREADS_MAX_MINIMUM'
-    exists for, and that is more processes than it has cores to run them.
+    the minimum regardless, the least PartCAD runs with (see
+    'THREADS_MAX_MINIMUM'), and that is more processes than it has cores to run
+    them.
     """
     cores = cpu_cores()
     if cores < THREADS_MAX_MINIMUM:

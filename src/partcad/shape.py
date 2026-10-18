@@ -31,7 +31,7 @@ from . import output
 from . import physics as pc_physics
 from . import render_overlay
 from . import runtime as pc_runtime
-from . import sandbox_versions, scene_world, shape_ports, source_key, wrapper
+from . import sandbox_versions, scene_world, shape_ports, source_key, sync_threads, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import ShapeConfiguration
@@ -240,6 +240,20 @@ def sandbox_note(ctx, impl) -> str:
     return "\n" + note if note else ""
 
 
+def _held_by_current_task(shape) -> bool:
+    """Whether the task this is called from holds 'shape.locked()' already.
+
+    A function rather than a method, for the reason 'sandbox_note' is one: the
+    telemetry decorator would make a span of every call, and this is asked on
+    the way into every lock. 'current_task()' is None outside a task; two such
+    callers on one loop cannot interleave at an await point anyway, so None is
+    never treated as re-entry.
+    """
+    owners = getattr(shape.tls, "async_shape_lock_owners", None)
+    task = asyncio.current_task()
+    return task is not None and bool(owners) and owners.get(id(shape)) is task
+
+
 # The part types whose geometry is the file they are read from, and is handed
 # over as the file holds it: a closed shell in one is reported, not converted.
 FILE_AUTHORITY_TYPES = frozenset({"step", "brep"})
@@ -294,38 +308,29 @@ _waiting_for: dict = {}
 _held = threading.local()
 
 
-class _ShapeLock:
+class _ShapeLock(sync_threads.PoolAwareRLock):
     """A shape's thread lock: re-entrant, and counted per thread while held.
 
+    Waited for without blocking an event loop, and by a slot of the thread
+    pools without keeping the slot from work that the lock's holder may be
+    waiting for: see 'sync_threads.PoolAwareRLock'.
+
     The count is how 'prepare_async(wait=True)' knows this thread holds some
-    shape's lock. Such a lock stops any other thread that asks for the same
-    shape, its whole event loop with it (see 'Shape.locked()'), so a thread
-    holding one must not wait for a preparation running on another thread:
-    that thread may be the one stopped.
+    shape's lock. Such a lock keeps any other thread that asks for the same
+    shape waiting until it is released, so a thread holding one must not wait
+    for a preparation running on another thread: that thread may be the one
+    waiting for the lock.
     """
 
-    __slots__ = ("_lock",)
-
-    def __init__(self):
-        self._lock = threading.RLock()
-
-    def acquire(self, blocking=True, timeout=-1):
-        acquired = self._lock.acquire(blocking, timeout)
+    def _try(self, timeout=None) -> bool:
+        acquired = super()._try(timeout)
         if acquired:
             _held.count = getattr(_held, "count", 0) + 1
         return acquired
 
     def release(self):
+        super().release()
         _held.count -= 1
-        self._lock.release()
-
-    def __enter__(self):
-        self.acquire()
-        return self
-
-    def __exit__(self, *exc_info):
-        self.release()
-        return False
 
 
 def _waits_for(preparation, chain) -> bool:
@@ -359,10 +364,20 @@ class Shape(ShapeConfiguration):
     # object, and left out of what lists the package's declarations.
     artifact = False
 
+    # Whether 'get_shape()' builds this shape on the constrained thread pool:
+    # a part, a sketch. What 'get_wrapped()' does about it is said there. An
+    # assembly is not: it builds itself on the loop that asks, so that its
+    # children are spread over the pool rather than built one after another on
+    # the one thread it would have been given.
+    built_on_pool = False
+
     def __init__(self, project_name: str, config: dict) -> None:
         super().__init__(config)
         self.project_name = project_name
         self.errors = []
+        # Re-entrant for the thread holding it, safe to wait for from an event
+        # loop and from a slot of the thread pools, and counted per thread
+        # while held: see '_ShapeLock'.
         self.lock = _ShapeLock()
         self.tls = threading.local()
         self.components = []
@@ -543,20 +558,26 @@ class Shape(ShapeConfiguration):
         no longer run at the same time, even though they write different paths.
         That is the price of one rule with no exceptions, and PartCAD's
         parallelism is across shapes rather than within one.
+
+        **Waited for without blocking anything else.** The thread lock is taken
+        with 'async with', which polls rather than blocks the event loop, and a
+        slot of the thread pools that waits for it gives the slot back while
+        whoever holds it waits for the pools itself (see
+        'sync_threads.PoolAwareRLock'). Keeping the slot while waiting was how a
+        shape's lock, held by the loop a command runs on while the shape's build
+        sat in the pool's queue, stopped a render for good once every slot was
+        taken by something waiting for that lock.
         """
         if not hasattr(self.tls, "async_shape_lock_owners"):
             self.tls.async_shape_lock_owners = {}
         owners = self.tls.async_shape_lock_owners
         self_id = id(self)
-        # 'current_task()' is None outside a task; two such callers on one loop
-        # cannot interleave at an await point anyway, so None is never treated
-        # as re-entry.
         task = asyncio.current_task()
-        if task is not None and owners.get(self_id) is task:
+        if _held_by_current_task(self):
             yield
             return
 
-        with self.lock:
+        async with self.lock:
             async with self.get_async_lock():
                 owners[self_id] = task
                 try:
@@ -853,6 +874,44 @@ class Shape(ShapeConfiguration):
             self.add_code_versions(versions)
 
     async def get_wrapped(self, ctx):
+        if self.built_on_pool:
+            # Built already. Never unset again for a shape like this, so the
+            # answer needs no lock -- and must not wait for one: whoever holds
+            # it may be writing this shape's files for as long as that takes,
+            # and an object built from this one has no reason to wait for that.
+            if self._wrapped is not None:
+                return self._wrapped
+            # Not on a slot of the pools yet, which is a command asking for this
+            # shape rather than another shape being built out of it: go to the
+            # pool *before* taking the lock, and take it there. Then whoever
+            # holds a part's lock while it is built is the thread building it,
+            # which needs nothing from the pools to finish (see
+            # 'sync_threads'), and an object built from it that waits for the
+            # lock waits for that thread and nothing else.
+            #
+            # Taken here instead, the lock is held by the command's event loop
+            # for as long as the build sits in the pool's queue -- behind,
+            # quite possibly, the very objects waiting for the lock. Each of
+            # those has to give its slot back for the build to get one
+            # ('sync_threads.PoolAwareRLock'), and the pool starts a thread for
+            # whatever is next in its queue, which may be one more object
+            # waiting for the same lock: a thread per waiter where none is
+            # needed. Before slots were given back, it was a deadlock -- a part
+            # and eight aliases of it, asked for at once on four threads,
+            # stopped for good even once no object took a second slot for its
+            # source.
+            #
+            # Not when the calling task holds the lock already: 'analyze_async'
+            # and the others take it first and ask for the shape inside it,
+            # and going elsewhere for the lock would be waiting for itself. Nor
+            # from inside a preparation, whose chain is a context variable the
+            # hop would leave behind: the far side would not know it for part
+            # of that preparation, and could wait for what is waiting for it.
+            if sync_threads.current_slot() is None and not _held_by_current_task(self) and _preparation.get() is None:
+                return await sync_threads.threadpool_manager.run_async(self._get_wrapped, ctx)
+        return await self._get_wrapped(ctx)
+
+    async def _get_wrapped(self, ctx):
         # Prepared before this shape's lock is taken, and waited for where
         # somebody else began it: the key read below means nothing until the
         # preparation is over, and waiting for one under the lock is the one
