@@ -159,6 +159,11 @@ def unavailable_reason(image: str) -> Optional[str]:
 
 # How the daemon reaches this machine's directories, by the image 'image_available'
 # asked about (see 'mount_sources'), for 'misses' to check a context's against.
+#
+# This and '_UNAVAILABLE_REASONS' are keyed by the image alone, where the probe's
+# own answers are also keyed by the interpreter it ran ('daemon_mounts'), and
+# that is enough here: everything that fills them asks through 'mount_sources'
+# below, with the one interpreter this sandbox runs, 'CONTAINER_PYTHON'.
 _SOURCES = {}
 
 

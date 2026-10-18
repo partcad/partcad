@@ -35,9 +35,14 @@ def unbacked(paths, sources) -> list:
 
 
 # Whether a directory this process creates is the one the daemon binds, keyed by
-# the daemon it was asked of and the image it was asked in. Once per process:
-# the answer is a property of how this machine reaches Docker, and that does not
-# change while a command runs.
+# the daemon it was asked of, the image it was asked in and the interpreter the
+# probe ran there. Once per process: the answer is a property of how this
+# machine reaches Docker, and that does not change while a command runs.
+#
+# The interpreter is in the key because "the image does not run here" can be
+# about it rather than about the image ('ImageDoesNotRun'): an image with no
+# 'python3' on its PATH may well have the interpreter another caller names, and
+# that caller is owed a probe of its own rather than the first one's failure.
 _MOUNTS_SHARED = {}
 _MOUNTS_SHARED_GUARD = threading.Lock()
 
@@ -132,7 +137,7 @@ def mount_sources(client, image: str, python: str = "python3"):
     each is a probe and not a guess about the environment -- one container that
     looks for a file, asked again with the mapping if it was not found without.
     """
-    key = (getattr(getattr(client, "api", None), "base_url", None), image)
+    key = (getattr(getattr(client, "api", None), "base_url", None), image, python)
     with _MOUNTS_SHARED_GUARD:
         if key in _MOUNTS_SHARED:
             return _answered(_MOUNTS_SHARED[key])
@@ -140,9 +145,10 @@ def mount_sources(client, image: str, python: str = "python3"):
     try:
         answer = _probe_answer(client, image, key, python)
     except ImageDoesNotRun as e:
-        # Remembered for this image and this daemon alone, which is all it is
-        # about: another image on the same daemon is asked afresh, and gets the
-        # answer about the mounts that this one could not give.
+        # Remembered for this image, this daemon and this interpreter alone,
+        # which is all it is about: another image on the same daemon, or the
+        # same image asked to run another interpreter, is asked afresh and gets
+        # the answer about the mounts that this one could not give.
         answer = e
     with _MOUNTS_SHARED_GUARD:
         _MOUNTS_SHARED[key] = answer

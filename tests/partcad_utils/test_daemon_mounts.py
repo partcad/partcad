@@ -39,8 +39,9 @@ class _Daemon:
 
     'sees' says whether a container finds a file the probe made - whether the
     daemon shares this filesystem. An image runs only where it has a build for
-    the daemon's platform, and 'NO_PYTHON' has no interpreter to run at all.
-    'refuses_mounts' is a daemon that will not make any bind.
+    the daemon's platform, and only the interpreters it carries: 'python3' in
+    each, except 'NO_PYTHON', which has none. 'refuses_mounts' is a daemon that
+    will not make any bind.
     """
 
     def __init__(self, sees=True, refuses_mounts=False, architecture="aarch64", base_url="unix://var/run/docker.sock"):
@@ -54,6 +55,7 @@ class _Daemon:
             EVERYWHERE: _Image("linux", {"aarch64": "arm64", "x86_64": "amd64"}[architecture]),
             NO_PYTHON: _Image("linux", {"aarch64": "arm64", "x86_64": "amd64"}[architecture]),
         }
+        self.interpreters = {AMD64_ONLY: {"python3"}, EVERYWHERE: {"python3"}, NO_PYTHON: set()}
         self.images = types.SimpleNamespace(get=self._image)
         self.containers = types.SimpleNamespace(get=self._container, run=self._run)
 
@@ -80,9 +82,9 @@ class _Daemon:
                 image=image,
                 stderr=b"exec /usr/bin/python3: exec format error",
             )
-        if image == NO_PYTHON:
+        if command[0] not in self.interpreters[image]:
             raise docker.errors.APIError(
-                'failed to create task for container: exec: "python3": executable file not found in $PATH'
+                'failed to create task for container: exec: "%s": executable file not found in $PATH' % command[0]
             )
         if volumes and self.refuses_mounts:
             raise docker.errors.APIError("Mounts denied: the path is not shared from the host")
@@ -181,6 +183,28 @@ def test_an_image_that_does_not_run_is_remembered_for_that_image_alone():
 
     assert daemon_mounts.mount_sources(daemon, EVERYWHERE) is None
     assert daemon_mounts.mounts_are_shared(daemon, EVERYWHERE) is True
+
+
+def test_an_interpreter_the_image_does_not_have_is_not_an_answer_for_one_it_does():
+    """'pc ide open' names an application's interpreter, the sandbox 'python3': each is asked about.
+
+    Remembered under the image alone, the first one's "does not run here" was
+    handed to the second without a probe of its own - for an image that runs it.
+    """
+    daemon = _Daemon(sees=True)
+
+    with pytest.raises(daemon_mounts.ImageDoesNotRun) as raised:
+        daemon_mounts.mount_sources(daemon, EVERYWHERE, "python3.13")
+    assert '"python3.13": executable file not found' in raised.value.reason
+
+    assert daemon_mounts.mount_sources(daemon, EVERYWHERE, "python3") is None
+    assert daemon_mounts.mounts_are_shared(daemon, EVERYWHERE, "python3") is True
+    # And each answer is still remembered: asked again, neither starts another container.
+    runs = len(daemon.runs)
+    with pytest.raises(daemon_mounts.ImageDoesNotRun):
+        daemon_mounts.mount_sources(daemon, EVERYWHERE, "python3.13")
+    assert daemon_mounts.mount_sources(daemon, EVERYWHERE, "python3") is None
+    assert len(daemon.runs) == runs
 
 
 def test_a_wrong_platform_on_one_daemon_is_not_an_answer_for_another():
