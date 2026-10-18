@@ -1,0 +1,11 @@
+desc: A parts library with a store of its own
+
+suppliers:
+  ../store:own:
+
+parts:
+  pin:
+    type: cadquery
+    desc: A pin
+    vendor: acme
+    sku: PIN-1

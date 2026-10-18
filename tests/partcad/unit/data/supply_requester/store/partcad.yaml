@@ -1,0 +1,7 @@
+desc: Two stores. Neither script is run by the tests, which only ask who is asked.
+
+providers:
+  shop:
+    type: store
+  own:
+    type: store

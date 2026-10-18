@@ -1474,6 +1474,11 @@ class Context:
             part_spec (ProviderCartItem): The part to find suppliers for.
             cart (ProviderCart, optional): Use this cart for requirements and preferences. Defaults to None.
 
+        The candidates are the suppliers of the package of the assembly the
+        item was procured for, first, and then those of the package the item
+        itself is declared in (see 'ProviderCartItem.suppliers'), each asked
+        once.
+
         Returns:
             list[str]: list of provider names that can supply the part.
         """
@@ -1490,7 +1495,9 @@ class Context:
             return {}
         pc_logging.debug("Retrieving suppliers from %s" % project_name)
 
-        part_suppliers = await prj.get_suppliers_async()
+        part_suppliers = dict(getattr(part_item, "suppliers", None) or {})
+        for supplier, extra in (await prj.get_suppliers_async()).items():
+            part_suppliers.setdefault(supplier, extra)
         if len(part_suppliers) == 0:
             pc_logging.error("No suppliers found for %s in %s" % (part_name, project_name))
             return {}

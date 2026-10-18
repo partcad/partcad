@@ -1,0 +1,9 @@
+desc: Another package of models built from the same library, bought somewhere else
+
+suppliers:
+  //store:own:
+
+assemblies:
+  frame:
+    type: assy
+    desc: One brick from the library
