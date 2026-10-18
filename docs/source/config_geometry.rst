@@ -330,11 +330,11 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
           dir: [<x>, <y>, <z>] # the vector to move along or rotate around
       motion: # (optional) the degrees of freedom a connection keeps; see "Joints" below
         dof: [<parameter name>, ...] # the freedom-of-movement parameters that stay free
-        type: <fixed|revolute|continuous|prismatic|cylindrical|screw|universal|ball|planar|floating>
+        type: <fixed|revolute|prismatic|cylindrical|screw|universal|ball|planar|floating>
         axis: [<x>, <y>, <z>] # in the frame of this interface's port; Z by default
         limits: # for a revolute, prismatic or screw type: degrees for a turn, millimetres for a move
-          lower: ...
-          upper: ...
+          lower: ... # -.inf for a side that is open whatever the parameter's range says
+          upper: ... # for a ball: how far it turns from its zero, in degrees, and no 'lower'
         softLimits: # (optional) limits a controller enforces before the hard ones
           lower: ...
           upper: ...
@@ -401,31 +401,53 @@ declared - about the port's Z axis unless ``axis:`` says otherwise, between
 ``type``                Degrees of freedom
 ======================= ====================================================================
 ``fixed``               none
-``revolute``            one turn about ``axis``, within ``limits``
-``continuous``          one turn about ``axis``, unlimited
-``prismatic``           one move along ``axis``, within ``limits``
+``revolute``            one turn about ``axis``, bounded on either side or on neither
+``prismatic``           one move along ``axis``, likewise
 ``cylindrical``         one turn and one move, about and along ``axis``
 ``screw``               the same two, the move following the turn by the ``threadStep``
-``universal``           two turns, about ``axis`` and about the port's X axis
-``ball``                three turns about the port's origin
+``universal``           two turns, about ``axis`` and about the port's X axis (its Y, when
+                        ``axis`` is X)
+``ball``                three turns about the port's origin, bounded by one angle
 ``planar``              two moves across the plane normal to ``axis``, and one turn about it
-``floating``            all six
+``floating``            all six: the connected object is a body of its own, nothing holds it
 ======================= ====================================================================
+
+There is one ``type`` per physical joint. ``continuous`` still reads, as a
+``revolute`` open on both sides, and ``pc lint`` says it is deprecated: an
+unbounded hinge is a hinge, and a bound on either side is a property of it rather
+than a second kind of joint.
 
 ``motion: revolute`` is the short form of ``motion: {type: revolute}``. ``limits``
 bound the one freedom of a ``revolute`` or ``prismatic`` motion and the turn of a
-``screw`` (whose move follows it); a kind with more than one degree of freedom
-states the range of each on its parameter and names them in ``dof`` instead.
+``screw`` (whose move follows it), and they are the range of the parameter the
+type implies -- the same travel said in the short form:
+
+* a side ``limits`` does not state is the parameter's own;
+* a side the parameter states as well has to say the same, or ``pc test`` fails
+  the assembly's ``connect`` check (and the parameter's range is used);
+* YAML's own infinity states a side open whatever the parameter's range says:
+  ``limits: {lower: -.inf, upper: .inf}`` is how a parameter declared with a range
+  for placing things is made a hinge that turns for ever. An open side is
+  otherwise stated by stating nothing: a parameter with no range is unlimited.
+
+A ``ball`` is bounded by **one angle**, how far it turns from its zero --
+``limits: {upper: 30}`` -- because that is all a ball can be bounded by without a
+gimbal in it, and it is how MuJoCo bounds one. A range on any one of a ball's turns
+is an error: to bound each turn on its own, name the three turns in ``dof``
+without ``type: ball``, which makes a *composite* (below) rather than a ball. Any
+other kind with more than one degree of freedom states the range of each on its
+parameter and names them in ``dof``.
 
 An implied degree of freedom is the interface's parameter of the same kind along
 the same axis when there is one - which is what makes it addressable from
 ``toParams`` - and otherwise one it brings along: ``turnZ``, ``moveX`` and their
 siblings along a principal axis, ``angle`` and ``offset`` along any other (the
 names ``pc convert assembly -t assy`` writes). Either way a connection can give
-it a value. A ``motion:`` that states both a ``type`` and a ``dof`` list has to
-describe one set of freedoms, and ``pc test`` says where it does not; the ``type``
-still decides the range (a ``continuous`` joint has none) and ``dof`` which
-parameters they are.
+it a value. ``dof`` is the declaration and ``type`` its short form, so a
+``motion:`` that states both is asserting that they say the same thing: where they
+do not, ``pc test`` fails the ``connect`` check (the joint is built from the
+``dof``); where they do, the ``type``'s ``limits`` bound the parameters ``dof``
+names, as above.
 
 Where it is declared
 ^^^^^^^^^^^^^^^^^^^^
@@ -518,14 +540,62 @@ target format cannot state is reported when it is exported - so the gap is
 always visible in one direction or the other.
 
 ``pc convert assembly -t assy`` fills both sections in from a URDF's joints -
-see :ref:`sim-urdf-joints` for the mapping - and what it writes is an implicit
+see :ref:`sim-urdf-joints` for the mapping - and what it writes is an explicit
 declaration of the joint it was. ``pc info -a <assembly>`` lists an assembly's
-joints, and :ref:`assy-joints` how a connection names, locks and starts one.
+joints, each with the ``type`` it is, and :ref:`assy-joints` how a connection
+names, locks and starts one.
 
-No exporter writes those joints yet: a simulation still sees each part where its
-connection placed it, every one of them a free body (see :ref:`sim-limitations`).
-Writing them out to MJCF, URDF and SDFormat is the next step; see the simulation
-`design record <https://github.com/partcad/partcad/blob/devel/docs/design/simulation.md>`__.
+What a joint is
+^^^^^^^^^^^^^^^
+
+Whatever declared them, the degrees of freedom a connection keeps are **one** of
+these, and that type is what every exporter writes (``pc info`` shows it):
+
+======================= ==============================================================================
+Type                    Degrees of freedom
+======================= ==============================================================================
+``revolute``            one turn, bounded on either side or on neither
+``prismatic``           one move, likewise
+``cylindrical``         a turn and a move on one line, in either order
+``screw``               the same, the move following the turn
+``universal``           two turns whose lines cross
+``ball``                three turns through one point, in any order, none bounded on its own
+``planar``              two moves and the turn about their normal, the moves first or the turn first
+``floating``            three moves and three turns: a body of its own
+``composite``           anything else: two moves of an XY stage, a turn about one line and a move
+                        across it, three turns each bounded on its own
+======================= ==============================================================================
+
+A *composite* is not a ``type`` one can write in ``motion:``; it is what a ``dof``
+list is when no physical joint has those freedoms, and physically it is a chain of
+bodies the declaration leaves out -- the carriage of an XY stage, the cross of a
+two-axis joint. Each format writes a type in its own terms, and refuses what it has
+no construct for rather than inventing a body to make one:
+
+======================= ========================= ========================= ==========================
+Type                    MuJoCo (MJCF)             Gazebo (SDFormat)         URDF
+======================= ========================= ========================= ==========================
+``revolute``            ``hinge``                 ``revolute``              ``revolute``, or
+                                                                            ``continuous`` open on
+                                                                            both sides
+``prismatic``           ``slide``                 ``prismatic``             ``prismatic``
+``cylindrical``         a hinge and a slide       refused                   refused
+``screw``               a hinge and a slide,      ``screw``                 refused
+                        coupled
+``universal``           two hinges                ``universal``             refused
+``ball``                ``ball``                  ``ball``                  refused
+``planar``              two slides and a hinge    refused                   ``planar``
+``floating``            a free body               a model of its own        ``floating``
+``composite``           its hinges and slides     refused                   refused
+======================= ========================= ========================= ==========================
+
+A refusal names the joint and its type, and the ways on: simulate the mechanism in
+MuJoCo, which writes every type; or model the body the joint stands for -- for a
+cylindrical pair a sleeve and its carriage, for a universal joint its cross -- and
+join it by native joints. A URDF that is read only for its kinematics can ask for
+what URDF has no type for with ``composites: massless``: see :ref:`sim-urdf-export`.
+The engine plugins' half of this is being built (see the simulation
+`design record <https://github.com/partcad/partcad/blob/devel/docs/design/simulation.md>`__, section 8.13).
 
 Abstract interfaces
 -------------------

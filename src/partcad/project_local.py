@@ -11,8 +11,9 @@ import json
 import os
 import sys
 
-import yaml
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
+
+from partcad_utils import config_yaml
 
 from . import config_template
 from . import logging as pc_logging
@@ -85,10 +86,11 @@ class ProjectLocal(Project):
         # to serve two of them is shown how.
         config = template.render(config_template.render_context(name, partcad_version()))
 
-        # Parse the config
+        # Parse the config, an int keeping the text it was written as where
+        # that is not its decimal text: see 'partcad_utils.config_yaml'.
         config_obj = None
         if config_path.endswith(".yaml"):
-            config_obj = yaml.safe_load(config)
+            config_obj = config_yaml.load(config)
         if config_path.endswith(".json"):
             # 'config' is the rendered text, not a file object, hence 'loads'
             config_obj = json.loads(config)

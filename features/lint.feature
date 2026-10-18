@@ -762,6 +762,31 @@ Feature: `pc lint` command
     Then the command should exit with a status code of "1"
     And STDOUT should contain "logo.assy:2:5: expected at least one of 'links', 'part', 'assembly'"
 
+  @failure
+  Scenario: A further joint is stated on the later of its two links
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package with an assembly
+      assemblies:
+        frame:
+          type: assy
+      """
+    And a file named "frame.assy" with content:
+      """
+      links:
+        - part: leg
+          name: left
+        - part: rail
+          connectPorts: {with: end-a, name: left, to: side}
+          alsoConnectPorts: {with: end-b, name: right, to: side}
+        - part: leg
+          name: right
+          connectPorts: {with: side, name: rail, to: end-b}
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "frame.assy:6:43: 'right' is placed after this node"
+
   @success
   Scenario: `pc lint --file` checks a named file without a package
     Given a file named "logo.assy" with content:

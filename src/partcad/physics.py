@@ -75,12 +75,15 @@ from .utils import resolve_resource_path, split_resource_path
 _WRAPPERS = os.path.join(os.path.dirname(__file__), "wrappers")
 if _WRAPPERS not in sys.path:
     sys.path.append(_WRAPPERS)
+import kinematics  # noqa: E402
 import mass_properties  # noqa: E402
 
 from .cache_hash import CacheHash  # noqa: E402
 
 # The request key the resolved physics of every shape travels to a sandbox
-# under, keyed by the shape's full name. 'wrappers/wrapper_export.PHYSICS_KEY'
+# under, keyed by 'kinematics.properties_key()': a part's full name, and an
+# assembly's or a scene's kind and full name, so that a part and an assembly
+# sharing a name do not share an entry. 'wrappers/wrapper_export.PHYSICS_KEY'
 # is its twin, spelled out there because a sandbox cannot import 'partcad'.
 FACTS_KEY = "__physics__"
 
@@ -496,7 +499,7 @@ def physics_by_shape(ctx, request, fallback=None):
     for node, is_shape in _envelopes(request):
         resolved, _sources = _of_node(node, materials, fallback if is_shape else None)
         if resolved:
-            facts[node["name"]] = resolved
+            facts[kinematics.properties_key(node)] = resolved
     return facts
 
 
@@ -514,7 +517,7 @@ async def physics_by_shape_async(ctx, request, fallback=None):
         else:
             resolved, _sources = _of_node(node, materials)
         if resolved:
-            facts[node["name"]] = resolved
+            facts[kinematics.properties_key(node)] = resolved
     return facts
 
 

@@ -57,6 +57,13 @@ class AssemblyChild:
     fixed joint - and None for anything else. It is not a joint, and it changes
     no placement: it says which body the child is part of when that sibling
     moves (see 'shape_envelope.KEY_ATTACHED'). Only an assembly sets it.
+
+    'also' is what its 'alsoConnectPorts' found: the further joints this child
+    makes once it is placed - the other end of a rail meeting the second leg it
+    spans, a loop of a frame closing - each a record of the two ports, the link
+    they belong to and where they meet. None of them places anything: they are
+    stated so that they are checked, and so that the step that makes them can
+    say so (see 'AssemblyFactoryAssy.resolve_also').
     """
 
     def __init__(
@@ -74,6 +81,7 @@ class AssemblyChild:
         joint_problems=None,
         fixed=False,
         attached=None,
+        also=None,
     ):
         self.item = item
         self.name = name
@@ -99,6 +107,10 @@ class AssemblyChild:
         self.joint_problems = list(joint_problems or [])
         self.fixed = bool(fixed)
         self.attached = attached
+        # What 'alsoConnectPorts' declares, as read, until the links it names are
+        # placed and it can be resolved into 'also'.
+        self.also_declared = list(also or [])
+        self.also = []
 
     def connect_info(self):
         """What the ASSY file says about connecting this child, or None.
@@ -107,13 +119,18 @@ class AssemblyChild:
         'how' are left out: they add nothing to what the defaults already say.
         """
         has_how = self.how is not None and not self.how.is_default()
-        if self.comment is None and not has_how:
+        if self.comment is None and not has_how and not self.also:
             return None
         info = {"name": self.name}
         if self.comment is not None:
             info["comment"] = self.comment
         if has_how:
             info["how"] = self.how.info()
+        if self.also:
+            info["also"] = [
+                {key: record[key] for key in ("name", "with", "to", "comment") if record.get(key) is not None}
+                for record in self.also
+            ]
         return info
 
 

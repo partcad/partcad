@@ -150,6 +150,15 @@ then nothing can be mounted into a container, and the answer is to send the
 files instead: set ``useDockerRemote: true`` (``PC_USE_DOCKER_REMOTE=true``).
 See :ref:`useDockerRemote <use-docker-remote>`, including what it does not protect yet.
 
+If it says that an image **does not run here** -- most often "it has no build for
+linux/arm64 (it is linux/amd64 only)" -- the image is the problem and not the
+daemon: it was built for another platform, and ``useDockerRemote`` will not help,
+since the same image would be started on the same daemon. Run it on a machine of
+the image's platform, or have its publisher build it for this one. A package's
+``dockerImage`` is only where its parts run best, so PartCAD builds those in its
+own image instead and says so; a ``container:``, KiCad, and ``pc ide open`` run
+in their image or not at all, and fail with the reason.
+
 Containers earlier releases made carry no PartCAD label, so ``pc system prune``
 cannot see them: remove them by hand -- ``integration-kicad`` (KiCad) and the
 ``partcad-freecad``-style ones ``pc open`` used to make, with

@@ -81,9 +81,9 @@ leaves the other pair 0.751923 mm clear - where a fitter puts a shim.
 
 `AeroAssembly.step` is AP214: no material, no tolerance, no stock. Those are
 supplied below, and the method is read off each solid. Seven are
-`subtractive`, each cut from a billet `stock.py` derives from the solid it
-holds; `AeroFrame_Cap` is `forming`, because milling a bent 3 mm strip
-throws away 97.2% of its block. The measurements are in the YAML.
+`subtractive`, each cut from a bought billet `stock.py` derives from the
+solid it holds; `AeroFrame_Cap` is `forming`, because milling a bent 3 mm
+strip throws away 97.2% of its block. The figures are in the YAML.
 
 ### What makes the third one manufacturable
 
@@ -127,7 +127,7 @@ pc ide view AeroAssembly_assy_example/AeroFrame_Plate
 # that this part is what is left of the stock it names
 pc test -f manufacturability AeroAssembly_assy_example/AeroFrame_Plate
 
-# who makes the eight parts, and for how much
+# what a part is cut from, and what that costs: the cart holds the billet
 pc supply quote AeroAssembly_assy_example/AeroFrame_Plate#1
 ```
 

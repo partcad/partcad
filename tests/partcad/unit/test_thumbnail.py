@@ -59,6 +59,9 @@ class _Shape:
     async def get_wrapped(self, ctx):
         return {"shape": True}
 
+    async def get_cache_key_async(self):
+        return self.hash.get()
+
     def get_cacheable(self):
         return True
 

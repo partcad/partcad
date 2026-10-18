@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import copy
 import os
 import sys
@@ -243,6 +244,102 @@ def sandbox_note(ctx, impl) -> str:
 # over as the file holds it: a closed shell in one is reported, not converted.
 FILE_AUTHORITY_TYPES = frozenset({"step", "brep"})
 
+# How often 'Shape.prepare_async(wait=True)' looks again at a preparation that
+# somebody else has begun and not finished, in seconds: from the first value,
+# doubling to the second. Polled rather than awaited for the reason
+# 'sandbox_lock' polls - a shape is prepared from several event loops at once,
+# and there is no one loop to put a future on.
+_PREPARE_POLL_MIN = 0.002
+_PREPARE_POLL_MAX = 0.1
+
+# The longest 'Shape.prepare_async(wait=True)' waits for a preparation begun
+# elsewhere before it goes on without the shape's key, in seconds. A backstop,
+# not the rule: the waits that can never end - a cycle of preparations, a lock
+# the preparer may need - are refused before any waiting (see
+# '_refusal_to_wait'). What is left is what nothing here can see, a preparer
+# stopped by something it waits for on another thread; giving up on it costs
+# one uncached build, where waiting on would cost the run.
+_PREPARE_WAIT_MAX = 60.0
+
+
+class PreparationInFlight(Exception):
+    """A shape's preparation, begun elsewhere and not over, that its caller may not wait for.
+
+    Raised by 'Shape.prepare_async(wait=True)' instead of returning, because
+    the caller asked to wait in order to read the key, and the key is not the
+    shape's key until the preparation is over.
+    """
+
+
+class _Preparation:
+    """One chain of preparations: a 'prepare_async()' and every one it leads to, in one task."""
+
+    __slots__ = ()
+
+
+# Which preparation the running code is part of, if any: set while a shape's
+# preparation hook runs, so that every shape it prepares on the way is known to
+# be prepared on its behalf. A context variable, so that it follows the task
+# and the tasks it starts, and nothing else.
+_preparation: contextvars.ContextVar = contextvars.ContextVar("partcad.shape.preparation", default=None)
+
+# What each preparation that is waiting is waiting for: '_Preparation' -> the
+# shape. Read to tell a wait that would close a cycle from one that ends. Under
+# '_preparations', with every shape's '_preparer', because those are written
+# from several threads at once.
+_preparations = threading.Lock()
+_waiting_for: dict = {}
+
+# How many shapes' thread locks this thread holds (see '_ShapeLock').
+_held = threading.local()
+
+
+class _ShapeLock:
+    """A shape's thread lock: re-entrant, and counted per thread while held.
+
+    The count is how 'prepare_async(wait=True)' knows this thread holds some
+    shape's lock. Such a lock stops any other thread that asks for the same
+    shape, its whole event loop with it (see 'Shape.locked()'), so a thread
+    holding one must not wait for a preparation running on another thread:
+    that thread may be the one stopped.
+    """
+
+    __slots__ = ("_lock",)
+
+    def __init__(self):
+        self._lock = threading.RLock()
+
+    def acquire(self, blocking=True, timeout=-1):
+        acquired = self._lock.acquire(blocking, timeout)
+        if acquired:
+            _held.count = getattr(_held, "count", 0) + 1
+        return acquired
+
+    def release(self):
+        _held.count -= 1
+        self._lock.release()
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, *exc_info):
+        self.release()
+        return False
+
+
+def _waits_for(preparation, chain) -> bool:
+    """Whether 'preparation' is waiting, directly or through others, for 'chain'. Under '_preparations'."""
+    seen = set()
+    while preparation is not None and id(preparation) not in seen:
+        if preparation is chain:
+            return True
+        seen.add(id(preparation))
+        shape = _waiting_for.get(preparation)
+        owner = shape._preparer if shape is not None else None
+        preparation = owner[0] if owner is not None else None
+    return False
+
 
 @telemetry.instrument(exclude=["locked"])
 class Shape(ShapeConfiguration):
@@ -266,7 +363,7 @@ class Shape(ShapeConfiguration):
         super().__init__(config)
         self.project_name = project_name
         self.errors = []
-        self.lock = threading.RLock()
+        self.lock = _ShapeLock()
         self.tls = threading.local()
         self.components = []
         self.compound = None
@@ -309,8 +406,13 @@ class Shape(ShapeConfiguration):
         # Set by the factory (see ShapeFactory.prepare_async): everything that has
         # to happen before this shape's cache key means anything - 'fileFrom'
         # downloads and cross-package references - without building the shape.
+        # '_prepared' is raised as the preparation begins, '_prepare_finished'
+        # once it is over, and '_preparer' says who is doing it meanwhile: the
+        # '_Preparation' and the thread (see 'prepare_async').
         self._prepare = None
         self._prepared = False
+        self._prepare_finished = False
+        self._preparer = None
 
         # Filesystem cache
         self.hash = CacheHash(f"{self.project_name}:{self.name}", cache=self.cacheable)
@@ -522,7 +624,7 @@ class Shape(ShapeConfiguration):
     def prepare(self):
         return asyncio.run(self.prepare_async())
 
-    async def prepare_async(self):
+    async def prepare_async(self, wait: bool = False):
         """Fetch everything the cache key depends on, without building the shape.
 
         This is what makes 'pc install' behave like 'npm install': the factory
@@ -533,19 +635,107 @@ class Shape(ShapeConfiguration):
         Idempotent, and safe against reference cycles between assemblies: the
         flag is raised before the hook runs, so a shape that (indirectly) links
         back to itself stops here instead of recursing.
+
+        That same flag is what everybody else sees while the hook is still
+        running, and by default they return on it too: the preparation has
+        begun, but what it hashes in - the keys of the objects an assembly links
+        to, the file a plugin or a 'fileFrom' fetches - may not be in the hash
+        yet. A hash adds its files when it is first read, so a key read then is
+        not merely early: the shape keeps it, file left out, for as long as the
+        process lives.
+
+        'wait' is for every caller about to read the key - 'get_cache_key_async()',
+        'get_wrapped()', 'Test.test_cached()' - and it returns only once the
+        preparation is over: one begun elsewhere is waited for, and if it
+        failed, the shape is prepared here instead. Where waiting could never
+        end, it raises 'PreparationInFlight' rather than wait, and the caller
+        goes on without the key (see '_refusal_to_wait()' for when). A caller
+        that only needs the preparation started - one that resolves what a
+        declaration points at - does not pass it, and nothing about it changed.
         """
-        if self._prepared:
-            return
-        self._prepared = True
-        if self._prepare is not None:
-            try:
+        chain = _preparation.get()
+        delay, waited = _PREPARE_POLL_MIN, 0.0
+        try:
+            while True:
+                with _preparations:
+                    if not self._prepared:
+                        # Ours to do: in the chain this was called from, or in a
+                        # chain of its own.
+                        self._prepared = True
+                        self._prepare_finished = False
+                        mine = chain if chain is not None else _Preparation()
+                        self._preparer = (mine, threading.get_ident())
+                        break
+                    if self._prepare_finished or not wait:
+                        return
+                    refusal = self._refusal_to_wait(chain, waited)
+                    if refusal is None and chain is not None:
+                        _waiting_for[chain] = self
+                if refusal is not None:
+                    if waited >= _PREPARE_WAIT_MAX:
+                        pc_logging.warning("%s:%s: %s" % (self.project_name, self.name, refusal))
+                    raise PreparationInFlight("%s:%s %s" % (self.project_name, self.name, refusal))
+                await asyncio.sleep(delay)
+                waited += delay
+                delay = min(2 * delay, _PREPARE_POLL_MAX)
+        finally:
+            if chain is not None:
+                with _preparations:
+                    if _waiting_for.get(chain) is self:
+                        del _waiting_for[chain]
+
+        token = _preparation.set(mine)
+        try:
+            if self._prepare is not None:
                 await self._prepare(self)
-            except BaseException:
-                # A preparation that failed has not happened: leaving the flag
-                # up would make a warm context skip it forever and then hash a
-                # file that was never downloaded.
+        except BaseException:
+            # A preparation that failed has not happened: leaving the flag
+            # up would make a warm context skip it forever and then hash a
+            # file that was never downloaded.
+            with _preparations:
                 self._prepared = False
-                raise
+                self._preparer = None
+            raise
+        finally:
+            _preparation.reset(token)
+        with _preparations:
+            self._prepare_finished = True
+            self._preparer = None
+
+    def _refusal_to_wait(self, chain, waited: float):
+        """Why a caller may not wait for this shape's preparation, under way elsewhere; None if it may.
+
+        Under '_preparations'. 'chain' is the preparation the caller is part
+        of, if any; 'waited' how long it has waited so far.
+
+        A wait that could never end is refused before it starts, and there are
+        two of those:
+
+          * **A cycle of preparations.** A link back to a shape from inside its
+            own preparation would wait for itself; and two preparations each
+            waiting for a shape the other is preparing - X linking Y, while Y
+            links X - would wait for each other. Each preparation records what
+            it waits for, and a wait that would close a loop is refused. A
+            shape in a cycle has no key, which is what keying it on half of
+            itself used to amount to anyway.
+          * **A shape's lock, held across threads.** A shape's thread lock
+            stops every other thread that asks for that shape, its whole event
+            loop with it (see 'locked()'). A thread that holds one and waits for
+            a preparation running on another thread may be waiting for a thread
+            it has stopped. Waiting on the same thread is safe - the waiter
+            hands its own loop back while it waits - which is what an
+            assembly's children do while the assembly is built under its lock.
+
+        What is left is backstopped by '_PREPARE_WAIT_MAX'.
+        """
+        owner, thread = self._preparer if self._preparer is not None else (None, None)
+        if chain is not None and (owner is chain or _waits_for(owner, chain)):
+            return "is being prepared by a preparation that is waiting for this one: a cycle of links"
+        if getattr(_held, "count", 0) > 0 and thread != threading.get_ident():
+            return "is being prepared on another thread, and this one holds a shape's lock"
+        if waited >= _PREPARE_WAIT_MAX:
+            return "has been in preparation elsewhere for %ds; going on without its cache key" % waited
+        return None
 
     async def get_cache_key_async(self) -> Optional[str]:
         """Prepare this shape and return its cache key, or None if it has none.
@@ -555,8 +745,19 @@ class Shape(ShapeConfiguration):
         on disk - which is what 'prepare_async()' above guarantees. Shapes that
         are not cached in their own right (an alias or an enrich hashes the
         object it points at, not itself) report no key.
+
+        Every key that reaches a cache, or another shape's key, comes through
+        here or waits the same way, so it is never read while a preparation of
+        this shape begun elsewhere is still under way: that is waited for, and
+        where it may not be (see 'prepare_async()'), there is no key yet - None,
+        as for a shape that is not cached, and the hash is left unread so that
+        whoever asks once the preparation is over gets the whole of it.
         """
-        await self.prepare_async()
+        try:
+            await self.prepare_async(wait=True)
+        except PreparationInFlight as e:
+            pc_logging.debug("No cache key yet: %s" % e)
+            return None
         if not self.get_cacheable():
             return None
         return self.hash.get()
@@ -652,6 +853,17 @@ class Shape(ShapeConfiguration):
             self.add_code_versions(versions)
 
     async def get_wrapped(self, ctx):
+        # Prepared before this shape's lock is taken, and waited for where
+        # somebody else began it: the key read below means nothing until the
+        # preparation is over, and waiting for one under the lock is the one
+        # place that must never happen - the lock stops every other thread that
+        # asks for this shape, the preparer's among them. A preparation that
+        # cannot be waited for leaves this build uncached rather than keyed on
+        # part of what it is made of.
+        try:
+            await self.prepare_async(wait=True)
+        except PreparationInFlight as e:
+            pc_logging.debug("Building without the cache: %s" % e)
         async with self.locked():
             if self._wrapped is not None:
                 return self._wrapped
@@ -672,7 +884,8 @@ class Shape(ShapeConfiguration):
             # is every part, every sketch, and most assemblies.
             await shape_ports.prepare_async(self, ctx)
 
-            is_cacheable = self.get_cacheable() and ctx
+            # Not before the preparation is over (see above).
+            is_cacheable = self.get_cacheable() and ctx and self._prepare_finished
             if is_cacheable:
                 cache_hash = self.hash
                 if cache_hash:
@@ -1249,7 +1462,9 @@ class Shape(ShapeConfiguration):
         if mass_properties:
             info["MassProperties"] = mass_properties
 
-        info["Hash"] = self.hash.get()
+        # The key, once the preparation is over: read before, a hash keeps what
+        # it had then (see 'prepare_async()').
+        info["Hash"] = asyncio.run(self.get_cache_key_async())
         if self.environment_cache_key is not None:
             # Part of that hash, and the part of it a user is most likely to be
             # asking about when a shape re-renders instead of coming from cache.

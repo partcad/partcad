@@ -45,6 +45,23 @@ from .sandbox_lock import process_slots
 # the largest dimension of the two, unless the step says otherwise.
 EXPLODED_FRACTION = 0.5
 
+# How far a fastener is pulled out of its hole in the picture of driving it in,
+# as a fraction of its own length: a little more than all of it, so that its
+# point is clear of what it goes through.
+FASTENER_PULL = 1.25
+
+# The two colours a step is drawn in: what is there already, and what the step
+# adds. A light grey that recedes on white paper, and a blue that stands out
+# against it and against the red the gap is drawn in.
+CONTEXT_COLOR = "#A8A8A8"
+NEW_COLOR = "#1565C0"
+
+# An item is shown on its own, in the box of parts of its step, when it is
+# smaller than this fraction of the finished assembly: something that size is
+# hard to pick out in a picture of the whole - a screw, a bracket - while a
+# board or a panel is the thing the picture is of.
+SMALL_FRACTION = 0.25
+
 # What to space two items by when neither of them can be measured (an empty
 # shape, or a runtime that failed to hand a bounding box back). Small enough to
 # be harmless, large enough to be visible.
@@ -195,15 +212,38 @@ def view_along(along=None):
     return iso
 
 
+def view_facing(directions):
+    """The iso view that looks at the most of 'directions' from the side they point to.
+
+    What a step pulls out is seen best from the side it comes out of: a screw
+    pulled out of the far face of a leg is behind the leg from anywhere else.
+    So the view is the one most of the directions point towards - and, between
+    views that do equally well, the first of 'ISO_VIEWS', so that a book whose
+    steps all go one way is drawn from one place throughout. Directions are
+    what the gaps of the pictures are along; with none, the first view.
+    """
+    units = [unit for unit in (_normalized(direction) for direction in directions or []) if unit is not None]
+
+    def facing(view):
+        v = _normalized(view)
+        return sum(max(0.0, sum(v[i] * unit[i] for i in range(3))) for unit in units)
+
+    best = ISO_VIEWS[0]
+    for view in ISO_VIEWS[1:]:
+        if facing(view) > facing(best) + 1e-9:
+            best = view
+    return best
+
+
 class ImageSource:
     """Where the pictures of a document come from."""
 
-    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None):
+    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None, view=None):
         return None
 
-    def shape_image(self, shape, key=None, alt=None, caption=None, annotations=None, along=None):
+    def shape_image(self, shape, key=None, alt=None, caption=None, annotations=None, along=None, view=None):
         # Inherited by every image source, so each of them offers both forms.
-        return asyncio.run(self.shape_image_async(shape, key, alt, caption, annotations, along))
+        return asyncio.run(self.shape_image_async(shape, key, alt, caption, annotations, along, view))
 
 
 class PackageImages(ImageSource):
@@ -219,7 +259,7 @@ class PackageImages(ImageSource):
         self.output_dir = output_dir
         self.return_path = return_path
 
-    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None):
+    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None, view=None):
         # The image is looked up where the shape's own configuration puts it, the
         # same way rendering it there does. Deep copy: the merge is in place.
         image_cfg = render_cfg_merge(copy.deepcopy(self.render_cfg), shape.config.get("render") or {})
@@ -271,7 +311,7 @@ class RenderedImages(ImageSource):
         # is never holding one. See '_sandbox_budget()'.
         self._budget = _sandbox_budget()
 
-    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None):
+    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None, along=None, view=None):
         if key is None:
             key = "%s:%s" % (shape.project_name, shape.name)
 
@@ -296,7 +336,7 @@ class RenderedImages(ImageSource):
                         # insisting, and would turn the flag off for a package
                         # that had asked for it on its 'svg:' file type.
                         reproducible=True if self.reproducible else None,
-                        viewport_origin=view_along(along),
+                        viewport_origin=view or view_along(along),
                         viewport_up=VIEW_UP,
                         defaults_only=True,
                     )
@@ -344,8 +384,47 @@ def _prose_blocks(text) -> list:
 
 
 @dataclass
+class GuideFastener:
+    """One fastener a step drives in once its item is in place.
+
+    A screw, a nail, a pin: a link whose joint is made by going into the
+    material ('selfScrew' or 'snapIn', see 'ConnectHow') and that holds the
+    item of the step it follows - it is connected to that item, or driven
+    through it on its way into another ('interferes'). Such a link is not a
+    step of its own: a person fastens the part they have just positioned, and
+    the book says so on the same page (see '_fastens').
+    """
+
+    item: object
+    item_name: str
+    location: Location
+    connection: Optional[dict] = None
+    description: Optional[str] = None
+    comment: Optional[str] = None
+    how: object = None
+    # Where it is pulled out to in the picture of fastening it, and the line it
+    # goes in along.
+    direction: tuple = (0.0, 0.0, 1.0)
+    distance: float = FALLBACK_EXPLODED_DISTANCE
+    gap: Optional[tuple] = None
+
+    @property
+    def target(self) -> Optional[str]:
+        return (self.connection or {}).get("target")
+
+    @property
+    def through(self) -> list:
+        """The links it is driven through on its way into its target."""
+        return list((self.connection or {}).get("interferes") or [])
+
+    def exploded_location(self) -> Location:
+        offset = [self.direction[i] * self.distance for i in range(3)]
+        return Location([offset, [0, 0, 1], 0]) * self.location
+
+
+@dataclass
 class GuideStep:
-    """One item joined to one other item."""
+    """One item joined to what is there already, and what fastens it."""
 
     number: int
     item: object
@@ -369,6 +448,17 @@ class GuideStep:
     direction: tuple = (0.0, 0.0, 1.0)
     distance: float = FALLBACK_EXPLODED_DISTANCE
     gap: Optional[tuple] = None
+    # Everything of this assembly placed before this step, as the children that
+    # placed it: what the person following the book has in front of them, and
+    # what the pictures of the step show the item going onto.
+    context: list = field(default_factory=list)
+    # The fasteners driven in once the item is in place ('GuideFastener').
+    fasteners: list = field(default_factory=list)
+    # The further joints the item makes once placed: the records of its
+    # 'alsoConnectPorts' (see 'AssemblyFactoryAssy.resolve_also').
+    also: list = field(default_factory=list)
+    # How it is put in place, as the 'how' of the connection ('ConnectHow').
+    how: object = None
 
     def exploded_location(self) -> Location:
         """Where the item sits in the exploded view of this step."""
@@ -393,6 +483,54 @@ class GuideStep:
             )
         return "Add %s to %s." % (self.item_name, self.counterpart_name)
 
+    def joint_detail(self) -> Optional[str]:
+        """Which ports of what meet, and how it goes on, as one short line.
+
+        The step's own words are the node's 'description', written for whoever
+        builds it. This is the model's account of the same joint - the names a
+        package gave its ports - kept for the reader who checks the book
+        against the model, and set apart from the instructions so that the two
+        are never mistaken for each other.
+        """
+        connection = self.connection or {}
+        if not connection.get("with_port") or not connection.get("to_port"):
+            return None
+        text = "%s %s to %s %s" % (
+            self.item_name,
+            connection["with_port"],
+            self.counterpart_name,
+            connection["to_port"],
+        )
+        how = _how_words(self.how)
+        return "Joint: %s%s." % (text, ", " + how if how else "")
+
+    def also_sentences(self) -> list:
+        """One sentence for every further joint the item makes."""
+        return ["It also meets %s." % record.get("name") for record in self.also if record.get("name")]
+
+    def also_detail(self) -> list:
+        return [
+            "Also: %s %s to %s %s." % (self.item_name, record.get("with"), record.get("name"), record.get("to"))
+            for record in self.also
+            if record.get("name")
+        ]
+
+
+def _how_words(how) -> Optional[str]:
+    """What a connection's 'how' says about putting the item in place, in words."""
+    if how is None:
+        return None
+    if getattr(how, "self_screw", False):
+        return "driven in, cutting its own thread"
+    if getattr(how, "snap_in", False):
+        return "pushed in until it snaps"
+    torque = getattr(how, "turn_torque_max", 0) or 0
+    if torque > 0:
+        return "turned in, up to %g N*m" % torque
+    if "pushForceMax" in getattr(how, "_stated", ()):
+        return "pushed into place, up to %g N" % how.push_force_max
+    return None
+
 
 @dataclass
 class GuideSection:
@@ -413,6 +551,22 @@ class GuideSection:
     # towers with a spire each need four spires. The build plan counted it
     # ('build_plan'), the same walk that decided where it is documented.
     count: int = 1
+    # Which step each link of the assembly is put in by, by the link's position:
+    # 0 for the base, which no step places, and the step a fastener is driven in
+    # at for each fastener (see '_fastens'). The build plan lists every link;
+    # this is what puts the ones that share a step on that step's page.
+    step_of_link: dict = field(default_factory=dict)
+    # Everything the assembly is put together from, as the children that place
+    # it: what its own page lists as what is needed.
+    children: list = field(default_factory=list)
+    # The largest dimension of the finished assembly, against which an item
+    # counts as small enough to be shown on its own (see '_is_small').
+    size: Optional[float] = None
+    # What the section was measured with, for what its pages measure in turn.
+    ctx: object = None
+    # Where every step of the section is drawn from: one place, so that one
+    # picture follows on from the one before it (see 'view_facing').
+    view: Optional[tuple] = None
 
 
 def _step_source(assembly):
@@ -450,6 +604,36 @@ def _display_name(assembly):
     return name.rsplit(":", 1)[-1] or name
 
 
+def _label(name) -> str:
+    """An object's name without the parameter values it was instantiated with.
+
+    'imperial-desk-1/side;apron=25.0,leg=29.28125' is how PartCAD tells two
+    instances of one object apart, and is what the bill of materials lists;
+    as the title of a page it is a line of text no page is wide enough for and
+    no reader needs. The values are on the page, beside it ('_parameters').
+    """
+    return str(name or "").split(";", 1)[0]
+
+
+def _parameters(name) -> Optional[str]:
+    """The parameter values a name carries, written to be read: 'apron 25, leg 29.28125'."""
+    _, _, values = str(name or "").partition(";")
+    if not values:
+        return None
+    return ", ".join(
+        "%s %s" % (key, _number_words(value)) for key, _, value in (pair.partition("=") for pair in values.split(","))
+    )
+
+
+def _number_words(value) -> str:
+    """A number the way it reads: '25.0' is 25, '29.28125' stays as it is."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    return ("%.6f" % number).rstrip("0").rstrip(".")
+
+
 def _assembly_key(assembly):
     """What makes two assemblies the same one for the purpose of documenting it.
 
@@ -468,24 +652,44 @@ async def _build_section(ctx, assembly, content=None, top=False, budget=None):
 
     Composing the steps is bookkeeping over what the ASSY file already says, and
     it stays in order: each step is joined to what the steps before it have
-    placed. Measuring them is not - it is a sandbox process per item - and one
-    step's measurements tell the next step nothing, so they are all taken at
-    once.
+    placed. A fastener that holds the item a step has just positioned is driven
+    in at that same step rather than at one of its own (see '_fastens'), so a
+    step is a part and the screws that hold it. Measuring them is not
+    bookkeeping - it is a sandbox process per item - and one step's
+    measurements tell the next step nothing, so they are all taken at once.
 
     'budget' is the caller's, when several sections are being built together, so
     that the sections share one ceiling rather than take one each.
     """
     if content is None:
         content = _step_source(assembly)
-    section = GuideSection(assembly=assembly, name=_display_name(assembly), top=top)
+    section = GuideSection(assembly=assembly, name=_display_name(assembly), top=top, ctx=ctx)
+    section.children = list(content.children)
 
     placed = []
-    for child in content.children:
+    for position, child in enumerate(content.children):
         if not placed:
             # The first item is what everything else is added to; there is
             # nothing yet to connect it to.
             section.base_name = child.name or child.item.name
             section.base_description = child.description
+            section.step_of_link[position] = 0
+            placed.append(child)
+            continue
+
+        if section.steps and _fastens(child, section.steps[-1]):
+            section.steps[-1].fasteners.append(
+                GuideFastener(
+                    item=child.item,
+                    item_name=child.name or child.item.name,
+                    location=child.location or Location(),
+                    connection=child.connection,
+                    description=child.description,
+                    comment=child.comment,
+                    how=child.how,
+                )
+            )
+            section.step_of_link[position] = section.steps[-1].number
             placed.append(child)
             continue
 
@@ -502,16 +706,62 @@ async def _build_section(ctx, assembly, content=None, top=False, budget=None):
             connection=child.connection,
             item_description=child.description,
             comment=child.comment,
+            context=list(placed),
+            also=list(getattr(child, "also", None) or []),
+            how=child.how,
         )
         section.steps.append(step)
+        section.step_of_link[position] = step.number
         placed.append(child)
 
-    await _gather_bounded(
-        budget if budget is not None else _sandbox_budget(),
-        [_resolve_step_geometry(ctx, step) for step in section.steps],
+    budget = budget if budget is not None else _sandbox_budget()
+    await _gather_bounded(budget, [_resolve_step_geometry(ctx, step) for step in section.steps])
+    section.view = view_facing(
+        [step.direction for step in section.steps]
+        + [fastener.direction for step in section.steps for fastener in step.fasteners]
     )
+    if ctx is not None:
+        try:
+            section.size = await assembly.get_max_dimension_async(ctx)
+        except Exception as e:  # pylint: disable=broad-except
+            # A size is what decides which items get a picture of their own;
+            # without one every item does, which is a longer page and nothing
+            # worse.
+            pc_logging.debug("Could not measure %s: %s" % (assembly.name, e))
 
     return section
+
+
+def _fastens(child, step) -> bool:
+    """Whether a link is a fastener for the item a step has just positioned.
+
+    A fastener is what makes its joint by going into the material - a screw
+    cutting its own thread, a pin or a clip snapped in - which is what its
+    'how' says, or the mating or the interfaces it connects through ('selfScrew',
+    'snapIn'). It fastens the item of the step before it when it is connected
+    to that item or driven through it into something else ('interferes'), and
+    then a person drives it in as part of that step: the part is positioned,
+    and then screwed down. A run of the same fastener after another fastener
+    belongs to the same step too, so that a step adding a screw with nothing to
+    fasten it to adds as many of them as follow it, at once.
+
+    Anything else - including a fastener that holds something placed steps ago
+    - is a step of its own.
+    """
+    how = getattr(child, "how", None)
+    if how is None or not (getattr(how, "self_screw", False) or getattr(how, "snap_in", False)):
+        return False
+    connection = child.connection or {}
+    target = connection.get("target")
+    through = connection.get("interferes") or []
+    if target == step.item_name or step.item_name in through:
+        return True
+    return _object_key(child.item) == _object_key(step.item)
+
+
+def _object_key(item) -> str:
+    """What makes two items the same thing to fetch: the same object, with the same parameters."""
+    return "%s:%s" % (getattr(item, "project_name", ""), getattr(item, "name", ""))
 
 
 def _counterpart(assembly, placed, child):
@@ -556,6 +806,11 @@ async def _resolve_step_geometry(ctx, step: GuideStep):
     face to face, so the item backs out along the normal of the port it was
     connected to. Without a joint there is only the geometry to go by, and the
     item backs out along the line between the two centers.
+
+    Each fastener of the step backs out the same way, from what it is driven
+    into: along the normal of the port it was connected to, away from that
+    item - which is the way its head is - by a little more than its own length,
+    so that its point clears whatever it goes through.
     """
     connection = step.connection or {}
 
@@ -598,6 +853,35 @@ async def _resolve_step_geometry(ctx, step: GuideStep):
     end = [start[i] + step.direction[i] * step.distance for i in range(3)]
     step.gap = (list(start), end)
 
+    await asyncio.gather(*[_resolve_fastener_geometry(ctx, step, fastener) for fastener in step.fasteners])
+
+
+async def _resolve_fastener_geometry(ctx, step: GuideStep, fastener: GuideFastener):
+    """Which way a fastener of a step is pulled out to show it, and how far."""
+    target_item, target_location = step.item, step.location
+    for child in step.context:
+        if child.name == fastener.target and child.name != step.item_name:
+            target_item, target_location = child.item, child.location or Location()
+            break
+    center, target_center, length = await asyncio.gather(
+        _placed_center(ctx, fastener.item, fastener.location),
+        _placed_center(ctx, target_item, target_location),
+        fastener.item.get_max_dimension_async(ctx),
+    )
+    away = [center[i] - target_center[i] for i in range(3)]
+    direction = _normalized((fastener.connection or {}).get("direction")) or _normalized(away) or (0.0, 0.0, 1.0)
+    if sum(direction[i] * away[i] for i in range(3)) < 0:
+        direction = tuple(-value for value in direction)
+    fastener.direction = direction
+    exploded = (fastener.connection or {}).get("exploded")
+    if exploded is not None:
+        fastener.distance = float(exploded)
+    else:
+        fastener.distance = FASTENER_PULL * length if length else FALLBACK_EXPLODED_DISTANCE
+    # Along the line it goes in by: from where it ends up to where it is shown.
+    end = [center[i] + direction[i] * fastener.distance for i in range(3)]
+    fastener.gap = (list(center), end)
+
 
 async def _placed_center(ctx, shape, location):
     """The center of a shape's bounding box, where the assembly puts it."""
@@ -618,8 +902,43 @@ def _normalized(vector):
     return tuple(float(value) / length for value in vector)
 
 
+def _group(project_name, name, color, children):
+    """Some items, where they are, drawn in one colour: one layer of a step's picture.
+
+    'children' are '(item, name, location)'. The colour is the group's, and an
+    item inherits it unless it states one of its own (see
+    'builtin/render/appearance' in the wrappers): which is how a picture tells
+    what is there already from what is being added, in a drawing that has
+    nothing else to tell them apart by.
+    """
+    group = Assembly(
+        project_name,
+        {"name": name, "child": True, "cache": False, "properties": {"color": color}},
+    )
+    group.instantiate = lambda _: True
+    for item, item_name, location in children:
+        group.add(item, item_name, location)
+    return group
+
+
+def _picture(project_name, name, layers):
+    """An assembly of nothing but the layers of one picture, each at the origin."""
+    picture = Assembly(project_name, {"name": name, "child": True, "cache": False})
+    picture.instantiate = lambda _: True
+    for layer_name, layer in layers:
+        if layer.children:
+            picture.add(layer, layer_name, Location())
+    return picture
+
+
 def exploded_assembly(section: GuideSection, step: GuideStep) -> Assembly:
-    """The two items of a step, connected but held apart.
+    """What a step adds, pulled off what is there already: the picture of positioning it.
+
+    Everything placed before the step is drawn where it is, in CONTEXT_COLOR -
+    the assembly so far, which is what the reader has in front of them - and the
+    item of the step in NEW_COLOR, held off the joint along which it goes on.
+    A step with nothing placed before it in its own assembly - there is none:
+    the base is placed by no step - would show the counterpart alone.
 
     Named after the assembly the step belongs to as well as the step's number:
     the sections of a book are drawn at once, so every section's first step is
@@ -628,18 +947,52 @@ def exploded_assembly(section: GuideSection, step: GuideStep) -> Assembly:
     'logging_ansi_terminal.action_key').
     """
     project_name = getattr(step.counterpart, "project_name", None) or getattr(step.item, "project_name", "")
-    pair = Assembly(
+    prefix = "%s-step-%d" % (section.assembly.name or "assembly", step.number)
+    if step.context:
+        context = [(child.item, child.name, child.location or Location()) for child in step.context]
+    else:
+        context = [(step.counterpart, step.counterpart_name, step.counterpart_location)]
+    return _picture(
         project_name,
-        {
-            "name": "%s-step-%d-exploded" % (section.assembly.name or "assembly", step.number),
-            "child": True,
-            "cache": False,
-        },
+        prefix + "-exploded",
+        [
+            ("so-far", _group(project_name, prefix + "-so-far", CONTEXT_COLOR, context)),
+            (
+                "new",
+                _group(
+                    project_name, prefix + "-new", NEW_COLOR, [(step.item, step.item_name, step.exploded_location())]
+                ),
+            ),
+        ],
     )
-    pair.instantiate = lambda _: True
-    pair.add(step.counterpart, step.counterpart_name, step.counterpart_location)
-    pair.add(step.item, step.item_name, step.exploded_location())
-    return pair
+
+
+def fastened_assembly(section: GuideSection, step: GuideStep) -> Assembly:
+    """What the fasteners of a step go into, in place, and the fasteners pulled out.
+
+    Only the items the fasteners join are drawn - the item of the step, what
+    each fastener is driven into and what it is driven through - so that the
+    picture is of the joint and as close up as the joint allows, rather than of
+    the whole of the assembly with screws too small to see on it.
+    """
+    project_name = getattr(step.item, "project_name", "")
+    prefix = "%s-step-%d" % (section.assembly.name or "assembly", step.number)
+    involved = {step.item_name}
+    for fastener in step.fasteners:
+        if fastener.target:
+            involved.add(fastener.target)
+        involved.update(fastener.through)
+    held = [(child.item, child.name, child.location or Location()) for child in step.context if child.name in involved]
+    held.append((step.item, step.item_name, step.location))
+    fasteners = [(fastener.item, fastener.item_name, fastener.exploded_location()) for fastener in step.fasteners]
+    return _picture(
+        project_name,
+        prefix + "-fastened",
+        [
+            ("held", _group(project_name, prefix + "-held", CONTEXT_COLOR, held)),
+            ("fasteners", _group(project_name, prefix + "-fasteners", NEW_COLOR, fasteners)),
+        ],
+    )
 
 
 #
@@ -964,6 +1317,9 @@ async def build_guide_async(
     composers = []
     page_items = []
     same_page = {}
+    # The first link of every step, by assembly and step number: the item whose
+    # page the step's page is, which the other links of the step point at.
+    first_link_of = {container: {} for container in sections}
 
     def visit(item):
         if item.type == build_plan.ITEM_ASSEMBLY:
@@ -974,14 +1330,20 @@ async def build_guide_async(
                 visit(child)
         elif item.type == build_plan.ITEM_LINK:
             section = sections[item.container]
-            if item.step == 0:
+            number = section.step_of_link.get(item.step, item.step)
+            if number == 0:
                 if item.container == build_plan.ROOT_ID:
                     composers.append(_section_page(project, section, images))
                     page_items.append(item.id)
                 else:
                     same_page[item.id] = item.container
+            elif number in first_link_of[item.container]:
+                # A fastener driven in at the step of the item it holds: that
+                # step's page is its page too.
+                same_page[item.id] = first_link_of[item.container][number]
             else:
-                composers.append(_step_page(section, section.steps[item.step - 1], images))
+                first_link_of[item.container][number] = item.id
+                composers.append(_step_page(section, section.steps[number - 1], images))
                 page_items.append(item.id)
         elif item.type == build_plan.ITEM_MANUFACTURE:
             composers.append(_manufacture_page(ctx, project, item, index, images))
@@ -989,15 +1351,15 @@ async def build_guide_async(
 
     visit(plan)
 
-    composed = await asyncio.gather(_title_page(project, assembly, images, list(sections.values())), *composers)
+    composed = await asyncio.gather(_title_page(project, assembly, images, list(sections.values()), ctx), *composers)
 
     pages = [composed[0], doc.Page(title="Bill of Materials", blocks=_bom_page_blocks(project, grouped, dir_path))]
     page_of = {build_plan.ROOT_ID: 0}
     for item_id, page in zip(page_items, composed[1:]):
         page_of[item_id] = len(pages)
         pages.append(page)
-    for item_id, container in same_page.items():
-        page_of[item_id] = page_of[container]
+    for item_id, other in same_page.items():
+        page_of[item_id] = page_of[other]
     pages.append(_links_page(project, assembly, grouped, dir_path))
 
     document = doc.Document(
@@ -1097,7 +1459,7 @@ async def part_plan_async(ctx, project, part, choices=None):
             yield await build_part_plan_async(ctx, project, part, images, choices)
 
 
-async def _title_page(project, assembly, images, sections):
+async def _title_page(project, assembly, images, sections, ctx=None):
     blocks = [doc.Heading(assembly.name, level=1)]
 
     image = await images.shape_image_async(assembly, alt=assembly.name)
@@ -1111,11 +1473,34 @@ async def _title_page(project, assembly, images, sections):
     if author:
         properties.append(("Author", author))
     properties.append(("Assemblies", str(len(sections))))
-    properties.append(("Steps", str(sum(len(section.steps) for section in sections))))
+    # Every step that is done, which counts a section that is made twice twice:
+    # the number of the steps written down is not what anybody does.
+    properties.append(("Steps", str(sum(len(section.steps) * section.count for section in sections))))
+    size = await _size_words(ctx, assembly)
+    if size:
+        properties.append(("Size", size))
     blocks.append(doc.Properties(properties))
     blocks.append(doc.Paragraph("Generated by PartCAD"))
 
     return doc.Page(title=assembly.name, blocks=blocks)
+
+
+async def _size_words(ctx, shape) -> Optional[str]:
+    """How big a shape is, along X, Y and Z, in millimetres and inches."""
+    if ctx is None:
+        return None
+    try:
+        box = await shape.get_bounding_box_async(ctx)
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.debug("Could not measure %s: %s" % (getattr(shape, "name", "?"), e))
+        return None
+    if not box:
+        return None
+    sizes = [box[3] - box[0], box[4] - box[1], box[5] - box[2]]
+    return "%s mm (%s in.), along X, Y and Z" % (
+        " x ".join("%.0f" % size for size in sizes),
+        " x ".join(_number_words(round(size / 25.4, 2)) for size in sizes),
+    )
 
 
 def _bom_page_blocks(project, grouped, dir_path):
@@ -1152,7 +1537,14 @@ async def _manufacture_page(ctx, project, item, index, images: ImageSource):
     name = item.name
     stock = node.get("stock") or {}
 
-    blocks = [doc.Heading(item.title, level=1)]
+    heading = _short_name(project, name)
+    blocks = [
+        doc.Heading(
+            _label(heading),
+            level=1,
+            kicker="Make" if item.count <= 1 else "Make %d" % item.count,
+        )
+    ]
     if part is None:
         blocks.append(doc.Paragraph("%s is not found, so there is nothing to say about making it." % name))
         return doc.Page(title=item.title, blocks=blocks)
@@ -1165,6 +1557,8 @@ async def _manufacture_page(ctx, project, item, index, images: ImageSource):
         blocks.append(doc.ImageRow([picture], height=0.25))
     blocks += _prose_blocks(getattr(part, "desc", None))
     properties = [("Package", part.project_name), ("Needed", str(item.count))]
+    if _parameters(name):
+        properties.append(("Size", _parameters(name)))
     if stock.get("name"):
         properties.append(("Made from", stock["name"]))
     blocks.append(doc.Properties(properties))
@@ -1241,21 +1635,37 @@ async def _section_pages(project, section: GuideSection, images: ImageSource, se
     return [page] + step_pages
 
 
+def _section_kicker(section: GuideSection) -> str:
+    """What a page of a section belongs to, in a few words: its name, and how many to make."""
+    label = _label(section.name)
+    return label if section.count <= 1 else "%s - make %d" % (label, section.count)
+
+
 async def _section_page(project, section: GuideSection, images: ImageSource):
-    """An assembly's own page: what it looks like together, and what to start with."""
+    """An assembly's own page: what it looks like together, what goes into it, and what to start with."""
     image = await images.shape_image_async(section.assembly, alt=section.name)
 
-    title = "Assembly: %s" % section.name if not section.top else section.name
-    blocks = [doc.Heading(title, level=1)]
+    label = _label(section.name)
+    if section.top:
+        blocks = [doc.Heading(label, level=1)]
+    else:
+        blocks = [
+            doc.Heading(
+                label,
+                level=1,
+                kicker="Sub-assembly" if section.count <= 1 else "Sub-assembly - make %d" % section.count,
+            )
+        ]
 
     if image is not None:
-        blocks.append(doc.ImageRow([image], height=0.5))
+        # The top assembly's picture is on the cover already, at half a page.
+        blocks.append(doc.ImageRow([image], height=0.3 if section.top else 0.4))
 
     blocks += _prose_blocks(getattr(section.assembly, "desc", None))
-    properties = [
-        ("Package", section.assembly.project_name),
-        ("Steps", str(len(section.steps))),
-    ]
+    properties = [("Package", section.assembly.project_name)]
+    if _parameters(section.name):
+        properties.append(("Size", _parameters(section.name)))
+    properties.append(("Steps", str(len(section.steps))))
     if section.count > 1:
         properties.append(("Needed", "%d" % section.count))
     blocks.append(doc.Properties(properties))
@@ -1266,56 +1676,200 @@ async def _section_page(project, section: GuideSection, images: ImageSource):
                 % (section.count, section.count)
             )
         )
+    needed = _needed_rows(project, section)
+    if needed:
+        blocks.append(doc.Heading("What goes into it" if section.count <= 1 else "What goes into one", level=2))
+        blocks.append(
+            doc.Table(columns=["Item", "Count", "Description"], aligns=["left", "right", "left"], rows=needed)
+        )
     if section.base_name:
         blocks.append(doc.Paragraph("Start with %s." % section.base_name))
         blocks += _prose_blocks(section.base_description)
 
-    return doc.Page(title=section.name, blocks=blocks)
+    return doc.Page(title=label, blocks=blocks)
+
+
+def _needed_rows(project, section: GuideSection) -> list:
+    """What one of a section's assembly is put together from, counted: its own links, not theirs.
+
+    Its sub-assemblies are a line each, as the finished things they are by the
+    time this one is put together: what is inside them is on their own page.
+    """
+    counts = {}
+    for child in section.children:
+        item = child.item
+        key = _object_key(item)
+        if key not in counts:
+            counts[key] = [item, 0]
+        counts[key][1] += 1
+    rows = []
+    for item, count in counts.values():
+        name = _short_name(project, "%s:%s" % (getattr(item, "project_name", ""), getattr(item, "name", "")))
+        description = getattr(item, "desc", None) or ""
+        size = _parameters(name)
+        if size:
+            description = "%s (%s)" % (description, size) if description else size
+        rows.append([_label(name), count, " ".join(description.split())])
+    return rows
 
 
 async def _step_page(section: GuideSection, step: GuideStep, images: ImageSource):
-    # The three pictures of a step - the item, what it is joined to, and the two
-    # of them pulled apart - are three unrelated projections, so they are drawn
-    # at once. Two of them may well be the same picture as one on another page,
-    # and 'images' is what makes that one render rather than three.
-    item_image, counterpart_image, exploded = await asyncio.gather(
-        images.shape_image_async(step.item, alt=step.item_name, caption=step.item_name),
-        images.shape_image_async(
-            step.counterpart,
-            key=_counterpart_key(section, step),
-            alt=step.counterpart_name,
-            caption=step.counterpart_name,
-        ),
-        images.shape_image_async(
-            exploded_assembly(section, step),
-            key="%s-step-%d-exploded" % (section.name, step.number),
-            alt="%s exploded" % step.item_name,
-            caption="Exploded view: the two are shown %.1fmm apart." % step.distance,
-            annotations=[step.gap] if step.gap else None,
-            along=step.direction,
-        ),
+    """One step: the parts it needs, the item going on, and the fasteners going in.
+
+    Laid out by what the step adds, in the way a printed instruction book is:
+
+    * the parts a person has to pick out - every fastener, and the item itself
+      when it is small next to the whole (see '_is_small') - in a box of their
+      own, with how many. A board or a panel is what the picture is of, and
+      shown again on its own it would only take room; a screw is a few pixels
+      of that picture, and the box is where it can be seen, and counted;
+    * the item going onto what is there already: everything placed before the
+      step in grey, and the item in blue, held off the joint along which it
+      goes on - the assembly so far, rather than the one part it is joined
+      to, because that is what the reader has in front of them;
+    * when it is fastened, the fasteners going in: only the parts they join,
+      in place, and the fasteners pulled out of their holes along the line
+      they go in by.
+
+    The words are the node's description, for whoever builds it, and what the
+    model says about the joint below them, set apart, for whoever checks the
+    book against the model.
+    """
+    total = len(section.steps)
+    small = await _small_items(section, step)
+    position_view = images.shape_image_async(
+        exploded_assembly(section, step),
+        key="%s-step-%d-exploded" % (section.name, step.number),
+        alt="%s going on" % step.item_name,
+        annotations=[step.gap] if step.gap else None,
+        along=step.direction,
+        view=section.view,
     )
+    fasten_view = None
+    if step.fasteners:
+        fasten_view = images.shape_image_async(
+            fastened_assembly(section, step),
+            key="%s-step-%d-fastened" % (section.name, step.number),
+            alt="%s fastened" % step.item_name,
+            annotations=[fastener.gap for fastener in step.fasteners if fastener.gap] or None,
+            along=step.fasteners[0].direction,
+            view=view_facing([fastener.direction for fastener in step.fasteners]),
+        )
+    thumbnails = [
+        images.shape_image_async(item, alt=label, caption="%d \u00d7 %s" % (count, label))
+        for item, count, label in small
+    ]
+    position, fastened, *pictures = await asyncio.gather(position_view, fasten_view or _nothing(), *thumbnails)
 
-    blocks = [doc.Heading("%s: step %d of %d" % (section.name, step.number, len(section.steps)), level=1)]
+    blocks = [doc.Heading("Step %d of %d" % (step.number, total), level=1, kicker=_section_kicker(section))]
+    pictures = [picture for picture in pictures if picture is not None]
+    if pictures:
+        blocks.append(doc.ImageRow(pictures, height=0.09, boxed=True, title="Parts for this step"))
 
-    row = [image for image in (item_image, counterpart_image) if image is not None]
-    if row:
-        blocks.append(doc.ImageRow(row, height=0.3))
+    said = _prose_blocks(step.item_description)
+    blocks += said or [doc.Paragraph(step.description())]
+    blocks += [doc.Paragraph(sentence) for sentence in step.also_sentences()]
+    if step.fasteners:
+        blocks += _fastener_blocks(step)
 
-    blocks += _prose_blocks(step.item_description)
-    blocks.append(doc.Paragraph(step.description()))
+    # Positioning and fastening are two things done one after the other, and
+    # side by side they read in that order: left to right, as the text does.
+    row = [picture for picture in (position, fastened) if picture is not None]
+    if step.fasteners and len(row) == 2:
+        position.caption, fastened.caption = "1. Put it in place", "2. Fasten it"
+        blocks.append(doc.ImageRow(row, height=0.5))
+    elif row:
+        blocks.append(doc.ImageRow(row, height=0.55))
+
+    details = ([step.joint_detail()] if said and step.joint_detail() else []) + step.also_detail()
+    details += _fastener_details(step)
+    blocks += [doc.Paragraph(detail, style=doc.PARAGRAPH_DETAIL) for detail in details]
+
     # Marked as a note, because it is one: a "comment" is context around the
     # step and never the step itself, and the reader has to be able to tell
-    # which of the two paragraphs is the thing to do.
-    comment = _prose(step.comment)
-    if comment:
-        blocks.append(doc.Paragraph("Note: %s" % comment[0]))
-        blocks += [doc.Paragraph(paragraph) for paragraph in comment[1:]]
+    # which of the paragraphs is the thing to do.
+    for comment in [step.comment] + [fastener.comment for fastener in step.fasteners]:
+        paragraphs = _prose(comment)
+        if paragraphs:
+            blocks.append(doc.Paragraph("Note: %s" % paragraphs[0], style=doc.PARAGRAPH_NOTE))
+            blocks += [doc.Paragraph(paragraph, style=doc.PARAGRAPH_NOTE) for paragraph in paragraphs[1:]]
 
-    if exploded is not None:
-        blocks.append(doc.ImageRow([exploded], height=0.45))
+    return doc.Page(title="%s: step %d" % (_label(section.name), step.number), blocks=blocks)
 
-    return doc.Page(title="%s: step %d" % (section.name, step.number), blocks=blocks)
+
+async def _nothing():
+    return None
+
+
+def _fastener_groups(step: GuideStep) -> list:
+    """A step's fasteners as '(the first of them, all of them)' per kind, in the order they go in."""
+    groups = {}
+    for fastener in step.fasteners:
+        groups.setdefault(_object_key(fastener.item), []).append(fastener)
+    return [(fasteners[0], fasteners) for fasteners in groups.values()]
+
+
+def _fastener_blocks(step: GuideStep) -> list:
+    """What the fasteners of a step say about driving them in, or a sentence saying how many."""
+    said = []
+    for fastener in step.fasteners:
+        for paragraph in _prose(fastener.description):
+            if paragraph not in said:
+                said.append(paragraph)
+    if said:
+        return [doc.Paragraph(paragraph) for paragraph in said]
+    return [
+        doc.Paragraph("Fasten it with %d \u00d7 %s." % (len(fasteners), _label(first.item.name)))
+        for first, fasteners in _fastener_groups(step)
+    ]
+
+
+def _fastener_details(step: GuideStep) -> list:
+    """The model's account of a step's fasteners: how many of what go into what, through what."""
+    details = []
+    for first, fasteners in _fastener_groups(step):
+        into = []
+        for fastener in fasteners:
+            if fastener.target and fastener.target not in into:
+                into.append(fastener.target)
+        through = []
+        for fastener in fasteners:
+            for name in fastener.through:
+                if name not in through:
+                    through.append(name)
+        text = "Fasteners: %d \u00d7 %s" % (len(fasteners), _label(first.item.name))
+        if into:
+            text += " into %s" % ", ".join(into)
+        if through:
+            text += " through %s" % ", ".join(through)
+        how = _how_words(first.how)
+        details.append(text + (", " + how if how else "") + ".")
+    return details
+
+
+async def _small_items(section: GuideSection, step: GuideStep) -> list:
+    """The items a step adds that are shown on their own, as '(item, count, label)'.
+
+    Every kind of fastener, with how many go in; and the item of the step when
+    it is small next to the finished assembly. See '_step_page' for why.
+    """
+    items = []
+    if await _is_small(section, step.item):
+        items.append((step.item, 1, _label(step.item.name)))
+    for first, fasteners in _fastener_groups(step):
+        items.append((first.item, len(fasteners), _label(first.item.name)))
+    return items
+
+
+async def _is_small(section: GuideSection, item) -> bool:
+    """Whether an item is small enough next to its finished assembly to be hard to pick out in it."""
+    if section.size is None:
+        return False
+    try:
+        size = await item.get_max_dimension_async(section.ctx)
+    except Exception:  # pylint: disable=broad-except
+        return False
+    return size is not None and size < SMALL_FRACTION * section.size
 
 
 def _counterpart_key(section: GuideSection, step: GuideStep):

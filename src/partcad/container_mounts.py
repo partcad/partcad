@@ -75,7 +75,15 @@ def bind_mounts(client, image: str, paths: Iterable[str], what: str) -> Dict[str
     from . import runtime_python_docker as rpd
 
     paths = [p for p in paths if p]
-    sources = rpd.mount_sources(client, image)
+    try:
+        sources = rpd.mount_sources(client, image)
+    except rpd.ImageDoesNotRun as e:
+        # The image does not start here at all - most often one with no build
+        # for this platform - which is not the daemon failing to see the files,
+        # and a container it never ran in is no reason to send anything.
+        raise runtime.SandboxUnavailable(
+            "%s runs in a container, and its image %s does not run here: %s" % (what, image, e.reason)
+        )
     if sources is False:
         raise runtime.SandboxUnavailable(
             "%s runs in a container, and the Docker daemon here cannot see this machine's files, so "
