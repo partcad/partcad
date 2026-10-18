@@ -33,7 +33,7 @@ import os
 from ... import consts
 from ... import logging as pc_logging
 from ... import project_factory_git as rfg
-from ...dependency_pin import set_dependency_revision
+from ...dependency_pin import set_dependency_revision, yaml_scalar
 from ...utils import get_child_project_path
 
 
@@ -129,7 +129,14 @@ def pin_tracked_dependencies(ctx) -> dict:
     for project, name, config in tracked:
         dependency = _dependency_path(project, name, config)
         url = config.get("url")
-        track = str(config["track"])
+        try:
+            # As loading reads it, so that 'track: 2024' is the branch '2024'
+            # and 'track: 1.10' an error rather than the branch '1.1'.
+            track = rfg.ref_text(config["track"], "track", dependency)
+        except ValueError as e:
+            pc_logging.error("Failed to update %s: %s" % (dependency, e))
+            stats["failed"] += 1
+            continue
         if not url:
             pc_logging.error("Failed to update %s: it tracks '%s' but names no 'url'" % (dependency, track))
             stats["failed"] += 1
@@ -143,6 +150,9 @@ def pin_tracked_dependencies(ctx) -> dict:
             continue
 
         current = config.get("revision")
+        # 'str' rather than 'ref_text', which would refuse a pin YAML made a
+        # float or a bool of: such a pin is where no branch is, so it is moved
+        # like any other, and what replaces it is written to be read as text.
         current = None if current is None else str(current).strip()
         if current and rfg.looks_like_commit_id(current) and commit.startswith(current.lower()):
             pc_logging.debug("%s is at the tip of '%s' already: %s" % (dependency, track, commit))
@@ -153,7 +163,7 @@ def pin_tracked_dependencies(ctx) -> dict:
         if reason is not None:
             pc_logging.error(
                 "Failed to pin %s to the tip of '%s' in the 'partcad.yaml' of %s: %s. Set 'revision: %s' in it by hand."
-                % (dependency, track, project.name, reason, commit)
+                % (dependency, track, project.name, reason, yaml_scalar(commit))
             )
             stats["failed"] += 1
             continue
