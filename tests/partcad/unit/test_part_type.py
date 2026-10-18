@@ -13,13 +13,39 @@ end-to-end test instantiates the shape when the sandbox is available.
 """
 
 import asyncio
+import os
 
 import pytest
 
 import partcad as pc
-from partcad import factory
+from partcad import factory, shape_envelope
 
 EXAMPLE = "examples/produce_part_wrapper"
+
+# A partType that reads the file its part points at: a square slab as wide as
+# the number in it says.
+SLAB_WRAPPER = """
+if __name__ == "__partcad_part__":
+    from build123d import Box
+
+    with open(request["path"], encoding="utf-8") as f:
+        size = float(f.read())
+    output = {"shape": Box(size, size, 1).wrapped}
+"""
+
+
+def file_reading_part_type(tmp_path):
+    """The partType in one package, and a part in another that points it at a file."""
+    types = tmp_path / "types"
+    types.mkdir()
+    (types / "partcad.yaml").write_text("partTypes:\n  slab:\n    kind: wrapper\n    path: slab.py\n", encoding="utf-8")
+    (types / "slab.py").write_text(SLAB_WRAPPER, encoding="utf-8")
+    (tmp_path / "size.txt").write_text("7\n", encoding="utf-8")
+    (tmp_path / "partcad.yaml").write_text(
+        "parts:\n  slab:\n    type: types:slab\n    path: size.txt\n",
+        encoding="utf-8",
+    )
+    return pc.Context(str(tmp_path))
 
 
 def test_wrapper_factory_is_registered():
@@ -54,6 +80,17 @@ def test_short_part_type_is_expanded_and_stored():
     assert expanded == root.name + ":box"
 
 
+def test_a_part_s_path_is_resolved_in_its_own_package_and_keys_its_cache(tmp_path):
+    # The partType's script runs in 'types/', so 'size.txt' as written would
+    # name a file that is not there. It is the part's package that it is in.
+    ctx = file_reading_part_type(tmp_path)
+    part = ctx.get_part("//:slab")
+    assert part is not None
+
+    expected = os.path.normpath(str(tmp_path / "size.txt"))
+    assert [os.path.normpath(path) for path in part.cache_dependencies] == [expected]
+
+
 def test_unknown_part_type_is_not_found():
     ctx = pc.Context(EXAMPLE)
     root = ctx.get_project(ctx.get_current_project_path())
@@ -71,3 +108,17 @@ def test_wrapper_part_instantiates():
     except Exception as e:
         pytest.skip("Sandbox unavailable for partType wrapper: %s" % e)
     assert wrapped is not None
+
+
+@pytest.mark.slow
+def test_a_part_type_reads_the_file_its_part_points_at(tmp_path):
+    """End to end: 'request["path"]' is the part's file (needs the sandbox)."""
+    ctx = file_reading_part_type(tmp_path)
+    part = ctx.get_part("//:slab")
+    try:
+        metadata = asyncio.run(part.get_metadata_async(ctx))
+    except Exception as e:
+        pytest.skip("Sandbox unavailable for partType wrapper: %s" % e)
+    assert metadata, "the partType built nothing"
+    box = shape_envelope.metadata_section(metadata, shape_envelope.METADATA_MEASUREMENTS)[shape_envelope.METADATA_BBOX]
+    assert [round(box[axis + 3] - box[axis], 6) for axis in range(3)] == [7.0, 7.0, 1.0]

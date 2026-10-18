@@ -50,6 +50,10 @@ Only the primitives a format defines (a box, a cylinder, a sphere) have no file
 to name, and the reader writes those out itself. See
 ``wrappers/wrapper_import.py`` for the contract in full.
 
+The file is a Jinja2 template like every other file a package declares, and is
+rendered before the reader sees it -- when it is text. A binary format (a DWG,
+say) is handed to the reader exactly as it is on disk.
+
 Two fields are worth dwelling on. ``kinds:`` is a claim the core holds the
 declaration to: a format that describes one robot is an assembly and declaring
 it under ``scenes:`` is an error, while a format used for both -- MJCF is the

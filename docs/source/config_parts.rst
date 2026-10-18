@@ -470,6 +470,14 @@ as it does for a package. This is the same mechanism as a custom output
 implementation (see :ref:`output-files`), pointed at building a shape rather
 than writing a file.
 
+A ``partType`` that builds parts out of a file -- a drawing, a mesh, a table --
+is pointed at it with ``path:``, as a file-backed part is. The script runs in
+the directory of the package that declares the ``partType``, which is usually
+not the one that declares the part, so PartCAD resolves ``path:`` against the
+part's own package and hands the absolute path over as ``request["path"]``
+(``None`` for a part with no ``path:``). The file is part of the part's cache
+key, so an edit to it builds the part again.
+
 A ``type`` beginning with ``:`` names a ``partType`` of the part's own package
 and is expanded to ``<package path>:<name>`` when the package is loaded. Write
 the package path out to use another package's type, which is what makes these

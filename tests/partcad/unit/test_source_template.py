@@ -111,6 +111,15 @@ def test_the_rendered_file_is_not_written_into_the_package(package):
     assert not path.startswith(os.path.abspath(package.config_dir) + os.sep)
 
 
+def test_a_file_that_is_not_text_is_the_file_itself(package):
+    """A binary format is not a template: its bytes reach the reader untouched."""
+    factory = factory_of(package, "plain")
+    with open(factory.path, "wb") as f:
+        f.write(b"AC1032\x00\x80\xff\xfe binary drawing")
+
+    assert factory.rendered_source() == factory.path
+
+
 def test_a_template_that_will_not_render_names_the_file_it_is_in(package, tmp_path):
     factory = factory_of(package, "templated")
     open(factory.path, "w", encoding="utf-8").write("{% for %}")

@@ -41,7 +41,23 @@ class PartFactoryWrapper(PartFactory):
             self.runtime = self.ctx.get_python_runtime(python_version, image=self.project.docker_image_declared)
             self.session = self.runtime.get_session(source_project.name)
 
+            # A partType that reads a file -- a drawing, a mesh, a table -- is
+            # pointed at it with 'path:', as a file-backed part is. Its script
+            # runs in the partType's package, which is usually not this one, so
+            # the path is resolved here, against the package that declares the
+            # part, and handed over as 'request["path"]'. It is a cache
+            # dependency too: without that, an edit to the file would go on
+            # being served the part built from the old one.
+            self.path = None
+            if config.get("path"):
+                self.path = os.path.join(source_project.config_dir, config["path"])
+
             self._create(config)
+
+    def post_create(self) -> None:
+        if self.path:
+            self.part.cache_dependencies.append(self.path)
+        super().post_create()
 
     def environment_cache_key(self) -> str | None:
         """The interpreter and the dependency versions this part renders with.
@@ -178,6 +194,7 @@ class PartFactoryWrapper(PartFactory):
                 "orig_name": self.orig_name,
                 "config": self.config,
                 "parameters": {},
+                "path": self.path,
             }
             for param_name, param in (self.config.get("parameters") or {}).items():
                 request["parameters"][param_name] = param.get("default") if isinstance(param, dict) else param

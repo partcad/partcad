@@ -12,7 +12,9 @@ produces back to PartFactoryWrapper.
 
 The partType script is executed with these globals available:
 
-    request  -- the part's config/parameters (see PartFactoryWrapper)
+    request  -- the part's config/parameters (see PartFactoryWrapper), and
+                under 'path' the absolute path of the part's 'path:' file,
+                resolved against the part's own package (None without one)
 
 and is expected to leave its result in a global 'output':
 
