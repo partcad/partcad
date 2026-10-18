@@ -1507,6 +1507,11 @@ class Context:
         pc_logging.debug("Part: %s" % str(part_item))
         for provider_name, provider_extra_config in part_suppliers.items():
             provider = self.get_provider(provider_name, provider_extra_config)
+            if provider is None:
+                # A store named where it cannot be loaded - a package used
+                # without the one that registers its stores - has been reported
+                # by 'get_provider', and has nothing to offer: ask the next.
+                continue
             if not await provider.is_part_available(part_item):
                 continue
             if cart and cart.qos is not None and not provider.is_qos_available(cart.qos):

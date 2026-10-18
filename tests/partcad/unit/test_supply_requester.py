@@ -110,3 +110,15 @@ def test_without_any_supplier_nothing_is_found(asked):
 
     assert not suppliers["//lib:brick#1"]
     assert asked == []
+
+
+def test_a_store_that_cannot_be_loaded_is_passed_over(asked):
+    # A parts library used without the package that registers its stores
+    # names them all the same; the ones that are here are still asked.
+    ctx = pc.Context(PACKAGE)
+    cart = ProviderCart()
+    item = cart.add_item(_cart(ctx, "//:model").parts["//kit:pin"])
+    item.suppliers = {"//nowhere:shop": {}, "//store:closed": {}, OWN: {}}
+
+    assert asyncio.run(ctx.find_part_suppliers(item)) == [OWN]
+    assert asked == [("own", "//kit:pin")]
