@@ -709,6 +709,25 @@ def test_info_emits_stats_with_version_and_recalculated_counts():
     assert payload["stats"]["path"] == "/abs/partcad.yaml"
 
 
+@pytest.mark.parametrize("cwd", ["root", "package"])
+def test_info_reports_the_root_config_path_whatever_the_working_directory(monkeypatch, tmp_path, cwd):
+    """The path is not made relative to the service's working directory.
+
+    That directory is the client's only over stdio. A POSIX daemon detaches
+    into '/', and relative to that, by a `str.replace`, every '/' in the path
+    became a '.': the Context view read '.abs.partcad.yaml'. The client works
+    out what to show relative to its own workspace (see 'PartcadContext.ts').
+    """
+    session, seen = make_session()
+    config_path = str(tmp_path / "partcad.yaml")
+    session.partcad_ctx.projects["//"].config_path = config_path
+    monkeypatch.chdir(os.path.abspath(os.sep) if cwd == "root" else tmp_path)
+
+    operations.info(session, {})
+
+    assert seen[-1][1]["stats"]["path"] == config_path
+
+
 def test_a_listing_warms_the_kind_it_is_about_to_walk():
     """One round trip for the tree, rather than one per package.
 

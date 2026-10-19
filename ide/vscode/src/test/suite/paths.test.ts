@@ -9,7 +9,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 
-import { pathKey } from '../../common/paths';
+import { pathKey, workspacePath } from '../../common/paths';
 
 suite('Comparing file paths', () => {
     test('a Windows drive letter compares in either case', () => {
@@ -38,5 +38,64 @@ suite('Comparing file paths', () => {
 
     test('different files still differ', () => {
         assert.notStrictEqual(pathKey('/pkg/robot.assy'), pathKey('/pkg/robot2.assy'));
+    });
+});
+
+suite('Showing a path PartCAD reports', () => {
+    test('a path in the workspace is shown from the workspace folder', () => {
+        assert.strictEqual(workspacePath('/home/me/pkg/partcad.yaml', ['/home/me/pkg'], 'linux'), './partcad.yaml');
+        assert.strictEqual(
+            workspacePath('/home/me/pkg/sub/partcad.yaml', ['/home/me/pkg'], 'linux'),
+            './sub/partcad.yaml',
+        );
+    });
+
+    test('every separator survives', () => {
+        // What the Context view used to show: the daemon made the path relative
+        // to its own working directory, '/', by replacing every occurrence of
+        // it -- '.home.me.pkg.partcad.yaml'. Nothing here may do that again,
+        // inside the workspace or outside it.
+        assert.strictEqual(workspacePath('/home/me/pkg/partcad.yaml', ['/'], 'linux'), './home/me/pkg/partcad.yaml');
+        assert.strictEqual(workspacePath('/home/me/pkg/partcad.yaml', [], 'linux'), '/home/me/pkg/partcad.yaml');
+    });
+
+    test('a path outside every folder is shown whole', () => {
+        // Including a sibling whose name merely starts with the folder's.
+        assert.strictEqual(
+            workspacePath('/home/me/pkg2/partcad.yaml', ['/home/me/pkg'], 'linux'),
+            '/home/me/pkg2/partcad.yaml',
+        );
+        assert.strictEqual(
+            workspacePath('/home/me/other/partcad.yaml', ['/home/me/pkg'], 'linux'),
+            '/home/me/other/partcad.yaml',
+        );
+    });
+
+    test('the folder holding it is the one it is shown from', () => {
+        assert.strictEqual(
+            workspacePath('/home/me/two/partcad.yaml', ['/home/me/one', '/home/me/two'], 'linux'),
+            './partcad.yaml',
+        );
+    });
+
+    test('Windows spells it with its own separator and ignores the drive letter case', () => {
+        // `Uri.fsPath` lower-cases the drive letter and PartCAD does not (see
+        // `pathKey`), which must not put the package outside its own folder.
+        assert.strictEqual(
+            workspacePath('C:\\Users\\me\\pkg\\sub\\partcad.yaml', ['c:\\Users\\me\\pkg'], 'win32'),
+            '.\\sub\\partcad.yaml',
+        );
+        assert.strictEqual(
+            workspacePath('D:\\pkg\\partcad.yaml', ['c:\\Users\\me\\pkg'], 'win32'),
+            'D:\\pkg\\partcad.yaml',
+        );
+    });
+
+    test('what is not an absolute path is shown as it is', () => {
+        // The placeholder before PartCAD answers, and an older service's
+        // already-relative path: nothing here knows what it is relative to.
+        assert.strictEqual(workspacePath('Loading...', ['/home/me/pkg'], 'linux'), 'Loading...');
+        assert.strictEqual(workspacePath('./partcad.yaml', ['/home/me/pkg'], 'linux'), './partcad.yaml');
+        assert.strictEqual(workspacePath('.\\partcad.yaml', ['c:\\pkg'], 'win32'), '.\\partcad.yaml');
     });
 });

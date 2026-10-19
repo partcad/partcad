@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as utils from './utils';
+import { workspacePath } from './common/paths';
 
 type Stats = {
     path: string;
@@ -201,7 +202,7 @@ export class PartcadContext implements vscode.WebviewViewProvider {
         </tr>
         <tr>
         <td>Package:</td>
-        <td id="path" class="path">${saved.stats.path}</td>
+        <td id="path" class="path">${escapeHtml(workspacePath(saved.stats.path, workspaceFolders()))}</td>
         </tr>
         <tr>
         <td colspan=2>&nbsp;</td>
@@ -242,12 +243,20 @@ export class PartcadContext implements vscode.WebviewViewProvider {
     }
 }
 
+/** The workspace's folders on this machine's filesystem, as paths. */
+function workspaceFolders(): string[] {
+    return (vscode.workspace.workspaceFolders ?? [])
+        .filter((folder) => folder.uri.scheme === 'file')
+        .map((folder) => folder.uri.fsPath);
+}
+
 /**
  * Escape a value for HTML text or for a double-quoted attribute.
  *
- * The version arrives from the service rather than from this extension, and the
- * title attribute above puts it inside quotes, where an unescaped one would end
- * the attribute.
+ * The version and the package's path arrive from the service rather than from
+ * this extension -- a directory may well be named `R&D` -- and the title
+ * attribute above puts the version inside quotes, where an unescaped one would
+ * end the attribute.
  */
 function escapeHtml(value: string): string {
     return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
