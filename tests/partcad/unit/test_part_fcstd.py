@@ -15,7 +15,9 @@ its last feature's result rather than every feature stacked.
 
 import asyncio
 import importlib.util
+import io
 import os
+import urllib.error
 
 import pytest
 
@@ -23,11 +25,12 @@ import partcad as pc
 from partcad import factory, output, shape_envelope
 
 PACKAGE = "tests/partcad/unit/data/import_fcstd/partcad.yaml"
-SCRIPT = os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.IMPORT]], "part_fcstd.py")
+BUILTIN_IMPORT = output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.IMPORT]]
+SCRIPT = os.path.join(BUILTIN_IMPORT, "part_fcstd.py")
 
 
-def _script():
-    spec = importlib.util.spec_from_file_location("part_fcstd_under_test", SCRIPT)
+def _script(path=SCRIPT, name="part_fcstd_under_test"):
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -93,6 +96,52 @@ def test_the_result_is_what_nothing_else_consumes():
         ]
     }
     assert script.result_entries(model) == ["Fillet.Shape.brp"]
+
+
+class _Response(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+
+def _flaky_urlopen(failures):
+    """An 'urlopen' that raises each of 'failures' in turn, then answers."""
+    calls = []
+
+    def urlopen(url, timeout=None):
+        calls.append(url)
+        if len(calls) <= len(failures):
+            raise failures[len(calls) - 1]
+        return _Response(b"cadmpeg")
+
+    return urlopen, calls
+
+
+def test_a_download_outlasts_a_server_that_fails_for_a_while(tmp_path, monkeypatch):
+    tool = _script(os.path.join(BUILTIN_IMPORT, "cadmpeg_tool.py"), "cadmpeg_tool_under_test")
+    bad_gateway = urllib.error.HTTPError("https://example", 502, "Bad Gateway", {}, None)
+    urlopen, calls = _flaky_urlopen([bad_gateway, urllib.error.URLError("reset")])
+    monkeypatch.setattr(tool.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(tool.time, "sleep", lambda _seconds: None)
+
+    tool.fetch("https://example/cadmpeg.tar.xz", str(tmp_path / "cadmpeg.tar.xz"))
+
+    assert len(calls) == 3
+    assert (tmp_path / "cadmpeg.tar.xz").read_bytes() == b"cadmpeg"
+
+
+def test_a_download_that_cannot_succeed_is_not_tried_again(tmp_path, monkeypatch):
+    tool = _script(os.path.join(BUILTIN_IMPORT, "cadmpeg_tool.py"), "cadmpeg_tool_under_test")
+    not_found = urllib.error.HTTPError("https://example", 404, "Not Found", {}, None)
+    urlopen, calls = _flaky_urlopen([not_found] * tool.ATTEMPTS)
+    monkeypatch.setattr(tool.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(tool.time, "sleep", lambda _seconds: None)
+
+    with pytest.raises(urllib.error.HTTPError):
+        tool.fetch("https://example/cadmpeg.tar.xz", str(tmp_path / "cadmpeg.tar.xz"))
+    assert len(calls) == 1
 
 
 def _measured(ctx, name):

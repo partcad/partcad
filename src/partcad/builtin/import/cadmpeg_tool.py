@@ -23,6 +23,8 @@ import platform
 import shutil
 import tarfile
 import tempfile
+import time
+import urllib.error
 import urllib.request
 import zipfile
 
@@ -57,6 +59,30 @@ ASSETS = {
 
 MACHINES = {"amd64": "x86_64", "x86_64": "x86_64", "arm64": "aarch64", "aarch64": "aarch64"}
 
+# How many times a download is tried, waiting twice as long after each failure.
+ATTEMPTS = 4
+FIRST_WAIT = 2
+
+
+def _transient(error):
+    """Whether trying again could give a different answer: a server error or a dropped connection."""
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code >= 500 or error.code == 429
+    return isinstance(error, (urllib.error.URLError, ConnectionError, TimeoutError))
+
+
+def fetch(url, path):
+    """Download 'url' to 'path', trying again while the failure is one that passes."""
+    for attempt in range(ATTEMPTS):
+        try:
+            with urllib.request.urlopen(url, timeout=600) as response, open(path, "wb") as f:
+                shutil.copyfileobj(response, f)
+            return
+        except Exception as e:
+            if attempt == ATTEMPTS - 1 or not _transient(e):
+                raise
+            time.sleep(FIRST_WAIT * 2**attempt)
+
 
 def host():
     """This machine as ASSETS spells it: ('linux', 'x86_64') and so on."""
@@ -88,8 +114,7 @@ def executable(cache_dir):
     staging = tempfile.mkdtemp(prefix=".download-", dir=os.path.dirname(target))
     try:
         archive = os.path.join(staging, asset)
-        with urllib.request.urlopen(RELEASE_URL + asset, timeout=600) as response, open(archive, "wb") as f:
-            shutil.copyfileobj(response, f)
+        fetch(RELEASE_URL + asset, archive)
         digest = hashlib.sha256()
         with open(archive, "rb") as f:
             for chunk in iter(lambda: f.read(1 << 20), b""):
