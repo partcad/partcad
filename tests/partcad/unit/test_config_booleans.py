@@ -174,7 +174,6 @@ def test_config_file_values_read_the_same_way(config_home, monkeypatch, key, att
         ("use_docker_python", False),
         ("use_docker_python_declared", False),
         ("force_update", False),
-        ("devel_index", False),
         ("offline", False),
         ("cache_dependencies_ignore", False),
         ("cache_bypass", False),
@@ -184,6 +183,26 @@ def test_config_file_values_read_the_same_way(config_home, monkeypatch, key, att
 def test_an_option_nobody_set_keeps_its_default(config_home, monkeypatch, attribute, expected):
     """The reading changed; what an unset option means did not."""
     assert getattr(build_config(monkeypatch), attribute) is expected
+
+
+@pytest.mark.parametrize("from_sources", [True, False])
+def test_the_index_being_developed_is_the_default_from_sources(config_home, monkeypatch, from_sources):
+    """PartCAD run from its sources is PartCAD being developed, and gets the index being developed.
+
+    Under pytest it always is -- 'src' is on the path -- so both answers are
+    asked for rather than read off the machine.
+    """
+    monkeypatch.setattr("partcad_utils.user_config.is_editable_install", lambda module: from_sources)
+    assert build_config(monkeypatch).devel_index is from_sources
+
+
+def test_saying_otherwise_outranks_running_from_sources(config_home, monkeypatch):
+    monkeypatch.setattr("partcad_utils.user_config.is_editable_install", lambda module: True)
+    assert build_config(monkeypatch, "PC_DEVEL_INDEX", "0").devel_index is False
+
+    (config_home / ".partcad").mkdir(exist_ok=True)
+    (config_home / ".partcad" / "config.yaml").write_text("develIndex: false\n")
+    assert build_config(monkeypatch).devel_index is False
 
 
 # ---- the master switch -------------------------------------------------------

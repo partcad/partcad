@@ -151,26 +151,48 @@ function logoLines(): string[] {
     return lines;
 }
 
-/** Beside the logo's head, starting at its second line. */
+/** Beside the logo's head, starting at its second line -- or under the logo, in a shell too narrow for that. */
 const SHELL_INVITATION = [
     'Start your favorite coding agent here,',
     'side by side with the PartCAD terminal log view,',
     'or simply run "pc"!',
 ];
 
+const BANNER_INDENT = ' ';
+const BANNER_GAP = '   ';
+
+/** How wide a shell has to be for the invitation to go beside the logo: the widest line it makes there. */
+export const BANNER_BESIDE_COLUMNS =
+    BANNER_INDENT.length +
+    LOGO[0].length / 2 +
+    BANNER_GAP.length +
+    Math.max(...SHELL_INVITATION.map((text) => text.length));
+
 /**
  * Written at the top of that shell when it is created (`TerminalOptions.message`
  * -- straight into the view, not to the shell, so the shell never sees it).
+ *
+ * `columns` is how wide the shell is. In one narrower than
+ * `BANNER_BESIDE_COLUMNS` the terminal would wrap each sentence onto a row of
+ * its own, between two rows of the logo, so the invitation goes under the logo
+ * instead. Not knowing (`undefined`) puts it beside, which is what half of a
+ * panel along the bottom of the window has room for.
  */
-export const SHELL_BANNER =
-    [
-        '',
-        ...logoLines().map((logo, i) => {
-            const text = SHELL_INVITATION[i - 1];
-            return ' ' + logo + (text === undefined ? '' : `   \x1b[1m${text}\x1b[0m`);
-        }),
-        '',
-    ].join('\r\n') + '\r\n';
+export function shellBanner(columns?: number): string {
+    const logo = logoLines().map((line) => BANNER_INDENT + line);
+    const invitation = SHELL_INVITATION.map((text) => `\x1b[1m${text}\x1b[0m`);
+    const lines =
+        columns === undefined || columns >= BANNER_BESIDE_COLUMNS
+            ? logo.map((line, i) => (invitation[i - 1] === undefined ? line : line + BANNER_GAP + invitation[i - 1]))
+            : [...logo, '', ...invitation.map((text) => BANNER_INDENT + text)];
+    return ['', ...lines, ''].join('\r\n') + '\r\n';
+}
+
+/**
+ * Where `PartcadTerminals` remembers how wide the shell is, for the next shell
+ * it makes -- in this window or the next one.
+ */
+export const SHELL_COLUMNS_KEY = 'partcad.shellColumns';
 
 /** How long after creating a shell one restored by VS Code may still turn up and replace it. */
 const REVIVE_WINDOW_MS = 5000;
@@ -257,16 +279,22 @@ class View {
     constructor(
         onOpen: (view: View) => void,
         onClose: (view: View) => void,
+        /** How many columns wide it is, each time VS Code says. */
+        onResize: (view: View, columns: number) => void,
         /** The shell it was split off, if it was. */
         readonly parent?: vscode.Terminal,
     ) {
         this.pty = {
             onDidWrite: this.emitter.event,
-            open: () => {
+            open: (dimensions) => {
                 this.opened = true;
+                if (dimensions) {
+                    onResize(this, dimensions.columns);
+                }
                 onOpen(this);
             },
             close: () => onClose(this),
+            setDimensions: (dimensions) => onResize(this, dimensions.columns),
             handleInput: async (_char: string) => {},
         };
     }
@@ -310,6 +338,8 @@ export interface PartcadTerminalsOptions {
     /** Whether new output brings the view to the front: `partcad.popupTerminal`. */
     popup: () => boolean;
     iconPath?: vscode.Uri;
+    /** Where the shell's width outlives the window: the extension's `globalState`. */
+    state?: vscode.Memento;
     /** Said, with its two buttons, when an alert finds no view open. */
     showError?: (message: string, ...actions: string[]) => Thenable<string | undefined>;
     /**
@@ -330,7 +360,7 @@ const SHOW_ACTION = 'Show Terminal';
  * - **Created when there is something to show.** The first output in a window
  *   opens a view, split to the right of a shell -- an existing one by
  *   `SHELL_NAME`, or a new one running the user's default profile, with
- *   `SHELL_BANNER` at the top.
+ *   `shellBanner` at the top.
  * - **Closing one keeps it closed.** Further output goes to the replay buffer
  *   only, unless `partcad.reopenTerminal` is set or it is an alert (see
  *   `writeTerminal`). "PartCAD: Show Terminal" and the "+" menu open one again,
@@ -345,6 +375,12 @@ const SHOW_ACTION = 'Show Terminal';
  *   only after the view needed one and a new shell was made. A restored shell
  *   seen within `REVIVE_WINDOW_MS` of that replaces the new one and its view,
  *   and a new view beside it gets everything from the replay.
+ * - **The banner is laid out for the width of the view beside the shell.** An
+ *   extension is told the width of a pseudoterminal and of nothing else, and
+ *   the banner is fixed when the shell is created, before there is a view to
+ *   ask. But a split is even, so the view is as wide as the shell, and what it
+ *   was last time is kept (`SHELL_COLUMNS_KEY`) for the next shell made. The
+ *   first one on a machine, with nothing kept, is laid out as if it were wide.
  */
 export class PartcadTerminals implements vscode.Disposable, vscode.TerminalProfileProvider {
     private readonly views = new Set<View>();
@@ -355,6 +391,8 @@ export class PartcadTerminals implements vscode.Disposable, vscode.TerminalProfi
     private readonly reviveWindowMs: number;
     private readonly showError: (message: string, ...actions: string[]) => Thenable<string | undefined>;
     private shell: vscode.Terminal | undefined;
+    /** How wide the last view beside a shell was, which is how wide the next shell will be. */
+    private shellColumns: number | undefined;
     /** Whether a view has been opened in this window, by the extension or by the user. */
     private everOpened = false;
     private reviveWatch: ReturnType<typeof setInterval> | undefined;
@@ -365,6 +403,7 @@ export class PartcadTerminals implements vscode.Disposable, vscode.TerminalProfi
         this.shellName = options.shellName ?? SHELL_NAME;
         this.viewName = options.viewName ?? VIEW_NAME;
         this.reviveWindowMs = options.reviveWindowMs ?? REVIVE_WINDOW_MS;
+        this.shellColumns = options.state?.get<number>(SHELL_COLUMNS_KEY);
         this.showError =
             options.showError ?? ((message, ...actions) => vscode.window.showErrorMessage(message, ...actions));
         // `close()` is how a view learns it is gone, but VS Code calls it only
@@ -448,7 +487,7 @@ export class PartcadTerminals implements vscode.Disposable, vscode.TerminalProfi
             shell = vscode.window.createTerminal({
                 name: this.shellName,
                 location: vscode.TerminalLocation.Panel,
-                message: SHELL_BANNER,
+                message: shellBanner(this.shellColumns),
             });
             this.shell = shell;
             this.watchForRestoredShell(shell);
@@ -475,10 +514,26 @@ export class PartcadTerminals implements vscode.Disposable, vscode.TerminalProfi
         const view = new View(
             (opened) => opened.write(GREETING + this.replay.text()),
             (closed) => this.forget(closed),
+            (resized, columns) => {
+                // One from the "+" menu is beside no shell, and says nothing about one.
+                if (resized.parent) {
+                    this.rememberShellColumns(columns);
+                }
+            },
             parent,
         );
         this.views.add(view);
         return view;
+    }
+
+    private rememberShellColumns(columns: number): void {
+        if (columns === this.shellColumns) {
+            return;
+        }
+        this.shellColumns = columns;
+        this.options.state
+            ?.update(SHELL_COLUMNS_KEY, columns)
+            .then(undefined, (e) => traceError(`PartCAD: could not remember the shell's width: ${e}`));
     }
 
     private forget(view: View): void {

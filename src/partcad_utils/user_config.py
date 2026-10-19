@@ -700,7 +700,10 @@ class UserConfig(vyper.Vyper):
 
         self.set_default("internalStateDir", UserConfig.get_config_dir())
         self.set_default("forceUpdate", False)
-        self.set_default("develIndex", False)
+        # PartCAD running from its sources (an editable install: 'pip install
+        # -e', 'poetry install') is PartCAD being developed, so it gets the
+        # index being developed. See 'develIndex' below.
+        self.set_default("develIndex", is_editable_install(pc_logging))
 
         # option: git.clone.timeout
         # description: how long a single git network operation (clone, fetch,
@@ -1020,8 +1023,12 @@ class UserConfig(vyper.Vyper):
         #              Applies to every dependency whose URL names that
         #              repository, wherever in the dependency tree it appears,
         #              and leaves every other dependency alone.
+        #              On by default where PartCAD runs from its sources, so
+        #              that a feature under development is built against the
+        #              packages being written for it before either is released.
         # values: [True | False]
-        # default: False
+        # default: True when PartCAD runs from its sources (an editable
+        #          install), False otherwise
         self.bind_env("develIndex", "PC_DEVEL_INDEX")
         self.devel_index = self.get_bool("develIndex")
 
