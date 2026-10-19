@@ -73,13 +73,17 @@ class PartFactoryWrapper(PartFactory):
             pt_config = pt_project.get_part_type_config(self.part_type_name) if pt_project is not None else None
             pt_config = pt_config if isinstance(pt_config, dict) else {}
 
-            # The file this part is read from, for a partType that reads one.
+            # The file this part is read from, for a partType that reads one,
+            # spelled the way this platform spells it: 'path:' is written with
+            # forward slashes, and the script gets it as it is.
             extension = pt_config.get("extension")
             self.path = None
             if extension:
-                self.path = os.path.join(
-                    source_project.config_dir,
-                    config.get("path") or "%s.%s" % (self.orig_name, str(extension).lstrip(".")),
+                self.path = os.path.normpath(
+                    os.path.join(
+                        source_project.config_dir,
+                        config.get("path") or "%s.%s" % (self.orig_name, str(extension).lstrip(".")),
+                    )
                 )
 
             # The image is the implementing package's, as it is for an output
