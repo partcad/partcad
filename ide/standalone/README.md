@@ -145,6 +145,25 @@ launches is `partcad-json-rpc` out of that bundle. The bundle carries a conda (s
 bundle and adds nothing here. Before it did, the IDE started fine on a clean machine and then failed the
 moment a part had to be built, for want of a `conda` executable the user was never told to install.
 
+**The PartCAD workbench is first on the activity bar, and in colour** (`tools/patch_workbench.py`). The
+activity bar is the strip of icons down the side of the window, and neither thing is anything an extension can
+ask for: the editor draws a contributed icon as a mask over a flat fill in the theme's colour, so every
+extension's comes out the same grey, and it numbers its own containers from 0 (Explorer) to 6 and an
+extension's from 7, in the order extensions register. So the build edits the workbench itself. A rule appended
+to `workbench.desktop.main.css` draws `logo.svg` in place of the mask, and two substitutions in
+`workbench.desktop.main.js` give the PartCAD container the order -1. The second of those is for a profile that
+already exists: the editor remembers the activity bar as the user left it and puts a container it remembers
+back where it was, whatever its order, so a user of an earlier PartCAD IDE would never see the change. It also
+remembers the order each container had, which is what lets the first start of a newer IDE move PartCAD to the
+top once -- the remembered order is 7 or more, the new one is -1 -- and leave it wherever the user drags it after
+that.
+
+Both files are covered by `checksums` in `product.json`, which the editor compares at every start, calling an
+installation whose files disagree "corrupt" in a warning; the tool recomputes the two entries. Its substitutions
+are written against the *minified* workbench, by structure rather than by name, and each has to match exactly
+once: when a VSCodium release changes the code underneath them, the build stops there and says which, and the
+docstring of `patch_workbench.py` quotes the source each one stands for.
+
 **The result is checked** (`tools/verify_bundle.py`): branding applied, every required extension present, no
 extension present that the policy skips, the tools where they should be, the launcher runnable. Each of those
 failures produces an application that starts and looks right, so none of them would be noticed before a user
@@ -354,9 +373,11 @@ ide/standalone/build.sh --vscodium-version <tag> --record
 ```
 
 `--record` writes the version and the checksum of what it downloaded into `vscodium.json` -- as plain JSON,
-without the comments that explain the file, so put those back before committing. Then check the two things a
-VSCodium release can break: that the extensions still install (the build fails if a required one does not), and
-that the launcher was still rewritten (the build runs `--version` through it and fails if it does not run).
+without the comments that explain the file, so put those back before committing. Then check the three things a
+VSCodium release can break: that the extensions still install (the build fails if a required one does not), that
+the launcher was still rewritten (the build runs `--version` through it and fails if it does not run), and that
+the workbench could still be patched (`patch_workbench.py` fails the build when a substitution no longer finds
+the code it replaces).
 
 With `version` left as `null`, the build takes whatever VSCodium released last. That is convenient and not
 reproducible: a rebuild of an old PartCAD version then produces a different IDE. Pin it before a release.
