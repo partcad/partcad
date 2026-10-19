@@ -16,8 +16,9 @@ dependencies:
   #   revision: <commit>                        # type:git only, written by `pc update`
   #   web: <package's or maintainer's url>      # optional
   #   poc: <maintainer's email>                 # optional
-  # Run `pc update` to pin `revision:` to where `track:` is now, and again
-  # whenever you want what is newer. Nothing else moves it.
+  # `revision:` is where `track:` was when `pc init` created this package
+  # (missing if it could not find out). Run `pc update` to move it to what is
+  # newer, whenever you want that; nothing else moves it.
   pub:
     type: git
     url: https://github.com/partcad/partcad-index.git

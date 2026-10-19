@@ -49,6 +49,11 @@ PartCAD Public Repository
 Besides main PartCAD software components, you can contribute to the community by publishing design data
 as well as pluggable software modules to PartCAD Public Repository.
 
+A package is published by a pull request to the `partcad-index`_ repository, against its ``devel`` branch. Its
+`CONTRIBUTING.md <https://github.com/partcad/partcad-index/blob/devel/CONTRIBUTING.md>`_ says what the index
+expects of a package -- a pinned commit, the oldest PartCAD it works with, a tracked branch that keeps working for
+everybody who uses it -- and what to do instead when a change would break them.
+
 Assemblies
 ----------
 
@@ -522,7 +527,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad (0.8.220)
+  Installing the current project: partcad (0.8.224)
 
 .. warning::
 
@@ -887,6 +892,9 @@ you.
 - `Creating a pull request`_
 - `GitHub Pull Requests in Visual Studio Code`_
 
+Open it against ``devel``, which is the default branch. Nothing is merged to ``main``; see
+:ref:`release-process`.
+
 Meet PR Merge Criteria
 ----------------------
 
@@ -1235,6 +1243,127 @@ publishing that release's images. That build is not a second implementation eith
 image built" and the two cannot drift into testing an image built differently from the one that was published.
 Changing that script counts as a container change, like changing a Dockerfile.
 
+.. _release-process:
+
+Branches, releases and breaking changes
+---------------------------------------
+
+PartCAD and the public index, `partcad-index`_, are released the same way, and a change to one is often a change
+to the other. Both follow these rules:
+
+#. **Every pull request merges to** ``devel``. Nothing merges to ``main``, in either repository.
+#. ``main`` **only moves by fast-forward from** ``devel``, and that fast-forward is the release. Every merge to
+   PartCAD's ``devel`` is followed by a ``Version updated from X to Y`` commit, tagged and published to TestPyPI;
+   moving ``main`` to one of those commits publishes that version to PyPI. The index's ``main`` is what every
+   package created by ``pc init`` tracks, so moving it is what ``pc update`` delivers to them.
+#. **The index always pins an exact revision**: a commit id, under the ``track:`` of the branch it follows (see
+   :ref:`pinning-dependencies`). A dependency of the index changes only when a pull request to the index's
+   ``devel`` changes its ``revision:``.
+#. **A branch the index tracks is a promise.** Once a dependency is added to the index's ``devel`` or ``main``
+   tracking a branch, that branch is expected to keep working with every PartCAD release since the one the
+   dependency's own ``partcad:`` required at that moment. Moving the pin to the tip of that branch must never be
+   what breaks somebody.
+#. **Every dependency of the index declares the oldest PartCAD it works with**, as ``partcad:`` in its own
+   ``partcad.yaml``, and every other package should. An older PartCAD then refuses the package with
+   ``Incompatible PartCAD version!`` instead of reading it wrong.
+#. **Every dependency is pinned to a particular revision**, with ``track:`` or without it.
+
+The same rules from a package maintainer's side, and how the index is released, are in the index's own
+`CONTRIBUTING.md <https://github.com/partcad/partcad-index/blob/devel/CONTRIBUTING.md>`_. For packages that are
+not in the index, :doc:`large_projects` gives the same advice.
+
+``examples/partcad.yaml`` is the one deliberate exception to the last rule: it tracks the index and is not pinned,
+so that what it is built against is always the newest of whichever branch is in use -- and it breaks, often and
+on purpose, as soon as PartCAD and the index stop agreeing. The ``Repo //pub`` job (a deep run; see
+:ref:`deep-test`) does the same for a sample of the index's packages. Which branch that is depends on how PartCAD
+is installed; see the next section.
+
+.. _devel-index-from-sources:
+
+The index from a source checkout
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+PartCAD running from its sources -- an editable install, which is what ``poetry install``, ``pip install -e`` and
+the dev container all make -- takes the public index from its ``devel`` branch instead of its ``main``, wherever
+the index appears in the dependency tree and whatever revision a package pins it to. That is the ``develIndex``
+setting, which is on by default for a source checkout and off otherwise. It is there so that a feature being
+developed in PartCAD is built against the packages being written for it before either is released: a source
+checkout of PartCAD's ``devel`` reads the index's ``devel``, and the two move forward together.
+
+An installed PartCAD -- from PyPI, a standalone bundle, the IDE -- keeps it off and reads the index's ``main``,
+which is what users get. So does every job of the ``CI`` workflow that runs ``pc`` (the behave suite, the example
+sweeps, ``Repo //pub``), because ``CI`` installs the checkout as a wheel. ``CI-Dev`` installs it in the dev
+container the way a contributor does, with ``poetry install``, so its jobs read ``devel``; and so does ``pytest``
+everywhere, which puts ``src`` on the path.
+
+Say otherwise either way when you need to. ``PC_DEVEL_INDEX=false``, or ``develIndex: false`` in
+``~/.partcad/config.yaml``, shows a source checkout what users of the index see; ``--devel-index``, or
+``PC_DEVEL_INDEX=true``, points an installed one at ``devel``. ``pc config`` prints which one is in effect
+(``devel_index``).
+
+The VS Code extension's ``partcad.develIndex`` setting follows the same rule. Set in a settings file, either way,
+it is what the extension passes to the service it starts. Left unset, it is on where the extension itself runs
+from its sources -- an Extension Development Host, such as the repository's ``Debug Extension and Python``
+launch configuration, or its test host -- and an installed extension passes nothing, so that the PartCAD it
+starts decides: ``devel`` in the dev container, where PartCAD is a source checkout, and ``main`` with a
+downloaded bundle. The Settings editor shows the setting as off either way, because ``package.json`` cannot
+declare a default that depends on anything.
+
+What breaks a package
+^^^^^^^^^^^^^^^^^^^^^
+
+A change to PartCAD is a breaking change when a package that worked before stops working, or works differently,
+without anything in the package having changed. That is a key, a type or a field PartCAD stops accepting; an
+existing spelling read with another meaning -- a unit, a default, a direction; or the same input built into
+other geometry where other packages depend on it, such as where a port is.
+
+The index is what packages in the wild look like, so that is where to look for what a change breaks. Search it
+for the feature being changed, and run what uses it from ``examples``, which imports the index. A source checkout
+runs that against the index's ``devel``; run it with ``PC_DEVEL_INDEX=false`` too, to see what users of the
+index's ``main`` will meet.
+
+Making a breaking change
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+An installed PartCAD reads the index's ``main``, so ``main`` may only pin packages that a released PartCAD can
+read -- and PartCAD's CI renders its examples against that ``main``, so a pull request that breaks one of its
+packages cannot go green. A source checkout reads the index's ``devel``, and that is where a package that needs an
+unreleased PartCAD waits for it. So a breaking change moves through both ``devel`` branches together, and reaches
+the two ``main`` branches in order -- PartCAD's first, then the index's -- with the old form kept working until
+the end:
+
+#. **Add, don't replace.** Teach PartCAD the new form while it still accepts the old one, and warn when it reads
+   the old one, naming the package and what to write instead. That pull request breaks nothing, so it is an
+   ordinary change. Where an existing spelling has to change its meaning, do not reuse it: give the new meaning
+   a new spelling, or make sure every package written for the new meaning declares the release that introduced
+   it, so that an older PartCAD refuses it rather than computing with it. ``//pub/std/manufacturing/material/fluid``
+   is that case: its densities are in kg/m³ and it requires the PartCAD that reads them that way, because an
+   older one would read the same number in g/mm³.
+#. **Merge it to** ``devel``. The version bump that follows names the first release with the change -- call it N.
+#. **Migrate the packages, on the index's** ``devel``. Each one is changed by its maintainers through the index's
+   process for a breaking change: a package that can serve both N and the older releases its tracked branch
+   promised to support does so on that branch, choosing between the two forms with ``partcad_version_at_least()``
+   (see :ref:`serving-two-partcads`); one that must require N moves to a new branch that says
+   ``partcad: ">=N"``, and a pull request to the index's ``devel`` switches its ``track:`` and ``revision:``. That
+   work can start alongside step 1 -- your source checkout already reads the index's ``devel``, so the packages
+   can be tried against your branch before either is merged -- and the index's pull requests can merge as soon as
+   N exists on PartCAD's ``devel``. Open them yourself, or an issue with each package that needs one, and link
+   them from your PartCAD pull request.
+#. **Release PartCAD.** A maintainer fast-forwards PartCAD's ``main`` to the bump that named N, or a later one,
+   which publishes it.
+#. **Release the index**, only then: an index maintainer fast-forwards its ``main`` once N is on PyPI, and once
+   its ``devel`` works with N -- which a source checkout of PartCAD at N, or ``pc --devel-index`` with N
+   installed, shows.
+#. **Retire the old form, if at all, last** -- as a PartCAD change of its own, and only once no commit the
+   index's ``main`` pins uses it any more. This is the step that breaks packages nobody migrated, outside the
+   index included, so give the warning from step 1 time to be seen first, and say in the pull request what stops
+   working.
+
+A change that only takes something away -- a form nothing should use any more, a retired type -- is step 6 on its
+own: the packages in the index move off it first, through the index's ``devel`` and a release of it, and PartCAD
+stops accepting it after that. Its pull request says which packages it breaks and links the changes that fixed
+them.
+
 Implementation Details
 ----------------------
 
@@ -1308,3 +1437,4 @@ Parallelism
 .. _Merging a pull request: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/merging-a-pull-request
 .. _About Status Checks: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks#checks
 .. _Required reviews: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/approving-a-pull-request-with-required-reviews
+.. _partcad-index: https://github.com/partcad/partcad-index

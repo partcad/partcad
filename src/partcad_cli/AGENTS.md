@@ -135,6 +135,17 @@ message could reach the other window.
 on this machine what it is showing, over the socket the IDE already listens on for `show`
 (`partcad_ide_client.state`). The IDE is wherever the person is; a daemon can be remote.
 
+**`pc mcp` is a thin client too, just a long-lived one with a protocol of its own on the other side.** It serves
+the Model Context Protocol on stdio to the AI agent that started it, and every tool is one daemon method sent
+through `partcad_client.mcp_server` -- which calls the daemon itself, through `partcad_client.client`, rather
+than through `click/service.py::run`, because a server keeps one connection for the session and turns errors
+into tool results instead of exit codes. What stays in the client is what is the client's: which files the
+agent may name (the workspace, and `--allow-path`), writing an exported file where the agent asked, and this
+machine's Build vs Buy choices. The root command forces `--no-ansi` for it, since the ANSI renderer draws on
+stdout and stdout is the protocol. It never imports `partcad`, so it is in neither list below; the methods it
+refuses to forward (`daemon.reset`, `daemon.stop`, ...) are listed in `mcp_server/server.py` with the reason
+for each.
+
 Those two are the only daemon calls an in-process command makes, and `IN_PROCESS_DAEMON_CALLS` in
 `tests/partcad_cli/unit/test_command_boundary.py` is where it is written down -- one method at a time, so
 widening it is a decision somebody makes on purpose.

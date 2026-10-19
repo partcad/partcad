@@ -9,14 +9,16 @@ Common options, such as ``-v``/``-q`` (verbosity), ``--no-ansi`` (plain-text log
 
 ``--devel-index`` is one of those common options, and is worth calling out. The public index (the ``pub``
 dependency, published at `partcad-index <https://github.com/partcad/partcad-index>`_) lives in a repository of
-its own, and a package imports it at ``main``: the branch ``pc init`` has the dependency track, and the one
-``pc update`` pins it to the newest commit of. That is the released state. ``--devel-index`` imports
-its ``devel`` branch instead — the branch that a release fast-forwards ``main`` to — so a change staged there
-can be exercised before it is released. It replaces the revision a package names rather than deferring to it,
-which is what it exists to do. The redirect follows the repository rather than the dependency name, so it
-applies wherever the index appears in the dependency tree and leaves every other dependency alone. The same
-switch is available as the ``PC_DEVEL_INDEX`` environment variable, as ``develIndex`` in the user configuration,
-and as the ``partcad.develIndex`` setting of the VS Code extension.
+its own, and a package imports it at ``main``: the branch ``pc init`` has the dependency track and pins to the
+commit it is at, and the one ``pc update`` moves that pin to the newest commit of. That is the released state.
+``--devel-index`` imports its ``devel`` branch instead — the branch that a release fast-forwards ``main`` to — so
+a change staged there can be exercised before it is released. It replaces the revision a package names rather
+than deferring to it, which is what it exists to do. The redirect follows the repository rather than the
+dependency name, so it applies wherever the index appears in the dependency tree and leaves every other dependency
+alone. The same switch is available as the ``PC_DEVEL_INDEX`` environment variable, as ``develIndex`` in the user
+configuration, and as the ``partcad.develIndex`` setting of the VS Code extension. It is off by default, except
+where PartCAD runs from its sources (an editable install), which is PartCAD being developed and gets the index
+being developed: ``PC_DEVEL_INDEX=false`` turns it off there (see :ref:`devel-index-from-sources`).
 
 ``--force-update`` is another, and is the "force auto-update" setting. Loading a package never moves a ``git``
 dependency it has downloaded before -- ``pc update`` does that, by rewriting the dependency's ``revision:`` (see
@@ -242,6 +244,12 @@ Package commands
   Create a new PartCAD package (a ``partcad.yaml`` file) in the current directory. Use ``-i`` for interactive
   mode, and options such as ``--desc``, ``--url``, and ``--manufacturable`` to prefill package metadata.
 
+  Unless it is ``-p`` (private), the package depends on the public index as ``pub``, with ``track: main`` and
+  ``revision:`` pinned to the commit ``main`` is at as the package is created -- what ``pc add dep`` writes, so
+  the package builds the same way from its first commit on and ``pc update`` is what moves it (see
+  :ref:`pinning-dependencies`). With ``--offline``, or when the index cannot be reached, the package is still
+  created, without the ``revision:`` line, and a warning says to run ``pc update``.
+
   It also sets up the repository the package is in: a **Render** command in ``.vscode/launch.json``, and the
   AI agent skills that teach a coding agent to drive PartCAD -- the ``pc`` plugin in
   ``.claude/skills/`` for Claude Code, and ``pc-``-prefixed skills in ``.cursor/skills/`` for Cursor. Both come
@@ -254,6 +262,11 @@ Package commands
   install for: ``all`` (the default), or a comma-separated list of ``claude`` and ``cursor``. An agent PartCAD
   does not know is an error, because a typo that installs nothing looks exactly like an agent that is not
   supported yet.
+
+  With the skills, each agent is also given the **MCP server**, ``pc mcp`` (see :doc:`mcp`): a ``partcad``
+  entry in ``.mcp.json`` for Claude Code and in ``.cursor/mcp.json`` for Cursor, pointed at the package with
+  ``-p``. The other servers in those files are left as they are, and the ``partcad`` entry is rewritten each
+  time. ``--no-mcp`` leaves both files alone.
 
   Installing again updates what is there and **removes the skills PartCAD has stopped shipping**: a retired
   skill left behind describes a CLI that has moved on, which is worse than no skill at all because the agent
@@ -1198,6 +1211,25 @@ instead.
   ``<package>:<part>`` name: resolving a name is a package-graph question, which is the round trip this
   command does not make. ``--json`` prints what happened (or the reason it did not) as one object, which is
   what the VS Code extension's "Open in..." context menu reads.
+
+**************************
+Interacting with AI agents
+**************************
+
+``pc mcp``
+  Serve the `Model Context Protocol <https://modelcontextprotocol.io>`_ on stdio, so that an AI agent can drive
+  PartCAD: list a package's objects, read their declarations, look at them (a render comes back as an image),
+  test them, export them, and run any other daemon method. An MCP client starts it as a subprocess; it is a
+  client of the workspace's daemon like every other ``pc`` command, and serves the package ``-p`` names, or the
+  current directory.
+
+  .. code-block:: shell
+
+    claude mcp add partcad -- pc mcp                 # Claude Code, with PartCAD installed
+    pc -p packages/robot mcp --allow-path ../shared  # a package below the root, and one more folder
+
+  The agent may name files only inside the workspace unless ``--allow-path DIR`` (repeatable) or
+  ``--allow-any-path`` says otherwise. :doc:`mcp` lists the tools and how each MCP client is set up.
 
 *****************
 Workflow commands

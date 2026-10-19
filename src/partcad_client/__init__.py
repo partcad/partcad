@@ -22,6 +22,9 @@ machine and its own installation**, from the process running out of it.
 * :mod:`~partcad_client.object_types` -- which PartCAD object types are meshes,
   which is what decides whether a file has to be converted before an application
   that reads nothing else can open it.
+* :mod:`~partcad_client.mcp_server` -- `pc mcp`, the Model Context Protocol
+  server an AI agent on this machine starts on stdio and drives the workspace's
+  daemon through.
 
 None of it belongs to a daemon. A daemon can be remote, where "update PartCAD"
 would mean updating somebody else's installation and "stop the local daemons"
@@ -46,4 +49,4 @@ reference caller; the VS Code extension reaches the same code by running `pc`
 rather than by reimplementing it in TypeScript.
 """
 
-__version__ = "0.8.220"
+__version__ = "0.8.224"

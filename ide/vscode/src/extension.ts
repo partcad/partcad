@@ -18,6 +18,7 @@ import {
     getPopupTerminalFromSetting,
 } from './common/settings';
 import { updateServiceBundle } from './common/provision';
+import { registerMcpServers } from './common/mcp';
 import { refreshToolsPath, warnIfShellIntegrationOff } from './common/terminalPath';
 import { activateWhenTrusted } from './common/trust';
 import { loadServerDefaults } from './common/setup';
@@ -124,6 +125,7 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
         reopen: () => getReopenTerminalFromSetting(serverId) === 'true',
         popup: () => getPopupTerminalFromSetting(serverId) === 'true',
         iconPath: vscode.Uri.joinPath(context.extensionUri, 'resources', 'logo.svg'),
+        state: context.globalState,
     });
     context.subscriptions.push(
         partcadTerminals,
@@ -160,6 +162,9 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
     // whatever is already installed, and a user who opened a terminal first
     // should not have to wait for a language server to get `pc`.
     refreshToolsPath(context, serverId);
+    // And `pc mcp` for the editor's own agent, naming that same `pc`; refreshed
+    // wherever the PATH is, because it goes stale for the same reasons.
+    const mcpServers = registerMcpServers(context, serverId);
     // A terminal opened with shell integration off gets the tools only at
     // process creation, where its rc files can put another `pc` ahead of them.
     context.subscriptions.push(
@@ -570,6 +575,7 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
             // Cheap and idempotent, so it is not worth working out which of the
             // settings that decide the directory was the one that changed.
             refreshToolsPath(context, serverId);
+            mcpServers.refresh();
             if (checkIfConfigurationChanged(e, serverId)) {
                 await runServer();
             }
@@ -623,6 +629,7 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
                 // every superseded one, so the directory this put on the PATH
                 // may no longer exist.
                 refreshToolsPath(context, serverId);
+                mcpServers.refresh();
                 if (!result.execPath) {
                     await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
                     return;

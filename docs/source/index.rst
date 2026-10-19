@@ -47,6 +47,12 @@ product development process.**
 
 .. toctree::
    :maxdepth: 2
+   :caption: AI agents
+
+   mcp.rst
+
+.. toctree::
+   :maxdepth: 2
    :caption: Package configuration
 
    configuration.rst
@@ -63,6 +69,7 @@ product development process.**
 
    simulation.rst
    use_cases.rst
+   large_projects.rst
    features.rst
 
 .. toctree::

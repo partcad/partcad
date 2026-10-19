@@ -246,6 +246,15 @@ the package data properly reflects the quality that the maintainer provides and
 commits to maintain. This way PartCAD users have a choice of which model to
 use based on their specific needs.
 
+Every package in it is pinned to an exact commit, declares the oldest PartCAD
+it works with, and keeps the branch the repository tracks working for everybody
+who already uses it; a breaking change goes to a new branch instead. Changes are
+merged to its ``devel`` branch, and ``main`` -- what packages created by
+``pc init`` track -- only moves by fast-forward from it.
+`CONTRIBUTING.md <https://github.com/partcad/partcad-index/blob/devel/CONTRIBUTING.md>`_
+in the repository has the details, and :doc:`large_projects` gives the same
+advice for a library of packages of your own.
+
 =====
 Tools
 =====

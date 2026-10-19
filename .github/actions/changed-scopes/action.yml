@@ -301,6 +301,12 @@ runs:
               add schema; add code ;;
             src/*|tests/*|features/*|cad/*|tools/*|dev-tools/*|conftest.py|behave.ini)
               add code ;;
+            server.json)
+              # The MCP Registry entry. Nothing builds it into anything: "deploy.yml"
+              # publishes it as it is, and "tests/dev_tools/test_mcp_registry.py" is
+              # what holds it to the wheel and the release -- so what a change to it
+              # has to run is that test.
+              add code ;;
             pyproject.toml|poetry.lock|poetry.toml|requirements*.txt|requirements*.in)
               # What PartCAD is built out of, as opposed to what it is. Only the
               # root-level files: "*" matches "/" in a case pattern, so these

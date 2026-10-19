@@ -989,6 +989,27 @@ trap 'rm -rf "${SMOKE_DIR}"' EXIT
 (cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/partcad${EXE_SUFFIX}" --help >/dev/null)
 (cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/partcad-json-rpc${EXE_SUFFIX}" --version >/dev/null)
 
+# `pc mcp` is the one path through the bundle that imports the `mcp` SDK, and
+# with it `pydantic`, `cryptography` and `httpx2` -- what the spec stopped
+# excluding for it. It answers an MCP `initialize` without starting a daemon and
+# exits when its stdin closes, so one request through a pipe is the whole check:
+# a module PyInstaller did not collect fails here, rather than on a user's first
+# tool call.
+mcp_initialize='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"build.sh","version":"0"}}}'
+mcp_status=0
+mcp_answer="$(cd "${SMOKE_DIR}" && printf '%s\n' "${mcp_initialize}" | "${BUNDLE_DIR}/pc${EXE_SUFFIX}" mcp)" || mcp_status=$?
+# Both: an answer from a server that then dies on the way out is a bundle
+# missing something the shutdown path imports, and it is as broken as one that
+# never answered.
+case "${mcp_status}:${mcp_answer}" in
+0:*'"serverInfo"'*) ;;
+*)
+  echo "error: 'pc mcp' did not answer an MCP initialize request and exit cleanly (exit ${mcp_status}):" >&2
+  printf '       %s\n' "${mcp_answer}" >&2
+  exit 1
+  ;;
+esac
+
 if [ -d "${OPENSCAD_BUNDLED_DIR}" ]; then
   # First that the payload itself runs, and that it is the version we pinned:
   # this catches a data file that shipped without its executable bit, an

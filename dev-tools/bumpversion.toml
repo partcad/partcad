@@ -1,5 +1,5 @@
 [tool.bumpversion]
-current_version = "0.8.220"
+current_version = "0.8.224"
 commit = "true"
 commit_args = "--no-verify"
 tag = "true"
@@ -149,6 +149,17 @@ replace = "version\": \"{new_version}\""
 # a tool doing.
 [[tool.bumpversion.files]]
 filename = "ai-agents/claude/.claude-plugin/plugin.json"
+search = "\"version\": \"{current_version}\""
+replace = "\"version\": \"{new_version}\""
+
+# The MCP Registry entry, which `deploy.yml` publishes after the wheel. It states
+# the release twice -- the entry's own version and the version of the wheel it
+# installs -- and this one search moves both. The registry refuses a version it
+# has seen, so an entry left behind would not be republished, it would be
+# refused, and `pc mcp` would stay listed at the release it was first published
+# with.
+[[tool.bumpversion.files]]
+filename = "server.json"
 search = "\"version\": \"{current_version}\""
 replace = "\"version\": \"{new_version}\""
 

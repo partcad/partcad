@@ -75,9 +75,19 @@ a CAD addon, or documentation.
 
   What a **client** does, and a daemon must not: discovering the daemon serving a workspace and connecting to
   it (`daemon`, `client`), replacing this installation of PartCAD (`selfupdate`), opening a file in a
-  third-party CAD application on this machine (`external`), and putting the PartCAD extension into an editor
+  third-party CAD application on this machine (`external`), putting the PartCAD extension into an editor
   on this machine and opening a workspace in it, in the PartCAD workbench (`ide`: `pc ide install`,
-  `pc ide workspace <directory>`).
+  `pc ide workspace <directory>`), and serving the Model Context Protocol to an AI agent on this machine
+  (`mcp_server`: `pc mcp`).
+
+  `mcp_server` is a client like `pc` is: an MCP client starts it as a subprocess, it speaks MCP on stdio (the
+  official `mcp` SDK, which is why the wheel and the bundle carry pydantic) and framed JSON-RPC to the
+  workspace's daemon, and the daemon does the work. It is shaped after cadcraft's and solidcraft's
+  `<app>-cli mcp`: a dozen curated tools with real schemas, each one daemon method with the parameters the `pc`
+  command it mirrors sends, plus one `execute` that reaches every method -- so a new daemon method is reachable
+  without a new tool, and a tool cannot come to mean something its command does not. Failures are tool results
+  with the daemon's log attached, never protocol errors, and the paths an agent names are confined to the
+  workspace unless `--allow-path` widens that. It is published four ways beyond the wheel (see "Packaging").
 
   All of it acts on **this machine**, from the process running out of it. A daemon can be remote, where
   "update PartCAD" would mean updating somebody else's installation and "stop the local daemons" somebody
@@ -171,6 +181,21 @@ Full narrative guide (Docker/dev-container setup, PR merge criteria): `docs/sour
 Package-specific commands: `src/partcad/AGENTS.md`, `src/partcad_cli/AGENTS.md`,
 `src/partcad_service_json_rpc/AGENTS.md`, `src/partcad_ide_client/AGENTS.md`. Other components:
 `ide/vscode/AGENTS.md`, `ide/standalone/AGENTS.md`, `cad/freecad/AGENTS.md`.
+
+**Every pull request targets `devel`; nothing merges to `main`**, which only moves by fast-forward from `devel`
+and is the release (PyPI publishes from it). The same holds for `partcad/partcad-index`. A change that breaks
+packages in the index -- a key PartCAD stops accepting, a field read with a new meaning -- is made in the order
+"Branches, releases and breaking changes" in `docs/source/contributing.rst` gives: additive first, released, the
+index's packages migrated through the index's `devel`, the old form retired last. `examples/partcad.yaml` tracks
+the index unpinned on purpose, so that it breaks as soon as the two disagree; do not pin it.
+
+**PartCAD running from its sources reads the index's `devel`, not its `main`.** `develIndex` defaults to on for an
+editable install (`is_editable_install`, so `poetry install`, `pip install -e`, the dev container, CI-Dev, and
+`pytest` everywhere, which puts `src` on the path) and to off for a wheel or a bundle (the `CI` workflow's `pc` jobs
+and every user). That is how a feature and the unreleased packages written for it are developed together;
+`PC_DEVEL_INDEX=false` shows a checkout what users of `main` get. The VS Code extension's `partcad.develIndex`
+follows suit when no settings file sets it: on for an extension running from its sources, and otherwise passed
+on as nothing, so the PartCAD it starts decides (see "The backend" in `ide/vscode/AGENTS.md`).
 
 ### Where commands run
 
@@ -632,6 +657,17 @@ working), the standalone PyInstaller bundles for users who have no Python, the P
 bundles inside it, the VS Code extension's `.vsix` (with the `ide/vscode-shim` `.vsix` published beside it, for the
 same reason the wheel has one), the `pc` plugin for Claude Code, and the snap, which wraps the Linux bundle and is
 built but not published yet.
+
+**The MCP server, `pc mcp`, is in the wheel and every bundle, and is published four more ways**, none of them an
+artifact of its own: `server.json` at the root is the **MCP Registry** entry (`io.github.partcad/partcad`, run as
+`uvx partcad mcp`), which `deploy.yml` publishes after the PyPI upload on `main`, signing in with GitHub's OIDC
+token -- no secret, because a workflow in a repository owned by `partcad` is what grants that namespace; the `pc`
+plugin carries it in `ai-agents/claude/.mcp.json`; the VS Code extension registers it with the editor
+(`ide/vscode/src/common/mcp.ts`); and `pc init` writes it into the `.mcp.json` and `.cursor/mcp.json` of the
+repository it sets up. The registry proves the wheel is ours by finding `mcp-name: io.github.partcad/partcad` in
+its PyPI description, which is `README.md` -- so **that line in the README is load-bearing**, and a published
+version is final, which is why `server.json` is in `dev-tools/bumpversion.toml` and
+`tests/dev_tools/test_mcp_registry.py` holds it to the release, the README and the `pc` command line.
 
 There used to be five wheels pinning each other at `==`. Do not add a second distribution back: within one
 distribution a pin is an import, and two distributions owning one import name break each other on uninstall
