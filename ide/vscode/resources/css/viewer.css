@@ -277,10 +277,13 @@ body {
     text-overflow: ellipsis;
 }
 
-/* The groups are the sections of a declaration rather than things of their own. */
+/* The groups are the sections of a declaration rather than things of their own,
+   and in an assembly they sit among the rows of the things it holds - so they are
+   set apart from those rows by more than the angle brackets round their names. */
 .tree-ports > .tree-line > .tree-label > .tree-name,
 .tree-interfaces > .tree-line > .tree-label > .tree-name {
     color: var(--vscode-descriptionForeground);
+    font-style: italic;
 }
 
 .tree-twisty {
