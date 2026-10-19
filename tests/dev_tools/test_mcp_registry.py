@@ -20,7 +20,13 @@ installs the wrong thing until the next release:
 import json
 import pathlib
 import re
-import tomllib
+
+# `tomllib` is only in the standard library from Python 3.11, and the CI matrix
+# still runs 3.10 -- see the same fallback in tests/partcad_cli/unit/test_versions.py.
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SERVER = json.loads((REPO_ROOT / "server.json").read_text(encoding="utf-8"))
