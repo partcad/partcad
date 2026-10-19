@@ -278,9 +278,9 @@ suite('PartCAD terminal: views', () => {
     });
 
     test('a shell is made for the width the view beside the last one had', async () => {
-        // Narrower than any view in this window will be, so that the view's own
-        // width is seen to replace it.
-        const narrow = 20;
+        // Narrower than any terminal can be, so that the view's own width is seen
+        // to replace it: a view on a Windows runner has been 18 columns wide.
+        const narrow = 0;
         const state = new Memory();
         await state.update(SHELL_COLUMNS_KEY, narrow);
         const partcad = make({ state });
