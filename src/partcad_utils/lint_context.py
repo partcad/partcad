@@ -110,7 +110,9 @@ def describe(path: str, package_name: str = "", include_paths=(), parameter_over
 def _describe(target: str, package_name: str, include_paths: list, parameter_overrides) -> FileContext:
     directory = os.path.dirname(target)
     if assy_lint.schema_name_for_file(target) == assy_lint.PARTCAD_SCHEMA:
-        above = _packages_above(os.path.dirname(directory), include_paths)
+        # A package in a folder marked '.pcignore' has nothing above it to
+        # inherit from (see 'partcad_utils.pcignore').
+        above = [] if pcignore.is_ignored(directory) else _packages_above(os.path.dirname(directory), include_paths)
         return FileContext(
             renders=[
                 assy_lint.Render(

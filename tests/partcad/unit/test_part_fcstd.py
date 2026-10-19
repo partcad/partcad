@@ -9,7 +9,7 @@ It is a partType PartCAD ships in '//builtin/import', named by its bare name,
 and it is what a file-backed partType is: the part's own file, resolved against
 the part's package and depended on by its cache entry. Those parts are checked
 without a sandbox. Reading the documents downloads cadmpeg and runs it, so
-that part is gated and measured -- a PartDesign body is checked to come out as
+that part is marked slow and measured -- a PartDesign body is checked to come out as
 its last feature's result rather than every feature stacked.
 """
 
@@ -104,12 +104,8 @@ def _measured(ctx, name):
 
 @pytest.mark.slow
 def test_documents_are_read_as_what_freecad_shows(ctx):
-    try:
-        box = _measured(ctx, ":box")
-    except Exception as e:
-        pytest.skip("cadmpeg or the sandbox is unavailable: %s" % e)
-    if box is None:
-        pytest.skip("cadmpeg or the sandbox is unavailable: %s" % ctx.get_part(":box").errors)
+    box = _measured(ctx, ":box")
+    assert box is not None, ctx.get_part(":box").errors
     assert box["solids"] == 1
     assert box["volume"] == pytest.approx(25 * 15 * 8)
     assert box["bbox"] == pytest.approx([0, 0, 0, 25, 15, 8], abs=1e-6)
@@ -124,9 +120,6 @@ def test_documents_are_read_as_what_freecad_shows(ctx):
 @pytest.mark.slow
 def test_a_document_with_no_solid_is_an_error(ctx):
     part = ctx.get_part(":sketches")
-    try:
-        envelope = asyncio.run(part.get_wrapped(ctx))
-    except Exception as e:
-        pytest.skip("cadmpeg or the sandbox is unavailable: %s" % e)
+    envelope = asyncio.run(part.get_wrapped(ctx))
     assert envelope is None
     assert any("holds no solid" in str(error) for error in part.errors)

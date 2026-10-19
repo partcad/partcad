@@ -21,8 +21,6 @@ import tempfile
 # bundled copy of expat: see the note in ocp_serialize.
 import pyexpat  # noqa: F401
 
-import build123d as b3d
-
 from OCP.Message import Message, Message_ProgressRange
 from OCP.RWGltf import RWGltf_CafReader
 from OCP.RWMesh import RWMesh_CoordinateSystem
@@ -32,6 +30,7 @@ from OCP.TDocStd import TDocStd_Document
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
+import wrapper_stl
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
@@ -65,17 +64,14 @@ def process(path, request):
         with tempfile.TemporaryDirectory(prefix="partcad-gltf-") as tmp:
             stl = os.path.join(tmp, "mesh.stl")
             writer = StlAPI_Writer()
-            # Binary: the mesher below reads STL through lib3mf, which takes no
+            # Binary: an STL part is meshed through lib3mf, which takes no
             # other kind.
             writer.ASCIIMode = False
             if not writer.Write(triangles, stl):
                 raise RuntimeError("The glTF file holds no triangles")
-            try:
-                shape = b3d.Mesher().read(stl)[0].wrapped
-            except Exception:
-                shape = b3d.import_stl(stl).wrapped
-
-        return {"success": True, "exception": None, "shape": shape}
+            # Read as an STL part is, which makes a solid of the triangles or
+            # says why it cannot: a part is a body, not a skin.
+            return wrapper_stl.process(stl, request)
 
     except Exception as e:
         wrapper_common.handle_exception(e)

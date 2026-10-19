@@ -64,10 +64,7 @@ def test_the_reader_reads_the_consumer_s_file(tmp_path):
     (tmp_path / "data" / "consumer" / "crate.box").write_text("10 20 %r\n" % depth)
     ctx = pc.Context(str(tmp_path / "data" / "consumer" / "partcad.yaml"))
     part = ctx.get_part(":crate")
-    try:
-        envelope = asyncio.run(part.get_wrapped(ctx))
-    except Exception as e:
-        pytest.skip("The sandbox is unavailable: %s" % e)
+    envelope = asyncio.run(part.get_wrapped(ctx))
     assert envelope is not None, part.errors
     measured = envelope[shape_envelope.KEY_METADATA][shape_envelope.METADATA_MEASUREMENTS]
     assert measured["volume"] == pytest.approx(10 * 20 * depth)

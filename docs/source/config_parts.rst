@@ -292,7 +292,9 @@ the buffers it names beside it, or a single ``.glb`` (``path: model.glb``). Ever
 mesh in it is placed by the node tree, glTF's metres and Y-up are restated as
 millimetres and Z-up, and the triangles are meshed into the faces of a solid,
 as an STL part's are -- so what ``pc export -t gltf`` writes reads back where it
-was. ``pc import part`` copies the buffers a ``.gltf`` names along with it.
+was. A ``.gltf``'s buffers and images are part of its cache key, and
+``pc import part`` copies them along with it -- refusing one that would replace a
+different file of the same name already in the package.
 
 FreeCAD documents
 ^^^^^^^^^^^^^^^^^

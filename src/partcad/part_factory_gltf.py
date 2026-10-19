@@ -11,7 +11,10 @@ glTF is how meshes travel between renderers, game engines and the web, and what
 node tree and stated in millimetres, meshed into the faces of a solid.
 """
 
+import json
 import os
+from pathlib import Path
+from urllib.parse import unquote
 
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, telemetry, wrapper
@@ -20,9 +23,41 @@ from .part_factory_homogen import PartFactoryHomogen
 from .process_crash import command_failure
 
 
+def gltf_companions(source_path) -> list:
+    """The files a '.gltf' file names beside itself, its buffers and its images, relative to it.
+
+    A '.glb' carries them inside, and a URI that is a 'data:' URL or a web
+    address is not a file; anything else is a percent-encoded path relative to
+    the '.gltf', and the part cannot be read without it.
+    """
+    source_path = Path(source_path)
+    try:
+        with open(source_path, encoding="utf-8") as f:
+            document = json.load(f)
+    except (OSError, UnicodeDecodeError, ValueError):
+        return []  # a '.glb' under the '.gltf' name, or not glTF at all
+    if not isinstance(document, dict):
+        return []
+    found = []
+    for section in ("buffers", "images"):
+        for item in document.get(section) or []:
+            uri = item.get("uri") if isinstance(item, dict) else None
+            if not isinstance(uri, str) or not uri or ":" in uri:
+                continue  # inside the file, or not a file at all
+            relative = unquote(uri)
+            # Only what sits at or below the '.gltf': a copy must land inside
+            # the package it is imported into.
+            if ":" in relative or relative.startswith(("/", "\\")) or ".." in Path(relative).parts:
+                continue
+            if (source_path.parent / relative).is_file() and relative not in found:
+                found.append(relative)
+    return found
+
+
 @telemetry.instrument()
 class PartFactoryGltf(PartFactoryHomogen, PartFactoryFile):
-    WRAPPERS = ("import_gltf.py",)
+    # The triangles are read as an STL part's are (see 'wrapper_import_gltf').
+    WRAPPERS = ("import_gltf.py", "stl.py")
 
     PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
 
@@ -31,6 +66,13 @@ class PartFactoryGltf(PartFactoryHomogen, PartFactoryFile):
             super().__init__(ctx, source_project, target_project, config, extension=".gltf")
             self._create(config)
             self.runtime = None  # Lazy initialization for the sandbox runtime
+
+    def post_create(self) -> None:
+        # What the '.gltf' names is read with it, so a new buffer is a new part.
+        if self.path and os.path.isfile(self.path):
+            for relative in gltf_companions(self.path):
+                self.part.cache_dependencies.append(os.path.join(os.path.dirname(self.path), relative))
+        super().post_create()
 
     async def instantiate(self, part):
         await super().instantiate(part)

@@ -4,7 +4,6 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -12,34 +11,28 @@ from typing import Optional
 
 from ... import logging as pc_logging
 from ...adhoc.convert import convert_cad_file
+from ...part_factory_gltf import gltf_companions
 from ...project import Project
 from .add import add_part_action
 
 
-def gltf_companions(source_path: Path) -> list:
-    """The files a '.gltf' file names beside itself: its buffers and its images.
-
-    A '.glb' carries them inside, and a URI that is a 'data:' URL or a web
-    address is not a file to copy; anything else is a path relative to the
-    '.gltf', and the part cannot be read without it.
-    """
-    try:
-        with open(source_path, encoding="utf-8") as f:
-            document = json.load(f)
-    except (OSError, UnicodeDecodeError, ValueError):
-        return []  # a '.glb' under the '.gltf' name, or not glTF at all
-    found = []
-    for section in ("buffers", "images"):
-        for item in document.get(section) or []:
-            uri = item.get("uri") if isinstance(item, dict) else None
-            # Only what sits at or below the '.gltf': a copy must land inside
-            # the package it is imported into.
-            if not uri or ":" in uri or uri.startswith(("/", "\\")) or ".." in Path(uri).parts:
-                continue
-            companion = (source_path.parent / uri).resolve()
-            if companion.is_file():
-                found.append(uri)
-    return found
+def _companions_to_copy(source_path: Path, target_path: Path) -> list:
+    """(source, target) of every file a '.gltf' names, refusing any that would replace another's."""
+    package_dir = target_path.parent.resolve()
+    pairs = []
+    for relative in gltf_companions(source_path):
+        source = source_path.parent / relative
+        target = (target_path.parent / relative).resolve()
+        if not target.is_relative_to(package_dir):
+            raise ValueError(f"'{relative}', which '{source_path.name}' names, would be written outside the package")
+        if not target.exists():
+            pairs.append((source, target))
+        elif not source.samefile(target) and source.read_bytes() != target.read_bytes():
+            raise ValueError(
+                f"'{relative}', which '{source_path.name}' names, would replace the package's own; "
+                "rename it in the file and beside it, or import it into another package"
+            )
+    return pairs
 
 
 def import_part_action(
@@ -76,15 +69,15 @@ def import_part_action(
 
     target_path = (Path(project.path) / f"{name}.{kind}").resolve()
     if not target_path.exists() or not source_path.samefile(target_path):
+        # Checked before anything is copied, so a refusal leaves nothing behind.
+        companions = _companions_to_copy(source_path, target_path) if kind == "gltf" else []
         try:
             shutil.copy2(source_path, target_path)
         except shutil.Error as e:
             raise ValueError(f"Failed to copy '{source_path}' -> '{target_path}': {e}")
-        if kind == "gltf":
-            for uri in gltf_companions(source_path):
-                companion_target = (target_path.parent / uri).resolve()
-                companion_target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source_path.parent / uri, companion_target)
+        for companion_source, companion_target in companions:
+            companion_target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(companion_source, companion_target)
 
     add_part_action(project, kind, str(target_path), config)
     pc_logging.info(f"Part '{name}' imported successfully.")

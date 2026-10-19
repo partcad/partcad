@@ -73,6 +73,13 @@ def test_the_packages_above_a_file_stop_at_an_ignored_folder(tree):
     assert above == [str(tree / "tests" / "consumer")]
 
 
+def test_a_package_in_an_ignored_folder_inherits_nothing(tree):
+    (tree / "partcad.yaml").write_text("desc: The plugin\nmanufacturable: true\n")
+    (tree / "tests" / "partcad.yaml").write_text("desc: Its own package\n")
+    assert lint_context.describe(str(tree / "tests" / "partcad.yaml")).inherited_manufacturable is None
+    assert lint_context.describe(str(tree / "sub" / "partcad.yaml")).inherited_manufacturable is True
+
+
 def test_the_marker_is_a_file(tmp_path):
     (tmp_path / pcignore.IGNORE_FILE).mkdir()
     assert not pcignore.is_ignored(str(tmp_path))

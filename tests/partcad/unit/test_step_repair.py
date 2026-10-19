@@ -81,10 +81,7 @@ def test_a_repaired_copy_is_gone_afterwards(step_repair):
 def test_opencascade_reads_the_file_it_used_to_crash_on():
     ctx = pc.Context(PACKAGE)
     part = ctx.get_part(":cadmpeg")
-    try:
-        envelope = asyncio.run(part.get_wrapped(ctx))
-    except Exception as e:
-        pytest.skip("The sandbox is unavailable: %s" % e)
+    envelope = asyncio.run(part.get_wrapped(ctx))
     assert envelope is not None, part.errors
     measured = envelope[shape_envelope.KEY_METADATA][shape_envelope.METADATA_MEASUREMENTS]
     # Everything cadmpeg wrote: the Pad twice over and the Pocket's tool.
