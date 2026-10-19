@@ -111,6 +111,16 @@ those rules in TypeScript is a copy that can disagree, and a disagreement means 
 a daemon of its own beside the one `pc` is using. What stays in Node is the socket transport itself, because a
 live notification connection cannot be shelled out.
 
+**`partcad.develIndex` has no fixed default, and its `false` in `package.json` is only what the Settings editor
+shows.** PartCAD reads the public index's `devel` where it runs from its sources and `main` elsewhere, and the
+setting follows the same rule (`getDevelIndexFromSetting`): a value a settings file sets is passed, either way, as
+`--devel-index` and `PC_DEVEL_INDEX` (the variable because the flag can only say yes, and an inherited
+`PC_DEVEL_INDEX=true` would outrank a `false`). With none, an extension running from its sources -- any
+`extensionMode` but `Production` -- passes `true`, and an installed one passes nothing at all, so the PartCAD it
+starts decides for itself: `devel` in the dev container, whose PartCAD is an editable install, `main` from a
+bundle. `inspect()`, not `get()`, is what tells the two apart, since `get()` hands back the declared `false` for
+a setting nobody set.
+
 ### There used to be a second backend
 
 A Python language server under `bundled/tool`, with PartCAD's dependencies vendored into `bundled/libs`,

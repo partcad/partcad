@@ -183,7 +183,9 @@ the index unpinned on purpose, so that it breaks as soon as the two disagree; do
 editable install (`is_editable_install`, so `poetry install`, `pip install -e`, the dev container, CI-Dev, and
 `pytest` everywhere, which puts `src` on the path) and to off for a wheel or a bundle (the `CI` workflow's `pc` jobs
 and every user). That is how a feature and the unreleased packages written for it are developed together;
-`PC_DEVEL_INDEX=false` shows a checkout what users of `main` get.
+`PC_DEVEL_INDEX=false` shows a checkout what users of `main` get. The VS Code extension's `partcad.develIndex`
+follows suit when no settings file sets it: on for an extension running from its sources, and otherwise passed
+on as nothing, so the PartCAD it starts decides (see "The backend" in `ide/vscode/AGENTS.md`).
 
 ### Where commands run
 

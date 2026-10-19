@@ -1299,8 +1299,15 @@ everywhere, which puts ``src`` on the path.
 Say otherwise either way when you need to. ``PC_DEVEL_INDEX=false``, or ``develIndex: false`` in
 ``~/.partcad/config.yaml``, shows a source checkout what users of the index see; ``--devel-index``, or
 ``PC_DEVEL_INDEX=true``, points an installed one at ``devel``. ``pc config`` prints which one is in effect
-(``devel_index``). The VS Code extension always passes its own ``partcad.develIndex`` setting, so a window it
-serves reads ``main`` until that setting is turned on, however PartCAD was installed.
+(``devel_index``).
+
+The VS Code extension's ``partcad.develIndex`` setting follows the same rule. Set in a settings file, either way,
+it is what the extension passes to the service it starts. Left unset, it is on where the extension itself runs
+from its sources -- an Extension Development Host, such as the repository's ``Debug Extension and Python``
+launch configuration, or its test host -- and an installed extension passes nothing, so that the PartCAD it
+starts decides: ``devel`` in the dev container, where PartCAD is a source checkout, and ``main`` with a
+downloaded bundle. The Settings editor shows the setting as off either way, because ``package.json`` cannot
+declare a default that depends on anything.
 
 What breaks a package
 ^^^^^^^^^^^^^^^^^^^^^
