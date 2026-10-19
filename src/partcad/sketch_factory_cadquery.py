@@ -105,6 +105,7 @@ class SketchFactoryCadquery(SketchFactoryPython):
             exitcode, response_serialized, errors = await self.runtime.run_async(
                 command,
                 request_serialized,
+                session=self.session,
             )
 
             if exitcode != 0 and len(errors) == 0:

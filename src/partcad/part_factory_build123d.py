@@ -111,6 +111,7 @@ class PartFactoryBuild123d(PartFactoryPython):
             exitcode, response_serialized, errors = await self.runtime.run_async(
                 command,
                 request_serialized,
+                session=self.session,
             )
             if exitcode != 0 and len(errors) == 0:
                 errors = "%s: %s: Failed to instantiate" % (part.project_name, part.name)
@@ -136,7 +137,7 @@ class PartFactoryBuild123d(PartFactoryPython):
                 return None
 
             if not result["success"]:
-                pc_logging.error("Failed to produce the part: %s" % part.name)
+                part.error("%s: %s" % (part.name, result["exception"]))
                 return None
 
             self.ctx.stats_parts_instantiated += 1
