@@ -182,6 +182,21 @@ Package-specific commands: `src/partcad/AGENTS.md`, `src/partcad_cli/AGENTS.md`,
 `src/partcad_service_json_rpc/AGENTS.md`, `src/partcad_ide_client/AGENTS.md`. Other components:
 `ide/vscode/AGENTS.md`, `ide/standalone/AGENTS.md`, `cad/freecad/AGENTS.md`.
 
+**Every pull request targets `devel`; nothing merges to `main`**, which only moves by fast-forward from `devel`
+and is the release (PyPI publishes from it). The same holds for `partcad/partcad-index`. A change that breaks
+packages in the index -- a key PartCAD stops accepting, a field read with a new meaning -- is made in the order
+"Branches, releases and breaking changes" in `docs/source/contributing.rst` gives: additive first, released, the
+index's packages migrated through the index's `devel`, the old form retired last. `examples/partcad.yaml` tracks
+the index unpinned on purpose, so that it breaks as soon as the two disagree; do not pin it.
+
+**PartCAD running from its sources reads the index's `devel`, not its `main`.** `develIndex` defaults to on for an
+editable install (`is_editable_install`, so `poetry install`, `pip install -e`, the dev container, CI-Dev, and
+`pytest` everywhere, which puts `src` on the path) and to off for a wheel or a bundle (the `CI` workflow's `pc` jobs
+and every user). That is how a feature and the unreleased packages written for it are developed together;
+`PC_DEVEL_INDEX=false` shows a checkout what users of `main` get. The VS Code extension's `partcad.develIndex`
+follows suit when no settings file sets it: on for an extension running from its sources, and otherwise passed
+on as nothing, so the PartCAD it starts decides (see "The backend" in `ide/vscode/AGENTS.md`).
+
 ### Where commands run
 
 **Validation and commits run inside the dev container, not on the host.** The container is the only environment

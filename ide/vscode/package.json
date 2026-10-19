@@ -319,7 +319,7 @@
           },
           "partcad.develIndex": {
             "default": false,
-            "description": "Whether to take the public PartCAD index from its 'devel' branch instead of the released state on 'main'. Turn this on to work against index changes that have not been released yet.",
+            "description": "Whether to take the public PartCAD index from its 'devel' branch instead of the released state on 'main'. Turn this on to work against index changes that have not been released yet. Left unset, it is on where the extension or PartCAD runs from its sources (an Extension Development Host, an editable install of PartCAD) and off otherwise.",
             "scope": "machine",
             "type": "boolean"
           },

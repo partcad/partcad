@@ -69,6 +69,7 @@ product development process.**
 
    simulation.rst
    use_cases.rst
+   large_projects.rst
    features.rst
 
 .. toctree::
