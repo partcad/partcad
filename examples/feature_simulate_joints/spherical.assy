@@ -1,0 +1,17 @@
+# The plate on a ball 10 mm under the frame, hung by the middle of its top
+# edge. A ball keeps three turns through one point, about the contact frame's
+# X, Y and Z in that order, Z being the vertical line the plate hangs on. It
+# starts twisted 90 degrees about that line, and then tilted 5 degrees about X,
+# which the twist has made square to the plate.
+links:
+  - part: frame
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: plate
+    connect:
+      name: frame
+      with: edge
+      to: pivot
+      toInstance: below
+      joint: socket
+      motion: ball
+      toParams: { turnX: 5, turnZ: 90 }

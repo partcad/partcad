@@ -20,7 +20,7 @@ from partcad.dependency_pin import set_dependency_revision, yaml_scalar
 SHA = "8c1517c6a65e0316910f5caff64291a56c7fa0c2"
 # Commit ids of decimal digits alone, which YAML 1.1 reads as an int when they
 # are not quoted: one it reads as the int it says, and one with a leading zero
-# and no digit above 7, which it reads as an octal int, losing the text.
+# and no digit above 7, which it reads as an octal int.
 DIGITS = "8759402447468759402447468759402447468759"
 OCTAL = "0123456701234567012345670123456701234567"
 
@@ -193,6 +193,10 @@ def test_what_would_be_a_guess_is_left_alone(tmp_path, text, why):
         (OCTAL, "'%s'" % OCTAL),
         ("875940244746", "'875940244746'"),
         # Not commit ids, but 'yaml_scalar' is about any value: a tag, a branch.
+        # PartCAD keeps the text of these ints, but an int is not a string.
+        ("1_000", "'1_000'"),
+        ("0x1f", "'0x1f'"),
+        ("1:30", "'1:30'"),
         ("1.10", "'1.10'"),
         ("on", "'on'"),
         ("it's", "it's"),
@@ -230,7 +234,7 @@ def test_a_quoted_revision_replaced_by_digits_keeps_its_quotes(tmp_path):
 
 
 def test_digits_written_plain_already_are_quoted_rather_than_left_alone(tmp_path):
-    """The text is the commit, but what is read back is not: it is an octal int, and a different number."""
+    """The text is the commit, but what is read back is an int, which the schema says a revision is not."""
     reason, after = pin(tmp_path, "dependencies:\n  pub:\n    track: main\n    revision: %s\n" % OCTAL, revision=OCTAL)
     assert reason is None
     assert after == "dependencies:\n  pub:\n    track: main\n    revision: '%s'\n" % OCTAL

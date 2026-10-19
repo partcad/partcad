@@ -37,7 +37,7 @@ import { identity, INSTANTIATE_METHOD, pendingSubassemblies, requestParams } fro
 import { cliBeside, ensureServiceExecutable, locateCommand, resolveServicePath, ServiceResolution } from './provision';
 import { writeTerminal } from '../terminal';
 import { refreshToolsPath } from './terminalPath';
-import { getServiceChannelFromSetting } from './settings';
+import { getDevelIndexFromSetting, getServiceChannelFromSetting } from './settings';
 import { checkoutService, debugCheckout, DEBUG_STATUS_METHOD, DebugStatus, needsReplacing } from './debug';
 
 /** The subset of the language client the extension depends on. */
@@ -659,7 +659,7 @@ class JsonRpcBackend implements PartcadBackend {
     }
 }
 
-function serviceArgs(serverId: string): string[] {
+function serviceArgs(serverId: string, develIndex: boolean | undefined): string[] {
     const config = vscode.workspace.getConfiguration(serverId);
     const args: string[] = [];
     const verbosity = config.get<string>('verbosity') ?? 'info';
@@ -682,21 +682,24 @@ function serviceArgs(serverId: string): string[] {
     // The daemon reads this once, at launch. Toggling the setting restarts the
     // backend (checkIfConfigurationChanged lists it), so the running daemon
     // always reflects the current value.
-    if (config.get<boolean>('develIndex') === true) {
+    if (develIndex === true) {
         args.push('--devel-index');
     }
     return args;
 }
 
 /** The environment the service is launched with. */
-function serviceEnv(serverId: string): NodeJS.ProcessEnv {
-    const config = vscode.workspace.getConfiguration(serverId);
+function serviceEnv(develIndex: boolean | undefined): NodeJS.ProcessEnv {
     const env = { ...process.env };
     // '--devel-index' is a flag, so it can ask for the development index but
     // never against it: a 'PC_DEVEL_INDEX=true' inherited from whatever started
     // VS Code would outrank an extension setting of false. The environment can
-    // spell out both answers, so the setting travels through it either way.
-    env.PC_DEVEL_INDEX = config.get<boolean>('develIndex') === true ? 'true' : 'false';
+    // spell out both answers, so the setting travels through it either way --
+    // when there is one. With none, the variable is left as it was, and PartCAD
+    // decides (see getDevelIndexFromSetting).
+    if (develIndex !== undefined) {
+        env.PC_DEVEL_INDEX = develIndex ? 'true' : 'false';
+    }
     return env;
 }
 
@@ -1147,8 +1150,9 @@ export async function restartBackend(
     }
     const execPath = resolution.execPath;
     const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
-    const args = serviceArgs(serverId);
-    const env = serviceEnv(serverId);
+    const develIndex = getDevelIndexFromSetting(serverId, context.extensionMode !== vscode.ExtensionMode.Production);
+    const args = serviceArgs(serverId, develIndex);
+    const env = serviceEnv(develIndex);
     try {
         if (getServiceChannelFromSetting(serverId) === 'stdio') {
             return connectStdio(execPath, args, cwd, env, outputChannel);

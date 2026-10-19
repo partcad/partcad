@@ -244,6 +244,8 @@ def test_only_the_root_dependency_files_are_dependencies(tmp_path, path):
         ("features/pc_list.feature", "code"),
         ("conftest.py", "code"),
         ("behave.ini", "code"),
+        # Published as it is, and held to the release by a pytest module.
+        ("server.json", "code"),
         ("pyproject.toml", "deps"),
         ("poetry.lock", "deps"),
         ("requirements.txt", "deps"),
@@ -441,6 +443,7 @@ def test_every_top_level_entry_is_classified_deliberately(tmp_path):
         "requirements-dev.in": {"deps"},
         "requirements-lint.txt": {"deps"},
         "requirements.txt": {"deps"},
+        "server.json": {"code"},
         "src": {"code"},
         "tests": {"code"},
         "tools": {"code"},

@@ -128,6 +128,8 @@ that table and for any added to it: what is lower case in an expression is a
 function (``sqrt``, ``sin``) or a parameter, and a parameter is as likely to be
 called ``e`` as a constant is.
 
+.. _serving-two-partcads:
+
 Serving two PartCADs at once
 ----------------------------
 
@@ -308,6 +310,9 @@ changed by it.
 That is for trying a package out against whatever its dependencies are about to release. It is not a way to keep a
 package up to date: what it builds against is then a matter of when you happened to run it, and nothing in the
 package records which commits those were. ``pc update`` is.
+
+How to run a library of packages that other packages pin -- branches, releases, and making a breaking change -- is
+in :doc:`large_projects`.
 
 External packages
 -----------------

@@ -218,12 +218,12 @@ suite("The 3D view's control tree", () => {
         assert.deepStrictEqual(rows(pane), [
             'object mount',
             'node bottom',
-            'ports ports',
+            'ports <ports>',
             'port origin',
-            'interfaces interfaces',
+            'interfaces <interfaces>',
             'interface m3-thru (TL)',
             'port TL-thru-m3',
-            'ports ports',
+            'ports <ports>',
             'port hold',
         ]);
     });
@@ -256,7 +256,7 @@ suite("The 3D view's control tree", () => {
 
         assert.deepStrictEqual(rows(pane), [
             'object bracket',
-            'interfaces interfaces',
+            'interfaces <interfaces>',
             'interface m3-thru',
             'port thru-m3',
         ]);
@@ -382,28 +382,73 @@ suite("The 3D view's control tree", () => {
         assert.strictEqual(twisty.attributes['aria-expanded'], 'true');
     });
 
-    test('the ports and interfaces of a node start folded up', () => {
+    test('the ports and interfaces of a node start folded up, and so does a part', () => {
         const [pane, element] = host();
         const tree = new Tree(element, () => undefined);
         tree.setObject(assembly());
 
-        // The hierarchy is what the pane is for, so the object and its nodes are
-        // open; the two group rows run to a dozen rows for a part and hundreds for
-        // an assembly, and unfolded they bury what they are attached to. An
-        // interface *instance* is not one of those groups - it is one interface,
-        // with the ports it is made of - so it stays open inside the folded group.
+        // The hierarchy is what the pane is for, so the object is open. A part
+        // has nothing under it but what it declares, so it is folded, and the
+        // list of what the assembly holds is not broken up by two group rows per
+        // part. The two group rows run to a dozen rows for a part and hundreds
+        // for an assembly, so they are folded too. An interface *instance* is
+        // not one of those groups - it is one interface, with the ports it is
+        // made of - so it stays open inside the folded group.
         assert.deepStrictEqual(folding(pane), [
             'object mount open',
-            'node bottom open',
-            'ports ports folded',
-            'interfaces interfaces folded',
+            'node bottom folded',
+            'ports <ports> folded',
+            'interfaces <interfaces> folded',
             'interface m3-thru (TL) open',
-            'ports ports folded',
+            'ports <ports> folded',
         ]);
 
         // Folded is about the rows, not about what is drawn: the ports of the
         // assembly itself are still shown.
         assert.ok(tree.visible().has('n:p0'));
+    });
+
+    test('a sub-assembly is open and the parts inside it are folded', () => {
+        const [pane, element] = host();
+        const tree = new Tree(element, () => undefined);
+        tree.setObject({
+            name: '//pkg:widget',
+            label: 'widget',
+            assembly: [
+                {
+                    name: '//pkg:widget:tower',
+                    label: 'tower',
+                    assembly: [part()],
+                },
+            ],
+        });
+
+        assert.deepStrictEqual(folding(pane), [
+            'object widget open',
+            'node tower open',
+            'node bracket folded',
+            'interfaces <interfaces> folded',
+            'interface m3-thru open',
+        ]);
+    });
+
+    test('a part shown on its own is folded too, and its ports are still drawn', () => {
+        const [pane, element] = host();
+        const tree = new Tree(element, () => undefined);
+        tree.setObject(part());
+
+        // No exception for the root: a part is a tree one node deep.
+        assert.deepStrictEqual(folding(pane), [
+            'object bracket folded',
+            'interfaces <interfaces> folded',
+            'interface m3-thru open',
+        ]);
+        assert.deepStrictEqual([...tree.visible()].sort(), ['n', 'n:i0', 'n:interfaces', 'n:p0']);
+
+        // And it opens.
+        const twisty = byClass(pane, 'tree-twisty')[0];
+        twisty.fire('click');
+        assert.strictEqual(twisty.attributes['aria-expanded'], 'true');
     });
 
     test('a folded group still opens', () => {
@@ -608,7 +653,7 @@ suite('The control tree of the 2D and Draft tabs', () => {
         const [pane, tree] = twoD(part());
         assert.deepStrictEqual(rows(pane), [
             'object bracket',
-            'interfaces interfaces',
+            'interfaces <interfaces>',
             'interface m3-thru',
             'port thru-m3',
         ]);
@@ -618,6 +663,15 @@ suite('The control tree of the 2D and Draft tabs', () => {
             internals: false,
             select: ['thru-m3'],
         });
+    });
+
+    test('the 2D tab folds a part the way the 3D view does', () => {
+        // One widget, so one rule: what an assembly holds is listed without the
+        // group rows of every part in it between one part and the next.
+        const [pane] = twoD(assembly());
+        assert.deepStrictEqual(folding(pane).slice(0, 2), ['object mount open', 'node bottom folded']);
+        const [own] = twoD(part());
+        assert.deepStrictEqual(folding(own)[0], 'object bracket folded');
     });
 
     test('the root is ticked and cannot be cleared', () => {
@@ -706,7 +760,7 @@ suite('The control tree of the 2D and Draft tabs', () => {
 
     test('a cleared port row takes the overlay off', () => {
         const [pane, tree] = twoD(part());
-        set(boxOf(pane, 'interfaces'), false);
+        set(boxOf(pane, '<interfaces>'), false);
         assert.deepStrictEqual(tree.overlay(), {
             ports: false,
             interfaces: false,
@@ -719,7 +773,7 @@ suite('The control tree of the 2D and Draft tabs', () => {
         // An assembly is taken at its word about which ports are its own, so
         // reaching the ones inside it is a request of its own.
         const [pane, tree] = twoD(assembly());
-        set(boxOf(pane, 'interfaces'), true);
+        set(boxOf(pane, '<interfaces>'), true);
         // The assembly's own 'hold' is ticked to begin with, as the 3D view
         // ticks it; the child's came back with the group.
         assert.deepStrictEqual(tree.overlay(), {
@@ -732,7 +786,7 @@ suite('The control tree of the 2D and Draft tabs', () => {
 
     test('a port under a cleared node asks for nothing', () => {
         const [pane, tree] = twoD(assembly());
-        set(boxOf(pane, 'interfaces'), true);
+        set(boxOf(pane, '<interfaces>'), true);
         set(boxOf(pane, 'bottom'), false);
         assert.deepStrictEqual(tree.overlay(), {
             ports: true,
@@ -747,7 +801,7 @@ suite('The control tree of the 2D and Draft tabs', () => {
         // the other side: the two sides compose the same string, which is what
         // lets the panel ask for one port of one placement.
         const [pane, tree] = twoD(assembly());
-        set(boxOf(pane, 'interfaces'), true);
+        set(boxOf(pane, '<interfaces>'), true);
         assert.deepStrictEqual(tree.overlay().select.sort(), ['bottom:TL-thru-m3', 'hold']);
 
         // The object's own ports carry no path: they are reported under their

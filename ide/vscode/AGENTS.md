@@ -111,6 +111,16 @@ those rules in TypeScript is a copy that can disagree, and a disagreement means 
 a daemon of its own beside the one `pc` is using. What stays in Node is the socket transport itself, because a
 live notification connection cannot be shelled out.
 
+**`partcad.develIndex` has no fixed default, and its `false` in `package.json` is only what the Settings editor
+shows.** PartCAD reads the public index's `devel` where it runs from its sources and `main` elsewhere, and the
+setting follows the same rule (`getDevelIndexFromSetting`): a value a settings file sets is passed, either way, as
+`--devel-index` and `PC_DEVEL_INDEX` (the variable because the flag can only say yes, and an inherited
+`PC_DEVEL_INDEX=true` would outrank a `false`). With none, an extension running from its sources -- any
+`extensionMode` but `Production` -- passes `true`, and an installed one passes nothing at all, so the PartCAD it
+starts decides for itself: `devel` in the dev container, whose PartCAD is an editable install, `main` from a
+bundle. `inspect()`, not `get()`, is what tells the two apart, since `get()` hands back the declared `false` for
+a setting nobody set.
+
 ### There used to be a second backend
 
 A Python language server under `bundled/tool`, with PartCAD's dependencies vendored into `bundled/libs`,
@@ -531,12 +541,32 @@ The `PartCAD` views `src/terminal.ts` creates are not touched by any of this: th
 surfaces with a no-op `handleInput` and no environment to inherit. The shell it opens to their left is an
 ordinary terminal and gets the tools like any other.
 
+## The MCP server for the editor's agent
+
+`src/common/mcp.ts` contributes an MCP server definition provider (`contributes.mcpServerDefinitionProviders`,
+id `partcad.mcpServers`), so the editor's own agent -- and anything else in VS Code that runs MCP servers --
+has PartCAD's server without anyone writing a `.vscode/mcp.json`. Each workspace folder holding a
+`partcad.yaml` gets one server, `pc -p <folder> mcp`, started in that folder; the server is `pc mcp` and
+everything it does is `partcad_client.mcp_server`'s, so nothing about MCP is implemented here.
+
+The `pc` it names is the one beside the resolved service, `toolsDirectory`'s -- the same directory the terminal
+PATH gets, including a debug window's checkout `.venv` -- which is the whole reason to contribute the server
+rather than tell users to configure it: a hand-written configuration cannot name a bundle this extension
+downloaded. It is refreshed at the same moments as the terminal PATH (activation, any configuration change,
+after `updateServiceBundle`), plus when a workspace folder or a `partcad.yaml` comes or goes.
+
+It is registered from `activateTrusted`, so Restricted Mode offers no server, like it starts nothing else. And
+it is feature-detected even though `engines.vscode` is `^1.101.0`, the release that has the API: a fork reports
+the version it was forked from, and its extension host need not implement every API of it. That `engines` floor
+is this provider's; it was `^1.82.0` before, and `@types/vscode` moves with it (`vsce` refuses typings newer
+than the engine).
+
 ## The `PartCAD` terminal views
 
 `src/terminal.ts`, `PartcadTerminals`. What the user sees, and why each part is built the way it is:
 
 - **Nothing opens until there is output.** The first write in a window opens a view, split to the right of a
-  shell named `Shell`: one already open, or a new one running the user's default profile with `SHELL_BANNER` at
+  shell named `Shell`: one already open, or a new one running the user's default profile with `shellBanner` at
   the top (`TerminalOptions.message` is written into the view, not sent to the shell). Activation runs the health
   checks as a logged process, which ends in a `DONE:` line at the least, so the pair appears at every start, as
   the single terminal used to.
@@ -548,7 +578,18 @@ ordinary terminal and gets the tools like any other.
   and would otherwise turn a light theme's yellow into brown, tone by tone. A cell's main tone is its
   *background* wherever it can be: the terminal draws block characters itself only with GPU acceleration on,
   and from the font they leave seams between cells, where a background never does. Lines stay within 65
-  columns -- the logo, a gap and the longest sentence -- for the shell's half of a split panel.
+  columns -- the logo, a gap and the longest sentence (`BANNER_BESIDE_COLUMNS`) -- for the shell's half of a
+  split panel.
+- **In a shell narrower than that, the invitation goes under the logo.** Beside it, the terminal would wrap
+  each sentence onto a row of its own between two rows of the logo, cutting the logo into strips. The width
+  has to be known when the shell is created, since `TerminalOptions.message` is fixed then, and an extension is
+  told the width of a pseudoterminal and of no other terminal -- `Terminal` has no dimensions in the stable API.
+  So it is the `PartCAD` view's: a split is even, and the view is as wide as the shell it was split off. That
+  view does not exist yet when its shell is made, so the width is the one the last such view had, kept in
+  `globalState` (`SHELL_COLUMNS_KEY`); a view from the "+" menu is beside no shell and is not counted. With
+  nothing kept yet -- the first shell on a machine -- the invitation goes beside the logo, which is what a
+  panel along the bottom of the window has room for. A shell narrowed after it was made is not redrawn: the
+  banner was written once and is the terminal's from then on.
 - **Closing a view keeps it closed.** `partcad.reopenTerminal` defaults to `false` now; it used to reopen the
   view on the next log line, which is fighting the user. "PartCAD: Show Terminal" and the `PartCAD` entry in the
   terminal panel's "+" menu (`contributes.terminal.profiles`, `partcad.terminal`) open one again. In Restricted

@@ -104,6 +104,7 @@ class SketchFactoryBuild123d(SketchFactoryPython):
             exitcode, response_serialized, errors = await self.runtime.run_async(
                 command,
                 request_serialized,
+                session=self.session,
             )
             if exitcode != 0 and len(errors) == 0:
                 errors = "%s: %s: Failed to instantiate" % (sketch.project_name, sketch.name)

@@ -5,12 +5,28 @@ Feature: `pc init` command
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
 
-  @pc-init
+  @pc-init @requires-network
   Scenario: Initialize new package as public
     Given a file named "partcad.yaml" does not exist
     When I run "pc --no-ansi init"
     Then the command should exit with a status code of "0"
     And STDERR should not contain "PartCAD configuration file is not found"
+    # The public index, tracking its released branch and pinned to the commit
+    # that branch is at now -- which moves, so the commit cannot be written
+    # down here.
+    And STDERR should match the regex ".*Pinned pub to [0-9a-f]{40}, the tip of 'main'"
+    And a file named "partcad.yaml" should contain "url: https://github.com/partcad/partcad-index.git"
+    And a file named "partcad.yaml" should contain "track: main"
+    And a file named "partcad.yaml" should contain "revision: "
+
+  @pc-init
+  Scenario: Initialize new package as public with no network
+    # Creating a package does not need the network: the index is left
+    # tracking its branch, unpinned, and 'pc update' pins it later.
+    Given a file named "partcad.yaml" does not exist
+    When I run "pc --no-ansi --offline init"
+    Then the command should exit with a status code of "0"
+    And STDERR should contain "Not pinning pub: PartCAD is configured to work offline"
     And a file named "partcad.yaml" should have YAML content:
       """
       partcad: ">=\\d+\\.\\d+\\.\\d+"
@@ -63,6 +79,19 @@ Feature: `pc init` command
     And a file named ".cursor/skills/init/SKILL.md" should not exist
     And the skill "pc-init" should be named after its directory
     And STDERR should contain "Installed the 'pc' plugin"
+    # And the MCP server the skills' agent can drive PartCAD through.
+    And a file named ".mcp.json" should be created
+    And a file named ".cursor/mcp.json" should be created
+    And STDERR should contain "Added the PartCAD MCP server"
+
+  @pc-init @agent-skills @mcp
+  Scenario: Install the skills without the MCP server
+    Given a file named "partcad.yaml" does not exist
+    When I run "pc --no-ansi init --no-mcp"
+    Then the command should exit with a status code of "0"
+    And a file named ".cursor/skills/pc-init/SKILL.md" should be created
+    And a file named ".mcp.json" should not exist
+    And a file named ".cursor/mcp.json" should not exist
 
   @pc-init @agent-skills @skills-only
   Scenario: Install the skills into a repository that has a package already

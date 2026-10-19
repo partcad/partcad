@@ -23,17 +23,19 @@ that is wrong.
 
 What is written is a value 'partcad.yaml' reads back as the text it is. The file
 is read as YAML 1.1, where an unquoted value is typed by what it looks like: a
-commit id is hex, and one made of decimal digits alone is read as an int. The
-reader turns most of those back into the text they were written as, but not an
-octal-looking one -- a leading '0' and no digit above '7' -- whose text is gone
-by then (see 'project_factory_git.ref_text'). So a value that would not be read
-back as itself is quoted, and every other is written plain, as it always was.
+commit id is hex, and one made of decimal digits alone is read as an int.
+PartCAD keeps the text of such an int (see 'partcad_utils.config_yaml'), but
+PartCAD is not the file's only reader: 'pc lint' holds it to the schema, which
+says a revision is a string. So a value that would not be read back as itself is
+quoted, and every other is written plain, as it always was.
 """
 
 import re
 import typing
 
 import yaml
+
+from partcad_utils import config_yaml
 
 _TOP_LEVEL_SECTION = "dependencies"
 
@@ -53,12 +55,13 @@ _REVISION_RE = re.compile(
 def plain_reads_back(value: str) -> bool:
     """Whether 'value', written unquoted, is read back from 'partcad.yaml' as this very text.
 
-    The question is put to the reader 'partcad.yaml' is read with (PyYAML's
-    'safe_load', see 'ProjectLocal') rather than to a list of what looks
-    numeric, so the two cannot disagree.
+    The question is put to the reader 'partcad.yaml' is read with
+    ('config_yaml.load', see 'ProjectLocal') rather than to a list of what looks
+    numeric, so the two cannot disagree. An int it keeps the text of is still
+    an int, and not this text.
     """
     try:
-        return yaml.safe_load("value: %s" % value) == {"value": value}
+        return config_yaml.load("value: %s" % value) == {"value": value}
     except yaml.YAMLError:
         return False
 

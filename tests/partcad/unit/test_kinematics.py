@@ -205,11 +205,15 @@ TABLE = [
 ]
 
 
-def test_the_old_names_stay_for_the_plugins_and_classify_never_returns_continuous():
-    """'CHAIN' is 'COMPOSITE' under its old name, and 'CONTINUOUS' is kept only to be importable."""
-    assert kinematics.CHAIN == kinematics.COMPOSITE == "composite"
-    assert kinematics.CONTINUOUS == "continuous"
-    assert kinematics.CONTINUOUS not in {kind for _, _, kind in TABLE}
+def test_the_old_names_are_gone_and_classify_never_returns_them():
+    """One turn is 'revolute' whatever its bounds, and what no native joint has is 'composite'.
+
+    'continuous' and 'chain' were kept importable as 'CONTINUOUS' and 'CHAIN'
+    only until both engine plugins stopped using them, and both have.
+    """
+    assert not hasattr(kinematics, "CONTINUOUS")
+    assert not hasattr(kinematics, "CHAIN")
+    assert {"continuous", "chain"}.isdisjoint({kind for _, _, kind in TABLE})
     assert set(kinematics.NATIVE) == {kind for _, _, kind in TABLE} - {kinematics.FIXED, kinematics.COMPOSITE}
 
 

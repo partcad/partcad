@@ -129,6 +129,13 @@ function itemsOf(node: ShowNode, path: number[], options: TreeOptions, owner: re
     // asked for is not it.
     const drawn = depth === 0 && options.portsDrawn !== false;
     const deep = depth > 0;
+    // A part starts folded up. All a node that holds no other node has under it
+    // is what it declares, and unfolded that is two group rows per part between
+    // every part of an assembly and the next: the list of what the assembly is
+    // made of, broken up by rows that are not any of it. The root is no
+    // exception, for the same reason the rule is not about depth: a part is a
+    // tree one node deep.
+    const collapsed = children.length === 0;
 
     if (options.ports === false) {
         // A dimensioned drawing is of the solid. Nothing is drawn at a port in
@@ -138,7 +145,7 @@ function itemsOf(node: ShowNode, path: number[], options: TreeOptions, owner: re
             name: nodeLabel(node),
             kind: depth === 0 ? 'object' : 'node',
             checked: true,
-            collapsed: false,
+            collapsed,
             children,
             deep,
         };
@@ -147,7 +154,11 @@ function itemsOf(node: ShowNode, path: number[], options: TreeOptions, owner: re
     if (loose.length > 0) {
         children.push({
             id: portsGroupId(path),
-            name: 'ports',
+            // In angle brackets, and drawn in italics: a group row is a section
+            // of a declaration rather than a thing of its own, and in an
+            // assembly it sits in the list of the things it holds, where a link
+            // called 'ports' could sit too.
+            name: '<ports>',
             kind: 'ports',
             checked: drawn,
             // Folded up to begin with. What a reader of the pane is looking at is
@@ -172,7 +183,7 @@ function itemsOf(node: ShowNode, path: number[], options: TreeOptions, owner: re
     if (interfaces.length > 0) {
         children.push({
             id: interfacesGroupId(path),
-            name: 'interfaces',
+            name: '<interfaces>',
             kind: 'interfaces',
             checked: drawn,
             collapsed: true,
@@ -205,8 +216,9 @@ function itemsOf(node: ShowNode, path: number[], options: TreeOptions, owner: re
         name: nodeLabel(node),
         kind: depth === 0 ? 'object' : 'node',
         checked: true,
-        // The hierarchy itself is what the pane is for, so it is open.
-        collapsed: false,
+        // The hierarchy itself is what the pane is for, so an assembly is open;
+        // a part is folded (see above).
+        collapsed,
         children,
         deep,
     };

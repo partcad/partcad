@@ -148,6 +148,10 @@ The commands and options supported by PartCAD CLI:
     ide          Show an object in the Digital Thread or another application, or ask the IDE
                  what it shows (view, open, state)
 
+  Interacting with AI agents:
+    mcp          Serve the Model Context Protocol on stdio, so that an AI agent can drive
+                 PartCAD
+
   Workflow commands:
     supply       Manage the supply chain of the current project
 

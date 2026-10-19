@@ -1,0 +1,16 @@
+# The plate against the frame's -Y face, on a planar joint: two moves across
+# the face and the turn about the line square to it. In the contact frame the
+# first move, X, is straight up and the second, Y, is level; the turn is about
+# the plate's own middle, where its centre of mass is. It starts 50 mm up,
+# 100 mm along and turned 30 degrees.
+links:
+  - part: frame
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: plate
+    connect:
+      name: frame
+      with: face
+      to: flank
+      joint: wall
+      motion: planar
+      toParams: { moveX: 50, moveY: 100, turnZ: 30 }

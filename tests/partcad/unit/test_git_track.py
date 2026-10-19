@@ -37,6 +37,7 @@ from partcad.actions.package.update import pin_tracked_dependencies, update, wor
 from partcad.project_factory_git import GitImportConfiguration, cache_dir_name, get_clone_options
 from partcad.revision import package_revision
 from partcad.user_config import UserConfig
+from partcad_utils import config_yaml
 
 # At a fixed time, so that every commit id below is the same in every run: a
 # test whose outcome depends on what an id looks like fails every time or never.
@@ -314,6 +315,10 @@ def test_update_leaves_a_current_pin_alone(tmp_path, upstream, user_config, shap
 # one a test can make, but the one whose plain text YAML reads as a number.
 DIGITS = "8759402447468759402447468759402447468759"
 
+# Spelled the way YAML 1.1 reads as an int, and as one that is not the name:
+# 1000, 83, 31, 5 and 90.
+SPELLED_LIKE_INTS = ["1_000", "0123", "0x1f", "0b101", "1:30"]
+
 
 def test_update_writes_a_pin_of_digits_that_is_read_back_as_the_pin(tmp_path, upstream, user_config, monkeypatch):
     workspace = tmp_path / "ws"
@@ -330,16 +335,66 @@ def test_update_writes_a_pin_of_digits_that_is_read_back_as_the_pin(tmp_path, up
     assert config.read_text() == before
 
 
-def test_update_reads_a_track_of_digits_as_the_branch_it_names(tmp_path, upstream, user_config, monkeypatch):
+@pytest.mark.parametrize("track", ["2024"] + SPELLED_LIKE_INTS)
+def test_update_reads_a_track_of_digits_as_the_branch_it_names(tmp_path, upstream, user_config, monkeypatch, track):
     workspace = tmp_path / "ws"
-    write_package(workspace, dependency(upstream, track="2024"))
+    write_package(workspace, dependency(upstream, track=track))
     asked = []
     monkeypatch.setattr(
         rfg, "tracked_commit", lambda user_config, url, track=None: asked.append(track) or (track, DIGITS)
     )
 
     assert pin(workspace, user_config)["pinned"] == 1
-    assert asked == ["2024"]
+    assert asked == [track]
+
+
+# A branch or a tag name YAML reads as an int, and a decoy named after that int:
+# what PartCAD would have asked for, had it gone by the int.
+NAMED_LIKE_INTS = [("1_000", "1000"), ("0123", "83"), ("0x1f", "31")]
+
+
+def named(upstream, kind: str, name: str, decoy: str) -> str:
+    """Make 'name' a branch or a tag at a new commit, and 'decoy' one at the commit after; 'main' moves on past both."""
+    wanted = upstream.commit("wanted")
+    upstream.repo.references.create("refs/%s/%s" % (kind, name), pygit2.Oid(hex=wanted))
+    decoyed = upstream.commit("decoy")
+    upstream.repo.references.create("refs/%s/%s" % (kind, decoy), pygit2.Oid(hex=decoyed))
+    upstream.commit("main")
+    return wanted
+
+
+@pytest.mark.parametrize("name, decoy", NAMED_LIKE_INTS)
+def test_a_track_spelled_like_an_int_is_the_branch_of_that_name(tmp_path, upstream, user_config, name, decoy):
+    """'track: 1_000' is branch '1_000', not the branch '1000' that YAML's int would name."""
+    named(upstream, "heads", name, decoy)
+    workspace = tmp_path / "ws"
+    write_package(workspace, dependency(upstream, track=name))
+
+    assert load_version(workspace, user_config) == "wanted"
+
+
+@pytest.mark.parametrize("name, decoy", NAMED_LIKE_INTS)
+def test_update_pins_a_track_spelled_like_an_int_to_the_branch_of_that_name(
+    tmp_path, upstream, user_config, name, decoy
+):
+    wanted = named(upstream, "heads", name, decoy)
+    workspace = tmp_path / "ws"
+    config = write_package(workspace, dependency(upstream, track=name))
+
+    ctx, stats = run_update(workspace, user_config)
+
+    assert stats["pinned"] == 1 and stats["failed"] == 0
+    assert config.read_text() == dependency_text(upstream, track=name, revision=wanted)
+    assert (Path(ctx.get_project("//dep").config_dir) / "version.txt").read_text() == "wanted"
+
+
+@pytest.mark.parametrize("name, decoy", [("2024", "2023")] + NAMED_LIKE_INTS)
+def test_a_revision_naming_a_tag_spelled_like_an_int_is_that_tag(tmp_path, upstream, user_config, name, decoy):
+    named(upstream, "tags", name, decoy)
+    workspace = tmp_path / "ws"
+    write_package(workspace, dependency(upstream, revision=name))
+
+    assert load_version(workspace, user_config) == "wanted"
 
 
 def test_update_refuses_a_track_whose_text_yaml_lost(tmp_path, upstream, user_config, caplog):
@@ -508,31 +563,39 @@ def test_which_copy_it_is_kept_in(config, settings, expected):
 
 def read(text: str, **settings):
     """What a dependency declared as 'text' asks for, read as 'ProjectLocal' reads 'partcad.yaml'."""
-    return _Import(yaml.safe_load("name: //dep\nurl: %s\n%s" % (URL, text)), **settings)
+    return _Import(config_yaml.load("name: //dep\nurl: %s\n%s" % (URL, text)), **settings)
+
+
+@pytest.mark.parametrize(
+    "written, expected, commit",
+    [
+        ("87594a244746", "87594a244746", True),
+        # An int to YAML, and its decimal text is what was written.
+        ("875940244746", "875940244746", True),
+        (DIGITS, DIGITS, True),
+        ("'875940244746'", "875940244746", True),
+        # An octal-looking commit id: 21913025 to YAML.
+        ("0123456701", "0123456701", True),
+        # Text to YAML already, however numeric they look.
+        ("123e4567", "123e4567", True),
+        ("0189abcdef", "0189abcdef", True),
+        # A tag named like a number, which YAML reads as one.
+        ("2024", "2024", False),
+    ]
+    + [(written, written, False) for written in SPELLED_LIKE_INTS],
+)
+def test_a_revision_is_read_as_the_text_it_was_written_as(written, expected, commit):
+    imported = read("revision: %s\n" % written)
+    assert imported.import_revision == expected
+    assert imported.import_cache_name == expected
+    # Which is what decides how it is downloaded: by its id, as a commit, or by name.
+    assert get_clone_options(imported.import_revision).single_commit is commit
 
 
 @pytest.mark.parametrize(
     "written, expected",
-    [
-        ("87594a244746", "87594a244746"),
-        # An int to YAML, and its decimal text is what was written.
-        ("875940244746", "875940244746"),
-        (DIGITS, DIGITS),
-        ("'875940244746'", "875940244746"),
-        # Text to YAML already, however numeric they look.
-        ("123e4567", "123e4567"),
-        ("0189abcdef", "0189abcdef"),
-    ],
+    [("main", "main"), ("2024", "2024"), ("'2024'", "2024")] + [(written, written) for written in SPELLED_LIKE_INTS],
 )
-def test_a_revision_is_read_as_the_text_it_was_written_as(written, expected):
-    imported = read("revision: %s\n" % written)
-    assert imported.import_revision == expected
-    assert imported.import_cache_name == expected
-    # Which is what decides how it is downloaded: by its id, as a commit.
-    assert get_clone_options(imported.import_revision).single_commit
-
-
-@pytest.mark.parametrize("written, expected", [("main", "main"), ("2024", "2024"), ("'2024'", "2024")])
 def test_a_track_is_read_as_the_text_it_was_written_as(written, expected):
     imported = read("track: %s\n" % written)
     assert imported.import_track == expected
@@ -746,7 +809,7 @@ def test_a_claim_goes_with_the_process_that_held_it(tmp_path, upstream, user_con
 
 
 def test_an_unpinned_copy_another_context_is_built_from_is_not_moved_under_it(tmp_path, upstream, user_config):
-    """'pc init' tracks the index with no pin yet: the commit it was downloaded at is the one it reads from."""
+    """'pc init' offline tracks the index with no pin yet: the commit it was downloaded at is the one it reads from."""
     write_package(tmp_path / "one", dependency(upstream, track="main"))
     one = pc.Context(str(tmp_path / "one"), search_root=False, user_config=user_config)
     assert one.get_project("//dep") is not None
@@ -852,6 +915,56 @@ def test_add_dep_adds_nothing_offline(tmp_path, upstream, user_config):
 
     assert not ok
     assert dependencies is None
+
+
+# ---- pc init --------------------------------------------------------------------
+
+INDEX_URL = "https://github.com/partcad/partcad-index.git"
+
+
+def initialized(tmp_path, user_config, upstream=None):
+    """Create a public package; the template's index is served by 'upstream', if given."""
+    if upstream is not None:
+        user_config.set("dependencies.overrides.url", {upstream.path.as_uri(): INDEX_URL})
+    config = tmp_path / "ws" / "partcad.yaml"
+    config.parent.mkdir()
+    assert pc.create_package(str(config), {"private": False}, user_config=user_config)
+    return config, yaml.safe_load(config.read_text())["dependencies"]["pub"]
+
+
+def test_init_pins_the_index_to_the_tip_of_main(tmp_path, upstream, user_config):
+    # As the real index is: its default branch is 'devel', which is ahead of or
+    # behind the released 'main' -- and 'main' is what a new package gets.
+    unreleased = upstream.repo.head.peel(pygit2.Commit)
+    released = upstream.commit("B")
+    upstream.repo.branches.local.create("devel", unreleased)
+    upstream.repo.set_head("refs/heads/devel")
+
+    config, pub = initialized(tmp_path, user_config, upstream)
+
+    # The URL the package is published with, not the one that answered.
+    assert pub == {"type": "git", "url": INDEX_URL, "track": "main", "revision": released}
+    # Written the way 'pc update' writes it, so the template's comments survive.
+    assert "track: main\n    revision: %s\n" % released in config.read_text()
+    assert "# Add dependencies here" in config.read_text()
+
+
+def test_init_offline_creates_the_package_tracking_main_unpinned(tmp_path, user_config, caplog):
+    user_config.offline = True
+
+    _, pub = initialized(tmp_path, user_config)
+
+    assert pub == {"type": "git", "url": INDEX_URL, "track": "main"}
+    assert "Run 'pc update' to pin it" in caplog.text
+
+
+def test_init_creates_the_package_unpinned_when_the_branch_cannot_be_found(tmp_path, upstream, user_config, caplog):
+    upstream.repo.branches.local["main"].rename("trunk")
+
+    _, pub = initialized(tmp_path, user_config, upstream)
+
+    assert "revision" not in pub and pub["track"] == "main"
+    assert "There is no branch 'main'" in caplog.text and "Run 'pc update' to pin it" in caplog.text
 
 
 def test_a_pin_the_remote_does_not_have_keeps_the_copy_and_says_why(tmp_path, upstream, user_config, caplog):

@@ -89,6 +89,13 @@ class Test(ABC):
     # not carry it.
     NAMED = "named"
 
+    # A key 'ManufacturabilityTest' sets on 'test_ctx' as it tests what another
+    # object is made of - an assembly's parts and the sub-assemblies it orders
+    # assembled, a part's stock - to hold that object to being made whatever
+    # its own 'manufacturable:' says. It is part of the verdict's key wherever
+    # it can change the verdict (see 'test_cached()').
+    FORCE_MANUFACTURING = "force_manufacturing"
+
     # The wrappers this test runs in a sandbox to reach its verdict, by the name
     # 'wrapper.get()' takes. The version each reports is part of the verdict's
     # key, so raising it has every verdict it reached reached again (see
@@ -159,6 +166,25 @@ class Test(ABC):
             manufacturable = int(bool(getattr(shape, "is_manufacturable", True)))
             suffix = await self.cache_key_suffix(ctx, shape)
             cache_key = f"test.{self.name}.manufacturable={manufacturable}{suffix}"
+            if not manufacturable:
+                # And, for an object that says it is not to be made, whether it
+                # is being held to being made all the same. The same object
+                # asked the same question answers differently then - "not
+                # applicable" on its own, "cannot be purchased or manufactured"
+                # as a part of a manufacturable assembly - and under one key the
+                # check that ran first answered for both: the assembly passed on
+                # its part's own "not applicable", or the part failed its own
+                # run with the assembly's failure, depending on which of the two
+                # a package-wide 'pc test' reached first.
+                #
+                # Nothing is added for an object that is to be made, which
+                # answers the same either way, so an assembly's walk still reads
+                # the verdicts the package's own run left for its parts. ('SimTest'
+                # says nothing in such a walk at all, and does not ask the cache
+                # then.) And it is always there, 0 or 1, so that a verdict a
+                # forced run left under the key the two used to share is never
+                # read back. Read as 'ManufacturabilityTest' reads it: present.
+                cache_key += ".forced=%d" % int(self.FORCE_MANUFACTURING in test_ctx)
             versions = code_version.wrappers_key(self.WRAPPERS)
             if versions is not None:
                 cache_key += ".code=" + versions

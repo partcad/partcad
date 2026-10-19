@@ -182,6 +182,12 @@ command_groups = [
         "commands": ["ide"],
     },
     {
+        # The same objects in front of an agent instead of a person: `pc mcp`
+        # is what an MCP client starts to drive PartCAD with.
+        "name": "Interacting with AI agents",
+        "commands": ["mcp"],
+    },
+    {
         "name": "Workflow commands",
         "commands": ["supply"],
     },
@@ -519,6 +525,13 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             else:
                 setattr(pc_user_config, attrib, value)
     _bypass_cache(ctx, pc_user_config, kwargs)
+
+    # `pc mcp` speaks the Model Context Protocol on stdout, and the ANSI renderer
+    # draws on stdout. An MCP client starts the server with whatever arguments
+    # its configuration names, and a configuration that forgot `--no-ansi` must
+    # not corrupt the protocol with a progress bar, so the choice is not offered.
+    if ctx.invoked_subcommand == "mcp":
+        no_ansi = True
 
     # Initialize logging before using telemetry, as telemetry may use logging.
     # The remote-log client wraps logging_ansi_terminal (ANSI) or a plain stderr

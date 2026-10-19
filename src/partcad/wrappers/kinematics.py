@@ -261,13 +261,6 @@ FLOATING = "floating"
 COMPOSITE = "composite"
 NATIVE = (REVOLUTE, PRISMATIC, CYLINDRICAL, SCREW, UNIVERSAL, BALL, PLANAR, FLOATING)
 
-# Kept only until partcad-sim-mujoco and partcad-sim-gazebo stop using them, and
-# to be removed then: both plugins import this module, and their CI installs
-# PartCAD from 'devel'. 'classify()' never returns CONTINUOUS -- one turn is a
-# REVOLUTE whatever its bounds -- and CHAIN is COMPOSITE under its old name.
-CONTINUOUS = "continuous"
-CHAIN = COMPOSITE
-
 # The role of the fixed step a body's joint starts with: where the node it is
 # connected to sits in the parent body (see 'Joint').
 ROLE_PARENT_FRAME = "parentFrame"

@@ -31,9 +31,7 @@ declares is checked masked rather than rendered (see 'assy_lint.validate_source'
 import copy
 import os
 
-import yaml
-
-from . import __version__, assy_lint, config_template, pcignore, template_render
+from . import __version__, assy_lint, config_template, config_yaml, pcignore, template_render
 from .parameters import coerce_parameter_value, normalize_parameters
 
 # How far up from the file the search for a package declaring it goes. A
@@ -324,7 +322,7 @@ def _load(config_path: str, search_path):
         # of a package that will not render is still plain YAML.
         rendered = text
     try:
-        return yaml.safe_load(rendered)
+        return config_yaml.load(rendered)
     except Exception:  # pylint: disable=broad-except
         # Not only 'yaml.YAMLError': a date that is not one raises 'ValueError',
         # and nesting deep enough 'RecursionError'.

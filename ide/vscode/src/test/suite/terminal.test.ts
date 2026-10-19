@@ -16,7 +16,15 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 
-import { LOGO, PartcadTerminals, PartcadTerminalsOptions, ReplayBuffer, SHELL_BANNER } from '../../terminal';
+import {
+    BANNER_BESIDE_COLUMNS,
+    LOGO,
+    PartcadTerminals,
+    PartcadTerminalsOptions,
+    ReplayBuffer,
+    SHELL_COLUMNS_KEY,
+    shellBanner,
+} from '../../terminal';
 
 const ERASE = '\x1b[1A\x1b[2K';
 const NO_WRAP = '\x1b[?7l';
@@ -68,15 +76,55 @@ suite('PartCAD terminal: replay buffer', () => {
     });
 });
 
+const INVITATION = [
+    'Start your favorite coding agent here,',
+    'side by side with the PartCAD terminal log view,',
+    'or simply run "pc"!',
+];
+
+/** A banner as the terminal shows it: without its colours, one line at a time. */
+function plainLines(banner: string): string[] {
+    return banner.replace(/\x1b\[[0-9;]*m/g, '').split('\r\n');
+}
+
 suite('PartCAD terminal: the shell banner', () => {
     test('says what the shell is for, and fits half a terminal', () => {
-        const plain = SHELL_BANNER.replace(/\x1b\[[0-9;]*m/g, '');
-        assert.ok(plain.includes('Start your favorite coding agent here,'));
-        assert.ok(plain.includes('side by side with the PartCAD terminal log view,'));
-        assert.ok(plain.includes('or simply run "pc"!'));
-        for (const line of plain.split('\r\n')) {
+        const lines = plainLines(shellBanner());
+        for (const sentence of INVITATION) {
+            assert.ok(
+                lines.some((line) => line.includes(sentence)),
+                `missing: ${sentence}`,
+            );
+        }
+        for (const line of lines) {
             assert.ok(line.length <= 65, `too wide for a split panel: ${line}`);
             assert.ok(!line.includes('\n'), 'a pseudoterminal-style \\r\\n, not a bare \\n');
+        }
+    });
+
+    test('beside the logo in a shell just wide enough for that, and in one of unknown width', () => {
+        const lines = plainLines(shellBanner(BANNER_BESIDE_COLUMNS));
+        assert.strictEqual(Math.max(...lines.map((line) => line.length)), BANNER_BESIDE_COLUMNS);
+        assert.ok(lines.some((line) => line.endsWith(INVITATION[0]) && line.length > INVITATION[0].length + 3));
+        assert.strictEqual(shellBanner(), shellBanner(BANNER_BESIDE_COLUMNS));
+        assert.strictEqual(shellBanner(200), shellBanner(BANNER_BESIDE_COLUMNS));
+    });
+
+    test('under the logo in a shell any narrower, where it would be wrapped between rows of the logo', () => {
+        const lines = plainLines(shellBanner(BANNER_BESIDE_COLUMNS - 1));
+        const first = lines.indexOf(' ' + INVITATION[0]);
+        assert.ok(first > 0, `not on a line of its own: ${lines.join('|')}`);
+        assert.deepStrictEqual(
+            lines.slice(first, first + INVITATION.length),
+            INVITATION.map((text) => ' ' + text),
+        );
+        const logo = lines.slice(0, first).filter((line) => line.trim() !== '');
+        assert.strictEqual(logo.length, LOGO.length / 2, 'the whole logo is above it');
+        for (const line of logo) {
+            assert.ok(line.length <= 1 + LOGO[0].length / 2, `something beside the logo: ${line}`);
+        }
+        for (const line of lines) {
+            assert.ok(line.length < BANNER_BESIDE_COLUMNS, `too wide: ${line}`);
         }
     });
 
@@ -158,6 +206,25 @@ class Output {
     }
 }
 
+/** A `globalState` of its own, for a test to read what was remembered in it. */
+class Memory implements vscode.Memento {
+    private readonly values = new Map<string, unknown>();
+
+    keys(): readonly string[] {
+        return [...this.values.keys()];
+    }
+
+    get<T>(key: string): T | undefined;
+    get<T>(key: string, defaultValue: T): T;
+    get<T>(key: string, defaultValue?: T): T | undefined {
+        return this.values.has(key) ? (this.values.get(key) as T) : defaultValue;
+    }
+
+    async update(key: string, value: unknown): Promise<void> {
+        this.values.set(key, value);
+    }
+}
+
 suite('PartCAD terminal: views', () => {
     let count = 0;
     let shellName = '';
@@ -202,12 +269,51 @@ suite('PartCAD terminal: views', () => {
         partcad.write('INFO: hello\r\n');
         assert.strictEqual(shells().length, 1);
         assert.strictEqual(views().length, 1);
-        assert.strictEqual((shells()[0].creationOptions as vscode.TerminalOptions).message, SHELL_BANNER);
+        assert.strictEqual((shells()[0].creationOptions as vscode.TerminalOptions).message, shellBanner());
         const output = new Output(views()[0]);
         await waitFor(() => output.text.includes('INFO: hello'), 'the first output, replayed on open');
 
         partcad.write('INFO: again\r\n');
         await waitFor(() => output.text.includes('INFO: again'), 'output written to the open view');
+    });
+
+    test('a shell is made for the width the view beside the last one had', async () => {
+        // Narrower than any terminal can be, so that the view's own width is seen
+        // to replace it: a view on a Windows runner has been 18 columns wide.
+        const narrow = 0;
+        const state = new Memory();
+        await state.update(SHELL_COLUMNS_KEY, narrow);
+        const partcad = make({ state });
+        partcad.write('INFO: hello\r\n');
+        const [first] = shells();
+        assert.strictEqual((first.creationOptions as vscode.TerminalOptions).message, shellBanner(narrow));
+
+        await waitFor(() => state.get(SHELL_COLUMNS_KEY) !== narrow, 'the view to say how wide it is');
+        const columns = state.get<number>(SHELL_COLUMNS_KEY);
+        assert.ok(typeof columns === 'number' && columns > narrow, `remembered ${columns}`);
+
+        first.dispose();
+        views()[0].dispose();
+        await waitFor(() => shells().length === 0 && views().length === 0, 'the pair to close');
+        partcad.show();
+        assert.strictEqual(shells().length, 1);
+        assert.strictEqual(
+            (shells()[0].creationOptions as vscode.TerminalOptions).message,
+            shellBanner(state.get<number>(SHELL_COLUMNS_KEY)),
+        );
+    });
+
+    test('a view from the "+" menu, beside no shell, says nothing about how wide one is', async () => {
+        const state = new Memory();
+        const partcad = make({ state });
+        const plus = vscode.window.createTerminal(
+            partcad.provideTerminalProfile().options as vscode.ExtensionTerminalOptions,
+        );
+        plus.show(true);
+        const output = new Output(plus);
+        await waitFor(() => output.text.includes('Keep an eye on'), 'the view to open');
+        await sleep(500);
+        assert.deepStrictEqual(state.keys(), []);
     });
 
     test('output reaches every open view', async () => {

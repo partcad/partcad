@@ -16,7 +16,13 @@ First, the current directory needs to be initialized as a PartCAD package.
     pc init
 
 If there is no ``-p`` flag passed to ``pc init``
-then the dependency on the public PartCAD repository is added automatically.
+then the dependency on the public PartCAD repository is added automatically. It tracks the
+repository's released branch, ``main``, and is pinned to the commit ``main`` is at as the package
+is created: ``pc init`` writes that commit into a ``revision:`` line under ``track: main``, and
+from then on the package is built against that commit, wherever ``main`` goes, until you run
+``pc update`` (see :ref:`pinning-dependencies`). Offline, or when the repository cannot be
+reached, the package is created all the same, with no ``revision:`` yet, and a warning says to
+run ``pc update`` to pin it.
 
 ``pc init`` also adds a **Render** command to ``.vscode/launch.json``, at the root of the git
 repository it is run in (next to the package, when there is no repository). It shows up in the
@@ -30,7 +36,8 @@ skills are ``/pc:gen-part``, ``/pc:render`` and the rest; Cursor, which has no p
 them, gets the same skills in ``.cursor/skills/`` named ``pc-gen-part``, ``pc-render`` and so on.
 They come from the PartCAD you have installed, so they always match it. Pass ``--no-skills`` if you
 would rather not have them, and ``pc init --skills-only`` to install them into a package you created
-before this version -- that touches nothing else.
+before this version -- that touches nothing else. Each agent also gets PartCAD's :doc:`MCP server <mcp>`
+in its ``.mcp.json`` or ``.cursor/mcp.json``, unless you pass ``--no-mcp``.
 
 Alternatively, manually create ``partcad.yaml`` with the following content:
 
@@ -44,10 +51,9 @@ Alternatively, manually create ``partcad.yaml`` with the following content:
         url: https://github.com/partcad/partcad-index.git
         track: main
 
-Pin it to the commit ``main`` is at now. ``pc update`` writes that commit into a
-``revision:`` line under ``track: main``, and from then on the package is built
-against that commit, wherever ``main`` goes -- until you run ``pc update`` again
-(see :ref:`pinning-dependencies`):
+Then pin it to the commit ``main`` is at now, the way ``pc init`` would have.
+``pc update`` writes that commit into a ``revision:`` line under ``track: main``,
+and moves it again each time you run it:
 
   .. code-block:: shell
 

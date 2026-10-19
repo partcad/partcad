@@ -95,6 +95,17 @@ at all).
   polled rather than blocked on: they are taken from several event loops at once (a part is instantiated on a
   worker thread running a loop of its own), and a task that blocked its own loop waiting for a lock the task
   beside it is about to release would never see it released.
+- **A key is read once its shape is prepared** (`Shape.prepare_async(wait=True)`): a preparation hashes in what
+  a shape is made of -- the file a `fileFrom` or a plugin fetches, the keys of what an assembly links to -- and a
+  hash adds its files when it is first read, so a key read while one is under way is kept, half of it missing, for
+  the rest of the process. Every key reader (`get_cache_key_async()`, `get_wrapped()`, `Test.test_cached()`)
+  waits for a preparation begun elsewhere, and two waits are refused rather than started, because they could
+  never end: one that would close a cycle of preparations (each records what it waits for), and a thread that
+  holds a shape's lock waiting for a preparation on another thread, which that lock may be what stops. A refused
+  wait raises `PreparationInFlight`, and the caller goes on without the key, uncached; `_PREPARE_WAIT_MAX` bounds
+  the rest. `get_wrapped()` prepares before it takes its lock for the same reason. A caller that only needs the
+  preparation started passes nothing and returns at once, as before.
+
 - **Location/coordinate format**: 3D locations (OpenCASCADE `TopLoc_Location`) are represented as
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
@@ -975,8 +986,7 @@ at all).
   zero has to be PartCAD's start (`rezeroed()`), and maps what an engine reads back into PartCAD's names and units
   (`joint_map()`, which travels in the names sidecar, and `reading()`). Do not give an exporter a copy of
   the rule, and do not make the core depend on an exporter reading it: three exporters deciding for themselves which
-  parts are one body is three answers to what falls apart. `kinematics.CONTINUOUS` and `CHAIN` are kept only until the
-  engine plugins stop importing them -- their CI installs PartCAD from `devel` -- and nothing in this tree may use them. A scene is also a simulation subject
+  parts are one body is three answers to what falls apart. A scene is also a simulation subject
   (`simulation.SUBJECT_KINDS`), placed in its world by a `scene:` link.
 
 - **One shape, one tree, two forms** (`./src/partcad/shape_envelope.py`,
@@ -1225,8 +1235,8 @@ at all).
   claiming until the cycle collector runs; a claim of this process's that is in the way is probed again after a
   `gc.collect()`, and only one in the way, because the daemon keeps a context per directory and most of them
   agree. Every context built from a copy that can move claims it — a pin, and equally a branch nobody has pinned
-  yet (`pc init`'s index), which reads from the commit it was downloaded at; only a copy named after its commit
-  never moves. A claim only counts where it is in the way: one that agrees with what a load would do leaves that
+  yet (`pc init`'s index, when it was created offline), which reads from the commit it was downloaded at; only a
+  copy named after its commit never moves. A claim only counts where it is in the way: one that agrees with what a load would do leaves that
   load on its ordinary path, the check for an interrupted download included. `forceUpdate` stopped by a claim
   follows the branch as a pin on its tip for that load (`_branch_tip`, one `ls-remote`): the claimed copy if that
   is where the branch is, a commit-named copy if not, and — only when the tip cannot be found out, offline — the
