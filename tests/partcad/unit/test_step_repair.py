@@ -14,6 +14,7 @@ back, and touches nothing else.
 import asyncio
 import importlib.util
 import os
+import sys
 
 import pytest
 
@@ -59,6 +60,37 @@ def test_a_complex_instance_is_left_alone(step_repair):
     # Each partial list in a complex instance holds one supertype's attributes.
     text = "#9 = ( CARTESIAN_TRANSFORMATION_OPERATOR_3D($) GEOMETRIC_REPRESENTATION_ITEM() );"
     assert step_repair.repair_text(text) == (text, 0)
+
+
+def test_commas_inside_nested_lists_do_not_count(step_repair):
+    text = "#1 = X('',(#2,#3),#4);"
+    commas, end = step_repair.top_level_commas(text, text.index("(") + 1)
+    assert [text[i + 1] for i in commas] == ["(", "#"]
+    assert text[end] == ")"
+    # An instance cut off before its closing parenthesis ends with the text.
+    assert step_repair.top_level_commas("('',#2", 1) == ([3], 6)
+
+
+def test_a_file_with_only_complete_operators_is_read_as_it_is(step_repair, tmp_path):
+    complete = tmp_path / "complete.step"
+    complete.write_text("#1 = CARTESIAN_TRANSFORMATION_OPERATOR_2D('','',$,#2,#3,#4,1.);\n")
+    with step_repair.readable(str(complete)) as path:
+        assert path == str(complete)
+
+
+def test_a_repaired_copy_already_gone_is_no_error(step_repair):
+    source = os.path.join(os.path.dirname(PACKAGE), "cadmpeg.step")
+    with step_repair.readable(source) as path:
+        os.remove(path)
+
+
+def test_a_step_assembly_is_read_from_the_repaired_copy():
+    # In process, as the sandbox runs it ('wrapper_step' cannot be: it runs as
+    # it is imported).
+    sys.path.append(os.path.dirname(REPAIR))
+    import wrapper_import_assy
+
+    assert wrapper_import_assy.parse_step_tree(os.path.join(os.path.dirname(PACKAGE), "cadmpeg.step"))
 
 
 def test_a_file_needing_no_repair_is_read_as_it_is(step_repair, tmp_path):

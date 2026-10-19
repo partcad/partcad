@@ -14,10 +14,16 @@ its last feature's result rather than every feature stacked.
 """
 
 import asyncio
+import hashlib
 import importlib.util
 import io
 import os
+import runpy
+import shutil
+import sys
+import tarfile
 import urllib.error
+import zipfile
 
 import pytest
 
@@ -142,6 +148,111 @@ def test_a_download_that_cannot_succeed_is_not_tried_again(tmp_path, monkeypatch
     with pytest.raises(urllib.error.HTTPError):
         tool.fetch("https://example/cadmpeg.tar.xz", str(tmp_path / "cadmpeg.tar.xz"))
     assert len(calls) == 1
+
+
+def _tool():
+    return _script(os.path.join(BUILTIN_IMPORT, "cadmpeg_tool.py"), "cadmpeg_tool_under_test")
+
+
+def _release(tool, monkeypatch, tmp_path, system, asset, member, sha256=None):
+    """Make 'tool' download 'asset', a fake release holding 'member', for 'system'."""
+    archive = tmp_path / asset
+    if asset.endswith(".zip"):
+        with zipfile.ZipFile(archive, "w") as z:
+            z.writestr(member, "#!/bin/sh\n")
+    else:
+        with tarfile.open(archive, "w:xz") as t:
+            content = tmp_path / "content"
+            content.write_text("#!/bin/sh\n")
+            t.add(content, arcname=member)
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    monkeypatch.setattr(tool, "host", lambda: (system, "x86_64"))
+    monkeypatch.setattr(tool, "ASSETS", {(system, "x86_64"): (asset, sha256 or digest)})
+    monkeypatch.setattr(tool, "fetch", lambda url, path: shutil.copyfile(archive, path))
+    monkeypatch.setattr(tool.shutil, "which", lambda name: None)
+
+
+@pytest.mark.parametrize(
+    "system, asset, member",
+    [
+        ("linux", "cadmpeg-x86_64-unknown-linux-gnu.tar.xz", "cadmpeg-x86_64-unknown-linux-gnu/cadmpeg"),
+        ("windows", "cadmpeg-x86_64-pc-windows-msvc.zip", "cadmpeg.exe"),
+    ],
+)
+def test_the_release_is_verified_unpacked_and_kept(tmp_path, monkeypatch, system, asset, member):
+    tool = _tool()
+    _release(tool, monkeypatch, tmp_path, system, asset, member)
+    cache = tmp_path / "cache"
+
+    exe = tool.executable(str(cache))
+
+    assert os.path.basename(exe) == os.path.basename(member)
+    assert os.path.dirname(exe) == str(cache / "cadmpeg" / tool.VERSION / ("%s-x86_64" % system))
+    assert os.path.isfile(exe)
+    # Kept: the second part converted does not download it again.
+    monkeypatch.setattr(tool, "fetch", lambda url, path: pytest.fail("downloaded twice"))
+    assert tool.executable(str(cache)) == exe
+    assert os.listdir(cache / "cadmpeg" / tool.VERSION) == ["%s-x86_64" % system]
+
+
+def test_a_release_that_does_not_match_its_checksum_is_refused(tmp_path, monkeypatch):
+    tool = _tool()
+    _release(tool, monkeypatch, tmp_path, "linux", "cadmpeg.tar.xz", "cadmpeg", sha256="0" * 64)
+    cache = tmp_path / "cache"
+    with pytest.raises(RuntimeError, match="does not match its published checksum"):
+        tool.executable(str(cache))
+    assert os.listdir(cache / "cadmpeg" / tool.VERSION) == []
+
+
+def test_a_release_without_the_program_is_an_error(tmp_path, monkeypatch):
+    tool = _tool()
+    _release(tool, monkeypatch, tmp_path, "linux", "cadmpeg.tar.xz", "README")
+    with pytest.raises(RuntimeError, match="holds no cadmpeg"):
+        tool.executable(str(tmp_path / "cache"))
+
+
+def test_cadmpeg_on_the_path_is_used_as_it_is(tmp_path, monkeypatch):
+    tool = _tool()
+    monkeypatch.setattr(tool.shutil, "which", lambda name: "/opt/bin/cadmpeg")
+    assert tool.executable(str(tmp_path)) == "/opt/bin/cadmpeg"
+
+
+def test_a_platform_cadmpeg_has_no_build_for_is_named(tmp_path, monkeypatch):
+    tool = _tool()
+    monkeypatch.setattr(tool.shutil, "which", lambda name: None)
+    monkeypatch.setattr(tool, "host", lambda: ("plan9", "mips"))
+    with pytest.raises(RuntimeError, match="no build for plan9/mips"):
+        tool.executable(str(tmp_path))
+
+
+@pytest.fixture(scope="module")
+def in_process(ctx):
+    """The script as the sandbox runs it, with cadmpeg where the sandbox keeps it."""
+    sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))  # step_repair
+    return _script(), output.package_cache_dir(ctx, output.builtin_project(ctx, output.IMPORT))
+
+
+@pytest.mark.slow
+def test_documents_are_read_in_process(in_process):
+    script, cache_dir = in_process
+    data = os.path.dirname(PACKAGE)
+    for document in ("techdraw_annotations.FCStd", "design_history.FCStd"):
+        assert len(script.solids(script.convert(os.path.join(data, document), cache_dir))) == 1
+    with pytest.raises(RuntimeError, match="holds no solid"):
+        script.convert(os.path.join(data, "sketch_constraints.FCStd"), cache_dir)
+
+
+@pytest.mark.slow
+def test_the_script_answers_with_a_shape_or_an_exception(in_process):
+    _script_module, cache_dir = in_process
+    data = os.path.dirname(PACKAGE)
+
+    def run(document):
+        request = {"path": os.path.join(data, document), "cache_dir": cache_dir}
+        return runpy.run_path(SCRIPT, init_globals={"request": request}, run_name="__partcad_part__")["output"]
+
+    assert not run("techdraw_annotations.FCStd")["shape"].IsNull()
+    assert "holds no solid" in run("sketch_constraints.FCStd")["exception"]
 
 
 def _measured(ctx, name):

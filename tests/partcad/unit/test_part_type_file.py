@@ -13,9 +13,12 @@ package declaring the type.
 """
 
 import asyncio
+import functools
+import http.server
 import os
 import random
 import shutil
+import threading
 
 import pytest
 
@@ -70,3 +73,38 @@ def test_the_reader_reads_the_consumer_s_file(tmp_path):
     assert measured["volume"] == pytest.approx(10 * 20 * depth)
     with open(tmp_path / "data" / "reader" / ".cache" / "read", encoding="utf-8") as f:
         assert f.read() == str(tmp_path / "data" / "consumer" / "crate.box")
+
+
+def _consumer_with(tmp_path, part):
+    """A copy of the consumer package declaring 'part' as well."""
+    shutil.copytree(DATA, tmp_path / "data")
+    with open(tmp_path / "data" / "consumer" / "partcad.yaml", "a", encoding="utf-8") as f:
+        f.write(part)
+    return pc.Context(str(tmp_path / "data" / "consumer" / "partcad.yaml"))
+
+
+def test_a_missing_file_is_reported_before_the_script_runs(tmp_path):
+    ctx = _consumer_with(tmp_path, "  lost:\n    type: reader:box_file\n")
+    part = ctx.get_part(":lost")
+    assert asyncio.run(part.get_wrapped(ctx)) is None
+    assert any("file is not found" in str(error) for error in part.errors)
+
+
+def test_a_file_that_cannot_be_fetched_fails_the_part(tmp_path):
+    # As it does a STEP part's: the download is part of preparing the part.
+    # Served from an empty directory, so the file is a 404.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(empty))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        url = "http://127.0.0.1:%d/fetched.box" % server.server_address[1]
+        ctx = _consumer_with(
+            tmp_path, "  fetched:\n    type: reader:box_file\n    fileFrom: url\n    fileUrl: %s\n" % url
+        )
+        with pytest.raises(Exception, match="404"):
+            asyncio.run(ctx.get_part(":fetched").get_wrapped(ctx))
+    finally:
+        server.shutdown()
+        server.server_close()

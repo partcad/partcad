@@ -14,6 +14,7 @@ millimetres and Z-up for the box to land where it started.
 import asyncio
 import json
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -93,6 +94,51 @@ def test_importing_a_gltf_never_replaces_another_part_s_buffer(tmp_path):
     assert not (project_dir / "imported.gltf").exists()
 
 
+@pytest.mark.parametrize("filename", ["box.gltf", "box.glb"])
+def test_the_reader_makes_a_solid_of_the_triangles(filename):
+    # In process, as the sandbox runs it.
+    sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
+    import wrapper_import_gltf
+    from OCP.TopAbs import TopAbs_SOLID
+
+    result = wrapper_import_gltf.process(str(DATA / filename), {})
+    assert result["success"], result["exception"]
+    assert result["shape"].ShapeType() == TopAbs_SOLID
+
+
+def test_a_file_that_is_not_gltf_is_an_error(tmp_path):
+    sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
+    import wrapper_import_gltf
+
+    (tmp_path / "broken.gltf").write_text("not glTF")
+    result = wrapper_import_gltf.process(str(tmp_path / "broken.gltf"), {})
+    assert not result["success"]
+    assert result["shape"] is None
+
+
+def test_a_gltf_that_is_not_an_object_names_no_companions(tmp_path):
+    (tmp_path / "list.gltf").write_text("[]")
+    assert gltf_companions(tmp_path / "list.gltf") == []
+
+
+def test_importing_a_gltf_never_writes_outside_the_package(tmp_path):
+    project_dir, project = _package(tmp_path)
+    source = tmp_path / "source"
+    (source / "buffers").mkdir(parents=True)
+    (source / "buffers" / "mesh.bin").write_bytes(b"triangles")
+    (source / "model.gltf").write_text(json.dumps({"buffers": [{"uri": "buffers/mesh.bin"}]}))
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    try:
+        os.symlink(outside, project_dir / "buffers", target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("No symbolic links here")
+
+    with pytest.raises(ValueError, match="outside the package"):
+        import_part_action(project, "gltf", "imported", str(source / "model.gltf"))
+    assert not (outside / "mesh.bin").exists()
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("name", [":box", ":box_binary"])
 def test_a_gltf_reads_back_where_it_was_written(name):
@@ -104,3 +150,12 @@ def test_a_gltf_reads_back_where_it_was_written(name):
     assert measured["solids"] == 1
     assert measured["volume"] == pytest.approx(6000)
     assert measured["bbox"] == pytest.approx([95, -10, -15, 105, 10, 15], abs=1e-6)
+
+
+@pytest.mark.slow
+def test_a_gltf_part_that_cannot_be_read_is_an_error(tmp_path):
+    (tmp_path / "partcad.yaml").write_text("parts:\n  broken:\n    type: gltf\n")
+    (tmp_path / "broken.gltf").write_text("not glTF")
+    ctx = pc.Context(str(tmp_path))
+    with pytest.raises(Exception, match="Failed to read the glTF file"):
+        asyncio.run(ctx.get_part(":broken").get_wrapped(ctx))
