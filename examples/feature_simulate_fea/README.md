@@ -8,7 +8,7 @@ mechanism: one arm of [OpenVMP](https://github.com/openvmp/openvmp-models)'s
 Don1 robot, and the worm gear in its knee.
 
 ```shell
-pc sim -a arm --json     # the run, with what acts on every body at the end of it   sections 1 and 2
+pc sim -a arm --json     # both runs, and what acts on every body at their end     sections 1 and 2
 pc cae fea :knee-gear    # the gear under what the worm holds it with              sections 3 and 4
 pc test                  # both, as checks
 ```
@@ -63,7 +63,10 @@ and gives as far as that moment turns the spring:
 MuJoCo ends the second at 89.9258° -- 0.0742° short of 90 -- and swings to
 89.872° on the way, 1.72 times as far, at t = 0.020 s. `dropped`'s
 `validation:` checks both, the first to a percent. They are about joints, so
-any simulation plugin answers them.
+any simulation plugin answers them, and `dropped_in_gazebo` holds Gazebo to the
+very same text: it ends at 89.9258° too, and is seen at 1.67 times as far at
+t = 0.0215 s (Gazebo's readings are the first pose message past each instant,
+so it sees the swing's bottom a little late).
 
 ## 3. What acts on the gear's body
 
@@ -75,7 +78,7 @@ the gear's own frame, the frame its ports and so its `fea:` section are
 written in:
 
 ```shell
-pc --no-ansi sim -a arm --json > sim.json
+pc --no-ansi sim -a arm -f dropped --json > sim.json
 python part_loads.py loads sim.json knee-worm-gear/gear
 ```
 
@@ -89,6 +92,12 @@ They add up to nought, to the last printed digit: the body is at rest and
 every load on it was reported. The gear's apparent gravity, `g − a`, is the
 scene's gravity at rest -- (0, −8.962, −3.990) m/s², the gear standing on its
 edge -- and that is its `gravity:`.
+
+Gazebo (`-f dropped_in_gazebo`) reports the knee's row and the weight's to the
+same four figures, and no weld: it makes no force-torque sensor on a joint to
+the world, and says so in `warnings`. So its loads do not add up -- they need
+not -- and nothing below reads the weld: the gear's analysis starts from the
+same `fea:` whichever engine ran.
 
 ## 4. From the body's loads to the gear's
 
@@ -154,23 +163,50 @@ straight down; that refusal is what an older CalculiX gets here.
 
 | mesh (`mesh_size`) | elements | peak von Mises | peak displacement |
 | --- | --- | --- | --- |
-| 0.03 of the gear, the one declared | 27,119 | 67 MPa | 0.00505 mm |
-| 0.02 | 56,702 | 58 MPa | 0.00504 mm |
+| 0.03 of the gear, the one declared | 27,473 | 67.6 MPa | 0.00525 mm |
+| 0.02 | 57,309 | 82.8 MPa | 0.00535 mm |
 
 The allowable is the yield over CalculiX's safety factor of 1.5, 82.7 MPa, so
-it **passes** with no findings. The displacement has converged; the peak
-stress has not, and will not: the load is a point load spread over the nodes
-near the tooth's port, and the stress right under one depends on how many
-nodes that is. Read the peak as the stress at the root of a tooth carrying the
-load near its pitch line, to within about the difference between the two rows.
+at the declared mesh it **passes** with no findings. The displacement has
+converged; the peak stress has not, and will not. The load is a traction of
+155 N over the 21 mm² of tooth 13 within `port_radius` of the port, the peak
+is at the root of that tooth where the patch ends, and a load that stops dead
+at an edge puts a stress there that grows as the mesh resolves the edge. A real
+mesh with the worm tapers off instead. Read the peak as the stress at the root
+of a tooth carrying the load near its pitch line, to within the difference
+between the two rows: about at the allowable, and well under the yield.
 
-`pc cae fea` says, once for every port, that its sketch "lies on no surface
-of the part, so the condition on it does nothing". goBILDA's ports are drawn
-where a mating part sits -- a hole's sketch over the hole, a tooth's at its
-pitch line -- not on a face. That matters to an implementation that applies a
-condition to the faces under a port's sketch. CalculiX applies it to the mesh
-nodes within `port_radius` (5 % of the part) of the port, and says so
-separately when it finds none -- which it does not, here.
+**Every load lands on a surface.** goBILDA's ports are drawn where a mating
+part sits -- a hole's sketch over the hole, a tooth's at its pitch line -- so
+none of their sketches lies on a face of the gear. PartCAD applies such a
+condition to the surface within `port_radius` (5 % of the part, 2.04 mm here)
+of the port instead, and `pc cae fea` says so once for every port, with the
+area that came to: 54.4 mm² around each bolt hole -- the face around its
+mouth and its thread -- and 24.6 mm² of tooth 13. CalculiX finds the mesh
+nodes near each port for itself, and spreads the load over the surface among
+them by area.
+
+**Any implementation that reads a direction and a gravity will do.** The
+same `fea:` section, from the same request, in each one's own image:
+
+| implementation | elements | peak von Mises | peak displacement | findings |
+| --- | --- | --- | --- | --- |
+| [CalculiX](https://github.com/partcad/partcad-cae-calculix) | 27,473 | 67.6 MPa | 0.00525 mm | none |
+| [Elmer](https://github.com/partcad/partcad-cae-elmer) | 28,127 | 73.3 MPa | 0.00421 mm | none |
+| [Code_Aster](https://github.com/partcad/partcad-cae-code-aster) | 28,127 | 64.1 MPa | 0.00421 mm | none |
+| [MOOSE](https://github.com/partcad/partcad-cae-moose) | 28,127 | 59.0 MPa | 0.00456 mm | none |
+
+```shell
+pc cae fea :knee-gear -i //pub/feature/cae/elmer:fea
+```
+
+They agree on the displacement to within how each holds the bolt holes
+(CalculiX holds every node near a hole, inside the material too; the others
+the surface), and on the stress to within what the edge of the loaded patch
+does on each one's mesh. At 0.02 Code_Aster reads 79.8 MPa and MOOSE 62.5 MPa;
+Elmer's direct solver runs out of memory there (317,295 unknowns). Which
+engine ran the simulation does not matter: MuJoCo and Gazebo hand every one of
+them the same loads.
 
 ## 6. At the worst moment
 
@@ -179,7 +215,7 @@ largest load on the gear came at the bottom of the first swing, at t =
 0.020 s: −4.582 N·m about its axis, 1.77 times the end's (`part_loads.py loads
 sim.json knee-worm-gear/gear --reading 3`). The analysis is linear and the
 gear's own weight is under a newton against 155 N, so at that
-instant the same mesh would read about 67 × 1.77 = 118 MPa -- over the
+instant the same mesh would read about 67.6 × 1.77 = 120 MPa -- over the
 82.7 MPa allowable, under the yield. Let go with nothing to slow it, the knee
 loads its gear harder than standing still does, and a stress analysis of the
 standing arm alone would not say so.

@@ -14,6 +14,7 @@ where gmsh cannot be imported.
 
 import ctypes
 import json
+import math
 import os
 import signal
 import struct
@@ -115,7 +116,7 @@ def test_on_an_edge_the_face_the_frame_faces_wins():
 
 
 def test_a_sketch_that_misses_the_part_is_a_warning():
-    """A condition that does nothing is said out loud, and nothing is guessed."""
+    """A condition that does nothing is said out loud, and nothing is guessed: no surface is near it either."""
     request = {
         "wrapped": build123d.Box(10, 10, 10).wrapped,
         "boundary": [{"port": "off", "location": [[0, 0, 9], [0, 0, 1], 0], "sketch": [_disc(2, (0, 0, 9))]}],
@@ -123,6 +124,68 @@ def test_a_sketch_that_misses_the_part_is_a_warning():
     warnings = cae_support.prepare(request)
     assert len(warnings) == 1 and "'off'" in warnings[0]
     assert request["boundary"][0]["faces"] == []
+
+
+def _solids(shape):
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+
+    explorer, count = TopExp_Explorer(shape, TopAbs_SOLID), 0
+    while explorer.More():
+        count += 1
+        explorer.Next()
+    return count
+
+
+def test_a_sketch_on_no_surface_loads_the_surface_near_its_port():
+    """A hole's outline over the hole, a sketch beside its face: the surface within 'port_radius' of the port is loaded."""
+    request = {
+        "wrapped": build123d.Box(10, 10, 10).wrapped,
+        # 0.2 mm off the top face; 5 % of 10 mm reaches 0.5 mm, so the top face
+        # is loaded over a disc of radius sqrt(0.5^2 - 0.2^2).
+        "boundary": [{"port": "hole", "location": [[0, 0, 5.2], [0, 0, 1], 0], "sketch": [_disc(1, (0, 0, 5.2))]}],
+    }
+    warnings = cae_support.prepare(request)
+    assert len(warnings) == 1 and "'hole'" in warnings[0] and "within 0.5 mm" in warnings[0]
+    (record,) = request["boundary"]
+    assert [face["centroid"][2] for face in record["faces"]] == [pytest.approx(5)]
+    assert record["area"] == pytest.approx(math.pi * (0.5**2 - 0.2**2), rel=1e-3)
+    # The faces are divided where the sphere meets them, and the solid is not.
+    assert _solids(request["wrapped"]) == 1
+
+
+def test_a_freeform_face_near_the_port_is_loaded_whole():
+    """A curve drawn on a freeform face is one a mesher may not mesh, so such a face is not divided."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+
+    # The same box with every face a B-spline surface.
+    request = {
+        "wrapped": BRepBuilderAPI_NurbsConvert(build123d.Box(10, 10, 10).wrapped).Shape(),
+        "boundary": [{"port": "hole", "location": [[0, 0, 5.2], [0, 0, 1], 0], "sketch": [_disc(1, (0, 0, 5.2))]}],
+    }
+    warnings = cae_support.prepare(request)
+    assert len(warnings) == 1 and "within 0.5 mm" in warnings[0] and "(100 mm^2)" in warnings[0]
+    (record,) = request["boundary"]
+    assert [face["centroid"][2] for face in record["faces"]] == [pytest.approx(5)]
+    assert record["area"] == pytest.approx(100.0, rel=1e-6)
+
+
+def test_the_implementation_s_port_radius_is_how_far_that_reaches():
+    request = {
+        "wrapped": build123d.Box(10, 10, 10).wrapped,
+        "port_radius": 0.1,
+        "boundary": [{"port": "hole", "location": [[0, 0, 5.2], [0, 0, 1], 0], "sketch": [_disc(1, (0, 0, 5.2))]}],
+    }
+    cae_support.prepare(request)
+    assert request["boundary"][0]["area"] == pytest.approx(math.pi * (1.0**2 - 0.2**2), rel=1e-3)
+
+
+def test_a_sketch_on_a_face_is_not_widened():
+    """Only a sketch that covers nothing falls back: one that covers its face covers that, exactly."""
+    request = _pipe_request()
+    request["port_radius"] = 0.5
+    assert cae_support.prepare(request) == []
+    assert request["boundary"][0]["area"] == pytest.approx(78.5398, rel=1e-4)
 
 
 def test_nothing_to_prepare_is_not_an_error():
@@ -197,6 +260,26 @@ def test_mesh_names_the_groups_it_was_given_and_the_rest(tmp_path):
     with open(path) as f:
         text = f.read()
     assert '"inlet0"' in text and '"wall"' in text and '"body"' in text
+
+
+def test_a_second_order_mesh_has_straight_edges():
+    """Every mid-side node at the middle of its edge, never moved out onto the bore's curve.
+
+    Moved out, the mid-side nodes of the small elements on a tight curve fold
+    them inside out, and the solver refuses the whole mesh.
+    """
+    pytest.importorskip("gmsh")
+    request = _pipe_request()
+    cae_support.prepare(request)
+    mesh = cae_support.mesh(request, {}, size=0.2, order=2)
+    at = {int(tag): k for k, tag in enumerate(mesh.node_tags)}
+    # gmsh's 10-node tetrahedron: corners 0-3, then the middle of 0-1, 1-2, 2-0, 3-0, 3-2, 3-1.
+    (elements,) = [nodes for kind, _tags, nodes in mesh.volumes if kind == 11]
+    edges = [(0, 1), (1, 2), (2, 0), (3, 0), (3, 2), (3, 1)]
+    for element in elements:
+        xyz = mesh.coordinates[[at[int(tag)] for tag in element]]
+        for k, (a, b) in enumerate(edges):
+            assert xyz[4 + k] == pytest.approx((xyz[a] + xyz[b]) / 2, abs=1e-9)
 
 
 @pytest.mark.skipif(not hasattr(signal, "SIGPIPE"), reason="no SIGPIPE on this platform")

@@ -66,6 +66,13 @@ MM_PER_M = 1000.0
 # implementation reads, and the geometry itself has no business in a result.
 SKETCH_KEY = "sketch"
 
+# How far from its port a condition reaches when the port's sketch lies on no
+# surface, as a fraction of the part's largest dimension -- unless the
+# implementation's own 'port_radius' says otherwise. The neighbourhood an
+# implementation that applies conditions to the mesh nodes near a port takes
+# (CalculiX's 'port_radius'), so that both kinds of implementation load one place.
+PORT_RADIUS = 0.05
+
 
 class ToolMissing(Exception):
     """The solver, or something it needs, is not available where this runs."""
@@ -304,8 +311,10 @@ def prepare(request):
     decoded and before the implementation sees it. Changes the request in
     place: 'request["wrapped"]' becomes the part with every sketch imprinted on
     it, and every boundary record gains 'faces' and 'area' and loses its
-    sketch. Returns warnings: a sketch that lies on no surface of the part is a
-    condition that does nothing, which is worth saying every time.
+    sketch. Returns warnings, one for every sketch that lies on no surface of
+    the part: its condition is applied to the surface within 'port_radius' of
+    its port instead -- or, with no surface that near, does nothing -- and that
+    is worth saying every time.
 
     A failure to imprint is a warning too, and leaves the part as it was: the
     records then carry no 'faces', which is what an implementation written
@@ -339,20 +348,146 @@ def prepare(request):
 
     faces = faces_of(shape)
     areas = [_area_and_centroid(face)[0] for face in faces]
+    regions = dict(sketches)
+    missed = [index for index in sketches if not _covering(faces, areas, sketches[index], fuzzy)]
+    if missed:
+        # A sketch that lies on no surface -- a tooth's cross-section at its
+        # pitch line, a hole's outline over the hole -- still says where its
+        # port is. The surface around it is what the port stands for there:
+        # the faces within 'port_radius' of the port, which is the
+        # neighbourhood an implementation that applies conditions to mesh
+        # nodes takes, so that both kinds load the same place. Imprinted as
+        # the curves the sphere draws on the part's surface, which divide its
+        # faces without dividing the solid -- on the faces where that curve is
+        # exact; a freeform face that comes that near is taken whole (see
+        # '_imprint_around').
+        radius = extent * float(request.get("port_radius") or PORT_RADIUS)
+        origins = {index: _frame(boundary[index].get("location"))[0] for index in missed}
+        balls = {index: _ball(origin, radius) for index, origin in origins.items()}
+        try:
+            shape = _imprint_around(shape, balls.values())
+            request["wrapped"] = shape
+        except Exception as e:
+            warnings.append("The surface around a port could not be imprinted on the part: %s" % e)
+            balls = {}
+        regions.update({index: [ball] for index, ball in balls.items()})
+        faces = faces_of(shape)
+        areas = [_area_and_centroid(face)[0] for face in faces]
+        freeform = {index: _freeform_near(faces, origins[index], radius) for index in balls}
+
     for index, record in enumerate(boundary):
-        if index in sketches:
-            covered = [k for k, face in enumerate(faces) if _covered(face, areas[k], sketches[index], fuzzy)]
-            if not covered:
+        name = record.get("port") or record.get("interface_label") or "?"
+        if index in regions:
+            covered = _covering(faces, areas, regions[index], fuzzy)
+            if index in missed:
+                covered = sorted(set(covered) | set(freeform.get(index, ())))
+            if index in missed and covered:
                 warnings.append(
-                    "The sketch of port '%s' lies on no surface of the part, so the condition on it does "
-                    "nothing: check that the port's frame puts the sketch on a face, Z out of it"
-                    % (record.get("port") or record.get("interface_label") or "?")
+                    "The sketch of port '%s' lies on no surface of the part, so the condition on it is applied to "
+                    "the surface within %.3g mm of the port instead (%.3g mm^2): check that the port's frame puts "
+                    "the sketch on a face, Z out of it" % (name, radius, sum(areas[k] for k in covered))
+                )
+            elif not covered:
+                warnings.append(
+                    "The sketch of port '%s' lies on no surface of the part, and no surface is near the port, so "
+                    "the condition on it does nothing: check that the port's frame puts the sketch on a face, Z "
+                    "out of it" % name
                 )
         else:
             covered = _faces_at(faces, record.get("location"), tolerance)
         record["faces"] = [fingerprint(faces[k], k) for k in covered]
         record["area"] = sum(areas[k] for k in covered)
     return warnings
+
+
+def _covering(faces, areas, regions, fuzzy):
+    """The faces the regions in 'regions' -- sketch faces, or a ball -- cover the whole of."""
+    return [k for k, face in enumerate(faces) if _covered(face, areas[k], regions, fuzzy)]
+
+
+def _ball(origin, radius):
+    """The solid sphere of 'radius' about 'origin': the neighbourhood of a port."""
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeSphere
+    from OCP.gp import gp_Pnt
+
+    return BRepPrimAPI_MakeSphere(gp_Pnt(*origin), radius).Shape()
+
+
+def _imprint_around(shape, balls):
+    """'shape' with the curves where each ball's surface meets its own drawn on it.
+
+    Those curves divide the part's faces at the ball's edge and leave its solid
+    whole; imprinting the ball itself would cut the solid in two. Drawn on the
+    faces they lie on and nowhere else ('BRepFeat_SplitShape'), not by a
+    general split of the whole part ('_split'): the curves lie exactly on the
+    faces, which is the case a general split is slowest at -- on a gear's few
+    hundred toothed faces, minutes against half a second.
+
+    And only on an analytic face -- a plane, a cylinder, a cone, a sphere, a
+    torus -- where the curve is exact. On a freeform one it is an
+    approximation, and what it leaves between itself and the face's own edges
+    is what a mesher cannot mesh: a threaded hole's helix, divided like this,
+    fails gmsh with "overlapping facets" on every implementation. Such a face
+    is taken whole instead ('_freeform_near').
+    """
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Section
+    from OCP.BRepFeat import BRepFeat_SplitShape
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS, TopoDS_Shape
+
+    split = BRepFeat_SplitShape(shape)
+    for ball in balls:
+        section = BRepAlgoAPI_Section(shape, ball, False)
+        # Each curve as it lies on the part's face, which is what drawing it
+        # there takes.
+        section.ComputePCurveOn1(True)
+        section.Approximation(True)
+        section.Build()
+        if not section.IsDone():
+            raise RuntimeError("the sphere around the port could not be intersected with the part")
+        edges = TopExp_Explorer(section.Shape(), TopAbs_EDGE)
+        while edges.More():
+            edge, face = TopoDS.Edge_s(edges.Current()), TopoDS_Shape()
+            if section.HasAncestorFaceOn1(edge, face) and _analytic(TopoDS.Face_s(face)):
+                split.Add(edge, TopoDS.Face_s(face))
+            edges.Next()
+    split.Build()
+    if not split.IsDone():
+        raise RuntimeError("the curves around the ports could not be drawn on the part")
+    return split.Shape()
+
+
+def _analytic(face):
+    """Whether a face is a plane, a cylinder, a cone, a sphere or a torus."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_Torus
+
+    return BRepAdaptor_Surface(face).GetType() in (
+        GeomAbs_Plane,
+        GeomAbs_Cylinder,
+        GeomAbs_Cone,
+        GeomAbs_Sphere,
+        GeomAbs_Torus,
+    )
+
+
+def _freeform_near(faces, origin, radius):
+    """The faces '_imprint_around' leaves whole that come within 'radius' of 'origin'."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.gp import gp_Pnt
+
+    centre = gp_Pnt(*origin)
+    point = BRepBuilderAPI_MakeVertex(centre).Vertex()
+    near = []
+    for index, face in enumerate(faces):
+        if _analytic(face) or _box(face, radius).IsOut(centre):
+            continue
+        distance = BRepExtrema_DistShapeShape(point, face)
+        if distance.IsDone() and distance.Value() < radius:
+            near.append(index)
+    return near
 
 
 # --------------------------------------------------------------------------- #
@@ -501,6 +636,18 @@ def mesh(request, groups, size=0.05, order=1, rest=None, scale=1.0 / MM_PER_M, f
             gmsh.option.setNumber("Mesh.MeshSizeMax", target)
             gmsh.option.setNumber("Mesh.MeshSizeMin", target / 3.0)
             gmsh.option.setNumber("Mesh.ElementOrder", int(order))
+            # Second-order tetrahedra with straight edges: each mid-side node at
+            # the middle of its edge rather than moved out onto the curved
+            # surface the edge spans. Moved out, the mid-side nodes of the small
+            # elements on a tight curve -- a gear tooth's flank, a thread -- fold
+            # an element inside out, and the solver refuses the whole mesh (MOOSE
+            # with a negative element volume; CalculiX, which meshes for itself,
+            # with "nonpositive jacobian"). A straight-sided quadratic element
+            # still interpolates quadratically, which is what makes it bend as it
+            # should; what it gives up is following a curve between two nodes,
+            # which a mesh fine enough to resolve the curve's stresses follows
+            # anyway.
+            gmsh.option.setNumber("Mesh.SecondOrderLinear", 1)
             gmsh.model.mesh.generate(3)
 
             for path in files:

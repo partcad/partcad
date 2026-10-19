@@ -606,6 +606,14 @@ Object commands
   force or a power is spread over: an inlet drawn as the bore's circle is exactly the bore. A port with no
   sketch covers the face it lies on, when it lies on one.
 
+  A sketch that lies on no surface — a gear tooth's cross-section at its pitch circle, a hole's outline drawn
+  over the hole — still says where its port is, and the condition is applied to the surface around it instead:
+  everything within ``port_radius`` of the port (a fraction of the part's largest dimension, 5 % unless the
+  implementation says otherwise — the same neighbourhood an implementation that loads mesh nodes near a port
+  takes). PartCAD divides a plane, a cylinder, a cone, a sphere or a torus where that neighbourhood ends, and takes
+  a freeform face that comes that near whole, because a curve drawn on one is what a mesher fails on. Either
+  way the analysis warns, naming the port and the area it loaded: the port's frame is still worth correcting.
+
   The model the analysis produces is written to ``<part>.<analysis>.<extension>`` and saved as it stands.
   Which format that is — 3D or 2D — is the implementation's choice, and PartCAD does not convert it. The
   **findings** are the other half of the answer: a JSON array of what the analysis has to say about the part,

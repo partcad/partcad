@@ -17,6 +17,7 @@ in the library for the wheel or `pc init` to carry along.
 
 import importlib.util
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -132,6 +133,25 @@ def test_the_part_s_gravity_is_the_scene_s_less_the_body_s_acceleration_in_its_f
     assert close(answer["gravity"], [0.0, 0.0, -9.81])
     assert close(answer["acceleration"], [0.0, -2.0, 0.0])
     assert close(answer["apparent_gravity"], [0.0, 2.0, -9.81])
+
+
+def test_on_a_turning_body_the_part_s_gravity_is_where_the_part_is(part_loads):
+    """A turn a second about Z, the centre of mass 10 mm from the gear: the gear is flung outward."""
+    result = run()
+    result["after"] = json.loads(json.dumps(result["after"]))
+    arm = result["after"]["bodies"]["arm"]
+    arm.update({"com": [100.0, 0.0, 0.0], "angvel": [0.0, 0.0, 360.0], "angacc": [0.0, 0.0, 0.0]})
+    answer = part_loads.loads(result, "gear")
+    # Centripetal: omega^2 r toward the centre of mass, the world's -Y here;
+    # the part is turned half a turn, so that is its +Y.
+    inward = (2.0 * math.pi) ** 2 * 0.010
+    assert close(answer["acceleration"], [0.0, inward, 0.0])
+    assert close(answer["apparent_gravity"], [0.0, -inward, -9.81])
+
+    # And turning faster: alpha x r, along the world's -X at the part, its +X.
+    arm.update({"angvel": [0.0, 0.0, 0.0], "angacc": [0.0, 0.0, 360.0]})
+    answer = part_loads.loads(result, "gear")
+    assert close(answer["acceleration"], [2.0 * math.pi * 0.010, 0.0, 0.0])
 
 
 def test_the_loads_add_up_about_the_part_s_origin(part_loads):

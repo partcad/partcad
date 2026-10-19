@@ -25,9 +25,9 @@ its full name) where only one placement of it is in the run.
 
 `loads` prints JSON: the part, its body and its pose in the world; every load on
 the body with `at` in mm, `force` in N and `torque` in N*m about `at`, all in the
-part's frame; the part's apparent gravity -- the scene's gravity less the body's
-acceleration, `g - a`, m/s^2 in the part's frame -- which is what an `fea:`
-section's `gravity:` is; and the sum of the loads, which is the body's mass
+part's frame; the part's apparent gravity -- the scene's gravity less the
+acceleration of the part's origin, `g - a`, m/s^2 in the part's frame -- which is
+what an `fea:` section's `gravity:` is; and the sum of the loads, which is the body's mass
 times its acceleration if every load was reported. `point` turns a point (mm) --
 or with `--direction` a direction -- from one part's frame into another's, at
 the same reading: where another part's port is in this part's frame.
@@ -214,6 +214,14 @@ def loads(document, part, simulation=None, which="after"):
 
     gravity = tuple(result.get("gravity") or DEFAULT_GRAVITY)
     acceleration = tuple(body.get("acc") or (0.0, 0.0, 0.0))
+    if "acc" in body and "com" in body:
+        # 'acc' is the body's centre of mass's. On a body that turns, the part's
+        # origin, r from it, accelerates by alpha x r + omega x (omega x r) more.
+        r = [(p - c) / 1000.0 for p, c in zip(pose[1], body["com"])]
+        omega = [math.radians(c) for c in body.get("angvel") or (0.0, 0.0, 0.0)]
+        alpha = [math.radians(c) for c in body.get("angacc") or (0.0, 0.0, 0.0)]
+        tangential, centripetal = cross(alpha, r), cross(omega, cross(omega, r))
+        acceleration = tuple(a + t + n for a, t, n in zip(acceleration, tangential, centripetal))
     apparent = tuple(g - a for g, a in zip(gravity, acceleration))
     stated = [here(load) for load in body["loads"]]
     force = [sum(load["force"][i] for load in stated) for i in range(3)]

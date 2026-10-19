@@ -63,9 +63,11 @@ that body with `at` (mm), `force` (N) and `torque` (N·m about `at`) in the
 **part's own frame** -- the frame its ports, and so an `fea:` section, are
 written in -- beside:
 
-- `apparent_gravity`: the scene's gravity less the body's acceleration, `g - a`,
-  in m/s² and the part's frame. That is the part's `gravity:` below: its own
-  weight, and what its acceleration flings it by;
+- `apparent_gravity`: the scene's gravity less the acceleration of the part's
+  origin, `g - a`, in m/s² and the part's frame -- on a body that turns, its
+  centre of mass's and what the turning adds that far from it. That is the
+  part's `gravity:` below: its own weight, and what its acceleration flings it
+  by;
 - `total`: the loads added up. For a body every load of which was reported it is
   the body's mass times its acceleration; on Gazebo it need not be.
 
@@ -73,7 +75,7 @@ written in -- beside:
 into this part's -- which is how you find where a mating part touches it:
 
 ```sh
-python part_loads.py point /tmp/pc-sim-fea/sim.json <other part> <part> X Y Z
+python <this skill's directory>/part_loads.py point /tmp/pc-sim-fea/sim.json <other part> <part> X Y Z
 ```
 
 Read each load: what it is (`kind`), what it comes from (`from`), and for a
@@ -145,7 +147,7 @@ parts:
     desc: The knee's worm gear, as the arm loads it at the end of its 'held' simulation
     fea:
       # Who reads a direction and a gravity: an implementation whose 'reads:'
-      # lists 'force' and 'gravity'. CalculiX does.
+      # lists 'force' and 'gravity'. CalculiX, Elmer, Code_Aster and MOOSE do.
       implementation: //pub/feature/cae/calculix:fea
       # Where its load leaves: bolted to the hub by its four threaded holes.
       fix:
@@ -182,11 +184,15 @@ pc --no-ansi cae fea :<part> 2>&1
 The log carries the peak stress and displacement the implementation measured,
 and the **findings** -- what it wants acted on (an empty list is a pass). Read the
 warnings too: a condition that reached no material did nothing, and an analysis
-with a condition doing nothing is answering another question. Which warning
-says so depends on the implementation. PartCAD warns when a port's sketch "lies
-on no surface", which matters to one that applies conditions to the faces under
-a sketch; CalculiX applies them to the mesh nodes near each port, and names a
-port it found no node near. The model is written
+with a condition doing nothing is answering another question. A port whose
+sketch "lies on no surface" (a gear's tooth, whose sketch is its cross-section
+at the pitch circle; a hole's outline over the hole) is applied to the surface
+within `port_radius` of the port instead, and PartCAD says so and how much
+area that was: check it is the surface you meant. CalculiX applies every
+condition to the mesh nodes near its port either way, and names a port it found
+no node near. Any implementation whose `reads:` lists `force` and `gravity`
+will do -- CalculiX, Elmer, Code_Aster, MOOSE; on the same part they should
+agree to within what their meshes differ by. The model is written
 beside the package as `<part>.fea.glb`. `pc test -f fea :<part>` runs the same
 analysis as a check.
 

@@ -35,7 +35,7 @@ docs:
 
   usage: |
     ```shell
-    pc sim -a arm --json     # the run, with what acts on every body at the end of it
+    pc sim -a arm --json     # both runs, and what acts on every body at their end
     pc cae fea :knee-gear    # the gear under what the worm holds it with
     pc test                  # both, as checks
     ```
@@ -82,7 +82,7 @@ assemblies:
         # that moment turns its 2000 N*m/rad, under a tenth of a degree. On the way
         # it swung past that: let go at once, a spring this lightly damped
         # carries a load to three quarters as far again before it settles.
-        validation: |
+        validation: &held |
           (
               abs(
                   (90 - after["joints"]["knee"]["pos"]) * 3.14159265 / 180 * 2000
@@ -92,6 +92,22 @@ assemblies:
               and max(90 - s["joints"]["knee"]["pos"] for s in result["samples"])
               > 1.4 * (90 - after["joints"]["knee"]["pos"])
           )
+      dropped_in_gazebo:
+        desc: |
+          The same, in Gazebo. Gazebo reports what the knee passes and what
+          each body weighs, which is all the knee gear's analysis reads, and
+          says what it does not: the weld to the world.
+        simulation: //pub/feature/simulate/gazebo:gazebo
+        scene: :hung
+        offset: [[0, 0, 400], [1, 0, 0], 180]
+        # As many readings as MuJoCo takes: Gazebo publishes about sixty a second
+        # of the wall clock, and runs slower than real time to give more, which
+        # is what it takes to see the first swing of a 24 Hz ring.
+        params:
+          duration: 1.0
+          timestep: 0.0005
+          samples: 199
+        validation: *held
 
 scenes:
   hung:
@@ -128,7 +144,8 @@ parts:
     desc: The worm gear of the arm's knee, under what the worm holds it with when the arm is at rest
     fea:
       # It has to read a load's direction and a gravity ('reads:'), which
-      # CalculiX does.
+      # CalculiX does -- and Elmer, Code_Aster and MOOSE, which README.md
+      # compares it with ('pc cae fea :knee-gear -i <implementation>').
       implementation: //pub/feature/cae/calculix:fea
       # Where its load leaves: it is bolted to its hub by the threaded holes of
       # its hub side, as 'assembly-worm-gear' bolts it, and the hub is on the
@@ -171,6 +188,11 @@ parts:
 # a file this package keeps.
 export:
   mjcf:
+    tolerance: 0.3
+    angularTolerance: 0.5
+    exclude: [assemblies, interfaces, parts, scenes, sketches]
+  # And to Gazebo, the same: its world's meshes are what DART collides.
+  world:
     tolerance: 0.3
     angularTolerance: 0.5
     exclude: [assemblies, interfaces, parts, scenes, sketches]
