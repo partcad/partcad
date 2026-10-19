@@ -318,6 +318,12 @@ SELECTION_KEYS = frozenset({"filter"})
 # reader is handed everything else.
 IMPORT_KEYS = frozenset({"kinds", "noun", "dropped"})
 
+# The same, for the 'cae:' section. 'reads' is what the implementation says it
+# reads of an analysis section beyond where each condition lands and how big it
+# is -- a load's direction, a gravity (see 'partcad.cae.READS') -- which PartCAD
+# checks an analysis against before asking, rather than a parameter of the run.
+ANALYSIS_KEYS = frozenset({"reads"})
+
 # The request key the implementation script's path travels under. It is passed
 # in the request rather than on the command line because the two positional
 # arguments of a wrapper are already spent on the output path and the working
@@ -472,6 +478,8 @@ class Implementation:
             return RESERVED_KEYS | SIMULATION_KEYS
         if self.section == IMPORT:
             return RESERVED_KEYS | IMPORT_KEYS
+        if self.section in ANALYSIS_SECTIONS:
+            return RESERVED_KEYS | ANALYSIS_KEYS
         if self.section in SECTIONS:
             return RESERVED_KEYS | SELECTION_KEYS
         return RESERVED_KEYS
@@ -613,6 +621,21 @@ class Implementation:
             if fallback:
                 return str(fallback)
         return None
+
+    @property
+    def reads(self) -> frozenset:
+        """What of an analysis section this implementation says it reads ('reads:', see 'partcad.cae.READS').
+
+        The implementing package's word, like its requirements and its image:
+        whether a script reads a load's direction is a fact about the script,
+        and a package that only asks for the analysis cannot make it one by
+        saying so. Nothing declared reads nothing beyond what every
+        implementation reads.
+        """
+        declared = self._declared("reads")
+        if isinstance(declared, str):
+            declared = [declared]
+        return frozenset(str(entry) for entry in declared or ())
 
     @property
     def python_requirements(self) -> list:

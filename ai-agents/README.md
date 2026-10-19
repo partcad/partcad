@@ -275,6 +275,17 @@ The plugin folder is named `claude`, but the command namespace comes from
   "met". The IDE's Requirements tab puts an "LLM" banner on every feature that
   points here. `/pc:gen-part` and `/pc:gen-assembly` write the requirements down
   before they model anything.
+- **`/pc:sim-assembly-fea <assembly> <simulation> <part>`** — analyses one part
+  of an assembly under what a simulation of the assembly measured. The agent
+  runs the `simulate:` entry, reads the loads on the body the part is welded
+  into at the end of the run, in the part's own frame (`part_loads.py`, beside
+  the skill, does that arithmetic), works out by statics which of them pass
+  through the part and where they enter and leave it, and writes the part an
+  `fea:` section of directed forces and its apparent gravity -- on a reference
+  to it when the part comes from another package. Then it runs `pc cae fea`,
+  and in an IDE opens the result on the Digital Thread's FEA tab
+  (`pc ide view --analysis-fea`). `examples/feature_simulate_fea` is one, end
+  to end.
 - **`/pc:search <query>`** — finds existing parts and assemblies in the catalog
   whose name, description, or source matches the query (`pc search parts` /
   `pc search assemblies`), lists the matches, and can inspect or render a chosen

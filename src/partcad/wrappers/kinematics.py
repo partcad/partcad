@@ -54,6 +54,14 @@ URDF and SDFormat to metres and radians, MJCF to metres and its own angles.
     joint inside a scene). 'properties' is the request's properties index
     ('request["properties"]'), which every body's physics is read from.
 
+``parts_entry(body) -> list``
+    What a simulation sidecar says about the parts welded into a body, so that
+    a run can say which body each part is in and where it sits there: one
+    ``{"label", "part", "placement"}`` per shape, 'label' being its path of
+    labels joined by '/' ('part_label()'), 'part' its '<package>:<part>' and
+    'placement' where it sits in the body's frame, packed ('naming.parts_of()'
+    reads it back).
+
 ``properties_of(properties, node) -> dict or None``
     A node's entry in that index. Keyed by full name, except that an assembly
     or a scene sharing its full name with a part has its own entry under its
@@ -66,9 +74,10 @@ URDF and SDFormat to metres and radians, MJCF to metres and its own angles.
     "-2", "-3" ... in list order, as joint names are made unique); 'label';
     'path' (the labels from the root down to it); 'node' (the envelope node it
     is rooted at); 'kind'; 'world' (its frame, a pose in the tree's frame);
-    'parts' (each a 'BodyPart' with 'node', 'name', 'label', 'physics',
-    'placement' in the body's frame and 'world', which is
-    'compose(body.world, placement)'); 'parent' (a Body, 'WORLD', or None for a
+    'parts' (each a 'BodyPart' with 'node', 'name', 'label', 'path' -- the
+    labels from the root down to it --, 'physics', 'placement' in the body's
+    frame and 'world', which is 'compose(body.world, placement)'); 'parent' (a
+    Body, 'WORLD', or None for a
     free body); 'fixed_to_world'; 'joint' (a 'Joint', or None for a root);
     'children'; 'physics' (the combined physics dict, or None when nothing in it
     weighs anything); 'displacement' ('mass_properties.displacement_of()' of its
@@ -1645,10 +1654,13 @@ def reading(entries, positions, velocities=None) -> dict:
 class BodyPart:
     """One shape of a body: the node, its physics, and where it sits."""
 
-    def __init__(self, node, placement, world, physics):
+    def __init__(self, node, placement, world, physics, path=()):
         self.node = node
         self.name = node.get("name")
         self.label = node.get("label")
+        # The labels from the root of the tree down to this shape: which of a
+        # hundred placements of one bolt this is (see 'parts_entry').
+        self.path = tuple(path)
         # In the body's frame, and in the tree's: 'world' is the body's frame
         # times 'placement', by definition, so the two always agree exactly.
         self.placement = placement
@@ -1703,6 +1715,26 @@ class Body:
     def __repr__(self):
         parent = self.parent.name if isinstance(self.parent, Body) else self.parent
         return "<Body %s (%s) parent=%s parts=%s>" % (self.name, self.kind, parent, [p.label for p in self.parts])
+
+
+def part_label(path) -> str:
+    """A shape's path of labels as one name, 'subject/arm/gear': what tells two placements of one part apart."""
+    return "/".join(str(label) for label in path if label is not None)
+
+
+def parts_entry(body) -> list:
+    """What a sidecar says about the parts welded into 'body' ('naming.parts_of' reads it back).
+
+    One entry per shape: its path of labels ('part_label'), the part it is
+    ('<package>:<part>') and where it sits in the body's frame, packed (mm and
+    degrees; None for the body's own frame). With the body's pose in a reading,
+    that is where the part is -- which is what turns a body's loads into a
+    part's (docs/design/simulation.md, section 4.2).
+    """
+    return [
+        {"label": part_label(part.path), "part": part.name, "placement": packed_of(part.placement)}
+        for part in body.parts
+    ]
 
 
 class Bodies(list):
@@ -1776,8 +1808,8 @@ class _Builder:
         for body in self.bodies:
             self.weigh(body)
 
-    def add_part(self, body, node, placement):
-        body.parts.append(BodyPart(node, placement, compose(body.world, placement), self.physics_of(node)))
+    def add_part(self, body, node, placement, path=()):
+        body.parts.append(BodyPart(node, placement, compose(body.world, placement), self.physics_of(node), path))
 
     def scene(self, node, world, path, fixed, root=False):
         """Every element of a scene, recursively, as a body of its own.
@@ -1790,7 +1822,7 @@ class _Builder:
         if own:
             body = self.new_body(node, world, path, None, fixed)
             for shape in own:
-                self.add_part(body, shape, pose_of(shape.get(KEY_LOCATION)))
+                self.add_part(body, shape, pose_of(shape.get(KEY_LOCATION)), path + (shape.get("label"),))
         for child in elements:
             child_world = compose(world, pose_of(child.get(KEY_LOCATION)))
             child_path = path + (child.get("label"),)
@@ -1813,7 +1845,7 @@ class _Builder:
         child that moves against its target starts a body of its own.
         """
         if is_geometry(node):
-            self.add_part(body, node, placement)
+            self.add_part(body, node, placement, path)
         children = _children(node)
         if not children:
             return

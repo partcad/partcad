@@ -1,0 +1,176 @@
+desc: PartCAD example project which demonstrates a stress analysis of one part under the loads a simulation of its assembly measured - the worm gear in the knee of an OpenVMP robot arm.
+
+docs:
+  intro: |
+    A simulation of an assembly says what acts on every **body** of it -- the
+    force and the moment each joint passes, every contact, every weight -- and
+    which **part** is welded into which body. That is what a stress analysis of
+    one of those parts starts from. This package goes the whole way, on a real
+    mechanism: one arm of [OpenVMP](https://github.com/openvmp/openvmp-models)'s
+    Don1 robot, and the worm gear in its knee.
+
+    `arm` is Don1's lower arm and upper arm, joined at the knee as the robot
+    joins them. The knee is driven by a worm and a 28-tooth wheel, and a worm
+    drive does not run backwards: the gear cannot turn the worm, so the knee
+    stays where the motor left it, and what holds it there is the gear's teeth.
+    The simulation keeps that as the knee joint's spring -- as stiff as the
+    teeth and the shaft are, so the arm gives under a tenth of a degree -- and
+    the scene, `hung`, bolts the lower arm to the world upside down, with the
+    upper arm level. Let go, the upper arm drops onto the worm's give, swings,
+    and comes to rest where the worm holds it.
+
+    At rest, the knee carries the upper arm's weight and the moment of it about
+    the knee, and the simulation reports both on the lower arm's body -- which
+    the gear is welded into. A rigid simulation cannot say how much of that
+    goes through the gear; statics can. The moment about the knee's axis goes
+    through the gear to the worm, at the one tooth in mesh; the rest (the
+    weight, the bending) goes through the knee shaft into its bearings. So
+    `knee-gear` -- the goBILDA gear, by reference -- is held where it is
+    bolted to its hub and pushed at tooth 13, where the worm holds it, by the
+    force that holds that moment, and analysed under it.
+
+    That last step is what the `/pc:sim-assembly-fea` skill does, and the
+    `fea:` section of `knee-gear` is what it wrote; see README.md for every
+    number, where it came from, and what the analysis found.
+
+  usage: |
+    ```shell
+    pc sim -a arm --json     # the run, with what acts on every body at the end of it
+    pc cae fea :knee-gear    # the gear under what the worm holds it with
+    pc test                  # both, as checks
+    ```
+
+assemblies:
+  arm:
+    type: assy
+    path: arm.assy
+    desc: OpenVMP Don1's lower and upper arm, joined at the knee, which the knee's worm drive holds
+    # Some of it is still placed by coordinates: the motors, their mounts and the
+    # hook, which Don1's arms place that way (see their own 'connectivity:').
+    connectivity:
+      requireAnchored: false
+    parameters:
+      # Where the knee starts and where its worm holds it: the turn of the upper
+      # arm's hub on the knee shaft, in degrees from where Don1 draws it. At 90
+      # the upper arm is level when the lower arm is hung upside down.
+      start:
+        type: float
+        default: 90
+    simulate:
+      dropped:
+        desc: |
+          Let go level, the upper arm drops onto the worm's give, swings, and
+          comes to rest where the worm holds it -- given exactly as much as the
+          moment of its weight about the knee bends the worm's stiffness.
+        simulation: //pub/feature/simulate/mujoco:mujoco
+        scene: :hung
+        # Upside down: the lower arm's knee above the end it would hang from,
+        # and the upper arm level from it.
+        offset: [[0, 0, 400], [1, 0, 0], 180]
+        params:
+          # The drive rings at about 24 Hz and is damped to a tenth of critical,
+          # so a second is long enough to come to rest many times over; a step
+          # of half a millisecond is eighty a cycle, and a reading every five
+          # sees the first swing.
+          duration: 1.0
+          timestep: 0.0005
+          samples: 199
+        # At rest, the worm holds the moment of the upper arm's weight about
+        # the knee: m g d, with m the 0.8644 kg it weighs (its parts name no
+        # material, so 2700 kg/m^3, as MuJoCo was handed it) and d the 305.5 mm
+        # its centre of mass is out from the knee's axis -- and gives as much as
+        # that moment turns its 2000 N*m/rad, under a tenth of a degree. On the way
+        # it swung past that: let go at once, a spring this lightly damped
+        # carries a load to three quarters as far again before it settles.
+        validation: |
+          (
+              abs(
+                  (90 - after["joints"]["knee"]["pos"]) * 3.14159265 / 180 * 2000
+                  / (0.8644 * 9.81 * 0.3055)
+                  - 1
+              ) < 0.01
+              and max(90 - s["joints"]["knee"]["pos"] for s in result["samples"])
+              > 1.4 * (90 - after["joints"]["knee"]["pos"])
+          )
+
+scenes:
+  hung:
+    desc: An empty world with whatever is simulated in it bolted down by its root
+    type: assy
+    path: hung.assy
+    gravity: [0, 0, -9.81]
+    # What it holds is the arm, and that is still partly placed by coordinates.
+    connectivity:
+      requireAnchored: false
+    parameters:
+      # The three the scene PartCAD ships takes, assigned by 'pc sim'. The arm
+      # by default, so the scene on its own holds something to draw.
+      subject:
+        type: string
+        default: arm
+      subject_kind:
+        type: string
+        default: assembly
+      subject_offset:
+        type: string
+        default: "0 0 400 1 0 0 180"
+
+parts:
+  # The worm gear in the knee, by reference: the gear is goBILDA's, and the loads
+  # are this arm's. A reference keeps the gear's geometry and its ports -- each
+  # of its teeth is one -- and states the analysis of it in this product.
+  #
+  # Written by /pc:sim-assembly-fea from the 'after' reading of 'dropped', at
+  # t = 1.0 s, in MuJoCo; README.md has the run's numbers and the arithmetic.
+  knee-gear:
+    type: alias
+    source: //pub/robotics/parts/gobilda:motion/worm_gear_28t
+    desc: The worm gear of the arm's knee, under what the worm holds it with when the arm is at rest
+    fea:
+      # It has to read a load's direction and a gravity ('reads:'), which
+      # CalculiX does.
+      implementation: //pub/feature/cae/calculix:fea
+      # Where its load leaves: it is bolted to its hub by the threaded holes of
+      # its hub side, as 'assembly-worm-gear' bolts it, and the hub is on the
+      # knee shaft.
+      fix:
+        //pub/robotics/parts/gobilda:4xM4-16mm-pattern-threaded-thru-4mm: [outer]
+      # Where it enters. The knee passes the lower arm -2.590 N*m about the
+      # gear's axis (its X); the worm holds that at the tooth in mesh, tooth 13
+      # -- 0.6 mm from where the worm's pitch cylinder touches the gear's pitch
+      # circle, at 159 degrees about X from +Y. On the pitch radius of 17.75 mm
+      # that is 145.9 N along the pitch circle, [0, -0.358, -0.934], and 53.1 N
+      # toward the axis, [0, 0.934, -0.358], from the 20 degree pressure angle.
+      # The worm's lead (5.7 degrees) adds 14.6 N along the axis, in a direction
+      # friction decides in a drive that holds; it is left out.
+      load:
+        "//pub/robotics/parts/gobilda:gear-28t;module=1.25,shift=0.2":
+          "13-tooth": [0 N, -2.7 N, -155.2 N]
+      # g - a in the gear's frame: at rest, the scene's gravity, which the gear
+      # standing on its edge has along its -Y and -Z.
+      gravity: [0, -8.962, -3.990]
+    # What the gear is made of: goBILDA's 2314 series is brass. Free-cutting
+    # brass (C36000), as cut: 97 GPa, 0.31, 124 MPa at yield, 8500 kg/m^3. Every
+    # other parameter is the implementation's own.
+    cae:
+      fea:
+        youngs_modulus: 9.7e+10
+        poissons_ratio: 0.31
+        yield_strength: 1.24e+8
+        density: 8500
+        # 1.2 mm on a 41 mm gear: a little more than one element across a tooth
+        # at its pitch circle. See README.md for what a finer one measures.
+        mesh_size: 0.03
+
+# How the scene is handed to MuJoCo: its meshes coarser than the exporter's own
+# 0.1. The worm's thread is fine enough that at 0.1 its mesh has more triangles
+# than MuJoCo reads from one file (200,000); and what is drawn here only has to
+# collide, which a coarser mesh does as well and faster. Only the parameters,
+# so the exporter stays the plugin's own -- and for the simulation alone: 'pc
+# render' writes every file type a package configures, and an MJCF model is not
+# a file this package keeps.
+export:
+  mjcf:
+    tolerance: 0.3
+    angularTolerance: 0.5
+    exclude: [assemblies, interfaces, parts, scenes, sketches]

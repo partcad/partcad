@@ -339,7 +339,7 @@ def test_a_misspelt_instance_is_not_reported_as_a_missing_interface():
     config = AnalysisConfig("fea", {"fix": {"rail": ["lefft"]}})
     assigned, unmatched = cae.assign_ports(config, [_port("//pkg:rail", "left")])
     assert assigned == []
-    assert unmatched == [("rail", "no instance named lefft")]
+    assert unmatched == [("rail", "no instance or port named lefft")]
 
 
 def test_an_empty_fix_instance_list_is_refused():
@@ -475,7 +475,7 @@ def test_an_instance_that_does_not_exist_is_reported_even_when_a_sibling_matched
     config = AnalysisConfig("fea", {"fix": {"rail": ["left", "right"]}})
     assigned, unmatched = cae.assign_ports(config, [_port("//pkg:rail", "left", "a")])
     assert [record["port"] for record in assigned] == ["a"]
-    assert unmatched == [("rail", "no instance named right")]
+    assert unmatched == [("rail", "no instance or port named right")]
 
 
 def test_the_same_holds_for_a_load_named_per_instance():
@@ -483,7 +483,7 @@ def test_the_same_holds_for_a_load_named_per_instance():
     config = AnalysisConfig("fea", {"load": {"rail": {"left": "1 N", "right": "2 N"}}})
     assigned, unmatched = cae.assign_ports(config, [_port("//pkg:rail", "left", "a")])
     assert [record["port"] for record in assigned] == ["a"]
-    assert unmatched == [("rail", "no instance named right")]
+    assert unmatched == [("rail", "no instance or port named right")]
 
 
 def test_every_instance_is_satisfied_by_any_one_of_them():
@@ -621,3 +621,157 @@ def test_dynamic_fixtures_land_without_a_load_default():
 def test_every_analysis_has_a_label_and_roles():
     """What `pc cae`, the IDE and the schema enumerate has to agree."""
     assert set(cae.ANALYSES) == set(cae.ROLES) == set(cae.LABELS)
+
+
+# ---- a load with a direction, and a gravity --------------------------------
+#
+# What a simulation measures acting on a part has a direction, and the part may
+# be upside down or swinging: a stress analysis of it needs both said, in the
+# part's own frame. A magnitude and an implementation's own gravity remain what
+# every section that says neither is answered with.
+
+
+def test_a_load_may_be_a_vector_in_the_parts_frame():
+    """Three forces, each in any unit a load takes -- a bare number is still kilograms."""
+    config = AnalysisConfig(
+        "fea",
+        {"fix": ["hub"], "load": {"tooth": {"21": ["0 N", "-146 N", "12N"]}, "hook": [0, 0, -5]}},
+    )
+    assert config.loads["tooth"]["21"] == pytest.approx([0.0, -146.0, 12.0])
+    assert config.loads["hook"][EVERY_INSTANCE] == pytest.approx([0.0, 0.0, -5 * GRAVITY])
+    assert config.directed
+
+
+@pytest.mark.parametrize(
+    "value,message",
+    [
+        ([1, 2], "list of 2"),
+        ([0, 0, 0, 1], "list of 4"),
+        (["0 N", "0 N", "0 N"], "nought in every direction"),
+        (["1 N", "west", "0 N"], "the y of 'load: tooth:' is not a force or a mass: 'west'"),
+    ],
+)
+def test_a_vector_load_that_is_not_three_forces_is_refused(value, message):
+    with pytest.raises(CaeConfigError, match=message):
+        AnalysisConfig("fea", {"fix": ["hub"], "load": {"tooth": value}})
+
+
+def test_a_vector_lands_as_its_magnitude_and_its_direction():
+    """'load' stays the newtons every implementation reads; 'force' is the vector beside it."""
+    config = AnalysisConfig("fea", {"fix": ["hub"], "load": {"tooth": {"21": ["3 N", "0 N", "-4 N"]}, "hook": "2 N"}})
+    assigned, unmatched = cae.assign_ports(
+        config,
+        [
+            {"interface": "tooth", "instance": "21", "port": "21-tooth"},
+            {"interface": "tooth", "instance": "22", "port": "22-tooth"},
+            {"interface": "hook", "instance": "", "port": "eye"},
+            {"interface": "hub", "instance": "", "port": "bore"},
+        ],
+    )
+    assert unmatched == []
+    by_port = {record["port"]: record for record in assigned}
+    assert sorted(by_port) == ["21-tooth", "bore", "eye"]
+    assert by_port["21-tooth"]["load"] == pytest.approx(5.0)
+    assert by_port["21-tooth"]["force"] == pytest.approx([3.0, 0.0, -4.0])
+    # A magnitude is handed as it always was, with no direction to read.
+    assert by_port["eye"]["load"] == pytest.approx(2.0)
+    assert "force" not in by_port["eye"]
+
+
+def test_the_request_carries_magnitudes_where_it_always_did_and_directions_beside_them():
+    config = AnalysisConfig("fea", {"fix": ["hub"], "load": {"tooth": {"21": ["3 N", "0 N", "-4 N"]}, "hook": "2 N"}})
+    data = json.loads(json.dumps(config.to_data()))
+    assert data["load"] == {"tooth": {"21": pytest.approx(5.0)}, "hook": {EVERY_INSTANCE: pytest.approx(2.0)}}
+    assert data["force"] == {"tooth": {"21": [3.0, 0.0, -4.0]}}
+    assert "gravity" not in data
+    # A section of magnitudes alone is the request it always was.
+    plain = AnalysisConfig("fea", {"fix": ["hub"], "load": {"hook": "2 N"}}).to_data()
+    assert "force" not in plain
+
+
+def test_gravity_is_an_acceleration_in_the_parts_frame():
+    config = AnalysisConfig("fea", {"fix": ["hub"], "gravity": [0, "-9.81 m/s^2", "1.5m/s2"]})
+    assert config.gravity == pytest.approx([0.0, -9.81, 1.5])
+    assert config.to_data()["gravity"] == pytest.approx([0.0, -9.81, 1.5])
+    # Weightless is a thing worth saying, and is said.
+    assert AnalysisConfig("fea", {"fix": ["hub"], "gravity": [0, 0, 0]}).gravity == [0.0, 0.0, 0.0]
+    assert AnalysisConfig("fea", {"fix": ["hub"]}).gravity is None
+
+
+@pytest.mark.parametrize("value", [9.81, [0, -9.81], [0, 0, "9.81 N"], "down"])
+def test_gravity_that_is_not_three_accelerations_is_refused(value):
+    with pytest.raises(CaeConfigError, match="'fea: gravity:'"):
+        AnalysisConfig("fea", {"fix": ["hub"], "gravity": value})
+
+
+def test_only_a_stress_analysis_takes_a_gravity():
+    with pytest.raises(CaeConfigError, match="'dynamic:' does not take gravity"):
+        AnalysisConfig("dynamic", {"fix": ["hub"], "gravity": [0, 0, -9.81]})
+    with pytest.raises(CaeConfigError, match="it takes 'fix:', 'load:', 'gravity:' and 'implementation:'"):
+        AnalysisConfig("fea", {"fix": ["hub"], "weight": 1})
+
+
+def test_what_an_implementation_has_to_read_to_answer_a_section():
+    assert AnalysisConfig("fea", {"fix": ["hub"], "load": {"hook": "2 N"}}).reads() == set()
+    assert AnalysisConfig("fea", {"fix": ["hub"], "load": {"hook": [0, 0, "-2 N"]}}).reads() == {"force"}
+    assert AnalysisConfig("fea", {"fix": ["hub"], "gravity": [0, 0, -9.81]}).reads() == {"gravity"}
+
+
+def test_an_implementation_that_does_not_read_a_direction_is_refused_rather_than_asked():
+    config = AnalysisConfig("fea", {"fix": ["hub"], "load": {"hook": [0, 0, "-2 N"]}, "gravity": [0, 0, -1]})
+    assert cae.unread_by(config, {"force", "gravity"}, "//x:fea") is None
+    said = cae.unread_by(config, {"gravity"}, "//x:fea")
+    assert "a load with a direction" in said and "//x:fea does not read it" in said
+    assert "every load pulled straight down" in said and "state the loads as magnitudes" in said
+    said = cae.unread_by(config, set(), "//x:fea")
+    assert "lists nothing" in said and "reads 'force' and 'gravity'" in said
+    # A section that states neither is answered by anything that answers it.
+    assert cae.unread_by(AnalysisConfig("fea", {"fix": ["hub"]}), set(), "//x:fea") is None
+
+
+def test_a_parameterized_interface_is_named_as_it_is_implemented():
+    """A gear's teeth: '<package>:gear-tooth;module=1.25', instance '21', matched exactly."""
+    name = "//pub/gears:gear-tooth;module=1.25"
+    config = AnalysisConfig("fea", {"fix": ["hub"], "load": {name: {"21": ["0 N", "-1 N", "0 N"]}}})
+    assigned, unmatched = cae.assign_ports(
+        config, [{"interface": name, "instance": "21"}, {"interface": "hub", "instance": ""}]
+    )
+    assert unmatched == [] and assigned[0]["force"] == pytest.approx([0.0, -1.0, 0.0])
+
+
+def test_a_name_under_an_interface_may_be_one_of_its_ports():
+    """One tooth of a gear: its teeth are the ports of one unnamed instance of one interface."""
+    gear = "//pub/gears:gear-28t;module=1.25"
+    config = AnalysisConfig(
+        "fea",
+        {
+            "fix": {"pattern": ["outer"]},
+            "load": {gear: {"13-tooth": ["0 N", "-1 N", "0 N"], EVERY_INSTANCE: "1 N"}, "hook": {"eye-left": "2 N"}},
+        },
+    )
+    records = [
+        {"interface": gear, "instance": "", "port": "12-tooth"},
+        {"interface": gear, "instance": "", "port": "13-tooth"},
+        {"interface": "pattern", "instance": "outer", "port": "outer-TL"},
+        {"interface": "pattern", "instance": "outer", "port": "outer-BR"},
+        {"interface": "pattern", "instance": "inner", "port": "inner-TL"},
+        {"interface": "hook", "instance": "", "port": "eye-left"},
+        {"interface": "hook", "instance": "", "port": "eye-right"},
+    ]
+    assigned, unmatched = cae.assign_ports(config, records)
+    assert unmatched == []
+    by_port = {record["port"]: record for record in assigned}
+    # The tooth named has its own force; every other port of the instance, the interface-wide one.
+    assert by_port["13-tooth"]["force"] == pytest.approx([0.0, -1.0, 0.0])
+    assert by_port["12-tooth"]["load"] == pytest.approx(1.0) and "force" not in by_port["12-tooth"]
+    # Every port of the instance a set names; none of the other instance's.
+    assert by_port["outer-TL"]["fix"] and by_port["outer-BR"]["fix"] and "inner-TL" not in by_port
+    assert by_port["eye-left"]["load"] == pytest.approx(2.0) and "eye-right" not in by_port
+
+
+def test_a_port_named_that_is_not_there_is_reported_as_neither():
+    config = AnalysisConfig("fea", {"fix": ["hub"], "load": {"gear": {"31-tooth": "1 N"}}})
+    _assigned, unmatched = cae.assign_ports(
+        config, [{"interface": "gear", "instance": "", "port": "1-tooth"}, {"interface": "hub", "instance": ""}]
+    )
+    assert unmatched == [("gear", "no instance or port named 31-tooth")]

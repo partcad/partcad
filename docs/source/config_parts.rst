@@ -413,6 +413,28 @@ A ``:`` or a ``//`` is fine -- a material reference such as
 ``//pub/std/materials:water`` or a URL is a value like any other, because only
 a ``:`` *before* the parameters separates a package from the object it names.
 
+A reference may also say what the object it points at carries where it is
+used: its own analysis sections (``fea:``, ``dynamic:``, ``thermal:``, ``cfd:``,
+see :ref:`pc cae <cae>`), each replacing the source's. A gear is loaded one way
+in one gearbox and another way in the next, and the package that buys it is the
+one that knows how -- the product a simulation measured the loads in. The
+reference is analysed as its source's geometry, by its source's ports, under its
+own conditions:
+
+.. code-block:: yaml
+
+  parts:
+    knee-gear:
+      type: alias
+      source: //pub/robotics/parts/gobilda:motion/worm_gear_28t
+      desc: The knee's worm gear, as the arm loads it
+      fea:
+        fix:
+          //pub/robotics/parts/gobilda:4xM4-16mm-pattern-threaded-thru-4mm: [outer]
+        load:
+          "//pub/robotics/parts/gobilda:gear-28t;module=1.25,shift=0.2":
+            "13-tooth": [0 N, -2.7 N, -155.2 N]
+
 An enrich says which values it wants, and nothing about how the object is
 built. ``path``, the requirements, the sandbox versions, the inputs of the
 types that build one object out of another -- and ``parameters:``, which
