@@ -622,6 +622,9 @@ aioboto3 = "^15.5.0"
 # not, and `partcad_cli.click.command` imports it at the top.
 click = "^8.4.2"
 rich-click = "^1.9.8"
+# `pc mcp`, restated for the same reason; requirements.txt says why it is an
+# ordinary dependency and why it stops below 3.
+mcp = ">=2.3.0,<3"
 
 [tool.poetry.group.performance.dependencies]
 snakeviz = "^2.2.2"

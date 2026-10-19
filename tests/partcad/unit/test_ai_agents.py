@@ -185,7 +185,9 @@ def test_an_installation_carrying_no_skills_installs_nothing(tmp_path, monkeypat
     assert ai_agents.available_skills() == []
     assert not ai_agents.install_claude_plugin(str(tmp_path))
     assert not ai_agents.install_cursor_skills(str(tmp_path))
-    assert not ai_agents.install_agent_skills(str(tmp_path))
+    # The MCP server is not package data -- its entry is written by code -- so
+    # it is left out here, where the question is what the missing data costs.
+    assert not ai_agents.install_agent_skills(str(tmp_path), mcp=False)
     assert not (tmp_path / ".claude").exists()
 
 
@@ -388,3 +390,109 @@ def test_every_agent_is_installed_for_by_default(tmp_path):
     assert sorted(ai_agents.AGENTS) == ["claude", "cursor"]
     assert (tmp_path / ".claude" / "skills" / "pc").is_dir()
     assert (tmp_path / ".cursor" / "skills" / "pc-init").is_dir()
+
+
+# --- The MCP server ---
+
+
+def read_json(path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_both_agents_are_given_the_mcp_server(tmp_path):
+    assert ai_agents.install_agent_skills(str(tmp_path))
+
+    claude = read_json(tmp_path / ".mcp.json")["mcpServers"]["partcad"]
+    assert claude == {"type": "stdio", "command": "pc", "args": ["-p", "${CLAUDE_PROJECT_DIR:-.}", "mcp"]}
+    cursor = read_json(tmp_path / ".cursor" / "mcp.json")["mcpServers"]["partcad"]
+    assert cursor == {"command": "pc", "args": ["-p", "${workspaceFolder}", "mcp"]}
+
+
+def test_the_server_is_pointed_at_a_package_below_the_repository_root(repository):
+    """The file is at the root, where the editor reads it; the package it serves need not be."""
+    package = repository / "packages" / "widget"
+    package.mkdir(parents=True)
+
+    ai_agents.install_agent_skills(str(package))
+
+    assert read_json(repository / ".mcp.json")["mcpServers"]["partcad"]["args"] == [
+        "-p",
+        "${CLAUDE_PROJECT_DIR:-.}/packages/widget",
+        "mcp",
+    ]
+    assert read_json(repository / ".cursor" / "mcp.json")["mcpServers"]["partcad"]["args"][1] == (
+        "${workspaceFolder}/packages/widget"
+    )
+    assert not (package / ".mcp.json").exists()
+
+
+def test_the_entry_runs_the_command_pc_has():
+    """`pc -p <package> mcp`: a global option, then the subcommand."""
+    from partcad_cli.click.command import cli
+
+    entry = ai_agents.mcp_server_entry("claude", "/repo", "/repo")
+    assert entry["command"] == "pc"
+    assert "-p" in next(param for param in cli.params if param.name == "path").opts
+    assert cli.get_command(None, entry["args"][-1]) is not None
+
+
+def test_other_servers_in_the_file_are_kept(tmp_path):
+    theirs = {"mcpServers": {"github": {"command": "gh-mcp"}}, "something": "else"}
+    (tmp_path / ".mcp.json").write_text(json.dumps(theirs), encoding="utf-8")
+
+    assert ai_agents.install_mcp_config("claude", str(tmp_path), str(tmp_path))
+
+    config = read_json(tmp_path / ".mcp.json")
+    assert config["mcpServers"]["github"] == {"command": "gh-mcp"}
+    assert config["something"] == "else"
+    assert config["mcpServers"]["partcad"]["command"] == "pc"
+
+
+def test_an_out_of_date_entry_is_replaced(tmp_path):
+    stale = {"mcpServers": {"partcad": {"command": "/old/venv/bin/pc", "args": ["mcp"]}}}
+    (tmp_path / ".mcp.json").write_text(json.dumps(stale), encoding="utf-8")
+
+    assert ai_agents.install_mcp_config("claude", str(tmp_path), str(tmp_path))
+
+    assert read_json(tmp_path / ".mcp.json")["mcpServers"]["partcad"] == ai_agents.mcp_server_entry(
+        "claude", str(tmp_path), str(tmp_path)
+    )
+
+
+@pytest.mark.parametrize("content", ["{ not json", "[]", '{"mcpServers": []}'])
+def test_a_file_that_cannot_be_merged_into_is_left_alone(tmp_path, content):
+    (tmp_path / ".mcp.json").write_text(content, encoding="utf-8")
+
+    assert not ai_agents.install_mcp_config("claude", str(tmp_path), str(tmp_path))
+
+    assert (tmp_path / ".mcp.json").read_text(encoding="utf-8") == content
+
+
+@pytest.mark.skipif(not hasattr(os, "symlink") or os.name == "nt", reason="needs symlinks")
+def test_a_symlinked_configuration_is_refused(tmp_path):
+    shared = tmp_path / "shared.json"
+    shared.write_text("{}", encoding="utf-8")
+    os.symlink(shared, tmp_path / ".mcp.json")
+
+    assert not ai_agents.install_mcp_config("claude", str(tmp_path), str(tmp_path))
+
+    assert shared.read_text(encoding="utf-8") == "{}"
+
+
+def test_no_mcp_means_no_server(tmp_path):
+    assert ai_agents.install_agent_skills(str(tmp_path), mcp=False)
+
+    assert not (tmp_path / ".mcp.json").exists()
+    assert not (tmp_path / ".cursor" / "mcp.json").exists()
+
+
+def test_only_the_named_agents_are_given_the_server(tmp_path):
+    ai_agents.install_agent_skills(str(tmp_path), ["cursor"])
+
+    assert (tmp_path / ".cursor" / "mcp.json").is_file()
+    assert not (tmp_path / ".mcp.json").exists()
+
+
+def test_every_agent_has_somewhere_to_put_the_server():
+    """An agent added to AGENTS without one would get the skills and silently no server."""
+    assert sorted(ai_agents.MCP_CONFIGS) == sorted(ai_agents.AGENTS)

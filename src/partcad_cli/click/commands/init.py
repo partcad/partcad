@@ -125,6 +125,14 @@ class DynamicPromptOption(click.Option):
     help="Which agents to install the skills for: 'all', or a comma-separated list (claude, cursor)",
 )
 @click.option(
+    "--mcp/--no-mcp",
+    "mcp",
+    is_flag=True,
+    default=True,
+    show_envvar=True,
+    help="With the skills, add the PartCAD MCP server (pc mcp) to the agents' .mcp.json and .cursor/mcp.json",
+)
+@click.option(
     "-p",
     "--private",
     is_flag=True,
@@ -157,6 +165,7 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
         # "partcad.ai_agents.AGENTS" is installed for without touching the CLI.
         agents = kwargs.pop("agents")
         agents = None if agents.strip() == "all" else [a.strip() for a in agents.split(",") if a.strip()]
+        mcp = kwargs.pop("mcp")
 
         if skills_only:
             # The whole command, for a repository that has a package already --
@@ -167,7 +176,7 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
             if not install_skills:
                 pc.logging.error("'--skills-only' and '--no-skills' ask for opposite things")
                 return
-            if not pc.install_agent_skills(os.path.dirname(os.path.abspath(dst_path)), agents):
+            if not pc.install_agent_skills(os.path.dirname(os.path.abspath(dst_path)), agents, mcp):
                 # An error here, unlike below: installing them is the whole of
                 # what was asked for, so there is nothing left that succeeded.
                 pc.logging.error("Failed installing the AI agent skills!")
@@ -212,6 +221,6 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
             # Reported the same way, and a failure to install them is not a
             # failure to create the package either.
             if install_skills:
-                pc.install_agent_skills(package_dir, agents)
+                pc.install_agent_skills(package_dir, agents, mcp)
         else:
             pc.logging.error(f"Failed creating '{dst_path}'!")
