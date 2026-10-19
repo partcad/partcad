@@ -33,7 +33,7 @@ import os
 
 import yaml
 
-from . import __version__, assy_lint, config_template, template_render
+from . import __version__, assy_lint, config_template, pcignore, template_render
 from .parameters import coerce_parameter_value, normalize_parameters
 
 # How far up from the file the search for a package declaring it goes. A
@@ -265,6 +265,9 @@ def _packages_above(directory: str, include_paths=()) -> list:
         config_path = os.path.join(directory, CONFIG_FILENAME)
         if os.path.isfile(config_path):
             found.append(directory)
+        if pcignore.is_ignored(directory):
+            # Not part of the package around it (see 'partcad_utils.pcignore').
+            break
         parent = os.path.dirname(directory)
         if parent == directory:
             break

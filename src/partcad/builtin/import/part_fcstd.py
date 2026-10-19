@@ -18,10 +18,10 @@ about the document decides what the part is:
     OpenCASCADE's own format, so nothing is translated on the way.
 
 What that cannot read -- a document saved with binary shapes, or one whose
-result is nowhere in the archive -- is converted by cadmpeg to STEP instead. That
-STEP is read in a process of its own, because OpenCASCADE can crash on some of
-what cadmpeg writes (transformed pcurves), and a crash is better reported than
-suffered.
+result is nowhere in the archive -- is converted by cadmpeg to STEP instead, and
+read the way every STEP file is (see 'wrappers/step_repair.py' for what cadmpeg
+writes that OpenCASCADE would otherwise crash on). That STEP holds every shape
+the document stored, so it is the second choice and not the first.
 
 The document's history (sketches, constraints, the parametric features) does
 not survive either way: what PartCAD gets is the geometry FreeCAD last
@@ -48,20 +48,6 @@ CACHE_VERSION = 1
 # A feature's 'Shape' output in cadmpeg's model names the archive entry holding
 # it: 'fcstd:model:body#Fillet:Shape:Fillet.Shape.brp:47'.
 SHAPE_ENTRY = re.compile(r"#[^:]*:Shape:(?P<entry>[^:]+\.brp)(?::|$)")
-
-# Run with the sandbox's interpreter to read a STEP file and write it back as
-# BREP: OpenCASCADE crashing in there is a return code here.
-STEP_TO_BREP = """
-import sys
-from OCP.BRepTools import BRepTools
-from OCP.IFSelect import IFSelect_RetDone
-from OCP.STEPControl import STEPControl_Reader
-
-reader = STEPControl_Reader()
-if reader.ReadFile(sys.argv[1]) != IFSelect_RetDone or reader.TransferRoots() == 0:
-    sys.exit(2)
-BRepTools.Write_s(reader.OneShape(), sys.argv[2])
-"""
 
 
 def run(command):
@@ -135,14 +121,18 @@ def from_archive(source, cadmpeg, tmp):
 
 def from_step(source, cadmpeg, tmp):
     """The solids of everything cadmpeg converts the document to."""
+    import step_repair
+    from OCP.IFSelect import IFSelect_RetDone
+    from OCP.STEPControl import STEPControl_Reader
+
     step = os.path.join(tmp, "document.step")
-    brep = os.path.join(tmp, "document.brep")
     run([cadmpeg, "convert", source, "-o", step])
-    result = subprocess.run([sys.executable, "-c", STEP_TO_BREP, step, brep], capture_output=True, check=False)
-    if result.returncode != 0 or not os.path.isfile(brep):
-        reason = "OpenCASCADE crashed reading it" if result.returncode < 0 else "OpenCASCADE could not read it"
-        raise RuntimeError("cadmpeg converted %s to STEP, but %s" % (os.path.basename(source), reason))
-    return solids(read_brep(brep))
+    reader = STEPControl_Reader()
+    with step_repair.readable(step) as readable_path:
+        read = reader.ReadFile(readable_path)
+    if read != IFSelect_RetDone or reader.TransferRoots() == 0:
+        raise RuntimeError("cadmpeg converted %s to STEP, but OpenCASCADE could not read it" % os.path.basename(source))
+    return solids(reader.OneShape())
 
 
 def convert(source, cache_dir):

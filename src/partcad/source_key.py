@@ -57,6 +57,8 @@ import time
 import typing
 import weakref
 
+from partcad_utils import pcignore
+
 from . import logging as pc_logging
 
 # Directories that hold no source a script imports: version control, caches,
@@ -88,7 +90,7 @@ def _sources(directory: str) -> typing.List[typing.Tuple[str, str]]:
         for name in dirs:
             if name.startswith(".") or name in _SKIPPED_DIRECTORIES:
                 continue
-            if os.path.isfile(os.path.join(root, name, _PACKAGE_FILE)):
+            if os.path.isfile(os.path.join(root, name, _PACKAGE_FILE)) or pcignore.is_ignored(os.path.join(root, name)):
                 continue
             kept.append(name)
         dirs[:] = sorted(kept)

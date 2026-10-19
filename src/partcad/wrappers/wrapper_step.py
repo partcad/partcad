@@ -30,6 +30,7 @@ from OCP.TopoDS import (
 sys.path.append(os.path.dirname(__file__))
 import ocp_serialize
 import step_metadata
+import step_repair
 import wrapper_common
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
@@ -42,7 +43,9 @@ def process(path, request):
     compound = None
     try:
         reader = STEPControl_Reader()
-        readStatus = reader.ReadFile(path)
+        # What OpenCASCADE would crash on is repaired first (see step_repair).
+        with step_repair.readable(path) as readable_path:
+            readStatus = reader.ReadFile(readable_path)
         if readStatus != OCP.IFSelect.IFSelect_RetDone:
             raise Exception("STEP File could not be loaded")
         for i in range(reader.NbRootsForTransfer()):

@@ -1,0 +1,11 @@
+desc: |
+  A STEP file OpenCASCADE crashes on unless it is repaired first.
+
+  'cadmpeg.step' is what cadmpeg 0.6.1 writes for 'design_history.FCStd' of
+  its corpus (CC0-1.0; see '../import_fcstd'): it places its pcurves with
+  CARTESIAN_TRANSFORMATION_OPERATOR_2D instances that leave out the two
+  attributes STEP inherits from functionally_defined_transformation.
+
+parts:
+  cadmpeg:
+    type: step

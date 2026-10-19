@@ -26,6 +26,7 @@ import os
 import socket
 from typing import Optional
 
+from . import pcignore
 from .framing import read_message, write_message
 
 # How long to wait for a daemon to answer a liveness probe.
@@ -34,11 +35,12 @@ LIVENESS_TIMEOUT = 1.0
 
 def determine_root_path(start: Optional[str] = None) -> str:
     """Find the workspace root the way ``partcad.Context`` does, without importing
-    partcad. Walks up while a parent ``partcad.yaml`` exists."""
+    partcad. Walks up while a parent ``partcad.yaml`` exists, and not out of a
+    folder holding a '.pcignore' (see 'partcad_utils.pcignore')."""
     root = os.path.abspath(start or os.getcwd())
     if os.path.isfile(root):
         root = os.path.dirname(root)
-    while os.path.exists(os.path.join(root, "..", "partcad.yaml")):
+    while pcignore.climbs_to_parent(root):
         root = os.path.abspath(os.path.join(root, ".."))
     return root
 

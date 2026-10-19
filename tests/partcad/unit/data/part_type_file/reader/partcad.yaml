@@ -1,0 +1,11 @@
+desc: |
+  Teaches PartCAD a file format of its own: a box, written as its three sizes.
+  What a plugin package that reads a format looks like, at its smallest.
+
+partTypes:
+  box_file:
+    path: read_box.py
+    extension: box
+    # Never pulled by the tests that read it, and not a real image: what is
+    # checked is whose declaration a part is keyed under.
+    dockerImage: ghcr.io/partcad/partcad-test-box-reader:1

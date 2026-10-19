@@ -58,6 +58,7 @@ const APPLICATION_NAMES: { [tool: string]: string } = {
     blender: 'Blender',
     gazebo: 'Gazebo',
     mujoco: 'MuJoCo',
+    solidcraft: 'SolidCraft',
 };
 
 export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
@@ -99,6 +100,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         vscode.commands.registerCommand(`partcad.openInKiCad`, (item) => this.openWith('kicad', item));
         vscode.commands.registerCommand(`partcad.openInBlender`, (item) => this.openWith('blender', item));
         vscode.commands.registerCommand(`partcad.openInMuJoCo`, (item) => this.openWith('mujoco', item));
+        vscode.commands.registerCommand(`partcad.openInSolidCraft`, (item) => this.openWith('solidcraft', item));
 
         vscode.commands.registerCommand(`partcad.test`, (item) => this.test(item));
 

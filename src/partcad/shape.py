@@ -1637,7 +1637,8 @@ class Shape(ShapeConfiguration):
         # 'output.package_cache_dir'). Added here, after anything has been keyed
         # on the request, because it is a path on this machine and says nothing
         # about what the file will contain.
-        request.setdefault("cache_dir", output.package_cache_dir(ctx, impl.project))
+        if getattr(impl, "project", None) is not None:
+            request.setdefault("cache_dir", output.package_cache_dir(ctx, impl.project))
 
         request_serialized = shape_envelope.serialize(request)
 

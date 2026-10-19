@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, List, Optional
 import ruamel.yaml
 from ruamel.yaml.scalarstring import SingleQuotedScalarString
 
-from partcad_utils import assy_filter
+from partcad_utils import assy_filter, pcignore
 
 from . import (
     assembly,
@@ -36,9 +36,6 @@ from . import (
     assembly_guide,
 )
 from . import config as pc_config
-from . import (
-    consts,
-)
 from . import document as pc_document
 from . import (
     factory,
@@ -1050,13 +1047,7 @@ class Project(project_config.Configuration):
             # check failed on a tree nobody had touched.
             sub_folders = sorted(f.name for f in os.scandir(self.config_dir) if f.is_dir())
             for subdir in list(sub_folders):
-                if os.path.exists(
-                    os.path.join(
-                        self.config_dir,
-                        subdir,
-                        consts.DEFAULT_PACKAGE_CONFIG,
-                    )
-                ):
+                if pcignore.is_subpackage(os.path.join(self.config_dir, subdir)):
                     children.append(self.name + "/" + subdir if absolute else subdir)
 
         dependencies = self.dependencies()

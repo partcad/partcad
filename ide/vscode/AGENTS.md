@@ -703,7 +703,7 @@ npm run pretest && PARTCAD_TEST_WITH_CSPELL=streetsidesoftware.code-spell-checke
 ## Opening a file in a third-party application
 
 The Explorer's per-item **"Open in > ..."** menu hands the item's file to `partcad.openExternal`, which runs
-`pc --no-ansi ide open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Five
+`pc --no-ansi ide open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Six
 applications, each offered for the objects it can actually open:
 
 | Menu entry | Command | Shown for |
@@ -713,6 +713,13 @@ applications, each offered for the objects it can actually open:
 | Gazebo | `partcad.openInGazebo` | scenes of type `world` (`viewItem == sceneWorld`) |
 | MuJoCo | `partcad.openInMuJoCo` | scenes of type `mjcf` (`viewItem == sceneMjcf`) |
 | KiCad | `partcad.openInKiCad` | parts of type `kicad` (`viewItem == partKicad`) |
+| SolidCraft | `partcad.openInSolidCraft` | parts and assemblies |
+
+SolidCraft, like Gazebo and MuJoCo, is not one of PartCAD's own: its `open:` entry is declared by the plugin
+package for it ([`partcad-solidcraft`](https://github.com/partcad/partcad-solidcraft)), and `pc ide open` finds it
+only in a workspace that imports that package. Elsewhere the entry is still on the menu, and picking it shows
+`pc ide open`'s own answer -- the applications it does know -- rather than the menu guessing at what the
+workspace imports.
 
 The narrow ones are why `PartcadItem` gives those objects a context value of their own: `viewItem` is one
 string compared exactly, so "a scene Gazebo can open" and "a part KiCad can open" have to *be* separate

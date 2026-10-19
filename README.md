@@ -216,8 +216,8 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Using a part type the package defines itself (`partTypes`), including one that reads a file format of its
     own
     - [x] [SolidCraft] designs (`.solidcraft`), `Rhino` (`.3dm`) and `IGES`, from the SolidCraft plugin package
-          ([`plugins/solidcraft`](./plugins/solidcraft/README.md)), which downloads SolidCraft on first use or
-          runs in its own container image
+          ([`partcad-solidcraft`](https://github.com/partcad/partcad-solidcraft)), which downloads SolidCraft on
+          first use or runs in its own container image
 - Part and interface blueprints (2D)
   - Using scripting languages
     - [x] [CadQuery]

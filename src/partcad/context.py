@@ -15,7 +15,7 @@ import time
 import urllib.parse
 from typing import Any, Optional
 
-from partcad_utils import process_role
+from partcad_utils import pcignore, process_role
 
 from . import consts
 from . import logging as pc_logging
@@ -457,7 +457,9 @@ class Context:
                 root_path = os.path.dirname(root_path)
         initial_root_path = os.path.abspath(root_path)
         if search_root:
-            while os.path.exists(os.path.join(root_path, "..", "partcad.yaml")):
+            # Up while the parent is a package, and not out of a folder it
+            # ignores (see 'partcad_utils.pcignore').
+            while pcignore.climbs_to_parent(root_path):
                 root_path = os.path.join(root_path, "..")
         self.root_path = os.path.abspath(root_path)
         if self.root_path == initial_root_path and root_file != "":
@@ -988,13 +990,7 @@ class Context:
         subfolders = (
             [f.name for f in os.scandir(project.config_dir) if f.is_dir()] if os.path.isdir(project.config_dir) else []
         )
-        if next_import in subfolders and os.path.exists(
-            os.path.join(
-                project.config_dir,
-                next_import,
-                consts.DEFAULT_PACKAGE_CONFIG,
-            )
-        ):
+        if next_import in subfolders and pcignore.is_subpackage(os.path.join(project.config_dir, next_import)):
             pc_logging.debug("Importing a subfolder (get): %s..." % next_project_path)
             prj_conf = {
                 "name": next_project_path,
@@ -1132,13 +1128,7 @@ class Context:
             [f.name for f in os.scandir(project.config_dir) if f.is_dir()] if os.path.isdir(project.config_dir) else []
         )
         for subdir in list(subfolders):
-            if os.path.exists(
-                os.path.join(
-                    project.config_dir,
-                    subdir,
-                    consts.DEFAULT_PACKAGE_CONFIG,
-                )
-            ):
+            if pcignore.is_subpackage(os.path.join(project.config_dir, subdir)):
                 # TODO(clairbee): check if this subdir is already imported
                 next_project_path = get_child_project_path(project.name, subdir)
                 if is_excluded(next_project_path, exclude):
