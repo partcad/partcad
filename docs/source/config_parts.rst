@@ -568,7 +568,7 @@ FreeCAD documents -- and a part names one of those by its bare name,
 `partcad-solidcraft <https://github.com/partcad/partcad-solidcraft>`_, is a whole
 package of them: SolidCraft designs, Rhino and IGES, downloading SolidCraft's
 command line tool on demand or running in the image it publishes, with its tests
-kept beside it in a folder PartCAD ignores (see :ref:`pcignore`).
+kept beside it in a folder PartCAD ignores (see :ref:`.pcignore <pcignore>`).
 
 Should PartCAD implement a type natively that you find yourself writing again
 and again, please file an issue on GitHub or write to
