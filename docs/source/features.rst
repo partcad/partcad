@@ -154,9 +154,11 @@ readable as one. It is half see-through, so the opening it covers still reads as
 leaves it alone — that slider is about the shape rather than about what is drawn on top of it. It is part of the
 port, so the port's checkbox draws or hides both.
 
-The ``ports`` and ``interfaces`` lines start folded up — for an assembly they run to hundreds of rows, and
-unfolded they bury the hierarchy they hang off. Pointing at a part or a sub-assembly makes it **flicker** in the
-3D view, which is how to tell which of the shapes on screen a line is without moving the camera.
+The ``<ports>`` and ``<interfaces>`` lines start folded up — for an assembly they run to hundreds of rows, and
+unfolded they bury the hierarchy they hang off — and so does every part, since those two lines are all a part
+has under it. They are written in italics, so that where they sit beside the parts of an assembly they do not
+read as two more of them. Pointing at a part or a sub-assembly makes it **flicker** in the 3D view, which is how
+to tell which of the shapes on screen a line is without moving the camera.
 
 The 3D view, and the model of an FEA or CFD result, can also be navigated with a
 `3Dconnexion <https://3dconnexion.com/>`_ **SpaceMouse**: the cap moves the model the way it is pushed and

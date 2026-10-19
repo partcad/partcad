@@ -47,6 +47,37 @@ export function getPopupTerminalFromSetting(namespace: string, scope?: Configura
     return config.get<string>('popupTerminal');
 }
 
+/**
+ * What `partcad.develIndex` tells the service: `true` or `false`, or `undefined` for nothing at all.
+ *
+ * A settings file that sets it decides. Where none does, the answer depends on whether this runs from
+ * sources, the way PartCAD's own default does: an extension running from its sources -- an Extension
+ * Development Host, or its test host -- turns it on, and an installed one says nothing, which leaves it to
+ * PartCAD: on where PartCAD runs from its sources (an editable install), off where it is a wheel or a
+ * bundle. `package.json` cannot declare a default that depends on anything, so its `false` is what the
+ * Settings editor shows rather than what an unset setting means.
+ */
+export function getDevelIndexFromSetting(
+    namespace: string,
+    extensionFromSources: boolean,
+    scope?: ConfigurationScope,
+): boolean | undefined {
+    const config = getConfiguration(namespace, scope);
+    const inspected = config.inspect<boolean>('develIndex');
+    const stated = [inspected?.globalValue, inspected?.workspaceValue, inspected?.workspaceFolderValue].some(
+        (value) => value !== undefined,
+    );
+    return develIndexFor(stated ? config.get<boolean>('develIndex') === true : undefined, extensionFromSources);
+}
+
+/** `getDevelIndexFromSetting` once the settings files have been read. Exported for the test suite. */
+export function develIndexFor(stated: boolean | undefined, extensionFromSources: boolean): boolean | undefined {
+    if (stated !== undefined) {
+        return stated;
+    }
+    return extensionFromSources ? true : undefined;
+}
+
 export function getViewerPerformanceDebugFromSetting(namespace: string, scope?: ConfigurationScope): boolean {
     const config = getConfiguration(namespace, scope);
     return config.get<boolean>('viewer.performanceDebug') ?? false;

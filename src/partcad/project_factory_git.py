@@ -1096,10 +1096,11 @@ class GitImportConfiguration:
         """Point the public index at its unreleased branch when asked to.
 
         The public index lives in a repository of its own, and a package
-        imports it at 'main': the branch 'pc init' has the dependency track, and
-        the commit 'pc update' pins it to from there. Either way that is the
-        released state.
-        'develIndex' is how the staged state is exercised instead, and it names no
+        imports it at 'main': the branch 'pc init' has the dependency track, at
+        the commit it pins it to and 'pc update' moves it on from. Either way
+        that is the released state.
+        'develIndex' is how the staged state is exercised instead -- on by default
+        where PartCAD runs from its sources, off otherwise -- and it names no
         dependency: the index is recognized by the repository its URL points at,
         so it is redirected wherever in the dependency tree it appears and under
         whatever name the importing package gave it.

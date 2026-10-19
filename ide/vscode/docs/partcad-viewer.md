@@ -93,10 +93,16 @@ What starts out ticked follows from depth and nothing else. The object's own por
 the few it says are its own; the ports of everything inside it are not, because an assembly of forty parts has a
 frame at every hole of every one of them and all of that at once is not a view of anything.
 
-The `ports` and `interfaces` rows **start folded**. The hierarchy is what the pane is for, and those two run to a
-dozen rows for a part and hundreds for an assembly; unfolded they bury what they are attached to. An interface
-*instance* is not one of those groups — it is one interface with the ports it is made of — so it stays open inside
-the folded group. Folding is about the rows and not about what is drawn: the object's own ports are still shown.
+The `<ports>` and `<interfaces>` rows **start folded**, and so does every **part**. The hierarchy is what the pane
+is for, and those two run to a dozen rows for a part and hundreds for an assembly; unfolded they bury what they are
+attached to. A part — a node that holds no other node — has nothing under it but those two, so it is folded as
+well: otherwise every part of an assembly is followed by two group rows before the next part, and the list of what
+the assembly holds is broken up by rows that are not any of it. That rule does not ask about depth, so a part shown
+on its own starts folded too. A sub-assembly stays open, and its own `<ports>` and `<interfaces>` rows sit among the
+things it holds, which is why they are named in angle brackets and drawn in italics: a link can be called `ports`,
+and a group row is not a link. An interface *instance* is not one of those groups — it is one interface with the
+ports it is made of — so it stays open inside the folded group. Folding is about the rows and not about what is
+drawn: the object's own ports are still shown.
 
 **Pointing at a part or a sub-assembly flickers it** — seven times a second, driven by the clock rather than by a
 frame count, so the rate holds whatever the renderer manages (`FLICKER_HZ` and `flickerOn` in `nodes.ts`). It is
