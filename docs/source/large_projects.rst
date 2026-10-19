@@ -43,9 +43,11 @@ against with ``revision:`` (see :ref:`pinning-dependencies`):
       track: main
       revision: 5e2161123918f9c796c44e190f5a2e8d5ee7292e
 
-``pc add dep`` and ``pc init`` write it that way, and loading a package never moves it. ``pc update`` does,
-when you ask: it moves every ``revision:`` to the tip of its ``track:`` and leaves the change in
-``partcad.yaml`` for you to review and commit. So:
+``pc add dep`` and ``pc init`` write it that way, and loading a package never moves it. (``pc init`` pins only
+when it can ask the repository where the branch is: offline, or when the repository cannot be reached, it leaves
+``revision:`` out and warns, and ``pc update`` writes it later.) ``pc update`` moves it when you ask: it moves
+every ``revision:`` to the tip of its ``track:`` and leaves the change in ``partcad.yaml`` for you to review and
+commit. So:
 
 * every checkout of a commit builds against the same commits of everything it depends on, today and in a year;
 * what changed between two builds is in the history of your own repository, as a diff of ``revision:`` lines;
