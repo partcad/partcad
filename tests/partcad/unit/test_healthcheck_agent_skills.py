@@ -119,6 +119,20 @@ def test_the_fix_does_not_install_for_an_agent_that_was_not_there(workspace):
     assert not (workspace / ".claude").exists()
 
 
+def test_the_fix_leaves_the_mcp_configuration_alone(workspace):
+    """Stale skills are repaired; an `.mcp.json` the user never had, or deleted, is not "repaired" into being."""
+    ai_agents.install_agent_skills(str(workspace), mcp=False)
+    age_the_plugin(workspace)
+    age_the_cursor_skill(workspace)
+
+    check = AgentSkillsCheck()
+    check.test()
+    assert check.fix()
+
+    assert not (workspace / ".mcp.json").exists()
+    assert not (workspace / ".cursor" / "mcp.json").exists()
+
+
 def test_it_is_found_by_the_healthcheck_discovery(workspace):
     """The runner discovers checks by walking the package, so this must be in it.
 

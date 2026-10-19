@@ -504,3 +504,22 @@ def test_a_long_daemon_traceback_keeps_only_where_it_failed(tmp_path):
     assert traceback.startswith("...")
     assert traceback.endswith("ValueError: boom")
     assert len(traceback.splitlines()) == mcp_server._TRACEBACK_TAIL + 1
+
+
+def test_a_question_without_a_context_is_asked_again_on_a_new_connection(tmp_path):
+    """Nothing went ahead of it to find the connection dead, and asking again changes nothing."""
+    daemon, server = serve(tmp_path, {"version": lambda params, emit: {"partcad": "9.9.9"}})
+    daemon.drops.append("version")
+    result = call(server, "version")
+    assert not result.is_error, body(result)
+    assert daemon.connections == 2
+    assert len(requests(daemon, "version")) == 2
+
+
+def test_a_request_without_a_context_that_does_something_is_not_sent_again(tmp_path):
+    daemon, server = serve(tmp_path, {"adhoc.convert": lambda params, emit: None})
+    daemon.drops.append("adhoc.convert")
+    result = call(server, "execute", {"method": "adhoc.convert"})
+    assert result.is_error
+    assert "may or may not have finished" in body(result)["error"]
+    assert len(requests(daemon, "adhoc.convert")) == 1

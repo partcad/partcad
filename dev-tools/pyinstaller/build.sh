@@ -998,10 +998,13 @@ trap 'rm -rf "${SMOKE_DIR}"' EXIT
 mcp_initialize='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"build.sh","version":"0"}}}'
 mcp_status=0
 mcp_answer="$(cd "${SMOKE_DIR}" && printf '%s\n' "${mcp_initialize}" | "${BUNDLE_DIR}/pc${EXE_SUFFIX}" mcp)" || mcp_status=$?
-case "${mcp_answer}" in
-*'"serverInfo"'*) ;;
+# Both: an answer from a server that then dies on the way out is a bundle
+# missing something the shutdown path imports, and it is as broken as one that
+# never answered.
+case "${mcp_status}:${mcp_answer}" in
+0:*'"serverInfo"'*) ;;
 *)
-  echo "error: 'pc mcp' did not answer an MCP initialize request (exit ${mcp_status}):" >&2
+  echo "error: 'pc mcp' did not answer an MCP initialize request and exit cleanly (exit ${mcp_status}):" >&2
   printf '       %s\n' "${mcp_answer}" >&2
   exit 1
   ;;
