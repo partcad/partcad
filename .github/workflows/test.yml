@@ -198,7 +198,7 @@ env:
   # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
   # the public index, uses PYTHONS_SANDBOX instead.
   PYTHONS_SLIM: '["3.10", "3.14"]'
-  VERSION: 0.8.220
+  VERSION: 0.8.222
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
   PC_TELEMETRY_PERFORMANCE: false
@@ -993,6 +993,15 @@ jobs:
     # 3.10" had reached 56-57 minutes by 0.8.204, and the simulation safety tests
     # (#797) took it past 60 at 99% on 0.8.205 -- a job cancelled at its limit
     # uploads no coverage and says nothing about the tests it did not reach.
+    #
+    # Windows is the platform this number is for. On devel's runs of 2026-10-18
+    # its cells took 37-62 minutes ("windows-latest, 3.10" the slowest), macOS
+    # 31-45 and Linux 23-39. Windows has no Docker for PartCAD's images, so every
+    # sandbox there is a conda environment built from nothing inside the session,
+    # and that is where the difference goes: the first conversion to need each
+    # environment takes minutes ("test_convert_cad_file[stl-step]" 222 s, against
+    # 59 s on Linux), and so does each interpreter "test_runtime_python"
+    # provisions (355 s for the three, against 95 s).
     timeout-minutes: 75
 
     # The tag PartCAD addresses its own container images by, empty on a run

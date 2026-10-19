@@ -79,6 +79,19 @@ Feature: `pc init` command
     And a file named ".cursor/skills/init/SKILL.md" should not exist
     And the skill "pc-init" should be named after its directory
     And STDERR should contain "Installed the 'pc' plugin"
+    # And the MCP server the skills' agent can drive PartCAD through.
+    And a file named ".mcp.json" should be created
+    And a file named ".cursor/mcp.json" should be created
+    And STDERR should contain "Added the PartCAD MCP server"
+
+  @pc-init @agent-skills @mcp
+  Scenario: Install the skills without the MCP server
+    Given a file named "partcad.yaml" does not exist
+    When I run "pc --no-ansi init --no-mcp"
+    Then the command should exit with a status code of "0"
+    And a file named ".cursor/skills/pc-init/SKILL.md" should be created
+    And a file named ".mcp.json" should not exist
+    And a file named ".cursor/mcp.json" should not exist
 
   @pc-init @agent-skills @skills-only
   Scenario: Install the skills into a repository that has a package already

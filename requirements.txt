@@ -58,3 +58,17 @@ backports.zstd>=1.6.0; python_version < "3.14"
 # baseline.
 click==8.4.2
 rich-click==1.9.8
+
+# ---------------------------------------------------------------------------
+# The MCP server
+# ---------------------------------------------------------------------------
+#
+# `pc mcp` serves the Model Context Protocol on stdio (see
+# `partcad_client.mcp_server`), and it is a subcommand of `pc` for the reason
+# the two above are ordinary dependencies: a console script cannot be
+# conditional on an extra. It is the official SDK rather than a protocol written
+# here, so that the protocol revisions it speaks are the SDK's to keep up with.
+# It is what brings pydantic, cryptography and httpx2 into the wheel and the
+# standalone bundle. Capped at the next major: 2.0 renamed FastMCP and changed
+# the server API, and a 3.0 would be free to do the same.
+mcp>=2.3.0,<3

@@ -263,6 +263,11 @@ Package commands
   does not know is an error, because a typo that installs nothing looks exactly like an agent that is not
   supported yet.
 
+  With the skills, each agent is also given the **MCP server**, ``pc mcp`` (see :doc:`mcp`): a ``partcad``
+  entry in ``.mcp.json`` for Claude Code and in ``.cursor/mcp.json`` for Cursor, pointed at the package with
+  ``-p``. The other servers in those files are left as they are, and the ``partcad`` entry is rewritten each
+  time. ``--no-mcp`` leaves both files alone.
+
   Installing again updates what is there and **removes the skills PartCAD has stopped shipping**: a retired
   skill left behind describes a CLI that has moved on, which is worse than no skill at all because the agent
   follows it anyway. Only PartCAD's own are removed -- the Cursor copies carry a ``metadata.partcad`` stamp
@@ -1206,6 +1211,25 @@ instead.
   ``<package>:<part>`` name: resolving a name is a package-graph question, which is the round trip this
   command does not make. ``--json`` prints what happened (or the reason it did not) as one object, which is
   what the VS Code extension's "Open in..." context menu reads.
+
+**************************
+Interacting with AI agents
+**************************
+
+``pc mcp``
+  Serve the `Model Context Protocol <https://modelcontextprotocol.io>`_ on stdio, so that an AI agent can drive
+  PartCAD: list a package's objects, read their declarations, look at them (a render comes back as an image),
+  test them, export them, and run any other daemon method. An MCP client starts it as a subprocess; it is a
+  client of the workspace's daemon like every other ``pc`` command, and serves the package ``-p`` names, or the
+  current directory.
+
+  .. code-block:: shell
+
+    claude mcp add partcad -- pc mcp                 # Claude Code, with PartCAD installed
+    pc -p packages/robot mcp --allow-path ../shared  # a package below the root, and one more folder
+
+  The agent may name files only inside the workspace unless ``--allow-path DIR`` (repeatable) or
+  ``--allow-any-path`` says otherwise. :doc:`mcp` lists the tools and how each MCP client is set up.
 
 *****************
 Workflow commands

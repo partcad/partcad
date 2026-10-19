@@ -541,6 +541,26 @@ The `PartCAD` views `src/terminal.ts` creates are not touched by any of this: th
 surfaces with a no-op `handleInput` and no environment to inherit. The shell it opens to their left is an
 ordinary terminal and gets the tools like any other.
 
+## The MCP server for the editor's agent
+
+`src/common/mcp.ts` contributes an MCP server definition provider (`contributes.mcpServerDefinitionProviders`,
+id `partcad.mcpServers`), so the editor's own agent -- and anything else in VS Code that runs MCP servers --
+has PartCAD's server without anyone writing a `.vscode/mcp.json`. Each workspace folder holding a
+`partcad.yaml` gets one server, `pc -p <folder> mcp`, started in that folder; the server is `pc mcp` and
+everything it does is `partcad_client.mcp_server`'s, so nothing about MCP is implemented here.
+
+The `pc` it names is the one beside the resolved service, `toolsDirectory`'s -- the same directory the terminal
+PATH gets, including a debug window's checkout `.venv` -- which is the whole reason to contribute the server
+rather than tell users to configure it: a hand-written configuration cannot name a bundle this extension
+downloaded. It is refreshed at the same moments as the terminal PATH (activation, any configuration change,
+after `updateServiceBundle`), plus when a workspace folder or a `partcad.yaml` comes or goes.
+
+It is registered from `activateTrusted`, so Restricted Mode offers no server, like it starts nothing else. And
+it is feature-detected even though `engines.vscode` is `^1.101.0`, the release that has the API: a fork reports
+the version it was forked from, and its extension host need not implement every API of it. That `engines` floor
+is this provider's; it was `^1.82.0` before, and `@types/vscode` moves with it (`vsce` refuses typings newer
+than the engine).
+
 ## The `PartCAD` terminal views
 
 `src/terminal.ts`, `PartcadTerminals`. What the user sees, and why each part is built the way it is:

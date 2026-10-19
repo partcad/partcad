@@ -42,6 +42,7 @@ ai-agents/
 │       └── init/SKILL.md           #   → usable by any agent that reads SKILL.md
 ├── claude/                         # the Claude plugin (name: pc)
 │   ├── .claude-plugin/plugin.json  # version: the repository's, bumped with it
+│   ├── .mcp.json                   # the MCP server, `pc mcp`, for the project the session is in
 │   └── skills -> ../common/skills  # symlink: no duplication
 └── scripts/
     └── materialize.sh              # publish-time: deref the symlink into real files
@@ -115,6 +116,21 @@ not supported yet. Adding a third agent is a line in `AGENTS` in
 Neither destination is written through a symlink, and this repository is why:
 `.claude/skills/pc` here points at `ai-agents/claude`, so following it would
 have `pc init` overwrite the working tree with a copy of the installed PartCAD.
+
+### The MCP server
+
+The skills say how to drive PartCAD; `pc mcp` is what an agent drives it
+through without a shell (see `docs/source/mcp.rst`). The marketplace plugin
+declares it in `claude/.mcp.json`, run as `pc -p ${CLAUDE_PROJECT_DIR} mcp`, so
+`/plugin install pc@partcad` brings it with the skills, and the plugin workflow's
+smoke install fails if the installed plugin does not report it.
+
+`pc init` does not copy that file into `.claude/skills/pc/`. It writes a
+`partcad` entry into the repository's own `.mcp.json` for Claude Code and
+`.cursor/mcp.json` for Cursor instead, pointed at the package with `-p` -- which
+is the one thing a plugin cannot know, in a repository whose package is in a
+subdirectory -- and leaves every other server in those files alone. Re-running
+it rewrites the `partcad` entry; `--no-mcp` leaves both files untouched.
 
 ### What a re-run does
 

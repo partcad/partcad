@@ -134,4 +134,7 @@ class AgentSkillsCheck(HealthCheckTest):
         """
         if not self._stale:
             return True
-        return ai_agents.install_agent_skills(self._root, self._stale)
+        # The skills, and nothing else: the MCP entry `pc init` writes beside
+        # them is not stale when the skills are, and a repair that recreates an
+        # `.mcp.json` its user deleted is not one.
+        return ai_agents.install_agent_skills(self._root, self._stale, mcp=False)

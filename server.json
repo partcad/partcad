@@ -1,0 +1,38 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.partcad/partcad",
+  "title": "PartCAD",
+  "description": "Inspect, render, test and export the parts and assemblies of PartCAD hardware packages",
+  "websiteUrl": "https://partcad.org",
+  "repository": {
+    "url": "https://github.com/partcad/partcad",
+    "source": "github"
+  },
+  "version": "0.8.220",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "partcad",
+      "version": "0.8.220",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "PC_PATH",
+          "description": "The PartCAD package to serve: a directory with a partcad.yaml, or the file. The working directory when unset.",
+          "format": "filepath",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

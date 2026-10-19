@@ -36,7 +36,8 @@ skills are ``/pc:gen-part``, ``/pc:render`` and the rest; Cursor, which has no p
 them, gets the same skills in ``.cursor/skills/`` named ``pc-gen-part``, ``pc-render`` and so on.
 They come from the PartCAD you have installed, so they always match it. Pass ``--no-skills`` if you
 would rather not have them, and ``pc init --skills-only`` to install them into a package you created
-before this version -- that touches nothing else.
+before this version -- that touches nothing else. Each agent also gets PartCAD's :doc:`MCP server <mcp>`
+in its ``.mcp.json`` or ``.cursor/mcp.json``, unless you pass ``--no-mcp``.
 
 Alternatively, manually create ``partcad.yaml`` with the following content:
 
