@@ -154,6 +154,22 @@ def test_a_sketch_on_no_surface_loads_the_surface_near_its_port():
     assert _solids(request["wrapped"]) == 1
 
 
+def test_two_ports_whose_surroundings_overlap_each_load_their_own():
+    """Two adjacent gear teeth, as it were: their spheres cross on one face, and each still covers its own disc."""
+    request = {
+        "wrapped": build123d.Box(10, 10, 10).wrapped,
+        "boundary": [
+            {"port": "a", "location": [[0, 0, 5.2], [0, 0, 1], 0], "sketch": [_disc(1, (0, 0, 5.2))]},
+            {"port": "b", "location": [[0.6, 0, 5.2], [0, 0, 1], 0], "sketch": [_disc(1, (0.6, 0, 5.2))]},
+        ],
+    }
+    warnings = cae_support.prepare(request)
+    assert len(warnings) == 2 and all("within 0.5 mm" in warning for warning in warnings)
+    disc = math.pi * (0.5**2 - 0.2**2)
+    assert [record["area"] for record in request["boundary"]] == [pytest.approx(disc, rel=1e-3)] * 2
+    assert _solids(request["wrapped"]) == 1
+
+
 def test_a_freeform_face_near_the_port_is_loaded_whole():
     """A curve drawn on a freeform face is one a mesher may not mesh, so such a face is not divided."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert

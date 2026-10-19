@@ -361,15 +361,26 @@ def prepare(request):
         # faces without dividing the solid -- on the faces where that curve is
         # exact; a freeform face that comes that near is taken whole (see
         # '_imprint_around').
+        #
+        # One sphere at a time, each on the part the one before it left, so
+        # that one that cannot be drawn costs its own port and not the rest.
+        # The curves of two that overlap -- the ports of two adjacent gear
+        # teeth -- cross, and each still covers its own disc.
         radius = extent * float(request.get("port_radius") or PORT_RADIUS)
         origins = {index: _frame(boundary[index].get("location"))[0] for index in missed}
-        balls = {index: _ball(origin, radius) for index, origin in origins.items()}
-        try:
-            shape = _imprint_around(shape, balls.values())
-            request["wrapped"] = shape
-        except Exception as e:
-            warnings.append("The surface around a port could not be imprinted on the part: %s" % e)
-            balls = {}
+        balls = {}
+        for index, origin in origins.items():
+            ball = _ball(origin, radius)
+            try:
+                shape = _imprint_around(shape, ball, fuzzy)
+            except Exception as e:
+                warnings.append(
+                    "The surface around port '%s' could not be imprinted on the part: %s"
+                    % (boundary[index].get("port") or boundary[index].get("interface_label") or "?", e)
+                )
+                continue
+            balls[index] = ball
+        request["wrapped"] = shape
         regions.update({index: [ball] for index, ball in balls.items()})
         faces = faces_of(shape)
         areas = [_area_and_centroid(face)[0] for face in faces]
@@ -413,49 +424,45 @@ def _ball(origin, radius):
     return BRepPrimAPI_MakeSphere(gp_Pnt(*origin), radius).Shape()
 
 
-def _imprint_around(shape, balls):
-    """'shape' with the curves where each ball's surface meets its own drawn on it.
+def _imprint_around(shape, ball, fuzzy):
+    """'shape' with the curves where the ball's surface meets its own drawn on it.
 
     Those curves divide the part's faces at the ball's edge and leave its solid
-    whole; imprinting the ball itself would cut the solid in two. Drawn on the
-    faces they lie on and nowhere else ('BRepFeat_SplitShape'), not by a
-    general split of the whole part ('_split'): the curves lie exactly on the
-    faces, which is the case a general split is slowest at -- on a gear's few
-    hundred toothed faces, minutes against half a second.
+    whole; imprinting the ball itself would cut the solid in two. Drawn only on
+    an analytic face -- a plane, a cylinder, a cone, a sphere, a torus -- where
+    the curve is exact. On a freeform one it is an approximation, and what it
+    leaves between itself and the face's own edges is what a mesher cannot
+    mesh: a threaded hole's helix, divided like this, fails gmsh with
+    "overlapping facets" on every implementation. Such a face is taken whole
+    instead ('_freeform_near'). That is also what keeps the split quick: curves
+    lying exactly on a gear's freeform faces took a general split minutes, and
+    on its analytic ones it takes a second.
 
-    And only on an analytic face -- a plane, a cylinder, a cone, a sphere, a
-    torus -- where the curve is exact. On a freeform one it is an
-    approximation, and what it leaves between itself and the face's own edges
-    is what a mesher cannot mesh: a threaded hole's helix, divided like this,
-    fails gmsh with "overlapping facets" on every implementation. Such a face
-    is taken whole instead ('_freeform_near').
+    By a general split ('_split') rather than BRepFeat_SplitShape, which is
+    quicker still but cannot draw a curve across one already drawn: the second
+    of two overlapping balls left a face of negative area.
     """
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Section
-    from OCP.BRepFeat import BRepFeat_SplitShape
     from OCP.TopAbs import TopAbs_EDGE
     from OCP.TopExp import TopExp_Explorer
     from OCP.TopoDS import TopoDS, TopoDS_Shape
 
-    split = BRepFeat_SplitShape(shape)
-    for ball in balls:
-        section = BRepAlgoAPI_Section(shape, ball, False)
-        # Each curve as it lies on the part's face, which is what drawing it
-        # there takes.
-        section.ComputePCurveOn1(True)
-        section.Approximation(True)
-        section.Build()
-        if not section.IsDone():
-            raise RuntimeError("the sphere around the port could not be intersected with the part")
-        edges = TopExp_Explorer(section.Shape(), TopAbs_EDGE)
-        while edges.More():
-            edge, face = TopoDS.Edge_s(edges.Current()), TopoDS_Shape()
-            if section.HasAncestorFaceOn1(edge, face) and _analytic(TopoDS.Face_s(face)):
-                split.Add(edge, TopoDS.Face_s(face))
-            edges.Next()
-    split.Build()
-    if not split.IsDone():
-        raise RuntimeError("the curves around the ports could not be drawn on the part")
-    return split.Shape()
+    section = BRepAlgoAPI_Section(shape, ball, False)
+    # Each curve as it lies on the part's face, which is what drawing it there
+    # takes.
+    section.ComputePCurveOn1(True)
+    section.Approximation(True)
+    section.Build()
+    if not section.IsDone():
+        raise RuntimeError("the sphere around the port could not be intersected with the part")
+    curves = []
+    edges = TopExp_Explorer(section.Shape(), TopAbs_EDGE)
+    while edges.More():
+        edge, face = TopoDS.Edge_s(edges.Current()), TopoDS_Shape()
+        if section.HasAncestorFaceOn1(edge, face) and _analytic(TopoDS.Face_s(face)):
+            curves.append(edge)
+        edges.Next()
+    return _split(shape, curves, fuzzy) if curves else shape
 
 
 def _analytic(face):

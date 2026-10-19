@@ -163,8 +163,8 @@ straight down; that refusal is what an older CalculiX gets here.
 
 | mesh (`mesh_size`) | elements | peak von Mises | peak displacement |
 | --- | --- | --- | --- |
-| 0.03 of the gear, the one declared | 27,473 | 67.6 MPa | 0.00525 mm |
-| 0.02 | 57,309 | 82.8 MPa | 0.00535 mm |
+| 0.03 of the gear, the one declared | 27,475 | 67.6 MPa | 0.00525 mm |
+| 0.02 | 57,292 | 83 MPa | 0.00535 mm |
 
 The allowable is the yield over CalculiX's safety factor of 1.5, 82.7 MPa, so
 at the declared mesh it **passes** with no findings. The displacement has
@@ -191,10 +191,10 @@ same `fea:` section, from the same request, in each one's own image:
 
 | implementation | elements | peak von Mises | peak displacement | findings |
 | --- | --- | --- | --- | --- |
-| [CalculiX](https://github.com/partcad/partcad-cae-calculix) | 27,473 | 67.6 MPa | 0.00525 mm | none |
-| [Elmer](https://github.com/partcad/partcad-cae-elmer) | 28,127 | 73.3 MPa | 0.00421 mm | none |
-| [Code_Aster](https://github.com/partcad/partcad-cae-code-aster) | 28,127 | 64.1 MPa | 0.00421 mm | none |
-| [MOOSE](https://github.com/partcad/partcad-cae-moose) | 28,127 | 59.0 MPa | 0.00456 mm | none |
+| [CalculiX](https://github.com/partcad/partcad-cae-calculix) | 27,475 | 67.6 MPa | 0.00525 mm | none |
+| [Elmer](https://github.com/partcad/partcad-cae-elmer) | 28,133 | 72.9 MPa | 0.00421 mm | none |
+| [Code_Aster](https://github.com/partcad/partcad-cae-code-aster) | 28,132 | 64.0 MPa | 0.00421 mm | none |
+| [MOOSE](https://github.com/partcad/partcad-cae-moose) | 28,133 | 58.9 MPa | 0.00455 mm | none |
 
 ```shell
 pc cae fea :knee-gear -i //pub/feature/cae/elmer:fea
