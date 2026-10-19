@@ -556,7 +556,7 @@ than the engine).
 `src/terminal.ts`, `PartcadTerminals`. What the user sees, and why each part is built the way it is:
 
 - **Nothing opens until there is output.** The first write in a window opens a view, split to the right of a
-  shell named `Shell`: one already open, or a new one running the user's default profile with `SHELL_BANNER` at
+  shell named `Shell`: one already open, or a new one running the user's default profile with `shellBanner` at
   the top (`TerminalOptions.message` is written into the view, not sent to the shell). Activation runs the health
   checks as a logged process, which ends in a `DONE:` line at the least, so the pair appears at every start, as
   the single terminal used to.
@@ -568,7 +568,18 @@ than the engine).
   and would otherwise turn a light theme's yellow into brown, tone by tone. A cell's main tone is its
   *background* wherever it can be: the terminal draws block characters itself only with GPU acceleration on,
   and from the font they leave seams between cells, where a background never does. Lines stay within 65
-  columns -- the logo, a gap and the longest sentence -- for the shell's half of a split panel.
+  columns -- the logo, a gap and the longest sentence (`BANNER_BESIDE_COLUMNS`) -- for the shell's half of a
+  split panel.
+- **In a shell narrower than that, the invitation goes under the logo.** Beside it, the terminal would wrap
+  each sentence onto a row of its own between two rows of the logo, cutting the logo into strips. The width
+  has to be known when the shell is created, since `TerminalOptions.message` is fixed then, and an extension is
+  told the width of a pseudoterminal and of no other terminal -- `Terminal` has no dimensions in the stable API.
+  So it is the `PartCAD` view's: a split is even, and the view is as wide as the shell it was split off. That
+  view does not exist yet when its shell is made, so the width is the one the last such view had, kept in
+  `globalState` (`SHELL_COLUMNS_KEY`); a view from the "+" menu is beside no shell and is not counted. With
+  nothing kept yet -- the first shell on a machine -- the invitation goes beside the logo, which is what a
+  panel along the bottom of the window has room for. A shell narrowed after it was made is not redrawn: the
+  banner was written once and is the terminal's from then on.
 - **Closing a view keeps it closed.** `partcad.reopenTerminal` defaults to `false` now; it used to reopen the
   view on the next log line, which is fighting the user. "PartCAD: Show Terminal" and the `PartCAD` entry in the
   terminal panel's "+" menu (`contributes.terminal.profiles`, `partcad.terminal`) open one again. In Restricted

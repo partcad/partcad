@@ -125,6 +125,7 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
         reopen: () => getReopenTerminalFromSetting(serverId) === 'true',
         popup: () => getPopupTerminalFromSetting(serverId) === 'true',
         iconPath: vscode.Uri.joinPath(context.extensionUri, 'resources', 'logo.svg'),
+        state: context.globalState,
     });
     context.subscriptions.push(
         partcadTerminals,
