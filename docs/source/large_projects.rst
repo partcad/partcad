@@ -127,9 +127,8 @@ Anything new goes beside what is there. Mark what is being replaced as deprecate
 on a new branch, later.
 
 The public index states this exactly: a branch it tracks keeps supporting every PartCAD release since the one the
-index's top-level ``partcad.yaml`` required at the time it was added (or since the one the package itself
-required then, if that was newer). An internal library should pick its own floor the same way, in its top-level
-``partcad.yaml``, and hold its packages to it.
+package's own ``partcad:`` required when the index started tracking that branch. Hold the packages of a library
+of your own to the same.
 
 ========================
 Making a breaking change

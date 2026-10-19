@@ -10,13 +10,15 @@ Common options, such as ``-v``/``-q`` (verbosity), ``--no-ansi`` (plain-text log
 ``--devel-index`` is one of those common options, and is worth calling out. The public index (the ``pub``
 dependency, published at `partcad-index <https://github.com/partcad/partcad-index>`_) lives in a repository of
 its own, and a package imports it at ``main``: the branch ``pc init`` has the dependency track and pins to the
-commit it is at, and the one ``pc update`` moves that pin to the newest commit of. That is the released state. ``--devel-index`` imports
-its ``devel`` branch instead — the branch that a release fast-forwards ``main`` to — so a change staged there
-can be exercised before it is released. It replaces the revision a package names rather than deferring to it,
-which is what it exists to do. The redirect follows the repository rather than the dependency name, so it
-applies wherever the index appears in the dependency tree and leaves every other dependency alone. The same
-switch is available as the ``PC_DEVEL_INDEX`` environment variable, as ``develIndex`` in the user configuration,
-and as the ``partcad.develIndex`` setting of the VS Code extension.
+commit it is at, and the one ``pc update`` moves that pin to the newest commit of. That is the released state.
+``--devel-index`` imports its ``devel`` branch instead — the branch that a release fast-forwards ``main`` to — so
+a change staged there can be exercised before it is released. It replaces the revision a package names rather
+than deferring to it, which is what it exists to do. The redirect follows the repository rather than the
+dependency name, so it applies wherever the index appears in the dependency tree and leaves every other dependency
+alone. The same switch is available as the ``PC_DEVEL_INDEX`` environment variable, as ``develIndex`` in the user
+configuration, and as the ``partcad.develIndex`` setting of the VS Code extension. It is off by default, except
+where PartCAD runs from its sources (an editable install), which is PartCAD being developed and gets the index
+being developed: ``PC_DEVEL_INDEX=false`` turns it off there (see :ref:`devel-index-from-sources`).
 
 ``--force-update`` is another, and is the "force auto-update" setting. Loading a package never moves a ``git``
 dependency it has downloaded before -- ``pc update`` does that, by rewriting the dependency's ``revision:`` (see

@@ -177,7 +177,13 @@ and is the release (PyPI publishes from it). The same holds for `partcad/partcad
 packages in the index -- a key PartCAD stops accepting, a field read with a new meaning -- is made in the order
 "Branches, releases and breaking changes" in `docs/source/contributing.rst` gives: additive first, released, the
 index's packages migrated through the index's `devel`, the old form retired last. `examples/partcad.yaml` tracks
-the index's `main` unpinned on purpose, so CI notices; do not pin it.
+the index unpinned on purpose, so that it breaks as soon as the two disagree; do not pin it.
+
+**PartCAD running from its sources reads the index's `devel`, not its `main`.** `develIndex` defaults to on for an
+editable install (`is_editable_install`, so `poetry install`, `pip install -e`, the dev container, CI-Dev, and
+`pytest` everywhere, which puts `src` on the path) and to off for a wheel or a bundle (the `CI` workflow's `pc` jobs
+and every user). That is how a feature and the unreleased packages written for it are developed together;
+`PC_DEVEL_INDEX=false` shows a checkout what users of `main` get.
 
 ### Where commands run
 
