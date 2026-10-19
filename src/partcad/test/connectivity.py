@@ -140,7 +140,10 @@ class ConnectivityTest(Test):
             interface = connection.get("to_interface")
             if target is None or (port is None and interface is None):
                 continue
-            key = (target, port, interface)
+            # Where on the port: a connection's parameters can move what it
+            # places along the port - a screw 1 in. and one 3-1/2 in. in from
+            # the same edge - and two things in two places do not crowd it.
+            key = (target, port, interface, _place(connection.get("contact")))
             if key not in taken:
                 taken[key] = child.name
                 continue
@@ -243,3 +246,10 @@ async def _allows_many(ctx, interface_spec):
         return bool(interface.get_multi_connect())
     except Exception:
         return False
+
+
+def _place(point):
+    """A point as a key, to a micrometre: None for a connection that recorded none."""
+    if point is None:
+        return None
+    return tuple(round(float(value), 3) + 0.0 for value in point)

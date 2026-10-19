@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
 import ruamel.yaml
+from ruamel.yaml.scalarstring import SingleQuotedScalarString
 
 from partcad_utils import assy_filter
 
@@ -78,6 +79,7 @@ from . import tags as pc_tags
 from . import (
     telemetry,
 )
+from .dependency_pin import plain_reads_back
 from .document_pdf import render_pdf_async
 from .enrich import enriched_source_name
 from .exception import EmptyShapesError, NeedsUpdateException, ObjectNameTakenError
@@ -2412,8 +2414,13 @@ class Project(project_config.Configuration):
             except rfg.GIT_ERRORS as e:
                 pc_logging.error("Not adding %s: failed to find the commit to pin it to: %s" % (alias, e))
                 return False
-            entry["track"] = branch
-            entry["revision"] = commit
+            # Quoted where a plain value would not be read back as itself, as
+            # 'pc update' writes it ('dependency_pin.yaml_scalar'). ruamel would
+            # quote an id of digits alone by itself, but it decides by YAML 1.2,
+            # and 'partcad.yaml' is read as YAML 1.1, where more than that is
+            # not text: a branch named 'on' or 'yes', say.
+            for key, value in (("track", branch), ("revision", commit)):
+                entry[key] = value if plain_reads_back(value) else SingleQuotedScalarString(value)
             pc_logging.info("Pinned %s to %s, the tip of '%s'" % (alias, commit, branch))
         elif track:
             pc_logging.error("Not adding %s: only a git dependency tracks a branch" % alias)

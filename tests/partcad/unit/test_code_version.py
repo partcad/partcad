@@ -374,6 +374,9 @@ class _Shape:
     name = "part"
     project_name = "//pkg"
 
+    async def prepare_async(self, wait=False):
+        pass
+
     def get_cacheable(self):
         return True
 

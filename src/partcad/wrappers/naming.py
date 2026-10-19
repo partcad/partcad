@@ -50,7 +50,8 @@ case_sensitive=True, max_length=None)``
     is told apart by '<separator><n>' counting from 'first' -- 'leg-2' after
     'leg', as 'kinematics' tells a second body of one name apart. 'derive(name)'
     hands out a name for something PartCAD does not name (a model's root link,
-    a dummy link, a mesh) from the same pool, unmapped and fresh every time.
+    a massless link of a chain, a mesh) from the same pool, unmapped and fresh
+    every time.
     'release(internal)' gives a name back. 'internal(name, kind)' and
     'partcad(internal)' read the mapping either way, 'mapping()' is all of it
     by kind, and 'renamed()' the entries where the two differ -- what an
@@ -70,14 +71,20 @@ how the exporter named anything (docs/design/simulation.md, section 4.2):
     {"version": 1, "format": "mjcf",
      "names":  {"<kind>": {"<PartCAD name>": "<internal name>"}},
      "bodies": {"<PartCAD body>": {"path": ["<internal>", ...]}},
-     "joints": {"<reported joint>": {"path": ["<internal>", ...], "joint": "<PartCAD joint>"}}}
+     "joints": {"<engine joint>": {"path": ["<internal>", ...], "joint": "<PartCAD joint>",
+                                   "map": {...}}}}
 
 A 'path' is the internal names from the outermost entity down -- an MJCF body
-by its name alone, an SDFormat link by its model's and its own. 'bodies' and
-'joints' are open: an entry is a dict so that what a later exporter knows about
-a body or a joint (a joint's starting value, to re-zero a reading by) is a key
-added, not a shape changed. A reader ignores keys it does not know, and so does
-'read_sidecar'.
+by its name alone, an SDFormat link by its model's and its own. A joint entry
+is one joint as the engine has it, and its "map" is what that joint is in
+PartCAD's terms -- which PartCAD joint and parameters, the kind, the unit
+factor, the start a re-zeroed engine counts from, a free body's parent -- as
+'kinematics.joint_map()' writes it and 'kinematics.reading()' reads it back
+(docs/design/simulation.md, section 8.13.5): the joint map travels here, one
+file from the exporter to the simulator, rather than inside each format.
+'bodies' and 'joints' are open: an entry is a dict so that what a later
+exporter knows about a body or a joint is a key added, not a shape changed. A
+reader ignores keys it does not know, and so does 'read_sidecar'.
 """
 
 import json

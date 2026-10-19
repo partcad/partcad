@@ -95,6 +95,17 @@ at all).
   polled rather than blocked on: they are taken from several event loops at once (a part is instantiated on a
   worker thread running a loop of its own), and a task that blocked its own loop waiting for a lock the task
   beside it is about to release would never see it released.
+- **A key is read once its shape is prepared** (`Shape.prepare_async(wait=True)`): a preparation hashes in what
+  a shape is made of -- the file a `fileFrom` or a plugin fetches, the keys of what an assembly links to -- and a
+  hash adds its files when it is first read, so a key read while one is under way is kept, half of it missing, for
+  the rest of the process. Every key reader (`get_cache_key_async()`, `get_wrapped()`, `Test.test_cached()`)
+  waits for a preparation begun elsewhere, and two waits are refused rather than started, because they could
+  never end: one that would close a cycle of preparations (each records what it waits for), and a thread that
+  holds a shape's lock waiting for a preparation on another thread, which that lock may be what stops. A refused
+  wait raises `PreparationInFlight`, and the caller goes on without the key, uncached; `_PREPARE_WAIT_MAX` bounds
+  the rest. `get_wrapped()` prepares before it takes its lock for the same reason. A caller that only needs the
+  preparation started passes nothing and returns at once, as before.
+
 - **Location/coordinate format**: 3D locations (OpenCASCADE `TopLoc_Location`) are represented as
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
@@ -705,7 +716,9 @@ at all).
   `runtime.communicate` waits the budget plus `TIMEOUT_GRACE` and, on expiry or cancellation, takes the whole
   tree with `runtime.kill_process_tree` (a bounded run starts as a session of its own:
   `runtime.bounded_spawn_options`); a thread of its own does the same `BACKSTOP` seconds later, because on macOS
-  a *stopped* child blocks the event loop inside CPython's child watcher and with it every timer. A spent budget is `SimulationTimeout`; a non-zero exit, a signal or an
+  a *stopped* child blocks the event loop inside CPython's child watcher and with it every timer. Neither kills
+  by number alone: `runtime.process_owner` (pid plus start time) is checked first, because a reaped run's pid
+  and group id can belong to somebody else by then. A spent budget is `SimulationTimeout`; a non-zero exit, a signal or an
   answer that is not a JSON object is `SimulationCrash` with the tail of stderr. Both reach `pc test` as a
   run that did not deliver -- a failure, with the one excuse -- and neither is cached.
 
@@ -789,7 +802,9 @@ at all).
   else volume × density; `centerOfMass` stated, else the centroid; `inertia` stated, else the solid's scaled to
   that mass. `pc info` shows the result as `MassProperties` with a `source` per value, an assembly's as its
   parts' combined in its own frame; an export with `properties: true` is handed it per shape (`FACTS_KEY`,
-  merged *underneath* what each shape states by `wrapper_export.properties_index()`); the IDE's Build vs Buy
+  merged *underneath* what each shape states by `wrapper_export.properties_index()`; keyed by
+  `kinematics.properties_key()`, and so is an assembly in the index that shares its full name with a part, so that
+  the two stay two entries); the IDE's Build vs Buy
   table shows the same mass. No exporter knows materials or densities exist.
 
   **Every density is kg/m³** — a material's, a part's, an export's — so nothing converts one, and
@@ -966,7 +981,10 @@ at all).
   `how`. `kinematics` is pure Python beside `mass_properties`, imported by the engine plugins' exporters and the
   URDF exporter (`builtin/export/export_urdf.py`, a link per body and a joint per pair) from the sandbox path; it
   turns the shape tree every implementation is handed (`shape_tree`) into `bodies()` (parts, frames, parents, joints re-expressed for the
-  body pair, combined physics) and classifies a joint's free steps (`classify()`). Do not give an exporter a copy of
+  body pair, combined physics) and classifies a joint's free steps (`classify()`) as one native type per physical
+  joint, or `composite` (docs/design/simulation.md, section 8.13). It also re-expresses a joint for an engine whose
+  zero has to be PartCAD's start (`rezeroed()`), and maps what an engine reads back into PartCAD's names and units
+  (`joint_map()`, which travels in the names sidecar, and `reading()`). Do not give an exporter a copy of
   the rule, and do not make the core depend on an exporter reading it: three exporters deciding for themselves which
   parts are one body is three answers to what falls apart. A scene is also a simulation subject
   (`simulation.SUBJECT_KINDS`), placed in its world by a `scene:` link.

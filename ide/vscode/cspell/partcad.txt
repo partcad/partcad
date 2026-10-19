@@ -6,6 +6,7 @@ alias
 aliases
 allow
 along
+also
 anchored
 angle
 apps

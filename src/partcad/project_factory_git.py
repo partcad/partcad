@@ -29,6 +29,8 @@ import pygit2
 from filelock import FileLock
 from pygit2.enums import CheckoutStrategy, ConfigLevel, CredentialType, ReferenceType, ResetMode
 
+from partcad_utils import config_yaml
+
 from . import consts
 from . import logging as pc_logging
 from . import project_factory as pf
@@ -423,6 +425,43 @@ def _claimed_commits(cache_path, own=None, matters=None) -> set:
 
 def looks_like_commit_id(revision: str) -> bool:
     return bool(_SHA_RE.match(revision.strip()))
+
+
+def ref_text(value, key: str, dependency=None):
+    """A dependency's 'revision:' or 'track:' as the text that was written, or None if it names none.
+
+    'partcad.yaml' is YAML 1.1, which types an unquoted value by what it looks
+    like, and every git operation here takes the value as text. A commit id is
+    hex, and an abbreviated one made of decimal digits alone -- 'revision:
+    875940244746', about one in three hundred 12-character ids -- is an int to
+    YAML; so is a branch or a tag named '2024', '1_000', '0123', '0x1f' or
+    '1:30', and of all of those only '875940244746' and '2024' are the decimal
+    text of the int they are read as (1000, 83, 31 and 90 are not the others).
+
+    An int is therefore given back as the text it was written as, exactly:
+    'ProjectLocal' reads the file with 'partcad_utils.config_yaml', which keeps
+    that text beside every int that is not spelled as its decimal text
+    ('1_000' is not branch '1000'). An int that is not one of those was written
+    as its decimal text, or came from somewhere with no other way to write one
+    (a repository plugin's JSON).
+
+    Anything else that is not text is refused, with the fix named: a float
+    ('1.10' is 1.1, and its text is not kept -- see 'config_yaml'), a bool
+    ('yes', 'on'), a date ('2024-01-01'). A spelling that only looks numeric is
+    text already: PyYAML's float wants a '.', so '1e10' and every other id with
+    an 'e' in it is a string, and so is '0189', a leading zero with an '8' or a
+    '9' after it.
+    """
+    if value is None or isinstance(value, str):
+        return value
+    # A bool is an int to Python, and 'yes' is not "1".
+    if isinstance(value, int) and not isinstance(value, bool):
+        return config_yaml.spelling(value)
+    raise ValueError(
+        "The '%s:' of %s is read as the %s %s, and the text it was written as is lost by then: "
+        "quote it in 'partcad.yaml', as in %s: '<as written>'"
+        % (key, dependency or "a git dependency", type(value).__name__, value, key)
+    )
 
 
 def repo_path(url: str) -> str:
@@ -1023,8 +1062,10 @@ class GitImportConfiguration:
 
     def __init__(self):
         self.import_config_url = self.config_obj.get("url")
-        self.import_revision = self.config_obj.get("revision")
-        self.import_track = self.config_obj.get("track")
+        # As text, whatever YAML made of them: see 'ref_text'.
+        dependency = self.config_obj.get("name")
+        self.import_revision = ref_text(self.config_obj.get("revision"), "revision", dependency)
+        self.import_track = ref_text(self.config_obj.get("track"), "track", dependency)
         self.import_rel_path = self.config_obj.get("relPath")
         self.import_cache_name = None
 

@@ -23,6 +23,7 @@ import pytest
 
 from partcad_utils.assy_lint import (
     ASSY_SCHEMA,
+    CODE_DEPRECATED,
     CODE_LINKS,
     CODE_MANUFACTURABLE,
     CODE_SCHEMA,
@@ -601,6 +602,76 @@ def test_interferes_that_names_nothing():
     assert "nosuch" in one_link_finding(text).message
 
 
+def test_a_further_joint_with_a_preceding_sibling_is_clean():
+    text = (
+        CHAIN + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: {with: x, name: second, to: y}\n"
+    )
+    assert link_findings(text) == []
+    # One entry, or a list of them.
+    text = (
+        CHAIN
+        + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts:\n      - {with: x, name: second, to: y}\n"
+    )
+    assert link_findings(text) == []
+
+
+def test_a_further_joint_with_a_link_placed_later_says_so():
+    # The joint is checked once both links are placed, so it is stated on the
+    # later of the two - which the one written first is not.
+    text = (
+        "links:\n"
+        "  - part: a\n"
+        "  - part: b\n"
+        "    connectPorts: {name: a}\n"
+        "    alsoConnectPorts: {with: x, name: c, to: y}\n"
+        "  - part: c\n"
+        "    connectPorts: {name: a}\n"
+    )
+    assert "state it on 'c'" in one_link_finding(text).message
+
+
+def test_a_further_joint_with_a_link_nothing_places():
+    text = (
+        CHAIN + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: [{with: x, name: nosuch, to: y}]\n"
+    )
+    assert "nosuch" in one_link_finding(text).message
+
+
+def test_a_further_joint_with_a_link_of_another_list_says_so():
+    text = (
+        "links:\n"
+        "  - name: frame\n"
+        "    links:\n"
+        "      - part: a\n"
+        "        name: inner\n"
+        "  - part: b\n"
+        "    connectPorts: {name: frame}\n"
+        "    alsoConnectPorts: {with: x, name: inner, to: y}\n"
+    )
+    assert "same 'links:' list, so this node cannot meet it" in one_link_finding(text).message
+
+
+def test_a_further_joint_the_template_names_or_the_schema_refuses_is_left_to_them():
+    """A templated name is only known once rendered, and an entry that is not a section is the schema's"""
+    text = (
+        CHAIN
+        + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: {with: x, name: {{ which }}, to: y}\n"
+    )
+    assert link_findings(text) == []
+    text = CHAIN + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: [second]\n"
+    assert link_findings(text) == []
+
+
+def test_the_schema_takes_a_further_joint_and_only_its_three_ports_and_a_comment():
+    text = (
+        CHAIN
+        + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: {with: x, name: second, to: y, how: {}}\n"
+    )
+    assert any("how" in diagnostic.message for diagnostic in check(text))
+    text = CHAIN + "  - part: c\n    connectPorts: {name: first}\n    alsoConnectPorts: {with: x, name: second}\n"
+    assert check(text)
+
+
 def test_the_root_node_has_nothing_to_connect_to():
     # Reported here as well as when the file is read, where
     # 'apply_root_placement' says the same thing: the root node *is* the
@@ -851,3 +922,56 @@ def test_yaml_the_parser_raises_on_otherwise_is_a_finding_and_not_a_crash(render
     # An impossible date is a 'ValueError' out of PyYAML, not a 'YAMLError'.
     diagnostic = only_of(validate_source("desc: 2001-13-45\n", get_schema(PARTCAD_SCHEMA), renders=list(renders)))
     assert diagnostic.code == CODE_YAML
+
+
+#
+# A deprecated spelling of a kind of joint (docs/design/simulation.md, 8.13.2)
+#
+
+CONTINUOUS_INTERFACE = """interfaces:
+  bore:
+    ports:
+      hole:
+    motion: {motion}
+  pin:
+    ports:
+      tip:
+    mates:
+      bore:
+        motion: {mating}
+"""
+
+
+@pytest.mark.parametrize("renders", [(), (Render({}),)])
+def test_continuous_is_a_deprecation_warning_wherever_a_motion_is(renders):
+    """On an interface and a mating in a configuration, and on a connection in an ASSY file: never an error."""
+    text = CONTINUOUS_INTERFACE.format(motion="continuous", mating="{type: continuous, dof: [turnZ]}")
+    diagnostics = validate_source(text, get_schema(PARTCAD_SCHEMA), renders=list(renders))
+    assert [(d.severity, d.code, d.line) for d in diagnostics] == [
+        (SEVERITY_WARNING, CODE_DEPRECATED, 4),
+        (SEVERITY_WARNING, CODE_DEPRECATED, 10),
+    ]
+    assert all("'continuous' is a deprecated spelling of 'revolute'" in d.message for d in diagnostics)
+    assert diagnostics[1].column == text.splitlines()[10].index("continuous")
+    connection = "links:\n  - part: a\n  - part: b\n    connect: {name: a, motion: continuous}\n"
+    (diagnostic,) = check(connection)
+    assert (diagnostic.severity, diagnostic.code, diagnostic.path) == (
+        SEVERITY_WARNING,
+        CODE_DEPRECATED,
+        "$.links.1.connect.motion",
+    )
+
+
+def test_what_continuous_means_spelled_out_is_clean():
+    text = CONTINUOUS_INTERFACE.format(
+        motion="{type: revolute, limits: {lower: -.inf, upper: .inf}}", mating="{type: ball, limits: {upper: 30}}"
+    )
+    assert validate_source(text, get_schema(PARTCAD_SCHEMA)) == []
+
+
+def test_a_kind_of_joint_that_is_none_is_named_with_every_kind_there_is():
+    text = CONTINUOUS_INTERFACE.format(motion="hinge", mating="fixed")
+    (diagnostic,) = validate_source(text, get_schema(PARTCAD_SCHEMA))
+    assert diagnostic.severity == SEVERITY_ERROR
+    assert diagnostic.message.startswith("'hinge' is not one of ['fixed', 'revolute', 'prismatic'")
+    assert "'continuous'" in diagnostic.message

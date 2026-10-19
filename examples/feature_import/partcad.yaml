@@ -84,9 +84,9 @@ docs:
 
     `AeroAssembly.step` is AP214: no material, no tolerance, no stock. Those are
     supplied below, and the method is read off each solid. Seven are
-    `subtractive`, each cut from a billet `stock.py` derives from the solid it
-    holds; `AeroFrame_Cap` is `forming`, because milling a bent 3 mm strip
-    throws away 97.2% of its block. The measurements are in the YAML.
+    `subtractive`, each cut from a bought billet `stock.py` derives from the
+    solid it holds; `AeroFrame_Cap` is `forming`, because milling a bent 3 mm
+    strip throws away 97.2% of its block. The figures are in the YAML.
 
     ### What makes the third one manufacturable
 
@@ -129,15 +129,25 @@ docs:
     # that this part is what is left of the stock it names
     pc test -f manufacturability AeroAssembly_assy_example/AeroFrame_Plate
 
-    # who makes the eight parts, and for how much
+    # what a part is cut from, and what that costs: the cart holds the billet
     pc supply quote AeroAssembly_assy_example/AeroFrame_Plate#1
     ```
 
-# Who makes the eight parts - seven milled, one bent. The example defines its
-# own shop rather than buying from 'examples/provider_store', because nothing
-# here is a catalogue item: these are one product's parts, made from 6061 to a
-# drawing.
+# Who makes the eight parts - seven milled, one bent - and who sells the metal
+# seven of them are milled from. The example defines its own shop rather than
+# buying from 'examples/provider_store', because nothing here is a catalogue
+# item: these are one product's parts, made from 6061 to a drawing. The billets
+# they are cut from are catalogue items - plate sawn to size - and so they are
+# bought, from a stockist of the example's own (see 'metalStore' below).
+#
+# The stockist is listed first, and the order matters: a cart takes each item
+# from the first supplier that says it has it, and the only items in a cart for
+# these parts are the billets (a made part is not bought; what it is made from
+# is). A manufacturer is asked only whether it works the material, so the shop
+# would say it has a billet too, and the cart would be priced for milling a
+# block nobody needs milled.
 suppliers:
+  metalStore:
   machineShop:
 
 providers:
@@ -149,6 +159,14 @@ providers:
       'examples/provider_manufacturer' is: it answers the one question
       'pc test' asks of a supplier - can you make this - out of a table rather
       than over the wire.
+  metalStore:
+    type: store
+    desc: >-
+      A metal stockist that sells 6061-T6 plate sawn to size, the four sizes the
+      billets below are cut to. A stand-in for a real supplier's API in the way
+      'machineShop' is, and the way 'examples/provider_store' is a store: it
+      answers whether it carries a vendor's SKU, and what an order of them
+      costs, out of a table rather than over the wire.
 
 # What every part and every billet below is made of is not declared here: 6061-T6
 # is in the public material catalogue, and each part names it there in full -
@@ -464,13 +482,22 @@ parts:
   # what re-cuts the billet if that file is ever re-imported.
   #
   # None of them declares a 'manufacturing' method. Nobody here makes stock -
-  # it is bought by the metre, and what is done to it is the business of the
-  # part that names it. They carry the material because that is what is being
-  # bought, and a sawing tolerance because they are sawn.
+  # it is bought, plate sawn to size, and what is done to it is the business of
+  # the part that names it. They carry the material because that is what is
+  # being bought, and a sawing tolerance because they are sawn.
+  #
+  # And each names what to order it by: a 'vendor' and an 'sku', which is what
+  # makes a part bought rather than nothing at all. One SKU per size, so the
+  # billets of the two halves' matching parts are one SKU, and 'metalStore'
+  # carries the four. Without them a billet could not be had, and a part cut
+  # from something that cannot be had cannot be made: 'pc test' holds every
+  # part a manufacturable assembly is made of to that, through its stock.
   AeroAssembly_assy_example/AeroFrameAssembly_solid1_stock:
     type: build123d
     path: stock.py
     desc: The 135 x 45 x 18 mm billet the first half's rear foot is cut from
+    vendor: example-metals
+    sku: "6061-T6 plate 135x45x18"
     parameters:
       part:
         default: AeroAssembly_assy_example/AeroFrameAssembly_solid1.step
@@ -484,6 +511,8 @@ parts:
     type: build123d
     path: stock.py
     desc: The 140 x 50 x 20 mm billet the first half's front foot is cut from
+    vendor: example-metals
+    sku: "6061-T6 plate 140x50x20"
     parameters:
       part:
         default: AeroAssembly_assy_example/AeroFrameAssembly_solid2.step
@@ -497,6 +526,8 @@ parts:
     type: build123d
     path: stock.py
     desc: The 235 x 95 x 32 mm billet the first half's strut is cut from
+    vendor: example-metals
+    sku: "6061-T6 plate 235x95x32"
     parameters:
       part:
         default: AeroAssembly_assy_example/AeroFrameAssembly_solid3.step
@@ -510,6 +541,8 @@ parts:
     type: build123d
     path: stock.py
     desc: The 180 x 70 x 26 mm billet the plate is cut from
+    vendor: example-metals
+    sku: "6061-T6 plate 180x70x26"
     parameters:
       part:
         default: AeroAssembly_assy_example/AeroFrame_Plate.step
@@ -523,6 +556,8 @@ parts:
     type: build123d
     path: stock.py
     desc: The 135 x 45 x 18 mm billet the mirrored half's rear foot is cut from
+    vendor: example-metals
+    sku: "6061-T6 plate 135x45x18"
     parameters:
       part:
         default: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1.step
@@ -536,6 +571,8 @@ parts:
     type: build123d
     path: stock.py
     desc: The 140 x 50 x 20 mm billet the mirrored half's front foot is cut from
+    vendor: example-metals
+    sku: "6061-T6 plate 140x50x20"
     parameters:
       part:
         default: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2.step
@@ -549,6 +586,8 @@ parts:
     type: build123d
     path: stock.py
     desc: The 235 x 95 x 32 mm billet the mirrored half's strut is cut from
+    vendor: example-metals
+    sku: "6061-T6 plate 235x95x32"
     parameters:
       part:
         default: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3.step
@@ -596,9 +635,9 @@ assemblies:
   # what 'pc test' then holds it to: every item connected rather than placed
   # (see 'partcad.test.connectivity'), no shared volume anywhere as a failure
   # rather than a note, instructions that resolve, and eight parts that a
-  # supplier will make. The 'assy' manufacturing method comes with the type: an
-  # ASSY is put together by following its own instructions, which is what
-  # 'pc render -t pdf' writes out.
+  # supplier will make, seven of them out of billets a supplier sells. The
+  # 'assy' manufacturing method comes with the type: an ASSY is put together by
+  # following its own instructions, which is what 'pc render -t pdf' writes out.
   AeroAssembly_assy_example/AeroAssembly_connected:
     type: assy
     manufacturable: true

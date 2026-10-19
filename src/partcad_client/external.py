@@ -1149,7 +1149,13 @@ def _mount_sources(reference: str, python: str):
         resolved, _ = containers.resolve_image(client, reference)
     except containers.ContainerUnavailable as e:
         raise ExternalToolError(str(e))
-    return daemon_mounts.mount_sources(client, resolved, python)
+    try:
+        return daemon_mounts.mount_sources(client, resolved, python)
+    except daemon_mounts.ImageDoesNotRun as e:
+        # The image, and not the daemon: most often one with no build for this
+        # machine's platform. Not the "cannot see this machine's files" below,
+        # whose remedy - sending the file instead - would start the same image.
+        raise ExternalToolError("The application's image %s does not run on this machine: %s" % (resolved, e.reason))
 
 
 def _binds(spec: Tool, reference: str, wanted: List[str], local_binds: dict, optional=()) -> Tuple[dict, dict]:

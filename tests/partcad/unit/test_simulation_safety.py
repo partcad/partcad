@@ -236,6 +236,16 @@ def _gone(pid, within=5.0):
     return False
 
 
+def _tree_script(pids):
+    """A process that starts one of its own, writes that one's pid to 'pids', and waits."""
+    return (
+        "import subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)'])\n"
+        f"open({str(pids)!r}, 'w').write(str(child.pid))\n"
+        "time.sleep(600)\n"
+    )
+
+
 # --------------------------------------------------------------------------- #
 # The budget                                                                  #
 # --------------------------------------------------------------------------- #
@@ -501,12 +511,7 @@ def test_pc_test_fails_a_run_that_did_not_deliver_and_says_why(package, monkeypa
 def test_a_wedged_process_tree_is_killed_whole(tmp_path):
     """'communicate' on its own, as every bounded sandbox run uses it."""
     pids = tmp_path / "pids"
-    script = (
-        "import subprocess, sys, time\n"
-        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)'])\n"
-        "open(%r, 'w').write(str(child.pid))\n"
-        "time.sleep(600)\n" % str(pids)
-    )
+    script = _tree_script(pids)
 
     async def main():
         p = await asyncio.create_subprocess_exec(
@@ -539,12 +544,7 @@ def test_the_bound_holds_when_the_event_loop_itself_is_held_up(monkeypatch, tmp_
     """
     monkeypatch.setattr(pc_runtime, "BACKSTOP", 0.5)
     pids = tmp_path / "pids"
-    script = (
-        "import subprocess, sys, time\n"
-        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)'])\n"
-        "open(%r, 'w').write(str(child.pid))\n"
-        "time.sleep(600)\n" % str(pids)
-    )
+    script = _tree_script(pids)
 
     async def main():
         p = await asyncio.create_subprocess_exec(
@@ -571,6 +571,58 @@ def test_the_bound_holds_when_the_event_loop_itself_is_held_up(monkeypatch, tmp_
     took = asyncio.run(main())
     assert took < 10
     assert _gone(int(pids.read_text()))
+
+
+@pytest.mark.skipif(not POSIX, reason="what blocks the loop here is a waitpid on a stopped child, a POSIX notion")
+def test_the_backstop_asks_for_the_run_again_when_it_could_not_be_had_at_the_start(monkeypatch):
+    monkeypatch.setattr(pc_runtime, "BACKSTOP", 0.5)
+    real = pc_runtime.process_owner
+    asked = []
+
+    def first_time_nothing(p):
+        asked.append(p.pid)
+        return None if len(asked) == 1 else real(p)
+
+    monkeypatch.setattr(pc_runtime, "process_owner", first_time_nothing)
+
+    async def main():
+        p = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-c",
+            "import time; time.sleep(600)",
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            **pc_runtime.bounded_spawn_options(0.5),
+        )
+        asyncio.get_running_loop().call_later(0.1, _gone, p.pid, 30.0)
+        with pytest.raises((asyncio.TimeoutError, TimeoutError)):
+            await pc_runtime.communicate(p, b"", timeout=0.5)
+        await asyncio.wait_for(p.wait(), 10)
+
+    started = time.monotonic()
+    asyncio.run(main())
+    assert time.monotonic() - started < 10
+    assert len(asked) >= 2
+
+
+@pytest.mark.skipif(not POSIX, reason="a reused process group id is a POSIX notion")
+def test_a_kill_that_finds_its_run_gone_spares_whatever_has_its_number_now():
+    """A reaped run's pid, and the group id it led, can be handed to anything.
+
+    Stood in for here by a process leading a group of its own under the run's
+    number, and an owner that says the run it was taken from is gone.
+    """
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"], start_new_session=True)
+    try:
+        run = types.SimpleNamespace(pid=other.pid, returncode=None)
+        gone = types.SimpleNamespace(is_running=lambda: False)
+        pc_runtime.kill_process_tree(run, from_thread=True, owner=gone)
+        pc_runtime.kill_process_tree(run, owner=gone)
+        assert not _gone(other.pid, within=0.5)
+    finally:
+        other.kill()
+        other.wait(10)
 
 
 def test_an_unbounded_run_is_started_as_it_always_was():
@@ -793,6 +845,17 @@ def test_a_tree_with_no_process_or_none_left_is_nothing_to_kill():
     gone = subprocess.Popen([sys.executable, "-c", "pass"])
     gone.wait(10)
     pc_runtime.kill_process_tree(gone)
+    assert pc_runtime.process_owner(types.SimpleNamespace()) is None
+    assert pc_runtime.process_owner(gone) is None
+    assert pc_runtime.process_owner(types.SimpleNamespace(pid=gone.pid, returncode=None)) is None
+    # Running, but somebody else's: what a reused pid would be.
+    assert pc_runtime.process_owner(types.SimpleNamespace(pid=os.getppid(), returncode=None)) is None
+    alive = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])
+    try:
+        assert pc_runtime.process_owner(alive).pid == alive.pid
+    finally:
+        alive.kill()
+        alive.wait(10)
 
 
 def test_only_the_end_of_a_long_stderr_is_carried():

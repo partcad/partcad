@@ -537,7 +537,11 @@ class _ProbeClient:
         if self.sees:
             return b""
         raise docker.errors.ContainerError(
-            container="probe", exit_status=1, command=kwargs.get("command"), image=image, stderr=b""
+            container="probe",
+            exit_status=runtime_python_docker._PROBE_ABSENT,
+            command=kwargs.get("command"),
+            image=image,
+            stderr=b"",
         )
 
 

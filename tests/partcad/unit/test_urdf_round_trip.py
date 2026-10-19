@@ -18,7 +18,9 @@ it mimics; every link that is a rigid body is there under its name; and every
 shape is where it was, to a micrometre. What is not kept is said in the tests:
 a link on a fixed joint is one rigid body with its parent, so it is a shape of
 the parent's link, and a link with no geometry is no part of PartCAD's, so the
-chain it was in comes back through a dummy link named after the joint.
+chain it was in comes back - asked for with 'composites: massless', since a
+URDF has no type for the joint it composes into - through a link with no
+'<inertial>' named after the joint.
 """
 
 import asyncio
@@ -136,9 +138,9 @@ def _package(root, urdf):
     return pc.Context(str(root))
 
 
-def _export(ctx, assembly, directory, name="rig"):
+def _export(ctx, assembly, directory, name="rig", **options):
     path = os.path.join(str(directory), "%s.urdf" % name)
-    asyncio.run(assembly.render_async(ctx, "urdf", filepath=path, tolerance=1.0, angularTolerance=0.5))
+    asyncio.run(assembly.render_async(ctx, "urdf", filepath=path, tolerance=1.0, angularTolerance=0.5, **options))
     return path
 
 
@@ -285,12 +287,14 @@ def test_a_urdf_read_exported_and_read_again_keeps_its_kinematics(tmp_path):
     assert [step.axis for step in read["camera"].joint.free_steps()] == [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
 
     source = read_urdf(tmp_path / "source" / "rig.urdf")
-    exported_path = _export(ctx, rig, tmp_path / "out")
+    # The two joints through the gimbal are one universal joint, which a URDF
+    # has no type for: exported as the chain it was, through a massless link.
+    exported_path = _export(ctx, rig, tmp_path / "out", composites="massless")
     exported = read_urdf(exported_path)
 
     # Every link that is a body of its own, under its own name - the tool, on a
     # fixed joint, is a shape of the carriage's link - and the gimbal, which has
-    # no geometry, comes back as the dummy link between the two joints.
+    # no geometry, comes back as the massless link between the two joints.
     welded = body_of(source)
     assert set(exported["links"]) == {link for link in source["links"] if welded[link] == link} - {"gimbal"} | {
         "roll_link1"
@@ -299,6 +303,9 @@ def test_a_urdf_read_exported_and_read_again_keeps_its_kinematics(tmp_path):
     for name, joint in movable(source).items():
         assert_same_joint(name, joint, exported["joints"][name], renamed={"gimbal": "roll_link1"})
     assert_same_shapes(source, exported)
+    # It weighs nothing: a frame, as the gimbal link in the source was.
+    gimbal = ET.parse(exported_path).getroot().find("link[@name='roll_link1']")
+    assert gimbal is not None and gimbal.find("inertial") is None
 
     # And read again, it is the same mechanism.
     again_root = tmp_path / "out"
@@ -437,15 +444,22 @@ def test_hand_written_joints_go_out_as_urdf_and_come_back(tmp_path):
     kinds = {joint.name: kinematics.classify(joint.to_envelope()).kind for _, joint in rig.joints()}
     assert kinds == {"shoulder": kinematics.REVOLUTE, "wrist": kinematics.BALL, "spin": kinematics.SCREW}
 
+    # A ball and a screw have no URDF type: the export refuses them, and writes
+    # nothing...
+    refused = tmp_path / "refused"
+    refused.mkdir()
+    _export(ctx, rig, refused)
+    assert list(refused.iterdir()) == []
+    # ...unless asked to write them as chains through massless links.
     out = tmp_path / "out"
-    exported = read_urdf(_export(ctx, rig, out))
+    exported = read_urdf(_export(ctx, rig, out, composites="massless"))
     joints = exported["joints"]
     shoulder = joints["shoulder"]
     assert (shoulder["type"], shoulder["parent"], shoulder["child"]) == ("revolute", "base", "arm")
     assert (shoulder["limit"]["lower"], shoulder["limit"]["upper"]) == pytest.approx((-math.pi / 2, math.pi / 2))
     assert (shoulder["limit"]["effort"], shoulder["limit"]["velocity"]) == pytest.approx((2.0, math.pi))
     assert shoulder["dynamics"]["damping"] == pytest.approx(0.05)
-    # A ball is three turns through two dummy links, named after the joint.
+    # A ball is three turns through two massless links, named after the joint.
     wrist = [name for name, joint in joints.items() if name.startswith("wrist")]
     assert len(wrist) == 3 and {"wrist_link1", "wrist_link2"} <= set(exported["links"])
     # A screw is a turn and a move that mimics it by the lead: 2 mm a turn.
@@ -461,3 +475,94 @@ def test_hand_written_joints_go_out_as_urdf_and_come_back(tmp_path):
     assert {name: classification.kind for name, classification in read.items()} == kinds
     (turn,) = read["shoulder"].freedoms
     assert (turn.lower, turn.upper) == pytest.approx((-90.0, 90.0))
+
+
+# A leg whose knee cannot straighten: its limits, as a legged robot's often are,
+# leave URDF's zero out, and its ankle's do not.
+KNEE = """
+  <joint name="knee" type="revolute">
+    <origin xyz="0 0 -0.1"/>
+    <parent link="thigh"/><child link="shin"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.7" upper="-0.08" effort="10" velocity="5"/>
+  </joint>
+  <joint name="ankle" type="revolute">
+    <origin xyz="0 0 -0.1"/>
+    <parent link="shin"/><child link="foot"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.5" upper="0.5" effort="5" velocity="5"/>
+  </joint>
+"""
+
+
+def leg_urdf():
+    links = {"thigh": (0.02, 0.02, 0.1), "shin": (0.02, 0.02, 0.1), "foot": (0.05, 0.02, 0.01)}
+    body = "".join(LINK % (name, _box(size), 0.1) for name, size in links.items())
+    return "<?xml version='1.0'?>\n<robot name='rig'>%s%s\n</robot>\n" % (body, KNEE)
+
+
+def _start_of(assembly, link):
+    child = next(child for child in assembly.children if child.name == link)
+    (free,) = child.joint.free_steps()
+    return free
+
+
+def test_a_joint_whose_limits_leave_zero_out_starts_at_the_nearest_bound(tmp_path):
+    """A knee bounded to -2.7 .. -0.08 rad starts bent at -0.08, read as a URDF and converted alike.
+
+    Started at URDF's zero it would start against its own stop: an engine
+    throws it back in with its first step, and the 'connect' check fails it. So
+    the reader places the shin, and everything below it, with the knee at the
+    bound nearest zero, the converter writes that bound as the parameter's
+    default and the connection's 'toParams', and the assembly is drawn there.
+    The URDF exported again is the URDF it was, at its own zero.
+    """
+    from partcad.actions.assembly import convert_assembly_action
+
+    ctx = _package(tmp_path / "source", leg_urdf())
+    read = ctx._get_assembly(":rig")
+    asyncio.run(read.do_instantiate())
+    knee = _start_of(read, "shin")
+    start = math.degrees(-0.08)
+    assert (knee.value, knee.lower, knee.upper) == pytest.approx((start, math.degrees(-2.7), start))
+    # The ankle's range has zero in it: it starts there, as the URDF places it.
+    assert _start_of(read, "foot").value == 0.0
+    # Placed where the steps at those values put it - the shin bent, and the foot with it.
+    placed = {child.name: child for child in read.children}
+    for name in ("shin", "foot"):
+        child = placed[name]
+        parent = placed[child.joint.parent]
+        product = parent.location * child.joint.composition.location()
+        # To the reader's rounding of a placement, a micrometre's thousandth.
+        assert product.translation == pytest.approx(child.location.translation, abs=1e-5), name
+        assert kinematics.outside_bounds(kinematics.Joint(child.joint.to_envelope())) == [], name
+    # The foot's box is 100 mm below the knee, less its own 5 mm offset up its link, turned with the shin.
+    assert placed["foot"].location.translation[0] == pytest.approx(95.0 * math.sin(0.08), abs=1e-5)
+
+    convert_assembly_action(ctx.get_project("//"), "rig", "assy")
+    converted = pc.Context(str(tmp_path / "source"))._get_assembly(":rig")
+    asyncio.run(converted.do_instantiate())
+    assert asyncio.run(converted.get_connect_problems()) == []
+    assert _start_of(converted, "shin").value == pytest.approx(start)
+    assy = (tmp_path / "source" / "rig.assy").read_text()
+    assert "toParams: {angle: %s}" % round(start, 9) in assy
+    assert assy.count("toParams") == 1
+    config = (tmp_path / "source" / "partcad.yaml").read_text()
+    assert "default: %s" % round(start, 9) in config
+    # The converted assembly stands as the read one does. Its parts are each in
+    # its link's frame, so it is the link frames that are compared: the shin's
+    # at the knee, turned to the start about Y, and the foot's 100 mm down it.
+    links = {child.name: child.location for child in converted.children}
+    turned = links["thigh"].inverse() * links["shin"]
+    axis, angle = turned.as_packed()[1:]
+    about_y = angle * (1 if axis[1] > 0 else -1)
+    assert (about_y - start + 180.0) % 360.0 - 180.0 == pytest.approx(0.0, abs=1e-6)
+    assert turned.translation == pytest.approx((0.0, 0.0, -100.0), abs=1e-5)
+    foot = (100.0 * math.sin(0.08), 0.0, -100.0 - 100.0 * math.cos(0.08))
+    assert links["foot"].translation == pytest.approx(foot, abs=1e-5)
+
+    # Exported again, the URDF is the leg it was: joint zeros are the hardware's.
+    source = read_urdf(tmp_path / "source" / "rig.urdf")
+    exported = read_urdf(_export(ctx, converted, tmp_path / "out"))
+    for name, joint in movable(source).items():
+        assert_same_joint(name, joint, exported["joints"][name])

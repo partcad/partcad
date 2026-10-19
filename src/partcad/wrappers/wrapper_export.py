@@ -122,6 +122,7 @@ import runpy
 import sys
 
 sys.path.append(os.path.dirname(__file__))
+import kinematics
 import ocp_serialize
 import wrapper_common
 
@@ -183,8 +184,10 @@ JOINT_KEY = "joint"
 # two machines - see 'builtin/render/render_svg.py'.
 REPRODUCIBLE_KEY = "reproducible"
 
-# The key the core puts each shape's resolved physics under, keyed by the same
-# full name the index below is keyed by: what the shape states, what its
+# The key the core puts each shape's resolved physics under, keyed by
+# 'kinematics.properties_key()' - a part's full name, an assembly's or a scene's
+# kind and full name, so that a part and an assembly that share a name each get
+# their own (see 'properties_index()' below): what the shape states, what its
 # material lends - a shape says what it is made of by *name*, and turning
 # ':aluminium' into a density means loading the package that catalogues it,
 # which the core can do and a sandbox cannot - and the mass, centre of mass and
@@ -224,18 +227,31 @@ def properties_index(request):
     for, appear. A part with no 'properties:' of its own still weighs what its
     solid weighs, so it is indexed for its physics alone. A shape with no name
     cannot be looked up and is skipped, but its children are still walked.
+
+    A part and an assembly (or a scene) may share a name within a package, and
+    so a full name: the assembly 'nut' that holds the part 'nut'. The full name
+    is then the part's - it is what every exporter looks a part up by, for its
+    colour and its density - and the assembly's entry is under its kind and
+    full name as well ('kinematics.properties_key()'), even when it has nothing
+    in it, so that 'kinematics.properties_of()' never hands it the part's
+    instead. Until it was, whichever of the two the walk reached last took the
+    entry, and an assembly exported with its namesake inside it weighed what
+    that part weighs. A full name nothing else carries is indexed exactly as it
+    always was.
     """
-    index = {}
     resolved_physics = request.get(PHYSICS_KEY) or {}
 
-    def resolved(name, properties):
+    def resolved(obj, properties):
         """One shape's properties, with its resolved physics under its own."""
-        facts = resolved_physics.get(name)
+        facts = resolved_physics.get(kinematics.properties_key(obj))
         if not facts:
             return properties
         physics = dict(facts)
         physics.update(properties.get("physics") or {})
         return dict(properties, physics=physics)
+
+    # (kind, full name, key, entry) for every named shape, in the order walked.
+    found = []
 
     def walk(obj):
         if isinstance(obj, list):
@@ -249,8 +265,8 @@ def properties_index(request):
             properties = obj.get(PROPERTIES_KEY)
             properties = properties if isinstance(properties, dict) else {}
             name = obj.get("name")
-            if name and (properties or resolved_physics.get(name)):
-                index[name] = resolved(name, properties)
+            if name:
+                found.append((kinematics.kind_of(obj), name, kinematics.properties_key(obj), resolved(obj, properties)))
             for child in obj.get(ocp_serialize.KEY_ASSEMBLY) or []:
                 walk(child)
             return
@@ -262,6 +278,17 @@ def properties_index(request):
                 walk(value)
 
     walk(request)
+
+    kinds = {}
+    for kind, name, _key, _entry in found:
+        kinds.setdefault(name, set()).add(kind)
+    index = {}
+    for kind, name, key, entry in found:
+        shared = len(kinds[name]) > 1
+        if shared and kind != kinematics.PART:
+            index[key] = entry
+        if entry and (kind == kinematics.PART or kinematics.PART not in kinds[name]):
+            index[name] = entry
     return index
 
 

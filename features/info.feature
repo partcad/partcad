@@ -332,6 +332,7 @@ Feature: `pc info` command
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Joints"
     And STDOUT should contain "'door_hinge'"
+    And STDOUT should contain "'type': 'revolute'"
     And STDOUT should contain "-150 to 150 deg"
     And STDOUT should contain "'value': 30.0"
 # And STDOUT should contain "cube" in the parts list

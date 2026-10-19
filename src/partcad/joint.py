@@ -51,6 +51,10 @@ and 'AssemblyChild.joint' is None for it.
 Nothing here imports OCP.
 """
 
+import math
+import os
+import sys
+
 from . import motion as pc_motion
 from .geom import Location
 from .interface import PARAM_MOVE, PARAM_TURN, InterfaceParameter, movement_offset
@@ -278,6 +282,8 @@ class Joint:
         record = record or {}
         self.soft_limits = record.get("softLimits")
         self.mimic = record.get("mimic")
+        # A ball's one bound: how far it turns from its zero, in degrees.
+        self.turn_limit = _finite(record.get("turnLimit"))
         self.problems = []
 
     @property
@@ -364,15 +370,39 @@ class Joint:
             entry["softLimits"] = dict(self.soft_limits)
         if self.mimic:
             entry["mimic"] = dict(self.mimic)
+        if self.turn_limit is not None:
+            entry["turnLimit"] = self.turn_limit
         return entry
+
+    @property
+    def start_rotation(self):
+        """A ball's starting rotation (a quaternion, 'w x y z'), or None for a joint that is no ball."""
+        if self.type != pc_motion.BALL:
+            return None
+        return _kinematics().rezeroed(self.to_envelope()).rotation
+
+    @property
+    def type(self) -> str:
+        """The native type of joint the free steps are, as every exporter reads it.
+
+        'kinematics.classify()' - the one classification the URDF exporter and
+        the engine plugins write joints by (section 8.13.3 of
+        docs/design/simulation.md) - asked here so that 'pc info' names the
+        same type an export will. Its kinds are 'motion.type''s, but for
+        'composite': a set of freedoms no native joint has.
+        """
+        return _kinematics().classify(self.to_envelope()).kind
 
     def info(self, prefix: str = "") -> dict:
         """What 'pc info' shows of this joint: what it joins, how it moves, and where each came from."""
         info = {
             "parent": prefix + str(self.parent),
             "child": prefix + str(self.child),
+            "type": self.type,
             "free": [_free_step_info(step, self.steps) for step in self.free_steps()],
         }
+        if self.turn_limit is not None:
+            info["turnLimit"] = "%g deg from its zero" % self.turn_limit
         if self.physics:
             info["physics"] = dict(self.physics)
             info["physicsFrom"] = self.physics_source
@@ -386,6 +416,20 @@ class Joint:
 
     def __repr__(self):
         return "<Joint %s: %s -> %s, %s>" % (self.name, self.parent, self.child, self.free_steps())
+
+
+def _kinematics():
+    """'wrappers/kinematics.py', imported the way 'physics' imports 'mass_properties' beside it.
+
+    Pure Python, and on the path for anything that imports 'partcad' already
+    (see 'shape.py'); said again here so that this module stands on its own.
+    """
+    wrappers = os.path.join(os.path.dirname(__file__), "wrappers")
+    if wrappers not in sys.path:
+        sys.path.append(wrappers)
+    import kinematics
+
+    return kinematics
 
 
 def _shown(value):
@@ -521,29 +565,35 @@ class Side:
     def steps(self) -> list:
         """This side's factors of the composition, in the order the placement composes them.
 
-        The parameters the connection names come first, in the order it names
-        them, exactly as the placement always composed them: a degree of
-        freedom as a free step at the value given, anything else as an
-        adjustment fixed at it. The degrees of freedom it does not name follow,
-        free at zero - which composes nothing, so they change no placement.
+        The adjustments the connection names come first, in the order it names
+        them, exactly as the placement always composed them, each fixed at its
+        value. The degrees of freedom follow, every one of them, in the order
+        they were declared - a 'dof' list's own order, or the order a 'type'
+        implies them in (section 8.2 of docs/design/simulation.md) - each at
+        the value the connection gives it, nought where it gives none, which
+        composes nothing. A connection's 'toParams' supplies values and never
+        order: what kind of joint the freedoms make is a property of the joint,
+        not of how its start was written, so 'motion: floating' posed as
+        '{moveZ: 100, turnX: 10}' or as '{turnX: 10, moveZ: 100}' is one free
+        body at one placement (8.13.10). An adjustment goes before them because
+        it is the fixed geometry the freedoms act in: a slot positions the
+        hinge that turns in it.
         """
         steps = []
-        named = set()
+        values = {}
         for name, value in self.values.items():
             parameter = self.parameter(name)
             if parameter is None:
                 continue
-            named.add(name)
             # Called for every named parameter, free or not: it is what reports
             # a value outside the parameter's range, as it always has.
             offsets = parameter.get_offsets(value)
             if name in self.dof:
-                steps.append(self._free(name, parameter, value))
+                values[name] = value
             else:
                 steps.extend(FixedStep(offset, ROLE_ADJUSTMENT, "%s:%s" % (self.name, name)) for offset in offsets)
         for name in self.dof:
-            if name not in named:
-                steps.append(self._free(name, self.parameter(name), 0.0))
+            steps.append(self._free(name, self.parameter(name), values.get(name, 0.0)))
         return steps
 
     def _free(self, name, parameter, value):
@@ -552,10 +602,165 @@ class Side:
         return FreeStep(_kind(parameter), parameter.dir, lower, upper, value, [source], self.name)
 
 
+def _finite(value):
+    """'value' as a float, or None where it is not a finite number: an open bound."""
+    number = _number(value)
+    return number if number is not None and abs(number) != float("inf") else None
+
+
 def _parameter_range(parameter) -> tuple:
+    """A parameter's range as a degree of freedom: None on a side it leaves open.
+
+    A parameter declared by name alone states no range at all, and one whose
+    'min' or 'max' is YAML's infinity states that side open.
+    """
     if parameter.unbounded:
         return None, None
-    return _number(parameter.min), _number(parameter.max)
+    return _finite(parameter.min), _finite(parameter.max)
+
+
+def _shown_range(lower, upper) -> str:
+    def side(value, sign):
+        return "%sinf" % sign if value is None else "%g" % value
+
+    return "%s to %s" % (side(lower, "-"), side(upper, "+"))
+
+
+def _bounded(freedom, parameter, factor, name, motion, problems) -> tuple:
+    """The range of a freedom a 'type' implies, in its parameter's units: '(lower, upper)'.
+
+    The parameter's own range is the freedom's travel, and 'limits' is how the
+    short form states the range of a parameter it implies (section 8.13.2 of
+    docs/design/simulation.md). So each side 'limits' states is laid over the
+    parameter's - scaled into the parameter's units by 'factor', and on the
+    other side of it where the parameter runs the other way - and a side it
+    does not state is the parameter's. Where the parameter is declared with a
+    bound of its own on a side 'limits' states as well, the two are one travel
+    stated twice and have to agree: a disagreement is an error, and the
+    parameter's bound is used. A side 'limits' states open is open whatever
+    the parameter says, which is what an open side is stated for.
+    """
+    declared = dict(zip(pc_motion.BOUNDS, _parameter_range(parameter)))
+    if not freedom.limited:
+        return declared["lower"], declared["upper"]
+    result = dict(declared)
+    disagreed = False
+    for side, value in freedom.bounds.items():
+        if factor < 0:
+            side = "upper" if side == "lower" else "lower"
+        if value is None:
+            result[side] = None
+            continue
+        value *= factor
+        own = declared[side]
+        if own is not None and abs(value - own) > 1e-9 * max(1.0, abs(own)):
+            disagreed = True
+            continue
+        result[side] = value
+    if disagreed:
+        problems.append(
+            "%s: 'limits' bound '%s' %s, and '%s' is declared %s: one travel stated twice, and differently; state it "
+            "on the parameter or in 'limits', not in both (the parameter's is used)"
+            % (
+                motion.where,
+                name,
+                _shown_range(freedom.lower, freedom.upper),
+                name,
+                _shown_range(declared["lower"], declared["upper"]),
+            )
+        )
+    return result["lower"], result["upper"]
+
+
+def _reversed(freedom, factor) -> bool:
+    """Whether 'limits' bound this freedom about an axis that runs the other way to its parameter.
+
+    Recorded on the freedom's source ("reversed"), because it is what makes a
+    start and a bound that look consistent as written disagree as resolved: a
+    target's 'turnZ' is about the contact frame's Z, the target port's own Z
+    reversed, so 'limits: {lower: -10, upper: 30}' bound it -30 to 10.
+    """
+    return factor < 0 and any(value is not None for value in freedom.bounds.values())
+
+
+def outside_bounds(composition, name) -> list:
+    """Every degree of freedom of a joint that starts outside its own bounds, as a problem.
+
+    The start is the parameter's own value ('toParams', 'withParams', nought
+    where the connection gives none) and the bounds its range in the same
+    terms, so an engine handed both starts the joint against its own stop:
+    MuJoCo does, and its first step throws it back in. It fails the 'connect'
+    check, the message naming the joint, the parameter, the start and the
+    bounds - and, where 'limits:' were stated about an axis that runs the other
+    way to the parameter, saying so, since that is the usual way to come by
+    one. 'kinematics.outside_bounds' says the same of a tree.
+    """
+    problems = []
+    for step in composition.free_steps():
+        value = _number(step.value)
+        if value is None:
+            continue
+        tolerance = 1e-9 * max(1.0, abs(value))
+        lower, upper = step.lower, step.upper
+        if not ((lower is not None and value < lower - tolerance) or (upper is not None and value > upper + tolerance)):
+            continue
+        parameters = "+".join(str(source.get("parameter")) for source in step.source) or "?"
+        unit = "deg" if step.kind == PARAM_TURN else "mm"
+        problem = "the joint '%s' starts '%s' at %g %s, outside its bounds of %s %s" % (
+            name,
+            parameters,
+            value,
+            unit,
+            _shown_range(lower, upper),
+            unit,
+        )
+        if any(source.get("reversed") for source in step.source):
+            problem += (
+                ": its 'limits' are stated about the motion's axis, which runs the other way to '%s' (a target "
+                "interface's parameters are read in the contact frame, whose Z is the target port's Z reversed), "
+                "so they bound '%s' the other way round; state the start in the parameter's sense, or the limits "
+                "on the parameter itself" % (parameters, parameters)
+            )
+        problems.append(problem)
+    return problems
+
+
+def turned_beyond_bound(name, turn_limit, rotation) -> list:
+    """A ball that starts turned further from its zero than its one bound lets it, as a problem.
+
+    A ball's turns carry no range ('_ball_turn'), so 'outside_bounds' cannot
+    see it: what the bound bounds is the rotation the three turns make
+    together, 'rotation' (a quaternion, 'w x y z', the ball's start; see
+    'kinematics.Rezeroed.rotation'), whose angle has to be within
+    'turn_limit' degrees. 'kinematics.outside_bounds' says the same of a tree.
+    """
+    if turn_limit is None or rotation is None:
+        return []
+    angle = math.degrees(2.0 * math.acos(min(1.0, abs(float(rotation[0])))))
+    if angle <= turn_limit + 1e-9 * max(1.0, turn_limit):
+        return []
+    return [
+        "the ball '%s' starts turned %g deg from its zero, beyond its bound of %g deg ('limits: {upper: %g}')"
+        % (name, angle, turn_limit, turn_limit)
+    ]
+
+
+def _ball_turn(parameter, name, motion, problems) -> tuple:
+    """The range of one of a ball's turns: none, and an error where the parameter it is declares one.
+
+    A ball is bounded by one angle, how far it turns from its zero, and not
+    turn by turn (section 8.13.3); a range on one of its turns cannot be
+    written by any engine as what it says. Turns bounded each on its own are a
+    composite, which is what naming them in 'dof' without 'type: ball' states.
+    """
+    if _parameter_range(parameter) != (None, None):
+        problems.append(
+            "%s: a ball is bounded by one angle, how far it turns from its zero ('limits: {upper: <degrees>}'), "
+            "and '%s' states a range of its own (%s), which no ball can keep; name the turns in 'dof' instead of "
+            "'type: ball' to bound each of them (the range is not used)"
+            % (motion.where, name, _shown_range(*_parameter_range(parameter)))
+        )
+    return None, None
 
 
 def _scaled_range(lower, upper, factor) -> tuple:
@@ -581,6 +786,11 @@ class Resolution:
         self.thread_step = thread_step
         self.problems = []
         self.record = {}
+        # A ball's one bound, from the declaration that decided the freedoms
+        # (see '_resolve'); applied only to a joint that is a ball
+        # ('ball_bound').
+        self.turn_limit = None
+        self.turn_limit_from = None
         # The freedoms that follow another one (a screw's move), as
         # '(side, follower name, side, leader name, ratio)'.
         self.couplings = []
@@ -646,6 +856,39 @@ class Resolution:
             for level, motion, side in governing:
                 self._apply(level, motion, [side], side.to_contact, side)
 
+        # A declaration a more specific one overrides frees nothing, and still
+        # brings along the parameters it would have: what the connection's
+        # 'toParams' was written against. Each is an adjustment, then, fixed
+        # at its value - so 'connect: {motion: fixed, toParams: {turnZ: 90}}'
+        # welds a pendulum at 90 degrees, where it would have started, rather
+        # than dropping the value for want of a parameter to set.
+        deciding = governing[:1] if governing and governing[0][0] in (CONNECTION, MATING) else governing
+        for entry in self.levels:
+            level, motion, side = entry
+            if not motion.declared or any(entry is decided for decided in deciding):
+                continue
+            if level == INTERFACE:
+                self._addressable(motion, [side], side.to_contact, side)
+            elif level == MATING:
+                declarer = self._declarer_side()
+                self._addressable(motion, [self.to_side, self.with_side], declarer.to_contact, declarer)
+
+        # A ball's one bound bounds the freedoms its declaration implies, so it
+        # comes from a declaration that decided them - the connection's, the
+        # mating's, or the two interfaces' - and from nothing it overrides: an
+        # interface's bounded ball under 'connect: {motion: revolute}' is no
+        # bound on the revolute. Two interfaces stating two bounds for one ball
+        # are reported, and the target's is used.
+        bounds = [(motion, side) for _, motion, side in deciding if motion.type == pc_motion.BALL and motion.turn_limit]
+        for motion, side in bounds:
+            if self.turn_limit is None:
+                self.turn_limit, self.turn_limit_from = motion.turn_limit, motion.where
+            elif motion.turn_limit != self.turn_limit:
+                self.problems.append(
+                    "the two interfaces bound one ball by different angles (%g and %g degrees); the target's is used"
+                    % (self.turn_limit, motion.turn_limit)
+                )
+
         # What the declarations say about the joint as a whole - its soft limits
         # and what it mimics - comes from the most specific one that says it.
         # The two interfaces are one level, so between those two it is the
@@ -660,6 +903,58 @@ class Resolution:
                     self.problems.append(
                         "the two interfaces state different '%s' for one joint; the target's is used" % field
                     )
+
+    def _addressable(self, motion, sides, frame, default) -> None:
+        """The parameters an overridden 'motion:' would bring along, made so that 'toParams' finds them.
+
+        Matched as '_apply' matches them - a declared or an already brought
+        parameter of the same kind along the same axis is the one - and
+        brought along as it brings them where there is none; but nothing is
+        made free. A 'dof' list's predefined names are brought along the same
+        way, and its declared ones need nothing.
+        """
+        if motion.dof is not None:
+            for name in motion.dof:
+                if name in pc_motion.PREDEFINED and all(side.parameter(name) is None for side in sides):
+                    kind, axis = pc_motion.PREDEFINED[name]
+                    parameter = InterfaceParameter(
+                        {"name": name, "type": kind, "dir": list(axis), "min": None, "max": None, "default": 0.0}
+                    )
+                    parameter.unbounded = True
+                    default.synthesized[name] = parameter
+            return
+        for freedom in motion.implied():
+            direction = pc_motion.unit(frame(freedom.axis))
+            found = False
+            for side in sides:
+                for parameter in list(side.declared().values()) + list(side.synthesized.values()):
+                    axis = pc_motion.unit(parameter.dir)
+                    if _kind(parameter) == freedom.kind and axis is not None and pc_motion.parallel(axis, direction):
+                        found = True
+                        break
+                if found:
+                    break
+            if not found:
+                default.synthesize(freedom.kind, direction)
+
+    def ball_bound(self, joint) -> list:
+        """Give 'joint' its ball's one bound if it is a ball; the problems with it if it is not.
+
+        Called once the joint is composed and merged, since only then is it
+        known what the freedoms make: a ball declared on one interface and a
+        move on the other are a composite, which the ball's bound does not
+        bound. That bound is then dropped, and said to be.
+        """
+        if self.turn_limit is None:
+            return []
+        kind = joint.type
+        if kind == pc_motion.BALL:
+            joint.turn_limit = self.turn_limit
+            return []
+        return [
+            "%s: a ball's bound ('limits: {upper: %g}') bounds a ball, and this joint is a %s: it is not used"
+            % (self.turn_limit_from, self.turn_limit, kind)
+        ]
 
     def _apply(self, level, motion, sides, frame, default) -> None:
         """Mark what one 'motion:' declares free, on the sides it is resolved against."""
@@ -702,20 +997,20 @@ class Resolution:
             factor = float(sign)
             if freedom.kind == PARAM_MOVE:
                 factor /= _length(parameter.dir)
-            if freedom.unlimited:
-                lower, upper = None, None
-            elif freedom.limited:
-                lower, upper = _scaled_range(freedom.lower, freedom.upper, factor)
+            if motion.type == pc_motion.BALL:
+                lower, upper = _ball_turn(parameter, name, motion, self.problems)
             else:
-                lower, upper = _parameter_range(parameter)
+                lower, upper = _bounded(freedom, parameter, factor, name, motion, self.problems)
             source = {
                 "side": side.name,
                 "interface": side.interface_name,
                 "parameter": name,
                 "level": level,
-                "by": "motion '%s'" % motion.type,
+                "by": "motion '%s'" % motion.named,
                 "synthesized": synthesized,
             }
+            if _reversed(freedom, factor):
+                source["reversed"] = True
             side.add_dof(name, lower, upper, source)
             followers[index] = (side, name, factor)
             if freedom.follows is not None:
@@ -782,9 +1077,14 @@ class Resolution:
 
         Paired up by kind and by axis - the same line, either way round - with
         the parameters' directions read in the contact frame and the type's axis
-        mapped there from the frame it is stated in. Where they agree, the type
-        still says what the range is ('continuous' has none, 'limits:' gives
-        one); the parameters 'dof' names are what the freedoms *are*.
+        mapped there from the frame it is stated in. 'dof' is the declaration
+        and 'type' its short form, so the type is an assertion about the 'dof'
+        beside it, and one that does not hold is an error (section 8.13.2 of
+        docs/design/simulation.md); the joint is then built from the 'dof',
+        which names what the freedoms *are*. Where they agree, the type's
+        'limits:' still state the range of each parameter they bound, as
+        '_bounded' lays them over it - and an open side ('continuous', or
+        '.inf') is open whatever the parameter says.
         """
         remaining = list(named)
         unmatched = []
@@ -799,20 +1099,24 @@ class Resolution:
                     factor = float(sign)
                     if freedom.kind == PARAM_MOVE:
                         factor /= _length(parameter.dir)
-                    lower, upper, source = side.dof[name]
-                    if freedom.unlimited:
-                        lower, upper = None, None
-                    elif freedom.limited:
-                        lower, upper = _scaled_range(freedom.lower, freedom.upper, factor)
-                    side.dof[name] = (lower, upper, dict(source, by="'dof' and motion '%s'" % motion.type))
+                    _, _, source = side.dof[name]
+                    if motion.type == pc_motion.BALL:
+                        lower, upper = _ball_turn(parameter, name, motion, self.problems)
+                    else:
+                        lower, upper = _bounded(freedom, parameter, factor, name, motion, self.problems)
+                    source = dict(source, by="'dof' and motion '%s'" % motion.named)
+                    if _reversed(freedom, factor):
+                        source["reversed"] = True
+                    side.dof[name] = (lower, upper, source)
                     break
             else:
                 unmatched.append(freedom)
         if unmatched or remaining:
             said = ", ".join(name for _, name, _ in named) or "nothing"
             self.problems.append(
-                "%s: 'type: %s' and 'dof: [%s]' do not describe the same degrees of freedom; 'dof' is used"
-                % (motion.where, motion.type, said)
+                "%s: 'type: %s' and 'dof: [%s]' do not describe the same degrees of freedom; a 'type' beside a 'dof' "
+                "says what the 'dof' is, so one of the two is wrong (the joint is built from the 'dof')"
+                % (motion.where, motion.named, said)
             )
 
     def _couple(self, motion, followers, index, leader_index) -> None:

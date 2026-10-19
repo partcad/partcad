@@ -1,0 +1,16 @@
+# The plate against the frame's -Y face on two moves and no turn - an XY stage,
+# whose carriage the declaration leaves out. No physical joint has exactly
+# these two freedoms, so the 'dof' list is a composite. As on 'wall', X is
+# straight up and Y level; it starts 50 mm up and 100 mm along.
+links:
+  - part: frame
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: plate
+    connect:
+      name: frame
+      with: face
+      to: flank
+      joint: stage
+      motion:
+        dof: [moveX, moveY]
+      toParams: { moveX: 50, moveY: 100 }
