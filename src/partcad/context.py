@@ -1480,7 +1480,8 @@ class Context:
         once.
 
         Returns:
-            list[str]: list of provider names that can supply the part.
+            list[str]: list of provider names that can supply the part, a
+            supplier named with parameters by the name of that instance.
         """
         providers = []
 
@@ -1517,7 +1518,11 @@ class Context:
             if cart and cart.qos is not None and not provider.is_qos_available(cart.qos):
                 continue
 
-            providers.append(provider_name)
+            # The name of the instance that was asked: a supplier named with
+            # parameters ('currency: EUR') is an instance of its own, and the
+            # carts and quotes made from this ask 'get_provider' for it by
+            # name. Its bare name would be the provider with its defaults.
+            providers.append(provider.name)
 
         return providers
 

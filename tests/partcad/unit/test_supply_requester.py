@@ -14,6 +14,7 @@ every part it is procured from, ahead of the ones the part's own package names.
   '//lib'          - names no supplier at all
   '//kit'          - buys at '//store:own'
   '//other:frame'  - one '//lib:brick'; '//other' buys at '//store:own'
+  '//store:priced' - a store with a 'currency' parameter, which no package names
 
 The stores' scripts are never run: availability is replaced, and what is
 checked is which providers are asked, in what order.
@@ -134,3 +135,19 @@ def test_a_part_nobody_supplies_is_kept_apart_from_the_quote(asked):
     assert preferred == {"//lib:brick#1": "", "//kit:pin#1": OWN}
     carts = asyncio.run(ctx.prepare_supplier_carts(preferred))
     assert {name: list(cart.parts) for name, cart in carts.items()} == {"": ["//lib:brick"], OWN: ["//kit:pin"]}
+
+
+def test_a_store_named_with_parameters_is_quoted_as_that_store(asked):
+    # 'suppliers: {//store:priced: {currency: EUR}}' is an instance of its own,
+    # and what is returned is its name, so that the carts and quotes made from
+    # it reach the instance that was asked rather than one with the defaults.
+    ctx = pc.Context(PACKAGE)
+    cart = ProviderCart()
+    item = cart.add_item(_cart(ctx, "//:model").parts["//kit:pin"])
+    item.suppliers = {"//store:priced": {"currency": "EUR"}}
+
+    found = asyncio.run(ctx.find_part_suppliers(item))
+
+    assert found[0] == "//store:priced;currency=EUR"
+    assert ctx.get_provider(found[0]) is ctx.get_provider("//store:priced", {"currency": "EUR"})
+    assert ctx.get_provider(found[0]) is not ctx.get_provider("//store:priced")

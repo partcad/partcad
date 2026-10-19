@@ -525,6 +525,10 @@ class FakeContext:
         return self.projects.get(name)
 
     async def find_part_suppliers(self, cart_item, cart=None):
+        # The stores the item was procured with, as the real one asks first,
+        # or else the ones its own package is set up with here.
+        if getattr(cart_item, "suppliers", None):
+            return list(cart_item.suppliers)
         return list(self.item_suppliers.get(cart_item.name, []))
 
     def get_provider(self, name, params=None):
@@ -2353,7 +2357,7 @@ def test_supply_asks_the_stores_the_assembly_package_names(monkeypatch):
 
     result = operations.supply_quote(session, {"package": "//", "object": "top"})
 
-    assert [option["name"] for option in result["items"][0]["suppliers"]] == ["//:cheap", "//:dear"]
+    assert [option["name"] for option in result["items"][0]["suppliers"]] == ["//:cheap"]
     assert result["items"][1]["suppliers"] == []
     assert session.partcad.logging.messages("error") == []
 

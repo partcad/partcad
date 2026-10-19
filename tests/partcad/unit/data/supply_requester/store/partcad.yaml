@@ -5,3 +5,9 @@ providers:
     type: store
   own:
     type: store
+  priced:
+    type: store
+    parameters:
+      currency:
+        type: string
+        default: USD
