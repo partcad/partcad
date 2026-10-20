@@ -819,7 +819,7 @@ def _add_projected(exporter, layer, shapes, origin, up, look_at, reproducible=Fa
         compound.wrapped = ocp_serialize.compound_of(
             shape.wrapped if hasattr(shape, "wrapped") else shape for shape in shapes
         )
-        exporter.add_shape(project(compound, origin, up, look_at, reproducible), layer=layer)
+        exporter.add_shape(drawable(project(compound, origin, up, look_at, reproducible)), layer=layer)
     except Exception as e:
         wrapper_common.handle_exception(e)
 

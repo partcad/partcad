@@ -387,6 +387,22 @@ def test_every_projection_leaves_slivers_out(real_svg, monkeypatch, reproducible
     assert [edges for _color, edges in layers] == [[edge]] * colors
 
 
+def test_an_overlay_leaves_slivers_out_too(real_svg, monkeypatch):
+    """Annotations and port boundaries go through the same projection, and the same filter."""
+    sliver = _line(real_svg.MIN_EDGE_LENGTH / 2)
+    edge = _line(1.0)
+    monkeypatch.setattr(real_svg, "project", lambda *_args: [edge, sliver])
+    added = []
+
+    class _Exporter:
+        def add_shape(self, shapes, layer=None):
+            added.append((layer, shapes))
+
+    real_svg._add_projected(_Exporter(), "Annotations", [_line(1.0)], (0, 0, 100), (0, 1, 0), (0, 0, 0))
+
+    assert added == [("Annotations", [edge])]
+
+
 # --------------------------------------------------------------------------- #
 # End to end, through a package and the sandbox                               #
 # --------------------------------------------------------------------------- #

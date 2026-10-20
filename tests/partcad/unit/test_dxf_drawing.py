@@ -418,3 +418,25 @@ def test_a_closed_wire_that_makes_no_face_makes_the_drawing_wires():
 
     assert shape == ("compound", ["rim", "up"])
     assert warning == "no face could be built from the DXF file (not planar); imported the wires it draws instead"
+
+
+@pytest.mark.parametrize("version", ["R12", "R2010"])
+def test_a_drawing_that_says_nothing_of_its_units_is_read_as_it_is(tmp_path, version):
+    """No '$INSUNITS' at all is not metres, whatever ezdxf's default for a new drawing is.
+
+    R12 has no such variable, and a later drawing can leave it out: both read
+    1:1, exactly as every DXF sketch did before units were honoured.
+    """
+    path = str(tmp_path / "plain.dxf")
+    document = ezdxf.new(version)
+    document.modelspace().add_line((0, 0), (1, 0))
+    document.saveas(path)
+    with open(path) as f:
+        lines = f.read().split("\n")
+    if "$INSUNITS" in lines:
+        at = lines.index("$INSUNITS")
+        del lines[at - 1 : at + 3]
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
+
+    assert dxf_drawing.millimetres_per_unit(ezdxf.readfile(path)) == (1.0, None, None)
