@@ -786,6 +786,18 @@ class Runtime:
         """
         return returncode, stderr
 
+    async def _ended_async(self, returncode, stderr):
+        """'_ended', from a coroutine: off the event loop when the process failed.
+
+        Asking whether a container has stopped is a synchronous request to
+        Docker's daemon, and a slow or wedged one would hold every coroutine on
+        the loop for as long as it takes. A success asks nothing, so it stays
+        here.
+        """
+        if returncode == 0:
+            return self._ended(returncode, stderr)
+        return await asyncio.get_running_loop().run_in_executor(None, self._ended, returncode, stderr)
+
     def run(
         self,
         cmd: list[str],
@@ -876,7 +888,12 @@ class Runtime:
                 input_dirs=input_dirs,
                 timeout=timeout,
             )
-            returncode, stderr = self._endpoint_ended(endpoint, returncode, stderr)
+            if returncode != 0:
+                # Off the loop: '_endpoint_ended' asks Docker whether the
+                # container stopped (see '_ended_async').
+                returncode, stderr = await asyncio.get_running_loop().run_in_executor(
+                    None, self._endpoint_ended, endpoint, returncode, stderr
+                )
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
             async with sandbox_lock.process_slots.slot_async():
@@ -896,7 +913,7 @@ class Runtime:
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
-            returncode, stderr = self._ended(p.returncode, stderr)
+            returncode, stderr = await self._ended_async(p.returncode, stderr)
             return self._finished(cmd, stdout, stderr, returncode)
 
         return self._finished(cmd, stdout, stderr, returncode)

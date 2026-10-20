@@ -790,7 +790,7 @@ class PythonRuntime(runtime.Runtime):
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
-            returncode, stderr = self._ended(p.returncode, stderr)
+            returncode, stderr = await self._ended_async(p.returncode, stderr)
 
             if stdout:
                 pc_logging.debug("Output of %s: %s" % (cmd, stdout))

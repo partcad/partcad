@@ -264,12 +264,16 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 # Instantiated, which is what registers its mates.
                 interface.get_ports()
             implemented[id(item)] = resolved
-        here = {
-            interface.full_name
-            for resolved in implemented.values()
-            if resolved is not None
-            for interface in resolved.values()
-        }
+        # Each interface stands for itself and for every interface it is a
+        # drop-in for ('compatible_with'): a connection is worked out across
+        # both (see 'Context.find_mating_interfaces'), so a mate declared on, or
+        # with, an ancestor places parts here as much as one on the interface.
+        standing_for = {}
+        for resolved in implemented.values():
+            for interface in (resolved or {}).values():
+                if interface.full_name not in standing_for:
+                    standing_for[interface.full_name] = self._compatible_full_names(interface)
+        here = set().union(*standing_for.values()) if standing_for else set()
         declared = {}
         for item_id, resolved in implemented.items():
             if resolved is None:
@@ -277,7 +281,10 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 continue
             interfaces = {}
             for name, interface in resolved.items():
-                mates = self.ctx.mates.get(interface.full_name, {})
+                mates = {}
+                for source in sorted(standing_for[interface.full_name]):
+                    for target, mate in self.ctx.mates.get(source, {}).items():
+                        mates.setdefault(target, mate)
                 interfaces[name] = {
                     "config": interface.config,
                     "mates": {
@@ -288,6 +295,20 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 }
             declared[item_id] = interfaces
         return declared
+
+    def _compatible_full_names(self, interface) -> set:
+        """'interface' and every interface it is a drop-in for, by full name, each instantiated.
+
+        Instantiated for the reason the interfaces themselves are (see
+        'interfaces_of'): that is what registers the mates each declares.
+        """
+        names = {interface.full_name}
+        for name in interface.compatible_with:
+            ancestor = self.ctx.get_interface(name)
+            if ancestor is not None:
+                ancestor.get_ports()
+                names.add(ancestor.full_name)
+        return names
 
     async def subassemblies_async(self, assembly) -> list:
         """The assemblies this file links to, resolved but not built.

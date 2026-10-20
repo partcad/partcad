@@ -236,3 +236,42 @@ def test_a_mate_between_interfaces_implemented_here_is_in_the_key(tmp_path):
     fixed = _rig_key(_connected(tmp_path / "fixed", "mates:\n  bore:\n    pin:\n      motion: fixed\n"))
     assert plain is not None and fixed is not None
     assert plain != fixed
+
+
+# The bore the base implements is an 'm4-bore', a drop-in for 'bore', and
+# 'bore' declares that it mates the pin. A connection is worked out across what
+# each side is a drop-in for, so that mate places the arm, and changing it has
+# to move the key - though neither interface the rig's links implement says a
+# word about it.
+_INHERITED = """
+interfaces:
+  bore:
+    ports:
+      hole:
+    mates:
+      pin:%s
+  m4-bore:
+    inherits: bore
+  pin:
+    ports:
+      tip: [[0, 0, 0], [0, 0, 1], 0]
+"""
+
+_INHERITED_CONNECTED = _CONNECTED.replace("//lib:bore:", "//lib:m4-bore:")
+_INHERITED_RIG = _RIG.replace("to: //lib:bore", "to: //lib:m4-bore")
+
+
+def _inherited(root, mating):
+    (root / "lib").mkdir(parents=True, exist_ok=True)
+    (root / "lib" / "partcad.yaml").write_text(_INHERITED % mating)
+    (root / "partcad.yaml").write_text(_INHERITED_CONNECTED)
+    (root / "rig.assy").write_text(_INHERITED_RIG)
+    (root / "cube.stl").write_text("solid cube\nendsolid cube\n")
+    return root
+
+
+def test_a_mate_with_an_interface_an_implemented_one_is_a_drop_in_for_is_in_the_key(tmp_path):
+    plain = _rig_key(_inherited(tmp_path / "plain", " {}"))
+    fixed = _rig_key(_inherited(tmp_path / "fixed", "\n        motion: fixed"))
+    assert plain is not None and fixed is not None
+    assert plain != fixed
