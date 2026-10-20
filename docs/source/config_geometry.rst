@@ -111,6 +111,28 @@ Such sketches are declared using the following syntax:
       include: <(optional) a layer name or a list of layer names to import>
       exclude: <(optional) a layer name or a list of layer names not to import>
 
+The sketch is **every face** the selected layers draw. Each layer's lines, arcs,
+circles, ellipses, splines and polylines are joined end to end into outlines;
+each closed outline becomes a face, with the outlines inside it as its holes. A
+drawing of several outlines -- side by side, or one on each of several layers
+-- is a sketch of several faces. Text, dimensions and hatches are not geometry
+and are left out of it.
+
+**Block references** (``INSERT``, and the grids ``MINSERT`` places) draw what
+the block draws, where the reference puts it: moved, turned, scaled and mirrored
+as placed, with blocks inside blocks followed all the way down. An entity a block
+keeps on layer ``0`` is on the reference's layer, which is what layer ``0`` in a
+block means; an entity on any other layer stays on that layer wherever the block
+is placed, and the layer filters below select it there.
+
+A **mirrored** arc, circle or polyline -- what ``MIRROR`` writes, and what a
+block reference with a negative scale places -- is read where it was mirrored
+to.
+
+The drawing's numbers are taken as millimetres as they are: what ``$INSUNITS``
+says is reported by ``pc info`` (see :ref:`sketch-annotations`), and does not
+scale the sketch.
+
 .. _sketch-layers:
 
 Layers, and reading one drawing several ways
