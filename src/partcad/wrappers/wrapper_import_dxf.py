@@ -36,12 +36,36 @@ import wrapper_common
 # before is produced again.
 CACHE_VERSION = 2
 
-# How deep block references may be placed inside one another before a drawing
-# is taken to refer to itself. AutoCAD refuses to create such a cycle; a file
-# written by something else can still contain one, and exploding it would never
-# finish. What is left at this depth is left out, as every block reference used
-# to be.
-MAX_BLOCK_DEPTH = 32
+
+def endless_blocks(document):
+    """The blocks exploding which would never finish, by lower-cased name.
+
+    A block that places itself, directly or through other blocks, and every
+    block that places one of those. AutoCAD refuses to create such a cycle; a
+    file written by something else can still contain one, and since a block can
+    place itself more than once, what it draws can grow without bound long
+    before any depth limit is reached. So the cycles are found first, in the
+    block definitions, and a reference to such a block is left out -- as every
+    block reference used to be.
+
+    Every other block bottoms out, so exploding references to them alone is
+    finite: what it places are references to blocks that bottom out sooner.
+    Block names are compared without regard to case, as AutoCAD does.
+    """
+    places = {
+        block.name.lower(): {insert.dxf.name.lower() for insert in block.query("INSERT")} for block in document.blocks
+    }
+    pending = dict(places)
+    finite = set()
+    while True:
+        # A block is finite once everything it places is finite, or is not
+        # defined at all (that reference is left out when it is reached).
+        done = [name for name, inner in pending.items() if all(n in finite or n not in places for n in inner)]
+        if not done:
+            return set(pending)
+        for name in done:
+            finite.add(name)
+            del pending[name]
 
 
 def drawing(request):
@@ -70,9 +94,9 @@ def drawing(request):
 
     A drawing with neither -- which is every drawing PartCAD imported before
     either was done -- is read exactly as it was. And a reference that cannot
-    be followed -- to a block the file does not define, or nested past
-    MAX_BLOCK_DEPTH -- draws nothing, which is what every reference drew
-    before; it is a warning rather than a failure, so that no drawing that
+    be followed -- to a block the file does not define, or to one that places
+    itself ('endless_blocks') -- draws nothing, which is what every reference
+    drew before; it is a warning rather than a failure, so that no drawing that
     imported then fails now.
 
     Layer selection is CadQuery's own, mirrored here because this no longer goes
@@ -86,33 +110,34 @@ def drawing(request):
 
     document = ezdxf.readfile(request["path"])
     modelspace = document.modelspace()
-    warnings = []
+    endless = endless_blocks(document)
+    left_out = {}  # why -> how many references
 
-    for _ in range(MAX_BLOCK_DEPTH):
+    # One pass per level of nesting: what a block places comes out as further
+    # references, exploded on the next pass.
+    while True:
         inserts = list(modelspace.query("INSERT"))
         if not inserts:
             break
         for insert in inserts:
             layer = insert.dxf.layer
+            if insert.dxf.name.lower() in endless:
+                why = 'block "%s" places itself, directly or through other blocks' % insert.dxf.name
+                left_out[why] = left_out.get(why, 0) + 1
+                modelspace.delete_entity(insert)
+                continue
             try:
                 # Places a MINSERT's every cell, and removes the reference.
                 exploded = insert.explode()
             except Exception as e:
-                warnings.append("a block reference was left out (%s)" % e)
+                left_out[str(e)] = left_out.get(str(e), 0) + 1
                 modelspace.delete_entity(insert)
                 continue
             for entity in exploded:
                 if entity.dxf.layer == "0":
                     entity.dxf.layer = layer
-    else:
-        inserts = list(modelspace.query("INSERT"))
-        if inserts:
-            warnings.append(
-                "%d block reference(s) nested more than %d deep were left out (do blocks refer to each other?)"
-                % (len(inserts), MAX_BLOCK_DEPTH)
-            )
-            for insert in inserts:
-                modelspace.delete_entity(insert)
+
+    warnings = ["%d block reference(s) were left out: %s" % (count, why) for why, count in left_out.items()]
 
     upright_all(modelspace)
 

@@ -229,20 +229,30 @@ def test_a_reference_to_a_block_that_is_not_there_draws_nothing_and_says_so(tmp_
         doc.modelspace().add_blockref("PAD", (20, 0)).dxf.name = "MISSING"
 
     assert _faces(_sketch(tmp_path, draw)) == [(100.0, (5.0, 5.0))]
-    assert "block reference was left out" in caplog.text
+    assert "block reference(s) were left out" in caplog.text
+    assert "MISSING" in caplog.text
 
 
-def test_a_block_that_places_itself_stops_and_says_so(tmp_path, caplog):
-    """AutoCAD will not write one; something else can, and exploding it would never end."""
+@pytest.mark.parametrize("copies", [1, 2])
+def test_a_block_that_places_itself_draws_nothing_and_says_so(tmp_path, caplog, copies):
+    """AutoCAD will not write one; something else can, and exploding it would never end.
+
+    Placed twice, it would double with every level, so a depth limit is no
+    answer: the cycle is found in the block definitions before anything is
+    exploded. So is a block that only reaches itself through another one.
+    """
 
     def draw(doc):
         _square(doc.modelspace(), 0, -20, 10)
-        block = doc.blocks.new("SELF")
-        _square(block, 0, 0, 1)
-        block.add_blockref("SELF", (2, 0))
-        doc.modelspace().add_blockref("SELF", (0, 0))
+        loop = doc.blocks.new("LOOP")
+        _square(loop, 0, 0, 1)
+        for n in range(copies):
+            loop.add_blockref("LOOP", (2 * (n + 1), 0))
+        via = doc.blocks.new("VIA")
+        via.add_blockref("LOOP", (0, 0))
+        doc.modelspace().add_blockref("LOOP", (0, 0))
+        doc.modelspace().add_blockref("VIA", (0, 5))
 
-    faces = _faces(_sketch(tmp_path, draw))
-    assert (100.0, (5.0, -15.0)) in faces
-    assert len(faces) > 1
-    assert "nested more than" in caplog.text
+    assert _faces(_sketch(tmp_path, draw)) == [(100.0, (5.0, -15.0))]
+    assert 'block "LOOP" places itself' in caplog.text
+    assert 'block "VIA" places itself' in caplog.text
