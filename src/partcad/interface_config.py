@@ -113,7 +113,7 @@ class InterfaceConfiguration:
     """
 
     @staticmethod
-    def normalize(name, config, object_name):
+    def normalize(name, config, object_name, user_config=None):
         if config is None:
             config = {}
         elif isinstance(config, str):
@@ -142,7 +142,7 @@ class InterfaceConfiguration:
                 # Overridden against the construction half only: the user's
                 # 'parameters' configuration sets the values an object is built
                 # with, and a freedom-of-movement range is not one of those.
-                apply_user_parameter_overrides({PARAMETERS: construction}, object_name, PARAMETERS)
+                apply_user_parameter_overrides({PARAMETERS: construction}, object_name, PARAMETERS, user_config)
                 declared.update(construction)
             for param_name in movement:
                 pc_logging.debug("%s: '%s' is a freedom-of-movement parameter" % (object_name, param_name))

@@ -13,8 +13,8 @@ part and for a sketch.
 
 from . import logging as pc_logging
 from . import reference
+from .config import parameter_overrides
 from .shape_config_store import STORE_PROPERTIES, resolve_store_properties
-from .user_config import user_config
 from .utils import format_parameterized_name
 
 # The properties of an 'enrich' declaration that describe the reference itself
@@ -199,15 +199,19 @@ def enriched_source_name(source_project, target_project, config) -> str:
     source_name = reference.source_of(source_project, target_project.name, config, "object")
 
     parameters = dict(config.get("with") or {})
-    parameters.update(user_config.parameter_config.to_dict().get(f"{target_project.name}:{config['name']}", {}))
+    # The overrides of the context this package was loaded into (see
+    # 'config.parameter_overrides').
+    overrides = parameter_overrides(getattr(getattr(target_project, "ctx", None), "user_config", None))
+    parameters.update(overrides.get(f"{target_project.name}:{config['name']}", {}))
     return format_parameterized_name(source_name, parameters)
 
 
 def resolve_source_again(factory, declaration, source_attribute: str) -> None:
     """Point this enrich at whatever its declaration now names.
 
-    The user's own parameter overrides ('pc.user_config.parameter_config') can
-    arrive after the package has been loaded: the CLI reads them from the
+    The user's own parameter overrides ('config.parameter_overrides': the
+    process-wide ones and the context's) can arrive after the package has been
+    loaded: the CLI reads them from the
     command line, and a program using PartCAD as a library sets them against a
     context it already has. An override on an enrich says which instance of the
     source it wants and not merely what that instance reports, so the name is

@@ -453,7 +453,7 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
             config[shape_envelope.KEY_PROPERTIES] = properties
 
         full_name = "%s:%s" % (self.project.name, part_name)
-        config = PartConfiguration.normalize(part_name, config, full_name)
+        config = PartConfiguration.normalize(part_name, config, full_name, self.ctx.user_config)
         try:
             part = self.project.materialize_part_by_config(config)
         except Exception as e:  # pylint: disable=broad-except

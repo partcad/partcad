@@ -712,7 +712,7 @@ class Project(project_config.Configuration):
         configs = self._object_configs.get(kind)
         if name in done and configs is not None and configs.get(name) is config:
             return config
-        normalized = config_class.normalize(name, config, f"{self.name}:{name}")
+        normalized = config_class.normalize(name, config, f"{self.name}:{name}", self.ctx.user_config)
         if kind in LAZY_OBJECT_KINDS and isinstance(normalized, dict) and "manufacturable" not in normalized:
             # What the package says about anything it produces, written onto the
             # declaration rather than only onto the object. 'ShapeFactory' puts
@@ -1109,7 +1109,7 @@ class Project(project_config.Configuration):
         if material_name is None:
             material_name = config["name"]
         config = material_config.MaterialConfiguration.normalize(
-            material_name, config, "%s:%s" % (self.name, material_name)
+            material_name, config, "%s:%s" % (self.name, material_name), self.ctx.user_config
         )
         self.register_object(
             "material",
@@ -1183,7 +1183,7 @@ class Project(project_config.Configuration):
         config = self.get_interface_config(interface_name)
         with self.lock:
             config = interface_config.InterfaceConfiguration.normalize(
-                interface_name, config, f"{self.name}:{interface_name}"
+                interface_name, config, f"{self.name}:{interface_name}", self.ctx.user_config
             )
             return copy.deepcopy(config) if deep_copy else config
 
@@ -1269,7 +1269,9 @@ class Project(project_config.Configuration):
             # unparametrized interface itself, inherit them.
             config = self.normalized_interface_config(base_name, deep_copy=True)
             full_object_name = f"{self.name}:{result_name}"
-            config = interface_config.InterfaceConfiguration.normalize(result_name, config, full_object_name)
+            config = interface_config.InterfaceConfiguration.normalize(
+                result_name, config, full_object_name, self.ctx.user_config
+            )
             config["orig_name"] = base_name
             # The construction half of 'parameters:' - the values the interface
             # is built from. The other half of that section is the freedom of
@@ -1756,7 +1758,9 @@ class Project(project_config.Configuration):
                 # any) is what the fully qualified name is built from - not the
                 # object the alias points at.
                 full_alias_name = f"{self.name}:{alias}"
-                alias_object_config = config_class.normalize(alias, alias_object_config, full_alias_name)
+                alias_object_config = config_class.normalize(
+                    alias, alias_object_config, full_alias_name, self.ctx.user_config
+                )
                 # Per alias, and against the alias rather than the object it
                 # points at: an alias that cannot be created - most often
                 # because the package already declares something under that
@@ -2293,7 +2297,7 @@ class Project(project_config.Configuration):
 
             # Expand the config object so that the parameter values can be set
             full_object_name = f"{self.name}:{result_name}"
-            config = config_class.normalize(result_name, config, full_object_name)
+            config = config_class.normalize(result_name, config, full_object_name, self.ctx.user_config)
             config["orig_name"] = base_object_name
 
             # Fill in the parameter values
