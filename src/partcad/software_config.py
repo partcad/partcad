@@ -13,7 +13,7 @@ class SoftwareConfiguration:
         super().__init__(name, config)
 
     @staticmethod
-    def normalize(name, config, object_name):
+    def normalize(name, config, object_name, user_config=None):
         if config is None:
             config = {}
 
@@ -29,4 +29,4 @@ class SoftwareConfiguration:
         if "type" not in config or config["type"] is None:
             config["type"] = DEFAULT_TYPE
 
-        return Configuration.normalize(name, config, object_name)
+        return Configuration.normalize(name, config, object_name, user_config)

@@ -187,7 +187,9 @@ async def restore_async(ctx, artifact: dict) -> bool:
             "desc": "Volume %d of what %s share" % (index, artifact.get("title", "the two")),
             "manufacturable": False,
         }
-        config = PartConfiguration.normalize(part_name, config, "%s:%s" % (project.name, part_name))
+        config = PartConfiguration.normalize(
+            part_name, config, "%s:%s" % (project.name, part_name), project.ctx.user_config
+        )
         existing = project.objects("part").get(part_name)
         if existing is not None and (existing.config or {}).get("path") != path:
             # An earlier run's volume, under the name this one's has: replaced,

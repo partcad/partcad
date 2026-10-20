@@ -12,7 +12,7 @@ class MaterialConfiguration:
         super().__init__(name, config)
 
     @staticmethod
-    def normalize(name, config, object_name):
+    def normalize(name, config, object_name, user_config=None):
         if config is None:
             config = {}
 
@@ -28,4 +28,4 @@ class MaterialConfiguration:
         # there is no factory here and why 'Project.init_material_by_config'
         # builds the object directly, the way interfaces are built.
 
-        return Configuration.normalize(name, config, object_name)
+        return Configuration.normalize(name, config, object_name, user_config)

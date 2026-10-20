@@ -18,7 +18,7 @@ class AssemblyConfiguration(Configuration, ShapeConfiguration):
         super().__init__(name, config)
 
     @staticmethod
-    def normalize(name, config, object_name):
+    def normalize(name, config, object_name, user_config=None):
         if isinstance(config, str):
             # This is a short form alias
             config = {"type": "alias", "source": config}
@@ -31,7 +31,7 @@ class AssemblyConfiguration(Configuration, ShapeConfiguration):
             if isinstance(manufacturing, dict):
                 manufacturing.setdefault("method", ASSEMBLY_METHOD_ASSY)
 
-        config = Configuration.normalize(name, config, object_name)
+        config = Configuration.normalize(name, config, object_name, user_config)
         return ShapeConfiguration.normalize(name, config)
 
     @staticmethod

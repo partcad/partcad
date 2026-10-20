@@ -66,7 +66,7 @@ class Linting(ABC):
     def get_targets(self, ctx: Context, package: Project) -> list[str]:
         raise NotImplementedError("This method should be overridden")
 
-    def get_hash(self, name: str, target: str) -> CacheHash:
+    def get_hash(self, name: str, target: str, ctx: Context = None) -> CacheHash:
         hash = CacheHash(name, cache=True)
         hash.add_filename(target)
         hash.add_string(name)
@@ -75,7 +75,7 @@ class Linting(ABC):
     @semaphore_wrapper
     async def validate_cached(self, ctx: Context, package: Project, target: str, lint_ctx: dict = {}) -> LintingReport:
         cache_key = f"lint.{self.name}"
-        hash = self.get_hash(package.name, target)
+        hash = self.get_hash(package.name, target, ctx)
         cached_results = await ctx.cache_lints.read_data_async(hash, [cache_key])
         cached_bytes = cached_results.get(cache_key, [])
         if cached_bytes is not None and len(cached_bytes) > 0:

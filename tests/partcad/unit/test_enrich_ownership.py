@@ -780,6 +780,35 @@ def test_a_user_s_parameter_override_says_which_instance_an_enrich_wants(tmp_pat
     assert width_of(wide) == 9.0
 
 
+def test_the_context_s_parameter_override_says_which_instance_an_enrich_wants(tmp_path):
+    """The same, set on the configuration the context was built from.
+
+    Which is where a daemon has it: '--extra-param' arrives as part of the
+    caller's configuration, and the daemon's process-wide one never holds it.
+    """
+    write_package(
+        tmp_path,
+        "",
+        {
+            "name": "//test",
+            "parts": {
+                "widget": {"type": "test-null", "parameters": {"width": {"default": 3.0}}},
+                "wide": {"type": "enrich", "source": ":widget", "with": {"width": 5.0}},
+            },
+        },
+    )
+    caller = pc.UserConfig()
+    caller.parameter_config["//test:wide"] = {"width": 9.0}
+    ctx = pc.Context(str(tmp_path), user_config=caller)
+
+    wide = ctx.get_part("//test:wide")
+    asyncio.run(wide.prepare_async())
+
+    assert wide.config["source"] == "//test:widget;width=9.0"
+    assert width_of(wide) == 9.0
+    assert "//test:wide" not in pc.user_config.parameter_config
+
+
 def test_an_enrich_does_not_publish_the_aliases_of_what_it_points_at(tmp_path):
     """'aliases:' on the source is the source package's name for the source.
 
