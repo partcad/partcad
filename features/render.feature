@@ -12,9 +12,8 @@ Feature: `pc render` command
     # 'examples/produce_part_sheet_metal' holds one DXF with two bend lines on
     # two layers, and three parts read it: one folded at each line, and one
     # folded at both - and the file each reading is written to is named after
-    # it, parameters and all. Both ';' and '=' are legal in a filename
-    # everywhere PartCAD runs; '/' and ':' are the ones that are not, and
-    # neither can appear in an object name.
+    # it, parameters and all, with what a shell or a filesystem would take for
+    # something else written as '_' (a value may hold a '/' or a ':').
     #
     # What this rules out is the two ways it could go wrong: a reading that
     # writes nothing, and readings that write over each other or over the
@@ -26,7 +25,9 @@ Feature: `pc render` command
     # quotes nothing and would be passed through as part of the name. The
     # object would then begin "'" rather than ':', 'resolve_resource_path'
     # would cut the package at the ':' after it, and the render would be asked
-    # for a package named "'".
+    # for a package named "'". The third is the same request spelled with
+    # '-p', which has nothing to quote, and has to land in the file the name
+    # would have.
     When I run command
       """
       pc --no-ansi -p $PARTCAD_ROOT/examples render --package //produce_part_sheet_metal -t svg -O ./ -s ":panel;include=BEND_UP"
@@ -39,12 +40,12 @@ Feature: `pc render` command
     Then the command should exit with a status code of "0"
     When I run command
       """
-      pc --no-ansi -p $PARTCAD_ROOT/examples render --package //produce_part_sheet_metal -t svg -O ./ -s ":panel;include=BEND_UP,BEND_DOWN"
+      pc --no-ansi -p $PARTCAD_ROOT/examples render --package //produce_part_sheet_metal -t svg -O ./ -s :panel -p include=BEND_UP,BEND_DOWN
       """
     Then the command should exit with a status code of "0"
-    Then a file named "panel;include=BEND_UP.svg" should be created
-    And a file named "panel;include=BEND_DOWN.svg" should be created
-    And a file named "panel;include=BEND_UP,BEND_DOWN.svg" should be created
+    Then a file named "panel_include_BEND_UP.svg" should be created
+    And a file named "panel_include_BEND_DOWN.svg" should be created
+    And a file named "panel_include_BEND_UP_BEND_DOWN.svg" should be created
     # Nobody asked for the drawing itself, and nothing wrote it: a reading that
     # lost its parameters on the way to a filename would have landed here.
     And a file named "panel.svg" should not exist

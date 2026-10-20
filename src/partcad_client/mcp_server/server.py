@@ -26,7 +26,7 @@ from mcp_types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from pydantic import Field
 
 from partcad_client import __version__
-from partcad_utils import garage
+from partcad_utils import garage, parameters
 
 from .bridge import Bridge, CallFailed, Outcome
 from .sandbox import OutsideScope, PathScope
@@ -117,7 +117,9 @@ def instructions(bridge: Bridge, scope: PathScope) -> str:
         "PartCAD documents manufacturable products as code. A package is a directory with a partcad.yaml that "
         "declares parts, sketches, assemblies (ASSY files), scenes and interfaces, each made by a script "
         "(build123d, CadQuery, OpenSCAD, ...) or read from a file (STEP, STL, ...), and imports other packages. "
-        "Objects are named '//package/path:name'; a bare name is in the workspace's own package. "
+        "Objects are named '//package/path:name'; a bare name is in the workspace's own package. An object that "
+        "declares parameters is asked for with particular values through a tool's params ({name: value}), which "
+        "is the same as naming it 'name;param=value,...'. "
         "Start with list_objects (kind=packages for the package tree) and info; look at an object with render, "
         "which returns an image; check it against its declared requirements with test; write STEP, STL, 3MF and "
         "the rest with export. To create or change an object, edit partcad.yaml and its script with your own file "
@@ -217,6 +219,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             Optional[str],
             Field(description="A package whose 'render:' section implements the file type, such as a drawing style."),
         ] = None,
+        params: Parameters = None,
     ) -> CallToolResult:
         """Render one part, assembly, scene or sketch and return the picture.
 
@@ -225,6 +228,8 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         request = {"package": package, "object": object, "kind": kind, "format": format}
         if options_package:
             request["options_package"] = options_package
+        if params:
+            request["params"] = _assignments(params)
         try:
             outcome = _produced_a_file(await call(ctx, "render.inline", request), object, format)
         except CallFailed as e:
@@ -249,6 +254,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             Optional[str],
             Field(description="A package whose 'export:' or 'render:' section implements the file type."),
         ] = None,
+        params: Parameters = None,
     ) -> CallToolResult:
         """Export or render one object to a file in the workspace.
 
@@ -261,6 +267,8 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         request = {"package": package, "object": object, "kind": kind, "format": format}
         if options_package:
             request["options_package"] = options_package
+        if params:
+            request["params"] = _assignments(params)
         try:
             outcome = _produced_a_file(await call(ctx, "render.inline", request), object, format)
         except CallFailed as e:
@@ -284,12 +292,15 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         kind: Annotated[TestKind, Field(description="What the object is.")] = "part",
         package: PackageName = None,
         recursive: Annotated[bool, Field(description="Also test the packages below this one.")] = False,
+        params: Parameters = None,
     ) -> CallToolResult:
         """Check objects against the requirements and tests they declare.
 
         `pc test`. ok is false when any check failed, and the errors say which.
         """
         request = {"package": package, "object": object, "recursive": recursive, **_kind_flag(kind)}
+        if params:
+            request["params"] = _assignments(params)
         return await run(ctx, "test.run", request)
 
     @server.tool(title="Lint a package", annotations=_READS)
@@ -351,12 +362,15 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         object: ObjectName,
         package: PackageName = None,
         subassemblies: Annotated[bool, Field(description="Also write the steps of the subassemblies.")] = False,
+        params: Parameters = None,
     ) -> CallToolResult:
         """The step-by-step build of an assembly: what goes where, in which order, with which parts.
 
         `pc instructions`, as data. The user's Build vs Buy choices on this machine are applied.
         """
         request = {"package": package, "object": object, "subassemblies": subassemblies, "bvb": garage.load_all_bvb()}
+        if params:
+            request["params"] = _assignments(params)
         return await run(ctx, "assembly.guide", request)
 
     @server.tool(title="PartCAD version", annotations=_LOCAL)
@@ -401,7 +415,9 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             Optional[dict[str, Any]],
             Field(
                 description="Its parameters, as `pc` sends them: 'package' and 'object' for what it acts on, "
-                "'params' as ['name=value', ...]. The workspace's context is added for you. Paths are relative "
+                "and 'params' for the values of the object's own parameters, as {name: value} or as "
+                "['name=value', ...] ('-p name=value' on the command line, the same as naming the object "
+                "'object;name=value'). The workspace's context is added for you. Paths are relative "
                 "to the workspace."
             ),
         ] = None,
@@ -596,11 +612,14 @@ def _checked(scope: PathScope, key: str, value):
 
 
 def _assignments(params: Optional[dict]) -> list:
-    """``{"width": 10}`` as the ``["width=10"]`` the daemon takes, which is how `pc -p` sends them."""
-    return [
-        "%s=%s" % (key, json.dumps(value) if isinstance(value, bool) else value)
-        for key, value in (params or {}).items()
-    ]
+    """``{"width": 10}`` as the ``["width=10"]`` that `pc -p` sends.
+
+    The daemon reads a mapping as well, but a list is what every daemon has read,
+    so a server talking to an older one still gets its values across. Each value
+    is written the way an object's name spells it: a flag as ``true``, a list
+    joined by commas.
+    """
+    return ["%s=%s" % (key, parameters.format_assignment(value)) for key, value in (params or {}).items()]
 
 
 def _kind_flag(kind: str) -> dict:

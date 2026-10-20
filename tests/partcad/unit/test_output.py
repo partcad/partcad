@@ -453,6 +453,41 @@ def test_a_name_with_a_slash_names_a_file_in_a_sub_directory():
     # one there as here.
 
 
+@pytest.mark.parametrize(
+    "name, segments",
+    [
+        ("bolt;length=10", ["bolt_length_10.step"]),
+        ("bolt;head=hex,length=10.5", ["bolt_head_hex_length_10.5.step"]),
+        # A value is text a user wrote, and its '/' and ':' are not a directory
+        # and a drive: the file has to be one file Windows can open.
+        ("room;medium=//pub/std/materials:air", ["room_medium_pub_std_materials_air.step"]),
+        # Only the declared half of the name says where the file goes.
+        ("robot/base_link;scale=2", ["robot", "base_link_scale_2.step"]),
+        # Underscores and dots a value holds are kept as they are.
+        ("bolt;finish=black_oxide", ["bolt_finish_black_oxide.step"]),
+    ],
+)
+def test_an_instance_is_written_to_a_file_with_nothing_to_quote(name, segments):
+    """'bolt;length=10' is written as 'bolt_length_10': no ';' for a shell to split on."""
+    assert output.name_to_segments(name, ".step") == segments
+    assert output.name_to_path(name, ".step").split(os.sep) == segments
+
+
+def test_a_document_links_an_instance_at_the_file_its_render_wrote(tmp_path):
+    """The README of 'stack;offset=12' shows the picture 'pc render' wrote of it.
+
+    The link used to be the name with the extension on the end, which for an
+    instance is a file nothing writes.
+    """
+    (tmp_path / "partcad.yaml").write_text("name: //p\n")
+    project = pc.Context(str(tmp_path)).get_project("//")
+
+    src, test_path = project.readme_image_path("robot/base;scale=2", {"svg": {"prefix": "images"}}, ".")
+
+    assert src.replace(os.sep, "/") == "./images/robot/base_scale_2.svg"
+    assert test_path == os.path.join("images", "robot", "base_scale_2.svg")
+
+
 def test_the_output_path_of_a_name_with_a_slash_is_in_a_sub_directory(ctx, tmp_path):
     """A part declared as '<dir>/<part>' is written into '<dir>'.
 

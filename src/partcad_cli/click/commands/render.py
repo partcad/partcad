@@ -15,6 +15,7 @@ import rich_click as click
 from .. import fast_only
 from ..exclude import exclude_option, exclude_params
 from ..link_filter import filter_option, filter_params
+from ..parameters import param_option, param_params
 from ..service import run
 from ..viewport import viewport_options, viewport_params
 
@@ -143,6 +144,7 @@ from ..viewport import viewport_options, viewport_params
 )
 @exclude_option
 @filter_option
+@param_option
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
 def cli(
@@ -168,6 +170,7 @@ def cli(
     exclude,
     ports,
     link_filter,
+    params,
     object,
 ):
     run(
@@ -196,6 +199,7 @@ def cli(
             # options above meant on their own before this existed.
             "ports": list(ports) or None,
             "object": object,
+            **param_params(params),
             **exclude_params(exclude),
             **filter_params(link_filter),
         },

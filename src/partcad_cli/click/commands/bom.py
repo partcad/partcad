@@ -9,6 +9,7 @@ import sys
 
 import rich_click as click
 
+from ..parameters import param_option, param_params
 from ..service import run
 
 
@@ -39,16 +40,7 @@ from ..service import run
     "and an SKU is always listed as a single line item now",
     show_envvar=True,
 )
-@click.option(
-    "-p",
-    "--param",
-    "params",
-    type=str,
-    multiple=True,
-    metavar="<name>=<value>",
-    help="Assign a value to the parameter",
-    show_envvar=True,
-)
+@param_option
 @click.argument("object", type=str, required=True)  # help="Assembly to print the bill of materials of"
 @click.pass_obj
 def cli(cli_ctx, package: str, api: bool, stop_at_purchasable: bool, params: tuple[str, ...], object: str) -> None:
@@ -58,7 +50,7 @@ def cli(cli_ctx, package: str, api: bool, stop_at_purchasable: bool, params: tup
         {
             "package": package,
             "object": object,
-            "params": list(params),
+            **param_params(params),
             "stop_at_purchasable": stop_at_purchasable,
             "json": api,
         },

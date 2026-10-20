@@ -64,6 +64,7 @@ pc --no-ansi render -t png -O ./out bracket             # a part
 pc --no-ansi render -t png -O ./out -a gearbox          # an assembly (-a)
 pc --no-ansi render -t svg -O ./out -s outline          # a sketch (-s; SVG suits one better than PNG)
 pc --no-ansi render -t png -O ./out -P //pub/std bolt   # an object in another package
+pc --no-ansi render -t png -O ./out bolt -p length=30   # with a value for one of its parameters
 ```
 
 Formats: `png`, `jpeg`, `svg`, `dxf`, plus any a package implements itself.
@@ -73,6 +74,12 @@ take no viewing angle.
 
 The file is written into `-O` and named after the object. Nothing about the
 package changes.
+
+An object that declares `parameters:` is rendered with particular values by
+`-p <name>=<value>`, repeated for each — or by naming it `"bolt;length=30"`,
+which is the same request, quoted because a shell ends the command at the `;`.
+The file is named with the values, `bolt_length_30.png`, so renders of several
+values sit side by side.
 
 ## 4. A file with no package — `pc adhoc render`
 

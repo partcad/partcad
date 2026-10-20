@@ -188,6 +188,14 @@ wrong. So adding the suffix to a command is a `--help` string here and, where th
 Two commands keep a `-r` that is **not** this: `pc supply find` and `pc supply quote`, where `-r` means "break
 every assembly down to its parts" and has nothing to do with the package graph. Do not fold those in.
 
+`-p`/`--param <name>=<value>` is the same kind of thing for an object's parameter values: `bolt -p length=10`
+is the request `"bolt;length=10"` makes, with no `;` to quote. Every command that names an object takes it
+from `click/parameters.py`, sends it as `params`, and the daemon writes it into the object's name (see
+"`params`" in [`partcad_service_json_rpc/AGENTS.md`](../partcad_service_json_rpc/AGENTS.md)) -- so a command
+that gains an object argument gains `@param_option` and `**param_params(params)`, and nothing else.
+`tests/partcad_cli/unit/test_param_option.py` lists the commands, and checks that `-p` means this on each: Click
+lets the last of two options claiming one short flag win, silently.
+
 The client's whenever the client sends one — as of the moment the command ran. `service.py::run` resolves the
 CLI's own `user_config` (file + `PC_*` environment + command line) and sends a copy of it,
 `UserConfig.to_dict()`, with every `context.create`; the daemon rebuilds it with `UserConfig.from_dict()` and
