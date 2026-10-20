@@ -95,24 +95,26 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
     WRAPPERS = ("import.py",)
 
     @classmethod
-    def for_declaration(cls, ctx, target_project, config):
-        """The class an object of this 'import:' type is built by.
+    def create(cls, ctx, source_project, target_project, config):
+        """Build an object of this 'import:' type, with the class its declaration calls for.
 
-        This one for a format whose files are text, and so templates; its
+        This class for a format whose files are text, and so templates; its
         binary variant ('<cls>Binary', a 'BinarySourceFile') for a format the
         declaration says is bytes with 'binary: true'. Decided here, by what
-        the declaration says, so that no file is ever opened to find out.
+        the declaration says, so that no file is ever opened to find out -- and
+        the declaration is resolved once, here, and handed to the constructor.
 
-        A type nothing declares gets this class, whose constructor raises the
-        'ImportedTypeError' the caller already handles.
+        A type nothing declares reaches the constructor with no declaration,
+        which raises the 'ImportedTypeError' the caller already handles.
         """
         impl = output.import_declaration(ctx, target_project, config.get("type"))
+        factory_class = cls
         if impl is not None and output.as_flag(impl.config.get(output.IMPORT_BINARY_KEY)):
-            return cls.BINARY_VARIANT
-        return cls
+            factory_class = cls.BINARY_VARIANT
+        return factory_class(ctx, source_project, target_project, config, impl=impl)
 
-    def __init__(self, ctx, source_project, target_project, config):
-        self.impl = output.import_declaration(ctx, target_project, config.get("type"))
+    def __init__(self, ctx, source_project, target_project, config, impl=None):
+        self.impl = impl if impl is not None else output.import_declaration(ctx, target_project, config.get("type"))
         if self.impl is None:
             raise ImportedTypeError(
                 "no 'import:' section declares the object type '%s'" % config.get("type"),
