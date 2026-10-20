@@ -925,6 +925,22 @@ def test_add_dep_adds_to_a_package_that_declares_no_dependencies(tmp_path, upstr
     assert loaded.get("desc") == (yaml.safe_load(written) or {}).get("desc")
 
 
+def test_add_dep_leaves_the_readers_a_package_imports_alone(tmp_path, upstream, user_config):
+    """'import:' declares readers now, and is no longer the old name of 'dependencies:'."""
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    config = workspace / "partcad.yaml"
+    readers = {"myt": {"path": "read_myt.py", "extension": "myt", "kinds": ["assembly"]}}
+    config.write_text(yaml.safe_dump({"import": readers}))
+    ctx = pc.Context(str(workspace), search_root=False, user_config=user_config)
+
+    assert ctx.get_project(ctx.name).add_import("dep", upstream.path.as_uri())
+
+    loaded = yaml.safe_load(config.read_text())
+    assert loaded["import"] == readers
+    assert list(loaded["dependencies"]) == ["dep"]
+
+
 def test_add_dep_adds_nothing_offline(tmp_path, upstream, user_config):
     user_config.offline = True
     ok, dependencies = added(tmp_path, user_config, upstream.path.as_uri())
