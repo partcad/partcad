@@ -164,6 +164,9 @@ plugins PartCAD maintains share one, so that a validation reads the same against
 | `joints.<name>.type` | `revolute`, `continuous`, `prismatic` or `ball`. A turn with no finite limit is reported `continuous` whatever the file called it. |
 | `joints.<name>.pos` / `vel` | deg and deg/s for a turn; mm and mm/s for a move. A ball joint reports `quat` and an angular velocity instead. |
 | `joints.<name>.effort` | Actuator effort, N·m or N (MuJoCo's `qfrc_actuator`), when the engine reports one. |
+| `bodies.<name>.mass`, `com` | The body's mass, kg, and its centre of mass, mm, in the world's frame. |
+| `bodies.<name>.acc`, `angvel`, `angacc` | The centre of mass's acceleration, m/s² (the acceleration, not an accelerometer's reading), and the body's angular velocity and acceleration, deg/s and deg/s², about the world's axes. |
+| `bodies.<name>.loads` | Everything acting on the body (section 4.2.1). |
 | `samples` | The same readings at evenly spaced instants, when asked for. |
 
 Section 8.13.5 changes the joint rows, and the plugins are moving to it: a joint is reported once, under PartCAD's
@@ -188,7 +191,8 @@ exporter writes beside the scene when `formatOptions` asks for it with `names_fi
 ```json
 {"version": 1, "format": "mjcf",
  "names":  {"<kind>": {"<PartCAD name>": "<name in the file>"}},
- "bodies": {"<PartCAD body>": {"path": ["<model>", "<link>"]}},
+ "bodies": {"<PartCAD body>": {"path": ["<model>", "<link>"],
+                               "parts": [{"label": "<a/b/c>", "part": "<package>:<part>", "placement": [...]}]}},
  "joints": {"<reported joint>": {"path": ["<model>", "<joint>"], "joint": "<PartCAD joint>"}}}
 ```
 
@@ -197,13 +201,63 @@ transcoder did, by kind (`scene`, `body`, `joint`); a `path` is the file's names
 one MJCF body, an SDFormat model and its link. An entry is an object so that what a later exporter knows about a body
 or a joint is a key added rather than a shape changed: the joint redesign (8.13.5, decision 6) adds each joint's
 `map` -- which PartCAD joint and parameters it is, its kind, its unit factor, the start a re-zeroed engine counts
-from, a free body's parent -- as `kinematics.joint_map()` writes it (built in the core, #804). A reader ignores keys it does
+from, a free body's parent -- as `kinematics.joint_map()` writes it (built in the core, #804); a body's `parts` --
+the shapes welded into it, by path of labels, with their placement in it (`kinematics.parts_entry()`) -- is what a
+run reports as `parts`, so that a body's loads can be read as a part's (4.2.1). A reader ignores keys it does
 not know; `version` changes only for one a reader of the old shape would misread. A scene file with no sidecar -- an
 override exporter, an older PartCAD -- is reported under the names in it, and Gazebo then as it publishes poses, each
 relative to its parent. The sidecar is beside the file rather than inside it because both engines would have to be
 taught to carry it (MJCF's `<custom><text>`, an SDFormat namespaced element) and Gazebo's world is copied before it
 runs (sim-gazebo `prepare_world`); a file in the run directory travels with the meshes, which `upload` sandboxes already
 send both ways.
+
+#### 4.2.1 Loads (built: sim-mujoco; sim-gazebo where Gazebo can)
+
+A reading also says what acts on each body: the loads a stress analysis of the body, or of a part in it, starts from.
+`bodies.<name>.loads` is a list, one entry per thing acting on the body:
+
+| Key | Content |
+|---|---|
+| `kind` | `joint` (through one of its joints), `fixed` (a weld: to the world, for a body a scene fixes), `contact` (every contact with one other body, added up), `gravity` (its weight), `buoyancy` (the fluid's lift). |
+| `from` | The body at the other end -- `world` for the world and the ground -- or the body itself for its weight and its lift. |
+| `joint` | For a joint, PartCAD's name for it. |
+| `at` | Where it acts, mm, in the world's frame: a joint's anchor, a weld's body frame, the force-weighted centre of the contacts, the centre of mass, the centre of buoyancy. |
+| `force` | N, in the world's frame, acting *on this body*. |
+| `torque` | N·m, about `at`, in the world's frame. |
+| `contacts` | For a contact, how many. |
+
+Decisions:
+
+- **The loads on a body add up to its mass times its acceleration.** That is the check a reader -- or a test -- makes,
+  and why gravity is a load of its own rather than folded into the acceleration the way MuJoCo's own `cacc` folds it.
+- **A joint's load is everything it passes**: what its constraint holds and what its spring, damper, friction and an
+  actuator exert along the freedom it keeps. A joint's `effort` (4.2) stays the actuator's alone; the load is the
+  reaction, and a worm drive modelled as a stiff spring on a hinge is the case it exists for -- the moment that holds
+  the arm is in the load and in no `effort`. Both ends report it: the child from its parent, the parent the same
+  reversed. A free body's six freedoms pass nothing and are not a load.
+- **World frame, point and moment.** A wrench is stated about the point it acts at, so that "at the knee" and "at the
+  contact" are readable without arithmetic, and in the world's frame, so that a reader turns it into a part's frame
+  with the body's pose and the part's placement (below) and nothing engine-specific.
+- **Contacts are added up per pair of bodies**, at the force-weighted centre of their points, with the residual
+  moment. A per-contact list is an engine's detail and changes count from step to step; a pair is what a reader
+  names.
+- **What an engine cannot split is said, not guessed.** MuJoCo applies a fluid's drag to the joints without saying
+  how much fell on which body, so a joint's load in a fluid includes the drag beyond it, and the run says so. Its
+  `gravcomp` lift is taken back out of the joints and stated as the body's own, at its centre of buoyancy.
+  Gazebo's contacts carry no forces a run can read, so a Gazebo run reports joint loads and weights, and names the
+  contacts it left out (sim-gazebo).
+- `params: {loads: false}` reports poses alone. The default is on: a reading of a few bodies costs one more
+  evaluation of the model, and the cost of a missing load is a second run.
+
+**Which body a part is in.** A body is several parts welded together, so a load on a body is not a load on any one
+of them. The sidecar's body entries carry `parts` -- each shape's path of labels, the part it is, and its placement
+in the body's frame (`kinematics.parts_entry()`) -- and a run reports them as `result["parts"]`, label -> `{part,
+body, placement}` (`naming.parts_of()`). The body's pose and the placement are where the part is; the loads that act
+*on the part* are those whose `at` is on it -- a joint at one of its ports, a contact on its faces -- and the rest
+reach it through the parts it is welded to, which a rigid simulation does not see. Turning that into the part's
+boundary conditions is a modelling decision, and is the `/pc:sim-assembly-fea` skill's: it writes the part an
+`fea:` section with each load as a force with a direction in the part's frame and `gravity:` as `g - a` there, the
+two things a stress analysis needed and could not say until this (`partcad.cae`, `reads:`).
 
 ### 4.3 What an exporter is handed (built)
 
@@ -1801,6 +1855,7 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 17 | Named frames (8.10) and named configurations of an assembly | planned |
 | 18 | Closed loops (8.9); a free water surface (6.1); USD export | planned |
 | 19 | Unit-suffixed values through one parser | planned |
+| 20 | Loads in every reading (4.2.1); which body a part is in; directed loads and `gravity:` in `fea:`, read by implementations that say so (`reads:`); analyses on a reference; the `/pc:sim-assembly-fea` skill | built (sim-mujoco, sim-gazebo, partcad-cae-calculix) |
 
 ## 14. Open questions
 

@@ -11,8 +11,28 @@ from typing import Optional
 
 from ... import logging as pc_logging
 from ...adhoc.convert import convert_cad_file
+from ...part_factory_gltf import gltf_companions
 from ...project import Project
 from .add import add_part_action
+
+
+def _companions_to_copy(source_path: Path, target_path: Path) -> list:
+    """(source, target) of every file a '.gltf' names, refusing any that would replace another's."""
+    package_dir = target_path.parent.resolve()
+    pairs = []
+    for relative in gltf_companions(source_path):
+        source = source_path.parent / relative
+        target = (target_path.parent / relative).resolve()
+        if not target.is_relative_to(package_dir):
+            raise ValueError(f"'{relative}', which '{source_path.name}' names, would be written outside the package")
+        if not target.exists():
+            pairs.append((source, target))
+        elif not source.samefile(target) and source.read_bytes() != target.read_bytes():
+            raise ValueError(
+                f"'{relative}', which '{source_path.name}' names, would replace the package's own; "
+                "rename it in the file and beside it, or import it into another package"
+            )
+    return pairs
 
 
 def import_part_action(
@@ -49,10 +69,15 @@ def import_part_action(
 
     target_path = (Path(project.path) / f"{name}.{kind}").resolve()
     if not target_path.exists() or not source_path.samefile(target_path):
+        # Checked before anything is copied, so a refusal leaves nothing behind.
+        companions = _companions_to_copy(source_path, target_path) if kind == "gltf" else []
         try:
             shutil.copy2(source_path, target_path)
         except shutil.Error as e:
             raise ValueError(f"Failed to copy '{source_path}' -> '{target_path}': {e}")
+        for companion_source, companion_target in companions:
+            companion_target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(companion_source, companion_target)
 
     add_part_action(project, kind, str(target_path), config)
     pc_logging.info(f"Part '{name}' imported successfully.")

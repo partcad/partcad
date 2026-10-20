@@ -15,7 +15,7 @@ import time
 import urllib.parse
 from typing import Any, Optional
 
-from partcad_utils import process_role
+from partcad_utils import pcignore, process_role
 
 from . import consts
 from . import logging as pc_logging
@@ -457,7 +457,9 @@ class Context:
                 root_path = os.path.dirname(root_path)
         initial_root_path = os.path.abspath(root_path)
         if search_root:
-            while os.path.exists(os.path.join(root_path, "..", "partcad.yaml")):
+            # Up while the parent is a package, and not out of a folder it
+            # ignores (see 'partcad_utils.pcignore').
+            while pcignore.climbs_to_parent(root_path):
                 root_path = os.path.join(root_path, "..")
         self.root_path = os.path.abspath(root_path)
         if self.root_path == initial_root_path and root_file != "":
@@ -988,13 +990,7 @@ class Context:
         subfolders = (
             [f.name for f in os.scandir(project.config_dir) if f.is_dir()] if os.path.isdir(project.config_dir) else []
         )
-        if next_import in subfolders and os.path.exists(
-            os.path.join(
-                project.config_dir,
-                next_import,
-                consts.DEFAULT_PACKAGE_CONFIG,
-            )
-        ):
+        if next_import in subfolders and pcignore.is_subpackage(os.path.join(project.config_dir, next_import)):
             pc_logging.debug("Importing a subfolder (get): %s..." % next_project_path)
             prj_conf = {
                 "name": next_project_path,
@@ -1132,13 +1128,7 @@ class Context:
             [f.name for f in os.scandir(project.config_dir) if f.is_dir()] if os.path.isdir(project.config_dir) else []
         )
         for subdir in list(subfolders):
-            if os.path.exists(
-                os.path.join(
-                    project.config_dir,
-                    subdir,
-                    consts.DEFAULT_PACKAGE_CONFIG,
-                )
-            ):
+            if pcignore.is_subpackage(os.path.join(project.config_dir, subdir)):
                 # TODO(clairbee): check if this subdir is already imported
                 next_project_path = get_child_project_path(project.name, subdir)
                 if is_excluded(next_project_path, exclude):
@@ -1490,8 +1480,14 @@ class Context:
             part_spec (ProviderCartItem): The part to find suppliers for.
             cart (ProviderCart, optional): Use this cart for requirements and preferences. Defaults to None.
 
+        The candidates are the suppliers of the package of the assembly the
+        item was procured for, first, and then those of the package the item
+        itself is declared in (see 'ProviderCartItem.suppliers'), each asked
+        once.
+
         Returns:
-            list[str]: list of provider names that can supply the part.
+            list[str]: list of provider names that can supply the part, a
+            supplier named with parameters by the name of that instance.
         """
         providers = []
 
@@ -1506,7 +1502,9 @@ class Context:
             return {}
         pc_logging.debug("Retrieving suppliers from %s" % project_name)
 
-        part_suppliers = await prj.get_suppliers_async()
+        part_suppliers = dict(getattr(part_item, "suppliers", None) or {})
+        for supplier, extra in (await prj.get_suppliers_async()).items():
+            part_suppliers.setdefault(supplier, extra)
         if len(part_suppliers) == 0:
             pc_logging.error("No suppliers found for %s in %s" % (part_name, project_name))
             return {}
@@ -1516,18 +1514,33 @@ class Context:
         pc_logging.debug("Part: %s" % str(part_item))
         for provider_name, provider_extra_config in part_suppliers.items():
             provider = self.get_provider(provider_name, provider_extra_config)
+            if provider is None:
+                # A store named where it cannot be loaded - a package used
+                # without the one that registers its stores - has been reported
+                # by 'get_provider', and has nothing to offer: ask the next.
+                continue
             if not await provider.is_part_available(part_item):
                 continue
             if cart and cart.qos is not None and not provider.is_qos_available(cart.qos):
                 continue
 
-            providers.append(provider_name)
+            # The name of the instance that was asked: a supplier named with
+            # parameters ('currency: EUR') is an instance of its own, and the
+            # carts and quotes made from this ask 'get_provider' for it by
+            # name. Its bare name would be the provider with its defaults.
+            providers.append(provider.name)
 
         return providers
 
     def select_preferred_supplier(self, suppliers: list[str]):
-        """From a list of suppliers, select the preferred one."""
-        return suppliers[0]
+        """From a list of suppliers, select the preferred one, or '' if there is none.
+
+        '' is what 'select_supplier()' records for a part its provider does not
+        have, and what the carts and quotes made from this keep apart as the
+        parts nobody supplies - rather than one such part failing the quote
+        of all the others.
+        """
+        return suppliers[0] if suppliers else ""
 
     def select_preferred_suppliers(self, suppliers_per_part: dict[str, list[str]]) -> dict[str, str]:
         """Given a list of suppliers per part, select the preferred supplier for each."""

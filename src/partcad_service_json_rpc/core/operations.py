@@ -1092,10 +1092,15 @@ def info(session, params):
     ctx = _ctx(session, params)
     if ctx is None:
         return None
-    cwd = os.getcwd()
+    # Absolute, as PartCAD has it. It used to be made relative to this
+    # process's working directory, which is the client's only when the service
+    # runs over stdio in the client's workspace. A POSIX daemon detaches into
+    # '/', and the `str.replace` that did it then turned every separator into a
+    # '.' - '/home/me/pkg/partcad.yaml' became '.home.me.pkg.partcad.yaml' in
+    # the editor's Context view. What to show it relative to is for the client
+    # to decide: it knows the workspace it opened, and a daemon may not even
+    # share its filesystem (see `workspacePath` in the extension).
     path = _root_config_path(ctx)
-    if path.startswith(cwd):
-        path = path.replace(cwd, ".")
     ctx.stats_recalc()
     session.emitter.emit(
         events.STATS,
@@ -2393,7 +2398,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.222"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.229"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -3798,7 +3803,9 @@ async def _item_suppliers(pc, ctx, cart_item, cart):
     """
     project_name, _ = pc.utils.resolve_resource_path(ctx.current_project_path, cart_item.name)
     project = ctx.get_project(project_name)
-    if project is None or not await project.get_suppliers_async():
+    if project is None:
+        return []
+    if not getattr(cart_item, "suppliers", None) and not await project.get_suppliers_async():
         return []
     return await ctx.find_part_suppliers(cart_item, cart)
 

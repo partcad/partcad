@@ -154,9 +154,11 @@ readable as one. It is half see-through, so the opening it covers still reads as
 leaves it alone — that slider is about the shape rather than about what is drawn on top of it. It is part of the
 port, so the port's checkbox draws or hides both.
 
-The ``ports`` and ``interfaces`` lines start folded up — for an assembly they run to hundreds of rows, and
-unfolded they bury the hierarchy they hang off. Pointing at a part or a sub-assembly makes it **flicker** in the
-3D view, which is how to tell which of the shapes on screen a line is without moving the camera.
+The ``<ports>`` and ``<interfaces>`` lines start folded up — for an assembly they run to hundreds of rows, and
+unfolded they bury the hierarchy they hang off — and so does every part, since those two lines are all a part
+has under it. They are written in italics, so that where they sit beside the parts of an assembly they do not
+read as two more of them. Pointing at a part or a sub-assembly makes it **flicker** in the 3D view, which is how
+to tell which of the shapes on screen a line is without moving the camera.
 
 The 3D view, and the model of an FEA or CFD result, can also be navigated with a
 `3Dconnexion <https://3dconnexion.com/>`_ **SpaceMouse**: the cap moves the model the way it is pushed and
@@ -510,7 +512,7 @@ an assembly given assembly instructions and using parts ordered from
 
 Currently, the provider has to be explicitly specified in the quote or order
 request, or explicitly specified as one of the suppliers in the package where
-the parts are declared:
+the parts are declared, or in the package of the assembly they are procured for:
 
 .. code-block:: yaml
 
@@ -531,6 +533,26 @@ read the same way (see :ref:`repositories`):
 .. code-block:: json
 
   {"desc": "Metric hex bolts", "suppliers": {"//pub/svc/commerce/homedepot:homedepot": {}}}
+
+A package that builds assemblies out of somebody else's parts can say where to
+buy them, too. When ``pc supply`` breaks an assembly (or a scene) down into what
+it is procured from, every one of those parts is looked for first at the
+suppliers of the package the assembly is declared in, and then at the ones its
+own package names. So a package of models built from a parts library that knows
+nothing of a particular store can still be quoted at that store:
+
+.. code-block:: yaml
+
+  # The models' own package: none of its parts is declared here.
+  suppliers:
+    //pub/svc/commerce/homedepot:homedepot:
+
+  assemblies:
+    shelf:
+      type: assy
+
+A part asked for on its own, rather than as part of an assembly, is looked for
+at its own package's suppliers only, and so is every part ``pc test`` checks.
 
 In the future PartCAD will be able to select providers
 based on the location and preferences of the requester, while leaving the

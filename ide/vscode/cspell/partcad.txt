@@ -104,6 +104,7 @@ external
 extrude
 faces
 factor
+fcstd
 fea
 feature
 features
@@ -267,6 +268,7 @@ quality
 radius
 ratio
 raw
+reads
 rectangle
 rectangles
 ref

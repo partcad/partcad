@@ -162,7 +162,7 @@
         {
           "type": "object",
           "patternProperties": {
-            "^[a-zA-Z0-9_/./:-]+$": {
+            "^[a-zA-Z0-9_/./:;=,-]+$": {
               "oneOf": [
                 { "type": "null" },
                 { "type": "string" },
@@ -178,7 +178,7 @@
       "description": "A map from an interface type this object implements to one value for every instance of it, or to a map naming the instance",
       "type": "object",
       "patternProperties": {
-        "^[a-zA-Z0-9_/./:-]+$": {
+        "^[a-zA-Z0-9_/./:;=,-]+$": {
           "oneOf": [
             { "type": ["number", "string"] },
             {
@@ -196,12 +196,19 @@
     },
     "cae-fea": {
       "type": "object",
-      "description": "The boundary conditions a static stress analysis ('pc cae fea') is run under. 'fix:' names what is held still, 'load:' what is pulled on; both name interface types this object implements, and 'load' values are a force (or a mass, which is the default reading of a bare number - in kilograms)",
+      "description": "The boundary conditions a static stress analysis ('pc cae fea') is run under. 'fix:' names what is held still, 'load:' what is pulled on; both name interface types this object implements, and 'load' values are a force (or a mass, which is the default reading of a bare number - in kilograms), or three of them, a force with a direction in the object's own frame. 'gravity:' is the acceleration of free fall the object is analysed in, in m/s^2 and its own frame",
       "properties": {
         "desc": { "type": "string", "maxLength": 1000 },
         "implementation": { "$ref": "#/definitions/cae-implementation" },
         "fix": { "$ref": "#/definitions/cae-set" },
-        "load": { "$ref": "#/definitions/cae-load-values" }
+        "load": { "$ref": "#/definitions/cae-load-values" },
+        "gravity": {
+          "description": "The acceleration of free fall the object is analysed in -- what a simulation reads as the scene's gravity less the object's own acceleration -- in m/s^2 and the object's own frame. Without it the implementation weighs the object under its own gravity (CalculiX: 9.81 m/s^2 along -Z, with 'self_weight'). Only an implementation whose 'reads:' lists 'gravity' answers an analysis that states it",
+          "type": "array",
+          "items": { "oneOf": [{ "type": "number" }, { "type": "string", "minLength": 1 }] },
+          "minItems": 3,
+          "maxItems": 3
+        }
       },
       "additionalProperties": false,
       "minProperties": 1
@@ -246,7 +253,7 @@
     "cae-load-values": {
       "type": "object",
       "patternProperties": {
-        "^[a-zA-Z0-9_/./:-]+$": {
+        "^[a-zA-Z0-9_/./:;=,-]+$": {
           "oneOf": [
             { "$ref": "#/definitions/cae-load-value" },
             {
@@ -263,10 +270,16 @@
       "additionalProperties": false
     },
     "cae-load-value": {
-      "description": "A force, or a mass to weigh into one. A number is a mass in kilograms; a string ends in a unit name, case-insensitively, with or without a preceding space and with or without a plural 's': n/nm/mn/kn/newton for force, mg/g/kg/ton/tonne/lb/pound for mass",
+      "description": "A force, or a mass to weigh into one. A number is a mass in kilograms; a string ends in a unit name, case-insensitively, with or without a preceding space and with or without a plural 's': n/nm/mn/kn/newton for force, mg/g/kg/ton/tonne/lb/pound for mass. Three of them are a force with a direction, [x, y, z] in the object's own frame, which only an implementation whose 'reads:' lists 'force' answers",
       "oneOf": [
         { "type": "number" },
-        { "type": "string", "minLength": 1 }
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": { "oneOf": [{ "type": "number" }, { "type": "string", "minLength": 1 }] },
+          "minItems": 3,
+          "maxItems": 3
+        }
       ]
     },
     "materials": {
@@ -659,6 +672,12 @@
               "description": "Write this file type of only part of the object: the links of the assembly or scene to keep. Declared here it applies every time the file is written, so a package can keep a picture of one sub-assembly checked in beside the drawing of the whole of it; 'pc render --filter' and 'pc export --filter' ask for the same thing for one run and override it. PartCAD acts on it itself -- the implementation is handed the smaller shape -- so an implementation another package supplies needs to know nothing about it. A part and a sketch have no links, and a filter over one of them is reported rather than ignored"
             },
             "extension": { "type": "string", "minLength": 1 },
+            "reads": {
+              "description": "For an analysis ('cae:'): what the implementation reads of a part's analysis section beyond where each condition lands and how big it is. 'force': a load's direction, handed in each port's record beside its magnitude; 'gravity': the section's 'gravity:'. PartCAD refuses to ask an implementation that does not say it reads what the section states, rather than have it answer as if it had not been said",
+              "type": "array",
+              "items": { "type": "string", "enum": ["force", "gravity"] },
+              "uniqueItems": true
+            },
             "prefix": { "type": "string", "minLength": 1 },
             "output_dir": { "type": "string", "minLength": 1 },
             "exclude": {
@@ -1714,7 +1733,7 @@
                   "enum": [
                     "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
                     "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
-                    "obj", "kicad", "compound"
+                    "obj", "gltf", "kicad", "compound", "fcstd"
                   ]
                 },
                 "aliases": {
@@ -2124,6 +2143,8 @@
                 },
                 "gravity": { "$ref": "#/definitions/scene-gravity" },
                 "medium": { "$ref": "#/definitions/scene-medium" },
+                "interference": { "$ref": "#/definitions/check-interference" },
+                "connectivity": { "$ref": "#/definitions/check-connectivity" },
                 "timeout": {
                   "type": "integer",
                   "minimum": 1,
@@ -2162,6 +2183,8 @@
                 "manufacturable": { "type": "boolean", "default": false },
                 "gravity": { "$ref": "#/definitions/scene-gravity" },
                 "medium": { "$ref": "#/definitions/scene-medium" },
+                "interference": { "$ref": "#/definitions/check-interference" },
+                "connectivity": { "$ref": "#/definitions/check-connectivity" },
                 "timeout": {
                   "type": "integer",
                   "minimum": 1,
@@ -2477,6 +2500,8 @@
             "desc": { "type": "string", "maxLength": 1000 },
             "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1 },
+            "extension": { "type": "string", "minLength": 1, "description": "The extension of the file each part of this type is read from. Declaring one makes the part file-backed: its 'path' is relative to the part's own package and defaults to '<name>.<extension>', 'fileFrom' fetches it, and the script finds it as request['path']" },
+            "dockerImage": { "type": "string", "minLength": 1, "description": "The image the 'docker' sandbox runs this partType's script in, where it can be pulled. Defaults to the declaring package's own" },
             "pythonRequirements": { "type": "array", "items": { "type": "string" } }
           },
           "additionalProperties": false

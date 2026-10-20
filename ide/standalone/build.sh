@@ -611,6 +611,19 @@ if 'partcad-main' not in previous:
 " "${RESOURCES_DIR}/app/package.json" "./out/partcad-main.js" \
   || fail "could not point the application at the PartCAD entry point"
 
+# The PartCAD workbench goes at the top of the activity bar, above Explorer, and
+# its icon is drawn in colour rather than as the flat grey the editor makes of
+# every extension's. Neither is anything an extension can ask for, so this
+# patches the workbench and recomputes the checksums `product.json` keeps for
+# it; the docstring of `patch_workbench.py` has how, and why each part is
+# needed. It fails the build when an upstream release has changed the code it
+# patches, rather than shipping an IDE where PartCAD is grey and sixth again.
+log "==> Putting the PartCAD workbench first on the activity bar, in colour"
+"${PYTHON}" "${SCRIPT_DIR}/tools/patch_workbench.py" \
+  --app "${RESOURCES_DIR}/app" \
+  --icon "${REPO_ROOT}/ide/vscode/resources/logo.svg" ||
+  fail "could not patch the workbench; the message above says which part"
+
 ICON_DIR="${WORK_DIR}/icons"
 ICONS_BUILT=0
 if [ "${BRAND_ICONS}" = "1" ]; then

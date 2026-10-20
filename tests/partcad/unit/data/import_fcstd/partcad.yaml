@@ -1,0 +1,20 @@
+desc: |
+  Parts read from FreeCAD documents with the built-in 'fcstd' part type.
+
+  The three '.FCStd' files are fixtures of the cadmpeg corpus
+  (https://github.com/cadmpeg/cadmpeg, corpus/freecad_fcstd/fixtures), authored
+  in FreeCAD 1.1.1 and dedicated to the public domain under CC0-1.0.
+
+parts:
+  # A Part::Box, 25 x 15 x 8 mm.
+  box:
+    type: fcstd
+    path: techdraw_annotations.FCStd
+  # A PartDesign Body: Pad, Pocket and Fillet. The part is the Fillet's result,
+  # not the three stacked.
+  design_history:
+    type: fcstd
+  # Sketches and nothing else: no solid to make a part of.
+  sketches:
+    type: fcstd
+    path: sketch_constraints.FCStd

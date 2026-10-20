@@ -111,6 +111,16 @@ those rules in TypeScript is a copy that can disagree, and a disagreement means 
 a daemon of its own beside the one `pc` is using. What stays in Node is the socket transport itself, because a
 live notification connection cannot be shelled out.
 
+**`partcad.develIndex` has no fixed default, and its `false` in `package.json` is only what the Settings editor
+shows.** PartCAD reads the public index's `devel` where it runs from its sources and `main` elsewhere, and the
+setting follows the same rule (`getDevelIndexFromSetting`): a value a settings file sets is passed, either way, as
+`--devel-index` and `PC_DEVEL_INDEX` (the variable because the flag can only say yes, and an inherited
+`PC_DEVEL_INDEX=true` would outrank a `false`). With none, an extension running from its sources -- any
+`extensionMode` but `Production` -- passes `true`, and an installed one passes nothing at all, so the PartCAD it
+starts decides for itself: `devel` in the dev container, whose PartCAD is an editable install, `main` from a
+bundle. `inspect()`, not `get()`, is what tells the two apart, since `get()` hands back the declared `false` for
+a setting nobody set.
+
 ### There used to be a second backend
 
 A Python language server under `bundled/tool`, with PartCAD's dependencies vendored into `bundled/libs`,
@@ -556,7 +566,7 @@ than the engine).
 `src/terminal.ts`, `PartcadTerminals`. What the user sees, and why each part is built the way it is:
 
 - **Nothing opens until there is output.** The first write in a window opens a view, split to the right of a
-  shell named `Shell`: one already open, or a new one running the user's default profile with `SHELL_BANNER` at
+  shell named `Shell`: one already open, or a new one running the user's default profile with `shellBanner` at
   the top (`TerminalOptions.message` is written into the view, not sent to the shell). Activation runs the health
   checks as a logged process, which ends in a `DONE:` line at the least, so the pair appears at every start, as
   the single terminal used to.
@@ -568,7 +578,18 @@ than the engine).
   and would otherwise turn a light theme's yellow into brown, tone by tone. A cell's main tone is its
   *background* wherever it can be: the terminal draws block characters itself only with GPU acceleration on,
   and from the font they leave seams between cells, where a background never does. Lines stay within 65
-  columns -- the logo, a gap and the longest sentence -- for the shell's half of a split panel.
+  columns -- the logo, a gap and the longest sentence (`BANNER_BESIDE_COLUMNS`) -- for the shell's half of a
+  split panel.
+- **In a shell narrower than that, the invitation goes under the logo.** Beside it, the terminal would wrap
+  each sentence onto a row of its own between two rows of the logo, cutting the logo into strips. The width
+  has to be known when the shell is created, since `TerminalOptions.message` is fixed then, and an extension is
+  told the width of a pseudoterminal and of no other terminal -- `Terminal` has no dimensions in the stable API.
+  So it is the `PartCAD` view's: a split is even, and the view is as wide as the shell it was split off. That
+  view does not exist yet when its shell is made, so the width is the one the last such view had, kept in
+  `globalState` (`SHELL_COLUMNS_KEY`); a view from the "+" menu is beside no shell and is not counted. With
+  nothing kept yet -- the first shell on a machine -- the invitation goes beside the logo, which is what a
+  panel along the bottom of the window has room for. A shell narrowed after it was made is not redrawn: the
+  banner was written once and is the terminal's from then on.
 - **Closing a view keeps it closed.** `partcad.reopenTerminal` defaults to `false` now; it used to reopen the
   view on the next log line, which is fighting the user. "PartCAD: Show Terminal" and the `PartCAD` entry in the
   terminal panel's "+" menu (`contributes.terminal.profiles`, `partcad.terminal`) open one again. In Restricted
@@ -723,7 +744,7 @@ npm run pretest && PARTCAD_TEST_WITH_CSPELL=streetsidesoftware.code-spell-checke
 ## Opening a file in a third-party application
 
 The Explorer's per-item **"Open in > ..."** menu hands the item's file to `partcad.openExternal`, which runs
-`pc --no-ansi ide open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Five
+`pc --no-ansi ide open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Six
 applications, each offered for the objects it can actually open:
 
 | Menu entry | Command | Shown for |
@@ -733,6 +754,13 @@ applications, each offered for the objects it can actually open:
 | Gazebo | `partcad.openInGazebo` | scenes of type `world` (`viewItem == sceneWorld`) |
 | MuJoCo | `partcad.openInMuJoCo` | scenes of type `mjcf` (`viewItem == sceneMjcf`) |
 | KiCad | `partcad.openInKiCad` | parts of type `kicad` (`viewItem == partKicad`) |
+| SolidCraft | `partcad.openInSolidCraft` | parts and assemblies |
+
+SolidCraft, like Gazebo and MuJoCo, is not one of PartCAD's own: its `open:` entry is declared by the plugin
+package for it ([`partcad-solidcraft`](https://github.com/partcad/partcad-solidcraft)), and `pc ide open` finds it
+only in a workspace that imports that package. Elsewhere the entry is still on the menu, and picking it shows
+`pc ide open`'s own answer -- the applications it does know -- rather than the menu guessing at what the
+workspace imports.
 
 The narrow ones are why `PartcadItem` gives those objects a context value of their own: `viewItem` is one
 string compared exactly, so "a scene Gazebo can open" and "a part KiCad can open" have to *be* separate

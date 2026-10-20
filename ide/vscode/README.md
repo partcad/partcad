@@ -205,6 +205,11 @@ in a tool that draws, next to what the extension does with it.
   handed to MuJoCo has no package around it to reach.
 * **KiCad**, for a part of type `kicad`. What is opened is the board (`.kicad_pro`) beside the STEP the part
   is, because that is the file KiCad has anything to say about.
+* **SolidCraft**, for a part or an assembly, in a workspace that imports the SolidCraft plugin package
+  ([`partcad-solidcraft`](https://github.com/partcad/partcad-solidcraft)), which is what declares it. A
+  SolidCraft design is opened as it is, with its history; STEP, IGES and meshes as they are; anything else (a
+  script, a BREP) is converted to STEP first, and an edit to that copy is written back where the object's own
+  file can take it.
 
 This runs on your machine and never goes anywhere near the PartCAD daemon: the extension runs `pc ide open`, which
 looks for the application installed here and starts it. If there is none, and `partcad.open.useDocker` is on (the default),

@@ -1282,6 +1282,34 @@ def test_an_assembly_in_a_scene_is_one_articulated_tree_whose_root_is_free(tmp_p
     _assert_placements(found, tree)
 
 
+def test_a_body_says_which_parts_it_is_by_their_paths_and_where_they_sit_in_it(tmp_path, stand_in_geometry):
+    """What a sidecar carries, so that a run can say which body a part is in ('parts_entry')."""
+    room = """
+    links:
+      - assembly: rig
+        name: robot
+        location: [[0, 100, 0], [0, 0, 1], 90]
+    """
+    ctx = _context(
+        tmp_path,
+        {"rig.assy": RIG_ASSY, "room.assy": room},
+        PARTS_AND_SCENES,
+        bore="parameters: {turnZ: [-90, 90]}\nmotion: revolute",
+    )
+    found = kinematics.bodies(_tree(ctx, ":room", "scene"))
+    robot = kinematics.parts_entry(found.by_name("robot"))
+    assert [(entry["label"], entry["part"].rpartition(":")[2]) for entry in robot] == [
+        ("robot/base", "base"),
+        ("robot/lid", "lid"),
+    ]
+    # The part the body is rooted at sits at its frame; the lid where the rig puts it.
+    assert robot[0]["placement"] is None
+    assert robot[1]["placement"] == kinematics.packed_of(found.by_name("robot").parts[1].placement)
+    assert robot[1]["placement"][0] == pytest.approx([0.0, 30.0, 0.0])
+    (arm,) = kinematics.parts_entry(found.by_name("arm"))
+    assert arm["label"] == "robot/arm"
+
+
 def test_fixed_welds_what_a_scene_places_to_the_world(tmp_path, stand_in_geometry):
     room = """
     links:

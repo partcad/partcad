@@ -1,0 +1,48 @@
+{% set G = "//pub/robotics/parts/gobilda" %}
+{% set D = "//pub/robotics/multimodal/openvmp/robots/don1" %}
+# One arm of OpenVMP's Don1: the lower arm (the thigh) and the upper arm (the
+# foot, without its wheel), joined at the knee the way 'robot/corner' joins
+# them -- the upper arm's hub on the end of the knee shaft.
+#
+# In the robot that hub turns the knee shaft, which turns in its bearings in the
+# lower arm, and the worm gear on the shaft holds it: the worm turns the gear,
+# and the gear cannot turn the worm, so the knee stays wherever the motor left
+# it. Here the turn is put where the hub meets the shaft, which moves nothing
+# that matters -- whichever side of the hex it is on, the torque about the knee
+# is the torque the worm holds against -- and the worm's hold is the joint's
+# spring: as stiff as the gear's teeth and the worm's shaft are together, and
+# damped as the drive is, so that the arm gives a little and stops ringing.
+links:
+  - assembly: {{ D }}:link-lower-arm
+    name: lower
+
+  - assembly: {{ D }}:link-upper-arm
+    name: upper
+    connect:
+      with: {{ G }}:8mmREX-thru-10
+      withInstance: knee
+      name: lower
+      to: {{ G }}:8mmREX-shaft
+      toInstance: knee
+      # Where the knee starts: the hub's turn on the shaft, from the arm as
+      # 'robot/corner' draws it.
+      withParams:
+        turnZ: {{ param_start }}
+      toParams:
+        moveZ: 0.25
+      # Through the hubs' REX bores, which the models draw the same size as the
+      # knee shaft they slide onto.
+      interferes: lower
+      joint: knee
+      # The turn the hex would lock, kept free, so that the worm can hold it.
+      motion:
+        dof: [turnZ]
+      physics:
+        # N*m/rad: a 28-tooth wheel of MOD 1.25 and its worm, with the shaft
+        # and the hub between them. Holds the arm within a tenth of a degree.
+        springStiffness: 2000
+        # Where the worm holds it: where it starts.
+        springReference: {{ param_start }}
+        # N*m*s/rad: about a tenth of critical, so it rings for a tenth of a
+        # second and then stands still.
+        damping: 2.5

@@ -30,9 +30,8 @@ that the next download replaces, so nothing below an import is edited.
 
 import os
 
-from partcad_utils import config_yaml
+from partcad_utils import config_yaml, pcignore
 
-from ... import consts
 from ... import logging as pc_logging
 from ... import project_factory_git as rfg
 from ...dependency_pin import set_dependency_revision, yaml_scalar
@@ -72,7 +71,7 @@ def _local_children(project, is_root: bool) -> list[str]:
     config_dir = getattr(project, "config_dir", None)
     if config_dir and os.path.isdir(config_dir):
         for entry in sorted(os.scandir(config_dir), key=lambda e: e.name):
-            if entry.is_dir() and os.path.exists(os.path.join(entry.path, consts.DEFAULT_PACKAGE_CONFIG)):
+            if entry.is_dir() and pcignore.is_subpackage(entry.path):
                 children.append(get_child_project_path(project.name, entry.name))
     return children
 

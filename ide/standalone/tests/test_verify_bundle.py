@@ -13,10 +13,11 @@ import shutil
 import stat
 
 import brand
+import patch_workbench
 import pytest
 import verify_bundle
 
-from conftest import COMPONENT_ROOT
+from conftest import COMPONENT_ROOT, REPO_ROOT, write_workbench
 
 PLAN = {
     "install": [
@@ -71,6 +72,11 @@ def make_bundle(tmp_path, with_tools=True):
         json.dumps({"name": "Code", "type": "module", "main": "./out/partcad-main.js"}),
         encoding="utf-8",
     )
+
+    # The workbench, with the PartCAD workbench first on its activity bar and in
+    # colour, and the checksums product.json keeps for it.
+    write_workbench(resources / "app")
+    patch_workbench.patch(resources / "app", REPO_ROOT / "ide" / "vscode" / "resources" / "logo.svg")
 
     extensions = resources / "app" / "extensions"
     extensions.mkdir()
@@ -241,6 +247,38 @@ def test_a_wrapper_that_leaves_workspace_trust_on_is_a_problem(tmp_path, capsys)
 
     assert run(resources, tmp_path) != 0
     assert "does not turn workspace trust off" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# The workbench: the PartCAD workbench first on the activity bar and drawn in
+# colour, and `product.json`'s checksums still matching the files they cover.
+# `test_patch_workbench.py` tests the patch; this tests that a build that
+# skipped it, or edited a file after it, does not pass.
+# ---------------------------------------------------------------------------
+
+
+def test_the_workbench_is_reported(tmp_path, capsys):
+    assert run(make_bundle(tmp_path), tmp_path) == 0
+    assert "PartCAD workbench is ordered first and drawn in colour" in capsys.readouterr().out
+
+
+def test_an_unpatched_workbench_is_a_problem(tmp_path, capsys):
+    resources = make_bundle(tmp_path)
+    write_workbench(resources / "app")
+
+    assert run(resources, tmp_path) != 0
+    output = capsys.readouterr().out
+    assert "not ordered first on the activity bar" in output
+    assert "not drawn in colour" in output
+
+
+def test_a_workbench_that_disagrees_with_its_checksum_is_a_problem(tmp_path, capsys):
+    resources = make_bundle(tmp_path)
+    css = resources / "app" / "out" / patch_workbench.WORKBENCH_CSS
+    css.write_text(css.read_text(encoding="utf-8") + "/* edited after the build */\n", encoding="utf-8")
+
+    assert run(resources, tmp_path) != 0
+    assert "would call the installation corrupt" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------

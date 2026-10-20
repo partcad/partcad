@@ -539,6 +539,10 @@ class FakeContext:
         return self.projects.get(name)
 
     async def find_part_suppliers(self, cart_item, cart=None):
+        # The stores the item was procured with, as the real one asks first,
+        # or else the ones its own package is set up with here.
+        if getattr(cart_item, "suppliers", None):
+            return list(cart_item.suppliers)
         return list(self.item_suppliers.get(cart_item.name, []))
 
     def get_provider(self, name, params=None):
@@ -721,6 +725,25 @@ def test_info_emits_stats_with_version_and_recalculated_counts():
     assert payload["version"] == "0.7.158"
     assert payload["stats"]["packages"] == 3
     assert payload["stats"]["path"] == "/abs/partcad.yaml"
+
+
+@pytest.mark.parametrize("cwd", ["root", "package"])
+def test_info_reports_the_root_config_path_whatever_the_working_directory(monkeypatch, tmp_path, cwd):
+    """The path is not made relative to the service's working directory.
+
+    That directory is the client's only over stdio. A POSIX daemon detaches
+    into '/', and relative to that, by a `str.replace`, every '/' in the path
+    became a '.': the Context view read '.abs.partcad.yaml'. The client works
+    out what to show relative to its own workspace (see 'PartcadContext.ts').
+    """
+    session, seen = make_session()
+    config_path = str(tmp_path / "partcad.yaml")
+    session.partcad_ctx.projects["//"].config_path = config_path
+    monkeypatch.chdir(os.path.abspath(os.sep) if cwd == "root" else tmp_path)
+
+    operations.info(session, {})
+
+    assert seen[-1][1]["stats"]["path"] == config_path
 
 
 def test_a_listing_warms_the_kind_it_is_about_to_walk():
@@ -2181,12 +2204,13 @@ class FakeDocumentError(Exception):
 class FakeCartItem:
     """Stand-in for ``partcad.plugin_provider_data_cart.ProviderCartItem``."""
 
-    def __init__(self, name, count=1, vendor=None, sku=None, count_per_sku=1):
+    def __init__(self, name, count=1, vendor=None, sku=None, count_per_sku=1, suppliers=None):
         self.name = name
         self.count = count
         self.vendor = vendor
         self.sku = sku
         self.count_per_sku = count_per_sku
+        self.suppliers = suppliers or {}
 
 
 class FakeCart:
@@ -2354,6 +2378,20 @@ def test_supply_says_nothing_when_the_package_declares_no_supplier(monkeypatch):
 
     assert all(item["suppliers"] == [] for item in result["items"])
     assert result["totals"] == []
+    assert session.partcad.logging.messages("error") == []
+
+
+def test_supply_asks_the_stores_the_assembly_package_names(monkeypatch):
+    # The parts' own package names no supplier, but the package of the
+    # assembly they are procured for does, and the cart says so on each item.
+    session, ctx = make_supply_session(monkeypatch)
+    ctx.projects["//"].suppliers = {}
+    ctx.cart_contents["//:top"][0].suppliers = {"//:cheap": {}}
+
+    result = operations.supply_quote(session, {"package": "//", "object": "top"})
+
+    assert [option["name"] for option in result["items"][0]["suppliers"]] == ["//:cheap"]
+    assert result["items"][1]["suppliers"] == []
     assert session.partcad.logging.messages("error") == []
 
 

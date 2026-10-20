@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.8.222",
+  "version": "0.8.229",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -251,13 +251,13 @@
         "properties": {
           "partcad.open.useDocker": {
             "default": true,
-            "description": "Let PartCAD run a third-party application (\"Open in...\": FreeCAD, Blender, Gazebo, MuJoCo, KiCad) in a Docker container when it is not installed on this machine, and Docker is running here. The container is named after the application ('partcad-freecad', 'partcad-blender', 'partcad-gazebo', 'partcad-mujoco', 'partcad-kicad'), keeps the workspace mounted at the path it has here, and shows its windows on this machine's X display - which macOS and Windows need an X server for.",
+            "description": "Let PartCAD run a third-party application (\"Open in...\": FreeCAD, Blender, Gazebo, MuJoCo, KiCad, SolidCraft) in a Docker container when it is not installed on this machine, and Docker is running here. The container is named after the application ('partcad-freecad', 'partcad-blender', 'partcad-gazebo', 'partcad-mujoco', 'partcad-kicad', 'partcad-solidcraft'), keeps the workspace mounted at the path it has here, and shows its windows on this machine's X display - which macOS and Windows need an X server for.",
             "scope": "machine",
             "type": "boolean"
           },
           "partcad.open.dockerImage": {
             "default": "",
-            "description": "Create that container from this image instead of the application's default one (FreeCAD: 'linuxserver/freecad:latest', Blender: 'linuxserver/blender:latest', Gazebo: 'gazebosim/gz-harmonic:latest', MuJoCo: 'ghcr.io/google-deepmind/mujoco:latest', KiCad: the 'ghcr.io/partcad/partcad-container-kicad' image of this release). Applies to whichever application is opened next and only when its container is created; remove an existing one to have it recreated.",
+            "description": "Create that container from this image instead of the application's default one (FreeCAD: 'linuxserver/freecad:latest', Blender: 'linuxserver/blender:latest', Gazebo: 'gazebosim/gz-harmonic:latest', MuJoCo: 'ghcr.io/google-deepmind/mujoco:latest', KiCad: the 'ghcr.io/partcad/partcad-container-kicad' image of this release, SolidCraft: the image its plugin package publishes). Applies to whichever application is opened next and only when its container is created; remove an existing one to have it recreated.",
             "scope": "machine",
             "type": "string"
           }
@@ -319,7 +319,7 @@
           },
           "partcad.develIndex": {
             "default": false,
-            "description": "Whether to take the public PartCAD index from its 'devel' branch instead of the released state on 'main'. Turn this on to work against index changes that have not been released yet.",
+            "description": "Whether to take the public PartCAD index from its 'devel' branch instead of the released state on 'main'. Turn this on to work against index changes that have not been released yet. Left unset, it is on where the extension or PartCAD runs from its sources (an Extension Development Host, an editable install of PartCAD) and off otherwise.",
             "scope": "machine",
             "type": "boolean"
           },
@@ -809,6 +809,14 @@
         "title": "MuJoCo",
         "icon": "$(link-external)",
         "enablement": "!partcad.editingExternally"
+      },
+      {
+        "command": "partcad.openInSolidCraft",
+        "category": "PartCAD",
+        "group": "Open in",
+        "title": "SolidCraft",
+        "icon": "$(link-external)",
+        "enablement": "!partcad.editingExternally"
       }
     ],
     "submenus": [
@@ -1094,6 +1102,10 @@
         },
         {
           "command": "partcad.openInBlender",
+          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf"
+        },
+        {
+          "command": "partcad.openInSolidCraft",
           "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf"
         }
       ]

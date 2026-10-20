@@ -5,12 +5,28 @@ Feature: `pc init` command
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
 
-  @pc-init
+  @pc-init @requires-network
   Scenario: Initialize new package as public
     Given a file named "partcad.yaml" does not exist
     When I run "pc --no-ansi init"
     Then the command should exit with a status code of "0"
     And STDERR should not contain "PartCAD configuration file is not found"
+    # The public index, tracking its released branch and pinned to the commit
+    # that branch is at now -- which moves, so the commit cannot be written
+    # down here.
+    And STDERR should match the regex ".*Pinned pub to [0-9a-f]{40}, the tip of 'main'"
+    And a file named "partcad.yaml" should contain "url: https://github.com/partcad/partcad-index.git"
+    And a file named "partcad.yaml" should contain "track: main"
+    And a file named "partcad.yaml" should contain "revision: "
+
+  @pc-init
+  Scenario: Initialize new package as public with no network
+    # Creating a package does not need the network: the index is left
+    # tracking its branch, unpinned, and 'pc update' pins it later.
+    Given a file named "partcad.yaml" does not exist
+    When I run "pc --no-ansi --offline init"
+    Then the command should exit with a status code of "0"
+    And STDERR should contain "Not pinning pub: PartCAD is configured to work offline"
     And a file named "partcad.yaml" should have YAML content:
       """
       partcad: ">=\\d+\\.\\d+\\.\\d+"

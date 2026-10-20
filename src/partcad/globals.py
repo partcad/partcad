@@ -12,8 +12,9 @@ import threading
 
 import ruamel.yaml as ruamel
 
-from . import consts, factory
+from . import consts, dependency_pin, factory
 from . import logging as pc_logging
+from . import project_factory_git as rfg
 from .assembly import Assembly
 from .assembly_factory_alias import AssemblyFactoryAlias
 from .assembly_factory_assy import AssemblyFactoryAssy
@@ -33,6 +34,7 @@ from .part_factory_chili3d import PartFactoryChili3d
 from .part_factory_compound import PartFactoryCompound
 from .part_factory_enrich import PartFactoryEnrich
 from .part_factory_extrude import PartFactoryExtrude
+from .part_factory_gltf import PartFactoryGltf
 from .part_factory_kicad import PartFactoryKicad
 from .part_factory_obj import PartFactoryObj
 from .part_factory_scad import PartFactoryScad
@@ -63,6 +65,7 @@ from .sketch_factory_enrich import SketchFactoryEnrich
 from .sketch_factory_svg import SketchFactorySvg
 from .software_factory_raw import SoftwareFactoryRaw
 from .user_config import UserConfig
+from .user_config import user_config as default_user_config
 
 __version__: str = "0.7.127"
 
@@ -86,6 +89,7 @@ factory.register("part", "brep", PartFactoryBrep)
 factory.register("part", "stl", PartFactoryStl)
 factory.register("part", "3mf", PartFactory3mf)
 factory.register("part", "obj", PartFactoryObj)
+factory.register("part", "gltf", PartFactoryGltf)
 factory.register("part", "scad", PartFactoryScad)
 factory.register("part", "kicad", PartFactoryKicad)
 factory.register("part", "extrude", PartFactoryExtrude)
@@ -237,7 +241,13 @@ def render(format=None, output_dir=None):
     return init().render(format, output_dir)
 
 
-def create_package(dst_path=consts.DEFAULT_PACKAGE_CONFIG, config_options={"private": False}):
+def create_package(dst_path=consts.DEFAULT_PACKAGE_CONFIG, config_options={"private": False}, user_config=None):
+    """Write a new package's 'partcad.yaml' from the template, with every dependency it tracks pinned.
+
+    'user_config' decides how the remotes are asked where those branches are
+    (offline, proxies, URL overrides); the one the command line configured when
+    it is not given.
+    """
     yaml = ruamel.YAML()
     private = config_options["private"]
     if private:
@@ -259,4 +269,46 @@ def create_package(dst_path=consts.DEFAULT_PACKAGE_CONFIG, config_options={"priv
     with open(dst_path, "w") as f:
         yaml.dump(config, f)
 
+    _pin_tracked_dependencies(
+        dst_path, config.get("dependencies"), default_user_config if user_config is None else user_config
+    )
     return True
+
+
+def _pin_tracked_dependencies(config_path, dependencies, user_config) -> None:
+    """Pin each dependency a new package tracks to the commit its branch is at now.
+
+    What 'pc add dep' writes, so a package is reproducible from the commit that
+    creates it, and 'pc update' is how it moves from then on. The 'revision:'
+    line is added the way 'pc update' adds one, under its 'track:'.
+
+    Unlike 'pc add dep', a pin that cannot be found stops nothing: creating a
+    package must work without a network. The dependency is then left tracking
+    its branch with no 'revision:' yet -- which loading checks out once, at the
+    tip -- and the warning says how to pin it later.
+    """
+    for name, config in (dependencies or {}).items():
+        if not isinstance(config, dict) or config.get("type") != "git" or config.get("revision"):
+            continue
+        track = config.get("track")
+        if not track:
+            continue
+        if user_config.offline:
+            pc_logging.warning(
+                "Not pinning %s: PartCAD is configured to work offline. Run 'pc update' to pin it to the tip of '%s'"
+                % (name, track)
+            )
+            continue
+        try:
+            _, commit = rfg.tracked_commit(user_config, config["url"], track)
+        except rfg.GIT_ERRORS as e:
+            pc_logging.warning(
+                "Not pinning %s: failed to find where '%s' of %s is: %s. Run 'pc update' to pin it"
+                % (name, track, config["url"], e)
+            )
+            continue
+        reason = dependency_pin.set_dependency_revision(config_path, name, commit)
+        if reason is not None:
+            pc_logging.warning("Not pinning %s: %s. Set 'revision: %s' in it by hand" % (name, reason, commit))
+            continue
+        pc_logging.info("Pinned %s to %s, the tip of '%s'" % (name, commit, track))

@@ -1104,6 +1104,13 @@ validation reads the same against either engine:
    * - ``joints.<name>.effort``
      - What the model's actuators exert along the joint, in N·m or N. MuJoCo
        only.
+   * - ``bodies.<name>.loads``
+     - What acts on the body: its weight, its contacts, the force and the moment
+       each of its joints passes it. See :ref:`sim-loads`.
+   * - ``bodies.<name>.mass``, ``com``, ``acc``, ``angvel``, ``angacc``
+     - Its mass in kg, its centre of mass in mm, how that is accelerating in
+       m/s², and how fast the body turns and how fast that changes, in deg/s and
+       deg/s² -- all in the world's frame.
 
 A body is named after the link that places it -- an ASSY link's ``name:`` --
 and made unique where two would collide. Walking every body, ``for name in
@@ -1131,6 +1138,87 @@ the run was: which engine ran it, the ``duration``, the ``gravity`` it was
 actually under in m/s², and the ``medium`` for a MuJoCo run in a fluid. Whatever
 the engine could not report is named in ``warnings`` rather than reported as
 zero.
+
+.. _sim-loads:
+
+What holds each body, and how hard
+==================================
+
+Every body in a reading says what acts on it, as ``loads`` -- the loads a stress
+analysis of the body, or of a part in it, starts from. Each load is one thing
+acting on the body:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 85
+
+   * - ``kind``
+     - What it is
+   * - ``joint``
+     - What one of its joints passes it: the joint to the body it hangs from,
+       and each joint of a body hanging from it. ``joint`` names it.
+   * - ``fixed``
+     - What holds a body a scene fixes: its weld to the world.
+   * - ``contact``
+     - Every contact with one other body, added up; ``contacts`` says how many.
+   * - ``gravity``
+     - Its weight, at its centre of mass.
+   * - ``buoyancy``
+     - The lift of the fluid it is in, at its centre of buoyancy.
+
+and says where it comes from (``from``: the body at the other end, ``world`` for
+the world and the ground, the body itself for its weight and its lift), where it
+acts (``at``, mm, in the world's frame), the ``force`` on *this* body in N, and
+the ``torque`` about ``at`` in N·m, both in the world's frame:
+
+.. code-block:: json
+
+  "upper": {
+    "pos": [0.0, 126.8, 530.4], "quat": [0.5, 0.5, 0.5, 0.5],
+    "mass": 0.864, "com": [0.0, 432.3, 568.3],
+    "acc": [0.0, 0.0, 0.0], "angvel": [0.0, 0.0, 0.0], "angacc": [0.0, 0.0, 0.0],
+    "loads": [
+      {"kind": "joint", "from": "subject", "joint": "knee", "at": [-39.7, 126.8, 530.4],
+       "force": [0.0, 0.0, 8.48], "torque": [2.59, -0.337, 0.0]},
+      {"kind": "gravity", "from": "upper", "at": [0.0, 432.3, 568.3],
+       "force": [0.0, 0.0, -8.48], "torque": [0.0, 0.0, 0.0]}
+    ]
+  }
+
+A joint's load is everything it passes from one body to the other: what its
+constraint holds against, and what its spring, its damper, its friction and an
+actuator on it exert along the freedom it keeps. So a hinge held by a stiff
+spring -- a worm drive that does not back-drive, say -- reports the moment that
+holds the arm up, and a hinge with nothing on it reports none about its axis.
+The body hanging from a joint reports its load from the body above, and the body
+above the same load reversed. A free body's six freedoms pass nothing, and are
+not a load.
+
+**They add up**: the forces on a body are its ``mass`` times its ``acc``, and a
+validation can say so -- the knee above carries the arm's weight and the moment
+of it, with the arm at rest:
+
+.. code-block:: python
+
+  (
+      abs(next(l for l in after["bodies"]["upper"]["loads"] if l["kind"] == "joint")["force"][2]
+          - after["bodies"]["upper"]["mass"] * 9.81) < 0.01
+  )
+
+**Which body a part is in.** A body is the parts welded together (see
+:ref:`sim-bodies`), so a load on a body is not yet a load on any one part in it.
+``result["parts"]`` says which body each part is in: each part by its path of
+labels (``subject/lower/knee-worm-gear/gear``), the part it is, the body, and
+where it sits in that body's frame. With the body's pose in a reading that is
+where the part is, which is what turns a body's loads into a part's -- the
+``/pc:sim-assembly-fea`` skill does that, and writes the part a stress analysis
+that applies them (:ref:`pc cae <cae>`). What passes between two parts welded
+into one body is the body's own business: a rigid simulation does not see it,
+and says nothing about it.
+
+A run that asks for poses alone says ``params: {loads: false}``. MuJoCo reports
+every load; Gazebo reports what its joints transmit and each body's weight, and
+says in ``warnings`` what it cannot (see :ref:`sim-engines`).
 
 Some validations
 ================

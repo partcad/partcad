@@ -318,6 +318,12 @@ SELECTION_KEYS = frozenset({"filter"})
 # reader is handed everything else.
 IMPORT_KEYS = frozenset({"kinds", "noun", "dropped"})
 
+# The same, for the 'cae:' section. 'reads' is what the implementation says it
+# reads of an analysis section beyond where each condition lands and how big it
+# is -- a load's direction, a gravity (see 'partcad.cae.READS') -- which PartCAD
+# checks an analysis against before asking, rather than a parameter of the run.
+ANALYSIS_KEYS = frozenset({"reads"})
+
 # The request key the implementation script's path travels under. It is passed
 # in the request rather than on the command line because the two positional
 # arguments of a wrapper are already spent on the output path and the working
@@ -472,6 +478,8 @@ class Implementation:
             return RESERVED_KEYS | SIMULATION_KEYS
         if self.section == IMPORT:
             return RESERVED_KEYS | IMPORT_KEYS
+        if self.section in ANALYSIS_SECTIONS:
+            return RESERVED_KEYS | ANALYSIS_KEYS
         if self.section in SECTIONS:
             return RESERVED_KEYS | SELECTION_KEYS
         return RESERVED_KEYS
@@ -613,6 +621,21 @@ class Implementation:
             if fallback:
                 return str(fallback)
         return None
+
+    @property
+    def reads(self) -> frozenset:
+        """What of an analysis section this implementation says it reads ('reads:', see 'partcad.cae.READS').
+
+        The implementing package's word, like its requirements and its image:
+        whether a script reads a load's direction is a fact about the script,
+        and a package that only asks for the analysis cannot make it one by
+        saying so. Nothing declared reads nothing beyond what every
+        implementation reads.
+        """
+        declared = self._declared("reads")
+        if isinstance(declared, str):
+            declared = [declared]
+        return frozenset(str(entry) for entry in declared or ())
 
     @property
     def python_requirements(self) -> list:
@@ -829,6 +852,49 @@ def section_of(ctx, format_name: str) -> Optional[str]:
         if format_name in builtin_formats(ctx, section):
             return section
     return None
+
+
+def builtin_part_type(ctx, name):
+    """The package path declaring a built-in ``partType`` called ``name``, or None.
+
+    The part types PartCAD reads through a downloaded tool rather than a factory
+    of its own -- 'fcstd' -- are declared in '//builtin/import' the way any
+    package declares one, and a part names them by the bare name as if they
+    were built in, which as far as its author is concerned they are. Asked by
+    'factory.instantiate()' only once no registered factory claimed the name, so
+    a built-in factory always wins.
+    """
+    if not isinstance(name, str) or not name or ":" in name or ctx is None:
+        return None
+    project = builtin_project(ctx, IMPORT)
+    if project is None:
+        return None
+    part_types = project.config_obj.get("partTypes")
+    if isinstance(part_types, dict) and name in part_types:
+        return project.name
+    return None
+
+
+def package_cache_dir(ctx, project) -> str:
+    """Where a package's scripts keep what they fetch for themselves, between runs.
+
+    A plugin that needs a program pip cannot install downloads it once and
+    keeps it, rather than once per part. Its own directory is the natural place
+    -- a dependency is already in PartCAD's cache, one directory per commit, so
+    a new release of the plugin is a fresh directory and a fresh download -- and
+    that is the answer for every package but the built-in ones, which live inside
+    the installation: a wheel's 'site-packages' may not be the user's to write,
+    and a frozen bundle's is unpacked anew on every start. Those keep theirs in
+    PartCAD's state directory instead.
+
+    Handed to a partType's script and an output implementation's as
+    ``request["cache_dir"]``. Not created here: the script creates what it uses.
+    """
+    name = getattr(project, "name", "") or ""
+    if name == BUILTIN_ROOT_PACKAGE or name.startswith(BUILTIN_ROOT_PACKAGE + "/"):
+        state_dir = ctx.user_config.internal_state_dir if ctx is not None else os.path.expanduser("~/.partcad")
+        return os.path.join(state_dir, *name[len("//") :].split("/"))
+    return os.path.join(os.path.abspath(project.config_dir), ".cache")
 
 
 def import_declaration(ctx, project, type_name: str):

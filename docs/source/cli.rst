@@ -9,14 +9,16 @@ Common options, such as ``-v``/``-q`` (verbosity), ``--no-ansi`` (plain-text log
 
 ``--devel-index`` is one of those common options, and is worth calling out. The public index (the ``pub``
 dependency, published at `partcad-index <https://github.com/partcad/partcad-index>`_) lives in a repository of
-its own, and a package imports it at ``main``: the branch ``pc init`` has the dependency track, and the one
-``pc update`` pins it to the newest commit of. That is the released state. ``--devel-index`` imports
-its ``devel`` branch instead — the branch that a release fast-forwards ``main`` to — so a change staged there
-can be exercised before it is released. It replaces the revision a package names rather than deferring to it,
-which is what it exists to do. The redirect follows the repository rather than the dependency name, so it
-applies wherever the index appears in the dependency tree and leaves every other dependency alone. The same
-switch is available as the ``PC_DEVEL_INDEX`` environment variable, as ``develIndex`` in the user configuration,
-and as the ``partcad.develIndex`` setting of the VS Code extension.
+its own, and a package imports it at ``main``: the branch ``pc init`` has the dependency track and pins to the
+commit it is at, and the one ``pc update`` moves that pin to the newest commit of. That is the released state.
+``--devel-index`` imports its ``devel`` branch instead — the branch that a release fast-forwards ``main`` to — so
+a change staged there can be exercised before it is released. It replaces the revision a package names rather
+than deferring to it, which is what it exists to do. The redirect follows the repository rather than the
+dependency name, so it applies wherever the index appears in the dependency tree and leaves every other dependency
+alone. The same switch is available as the ``PC_DEVEL_INDEX`` environment variable, as ``develIndex`` in the user
+configuration, and as the ``partcad.develIndex`` setting of the VS Code extension. It is off by default, except
+where PartCAD runs from its sources (an editable install), which is PartCAD being developed and gets the index
+being developed: ``PC_DEVEL_INDEX=false`` turns it off there (see :ref:`devel-index-from-sources`).
 
 ``--force-update`` is another, and is the "force auto-update" setting. Loading a package never moves a ``git``
 dependency it has downloaded before -- ``pc update`` does that, by rewriting the dependency's ``revision:`` (see
@@ -273,6 +275,12 @@ Package commands
 ``pc init``
   Create a new PartCAD package (a ``partcad.yaml`` file) in the current directory. Use ``-i`` for interactive
   mode, and options such as ``--desc``, ``--url``, and ``--manufacturable`` to prefill package metadata.
+
+  Unless it is ``-p`` (private), the package depends on the public index as ``pub``, with ``track: main`` and
+  ``revision:`` pinned to the commit ``main`` is at as the package is created -- what ``pc add dep`` writes, so
+  the package builds the same way from its first commit on and ``pc update`` is what moves it (see
+  :ref:`pinning-dependencies`). With ``--offline``, or when the index cannot be reached, the package is still
+  created, without the ``revision:`` line, and a warning says to run ``pc update``.
 
   It also sets up the repository the package is in: a **Render** command in ``.vscode/launch.json``, and the
   AI agent skills that teach a coding agent to drive PartCAD -- the ``pc`` plugin in
@@ -593,7 +601,33 @@ Object commands
   ``newton`` for force, ``mg``, ``g``, ``kg``, ``ton``, ``tonne``, ``lb`` or ``pound`` for mass — matched
   case-insensitively, with or without a space in front of it and with or without a plural ``s``. A bare number
   is a **mass in kilograms**, which is what "the shelf carries 5" means. A mass is weighed into a force at
-  9.8 N/kg, so what is stored and handed to the solver is always newtons. A ``temperature`` is in **degrees
+  9.8 N/kg, so what is stored and handed to the solver is always newtons.
+
+  A force so written is a magnitude, and the implementation applies it the way it always has — CalculiX straight
+  down, along -Z, which is where a weight goes. A ``load`` may also be **three** of them, ``[x, y, z]`` in the
+  part's own frame: a force *with a direction*, which is what a simulation measures acting on a part (see
+  :ref:`sim-loads`). And ``fea:`` takes one key that names no interface, ``gravity:``, the acceleration of free
+  fall the part is analysed in, in m/s² and the part's own frame — for a part a simulation found upside down, or
+  accelerating, whose weight is then its mass times ``g - a``. Without it the implementation weighs the part
+  under its own gravity::
+
+      fea:
+        fix:
+          //pub/robotics/parts/gobilda:4xM4-16mm-pattern-threaded-thru-4mm: [outer]
+        load:
+          "//pub/robotics/parts/gobilda:gear-28t;module=1.25,shift=0.2":
+            "13-tooth": [0 N, -2.7 N, -155.2 N]    # the tooth the worm holds it by
+        gravity: [0, -8.962, -3.990]               # the gear stands on its edge here
+
+  A name under an interface is one of its instances, or one of their **ports**: a gear draws each tooth as a
+  port of one instance, so a tooth is loaded by its port's name. That is a whole example, in
+  ``examples/feature_simulate_fea``: the gear in a robot arm's knee, under what the worm holds it with at the end
+  of a simulation of the arm.
+
+  Both have to be *read* by the implementation, and one that does not would answer as if they had not been
+  written. So an implementation says which it reads (``reads:`` on its file type, see :ref:`cae-section`), and an
+  analysis that states one is refused by an implementation that does not, naming it and what to do about it.
+  ``//pub/feature/cae/calculix:fea`` reads both. A ``temperature`` is in **degrees
   Celsius**, and ``300 K`` or ``100 F`` are converted; a ``heat`` is a **power**, in watts (``mW`` and ``kW``
   are understood), put in through the whole of the port's surface; a ``convection`` is a **film coefficient** in
   W/(m²·K).
@@ -604,6 +638,14 @@ Object commands
   the part before the implementation runs and hands it the faces each port covers, and their area is what a
   force or a power is spread over: an inlet drawn as the bore's circle is exactly the bore. A port with no
   sketch covers the face it lies on, when it lies on one.
+
+  A sketch that lies on no surface — a gear tooth's cross-section at its pitch circle, a hole's outline drawn
+  over the hole — still says where its port is, and the condition is applied to the surface around it instead:
+  everything within ``port_radius`` of the port (a fraction of the part's largest dimension, 5 % unless the
+  implementation says otherwise — the same neighbourhood an implementation that loads mesh nodes near a port
+  takes). PartCAD divides a plane, a cylinder, a cone, a sphere or a torus where that neighbourhood ends, and takes
+  a freeform face that comes that near whole, because a curve drawn on one is what a mesher fails on. Either
+  way the analysis warns, naming the port and the area it loaded: the port's frame is still worth correcting.
 
   The model the analysis produces is written to ``<part>.<analysis>.<extension>`` and saved as it stands.
   Which format that is — 3D or 2D — is the implementation's choice, and PartCAD does not convert it. The

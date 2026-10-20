@@ -43,8 +43,9 @@ Besides the package properties and, optionally, a list of imported dependencies,
           includePaths: <(optional) Jinja2 include path>
 
   suppliers:
-      <(optional) the providers to consider for this package's objects; a bare
-       name is one of this package's own, "../sibling:name" is one next door>
+      <(optional) the providers to consider for this package's objects, and for
+       the parts its assemblies are procured from; a bare name is one of this
+       package's own, "../sibling:name" is one next door>
 
   parts:
       <part declarations, see below>
@@ -127,6 +128,8 @@ A constant is named in upper case. That is the convention for every name in
 that table and for any added to it: what is lower case in an expression is a
 function (``sqrt``, ``sin``) or a parameter, and a parameter is as likely to be
 called ``e`` as a constant is.
+
+.. _serving-two-partcads:
 
 Serving two PartCADs at once
 ----------------------------
@@ -234,6 +237,15 @@ Each dependency becomes a subpackage of the current package. All subfolders of t
 subpackages (of the type `local`) if they contain a ``partcad.yaml`` file. Subfolders do not need to be explicitly
 declared as a dependency, but may be declared to provide a more detailed description.
 
+.. _pcignore:
+
+A subfolder holding a file named ``.pcignore`` (empty; only its presence counts) is left out of the package around
+it, along with everything below it: no package in it is a subpackage, none of its files are part of the package's
+sources, and the search for the workspace root stops there, so a package inside it is a workspace of its own. That
+is how a plugin package keeps its tests with it -- a ``tests/`` folder with a ``.pcignore`` in it, holding packages
+that import the plugin the way a user's would, through a ``local`` dependency on ``../..`` -- without those test
+packages turning up as the plugin's own subpackages wherever the plugin is used.
+
 .. _pinning-dependencies:
 
 Pinning git dependencies
@@ -299,6 +311,9 @@ changed by it.
 That is for trying a package out against whatever its dependencies are about to release. It is not a way to keep a
 package up to date: what it builds against is then a matter of when you happened to run it, and nothing in the
 package records which commits those were. ``pc update`` is.
+
+How to run a library of packages that other packages pin -- branches, releases, and making a breaking change -- is
+in :doc:`large_projects`.
 
 External packages
 -----------------

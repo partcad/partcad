@@ -184,6 +184,28 @@ def test_the_sidecar_is_written_beside_the_file_and_read_back(tmp_path):
     assert naming.read_sidecar(str(tmp_path / "new.xml")) is None
 
 
+def test_a_sidecar_says_which_body_each_part_is_in():
+    """'parts_of': each part by its path of labels -> the body it is welded into and where it sits."""
+    sidecar = {
+        "bodies": {
+            "lower": {
+                "path": ["lower"],
+                "parts": [
+                    {"label": "arm/lower/channel", "part": "//p:channel", "placement": None},
+                    {"label": "arm/lower/gear", "part": "//p:gear", "placement": [[0, 10, 0], [0, 0, 1], 90]},
+                ],
+            },
+            # An exporter from before a body said which parts it is.
+            "upper": {"path": ["upper"]},
+        }
+    }
+    assert naming.parts_of(sidecar) == {
+        "arm/lower/channel": {"part": "//p:channel", "body": "lower", "placement": None},
+        "arm/lower/gear": {"part": "//p:gear", "body": "lower", "placement": [[0, 10, 0], [0, 0, 1], 90]},
+    }
+    assert naming.parts_of(None) == {} and naming.parts_of({"bodies": {"a": {"parts": "nonsense"}}}) == {}
+
+
 #
 # URDF's rules, which the core declares beside its exporter
 #

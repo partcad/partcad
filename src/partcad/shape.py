@@ -1819,6 +1819,12 @@ class Shape(ShapeConfiguration):
             if output.REPRODUCIBLE_KEY in request
             else impl.reproducible
         )
+        # Where the implementing package keeps what it fetches for itself (see
+        # 'output.package_cache_dir'). Added here, after anything has been keyed
+        # on the request, because it is a path on this machine and says nothing
+        # about what the file will contain.
+        if getattr(impl, "project", None) is not None:
+            request.setdefault("cache_dir", output.package_cache_dir(ctx, impl.project))
 
         request_serialized = shape_envelope.serialize(request)
 
@@ -2593,6 +2599,13 @@ class Shape(ShapeConfiguration):
                 ctx, analysis, format_name, project, filepath, options_project, output_dir
             )
             final_filepath = os.path.abspath(final_filepath)
+            # A load with a direction, or a gravity, asked of an implementation
+            # that does not read it would be answered as if it had not been
+            # said: refused, as the section asking something this
+            # implementation cannot answer (see 'partcad.cae.unread_by').
+            unread = pc_cae.unread_by(config, impl.reads, "%s:%s" % (options_project.name, format_name))
+            if unread:
+                raise pc_cae.CaeConfigError(unread)
 
             # A solve is a long silence: the sandbox says nothing between
             # starting the solver and the solver finishing, and a client gives

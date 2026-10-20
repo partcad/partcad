@@ -31,7 +31,7 @@ declares is checked masked rather than rendered (see 'assy_lint.validate_source'
 import copy
 import os
 
-from . import __version__, assy_lint, config_template, config_yaml, template_render
+from . import __version__, assy_lint, config_template, config_yaml, pcignore, template_render
 from .parameters import coerce_parameter_value, normalize_parameters
 
 # How far up from the file the search for a package declaring it goes. A
@@ -110,7 +110,9 @@ def describe(path: str, package_name: str = "", include_paths=(), parameter_over
 def _describe(target: str, package_name: str, include_paths: list, parameter_overrides) -> FileContext:
     directory = os.path.dirname(target)
     if assy_lint.schema_name_for_file(target) == assy_lint.PARTCAD_SCHEMA:
-        above = _packages_above(os.path.dirname(directory), include_paths)
+        # A package in a folder marked '.pcignore' has nothing above it to
+        # inherit from (see 'partcad_utils.pcignore').
+        above = [] if pcignore.is_ignored(directory) else _packages_above(os.path.dirname(directory), include_paths)
         return FileContext(
             renders=[
                 assy_lint.Render(
@@ -263,6 +265,9 @@ def _packages_above(directory: str, include_paths=()) -> list:
         config_path = os.path.join(directory, CONFIG_FILENAME)
         if os.path.isfile(config_path):
             found.append(directory)
+        if pcignore.is_ignored(directory):
+            # Not part of the package around it (see 'partcad_utils.pcignore').
+            break
         parent = os.path.dirname(directory)
         if parent == directory:
             break

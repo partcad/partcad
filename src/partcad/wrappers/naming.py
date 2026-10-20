@@ -70,7 +70,9 @@ how the exporter named anything (docs/design/simulation.md, section 4.2):
 
     {"version": 1, "format": "mjcf",
      "names":  {"<kind>": {"<PartCAD name>": "<internal name>"}},
-     "bodies": {"<PartCAD body>": {"path": ["<internal>", ...]}},
+     "bodies": {"<PartCAD body>": {"path": ["<internal>", ...],
+                                   "parts": [{"label": "<a/b/c>", "part": "<package>:<part>",
+                                              "placement": [[x, y, z], [ax, ay, az], deg]}]}},
      "joints": {"<engine joint>": {"path": ["<internal>", ...], "joint": "<PartCAD joint>",
                                    "map": {...}}}}
 
@@ -81,7 +83,11 @@ PartCAD's terms -- which PartCAD joint and parameters, the kind, the unit
 factor, the start a re-zeroed engine counts from, a free body's parent -- as
 'kinematics.joint_map()' writes it and 'kinematics.reading()' reads it back
 (docs/design/simulation.md, section 8.13.5): the joint map travels here, one
-file from the exporter to the simulator, rather than inside each format.
+file from the exporter to the simulator, rather than inside each format. A
+body's "parts" are the shapes welded into it, each by its path of labels, the
+part it is, and where it sits in the body's frame ('kinematics.parts_entry()'
+writes them and 'parts_of' reads them back): what lets a run say which body a
+part is in, so that the loads it reports on a body can be read as a part's.
 'bodies' and 'joints' are open: an entry is a dict so that what a later
 exporter knows about a body or a joint is a key added, not a shape changed. A
 reader ignores keys it does not know, and so does 'read_sidecar'.
@@ -362,6 +368,27 @@ def remove_sidecar(path):
         os.remove(sidecar_path(path))
     except FileNotFoundError:
         pass
+
+
+def parts_of(sidecar):
+    """Every part a sidecar names, by its path of labels: label -> {"part", "body", "placement"}.
+
+    'body' is the PartCAD body the part is welded into and 'placement' where it
+    sits in that body's frame, packed (see 'kinematics.parts_entry()'). Empty
+    for a sidecar with no parts in it, which an exporter older than them
+    wrote, and for no sidecar at all.
+    """
+    found = {}
+    for body, entry in ((sidecar or {}).get("bodies") or {}).items():
+        parts = entry.get("parts") if isinstance(entry, dict) else None
+        for part in parts if isinstance(parts, list) else ():
+            if isinstance(part, dict) and part.get("label"):
+                found[str(part["label"])] = {
+                    "part": part.get("part"),
+                    "body": body,
+                    "placement": part.get("placement"),
+                }
+    return found
 
 
 def read_sidecar(path):

@@ -1182,3 +1182,92 @@ def test_a_remote_sandbox_is_a_container_runtime(containerised, monkeypatch, cap
     with caplog.at_level("ERROR"):
         assert asyncio.run(CaeTest(cae.FEA).test([], containerised, part)) is CaeTest.TEST_FAILED
     assert "ccx: not found" in caplog.text
+
+
+# --------------------------------------------------------------------------- #
+# What an implementation reads                                                #
+# --------------------------------------------------------------------------- #
+
+DIRECTED = textwrap.dedent("""
+    name: //cae-directed
+    parts:
+      gear:
+        type: step
+        path: gear.step
+        fea:
+          implementation: :fea
+          fix:
+            - hub
+          load:
+            tooth:
+              "21": [0 N, -146 N, 12 N]
+          gravity: [0, 0, 9.81]
+      plain:
+        type: step
+        path: gear.step
+        fea:
+          implementation: :blind
+          fix:
+            - hub
+          load:
+            tooth: 15 kg
+      bent:
+        type: step
+        path: gear.step
+        fea:
+          implementation: :blind
+          fix:
+            - hub
+          load:
+            tooth: [0 N, -146 N, 0 N]
+    cae:
+      fea:
+        path: solve.py
+        extension: glb
+        reads: [force, gravity]
+      blind:
+        path: solve.py
+        extension: glb
+    """)
+
+
+@pytest.fixture
+def directed(tmp_path):
+    """A package whose implementations say, or do not say, that they read a load's direction."""
+    (tmp_path / "partcad.yaml").write_text(DIRECTED)
+    (tmp_path / "solve.py").write_text("def process(path, request):\n    return {'success': True}\n")
+    (tmp_path / "gear.step").write_text("")
+    return pc.Context(str(tmp_path))
+
+
+def test_what_an_implementation_reads_is_its_own_word_and_no_parameter(directed):
+    part = directed.get_part(":gear")
+    project = directed.get_project("//cae-directed")
+    impl, _path = part.analysis_getopts(directed, cae.FEA, "fea", project, options_project=project)
+    assert impl.reads == {"force", "gravity"}
+    assert "reads" not in impl.parameters
+    blind, _path = part.analysis_getopts(directed, cae.FEA, "blind", project, options_project=project)
+    assert blind.reads == frozenset()
+
+
+def test_a_direction_is_refused_by_an_implementation_that_does_not_read_one(directed):
+    """Asked anyway, it would pull every load straight down and answer as if it had been told to."""
+    import asyncio
+
+    part = directed.get_part(":bent")
+    with pytest.raises(cae.CaeConfigError, match="does not read it.*every load pulled straight down"):
+        asyncio.run(part.analyze_async(directed, cae.FEA))
+
+
+def test_a_magnitude_is_still_answered_by_every_implementation(directed, monkeypatch):
+    """Refused before anything is asked, and only for what the section says: a magnitude reaches the run."""
+    import asyncio
+
+    part = directed.get_part(":plain")
+
+    async def run(*args, **kwargs):
+        raise RuntimeError("reached the run")
+
+    monkeypatch.setattr(part, "get_wrapped", run)
+    with pytest.raises(cae.CaeFailed, match="reached the run"):
+        asyncio.run(part.analyze_async(directed, cae.FEA))

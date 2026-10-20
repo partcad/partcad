@@ -59,11 +59,14 @@ const EXAMPLES_DIRECTORY = 'examples';
 // example copied into the open workspace is a package the Explorer has not seen.
 const REFRESH_COMMAND = 'partcad.refresh';
 
-// `pc init` writes a template to disk: no network, no CAD kernel, no sandbox.
-// It is slow anyway the first time, because it runs out of a PyInstaller bundle
-// that unpacks itself before `main` -- on the cold filesystem of a machine that
-// has just installed the IDE, which is precisely when this runs, that has taken
-// tens of seconds.
+// `pc init` writes a template to disk: no CAD kernel, no sandbox, and one
+// question to the network -- which commit the public index's `main` is at, to
+// pin it to. Where the network is not there, that question gives up within
+// git's connect timeout and retries (about three minutes at worst) and the
+// package is created unpinned. It is slow anyway the first time, because it
+// runs out of a PyInstaller bundle that unpacks itself before `main` -- on the
+// cold filesystem of a machine that has just installed the IDE, which is
+// precisely when this runs, that has taken tens of seconds.
 const INIT_TIMEOUT_MS = 5 * 60 * 1000;
 
 let output;

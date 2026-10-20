@@ -146,6 +146,12 @@ its own result, and the `install` job in that workflow, which installs the archi
   and the editor writes a compile cache into `resources\app\node-compile-cache` as it runs, which kept the
   whole application directory on disk. Anything else the editor starts writing under the application directory
   needs an entry there too; the `Install (windows-x86_64)` job fails, listing what was left, when one is missing.
+- **Where the PartCAD workbench sits on the activity bar, and how its icon is drawn**: `tools/patch_workbench.py`,
+  which patches the editor's own minified workbench -- no extension can do either -- and recomputes the checksums
+  `product.json` keeps for it, without which every start warns that the installation is corrupt. Each
+  substitution must match exactly once, and quotes the `microsoft/vscode` source it stands for; a VSCodium release
+  that changes that code fails the build there. `tests/test_patch_workbench.py` runs the patched code under Node,
+  since a substitution that reads right can still throw or put PartCAD one place too low.
 - **The VSCodium release**: `build.sh --vscodium-version <tag> --record`, then restore the comments `--record`
   strips from `vscodium.json`.
 

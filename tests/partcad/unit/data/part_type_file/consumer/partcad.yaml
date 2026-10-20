@@ -1,0 +1,15 @@
+desc: |
+  Parts read through a partType another package declares: the files are this
+  package's, the reader is the other's.
+
+dependencies:
+  reader:
+    type: local
+    path: ../reader
+
+parts:
+  crate:
+    type: reader:box_file
+  crate_elsewhere:
+    type: reader:box_file
+    path: files/other.box
