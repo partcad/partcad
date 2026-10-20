@@ -110,13 +110,16 @@ Such sketches are declared using the following syntax:
       tolerance: <(optional) tolerance used for merging edges into wires>
       include: <(optional) a layer name or a list of layer names to import>
       exclude: <(optional) a layer name or a list of layer names not to import>
+      units: <(optional) what the numbers are in: auto (default), unitless, mm, in, ...>
 
 The sketch is **every face** the selected layers draw. Each layer's lines, arcs,
 circles, ellipses, splines and polylines are joined end to end into outlines;
 each closed outline becomes a face, with the outlines inside it as its holes. A
 drawing of several outlines -- side by side, or one on each of several layers
--- is a sketch of several faces. Text, dimensions and hatches are not geometry
-and are left out of it.
+-- is a sketch of several faces. A line that does not close bounds nothing, and
+is kept as the **wire** it is, beside the faces: an outline and the bend lines
+across it are a sketch of one face and two lines. Text, dimensions and hatches
+are not geometry and are left out of it.
 
 **Block references** (``INSERT``, and the grids ``MINSERT`` places) draw what
 the block draws, where the reference puts it: moved, turned, scaled and mirrored
@@ -129,9 +132,14 @@ A **mirrored** arc, circle or polyline -- what ``MIRROR`` writes, and what a
 block reference with a negative scale places -- is read where it was mirrored
 to.
 
-The drawing's numbers are taken as millimetres as they are: what ``$INSUNITS``
-says is reported by ``pc info`` (see :ref:`sketch-annotations`), and does not
-scale the sketch.
+The sketch is in **millimetres**, whatever the drawing is drawn in: its numbers
+are scaled by what ``$INSUNITS`` says they are, so a one-inch profile drawn in
+inches is a 25.4 mm sketch. A drawing that says it is unitless is taken as
+millimetres. ``units:`` says what the numbers are where the drawing does not, or
+says wrong -- ezdxf, for one, saves a drawing as metres unless it is told
+otherwise -- and ``unitless`` takes them as millimetres as they are. ``pc info``
+reports both what the drawing says and how much the sketch was scaled by (see
+:ref:`sketch-annotations`). PartCAD's own DXF output says it is in millimetres.
 
 .. _sketch-layers:
 
@@ -186,11 +194,12 @@ the declaration said rather than being added to it: a sketch declaring
 that exclusion alone. A reference that sets *both* is refused, the way a
 declaration writing both is.
 
-A drawing whose selected layers do not close into faces is imported as the
-**wires** it draws. That is what a drawing of bend lines is: two parallel lines
-across a blank are where it is folded, and a line is open by nature. PartCAD
-says so when it happens, because the other way to arrive there is an outline
-with a gap in it, which is a mistake rather than a drawing of lines.
+What the selected layers draw that does not close is imported as the **wires**
+it is, beside the faces the rest bound. That is what a drawing of bend lines is:
+two parallel lines across a blank are where it is folded, and a line is open by
+nature. PartCAD says so when it happens, because the other way to arrive there
+is an outline with a gap in it, which is a mistake rather than a drawing of
+lines.
 
 Second, the fields above are the **default** the reference overrides. They go on
 meaning exactly what they always meant, and a sketch that carries neither reads
@@ -253,9 +262,18 @@ element with no extended data is still carried, with nothing against it, because
 different answers. The layer filters above apply, so the annotations describe
 what is in the sketch and not what was filtered out of it.
 
+They describe a block's **contents**, where the references put them, rather than
+the references: a bend line drawn once in a block and placed twice is two
+annotated lines. Each is named by the handle of its entity in the block
+definition -- the one a person opening the file finds -- and lists the handles
+of the references that placed it, outermost first. What a reference says, its
+contents say too, unless they say otherwise: a reference annotated
+``angle=90`` says it of every line its block draws.
+
 ``pc info`` on the sketch prints them, under ``Annotations``, beside what the
 drawing says about *itself*: which DXF it is, what ``$INSUNITS`` says its
-numbers are in, and -- under ``Layers`` -- **every** layer the file has, with
+numbers are in and how much the sketch was scaled by (``mm per unit``), and --
+under ``Layers`` -- **every** layer the file has, with
 how many elements of which types are on each and whether this sketch reads it.
 That last is not the question the annotations answer, and it is why the drawing
 is described as well as read: a layer filter that matched nothing and a layer

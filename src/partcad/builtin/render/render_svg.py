@@ -38,10 +38,21 @@ import wrapper_common
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 
 # Two points closer than this are the same point, as far as a drawn line goes.
 TOLERANCE = 1e-9
+
+# The shortest edge a projection draws, in the shape's own units. The exact
+# hidden-line algorithm can leave a sliver where a silhouette meets an edge -- a
+# B-spline a few tenths of a micron long, just above the kernel's own confusion
+# tolerance of 1e-7 -- and build123d writes a B-spline into the SVG by having
+# OCCT approximate it ('ShapeCustom.BSplineRestriction'), which dies with SIGSEGV
+# on one that short rather than raising. Ten times that tolerance is still a
+# million times shorter than a pixel of a drawing of anything a millimetre
+# across, so nothing that can be seen is lost; the shortest edge in any drawing
+# checked in under 'examples/' is twenty times longer.
+MIN_EDGE_LENGTH = 1e-6
 
 # What build123d repairs the curves of a projected edge to, which the projection
 # of several shapes at once ('_project_exact_each') does exactly as
@@ -674,13 +685,18 @@ def project_by_color(whole, groups, origin, up, look_at, reproducible=False):
     if len(groups) == 1:
         carrier = b3d.Solid.make_box(1, 1, 1)
         carrier.wrapped = whole
-        return [(groups[0][0], project(carrier, origin, up, look_at, reproducible))]
+        return [(groups[0][0], drawable(project(carrier, origin, up, look_at, reproducible)))]
     shapes = [shape for _color, shape in groups]
     if reproducible:
         projected = _project_exact_each(shapes, origin, up, look_at)
     else:
         projected = _project_polygonal_each(whole, shapes, origin, up, look_at)
-    return [(color, edges) for (color, _shape), edges in zip(groups, projected)]
+    return [(color, drawable(edges)) for (color, _shape), edges in zip(groups, projected)]
+
+
+def drawable(edges):
+    """The projected edges, less the ones too short to draw: see 'MIN_EDGE_LENGTH'."""
+    return [edge for edge in edges if edge.length >= MIN_EDGE_LENGTH]
 
 
 def project(shape, origin, up, look_at, reproducible=False):

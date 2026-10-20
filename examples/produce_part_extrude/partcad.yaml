@@ -19,7 +19,9 @@ parts:
     desc: Extrude a DXF sketch to create a 3D part.
     type: extrude
     sketch: ../produce_sketch_dxf:dxf_01
-    depth: 10
+    # Ten inches of the one-inch profile the drawing is (it is drawn in inches,
+    # and a sketch is in millimetres).
+    depth: 254
   clock:
     desc: Extrude a clock sketch to create a 3D clock.
     type: extrude

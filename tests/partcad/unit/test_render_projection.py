@@ -345,6 +345,48 @@ def test_the_back_is_drawn_from_behind(real_svg, shapes, tmp_path, view, fin_on_
     assert ((top[0][0] + top[1][0]) / 2.0 > (min_x + max_x) / 2.0) is fin_on_the_right
 
 
+def _line(length):
+    import build123d as bd
+
+    return bd.Edge.make_line((0, 0, 0), (length, 0, 0))
+
+
+def test_an_edge_too_short_to_draw_is_left_out(real_svg):
+    """A sliver is dropped, and an edge only a little longer is kept.
+
+    build123d writes a B-spline by having OCCT approximate it, which crashes on
+    one a few tenths of a micron long rather than raising. The swept DXF profile
+    in 'examples/produce_part_sweep' left one behind once the profile was read
+    in the inches it is drawn in.
+    """
+    sliver = _line(real_svg.MIN_EDGE_LENGTH / 2)
+    short = _line(real_svg.MIN_EDGE_LENGTH * 2)
+
+    assert real_svg.drawable([sliver, short]) == [short]
+
+
+@pytest.mark.parametrize("reproducible", [True, False])
+@pytest.mark.parametrize("colors", [1, 2])
+def test_every_projection_leaves_slivers_out(real_svg, monkeypatch, reproducible, colors):
+    """Through either algorithm, of a shape in one colour or in several."""
+    sliver = _line(real_svg.MIN_EDGE_LENGTH / 2)
+    edge = _line(1.0)
+
+    def each(*args):
+        # Both take the shapes fourth from the end: '(shapes, origin, up,
+        # look_at)', and the polygonal one the whole shape before them.
+        return [[edge, sliver] for _shape in args[-4]]
+
+    monkeypatch.setattr(real_svg, "project", lambda *_args: [edge, sliver])
+    monkeypatch.setattr(real_svg, "_project_exact_each", each)
+    monkeypatch.setattr(real_svg, "_project_polygonal_each", each)
+    groups = [("#%06x" % index, _line(1.0).wrapped) for index in range(colors)]
+
+    layers = real_svg.project_by_color(None, groups, (0, 0, 100), (0, 1, 0), (0, 0, 0), reproducible)
+
+    assert [edges for _color, edges in layers] == [[edge]] * colors
+
+
 # --------------------------------------------------------------------------- #
 # End to end, through a package and the sandbox                               #
 # --------------------------------------------------------------------------- #

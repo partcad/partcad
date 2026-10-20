@@ -595,3 +595,71 @@ def test_a_record_with_no_points_to_move_is_left_as_it_is():
     metadata = shape_envelope.make_metadata(annotations=records)
     moved = shape_envelope.moved_annotations(metadata, lambda point: [axis + 1 for axis in point])
     assert moved[shape_envelope.METADATA_ANNOTATIONS] == records
+
+
+#
+# What a block reference places, described rather than the reference
+#
+
+
+def _bends_in_a_block():
+    """A drawing whose two bend lines are one block, placed twice, the second time annotated."""
+    import dxf_drawing
+
+    document = ezdxf.new("R2010", units=ezdxf.units.MM)
+    block = document.blocks.new("BEND")
+    line = block.add_line((0, 0), (100, 0), dxfattribs={"layer": "0"})
+    line.set_xdata("PARTCAD", [(1000, "radius=1.5")])
+    plain = document.modelspace().add_blockref("BEND", (0, 10), dxfattribs={"layer": "BEND_UP"})
+    annotated = document.modelspace().add_blockref("BEND", (0, 30), dxfattribs={"layer": "BEND_DOWN"})
+    annotated.set_xdata("PARTCAD", [(1000, "angle=90"), (1000, "radius=9")])
+    handles = (line.dxf.handle, plain.dxf.handle, annotated.dxf.handle)
+    _, origins = dxf_drawing.explode_blocks(document)
+    return document, origins, handles
+
+
+def test_a_block_s_contents_are_described_where_they_are_placed():
+    document, origins, (line, plain, annotated) = _bends_in_a_block()
+
+    records = sorted(dxf_metadata.annotations_of(document, origins=origins), key=lambda r: r["layer"])
+
+    assert [(r["type"], r["layer"]) for r in records] == [("LINE", "BEND_DOWN"), ("LINE", "BEND_UP")]
+    # Named by the entity the file states, which both placements share, and told apart by their reference.
+    assert [r["handle"] for r in records] == [line, line]
+    assert [r["references"] for r in records] == [[annotated], [plain]]
+    # Where each was placed, not where the block definition draws it.
+    assert [r["points"][0][1] for r in records] == [30.0, 10.0]
+
+
+def test_what_a_reference_says_its_contents_say_unless_they_say_otherwise():
+    document, origins, _ = _bends_in_a_block()
+
+    records = {r["layer"]: r for r in dxf_metadata.annotations_of(document, origins=origins)}
+
+    assert records["BEND_UP"]["metadata"] == {"radius": "1.5"}
+    # The reference says angle and radius; the line's own radius wins.
+    assert records["BEND_DOWN"]["metadata"] == {"angle": "90", "radius": "1.5"}
+
+
+def test_an_element_nothing_placed_has_no_references():
+    document = ezdxf.new("R2010", units=ezdxf.units.MM)
+    document.modelspace().add_line((0, 0), (1, 0))
+
+    [record] = dxf_metadata.annotations_of(document, origins={})
+
+    assert "references" not in record
+
+
+def test_the_drawing_says_how_much_it_was_scaled_by():
+    document = ezdxf.new("R2010", units=1)  # inches
+
+    read = dxf_metadata.read_document(document, millimetres_per_unit=25.4)
+
+    assert read["metadata"]["Drawing"]["units"] == "in"
+    assert read["metadata"]["Drawing"]["mm per unit"] == 25.4
+    assert "mm per unit" not in dxf_metadata.read_document(document)["metadata"]["Drawing"]
+
+
+def test_units_of_is_what_describe_reports():
+    assert dxf_metadata.units_of(ezdxf.new("R2010", units=1)) == "in"
+    assert dxf_metadata.units_of(ezdxf.new("R2010", units=0)) is None

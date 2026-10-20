@@ -40,7 +40,7 @@ from partcad.part_config_manufacturing import (
     PartConfigManufacturing,
 )
 from partcad.test import manufacturability_analysis
-from partcad.test.manufacturability_sheet_metal import ManufacturabilitySheetMetalTest, bend_failure
+from partcad.test.manufacturability_sheet_metal import ManufacturabilitySheetMetalTest, _describe, bend_failure
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import wrapper_manufacturability  # noqa: E402
@@ -112,6 +112,14 @@ def test_a_bend_that_says_everything_is_a_bend_that_can_be_made():
     # However the drawing spells the direction, and however it states a number.
     assert bend_failure(_bend(direction="DOWN")) is None
     assert bend_failure(_bend(angle="90", radius="1.5")) is None
+
+
+def test_a_line_a_block_placed_is_named_with_the_references_that_placed_it():
+    """Its handle is the entity in the block definition, which every placement shares."""
+    placed = dict(GOOD_BEND, references=["A0", "B3"])
+
+    assert _describe(GOOD_BEND) == "LINE on layer 'BEND_UP' (#2F)"
+    assert _describe(placed) == "LINE on layer 'BEND_UP' (#2F) placed by #A0 > #B3"
 
 
 def test_a_line_with_no_metadata_at_all_is_reported_as_such():
