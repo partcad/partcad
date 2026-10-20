@@ -49,7 +49,9 @@ that wait for the holder. So while it waits, such a slot does not count against
 its pool, and the pool admits the next piece of work in its place
 ('PoolAwareRLock'). A holder that does hold a slot, and is not itself waiting
 like this, needs nothing from the pool to finish, so waiting for it costs only
-the slot it is held on. The commonest case does not arise at all: a part or a
+the slot it is held on. A shape that another caller is preparing is waited for
+the same way ('waiting', used by 'partcad.preparation'), since a preparation
+can take such a lock. The commonest case does not arise at all: a part or a
 sketch that a command asks for goes to the pool before its lock is taken, so the
 thread holding it while it is built is the thread building it (see
 'Shape.get_wrapped').
@@ -451,16 +453,10 @@ class PoolAwareRLock:
             self._depth += 1
         return acquired
 
-    def _holder_needs_the_pool(self) -> bool:
-        owner = self._owner
-        if owner is None:
-            # Free, or about to be: the next try will tell.
-            return False
-        slot = _slots.get(owner)
-        return slot is None or slot.given_back
-
     def _waiting(self):
-        return _Waiting(self)
+        # Whoever holds it, or None when it is free -- or about to be, which
+        # the next try will tell.
+        return waiting(lambda: self._owner)
 
     def acquire(self, blocking=True, timeout=-1) -> bool:
         if self._try():
@@ -512,18 +508,43 @@ class PoolAwareRLock:
         self.release()
 
 
-class _Waiting:
-    """A wait for a 'PoolAwareRLock', and whether the waiter's slot is given back for it."""
+def needs_the_pool(thread) -> bool:
+    """Whether 'thread' may be waiting for one of the pools, rather than working on a slot of its own.
 
-    def __init__(self, lock: PoolAwareRLock):
-        self.lock = lock
+    A thread that holds no slot may be waiting for the pool's queue -- the event
+    loop a command runs on does. A thread whose slot is given back is itself
+    waiting like that, at one remove. None, for nobody, needs nothing.
+    """
+    if thread is None:
+        return False
+    slot = _slots.get(thread)
+    return slot is None or slot.given_back
+
+
+def waiting(holder):
+    """A wait by the calling thread for something 'holder()' names the thread of.
+
+    Call 'update()' on it each time the wait is looked at again: a thread
+    holding a slot gives it back for as long as the thread it waits for
+    'needs_the_pool()', and takes it back when that stops, or when the wait
+    ends. Nothing for a thread that holds no slot. 'PoolAwareRLock' waits this
+    way, and so does a shape waiting for another caller's preparation of it
+    ('partcad.preparation'): both are waits a slot must not spend holding the
+    slot when what it waits for is waiting for the pool.
+    """
+    return _Waiting(holder)
+
+
+class _Waiting:
+    def __init__(self, holder):
+        self.holder = holder
         self.slot = current_slot()
         self.giving_back = False
 
     def update(self):
         if self.slot is None:
             return
-        if self.lock._holder_needs_the_pool():
+        if needs_the_pool(self.holder()):
             if not self.giving_back:
                 self.giving_back = True
                 self.slot.give_back()

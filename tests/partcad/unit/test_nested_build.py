@@ -277,6 +277,43 @@ def test_a_part_asked_for_by_a_command_is_built_on_the_pool_with_its_lock(pool):
     assert seen["holder"] == seen["builder"] != threading.get_ident()
 
 
+def test_a_part_asked_for_inside_a_preparation_stays_in_it(pool):
+    """A preparation's chain is a context variable, and a thread hop leaves it behind.
+
+    Asked for from inside the preparation of 'outer', a part whose own
+    preparation reaches 'outer' again is part of that same chain, and is told
+    so at once: 'Shape.prepare_async' refuses a wait that closes a cycle, and
+    the link has no key. Sent
+    to a pool thread to be built, it would be a stranger there, wait for
+    'outer' to be prepared -- and 'outer' would wait for it, until the backstop
+    gave up a minute later.
+    """
+    pool(1)
+
+    outer = Part("//pkg", {"name": "outer"})
+    part = Part("//pkg", {"name": "part"})
+
+    async def prepare_part(shape):
+        # A link back, read the way an assembly reads what it links to
+        # ('add_cache_key_of'): no key, at once, for a cycle.
+        await outer.get_cache_key_async()
+
+    async def build(obj):
+        return _envelope("part")
+
+    async def prepare_outer(shape):
+        await part.get_wrapped(None)
+
+    outer._prepare = prepare_outer
+    part._prepare = prepare_part
+    part.instantiate = build
+
+    asyncio.run(asyncio.wait_for(outer.prepare_async(wait=True), timeout=DEADLINE))
+
+    assert outer._prepare_finished
+    assert shape_envelope.is_shape_envelope(part._wrapped)
+
+
 # ---- the same, through a real package --------------------------------------
 
 

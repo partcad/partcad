@@ -60,10 +60,12 @@ at all).
   and seven such objects at once. **A slot waiting for a shape's lock gives the slot back** while the holder is
   not itself working on a slot (`Shape.lock` is a `PoolAwareRLock`): the loop a command runs on holds an
   assembly's lock while the assembly's children are built, and a part's while `get_solidity_async` asks for the
-  part inside it. `async with` on that lock polls instead of blocking the loop, as `sandbox_lock` does. And a
-  part or sketch a command asks for goes to the pool *before* its lock is taken (`Shape.get_wrapped`), so the
-  thread holding it while it is built is the one building it, and objects built from it wait for that thread
-  without giving their slots back. Together these make the pools deadlock-free at any size, which
+  part inside it. `async with` on that lock polls instead of blocking the loop, as `sandbox_lock` does. A wait
+  for another caller's preparation of a shape gives the slot back by the same rule (`sync_threads.waiting`),
+  because a preparation can take such a lock. And a part or sketch a command asks for goes to the pool *before*
+  its lock is taken (`Shape.get_wrapped`), so the thread holding it while it is built is the one building it, and
+  objects built from it wait for that thread without giving their slots back -- except from inside a
+  preparation, whose chain is a context variable a thread hop would leave behind. Together these make the pools deadlock-free at any size, which
   `tests/partcad/unit/test_sync_threads.py` and `test_nested_build.py` check with pools of one and two threads.
   So do not wait from a pool thread for a pool's queue (`executor.submit(...).result()` -- use
   `threadpool_manager.complete`), and do not take a shape's lock with a blocking `with` from a coroutine.

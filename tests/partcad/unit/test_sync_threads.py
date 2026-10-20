@@ -329,10 +329,13 @@ def test_work_cancelled_while_it_waits_never_runs(pools):
         doomed = asyncio.ensure_future(manager.run(ran.append, "doomed"))
         await asyncio.sleep(0)
         doomed.cancel()
-        release.set()
-        await first
+        # Seen through before the slot is freed: the cancellation reaches the
+        # queued work from this loop, and a slot freed first may hand the work
+        # to the pool's thread before it has.
         with pytest.raises(asyncio.CancelledError):
             await doomed
+        release.set()
+        await first
         return await manager.run(lambda: "next")
 
     assert _run(main()) == "next"
@@ -496,6 +499,49 @@ def test_a_slot_waiting_behind_a_waiting_slot_gives_it_back(pools):
         return built, await first, await second
 
     assert _run(main()) == ("built", "first", "second")
+
+
+def test_a_slot_waiting_for_a_preparation_gives_it_back_while_the_preparer_waits_for_the_loop(pools):
+    """The same rule, for a shape another caller is preparing ('Shape.prepare_async').
+
+    A connected assembly's preparation can take a sub-assembly's lock, and the
+    loop may hold that lock while it waits for work still queued. The preparer,
+    on the one slot, gives it back for that; what the pool lets in next may be
+    one more caller waiting for the same preparation, and if that one kept the
+    slot, nothing the loop waits for would ever start.
+    """
+    from partcad.part import Part
+
+    manager = pools(1)
+    lock = PoolAwareRLock()
+    shape = Part("//pkg", {"name": "shape"})
+    second_is_waiting = threading.Event()
+
+    async def take_the_lock(shape):
+        async with lock:
+            pass
+
+    shape._prepare = take_the_lock
+
+    async def prepare():
+        await shape.prepare_async(wait=True)
+        return "prepared"
+
+    async def wait_for_the_preparation():
+        second_is_waiting.set()
+        await shape.prepare_async(wait=True)
+        return "waited"
+
+    async def main():
+        async with lock:
+            first = asyncio.ensure_future(manager.run_async(prepare))
+            second = asyncio.ensure_future(manager.run_async(wait_for_the_preparation))
+            await asyncio.get_running_loop().run_in_executor(None, second_is_waiting.wait, DEADLINE)
+            built = await manager.run(lambda: "built")
+        return built, await first, await second
+
+    assert _run(main()) == ("built", "prepared", "waited")
+    assert shape._prepare_finished
 
 
 def test_waiting_for_a_lock_does_not_stop_the_loop():

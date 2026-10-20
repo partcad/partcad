@@ -676,6 +676,14 @@ class Shape(ShapeConfiguration):
         """
         chain = _preparation.get()
         delay, waited = _PREPARE_POLL_MIN, 0.0
+        # A slot of the thread pools does not keep its slot while it waits for
+        # a preparation in the hands of a thread that may itself be waiting for
+        # the pools -- the event loop a command runs on, or a slot that has
+        # given its own back -- for the reason a shape's lock is waited for that
+        # way (see 'sync_threads.waiting'). A preparation can wait for the
+        # pools: a connected assembly's works out the ports of what it links
+        # to, which can instantiate a sub-assembly under that one's lock.
+        slot_wait = sync_threads.waiting(lambda: (self._preparer or (None, None))[1])
         try:
             while True:
                 with _preparations:
@@ -696,10 +704,12 @@ class Shape(ShapeConfiguration):
                     if waited >= _PREPARE_WAIT_MAX:
                         pc_logging.warning("%s:%s: %s" % (self.project_name, self.name, refusal))
                     raise PreparationInFlight("%s:%s %s" % (self.project_name, self.name, refusal))
+                slot_wait.update()
                 await asyncio.sleep(delay)
                 waited += delay
                 delay = min(2 * delay, _PREPARE_POLL_MAX)
         finally:
+            slot_wait.__exit__(None, None, None)
             if chain is not None:
                 with _preparations:
                     if _waiting_for.get(chain) is self:
