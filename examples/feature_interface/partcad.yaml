@@ -28,8 +28,8 @@ docs:
     through that port - and writes the name a `connectPorts:` would have to use.
     `--with-interfaces` names each *instance* of an interface once and draws a
     line out to each port that belongs to it, so a bolt pattern reads as the one
-    connection it is; the small circles are the port boundaries, the `m3` and
-    `m4` sketches this package defines.
+    connection it is; the small circles are the port boundaries, the `m3-boundary`
+    and `m4-boundary` sketches this package defines.
 
     An assembly is taken at its word: what is drawn is what it says its ports
     are, and this one externalizes none of the ones inside it. `--with-internals`
@@ -81,13 +81,13 @@ docs:
     them.
 
 sketches:
-  m3:
+  m3-boundary:
     type: basic
     circle: 1.5 # 1.5mm radius equals to 3mm diameter
-  m4:
+  m4-boundary:
     type: basic
     circle: 2.0
-  m5:
+  m5-boundary:
     type: basic
     circle: 2.5
 
@@ -99,7 +99,7 @@ interfaces:
     ports:
       m3:
         location: [[0, 0, 0], [0, 0, 1], 0] # redundant, for demonstration
-        sketch: m3
+        sketch: m3-boundary
   m3-opening:
     abstract: True
     desc: Abstract 3mm circular opening
@@ -124,7 +124,7 @@ interfaces:
     threadStep: 0.7 # M4 x 0.7mm
     ports:
       m4:
-        sketch: m4
+        sketch: m4-boundary
   m4-opening:
     desc: Abstract 4mm circular opening
     abstract: True
@@ -156,7 +156,7 @@ interfaces:
     abstract: True
     ports:
       m5:
-        sketch: m5
+        sketch: m5-boundary
 
   m3-screw:
     desc: Abstract M3 screw
