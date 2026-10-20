@@ -228,8 +228,10 @@ def properties_index(request):
     solid weighs, so it is indexed for its physics alone. A shape with no name
     cannot be looked up and is skipped, but its children are still walked.
 
-    A part and an assembly (or a scene) may share a name within a package, and
-    so a full name: the assembly 'nut' that holds the part 'nut'. The full name
+    A part and an assembly (or a scene) used to be able to share a name within
+    a package, and so a full name: the assembly 'nut' that holds the part 'nut'.
+    A package can no longer declare that ('partcad_utils.object_names'), but a
+    tree cached before it could not is still handed here as it was. The full name
     is then the part's - it is what every exporter looks a part up by, for its
     colour and its density - and the assembly's entry is under its kind and
     full name as well ('kinematics.properties_key()'), even when it has nothing

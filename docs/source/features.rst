@@ -208,7 +208,7 @@ Objects can be exported directly from the extension to any of the following form
 **JPEG**, **STEP**, **STL**, **3MF**, **ThreeJS**, **OBJ**, **IGES**, and **glTF**. An engine's own scene
 format — a **Gazebo world** (SDFormat), a **MuJoCo model** (MJCF) — is written by the plugin package that
 implements it, so it is named through that package and exported from the command line:
-``pc export -S -t sim-gazebo:world``.
+``pc export -t sim-gazebo:world``.
 
 .. _engineering-analysis:
 

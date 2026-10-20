@@ -40,7 +40,7 @@ instead of storing it.
 the numbers this description is anchored on:
 
 ```sh
-pc --no-ansi info <name> 2>&1   # add -a / -s for an assembly or a sketch
+pc --no-ansi info <name> 2>&1   # whatever kind of object it is
 ```
 
 Read all of it. The measurements are the first thing to look for, but the
@@ -81,7 +81,7 @@ overwrite each other:
 ```sh
 for view in front top iso; do
   mkdir -p /tmp/pc-render/$view
-  pc --no-ansi render -t png --view $view -O /tmp/pc-render/$view <name>   # add -a for an assembly
+  pc --no-ansi render -t png --view $view -O /tmp/pc-render/$view <name>
 done
 ```
 
@@ -96,7 +96,7 @@ better than PNG:
 
 ```sh
 mkdir -p /tmp/pc-render
-pc --no-ansi render -s -t svg -O /tmp/pc-render <name>
+pc --no-ansi render -t svg -O /tmp/pc-render <name>
 ```
 
 ## 4. Render a dimensioned drawing (parts, when it is available)

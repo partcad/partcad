@@ -142,7 +142,7 @@ Update button.
 
 ### `interface-m3.png`
 
-`feature_interface:m3` - an interface with one port, `m3`, bounded by the sketch `m3` (a circle) - shown in the
+`feature_interface:m3` - an interface with one port, `m3`, bounded by the sketch `m3-boundary` (a circle) - shown in the
 Digital Thread from where a show starts the camera, cut to what is drawn. The port is its axes, X red, Y green and
 Z blue, each fading towards its end as three.js draws them; the boundary is the port colour of the viewer.
 

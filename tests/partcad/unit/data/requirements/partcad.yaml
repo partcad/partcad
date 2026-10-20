@@ -1,7 +1,7 @@
 desc: Objects that declare what they are required to be, met and not
 
 sketches:
-  m3:
+  m3-boundary:
     type: basic
     circle: 1.5
 
@@ -18,7 +18,7 @@ interfaces:
     abstract: True
     ports:
       m3:
-        sketch: m3
+        sketch: m3-boundary
   m3-thru:
     desc: 3mm through hole
     inherits:
@@ -43,7 +43,7 @@ parts:
       top: [[0.0, 0.0, 5.0], [1.0, 0.0, 0.0], 180.0]
       side:
         location: [[20.0, 0.0, 2.5], [0.0, 1.0, 0.0], 90.0]
-        sketch: m3
+        sketch: m3-boundary
     requirements:
       features:
         holes: Two M3 clearance holes, 20 mm apart
@@ -53,7 +53,7 @@ parts:
         side:
           position: [">0", null, null]
           direction: [2, 0, 0]
-          sketch: m3
+          sketch: m3-boundary
       interfaces:
         m3-thru: [TL, TR]
         m3: [null, [0, 0, -1], null]

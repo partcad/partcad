@@ -323,6 +323,21 @@ An operation whose answer is about **one** object -- `bom`, `assembly.guide`, `c
 merged answer and a sequence of them. Adding recursion to one of those is a decision about what its result
 becomes, not a parsing change.
 
+### What a request's object is
+
+A request names its object by name, and need not say what kind it is: a name is one object of its package
+whatever its kind (see `partcad_utils/object_names.py`), so `operations._kind_of()` asks the package
+(`Project.object_kind`), and `_kind_of_async()` from a coroutine. The kind flags (`sketch`, `interface`,
+`assembly`, `scene`, `software`, read by `_object_kind()`) and the `kind` parameter of the methods the IDE calls
+(`_said_kind()`) are still taken, at their word and without a lookup -- what they are for now is skipping it. A
+name that is nothing at all becomes a part, so that the miss is reported by the part getter's "is not found",
+as it always was; a method that does nothing with the kind it finds refuses it in its own words
+(`_resolve_kind()`).
+
+A walk over a named object (`_targets()`) asks each package what its own object of that name is, and returns
+`(package, name, kind)`: the `bolt` of one package can be a part and the `bolt` of the next an assembly. A kind
+said with a flag narrows the walk to objects of that kind instead.
+
 ## Commit
 
 `pre-commit` hooks (`dev-tools/pre-commit-config.yaml`) run `pytest`, formatting, and lint checks on commit and

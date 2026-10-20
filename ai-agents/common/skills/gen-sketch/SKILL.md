@@ -58,7 +58,7 @@ Rendering is the build gate. Sketches render to SVG:
 
 ```sh
 mkdir -p /tmp/pc-render                          # the -O directory must already exist
-pc render -s -t svg -O /tmp/pc-render <name>     # writes /tmp/pc-render/<name>.svg
+pc render -t svg -O /tmp/pc-render <name>        # writes /tmp/pc-render/<name>.svg
 ```
 
 View `/tmp/pc-render/<name>.svg` and compare it against the description — the
@@ -68,4 +68,4 @@ Iterate until it is right.
 ## 6. Finalize
 
 Summarize what you drew — key dimensions and assumptions — and how to view it:
-`pc ide view -s <name>`.
+`pc ide view <name>`.

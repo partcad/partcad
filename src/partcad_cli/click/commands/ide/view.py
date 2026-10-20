@@ -10,6 +10,7 @@ import rich_click as click
 
 from partcad_ide_client.protocol import VIEWER_TABS
 
+from ... import object_kind
 from ...service import run
 
 # What each tab is called on the command line, where it differs from its id:
@@ -77,7 +78,7 @@ def tab_options(command):
 
 # TODO-98: @clairbee: fix type checking here
 # TODO: @alexanderilyin: https://stackoverflow.com/a/37491504/25671117
-@click.command(help="View a part, assembly, or scene visually")
+@click.command(help="View a part, assembly, or scene visually. " + object_kind.LOOKED_UP)
 @click.option(
     "-V",
     "--verbal",
@@ -98,28 +99,28 @@ def tab_options(command):
 @click.option(
     "-s",
     "--sketch",
-    help="The object is a sketch",
+    help=object_kind.flag_help("a sketch"),
     is_flag=True,
     show_envvar=True,
 )
 @click.option(
     "-i",
     "--interface",
-    help="The object is an interface",
+    help=object_kind.flag_help("an interface"),
     is_flag=True,
     show_envvar=True,
 )
 @click.option(
     "-a",
     "--assembly",
-    help="The object is an assembly",
+    help=object_kind.flag_help("an assembly"),
     is_flag=True,
     show_envvar=True,
 )
 @click.option(
     "-S",
     "--scene",
-    help="The object is a scene",
+    help=object_kind.flag_help("a scene"),
     is_flag=True,
     show_envvar=True,
 )

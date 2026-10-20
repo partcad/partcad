@@ -63,6 +63,12 @@ a CAD addon, or documentation.
   escaping (`ide/vscode/src/common/garage.ts`), which is why the escaping is the one both languages have
   built in.
 
+  `object_names` is the rule that a name is one object of its package whatever its kind, and the order a bare
+  name is looked for in (parts, interfaces, assemblies, sketches, scenes, software). It is here because both
+  ends read it: PartCAD refuses a second declaration of a name as it loads a package, and `assy_lint` reports it
+  where it is written -- and a rule with a copy per reader is a rule whose copies disagree about which object a
+  name is.
+
   `assy_lint` checks an ASSY file or a `partcad.yaml` *as it renders*, and rendering is the other thing both
   ends do: PartCAD as it loads a package, and every client as it lints the file an editor has open. So what a
   template may name (`config_template`) and what a parameter declaration means (`parameters`) are here, with

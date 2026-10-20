@@ -9,7 +9,7 @@ Feature: `pc list interfaces` command
     Given a file named "partcad.yaml" with content:
       """
       sketches:
-        m3:
+        m3-boundary:
           type: basic
           circle: 1.5 # 1.5mm radius equals to 3mm diameter
 
@@ -20,7 +20,7 @@ Feature: `pc list interfaces` command
           ports:
             m3:
               location: [[0, 0, 0], [0, 0, 1], 0] # redundant, for demonstration
-              sketch: m3
+              sketch: m3-boundary
       """
     When I run command:
       """

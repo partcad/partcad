@@ -52,7 +52,7 @@ def test_a_check_that_does_not_apply_says_why_before_anything_is_run(ctx):
     assert assembly["shell"].status == report.NOT_APPLICABLE
     assert assembly["shell"].findings[0]["text"].startswith("an assembly is checked through its parts")
 
-    sketch = _listed(ctx, ctx.get_sketch("//:m3"))
+    sketch = _listed(ctx, ctx.get_sketch("//:m3-boundary"))
     assert sketch["solidity"].findings[0]["text"] == "a sketch has no solid"
     assert sketch["fea"].findings[0]["text"] == "only a part is analysed"
 

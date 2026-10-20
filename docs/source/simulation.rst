@@ -70,9 +70,9 @@ checked, run in MuJoCo through `partcad-sim-mujoco`_. From that directory:
 
 .. code-block:: shell
 
-  pc sim -S stable      # two aluminium blocks, squarely stacked: nothing moves
-  pc sim -S unstable    # the top block 18 mm off the edge: it falls off
-  pc sim -S slippery    # 'stable' in PTFE, in a tilted world: the top block slides off
+  pc sim stable         # two aluminium blocks, squarely stacked: nothing moves
+  pc sim unstable       # the top block 18 mm off the edge: it falls off
+  pc sim slippery       # 'stable' in PTFE, in a tilted world: the top block slides off
   pc sim block          # an aluminium cube rests on the floor, and sinks in water
   pc sim float          # a sealed 3 g cube rises in water, and falls in a vacuum
   pc sim buoy           # the float with its weight low down rights itself
@@ -107,8 +107,8 @@ This is ``stable``:
                 for name in before["bodies"]
             ) < 5.0
 
-The validation says that no block moved 5 mm in any direction. ``pc sim -S
-stable`` says whether it held; ``pc sim --json -S stable`` prints everything
+The validation says that no block moved 5 mm in any direction. ``pc sim
+stable`` says whether it held; ``pc sim --json stable`` prints everything
 the engine reported as well, which is where to look before writing a validation
 of your own.
 
@@ -378,7 +378,7 @@ states where things are.
 A scene that is itself the claim -- a stack that stands, a pile that does not
 slide -- declares ``simulate:`` the way a part does, and the world it is
 simulated in places it with a ``scene:`` link, which ``subject_kind`` asks for.
-``pc sim -S`` and ``pc test -S`` name one. The ASSY keys are under
+``pc sim`` and ``pc test`` find one by its name, as they find a part. The ASSY keys are under
 :ref:`assy-scenes`.
 
 The rule is PartCAD's one copy of it, in the module the engine plugins import
@@ -405,8 +405,8 @@ kind of joint, checked against theirs (its ``README.md`` has the table):
 
 .. code-block:: shell
 
-  pc sim -a pendulum   # released horizontal, it passes the bottom at sqrt(2 g d / (I/m))
-  pc sim -a nudged     # swinging 5 degrees, its period is 2 pi sqrt((I/m) / (g d))
+  pc sim pendulum      # released horizontal, it passes the bottom at sqrt(2 g d / (I/m))
+  pc sim nudged        # swinging 5 degrees, its period is 2 pi sqrt((I/m) / (g d))
 
 Three things make one, and each is a declaration PartCAD already reads:
 
@@ -572,7 +572,7 @@ Running a simulation
 .. code-block:: shell
 
   pc sim block                # every simulation the part 'block' declares
-  pc sim -S stable            # a scene; -a names an assembly
+  pc sim stable               # a scene, found by its name like a part
   pc sim -f sinks block       # one simulation, by name
   pc sim                      # everything this package declares
   pc sim -P ...               # and everything in the packages below it
@@ -591,7 +591,7 @@ Two of those options are about what is asked and what is kept:
 .. code-block:: shell
 
   # The same claim, with Gazebo instead of the engine the declaration names
-  pc sim -S stable --plugin //pub/feature/simulate/gazebo:gazebo
+  pc sim stable --plugin //pub/feature/simulate/gazebo:gazebo
   # The state the run started from and ended in, as files
   pc sim -f sinks block --before before.yaml --after after.json
 
@@ -657,7 +657,7 @@ A declaration with no ``validation:`` has nothing to be judged by, so ``pc
 test`` does not run it, and what that costs depends on what was asked. Testing a
 package, it is skipped with a ``WARNING`` saying why: the claim may be one
 somebody is still writing, and the rest of the package deserves its verdict.
-Testing the object by name -- ``pc test -S stable`` -- it fails: somebody asked
+Testing the object by name -- ``pc test stable`` -- it fails: somebody asked
 whether this object does what it says, and it says nothing.
 
 ``--fast-only`` passes over an object that declares a ``timeout:``, as it does
@@ -1226,7 +1226,7 @@ declaration's options are under :ref:`assembly-urdf`.
 
 Its **joints are the assembly's**, so a ``urdf`` assembly is a mechanism as it
 is read, without converting it: each movable joint is the joint of the link it
-moves, with its axis, limits, dynamics, soft limits and mimic (``pc info -a
+moves, with its axis, limits, dynamics, soft limits and mimic (``pc info
 robot`` lists them, as it does an ASSY assembly's), and each link on a fixed
 joint is welded to its parent -- one rigid body with it, which turns when the
 parent does (:ref:`sim-bodies`). A joint with no ``<axis>`` turns about URDF's
@@ -1515,7 +1515,7 @@ and names the format through it:
    * - SDFormat
      - `partcad-sim-gazebo`_
      - a scene of type ``sim-gazebo:world``
-     - ``pc export -S -t sim-gazebo:world``
+     - ``pc export -t sim-gazebo:world``
    * - MJCF
      - `partcad-sim-mujoco`_
      - a scene or an assembly of type ``sim-mujoco:mjcf``
@@ -1541,8 +1541,8 @@ each reader's options).
 
 .. code-block:: shell
 
-  pc export -S -t sim-gazebo:world workcell           # a scene, as a Gazebo world
-  pc export -S -t sim-mujoco:mjcf workcell            # or as an MJCF model
+  pc export -t sim-gazebo:world workcell              # a scene, as a Gazebo world
+  pc export -t sim-mujoco:mjcf workcell               # or as an MJCF model
   pc convert scene -t assy warehouse                  # a world's shapes become parts of this package
   pc import scene -t sim-gazebo:world warehouse.world # the same, for a file not declared yet
 
@@ -1615,7 +1615,7 @@ out first, and open what was written:
 
 .. code-block:: shell
 
-  pc export -S -t sim-mujoco:mjcf workcell
+  pc export -t sim-mujoco:mjcf workcell
   pc ide open --with mujoco workcell.xml
 
 An ASSY scene is refused too, for a reason of its own: it is nothing but

@@ -8,7 +8,7 @@ import os
 
 import rich_click as click
 
-from .. import fast_only
+from .. import fast_only, object_kind
 from ..exclude import exclude_option, exclude_params
 from ..link_filter import filter_option, filter_params
 from ..service import run
@@ -18,7 +18,7 @@ from ..service import run
     help=(
         "Export 3D view of parts, assemblies, or scenes in the package. "
         "OBJECT may be written '...:<name>' to mean every object of that name in this "
-        "package and in every package below it"
+        "package and in every package below it. " + object_kind.LOOKED_UP
     ),
 )
 @click.option(
@@ -58,25 +58,25 @@ from ..service import run
 @click.option(
     "-s",
     "--sketch",
-    help="The object is a sketch",
+    help=object_kind.flag_help("a sketch"),
     is_flag=True,
 )
 @click.option(
     "-i",
     "--interface",
-    help="The object is an interface",
+    help=object_kind.flag_help("an interface"),
     is_flag=True,
 )
 @click.option(
     "-a",
     "--assembly",
-    help="The object is an assembly",
+    help=object_kind.flag_help("an assembly"),
     is_flag=True,
 )
 @click.option(
     "-S",
     "--scene",
-    help="The object is a scene",
+    help=object_kind.flag_help("a scene"),
     is_flag=True,
 )
 @exclude_option

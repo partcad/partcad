@@ -512,7 +512,7 @@ Anything but an assembly or a scene.
 - `'a' and 'b' share N mm^3`: the two are in each other. Each such failure
   leaves an assembly to look at: the two parts where the assembly places them,
   and a sub-assembly named `interference` holding what they share, one part per
-  volume. Open it from the IDE's Test tab, or with `pc ide view -a` and its name
+  volume. Open it from the IDE's Test tab, or with `pc ide view` and its name
   (`<assembly>/interference/<a>+<b>`), and switch the two parts off to see the
   overlap alone. Then move one of them - or, if the overlap is the joint, say so
   on the joint.

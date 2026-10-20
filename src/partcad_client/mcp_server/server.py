@@ -90,6 +90,10 @@ _SVG_LIMIT = 200_000
 ObjectKind = Literal["part", "assembly", "scene", "sketch"]
 TestKind = Literal["part", "assembly", "scene", "sketch", "interface"]
 InfoKind = Literal["part", "assembly", "scene", "sketch", "interface", "software"]
+
+# A name is one object of its package whatever its kind, so the daemon looks the
+# kind up when it is not given; saying it only saves the lookup.
+_KIND = "What the object is. Looked up from its name when left out, which is the usual way to call this."
 ListKind = Literal["packages", "parts", "sketches", "assemblies", "scenes", "interfaces", "materials", "software"]
 SearchKind = Literal["parts", "sketches", "assemblies", "scenes", "interfaces", "packages"]
 
@@ -189,7 +193,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
     async def info(
         ctx: Context,
         object: SomeObjectName = None,
-        kind: Annotated[InfoKind, Field(description="What the object is.")] = "part",
+        kind: Annotated[Optional[InfoKind], Field(description=_KIND)] = None,
         package: PackageName = None,
         params: Parameters = None,
     ) -> CallToolResult:
@@ -204,7 +208,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
     async def render(
         ctx: Context,
         object: ObjectName,
-        kind: Annotated[ObjectKind, Field(description="What the object is.")] = "part",
+        kind: Annotated[Optional[ObjectKind], Field(description=_KIND)] = None,
         format: Annotated[
             str,
             Field(
@@ -222,7 +226,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
 
         `pc render`, returned instead of written. The first render of an object builds it, which can take minutes.
         """
-        request = {"package": package, "object": object, "kind": kind, "format": format}
+        request = {"package": package, "object": object, "format": format, **_kind(kind)}
         if options_package:
             request["options_package"] = options_package
         try:
@@ -243,7 +247,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
                 "write it into under the name PartCAD chooses. Overwrites what is there."
             ),
         ],
-        kind: Annotated[ObjectKind, Field(description="What the object is.")] = "part",
+        kind: Annotated[Optional[ObjectKind], Field(description=_KIND)] = None,
         package: PackageName = None,
         options_package: Annotated[
             Optional[str],
@@ -258,7 +262,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             target = scope.check(path)
         except OutsideScope as e:
             return _refusal(str(e))
-        request = {"package": package, "object": object, "kind": kind, "format": format}
+        request = {"package": package, "object": object, "format": format, **_kind(kind)}
         if options_package:
             request["options_package"] = options_package
         try:
@@ -281,7 +285,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         object: Annotated[
             Optional[str], Field(description="The object to test; every object of the package when left out.")
         ] = None,
-        kind: Annotated[TestKind, Field(description="What the object is.")] = "part",
+        kind: Annotated[Optional[TestKind], Field(description=_KIND)] = None,
         package: PackageName = None,
         recursive: Annotated[bool, Field(description="Also test the packages below this one.")] = False,
     ) -> CallToolResult:
@@ -603,6 +607,15 @@ def _assignments(params: Optional[dict]) -> list:
     ]
 
 
-def _kind_flag(kind: str) -> dict:
-    """The one flag `pc` sets for a kind of object; a part is what an object is when none is set."""
-    return {} if kind == "part" else {kind: True}
+def _kind_flag(kind: Optional[str]) -> dict:
+    """The one flag `pc` sets for a kind of object, or none to have the daemon look the kind up.
+
+    A part has no flag of its own -- `pc` never needed one -- so a part said is a
+    part looked up, which is the first thing the lookup asks after anyway.
+    """
+    return {} if kind in (None, "part") else {kind: True}
+
+
+def _kind(kind: Optional[str]) -> dict:
+    """``kind`` for a method that takes it by that name, or nothing to have it looked up."""
+    return {} if kind is None else {"kind": kind}

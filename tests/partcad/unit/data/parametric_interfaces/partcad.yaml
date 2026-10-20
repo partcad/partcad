@@ -7,7 +7,7 @@ desc: |
   each come out with the values it was asked for.
 
 sketches:
-  m:
+  m-boundary:
     desc: The boundary of an M%size% opening
     type: basic
     # A 'basic' sketch has no script to hand its parameters to, so the
@@ -38,7 +38,7 @@ interfaces:
     ports:
       m:
         location: [[0, 0, 0], [0, 0, 1], 0]
-        sketch: m
+        sketch: m-boundary
         params:
           size: "%size%"
     parameters:
@@ -117,7 +117,7 @@ interfaces:
     desc: An interface with no parameters at all, to keep the old path honest
     ports:
       plain:
-        sketch: m
+        sketch: m-boundary
 
   m3-thru-3:
     # The enumerated name a package published before the family behind it

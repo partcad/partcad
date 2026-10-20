@@ -171,6 +171,15 @@ in the client, before the call. (The daemon and the CLI share a machine today, s
 coincide; they will not once a daemon can be remote, which is why the commands are separate. `daemon reset`
 carries a TODO to gate it behind access control before that happens.)
 
+## OBJECT, and what kind of object it is
+
+A command takes an object by its name alone: a name is one object of its package whatever its kind
+(`partcad_utils.object_names`), so the daemon looks the kind up (`operations._kind_of`). `-s`, `-i`, `-a`, `-S`
+and `-w` are kept for whoever knows and would rather not pay for the lookup, and go over the wire as the
+booleans they always were; `click/object_kind.py` holds the words every command describes them with, so that
+they say the same thing everywhere. A command does not resolve the kind itself, for the reason it does not parse
+`...` either: there are three clients of the daemon, and only the daemon has the package graph to ask.
+
 ## `...`: the package name that means "and everything below it"
 
 `//pub/examples...` is that package and every package below it — the same request `-r` makes, written where

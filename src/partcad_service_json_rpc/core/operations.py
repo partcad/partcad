@@ -156,18 +156,107 @@ def _excluded(ctx, params) -> list:
     return excluded
 
 
-def _object_kind(params) -> str:
-    """Which kind of object the flags of a request name.
+# The flags a request says what its object is with, as 'pc' sends them: '-s',
+# '-i', '-a', '-S' and, for 'pc info', '-w'. A part has none, because it never
+# needed one: it was what an object was when nothing was said.
+_KIND_FLAGS = ("sketch", "interface", "assembly", "scene", "software")
 
-    The same five flags on every command that takes an object, read in the same
+
+def _object_kind(params):
+    """The kind of object the flags of a request say its object is, or None for none.
+
+    The same flags on every command that takes an object, read in the same
     order, so that ``pc render -s`` and ``pc test -s`` cannot disagree about
-    what ``-s`` selects. A part is what an object is when nothing says
-    otherwise.
+    what ``-s`` selects. Saying nothing is the ordinary case now: a name is one
+    object of its package whatever its kind, so it is looked up instead (see
+    ``_kind_of``), and a flag is only a way of skipping the lookup.
     """
-    for kind in ("sketch", "interface", "assembly", "scene"):
+    for kind in _KIND_FLAGS:
         if params.get(kind):
             return kind
-    return "part"
+    return None
+
+
+def _said_kind(params):
+    """The kind a method that takes ``kind`` was told, or None when it was told none.
+
+    What the IDE sends -- it knows what it is showing -- and what an MCP tool
+    sends when the agent says. Any kind is returned, including one the method
+    does nothing with, so that the method refuses it in its own words.
+    """
+    kind = params.get("kind")
+    return kind if isinstance(kind, str) and kind else None
+
+
+def _kind_of(ctx, package, name, said=None, kinds=None):
+    """What ``name`` in ``package`` is: as the request said, or as looked up. None if it is nothing.
+
+    ``said`` is taken at its word and nothing is looked up, which is all a kind
+    flag is for now: a caller that knows what the object is, and would rather
+    not pay for being asked. Otherwise the package says, the cheap questions
+    first and the slow ones -- a round trip to the repository of a
+    plugin-backed package -- only after them, the most frequent kinds first
+    (see ``Project.object_kind``). ``kinds`` is what the operation can do
+    anything with; a name of another kind is then not found, rather than found
+    and refused.
+
+    None is "no such object", and every caller turns that into the getter of
+    its first kind, so that the miss is reported by the same "is not found"
+    line, naming the package, that it was reported by before any of this.
+    """
+    if said is not None:
+        return said
+    prj = ctx.get_project(package)
+    if prj is None:
+        return None
+    return prj.object_kind(name, kinds)
+
+
+async def _kind_of_async(ctx, package, name, said=None, kinds=None):
+    """``_kind_of`` for a caller already running on a loop.
+
+    A plugin-backed package answers the slow half of the lookup with a fetch,
+    which a coroutine has to await rather than wait for with its loop stopped
+    (see ``Project.object_kind_async``).
+    """
+    if said is not None:
+        return said
+    prj = ctx.get_project(package)
+    if prj is None:
+        return None
+    return await prj.object_kind_async(name, kinds)
+
+
+def _resolve_kind(ctx, params, package, name, allowed, refusal):
+    """The kind of the one object a method that takes ``kind`` is about.
+
+    As the request said it, or looked up when it said nothing; either way a
+    kind outside ``allowed`` is refused with ``refusal % kind``, so that a
+    sketch named where only a part will do is told so rather than reported
+    missing. A name that is nothing at all is a part, whose getter then says
+    that it is not found.
+    """
+    kind = _kind_of(ctx, package, name, _said_kind(params)) or "part"
+    if kind not in allowed:
+        raise JsonRpcError(USAGE_ERROR, refusal % kind)
+    return kind
+
+
+def _refuse_said_kind(params, allowed, refusal):
+    """Refuse a kind the request said and the method does nothing with, before anything is resolved."""
+    said = _said_kind(params)
+    if said is not None and said not in allowed:
+        raise JsonRpcError(USAGE_ERROR, refusal % said)
+
+
+def _getter(ctx, kind):
+    """The context accessor for one kind of object; a part's for a kind nothing names."""
+    return {
+        "sketch": ctx.get_sketch,
+        "interface": ctx.get_interface,
+        "assembly": ctx.get_assembly,
+        "scene": ctx.get_scene,
+    }.get(kind, ctx.get_part)
 
 
 def _link_filter(params, what: str):
@@ -211,14 +300,21 @@ def _overlay(params):
     )
 
 
-def _targets(ctx, pc, packages, object_name, kind):
-    """The ``(package, object)`` pairs that a named object resolves to, where it exists.
+def _targets(ctx, pc, packages, object_name, said=None, kinds=None):
+    """The ``(package, object, kind)`` triples that a named object resolves to, where it exists.
 
     What a recursive run over a named object is: each package of the subtree is
     asked for its own object of that name, and the ones that have none are
     passed over in silence. Reporting them would mean thirty-seven "bolt is not
     found" lines and a non-zero exit for a tree in which three packages have a
     bolt, which is the opposite of what asking for ``...:bolt`` means.
+
+    Each package says what its own one is. A name is one object of a package,
+    not of a tree, so the ``bolt`` of one package can be a part and the
+    ``bolt`` of the next an assembly, and both are what ``...:bolt`` asks for.
+    ``said`` is a kind the request named with a flag, which narrows the walk to
+    the objects of that kind and looks nothing else up; ``kinds`` narrows the
+    lookup to what the operation can do anything with.
 
     Deduplicated, because a name that carries a package of its own
     (``//elsewhere:bolt``) resolves to the same pair whichever package it was
@@ -235,9 +331,15 @@ def _targets(ctx, pc, packages, object_name, kind):
             continue
         seen.add((target, name))
         prj = ctx.get_project(target)
-        if prj is None or not prj.declares_object(kind, name):
+        if prj is None:
             continue
-        targets.append((target, name))
+        if said is not None:
+            kind = said if prj.declares_object(said, name) else None
+        else:
+            kind = prj.object_kind(name, kinds)
+        if kind is None:
+            continue
+        targets.append((target, name, kind))
     return targets
 
 
@@ -396,18 +498,15 @@ def _stage_named_object(session, ctx, pc, params, package, object_name, recursiv
     """
     if object_name is None or recursive:
         return
-    kind = _object_kind(params)
-    if kind == "scene":
-        getter = ctx.get_scene
-    elif kind == "assembly":
-        getter = ctx.get_assembly
-    else:
-        # A sketch, an interface or a part: built out of its own files.
-        return
     # The object may name a package of its own, which is the one that produces
     # it whatever '--package' selected.
     owner, name = pc.utils.resolve_resource_path(package, object_name)
-    shape = getter(_qualified(owner, name))
+    kind = _kind_of(ctx, owner, name, _object_kind(params))
+    if kind not in ("assembly", "scene"):
+        # A sketch, an interface or a part, built out of its own files -- or
+        # nothing at all, which the render says when it gets to it.
+        return
+    shape = _getter(ctx, kind)(_qualified(owner, name))
     if params.get("fast_only") and getattr(shape, "timeout", None) is not None:
         # Not built at all: '--fast-only' leaves it out, which the render says
         # when it gets to it. Staging it first would build exactly what was
@@ -1088,13 +1187,13 @@ def info_object(session, params):
     # 'pc info' has no '-r' of its own; '...' is how it is asked for one, which
     # is the whole reason the recursion is written on the package rather than
     # spelled as a flag on every command that could want it.
-    kind = "software" if params.get("software") else _object_kind(params)
+    said = _object_kind(params)
     if recursive:
         packages = [
             p["name"]
             for p in ctx.get_all_packages(parent_name=package_name, has_stuff=False, exclude=_excluded(ctx, params))
         ]
-        targets = _targets(ctx, pc, packages, object_name, kind)
+        targets = _targets(ctx, pc, packages, object_name, said)
         if not targets:
             _nowhere(pc, object_name, package_name)
             return None
@@ -1104,9 +1203,10 @@ def info_object(session, params):
         # flag for every object name that does not carry a '//package:' prefix
         # of its own, which is the ordinary way to spell one. A name that does
         # carry a prefix still wins over the flag.
-        targets = [pc.utils.resolve_resource_path(package_name, object_name)]
+        package, name = pc.utils.resolve_resource_path(package_name, object_name)
+        targets = [(package, name, _kind_of(ctx, package, name, said) or "part")]
 
-    for package, name in targets:
+    for package, name, kind in targets:
         path = _qualified(package, name)
 
         if kind == "assembly":
@@ -1354,10 +1454,11 @@ async def _test_package_async(pc, package, coroutine):
         return await coroutine
 
 
-async def _test_async(
-    ctx, pc, packages, filter_prefix, sketch, interface, assembly, scene, object_name, fast_only=False, named=False
-):
+async def _test_async(ctx, pc, packages, filter_prefix, said, object_name, fast_only=False, named=False):
     """Run the checks over what was selected.
+
+    ``said`` is the kind a flag named the object as, or None to have each
+    package say what its object of that name is (see ``_kind_of``).
 
     ``named`` is whether one object was asked about on its own -- an object
     name and no walk below the package -- and reaches the checks as
@@ -1406,7 +1507,10 @@ async def _test_async(
         if not obj:
             task = prj.test_log_wrapper_async(ctx, tests=tests_to_run, fast_only=fast_only)
             tasks.append(_test_package_async(pc, target, task) if len(packages) > 1 else task)
-        elif interface:
+            continue
+        # Software is not tested: it is a file, not a shape.
+        kind = await _kind_of_async(ctx, target, obj, said, _SHAPES)
+        if kind == "interface":
             shape = prj.get_interface(obj)
             if shape is None:
                 pc.logging.error("%s is not found" % obj)
@@ -1415,11 +1519,11 @@ async def _test_async(
             else:
                 tasks.append(shape.test_async())
         else:
-            if sketch:
+            if kind == "sketch":
                 shape = prj.get_sketch(obj)
-            elif assembly:
+            elif kind == "assembly":
                 shape = prj.get_assembly(obj)
-            elif scene:
+            elif kind == "scene":
                 shape = prj.get_scene(obj)
             else:
                 # Awaited, not 'get_part()': this is a coroutine, and a part a
@@ -1436,6 +1540,11 @@ async def _test_async(
                 tasks.extend([t.test_log_wrapper(tests_to_run, ctx, shape, test_ctx) for t in tests_to_run])
 
     await asyncio.gather(*tasks)
+
+
+# The kinds of object that are shapes, which is what 'pc test' tests and the
+# viewer shows: everything a command names but software, which is a file.
+_SHAPES = ("part", "interface", "assembly", "sketch", "scene")
 
 
 def test_run(session, params):
@@ -1468,11 +1577,11 @@ def test_run(session, params):
             # one object over a subtree reports it missing from every package
             # that does not declare it -- which for a name like 'bolt' is most
             # of them, and is not what asking for every bolt means.
-            targets = _targets(ctx, pc, packages, object_name, _object_kind(params))
+            targets = _targets(ctx, pc, packages, object_name, _object_kind(params), _SHAPES)
             if not targets:
                 _nowhere(pc, object_name, package)
                 return None
-            packages = [target for target, _ in targets]
+            packages = [target for target, _, _ in targets]
 
         asyncio.run(
             _test_async(
@@ -1480,10 +1589,7 @@ def test_run(session, params):
                 pc,
                 packages,
                 params.get("filter"),
-                params.get("sketch"),
-                params.get("interface"),
-                params.get("assembly"),
-                params.get("scene"),
+                _object_kind(params),
                 object_name,
                 bool(params.get("fast_only")),
                 named=bool(object_name) and not recursive,
@@ -1546,10 +1652,11 @@ async def _simulate_async(ctx, pc, packages, object_name, kind, filter_name, fas
     readable, which for a command whose whole output is a verdict per run is
     most of what it is for.
 
-    ``kind`` is what a named object is - "part", "assembly" or "scene" - since
-    the three are separate namespaces of a package. Walking a package takes all
-    three: a stack of blocks is an arrangement, so it is a scene, and it claims
-    to stand like anything else.
+    ``kind`` is what a named object is - "part", "assembly" or "scene" - as a
+    flag said it, or None to have each package say what its object of that
+    name is (see ``_kind_of``). Walking a package takes all three: a stack of
+    blocks is an arrangement, so it is a scene, and it claims to stand like
+    anything else.
     """
     from partcad import simulation as pc_simulation
 
@@ -1572,9 +1679,10 @@ async def _simulate_async(ctx, pc, packages, object_name, kind, filter_name, fas
             prj = ctx.get_project(target)
             if prj is None:
                 raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % target)
-            if kind == "assembly":
+            found = await _kind_of_async(ctx, target, name, kind, _SIMULATED) or "part"
+            if found == "assembly":
                 shape = prj.get_assembly(name)
-            elif kind == "scene":
+            elif found == "scene":
                 shape = prj.get_scene(name)
             else:
                 # Awaited, not 'get_part()': this is a coroutine, and a part a URDF,
@@ -1583,7 +1691,7 @@ async def _simulate_async(ctx, pc, packages, object_name, kind, filter_name, fas
                 shape = await prj.get_part_async(name)
             if shape is None:
                 raise JsonRpcError(USAGE_ERROR, "%s is not found" % _qualified(target, name))
-            targets.append((kind, shape))
+            targets.append((found, shape))
     else:
         for package in packages:
             prj = ctx.get_project(package)
@@ -1603,6 +1711,10 @@ async def _simulate_async(ctx, pc, packages, object_name, kind, filter_name, fas
                 continue
             results.append(await pc_simulation.run_async(ctx, shape, kind, declaration, plugin=plugin))
     return results
+
+
+# The kinds of object that declare what they are supposed to do ('simulate:').
+_SIMULATED = ("part", "assembly", "scene")
 
 
 def simulate_run(session, params):
@@ -1628,18 +1740,20 @@ def simulate_run(session, params):
         else:
             packages = [package]
 
-        kind = "scene" if params.get("scene") else ("assembly" if params.get("assembly") else "part")
+        # '-a' and '-S' only: what declares a 'simulate:' is a part, an
+        # assembly or a scene.
+        kind = "scene" if params.get("scene") else ("assembly" if params.get("assembly") else None)
         if recursive and object_name:
             # Only the packages that have such an object, so that walking a
             # subtree for one name is the simulations of the objects that
             # answer to it rather than a failure per package that does not.
-            targets = _targets(ctx, pc, packages, object_name, kind)
+            targets = _targets(ctx, pc, packages, object_name, kind, _SIMULATED)
             if not targets:
                 # A usage error, the way naming one object that does not exist
                 # already is ('_simulate_async' raises the same for it): what
                 # was asked for is not there, and nothing was run.
                 raise JsonRpcError(USAGE_ERROR, _nowhere_message(object_name, package))
-            packages = [target for target, _ in targets]
+            packages = [target for target, _, _ in targets]
 
         results = asyncio.run(
             _simulate_async(
@@ -1735,9 +1849,10 @@ def simulate_list(session, params):
     section is configuration, so reading it costs what reading the object's
     configuration costs -- nothing is built and nothing is run -- which is what
     makes it cheap enough to ask on every show. ``kind`` says whether
-    ``object`` is a part (the default), an assembly or a scene, as ``-a`` and
-    ``-S`` do for ``pc sim``: a stack of blocks is an arrangement, so it is a
-    scene, and it declares what it is supposed to do like anything else.
+    ``object`` is a part, an assembly or a scene, as ``-a`` and ``-S`` do for
+    ``pc sim``, and is looked up when it is not given: a stack of blocks is an
+    arrangement, so it is a scene, and it declares what it is supposed to do
+    like anything else.
 
     An object that declares none answers with an empty list rather than an
     error: "nothing to simulate here" is the ordinary case.
@@ -1752,7 +1867,9 @@ def simulate_list(session, params):
     package, object_name = resolved
     path = _qualified(package, object_name)
 
-    kind = params.get("kind") if params.get("kind") in ("assembly", "scene") else "part"
+    kind = _kind_of(ctx, package, object_name, _said_kind(params), _SIMULATED)
+    if kind not in _SIMULATED:
+        kind = "part"
     getter = {"part": ctx.get_part, "assembly": ctx.get_assembly, "scene": ctx.get_scene}[kind]
     shape = getter(path)
     if shape is None:
@@ -1998,19 +2115,12 @@ def inspect_object(session, params):
         # rather than assumed to be the selected one.
         package, object_name = pc.utils.resolve_resource_path(package, object_name)
         path = _qualified(package, object_name)
+        # Software is not shown: it is a file, not a shape.
+        kind = _kind_of(ctx, package, object_name, _object_kind(params), _SHAPES) or "part"
         # Whether what is asked for is built out of other assemblies, and so
         # goes through the two-phase build below.
-        assembled = bool(params.get("assembly") or params.get("scene"))
-        if params.get("assembly"):
-            obj = ctx.get_assembly(path, params=param_dict)
-        elif params.get("scene"):
-            obj = ctx.get_scene(path, params=param_dict)
-        elif params.get("interface"):
-            obj = ctx.get_interface(path, params=param_dict)
-        elif params.get("sketch"):
-            obj = ctx.get_sketch(path, params=param_dict)
-        else:
-            obj = ctx.get_part(path, params=param_dict)
+        assembled = kind in ("assembly", "scene")
+        obj = _getter(ctx, kind)(path, params=param_dict)
 
         if obj is None:
             pc.logging.error("Object %s is not found" % path)
@@ -2957,16 +3067,16 @@ def _manufactured_object(ctx, pc, params):
     """The part or assembly a manufacturing request is about, and its full name.
 
     Which of the two is read from ``kind``, as the IDE knows it from what it is
-    showing; nothing else is made or bought.
+    showing, or looked up when it is not given; nothing else is made or bought.
     """
-    kind = params.get("kind") or "part"
-    if kind not in ("part", "assembly"):
-        raise JsonRpcError(USAGE_ERROR, "Only parts and assemblies are built or bought; '%s' is neither" % kind)
+    refusal = "Only parts and assemblies are built or bought; '%s' is neither"
+    _refuse_said_kind(params, ("part", "assembly"), refusal)
     resolved = _resolve_object(ctx, pc, params)
     if resolved is None:
         return None
     package, name = resolved
     path = _qualified(package, name)
+    kind = _resolve_kind(ctx, params, package, name, ("part", "assembly"), refusal)
     obj = ctx.get_assembly(path) if kind == "assembly" else ctx.get_part(path)
     if obj is None:
         raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
@@ -3173,18 +3283,15 @@ def requirements_check(session, params):
     if ctx is None:
         return None
     pc = session.partcad
-    kind = params.get("kind") or "part"
     getters = {"part": ctx.get_part, "assembly": ctx.get_assembly, "scene": ctx.get_scene, "sketch": ctx.get_sketch}
-    if kind not in getters:
-        raise JsonRpcError(
-            USAGE_ERROR,
-            "Only parts, assemblies, scenes and sketches declare requirements; '%s' is none of them" % kind,
-        )
+    refusal = "Only parts, assemblies, scenes and sketches declare requirements; '%s' is none of them"
+    _refuse_said_kind(params, getters, refusal)
     resolved = _resolve_object(ctx, pc, params)
     if resolved is None:
         return None
     package, name = resolved
     path = _qualified(package, name)
+    kind = _resolve_kind(ctx, params, package, name, getters, refusal)
     obj = getters[kind](path)
     if obj is None:
         raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
@@ -3226,7 +3333,6 @@ def test_report(session, params):
     if ctx is None:
         return None
     pc = session.partcad
-    kind = params.get("kind") or "part"
     getters = {
         "part": ctx.get_part,
         "assembly": ctx.get_assembly,
@@ -3234,13 +3340,14 @@ def test_report(session, params):
         "sketch": ctx.get_sketch,
         "interface": ctx.get_interface,
     }
-    if kind not in getters:
-        raise JsonRpcError(USAGE_ERROR, "'%s' is not a kind of object 'pc test' tests" % kind)
+    refusal = "'%s' is not a kind of object 'pc test' tests"
+    _refuse_said_kind(params, getters, refusal)
     resolved = _resolve_object(ctx, pc, params)
     if resolved is None:
         return None
     package, name = resolved
     path = _qualified(package, name)
+    kind = _resolve_kind(ctx, params, package, name, getters, refusal)
     obj = getters[kind](path)
     if obj is None:
         raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
@@ -3419,13 +3526,13 @@ def cam_route(session, params):
         # counting it as a failure is what would make '...:panel' over a tree
         # exit non-zero for every tree but the one where every package has a
         # panel.
-        targets = _targets(ctx, pc, packages, object_name, "sketch" if params.get("sketch") else "part")
+        targets = _targets(ctx, pc, packages, object_name, _routed_kind(params), _ROUTED)
         if not targets:
             _nowhere(pc, object_name, package)
             # Named among the failures as it was written, not qualified with the
             # package the walk started from: it is in none of them.
             return {"routes": [], "failed": [object_name]}
-        packages = [target for target, _ in targets]
+        packages = [target for target, _, _ in targets]
 
     with pc.logging.Process("CAM", package):
         results, failures = asyncio.run(
@@ -3434,7 +3541,7 @@ def cam_route(session, params):
                 ctx,
                 packages,
                 object_name,
-                sketch=bool(params.get("sketch")),
+                kind=_routed_kind(params),
                 implementation=params.get("implementation") or None,
                 machine=machine,
                 output_dir=params.get("output_dir") or None,
@@ -3472,8 +3579,17 @@ def cam_route(session, params):
     }
 
 
+# The kinds of object a machine cuts: a sketch is a profile, a part a solid.
+_ROUTED = ("part", "sketch")
+
+
+def _routed_kind(params):
+    """'-s' when it was given, and None to have the name looked up."""
+    return "sketch" if params.get("sketch") else None
+
+
 async def _route_packages_async(
-    pc, ctx, packages, object_name, sketch, implementation, output_dir, machine=None, quiet_misses=False
+    pc, ctx, packages, object_name, kind, implementation, output_dir, machine=None, quiet_misses=False
 ):
     """Route the objects of every package named, reporting each as it lands.
 
@@ -3532,7 +3648,7 @@ async def _route_packages_async(
             shapes.extend(await prj.routable_shapes_async())
             continue
 
-        if sketch:
+        if await _kind_of_async(ctx, target, obj, kind, _ROUTED) == "sketch":
             named = await prj.routable_shapes_async(sketches=[obj])
         else:
             named = await prj.routable_shapes_async(parts=[obj])
@@ -4030,10 +4146,11 @@ def render_objects(session, params):
                 USAGE_ERROR,
                 "A filter selects the links of one assembly or scene; name that object, without a '...'",
             )
-        if _object_kind(params) not in ("assembly", "scene"):
+        owner, name = pc.utils.resolve_resource_path(package, object_name)
+        if _kind_of(ctx, owner, name, _object_kind(params)) not in ("assembly", "scene"):
             raise JsonRpcError(
                 USAGE_ERROR,
-                "Only an assembly or a scene has links to filter; name which one it is with '-a' or '-S'",
+                "Only an assembly or a scene has links to filter, and '%s' is neither" % object_name,
             )
 
     with pc.logging.Process(params.get("label", "Render"), package):
@@ -4102,8 +4219,8 @@ def render_inline(session, params):
     """Render one object to one file type and return the file itself.
 
     What the IDE's 2D and Draft tabs show and save: ``format`` is the file type
-    (``png``, ``svg``, ...), ``kind`` what the object is (a part unless it says
-    otherwise), and ``options_package`` a package whose ``render:`` section
+    (``png``, ``svg``, ...), ``kind`` what the object is (looked up when it is
+    not given), and ``options_package`` a package whose ``render:`` section
     supplies the implementation -- ``pc render -e``, which is how a drawing by
     ``//pub/feature/render/draftwright`` is asked for.
 
@@ -4137,24 +4254,16 @@ def render_inline(session, params):
     fmt = params.get("format")
     if not fmt:
         raise JsonRpcError(USAGE_ERROR, "No file type is given")
-    kind = params.get("kind") or "part"
-    if kind not in _RENDERABLE:
-        raise JsonRpcError(
-            USAGE_ERROR,
-            "Only parts, assemblies, scenes and sketches can be rendered to a file; '%s' is none of them" % kind,
-        )
-    getter = {
-        "part": ctx.get_part,
-        "assembly": ctx.get_assembly,
-        "scene": ctx.get_scene,
-        "sketch": ctx.get_sketch,
-    }[kind]
+    refusal = "Only parts, assemblies, scenes and sketches can be rendered to a file; '%s' is none of them"
+    _refuse_said_kind(params, _RENDERABLE, refusal)
 
     resolved = _resolve_object(ctx, pc, params)
     if resolved is None:
         return None
     package, name = resolved
     path = _qualified(package, name)
+    kind = _resolve_kind(ctx, params, package, name, _RENDERABLE, refusal)
+    getter = _getter(ctx, kind)
 
     options_package = params.get("options_package")
     if options_package:
@@ -4251,11 +4360,11 @@ def _render_objects(
         # ends the whole run: 'Project.render_async()' raises 'EmptyShapesError'
         # for a name it cannot resolve, so one package without a 'bolt' used to
         # cost every other package its render.
-        targets = _targets(ctx, pc, packages, object_name, _object_kind(params))
+        targets = _targets(ctx, pc, packages, object_name, _object_kind(params), _SHAPES)
         if not targets:
             _nowhere(pc, object_name, package)
             return
-        packages = [target for target, _ in targets]
+        packages = [target for target, _, _ in targets]
 
     # An object named as '<package>:<name>' is produced by that package, not
     # by the one '--package' selected, so its file types count as known too.
@@ -4350,16 +4459,13 @@ async def _render_packages_async(
                 )
             else:
                 sketches, interfaces, parts, assemblies, scenes = [], [], [], [], []
-                if params.get("sketch"):
-                    sketches.append(object_in_package)
-                elif params.get("interface"):
-                    interfaces.append(object_in_package)
-                elif params.get("assembly"):
-                    assemblies.append(object_in_package)
-                elif params.get("scene"):
-                    scenes.append(object_in_package)
-                else:
-                    parts.append(object_in_package)
+                # What this package's object of that name is: one name is one
+                # object of a package, and the next package's may be another
+                # kind. Nothing at all is a part, so that the miss is reported
+                # by the part getter as it always was.
+                kind = await _kind_of_async(ctx, package, object_in_package, _object_kind(params), _SHAPES)
+                by_kind = {"sketch": sketches, "interface": interfaces, "assembly": assemblies, "scene": scenes}
+                by_kind.get(kind, parts).append(object_in_package)
                 prj = ctx.get_project(package)
                 if prj is None:
                     # A package that does not resolve, reported as what it is.
@@ -4424,10 +4530,9 @@ def filter_object(session, params):
     from partcad.actions import filter_object_action
 
     kind = _object_kind(params)
-    # A part is what an object is when nothing says otherwise, and a part has no
-    # links; left unsaid here, the kind follows the source object (see
-    # 'actions.filter._detect_kind'), which is what makes a filtered scene a
-    # scene without the user saying so twice.
+    # Only an assembly or a scene has links. Left unsaid, the kind follows the
+    # source object (see 'actions.filter._detect_kind'), which is what makes a
+    # filtered scene a scene without the user saying so twice.
     if kind not in ("assembly", "scene"):
         kind = None
 

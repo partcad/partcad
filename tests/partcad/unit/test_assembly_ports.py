@@ -200,7 +200,7 @@ def test_pc_info_reports_a_port_that_has_no_boundary_sketch():
     assert reported["origin"] == {"location": Location().as_packed()}
     # Plain data, not a Location: this travels to a client over JSON-RPC.
     assert reported["TL-thru-m3"]["location"] == [[-10.0, 10.0, 0.0], [0.0, 0.0, 1.0], 0.0]
-    assert reported["TL-thru-m3"]["sketch"] == "//:m3"
+    assert reported["TL-thru-m3"]["sketch"] == "//:m3-boundary"
 
 
 def test_an_assembly_is_taken_at_its_word_unless_asked_otherwise():

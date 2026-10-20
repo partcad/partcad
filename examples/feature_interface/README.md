@@ -25,8 +25,8 @@ arrow is `+Z`, the direction a part travels along when it is connected
 through that port - and writes the name a `connectPorts:` would have to use.
 `--with-interfaces` names each *instance* of an interface once and draws a
 line out to each port that belongs to it, so a bolt pattern reads as the one
-connection it is; the small circles are the port boundaries, the `m3` and
-`m4` sketches this package defines.
+connection it is; the small circles are the port boundaries, the `m3-boundary`
+and `m4-boundary` sketches this package defines.
 
 An assembly is taken at its word: what is drawn is what it says its ports
 are, and this one externalizes none of the ones inside it. `--with-internals`

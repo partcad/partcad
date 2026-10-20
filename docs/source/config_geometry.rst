@@ -541,7 +541,7 @@ always visible in one direction or the other.
 
 ``pc convert assembly -t assy`` fills both sections in from a URDF's joints -
 see :ref:`sim-urdf-joints` for the mapping - and what it writes is an explicit
-declaration of the joint it was. ``pc info -a <assembly>`` lists an assembly's
+declaration of the joint it was. ``pc info <assembly>`` lists an assembly's
 joints, each with the ``type`` it is, and :ref:`assy-joints` how a connection
 names, locks and starts one.
 
@@ -619,14 +619,14 @@ Here is an example how to define the port boundary using a primitive sketch:
 .. code-block:: yaml
 
   sketches:
-    m3:
+    m3-boundary:
       type: basic
       circle: 3.0
   interfaces:
     m3:
       ports:
         m3:
-          sketch: m3
+          sketch: m3-boundary
 
 Here is how it will get visualized:
 
@@ -780,9 +780,9 @@ with the same ``;<name>=<value>`` suffix ``pc ide view cube;width=20`` uses.
 
 .. code-block:: shell
 
-  pc info -i m-thru                  # the defaults: a 3mm hole through 3mm
-  pc info -i "m-thru;size=4,depth=2" # a 4mm hole through 2mm
-  pc info -i m-thru -p size=4        # the same, said on the command line
+  pc info m-thru                     # the defaults: a 3mm hole through 3mm
+  pc info "m-thru;size=4,depth=2"    # a 4mm hole through 2mm
+  pc info m-thru -p size=4           # the same, said on the command line
 
 Every set of values is one interface, whatever order they are written in and
 however the numbers are spelled: ``m-thru;size=4,depth=2``,
