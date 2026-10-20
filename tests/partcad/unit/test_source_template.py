@@ -111,12 +111,61 @@ def test_the_rendered_file_is_not_written_into_the_package(package):
     assert not path.startswith(os.path.abspath(package.config_dir) + os.sep)
 
 
+def test_a_file_that_is_not_text_is_the_file_itself(package):
+    """A binary format is not a template: its bytes reach the reader untouched."""
+    factory = factory_of(package, "plain")
+    with open(factory.path, "wb") as f:
+        f.write(b"AC1032\x00\x80\xff\xfe binary drawing")
+
+    assert factory.rendered_source() == factory.path
+
+
 def test_a_template_that_will_not_render_names_the_file_it_is_in(package, tmp_path):
     factory = factory_of(package, "templated")
     open(factory.path, "w", encoding="utf-8").write("{% for %}")
 
     with pytest.raises(Exception, match="failed to render the template"):
         factory.rendered_source()
+
+
+def test_the_reader_runs_in_its_own_package_s_image_and_cache(tmp_path):
+    """Where a partType and an output implementation run, and with what they are told."""
+    import asyncio
+
+    root = tmp_path / "workspace"
+    root.mkdir()
+    (root / "reader.py").write_text(READER, encoding="utf-8")
+    (root / "plain.xml").write_text('<world model="plain"/>', encoding="utf-8")
+    (root / "partcad.yaml").write_text(
+        "name: //t\n"
+        "dockerImage: example/reader-image:1\n"
+        "import:\n  demo:\n    path: reader.py\n    extension: xml\n    kinds: [scene]\n"
+        "scenes:\n  plain:\n    type: demo\n    path: plain.xml\n",
+        encoding="utf-8",
+    )
+    factory = factory_of(pc.Context(str(root)).get_project("//"), "plain")
+    asked, seen = {}, {}
+
+    class Runtime:
+        async def ensure_async(self, _requirement):
+            return None
+
+        async def prepare_for_package(self, _project):
+            return None
+
+        async def run_async(self, command, request):
+            seen.update(pc.shape_envelope.deserialize(request))
+            return 0, pc.shape_envelope.serialize({"success": True, "root": {"links": [], "parts": []}}), ""
+
+    def get_python_runtime(*args, **kwargs):
+        asked.update(kwargs)
+        return Runtime()
+
+    factory.ctx.get_python_runtime = get_python_runtime
+    asyncio.run(factory._read_async())
+
+    assert asked["image"] == "example/reader-image:1"
+    assert seen["cache_dir"] == os.path.join(os.path.abspath(str(root)), ".cache")
 
 
 def test_the_reader_is_told_where_the_file_was_declared(package):

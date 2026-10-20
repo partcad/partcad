@@ -127,12 +127,17 @@ class AssemblyFactoryFile(AssemblyFactory):
         directory separately, precisely because the file they parse may be this
         copy. A file that cannot be read is left to the reader to complain
         about, which is where every other unreadable-file message comes from.
+
+        So is a file that is not text: an 'import:' reader may read a binary
+        format (a DWG, say), and bytes that do not decode are not a template.
         """
         try:
             with open(self.path, "r", encoding="utf-8") as f:
                 text = f.read()
         except OSError as e:
             pc_logging.debug("%s: cannot read the source file to render it: %s" % (self.name, e))
+            return self.path
+        except UnicodeDecodeError:
             return self.path
 
         try:

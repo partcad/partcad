@@ -202,8 +202,16 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
         request.update(self.impl.parameters)
         request.update(self._declared_parameters())
         request[output.SCRIPT_KEY] = os.path.abspath(script)
+        # Where the reader's package keeps what it fetches for itself, as a
+        # partType's script and an output implementation are told (see
+        # 'output.package_cache_dir'): a reader that converts through a program
+        # pip cannot install downloads it once, not once per object.
+        request.setdefault("cache_dir", output.package_cache_dir(self.ctx, self.impl.project))
 
-        runtime = self.ctx.get_python_runtime(version=self.impl.python_version())
+        # The sandbox image is the implementing package's too, for the reason it
+        # is an output implementation's: what a reader needs to run is known to
+        # whoever wrote it, and the package declaring the object never heard of it.
+        runtime = self.ctx.get_python_runtime(version=self.impl.python_version(), image=self.impl.docker_image)
         await runtime.prepare_for_package(self.impl.project)
         # Installed one at a time, not with asyncio.gather(): the order matters,
         # since build123d overwrites the OCP native module that cadquery-ocp
