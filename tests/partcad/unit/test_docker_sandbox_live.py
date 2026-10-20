@@ -30,8 +30,10 @@ so a sandbox per test is that download per test, and the disk to hold five
 copies of it. What is under test is the same sandbox at each step anyway.
 """
 
+import asyncio
 import os
 import shutil
+import time
 import types
 
 import pytest
@@ -118,6 +120,29 @@ def test_a_wrapper_is_handed_its_request_and_answers(made):
     )
     assert exitcode == 0, stderr
     assert "A REQUEST" in stdout
+
+
+def test_an_answer_read_late_comes_back_whole(made, monkeypatch):
+    """Docker closes a 'docker exec' client's streams two seconds after the command in it exits.
+
+    An answer of 1.5 MB is all buffered between the container and the client by
+    then, so a PartCAD whose event loop was busy for longer than that got
+    1409024 bytes of a MuJoCo run's answer, and an exit status of 0. Busy, here,
+    is 'communicate' starting late, with a command that does not wait for its
+    standard input.
+    """
+    real = runtime.communicate
+
+    async def late(p, stdin, timeout=None):
+        time.sleep(4)
+        return await real(p, stdin, timeout)
+
+    made.once()
+    monkeypatch.setattr(runtime, "communicate", late)
+    exitcode, stdout, stderr = asyncio.run(made.run_async(["-c", "import sys; sys.stdout.write('x' * 1500000)"], ""))
+
+    assert exitcode == 0, stderr
+    assert len(stdout) == 1500000
 
 
 def test_a_wrapper_file_can_be_opened_by_the_interpreter_over_there(made):
