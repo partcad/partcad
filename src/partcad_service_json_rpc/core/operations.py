@@ -993,10 +993,15 @@ def info(session, params):
     ctx = _ctx(session, params)
     if ctx is None:
         return None
-    cwd = os.getcwd()
+    # Absolute, as PartCAD has it. It used to be made relative to this
+    # process's working directory, which is the client's only when the service
+    # runs over stdio in the client's workspace. A POSIX daemon detaches into
+    # '/', and the `str.replace` that did it then turned every separator into a
+    # '.' - '/home/me/pkg/partcad.yaml' became '.home.me.pkg.partcad.yaml' in
+    # the editor's Context view. What to show it relative to is for the client
+    # to decide: it knows the workspace it opened, and a daemon may not even
+    # share its filesystem (see `workspacePath` in the extension).
     path = _root_config_path(ctx)
-    if path.startswith(cwd):
-        path = path.replace(cwd, ".")
     ctx.stats_recalc()
     session.emitter.emit(
         events.STATS,
