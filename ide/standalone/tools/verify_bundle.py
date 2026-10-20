@@ -30,6 +30,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import jsonc  # noqa: E402  (the path has to be set up first)
+import patch_workbench  # noqa: E402
 
 SERVICE_EXECUTABLES = ("partcad-json-rpc", "partcad-json-rpc.exe")
 
@@ -248,6 +249,22 @@ def check_entry_point(app_dir: pathlib.Path, problems: list[str], notes: list[st
     notes.append(f"entry point: {main} (software WebGL enabled, workspace trust off)")
 
 
+def check_workbench(app_dir: pathlib.Path, problems: list[str], notes: list[str]) -> None:
+    """The PartCAD workbench is first on the activity bar, and its icon is in colour.
+
+    Both are edits to the editor's own workbench (`patch_workbench.py`), and
+    both fail invisibly: an icon left grey, or an entry left sixth, is an IDE
+    that starts and works. So is one whose `product.json` checksums no longer
+    match the files they cover -- until it starts, and says on every start that
+    the installation is corrupt.
+    """
+    found = patch_workbench.problems(app_dir)
+    if found:
+        problems.extend(found)
+        return
+    notes.append("workbench: the PartCAD workbench is ordered first and drawn in colour; product.json checksums match")
+
+
 def check_macos_helpers(app_root: pathlib.Path, problems: list[str], notes: list[str]) -> None:
     """The Electron helper applications are named for the branded application.
 
@@ -327,6 +344,7 @@ def main(argv: list[str] | None = None) -> int:
 
     check_product(args.resources / "app" / "product.json", problems, notes)
     check_entry_point(args.resources / "app", problems, notes)
+    check_workbench(args.resources / "app", problems, notes)
     check_executable(args.executable, "application executable", problems, notes)
     check_executable(args.launcher, "command line launcher", problems, notes)
     if args.app_root is not None:
