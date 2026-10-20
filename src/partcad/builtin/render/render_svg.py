@@ -38,20 +38,23 @@ import wrapper_common
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 3
+CACHE_VERSION = 4
 
 # Two points closer than this are the same point, as far as a drawn line goes.
 TOLERANCE = 1e-9
 
-# The shortest edge a projection draws, in the shape's own units. The exact
+# The shortest curve a projection draws, in the shape's own units. The exact
 # hidden-line algorithm can leave a sliver where a silhouette meets an edge -- a
-# B-spline a few tenths of a micron long, just above the kernel's own confusion
-# tolerance of 1e-7 -- and build123d writes a B-spline into the SVG by having
-# OCCT approximate it ('ShapeCustom.BSplineRestriction'), which dies with SIGSEGV
-# on one that short rather than raising. Ten times that tolerance is still a
-# million times shorter than a pixel of a drawing of anything a millimetre
-# across, so nothing that can be seen is lost; the shortest edge in any drawing
-# checked in under 'examples/' is twenty times longer.
+# curve a few tenths of a micron long, just above the kernel's own confusion
+# tolerance of 1e-7 -- and build123d writes any curve but a line, a circle or an
+# ellipse by having OCCT approximate it first ('ShapeCustom.BSplineRestriction'),
+# which dies with SIGSEGV on a B-spline that short rather than raising. Ten times
+# that tolerance is still a million times shorter than a pixel of a drawing of
+# anything a millimetre across, so nothing that can be seen is lost.
+#
+# Only those curves: a line, a circle or an ellipse is written from its own
+# parameters, and a sliver of one comes out as an empty path. A few drawings
+# checked in under 'examples/' carry one, and they stay as they are.
 MIN_EDGE_LENGTH = 1e-6
 
 # What build123d repairs the curves of a projected edge to, which the projection
@@ -694,9 +697,14 @@ def project_by_color(whole, groups, origin, up, look_at, reproducible=False):
     return [(color, drawable(edges)) for (color, _shape), edges in zip(groups, projected)]
 
 
+# The kinds of edge build123d's SVG exporter writes from their own parameters,
+# by 'GeomType' name. Every other kind it approximates: see 'MIN_EDGE_LENGTH'.
+WRITTEN_AS_IS = frozenset({"LINE", "CIRCLE", "ELLIPSE"})
+
+
 def drawable(edges):
-    """The projected edges, less the ones too short to draw: see 'MIN_EDGE_LENGTH'."""
-    return [edge for edge in edges if edge.length >= MIN_EDGE_LENGTH]
+    """The projected edges, less the slivers the exporter would have to approximate."""
+    return [edge for edge in edges if edge.geom_type.name in WRITTEN_AS_IS or edge.length >= MIN_EDGE_LENGTH]
 
 
 def project(shape, origin, up, look_at, reproducible=False):

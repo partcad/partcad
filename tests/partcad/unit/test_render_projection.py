@@ -351,25 +351,44 @@ def _line(length):
     return bd.Edge.make_line((0, 0, 0), (length, 0, 0))
 
 
-def test_an_edge_too_short_to_draw_is_left_out(real_svg):
-    """A sliver is dropped, and an edge only a little longer is kept.
+def _curve(span):
+    """A curve the exporter has to approximate: a Bezier a little longer than 'span'."""
+    import build123d as bd
 
-    build123d writes a B-spline by having OCCT approximate it, which crashes on
-    one a few tenths of a micron long rather than raising. The swept DXF profile
-    in 'examples/produce_part_sweep' left one behind once the profile was read
-    in the inches it is drawn in.
+    return bd.Edge.make_bezier((0, 0, 0), (span / 2, span / 2, 0), (span, 0, 0))
+
+
+def test_a_curve_too_short_to_draw_is_left_out(real_svg):
+    """A sliver of a curve is dropped, and one only a little longer is kept.
+
+    build123d writes such a curve by having OCCT approximate it, which crashes
+    on a B-spline a few tenths of a micron long rather than raising. The swept
+    DXF profile in 'examples/produce_part_sweep' left one behind once the
+    profile was read in the inches it is drawn in.
     """
-    sliver = _line(real_svg.MIN_EDGE_LENGTH / 2)
-    short = _line(real_svg.MIN_EDGE_LENGTH * 2)
+    sliver = _curve(real_svg.MIN_EDGE_LENGTH / 4)
+    short = _curve(real_svg.MIN_EDGE_LENGTH * 2)
 
+    assert sliver.length < real_svg.MIN_EDGE_LENGTH < short.length
     assert real_svg.drawable([sliver, short]) == [short]
+
+
+def test_a_short_line_is_still_drawn(real_svg):
+    """A line is written from its two ends, and nothing approximates it.
+
+    So a sliver of one stays, as it always did, and so do the drawings checked
+    in with one.
+    """
+    line = _line(real_svg.MIN_EDGE_LENGTH / 2)
+
+    assert real_svg.drawable([line]) == [line]
 
 
 @pytest.mark.parametrize("reproducible", [True, False])
 @pytest.mark.parametrize("colors", [1, 2])
 def test_every_projection_leaves_slivers_out(real_svg, monkeypatch, reproducible, colors):
     """Through either algorithm, of a shape in one colour or in several."""
-    sliver = _line(real_svg.MIN_EDGE_LENGTH / 2)
+    sliver = _curve(real_svg.MIN_EDGE_LENGTH / 4)
     edge = _line(1.0)
 
     def each(*args):
@@ -389,7 +408,7 @@ def test_every_projection_leaves_slivers_out(real_svg, monkeypatch, reproducible
 
 def test_an_overlay_leaves_slivers_out_too(real_svg, monkeypatch):
     """Annotations and port boundaries go through the same projection, and the same filter."""
-    sliver = _line(real_svg.MIN_EDGE_LENGTH / 2)
+    sliver = _curve(real_svg.MIN_EDGE_LENGTH / 4)
     edge = _line(1.0)
     monkeypatch.setattr(real_svg, "project", lambda *_args: [edge, sliver])
     added = []
