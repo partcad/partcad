@@ -1,0 +1,12 @@
+links:
+  - part: brick
+    package: lib
+    name: brick1
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: brick
+    package: lib
+    name: brick2
+    location: [[0, 0, 10], [0, 0, 1], 0]
+  - part: pin
+    package: kit
+    location: [[0, 0, 20], [0, 0, 1], 0]

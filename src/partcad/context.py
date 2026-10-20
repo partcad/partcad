@@ -1474,8 +1474,14 @@ class Context:
             part_spec (ProviderCartItem): The part to find suppliers for.
             cart (ProviderCart, optional): Use this cart for requirements and preferences. Defaults to None.
 
+        The candidates are the suppliers of the package of the assembly the
+        item was procured for, first, and then those of the package the item
+        itself is declared in (see 'ProviderCartItem.suppliers'), each asked
+        once.
+
         Returns:
-            list[str]: list of provider names that can supply the part.
+            list[str]: list of provider names that can supply the part, a
+            supplier named with parameters by the name of that instance.
         """
         providers = []
 
@@ -1490,7 +1496,9 @@ class Context:
             return {}
         pc_logging.debug("Retrieving suppliers from %s" % project_name)
 
-        part_suppliers = await prj.get_suppliers_async()
+        part_suppliers = dict(getattr(part_item, "suppliers", None) or {})
+        for supplier, extra in (await prj.get_suppliers_async()).items():
+            part_suppliers.setdefault(supplier, extra)
         if len(part_suppliers) == 0:
             pc_logging.error("No suppliers found for %s in %s" % (part_name, project_name))
             return {}
@@ -1500,18 +1508,33 @@ class Context:
         pc_logging.debug("Part: %s" % str(part_item))
         for provider_name, provider_extra_config in part_suppliers.items():
             provider = self.get_provider(provider_name, provider_extra_config)
+            if provider is None:
+                # A store named where it cannot be loaded - a package used
+                # without the one that registers its stores - has been reported
+                # by 'get_provider', and has nothing to offer: ask the next.
+                continue
             if not await provider.is_part_available(part_item):
                 continue
             if cart and cart.qos is not None and not provider.is_qos_available(cart.qos):
                 continue
 
-            providers.append(provider_name)
+            # The name of the instance that was asked: a supplier named with
+            # parameters ('currency: EUR') is an instance of its own, and the
+            # carts and quotes made from this ask 'get_provider' for it by
+            # name. Its bare name would be the provider with its defaults.
+            providers.append(provider.name)
 
         return providers
 
     def select_preferred_supplier(self, suppliers: list[str]):
-        """From a list of suppliers, select the preferred one."""
-        return suppliers[0]
+        """From a list of suppliers, select the preferred one, or '' if there is none.
+
+        '' is what 'select_supplier()' records for a part its provider does not
+        have, and what the carts and quotes made from this keep apart as the
+        parts nobody supplies - rather than one such part failing the quote
+        of all the others.
+        """
+        return suppliers[0] if suppliers else ""
 
     def select_preferred_suppliers(self, suppliers_per_part: dict[str, list[str]]) -> dict[str, str]:
         """Given a list of suppliers per part, select the preferred supplier for each."""
