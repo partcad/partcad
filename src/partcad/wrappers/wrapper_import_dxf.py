@@ -20,9 +20,14 @@ import sys
 # dies with an undefined-symbol ImportError.
 import pyexpat  # noqa: F401
 
-import cadquery as cq
+# CadQuery's own DXF converters and face builder. Its importer is not called:
+# it reads only what modelspace draws directly, and 'dxf_drawing' says what
+# that misses.
+from cadquery.occ_impl.importers.dxf import _dxf_convert
+from cadquery.occ_impl.shapes import Compound, Face, sortWiresByBuildOrder
 
 sys.path.append(os.path.dirname(__file__))
+import dxf_drawing
 import dxf_metadata
 import ocp_serialize
 import wrapper_common
@@ -30,16 +35,37 @@ import wrapper_common
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 
-def as_wires(request):
+def as_faces(layers, tolerance):
+    """The faces what the selected layers draw bound, holes included -- every one of them.
+
+    CadQuery's importer, which this follows: each layer's entities are joined
+    into wires, the wires are sorted into outlines and the holes inside them,
+    and each outline becomes a face. Raises if a wire does not close, which is
+    the case 'as_wires' answers.
+
+    *Every* face is kept. A drawing of two outlines side by side, or one on
+    each of two layers, is a sketch of two faces -- not of whichever one the
+    importer happened to list first, which is what this used to keep. One face
+    comes back as that face, as it always has.
+    """
+    faces = [
+        Face.makeFromWires(wire_set[0], wire_set[1:])
+        for entities in layers.values()
+        for wire_set in sortWiresByBuildOrder(_dxf_convert(entities, tolerance))
+    ]
+    return dxf_drawing.one_shape(faces, Compound.makeCompound).wrapped
+
+
+def as_wires(layers, tolerance):
     """What the selected layers draw, as wires, for a drawing that has no faces.
 
-    CadQuery's importer builds *faces*: it merges each layer's entities into
-    wires and then asks each wire for the face it bounds. A drawing whose lines
-    do not close bounds nothing, so the whole import fails - and a drawing whose
-    lines do not close is precisely what sheet metal bend instructions are. Two
+    'as_faces' builds *faces*: it merges each layer's entities into wires and
+    then asks each wire for the face it bounds. A drawing whose lines do not
+    close bounds nothing, so the whole import fails - and a drawing whose lines
+    do not close is precisely what sheet metal bend instructions are. Two
     parallel lines across a blank are where it is folded, and they are open by
     nature.
 
@@ -48,60 +74,26 @@ def as_wires(request):
     a sketch of them is a perfectly good sketch - it is only not a face.
 
     Only ever reached *after* the face import has raised, which is what keeps
-    every drawing that imports today importing exactly as it did: this is a
-    second answer to a question that otherwise had none, never a different
-    answer to one that had one.
-
-    The layer selection is CadQuery's own, mirrored here because this does not
-    go through its importer: names are matched case-insensitively, and 'include'
-    and 'exclude' are mutually exclusive. 'dxf_metadata.is_included' applies the
-    same rule to the annotations, so the two describe one set of elements.
+    every drawing that imports as faces importing as faces: this is a second
+    answer to a question that otherwise had none, never a different answer to
+    one that had one.
     """
-    import ezdxf
-    from cadquery.occ_impl.importers.dxf import _dxf_convert
-    from cadquery.occ_impl.shapes import Compound
-
-    document = ezdxf.readfile(request["path"])
-    layers = document.modelspace().groupby(dxfattrib="layer")
-
-    wires = []
-    for name, layer in layers.items():
-        if not dxf_metadata.is_included(name, request["include"], request["exclude"]):
-            continue
-        wires.extend(_dxf_convert(layer, request["tolerance"]))
-
-    if not wires:
-        raise ValueError("the selected layers of the DXF file draw nothing")
-    return Compound.makeCompound(wires).wrapped
+    wires = [wire for entities in layers.values() for wire in _dxf_convert(entities, tolerance)]
+    return dxf_drawing.one_shape(wires, Compound.makeCompound, always_compound=True).wrapped
 
 
 def process(path, request):
-    warning = None
-    if request["include"] and request["exclude"]:
-        # Refused before the import rather than after it, because the import
-        # refuses it too and the 'except' below cannot tell that refusal from a
-        # drawing that would not close: it would fall back to the wires, apply
-        # both filters, and hand back a sketch for a request CadQuery rejected.
-        # 'SketchFactoryDxf' catches this first and says which sketch; this is
-        # the wrapper being right on its own, since the fallback's rule is
-        # meant to be the importer's.
-        raise ValueError("you may specify either 'include' or 'exclude' but not both")
     try:
+        layers, warnings = dxf_drawing.read(request["path"], request["include"], request["exclude"])
         try:
-            workplane = cq.importers.importDXF(
-                filename=request["path"],
-                tol=request["tolerance"],
-                include=request["include"],
-                exclude=request["exclude"],
-            )
-            shape = workplane.val().wrapped
+            shape = as_faces(layers, request["tolerance"])
         except Exception as e:
             # Said out loud rather than fallen back on quietly: a drawing of
             # open lines is meant to import this way, and an outline with a gap
             # in it is a mistake that would otherwise become a sketch nothing
             # can extrude and nobody was told about.
-            shape = as_wires(request)
-            warning = "no face could be built from the DXF file (%s); imported the wires it draws instead" % e
+            shape = as_wires(layers, request["tolerance"])
+            warnings.append("no face could be built from the DXF file (%s); imported the wires it draws instead" % e)
 
         # What the drawing says about its own elements, and about itself, which
         # the geometry cannot carry: BREP has nowhere to put an angle written
@@ -143,7 +135,7 @@ def process(path, request):
         return {
             "success": True,
             "exception": None,
-            "warning": warning,
+            "warning": "; ".join(warnings) or None,
             "shape": shape,
         }
 

@@ -193,7 +193,8 @@ class SketchFactoryDxf(SketchFactoryPython):
                     # Not an error - the sketch was produced - but not silent
                     # either: it says the drawing did not close into a face,
                     # which is what a drawing of bend lines is meant to do and
-                    # what an outline with a gap in it is not.
+                    # what an outline with a gap in it is not, or that a block
+                    # reference could not be followed and drew nothing.
                     pc_logging.warning("%s: %s" % (self.path, result["warning"]))
 
                 # Everything the drawing said - about its own elements and
