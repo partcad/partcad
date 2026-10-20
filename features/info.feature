@@ -427,7 +427,7 @@ Feature: `pc info` command
 
   # @pc-info
   # Scenario: Show simplified part information
-  #   When I run "pc info -s //pub/std/metric/m:m3"
+  #   When I run "pc info -s //pub/std/metric/m:m3-major"
   #   Then the command should exit with a status code of "0"
   #   And STDOUT should contain only essential fields
   #   And STDOUT should not contain detailed specifications
