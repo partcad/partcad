@@ -12,6 +12,7 @@ import contextlib
 import os
 import signal
 import subprocess
+import tempfile
 import threading
 
 import docker
@@ -213,6 +214,55 @@ async def communicate(p, stdin: bytes, timeout=None):
         raise
 
 
+class OutputCapture:
+    """Where a child's standard output and error go, and how they are read back. See 'output_capture'."""
+
+    def __init__(self, stdout, stderr):
+        self.stdout = stdout
+        self.stderr = stderr
+
+    def collect(self, stdout, stderr):
+        """What the child wrote, given what 'communicate' returned: that, or the file's contents."""
+        return self._read(self.stdout, stdout), self._read(self.stderr, stderr)
+
+    @staticmethod
+    def _read(target, read):
+        if read is not None or target is subprocess.PIPE:
+            return read
+        target.seek(0)
+        return target.read()
+
+
+@contextlib.contextmanager
+def output_capture(to_files: bool):
+    """Pipes for a child's output, read as it arrives; or, 'to_files', two unnamed files read once it has gone.
+
+    Pipes are what every runtime used, and they are fine for a child that writes
+    to them itself. They are not for a 'docker exec' client, whose output is the
+    end of a chain that Docker's daemon closes on its own clock: when the
+    command in the container exits, the daemon gives the copying of what it
+    wrote two seconds to finish, and then closes the streams, with whatever
+    had not reached the client still in them. The command's exit status is
+    still 0, and nothing is said on standard error.
+
+    So the client has to be read promptly, and a pipe is read by whoever holds
+    it -- for 'run_async', PartCAD's event loop, which a render or the decoding
+    of another answer can keep busy for longer than that. Between the pipe,
+    the sockets and the megabyte the daemon buffers before it makes the
+    command wait, an answer of between about 1.4 and 2.4 MB is entirely
+    written, and the command gone, before anybody has read any of it; one that
+    is then not read for two seconds comes back cut off at a multiple of 8192
+    bytes. A MuJoCo run reporting each body's loads in 799 samples is that
+    size, and came back 1409024 bytes long. A file is written by the client as
+    fast as the daemon sends, whatever PartCAD is doing.
+    """
+    if not to_files:
+        yield OutputCapture(subprocess.PIPE, subprocess.PIPE)
+        return
+    with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+        yield OutputCapture(stdout, stderr)
+
+
 def pack_directory(path: str) -> str:
     """A directory as a base64 gzipped tar, for sending to a container.
 
@@ -336,6 +386,10 @@ def docker_enabled(config=None) -> bool:
 
 
 class Runtime:
+    # Whether a child's output is collected in files rather than read from
+    # pipes; see 'output_capture'.
+    OUTPUT_TO_FILES = False
+
     @staticmethod
     def get_internal_state_dir(internal_state_dir):
         return os.path.join(
@@ -607,18 +661,19 @@ class Runtime:
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
             async with sandbox_lock.process_slots.slot_async():
-                p = await asyncio.create_subprocess_exec(
-                    *argv,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    shell=False,
-                    # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                    cwd=spawn_cwd,
-                    env=spawn_env,
-                    **bounded_spawn_options(timeout),
-                )
-                stdout, stderr = await communicate(p, stdin.encode(), timeout)
+                with output_capture(self.OUTPUT_TO_FILES) as capture:
+                    p = await asyncio.create_subprocess_exec(
+                        *argv,
+                        stdin=subprocess.PIPE,
+                        stdout=capture.stdout,
+                        stderr=capture.stderr,
+                        shell=False,
+                        # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
+                        cwd=spawn_cwd,
+                        env=spawn_env,
+                        **bounded_spawn_options(timeout),
+                    )
+                    stdout, stderr = capture.collect(*await communicate(p, stdin.encode(), timeout))
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)

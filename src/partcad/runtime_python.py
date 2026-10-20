@@ -608,20 +608,23 @@ class PythonRuntime(runtime.Runtime):
                 # 'encoding="utf-8"' would decode strictly, before that ever ran
                 # -- and it also made 'communicate' reject the encoded stdin two
                 # lines below, so this path raised on the way in as well as out.
-                p = subprocess.Popen(
-                    argv,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    shell=False,
-                    env=spawn_env,
-                    # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                    cwd=spawn_cwd,
-                )
-                stdout, stderr = p.communicate(
-                    input=stdin.encode(),
-                    # TODO(clairbee): add timeout
-                )
+                with runtime.output_capture(self.OUTPUT_TO_FILES) as capture:
+                    p = subprocess.Popen(
+                        argv,
+                        stdin=subprocess.PIPE,
+                        stdout=capture.stdout,
+                        stderr=capture.stderr,
+                        shell=False,
+                        env=spawn_env,
+                        # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
+                        cwd=spawn_cwd,
+                    )
+                    stdout, stderr = capture.collect(
+                        *p.communicate(
+                            input=stdin.encode(),
+                            # TODO(clairbee): add timeout
+                        )
+                    )
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
@@ -771,20 +774,21 @@ class PythonRuntime(runtime.Runtime):
                     span.set_attribute("cmd", " ".join(sanitized_cmd))
                     argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, self._subprocess_env())
                     # See the note beside the same line in 'run_onced'.
-                    p = await asyncio.create_subprocess_exec(
-                        *argv,
-                        stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        shell=False,
-                        env=spawn_env,
-                        # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                        cwd=spawn_cwd,
-                        # A bounded run is a process group of its own, so that
-                        # the bound stops all of it; see 'bounded_spawn_options'.
-                        **runtime.bounded_spawn_options(timeout),
-                    )
-                    stdout, stderr = await runtime.communicate(p, stdin.encode(), timeout)
+                    with runtime.output_capture(self.OUTPUT_TO_FILES) as capture:
+                        p = await asyncio.create_subprocess_exec(
+                            *argv,
+                            stdin=subprocess.PIPE,
+                            stdout=capture.stdout,
+                            stderr=capture.stderr,
+                            shell=False,
+                            env=spawn_env,
+                            # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
+                            cwd=spawn_cwd,
+                            # A bounded run is a process group of its own, so that
+                            # the bound stops all of it; see 'bounded_spawn_options'.
+                            **runtime.bounded_spawn_options(timeout),
+                        )
+                        stdout, stderr = capture.collect(*await runtime.communicate(p, stdin.encode(), timeout))
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)

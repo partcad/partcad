@@ -760,6 +760,40 @@ def test_the_way_a_part_is_run_is_a_call_this_sandbox_accepts(tmp_path, monkeypa
     assert "ran" in stdout
 
 
+def test_the_docker_client_writes_its_output_to_files_not_pipes(tmp_path, monkeypatch):
+    """Docker's daemon cuts off what a 'docker exec' client had not read two seconds after the command exits.
+
+    So the client must never wait on PartCAD to read a pipe (see
+    'runtime.output_capture'). What it writes still comes back whole, on both
+    streams, through every way a command is run.
+    """
+    import asyncio
+    import sys
+
+    made = _runtime(tmp_path)
+    made.provisioned = True
+    made.exec_path = sys.executable
+    # Failing, because standard error is handed back only from a run that failed.
+    script = (
+        "import os, stat, sys\n"
+        "sys.stderr.write('e' * 100000)\n"
+        "print(stat.S_ISFIFO(os.fstat(1).st_mode), stat.S_ISFIFO(os.fstat(2).st_mode), 'x' * 3000000)\n"
+        "sys.exit(3)\n"
+    )
+    monkeypatch.setattr(made, "_spawn", lambda cmd, cwd=None, env=None: ([sys.executable, "-c", script], None, None))
+
+    for exitcode, stdout, stderr in (
+        made.run(["-c", "pass"], "", session=None),
+        asyncio.run(made.run_async(["-c", "pass"], "", session=None)),
+        # Provisioning runs through the base class's own launch point.
+        asyncio.run(runtime.Runtime.run_async(made, ["-c", "pass"], "")),
+    ):
+        assert exitcode == 3
+        assert stdout.split(" ", 2)[:2] == ["False", "False"]
+        assert stdout.rstrip().endswith(" " + "x" * 3000000)
+        assert "e" * 100000 in stderr
+
+
 def test_the_environment_is_built_over_there(tmp_path, monkeypatch):
     """'-m venv' is the first thing this sandbox runs, and the easiest to lose.
 

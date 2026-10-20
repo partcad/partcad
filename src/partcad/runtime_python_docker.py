@@ -290,6 +290,11 @@ def sandbox_spec(image: str, mounts) -> containers.ContainerSpec:
 
 @telemetry.instrument()
 class DockerPythonRuntime(runtime_python.PythonRuntime):
+    # What runs here is a 'docker exec' client, and Docker's daemon stops
+    # waiting for it two seconds after the command exits: an answer PartCAD has
+    # not read by then is cut off. See 'runtime.output_capture'.
+    OUTPUT_TO_FILES = True
+
     def __init__(self, ctx, version=None, image=None):
         own_image = image is None
         if own_image:
