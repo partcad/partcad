@@ -16,7 +16,7 @@ class PluginConfiguration:
         super().__init__(name, config)
 
     @staticmethod
-    def normalize(name, config, object_name):
+    def normalize(name, config, object_name, user_config=None):
         if config is None:
             config = {}
 
@@ -26,4 +26,4 @@ class PluginConfiguration:
         config["name"] = name
         config["orig_name"] = name
 
-        return Configuration.normalize(name, config, object_name)
+        return Configuration.normalize(name, config, object_name, user_config)

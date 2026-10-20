@@ -16,10 +16,10 @@ class SketchConfiguration(Configuration, ShapeConfiguration):
         super().__init__(name, config)
 
     @staticmethod
-    def normalize(name, config, object_name):
+    def normalize(name, config, object_name, user_config=None):
         if isinstance(config, str):
             # This is a short form alias
             config = {"type": "alias", "source": config}
 
-        config = Configuration.normalize(name, config, object_name)
+        config = Configuration.normalize(name, config, object_name, user_config)
         return ShapeConfiguration.normalize(name, config)

@@ -21,9 +21,9 @@ from partcad_utils.assy_lint import (
     is_assy_file,
     schema_for_file,
 )
-from partcad_utils.user_config import user_config
 
 from .. import logging as pc_logging
+from ..config import parameter_overrides
 from ..context import Context
 from ..project import Project
 from .lint import Linting, LintingReport, Severity
@@ -67,7 +67,7 @@ class YamlLinting(Linting):
     def schema(self, name: str, target: str) -> dict:
         return schema_for_file(target, self.flavor(name, target))
 
-    def get_hash(self, name: str, target: str) -> CacheHash:
+    def get_hash(self, name: str, target: str, ctx: Context = None) -> CacheHash:
         # The schema is half of what produced a finding: a cached result for an
         # unchanged file is only valid while the schema it was checked against
         # is the same one. The flavor is in here for the same reason and is not
@@ -80,7 +80,7 @@ class YamlLinting(Linting):
         # nothing places) is in the checker and nowhere else, so a cache key
         # without it would go on serving the findings from before that check
         # existed for every file nobody has edited since.
-        hash = super().get_hash(name, target)
+        hash = super().get_hash(name, target, ctx)
         hash.add_string(json.dumps(self.schema(name, target), sort_keys=True))
         hash.add_string(str(self.flavor(name, target)))
         hash.add_string("checker-v%d" % CHECKER_VERSION)
@@ -88,17 +88,19 @@ class YamlLinting(Linting):
         # parameters its declaration gives it and what the packages around it
         # mark manufacturable. Editing either changes the findings of a file
         # nobody touched.
-        context = self.context(name, target)
+        context = self.context(name, target, ctx)
         _described.set((name, target, context))
         hash.add_string(self._context_key(context, target))
         return hash
 
-    def context(self, name: str, target: str) -> lint_context.FileContext:
+    def context(self, name: str, target: str, ctx: Context = None) -> lint_context.FileContext:
         """What ``target`` is rendered with and held to, as a client works it out -- see 'lint_context'."""
         # With the overrides PartCAD renders the file with -- '--extra-param'
         # and the 'parameters:' of the user's configuration -- matched by the
-        # object's full name, which here is known.
-        context = lint_context.describe(target, name, parameter_overrides=user_config.parameter_config.to_dict())
+        # object's full name, which here is known. Those of the context being
+        # linted: a daemon's is built from its caller's configuration.
+        overrides = parameter_overrides(getattr(ctx, "user_config", None))
+        context = lint_context.describe(target, name, parameter_overrides=overrides)
         flavor = self.flavor(name, target)
         if flavor is not None:
             context.flavor = flavor
@@ -158,7 +160,7 @@ class YamlLinting(Linting):
             if described is not None and described[:2] == (package.name, target):
                 context = described[2]
             else:
-                context = self.context(package.name, target)
+                context = self.context(package.name, target, ctx)
             diagnostics = context.check(raw, schema_for_file(target, context.flavor))
         except Exception as exc:  # pylint: disable=broad-except
             pc_logging.debug(package.name, str(exc))

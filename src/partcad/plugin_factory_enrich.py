@@ -70,7 +70,7 @@ class PluginFactoryEnrich(PluginFactory):
             augmented_config = copy.deepcopy(augmented_config)
             # TODO(clairbee): ideally whatever we pull from the project is already normalized
             augmented_config = PluginConfiguration.normalize(
-                self.source_plugin_name, augmented_config, target_plugin_name
+                self.source_plugin_name, augmented_config, target_plugin_name, self.ctx.user_config
             )
 
             # Fill in the parameter values using the simplified "with" option
@@ -80,7 +80,7 @@ class PluginFactoryEnrich(PluginFactory):
 
             # Recalling normalize to normalize data after replacing target parameters from with key.
             augmented_config = PluginConfiguration.normalize(
-                self.source_plugin_name, augmented_config, target_plugin_name
+                self.source_plugin_name, augmented_config, target_plugin_name, self.ctx.user_config
             )
 
             # Drop fields we don't want to be inherited by enriched clones

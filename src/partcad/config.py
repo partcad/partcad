@@ -2,10 +2,32 @@ from partcad_utils.parameters import coerce_parameter_value, normalize_parameter
 
 from . import expr
 from . import logging as pc_logging
-from .user_config import user_config
+from .user_config import user_config as process_user_config
 
 
-def apply_user_parameter_overrides(config: dict, object_name: str, section: str = "parameters") -> dict:
+def parameter_overrides(user_config=None) -> dict:
+    """The parameter overrides in effect for a context: object name -> {parameter: value}.
+
+    The process-wide configuration's ('pc.user_config', where a program using
+    PartCAD as a library sets them), with those of 'user_config' -- the
+    configuration the context was built from -- on top, one parameter at a
+    time. The two differ in a daemon: it builds every context from its caller's
+    configuration (see '_caller_user_config' in the JSON-RPC service), which is
+    where '--extra-param' and the caller's '~/.partcad/config.yaml' put theirs,
+    while its process-wide one was resolved when it started and has none of
+    them. Reading that one alone is how '--extra-param' came to change nothing
+    a daemon built.
+    """
+    overrides = {name: dict(values or {}) for name, values in process_user_config.parameter_config.to_dict().items()}
+    if user_config is not None and user_config is not process_user_config:
+        for name, values in user_config.parameter_config.to_dict().items():
+            overrides.setdefault(name, {}).update(values or {})
+    return overrides
+
+
+def apply_user_parameter_overrides(
+    config: dict, object_name: str, section: str = "parameters", user_config=None
+) -> dict:
     """Let the user's own configuration override the defaults this object declares.
 
     A name the object does not declare is reported rather than raised on: an
@@ -18,8 +40,11 @@ def apply_user_parameter_overrides(config: dict, object_name: str, section: str 
     '--extra-param' hands over text, and '60' used to reach a template as the
     string '60', which multiplies into '606060'. One that cannot be read as its
     type is an error, and the declared default stands.
+
+    'user_config' is the configuration of the context the object belongs to
+    (see 'parameter_overrides').
     """
-    config_parameters = user_config.parameter_config.to_dict()
+    config_parameters = parameter_overrides(user_config)
     if object_name in config_parameters and section in config and config[section]:
         parameter_config = config_parameters[object_name]
         for param_name in parameter_config:
@@ -47,7 +72,7 @@ class Configuration:
         super().__init__(name, config)
 
     @staticmethod
-    def normalize(name, config, object_name):
+    def normalize(name, config, object_name, user_config=None):
         if config is None:
             config = {}
 
@@ -61,7 +86,7 @@ class Configuration:
             normalize_parameters(config["parameters"])
 
         # Override parameters with user configuration
-        return apply_user_parameter_overrides(config, object_name)
+        return apply_user_parameter_overrides(config, object_name, user_config=user_config)
 
 
 def apply_parameter_values(parameters: dict, values: dict, object_name: str) -> dict:
