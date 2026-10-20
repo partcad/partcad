@@ -14,8 +14,9 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <scad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|extrude|sweep
-             |kicad|compound|alias|enrich|:<partType declared by this package>>
+      type: <scad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|gltf|fcstd|extrude|sweep
+             |kicad|compound|alias|enrich|:<partType declared by this package>
+             |<package>:<partType declared by that package>>
       desc: <(optional) textual description>
       images: <(optional) the images this part was modeled from; see below>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
@@ -279,12 +280,48 @@ Define parts with CAD files using the following syntax:
 
   parts:
     <part name>:
-      type: <step|brep|stl|3mf|obj>
+      type: <step|brep|stl|3mf|obj|gltf|fcstd>
       binary: <(stl only) use the binary format>
 
 A CAD file published elsewhere (in a vendor's catalog, for example) does not
 have to be committed to the package: see :ref:`files` for how to have PartCAD
 download it on demand.
+
+``gltf`` reads a `glTF <https://www.khronos.org/gltf/>`_ file: a ``.gltf`` with
+the buffers it names beside it, or a single ``.glb`` (``path: model.glb``). Every
+mesh in it is placed by the node tree, glTF's metres and Y-up are restated as
+millimetres and Z-up, and the triangles are meshed into the faces of a solid,
+as an STL part's are -- so what ``pc export -t gltf`` writes reads back where it
+was. A ``.gltf``'s buffers and images are part of its cache key, and
+``pc import part`` copies them along with it -- refusing one that would replace a
+different file of the same name already in the package.
+
+FreeCAD documents
+^^^^^^^^^^^^^^^^^
+
+``fcstd`` reads a `FreeCAD <https://www.freecad.org/>`_ document (``.FCStd``)
+without FreeCAD:
+
+.. code-block:: yaml
+
+  parts:
+    bracket:
+      type: fcstd          # reads bracket.FCStd
+
+The part is what the document shows: the shapes of the features nothing else in
+it consumes, that are neither hidden nor suppressed, and only their solids. A
+PartDesign body's Pad, the Pocket cut into it and the Fillet on top are three
+solids in the file, and the part is the last of them. The geometry is the exact
+shape FreeCAD stored, so nothing is translated on the way; the history -- the
+sketches, the constraints, the parametric features -- is not carried over, and
+objects placed through ``App::Link`` are not followed.
+
+It is read with `cadmpeg <https://github.com/cadmpeg/cadmpeg>`_, which PartCAD
+does not ship: the first part read downloads the release PartCAD pins, checks it
+against its published SHA-256, and keeps it in PartCAD's state directory (a
+``cadmpeg`` already on the ``PATH`` is used instead). ``fcstd`` is a
+:ref:`partType <part-types>` PartCAD declares in ``//builtin/import``, which is
+also what a package does to teach PartCAD a format of its own.
 
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                                                                              | Configuration             | Result                                                                                                                  |
@@ -508,6 +545,54 @@ served by a repository plugin reports the plugin's version instead (see
 :ref:`packages`). A script that states none keys as if it did not exist.
 
 See ``examples/produce_part_wrapper`` for the whole of the example above.
+
+A ``partType`` that reads a file
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A ``partType`` that declares an ``extension`` reads a file format: each part built
+with it is one such file, declared exactly as a STEP or an STL part is.
+
+.. code-block:: yaml
+
+  # The package that teaches PartCAD the format...
+  partTypes:
+    rhino:
+      path: read_part.py
+      extension: 3dm
+      dockerImage: ghcr.io/example/rhino-tools:1.2.3   # optional, see below
+
+  # ...and one that uses it, having imported that package as 'rhino'.
+  parts:
+    slab:
+      type: rhino:rhino          # reads slab.3dm
+    panel:
+      type: rhino:rhino
+      path: vendor/panel.3dm     # relative to *this* package
+      fileFrom: url              # or fetched, like any CAD file
+      fileUrl: https://example.com/panel.3dm
+
+The file belongs to the package that declares the part, not to the one that
+declares the type: ``path`` is relative to the part's package, it defaults to
+``<part name>.<extension>``, ``fileFrom`` fetches it, and it is what the part's
+cache entry depends on, so editing it rebuilds the part. The script finds it as
+``request["path"]``, an absolute path.
+
+The script is a converter more often than not, and a converter is often a
+program pip cannot install. Two things serve that. ``request["cache_dir"]`` is a
+directory that belongs to the package declaring the type -- its own ``.cache``
+directory, or one in PartCAD's state directory for the types PartCAD ships -- in
+which a script can keep what it downloads on first use. And ``dockerImage``, on
+the ``partType`` or on its package, is the image the ``docker`` sandbox runs the
+script in when it can be pulled, read from the implementing package as it is for
+an output implementation (see :ref:`output-files`) rather than from the part's.
+
+PartCAD ships ``partType`` s of its own in ``//builtin/import`` -- ``fcstd``, for
+FreeCAD documents -- and a part names one of those by its bare name,
+``type: fcstd``, as if it were built in. The SolidCraft plugin,
+`partcad-solidcraft <https://github.com/partcad/partcad-solidcraft>`_, is a whole
+package of them: SolidCraft designs, Rhino and IGES, downloading SolidCraft's
+command line tool on demand or running in the image it publishes, with its tests
+kept beside it in a folder PartCAD ignores (see :ref:`.pcignore <pcignore>`).
 
 Should PartCAD implement a type natively that you find yourself writing again
 and again, please file an issue on GitHub or write to

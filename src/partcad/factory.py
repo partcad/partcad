@@ -195,6 +195,16 @@ def instantiate(kind: str, t: str, ctx, source_project, target_project, config):
     if kind == "part" and isinstance(t, str) and ":" in t and "wrapper" in all[kind]:
         return all[kind]["wrapper"](ctx, source_project, target_project, config)
 
+    # A bare part 'type' nothing is registered for may be a partType PartCAD
+    # ships ('fcstd', in '//builtin/import'). The wrapper factory builds it the
+    # same as any other partType, and resolves the bare name the same way. The
+    # import is deferred for the reason the one below is.
+    if kind == "part" and isinstance(t, str) and "wrapper" in all[kind]:
+        from .output import builtin_part_type
+
+        if builtin_part_type(ctx, t) is not None:
+            return all[kind]["wrapper"](ctx, source_project, target_project, config)
+
     # An assembly or a scene 'type' nothing is registered for may still be a
     # format somebody declared a reader for, in an 'import:' section - PartCAD's
     # own ('urdf'), or a plugin package's, named by a package path exactly as a

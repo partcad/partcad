@@ -33,8 +33,30 @@
 name: //builtin/import
 desc: |
   The readers PartCAD ships with: the third-party formats an assembly or a
-  scene can be declared as. A package adds one of its own, or replaces one of
-  these, by declaring that type in its own `import:` section.
+  scene can be declared as, and the part types read through a program PartCAD
+  fetches rather than implements. A package adds one of its own, or replaces
+  one of these, by declaring that type in its own `import:` or `partTypes:`
+  section.
+
+# Part types read by a converter PartCAD downloads on first use rather than by
+# a factory of its own. A part names one by its bare name (`type: fcstd`) as if
+# it were built in; it is a `partType` like any a package declares, so a
+# plugin package that reads another format looks exactly like this.
+#
+#   - `extension`  -- the source file's extension. Each part is one such file:
+#                     `path` relative to the part's package, `<name>.<extension>`
+#                     by default, `fileFrom` to fetch it.
+#   - `path`       -- the script, run in the sandbox with `request["path"]` set
+#                     to that file and `request["cache_dir"]` to where whatever
+#                     it downloads is kept.
+partTypes:
+  fcstd:
+    desc: |
+      A FreeCAD document (`.FCStd`): the solids FreeCAD stored in it, read with
+      cadmpeg, so FreeCAD itself is not needed. The parametric history does not
+      survive -- what the part is is the geometry FreeCAD last computed.
+    path: part_fcstd.py
+    extension: FCStd
 
 import:
   urdf:

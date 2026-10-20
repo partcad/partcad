@@ -287,8 +287,11 @@ wrapper: the script runs inside a PartCAD sandbox, so it may import OCP,
 build123d or CadQuery, and it is executed with two globals available --
 
 - ``request`` -- the shape in ``request["wrapped"]``, every export parameter the
-  configuration resolved to, and ``shape_name``, ``shape_kind`` and
-  ``shape_type`` describing the object being written
+  configuration resolved to, ``shape_name``, ``shape_kind`` and ``shape_type``
+  describing the object being written, and ``cache_dir``: a directory belonging
+  to the implementing package, in which a script may keep what it downloads on
+  first use (a converter pip cannot install, for one). It is not part of what
+  the output is keyed on
 - ``path`` -- the absolute path of the file to write
 
 -- and reports what happened either by setting a global ``output``:

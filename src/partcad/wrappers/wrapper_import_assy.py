@@ -45,6 +45,7 @@ from OCP.TopExp import TopExp_Explorer
 from OCP.TopAbs import TopAbs_SOLID
 
 sys.path.append(os.path.dirname(__file__))
+import step_repair
 import wrapper_common
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
@@ -245,7 +246,10 @@ def parse_step_tree(step_file: str):
     shape_tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
 
     reader = STEPCAFControl_Reader()
-    if reader.ReadFile(step_file) != IFSelect_RetDone or reader.Transfer(doc) != 1:
+    # What OpenCASCADE would crash on is repaired first (see step_repair).
+    with step_repair.readable(step_file) as readable_path:
+        read = reader.ReadFile(readable_path)
+    if read != IFSelect_RetDone or reader.Transfer(doc) != 1:
         raise ValueError(f"Failed to read STEP file: {step_file}")
 
     root_nodes = []

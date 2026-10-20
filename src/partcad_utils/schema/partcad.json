@@ -1733,7 +1733,7 @@
                   "enum": [
                     "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
                     "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
-                    "obj", "kicad", "compound"
+                    "obj", "gltf", "kicad", "compound", "fcstd"
                   ]
                 },
                 "aliases": {
@@ -2500,6 +2500,8 @@
             "desc": { "type": "string", "maxLength": 1000 },
             "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1 },
+            "extension": { "type": "string", "minLength": 1, "description": "The extension of the file each part of this type is read from. Declaring one makes the part file-backed: its 'path' is relative to the part's own package and defaults to '<name>.<extension>', 'fileFrom' fetches it, and the script finds it as request['path']" },
+            "dockerImage": { "type": "string", "minLength": 1, "description": "The image the 'docker' sandbox runs this partType's script in, where it can be pulled. Defaults to the declaring package's own" },
             "pythonRequirements": { "type": "array", "items": { "type": "string" } }
           },
           "additionalProperties": false
