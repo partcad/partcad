@@ -147,7 +147,9 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         unresolved = []
         unkeyed = []
         assy = self.read_assy()
-        await self.prepare_node_async(assy, unresolved, assembly, unkeyed, _uses_connections(assy))
+        linked = []
+        await self.prepare_node_async(assy, unresolved, linked)
+        await self.add_linked_to_key(assembly, linked, unkeyed, _uses_connections(assy))
         # The ASSY file says which objects this is made of, and its content is
         # in the key already; what those objects contain is in it once each of
         # their keys is. Until then an edited part left every assembly using
@@ -162,16 +164,21 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         if unresolved:
             raise Exception("Failed to resolve the links to: %s" % ", ".join(unresolved))
 
-    async def prepare_node_async(self, node, unresolved: list, assembly=None, unkeyed=None, connects=False) -> None:
+    async def prepare_node_async(self, node, unresolved: list, linked: Optional[list] = None) -> None:
+        """Resolve and prepare what 'node' links to, adding each to 'linked' as '(name, object)'.
+
+        In the order the file names them, which is the order the key needs (see
+        'add_linked_to_key'). What does not resolve goes to 'unresolved'.
+        """
         if isinstance(node, list):
             for item in node:
-                await self.prepare_node_async(item, unresolved, assembly, unkeyed, connects)
+                await self.prepare_node_async(item, unresolved, linked)
             return
         if not isinstance(node, dict):
             return
 
         if "links" in node and node["links"] is not None:
-            await self.prepare_node_async(node["links"], unresolved, assembly, unkeyed, connects)
+            await self.prepare_node_async(node["links"], unresolved, linked)
             return
 
         if "assembly" in node:
@@ -194,14 +201,34 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             unresolved.append(name)
             return
         await item.prepare_async()
-        # In the order the file names them, which is the order the key needs.
-        if assembly is not None and not await assembly.add_cache_key_of(item):
-            unkeyed.append(name)
-        elif assembly is not None and connects and not await self.add_interfaces_to_key(assembly, item):
-            unkeyed.append(name)
+        if linked is not None:
+            linked.append((name, item))
 
-    async def add_interfaces_to_key(self, assembly, item) -> bool:
-        """Key 'assembly' on the interfaces 'item' implements, as they are declared.
+    async def add_linked_to_key(self, assembly, linked: list, unkeyed: list, connects: bool) -> None:
+        """Key 'assembly' on what it links to, adding the name of each that has no key to 'unkeyed'.
+
+        Each object's key, in the order the file names them, followed - for an
+        assembly that connects anything - by the interfaces it implements (see
+        'interfaces_of'). The interfaces wait for the whole list rather than
+        being taken object by object: what each of them mates with is only the
+        mates with the interfaces of everything here, and that is not known
+        until everything here is.
+        """
+        interfaces = None
+        if connects:
+            interfaces = await self.interfaces_of([item for _name, item in linked])
+        for name, item in linked:
+            if not await assembly.add_cache_key_of(item):
+                unkeyed.append(name)
+            elif interfaces is not None:
+                declared = interfaces.get(id(item))
+                if declared is None:
+                    unkeyed.append(name)
+                elif declared:
+                    assembly.hash.add_dict({"interfaces": declared})
+
+    async def interfaces_of(self, items: list) -> dict:
+        """The interfaces each of 'items' implements, as they are declared, by 'id()' of the item.
 
         Where a connected object goes is worked out from its interfaces - their
         ports, their freedom of movement, what they inherit and what they mate
@@ -210,25 +237,57 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         means; this covers the rest, for an assembly that connects anything.
 
         Every interface, not only the ones a 'connect:' names: which one is used
-        can be worked out from what both ends implement. False when one of them
-        does not resolve, which leaves the placement unaccounted for.
+        can be worked out from what both ends implement. An item maps to None
+        when one of its interfaces does not resolve, which leaves its placement
+        unaccounted for.
+
+        What an interface mates with is taken only among the interfaces
+        implemented here, which are the only mates that can place anything
+        here. All of them are instantiated before any is read, because that is
+        what registers the mates each declares, in both directions. Taken from
+        everything the context had registered, as it was, the key depended on
+        what else had been instantiated first: a round brick's axle hole mates
+        a Technic axle, the castle has no axle, and the castle's key changed
+        according to whether the car - which has - had been built before it.
         """
-        # An assembly presents the ports it maps from its children, and those
-        # are worked out from its tree (see 'handle_node', which does the same).
-        await prepare_ports_async(item, self.ctx)
-        interfaces = {}
-        for name in sorted(item.with_ports.get_interfaces()):
-            interface = self.ctx.get_interface(name)
-            if interface is None:
-                return False
-            mates = self.ctx.mates.get(interface.full_name, {})
-            interfaces[name] = {
-                "config": interface.config,
-                "mates": {target: {"config": mate.config, "reverse": mate.reverse} for target, mate in mates.items()},
-            }
-        if interfaces:
-            assembly.hash.add_dict({"interfaces": interfaces})
-        return True
+        implemented = {}
+        for item in items:
+            # An assembly presents the ports it maps from its children, and those
+            # are worked out from its tree (see 'handle_node', which does the same).
+            await prepare_ports_async(item, self.ctx)
+            names = sorted(item.with_ports.get_interfaces())
+            resolved = {name: self.ctx.get_interface(name) for name in names}
+            if None in resolved.values():
+                implemented[id(item)] = None
+                continue
+            for interface in resolved.values():
+                # Instantiated, which is what registers its mates.
+                interface.get_ports()
+            implemented[id(item)] = resolved
+        here = {
+            interface.full_name
+            for resolved in implemented.values()
+            if resolved is not None
+            for interface in resolved.values()
+        }
+        declared = {}
+        for item_id, resolved in implemented.items():
+            if resolved is None:
+                declared[item_id] = None
+                continue
+            interfaces = {}
+            for name, interface in resolved.items():
+                mates = self.ctx.mates.get(interface.full_name, {})
+                interfaces[name] = {
+                    "config": interface.config,
+                    "mates": {
+                        target: {"config": mate.config, "reverse": mate.reverse}
+                        for target, mate in sorted(mates.items())
+                        if target in here
+                    },
+                }
+            declared[item_id] = interfaces
+        return declared
 
     async def subassemblies_async(self, assembly) -> list:
         """The assemblies this file links to, resolved but not built.

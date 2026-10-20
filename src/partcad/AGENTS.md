@@ -222,6 +222,13 @@ at all).
   corrected `fileHash` has to move the cache key, or `pc test` answers the new declaration with the old one's
   failure.
 
+- **A key must not depend on what else happens to be loaded.** A connected assembly keys on the interfaces its
+  links implement, and on the mates *among those interfaces* (`AssemblyFactoryAssy.interfaces_of`), each of them
+  instantiated before any is read, since instantiating an interface is what registers the mates it declares.
+  Taken from every mate the context had registered, as it was, the key grew with whatever had been built first:
+  the LEGO castle's round bricks have a Technic axle hole, the castle has no axle, the car has, and the castle
+  keyed differently according to whether the car had been built before it.
+
 - **A file type may name the package that implements it** (`output.split_format`,
   `Shape._output_implementor`): `pc export -t sim-gazebo:world`, the spelling `import:`, `simulation:` and
   `pc cae --implementation` already took. It exists because there are formats PartCAD ships no implementation
