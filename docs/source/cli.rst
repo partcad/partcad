@@ -568,7 +568,33 @@ Object commands
   ``newton`` for force, ``mg``, ``g``, ``kg``, ``ton``, ``tonne``, ``lb`` or ``pound`` for mass — matched
   case-insensitively, with or without a space in front of it and with or without a plural ``s``. A bare number
   is a **mass in kilograms**, which is what "the shelf carries 5" means. A mass is weighed into a force at
-  9.8 N/kg, so what is stored and handed to the solver is always newtons. A ``temperature`` is in **degrees
+  9.8 N/kg, so what is stored and handed to the solver is always newtons.
+
+  A force so written is a magnitude, and the implementation applies it the way it always has — CalculiX straight
+  down, along -Z, which is where a weight goes. A ``load`` may also be **three** of them, ``[x, y, z]`` in the
+  part's own frame: a force *with a direction*, which is what a simulation measures acting on a part (see
+  :ref:`sim-loads`). And ``fea:`` takes one key that names no interface, ``gravity:``, the acceleration of free
+  fall the part is analysed in, in m/s² and the part's own frame — for a part a simulation found upside down, or
+  accelerating, whose weight is then its mass times ``g - a``. Without it the implementation weighs the part
+  under its own gravity::
+
+      fea:
+        fix:
+          //pub/robotics/parts/gobilda:4xM4-16mm-pattern-threaded-thru-4mm: [outer]
+        load:
+          "//pub/robotics/parts/gobilda:gear-28t;module=1.25,shift=0.2":
+            "13-tooth": [0 N, -2.7 N, -155.2 N]    # the tooth the worm holds it by
+        gravity: [0, -8.962, -3.990]               # the gear stands on its edge here
+
+  A name under an interface is one of its instances, or one of their **ports**: a gear draws each tooth as a
+  port of one instance, so a tooth is loaded by its port's name. That is a whole example, in
+  ``examples/feature_simulate_fea``: the gear in a robot arm's knee, under what the worm holds it with at the end
+  of a simulation of the arm.
+
+  Both have to be *read* by the implementation, and one that does not would answer as if they had not been
+  written. So an implementation says which it reads (``reads:`` on its file type, see :ref:`cae-section`), and an
+  analysis that states one is refused by an implementation that does not, naming it and what to do about it.
+  ``//pub/feature/cae/calculix:fea`` reads both. A ``temperature`` is in **degrees
   Celsius**, and ``300 K`` or ``100 F`` are converted; a ``heat`` is a **power**, in watts (``mW`` and ``kW``
   are understood), put in through the whole of the port's surface; a ``convection`` is a **film coefficient** in
   W/(m²·K).
@@ -579,6 +605,14 @@ Object commands
   the part before the implementation runs and hands it the faces each port covers, and their area is what a
   force or a power is spread over: an inlet drawn as the bore's circle is exactly the bore. A port with no
   sketch covers the face it lies on, when it lies on one.
+
+  A sketch that lies on no surface — a gear tooth's cross-section at its pitch circle, a hole's outline drawn
+  over the hole — still says where its port is, and the condition is applied to the surface around it instead:
+  everything within ``port_radius`` of the port (a fraction of the part's largest dimension, 5 % unless the
+  implementation says otherwise — the same neighbourhood an implementation that loads mesh nodes near a port
+  takes). PartCAD divides a plane, a cylinder, a cone, a sphere or a torus where that neighbourhood ends, and takes
+  a freeform face that comes that near whole, because a curve drawn on one is what a mesher fails on. Either
+  way the analysis warns, naming the port and the area it loaded: the port's frame is still worth correcting.
 
   The model the analysis produces is written to ``<part>.<analysis>.<extension>`` and saved as it stands.
   Which format that is — 3D or 2D — is the implementation's choice, and PartCAD does not convert it. The

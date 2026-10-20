@@ -267,6 +267,7 @@ quality
 radius
 ratio
 raw
+reads
 rectangle
 rectangles
 ref

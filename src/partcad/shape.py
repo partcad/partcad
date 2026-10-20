@@ -2593,6 +2593,13 @@ class Shape(ShapeConfiguration):
                 ctx, analysis, format_name, project, filepath, options_project, output_dir
             )
             final_filepath = os.path.abspath(final_filepath)
+            # A load with a direction, or a gravity, asked of an implementation
+            # that does not read it would be answered as if it had not been
+            # said: refused, as the section asking something this
+            # implementation cannot answer (see 'partcad.cae.unread_by').
+            unread = pc_cae.unread_by(config, impl.reads, "%s:%s" % (options_project.name, format_name))
+            if unread:
+                raise pc_cae.CaeConfigError(unread)
 
             # A solve is a long silence: the sandbox says nothing between
             # starting the solver and the solver finishing, and a client gives

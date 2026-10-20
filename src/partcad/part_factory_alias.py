@@ -10,11 +10,17 @@
 import copy
 import typing
 
+from . import cae as pc_cae
 from . import logging as pc_logging
 from . import part_factory as pf
 from . import reference, telemetry
 from .shape_config_store import resolve_store_properties
 from .utils import format_parameterized_name
+
+# What a reference may say about the object it points at, each section replacing
+# the source's whole: how it is made, and the boundary conditions each analysis
+# of it is run under (see 'get_final_config').
+RESTATED = ("manufacturing",) + pc_cae.ANALYSES
 
 
 @telemetry.instrument()
@@ -151,15 +157,26 @@ class PartFactoryAlias(pf.PartFactory):
         'manufacturing:' section is one statement (a method, a stock, a machine
         and where it cuts), so a reference that writes one replaces the
         source's whole rather than key by key.
+
+        And for what the object carries where it is used, for the same reason
+        again: one gear is loaded one way in one product and another way in the
+        next. A part's analysis sections ('fea:', 'dynamic:', 'thermal:',
+        'cfd:') are its boundary conditions, and a package that buys the part
+        rather than defining it -- the product a simulation found the loads in
+        -- states them on a reference to it, which analyses the source's
+        geometry by the source's ports under its own conditions. Each section
+        is one statement, so a reference that writes one replaces the source's.
         """
         source = self.ctx._get_part(self.source)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
         resolved = resolve_store_properties(source.get_final_config(), self.config)
-        manufacturing = self.config.get("manufacturing") if isinstance(self.config, dict) else None
-        if manufacturing:
+        restated = (
+            {key: self.config[key] for key in RESTATED if self.config.get(key)} if isinstance(self.config, dict) else {}
+        )
+        if restated:
             resolved = dict(resolved)
-            resolved["manufacturing"] = manufacturing
+            resolved.update(restated)
         return resolved
 
     async def get_tolerance(self):

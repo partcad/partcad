@@ -56,7 +56,14 @@ instances, or a nested map naming the instance. `ROLES` says which analysis read
 which key and how each is read; an analysis is refused a key it does not read,
 because a key taken silently would read as a boundary condition and not be one.
 
-`fea:` takes `fix:` and `load:`. `cfd:` takes the same two -- the walls the fluid
+`fea:` takes `fix:` and `load:`, and one key that names no interface:
+`gravity:`, the acceleration of free fall the part is analysed in, in m/s^2 and
+in the part's own frame. An implementation weighs the part under its own idea of
+gravity otherwise (CalculiX: 9.81 m/s^2 along -Z, with `self_weight`), which is
+right for a part standing the way it is drawn and wrong for one a simulation
+found upside down, or accelerating -- where what it carries is its weight less
+its mass times its acceleration, `g - a` (see `parse_gravity`). `cfd:` takes the
+same two -- the walls the fluid
 is held still against, and the force driving it in -- and `outlet:`, where it
 leaves. `dynamic:` takes `fix:` alone: a natural frequency is a property of the
 part and how it is held, not of what it carries. `thermal:` takes
@@ -68,6 +75,11 @@ The values are stored in one unit each, whatever unit they were written in:
   string ending in a unit name (see `parse_force`), and a bare number is read as
   a *mass* in kilograms -- which is what a user writing "the shelf carries 5"
   means. A mass becomes a force by weighing it: `GRAVITY` newtons per kilogram.
+  A force so stated is a magnitude, and an implementation applies it the way it
+  always has (CalculiX along -Z, "where a weight goes"). A value may also be a
+  **vector**, three of those, in the part's own frame -- `[0 N, -146 N, 12 N]`
+  -- which is a force *with a direction*: what a simulation measured acting on
+  the part, which is seldom straight down (see `parse_load`).
 * `temperature` values are in **degrees Celsius**; a bare number is one, and
   "300 K" or "100 F" are converted (see `parse_temperature`).
 * `heat` values are a **power**, in watts, put in through the whole of the
@@ -75,6 +87,13 @@ The values are stored in one unit each, whatever unit they were written in:
 * `convection` values are a **film coefficient**, in W/(m^2*K), against the
   ambient temperature the implementation is configured with (see
   `parse_film_coefficient`).
+
+A direction and a gravity are two things an implementation has to *read*, and
+one that does not would apply the load straight down and weigh the part under
+its own gravity, and answer as if it had been asked. So an implementation says
+which of them it reads, as `reads:` on its file type (`READS`), and an analysis
+that states either is refused by one that does not say it reads it rather than
+answered wrongly (see `unread_by`).
 
 Where a condition lands is a port, and a port is a coordinate frame -- and,
 when its interface draws it with a sketch, a surface: the circle of a bore, the
@@ -232,6 +251,73 @@ def parse_force(value, what: str = "value") -> float:
         "%s is not a force or a mass: %r. Write a number (kilograms), or a number and a unit (%s)"
         % (what, value, ", ".join(sorted(set(_MASS_UNITS) | set(_FORCE_UNITS))))
     )
+
+
+def parse_load(value, what: str = "value"):
+    """One `load:` value: a force in newtons, or a force vector in newtons.
+
+    A number or a string is a magnitude (see `parse_force`) and comes back as a
+    float. A list of three is a vector in the part's own frame -- each component
+    a force or a mass exactly as a magnitude is, so `[0 N, 0 N, -49 N]` and
+    `[0, 0, -5]` (five kilograms, weighed) are the same downward force -- and
+    comes back as a list of three floats. A vector of nought pulls on nothing,
+    and is refused, as a section naming a port it then does nothing to would be
+    a condition doing nothing.
+
+    Raises:
+        CaeConfigError: neither a force nor three of them.
+    """
+    if not isinstance(value, (list, tuple)):
+        return parse_force(value, what)
+    if len(value) != 3:
+        raise CaeConfigError(
+            "%s is a list of %d, and a force with a direction is three: [x, y, z], in the part's own frame"
+            % (what, len(value))
+        )
+    vector = [parse_force(component, "the %s of %s" % (axis, what)) for axis, component in zip("xyz", value)]
+    if not any(vector):
+        raise CaeConfigError("%s is a force of nought in every direction: %r" % (what, value))
+    return vector
+
+
+def magnitude(load) -> float:
+    """The size of a `parse_load` value, in newtons: itself for a magnitude, the length of a vector."""
+    if isinstance(load, list):
+        return sum(component * component for component in load) ** 0.5
+    return float(load)
+
+
+# The ways an acceleration's unit gets written. Accepted so that a value can say
+# what it is; there is nothing to convert, since this is the only unit.
+_ACCELERATION_UNITS = {
+    "m/s2": 1.0,
+    "m/s^2": 1.0,
+    "m/s²": 1.0,
+    "m/s/s": 1.0,
+}
+
+
+def parse_gravity(value, what: str = "'fea: gravity:'") -> list:
+    """`gravity:` -- the acceleration of free fall the part is analysed in, m/s^2, in its own frame.
+
+    Three numbers, each a number of m/s^2 or a string saying so ("9.81 m/s^2").
+    What a simulation's reading gives as `g - a` at the part: the gravity of the
+    scene, less the part's own acceleration, turned into the part's frame -- the
+    weight a part held upside down hangs by, or a part swung round a corner is
+    flung by. `[0, 0, 0]` is a part analysed weightless, which is a thing worth
+    saying.
+
+    Raises:
+        CaeConfigError: not three accelerations.
+    """
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        raise CaeConfigError(
+            "%s is not an acceleration: %r. Write three numbers, m/s^2, in the part's own frame" % (what, value)
+        )
+    return [
+        _number_and_unit(component, "the %s of %s" % (axis, what), _ACCELERATION_UNITS, None, "an acceleration")[0]
+        for axis, component in zip("xyz", value)
+    ]
 
 
 def _number_and_unit(value, what: str, units, default: Optional[str], kind: str):
@@ -408,7 +494,7 @@ class Role:
 
 
 _FIX = Role("fix", attribute="fixtures")
-_LOAD = Role("load", parse_force, attribute="loads")
+_LOAD = Role("load", parse_load, attribute="loads")
 _OUTLET = Role("outlet", attribute="outlets")
 
 # Which keys each analysis reads, in the order a reader of an error meets them.
@@ -430,6 +516,30 @@ ROLES = {
         Role("convection", parse_film_coefficient),
     ),
 }
+
+
+# The keys of an analysis section that name no interface, by analysis: what the
+# whole part is analysed under rather than where something lands on it. Each is
+# read by the function beside it. 'gravity:' is a stress analysis's: the weight
+# a part carries of itself, which a natural frequency and a flow do not ask for
+# and a temperature has nothing to do with.
+SECTION_KEYS = {
+    FEA: {"gravity": parse_gravity},
+}
+
+# What an implementation may say it reads, as 'reads:' on its file type, beyond
+# where each condition lands and how big it is -- which every implementation
+# reads. Each is the request key it is handed under:
+#
+# * 'force' -- a load's direction: the boundary record of a port a vector
+#   `load:` names carries the vector as 'force', in newtons and the part's frame,
+#   beside the magnitude under 'load' an implementation has always read;
+# * 'gravity' -- the request carries the section's `gravity:`.
+#
+# An implementation that does not list one is handed it all the same and would
+# not know it was there, so an analysis that states it is refused by it rather
+# than answered as if it had not (see 'unread_by').
+READS = ("force", "gravity")
 
 
 class AnalysisConfig:
@@ -474,6 +584,11 @@ class AnalysisConfig:
         self.roles = ROLES[analysis]
         self.conditions: dict[str, dict] = {role.key: {} for role in self.roles}
         self.implementation: Optional[str] = None
+        # The keys naming no interface this analysis takes, and what the part
+        # said under each: 'gravity' -> [gx, gy, gz] for a stress analysis
+        # that states one. Absent when it states none.
+        self.section_keys = SECTION_KEYS.get(analysis, {})
+        self.settings: dict = {}
 
         if config is None:
             raise CaeConfigError("'%s:' is empty" % analysis)
@@ -483,7 +598,7 @@ class AnalysisConfig:
         # A key another analysis reads is refused here as firmly as a misspelt
         # one. `outlet:` on a stress analysis, or `fix:` on a heat one, would
         # read as a boundary condition and not be one.
-        keys = [role.key for role in self.roles] + ["desc", "implementation"]
+        keys = [role.key for role in self.roles] + list(self.section_keys) + ["desc", "implementation"]
         unknown = [key for key in config if key not in keys]
         if unknown:
             raise CaeConfigError(
@@ -491,7 +606,7 @@ class AnalysisConfig:
                 % (
                     analysis,
                     ", ".join(sorted(unknown)),
-                    ", ".join("'%s:'" % role.key for role in self.roles),
+                    ", ".join("'%s:'" % key for key in [role.key for role in self.roles] + list(self.section_keys)),
                 )
             )
 
@@ -501,6 +616,9 @@ class AnalysisConfig:
                 self._parse_set(role, config.get(role.key))
             else:
                 self._parse_values(role, config.get(role.key))
+        for key, parse in self.section_keys.items():
+            if config.get(key) is not None:
+                self.settings[key] = parse(config[key], "'%s: %s:'" % (analysis, key))
 
         if not any(self.conditions.values()):
             if analysis in (FEA, CFD):
@@ -510,6 +628,25 @@ class AnalysisConfig:
             raise CaeConfigError(
                 "'%s:' declares none of %s" % (analysis, ", ".join("'%s:'" % role.key for role in self.roles))
             )
+
+    @property
+    def gravity(self) -> Optional[list]:
+        """The acceleration of free fall the part is analysed in, m/s^2 in its frame, or None for the implementation's."""
+        return self.settings.get("gravity")
+
+    @property
+    def directed(self) -> bool:
+        """Whether any load is stated with a direction (a vector) rather than as a magnitude."""
+        return any(isinstance(load, list) for values in self.loads.values() for load in values.values())
+
+    def reads(self) -> set:
+        """What of 'READS' an implementation has to read to answer this section as it was written."""
+        needed = set()
+        if self.directed:
+            needed.add("force")
+        if self.gravity is not None:
+            needed.add("gravity")
+        return needed
 
     @property
     def fixtures(self) -> dict[str, list[str]]:
@@ -627,8 +764,25 @@ class AnalysisConfig:
                 continue
             if role.is_set:
                 data[role.key] = {name: list(instances) for name, instances in found.items()}
+            elif role is _LOAD:
+                # Magnitudes under 'load', which is what an implementation has
+                # always read there; the directions, where the part states
+                # them, under 'force' beside it ('READS').
+                data[role.key] = {
+                    name: {instance: magnitude(load) for instance, load in values.items()}
+                    for name, values in found.items()
+                }
+                directed = {
+                    name: {instance: list(load) for instance, load in values.items() if isinstance(load, list)}
+                    for name, values in found.items()
+                }
+                directed = {name: values for name, values in directed.items() if values}
+                if directed:
+                    data["force"] = directed
             else:
                 data[role.key] = {name: dict(values) for name, values in found.items()}
+        for key, value in self.settings.items():
+            data[key] = list(value) if isinstance(value, list) else value
         if self.implementation is not None:
             # Carried so that `pc test`'s cache key changes when the part is
             # re-pointed at another solver: two solvers are two answers, and the
@@ -691,6 +845,13 @@ def assign_ports(config: AnalysisConfig, records: list) -> tuple[list, list[str]
     nothing names are left out, because an implementation is being told where
     to hold the part and where to pull it, not what the part's other ports are.
 
+    A name under an interface is an instance of it, or one of its *ports*: the
+    one a connection names with
+    `withPort:`/`toPort:`. That is how one tooth of a gear is named, whose
+    twenty-eight teeth are the ports of one instance of one interface, and one
+    hole of a four-hole pattern. An instance's own value wins over the
+    interface-wide one, and a port's over its instance's.
+
     A value written for every instance of an interface is applied to every
     instance of it -- **not** divided between them. "This interface carries 5 kg"
     reads as each of them carrying it, which is the conservative reading and the
@@ -719,6 +880,8 @@ def assign_ports(config: AnalysisConfig, records: list) -> tuple[list, list[str]
     for record in records:
         interface = record.get("interface")
         instance = record.get("instance") or ""
+        # A name under the interface may also be one of its ports.
+        port = record.get("port")
         entry = None
 
         for name in config.interfaces:
@@ -732,7 +895,7 @@ def assign_ports(config: AnalysisConfig, records: list) -> tuple[list, list[str]
                 if role.is_set:
                     # Both spellings are recorded when both apply, because both
                     # are declarations a user could have got wrong on their own.
-                    named = [one for one in (EVERY_INSTANCE, instance) if one in declared]
+                    named = [one for one in (EVERY_INSTANCE, instance, port) if one is not None and one in declared]
                     if not named:
                         continue
                     matched.update((role.key, name, one) for one in named)
@@ -741,13 +904,20 @@ def assign_ports(config: AnalysisConfig, records: list) -> tuple[list, list[str]
                 else:
                     # The instance's own value wins over the interface-wide one,
                     # so it is the one that counts as used.
-                    one = instance if instance in declared else EVERY_INSTANCE
+                    one = port if port is not None and port in declared else instance
+                    one = one if one in declared else EVERY_INSTANCE
                     amount = declared.get(one)
                     if amount is None:
                         continue
                     matched.add((role.key, name, one))
                     entry = entry or dict(record)
-                    entry[role.key] = amount
+                    if role is _LOAD and isinstance(amount, list):
+                        # The magnitude where an implementation has always
+                        # read it, and the direction beside it ('READS').
+                        entry[role.key] = magnitude(amount)
+                        entry["force"] = list(amount)
+                    else:
+                        entry[role.key] = amount
 
         if entry is not None:
             if config.analysis in (FEA, CFD):
@@ -782,8 +952,42 @@ def assign_ports(config: AnalysisConfig, records: list) -> tuple[list, list[str]
                 unmatched.append((name, "this object does not implement it"))
                 continue
             named = ", ".join(sorted(str(one) for one in missing if one != EVERY_INSTANCE))
-            unmatched.append((name, "no instance named %s" % named if named else "it names no instance of it"))
+            unmatched.append((name, "no instance or port named %s" % named if named else "it names no instance of it"))
     return assigned, unmatched
+
+
+def unread_by(config: AnalysisConfig, reads, implementation: str) -> Optional[str]:
+    """Why 'implementation' cannot answer 'config' as written, or None when it can.
+
+    'reads' is what the implementation's file type says it reads ('reads:',
+    see 'READS'). A load stated with a direction, or a gravity, handed to one
+    that does not read it is applied straight down, or under the
+    implementation's own gravity, and answered as if nothing had been said --
+    so it is refused, saying what to do about it, rather than answered.
+    """
+    missing = sorted(config.reads() - set(reads or ()))
+    if not missing:
+        return None
+    # What each one is, what an implementation that does not read it does
+    # instead, and what to write instead of it.
+    said = {
+        "force": ("a load with a direction", "every load pulled straight down", "the loads as magnitudes"),
+        "gravity": ("'gravity:'", "the part stood as it is drawn", "no 'gravity:'"),
+    }
+    return (
+        "'%s:' states %s, and %s does not read %s (its 'reads:' lists %s): it would answer as if %s. "
+        "Name an implementation that reads %s, or state %s"
+        % (
+            config.analysis,
+            " and ".join(said[key][0] for key in missing),
+            implementation,
+            "it" if len(missing) == 1 else "them",
+            ", ".join("'%s'" % key for key in sorted(reads or ())) or "nothing",
+            " and ".join(said[key][1] for key in missing),
+            " and ".join("'%s'" % key for key in missing),
+            " and ".join(said[key][2] for key in missing),
+        )
+    )
 
 
 def normalize_findings(findings) -> list[dict]:

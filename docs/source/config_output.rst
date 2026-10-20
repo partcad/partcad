@@ -686,7 +686,26 @@ analysis gets:
   ``location`` and the key's value on it, and ``faces``: the faces of
   ``wrapped`` the port covers, each an ``index`` with its ``centroid``, ``area``
   and outward ``normal`` (planar faces only), all in millimetres. ``area`` on the
-  record is their sum.
+  record is their sum;
+* where the part states them, ``force`` on the record of each port a load with a
+  direction landed on -- ``[x, y, z]`` newtons in the part's frame, beside the
+  magnitude under ``load`` -- and ``gravity``, ``[x, y, z]`` m/s² in the part's
+  frame.
+
+Those last two are things an implementation has to *read*, and one that does not
+would pull every load straight down and weigh the part under its own gravity --
+and answer as if it had been told to. So an implementation lists what it reads
+of them in ``reads:``, which PartCAD keeps for itself rather than handing it on as
+a parameter, and an analysis stating either is refused by one that does not list
+it, saying which implementation and what to do about it:
+
+.. code-block:: yaml
+
+  cae:
+    fea:
+      path: solve_fea.py
+      extension: glb
+      reads: [force, gravity]   # a load's direction, and the part's own gravity
 
 ``wrapped`` is the part with every port's sketch imprinted on it, which is what
 makes an inlet smaller than its face a face of its own; ``faces`` index it in the

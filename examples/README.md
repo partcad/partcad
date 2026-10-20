@@ -77,6 +77,7 @@ These examples showcase particular PartCAD features:
 - [Route files: the program a machine cuts an object with](./feature_cam)
 - [Simulate a part or an assembly, validate what happened, and let the material decide it](./feature_simulate)
 - [Simulate a mechanism on its joints - one of every kind - and hold each to its closed form](./feature_simulate_joints)
+- [Analyse a part under the loads a simulation of its mechanism measured - the worm gear in a robot arm's knee](./feature_simulate_fea)
 - [Part enrichment](./feature_enrich)
 - [Parts built by a part type the package defines itself](./produce_part_wrapper)
 - [Mono-repo and Multi-repo](./feature_monorepo)
