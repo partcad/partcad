@@ -2423,9 +2423,12 @@ class Project(project_config.Configuration):
             config = yaml.load(fp)
             fp.close()
 
+        if config is None:
+            # An empty 'partcad.yaml': a package that declares nothing yet.
+            config = ruamel.yaml.comments.CommentedMap()
         if "import" in config and "dependencies" not in config:
             config["dependencies"] = config["import"]
-        if config["dependencies"] is None:
+        if config.get("dependencies") is None:
             config["dependencies"] = {}
         config["dependencies"][alias] = entry
         with open(self.config_path, "w") as fp:

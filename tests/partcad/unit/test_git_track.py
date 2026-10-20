@@ -909,6 +909,22 @@ def test_add_dep_adds_nothing_it_could_not_pin(tmp_path, upstream, user_config):
     assert dependencies is None
 
 
+@pytest.mark.parametrize("written", ["", "desc: A package of nothing yet\n"])
+def test_add_dep_adds_to_a_package_that_declares_no_dependencies(tmp_path, upstream, user_config, written):
+    """An empty 'partcad.yaml', as every directory of the index is given, or one without the key."""
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    config = workspace / "partcad.yaml"
+    config.write_text(written)
+    ctx = pc.Context(str(workspace), search_root=False, user_config=user_config)
+
+    assert ctx.get_project(ctx.name).add_import("dep", upstream.path.as_uri())
+
+    loaded = yaml.safe_load(config.read_text())
+    assert loaded["dependencies"]["dep"]["revision"] == upstream.head()
+    assert loaded.get("desc") == (yaml.safe_load(written) or {}).get("desc")
+
+
 def test_add_dep_adds_nothing_offline(tmp_path, upstream, user_config):
     user_config.offline = True
     ok, dependencies = added(tmp_path, user_config, upstream.path.as_uri())
