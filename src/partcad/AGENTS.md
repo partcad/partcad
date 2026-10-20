@@ -243,8 +243,10 @@ at all).
   failure.
 
 - **A key must not depend on what else happens to be loaded.** A connected assembly keys on the interfaces its
-  links implement, and on the mates *among those interfaces* (`AssemblyFactoryAssy.interfaces_of`), each of them
-  instantiated before any is read, since instantiating an interface is what registers the mates it declares.
+  links implement, and on the mates *among those interfaces* and what they are drop-ins for
+  (`AssemblyFactoryAssy.interfaces_of`), each of them instantiated before any is read, since instantiating an
+  interface is what registers the mates it declares. Each mate is held under the interface declaring it rather than
+  merged by target: an interface and its ancestor can both mate with one target, and a connection may read either.
   Taken from every mate the context had registered, as it was, the key grew with whatever had been built first:
   the LEGO castle's round bricks have a Technic axle hole, the castle has no axle, the car has, and the castle
   keyed differently according to whether the car had been built before it.

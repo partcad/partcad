@@ -275,3 +275,45 @@ def test_a_mate_with_an_interface_an_implemented_one_is_a_drop_in_for_is_in_the_
     fixed = _rig_key(_inherited(tmp_path / "fixed", "\n        motion: fixed"))
     assert plain is not None and fixed is not None
     assert plain != fixed
+
+
+# Both ends are drop-ins this time: the base implements an 'm4-bore' and the
+# arm an 'm4-pin'. The mating 'pin' declares with 'm4-bore' is in the rig's key,
+# though no interface the links implement mentions it: a key keeping one mating
+# per target lost it at both ends at once, to 'bore' with 'pin' at the base and
+# to 'm4-pin' with 'm4-bore' at the arm.
+_CROSSED = """
+interfaces:
+  bore:
+    ports:
+      hole:
+    mates:
+      pin: {}
+      m4-pin: {}
+  m4-bore:
+    inherits: bore
+    mates:
+      m4-pin: {}
+  pin:
+    ports:
+      tip: [[0, 0, 0], [0, 0, 1], 0]
+    mates:
+      m4-bore:%s
+  m4-pin:
+    inherits: pin
+"""
+
+
+def _crossed(root, mating):
+    _inherited(root, "")
+    (root / "lib" / "partcad.yaml").write_text(_CROSSED % mating)
+    (root / "partcad.yaml").write_text(_INHERITED_CONNECTED.replace("//lib:pin:", "//lib:m4-pin:"))
+    (root / "rig.assy").write_text(_INHERITED_RIG.replace("with: //lib:pin", "with: //lib:m4-pin"))
+    return root
+
+
+def test_every_mating_between_drop_ins_and_their_ancestors_is_in_the_key(tmp_path):
+    plain = _rig_key(_crossed(tmp_path / "plain", " {}"))
+    fixed = _rig_key(_crossed(tmp_path / "fixed", "\n        motion: fixed"))
+    assert plain is not None and fixed is not None
+    assert plain != fixed

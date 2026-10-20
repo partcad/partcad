@@ -281,17 +281,22 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 continue
             interfaces = {}
             for name, interface in resolved.items():
+                # By the interface declaring each, and not merged by target: an
+                # interface and its ancestor can each mate with one target, and
+                # which of the two a connection reads is not ordered (see
+                # '_mating_between'), so both are in the key.
                 mates = {}
                 for source in sorted(standing_for[interface.full_name]):
-                    for target, mate in self.ctx.mates.get(source, {}).items():
-                        mates.setdefault(target, mate)
+                    declared_by = {
+                        target: {"config": mate.config, "reverse": mate.reverse}
+                        for target, mate in sorted(self.ctx.mates.get(source, {}).items())
+                        if target in here
+                    }
+                    if declared_by:
+                        mates[source] = declared_by
                 interfaces[name] = {
                     "config": interface.config,
-                    "mates": {
-                        target: {"config": mate.config, "reverse": mate.reverse}
-                        for target, mate in sorted(mates.items())
-                        if target in here
-                    },
+                    "mates": mates,
                 }
             declared[item_id] = interfaces
         return declared
