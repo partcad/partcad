@@ -3682,7 +3682,9 @@ async def _item_suppliers(pc, ctx, cart_item, cart):
     """
     project_name, _ = pc.utils.resolve_resource_path(ctx.current_project_path, cart_item.name)
     project = ctx.get_project(project_name)
-    if project is None or not await project.get_suppliers_async():
+    if project is None:
+        return []
+    if not getattr(cart_item, "suppliers", None) and not await project.get_suppliers_async():
         return []
     return await ctx.find_part_suppliers(cart_item, cart)
 

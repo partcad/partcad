@@ -1,0 +1,8 @@
+desc: A parts library that says nothing about where its parts are sold
+
+parts:
+  brick:
+    type: cadquery
+    desc: A brick
+    vendor: acme
+    sku: BRICK-1

@@ -82,10 +82,20 @@ class ProviderCartItem:
     count_per_sku: int = 1
     item_in_sku: str = None
 
+    # The suppliers named by the package of the assembly this item is procured
+    # for, as '{provider: extra config}' the way 'Project.get_suppliers()'
+    # returns them. Empty for an object put in the cart on its own. They are
+    # asked ahead of the ones the item's own package names (see
+    # 'Context.find_part_suppliers()'): whoever built the assembly chose where
+    # its parts are bought, and the package the parts come from may never have
+    # heard of that store. Not part of what a provider is handed.
+    suppliers: dict
+
     def __init__(self):
         self.name = "none"
         self.count = 0
         self.format = "none"
+        self.suppliers = {}
 
     def _set_store_data(self, object):
         store_data = object.get_store_data()
@@ -186,6 +196,12 @@ class ProviderCart:
         never an item to add for the scene itself. What is in it is procured
         exactly as an assembly's contents are.
 
+        Every item an assembly or a scene is broken down into carries the
+        suppliers of the package it is declared in (see
+        'ProviderCartItem.suppliers'), however deep in it the item was: the
+        package that is asked to be procured is the one whose choice of store
+        applies to all of it.
+
         Pass 'recursive=True' to break every assembly down to its parts,
         including the ones that could have been ordered assembled.
         """
@@ -236,19 +252,21 @@ class ProviderCart:
                     bom = await _procured(ctx, await holder.get_bom())
                 else:
                     bom = await holder.get_supply_bom(ctx)
+                suppliers = await prj.get_suppliers_async()
                 tasks = []
                 for item_name, item_count in bom.items():
                     pc_logging.debug(f"Adding '{item_name}' to the cart")
                     item_spec = item_name + "#" + str(item_count)
-                    tasks.append(asyncio.create_task(self.add_item_from_spec(ctx, item_spec, count)))
+                    tasks.append(asyncio.create_task(self.add_item_from_spec(ctx, item_spec, count, suppliers)))
                 await asyncio.gather(*tasks)
             else:
                 # TODO(clairbee): turn it into an error() and recover nicely
                 raise Exception(f"Part, assembly or scene '{object_name}' not found in project '{project_name}'")
 
-    async def add_item_from_spec(self, ctx, part_spec: str, count=1):
+    async def add_item_from_spec(self, ctx, part_spec: str, count=1, suppliers: dict = None):
         part_item = ProviderCartItem()
         await part_item.set_spec(ctx, part_spec)
+        part_item.suppliers = dict(suppliers or {})
         self.add_item(part_item, count)
 
     async def add_part_specs(self, ctx, part_specs: list[str]):
@@ -273,7 +291,13 @@ class ProviderCart:
         assert item.count > 0
         item.count *= count
         if item.name in self.parts:
-            self.parts[item.name].count += item.count
+            existing = self.parts[item.name]
+            existing.count += item.count
+            # The same part reached through assemblies of two packages can be
+            # bought where either of them says; the first to name a store keeps
+            # its place, and what it said about it.
+            for supplier, extra in item.suppliers.items():
+                existing.suppliers.setdefault(supplier, extra)
         else:
             self.parts[item.name] = item
         return item

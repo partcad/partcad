@@ -512,7 +512,7 @@ an assembly given assembly instructions and using parts ordered from
 
 Currently, the provider has to be explicitly specified in the quote or order
 request, or explicitly specified as one of the suppliers in the package where
-the parts are declared:
+the parts are declared, or in the package of the assembly they are procured for:
 
 .. code-block:: yaml
 
@@ -533,6 +533,26 @@ read the same way (see :ref:`repositories`):
 .. code-block:: json
 
   {"desc": "Metric hex bolts", "suppliers": {"//pub/svc/commerce/homedepot:homedepot": {}}}
+
+A package that builds assemblies out of somebody else's parts can say where to
+buy them, too. When ``pc supply`` breaks an assembly (or a scene) down into what
+it is procured from, every one of those parts is looked for first at the
+suppliers of the package the assembly is declared in, and then at the ones its
+own package names. So a package of models built from a parts library that knows
+nothing of a particular store can still be quoted at that store:
+
+.. code-block:: yaml
+
+  # The models' own package: none of its parts is declared here.
+  suppliers:
+    //pub/svc/commerce/homedepot:homedepot:
+
+  assemblies:
+    shelf:
+      type: assy
+
+A part asked for on its own, rather than as part of an assembly, is looked for
+at its own package's suppliers only, and so is every part ``pc test`` checks.
 
 In the future PartCAD will be able to select providers
 based on the location and preferences of the requester, while leaving the

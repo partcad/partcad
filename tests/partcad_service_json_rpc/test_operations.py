@@ -525,6 +525,10 @@ class FakeContext:
         return self.projects.get(name)
 
     async def find_part_suppliers(self, cart_item, cart=None):
+        # The stores the item was procured with, as the real one asks first,
+        # or else the ones its own package is set up with here.
+        if getattr(cart_item, "suppliers", None):
+            return list(cart_item.suppliers)
         return list(self.item_suppliers.get(cart_item.name, []))
 
     def get_provider(self, name, params=None):
@@ -2167,12 +2171,13 @@ class FakeDocumentError(Exception):
 class FakeCartItem:
     """Stand-in for ``partcad.plugin_provider_data_cart.ProviderCartItem``."""
 
-    def __init__(self, name, count=1, vendor=None, sku=None, count_per_sku=1):
+    def __init__(self, name, count=1, vendor=None, sku=None, count_per_sku=1, suppliers=None):
         self.name = name
         self.count = count
         self.vendor = vendor
         self.sku = sku
         self.count_per_sku = count_per_sku
+        self.suppliers = suppliers or {}
 
 
 class FakeCart:
@@ -2340,6 +2345,20 @@ def test_supply_says_nothing_when_the_package_declares_no_supplier(monkeypatch):
 
     assert all(item["suppliers"] == [] for item in result["items"])
     assert result["totals"] == []
+    assert session.partcad.logging.messages("error") == []
+
+
+def test_supply_asks_the_stores_the_assembly_package_names(monkeypatch):
+    # The parts' own package names no supplier, but the package of the
+    # assembly they are procured for does, and the cart says so on each item.
+    session, ctx = make_supply_session(monkeypatch)
+    ctx.projects["//"].suppliers = {}
+    ctx.cart_contents["//:top"][0].suppliers = {"//:cheap": {}}
+
+    result = operations.supply_quote(session, {"package": "//", "object": "top"})
+
+    assert [option["name"] for option in result["items"][0]["suppliers"]] == ["//:cheap"]
+    assert result["items"][1]["suppliers"] == []
     assert session.partcad.logging.messages("error") == []
 
 

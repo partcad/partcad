@@ -43,8 +43,9 @@ Besides the package properties and, optionally, a list of imported dependencies,
           includePaths: <(optional) Jinja2 include path>
 
   suppliers:
-      <(optional) the providers to consider for this package's objects; a bare
-       name is one of this package's own, "../sibling:name" is one next door>
+      <(optional) the providers to consider for this package's objects, and for
+       the parts its assemblies are procured from; a bare name is one of this
+       package's own, "../sibling:name" is one next door>
 
   parts:
       <part declarations, see below>

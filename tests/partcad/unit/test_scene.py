@@ -315,6 +315,10 @@ class _FakeProject:
     def get_scene(self, name, quiet=False):
         return self._scene if name == "thing" else None
 
+    async def get_suppliers_async(self):
+        # A package that names no store of its own.
+        return {}
+
 
 class _FakeContext:
     def __init__(self, project):

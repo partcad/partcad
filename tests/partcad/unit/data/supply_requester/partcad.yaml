@@ -1,0 +1,24 @@
+desc: Models built out of a parts library that names no store, and the store to buy them at
+
+dependencies:
+  lib:
+    type: local
+    path: ./lib
+  kit:
+    type: local
+    path: ./kit
+  store:
+    type: local
+    path: ./store
+  other:
+    type: local
+    path: ./other
+
+# Where this package's models are bought. None of their parts is declared here.
+suppliers:
+  //store:shop:
+
+assemblies:
+  model:
+    type: assy
+    desc: Two bricks from the library and a pin from the kit
