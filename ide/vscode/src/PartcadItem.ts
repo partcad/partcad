@@ -23,6 +23,22 @@ export function bareType(objectType: string | undefined): string {
     return (objectType ?? '').split(':').pop() ?? '';
 }
 
+/**
+ * The 2D drawing formats an object can be held in: AutoCAD's two.
+ *
+ * A sketch PartCAD reads from a DXF is one, and so is a part or an assembly
+ * whose type a plugin package implements for either format -- 'cadcraft:dwg',
+ * 'cadcraft:dxf' -- which is why the type is compared bare. These are the
+ * objects CADCraft, a drafting application, has anything to open: a solid
+ * PartCAD would have to draw first, and an edit to a drawing of it would have
+ * nowhere to go back to.
+ */
+export const DRAWING_TYPES = ['dwg', 'dxf'];
+
+export function isDrawing(objectType: string | undefined): boolean {
+    return DRAWING_TYPES.includes(bareType(objectType).toLowerCase());
+}
+
 export const ITEM_TYPE_NONE = 'none';
 export const ITEM_TYPE_PACKAGE = 'package';
 export const ITEM_TYPE_SKETCH = 'sketch';
@@ -120,7 +136,11 @@ export class PartcadItem extends vscode.TreeItem {
                 light: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'light', 'misc.svg')),
                 dark: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'dark', 'misc.svg')),
             };
-            this.contextValue = itemPath === undefined ? 'sketch' : 'sketchWithCode';
+            // A sketch read from a DXF gets a value of its own, as a 'kicad' part
+            // does below: it is the one kind of sketch an application can be
+            // handed as it is ("Open in > CADCraft"), and the others are not.
+            this.contextValue =
+                itemPath === undefined ? 'sketch' : isDrawing(config.type) ? 'sketchDrawing' : 'sketchWithCode';
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectSketch',
@@ -177,7 +197,11 @@ export class PartcadItem extends vscode.TreeItem {
                 light: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'light', 'extensions.svg')),
                 dark: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'dark', 'extensions.svg')),
             };
-            this.contextValue = itemPath === undefined ? 'assembly' : 'assemblyWithCode';
+            // An assembly read from a drawing (an 'import:' reader for DWG or DXF)
+            // is one CADCraft can be pointed at, so it is told apart like a
+            // drawing sketch above and a drawing part below.
+            this.contextValue =
+                itemPath !== undefined ? 'assemblyWithCode' : isDrawing(config.type) ? 'assemblyDrawing' : 'assembly';
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectAssembly',
@@ -218,8 +242,17 @@ export class PartcadItem extends vscode.TreeItem {
             // from is a file beside it (see the 'kicad' entry of 'builtin/open/partcad.yaml' and
             // 'partcad_client.external'). 'itemPath' stays undefined for it -
             // what the tree would open is the STEP KiCad writes, not source.
+            //
+            // A part read from a drawing ('cadcraft:dwg') is told apart the same
+            // way, for CADCraft: what it is handed is the DWG or the DXF itself.
             this.contextValue =
-                config.type === 'kicad' ? 'partKicad' : itemPath === undefined ? 'part' : 'partWithCode';
+                config.type === 'kicad'
+                    ? 'partKicad'
+                    : isDrawing(config.type)
+                      ? 'partDrawing'
+                      : itemPath === undefined
+                        ? 'part'
+                        : 'partWithCode';
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectPart',
