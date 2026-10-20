@@ -132,6 +132,27 @@ def test_an_alias_another_kind_has_the_name_of_is_not_made(tmp_path):
     assert "already the name of an interface" in project.get_broken_object_reason("sketch", "screw")
 
 
+def test_a_parametrized_declaration_s_refused_alias_is_not_made(tmp_path):
+    """Its aliases carry its parameters, and are refused under the name they carry."""
+    (tmp_path / "round.assy").write_text("links: []\n")
+    project = _package(
+        tmp_path,
+        "assemblies:\n"
+        "  'round;r=2':\n"
+        "    type: assy\n"
+        "    path: round.assy\n"
+        "sketches:\n"
+        "  'outline;r=2':\n"
+        "    type: basic\n"
+        "    circle: 2\n"
+        "    aliases: [round]\n",
+    )
+
+    assert "already the name of an assembly" in project.get_broken_object_reason("sketch", "round;r=2")
+    assert "outline;r=2" in project.sketches
+    assert "round;r=2" not in project.objects("sketch")
+
+
 def test_a_declaration_left_out_by_unless_takes_no_name(tmp_path):
     project = _package(
         tmp_path,

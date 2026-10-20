@@ -122,5 +122,8 @@ async def add_object_from_url_async(ctx, project, section: str, url: str, kind=N
 
     with pc_logging.Process("AddUrl", project.name):
         pc_logging.info("Adding '%s' to '%s' from %s" % (name, section, redacted_url(url)))
-        project.add_object_config(section, name, obj)
+        if not project.add_object_config(section, name, obj):
+            # Refused, and said why: the check before the download found the
+            # name free, and the file it is written into has taken it since.
+            raise ValueError("'%s' was not added to '%s'" % (name, project.name))
     return name

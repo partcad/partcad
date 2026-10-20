@@ -1929,14 +1929,18 @@ class Project(project_config.Configuration):
             object_name = config["name"]
             refused = self._refused_names.get(factory_name, {})
             for alias in config["aliases"]:
-                if alias in refused:
-                    # Another kind of object of this package has the name, and
-                    # was given it; the refusal was reported as the package
-                    # loaded (see '_refuse_duplicate_names').
-                    continue
+                declared = alias
                 if ";" in object_name:
                     # Copy parameters
                     alias += object_name[object_name.index(";") :]
+                if alias in refused or declared in refused:
+                    # Another kind of object of this package has the name, and
+                    # was given it; the refusal was reported as the package
+                    # loaded (see '_refuse_duplicate_names'). Asked with the
+                    # parameters as well as without: a parametrized
+                    # declaration's aliases are refused under the name they are
+                    # created under, which carries them.
+                    continue
                 alias_object_config = {
                     "type": "alias",
                     "name": alias,
