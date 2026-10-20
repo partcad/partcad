@@ -39,6 +39,15 @@ export function isDrawing(objectType: string | undefined): boolean {
     return DRAWING_TYPES.includes(bareType(objectType).toLowerCase());
 }
 
+/**
+ * The sketch types PartCAD reads from a file, inlined from
+ * `partcad.shape.SKETCH_EXTENSION_MAPPING`: every one of them is a sketch PartCAD
+ * can draw as a DXF, and so one an application that opens drawings can be
+ * handed -- as it is when it already is a DXF, and converted when it is an SVG
+ * or a CadQuery or build123d script (`pc ide open --kind sketch`).
+ */
+export const CONVERTIBLE_SKETCH_TYPES = ['svg', 'dxf', 'cadquery', 'build123d'];
+
 export const ITEM_TYPE_NONE = 'none';
 export const ITEM_TYPE_PACKAGE = 'package';
 export const ITEM_TYPE_SKETCH = 'sketch';
@@ -136,11 +145,20 @@ export class PartcadItem extends vscode.TreeItem {
                 light: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'light', 'misc.svg')),
                 dark: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'dark', 'misc.svg')),
             };
-            // A sketch read from a DXF gets a value of its own, as a 'kicad' part
-            // does below: it is the one kind of sketch an application can be
-            // handed as it is ("Open in > CADCraft"), and the others are not.
-            this.contextValue =
-                itemPath === undefined ? 'sketch' : isDrawing(config.type) ? 'sketchDrawing' : 'sketchWithCode';
+            // Every sketch PartCAD reads from a file can be opened in an
+            // application that opens drawings ("Open in > CADCraft"): a DXF as it
+            // is, an SVG or a script converted into one. A DXF gets a value of its
+            // own, as a 'kicad' part does below, and so does a script, which this
+            // tree does not open for editing (no `itemPath`) but which still has a
+            // file to convert; a sketch with no file of its own -- 'basic', an
+            // alias -- has nothing to open and stays 'sketch'.
+            if (itemPath !== undefined) {
+                this.contextValue = isDrawing(config.type) ? 'sketchDrawing' : 'sketchWithCode';
+            } else if (config?.item_path && CONVERTIBLE_SKETCH_TYPES.includes(bareType(config.type))) {
+                this.contextValue = 'sketchScript';
+            } else {
+                this.contextValue = 'sketch';
+            }
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectSketch',

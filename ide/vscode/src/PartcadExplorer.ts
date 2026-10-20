@@ -228,6 +228,10 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
                         path: path,
                         tool: tool,
                         type: item?.config?.type,
+                        // A sketch is converted between sketch formats, and its
+                        // type does not say it is one: a 'cadquery' file is a
+                        // part or a sketch depending on where it is declared.
+                        kind: item?.itemType === ITEM_TYPE_SKETCH ? 'sketch' : undefined,
                         signal: stop.signal,
                     })) as OpenOutcome;
                 },

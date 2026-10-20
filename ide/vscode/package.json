@@ -911,7 +911,7 @@
         {
           "command": "partcad.inspectSketch",
           "group": "navigation",
-          "when": "view == partcadExplorer && (viewItem == sketch || viewItem == sketchWithCode || viewItem == sketchDrawing)"
+          "when": "view == partcadExplorer && (viewItem == sketch || viewItem == sketchWithCode || viewItem == sketchDrawing || viewItem == sketchScript)"
         },
         {
           "command": "partcad.inspectInterface",
@@ -969,7 +969,7 @@
         },
         {
           "submenu": "partcad.submenu.openWith",
-          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == partKicad || viewItem == partDrawing || viewItem == assembly || viewItem == assemblyWithCode || viewItem == assemblyDrawing || viewItem == sceneWorld || viewItem == sceneMjcf || viewItem == sketchDrawing)",
+          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == partKicad || viewItem == partDrawing || viewItem == assembly || viewItem == assemblyWithCode || viewItem == assemblyDrawing || viewItem == sceneWorld || viewItem == sceneMjcf || viewItem == sketchDrawing || viewItem == sketchWithCode || viewItem == sketchScript)",
           "group": "additional_commands"
         }
       ],
@@ -1094,7 +1094,7 @@
       "partcad.submenu.openWith": [
         {
           "command": "partcad.openInFreeCAD",
-          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf && viewItem != sketchDrawing"
+          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf && viewItem != sketchDrawing && viewItem != sketchWithCode && viewItem != sketchScript"
         },
         {
           "command": "partcad.openInGazebo",
@@ -1110,15 +1110,15 @@
         },
         {
           "command": "partcad.openInBlender",
-          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf && viewItem != sketchDrawing"
+          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf && viewItem != sketchDrawing && viewItem != sketchWithCode && viewItem != sketchScript"
         },
         {
           "command": "partcad.openInSolidCraft",
-          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf && viewItem != sketchDrawing"
+          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf && viewItem != sketchDrawing && viewItem != sketchWithCode && viewItem != sketchScript"
         },
         {
           "command": "partcad.openInCADCraft",
-          "when": "view == partcadExplorer && (viewItem == sketchDrawing || viewItem == partDrawing || viewItem == assemblyDrawing)"
+          "when": "view == partcadExplorer && (viewItem == sketchDrawing || viewItem == sketchWithCode || viewItem == sketchScript || viewItem == partDrawing || viewItem == assemblyDrawing)"
         }
       ]
     },

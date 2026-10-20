@@ -53,7 +53,15 @@ def opened(monkeypatch):
             )
 
         def open_file(
-            self, path, tool="freecad", use_docker=False, image=None, log=None, object_type=None, transcode=None
+            self,
+            path,
+            tool="freecad",
+            use_docker=False,
+            image=None,
+            log=None,
+            object_type=None,
+            transcode=None,
+            object_kind=None,
         ):
             self.calls.append(
                 {
@@ -63,6 +71,7 @@ def opened(monkeypatch):
                     "image": image,
                     "log": log,
                     "object_type": object_type,
+                    "object_kind": object_kind,
                     "transcode": transcode,
                 }
             )
@@ -92,6 +101,7 @@ def test_the_options_reach_the_opener(click_runner: Iterator[CliRunner], opened)
             "image": "freecad/freecad:weekly",
             "log": opened.calls[0]["log"],
             "object_type": None,
+            "object_kind": "part",
             "transcode": opened.calls[0]["transcode"],
         }
     ]
@@ -180,6 +190,14 @@ def test_the_declared_type_is_handed_over(click_runner: Iterator[CliRunner], ope
     _invoke(click_runner, "--with", "blender", "--type", "cadquery", "cube.py")
     assert opened.calls[0]["object_type"] == "cadquery"
     assert opened.calls[0]["tool"] == "blender"
+
+
+def test_a_file_is_a_part_unless_it_is_said_to_be_a_sketch(click_runner: Iterator[CliRunner], opened) -> None:
+    """A 'cadquery' file is a part or a sketch depending on where it was declared, so the caller says which."""
+    _invoke(click_runner, "--type", "cadquery", "cube.py")
+    _invoke(click_runner, "--with", "cadcraft", "--kind", "sketch", "--type", "svg", "outline.svg")
+    assert opened.calls[0]["object_kind"] == "part"
+    assert opened.calls[1]["object_kind"] == "sketch"
 
 
 def test_a_conversion_is_the_daemon_s_adhoc_convert(click_runner: Iterator[CliRunner], opened, monkeypatch) -> None:
