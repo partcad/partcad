@@ -25,18 +25,37 @@ set -euo pipefail
 #     exit 1
 # fi
 
+# Allure is pinned, and fetched by name from Maven Central, where Allure
+# publishes the same command-line distribution its GitHub releases carry.
+#
+# It used to be "whatever api.github.com says is latest", asked anonymously.
+# The REST API gives an address 60 such requests an hour, and a GitHub-hosted
+# runner shares its address with everybody else's jobs. An answer that is not a
+# release -- "API rate limit exceeded", a 5xx -- has no .deb in it for `grep` to
+# match, and under `pipefail` that failed the assignment and so, under `-e`,
+# the whole build, before the check for an empty answer could say a word: exit
+# 1 and nothing printed. That is how CI-Dev #2697 died, and why no dev container
+# image was ever published for 0.8.224 (only a version bump builds one). A
+# file fetched by name is not behind that quota, `--retry` waits out a 429 or a
+# 5xx, and a pinned name has a checksum to check.
+#
+# To move the pin, take the version and the `.tgz.sha256` beside its archive
+# from https://repo1.maven.org/maven2/io/qameta/allure/allure-commandline/
+ALLURE_VERSION=2.46.1
+ALLURE_SHA256=37428164f310c8d137cfdd2c3a25d049b233261ddab13e1bd4dfd7627b5cbf8d
+
 install_allure() {
-  local allure_url
-  allure_url=$(curl -s https://api.github.com/repos/allure-framework/allure2/releases/latest | grep "browser_download_url.*allure_.*_all.deb" | cut -d '"' -f 4)
-  if [[ -z "${allure_url}" ]]; then
-    echo "Failed to fetch the latest Allure download URL"
+  local allure_url="https://repo1.maven.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.tgz"
+  local allure_tgz="/tmp/allure.tgz"
+
+  echo "Downloading Allure ${ALLURE_VERSION}..."
+  # -f: an HTTP error is a failure, not an error page saved as the archive.
+  if ! curl -fsSL --retry 5 -o "${allure_tgz}" "${allure_url}"; then
+    echo "Failed to download Allure from ${allure_url}"
     exit 1
   fi
-  local allure_deb="/tmp/allure.deb"
-
-  echo "Downloading Allure..."
-  if ! curl -JL -o "${allure_deb}" "${allure_url}"; then
-    echo "Failed to download Allure"
+  if ! echo "${ALLURE_SHA256}  ${allure_tgz}" | sha256sum --check --strict -; then
+    echo "Allure ${ALLURE_VERSION} does not match its pinned checksum"
     exit 1
   fi
 
@@ -53,13 +72,13 @@ install_allure() {
   fi
 
   echo "Installing Allure..."
-  if ! sudo dpkg -i "${allure_deb}"; then
-    echo "Failed to install Allure. Attempting to fix broken dependencies..."
-    if ! sudo apt --fix-broken install --yes; then
-      echo "Failed to fix broken dependencies"
-      exit 1
-    fi
+  # The launcher follows its own symlink to find lib/ beside it.
+  if ! sudo tar -xzf "${allure_tgz}" -C /opt \
+    || ! sudo ln -sf "/opt/allure-${ALLURE_VERSION}/bin/allure" /usr/local/bin/allure; then
+    echo "Failed to install Allure"
+    exit 1
   fi
+  rm -f "${allure_tgz}"
 
   echo "Allure installed successfully"
 }
