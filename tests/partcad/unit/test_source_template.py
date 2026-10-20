@@ -111,13 +111,59 @@ def test_the_rendered_file_is_not_written_into_the_package(package):
     assert not path.startswith(os.path.abspath(package.config_dir) + os.sep)
 
 
-def test_a_file_that_is_not_text_is_the_file_itself(package):
-    """A binary format is not a template: its bytes reach the reader untouched."""
+def _binary_package(tmp_path, content):
+    """A package whose 'demo' format is declared binary, and one scene of it."""
+    root = tmp_path / "binary"
+    root.mkdir()
+    (root / "reader.py").write_text(READER, encoding="utf-8")
+    (root / "drawing.dwg").write_bytes(content)
+    (root / "partcad.yaml").write_text(
+        "name: //b\n"
+        "import:\n  demo:\n    path: reader.py\n    extension: dwg\n    kinds: [scene, assembly]\n    binary: true\n"
+        "scenes:\n  drawing:\n    type: demo\n    path: drawing.dwg\n"
+        "assemblies:\n  drawing:\n    type: demo\n    path: drawing.dwg\n",
+        encoding="utf-8",
+    )
+    return pc.Context(str(root)).get_project("//")
+
+
+def test_a_binary_format_is_handed_over_as_it_is(tmp_path):
+    """Bytes are not a template, and are never opened to find out whether they would decode."""
+    from partcad.file_source import BinarySourceFile
+
+    project = _binary_package(tmp_path, b"AC1032\x00\x80\xff\xfe binary drawing")
+    factory = factory_of(project, "drawing")
+
+    assert isinstance(factory, BinarySourceFile)
+    assert factory.rendered_source() == factory.path
+
+
+def test_a_binary_format_is_not_rendered_even_where_its_bytes_would_decode(tmp_path):
+    """The declaration decides, not the content: '{{ name }}' in a binary file stays as it is."""
+    project = _binary_package(tmp_path, b"{{ name }} happens to be in these bytes")
+    factory = factory_of(project, "drawing")
+
+    assert factory.rendered_source() == factory.path
+
+
+def test_an_assembly_of_a_binary_format_is_binary_too(tmp_path):
+    from partcad.assembly_factory_imported import AssemblyFactoryImportedBinary
+
+    project = _binary_package(tmp_path, b"\x00\x01")
+    assembly = project.get_assembly("drawing")
+
+    assert isinstance(assembly.import_factory, AssemblyFactoryImportedBinary)
+    assert assembly.import_factory.rendered_source() == assembly.import_factory.path
+
+
+def test_a_text_format_whose_file_is_not_text_is_an_error_that_says_so(package):
+    """A template that does not decode is a broken declaration, not a file to pass on and hope."""
     factory = factory_of(package, "plain")
     with open(factory.path, "wb") as f:
         f.write(b"AC1032\x00\x80\xff\xfe binary drawing")
 
-    assert factory.rendered_source() == factory.path
+    with pytest.raises(Exception, match="is not UTF-8 text.*binary: true"):
+        factory.rendered_source()
 
 
 def test_a_template_that_will_not_render_names_the_file_it_is_in(package, tmp_path):

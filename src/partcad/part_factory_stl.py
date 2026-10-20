@@ -11,13 +11,14 @@ import os
 
 from . import logging as pc_logging
 from . import shape_envelope, telemetry, wrapper
+from .file_source import BinarySourceFile
 from .part_factory_file import PartFactoryFile
 from .part_factory_homogen import PartFactoryHomogen
 from .process_crash import command_failure
 
 
 @telemetry.instrument()
-class PartFactoryStl(PartFactoryHomogen, PartFactoryFile):
+class PartFactoryStl(BinarySourceFile, PartFactoryHomogen, PartFactoryFile):  # STL is binary as often as not
     WRAPPERS = ("stl.py",)
 
     PYTHON_SANDBOX_VERSION = "3.11"

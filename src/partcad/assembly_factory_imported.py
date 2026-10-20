@@ -50,6 +50,7 @@ from . import logging as pc_logging
 from . import output, shape_envelope, telemetry, wrapper
 from .assembly import AssemblyChild
 from .assembly_factory_file import AssemblyFactoryFile
+from .file_source import BinarySourceFile
 from .geom import Location
 from .part_config import PartConfiguration
 from .process_crash import describe_exit_code
@@ -92,6 +93,23 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
     # produces and which kind the declaration has to say it can produce.
 
     WRAPPERS = ("import.py",)
+
+    @classmethod
+    def for_declaration(cls, ctx, target_project, config):
+        """The class an object of this 'import:' type is built by.
+
+        This one for a format whose files are text, and so templates; its
+        binary variant ('<cls>Binary', a 'BinarySourceFile') for a format the
+        declaration says is bytes with 'binary: true'. Decided here, by what
+        the declaration says, so that no file is ever opened to find out.
+
+        A type nothing declares gets this class, whose constructor raises the
+        'ImportedTypeError' the caller already handles.
+        """
+        impl = output.import_declaration(ctx, target_project, config.get("type"))
+        if impl is not None and output.as_flag(impl.config.get(output.IMPORT_BINARY_KEY)):
+            return cls.BINARY_VARIANT
+        return cls
 
     def __init__(self, ctx, source_project, target_project, config):
         self.impl = output.import_declaration(ctx, target_project, config.get("type"))
@@ -491,3 +509,18 @@ class SceneFactoryImported(SceneFactoryMixin, AssemblyFactoryImported):
     from 'SceneFactoryMixin', which is mixed in ahead of the factory so its
     values win.
     """
+
+
+@telemetry.instrument()
+class AssemblyFactoryImportedBinary(BinarySourceFile, AssemblyFactoryImported):
+    """An assembly read from a binary file: its reader is handed the file as it is, never rendered."""
+
+
+@telemetry.instrument()
+class SceneFactoryImportedBinary(BinarySourceFile, SceneFactoryImported):
+    """A scene read from a binary file: its reader is handed the file as it is, never rendered."""
+
+
+# Set after the fact because each variant is a subclass of what points at it.
+AssemblyFactoryImported.BINARY_VARIANT = AssemblyFactoryImportedBinary
+SceneFactoryImported.BINARY_VARIANT = SceneFactoryImportedBinary

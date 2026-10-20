@@ -313,10 +313,15 @@ SELECTION_KEYS = frozenset({"filter"})
 
 # The same, for the 'import:' section. None of these is a parameter of the
 # reader: 'kinds' says which object kinds may be declared with this type,
-# 'noun' and 'dropped' are how the core words what the reader reports, and
-# 'extension' (already reserved above) is how the source file is found. The
-# reader is handed everything else.
-IMPORT_KEYS = frozenset({"kinds", "noun", "dropped"})
+# 'noun' and 'dropped' are how the core words what the reader reports, 'binary'
+# whether its files are bytes (below), and 'extension' (already reserved above)
+# is how the source file is found. The reader is handed everything else.
+IMPORT_KEYS = frozenset({"kinds", "noun", "dropped", "binary"})
+
+# The 'import:' field that says a format's files are bytes rather than text:
+# handed to the reader as they are, and never rendered as a Jinja2 template the
+# way a text format's are (see 'partcad.file_source').
+IMPORT_BINARY_KEY = "binary"
 
 # The same, for the 'cae:' section. 'reads' is what the implementation says it
 # reads of an analysis section beyond where each condition lands and how big it

@@ -375,6 +375,7 @@
           ]
         },
         "noun": { "type": "string", "minLength": 1, "description": "What one of these is called in a log line ('model', 'world', 'robot')" },
+        "binary": { "type": "boolean", "description": "The format's files are bytes rather than text: the reader is handed each one as it is, and it is never rendered as a Jinja2 template the way a text format's file is. False by default" },
         "dropped": {
           "type": "object",
           "description": "How each counter of the reader's 'dropped' summary is worded when it is reported. The reader counts; this names",

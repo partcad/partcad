@@ -22,6 +22,10 @@ from .part_factory_file import PartFactoryFile
 from .part_factory_homogen import PartFactoryHomogen
 from .process_crash import command_failure
 
+# The first four bytes of every binary glTF ('.glb') file, by the specification:
+# 'glTF' in ASCII. A '.gltf' is JSON and starts with '{' (or whitespace).
+GLB_MAGIC = b"glTF"
+
 
 def gltf_companions(source_path) -> list:
     """The files a '.gltf' file names beside itself, its buffers and its images, relative to it.
@@ -32,10 +36,18 @@ def gltf_companions(source_path) -> list:
     """
     source_path = Path(source_path)
     try:
-        with open(source_path, encoding="utf-8") as f:
-            document = json.load(f)
-    except (OSError, UnicodeDecodeError, ValueError):
-        return []  # a '.glb' under the '.gltf' name, or not glTF at all
+        with open(source_path, "rb") as f:
+            data = f.read()
+    except OSError:
+        return []  # nothing there yet: 'fileFrom' has not fetched it
+    if data[: len(GLB_MAGIC)] == GLB_MAGIC:
+        return []  # a '.glb', whatever it is named: its buffers are inside it
+    try:
+        # From bytes, which 'json' decodes the way the glTF specification says
+        # a '.gltf' is encoded (UTF-8), and refuses if it is not JSON at all.
+        document = json.loads(data)
+    except ValueError:
+        return []  # not glTF at all; the reader says so, with the file named
     if not isinstance(document, dict):
         return []
     found = []

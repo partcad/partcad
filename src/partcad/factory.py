@@ -219,7 +219,10 @@ def instantiate(kind: str, t: str, ctx, source_project, target_project, config):
         from .assembly_factory_imported import ImportedKindError, ImportedTypeError
 
         try:
-            return all[kind][IMPORTED_KINDS[kind]](ctx, source_project, target_project, config)
+            # The class depends on the declaration: a binary format's files are
+            # never rendered as templates (see 'partcad.file_source').
+            factory_class = all[kind][IMPORTED_KINDS[kind]].for_declaration(ctx, target_project, config)
+            return factory_class(ctx, source_project, target_project, config)
         except ImportedKindError as e:
             # Declared, but in the wrong section. That has a better message than
             # the generic one below, which would list every type there is
