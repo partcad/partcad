@@ -395,7 +395,13 @@ class JsonRpcBackend implements PartcadBackend {
      * rather than an opening: the window still belongs to the machine the
      * command ran on.
      */
-    private async openExternal(arg: { path?: string; tool?: string; type?: string; signal?: AbortSignal }): Promise<{
+    private async openExternal(arg: {
+        path?: string;
+        tool?: string;
+        type?: string;
+        kind?: string;
+        signal?: AbortSignal;
+    }): Promise<{
         detail: string;
         method: string;
         changed?: boolean;
@@ -414,6 +420,9 @@ class JsonRpcBackend implements PartcadBackend {
             // has to be converted first, and a file name does not always say
             // which type it holds. `pc ide open` decides what to do with it.
             ...(arg?.type ? ['--type', arg.type] : []),
+            // 'sketch' for a sketch, which is converted between sketch formats
+            // -- into a DXF, for an application that opens drawings.
+            ...(arg?.kind ? ['--kind', arg.kind] : []),
             ...((config.get<boolean>('open.useDocker') ?? true) ? ['--use-docker'] : []),
             ...(image ? ['--docker-image', image] : []),
             arg?.path ?? '',

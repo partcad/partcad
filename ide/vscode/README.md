@@ -210,6 +210,12 @@ in a tool that draws, next to what the extension does with it.
   SolidCraft design is opened as it is, with its history; STEP, IGES and meshes as they are; anything else (a
   script, a BREP) is converted to STEP first, and an edit to that copy is written back where the object's own
   file can take it.
+* **CADCraft**, for a drawing: any sketch with a file of its own, or a part or an assembly read from a DWG or a
+  DXF (`cadcraft:dwg`, `cadcraft:dxf`), in a workspace that imports the CADCraft plugin package
+  ([`partcad-cadcraft`](https://github.com/partcad/partcad-cadcraft)). A DXF or a DWG is opened as it is, and
+  what is saved there is the object's own file -- note that CADCraft leaves out what it does not model when it
+  saves. An SVG sketch, or one written as a CadQuery or build123d script, is drawn as a DXF first; what is saved
+  goes back into the SVG, and next to the script.
 
 This runs on your machine and never goes anywhere near the PartCAD daemon: the extension runs `pc ide open`, which
 looks for the application installed here and starts it. If there is none, and `partcad.open.useDocker` is on (the default),

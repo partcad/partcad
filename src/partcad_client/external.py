@@ -325,6 +325,17 @@ class Tool:
                 return _format_name(name)
         return None
 
+    def sketch_conversion_target(self) -> Optional[str]:
+        """The first format on the list PartCAD can write a sketch into, or None.
+
+        A drawing application's: CADCraft lists DXF, and a sketch held in SVG or
+        written as a script reaches it as one.
+        """
+        for name in self.formats:
+            if _format_name(name) in object_types.WRITABLE_SKETCH_TYPES:
+                return _format_name(name)
+        return None
+
     def file_for(self, path: str) -> str:
         """The file this application is really given, from the one it was handed.
 
@@ -603,6 +614,7 @@ def open_file(
     object_type: Optional[str] = None,
     transcode: Optional[Callable[..., None]] = None,
     mode: Optional[str] = None,
+    object_kind: Optional[str] = None,
 ) -> OpenResult:
     """Open ``path`` in ``tool``, wait for it to close, and bring back what was done in it.
 
@@ -616,12 +628,19 @@ def open_file(
     ``transcode`` is how a file this application cannot open becomes one it can,
     and how an edit to that copy goes back into the object's own format. Called
     as ``transcode(source, source_type, target, target_type, kind)`` -- ``kind``
-    is "part" or "scene" -- and expected to leave ``target`` on disk. It is CAD
+    is "part", "sketch" or "scene" -- and expected to leave ``target`` on disk. It is CAD
     work, so it belongs to the daemon; a caller that passes none can still open
     anything the application reads as it is.
 
     ``mode`` is the transfer mode for a container (see
     `partcad_utils.containers`); the configuration's when it is None.
+
+    ``object_kind`` is "sketch" for a file that holds a sketch, which is
+    converted between sketch formats -- into a drawing, for an application that
+    opens drawings -- rather than between part formats. Needed because the type
+    does not say: a 'cadquery' file is a part or a sketch depending on which
+    section declared it. Anything else, or None, is a part; whether the file is
+    a scene is the application's to say.
     """
     say = log or (lambda _message: None)
 
@@ -641,12 +660,17 @@ def open_file(
     # directory, and asking which workspace *it* is in would answer with the
     # state directory itself.
     root = _workspace_for(resolved)
-    kind = "scene" if spec.reads_scenes() else "part"
+    if spec.reads_scenes():
+        kind = "scene"
+    else:
+        kind = "sketch" if object_kind == "sketch" else "part"
     target_type = None
     opened = resolved
     if not spec.opens(resolved, object_type):
         if kind == "scene":
             opened, target_type = _transcode_scene(spec, resolved, root, object_type, transcode, say)
+        elif kind == "sketch":
+            opened, target_type = _transcode_sketch(spec, resolved, root, object_type, transcode, say)
         else:
             opened, target_type = _transcode(spec, resolved, root, object_type, transcode, say)
 
@@ -703,8 +727,17 @@ def open_file(
 
 def _bring_back(spec, result, source, edited, edited_type, object_type, kind, transcode, say) -> None:
     """Convert an edited copy back into the object's own format, over its source -- where there is one."""
-    original_type = object_types.readable_type(source, object_type) if kind == "part" else None
-    if kind != "part" or original_type not in object_types.WRITABLE_PART_TYPES or transcode is None:
+    if kind == "part":
+        original_type = object_types.readable_type(source, object_type)
+        writable = original_type in object_types.WRITABLE_PART_TYPES
+    elif kind == "sketch":
+        # An SVG sketch edited as a DXF goes back into the SVG; a sketch that is
+        # a script does not.
+        original_type = object_types.readable_sketch_type(source, object_type)
+        writable = original_type in object_types.WRITABLE_SKETCH_TYPES
+    else:
+        original_type, writable = None, False
+    if not writable or transcode is None:
         # A script, an alias, an extrude: nothing a converted file can be
         # written back into. The edit is kept where it was made and said so.
         result.edited = edited
@@ -789,6 +822,48 @@ def _transcode(
         )
     extension = object_types.PART_TYPE_EXTENSION.get(target, target)
     return _produce(spec, source, source_type, root, target, extension, "part", transcode, say), target
+
+
+def _transcode_sketch(
+    spec: Tool,
+    source: str,
+    root: str,
+    object_type: Optional[str],
+    transcode: Optional[Callable[..., None]],
+    say: Callable[[str], None],
+) -> Tuple[str, str]:
+    """Convert the sketch in ``source`` to the first format ``spec`` opens that PartCAD writes a sketch into.
+
+    The drawing counterpart of `_transcode`: a sketch PartCAD reads (SVG, DXF,
+    a CadQuery or build123d script) becomes a DXF for an application that opens
+    drawings, through the same `adhoc.convert` a `pc adhoc convert sketch` sends.
+    """
+    target = spec.sketch_conversion_target()
+    if target is None:
+        raise ExternalToolError(
+            "%s opens %s, and PartCAD writes a sketch into none of them (it writes: %s)."
+            % (spec.display_name, _formats_named(spec), ", ".join(sorted(object_types.WRITABLE_SKETCH_TYPES)))
+        )
+    source_type = object_types.readable_sketch_type(source, object_type)
+    if source_type is None:
+        raise ExternalToolError(
+            "%s opens %s, and PartCAD cannot tell what sketch %s holds -- it reads %s.\n"
+            "Say so with --type ('pc ide open --kind sketch --type ...'); the VS Code extension passes the "
+            "declared type of the sketch you clicked."
+            % (
+                spec.display_name,
+                _formats_named(spec),
+                source,
+                ", ".join(sorted(object_types.SKETCH_TYPE_EXTENSION)),
+            )
+        )
+    if transcode is None:
+        raise ExternalToolError(
+            "%s opens %s, and %s is not one. Converting it needs the PartCAD daemon; "
+            "run `pc ide open` rather than calling this directly." % (spec.display_name, _formats_named(spec), source)
+        )
+    extension = object_types.SKETCH_TYPE_EXTENSION.get(target, target)
+    return _produce(spec, source, source_type, root, target, extension, "sketch", transcode, say), target
 
 
 def _transcode_scene(

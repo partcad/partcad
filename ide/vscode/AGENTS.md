@@ -744,7 +744,7 @@ npm run pretest && PARTCAD_TEST_WITH_CSPELL=streetsidesoftware.code-spell-checke
 ## Opening a file in a third-party application
 
 The Explorer's per-item **"Open in > ..."** menu hands the item's file to `partcad.openExternal`, which runs
-`pc --no-ansi ide open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Six
+`pc --no-ansi ide open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Seven
 applications, each offered for the objects it can actually open:
 
 | Menu entry | Command | Shown for |
@@ -755,17 +755,32 @@ applications, each offered for the objects it can actually open:
 | MuJoCo | `partcad.openInMuJoCo` | scenes of type `mjcf` (`viewItem == sceneMjcf`) |
 | KiCad | `partcad.openInKiCad` | parts of type `kicad` (`viewItem == partKicad`) |
 | SolidCraft | `partcad.openInSolidCraft` | parts and assemblies |
+| CADCraft | `partcad.openInCADCraft` | every sketch with a file -- DXF as it is, SVG and CadQuery/build123d scripts drawn as DXF -- and parts and assemblies of a DWG or DXF type (`viewItem == sketchDrawing`, `sketchWithCode`, `sketchScript`, `partDrawing`, `assemblyDrawing`) |
 
-SolidCraft, like Gazebo and MuJoCo, is not one of PartCAD's own: its `open:` entry is declared by the plugin
-package for it ([`partcad-solidcraft`](https://github.com/partcad/partcad-solidcraft)), and `pc ide open` finds it
-only in a workspace that imports that package. Elsewhere the entry is still on the menu, and picking it shows
+SolidCraft and CADCraft, like Gazebo and MuJoCo, are not PartCAD's own: each one's `open:` entry is declared by
+the plugin package for it ([`partcad-solidcraft`](https://github.com/partcad/partcad-solidcraft),
+[`partcad-cadcraft`](https://github.com/partcad/partcad-cadcraft)), and `pc ide open` finds it only in a
+workspace that imports that package. Elsewhere the entry is still on the menu, and picking it shows
 `pc ide open`'s own answer -- the applications it does know -- rather than the menu guessing at what the
 workspace imports.
+
+CADCraft is a drafting application, so it is offered where there is a drawing to hand it: every sketch PartCAD
+reads from a file (`CONVERTIBLE_SKETCH_TYPES`, which mirrors `partcad.shape.SKETCH_EXTENSION_MAPPING`), and a
+part or an assembly whose type a plugin implements for DWG or DXF (`cadcraft:dwg`), compared bare like the
+engine scene types (`isDrawing`). A DXF sketch is handed over as it is; an SVG sketch, or a sketch written as a
+CadQuery or build123d script, is drawn as a DXF first -- `pc ide open --kind sketch`, which the extension passes
+for every sketch, because a `cadquery` type is a part or a sketch depending on where it was declared. An edit to
+an SVG sketch's DXF goes back into the SVG; an edit to a script's is kept beside it. A script sketch has a file
+this tree does not open for editing, so it gets a value of its own (`sketchScript`) rather than `sketchWithCode`.
+A solid would have to be drawn first, and an edit to that drawing would have nowhere to go back to, so solid parts
+are not offered; and the applications that open solids are kept off every sketch (`viewItem != sketchDrawing`,
+`sketchWithCode`, `sketchScript`).
 
 The narrow ones are why `PartcadItem` gives those objects a context value of their own: `viewItem` is one
 string compared exactly, so "a scene Gazebo can open" and "a part KiCad can open" have to *be* separate
 values. Each is then added back to every other clause that names their kind, because a world scene is a scene
-everywhere else and a KiCad part is a part.
+everywhere else and a KiCad part is a part. `src/test/suite/openIn.test.ts` holds every clause to that, which is
+how an MJCF scene was found to have no "Open in" menu at all, and so no way to reach MuJoCo.
 
 Each engine is offered for its own scene format and not the other's, which is not an oversight: `pc ide open`
 converts no scene. MJCF and SDFormat are written by the engines' plugin packages, and a file handed to

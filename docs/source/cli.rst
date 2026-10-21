@@ -1212,14 +1212,25 @@ instead.
   -- a ``.py`` is a CadQuery script, a build123d one or an SDF one -- and the VS Code extension passes the
   declared type of the object you clicked.
 
+  ``--kind sketch`` says the file holds a sketch, which is converted between sketch formats rather than part
+  formats: an application that opens drawings -- CADCraft, from the ``partcad-cadcraft`` plugin, lists DWG and
+  DXF -- is handed a DXF sketch as it is, and an SVG sketch or a CadQuery or build123d one as the DXF PartCAD
+  draws of it::
+
+    pc ide open --with cadcraft --kind sketch --type svg outline.svg
+
+  The type alone does not say which: a ``cadquery`` file declared under ``sketches:`` is a drawing, the same
+  file under ``parts:`` a solid. The VS Code extension passes the kind of the object you clicked.
+
   When the application closes, the file it was given is compared with what it was before:
 
   * **Unchanged** -- nothing happens, and ``No changes.`` says so.
   * **Changed, and opened as it is** -- the edit is already in your file.
   * **Changed, and converted first** -- the edited copy is converted back into the object's own format and
     written over its source, when that source is a file PartCAD can write (``step``, ``brep``, ``stl``, ``3mf``,
-    ``obj``, ``iges``, ``gltf``). A script is not: its edit is kept where it was made and the path is printed,
-    because overwriting the program that generates a part with its output would destroy the program.
+    ``obj``, ``iges``, ``gltf``; for a sketch, ``dxf`` and ``svg``). A script is not: its edit is kept where it
+    was made and the path is printed, because overwriting the program that generates a part with its output would
+    destroy the program.
 
   An application that saves beside what it opened -- KiCad -- has its whole directory compared rather than
   the one file. Interrupting ``pc ide open`` (``Ctrl+C``) stops the wait and leaves the application open; what is
