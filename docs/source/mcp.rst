@@ -98,7 +98,10 @@ runs it as ``uvx partcad mcp``, and offers ``PC_PATH`` for the package to serve.
 Tools
 *****
 
-Each tool is one daemon method, with the parameters the ``pc`` command it mirrors sends.
+Each tool is one daemon method, with the parameters the ``pc`` command it mirrors sends. The ones that name an
+object -- ``info``, ``render``, ``export``, ``test``, ``bom`` and ``instructions`` -- take ``params``, the values of
+the object's own parameters by name, which is ``-p <name>=<value>`` on the command line (see
+:ref:`parameter-values`).
 
 .. list-table::
    :header-rows: 1

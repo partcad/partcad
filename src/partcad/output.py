@@ -45,6 +45,7 @@ from __future__ import annotations
 import base64
 import copy
 import os
+import re
 from typing import Optional
 
 from . import logging as pc_logging
@@ -261,8 +262,37 @@ def name_to_path(name: str, suffix: str = "") -> str:
     in, rather than in a directory called 'a/b' that only one of the three can
     read back.
     """
-    *directories, stem = name.split("/")
-    return os.path.join(*directories, stem + suffix)
+    return os.path.join(*name_to_segments(name, suffix))
+
+
+# What is left of an instance's parameter values in the name of its file: the
+# characters every filesystem and every shell takes as they are. Anything else,
+# in a run, becomes one '_'.
+_UNSAFE_IN_FILE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
+
+
+def name_to_segments(name: str, suffix: str = "") -> list:
+    """'name_to_path()' as the list of its segments, the last one the file.
+
+    Joined with 'os.path.join()' it is where the file is on this machine, and
+    joined with '/' it is how a document links to it -- one answer for both, so
+    that a README cannot point at a file its own render named differently.
+
+    Only the name an object is declared under can say which directory its file
+    is in. The parameter values of an instance ('bolt;length=10') are text a
+    user wrote, and a value may hold anything a name may not -- a material
+    reference ('room;medium=//pub/std/materials:air') puts a '/' and a ':'
+    there, which made a directory of half a value and a file name Windows
+    refuses. So the values are written into the file's name with every run of
+    characters outside '[A-Za-z0-9_.-]' as one '_' -- 'bolt_length_10',
+    'room_medium_pub_std_materials_air' -- which is how 'pc instructions'
+    already named the book of one, and leaves nothing to quote in a shell.
+    """
+    base, separator, values = name.partition(";")
+    *directories, stem = base.split("/")
+    if separator:
+        stem += "_" + _UNSAFE_IN_FILE_NAME.sub("_", values)
+    return [*directories, stem + suffix]
 
 
 def is_document_format(format_name: str, section_obj) -> bool:

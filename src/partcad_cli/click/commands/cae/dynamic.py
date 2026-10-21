@@ -13,10 +13,10 @@ from ...analysis import analysis_command, analysis_options
 @analysis_options
 @click.argument("object", type=str, required=True)  # The part to analyse
 @click.pass_obj
-def cli(cli_ctx, package, implementation, output_dir, as_json, object):
+def cli(cli_ctx, package, implementation, output_dir, as_json, params, object):
     """Ask the configured solver at which frequencies the part rings.
 
     The part says what holds it in its own `dynamic:` section; everything else
     about the run is `analysis_command`, shared with `pc cae fea`.
     """
-    analysis_command(cli_ctx, "dynamic", package, implementation, output_dir, as_json, object)
+    analysis_command(cli_ctx, "dynamic", package, implementation, output_dir, as_json, params, object)

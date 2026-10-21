@@ -21,6 +21,7 @@ import os
 
 import rich_click as click
 
+from .parameters import param_option, param_params
 from .service import run
 
 _OPTIONS = (
@@ -66,12 +67,13 @@ def analysis_options(command):
     Applied in reverse because click reverses the parameters it collected, which
     is what makes them read in this order in '--help'.
     """
+    command = param_option(command)
     for option in reversed(_OPTIONS):
         command = option(command)
     return command
 
 
-def analysis_command(cli_ctx, analysis, package, implementation, output_dir, as_json, object):
+def analysis_command(cli_ctx, analysis, package, implementation, output_dir, as_json, params, object):
     """Run one analysis on the daemon and let it report.
 
     The findings are printed by the daemon through PartCAD logging, exactly as
@@ -86,6 +88,7 @@ def analysis_command(cli_ctx, analysis, package, implementation, output_dir, as_
             "analysis": analysis,
             "package": package,
             "object": object,
+            **param_params(params),
             "implementation": implementation,
             # Resolved to absolute so the model lands in the user's working
             # directory rather than the daemon's, which is somewhere else.

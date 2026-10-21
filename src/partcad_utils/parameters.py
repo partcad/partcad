@@ -10,12 +10,17 @@ a client that checks a file an editor has open expands it too, to render that
 file with the values PartCAD would (see 'partcad_utils.assy_lint'). Neither may
 have its own reading of 'size: 3', and the client must not import the CAD kernel
 to share this one -- which is why it lives here.
+
+The values a request assigns ('-p'/'--param') are read here for the same
+reason: 'pc' checks them before sending, the MCP server writes them, and the
+daemon reads them, and three readings of '<name>=<value>' would be three answers.
 """
 
 import decimal
 import re
 
 from .logging import debug
+from .utils import format_parameterized_name
 
 # One override as written: '<object>.<parameter>=<value>'. The parameter is the
 # first '.<name>=' in it -- a run with neither '.' nor '=' between a '.' and an
@@ -121,3 +126,61 @@ def parse_override(text: str) -> tuple:
     if match is None or not match.group("object").strip() or not match.group("parameter").strip():
         raise ValueError("'%s' is not '<object>.<parameter>=<value>'" % text)
     return match.group("object"), match.group("parameter"), match.group("value")
+
+
+def assignments(value) -> dict:
+    """The parameter values a request assigns to the object it names, by parameter.
+
+    What '-p'/'--param' on the command line arrives as, under the request's
+    'params'. Two shapes mean the same thing there: a list of '<name>=<value>'
+    strings, which is what 'pc' sends, and a mapping, which is what the editor
+    extension, the FreeCAD addon and an agent send. Read here so that the two
+    ends, and every method on the daemon, read them one way.
+
+    A string with no '=' in it is refused rather than passed over. It used to be
+    passed over, so that 'pc info -p width' quietly showed the object with its
+    default width.
+    """
+    if not value:
+        return {}
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, (list, tuple)):
+        result = {}
+        for item in value:
+            name, separator, text = str(item).partition("=")
+            if not separator or not name:
+                raise ValueError("'%s' is not '<name>=<value>'" % item)
+            result[name] = text
+        return result
+    raise ValueError("Parameter values are a mapping or a list of '<name>=<value>', not %r" % (value,))
+
+
+def format_assignment(value) -> str:
+    """One assigned value, written the way an object's name spells it.
+
+    A list is its items joined by commas, which is how a name holds one
+    ('bends;include=BEND_UP,BEND_DOWN', see 'parse_parameterized_name'), and a
+    flag is 'true' or 'false', which is what 'coerce_parameter_value' reads back.
+    """
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        return ",".join(format_assignment(item) for item in value)
+    return str(value)
+
+
+def assign(name: str, values) -> str:
+    """The name of the instance of 'name' with these parameter values.
+
+    'pc render bolt -p length=10' asks for exactly what 'pc render
+    "bolt;length=10"' asks for, and this is what makes the two one request: an
+    instance of an object *is* its name with the values written into it. A value
+    assigned here takes precedence over one the name already carries, the way an
+    outer reference takes precedence everywhere (see
+    'format_parameterized_name'). 'values' is either shape 'assignments' reads.
+    """
+    values = assignments(values)
+    if not values:
+        return name
+    return format_parameterized_name(name, {key: format_assignment(value) for key, value in values.items()})

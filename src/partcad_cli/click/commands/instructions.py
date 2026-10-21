@@ -11,6 +11,7 @@ import rich_click as click
 
 from partcad_utils import garage
 
+from ..parameters import param_option, param_params
 from ..service import run
 
 
@@ -69,15 +70,17 @@ from ..service import run
     help="Write the instructions even if the assembly is not manufacturable",
     show_envvar=True,
 )
+@param_option
 @click.argument("object", type=str, required=True)
 @click.pass_obj
-def cli(cli_ctx, fmt, recursive, build_parts, output_dir, package, ignore_manufacturability, object):
+def cli(cli_ctx, fmt, recursive, build_parts, output_dir, package, ignore_manufacturability, params, object):
     result = run(
         cli_ctx,
         "assembly.guide",
         {
             "package": package,
             "object": object,
+            **param_params(params),
             "format": fmt,
             # Not 'recursive': on a request that names an object, that is a
             # walk over the packages below it.

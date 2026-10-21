@@ -25,9 +25,10 @@ import yaml
 from packaging.specifiers import SpecifierSet
 
 from partcad_utils import conda as pc_conda
-from partcad_utils import config_report, staging
+from partcad_utils import config_report, parameters, staging
 from partcad_utils.utils import (
     directory_size_mb,
+    parse_parameterized_name,
     split_recursive_object,
     split_recursive_package,
     split_resource_path,
@@ -139,7 +140,59 @@ def _request(params, default="."):
         params.get("package") if params.get("package") else default,
         params.get("object"),
     )
-    return package, object_name, recursive or bool(params.get("recursive"))
+    return package, _assigned_name(params, object_name), recursive or bool(params.get("recursive"))
+
+
+def _assigned(params) -> dict:
+    """The parameter values a request assigns to its object, by parameter.
+
+    ``params`` is ``-p``/``--param``: a list of ``<name>=<value>`` from ``pc``, a
+    mapping from the editor, the FreeCAD addon or an agent. One reader, so that
+    no method reads one shape and drops the other (see
+    'partcad_utils.parameters.assignments').
+
+    A value is written the way a name spells it, so that one instance has one
+    name whichever client asked: '{"flat": true}' from the editor is the
+    instance 'pc ... -p flat=true' asks for, 'flat=true', where the mapping's
+    own value made it 'flat=True' -- a second object and a second cache entry.
+    Not a list: the FreeCAD addon sends an array parameter as one, and a factory
+    reading it takes it as it comes, where written into a name it would arrive
+    as the text 'A,B'.
+    """
+    try:
+        values = parameters.assignments(params.get("params"))
+    except ValueError as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    return {
+        key: value if isinstance(value, (list, tuple)) else parameters.format_assignment(value)
+        for key, value in values.items()
+    }
+
+
+def _assigned_name(params, object_name):
+    """The object a request names, with the values it assigns written into the name.
+
+    ``pc render bolt -p length=10`` is ``pc render "bolt;length=10"``: an
+    instance of an object is named by its values, so this is all it takes for
+    every operation that reads its object through ``_request`` or
+    ``_resolve_object`` to take parameters -- and for a log line, a file name
+    and a cache entry to say which instance they are about. A value given here
+    wins over one the name already carries.
+
+    Values with nothing to give them to are refused rather than dropped. Not when
+    the request names its object as ``name``, which is how the editor's
+    per-kind methods (``inspect.part`` and the rest) do it: those hand the
+    values to the getter themselves, and come through here only to have their
+    package found.
+    """
+    values = _assigned(params)
+    if not values:
+        return object_name
+    if object_name is None:
+        if params.get("name") is None:
+            raise JsonRpcError(USAGE_ERROR, "Parameter values are given, but no object to give them to")
+        return None
+    return parameters.assign(object_name, values)
 
 
 def _excluded(ctx, params) -> list:
@@ -302,7 +355,7 @@ def _resolve_object(ctx, pc, params):
         pc.logging.error("Package %s is not found" % package)
         return None
 
-    return pc.utils.resolve_resource_path(package_obj.name, object_name)
+    return pc.utils.resolve_resource_path(package_obj.name, _assigned_name(params, object_name))
 
 
 def _root_loaded(ctx) -> bool:
@@ -445,7 +498,7 @@ def instantiate_assembly(session, params):
     path = _qualified(package, name)
     with session.partcad.logging.Process("Instantiate", package, name):
         getter = ctx.get_scene if kind == "scene" else ctx.get_assembly
-        assembly = getter(path, params.get("params"))
+        assembly = getter(path, _assigned(params))
         if assembly is None:
             raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
         _stage_subassemblies(session, ctx, assembly)
@@ -483,7 +536,7 @@ def inspect_part(session, params):
         return None
     package, name = params["package"], params["name"]
     with session.partcad.logging.Process("Inspect", package, name):
-        part = ctx.get_part(_qualified(package, name), params.get("params"))
+        part = ctx.get_part(_qualified(package, name), _assigned(params))
         if part:
             part.show(ctx)
     session.emitter.signal(events.SHOW_PART_DONE)
@@ -497,7 +550,7 @@ def inspect_sketch(session, params):
         return None
     package, name = params["package"], params["name"]
     with session.partcad.logging.Process("Inspect", package, name):
-        sketch = ctx.get_sketch(_qualified(package, name), params.get("params"))
+        sketch = ctx.get_sketch(_qualified(package, name), _assigned(params))
         if sketch:
             sketch.show(ctx)
     session.emitter.signal(events.SHOW_PART_DONE)
@@ -525,7 +578,7 @@ def inspect_assembly(session, params):
         return None
     package, name = params["package"], params["name"]
     with session.partcad.logging.Process("Inspect", package, name):
-        assembly = ctx.get_assembly(_qualified(package, name), params.get("params"))
+        assembly = ctx.get_assembly(_qualified(package, name), _assigned(params))
         if assembly:
             _stage_subassemblies(session, ctx, assembly)
             assembly.show(ctx)
@@ -540,7 +593,7 @@ def inspect_scene(session, params):
         return None
     package, name = params["package"], params["name"]
     with session.partcad.logging.Process("Inspect", package, name):
-        scene = ctx.get_scene(_qualified(package, name), params.get("params"))
+        scene = ctx.get_scene(_qualified(package, name), _assigned(params))
         if scene:
             # A scene is an assembly and is placed out of assemblies, so it is
             # staged like one.
@@ -645,7 +698,7 @@ def export_part(session, params):
         return None
     package, name = params["package"], params["name"]
     with session.partcad.logging.Process("Export", package, name):
-        part = ctx.get_part(_qualified(package, name), params.get("params"))
+        part = ctx.get_part(_qualified(package, name), _assigned(params))
         if part:
             part.render(ctx, params["type"], filepath=params["path"])
     session.emitter.signal(events.EXPORT_PART_DONE)
@@ -659,7 +712,7 @@ def export_assembly(session, params):
         return None
     package, name = params["package"], params["name"]
     with session.partcad.logging.Process("Export", package, name):
-        assembly = ctx.get_assembly(_qualified(package, name), params.get("params"))
+        assembly = ctx.get_assembly(_qualified(package, name), _assigned(params))
         if assembly:
             _stage_subassemblies(session, ctx, assembly)
             assembly.render(ctx, params["type"], filepath=params["path"])
@@ -674,7 +727,7 @@ def export_scene(session, params):
         return None
     package, name = params["package"], params["name"]
     with session.partcad.logging.Process("Export", package, name):
-        scene = ctx.get_scene(_qualified(package, name), params.get("params"))
+        scene = ctx.get_scene(_qualified(package, name), _assigned(params))
         if scene:
             _stage_subassemblies(session, ctx, scene)
             scene.render(ctx, params["type"], filepath=params["path"])
@@ -955,6 +1008,8 @@ def test(session, params):
         return None
     package = params["package"]
     object_name = params.get("object", "")
+    if object_name:
+        object_name = _assigned_name(params, object_name)
 
     if object_name == "":
         with session.partcad.logging.Process("Test", package):
@@ -968,15 +1023,18 @@ def test(session, params):
     if not project:
         session.emitter.error("Failed to get the package: %s" % str(package))
         return None
-    if project.get_interface_config(object_name):
+    # Declared under the name without its parameter values; built under the
+    # name with them.
+    declared_name, _ = parse_parameterized_name(object_name)
+    if project.get_interface_config(declared_name):
         obj = project.get_interface(object_name)
-    elif project.get_sketch_config(object_name):
+    elif project.get_sketch_config(declared_name):
         obj = project.get_sketch(object_name)
-    elif project.get_part_config(object_name):
+    elif project.get_part_config(declared_name):
         obj = project.get_part(object_name)
-    elif project.get_assembly_config(object_name):
+    elif project.get_assembly_config(declared_name):
         obj = project.get_assembly(object_name)
-    elif project.get_scene_config(object_name):
+    elif project.get_scene_config(declared_name):
         obj = project.get_scene(object_name)
     else:
         session.emitter.error(f"Object {object_name} is not found in {package}")
@@ -1053,15 +1111,9 @@ def info_object(session, params):
         return None
     pc = session.partcad
 
+    # '-p <name>=<value>' is in 'object_name' by now: '_request' writes the
+    # values into the name, which is how every accessor below reads them.
     selected, object_name, recursive = _request(params, None)
-    # '-p <name>=<value>' arrives as a list of strings; every accessor below
-    # takes a mapping. Built here rather than passed through, because a list
-    # reaches 'Project.get_object' as something it cannot merge.
-    param_dict = {}
-    for kv in params.get("params") or []:
-        if "=" in kv:
-            key, value = kv.split("=", 1)
-            param_dict[key] = value
 
     package_name = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package_name)
@@ -1115,13 +1167,13 @@ def info_object(session, params):
         path = _qualified(package, name)
 
         if kind == "assembly":
-            obj = ctx.get_assembly(path, params=param_dict)
+            obj = ctx.get_assembly(path)
         elif kind == "scene":
-            obj = ctx.get_scene(path, params=param_dict)
+            obj = ctx.get_scene(path)
         elif kind == "interface":
-            obj = ctx.get_interface(path, params=param_dict)
+            obj = ctx.get_interface(path)
         elif kind == "sketch":
-            obj = ctx.get_sketch(path, params=param_dict)
+            obj = ctx.get_sketch(path)
         elif kind == "software":
             # Resolved through the package rather than through a context
             # accessor: software is not a shape, and none of what 'ctx.get_*'
@@ -1130,7 +1182,7 @@ def info_object(session, params):
             project = ctx.get_project(package)
             obj = project.get_software(name) if project is not None else None
         else:
-            obj = ctx.get_part(path, params=param_dict)
+            obj = ctx.get_part(path)
 
         if obj is None:
             pc.logging.error("Object %s not found" % path)
@@ -1983,16 +2035,12 @@ def inspect_object(session, params):
     package = package_obj.name
 
     with pc.logging.Process("inspect", package):
-        param_dict = {}
-        for kv in params.get("params") or []:
-            if "=" in kv:
-                k, v = kv.split("=", 1)
-                param_dict[k] = v
-
         object_name = params.get("object")
         if object_name is None:
             pc.logging.error("No object specified. Provide a part, assembly, sketch, interface, or scene to inspect.")
             return None
+        # '-p <name>=<value>', written into the name the way '_request' does it.
+        object_name = _assigned_name(params, object_name)
 
         # Resolve the object against the package '--package' selected, not
         # against the current one: 'get_current_project_path()' as the base drops
@@ -2007,15 +2055,15 @@ def inspect_object(session, params):
         # goes through the two-phase build below.
         assembled = bool(params.get("assembly") or params.get("scene"))
         if params.get("assembly"):
-            obj = ctx.get_assembly(path, params=param_dict)
+            obj = ctx.get_assembly(path)
         elif params.get("scene"):
-            obj = ctx.get_scene(path, params=param_dict)
+            obj = ctx.get_scene(path)
         elif params.get("interface"):
-            obj = ctx.get_interface(path, params=param_dict)
+            obj = ctx.get_interface(path)
         elif params.get("sketch"):
-            obj = ctx.get_sketch(path, params=param_dict)
+            obj = ctx.get_sketch(path)
         else:
-            obj = ctx.get_part(path, params=param_dict)
+            obj = ctx.get_part(path)
 
         if obj is None:
             pc.logging.error("Object %s is not found" % path)
@@ -2725,21 +2773,23 @@ def bom(session, params):
     package, object_name = resolved
     path = _qualified(package, object_name)
 
-    param_dict = {}
-    for kv in params.get("params") or []:
-        if "=" in kv:
-            k, v = kv.split("=", 1)
-            param_dict[k] = v
-
     with pc.logging.Process("BoM", package, object_name):
         # A scene lists what it holds the same way an assembly does, so it gets
         # the same bill of materials. Which one the name refers to is read from
         # the package's declarations rather than tried in turn: asking for the
         # assembly first would report "not found" for every scene.
+        #
+        # Under the name the object is declared as, which is the name without
+        # its parameter values: 'bolt;length=10' is an instance of 'bolt', and
+        # nothing declares it. Asked with the whole name, a part with values
+        # was taken for an assembly and reported as missing.
         package_obj = ctx.get_project(package)
-        declared_assembly = package_obj is not None and package_obj.get_assembly_config(object_name) is not None
+        declared_name, _ = parse_parameterized_name(object_name)
+        declared_assembly = package_obj is not None and package_obj.get_assembly_config(declared_name) is not None
         is_scene = (
-            package_obj is not None and not declared_assembly and package_obj.get_scene_config(object_name) is not None
+            package_obj is not None
+            and not declared_assembly
+            and package_obj.get_scene_config(declared_name) is not None
         )
         # A part is what it is procured as: itself when it is bought, the stock
         # it is made from when it is made (see 'part_bom_detailed_async').
@@ -2747,10 +2797,10 @@ def bom(session, params):
             package_obj is not None
             and not declared_assembly
             and not is_scene
-            and package_obj.get_part_config(object_name) is not None
+            and package_obj.get_part_config(declared_name) is not None
         )
         if is_part:
-            part = ctx.get_part(path, params=param_dict)
+            part = ctx.get_part(path)
             if part is None:
                 pc.logging.error("Part %s is not found" % path)
                 return None
@@ -2758,7 +2808,7 @@ def bom(session, params):
 
             bom_items = asyncio.run(part_bom_detailed_async(ctx, part))
         else:
-            assembly = ctx.get_scene(path, params=param_dict) if is_scene else ctx.get_assembly(path, params=param_dict)
+            assembly = ctx.get_scene(path) if is_scene else ctx.get_assembly(path)
             if assembly is None:
                 # Name the kind that was looked for. 'is_scene' has already
                 # decided which of the two this is, so there is nothing to be

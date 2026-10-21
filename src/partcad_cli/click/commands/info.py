@@ -7,6 +7,7 @@
 import rich_click as click
 
 from ..exclude import exclude_option, exclude_params
+from ..parameters import param_option, param_params
 from ..service import run
 
 
@@ -67,16 +68,7 @@ from ..service import run
     help="The object is software",
     show_envvar=True,
 )
-@click.option(
-    "-p",
-    "--param",
-    "params",
-    type=str,
-    multiple=True,
-    metavar="<name>=<value>",
-    help="Assign a value to the parameter",
-    show_envvar=True,
-)
+@param_option
 @exclude_option
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to show"
 @click.pass_obj
@@ -92,7 +84,7 @@ def cli(cli_ctx, package, interface, assembly, sketch, scene, software, exclude,
             "scene": scene,
             "software": software,
             "object": object,
-            "params": list(params),
+            **param_params(params),
             **exclude_params(exclude),
         },
         needs_context=True,
