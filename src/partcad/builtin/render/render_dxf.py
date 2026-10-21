@@ -24,7 +24,7 @@ import render_svg
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 # How many straight segments a curve is approximated with. DXF R2010 has no
 # general Bezier entity, so curves are flattened.
@@ -48,7 +48,11 @@ def convert_svg_to_dxf(svg_file, dxf_file, reproducible=False):
     # renders one file and exits.
     ezdxf.options.write_fixed_meta_data_for_testing = bool(reproducible)
 
-    doc = ezdxf.new(dxfversion="R2010")
+    # Millimetres, which is what the numbers are, said in the file: ezdxf
+    # declares metres unless told otherwise, and a reader that honours
+    # '$INSUNITS' -- PartCAD's own included -- would read such a file a thousand
+    # times too large.
+    doc = ezdxf.new(dxfversion="R2010", units=ezdxf.units.MM)
     msp = doc.modelspace()
 
     for path in paths:

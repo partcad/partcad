@@ -144,6 +144,11 @@ def _describe(annotation: dict) -> str:
         described += " on layer '%s'" % layer
     if handle:
         described += " (#%s)" % handle
+    # What a block reference placed is named by its entity in the block
+    # definition, which every placement shares; the references say which one.
+    references = annotation.get("references")
+    if references:
+        described += " placed by %s" % " > ".join("#%s" % reference for reference in references)
     return described
 
 

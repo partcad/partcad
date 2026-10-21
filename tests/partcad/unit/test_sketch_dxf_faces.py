@@ -48,17 +48,22 @@ def _square(layout, x, y, size, layer="0"):
     )
 
 
-def _sketch(tmp_path, draw, **declaration):
-    """The sketch a package gets for the drawing 'draw' makes, as a shape."""
+def _declared(tmp_path, draw, drawn_in=ezdxf.units.MM, **declaration):
+    """A package declaring the drawing 'draw' makes, saved in 'drawn_in' ($INSUNITS), and its context."""
     tmp_path.mkdir(parents=True, exist_ok=True)
-    document = ezdxf.new("R2010")
+    document = ezdxf.new("R2010", units=drawn_in)
     draw(document)
     document.saveas(tmp_path / "drawing.dxf")
     (tmp_path / "partcad.yaml").write_text(
         yaml.safe_dump({"name": "//test", "sketches": {"drawing": {"type": "dxf", **declaration}}})
     )
     ctx = pc.Context(str(tmp_path))
-    sketch = ctx.get_sketch("//test:drawing")
+    return ctx, ctx.get_sketch("//test:drawing")
+
+
+def _sketch(tmp_path, draw, drawn_in=ezdxf.units.MM, **declaration):
+    """The sketch a package gets for the drawing 'draw' makes, as a shape."""
+    ctx, sketch = _declared(tmp_path, draw, drawn_in, **declaration)
     envelope = asyncio.run(sketch.get_wrapped(ctx))
     assert envelope is not None, "the drawing did not import"
 
@@ -256,3 +261,74 @@ def test_a_block_that_places_itself_draws_nothing_and_says_so(tmp_path, caplog, 
     assert _faces(_sketch(tmp_path, draw)) == [(100.0, (5.0, -15.0))]
     assert 'block "LOOP" places itself' in caplog.text
     assert 'block "VIA" places itself' in caplog.text
+
+
+#
+# What the numbers are in
+#
+
+
+def test_a_drawing_in_inches_is_a_sketch_in_millimetres(tmp_path):
+    """A one-inch square is 25.4 mm across: '$INSUNITS' says what the numbers are."""
+    shape = _sketch(tmp_path, lambda doc: _square(doc.modelspace(), 0, 0, 1), drawn_in=1)
+    [(area, centre)] = _faces(shape)
+    assert area == pytest.approx(25.4 * 25.4, rel=1e-6)
+    assert centre == pytest.approx((12.7, 12.7))
+
+
+def test_the_declaration_says_what_a_drawing_saved_wrongly_is(tmp_path):
+    """A drawing saved as metres whose numbers are millimetres, as ezdxf saves them unless told."""
+    shape = _sketch(tmp_path, lambda doc: _square(doc.modelspace(), 0, 0, 10), drawn_in=6, units="mm")
+    assert _faces(shape) == [(100.0, (5.0, 5.0))]
+
+
+#
+# Faces where outlines close, wires where they do not
+#
+
+
+def test_an_outline_and_its_bend_lines_are_a_face_and_two_lines(tmp_path, caplog):
+    """Not three lines: the outline closes, the bend lines do not, and each is what it is."""
+
+    def draw(doc):
+        _square(doc.modelspace(), 0, 0, 100, layer="OUTLINE")
+        doc.modelspace().add_line((0, 30), (100, 30), dxfattribs={"layer": "BEND_UP"})
+        doc.modelspace().add_line((0, 60), (100, 60), dxfattribs={"layer": "BEND_DOWN"})
+
+    shape = _sketch(tmp_path, draw)
+    assert _faces(shape) == [(10000.0, (50.0, 50.0))]
+    assert _count(shape, TopAbs_EDGE) == 4 + 2
+    assert "2 wire(s) of the DXF file do not close" in caplog.text
+
+
+def test_an_outline_with_a_gap_beside_a_closed_one_is_said_out_loud(tmp_path, caplog):
+    def draw(doc):
+        _square(doc.modelspace(), 0, 0, 10)
+        doc.modelspace().add_lwpolyline([(20, 0), (30, 0), (30, 10), (20, 10)], close=False)
+
+    shape = _sketch(tmp_path, draw)
+    assert _faces(shape) == [(100.0, (5.0, 5.0))]
+    assert "beside the 1 face(s)" in caplog.text
+
+
+#
+# What the annotations describe
+#
+
+
+def test_the_annotations_describe_what_a_block_placed(tmp_path):
+    """The block's bend line where each reference put it, named by its handle in the file."""
+
+    def draw(doc):
+        block = doc.blocks.new("BEND")
+        block.add_line((0, 0), (100, 0)).set_xdata("PARTCAD", [(1000, "radius=1.5")])
+        reference = doc.modelspace().add_blockref("BEND", (0, 30), dxfattribs={"layer": "BEND_UP"})
+        reference.set_xdata("PARTCAD", [(1000, "angle=90"), (1000, "direction=up")])
+
+    ctx, sketch = _declared(tmp_path, draw)
+    [record] = asyncio.run(sketch.get_annotations(ctx))
+
+    assert (record["type"], record["layer"]) == ("LINE", "BEND_UP")
+    assert record["metadata"] == {"angle": "90", "direction": "up", "radius": "1.5"}
+    assert len(record["references"]) == 1
+    assert record["points"][0][:2] == pytest.approx([0.0, 30.0])

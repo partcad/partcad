@@ -38,10 +38,24 @@ import wrapper_common
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 2
+CACHE_VERSION = 4
 
 # Two points closer than this are the same point, as far as a drawn line goes.
 TOLERANCE = 1e-9
+
+# The shortest curve a projection draws, in the shape's own units. The exact
+# hidden-line algorithm can leave a sliver where a silhouette meets an edge -- a
+# curve a few tenths of a micron long, just above the kernel's own confusion
+# tolerance of 1e-7 -- and build123d writes any curve but a line, a circle or an
+# ellipse by having OCCT approximate it first ('ShapeCustom.BSplineRestriction'),
+# which dies with SIGSEGV on a B-spline that short rather than raising. Ten times
+# that tolerance is still a million times shorter than a pixel of a drawing of
+# anything a millimetre across, so nothing that can be seen is lost.
+#
+# Only those curves: a line, a circle or an ellipse is written from its own
+# parameters, and a sliver of one comes out as an empty path. A few drawings
+# checked in under 'examples/' carry one, and they stay as they are.
+MIN_EDGE_LENGTH = 1e-6
 
 # What build123d repairs the curves of a projected edge to, which the projection
 # of several shapes at once ('_project_exact_each') does exactly as
@@ -674,13 +688,23 @@ def project_by_color(whole, groups, origin, up, look_at, reproducible=False):
     if len(groups) == 1:
         carrier = b3d.Solid.make_box(1, 1, 1)
         carrier.wrapped = whole
-        return [(groups[0][0], project(carrier, origin, up, look_at, reproducible))]
+        return [(groups[0][0], drawable(project(carrier, origin, up, look_at, reproducible)))]
     shapes = [shape for _color, shape in groups]
     if reproducible:
         projected = _project_exact_each(shapes, origin, up, look_at)
     else:
         projected = _project_polygonal_each(whole, shapes, origin, up, look_at)
-    return [(color, edges) for (color, _shape), edges in zip(groups, projected)]
+    return [(color, drawable(edges)) for (color, _shape), edges in zip(groups, projected)]
+
+
+# The kinds of edge build123d's SVG exporter writes from their own parameters,
+# by 'GeomType' name. Every other kind it approximates: see 'MIN_EDGE_LENGTH'.
+WRITTEN_AS_IS = frozenset({"LINE", "CIRCLE", "ELLIPSE"})
+
+
+def drawable(edges):
+    """The projected edges, less the slivers the exporter would have to approximate."""
+    return [edge for edge in edges if edge.geom_type.name in WRITTEN_AS_IS or edge.length >= MIN_EDGE_LENGTH]
 
 
 def project(shape, origin, up, look_at, reproducible=False):
@@ -803,7 +827,7 @@ def _add_projected(exporter, layer, shapes, origin, up, look_at, reproducible=Fa
         compound.wrapped = ocp_serialize.compound_of(
             shape.wrapped if hasattr(shape, "wrapped") else shape for shape in shapes
         )
-        exporter.add_shape(project(compound, origin, up, look_at, reproducible), layer=layer)
+        exporter.add_shape(drawable(project(compound, origin, up, look_at, reproducible)), layer=layer)
     except Exception as e:
         wrapper_common.handle_exception(e)
 

@@ -192,7 +192,9 @@ def read(path: str, include=None, exclude=None) -> list:
     * ``handle`` - the file's own identifier for it, so that a record can be
       traced back to the entity it came from;
     * ``points`` - where it is, as far as '_points()' can say;
-    * ``metadata`` - what its XDATA says, as key/value pairs.
+    * ``metadata`` - what its XDATA says, as key/value pairs;
+    * ``references`` - only for what a block reference placed: the handles of
+      the references that placed it, outermost first (see 'annotations_of').
 
     An entity with no XDATA at all is still reported, with an empty
     ``metadata``. That is the difference between "this drawing annotates
@@ -208,30 +210,45 @@ def read(path: str, include=None, exclude=None) -> list:
     return annotations_of(ezdxf.readfile(path), include, exclude)
 
 
-def annotations_of(document, include=None, exclude=None) -> list:
+def annotations_of(document, include=None, exclude=None, origins=None) -> list:
     """'read()', of a drawing that has already been opened.
 
     Split out so that one pass over the file answers both questions a caller
     has of it -- what it says about its elements, and what it says about itself
     -- rather than opening and parsing a drawing twice to ask them separately.
+
+    'origins' is what 'dxf_drawing.explode_blocks' says about a drawing whose
+    block references it has replaced with what they draw: the annotations then
+    describe those elements, which are what is in the sketch, rather than the
+    references. An exploded element is named by the handle of the entity the
+    file states in the block definition, says which references placed it
+    (``references``), and inherits what those references say where it says
+    nothing of its own -- a reference annotated 'angle=90' says it of every bend
+    line its block draws.
     """
     include = list(include or [])
     exclude = list(exclude or [])
+    origins = origins or {}
 
     annotations = []
     for entity in document.modelspace():
         layer = getattr(entity.dxf, "layer", "")
         if not is_included(layer, include, exclude):
             continue
-        annotations.append(
-            {
-                "type": entity.dxftype(),
-                "layer": layer,
-                "handle": getattr(entity.dxf, "handle", None),
-                "points": _points(entity),
-                "metadata": metadata_of(entity),
-            }
-        )
+        handle = getattr(entity.dxf, "handle", None)
+        origin = origins.get(handle)
+        record = {
+            "type": entity.dxftype(),
+            "layer": layer,
+            "handle": handle,
+            "points": _points(entity),
+            "metadata": metadata_of(entity),
+        }
+        if origin is not None:
+            record["handle"] = origin.get("source")
+            record["references"] = list(origin.get("references") or [])
+            record["metadata"] = {**(origin.get("metadata") or {}), **record["metadata"]}
+        annotations.append(record)
     return annotations
 
 
@@ -296,11 +313,24 @@ def read_file(path: str, include=None, exclude=None) -> dict:
     """
     import ezdxf
 
-    document = ezdxf.readfile(path)
+    return read_document(ezdxf.readfile(path), include, exclude)
+
+
+def read_document(document, include=None, exclude=None, origins=None, millimetres_per_unit=None) -> dict:
+    """'read_file()', of a drawing that has already been opened -- and perhaps read for a sketch.
+
+    The import wrapper hands over the drawing 'dxf_drawing.read' made of the
+    file -- blocks exploded, numbers in millimetres -- with the 'origins' of
+    what was exploded and the 'millimetres_per_unit' it was scaled by, so that
+    what is described is what is in the sketch: the elements a block reference
+    placed rather than the reference, where the sketch has them.
+    """
     described = describe(document, include, exclude)
+    if millimetres_per_unit is not None:
+        described["mm per unit"] = millimetres_per_unit
     layers = described.pop("layers", [])
 
-    annotations = annotations_of(document, include, exclude)
+    annotations = annotations_of(document, include, exclude, origins=origins)
 
     metadata = {}
     if described:
@@ -336,12 +366,12 @@ def describe(document, include=None, exclude=None) -> dict:
       in every version, but what a drawing may carry beside it is not.
     * ``units`` - what '$INSUNITS' resolves to ('_units()'): a name, None where
       it says the drawing is unitless, or "unknown (<code>)" for a unit DXF has
-      gained since. PartCAD reads a DXF as millimetres whatever it says;
-      this is what the file states, and the two disagreeing is worth being able
-      to see. Note that a file omitting the variable altogether does not read as
-      unitless: ezdxf supplies a default for it while loading and there is no
-      way left to tell the two apart, so what is reported for such a file is
-      that default.
+      gained since. A sketch is scaled to millimetres by it ('dxf_drawing'),
+      and ``mm per unit`` beside it says by how much -- unless the declaration
+      said otherwise with 'units:', which is worth being able to see. Note that a
+      file omitting the variable altogether does not read as unitless: ezdxf
+      supplies a default for it while loading and there is no way left to tell
+      the two apart, so what is reported for such a file is that default.
     * ``appids`` - the applications the file declares. XDATA is written under an
       APPID, so this is the list of names an annotation could have been written
       by, and an empty one is a drawing that carries no XDATA at all.
@@ -415,6 +445,16 @@ def _units(code):
     if code is None or code == 0:
         return None
     return _UNITS.get(code, "unknown (%s)" % code)
+
+
+def units_of(document):
+    """The name of the unit the drawing says its numbers are in, as 'describe()' reports it.
+
+    None where it says it is unitless, and "unknown (<code>)" for a code this
+    module does not know. 'dxf_drawing.millimetres_per_unit' is what scales a
+    sketch by it.
+    """
+    return _units(_header_var(document, "$INSUNITS"))
 
 
 def _declared_layers(document) -> list:

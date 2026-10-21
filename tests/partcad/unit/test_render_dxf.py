@@ -60,7 +60,8 @@ class _EntityDB:
 
 
 class _Document:
-    def __init__(self, types_in_use):
+    def __init__(self, types_in_use, units):
+        self.units = units
         self.classes = _Classes()
         self.entitydb = _EntityDB(types_in_use)
         self.saved_as = None
@@ -87,12 +88,17 @@ def _dxf_implementation(types_in_use=("LINE", "LAYOUT", "ACDBPLACEHOLDER", "DICT
     ezdxf_stub = types.ModuleType("ezdxf")
     ezdxf_stub.options = _Options()
 
-    def new(dxfversion=None):
-        document = _Document(types_in_use)
+    # ezdxf's own default for 'units' is metres, as '$INSUNITS' codes go.
+    def new(dxfversion=None, units=6):
+        document = _Document(types_in_use, units)
         documents.append(document)
         return document
 
     ezdxf_stub.new = new
+
+    units_stub = types.ModuleType("ezdxf.units")
+    units_stub.MM = 4
+    ezdxf_stub.units = units_stub
 
     math_stub = types.ModuleType("ezdxf.math")
     math_stub.Vec2 = lambda x, y: (x, y)
@@ -104,6 +110,7 @@ def _dxf_implementation(types_in_use=("LINE", "LAYOUT", "ACDBPLACEHOLDER", "DICT
     stubs = {
         "ezdxf": ezdxf_stub,
         "ezdxf.math": math_stub,
+        "ezdxf.units": units_stub,
         "svgpathtools": svgpathtools_stub,
         "wrapper_common": types.ModuleType("wrapper_common"),
         "render_svg": types.ModuleType("render_svg"),
@@ -154,6 +161,20 @@ def test_the_real_timestamp_is_what_a_drawing_gets_unasked(tmp_path):
     module.convert_svg_to_dxf("in.svg", str(tmp_path / "out.dxf"))
 
     assert ezdxf_stub.options.write_fixed_meta_data_for_testing is False
+
+
+def test_the_drawing_says_it_is_in_millimetres(tmp_path):
+    """'$INSUNITS' is millimetres, which is what every number in the file is.
+
+    ezdxf declares metres unless told otherwise, and PartCAD's own DXF reader
+    honours the declaration: a drawing it rendered, read back as a sketch, would
+    otherwise come back a thousand times the size it was drawn.
+    """
+    module, _ezdxf_stub, documents = _dxf_implementation()
+
+    module.convert_svg_to_dxf("in.svg", str(tmp_path / "out.dxf"))
+
+    assert documents[0].units == 4
 
 
 def test_the_classes_section_is_registered_in_a_settled_order(tmp_path):

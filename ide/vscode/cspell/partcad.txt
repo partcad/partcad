@@ -9,12 +9,15 @@ along
 also
 anchored
 angle
+angstrom
 apps
 args
 array
 assemblies
 assembly
 assy
+au
+auto
 axis
 background
 ball
@@ -35,6 +38,7 @@ chili
 circle
 circles
 climb
+cm
 cnc
 collide
 collision
@@ -57,6 +61,7 @@ cut
 cuts
 cwd
 cylindrical
+dam
 damper
 damping
 default
@@ -70,6 +75,7 @@ dir
 direction
 display
 distance
+dm
 docker
 docs
 dof
@@ -127,15 +133,18 @@ fraction
 freecad
 friction
 from
+ft
 fudge
 full
 git
 globs
 gltf
+gm
 gravity
 hash
 heat
 height
+hm
 hold
 how
 id
@@ -176,6 +185,7 @@ kerf
 kicad
 kind
 kinds
+km
 laser
 lead
 length
@@ -185,6 +195,7 @@ load
 local
 location
 lower
+ly
 macos
 manufacturable
 manufacturer
@@ -200,9 +211,12 @@ mesh
 metal
 method
 mf
+mi
+mil
 mimic
 min
 mjcf
+mm
 model
 motion
 move
@@ -210,6 +224,7 @@ mu
 multi
 multiplier
 name
+nm
 node
 noun
 obj
@@ -238,6 +253,7 @@ pass
 patch
 path
 paths
+pc
 pcb
 peck
 per
@@ -341,11 +357,16 @@ track
 turn
 type
 types
+uin
+um
+unitless
+units
 universal
 unless
 upper
 urdf
 url
+us
 usage
 use
 validation
@@ -361,3 +382,4 @@ windows
 wires
 with
 wrapper
+yd
