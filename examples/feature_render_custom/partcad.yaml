@@ -100,6 +100,20 @@ parts:
 # must match what is checked in"): the file in this repository was reproduced
 # byte for byte on a second platform.
 #
+# What that flag cannot settle is which reportlab writes the PDF. draftwright
+# draws the sheet as SVG and hands it to svglib and reportlab, so the bytes are
+# reportlab's - and '//pub/feature/render/draftwright' pins draftwright alone,
+# leaving those two to draftwright's own floors ('reportlab>=4.0',
+# 'svglib>=1.5'). A sandbox therefore holds whichever releases were newest on
+# the day it was provisioned. reportlab 5.1.0 (2026-10-22) moved the font every
+# drawing starts out in ('defaultGraphicsFontName' in reportlab's settings)
+# from Times-Roman to Helvetica, the font a canvas already opens with: the
+# same drawing with one unused font resource fewer, and a different file.
+# 'bracket.pdf' is what 5.1.0 writes. A sandbox provisioned before that
+# release still has 5.0.1 - PartCAD records an install once and does not
+# resolve it again - and renders the previous file; 'pc system reset
+# --sandbox-only' is the answer to that, not a commit of it.
+#
 # 'bracket.svg' stays on that list, for what is left rather than for the reason
 # it was put there. draftwright writes the x-axis rotation of an elliptical arc
 # at whatever the float came out as, and two architectures disagree about it in
@@ -109,7 +123,8 @@ parts:
 # bytes are draftwright's, and that pass never sees them.
 #
 # So: modified after 'pc render' on the platform it was rendered on is a
-# regression. Modified on a different one may be only that.
+# regression, or a new reportlab - for 'bracket.pdf', look at which release
+# the sandbox has first. Modified on a different platform may be only that.
 render:
   # The package document, assembled by PartCAD out of the images below.
   readme:
