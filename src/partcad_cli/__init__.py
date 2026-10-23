@@ -1,1 +1,1 @@
-__version__: str = "0.8.235"
+__version__: str = "0.8.236"
