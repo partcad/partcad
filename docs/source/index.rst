@@ -71,6 +71,7 @@ product development process.**
    use_cases.rst
    large_projects.rst
    features.rst
+   supported.rst
 
 .. toctree::
    :maxdepth: 2

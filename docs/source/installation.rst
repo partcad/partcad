@@ -88,7 +88,14 @@ getting tested on Linux, macOS and Windows.
 
 .. note::
 
-  On Ubuntu, try ``apt install libcairo2-dev`` if ``pip install`` fails to install ``cairo``.
+  On **Windows**, install `Miniforge3 <https://github.com/conda-forge/miniforge>`_ with
+  ``Register Miniforge3 as my default Python X.XX`` and use that Python environment for PartCAD. Also set
+  ``LongPathsEnabled`` to ``1`` at ``HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem``
+  using the Registry Editor.
+
+  On **Ubuntu**, try ``apt install libcairo2-dev python3-dev`` if ``pip install`` fails to install ``cairo``.
+
+  On **macOS**, make sure Xcode and its command line tools are installed.
 
 .. note::
 
