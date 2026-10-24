@@ -112,7 +112,7 @@ def test_the_rendered_file_is_not_written_into_the_package(package):
 
 
 def _binary_package(tmp_path, content):
-    """A package whose 'demo' format is declared binary, and one scene of it."""
+    """A package whose 'demo' format is declared binary, with a scene and an assembly of one file."""
     root = tmp_path / "binary"
     root.mkdir()
     (root / "reader.py").write_text(READER, encoding="utf-8")
@@ -121,7 +121,9 @@ def _binary_package(tmp_path, content):
         "name: //b\n"
         "import:\n  demo:\n    path: reader.py\n    extension: dwg\n    kinds: [scene, assembly]\n    binary: true\n"
         "scenes:\n  drawing:\n    type: demo\n    path: drawing.dwg\n"
-        "assemblies:\n  drawing:\n    type: demo\n    path: drawing.dwg\n",
+        # Another name for the assembly: a name is one object of its package
+        # whatever its kind, and the same file serves both.
+        "assemblies:\n  drawing-assembly:\n    type: demo\n    path: drawing.dwg\n",
         encoding="utf-8",
     )
     return pc.Context(str(root)).get_project("//")
@@ -150,7 +152,7 @@ def test_an_assembly_of_a_binary_format_is_binary_too(tmp_path):
     from partcad.assembly_factory_imported import AssemblyFactoryImportedBinary
 
     project = _binary_package(tmp_path, b"\x00\x01")
-    assembly = project.get_assembly("drawing")
+    assembly = project.get_assembly("drawing-assembly")
 
     assert isinstance(assembly.import_factory, AssemblyFactoryImportedBinary)
     assert assembly.import_factory.rendered_source() == assembly.import_factory.path
