@@ -325,3 +325,19 @@ def test_a_kind_listed_later_can_take_a_name_from_one_listed_earlier():
     assert repo.object_configs("sketch") == {}
     assert repo.object_config("sketch", "m3") is None
     assert repo.object_kind("m3") == "interface"
+
+
+def test_an_alias_refused_as_its_kind_is_listed_is_not_indexed():
+    """The alias index is built from the refusals listing the kind made, not from those before it."""
+    repo, _ = _repository(
+        {
+            "objects/interface": {"thread": {"desc": "An interface"}},
+            "objects/sketch": {"outline": {"type": "basic", "circle": 1.5, "aliases": ["thread"]}},
+        }
+    )
+
+    assert list(repo.object_configs("interface")) == ["thread"]
+    # Listing the sketches is what refuses the alias, and the index is built
+    # by that same call.
+    assert repo.alias_declared_by("sketch", "thread") is None
+    assert repo.object_kind("thread") == "interface"

@@ -1670,8 +1670,11 @@ class Project(project_config.Configuration):
         index = self._alias_index.get(kind)
         if index is None:
             index = {}
+            # Listed first: listing a kind a plugin serves is what refuses its
+            # names, and the refusals read before it would miss those.
+            configs = self.object_configs(kind)
             refused = self._refused_names.get(kind, {})
-            for owner, config in self.object_configs(kind).items():
+            for owner, config in configs.items():
                 if not isinstance(config, dict):
                     continue
                 for alias in config.get("aliases") or []:
