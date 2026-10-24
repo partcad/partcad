@@ -185,11 +185,12 @@ The analysis tabs are the exception to "questions": looking at one *runs* the an
 part that declares scenarios of that analysis, and lists them on the left the way the Simulation tab lists
 simulations, in the order they are declared and with a mark for how each one's run went; the first is selected
 when the tab opens, and selecting one runs it -- ``pc cae fea -f <scenario>`` -- the first time it is looked at,
-and shows its answer from then on. A field over the model names which implementation runs it — pre-filled with
-the one the scenario names, or the configured default, and editable, so a machine whose solver is elsewhere is
-one line away from an answer rather than stuck on an error. The model is drawn according to the format the
-implementation chose: a 3D result is turned and zoomed, a 2D one is panned and zoomed as a picture. Any
-findings are listed under it; a scenario with nothing to report gets the whole pane.
+and shows its answer from then on. Over the model is the Simulation tab's toolbar: **Analysed by** lists the
+solvers ``//pub/feature/cae`` registers for the analysis, with the one the scenario names -- or the configured
+default -- selected, and choosing another runs the scenario with it, so a machine whose solver is elsewhere is
+one choice away from an answer rather than stuck on an error; **Analyse** runs it afresh. The model is drawn
+according to the format the implementation chose: a 3D result is turned and zoomed, a 2D one is panned and
+zoomed as a picture. Any findings are listed under it; a scenario with nothing to report gets the whole pane.
 
 .. _partcad-terminal:
 
@@ -335,8 +336,9 @@ Each package's README says what it needs and what every parameter means. Each
 names a ``dockerImage`` carrying its solver and mesher, so a container runtime is
 all it asks of a host that has neither installed -- and each also runs a solver
 installed on the host, when there is no container runtime or it is turned off.
-``pc cae fea --implementation`` overrides the choice for one run, and so does the
-field over the model in the IDE's analysis tabs.
+``pc cae fea --implementation`` overrides the choice for one run, and so does
+choosing another solver in "Analysed by" over the model in the IDE's analysis
+tabs.
 
 A scenario may also name its own, which is what it was written against:
 

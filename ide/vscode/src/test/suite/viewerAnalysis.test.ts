@@ -5,8 +5,8 @@
 //
 // The Analysis tabs - FEA, Dynamic FEA, Heat Transfer and CFD - as lists of the
 // scenarios a part declares: which tabs are offered, which scenario is on
-// screen, when one is run, what the field over the model says, and what each
-// row's mark says of its run.
+// screen, when one is run, which solver the toolbar over the model offers and
+// selects, and what each row's mark says of its run.
 //
 // The pane runs in the webview and this suite in the extension host, which has
 // no DOM and no WebGL, so it is given the handful of things 'dom.ts' and the
@@ -14,13 +14,20 @@
 // are drawn in ('cae.ts', which needs three.js). What is pinned is that the
 // tabs apply where the part declares something, that the first scenario - or
 // the one a show asked for - is selected, that each is run once for an object
-// however often it is looked at, per implementation, and that the user's own
-// implementation is theirs.
+// however often it is looked at, per implementation, and that the toolbar is
+// the Simulation tab's: the solver a scenario runs with unasked is selected,
+// and choosing another runs it with that one.
 //
 
 import * as assert from 'assert';
 
-import { AnalysisView, CaeResultView, analysisGroupHint, analysisTabSpecs } from '../../webview/analysis';
+import {
+    AnalysisView,
+    CaeResultView,
+    analysisGroupHint,
+    analysisTabSpecs,
+    implementationChoices,
+} from '../../webview/analysis';
 import {
     ANALYSIS_TABS,
     AnalysisTabId,
@@ -101,7 +108,7 @@ class FakeElement {
     }
 }
 
-/** What the bands under the field were last told to show. */
+/** What the bands under the toolbar were last told to show. */
 class FakeResult implements CaeResultView {
     public last: { kind: 'busy' | 'error' | 'render'; text?: string; data?: CaeData } | undefined;
     public renders = 0;
@@ -197,18 +204,19 @@ function mark(row: FakeElement): FakeElement {
     return row.find('cae-mark')[0];
 }
 
-function field(root: FakeElement): FakeElement {
+/** The "Analysed by" list over the model. */
+function solvers(root: FakeElement): FakeElement {
     return root.find('cae-implementation')[0];
 }
 
-/** Type into the implementation field, the way the user would. */
-function type(root: FakeElement, text: string): void {
-    const input = field(root);
-    input.value = text;
-    input.fire('input');
+/** Choose a solver in "Analysed by", the way the user would. */
+function choose(root: FakeElement, implementation: string): void {
+    const select = solvers(root);
+    select.value = implementation;
+    select.fire('change');
 }
 
-function runButton(root: FakeElement): FakeElement {
+function analyseButton(root: FakeElement): FakeElement {
     return root.find('cae-run')[0];
 }
 
@@ -379,72 +387,107 @@ suite('Digital Thread Analysis tabs', () => {
         assert.deepStrictEqual(result.last, { kind: 'error', text: 'PartCAD is not connected.' });
     });
 
-    test("the field says the scenario's own implementation, and the configured default otherwise", () => {
+    test("the toolbar is the Simulation tab's: the solver the scenario runs with unasked, and Analyse", () => {
         const { root, view } = pane();
         view.setScenarios(listed());
 
-        // 'loaded' names none: what the user configuration runs FEA with.
-        assert.strictEqual(field(root).value, CALCULIX);
+        // 'loaded' names none: what the user configuration runs FEA with is
+        // selected, among every FEA solver '//pub/feature/cae' registers.
+        assert.strictEqual(root.find('render-label')[0].textContent, 'Analysed by');
+        assert.deepStrictEqual(
+            solvers(root).children.map((option) => option.value),
+            [CALCULIX, '//pub/feature/cae/code_aster:fea', ELMER, '//pub/feature/cae/moose:fea'],
+        );
+        assert.strictEqual(solvers(root).value, CALCULIX);
+        assert.strictEqual(analyseButton(root).textContent, 'Analyse');
+        // What the scenario says it is, under the toolbar, as a simulation's is.
+        assert.strictEqual(root.find('cae-desc')[0].textContent, 'A full shelf on it');
+
+        // 'dropped' names Elmer, and says nothing of itself.
         rows(root)[1].fire('click');
-        // 'dropped' names Elmer.
-        assert.strictEqual(field(root).value, ELMER);
+        assert.strictEqual(solvers(root).value, ELMER);
+        assert.strictEqual(root.find('cae-desc')[0].hidden, true);
     });
 
-    test('what the user typed is theirs, per scenario, and Run runs the scenario with it', () => {
+    test('choosing another solver runs the scenario with it, and its answer is kept beside the first', () => {
         const { root, view, runs } = pane();
         view.setScenarios(listed());
         view.start();
         view.showRun('loaded', ran('loaded'));
+        assert.strictEqual(mark(rows(root)[0]).textContent, '✓');
 
-        type(root, ELMER);
-        // An answer arriving afterwards does not pre-fill over it.
-        view.showRun('loaded', ran('loaded'));
-        assert.strictEqual(field(root).value, ELMER);
-
-        runButton(root).fire('click');
-        assert.deepStrictEqual(runs[runs.length - 1], ['loaded', ELMER]);
+        choose(root, ELMER);
+        assert.deepStrictEqual(runs, [
+            ['loaded', undefined],
+            ['loaded', ELMER],
+        ]);
         view.showRun('loaded', ran('loaded', 1, null, ELMER), ELMER);
         assert.strictEqual(mark(rows(root)[0]).textContent, '✗');
-
-        // Another scenario shows its own; back again, what was typed is there.
-        rows(root)[1].fire('click');
-        assert.strictEqual(field(root).value, ELMER);
-        rows(root)[0].fire('click');
-        assert.strictEqual(field(root).value, ELMER);
-        // And it is what 'loaded' is set to run with now: its Elmer answer is kept.
-        assert.strictEqual(mark(rows(root)[0]).textContent, '✗');
         assert.strictEqual(view.state().scenarios[0].implementation, ELMER);
+
+        // Back to the one it runs with unasked: that answer is still here, and
+        // nothing is run again.
+        choose(root, CALCULIX);
+        assert.strictEqual(runs.length, 2);
+        assert.strictEqual(mark(rows(root)[0]).textContent, '✓');
+
+        // Analyse runs it afresh, with whatever is chosen - and the one it runs
+        // with unasked is no override.
+        analyseButton(root).fire('click');
+        assert.deepStrictEqual(runs[2], ['loaded', undefined]);
+        assert.strictEqual(analyseButton(root).disabled, true);
     });
 
-    test('an answer is the one of the implementation it was asked with, and Run on what was pre-filled is not an override', () => {
+    test('an answer is the one of the solver it was asked with', () => {
         const { root, view, result, runs } = pane();
         view.setScenarios(listed());
         view.start();
 
-        // Retyped and run again before the first run is back: two solvers in
-        // flight over one scenario.
-        type(root, ELMER);
-        field(root).fire('keydown', { key: 'Enter' });
+        // Another chosen before the first run is back: two solvers in flight
+        // over one scenario.
+        choose(root, ELMER);
         assert.deepStrictEqual(runs, [
             ['loaded', undefined],
             ['loaded', ELMER],
         ]);
 
-        // The first to finish is not the one asked last, and is not shown as its answer.
+        // The first to finish is not the one chosen last, and is not shown as its answer.
         view.showRun('loaded', ran('loaded'));
         assert.strictEqual(mark(rows(root)[0]).textContent, '…');
         assert.strictEqual(result.last?.kind, 'busy');
         view.showRun('loaded', ran('loaded', 3, null, ELMER), ELMER);
         assert.strictEqual(mark(rows(root)[0]).textContent, '✗');
         assert.strictEqual(mark(rows(root)[0]).title, 'Found 3 things');
+    });
 
-        // Back to what it would have run with anyway: run afresh, as itself.
-        type(root, CALCULIX);
-        runButton(root).fire('click');
-        assert.deepStrictEqual(runs[2], ['loaded', undefined]);
-        view.showRun('loaded', ran('loaded'));
-        assert.strictEqual(mark(rows(root)[0]).textContent, '✓');
-        assert.strictEqual(view.state().scenarios[0].implementation, CALCULIX);
+    test('the solvers a scenario is offered, and which of them it runs with unasked', () => {
+        const marked = (choices: { value: string; configured: boolean }[]) =>
+            choices.filter((choice) => choice.configured).map((choice) => choice.value);
+
+        // Its own, rooted: that one exactly.
+        assert.deepStrictEqual(marked(implementationChoices('fea', ELMER, CALCULIX)), [ELMER]);
+        // Its own, relative to its package: matched by the package it names.
+        assert.deepStrictEqual(marked(implementationChoices('fea', 'moose:fea', CALCULIX)), [
+            '//pub/feature/cae/moose:fea',
+        ]);
+        // A package alone means the analysis's file type in it.
+        assert.deepStrictEqual(marked(implementationChoices('cfd', 'openfoam', null)), [
+            '//pub/feature/cae/openfoam:cfd',
+        ]);
+        // None of its own: the configured default.
+        assert.deepStrictEqual(marked(implementationChoices('thermal', null, '//pub/feature/cae/elmer:thermal')), [
+            '//pub/feature/cae/elmer:thermal',
+        ]);
+        // Somebody else's, or the package's own: offered as itself, first.
+        const own = implementationChoices('fea', ':fea', CALCULIX);
+        assert.deepStrictEqual([own[0].value, own[0].configured], [':fea', true]);
+        assert.deepStrictEqual(marked(implementationChoices('fea', '//acme/cae/calculix:fea', null)), [
+            '//acme/cae/calculix:fea',
+        ]);
+        // Nothing known at all: the configured default, unnamed, is what runs.
+        const unknown = implementationChoices('dynamic', null, null);
+        assert.deepStrictEqual([unknown[0].value, unknown[0].configured], ['', true]);
+        assert.strictEqual(unknown.length, 4);
     });
 
     test('a scenario a show asked for is selected instead of the first, and only once', () => {
@@ -501,24 +544,19 @@ suite('Digital Thread Analysis tabs', () => {
         });
     });
 
-    test('a new part forgets the runs and what was typed; the same part again keeps what was typed', () => {
+    test('another list forgets the runs and the solvers chosen, as the Simulation tab does', () => {
         const { root, view, runs } = pane();
         view.setScenarios(listed());
         view.start();
         view.showRun('loaded', ran('loaded'));
-        type(root, ELMER);
+        choose(root, ELMER);
 
-        // The same part shown again - an edit saved: its answers are asked
-        // afresh, and what was typed stays.
-        view.setBusy('Asking PartCAD what this declares under fea:…');
-        view.setScenarios(listed());
-        assert.strictEqual(view.has('loaded'), false);
-        assert.strictEqual(field(root).value, ELMER);
-
-        // Another part, with a scenario of the same name: nothing carries over.
+        // The part shown again - an edit saved - or another one: its answers
+        // are asked afresh, with the solver each runs with unasked.
         view.setBusy('Asking PartCAD what this declares under fea:…');
         view.setScenarios(listed({ object: '//examples/feature_cae:plate' }));
-        assert.strictEqual(field(root).value, CALCULIX);
+        assert.strictEqual(view.has('loaded'), false);
+        assert.strictEqual(solvers(root).value, CALCULIX);
         view.start();
         assert.deepStrictEqual(runs[runs.length - 1], ['loaded', undefined]);
     });

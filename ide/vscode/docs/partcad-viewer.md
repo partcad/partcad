@@ -260,7 +260,7 @@ the protocol has no authentication.
 | `src/partcad/test/catalog.py` | What each check is and what to do when it fails, for this tab and for the documentation |
 | `src/partcad/requirements.py` | What a requirement means and whether the model meets it, for this tab and for `pc test` |
 | `src/common/garage.ts` | Where the Build vs Buy choices are kept, on this machine |
-| `src/webview/analysis.ts` | The Analysis tabs (FEA, Dynamic FEA, Heat Transfer, CFD): which apply, the scenarios declared, the implementation field, and what each run answered |
+| `src/webview/analysis.ts` | The Analysis tabs (FEA, Dynamic FEA, Heat Transfer, CFD): which apply, the scenarios declared, the Simulation tab's toolbar ("Analysed by", "Analyse"), and what each run answered |
 | `src/webview/cae.ts` | What an Analysis tab draws of the selected scenario: the result model, and the findings |
 | `src/webview/scenarioList.ts` | The list of declared entries the Simulation and Analysis tabs share: rows, verdict marks, the keyboard |
 | `src/webview/simulation.ts` | The Simulation tab: the simulations declared, and the scene before and after one ran |
@@ -468,17 +468,15 @@ reports each analysis tab's selected scenario, what each is set to run with, and
 
 Three things about the selected scenario are worth knowing:
 
-* **Which solver runs it is a field over the model, centred.** It is pre-filled with the scenario's own
-  `implementation:` where it names one, and otherwise with the configured default for the analysis --
-  `cae.defaults`, the user configuration's `caeFeaImplementation`, `caeDynamicImplementation`,
-  `caeThermalImplementation` or `caeCfdImplementation`, which the host adds to `cae.list`'s answer -- and, once
-  the scenario has run, with what it reports having run. That is the order `pc cae` resolves them in, and neither
-  side of the panel sends either as an override: a default sent as one would outrank the scenario's own. Editing
-  the field and pressing Run or Enter re-runs the scenario with what it says, which is the same override
-  `pc cae <analysis> --implementation` is, and from then on that is what the scenario runs with. What is typed
-  is the user's, per scenario: a later answer no longer pre-fills over it, however long the run that produced
-  the answer had been going, switching to another scenario and back shows it again, and a show of the same part
-  again -- an edit saved -- keeps it.
+* **Over it is the Simulation tab's toolbar**, which is the Draft tab's: **Analysed by** lists the solvers
+  `//pub/feature/cae` registers for the analysis (`CAE_IMPLEMENTATIONS`, the analysis's `SIMULATION_PLUGINS`),
+  with the one the scenario runs with unasked selected -- its own `implementation:`, else the configured
+  default, `cae.defaults` (the user configuration's `caeFeaImplementation`, `caeDynamicImplementation`,
+  `caeThermalImplementation` or `caeCfdImplementation`), which the host adds to `cae.list`'s answer. That is the
+  order `pc cae` resolves them in, so that one is never sent as an override; choosing another runs the scenario
+  with it, as `pc cae <analysis> --implementation`, and **Analyse** runs it afresh with what is chosen. A
+  scenario naming a solver nobody registered (its package's own, `:fea`) is offered as itself, first. Under the
+  toolbar is what the scenario says it is (`desc:`), as under a simulation's.
 * **The model is drawn according to its extension**, because which format an analysis writes is the
   implementation's decision and not PartCAD's. `glb`/`gltf`/`stl` get an orbit camera; `png`/`jpg`/`svg` and
   the other still-image types get an image that pans and zooms (wheel to zoom about the pointer, drag to pan,

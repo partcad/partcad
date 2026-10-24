@@ -987,13 +987,14 @@ a {
 /*
  * The analysis panes: FEA, Dynamic FEA, Heat Transfer and CFD.
  *
- * The part's scenarios down the left, in the Build tab's list (see below, where
- * the Simulation tab's is too), and the selected one beside it in three bands,
- * the middle one taking what is left. Which solver runs it is on top, centred,
- * because it is the one thing about an analysis a user changes without editing
- * a file; the findings are the bottom fifth, and are not there at all when the
- * analysis found nothing - a pass should hand the model the whole pane rather
- * than a strip of white space saying "none".
+ * The Simulation tab's layout: the part's scenarios down the left, in the Build
+ * tab's list (see below, where the Simulation tab's is too), and the selected
+ * one beside it under the Simulation tab's toolbar - the Draft tab's
+ * '.render-header', with nothing of its own - and what the scenario says it is.
+ * Under those, the model takes what is left, and the findings the bottom fifth;
+ * they are not there at all when the analysis found nothing - a pass should
+ * hand the model the whole pane rather than a strip of white space saying
+ * "none".
  */
 .cae-main {
     display: flex;
@@ -1001,51 +1002,6 @@ a {
     flex-direction: column;
     min-width: 0;
     overflow: hidden;
-}
-
-.cae-header {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0.4rem 1rem;
-    border-bottom: 1px solid var(--vscode-panel-border, transparent);
-}
-
-.cae-header-label {
-    color: var(--vscode-descriptionForeground);
-}
-
-.cae-implementation {
-    width: min(32rem, 60%);
-    padding: 0.25em 0.5em;
-    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, transparent));
-    border-radius: 2px;
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    font-family: var(--vscode-editor-font-family, monospace);
-    font-size: inherit;
-}
-
-.cae-implementation:focus-visible {
-    outline: 1px solid var(--vscode-focusBorder);
-    outline-offset: -1px;
-}
-
-.cae-run {
-    padding: 0.25em 0.9em;
-    border: none;
-    border-radius: 2px;
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
-    font-family: inherit;
-    font-size: inherit;
-    cursor: pointer;
-}
-
-.cae-run:hover {
-    background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
 }
 
 .cae-body {
@@ -1440,7 +1396,8 @@ input.switch:focus-visible {
 
 /* The toolbar is the Draft tab's ('.render-header'), with nothing of its own. */
 
-.simulation-desc {
+.simulation-desc,
+.cae-desc {
     flex: 0 0 auto;
     margin: 0 0 0.5rem;
     color: var(--vscode-descriptionForeground);

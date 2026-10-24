@@ -117,6 +117,40 @@ export const DRAFT_PLUGINS = ['//pub/feature/render/draftwright'];
 export const SIMULATION_PLUGINS = ['//pub/feature/simulate/mujoco:mujoco', '//pub/feature/simulate/gazebo:gazebo'];
 
 /**
+ * The solvers each Analysis tab offers, as '<package>:<file type>': the ones
+ * registered at '//pub/feature/cae' that implement that analysis, the user
+ * configuration's default first ('caeFeaImplementation' and the rest). The one
+ * a scenario runs with unasked -- its own 'implementation:', or that default --
+ * is the one selected; see 'analysis.ts'. The Simulation tab's
+ * 'SIMULATION_PLUGINS', for an analysis.
+ */
+export const CAE_IMPLEMENTATIONS: Record<AnalysisTabId, string[]> = {
+    fea: [
+        '//pub/feature/cae/calculix:fea',
+        '//pub/feature/cae/code_aster:fea',
+        '//pub/feature/cae/elmer:fea',
+        '//pub/feature/cae/moose:fea',
+    ],
+    dynamic: [
+        '//pub/feature/cae/elmer:dynamic',
+        '//pub/feature/cae/code_aster:dynamic',
+        '//pub/feature/cae/moose:dynamic',
+    ],
+    thermal: [
+        '//pub/feature/cae/elmer:thermal',
+        '//pub/feature/cae/code_aster:thermal',
+        '//pub/feature/cae/moose:thermal',
+    ],
+    cfd: [
+        '//pub/feature/cae/openfoam:cfd',
+        '//pub/feature/cae/calculix:cfd',
+        '//pub/feature/cae/code_saturne:cfd',
+        '//pub/feature/cae/elmer:cfd',
+        '//pub/feature/cae/moose:cfd',
+    ],
+};
+
+/**
  * The tabs that run an analysis rather than ask a question about the object,
  * in the order the Analysis strip shows them: the structural ones first, static
  * then dynamic, then heat transfer, then flow.

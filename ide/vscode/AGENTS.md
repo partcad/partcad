@@ -245,13 +245,14 @@ analysis tabs' ids fetch -- the list-then-run split Simulation has with `SIMULAT
 when the part declares a scenario for it, or has a section that cannot be read, which the tab then says. Each run
 carries a token of its own (`analysisRuns`), as a simulation's does, and its answer is kept per scenario *and*
 implementation while the object is on screen. A scenario that could not run comes back as that scenario's
-`error`, not as a JSON-RPC error, and is shown where the model would be. The field over the model names which
-solver -- pre-filled with the scenario's own `implementation:`, else with `cae.defaults` (the user
-configuration's `cae<Analysis>Implementation`: `caeFeaImplementation`, `caeDynamicImplementation`,
-`caeThermalImplementation`, `caeCfdImplementation`), which the host adds to `cae.list`'s answer. **Neither side
-sends that default as `implementation`**: the daemon resolves what was typed, then the scenario's own, then the
-configured one, and a default sent as an override would outrank the scenario's. What is typed is the user's, per
-scenario. `analysis.ts` imports no three.js and draws through a `CaeResultView`, which `cae.ts` (`CaeResult`)
+`error`, not as a JSON-RPC error, and is shown where the model would be. Over the model is **the Simulation
+tab's toolbar, not a UX of its own**: "Analysed by" lists `CAE_IMPLEMENTATIONS` -- the solvers `//pub/feature/cae`
+registers per analysis, as `SIMULATION_PLUGINS` lists the simulators -- with the one the scenario runs with
+unasked selected (`implementationChoices`, the twin of `pluginChoices`): its own `implementation:`, else
+`cae.defaults` (the user configuration's `cae<Analysis>Implementation`), which the host adds to `cae.list`'s
+answer; "Analyse" runs it afresh. **Neither side sends the one it runs with unasked as `implementation`**,
+exactly as a simulation's own plugin is not sent: the daemon resolves the scenario's own, then the configured
+one, and either sent as an override would outrank the scenario's. `analysis.ts` imports no three.js and draws through a `CaeResultView`, which `cae.ts` (`CaeResult`)
 implements -- the split is what lets `viewerAnalysis.test.ts` run the list in the extension host. The model is
 drawn by its extension, because the format is the
 implementation's choice: a mesh gets an orbit camera, a picture pans and zooms. An analysis is added on both

@@ -63,7 +63,7 @@ In the Digital Thread
 
 **Analysis** holds a tab per analysis -- **FEA**, **Dynamic FEA**, **Heat
 Transfer** and **CFD** -- for a part that declares scenarios of it. Each lists
-the scenarios, runs the one selected with the implementation typed beside it,
+the scenarios, runs the one selected with the solver chosen over it,
 and shows the model it was run on and what it found. The simulations are run
 from **Validation → Simulation**, since what a simulation answers is whether the
 object does what it says it does.
