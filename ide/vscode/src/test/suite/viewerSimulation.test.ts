@@ -144,16 +144,21 @@ function pane(): { root: FakeElement; view: SimulationView; runs: string[]; plug
 const MUJOCO = '//pub/feature/simulate/mujoco:mujoco';
 const GAZEBO = '//pub/feature/simulate/gazebo:gazebo';
 
-/** The "Simulated by" drop-down of the page on screen. */
+/** The "Simulated by" field of the page on screen: a combo box ('packagePicker.ts'). */
 function pluginSelect(root: FakeElement): FakeElement {
     return root.find('simulation-plugin')[0];
 }
 
-/** Choose another plugin, the way the user would. */
+/** The quick choices "Simulated by" offers, in order. */
+function offered(root: FakeElement): string[] {
+    return root.find('package-picker-option').map((option) => option.find('package-picker-value')[0].textContent);
+}
+
+/** Name another plugin, the way the user would: typed into the field, and the field left. */
 function choose(root: FakeElement, plugin: string): void {
-    const select = pluginSelect(root);
-    select.value = plugin;
-    select.fire('change');
+    const field = pluginSelect(root);
+    field.value = plugin;
+    field.fire('blur');
 }
 
 function rows(root: FakeElement): FakeElement[] {
@@ -248,7 +253,8 @@ suite('Digital Thread Simulation tab', () => {
 
         const [page] = root.find('simulation-page');
         assert.strictEqual(page.find('simulation-mark').length, 0);
-        assert.ok(!page.find('simulation-toolbar')[0].text().includes('falls'));
+        // The toolbar is over the page, and kept while the page is drawn again.
+        assert.ok(!root.find('simulation-toolbar')[0].text().includes('falls'));
         assert.match(page.find('simulation-desc')[0].textContent, /topples off/);
     });
 
@@ -266,10 +272,7 @@ suite('Digital Thread Simulation tab', () => {
         view.start();
 
         const select = pluginSelect(root);
-        assert.deepStrictEqual(
-            select.children.map((option) => option.value),
-            [MUJOCO, GAZEBO],
-        );
+        assert.deepStrictEqual(offered(root), [MUJOCO, GAZEBO]);
         // 'sim-mujoco:mujoco' is MuJoCo under its package's own name for it.
         assert.strictEqual(select.value, MUJOCO);
         // So nothing is overridden: the simulation runs with what it names.
@@ -295,6 +298,17 @@ suite('Digital Thread Simulation tab', () => {
         assert.strictEqual(runs.length, 2);
         assert.strictEqual(mark(rows(root)[0]).textContent, '✓');
         assert.deepStrictEqual(view.state().simulations[0], { name: 'falls', plugin: MUJOCO, verdict: 'passed' });
+    });
+
+    test('any plugin may be named, not only the ones offered', () => {
+        const { root, view, plugins } = pane();
+        view.setScenarios(LIST);
+        view.start();
+
+        choose(root, '//acme/sim:bullet');
+        assert.deepStrictEqual(plugins, [undefined, '//acme/sim:bullet']);
+        assert.strictEqual(pluginSelect(root).value, '//acme/sim:bullet');
+        assert.strictEqual(view.state().simulations[0].plugin, '//acme/sim:bullet');
     });
 
     test('a plugin that is neither of the two is offered as itself, first', () => {

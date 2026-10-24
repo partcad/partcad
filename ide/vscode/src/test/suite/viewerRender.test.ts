@@ -206,12 +206,32 @@ suite('The 2D and Draft tabs', () => {
         const { root, view, calls } = pane({ plugins: ['//pub/feature/render/draftwright', '//other/draw'] });
         assert.strictEqual(view.plugin, '//pub/feature/render/draftwright');
 
-        const plugins = root.find('render-plugin')[0];
-        plugins.value = '//other/draw';
-        plugins.fire('change');
+        // "Drawn by" is the field the Simulation and the Analysis tabs name
+        // their packages in: filled in, with every package known offered.
+        const field = root.find('package-picker-input')[0];
+        assert.strictEqual(field.value, '//pub/feature/render/draftwright');
+        const options = root.find('package-picker-option');
+        assert.deepStrictEqual(
+            options.map((option) => option.find('package-picker-value')[0].textContent),
+            ['//pub/feature/render/draftwright', '//other/draw'],
+        );
+        options[1].fire('mousedown');
 
         assert.deepStrictEqual(calls.plugins, ['//other/draw']);
         assert.strictEqual(view.plugin, '//other/draw');
+    });
+
+    test('any drawing package may be named, not only the ones offered', () => {
+        const { root, view, calls } = pane({ plugins: ['//pub/feature/render/draftwright'] });
+
+        const field = root.find('package-picker-input')[0];
+        field.value = '//mine/drawings';
+        // Not taken while it is being typed: only once the field is left (or Enter pressed).
+        assert.strictEqual(view.plugin, '//pub/feature/render/draftwright');
+        field.fire('blur');
+
+        assert.deepStrictEqual(calls.plugins, ['//mine/drawings']);
+        assert.strictEqual(view.plugin, '//mine/drawings');
     });
 
     test('Save is offered while there is a file, and only then', () => {

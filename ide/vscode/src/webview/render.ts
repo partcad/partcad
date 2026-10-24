@@ -11,7 +11,10 @@
 // differs is who implements the file type: the 2D tab asks PartCAD's own
 // renderers for a picture (PNG, JPEG, SVG), and the Draft tab names a package
 // that draws, the way 'pc render -e' names one, and offers whatever that package
-// declares.
+// declares. It names it in the field the Simulation and the Analysis tabs name
+// their packages in ('packagePicker.ts'): filled in with the drawing package
+// PartCAD knows of, offering every one it knows of, and taking any other name
+// typed into it - a package of the user's own draws as well as any.
 //
 // The pane down the left is the one the 3D view has, built by the same 'Tree' and
 // styled by the same rules, because it is answering the same question. What it
@@ -35,6 +38,7 @@
 import { el, empty, placeholder } from './dom';
 import { IMAGE_TYPES, ImageView } from './image';
 import { RenderData } from './messages';
+import { PackagePicker, quickChoices } from './packagePicker';
 
 /** One entry of a drop-down: what is sent, and what the user reads. */
 export interface Choice {
@@ -46,18 +50,18 @@ export interface Choice {
 export interface RenderViewOptions {
     /** A fixed list of file types, for a pane that knows them up front. */
     formats?: Choice[];
-    /** The packages to draw with, for a pane that offers a choice of them. */
+    /** The packages to draw with, for a pane that names one: the quick choices, the first of which it starts on. */
     plugins?: string[];
     /** The file type, or the package, was changed: render again. */
     onChange: () => void;
-    /** The package was changed, and its file types are not known yet. */
+    /** Another package was named - chosen, or typed - and its file types are not known yet. */
     onPlugin?: (plugin: string) => void;
     onSave: () => void;
 }
 
 export class RenderView {
     private readonly formats = el('select', 'render-select');
-    private readonly plugins: HTMLSelectElement | undefined;
+    private readonly plugins: PackagePicker | undefined;
     private readonly save = el('button', 'render-save', 'Save…');
     private readonly body = el('div', 'render-body');
     private readonly controls = el('div', 'controls');
@@ -82,16 +86,24 @@ export class RenderView {
         const header = el('div', 'render-header');
 
         if (options.plugins !== undefined) {
-            const plugins = el('select', 'render-select render-plugin');
-            fill(
-                plugins,
-                options.plugins.map((plugin) => ({ value: plugin, label: plugin })),
+            const plugins = new PackagePicker({
+                label: 'Drawn by',
+                title: "The package that makes the drawing: 'pc render -e'",
+                onCommit: (plugin) => options.onPlugin?.(plugin),
+            });
+            const first = options.plugins[0];
+            plugins.set(
+                first ?? '',
+                quickChoices(
+                    options.plugins,
+                    first,
+                    (value, named) => value === named,
+                    'The drawing package PartCAD knows of',
+                    'the default',
+                ),
             );
-            plugins.title = 'The package that makes the drawing';
-            plugins.setAttribute('aria-label', 'Drawn by');
-            plugins.addEventListener('change', () => options.onPlugin?.(plugins.value));
             header.appendChild(el('span', 'render-label', 'Drawn by'));
-            header.appendChild(plugins);
+            header.appendChild(plugins.element);
             this.plugins = plugins;
         }
 
@@ -123,9 +135,9 @@ export class RenderView {
         return this.formats.value || undefined;
     }
 
-    /** The package chosen to draw with, on a pane that offers one. */
+    /** The package named to draw with, on a pane that names one: the last one chosen or entered. */
     public get plugin(): string | undefined {
-        return this.plugins?.value || undefined;
+        return this.plugins?.current || undefined;
     }
 
     /**

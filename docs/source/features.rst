@@ -67,8 +67,9 @@ is always the first (see :doc:`digital_thread/index` for what each group is for)
   - **2D** — the object rendered to a picture, as ``pc render`` renders it: PNG, JPEG or SVG,
     chosen from a list. For a part, an assembly, a scene or a sketch.
   - **Draft** — a dimensioned technical drawing of a part or an assembly, made by a drawing package the way
-    ``pc render -e`` uses one. ``//pub/feature/render/draftwright`` is offered, and the formats are whatever
-    it declares (PDF, SVG and DXF). The first drawing takes a few minutes while PartCAD installs draftwright.
+    ``pc render -e`` uses one. **Drawn by** names it: ``//pub/feature/render/draftwright`` unless you choose or
+    type another, and the formats are whatever it declares (PDF, SVG and DXF). The first drawing takes a few
+    minutes while PartCAD installs draftwright.
 
   2D and Draft each have a **Save…** button that saves the file on screen wherever you choose. A picture is
   shown on the tab, and can be zoomed with the mouse wheel, dragged, and put back with a double-click; a PDF or
@@ -107,8 +108,9 @@ is always the first (see :doc:`digital_thread/index` for what each group is for)
     a line says so where they would be.
 
     Whether each run held is a green or red mark before its name in the list. Above the pictures, as on the
-    Draft tab, **Simulated by** chooses the plugin that runs it -- the one it names is selected, and choosing
-    another runs it with that one, like ``pc sim --plugin`` -- and **Simulate** runs it afresh. Under the
+    Draft tab, **Simulated by** names the plugin that runs it -- filled in with the one it names, offering the
+    ones PartCAD knows of, and taking any other name typed into it; another runs it with that one, like
+    ``pc sim --plugin`` -- and **Simulate** runs it afresh. Under the
     pictures, **Criteria**, **Before** and **After** open on a click: the ``validation:`` expression, and the
     ``before`` and ``after`` the plugin reported, which are what that expression is evaluated over.
   - **Process Emulation** — nothing yet; always disabled.
@@ -185,10 +187,11 @@ The analysis tabs are the exception to "questions": looking at one *runs* the an
 part that declares scenarios of that analysis, and lists them on the left the way the Simulation tab lists
 simulations, in the order they are declared and with a mark for how each one's run went; the first is selected
 when the tab opens, and selecting one runs it -- ``pc cae fea -f <scenario>`` -- the first time it is looked at,
-and shows its answer from then on. Over the model is the Simulation tab's toolbar: **Analysed by** lists the
-solvers ``//pub/feature/cae`` registers for the analysis, with the one the scenario names -- or the configured
-default -- selected, and choosing another runs the scenario with it, so a machine whose solver is elsewhere is
-one choice away from an answer rather than stuck on an error; **Analyse** runs it afresh. The model is drawn
+and shows its answer from then on. Over the model is the Simulation tab's toolbar: **Analysed by** is filled in
+with the solver the scenario names -- or the configured default -- offers the others ``//pub/feature/cae``
+registers for the analysis, and takes any other name typed into it; another runs the scenario with it, so a
+machine whose solver is elsewhere is one choice away from an answer rather than stuck on an error; **Analyse**
+runs it afresh. The model is drawn
 according to the format the implementation chose: a 3D result is turned and zoomed, a 2D one is panned and
 zoomed as a picture. Any findings are listed under it; a scenario with nothing to report gets the whole pane.
 
@@ -337,8 +340,8 @@ names a ``dockerImage`` carrying its solver and mesher, so a container runtime i
 all it asks of a host that has neither installed -- and each also runs a solver
 installed on the host, when there is no container runtime or it is turned off.
 ``pc cae fea --implementation`` overrides the choice for one run, and so does
-choosing another solver in "Analysed by" over the model in the IDE's analysis
-tabs.
+choosing or typing another solver in "Analysed by" over the model in the IDE's
+analysis tabs.
 
 A scenario may also name its own, which is what it was written against:
 

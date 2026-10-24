@@ -146,6 +146,102 @@ body {
     max-width: 50%;
 }
 
+/*
+ * The field a tab names a package in - "Drawn by", "Simulated by", "Analysed
+ * by" - which is a combo box: a text field, an arrow, and the quick choices
+ * under them, drawn in the editor's dropdown colours. See 'packagePicker.ts'.
+ */
+.package-picker {
+    position: relative;
+    display: inline-flex;
+    align-items: stretch;
+    max-width: 60%;
+}
+
+.package-picker-input.render-plugin {
+    width: 26em;
+    max-width: none;
+    min-width: 0;
+    flex: 1 1 auto;
+    border-right: none;
+    border-radius: 2px 0 0 2px;
+    font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.package-picker-toggle {
+    flex: 0 0 auto;
+    padding: 0 0.45em;
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border, transparent));
+    border-left: none;
+    border-radius: 0 2px 2px 0;
+    background: var(--vscode-dropdown-background);
+    color: var(--vscode-dropdown-foreground);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.package-picker-toggle:disabled,
+.package-picker-input:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.package-picker-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 20;
+    /* As wide as the field, and wider when a name and its note need it. */
+    min-width: 100%;
+    width: max-content;
+    max-width: 48em;
+    max-height: 14em;
+    margin-top: 1px;
+    overflow-y: auto;
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-focusBorder));
+    border-radius: 2px;
+    background: var(--vscode-dropdown-listBackground, var(--vscode-dropdown-background));
+    color: var(--vscode-dropdown-foreground);
+    box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+}
+
+.package-picker-option {
+    display: flex;
+    justify-content: space-between;
+    gap: 1em;
+    padding: 0.2em 0.5em;
+    font-family: var(--vscode-editor-font-family, monospace);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.package-picker-option:hover,
+.package-picker-option.active {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.package-picker-option.current {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.package-picker-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.package-picker-note {
+    flex: 0 0 auto;
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-font-family, sans-serif);
+    font-style: italic;
+}
+
+.package-picker-option.current .package-picker-note {
+    color: inherit;
+}
+
 .render-select:focus-visible,
 .render-save:focus-visible {
     outline: 1px solid var(--vscode-focusBorder);
@@ -577,7 +673,6 @@ table.grid .numeric {
 .requirements .description {
     white-space: pre-wrap;
 }
-
 
 .requirements .banner {
     display: inline-block;
@@ -1377,13 +1472,22 @@ input.switch:focus-visible {
 
 .simulation-main {
     position: relative;
+    display: flex;
     flex: 1 1 auto;
+    flex-direction: column;
     min-width: 0;
     overflow: hidden;
 }
 
-.simulation-main > .placeholder,
-.simulation-main > .error {
+/* What the toolbar is over, which is what is drawn again when an answer arrives. */
+.simulation-content {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.simulation-content > .placeholder,
+.simulation-content > .error {
     padding: 1rem;
 }
 

@@ -261,6 +261,7 @@ the protocol has no authentication.
 | `src/partcad/requirements.py` | What a requirement means and whether the model meets it, for this tab and for `pc test` |
 | `src/common/garage.ts` | Where the Build vs Buy choices are kept, on this machine |
 | `src/webview/analysis.ts` | The Analysis tabs (FEA, Dynamic FEA, Heat Transfer, CFD): which apply, the scenarios declared, the Simulation tab's toolbar ("Analysed by", "Analyse"), and what each run answered |
+| `src/webview/packagePicker.ts` | The package field "Drawn by", "Simulated by" and "Analysed by" are: an editable combo box, and the quick choices it offers |
 | `src/webview/cae.ts` | What an Analysis tab draws of the selected scenario: the result model, and the findings |
 | `src/webview/scenarioList.ts` | The list of declared entries the Simulation and Analysis tabs share: rows, verdict marks, the keyboard |
 | `src/webview/simulation.ts` | The Simulation tab: the simulations declared, and the scene before and after one ran |
@@ -317,12 +318,33 @@ Positional lights use `decay: 0`. With three's physical default of 2, irradiance
 part in metre units sits ~0.03 from the rig — intensity 1 would arrive as ~1000 and burn the model to a white
 silhouette. `Part.js` never hits this because its OBJ models are in millimetres.
 
+## The package field
+
+Three toolbars name somebody else's package to do the work -- the Draft tab's **Drawn by**, the Simulation tab's
+**Simulated by**, and each Analysis tab's **Analysed by** -- and all three are one widget, `packagePicker.ts`: an
+editable **combo box**. The field is always filled in, with the package that runs when nobody chooses one (what
+the object names, or the configured default); its arrow, or Down, shows the quick choices under it -- the
+packages PartCAD knows of for the job, with that one marked and saying why ("named by the scenario", "the
+configured default") -- and typing narrows them to the ones that match; and any other name typed into it is
+taken as well, because a package of the user's own is as good a package as any registered one. The quick
+choices are made one way for all three (`quickChoices`), so they cannot come to disagree about what is offered.
+
+A name is taken when it is chosen from the list, when Enter is pressed, and when the field is left with a new
+one in it -- never while it is being typed -- and leaving it empty, or Escape with the list closed, puts back the
+one in use. It is not a `<select>`, which cannot take a name it does not list, nor an `<input>` with a
+`<datalist>`: Chromium filters a datalist by what the field says, and this field always says something, so the
+list would only ever offer what is already chosen -- and it draws the list in the system's colours rather than
+the editor's. The toolbar holding it is made once and kept, so an answer arriving does not take the field from
+somebody typing in it, and the button beside it (**Simulate**, **Analyse**) is pressed without leaving the field,
+so a name typed and not entered runs once, with that name.
+
 ## The 2D and Draft views
 
 Each is the same pane: the control pane on the left, what to render to along the top, the file under it, and a
 Save button. Both are `pc render` of one object to one file type, and what differs is who implements the type —
 the 2D tab asks PartCAD's own renderers for a picture (PNG, JPEG, SVG), the Draft tab names a package that
-draws and offers whatever that package's `render:` section declares (`pc render -e`, and
+draws, in **Drawn by** (the package field, above; `//pub/feature/render/draftwright` unless another is chosen or
+typed), and offers whatever that package's `render:` section declares (`pc render -e`, and
 `examples/feature_render_custom`). The file comes back as bytes rather than as a path, because the daemon may
 be on another machine; the host keeps it in a temporary file so that Save has something to copy.
 
@@ -468,15 +490,16 @@ reports each analysis tab's selected scenario, what each is set to run with, and
 
 Three things about the selected scenario are worth knowing:
 
-* **Over it is the Simulation tab's toolbar**, which is the Draft tab's: **Analysed by** lists the solvers
-  `//pub/feature/cae` registers for the analysis (`CAE_IMPLEMENTATIONS`, the analysis's `SIMULATION_PLUGINS`),
-  with the one the scenario runs with unasked selected -- its own `implementation:`, else the configured
-  default, `cae.defaults` (the user configuration's `caeFeaImplementation`, `caeDynamicImplementation`,
-  `caeThermalImplementation` or `caeCfdImplementation`), which the host adds to `cae.list`'s answer. That is the
-  order `pc cae` resolves them in, so that one is never sent as an override; choosing another runs the scenario
-  with it, as `pc cae <analysis> --implementation`, and **Analyse** runs it afresh with what is chosen. A
-  scenario naming a solver nobody registered (its package's own, `:fea`) is offered as itself, first. Under the
-  toolbar is what the scenario says it is (`desc:`), as under a simulation's.
+* **Over it is the Simulation tab's toolbar**, which is the Draft tab's: **Analysed by** is the package field
+  (see "The package field"), filled in with the solver the scenario runs with unasked -- its own
+  `implementation:`, else the configured default, `cae.defaults` (the user configuration's
+  `caeFeaImplementation`, `caeDynamicImplementation`, `caeThermalImplementation` or `caeCfdImplementation`),
+  which the host adds to `cae.list`'s answer -- and offering the solvers `//pub/feature/cae` registers for the
+  analysis (`CAE_IMPLEMENTATIONS`, the analysis's `SIMULATION_PLUGINS`). That is the order `pc cae` resolves
+  them in, so that one is never sent as an override; another, chosen or typed, runs the scenario with it, as
+  `pc cae <analysis> --implementation`, and **Analyse** runs it afresh with what the field says. A scenario
+  naming a solver nobody registered (its package's own, `:fea`) is offered as itself, first. Under the toolbar
+  is what the scenario says it is (`desc:`), as under a simulation's.
 * **The model is drawn according to its extension**, because which format an analysis writes is the
   implementation's decision and not PartCAD's. `glb`/`gltf`/`stl` get an orbit camera; `png`/`jpg`/`svg` and
   the other still-image types get an image that pans and zooms (wheel to zoom about the pointer, drag to pan,
@@ -517,10 +540,11 @@ to check it against, … while it runs, and an empty slot of the same width befo
 up). The page itself does not repeat the name or the verdict.
 
 Over the page is the Draft tab's toolbar, with the Draft tab's classes: **Simulated by**, which plugin runs it,
-and **Simulate**. The list is the two plugins `//pub/feature/simulate` registers (`SIMULATION_PLUGINS`), and the
-one the simulation names is selected -- matched by what follows its `:`, because a package usually names it
-through a dependency of its own (`sim-mujoco:mujoco`), and offered as itself, first, when it is neither. While
-that one is selected nothing is overridden; choosing another runs the simulation with it (`pc sim --plugin`),
+and **Simulate**. **Simulated by** is the package field (see "The package field"): its quick choices are the two
+plugins `//pub/feature/simulate` registers (`SIMULATION_PLUGINS`), and it is filled in with the one the
+simulation names -- matched by what follows its `:`, because a package usually names it through a dependency of
+its own (`sim-mujoco:mujoco`), and offered as itself, first, when it is neither. While that one is in it nothing
+is overridden; another, chosen or typed, runs the simulation with it (`pc sim --plugin`),
 the way choosing a drawing package draws again, and **Simulate** runs it afresh. Answers are kept per
 simulation *and* per plugin, so switching back to one already run shows it. Under the toolbar is what the
 simulation is about, then two pictures of the scene: before anything moved on the left, after the run on the

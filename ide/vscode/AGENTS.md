@@ -246,13 +246,27 @@ when the part declares a scenario for it, or has a section that cannot be read, 
 carries a token of its own (`analysisRuns`), as a simulation's does, and its answer is kept per scenario *and*
 implementation while the object is on screen. A scenario that could not run comes back as that scenario's
 `error`, not as a JSON-RPC error, and is shown where the model would be. Over the model is **the Simulation
-tab's toolbar, not a UX of its own**: "Analysed by" lists `CAE_IMPLEMENTATIONS` -- the solvers `//pub/feature/cae`
-registers per analysis, as `SIMULATION_PLUGINS` lists the simulators -- with the one the scenario runs with
-unasked selected (`implementationChoices`, the twin of `pluginChoices`): its own `implementation:`, else
-`cae.defaults` (the user configuration's `cae<Analysis>Implementation`), which the host adds to `cae.list`'s
-answer; "Analyse" runs it afresh. **Neither side sends the one it runs with unasked as `implementation`**,
+tab's toolbar, not a UX of its own**: "Analysed by" is the package field Draft's "Drawn by" and Simulation's
+"Simulated by" are too (`packagePicker.ts`, below), offering `CAE_IMPLEMENTATIONS` -- the solvers
+`//pub/feature/cae` registers per analysis, as `SIMULATION_PLUGINS` lists the simulators -- and filled in with
+the one the scenario runs with unasked (`implementationChoices`, the twin of `pluginChoices`): its own
+`implementation:`, else `cae.defaults` (the user configuration's `cae<Analysis>Implementation`), which the host
+adds to `cae.list`'s answer; "Analyse" runs it afresh. **Neither side sends the one it runs with unasked as `implementation`**,
 exactly as a simulation's own plugin is not sent: the daemon resolves the scenario's own, then the configured
-one, and either sent as an override would outrank the scenario's. `analysis.ts` imports no three.js and draws through a `CaeResultView`, which `cae.ts` (`CaeResult`)
+one, and either sent as an override would outrank the scenario's.
+
+**Every field that names somebody else's package is one widget, `packagePicker.ts`** -- Draft's "Drawn by",
+Simulation's "Simulated by" and each Analysis tab's "Analysed by" -- an editable combo box: always filled in
+with the package that runs unasked, a list of quick choices under it (`quickChoices`, so the three cannot come to
+disagree about what is offered and marked), and any other name typed into it taken as well. Not a `<select>`,
+which cannot take a name it does not list, and not an `<input list>` with a `<datalist>`: Chromium filters a
+datalist by what the field already says, and this field always says something, so the list would only offer
+what is already chosen. A name is committed on a choice, on Enter, and when the field is left with a new one in
+it -- never while it is typed -- and the toolbar holding it is made once and kept, so that an answer arriving
+does not take the field from somebody typing in it; the Run-like button next to it is pressed without leaving
+the field, so a name typed and not entered runs once rather than twice.
+
+`analysis.ts` imports no three.js and draws through a `CaeResultView`, which `cae.ts` (`CaeResult`)
 implements -- the split is what lets `viewerAnalysis.test.ts` run the list in the extension host. The model is
 drawn by its extension, because the format is the
 implementation's choice: a mesh gets an orbit camera, a picture pans and zooms. An analysis is added on both

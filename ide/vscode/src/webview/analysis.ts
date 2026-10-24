@@ -23,14 +23,15 @@
 // before it has.
 //
 // Over the model is the Simulation tab's toolbar - which is the Draft tab's -
-// doing for a scenario what that one does for a simulation: "Analysed by" picks
-// the solver, and "Analyse" runs it afresh. The solver the scenario runs with
-// when nobody says otherwise is selected - its own 'implementation:', or failing
-// that the configured default, the order 'pc cae' resolves them in - and the
-// others registered at '//pub/feature/cae' for the analysis are offered beside
-// it; choosing one runs the scenario with it ('pc cae <analysis>
-// --implementation'), the way choosing another plugin runs a simulation with
-// it. Under the toolbar is what the scenario says it is ('desc:'), as under
+// doing for a scenario what that one does for a simulation: "Analysed by" names
+// the solver, and "Analyse" runs it afresh. It is the field all three name a
+// package in ('packagePicker.ts'): filled in with the solver the scenario runs
+// with when nobody says otherwise - its own 'implementation:', or failing that
+// the configured default, the order 'pc cae' resolves them in - offering the
+// others registered at '//pub/feature/cae' for the analysis beside it, and
+// taking any other name typed into it. Another than its own runs the scenario
+// with that one ('pc cae <analysis> --implementation'), the way another plugin
+// runs a simulation with it. Under the toolbar is what the scenario says it is ('desc:'), as under
 // the Simulation tab's.
 //
 // A run is minutes of daemon time the first time - the solver is installed into
@@ -45,7 +46,7 @@
 // no WebGL, exercise everything here.
 //
 
-import { el, empty } from './dom';
+import { el } from './dom';
 import {
     ANALYSIS_LABELS,
     ANALYSIS_TABS,
@@ -56,6 +57,7 @@ import {
     CaeRunData,
     CaeScenario,
 } from './messages';
+import { PackageChoice, PackagePicker, quickChoices, unaskedChoice } from './packagePicker';
 import { ScenarioList, Verdict, firstSelected } from './scenarioList';
 import { TabSpec } from './tabs';
 
@@ -162,15 +164,6 @@ export function analysisGroupHint(
     return 'No engineering analysis configurations are defined for this object';
 }
 
-/** One entry of the "Analysed by" list: the solver, and whether it is the one the scenario runs with unasked. */
-export interface ImplementationChoice {
-    /** As '<package>:<file type>'; empty for the configured default when nobody could say what it is. */
-    value: string;
-    label: string;
-    configured: boolean;
-    title: string;
-}
-
 /**
  * The solvers a scenario can be run with, and which of them it runs with when
  * nobody says otherwise: 'pluginChoices' ('simulation.ts'), for an analysis.
@@ -183,39 +176,24 @@ export interface ImplementationChoice {
  * under that name) is matched by its last package name, since every one of
  * them calls its file type after the analysis and that alone names nothing.
  * One that is neither is offered as itself, first - a package's own solver,
- * ':fea'. When there is nothing to mark at all, the first entry is the
- * configured default, unnamed, so that what is selected is still what runs.
+ * ':fea'. When nobody could say what the configured default is, it is taken to
+ * be the one PartCAD ships configured, which is the first registered.
  */
 export function implementationChoices(
     analysis: AnalysisTabId,
     own: string | null | undefined,
     configured: string | null | undefined,
-): ImplementationChoice[] {
-    const unasked = own || configured || undefined;
+): PackageChoice[] {
+    const known = CAE_IMPLEMENTATIONS[analysis];
+    const unasked = own || configured || known[0];
     const spelt = (spec: string) => (spec.includes(':') ? spec : `${spec}:${analysis}`);
-    const matches = (value: string, named: string) =>
-        named.startsWith('//') ? value === spelt(named) : value.endsWith(`/${spelt(named)}`);
-    const why = own ? `What this scenario names: ${own}` : `The configured default: ${configured}`;
-    const choices = CAE_IMPLEMENTATIONS[analysis].map((value) => {
-        const isUnasked = unasked !== undefined && matches(value, unasked);
-        return {
-            value,
-            label: value,
-            configured: isUnasked,
-            title: isUnasked ? why : `Run it with ${value} instead`,
-        };
-    });
-    if (unasked === undefined) {
-        choices.unshift({
-            value: '',
-            label: 'the configured default',
-            configured: true,
-            title: `Whatever 'cae${analysis.charAt(0).toUpperCase()}${analysis.slice(1)}Implementation' names`,
-        });
-    } else if (!choices.some((choice) => choice.configured)) {
-        choices.unshift({ value: unasked, label: unasked, configured: true, title: why });
-    }
-    return choices;
+    return quickChoices(
+        known,
+        unasked,
+        (value, named) => (named.startsWith('//') ? value === spelt(named) : value.endsWith(`/${spelt(named)}`)),
+        own ? `What this scenario names: ${own}` : `The configured default: ${unasked}`,
+        own ? 'named by the scenario' : 'the configured default',
+    );
 }
 
 /**
@@ -232,8 +210,14 @@ export class AnalysisView {
     /** What the analysis is called on its tab, which is what the pane calls it too. */
     private readonly label: string;
     private readonly list = new ScenarioList('cae', (name) => this.select(name));
-    /** The Simulation tab's toolbar, drawn again for whichever scenario is selected. */
+    /**
+     * The Simulation tab's toolbar, made once and kept: an answer arriving
+     * redraws what is under it, and must not take the field away from somebody
+     * typing a solver's name.
+     */
     private readonly toolbar = el('div', 'render-header cae-toolbar');
+    private readonly picker: PackagePicker;
+    private readonly analyse = el('button', 'render-save cae-run', 'Analyse');
     /** What the selected scenario says it is, under the toolbar. */
     private readonly desc = el('p', 'simulation-desc cae-desc');
     private readonly result: CaeResultView;
@@ -246,7 +230,7 @@ export class AnalysisView {
     private requested: string | undefined;
     /** What is known of each run, by scenario and implementation (see 'key'). */
     private readonly runs = new Map<string, RunState>();
-    /** The implementation each scenario is to be run with, by name; absent, the one it runs with unasked. */
+    /** The implementation each scenario is to be run with, by name, as chosen or typed; absent, the one it runs with unasked. */
     private readonly chosen = new Map<string, string>();
 
     constructor(
@@ -257,6 +241,26 @@ export class AnalysisView {
     ) {
         this.label = ANALYSIS_LABELS[analysis];
         root.classList.add('cae');
+
+        // The label where a person reads it, the id where they would type it:
+        // 'pc cae thermal' is the command, "Heat Transfer" is what it does.
+        this.picker = new PackagePicker({
+            label: 'Analysed by',
+            title: `The implementation that runs this ${this.label} scenario: 'pc cae ${analysis} --implementation'`,
+            className: 'cae-implementation',
+            onCommit: (implementation) => this.choose(implementation),
+        });
+        this.toolbar.appendChild(el('span', 'render-label', 'Analysed by'));
+        this.toolbar.appendChild(this.picker.element);
+        this.analyse.type = 'button';
+        this.analyse.title = 'Run this scenario afresh, with the implementation named';
+        // Pressed without leaving the field, so that a name typed and not yet
+        // entered is the one it runs with, once.
+        this.analyse.addEventListener('mousedown', (event?: { preventDefault?: () => void }) =>
+            event?.preventDefault?.(),
+        );
+        this.analyse.addEventListener('click', () => this.afresh());
+        this.toolbar.appendChild(this.analyse);
 
         const body = el('div', 'cae-body');
         const main = el('div', 'cae-main');
@@ -290,7 +294,7 @@ export class AnalysisView {
                 const verdict = verdictOf(this.runState(scenario.name)).state;
                 return {
                     name: scenario.name,
-                    implementation: this.choice(scenario.name).value || null,
+                    implementation: this.implementationOf(scenario.name) || null,
                     verdict: verdict === 'unrun' ? null : verdict,
                 };
             }),
@@ -302,25 +306,48 @@ export class AnalysisView {
         return this.runs.has(this.key(scenario, this.override(scenario)));
     }
 
-    /** The implementation a scenario is set to run with: the one it runs with unasked, unless another was chosen. */
-    private choice(scenario: string): ImplementationChoice {
-        const choices = implementationChoices(
+    /** The quick choices of a scenario's "Analysed by". */
+    private choices(scenario: string): PackageChoice[] {
+        return implementationChoices(
             this.analysis,
             this.scenarios.find((entry) => entry.name === scenario)?.implementation,
             this.configured,
         );
-        const chosen = this.chosen.get(scenario);
-        return (
-            choices.find((choice) => choice.value === chosen) ??
-            choices.find((choice) => choice.configured) ??
-            choices[0]
-        );
+    }
+
+    /** The implementation a scenario is set to run with: the one it runs with unasked, unless another was chosen or typed. */
+    private implementationOf(scenario: string): string {
+        return this.chosen.get(scenario) ?? unaskedChoice(this.choices(scenario))?.value ?? '';
     }
 
     /** What to ask the daemon to run a scenario with: undefined while that is the one it runs with unasked. */
     private override(scenario: string): string | undefined {
-        const choice = this.choice(scenario);
-        return choice.configured ? undefined : choice.value;
+        const unasked = unaskedChoice(this.choices(scenario));
+        const implementation = this.implementationOf(scenario);
+        return unasked?.configured && implementation === unasked.value ? undefined : implementation || undefined;
+    }
+
+    /** A solver was chosen or typed into "Analysed by": run the scenario on screen with it, unless it has. */
+    private choose(implementation: string): void {
+        if (this.selected === undefined) {
+            return;
+        }
+        this.chosen.set(this.selected, implementation);
+        this.drawList();
+        this.showSelected();
+        this.start();
+    }
+
+    /** "Analyse": the scenario on screen, afresh, with what "Analysed by" says. */
+    private afresh(): void {
+        if (this.selected === undefined) {
+            return;
+        }
+        const typed = this.picker.value;
+        if (typed !== '') {
+            this.chosen.set(this.selected, typed);
+        }
+        this.run(this.selected);
     }
 
     /**
@@ -473,50 +500,19 @@ export class AnalysisView {
     }
 
     private hideToolbar(): void {
-        empty(this.toolbar);
         this.toolbar.hidden = true;
         this.desc.hidden = true;
     }
 
     /**
      * The Simulation tab's toolbar, for a scenario: which solver runs it, and
-     * the button that runs it afresh. Choosing a solver runs the scenario with
-     * it -- unless it already has, for this object -- the way choosing a
-     * plugin runs a simulation with it.
+     * the button that runs it afresh -- and under it what the scenario says it
+     * is, as under a simulation's.
      */
     private drawToolbar(scenario: CaeScenario): void {
-        empty(this.toolbar);
         this.toolbar.hidden = false;
-
-        const solvers = el('select', 'render-select render-plugin cae-implementation');
-        solvers.setAttribute('aria-label', 'Analysed by');
-        // The label where a person reads it, the id where they would type it:
-        // 'pc cae thermal' is the command, "Heat Transfer" is what it does.
-        solvers.title = `The implementation that runs this ${this.label} scenario: 'pc cae ${this.analysis} --implementation'`;
-        const current = this.choice(scenario.name).value;
-        for (const choice of implementationChoices(this.analysis, scenario.implementation, this.configured)) {
-            const option = el('option', undefined, choice.label);
-            option.value = choice.value;
-            option.title = choice.title;
-            option.selected = choice.value === current;
-            solvers.appendChild(option);
-        }
-        solvers.value = current;
-        solvers.addEventListener('change', () => {
-            this.chosen.set(scenario.name, solvers.value);
-            this.drawList();
-            this.showSelected();
-            this.start();
-        });
-        this.toolbar.appendChild(el('span', 'render-label', 'Analysed by'));
-        this.toolbar.appendChild(solvers);
-
-        const analyse = el('button', 'render-save cae-run', 'Analyse');
-        analyse.type = 'button';
-        analyse.title = 'Run this scenario afresh, with the implementation chosen';
-        analyse.disabled = this.runState(scenario.name)?.state === 'running';
-        analyse.addEventListener('click', () => this.run(scenario.name));
-        this.toolbar.appendChild(analyse);
+        this.picker.set(this.implementationOf(scenario.name), this.choices(scenario.name));
+        this.analyse.disabled = this.runState(scenario.name)?.state === 'running';
 
         const desc = scenario.desc?.trim() ?? '';
         this.desc.textContent = desc;

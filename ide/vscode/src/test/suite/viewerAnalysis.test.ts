@@ -204,16 +204,21 @@ function mark(row: FakeElement): FakeElement {
     return row.find('cae-mark')[0];
 }
 
-/** The "Analysed by" list over the model. */
+/** The "Analysed by" field over the model: a combo box ('packagePicker.ts'). */
 function solvers(root: FakeElement): FakeElement {
     return root.find('cae-implementation')[0];
 }
 
-/** Choose a solver in "Analysed by", the way the user would. */
+/** The quick choices "Analysed by" offers, in order. */
+function offered(root: FakeElement): string[] {
+    return root.find('package-picker-option').map((option) => option.find('package-picker-value')[0].textContent);
+}
+
+/** Name a solver in "Analysed by", the way the user would: typed into the field, and the field left. */
 function choose(root: FakeElement, implementation: string): void {
-    const select = solvers(root);
-    select.value = implementation;
-    select.fire('change');
+    const field = solvers(root);
+    field.value = implementation;
+    field.fire('blur');
 }
 
 function analyseButton(root: FakeElement): FakeElement {
@@ -394,10 +399,12 @@ suite('Digital Thread Analysis tabs', () => {
         // 'loaded' names none: what the user configuration runs FEA with is
         // selected, among every FEA solver '//pub/feature/cae' registers.
         assert.strictEqual(root.find('render-label')[0].textContent, 'Analysed by');
-        assert.deepStrictEqual(
-            solvers(root).children.map((option) => option.value),
-            [CALCULIX, '//pub/feature/cae/code_aster:fea', ELMER, '//pub/feature/cae/moose:fea'],
-        );
+        assert.deepStrictEqual(offered(root), [
+            CALCULIX,
+            '//pub/feature/cae/code_aster:fea',
+            ELMER,
+            '//pub/feature/cae/moose:fea',
+        ]);
         assert.strictEqual(solvers(root).value, CALCULIX);
         assert.strictEqual(analyseButton(root).textContent, 'Analyse');
         // What the scenario says it is, under the toolbar, as a simulation's is.
@@ -436,6 +443,22 @@ suite('Digital Thread Analysis tabs', () => {
         analyseButton(root).fire('click');
         assert.deepStrictEqual(runs[2], ['loaded', undefined]);
         assert.strictEqual(analyseButton(root).disabled, true);
+    });
+
+    test('any solver may be named, not only the ones offered, and Analyse takes what is typed', () => {
+        const { root, view, runs } = pane();
+        view.setScenarios(listed());
+        view.start();
+
+        choose(root, '//acme/cae/nastran:fea');
+        assert.deepStrictEqual(runs[runs.length - 1], ['loaded', '//acme/cae/nastran:fea']);
+        assert.strictEqual(solvers(root).value, '//acme/cae/nastran:fea');
+
+        // Typed and not entered: "Analyse" runs it with that, once.
+        solvers(root).value = '//acme/cae/abaqus:fea';
+        analyseButton(root).fire('click');
+        assert.deepStrictEqual(runs[runs.length - 1], ['loaded', '//acme/cae/abaqus:fea']);
+        assert.strictEqual(runs.length, 3);
     });
 
     test('an answer is the one of the solver it was asked with', () => {
@@ -484,10 +507,11 @@ suite('Digital Thread Analysis tabs', () => {
         assert.deepStrictEqual(marked(implementationChoices('fea', '//acme/cae/calculix:fea', null)), [
             '//acme/cae/calculix:fea',
         ]);
-        // Nothing known at all: the configured default, unnamed, is what runs.
+        // Nothing known at all: the default PartCAD ships configured, which is
+        // the first registered -- so the field is never empty.
         const unknown = implementationChoices('dynamic', null, null);
-        assert.deepStrictEqual([unknown[0].value, unknown[0].configured], ['', true]);
-        assert.strictEqual(unknown.length, 4);
+        assert.deepStrictEqual([unknown[0].value, unknown[0].configured], ['//pub/feature/cae/elmer:dynamic', true]);
+        assert.strictEqual(unknown.length, 3);
     });
 
     test('a scenario a show asked for is selected instead of the first, and only once', () => {
