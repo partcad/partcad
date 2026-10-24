@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Tests for `pc cae fea` and `pc cae cfd`.
+"""Tests for `pc cae fea`, `pc cae dynamic`, `pc cae thermal` and `pc cae cfd`.
 
 Both commands are `analysis_command()` with a different word, which is the whole
 point of them sharing it: a user who has learned one has learned the other. What
@@ -12,8 +12,8 @@ daemon, and the two things this process does with what comes back.
 
 The exit status is the part worth being careful about. A finding is what the user
 asked about, so a run that produced one is a run whose answer is "no", and
-`pc cae fea && ...` has to stop there. A run that found nothing is a pass and
-exits zero, the same way `pc test` does. Nothing here starts a solver: the daemon
+`pc cae fea && ...` has to stop there; so is a scenario that did not run at all.
+A run that found nothing is a pass and exits zero, the same way `pc test` does. Nothing here starts a solver: the daemon
 call is replaced, because which request is sent is the contract and what a solver
 would do with it is not this command's business.
 """
@@ -130,3 +130,37 @@ def test_no_output_directory_means_the_configuration_decides(analysed):
     """Left out, the file goes where the `cae:` section puts it."""
     assert _invoke("fea", ":bracket").exit_code == 0
     assert analysed.calls[0]["params"]["output_dir"] is None
+
+
+def test_every_scenario_runs_unless_one_is_named(analysed):
+    """'pc cae fea :bracket' is every scenario, as 'pc sim' is every simulation."""
+    assert _invoke("fea", ":bracket").exit_code == 0
+    assert analysed.calls[0]["params"]["scenario"] is None
+
+
+@pytest.mark.parametrize("flag", ["-f", "--filter"])
+def test_a_scenario_is_named_with_filter(analysed, flag):
+    """The spelling 'pc sim' selects one simulation with."""
+    assert _invoke("thermal", flag, "in-use", ":heatsink").exit_code == 0
+    assert analysed.calls[0]["params"]["scenario"] == "in-use"
+    assert analysed.calls[0]["params"]["analysis"] == "thermal"
+
+
+def test_json_tags_each_finding_with_its_scenario(analysed):
+    """One array whatever ran, so that a script reading it needs to know nothing else."""
+    analysed.result = {
+        "findings": [{"message": "too thin", "scenario": "loaded"}, {"message": "rings", "scenario": "dropped"}],
+        "total": 2,
+        "failed": 0,
+    }
+    result = _invoke("fea", "--json", ":bracket")
+    assert result.exit_code == 1
+    assert [finding["scenario"] for finding in json.loads(result.output)] == ["loaded", "dropped"]
+
+
+def test_a_scenario_that_did_not_run_fails_the_command(analysed):
+    """The daemon has said why; this says how many, and stops."""
+    analysed.result = {"findings": [], "total": 3, "failed": 1}
+    result = _invoke("dynamic", ":bracket")
+    assert result.exit_code == 1
+    assert "1 of 3 DYNAMIC scenario(s) did not run" in result.output

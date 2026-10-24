@@ -1211,8 +1211,9 @@ of it, with the arm at rest:
 labels (``subject/lower/knee-worm-gear/gear``), the part it is, the body, and
 where it sits in that body's frame. With the body's pose in a reading that is
 where the part is, which is what turns a body's loads into a part's -- the
-``/pc:sim-assembly-fea`` skill does that, and writes the part a stress analysis
-that applies them (:ref:`pc cae <cae>`). What passes between two parts welded
+``/pc:sim-assembly-fea`` skill does that, and adds the part a scenario of its
+stress analysis that applies them, named after the simulation, beside any it
+already has (:ref:`pc cae <cae>`). What passes between two parts welded
 into one body is the body's own business: a rigid simulation does not see it,
 and says nothing about it.
 

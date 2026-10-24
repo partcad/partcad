@@ -8,16 +8,18 @@ mechanism: one arm of [OpenVMP](https://github.com/openvmp/openvmp-models)'s
 Don1 robot, and the worm gear in its knee.
 
 ```shell
-pc sim -a arm --json     # both runs, and what acts on every body at their end     sections 1 and 2
-pc cae fea :knee-gear    # the gear under what the worm holds it with              sections 3 and 4
-pc test                  # both, as checks
+pc sim -a arm --json              # both runs, and what acts on every body at their end  sections 1 and 2
+pc cae fea -f dropped :knee-gear  # the gear under what the worm holds it with           sections 3 and 4
+pc test                           # both, as checks
 ```
 
 The step in between -- from what acts on a body to what acts on one part of
 it -- is engineering rather than arithmetic, and is what the
 [`/pc:sim-assembly-fea`](../../ai-agents/common/skills/sim-assembly-fea/SKILL.md)
-skill does. `knee-gear`'s `fea:` section is what it wrote, and every number in
-it is worked out below.
+skill does. It adds a **scenario** to the part's `fea:` -- a section that is a
+map of named scenarios, the way `simulate:` is a map of simulations -- named
+after the simulation and the reading the loads came from: `knee-gear`'s
+`dropped` is what it wrote, and every number in it is worked out below.
 
 ![The arm at the end of 'dropped', as MuJoCo drew it](dropped.png)
 
@@ -74,7 +76,7 @@ A plugin that reports loads (the MuJoCo plugin, and Gazebo for what Gazebo
 measures) says, at the end of the run, what acts on the lower arm's body --
 which the gear, its hub, the knee shaft, the worm and everything else of the
 lower arm are welded into. `part_loads.py`, beside the skill, puts them in
-the gear's own frame, the frame its ports and so its `fea:` section are
+the gear's own frame, the frame its ports and so its `fea:` scenarios are
 written in:
 
 ```shell
@@ -97,7 +99,7 @@ Gazebo (`-f dropped_in_gazebo`) reports the knee's row and the weight's to the
 same four figures, and no weld: it makes no force-torque sensor on a joint to
 the world, and says so in `warnings`. So its loads do not add up -- they need
 not -- and nothing below reads the weld: the gear's analysis starts from the
-same `fea:` whichever engine ran.
+same `fea:` scenario whichever engine ran.
 
 ## 4. From the body's loads to the gear's
 
@@ -145,18 +147,18 @@ Its moment about X is +2.590 N·m: it turns the gear *against* the torque the
 shaft puts in, which is what holding is. The worm's lead, 5.7°, adds
 2.590 / 0.01775 × tan 5.7° = 14.6 N along the gear's axis; which way it
 points depends on friction in a drive that holds, so it is left out, and the
-`fea:` comments say so.
+scenario's comments say so.
 
 ## 5. The analysis
 
 `knee-gear` is the goBILDA gear by reference (`type: alias`): the gear's
 geometry, interfaces and ports are goBILDA's, and the loads are this arm's, so
 they belong to the package that has the arm. The reference states its own
-`fea:`, and its own `cae: fea:` for the material -- goBILDA's 2314 series is
+`fea:` -- the one scenario `dropped` -- and its own `cae: fea:` for the material -- goBILDA's 2314 series is
 brass (its `desc:` says so), taken as free-cutting brass, C36000: 97 GPa, 0.31, 124 MPa at yield, 8500
 kg/m³.
 
-Its `fea:` names CalculiX, which **reads** a load's direction and a gravity
+The scenario names CalculiX, which **reads** a load's direction and a gravity
 (its `reads: [force, gravity]`). PartCAD refuses to hand directed loads to an
 implementation that does not declare that, rather than let it pull every load
 straight down; that refusal is what an older CalculiX gets here.
@@ -187,7 +189,7 @@ nodes near each port for itself, and spreads the load over the surface among
 them by area.
 
 **Any implementation that reads a direction and a gravity will do.** The
-same `fea:` section, from the same request, in each one's own image:
+same scenario, from the same request, in each one's own image:
 
 | implementation | elements | peak von Mises | peak displacement | findings |
 | --- | --- | --- | --- | --- |
@@ -197,7 +199,7 @@ same `fea:` section, from the same request, in each one's own image:
 | [MOOSE](https://github.com/partcad/partcad-cae-moose) | 28,133 | 58.9 MPa | 0.00455 mm | none |
 
 ```shell
-pc cae fea :knee-gear -i //pub/feature/cae/elmer:fea
+pc cae fea -f dropped :knee-gear -i //pub/feature/cae/elmer:fea
 ```
 
 They agree on the displacement to within how each holds the bolt holes
@@ -219,3 +221,10 @@ instant the same mesh would read about 67.6 × 1.77 = 120 MPa -- over the
 82.7 MPa allowable, under the yield. Let go with nothing to slow it, the knee
 loads its gear harder than standing still does, and a stress analysis of the
 standing arm alone would not say so.
+
+That instant is a second scenario of the same analysis, not a replacement for
+the first: the skill run with that reading writes it beside `dropped`, under a
+name of its own, and both are then asked every time the package is tested. It
+is not declared here because it does not pass -- 120 MPa is over the allowable,
+so `pc test` would fail on it, which is the point of asking it and not what an
+example should do on every run.

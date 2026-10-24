@@ -75,8 +75,8 @@ is always the first (see :doc:`digital_thread/index` for what each group is for)
   a DXF cannot be shown there, and is saved and opened in another program instead.
 - **Analysis** — what engineering analysis says about the object:
 
-  - **FEA**, **Dynamic FEA**, **Heat Transfer** and **CFD** — for a part: the analysis :ref:`pc cae <cae>`
-    runs, and what it found.
+  - **FEA**, **Dynamic FEA**, **Heat Transfer** and **CFD** — for a part that declares scenarios of that
+    analysis: the scenarios, and for the one selected what :ref:`pc cae <cae>` produced and what it found.
 - **Manufacturing** — what making it takes:
 
   - **Build vs Buy** — for a part or an assembly: every part, piece of stock and sub-assembly it is made of,
@@ -181,11 +181,15 @@ a frame at every hole of every one of them, and all of it at once shows nothing.
 rather than solid is one that is showing while something under it is hidden — which is how a folded-up line says
 so.
 
-The two analysis tabs are the exception to "questions": looking at one *runs* the analysis. A field over the
-model names which implementation runs it — pre-filled with the configured default, and editable, so a machine
-whose solver is elsewhere is one line away from an answer rather than stuck on an error. The model is drawn
-according to the format the implementation chose: a 3D result is turned and zoomed, a 2D one is panned and
-zoomed as a picture. Any findings are listed under it; a part with nothing to report gets the whole pane.
+The analysis tabs are the exception to "questions": looking at one *runs* the analysis. Each is enabled for a
+part that declares scenarios of that analysis, and lists them on the left the way the Simulation tab lists
+simulations, in the order they are declared and with a mark for how each one's run went; the first is selected
+when the tab opens, and selecting one runs it -- ``pc cae fea -f <scenario>`` -- the first time it is looked at,
+and shows its answer from then on. A field over the model names which implementation runs it — pre-filled with
+the one the scenario names, or the configured default, and editable, so a machine whose solver is elsewhere is
+one line away from an answer rather than stuck on an error. The model is drawn according to the format the
+implementation chose: a 3D result is turned and zoomed, a 2D one is panned and zoomed as a picture. Any
+findings are listed under it; a scenario with nothing to report gets the whole pane.
 
 .. _partcad-terminal:
 
@@ -225,7 +229,10 @@ analysis, ``pc cae dynamic`` for its natural frequencies, ``pc cae thermal`` for
 heat transfer, and ``pc cae cfd`` for computational fluid dynamics. The
 conditions live on the part, in a section named after the analysis, because they
 are a property of the part rather than of whoever analyses it -- a bracket is
-bolted down at the same holes whichever solver is asked about it:
+bolted down at the same holes whichever solver is asked about it. A part is
+asked more than one question of each kind -- a shelf bracket loaded, and the
+same bracket knocked sideways -- so the section is a map of named
+**scenarios**, the way ``simulate:`` is a map of named simulations:
 
 .. code-block:: yaml
 
@@ -236,21 +243,44 @@ bolted down at the same holes whichever solver is asked about it:
       type: build123d
       path: bracket.py
       fea:
-        fix:
-          - m3-screw        # every instance of this interface is held still
-        load:
-          hook: 5 kg        # every instance of this one carries this
-          rail:
-            left: 30 N      # or one named instance at a time
-            right: 30 N
+        loaded:
+          desc: A full shelf on it
+          feature: carries-a-shelf   # the requirement it demonstrates
+          fix:
+            - m3-screw        # every instance of this interface is held still
+          load:
+            hook: 5 kg        # every instance of this one carries this
+            rail:
+              left: 30 N      # or one named instance at a time
+              right: 30 N
+        knocked:
+          fix:
+            - m3-screw
+          load:
+            hook: [0 N, 50 N, 0 N]   # a force with a direction
       dynamic:
-        fix:
-          - m3-screw        # held there, and left to ring
+        bolted-down:
+          fix:
+            - m3-screw        # held there, and left to ring
       thermal:
-        temperature:
-          m3-screw: 40 C    # held at a temperature
-        heat:
-          hook: 2 W         # heat put in through the port's surface
+        in-use:
+          temperature:
+            m3-screw: 40 C    # held at a temperature
+          heat:
+            hook: 2 W         # heat put in through the port's surface
+
+``pc cae fea :bracket`` runs every scenario of the analysis and ``-f`` runs one
+(``pc cae fea -f loaded :bracket``); ``pc test`` holds the part to all of them.
+Beside its conditions a scenario may say what it is (``desc:``), which feature
+of the part's :ref:`requirements <requirements>` it demonstrates
+(``feature:``, a name or a list -- the IDE's Requirements tab lists it there, as
+it lists a simulation), who runs it (``implementation:``, below) and the
+implementation's parameters for that scenario alone (``params:``, a finer
+``mesh_size`` say). A scenario cannot be named after any of those keys or after a
+condition. A section written the way it was before scenarios -- ``fea:`` holding
+``fix:`` and ``load:`` itself -- is still read, as one scenario named
+``default``, and PartCAD says once that it is deprecated: move its conditions
+under a name.
 
 Every key names :ref:`interfaces <interfaces>` the part implements, so the same
 declaration that says where a part connects also says where it is held, pulled,
@@ -308,17 +338,18 @@ installed on the host, when there is no container runtime or it is turned off.
 ``pc cae fea --implementation`` overrides the choice for one run, and so does the
 field over the model in the IDE's analysis tabs.
 
-A part may also name its own, which is what it was written against:
+A scenario may also name its own, which is what it was written against:
 
 .. code-block:: yaml
 
     fea:
-      implementation: //pub/feature/cae/calculix:fea
-      fix: [m3-screw]
-      load: {hook: 5 kg}
+      loaded:
+        implementation: //pub/feature/cae/calculix:fea
+        fix: [m3-screw]
+        load: {hook: 5 kg}
 
-That sits between the other two: ``-i`` on the command line wins, then the part,
-then the user configuration. It is how a package ships an analysis that works
+That sits between the other two: ``-i`` on the command line wins, then the
+scenario, then the user configuration. It is how a package ships an analysis that works
 for whoever opens it, without every reader first pointing their own
 configuration at the right place.
 
@@ -331,13 +362,14 @@ command line carries. The difference matters under ``pc test -P //...`` over a t
 packages, which runs with the tree's root current while every part in it sits one
 or more packages below.
 
-What comes back is two things: the model, written to
-``<part>.<analysis>.<extension>`` in whichever format the implementation chose,
-and the **findings** -- a JSON array of what the analysis has to say about the
-part. ``pc test`` gains a check per analysis -- ``fea``, ``dynamic``,
-``thermal``, ``cfd`` -- that fails a part whose
-analysis produced any finding, and they apply only to a part that declares the
-matching section, so a package of bolts pays nothing for them. There is one way to pass -- the
+What comes back from each scenario is two things: the model, written to
+``<part>.<analysis>.<scenario>.<extension>`` in whichever format the
+implementation chose (``bracket.fea.loaded.glb``), and the **findings** -- a
+JSON array of what the analysis has to say about the part. ``pc test`` gains a
+check per analysis -- ``fea``, ``dynamic``, ``thermal``, ``cfd`` -- that runs
+every scenario of it and fails a part any of whose scenarios produced a finding,
+naming the scenario; they apply only to a part that declares the matching
+section, so a package of bolts pays nothing for them. There is one way to pass -- the
 analysis ran and reported nothing -- and everything else **fails**: a malformed
 section, a plugin that cannot be resolved (not a dependency, misspelt, declaring
 no such file type), a plugin that resolves and cannot run (no mesher, no solver,
@@ -380,7 +412,8 @@ simulation" in :doc:`simulation`.
 
 ``examples/feature_cae`` is the set of cases to check an implementation against
 -- a cantilever analysed for stress, for its natural frequencies and for heat,
-and a pipe for flow, each with a closed-form answer to compare the solver with.
+and a pipe for flow, one scenario each, each with a closed-form answer to compare
+the solver with.
 The pipe's inlet and outlet are drawn with the bore's circle, so the pressure
 driving it is the inlet's force over exactly the bore's area. That example's
 ``README.md`` has what each implementation measured.

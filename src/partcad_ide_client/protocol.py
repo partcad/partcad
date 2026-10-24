@@ -210,6 +210,16 @@ KEY_METADATA = "metadata"
 # the other window. A tab that does not apply to the object is not opened, and
 # the viewer stays where it was.
 KEY_TAB = "tab"
+# On a show message that carries a KEY_TAB naming a tab that lists scenarios --
+# the Simulation tab, and each analysis tab: which of them to select, by the
+# name the object declares it under ('pc ide view --analysis-fea --scenario
+# loaded'). Absent selects the first, as opening the tab by hand does. One the
+# object does not declare selects nothing new, and the tab stays on its first.
+KEY_SCENARIO = "scenario"
+
+# The tabs whose pane is a list of what the object declares, one of which is
+# selected and run: its simulations, and its scenarios of each analysis.
+SCENARIO_TABS = ("fea", "dynamic", "thermal", "cfd", "simulation")
 
 # The viewer's tabs, by the group whose strip holds them, in the order they are
 # shown. 'ide/vscode/src/webview/messages.ts' ('TabId', 'TAB_GROUPS') is the

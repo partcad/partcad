@@ -68,6 +68,14 @@ parts:
       on-the-table:
         simulation: //nowhere:simulator
         feature: flat
+    fea:
+      bolted-down:
+        desc: Held by its holes, and leaned on at the top
+        feature: holes
+        fix: [m3-thru]
+        load:
+          m3-thru:
+            TR: 1 kg
 
   # The same plate, required to be what it is not.
   plate-wrong:
@@ -100,6 +108,10 @@ parts:
       wobbles:
         simulation: //nowhere:simulator
         feature: [holes, stable]
+    dynamic:
+      ringing:
+        feature: quiet
+        fix: [m3-thru]
 
   # The shape the section had before it had structure.
   legacy-text:

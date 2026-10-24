@@ -5,7 +5,8 @@
 #
 """The shared body of the CAE checks `pc test` runs: FEA, dynamic FEA, heat transfer and CFD.
 
-A part passes when the analysis has **no findings**. That is the whole verdict,
+A part passes when every scenario it declares for the analysis ran and had **no
+findings**. That is the whole verdict,
 and it is deliberately not a threshold PartCAD holds an opinion about: what
 counts as too much stress or too much drag is the solver's judgement, expressed
 by whether it says anything at all. PartCAD's part of the bargain is to run the
@@ -20,6 +21,11 @@ Two things bound how expensive this is, and both are the same gate:
   would otherwise start a solver for every bolt in it, and a bolt with no
   `fea:` has nothing for a solver to be told. Declaring `fea:` is how a user
   says "check this one", which is why the check needs no flag of its own.
+
+Every scenario of the section is run and judged, whatever became of the one
+before it, and each failure says which scenario it is -- the `sim` check's rule
+for a part's simulations, and for its reason: somebody fixing one scenario wants
+to hear about the other three now rather than one test run at a time.
 
 Everything else - which implementation, what the boundary conditions mean, what
 units they are in - is `partcad.cae` and `Shape.analyze_async()`, shared with
@@ -44,7 +50,7 @@ from .test import Test
 
 
 class CaeTest(ImplementationTest):
-    """The `fea` and `cfd` checks.
+    """The `fea`, `dynamic`, `thermal` and `cfd` checks.
 
     What an analysis that produced no answer costs -- a failure, or on a machine
     with no container runtime a skip -- is `ImplementationTest._verdict()`,
@@ -61,30 +67,32 @@ class CaeTest(ImplementationTest):
         if not isinstance(shape, Part):
             return "only a part is analysed"
         try:
-            config = self._config(shape)
+            scenarios = self._scenarios(shape)
         except pc_cae.CaeConfigError:
             # It asked, and asked wrong: that is the check's to fail.
             return None
-        return "it declares no '%s:' section" % self.analysis if config is None else None
+        return "it declares no '%s:' section" % self.analysis if not scenarios else None
 
-    def _config(self, shape):
-        """The boundary conditions, or None when this test does not apply.
+    def _scenarios(self, shape) -> list:
+        """The scenarios to run, or nothing when this test does not apply.
 
-        A malformed section is *not* None: it is a failure, and it is raised
+        A malformed section is *not* nothing: it is a failure, and it is raised
         rather than swallowed so that `test()` reports the sentence saying what
-        is wrong with it.
+        is wrong with it. A malformed *scenario* is one of the list, and fails
+        on its own when it is run.
         """
         if not isinstance(shape, Part):
-            return None
-        return pc_cae.config_of(shape, self.analysis)
+            return []
+        return pc_cae.of_shape(shape, self.analysis)
 
     async def cache_key_suffix(self, ctx, shape) -> str:
         """What this test reads beyond the shape, folded into the cache key.
 
-        Three things, none of which moves `shape.hash`:
+        Three things per scenario, none of which moves `shape.hash`:
 
-        * the boundary conditions, because a part whose load has just been
-          doubled must not be answered with the verdict on the old one;
+        * the boundary conditions and the parameters it hands the
+          implementation, because a part whose load has just been doubled must
+          not be answered with the verdict on the old one;
         * which implementation ran, because two solvers are two answers, and
           switching to one that is installed here is exactly what a user does
           after the first run;
@@ -102,46 +110,57 @@ class CaeTest(ImplementationTest):
         would cost precisely what the cache saves.
         """
         try:
-            config = self._config(shape)
+            scenarios = self._scenarios(shape)
         except pc_cae.CaeConfigError as e:
             # A malformed section is its own cache key: correcting it has to
             # produce a fresh run rather than the failure of what it replaced.
             return ".malformed=" + hashlib.md5(str(e).encode()).hexdigest()
-        if config is None:
+        if not scenarios:
             return ""
 
-        parts = [json.dumps(config.to_data(), sort_keys=True)]
-        try:
-            # The part's own 'implementation:' if it declared one, exactly as
-            # 'test()' resolves it -- otherwise the key describes the run the
-            # user configuration would have produced rather than the run that
-            # happens, and re-pointing a part at another solver would be
-            # answered from the cache of the first.
-            options_project, format_name = shape._analysis_implementation(
-                ctx, self.analysis, declared=config.implementation
-            )
-            parts.append("%s:%s" % (options_project.name, format_name))
-            opts, _output_dir = shape._output_getopts(
-                ctx, format_name, output.CAE, ctx.get_project(shape.project_name), options_project
-            )
-            parts.append(json.dumps(opts, sort_keys=True, default=str))
-        except Exception as e:
-            # The implementation could not be resolved -- not installed, not a
-            # dependency, misspelt. That is its own question and its own answer,
-            # so it gets its own key rather than borrowing the one belonging to
-            # a run that did resolve.
-            parts.append("unresolved:%s" % e)
+        parts = []
+        for scenario in scenarios:
+            parts.append("scenario:%s" % scenario.name)
+            try:
+                config = scenario.conditions()
+            except pc_cae.CaeConfigError as e:
+                # The same for one scenario: correcting it runs it afresh.
+                parts.append("malformed:%s" % e)
+                continue
+            parts.append(json.dumps(config.to_data(), sort_keys=True))
+            parts.append(json.dumps(config.params, sort_keys=True, default=str))
+            try:
+                # The scenario's own 'implementation:' if it declared one,
+                # exactly as 'test()' resolves it -- otherwise the key describes
+                # the run the user configuration would have produced rather than
+                # the run that happens, and re-pointing a scenario at another
+                # solver would be answered from the cache of the first.
+                options_project, format_name = shape._analysis_implementation(
+                    ctx, self.analysis, declared=config.implementation
+                )
+                parts.append("%s:%s" % (options_project.name, format_name))
+                opts, _output_dir = shape._output_getopts(
+                    ctx, format_name, output.CAE, ctx.get_project(shape.project_name), options_project
+                )
+                parts.append(json.dumps(opts, sort_keys=True, default=str))
+            except Exception as e:
+                # The implementation could not be resolved -- not installed, not
+                # a dependency, misspelt. That is its own question and its own
+                # answer, so it gets its own key rather than borrowing the one
+                # belonging to a run that did resolve.
+                parts.append("unresolved:%s" % e)
         return "." + self.analysis + "=" + hashlib.md5("\n".join(parts).encode()).hexdigest()
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = None) -> bool:
-        """Run the analysis, and pass the shape only if it found nothing.
+        """Run every scenario of the analysis, and pass the shape only if none found anything.
 
-        **There is one way to pass: the analysis ran and reported no findings.**
-        Everything else is a failure, and the report says which of them it was.
-        A part that declares `fea:` has asked a question, and any answer other
-        than "nothing to report" is something a user has to act on:
+        **There is one way to pass: every scenario ran and reported no
+        findings.** Everything else is a failure, and the report says which
+        scenario and which of these it was. A part that declares `fea:` has
+        asked a question, and any answer other than "nothing to report" is
+        something a user has to act on:
 
-        * the part declared the section wrongly;
+        * the part declared the section, or the scenario, wrongly;
         * the implementation could not be resolved -- not a dependency, did not
           load, declares no such file type;
         * the implementation resolved and could not run: no mesher, no solver,
@@ -181,6 +200,10 @@ class CaeTest(ImplementationTest):
         actions: install a solver, use another machine, or fix the part. The
         implementation is what knows which, so whatever it said is reported
         verbatim -- see `partcad.cae.dysfunction_report()`.
+
+        One scenario after another rather than together, for the reason the
+        `sim` check gives: a solver is what fills the machine, not the event
+        loop.
         """
         # Not `= {}` in the signature, the way the sibling checks have it: this
         # is the one that *writes* to `test_ctx` (`NOT_CACHEABLE`, below), and a
@@ -191,15 +214,33 @@ class CaeTest(ImplementationTest):
             test_ctx = {}
 
         try:
-            config = self._config(shape)
+            scenarios = self._scenarios(shape)
         except pc_cae.CaeConfigError as e:
             # The part asked for this analysis and got the request wrong. That
             # is a failure of the package rather than of the part, and saying so
             # here is the only place a user finds out without running `pc cae`.
             return self.failed(shape, "%s", e)
 
-        if config is None:
+        if not scenarios:
             return self.not_applicable(shape, self.inapplicable(shape))
+
+        verdicts = [await self._scenario(ctx, shape, scenario, test_ctx) for scenario in scenarios]
+        if all(verdicts):
+            return self.passed(shape)
+        return self.TEST_FAILED
+
+    async def _scenario(self, ctx, shape, scenario, test_ctx: dict) -> bool:
+        """One scenario's verdict, said once, naming the scenario where there is a name to say."""
+        name = "%s:%s" % (shape.project_name, shape.name)
+        # The name in the reports, which the unnamed form a section had before
+        # scenarios does not have: its sentences read as they always did.
+        named = None if scenario.legacy else scenario.name
+        try:
+            config = scenario.conditions()
+        except pc_cae.CaeConfigError as e:
+            # The part asked for this analysis and got the request wrong: the
+            # sentence names the scenario it is about.
+            return self.failed(shape, "%s", e)
 
         try:
             # Resolved here, and separately, so that failing to resolve it
@@ -223,12 +264,19 @@ class CaeTest(ImplementationTest):
                 None,
                 options_project,
                 None,
+                scenario,
             )
         except Exception as e:
-            return self.failed(shape, "the '%s' implementation could not be resolved: %s", self.analysis, e)
+            return self.failed(
+                shape,
+                "the '%s' implementation%s could not be resolved: %s",
+                self.analysis,
+                "" if named is None else " of the scenario '%s'" % named,
+                e,
+            )
 
         try:
-            result = await shape.analyze_async(ctx, self.analysis)
+            result = await shape.analyze_async(ctx, self.analysis, scenario=scenario.name)
         except pc_cae.CaeConfigError as e:
             return self.failed(shape, "%s", e)
         except pc_runtime.SandboxUnavailable as e:
@@ -254,11 +302,12 @@ class CaeTest(ImplementationTest):
                 shape,
                 impl,
                 pc_cae.dysfunction_report(
-                    "%s:%s" % (shape.project_name, shape.name),
+                    name,
                     self.analysis,
                     "%s:%s" % (options_project.name, format_name),
                     e,
                     remedy=pc_cae.NO_RUNTIME_REMEDY,
+                    scenario=named,
                 ),
             )
         except Exception as e:
@@ -287,19 +336,18 @@ class CaeTest(ImplementationTest):
                 str(e)
                 if isinstance(e, pc_cae.CaeFailed)
                 else pc_cae.dysfunction_report(
-                    "%s:%s" % (shape.project_name, shape.name),
+                    name,
                     self.analysis,
                     "%s:%s" % (options_project.name, format_name),
                     e,
+                    scenario=named,
                 )
             )
             return self._verdict(ctx, shape, impl, report)
 
-        findings = result.get("findings") or []
+        findings = (result or {}).get("findings") or []
         if findings:
-            return self.failed(
-                shape,
-                "%s",
-                pc_cae.findings_report("%s:%s" % (shape.project_name, shape.name), self.analysis, findings),
-            )
-        return self.passed(shape)
+            return self.failed(shape, "%s", pc_cae.findings_report(name, self.analysis, findings, scenario=named))
+        if named is not None:
+            self.debug(shape, "the scenario '%s' found nothing to report", named)
+        return self.TEST_PASSED

@@ -177,6 +177,28 @@ def test_show_takes_reply_timeout_where_it_always_was(ide):
     assert protocol.KEY_TAB not in message
 
 
+def test_show_carries_the_scenario_to_select_on_the_tab(ide):
+    client.show(protocol.make_node(b"glTF"), name="//pkg:beam", tab="fea", scenario="loaded")
+
+    (message,) = ide.received
+    assert (message[protocol.KEY_TAB], message[protocol.KEY_SCENARIO]) == ("fea", "loaded")
+
+
+def test_show_without_a_scenario_sends_no_scenario_key(ide):
+    """The tab selects its first, as it does when it is opened by hand."""
+    client.show(protocol.make_node(b"glTF"), name="//pkg:beam", tab="simulation")
+
+    (message,) = ide.received
+    assert protocol.KEY_SCENARIO not in message
+
+
+@pytest.mark.parametrize("tab", [None, "3d"])
+def test_show_refuses_a_scenario_on_a_tab_that_lists_none(ide, tab):
+    with pytest.raises(ValueError, match="a scenario is selected on a tab that lists them"):
+        client.show(protocol.make_node(b"glTF"), name="//pkg:beam", tab=tab, scenario="loaded")
+    assert ide.received == []
+
+
 def test_show_refuses_a_tab_the_viewer_does_not_have(ide):
     with pytest.raises(ValueError, match="not a Digital Thread tab"):
         client.show(protocol.make_node(b"glTF"), name="//pkg:beam", tab="buy")

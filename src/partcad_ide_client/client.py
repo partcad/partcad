@@ -199,6 +199,7 @@ def show(
     keep_camera=False,
     reply_timeout: float = REPLY_TIMEOUT,
     tab=None,
+    scenario=None,
 ) -> dict:
     """Display one already-tessellated object in the IDE's Digital Thread.
 
@@ -224,10 +225,17 @@ def show(
     which is what makes re-showing the same part after an edit not jump.
 
     'tab' is the tab of the viewer to open on (see 'protocol.KEY_TAB'), or None
-    to leave the viewer on the one it is on.
+    to leave the viewer on the one it is on. 'scenario' is which of that tab's
+    simulations or analysis scenarios to select (see 'protocol.KEY_SCENARIO'),
+    and needs a tab that lists them.
     """
     if tab is not None and tab not in protocol.viewer_tab_ids():
         raise ValueError("not a Digital Thread tab: %r (one of %s)" % (tab, ", ".join(protocol.viewer_tab_ids())))
+    if scenario is not None and tab not in protocol.SCENARIO_TABS:
+        raise ValueError(
+            "a scenario is selected on a tab that lists them (one of %s), not on %r"
+            % (", ".join(protocol.SCENARIO_TABS), tab)
+        )
     if not protocol.is_node(obj):
         raise TypeError(
             "not a shape tree (no %r, %r or %r key): %r"
@@ -245,6 +253,8 @@ def show(
     }
     if tab is not None:
         message[protocol.KEY_TAB] = tab
+    if scenario is not None:
+        message[protocol.KEY_SCENARIO] = scenario
     return _send(message, reply_timeout=reply_timeout)
 
 

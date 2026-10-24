@@ -190,7 +190,7 @@ at all).
 
 Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|assembly|scene|file`,
 `export.part|assembly|scene`, `ai.regenerate|change`, `add.part|assembly|scene`, `package.load|path|refresh`, `init`,
-`list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults`, `cam.route`, `filter.object`,
+`list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults|list`, `cam.route`, `filter.object`,
 `test`, `info`, `activate`, and `rpc.discover`. Five methods mirror no subcommand:
 
 * `assembly.instantiate`, which a client calls on its own behalf as the second half of a two-phase assembly
@@ -247,9 +247,9 @@ Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,
 `stats`, `terminal`, `execute`, and the `*Done`/lifecycle signals).
 
-Five of them answer the tabs of the IDE's Digital Thread, which is a webview with no file system and no
-network in reach: `bom`, `assembly.guide`, `supply.quote` and the pair behind the FEA and CFD tabs,
-`cae.analyze` and `cae.defaults`. The first three are the CLI's own operation returning **data**
+Six of them answer the tabs of the IDE's Digital Thread, which is a webview with no file system and no
+network in reach: `bom`, `assembly.guide`, `supply.quote` and the three behind the analysis tabs,
+`cae.list`, `cae.analyze` and `cae.defaults`. The first three are the CLI's own operation returning **data**
 rather than writing a file -- `assembly.guide` is the instruction book `pc render -t html|pdf` writes, as
 `partcad.document`'s renderer-independent model with the illustrations inlined (they live in a temporary
 directory that is deleted as soon as the document is built); `supply.quote` fills the cart `pc supply quote`
@@ -257,9 +257,16 @@ fills and quotes each line item on its own, because a cart of the whole assembly
 all of it. Note that `supply.quote` deliberately does *not* go through `Context.find_suppliers()`: that reports "no
 suppliers" as an error, and in the IDE an error is a modal popup, one per part.
 
-`cae.analyze` is the odd one of the five: it *runs* something rather than answering a question about the
-package, and it is the same `Shape.analyze_async()` that `pc cae fea` runs. Two things about it are for the
-webview specifically. `inline` asks for the model's bytes beside the path it was written to, because a panel
+`cae.analyze` is the odd one of the six: it *runs* something rather than answering a question about the
+package, and it is the same `Shape.analyze_async()` that `pc cae fea` runs -- for every scenario of the
+analysis the part declares, or for the one `scenario` names, which is `pc cae fea -f` and what a tab asks.
+Its answer is shaped like `simulate.run`'s: an entry per scenario under `analyses`, each with an `error`
+that is null or the sentence saying why that scenario produced nothing -- one scenario's failure is that
+entry's, not a JSON-RPC error, and does not stop the next -- and every finding under `findings`, tagged with
+its scenario. What leaves nothing to run at all (no such part, no such section, no such scenario) is still a
+`USAGE_ERROR`. `cae.list` is `simulate.list`'s twin: what each analysis declares, read and not run, which is
+what enables and fills each analysis tab. Two things about `cae.analyze` are for the webview specifically.
+`inline` asks for the model's bytes beside the path it was written to, because a panel
 with no file system cannot open a path -- and the daemon may not even be on the viewer's machine. And
 `cae.defaults` exists at all because the field over the model has to be *pre-filled*: which implementation runs
 an analysis is user configuration, not a property of the object on screen, so there is nothing in the object's

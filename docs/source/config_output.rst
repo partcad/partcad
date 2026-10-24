@@ -673,13 +673,17 @@ follow from an analysis not being a file type of the object:
   ``findings``, a JSON array of what it has to say about the part. An empty one
   is a pass, and is what the analysis checks of ``pc test`` require.
 
-The file it writes is named after the analysis as well as the object --
-``bracket.fea.glb`` -- because a part has as many results as it has analyses.
-What the analysis is *given* is the part's own section -- ``fea:``,
-``dynamic:``, ``thermal:`` or ``cfd:`` -- which is a property of the part rather
-than of whoever analyses it; see :ref:`pc cae <cae>` for the keys each takes and
-what units they are in. Beside the request every implementation is handed, the
-analysis gets:
+The file it writes is named after the analysis and the scenario as well as the
+object -- ``bracket.fea.loaded.glb`` -- because a part has as many results as it
+has scenarios of its analyses. What the analysis is *given* is one scenario of
+the part's own section -- ``fea:``, ``dynamic:``, ``thermal:`` or ``cfd:`` --
+which is a property of the part rather than of whoever analyses it; see
+:ref:`pc cae <cae>` for the keys each takes and what units they are in. An
+implementation is run once per scenario and is told nothing about the others,
+so one written for a section of one set of conditions answers each scenario as
+it always answered the section. Beside the request every implementation is
+handed -- with a scenario's ``params:`` over the parameters configured here --
+the analysis gets:
 
 * ``analysis`` -- which of the four it is;
 * the part's keys, each value in its stored unit: ``fix``/``outlet`` as

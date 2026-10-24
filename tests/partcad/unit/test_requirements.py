@@ -294,6 +294,25 @@ def test_a_simulation_names_the_feature_it_demonstrates():
     assert simulation.declared({"simulate": {"x": {"simulation": "//a:b"}}})[0].features == []
 
 
+def test_an_analysis_scenario_names_the_feature_it_demonstrates(ctx):
+    """The features list the scenarios that stand behind them, beside the simulations."""
+    report = _check(ctx, "part", "plate", verify=False)
+    features = {feature["name"]: feature for feature in report.to_dict()["features"]}
+    assert features["holes"]["analyses"] == [{"analysis": "fea", "name": "bolted-down"}]
+    assert features["holes"]["simulations"] == []
+    assert features["flat"]["analyses"] == []
+    assert features["flat"]["simulations"] == ["on-the-table"]
+
+
+def test_an_unreadable_analysis_section_names_no_feature(ctx):
+    """It is the analysis's own check that says what is wrong with it."""
+    shape = ctx.get_part("//:plate")
+    shape.config["fea"] = "nonsense"
+    report = asyncio.run(requirements.check_async(ctx, shape, verify=False))
+    assert all(check.section != "fea" for check in report.checks)
+    assert {feature["name"]: feature["analyses"] for feature in report.to_dict()["features"]}["holes"] == []
+
+
 # --- verdicts -------------------------------------------------------------------
 
 
@@ -392,6 +411,8 @@ def test_what_is_required_and_not_met_fails_saying_what_was_found(ctx):
     assert verdicts == {
         # A simulation naming a feature nobody declared.
         ("simulate", "wobbles"): False,
+        # And an analysis scenario doing the same.
+        ("dynamic", "ringing"): False,
         ("ports", "top"): False,
         ("ports", "bottom"): False,
         ("ports", "turned"): False,
@@ -415,6 +436,10 @@ def test_what_is_required_and_not_met_fails_saying_what_was_found(ctx):
     assert "x does not match" in details["centerOfMass"]
     assert "states no 'restitution'" in details["restitution"]
     assert "'stable'" in details["wobbles"]
+    assert details["ringing"] == (
+        "the Dynamic FEA scenario 'ringing' names the feature 'quiet', which the requirements do not declare: "
+        "they declare holes"
+    )
 
 
 def test_an_assembly_is_held_to_what_it_externalizes_and_what_it_holds(ctx):

@@ -219,3 +219,18 @@ def test_the_command_line_reads_past_a_log_on_the_same_stream(part_loads, tmp_pa
     printed = json.loads(capsys.readouterr().out)
     assert printed["part"]["body"] == "arm"
     assert close(printed["apparent_gravity"], [0.0, 0.0, -9.81])
+
+
+def test_the_loads_say_what_the_scenario_they_become_is_called(part_loads):
+    """After the simulation, and the reading for any reading but the one the skill reads."""
+    document = {"simulations": [{"simulation": "dropped", "result": run(), "error": None}]}
+    assert part_loads.loads(document, "gear")["scenario"] == "dropped"
+    assert part_loads.loads(document, "gear", which="before")["scenario"] == "dropped-before"
+    # One run's result names no simulation of its own.
+    assert part_loads.loads(run(), "gear")["scenario"] == "simulated"
+
+
+def test_a_sample_s_scenario_is_named_after_when_it_was(part_loads):
+    assert part_loads.scenario_name("dropped", "3", 0.02) == "dropped-t0.02"
+    assert part_loads.scenario_name("dropped", "3", None) == "dropped-3"
+    assert part_loads.scenario_name("held in place", "after") == "held-in-place"

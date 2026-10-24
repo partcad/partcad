@@ -320,7 +320,18 @@ at all).
 
   What is genuinely new is the two halves either side of the script. Going in, the *part* declares the
   boundary conditions in a section named after the analysis, because they belong to the part and not to
-  whoever analyses it. `cae.ROLES` says which keys each analysis reads and how -- a *set* (`fix:`, `outlet:`)
+  whoever analyses it -- as a map of named **scenarios**, the way `simulate:` is a map of simulations, since a
+  part is asked more than one question of each kind. `cae.of_shape()` reads the section into `cae.Scenario`s
+  (name, `desc:`, `feature:`, `implementation:`, `params:`) without failing on a malformed one, so a listing --
+  `cae.list`, the IDE's tabs, `partcad.requirements`' feature references -- never fails on one scenario's
+  mistake; `Scenario.conditions()` parses the conditions and raises, naming the scenario (`'fea: loaded:'`).
+  The form a section had before scenarios, the conditions themselves, is still read as one scenario named
+  `cae.LEGACY_SCENARIO` and warned about once: it is told apart by its keys, which is why no scenario may be
+  named after one. `Shape.analyze_async()` runs **one** scenario (`scenario=`, or the only one) and writes its
+  model to `<part>.<analysis>.<scenario>.<ext>` (`cae.model_suffix()`; the unnamed form keeps
+  `<part>.<analysis>.<ext>`); every caller that wants several -- `pc cae`, `pc test` -- loops, one scenario
+  after another, and reports each on its own. The request an implementation is handed is the one scenario's,
+  unchanged in shape, so an implementation knows nothing of scenarios. `cae.ROLES` says which keys each analysis reads and how -- a *set* (`fix:`, `outlet:`)
   or a *value* parsed into one stored unit (`load:` in newtons, a bare number being a mass weighed at
   `GRAVITY`; `temperature:` in Celsius; `heat:` in watts; `convection:` in W/(m^2*K)) -- so a fifth analysis
   is a row in that table, a CLI module, a test class and a schema definition, not a new parser.
@@ -334,7 +345,8 @@ at all).
   `pc cae` prints, `pc test`'s per-analysis checks fail on, and the IDE lists under the model. `cae.py` imports
   nothing from `partcad`, which is what lets it be tested without a sandbox.
 
-  Both checks are gated on the part *declaring* the section, and that gate is the whole cost model: a
+  Both checks are gated on the part *declaring* the section -- and then run every scenario of it -- and that
+  gate is the whole cost model: a
   `pc test -r` over a package tree must not start a solver for every bolt in it, and a bolt with no `fea:` has
   nothing to tell one. Declaring `fea:` is how a user asks for the check, which is why it needs no flag.
 

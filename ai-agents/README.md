@@ -268,8 +268,9 @@ The plugin folder is named `claude`, but the command namespace comes from
   `requirements:` say it has to be. The ports, interfaces and physical
   properties are `pc test`'s verdict (its `requirements` check), reported as
   they are; the features are prose, and the agent judges each from evidence it
-  gathers and names: every simulation (a `simulate:` entry says which feature it
-  demonstrates with `feature:`), renders from every angle a feature needs with
+  gathers and names: every simulation and every engineering analysis scenario
+  (a `simulate:` entry or a scenario of `fea:`, `dynamic:`, `thermal:` or
+  `cfd:` says which feature it demonstrates with `feature:`), renders from every angle a feature needs with
   the ports and interfaces drawn, and for an assembly the bill of materials and
   the assembly instructions. A feature nothing shows is "cannot tell", never
   "met". The IDE's Requirements tab puts an "LLM" banner on every feature that
@@ -280,12 +281,13 @@ The plugin folder is named `claude`, but the command namespace comes from
   runs the `simulate:` entry, reads the loads on the body the part is welded
   into at the end of the run, in the part's own frame (`part_loads.py`, beside
   the skill, does that arithmetic), works out by statics which of them pass
-  through the part and where they enter and leave it, and writes the part an
-  `fea:` section of directed forces and its apparent gravity -- on a reference
-  to it when the part comes from another package. Then it runs `pc cae fea`,
-  and in an IDE opens the result on the Digital Thread's FEA tab
-  (`pc ide view --analysis-fea`). `examples/feature_simulate_fea` is one, end
-  to end.
+  through the part and where they enter and leave it, and adds the part a new
+  FEA scenario of directed forces and its apparent gravity, named after the
+  simulation and the reading, beside any scenario the part already has -- on a
+  reference to it when the part comes from another package. Then it runs that
+  scenario (`pc cae fea -f <scenario>`), and in an IDE opens the result on the
+  Digital Thread's FEA tab (`pc ide view --analysis-fea --scenario
+  <scenario>`). `examples/feature_simulate_fea` is one, end to end.
 - **`/pc:search <query>`** — finds existing parts and assemblies in the catalog
   whose name, description, or source matches the query (`pc search parts` /
   `pc search assemblies`), lists the matches, and can inspect or render a chosen

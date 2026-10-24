@@ -67,6 +67,9 @@ _OPERATIONS = {
     "test.report": operations.test_report,
     "cae.analyze": operations.cae_analyze,
     "cae.defaults": operations.cae_defaults,
+    # Not a CLI command: the scenarios a part declares for each analysis, read
+    # rather than run -- what the IDE's Analysis tabs are enabled by and list.
+    "cae.list": operations.cae_list,
     "cam.route": operations.cam_route,
     "search.objects": operations.search_objects,
     "render.objects": operations.render_objects,

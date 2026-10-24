@@ -27,8 +27,10 @@ its full name) where only one placement of it is in the run.
 the body with `at` in mm, `force` in N and `torque` in N*m about `at`, all in the
 part's frame; the part's apparent gravity -- the scene's gravity less the
 acceleration of the part's origin, `g - a`, m/s^2 in the part's frame -- which is
-what an `fea:` section's `gravity:` is; and the sum of the loads, which is the body's mass
-times its acceleration if every load was reported. `point` turns a point (mm) --
+what an FEA scenario's `gravity:` is; the sum of the loads, which is the body's mass
+times its acceleration if every load was reported; and `scenario`, the name to give
+the FEA scenario these loads become (the simulation's, and the reading's for any but
+`after`). `point` turns a point (mm) --
 or with `--direction` a direction -- from one part's frame into another's, at
 the same reading: where another part's port is in this part's frame.
 
@@ -39,6 +41,7 @@ not arithmetic: see the skill.
 import argparse
 import json
 import math
+import re
 import sys
 
 # Gravity a reading is under when the result does not say, m/s^2: what MuJoCo
@@ -141,6 +144,35 @@ def run_of(document, simulation=None):
     if not result:
         raise SystemExit("The simulation '%s' did not run: %s" % (runs[0].get("simulation"), runs[0].get("error")))
     return result
+
+
+def simulation_of(document, simulation=None):
+    """The name of the run 'run_of' reads, or None for a document that is one run's result and names none."""
+    if isinstance(document, dict) and "before" in document and "after" in document:
+        return None
+    if simulation is not None:
+        return simulation
+    runs = (document or {}).get("simulations") if isinstance(document, dict) else None
+    return (runs or [{}])[0].get("simulation")
+
+
+def scenario_name(simulation, which="after", time=None):
+    """What to call the FEA scenario a reading's loads become: where they came from.
+
+    The simulation's name for its 'after' -- the reading the skill reads -- and
+    the reading beside it for any other: '-before', or '-t<seconds>' for a
+    sample, which says when without needing the index. A scenario's name is
+    letters, digits and '_', '.', '-', '/', so anything else in a simulation's
+    name is spelt '-'.
+    """
+    base = re.sub(r"[^a-zA-Z0-9_./-]", "-", simulation or "simulated")
+    if which == "after":
+        return base
+    if which == "before":
+        return base + "-before"
+    if time is not None:
+        return "%s-t%s" % (base, ("%.6f" % float(time)).rstrip("0").rstrip("."))
+    return "%s-%s" % (base, which)
 
 
 def reading_of(result, which="after"):
@@ -246,6 +278,9 @@ def loads(document, part, simulation=None, which="after"):
         # acceleration, when every load on it was reported.
         "total": {"force": [round(c, 9) for c in force], "torque": [round(c, 9) for c in moment]},
         "warnings": list(result.get("warnings") or []),
+        # The name the FEA scenario of these loads goes under, beside the
+        # part's others: see 'scenario_name'.
+        "scenario": scenario_name(simulation_of(document, simulation), which, reading.get("time")),
     }
 
 
