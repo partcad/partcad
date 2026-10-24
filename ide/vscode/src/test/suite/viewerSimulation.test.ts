@@ -476,6 +476,25 @@ suite('Digital Thread Simulation tab', () => {
         assert.strictEqual(view.has('falls'), false);
     });
 
+    test("a simulation a show asked for is selected instead of the first ('pc ide view --scenario')", () => {
+        const { view, runs } = pane();
+
+        view.request('falls_in_gazebo');
+        view.setScenarios(LIST);
+        assert.strictEqual(view.current, 'falls_in_gazebo');
+        view.start();
+        assert.deepStrictEqual(runs, ['falls_in_gazebo']);
+
+        // Asked for once: the next object's list opens on its first again.
+        view.setScenarios(LIST);
+        assert.strictEqual(view.current, 'falls');
+
+        // And one the object does not declare selects the first, as no request does.
+        view.request('flies');
+        view.setScenarios(LIST);
+        assert.strictEqual(view.current, 'falls');
+    });
+
     test("'pc ide view --validation-simulation' opens the Validation group on Simulation", () => {
         assert.strictEqual(groupOf('simulation'), 'validation');
         // Process Emulation holds nothing, so nothing can ask for it.

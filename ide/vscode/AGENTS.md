@@ -147,11 +147,18 @@ send (`PartcadViewer`). `src/webview/` is what runs *inside* that webview: `view
 because the show is what decides which tabs apply, and because two windows sharing the viewer port share it
 by connection. The renderer hands it to the strips as a *request* (`Tabs.request`) before they are rebuilt for
 the object: a request is opened even when the tab is `secondary`, waits through a rebuild that does not offer
-it yet (Build and Buy, until Build vs Buy has answered; Simulation, until `simulate.list` has), and is forgotten once opened or when the next show
+it yet (Build and Buy, until Build vs Buy has answered; Simulation, until `simulate.list` has; an analysis, until `cae.list` has), and is forgotten once opened or when the next show
 asks for nothing. The user also withdraws it, by clicking a tab or by a change on the tab they are on that
 rebuilds the strip (`keepCurrent`, a Build vs Buy switch): what they did wins over what a command line asked for
 earlier, so a request waiting for Buy does not pull them off the tab they are working in. `TAB_GROUPS` in `src/webview/messages.ts` is the list of what can be asked for, and a Python
 test holds it to `VIEWER_TABS` on the other side.
+
+A show asking for a tab that lists scenarios -- Simulation, or an analysis -- can also say which of them to
+select (`scenario`, from `pc ide view --scenario`; `KEY_SCENARIO` and `SCENARIO_TABS` on the Python side, forwarded
+by the host as `tab` is). It is handed to the panes (`request` on `SimulationView` and `AnalysisView`) at the top of
+the show, before their lists are asked for, because a list can arrive while the geometry is still loading -- long
+before the tab itself is requested -- and it is used once: the list opens on that entry instead of the first, or
+on the first when the object declares no such name, and every show says, so it does not linger.
 
 **The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA, Dynamic FEA, Heat Transfer and
 CFD for a part, then Manufacturing: what is built and what is bought, how to build it, the bill of materials, where
@@ -220,20 +227,33 @@ report a download that never happened; and nothing may dispose a parsed group th
 its geometry is the geometry of every clone of it.
 
 None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote`, `cae.analyze` and
-`simulate.run` are the CLI's own operations (`pc bom`, the book `pc render -t html` writes, the cart
+`simulate.run` (with `cae.list` and `simulate.list`, which read what they would run) are the CLI's own operations (`pc bom`, the book `pc render -t html` writes, the cart
 `pc supply quote` fills, the analysis `pc cae <analysis>` runs, the simulation `pc sim` runs), asked for
 as data rather
 than as a file -- the same rule as everywhere else in this extension: extend the one backend, do not
 reimplement it in TypeScript.
 
 The Analysis tabs -- FEA, Dynamic FEA, Heat Transfer and CFD -- are the ones that *act* rather than ask:
-selecting one runs a solver. Each is named after its analysis on the command line (`fea`, `dynamic`,
+selecting a scenario runs a solver. Each is named after its analysis on the command line (`fea`, `dynamic`,
 `thermal`, `cfd`), which is the id the host asks `cae.analyze` for; the label a person reads is
 `ANALYSIS_LABELS` in `src/webview/messages.ts`, and it is never derived from the id -- "DYNAMIC" is not what
-anybody calls a modal analysis. The field over the model names which solver -- pre-filled from `cae.defaults`
-(the user configuration's `cae<Analysis>Implementation`: `caeFeaImplementation`, `caeDynamicImplementation`,
-`caeThermalImplementation`, `caeCfdImplementation`) and filled in even when the run failed, which is when a
-user most needs to see what was tried. The model is drawn by its extension, because the format is the
+anybody calls a modal analysis. A part's section for an analysis is a map of named scenarios, as `simulate:` is a
+map of simulations, so each tab is a list of them, laid out and run like the Simulation tab
+(`src/webview/analysis.ts`, `AnalysisView`). What a part declares for all four is asked once per show
+(`partcad.caeList` -> `cae.list`, fetched under the group's own id, `analysis`, beside the `partcad.cae` runs the
+analysis tabs' ids fetch -- the list-then-run split Simulation has with `SIMULATION_RUN`); a tab is enabled only
+when the part declares a scenario for it, or has a section that cannot be read, which the tab then says. Each run
+carries a token of its own (`analysisRuns`), as a simulation's does, and its answer is kept per scenario *and*
+implementation while the object is on screen. A scenario that could not run comes back as that scenario's
+`error`, not as a JSON-RPC error, and is shown where the model would be. The field over the model names which
+solver -- pre-filled with the scenario's own `implementation:`, else with `cae.defaults` (the user
+configuration's `cae<Analysis>Implementation`: `caeFeaImplementation`, `caeDynamicImplementation`,
+`caeThermalImplementation`, `caeCfdImplementation`), which the host adds to `cae.list`'s answer. **Neither side
+sends that default as `implementation`**: the daemon resolves what was typed, then the scenario's own, then the
+configured one, and a default sent as an override would outrank the scenario's. What is typed is the user's, per
+scenario. `analysis.ts` imports no three.js and draws through a `CaeResultView`, which `cae.ts` (`CaeResult`)
+implements -- the split is what lets `viewerAnalysis.test.ts` run the list in the extension host. The model is
+drawn by its extension, because the format is the
 implementation's choice: a mesh gets an orbit camera, a picture pans and zooms. An analysis is added on both
 sides of the panel at once -- the renderer's `TAB_GROUPS` (which `ANALYSIS_TABS` is read from) and
 `ANALYSIS_LABELS`, and the host's `TAB_COMMANDS`, `ANALYSIS_TABS` and the pane in its HTML
@@ -244,7 +264,9 @@ and is what gives `pc ide view` its `--analysis-<id>` flags. See
 
 The Simulation tab acts too. It sits in the Validation group after Test, which is always enabled -- every
 object has checks -- so the group always is, and opens on Test; Process Emulation, after Simulation, is a
-placeholder and always disabled. Three things about Simulation are load-bearing:
+placeholder and always disabled. Its list is `src/webview/scenarioList.ts`, which the Analysis tabs list their
+scenarios with as well: one widget, so that the rows, the verdict marks and the keyboard cannot come to differ
+between them. Three things about Simulation are load-bearing:
 
 - **Whether Simulation applies is asked on every show.** `simulate.list` reads the object's `simulate:`
   section and runs nothing, so it is as cheap as `manufacturing.tree`, and it is asked for the same reason:
@@ -831,8 +853,9 @@ Explorer's selection straight off the `TreeView`, the Inspector's object (`Partc
 its webview what each field holds *now* and falls back to the applied values when the view cannot answer), and
 the Digital Thread's (`PartcadViewer.state`, which asks its webview). The webview's half is `src/webview/state.ts`
 plus `collectState`/`answerState` in `viewer.ts`: the tab and sub-tab on screen, what every strip offers, each
-sub-tab's `pc render --filter` and selections (its tree's rows from `Tree.rows()`, the 2D overlays, and every
-control in its pane from `controlValues`), and a screenshot. The screenshot is the pane's DOM drawn through an
+sub-tab's `pc render --filter` and selections (its tree's rows from `Tree.rows()`, the 2D overlays, every
+control in its pane from `controlValues`, and on Simulation and each analysis tab the entry selected and each
+entry's verdict), and a screenshot. The screenshot is the pane's DOM drawn through an
 SVG `<foreignObject>` onto a canvas, with each `<canvas>` replaced by an image of itself first -- the 3D view's
 through `scene.screenshot()`, which draws and reads in one task because its WebGL buffer is not preserved. The
 host writes the PNG into `os.tmpdir()` (`writeScreenshot`); the webview has no filesystem. A view that fails

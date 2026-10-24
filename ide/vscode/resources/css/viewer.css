@@ -590,6 +590,14 @@ table.grid .numeric {
     cursor: default;
 }
 
+/* An analysis scenario that demonstrates a feature: a badge like a simulation's,
+   in a colour of its own, so that what was simulated and what was analysed are
+   told apart at a glance down the column. */
+.requirements .banner.analysis {
+    background: var(--vscode-charts-blue, var(--vscode-badge-background));
+    color: var(--vscode-button-foreground, var(--vscode-badge-foreground));
+}
+
 .requirements .banner.llm {
     background: transparent;
     border: 1px solid var(--vscode-badge-background, currentColor);
@@ -979,15 +987,19 @@ a {
 /*
  * The analysis panes: FEA, Dynamic FEA, Heat Transfer and CFD.
  *
- * Three bands, and the middle one takes what is left. Which solver ran is on
- * top, centred, because it is the one thing about an analysis a user changes
- * without editing a file; the findings are the bottom fifth, and are not there
- * at all when the analysis found nothing - a pass should hand the model the
- * whole pane rather than a strip of white space saying "none".
+ * The part's scenarios down the left, in the Build tab's list (see below, where
+ * the Simulation tab's is too), and the selected one beside it in three bands,
+ * the middle one taking what is left. Which solver runs it is on top, centred,
+ * because it is the one thing about an analysis a user changes without editing
+ * a file; the findings are the bottom fifth, and are not there at all when the
+ * analysis found nothing - a pass should hand the model the whole pane rather
+ * than a strip of white space saying "none".
  */
-.pane.cae {
+.cae-main {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
+    min-width: 0;
     overflow: hidden;
 }
 
@@ -1307,19 +1319,21 @@ input.switch:focus-visible {
 
 /*
  * Build: the list of steps on the left, the selected one on the right. The
- * Simulation tab is the same pane over a different list -- the simulations an
- * object declares -- so it shares these rules rather than having a look of its
- * own.
+ * Simulation tab and the Analysis tabs are the same pane over different lists --
+ * the simulations an object declares, the scenarios a part declares for an
+ * analysis -- so they share these rules rather than having a look of their own.
  */
 
 .pane.build,
-.pane.simulation {
+.pane.simulation,
+.pane.cae {
     display: flex;
     overflow: hidden;
 }
 
 .build-list,
-.simulation-list {
+.simulation-list,
+.cae-list {
     display: flex;
     flex: 0 0 18rem;
     flex-direction: column;
@@ -1329,7 +1343,8 @@ input.switch:focus-visible {
 }
 
 .build-tree,
-.simulation-items {
+.simulation-items,
+.cae-items {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
@@ -1445,29 +1460,35 @@ input.switch:focus-visible {
     padding: 0 0 0.5rem;
 }
 
-/* The verdict, before a simulation's name in the list: a symbol in its colour,
-   in a slot of one width whether or not there is one yet, so the names line
-   up. Coloured on a selected row too: the colour is what it says. */
-.simulation-mark {
+/* The verdict, before a simulation's or an analysis scenario's name in the
+   list: a symbol in its colour, in a slot of one width whether or not there is
+   one yet, so the names line up. Coloured on a selected row too: the colour is
+   what it says. */
+.simulation-mark,
+.cae-mark {
     flex: 0 0 1em;
     font-weight: 600;
     text-align: center;
 }
 
-.simulation-passed {
+.simulation-passed,
+.cae-passed {
     color: var(--vscode-testing-iconPassed, var(--vscode-charts-green, currentColor));
 }
 
-.simulation-failed {
+.simulation-failed,
+.cae-failed {
     color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground, currentColor));
 }
 
-.simulation-error {
+.simulation-error,
+.cae-error {
     color: var(--vscode-errorForeground, currentColor);
 }
 
 .simulation-running,
-.simulation-ran {
+.simulation-ran,
+.cae-running {
     color: var(--vscode-descriptionForeground);
 }
 

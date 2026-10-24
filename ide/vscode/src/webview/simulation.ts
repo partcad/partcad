@@ -8,8 +8,10 @@
 // A list on the left and the selected simulation on the right, laid out and
 // behaving like the Build tab's: the list is the object's 'simulate:' section,
 // one row per simulation in the order it declares them, and the first is the
-// one selected when the tab opens. Selecting one runs it - 'pc sim -f <name>' -
-// the first time it is looked at for this object, and shows what came back:
+// one selected when the tab opens (the list itself is 'scenarioList.ts', which
+// the Analysis tabs list their scenarios with too). Selecting one runs it - 'pc
+// sim -f <name>' - the first time it is looked at for this object, and shows
+// what came back:
 //
 //   * the verdict of its 'validation:' expression, as a symbol before its name
 //     in the list, in green or red -- the one place it is said, so the list
@@ -52,6 +54,7 @@ import {
     SimulationRunData,
     SimulationScenario,
 } from './messages';
+import { ScenarioList, Verdict, firstSelected } from './scenarioList';
 
 export interface SimulationCallbacks {
     /**
@@ -114,11 +117,16 @@ const DETAILS: { id: SimulationDetail; label: string }[] = [
 ];
 
 export class SimulationView {
-    private readonly list = el('div', 'simulation-list');
-    private readonly items = el('div', 'simulation-items');
+    private readonly list = new ScenarioList('simulation', (name) => this.select(name));
     private readonly main = el('div', 'simulation-main');
     private scenarios: SimulationScenario[] = [];
     private selected: string | undefined;
+    /**
+     * The simulation a show asked for ('pc ide view --validation-simulation
+     * --scenario <name>'), to select instead of the first once the list is
+     * known; see 'request'.
+     */
+    private requested: string | undefined;
     /** What is known of each run, by simulation and plugin (see 'key'). */
     private readonly runs = new Map<string, RunState>();
     /** The plugin each simulation is to be run with, by name; absent, the one it names. */
@@ -133,9 +141,7 @@ export class SimulationView {
         private readonly callbacks: SimulationCallbacks,
     ) {
         root.classList.add('simulation');
-        this.items.setAttribute('role', 'listbox');
-        this.list.append(this.items);
-        root.append(this.list, this.main);
+        root.append(this.list.element, this.main);
     }
 
     /** The simulation selected, which is the one on screen. */
@@ -161,7 +167,7 @@ export class SimulationView {
         return {
             selected: this.selected ?? null,
             simulations: this.scenarios.map((scenario) => {
-                const verdict = verdictOf(this.runState(scenario.name)).className.replace(/^simulation-/, '');
+                const verdict = verdictOf(this.runState(scenario.name)).state;
                 return {
                     name: scenario.name,
                     plugin: this.choice(scenario.name).value,
@@ -202,33 +208,52 @@ export class SimulationView {
         return this.runs.get(this.key(scenario, this.override(scenario)));
     }
 
+    /**
+     * Select this simulation rather than the first when the list next arrives,
+     * or - undefined - the first, as opening the tab by hand does.
+     *
+     * What a show asks for ('pc ide view --validation-simulation --scenario
+     * <name>'), said before the list is asked for and kept until it arrives:
+     * every show says, so a request this object could not honour does not
+     * linger for the next one. A name the object does not declare selects the
+     * first.
+     */
+    public request(scenario: string | undefined): void {
+        this.requested = scenario;
+    }
+
     /** Nothing to list: a different object, or one still being asked about. */
     public setBusy(text: string): void {
         this.scenarios = [];
         this.selected = undefined;
         this.runs.clear();
         this.plugins.clear();
-        empty(this.items);
-        this.list.hidden = true;
+        this.list.draw([], undefined);
+        this.list.element.hidden = true;
         this.showMain(placeholder(text));
     }
 
     public showError(message: string): void {
         this.setBusy('');
+        this.requested = undefined;
         this.showMain(el('p', 'error', message));
     }
 
     /**
      * What the object declares. The first simulation is selected, as a list
-     * opened for the first time always is; the runs of the last object are
-     * forgotten.
+     * opened for the first time always is - or the one a show asked for (see
+     * 'request'); the runs of the last object are forgotten.
      */
     public setScenarios(data: SimulationListData): void {
         this.scenarios = data.simulations ?? [];
         this.runs.clear();
         this.plugins.clear();
-        this.selected = this.scenarios[0]?.name;
-        this.list.hidden = this.scenarios.length === 0;
+        this.selected = firstSelected(
+            this.scenarios.map((scenario) => scenario.name),
+            this.requested,
+        );
+        this.requested = undefined;
+        this.list.element.hidden = this.scenarios.length === 0;
         this.drawList();
         if (this.selected === undefined) {
             this.showMain(placeholder("This declares no simulations: it has no 'simulate:' section."));
@@ -284,46 +309,14 @@ export class SimulationView {
     }
 
     private drawList(): void {
-        empty(this.items);
-        for (const scenario of this.scenarios) {
-            const row = el('div', 'build-item simulation-item');
-            row.setAttribute('role', 'option');
-            row.tabIndex = 0;
-            row.dataset.name = scenario.name;
-            const selected = scenario.name === this.selected;
-            row.classList.toggle('selected', selected);
-            row.setAttribute('aria-selected', String(selected));
-            // The verdict, before the name, in its colour: an empty slot of the
-            // same width for one not run yet, so that the names stay in a column.
-            const verdict = verdictOf(this.runState(scenario.name));
-            const mark = el('span', `simulation-mark ${verdict.className}`, verdict.mark);
-            mark.title = verdict.label;
-            row.appendChild(mark);
-            row.appendChild(el('span', 'build-title', scenario.name));
-            row.title = scenario.desc ? `${scenario.name}: ${scenario.desc.trim()}` : scenario.name;
-            row.addEventListener('click', () => this.select(scenario.name));
-            row.addEventListener('keydown', (event: KeyboardEvent) => this.onKey(event, scenario.name));
-            this.items.appendChild(row);
-        }
-    }
-
-    /** Enter or Space selects; the arrow keys move through the list, as a listbox's do. */
-    private onKey(event: KeyboardEvent, scenario: string): void {
-        if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            this.select(scenario);
-            return;
-        }
-        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
-            return;
-        }
-        event.preventDefault();
-        const index = this.scenarios.findIndex((entry) => entry.name === scenario);
-        const next = this.scenarios[index + (event.key === 'ArrowDown' ? 1 : -1)];
-        if (next !== undefined) {
-            this.select(next.name);
-            (this.items.querySelector(`[data-name="${CSS.escape(next.name)}"]`) as HTMLElement | null)?.focus();
-        }
+        this.list.draw(
+            this.scenarios.map((scenario) => ({
+                name: scenario.name,
+                desc: scenario.desc,
+                verdict: verdictOf(this.runState(scenario.name)),
+            })),
+            this.selected,
+        );
     }
 
     private showSelected(): void {
@@ -551,23 +544,23 @@ function mimeType(extension: string): string {
     }
 }
 
-/** How a run is marked in the list: the symbol, what it means, and the class that colours it. */
-function verdictOf(state: RunState | undefined): { mark: string; label: string; className: string } {
+/** How a run is marked in the list: the symbol, and what it means. */
+function verdictOf(state: RunState | undefined): Verdict {
     if (state === undefined) {
-        return { mark: '', label: 'Not run yet', className: 'simulation-unrun' };
+        return { state: 'unrun', mark: '', label: 'Not run yet' };
     }
     if (state.state === 'running') {
-        return { mark: '…', label: 'Running', className: 'simulation-running' };
+        return { state: 'running', mark: '…', label: 'Running' };
     }
     if (state.state === 'failed' || state.run === undefined || state.run.error) {
-        return { mark: '!', label: 'Could not run', className: 'simulation-error' };
+        return { state: 'error', mark: '!', label: 'Could not run' };
     }
     if (state.run.passed === true) {
-        return { mark: '✓', label: 'Passed', className: 'simulation-passed' };
+        return { state: 'passed', mark: '✓', label: 'Passed' };
     }
     if (state.run.passed === false) {
-        return { mark: '✗', label: 'Failed', className: 'simulation-failed' };
+        return { state: 'failed', mark: '✗', label: 'Failed' };
     }
     // Ran, and nothing said what it was supposed to do.
-    return { mark: '•', label: 'Ran, with nothing to check it against', className: 'simulation-ran' };
+    return { state: 'ran', mark: '•', label: 'Ran, with nothing to check it against' };
 }

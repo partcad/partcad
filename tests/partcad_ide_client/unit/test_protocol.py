@@ -147,3 +147,15 @@ def test_every_tab_is_a_tab_id_of_the_extension():
 def test_the_tab_ids_are_listed_group_by_group():
     assert protocol.viewer_tab_ids()[:3] == ("3d", "2d", "draft")
     assert len(set(protocol.viewer_tab_ids())) == len(protocol.viewer_tab_ids())
+
+
+def test_the_tabs_a_scenario_is_selected_on_are_the_ones_the_extension_lists_them_on():
+    """'pc ide view --scenario' is refused on any other tab, so the two lists have to agree."""
+    with open(_MESSAGES_TS, encoding="utf-8") as f:
+        source = f.read()
+    body = re.search(r"export const SCENARIO_TABS: TabId\[\] = \[([^\]]*)\]", source).group(1)
+    tabs = []
+    for item in [part.strip() for part in body.split(",") if part.strip()]:
+        # '...ANALYSIS_TABS' spreads the Analysis strip, which is VIEWER_TABS' own.
+        tabs.extend(protocol.VIEWER_TABS["analysis"] if item == "...ANALYSIS_TABS" else re.findall(r"'([^']+)'", item))
+    assert tuple(tabs) == protocol.SCENARIO_TABS

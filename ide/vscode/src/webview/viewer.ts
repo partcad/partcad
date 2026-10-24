@@ -15,7 +15,9 @@
 //
 // Four groups, each a strip of its own. Design is the object itself: turned in
 // 3D, rendered to a picture, drawn as a dimensioned drawing. Analysis is what
-// engineering analysis says about it, and Manufacturing what making it takes -
+// engineering analysis says about it - a tab per analysis, each listing the
+// scenarios the part declares for it, run (see 'analysis.ts') - and
+// Manufacturing what making it takes -
 // which of its parts are made and which are ordered, how to make them, what it
 // is made of, where to buy it, how it goes together. Validation is whether it is
 // what it claims to be and does what it is supposed to: Test, first, is every
@@ -41,9 +43,9 @@
 //
 // This file is the shell: it owns the tab strips and the panes, routes what the
 // extension host posts in, and asks for the contents of a tab the first time it
-// is looked at. Each pane draws itself ('scene.ts', 'render.ts', 'cae.ts',
-// 'bom.ts', 'bvb.ts', 'build.ts', 'assembly.ts', 'supply.ts', 'test.ts',
-// 'simulation.ts');
+// is looked at. Each pane draws itself ('scene.ts', 'render.ts', 'analysis.ts'
+// and 'cae.ts', 'bom.ts', 'bvb.ts', 'build.ts', 'assembly.ts', 'supply.ts',
+// 'test.ts', 'simulation.ts');
 // none of them talks to the host directly.
 //
 // The Manufacturing strip is the one whose shape depends on an answer. Whether
@@ -54,7 +56,10 @@
 // the same: whether there is anything to simulate is what the object's
 // 'simulate:' section says, which only the daemon can read, so that list is
 // asked for on every show too - without running anything - and the panel's own
-// strip is rebuilt when it arrives.
+// strip is rebuilt when it arrives. And so is Analysis: which of its tabs apply
+// is which of a part's 'fea:', 'dynamic:', 'thermal:' and 'cfd:' sections
+// declare a scenario, asked once for all four ('cae.list') on every show of a
+// part.
 //
 // The 3D view is loaded on its own rather than imported: it needs WebGL, and a
 // window without it throws as the view is built. Imported, that took every other
@@ -67,12 +72,13 @@
 // contents are asked for ('fetchTab') and delivered ('tabData'), never fetched.
 //
 
+import { AnalysisView, CaeListState, analysisGroupHint, analysisTabSpecs, isAnalysed } from './analysis';
 import { AssemblyView } from './assembly';
 import { renderBom } from './bom';
 import { BuildView } from './build';
 import { BvbResult, BvbView, THUMBNAIL_SIZE, visibleRows } from './bvb';
 import { hasCallouts } from './callouts';
-import { CaeView } from './cae';
+import { CaeResult } from './cae';
 import { el, empty, placeholder } from './dom';
 import {
     fetchDetails,
@@ -88,11 +94,12 @@ import {
     showObject,
 } from './host';
 import {
-    ANALYSIS_LABELS,
     ANALYSIS_TABS,
     BomData,
+    AnalysisTabId,
     BvbData,
-    CaeData,
+    CaeListData,
+    CaeRunData,
     Choices,
     DRAFT_PLUGINS,
     DetailsMessage,
@@ -168,10 +175,19 @@ const assemblyView = new AssemblyView(panes.assembly, {
 });
 // Each analysis owns its pane for the life of the panel: the implementation
 // field is the user's, and rebuilding the pane on every show would take back
-// what they typed into it.
-const caeViews: Partial<Record<TabId, CaeView>> = {};
+// what they typed into it. Like the simulation pane, each keeps what every run
+// of every scenario answered for as long as the object is on screen.
+const caeViews: Partial<Record<TabId, AnalysisView>> = {};
 for (const tab of ANALYSIS_TABS) {
-    caeViews[tab] = new CaeView(panes[tab], tab, (implementation) => runAnalysis(tab, implementation));
+    caeViews[tab] = new AnalysisView(
+        panes[tab],
+        tab,
+        {
+            onRun: (scenario, implementation) => runAnalysis(tab, scenario, implementation),
+            onFailure: (message) => reportError(message),
+        },
+        (host) => new CaeResult(host, tab),
+    );
 }
 const requirementsView = new RequirementsView(panes.requirements);
 const testView = new TestView(panes.test, { onRun: () => runTests(), onShow: (artifact) => showArtifact(artifact) });
@@ -464,6 +480,17 @@ let simulations: SimulationListData | 'failed' | undefined;
 /** The simulation each run in flight is of, and the plugin it was asked for with, by its token. */
 const simulationRuns = new Map<number, { scenario: string; plugin: string | undefined }>();
 
+/**
+ * What the part on screen declares for each analysis, once the daemon has said
+ * ('cae.list'): what the Analysis tabs are enabled by. 'failed' when it could
+ * not say - a daemon too old to have been asked - which leaves every one of
+ * them disabled, saying so.
+ */
+let analyses: CaeListState;
+
+/** The scenario each analysis run in flight is of, and the implementation it was asked for with, by its token. */
+const analysisRuns = new Map<number, { tab: AnalysisTabId; scenario: string; implementation: string | undefined }>();
+
 /** The thumbnails and measurements still to ask for, and the batch in flight. */
 let detailsQueue: { name: string; kind: string }[] = [];
 let detailsToken: number | undefined;
@@ -543,7 +570,7 @@ function tabsFor(message: ShowMessage | undefined): TabSpec[] {
             label: 'Analysis',
             pane: panes.analysis,
             disabled: !Tabs.anyEnabled(analysisTabsFor(message)),
-            hint: 'No engineering analysis configurations are defined for this object',
+            hint: analysisGroupHint(message, analyses),
         },
         {
             id: 'manufacturing',
@@ -569,25 +596,24 @@ function tabsFor(message: ShowMessage | undefined): TabSpec[] {
 }
 
 /**
- * Analysis: FEA, Dynamic FEA, Heat Transfer and CFD, all four always shown,
- * enabled for a part, in the order and under the names 'ANALYSIS_TABS' and
- * 'ANALYSIS_LABELS' give them.
+ * Analysis: FEA, Dynamic FEA, Heat Transfer and CFD, all four always shown, in
+ * the order and under the names 'ANALYSIS_TABS' and 'ANALYSIS_LABELS' give
+ * them, and each enabled once the daemon has said the part declares a scenario
+ * for it (see 'analysisTabSpecs').
  *
  * Everything but the 3D view is a question put to the daemon about
  * '<package>:<name>', so an object whose package the sender did not tell us
  * about - a shape shown from a script, or a 'partcad' older than the field -
  * gets none of them rather than tabs that could only fail.
  *
- * Only a part is analysed. An assembly is a set of parts that each have boundary
- * conditions of their own, and a load on the whole of one says nothing about
- * which member carries it - so 'pc cae' takes a part, and so does this. Each is
- * enabled whether or not the part declares a section for it ('fea:',
- * 'dynamic:', 'thermal:', 'cfd:'), because "this part says nothing about heat
- * transfer" is the answer somebody looking for the tab came to read.
+ * They used to be enabled for every part, declared or not, on the grounds that
+ * "this part says nothing about heat transfer" was worth a tab of its own. Now
+ * that what a part declares is asked on every show, the strip says it - in the
+ * tooltip of the tab that does not apply - as the Simulation tab does, and the
+ * reader is not walked into a solver run that can only refuse.
  */
 function analysisTabsFor(message: ShowMessage | undefined): TabSpec[] {
-    const analysed = Boolean(message?.package) && message?.kind === 'part';
-    return ANALYSIS_TABS.map((id) => ({ id, label: ANALYSIS_LABELS[id], pane: panes[id], disabled: !analysed }));
+    return analysisTabSpecs(message, analyses, panes as Record<AnalysisTabId, HTMLElement>);
 }
 
 /**
@@ -777,12 +803,22 @@ async function show(message: ShowMessage): Promise<void> {
     for (const tab of DATA_TABS) {
         reset(tab);
     }
-    for (const tab of ANALYSIS_TABS) {
-        caeViews[tab]?.setBusy('Select this tab to run the analysis.');
-    }
+    // Worded as waiting on purpose, for an object that is not analysed as well:
+    // its tabs are disabled and nobody reads this, except whatever reads the
+    // pane to tell whether an analysis is still to come ('tests/ide').
+    resetAnalyses(
+        isAnalysed(message)
+            ? (tab) => `Asking PartCAD what this declares under ${tab}:…`
+            : () => 'Waiting for a part to analyse: only a part is analysed.',
+    );
     resetRenderTabs('Select this tab to render it.');
     resetManufacturing('Asking PartCAD what this is made of…');
     resetValidation('Asking PartCAD what this declares under simulate:…');
+    // Which scenario a tab asked for with the show is to select ('pc ide view
+    // --analysis-fea --scenario loaded'), said to the panes before their lists
+    // are asked for: an answer can arrive while the geometry is still loading,
+    // which is long before the tab itself is requested below.
+    requestScenario(message);
     testView.setBusy(
         message.package ? 'Select this tab to run the checks.' : 'PartCAD did not say which package this belongs to.',
     );
@@ -810,6 +846,12 @@ async function show(message: ShowMessage): Promise<void> {
     if (simulated(message)) {
         requested.add('simulation');
         request('simulation');
+    }
+    // And what a part declares for each analysis, which is the same again, and
+    // asked once for all four: the group's own id is what names that question.
+    if (isAnalysed(message)) {
+        requested.add('analysis');
+        request('analysis');
     }
 
     // Set up viewer configuration on the window object for access by scene.ts
@@ -880,6 +922,19 @@ async function show(message: ShowMessage): Promise<void> {
     setAllTabs(message);
 }
 
+/**
+ * Have every pane that lists scenarios select the one a show asked for, on the
+ * tab it asked for it on, once its list arrives - and forget an earlier request
+ * everywhere else. Every show says, as for the tab itself.
+ */
+function requestScenario(message: ShowMessage): void {
+    const scenario = message.scenario ?? undefined;
+    for (const tab of ANALYSIS_TABS) {
+        caeViews[tab]?.request(message.tab === tab ? scenario : undefined);
+    }
+    simulationView.request(message.tab === 'simulation' ? scenario : undefined);
+}
+
 /** Have every strip open on 'tab' when it next can, or forget any earlier request. */
 function requestTab(tab: TabId | null | undefined): void {
     const group = groupOf(tab);
@@ -909,9 +964,7 @@ function clear(): void {
     for (const tab of DATA_TABS) {
         reset(tab);
     }
-    for (const tab of ANALYSIS_TABS) {
-        caeViews[tab]?.setBusy('Nothing to analyse.');
-    }
+    resetAnalyses(() => 'Nothing to analyse.');
     resetRenderTabs('Nothing to render.');
     resetManufacturing('Nothing to show.');
     testView.setBusy('Nothing to test: select an object.');
@@ -919,6 +972,62 @@ function clear(): void {
     requirementsView.setBusy('Nothing to show.');
     resetValidation('Nothing to simulate.');
     setAllTabs(undefined);
+}
+
+/** Take back what the Analysis tabs showed for the previous object, saying 'text' of each in its place. */
+function resetAnalyses(text: (tab: AnalysisTabId) => string): void {
+    analyses = undefined;
+    analysisRuns.clear();
+    for (const tab of ANALYSIS_TABS) {
+        caeViews[tab]?.setBusy(text(tab));
+    }
+}
+
+/**
+ * Run one scenario of one analysis of the part on screen: 'pc cae <analysis> -f
+ * <name>', with the implementation typed over the model when one was.
+ *
+ * A token per run rather than the tab's one token, for the reason the
+ * simulations have one: a reader who selects one scenario and then the next has
+ * asked for both, and a user who retypes the implementation and runs again has
+ * two solvers in flight over one scenario - each answer belongs to the run it is
+ * of. The daemon runs them one after another either way.
+ */
+function runAnalysis(tab: AnalysisTabId, scenario: string, implementation: string | undefined): void {
+    if (shown === undefined) {
+        return;
+    }
+    lastToken += 1;
+    analysisRuns.set(lastToken, { tab, scenario, implementation });
+    fetchTab({ type: 'fetchTab', tab, token: lastToken, scenario, implementation });
+}
+
+/**
+ * What the part declares for every analysis has arrived: each tab lists its own,
+ * and the strips it decides are rebuilt.
+ *
+ * Not with 'keepCurrent', as for Simulation: this is the first the strips learn
+ * about which analyses apply, and a reader who was on one for the last part
+ * lands on it again now that it does.
+ */
+function onAnalyses(data: CaeListData | undefined, error: string | undefined): void {
+    if (error !== undefined || data === undefined || data === null) {
+        analyses = 'failed';
+        for (const tab of ANALYSIS_TABS) {
+            caeViews[tab]?.showError(error ?? 'PartCAD had nothing to say about what this part analyses.');
+        }
+    } else {
+        data.analyses = data.analyses ?? {};
+        analyses = data;
+        for (const tab of ANALYSIS_TABS) {
+            caeViews[tab]?.setScenarios(data);
+        }
+    }
+    if (shown === undefined) {
+        return;
+    }
+    analysisTabs.setTabs(analysisTabsFor(shown));
+    tabs.setTabs(tabsFor(shown));
 }
 
 /** Take back what the Simulation tab showed for the previous object. */
@@ -1074,13 +1183,6 @@ function requestGuide(): void {
     });
 }
 
-/** Ask for an analysis again, with whatever implementation was typed in. */
-function runAnalysis(tab: TabId, implementation: string): void {
-    requested.add(tab);
-    caeViews[tab]?.setBusy('Running the analysis…');
-    request(tab, { implementation: implementation || undefined });
-}
-
 /**
  * Render the object to the file type a render tab has chosen.
  *
@@ -1225,6 +1327,11 @@ function onLeafSelected(tab: TabId): void {
         // Same reason as the 3D view: a result mesh is drawn on a canvas that
         // had no size while its tab was hidden.
         caeViews[tab]?.resize();
+        // The scenarios were asked for with the show; what selecting the tab
+        // asks for is a run of the scenario selected in it, the first time --
+        // an analysis is not a lookup, and the pane says it is running.
+        caeViews[tab]?.start();
+        return;
     }
     if (tab === 'bvb') {
         // The table's pictures waited for it to be looked at (see 'pumpDetails').
@@ -1270,23 +1377,11 @@ function onLeafSelected(tab: TabId): void {
         return;
     }
     requested.add(tab);
-    if (isAnalysisTab(tab)) {
-        // An analysis is not a lookup - a solver runs for as long as it runs -
-        // so the pane says what is happening rather than going blank.
-        caeViews[tab]?.setBusy('Running the analysis…');
-    } else {
-        reset(tab).appendChild(placeholder('Asking PartCAD…'));
-    }
+    reset(tab).appendChild(placeholder('Asking PartCAD…'));
     request(tab);
 }
 
-function onTabData(
-    tab: TabId,
-    token: number,
-    data: unknown,
-    error: string | undefined,
-    implementation: string | undefined,
-): void {
+function onTabData(tab: TabId, token: number, data: unknown, error: string | undefined): void {
     const asked = tab === 'simulation' ? simulationRuns.get(token) : undefined;
     if (asked !== undefined) {
         // A run, which is answered under a token of its own: see 'runSimulation'.
@@ -1295,6 +1390,20 @@ function onTabData(
             simulationView.showRunError(asked.scenario, error, asked.plugin);
         } else {
             simulationView.showRun(asked.scenario, data as SimulationRunData | undefined, asked.plugin);
+        }
+        return;
+    }
+    const analysed = isAnalysisTab(tab) ? analysisRuns.get(token) : undefined;
+    if (analysed !== undefined) {
+        // A run of one scenario, answered under a token of its own as well: see
+        // 'runAnalysis'. A scenario that could not run is in the answer, as its
+        // 'error'; what arrives as 'error' here is a request that failed.
+        analysisRuns.delete(token);
+        const view = caeViews[analysed.tab];
+        if (error !== undefined) {
+            view?.showRunError(analysed.scenario, error, analysed.implementation);
+        } else {
+            view?.showRun(analysed.scenario, data as CaeRunData | undefined, analysed.implementation);
         }
         return;
     }
@@ -1338,6 +1447,10 @@ function onTabData(
         onSimulations(data as SimulationListData | undefined, error);
         return;
     }
+    if (tab === 'analysis') {
+        onAnalyses(data as CaeListData | undefined, error);
+        return;
+    }
     if (tab === 'build') {
         onPlan(data as PlanData | undefined, error);
         return;
@@ -1353,26 +1466,6 @@ function onTabData(
             } catch (e: unknown) {
                 assemblyView.showError(`Failed to display this: ${e}`);
                 reportError(`failed to render the 'assembly' tab: ${e}`);
-            }
-        }
-        return;
-    }
-
-    if (isAnalysisTab(tab)) {
-        // The analysis panes are not rebuilt: they own a field the user types
-        // into, and 'reset()' would take it away mid-sentence.
-        const view = caeViews[tab];
-        view?.suggest(implementation);
-        if (error !== undefined) {
-            view?.showError(error);
-        } else if (data === null || data === undefined) {
-            view?.showError('PartCAD had nothing to say about this.');
-        } else {
-            try {
-                view?.render(data as CaeData);
-            } catch (e: unknown) {
-                view?.showError(`Failed to display this: ${e}`);
-                reportError(`failed to render the '${tab}' tab: ${e}`);
             }
         }
         return;
@@ -1597,10 +1690,10 @@ function render(tab: TabId, pane: HTMLElement, data: unknown): void {
  * Per sub-tab because they differ by sub-tab: 3D, 2D and Draft share the boxes
  * ticked in their trees (see 'selection'), but 2D also draws port overlays and
  * has a format, Draft has a drawing package and a format of its own, each
- * Manufacturing tab has switches nobody else has, and Simulation has the
- * simulation selected and the verdict of each run. 'filters' is what the sub-tab
- * would send 'pc render --filter' -- null for the whole object -- and is
- * reported for the three that send one.
+ * Manufacturing tab has switches nobody else has, and Simulation and every
+ * analysis have the simulation or scenario selected and the verdict of each run.
+ * 'filters' is what the sub-tab would send 'pc render --filter' -- null for the
+ * whole object -- and is reported for the three that send one.
  */
 function collectState(): Record<string, unknown> {
     const tab = tabs.current;
@@ -1626,6 +1719,12 @@ function collectState(): Record<string, unknown> {
                 // Which simulation is on screen and how each run went, which
                 // no control in the pane holds: the list is rows, not a select.
                 selections.simulation = simulationView.state();
+            }
+            if (isAnalysisTab(id)) {
+                // The same for an analysis: which scenario is on screen, what
+                // each is set to run with and how each run went. The field's
+                // own text is among the controls already.
+                selections.analysis = caeViews[id]?.state();
             }
             subTabs[id] = { filters: tree?.filter() ?? null, selections };
         }
@@ -1681,7 +1780,7 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
     } else if (message.type === 'show') {
         show(message);
     } else if (message.type === 'tabData') {
-        onTabData(message.tab, message.token, message.data, message.error, message.implementation);
+        onTabData(message.tab, message.token, message.data, message.error);
     } else if (message.type === 'formats') {
         onFormats(message);
     } else if (message.type === 'details') {

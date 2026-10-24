@@ -8,10 +8,10 @@ The panel is a strip of tabs over one object, not a canvas:
 | **3D** | everything | the viewer protocol, from whichever `partcad` asked for the shape to be shown |
 | **2D** | parts, assemblies, scenes, sketches | the daemon's `render.inline` (a picture `pc render` makes) |
 | **Draft** | parts, assemblies | the daemon's `render.inline`, with a drawing package (`pc render -e`) |
-| **FEA** | parts | the daemon's `cae.analyze` (what `pc cae fea` runs) |
-| **Dynamic FEA** | parts | the daemon's `cae.analyze` (what `pc cae dynamic` runs: natural frequencies and mode shapes) |
-| **Heat Transfer** | parts | the daemon's `cae.analyze` (what `pc cae thermal` runs) |
-| **CFD** | parts | the daemon's `cae.analyze` (what `pc cae cfd` runs) |
+| **FEA** | parts that declare `fea:` scenarios | the daemon's `cae.list` (what the part declares for each analysis) and `cae.analyze` (what `pc cae fea -f <name>` runs) |
+| **Dynamic FEA** | parts that declare `dynamic:` scenarios | the daemon's `cae.list` and `cae.analyze` (what `pc cae dynamic -f <name>` runs: natural frequencies and mode shapes) |
+| **Heat Transfer** | parts that declare `thermal:` scenarios | the daemon's `cae.list` and `cae.analyze` (what `pc cae thermal -f <name>` runs) |
+| **CFD** | parts that declare `cfd:` scenarios | the daemon's `cae.list` and `cae.analyze` (what `pc cae cfd -f <name>` runs) |
 | **Build vs Buy** | parts, assemblies | the daemon's `manufacturing.tree` and `manufacturing.details`, and the user's choices from `~/.partcad/garage` |
 | **Build** | whatever is built | the daemon's `manufacturing.plan` (the order `pc instructions` writes its pages in) |
 | **Buy** | whatever is bought | the daemon's `supply.quote` (the cart `pc supply quote` fills) |
@@ -260,10 +260,12 @@ the protocol has no authentication.
 | `src/partcad/test/catalog.py` | What each check is and what to do when it fails, for this tab and for the documentation |
 | `src/partcad/requirements.py` | What a requirement means and whether the model meets it, for this tab and for `pc test` |
 | `src/common/garage.ts` | Where the Build vs Buy choices are kept, on this machine |
-| `src/webview/cae.ts` | The Analysis tabs (FEA, Dynamic FEA, Heat Transfer, CFD): the result model, and the findings |
+| `src/webview/analysis.ts` | The Analysis tabs (FEA, Dynamic FEA, Heat Transfer, CFD): which apply, the scenarios declared, the implementation field, and what each run answered |
+| `src/webview/cae.ts` | What an Analysis tab draws of the selected scenario: the result model, and the findings |
+| `src/webview/scenarioList.ts` | The list of declared entries the Simulation and Analysis tabs share: rows, verdict marks, the keyboard |
 | `src/webview/simulation.ts` | The Simulation tab: the simulations declared, and the scene before and after one ran |
 | `src/partcad/simulation.py` | What `simulate:` declares, how a run goes, and the pictures a plugin is asked to take |
-| `src/partcad/cae.py` | What a part declares about an analysis, and in what units |
+| `src/partcad/cae.py` | What a part declares about an analysis -- its named scenarios -- and in what units |
 | `src/partcad/assembly_guide.py` | The instruction book, built once for every format |
 | `src/partcad/document.py` | The renderer-independent document model |
 
@@ -386,14 +388,17 @@ Opening the tab is what asks for the verdicts (`verify: true`), and they are exa
 requirements` reaches, because both are `partcad/requirements.py`. While they are on the way every mark is
 pending — a requirement nobody has measured yet is neither met nor unmet. Then each port, interface and physical
 property required gets a green or a red mark (the editor's own test-explorer colours) beside what was required and
-what was found. A `simulate:` entry naming a feature that is not declared, and a requirement that cannot be
-read, are listed after them as problems, and fail the same way.
+what was found. A `simulate:` entry or an analysis scenario naming a feature that is not declared, and a
+requirement that cannot be read, are listed after them as problems, and fail the same way.
 
 The features follow, as a table: the name, what the feature is, and what validates it — a banner per
-`simulate:` entry that names it (`feature:`), then an **LLM** banner on every feature, whose tooltip names the
-skill that does it: "Validate using /pc-validate". The LLM is on the features a simulation already stands
-behind as well, because a simulation demonstrates the claim it was written for and cannot say whether that is
-the whole of the feature.
+`simulate:` entry that names it (`feature:`), then a banner per analysis scenario that names it (an entry of a
+part's `fea:`, `dynamic:`, `thermal:` or `cfd:` with a `feature:`), labelled with its analysis as its tab is --
+**FEA: loaded** -- because scenarios are named within an analysis, in a colour of its own and with the command
+that runs it as its tooltip (`pc cae fea -f loaded`), then an **LLM** banner on every feature, whose tooltip
+names the skill that does it: "Validate using /pc-validate". The LLM is on the features a simulation or an
+analysis already stands behind as well, because each demonstrates the claim it was written for and cannot say
+whether that is the whole of the feature.
 
 **Bill of Materials** is `Assembly.get_bom_detailed_async()` — the tree flattened and counted, with the store
 data that says what to order — in the columns `pc bom` prints it in.
@@ -428,32 +433,58 @@ anyway. An assembly PartCAD cannot write instructions for (not an ASSY file, or 
 refused with the reason, and the tab shows that.
 
 The **Analysis** tabs -- **FEA**, **Dynamic FEA**, **Heat Transfer** and **CFD**, in that order -- are the one
-thing in this panel that *does* something rather than asks about something: selecting a tab runs a solver,
-through the same `Shape.analyze_async()` that `pc cae <analysis>` runs. Each tab is named after its analysis
-on the command line -- `fea` (static), `dynamic` (modal: natural frequencies and mode shapes), `thermal`
-(steady-state heat transfer) and `cfd` -- and that id, not the label, is what the host asks `cae.analyze` for,
-so all four are one pane (`CaeView`) and one command (`partcad.cae`) and a fifth analysis is a row in
-`ANALYSIS_TABS`/`ANALYSIS_LABELS` (`src/webview/messages.ts`), a pane in the HTML and an entry in the host's
-`TAB_COMMANDS`. A part with no section of its own for the analysis (`fea:`, `dynamic:`, `thermal:`, `cfd:`) is
-told so in the tab, which is why every tab is offered for every part rather than only for the ones that
-declare it -- "this part says nothing about heat transfer" is the answer somebody who went looking for the tab
-came to read.
+thing in this panel besides Simulation that *does* something rather than asks about something: selecting a
+scenario runs a solver, through the same `Shape.analyze_async()` that `pc cae <analysis>` runs. Each tab is named
+after its analysis on the command line -- `fea` (static), `dynamic` (modal: natural frequencies and mode
+shapes), `thermal` (steady-state heat transfer) and `cfd` -- and that id, not the label, is what the host asks
+`cae.analyze` for, so all four are one pane (`AnalysisView`, drawing with `CaeResult`) and one command
+(`partcad.cae`) and a fifth analysis is a row in `ANALYSIS_TABS`/`ANALYSIS_LABELS` (`src/webview/messages.ts`), a
+pane in the HTML and an entry in the host's `TAB_COMMANDS`.
 
-Three things about them are worth knowing:
+A part's section for an analysis is a map of **named scenarios**, the way `simulate:` is a map of named
+simulations: each one set of boundary conditions, with a `desc:`, the requirement `feature:` it demonstrates, and
+optionally an `implementation:` and `params:` of its own. (The older unnamed form, `fea: {fix: ..., load: ...}`,
+is read as one scenario named `default`.) What a part declares is asked on every show of a part, once for all four
+tabs -- `cae.list`, which reads the configuration and runs nothing, asked under the group's own id (`analysis`)
+-- exactly as Simulation's `simulate.list` is, and the strips are rebuilt when it arrives. A tab is enabled only
+when the part declares at least one scenario for it; until the answer arrives every tab says it is asking, a
+daemon that cannot answer leaves them disabled saying so, and one that declares none says that in its tooltip
+("This part declares no CFD scenarios: it has no 'cfd:' section"). The group is enabled when any of its tabs is.
+A section that is there and cannot be read is the exception: its tab is enabled, so that the sentence saying what
+is wrong with it -- `cae.list`'s `errors` -- can be read where the model would be.
 
-* **Which solver ran is a field over the model, centred.** It is pre-filled with the implementation the host
-  actually asked for -- from `cae.defaults`, which is the user configuration's `caeFeaImplementation`,
-  `caeDynamicImplementation`, `caeThermalImplementation` or `caeCfdImplementation` -- and it is filled in even
-  when the analysis failed, because that is exactly when the user needs to see what was tried and type
-  something else. Editing it and pressing Run or Enter re-asks with that implementation, which is the same
-  override `pc cae <analysis> --implementation` is. Once it has been typed in, it is the user's: a later answer
-  no longer pre-fills over it, however long the run that produced the answer had been going.
+The tab is laid out like Simulation, with the same list (`scenarioList.ts`): the scenarios on the left, in the
+order the part declares them, the first selected, each row's tooltip its `desc:`; the selected one on the right.
+Selecting one runs it -- `cae.analyze` with `scenario`, which is `pc cae <analysis> -f <name>` -- the first time
+it is looked at for this object, and the answer is kept, per scenario *and* per implementation, until the next
+show, so going back to one already run shows it rather than starting a solver again. Before each name is how its
+run went: a green ✓ when it ran and found nothing, a red ✗ when it found something, a red ! when it could not
+run, … while it runs, and an empty slot of the same width before it has. A scenario that could not run -- one
+that cannot be read, a solver that would not start, no sandbox to start it in, an implementation that does not
+resolve -- is not a refusal of the request any more: it comes back as that scenario's `error`, and the tab shows
+the sentence where the model would have been. `pc ide view --analysis-fea --scenario <name>` opens the tab on
+that scenario instead of the first (the show's `scenario`, as for `--validation-simulation`), and `pc ide state`
+reports each analysis tab's selected scenario, what each is set to run with, and each one's verdict.
+
+Three things about the selected scenario are worth knowing:
+
+* **Which solver runs it is a field over the model, centred.** It is pre-filled with the scenario's own
+  `implementation:` where it names one, and otherwise with the configured default for the analysis --
+  `cae.defaults`, the user configuration's `caeFeaImplementation`, `caeDynamicImplementation`,
+  `caeThermalImplementation` or `caeCfdImplementation`, which the host adds to `cae.list`'s answer -- and, once
+  the scenario has run, with what it reports having run. That is the order `pc cae` resolves them in, and neither
+  side of the panel sends either as an override: a default sent as one would outrank the scenario's own. Editing
+  the field and pressing Run or Enter re-runs the scenario with what it says, which is the same override
+  `pc cae <analysis> --implementation` is, and from then on that is what the scenario runs with. What is typed
+  is the user's, per scenario: a later answer no longer pre-fills over it, however long the run that produced
+  the answer had been going, switching to another scenario and back shows it again, and a show of the same part
+  again -- an edit saved -- keeps it.
 * **The model is drawn according to its extension**, because which format an analysis writes is the
   implementation's decision and not PartCAD's. `glb`/`gltf`/`stl` get an orbit camera; `png`/`jpg`/`svg` and
   the other still-image types get an image that pans and zooms (wheel to zoom about the pointer, drag to pan,
   double-click to reset). Anything else is named, along with what could have been drawn, and the path the
-  model was written to. The model arrives as bytes rather than as that path: a webview has no file system in
-  reach, and the daemon may not even be on this machine.
+  model was written to (`<part>.<analysis>.<scenario>.<extension>`). The model arrives as bytes rather than as
+  that path: a webview has no file system in reach, and the daemon may not even be on this machine.
 * **The findings are the bottom fifth of the pane, and only when there are any.** An analysis that found
   nothing is a pass, and a pass gives the model the whole pane. This is also what `pc test` checks: its `fea`,
   `dynamic`, `thermal` and `cfd` tests fail a part whose analysis produced any finding.
@@ -479,7 +510,8 @@ section and runs nothing), exactly as Build vs Buy's tree is, and the panel's st
 arrives.
 
 The tab is laid out like Build: the simulations on the left, in the order the object declares them, the first
-selected; the selected one on the right. Selecting one runs it -- `simulate.run`, which is `pc sim -f <name>` --
+selected (or the one `pc ide view --validation-simulation --scenario <name>` names); the selected one on the
+right. Selecting one runs it -- `simulate.run`, which is `pc sim -f <name>` --
 the first time it is looked at for this object, and the answer is kept until the next show. What comes back is
 the verdict of its `validation:` expression, said once: as a mark before the simulation's name in the list (a
 green ✓ when it held, a red ✗ when it did not, a red ! when it could not run, a muted • when there was nothing

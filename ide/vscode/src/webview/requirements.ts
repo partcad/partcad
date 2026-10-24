@@ -12,8 +12,10 @@
 //     properties - listed with a mark beside each: green where 'pc test' finds
 //     the model meets it, red where it does not;
 //   - the features, which are prose, in a table: what each is, and what it is
-//     validated by - the 'simulate:' entries that name it, and an LLM reading
-//     the evidence through the '/pc:validate' skill.
+//     validated by - the 'simulate:' entries that name it, the analysis
+//     scenarios that name it (an entry of a part's 'fea:', 'dynamic:',
+//     'thermal:' or 'cfd:'), and an LLM reading the evidence through the
+//     '/pc:validate' skill.
 //
 // None of it is worked out here. The daemon's 'requirements.check' answers with
 // what 'partcad.requirements' decided, which is the code 'pc test -f
@@ -21,7 +23,7 @@
 //
 
 import { el, empty, placeholder } from './dom';
-import { RequirementCheck, RequirementFeature, RequirementsData } from './messages';
+import { ANALYSIS_LABELS, AnalysisTabId, RequirementCheck, RequirementFeature, RequirementsData } from './messages';
 
 /**
  * What the "LLM" banner says when pointed at.
@@ -80,15 +82,22 @@ export function groupChecks(checks: RequirementCheck[]): { heading: string; chec
 export interface Banner {
     label: string;
     title: string;
-    kind: 'simulation' | 'llm';
+    kind: 'simulation' | 'analysis' | 'llm';
 }
 
 /**
- * What a feature is validated by: each simulation that names it, then the LLM.
+ * What a feature is validated by: each simulation that names it, then each
+ * analysis scenario that does, then the LLM.
  *
- * The LLM banner is on every feature, the ones a simulation stands behind
- * included: a simulation demonstrates the claim it was written for, and whether
- * that is the whole of the feature is a judgement it cannot make.
+ * An analysis scenario is labelled with the analysis as well as its name -
+ * "FEA: loaded" - because scenarios are named within an analysis, and a part's
+ * FEA and its Heat Transfer can both have one called 'loaded'. The label is the
+ * one the analysis's tab has ('ANALYSIS_LABELS'), and the tooltip is the command
+ * that runs it.
+ *
+ * The LLM banner is on every feature, the ones a simulation or an analysis
+ * stands behind included: each demonstrates the claim it was written for, and
+ * whether that is the whole of the feature is a judgement it cannot make.
  */
 export function bannersOf(feature: RequirementFeature): Banner[] {
     const banners: Banner[] = (feature.simulations ?? []).map((name) => ({
@@ -96,6 +105,16 @@ export function bannersOf(feature: RequirementFeature): Banner[] {
         title: `Demonstrated by the simulation '${name}' (pc sim)`,
         kind: 'simulation',
     }));
+    for (const { analysis, name } of feature.analyses ?? []) {
+        // An analysis this extension does not know yet - from a newer PartCAD -
+        // is still a banner, under the id it was sent with.
+        const label = ANALYSIS_LABELS[analysis as AnalysisTabId] ?? analysis;
+        banners.push({
+            label: `${label}: ${name}`,
+            title: `Demonstrated by the ${label} scenario '${name}' (pc cae ${analysis} -f ${name})`,
+            kind: 'analysis',
+        });
+    }
     banners.push({ label: 'LLM', title: LLM_HINT, kind: 'llm' });
     return banners;
 }
@@ -105,7 +124,7 @@ export function summary(data: RequirementsData, checking: boolean): string {
     const measured = data.requirements;
     if (measured.length === 0) {
         return data.features.length > 0
-            ? 'Nothing here is for PartCAD to measure: every feature is validated by a simulation or by reading the evidence.'
+            ? 'Nothing here is for PartCAD to measure: every feature is validated by a simulation or an analysis, or by reading the evidence.'
             : 'No requirements are declared.';
     }
     if (!data.verified) {
