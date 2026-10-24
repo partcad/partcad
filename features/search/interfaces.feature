@@ -9,7 +9,7 @@ Feature: `pc search interfaces` command
     Given a file named "partcad.yaml" with content:
       """
         sketches:
-          m3:
+          m3-boundary:
             type: basic
             circle: 1.5
         interfaces:
@@ -19,7 +19,7 @@ Feature: `pc search interfaces` command
             ports:
               m3:
                 location: [[0, 0, 0], [0, 0, 1], 0]
-                sketch: m3
+                sketch: m3-boundary
       """
     When I run command:
       """
@@ -55,7 +55,7 @@ Feature: `pc search interfaces` command
     And a file named "pkg1/partcad.yaml" with content:
       """
       sketches:
-        m3_1:
+        m3_1-boundary:
           type: basic
           circle: 1.5
       interfaces:
@@ -65,13 +65,13 @@ Feature: `pc search interfaces` command
           ports:
             m3_1:
               location: [[0, 0, 0], [0, 0, 1], 0]
-              sketch: m3_1
+              sketch: m3_1-boundary
       """
     Given a directory named "pkg2" exists
     And a file named "pkg2/partcad.yaml" with content:
       """
       sketches:
-        m3_2:
+        m3_2-boundary:
           type: basic
           circle: 1.5
       interfaces:
@@ -81,7 +81,7 @@ Feature: `pc search interfaces` command
           ports:
             m3_2:
               location: [[0, 0, 0], [0, 0, 1], 0]
-              sketch: m3_2
+              sketch: m3_2-boundary
       """
     When I run command:
       """

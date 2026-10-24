@@ -61,8 +61,8 @@ capture both streams when reading them: `pc --no-ansi export ... 2>&1`.
 ```sh
 mkdir -p ./out                                       # -O expects the directory to exist
 pc --no-ansi export -t stl -O ./out bracket          # a part
-pc --no-ansi export -t step -O ./out -a gearbox      # an assembly (-a)
-pc --no-ansi export -t dxf -O ./out -s outline       # a sketch (-s)
+pc --no-ansi export -t step -O ./out gearbox         # an assembly, found by its name
+pc --no-ansi export -t dxf -O ./out outline          # a sketch, the same way
 pc --no-ansi export -t stl -O ./out -P //pub/std bolt  # an object in another package
 pc --no-ansi export -t stl -O ./out bolt -p length=30  # with a value for one of its parameters
 ```
@@ -108,8 +108,8 @@ sub-assembly can be exported without a declaration for it. It takes a JSON or
 YAML *file* naming the links, or the same written out on the command line:
 
 ```sh
-pc --no-ansi export -a -t step -O ./out --filter ./head.yaml logo
-pc --no-ansi export -a -t step -O ./out --filter '[bone1, bone2]' logo
+pc --no-ansi export -t step -O ./out --filter ./head.yaml logo
+pc --no-ansi export -t step -O ./out --filter '[bone1, bone2]' logo
 ```
 
 A link the filter names is kept and a link it does not name is dropped; a link
@@ -118,7 +118,7 @@ children under it keeps those children only. The names are the ones the Assembly
 YAML file uses, which are the names a `connect:` uses — read the `.assy` file to
 find them. Everything kept stays where the whole assembly put it.
 
-The object has to be named, with `-a` or `-S` for its kind: a part has no links,
+The object has to be named, and be an assembly or a scene: a part has no links,
 and neither has a whole package. The file written is the one an unfiltered export
 would have written, under the object's own name, so send two filters of one object
 to directories of their own with `-O`.

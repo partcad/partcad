@@ -214,7 +214,7 @@ Feature: `pc info` command
     Given a file named "partcad.yaml" with content:
       """
       sketches:
-        m:
+        m-boundary:
           type: basic
           circle: "%size / 2%"
           parameters:
@@ -233,7 +233,7 @@ Feature: `pc info` command
           ports:
             m:
               location: [[0, 0, 0], [0, 0, 1], 0]
-              sketch: m
+              sketch: m-boundary
               params:
                 size: "%size%"
         m-thru:
@@ -273,6 +273,62 @@ Feature: `pc info` command
     Then the command should exit with a status code of "0"
     And STDOUT should contain "3mm thick through hole of 3mm diameter"
     And STDOUT should contain "'alias': 'm-thru;size=3,depth=3'"
+    # The same, without saying it is an interface: a name is one object of its
+    # package, so 'pc' finds out what kind it is.
+    When I run command:
+      """
+      pc info "m-thru;size=4,depth=2"
+      """
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "2mm thick through hole of 4mm diameter"
+
+  @success @pc-info @object-names
+  Scenario: `pc info` finds what an object is by its name
+    Given a file named "partcad.yaml" with content:
+      """
+      sketches:
+        m3-boundary:
+          type: basic
+          circle: 1.5
+      interfaces:
+        m3:
+          desc: Abstract 3mm circular interface
+          ports:
+            m3:
+              sketch: m3-boundary
+      """
+    When I run command:
+      """
+      pc info m3
+      """
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Abstract 3mm circular interface"
+    When I run command:
+      """
+      pc info m3-boundary
+      """
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "'circle': 1.5"
+
+  @failure @pc-info @object-names
+  Scenario: A name given to two kinds of object is kept by one and refused to the other
+    Given a file named "partcad.yaml" with content:
+      """
+      sketches:
+        m3:
+          type: basic
+          circle: 1.5
+      interfaces:
+        m3:
+          desc: Abstract 3mm circular interface
+      """
+    When I run command:
+      """
+      pc info m3
+      """
+    Then the command should exit with a non-zero status code
+    And OUTPUT should contain "Failed to create the sketch '//:m3': 'm3' is already the name of an interface"
+    And STDOUT should contain "Abstract 3mm circular interface"
 
   @success @pc-info @joints
   Scenario: `pc info -a` lists the joints of an assembly
@@ -371,7 +427,7 @@ Feature: `pc info` command
 
   # @pc-info
   # Scenario: Show simplified part information
-  #   When I run "pc info -s //pub/std/metric/m:m3"
+  #   When I run "pc info -s //pub/std/metric/m:m3-major"
   #   Then the command should exit with a status code of "0"
   #   And STDOUT should contain only essential fields
   #   And STDOUT should not contain detailed specifications

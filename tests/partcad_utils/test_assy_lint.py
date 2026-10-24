@@ -26,6 +26,7 @@ from partcad_utils.assy_lint import (
     CODE_DEPRECATED,
     CODE_LINKS,
     CODE_MANUFACTURABLE,
+    CODE_NAMES,
     CODE_SCHEMA,
     CODE_TEMPLATE,
     CODE_YAML,
@@ -897,6 +898,53 @@ def test_parts_a_configuration_declares_in_a_loop_are_each_checked():
     diagnostics = config_made(config)
     assert sorted(d.message.split("'")[1] for d in diagnostics) == ["m3", "m4"]
     assert {d.line for d in diagnostics} == {3}
+
+
+# ---- one name, one object -------------------------------------------------
+
+
+def test_a_name_given_to_two_kinds_of_object_is_reported_where_the_refused_one_is():
+    """The one PartCAD refuses as the package loads: the kind looked for later."""
+    config = (
+        "sketches:\n"
+        "  m3:\n"
+        "    type: basic\n"
+        "    circle: 1.5\n"
+        "interfaces:\n"
+        "  m3:\n"
+        "    ports:\n"
+        "      m3:\n"
+        "        sketch: m3\n"
+    )
+    for diagnostics in (config_made(config), validate_source(config, get_schema(PARTCAD_SCHEMA))):
+        diagnostic = only_of(diagnostics)
+        assert diagnostic.code == CODE_NAMES
+        assert diagnostic.severity == SEVERITY_ERROR
+        assert "'m3' is already the name of an interface" in diagnostic.message
+        assert (diagnostic.line, diagnostic.column) == (1, 2)
+
+
+def test_an_alias_takes_a_name_like_a_declaration_does():
+    config = (
+        "parts:\n"
+        "  bolt:\n"
+        "    type: step\n"
+        "    aliases: [screw]\n"
+        "assemblies:\n"
+        "  screw:\n"
+        "    type: assy\n"
+    )
+    diagnostic = only_of(config_made(config))
+    assert "'screw' is already the name of a part (an alias of 'bolt')" in diagnostic.message
+    assert config.split("\n")[diagnostic.line][diagnostic.column :].startswith("screw:")
+
+
+def test_names_used_once_each_and_declarations_left_out_by_unless_are_clean():
+    assert config_made("parts:\n  bolt:\n    type: step\nsketches:\n  outline:\n    type: basic\n") == []
+    # Whether a declaration with 'unless:' applies is a question of the machine.
+    assert (
+        config_made("parts:\n  bolt:\n    type: step\nsketches:\n  bolt:\n    type: basic\n    unless: [arm]\n") == []
+    )
 
 
 def test_a_file_that_is_one_placed_item_is_that_item():

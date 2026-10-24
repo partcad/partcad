@@ -12,7 +12,7 @@ import os
 
 import rich_click as click
 
-from .. import fast_only
+from .. import fast_only, object_kind
 from ..exclude import exclude_option, exclude_params
 from ..link_filter import filter_option, filter_params
 from ..parameters import param_option, param_params
@@ -20,12 +20,11 @@ from ..service import run
 from ..viewport import viewport_options, viewport_params
 
 
-# TODO-105: @alexanderilyin: Replace --scene, --interface, --assembly, --sketch with a single option --type
 @click.command(
     help=(
         "Render a 2D projection of parts, assemblies, or scenes onto a plane. "
         "OBJECT may be written '...:<name>' to mean every object of that name in this "
-        "package and in every package below it"
+        "package and in every package below it. " + object_kind.LOOKED_UP
     ),
 )
 @click.option(
@@ -74,28 +73,28 @@ from ..viewport import viewport_options, viewport_params
 @click.option(
     "-s",
     "--sketch",
-    help="The object is a sketch",
+    help=object_kind.flag_help("a sketch"),
     is_flag=True,
     show_envvar=True,
 )
 @click.option(
     "-i",
     "--interface",
-    help="The object is an interface",
+    help=object_kind.flag_help("an interface"),
     is_flag=True,
     show_envvar=True,
 )
 @click.option(
     "-a",
     "--assembly",
-    help="The object is an assembly",
+    help=object_kind.flag_help("an assembly"),
     is_flag=True,
     show_envvar=True,
 )
 @click.option(
     "-S",
     "--scene",
-    help="The object is a scene",
+    help=object_kind.flag_help("a scene"),
     is_flag=True,
     show_envvar=True,
 )

@@ -28,6 +28,8 @@ it when it is first needed.
 import os
 import tempfile
 
+from partcad_utils import object_names
+
 from .. import logging as pc_logging
 from ..file_factory import file_digest_async
 from ..file_factory_url import FileFactoryUrl
@@ -38,6 +40,9 @@ from ..file_factory_url import FileFactoryUrl
 # (see "Command boundary" in src/partcad_cli/AGENTS.md). Re-exported here so that
 # everything about adding from a URL is still reachable from one module.
 from ..utils import filename_from_url, looks_like_url, redacted_url  # noqa: F401
+
+# The kind of object each section 'pc add' writes to declares, for the name check.
+KINDS_BY_SECTION = {section: kind for kind, section in object_names.SECTIONS.items()}
 
 # The algorithm the generated 'fileHash' uses. One choice, not a setting: a
 # package author reading a generated declaration should not have to wonder why
@@ -101,6 +106,11 @@ async def add_object_from_url_async(ctx, project, section: str, url: str, kind=N
     extension = None if kind is None else project.extension_for(section, kind)
     filename = filename_from_url(url, fallback="download" if extension is None else "download.%s" % extension)
     name = object_name_from_filename(filename, extension)
+    # Before the download rather than after it: a name another kind of object
+    # of the package has is refused whatever the file turns out to hold.
+    taken = project.name_taken(KINDS_BY_SECTION.get(section), name)
+    if taken is not None:
+        raise ValueError(taken)
 
     fetched = await fetched_file_config_async(ctx, project, url, filename)
 
@@ -112,5 +122,8 @@ async def add_object_from_url_async(ctx, project, section: str, url: str, kind=N
 
     with pc_logging.Process("AddUrl", project.name):
         pc_logging.info("Adding '%s' to '%s' from %s" % (name, section, redacted_url(url)))
-        project.add_object_config(section, name, obj)
+        if not project.add_object_config(section, name, obj):
+            # Refused, and said why: the check before the download found the
+            # name free, and the file it is written into has taken it since.
+            raise ValueError("'%s' was not added to '%s'" % (name, project.name))
     return name

@@ -10,7 +10,7 @@
 
 import rich_click as click
 
-from .. import fast_only
+from .. import fast_only, object_kind
 from ..exclude import exclude_option, exclude_params
 from ..parameters import param_option, param_params
 from ..service import run
@@ -20,7 +20,7 @@ from ..service import run
     help=(
         "Run tests on a part, assembly, or scene. "
         "OBJECT may be written '...:<name>' to mean every object of that name in this "
-        "package and in every package below it"
+        "package and in every package below it. " + object_kind.LOOKED_UP
     ),
 )
 @click.option(
@@ -52,28 +52,28 @@ from ..service import run
     "-s",
     is_flag=True,
     show_envvar=True,
-    help="The object is a sketch",
+    help=object_kind.flag_help("a sketch"),
 )
 @click.option(
     "--interface",
     "-i",
     is_flag=True,
     show_envvar=True,
-    help="The object is an interface",
+    help=object_kind.flag_help("an interface"),
 )
 @click.option(
     "--assembly",
     "-a",
     is_flag=True,
     show_envvar=True,
-    help="The object is an assembly",
+    help=object_kind.flag_help("an assembly"),
 )
 @click.option(
     "--scene",
     "-S",
     is_flag=True,
     show_envvar=True,
-    help="The object is a scene",
+    help=object_kind.flag_help("a scene"),
 )
 @exclude_option
 @param_option

@@ -96,26 +96,36 @@ def test_a_scene_declared_as_a_bare_string_is_an_alias(tmp_path):
     assert alias.desc == "Alias to bench"
 
 
-def test_a_scene_alias_resolves_to_a_scene_and_not_to_an_assembly(tmp_path):
-    """The source of a scene alias is looked up among scenes.
-
-    Both sections may declare the same name - they are separate namespaces - and
-    an alias that reached for the assembly would quietly hand back the wrong
-    object.
-    """
+def test_a_scene_alias_resolves_to_a_scene(tmp_path):
+    """The source of a scene alias is looked up among scenes, and the alias is one."""
     root = sandbox(tmp_path)
     config_path = root / SCENE_EXAMPLE_PACKAGE / "partcad.yaml"
     config = yaml.safe_load(config_path.read_text())
     config["scenes"]["twin"] = {"type": "alias", "source": "bench"}
+    config_path.write_text(yaml.safe_dump(config))
+
+    project = pc.Context(str(root)).get_project("//" + SCENE_EXAMPLE_PACKAGE)
+    assert project.get_scene("twin").kind == "scene"
+    assert project.object_kind("twin") == "scene"
+
+
+def test_an_assembly_and_a_scene_do_not_share_a_name(tmp_path):
+    """A name is one object of a package, and the assembly is looked for first, so it keeps it.
+
+    They used to be separate namespaces, and a scene and an assembly of one name
+    were two objects that every command had to be told apart with '-a' or '-S'.
+    """
+    root = sandbox(tmp_path)
+    config_path = root / SCENE_EXAMPLE_PACKAGE / "partcad.yaml"
+    config = yaml.safe_load(config_path.read_text())
     config["assemblies"] = {"bench": {"type": "assy", "path": "bench.assy"}}
     config_path.write_text(yaml.safe_dump(config))
 
     project = pc.Context(str(root)).get_project("//" + SCENE_EXAMPLE_PACKAGE)
-    assert project.get_scene("twin") is not None
-    # The alias is a scene, and so is what it points at; the assembly of the
-    # same name is a different object.
-    assert project.get_scene("bench").kind == "scene"
+    assert project.object_kind("bench") == "assembly"
     assert project.get_assembly("bench").kind == "assembly"
+    assert project.get_scene("bench", quiet=True) is None
+    assert "already the name of an assembly" in project.get_broken_object_reason("scene", "bench")
 
 
 def test_the_context_resolves_a_scene_by_name(tmp_path):

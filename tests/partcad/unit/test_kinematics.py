@@ -1519,24 +1519,29 @@ def test_a_mechanism_that_states_its_mass_is_weighed_by_its_bodies_and_says_so(t
 
 @pytest.mark.parametrize("jointed", [False, True])
 def test_an_assembly_named_after_a_part_it_holds_is_weighed_by_its_parts(tmp_path, stand_in_geometry, jointed):
-    """The assembly 'base' holding the part 'base': one full name, and each its own physics.
+    """An assembly with the full name of a part it holds: each keeps its own physics.
 
     Indexed by the full name alone, the part's physics were the assembly's too:
     welded, the assembly weighed what that one part weighs, as if it stated it;
     with a joint below it, it was reported as stating its own mass, and moving.
     The index here is the one an export is handed, made by the export wrapper
     from the tree and the physics the core resolved for each shape.
+
+    A package can no longer declare the two under one name (see
+    'partcad_utils.object_names'), so the tree is built as 'frame' and given
+    the part's name afterwards: a tree is what the wrapper is handed, and one
+    cached before that rule, or made by another producer, can still say it.
     """
     import wrapper_export
 
     if jointed:
-        files = {"base.assy": ONE_JOINT.format(params="")}
+        files = {"frame.assy": ONE_JOINT.format(params="")}
     else:
-        files = {"base.assy": "links:\n  - part: base\n  - part: lid\n    location: [[0, 30, 0], [0, 0, 1], 0]\n"}
-    ctx = _context(tmp_path, files, "assemblies:\n  base: {type: assy}\n", bore="motion: revolute")
-    tree = _tree(ctx, ":base")
+        files = {"frame.assy": "links:\n  - part: base\n  - part: lid\n    location: [[0, 30, 0], [0, 0, 1], 0]\n"}
+    ctx = _context(tmp_path, files, "assemblies:\n  frame: {type: assy}\n", bore="motion: revolute")
+    tree = _tree(ctx, ":frame")
     base = tree[shape_envelope.KEY_ASSEMBLY][0]
-    assert tree["name"] == base["name"]
+    tree["name"], tree["label"] = base["name"], base["label"]
 
     piece = {"mass": 1.0, "centerOfMass": [0.0, 0.0, 0.0], "inertia": {"ixx": 0.01, "iyy": 0.01, "izz": 0.01}}
     facts = {child["name"]: dict(piece) for child in tree[shape_envelope.KEY_ASSEMBLY]}

@@ -30,9 +30,9 @@ Make sure PartCAD is available as `/pc:init` describes.
 ## 1. Read what is required
 
 Find the object in `partcad.yaml` and read its `requirements:` and its
-`simulate:` section. `pc --no-ansi info <object>` (with `-a`, `-S` or `-s` for an
-assembly, a scene or a sketch) prints the declaration too, through whatever an
-alias or an enrich points at.
+`simulate:` section. `pc --no-ansi info <object>` (whatever kind of
+object it is) prints the declaration too, through whatever an alias or an
+enrich points at.
 
 ```yaml
 requirements:
@@ -63,7 +63,7 @@ required. Each gets a verdict in §6.
 ## 2. Run `pc test`
 
 ```sh
-pc --no-ansi test <object> 2>&1                     # -a / -S / -s for the other kinds
+pc --no-ansi test <object> 2>&1                     # whatever kind of object it is
 pc --no-ansi -v test -f requirements <object> 2>&1  # every requirement, met or not
 ```
 
@@ -88,7 +88,7 @@ the same simulations as its `sim` check: that check gives a verdict, and this
 gives what happened.
 
 ```sh
-pc --no-ansi sim <object> --json 2>&1               # -a for an assembly, -S for a scene
+pc --no-ansi sim <object> --json 2>&1               # a part, an assembly or a scene
 ```
 
 `simulate:` is declared by a part, an assembly or a scene, and `pc sim` takes all

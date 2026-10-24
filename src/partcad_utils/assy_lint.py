@@ -61,12 +61,14 @@ lost information is dropped rather than reported. That trades a missed error for
 never underlining correct code, which is the right trade for an editor, and is
 why masking is the fallback rather than the check.
 
-Beside the schema, three things are checked that no schema can say: a link
+Beside the schema, four things are checked that no schema can say: a link
 named by a ``connect:`` that nothing places ('check_links'); for what is marked
 manufacturable, an assembly item that is placed rather than connected and a part
 that nobody could make or buy ('check_manufacturable_assembly',
-'check_manufacturable_parts'); and a ``motion:`` that names a kind of joint by a
-deprecated spelling, as a warning ('check_motion').
+'check_manufacturable_parts'); a name a ``partcad.yaml`` gives to two kinds of
+object, which PartCAD refuses as it loads the package ('check_unique_names');
+and a ``motion:`` that names a kind of joint by a deprecated spelling, as a
+warning ('check_motion').
 
 It lives here, next to ``framing`` and ``workspace``, because neither end owns
 it. The daemon checks a package's files when `pc lint` walks the package graph;
@@ -90,7 +92,7 @@ import jsonschema
 import jsonschema.exceptions
 import yaml
 
-from . import assy_filter, template_render
+from . import assy_filter, object_names, template_render
 
 SEVERITY_ERROR = "error"
 SEVERITY_WARNING = "warning"
@@ -114,6 +116,9 @@ CODE_MANUFACTURABLE = "manufacturable"
 # warning, never an error, since what was written with it still works. See
 # 'check_motion()'.
 CODE_DEPRECATED = "deprecated"
+# A name a package gives to two kinds of object, which it may not: a name is one
+# object of a package whatever its kind. See 'check_unique_names()'.
+CODE_NAMES = "names"
 
 # The 'motion.type' spellings that are deprecated, and what to write instead.
 # 'partcad.motion.DEPRECATED_KINDS' is what reads them; spelled out here because
@@ -249,7 +254,8 @@ ASSEMBLY_NO_FIXED = (
 #   3 -- the document is checked as it renders, not masked, wherever the values
 #        it is rendered with are known; and the two rules for what is marked
 #        manufacturable.
-CHECKER_VERSION = 3
+#   4 -- 'check_unique_names': one name given to two kinds of object.
+CHECKER_VERSION = 4
 
 # An upper bound on how many findings a single file reports. A file that is
 # mid-edit can cascade; an editor gains nothing from the thousandth squiggle.
@@ -1167,7 +1173,7 @@ _MANUFACTURED_CONNECTIONS = ("connect", "connectPorts")
 _NOT_MADE_OF_ITS_OWN = ("alias", "enrich")
 
 
-def _report_at(diagnostics, root_node, path, key, message):
+def _report_at(diagnostics, root_node, path, key, message, code=CODE_MANUFACTURABLE):
     node = _resolve(root_node, path) if root_node is not None else None
     key_node = _key_node(node, key) if node is not None and key is not None else None
     start, end = _node_span(key_node) if key_node is not None else _fallback_span(node)
@@ -1179,7 +1185,7 @@ def _report_at(diagnostics, root_node, path, key, message):
             start[1],
             end[0],
             end[1],
-            code=CODE_MANUFACTURABLE,
+            code=code,
             path="$." + ".".join(str(step) for step in path + ([key] if key else [])),
         )
     )
@@ -1334,6 +1340,43 @@ def check_manufacturable_parts(data, root_node=None, inherited=None) -> list:
     return diagnostics
 
 
+def check_unique_names(data, root_node=None) -> list:
+    """Report a name a ``partcad.yaml`` gives to more than one kind of object.
+
+    A name is one object of a package whatever its kind, which is what lets a
+    command take a bare name without being told what it names. The rule and
+    its words are 'partcad_utils.object_names': the declaration of the kind
+    looked for first keeps the name, and every other one is refused -- which
+    PartCAD does as it loads the package, and this says where the refused one
+    is written, before anything loads it. An alias is a name too, and is
+    reported on the ``aliases:`` that asks for it.
+
+    A declaration that says ``unless:`` is left out of the comparison: whether
+    it applies is a question about the machine the package is loaded on, and
+    PartCAD compares only what applies there.
+    """
+    diagnostics: list = []
+    if not isinstance(data, dict):
+        return diagnostics
+    sections = {}
+    for kind in object_names.NAMED_KINDS:
+        declarations = data.get(object_names.SECTIONS[kind])
+        if isinstance(declarations, dict):
+            sections[kind] = {
+                name: config
+                for name, config in declarations.items()
+                if not (isinstance(config, dict) and "unless" in config)
+            }
+    for duplicate in object_names.duplicates(sections):
+        section = object_names.SECTIONS[duplicate.kind]
+        if duplicate.alias_of is None:
+            path, key = [section], duplicate.name
+        else:
+            path, key = [section, duplicate.alias_of], "aliases"
+        _report_at(diagnostics, root_node, path, key, object_names.message(duplicate), code=CODE_NAMES)
+    return diagnostics
+
+
 # ---- entry points ----------------------------------------------------------
 
 
@@ -1420,6 +1463,7 @@ def _document_checks(data, schema, root_node, masked, manufacturable, inherited_
             diagnostics.extend(check_manufacturable_assembly(data, root_node))
     elif _is_configuration_schema(schema):
         diagnostics.extend(check_manufacturable_parts(data, root_node, inherited_manufacturable))
+        diagnostics.extend(check_unique_names(data, root_node))
     return diagnostics
 
 

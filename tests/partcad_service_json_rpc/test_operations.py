@@ -359,6 +359,20 @@ class FakeProject:
         }[kind]
         return name.partition(";")[0] in getattr(self, section)
 
+    def object_kind(self, name, kinds=None):
+        # What a real Project answers for a name it was handed without its kind,
+        # in the order it asks (see 'partcad_utils.object_names'). These fakes
+        # are their own declarations, so there is no cheap pass to tell apart
+        # from the slow one; 'kind_lookups' is how a test tells that it asked.
+        self.kind_lookups = getattr(self, "kind_lookups", []) + [name]
+        for kind in ("part", "interface", "assembly", "sketch", "scene", "software"):
+            if (kinds is None or kind in kinds) and self.declares_object(kind, name):
+                return kind
+        return None
+
+    async def object_kind_async(self, name, kinds=None):
+        return self.object_kind(name, kinds)
+
     def get_suppliers(self):
         return dict(self.suppliers)
 
@@ -4076,8 +4090,8 @@ def test_an_unfiltered_render_passes_no_mask(monkeypatch):
         ({"format": "step"}, "name that object"),
         # A subtree, which is the same objection.
         ({"format": "step", "object": "top", "assembly": True, "recursive": True}, "name that object"),
-        # A part has no links.
-        ({"format": "step", "object": "cube"}, "'-a' or '-S'"),
+        # A part has no links -- and nothing called 'cube' is anything else.
+        ({"format": "step", "object": "cube"}, "'cube' is neither"),
     ],
 )
 def test_a_filter_is_refused_where_it_has_no_meaning(monkeypatch, params, expected):
@@ -4245,3 +4259,159 @@ def test_the_snapshots_of_a_run_come_back_as_bytes_when_asked(tmp_path):
     assert images["before"]["filename"] == "snapshot-before.png"
     assert images["before"]["extension"] == "png"
     assert base64.b64decode(images["before"]["content"]) == b"\x89PNG before"
+
+
+# ---- what an object is, looked up from its name ----------------------------
+#
+# A name is one object of its package whatever its kind, so a request that does
+# not say what its object is has it looked up ('operations._kind_of'), and a
+# kind flag only skips that. The fakes answer 'object_kind' from their own
+# declarations and record that they were asked, which is how these tell a
+# lookup from a flag taken at its word.
+
+
+def test_a_render_with_no_flag_renders_the_kind_the_package_says(monkeypatch):
+    session, rendered = _render_session(monkeypatch)
+    root = session.partcad_ctx.projects["//"]
+    root.add("assemblies", FakeObject("top"))
+
+    operations.render_objects(session, {"package": "//", "format": "step", "object": "top"})
+
+    assert len(rendered) == 1
+    assert rendered[0]["assemblies"] == ["top"]
+    assert rendered[0]["parts"] == []
+    # Looked up -- once to stage it, once to render it; the second finds what
+    # the first left memoized.
+    assert set(root.kind_lookups) == {"top"}
+
+
+def test_a_kind_flag_is_taken_at_its_word_and_nothing_is_looked_up(monkeypatch):
+    """What the flags are kept for: a caller who knows, and would rather not pay for asking."""
+    session, rendered = _render_session(monkeypatch)
+    root = session.partcad_ctx.projects["//"]
+    root.add("assemblies", FakeObject("top"))
+
+    operations.render_objects(session, {"package": "//", "format": "step", "object": "top", "sketch": True})
+
+    assert rendered[0]["sketches"] == ["top"]
+    assert getattr(root, "kind_lookups", []) == []
+
+
+def test_a_name_that_is_nothing_is_rendered_as_the_part_it_is_not(monkeypatch):
+    """The miss is reported by the part getter, by the "not found" it always said."""
+    session, rendered = _render_session(monkeypatch)
+
+    operations.render_objects(session, {"package": "//", "format": "step", "object": "ghost"})
+
+    assert rendered[0]["parts"] == ["ghost"]
+
+
+def test_a_walk_over_one_name_takes_each_package_s_own_kind(monkeypatch):
+    """'...:bolt' is a part in one package and an assembly in the next, and both are asked for."""
+    session, _ = _render_session(monkeypatch)
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("bolt"))
+    sub = FakeProject(name="//sub").add("assemblies", FakeObject("bolt"))
+    session.partcad_ctx.projects["//sub"] = sub
+    bare = FakeProject(name="//bare")
+    session.partcad_ctx.projects["//bare"] = bare
+    session.partcad_ctx.get_all_packages = lambda **_: [{"name": "//"}, {"name": "//sub"}, {"name": "//bare"}]
+
+    operations.render_objects(session, {"package": "//", "format": "step", "object": "...:bolt"})
+
+    assert [(r["parts"], r["assemblies"]) for r in root.render_requests] == []
+    assert [(r["parts"], r["assemblies"]) for r in sub.render_requests] == [([], ["bolt"])]
+    assert bare.render_requests == []
+
+
+def test_a_filtered_render_needs_no_flag_for_an_assembly(monkeypatch):
+    session, rendered = _render_session(monkeypatch)
+    session.partcad_ctx.projects["//"].add("assemblies", FakeObject("top"))
+
+    operations.render_objects(session, {"package": "//", "format": "step", "object": "top", "filter": {"base": None}})
+
+    assert rendered[0]["assemblies"] == ["top"]
+    assert rendered[0]["link_filter"].names() == ["base"]
+
+
+def test_targets_carry_the_kind_of_each_package_s_object():
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    ctx.projects["//"].add("parts", FakeObject("bolt"))
+    ctx.projects["//sub"] = FakeProject(name="//sub").add("scenes", FakeObject("bolt"))
+
+    targets = operations._targets(ctx, session.partcad, ["//", "//sub"], "bolt")
+
+    assert targets == [("//", "bolt", "part"), ("//sub", "bolt", "scene")]
+    # Narrowed to what the operation does anything with, a scene is nothing.
+    assert operations._targets(ctx, session.partcad, ["//", "//sub"], "bolt", kinds=("part",)) == [
+        ("//", "bolt", "part")
+    ]
+    # Said, it is looked for as that and nothing else.
+    assert operations._targets(ctx, session.partcad, ["//", "//sub"], "bolt", said="scene") == [
+        ("//sub", "bolt", "scene")
+    ]
+
+
+def test_info_with_no_flag_finds_software(monkeypatch):
+    session, _ = make_session()
+    firmware = FakeObject("firmware", config={"type": "raw"})
+    root = session.partcad_ctx.projects["//"]
+    root.add("software", firmware)
+    root.get_software = lambda name: root.software.get(name)
+
+    operations.info_object(session, {"package": "//", "object": "firmware"})
+
+    assert "CONFIGURATION: {'type': 'raw'}" in session.partcad.logging.messages("info")
+
+
+def test_a_test_run_with_no_flag_tests_the_kind_the_package_says(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    stack = FakeObject("stack")
+    stack.finalized = True
+    root.add("assemblies", stack)
+
+    operations.test_run(session, {"object": "stack"})
+
+    # Not asked for as a part, which is what it would have been before.
+    assert root.parts_requested == []
+    assert root.kind_lookups == ["stack"]
+    assert session.partcad.logging.messages("error") == []
+
+
+def test_simulate_list_with_no_kind_finds_a_scene(monkeypatch):
+    install_fake_simulation(monkeypatch, {"pile": [declared_simulation("stands", simulation="sim-mujoco:mujoco")]})
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].add("scenes", FakeObject("pile"))
+    session.partcad_ctx.shapes[("scene", "//:pile")] = FakeObject("pile")
+
+    result = operations.simulate_list(session, {"package": "//", "object": "pile"})
+
+    assert (result["object"], result["kind"]) == ("//:pile", "scene")
+
+
+def test_render_inline_with_no_kind_finds_a_sketch():
+    session = _inline_session()
+    session.partcad_ctx.projects["//"].add("sketches", FakeObject("outline"))
+    sketch = FakeRenderable("outline", kind="sketch", filename="outline.png")
+    session.partcad_ctx.shapes[("sketch", "//:outline")] = sketch
+
+    result = operations.render_inline(session, {"package": "//", "object": "outline", "format": "png"})
+
+    assert result["filename"] == "outline.png"
+    assert sketch.render_calls
+
+
+def test_render_inline_refuses_an_interface_it_looked_up():
+    """Looked up, an interface is refused in the words a said one is."""
+    session = _inline_session()
+    session.partcad_ctx.projects["//"].add("interfaces", FakeObject("port"))
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_inline(session, {"package": "//", "object": "port", "format": "png"})
+
+    assert caught.value.message == (
+        "Only parts, assemblies, scenes and sketches can be rendered to a file; 'interface' is none of them"
+    )
