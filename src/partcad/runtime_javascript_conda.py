@@ -22,7 +22,7 @@ import sys
 from partcad_utils import conda as pc_conda
 
 from . import logging as pc_logging
-from . import runtime_javascript, runtime_python_conda, sandbox_lock, telemetry
+from . import runtime, runtime_javascript, runtime_python_conda, sandbox_lock, telemetry
 
 
 @telemetry.instrument()
@@ -69,7 +69,7 @@ class CondaJavaScriptRuntime(runtime_javascript.JavaScriptRuntime):
                 shell=False,
                 encoding="utf-8",
             )
-            stdout, stderr = p.communicate()
+            stdout, stderr = runtime.communicate_sync(p)
             if p.returncode != 0:
                 pc_logging.warning("conda node check error: %s" % (stderr.strip() if stderr else p.returncode))
                 self.conda_initialized = False
@@ -203,7 +203,7 @@ class CondaJavaScriptRuntime(runtime_javascript.JavaScriptRuntime):
                         encoding="utf-8",
                         env=self.conda_command_env(),
                     )
-                    _, stderr = p.communicate()
+                    _, stderr = runtime.communicate_sync(p)
 
                 if stderr is not None and stderr.strip() != "":
                     pc_logging.warning("conda node install error: %s" % stderr)

@@ -182,3 +182,42 @@ def test_dispatch_is_serialized_across_connections(socket_dir):
             assert events_log[k + 1] == ("end", events_log[k][1])
     finally:
         server.stop()
+
+
+def test_a_busy_daemon_still_answers_whether_it_is_alive_and_can_be_stopped(socket_dir):
+    """Every other request waits its turn; the liveness probe does not.
+
+    Queued behind a long render -- or behind one that never ended, which is
+    what a sandbox that died used to leave -- the probe timed out, so the daemon
+    was taken for gone, and `pc daemon stop`, which asks it first, answered
+    "No PartCAD daemon was running for this workspace" to the very user the
+    stalled client had just told to run it.
+    """
+    from partcad_client.daemon import _stop_socket_daemon
+    from partcad_utils.workspace import is_alive
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def busy(session, params):
+        entered.set()
+        release.wait(30)
+        return "done"
+
+    def discover(session, params):
+        return {"methods": []}
+
+    server, path, thread = _serve(socket_dir, {"busy": busy, "rpc.discover": discover})
+    try:
+        f, c = _connect(path)
+        write_message(f, {"jsonrpc": "2.0", "id": 1, "method": "busy"})
+        assert entered.wait(5)
+
+        assert is_alive(path)
+        assert _stop_socket_daemon(path)
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+        c.close()
+    finally:
+        release.set()
+        server.stop()

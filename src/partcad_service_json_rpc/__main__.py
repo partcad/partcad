@@ -157,6 +157,25 @@ def _build_session(args: argparse.Namespace, log_dir: str = None) -> Session:
     # session is being built still counts as one (see 'config_restart').
     config_restart.remember()
 
+    # What this process found wrong with its own configuration as it read it --
+    # a 'threadsMax' below the minimum, in the environment it inherited -- was
+    # held, because nothing could render it yet (see
+    # 'partcad_utils.logging.warning_once'). Said here, it goes to this
+    # process's own stderr: the daemon's log, or the terminal of whoever ran
+    # '--http'. Held any longer, it would go to the first client served, which
+    # is the wrong reader twice over: that client started this process from the
+    # same environment and has said so already, and its commands do not run
+    # under this configuration at all -- they send their own. A '--stdio'
+    # service is nothing but such a client's child, writing to that client's
+    # terminal, so there it is not said a second time.
+    #
+    # Imported here rather than at the top: the launcher that merely finds a
+    # live daemon never gets this far, and should not pay for what this pulls
+    # in. 'remember()' above has imported it already, through the configuration.
+    from partcad_utils import logging as pc_logging
+
+    pc_logging.release_held_warnings(say=not args.stdio)
+
     # The same reasoning puts the debugger here: every serving process, and only
     # those, and before the session exists so that building it can be stepped
     # through. A no-op unless PC_DEBUGPY is set.

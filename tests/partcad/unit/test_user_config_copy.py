@@ -30,7 +30,7 @@ CLIENT_CONFIG = """
 forceUpdate: true
 develIndex: true
 offline: true
-threadsMax: 3
+threadsMax: 5
 pythonSandbox: pypy
 remoteSandbox: client.example:5050
 remoteSandboxToken: client-secret
@@ -187,7 +187,10 @@ def test_an_unset_option_is_left_out_rather_than_sent_as_null(tmp_path, monkeypa
         ("force_update", True),
         ("devel_index", True),
         ("offline", True),
-        ("threads_max", 3),
+        # Five rather than anything lower: below four it is raised to four on
+        # the way out (see test_threads_max.py), and the round trip would be
+        # testing that instead.
+        ("threads_max", 5),
         ("python_sandbox", "pypy"),
         # The one option with no default at all: unset it resolves to nothing
         # and is left out of the copy, so the only way the daemon can learn

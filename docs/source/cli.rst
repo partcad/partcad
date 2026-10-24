@@ -40,6 +40,11 @@ that copy rather than from the configuration it was started with. So ``pc --deve
 says even when a daemon has been running since before you set it, and there is no daemon to restart after
 changing a setting.
 
+``--threads-max`` (``PC_THREADS_MAX``, ``threadsMax``) is one of those settings too: it says how many sandbox
+processes run at once, and the daemon sizes them for each command it serves. It is never lower than 4 -- a lower
+value is raised to 4 with a warning -- and when nothing sets it, it is one per CPU core, still at least 4. See
+:ref:`threads-max`.
+
 An assembly is built out of other assemblies, and the daemon builds those **one at a time, each in a request of
 its own**. So asking for an assembly whose sub-assemblies have not been built yet prints a line naming them::
 
@@ -168,6 +173,26 @@ slow one is built by building that one, and is left out only if it declares a ti
 offered by ``pc render``, ``pc export``, ``pc test``, ``pc sim``, ``pc list`` and ``pc search``; on ``pc test``
 and ``pc sim`` it is ``--fast-only`` alone, since ``-f`` is their ``--filter``. Every recursive run over
 ``//pub`` in PartCAD's own CI passes it.
+
+.. _sandbox-death:
+
+**********************************
+When a sandbox process is killed
+**********************************
+
+Every piece of geometry is computed in a sandbox process, and the operating system can end one -- on a large
+model, most often the out-of-memory killer. The daemon notices within a couple of seconds, even when something
+the process had started is still running, and fails the work that depended on it with the reason rather than
+going quiet::
+
+    ERROR:partcad:.../wrapper_build123d.py ... was killed by signal 9 (SIGKILL). Nothing in the sandbox chose
+    this: something outside it ended the process, which on a large model is usually the out-of-memory killer.
+
+What was held for the process is let go -- its process slot, the sandbox's lock -- and whatever it left running
+is stopped, so the commands after it run as usual (``pc daemon status`` included), and the next one that needs
+the sandbox starts a new process. In the ``docker`` and ``remote`` sandboxes a container that stopped is said
+so, and started again for the next command. If it keeps happening, run fewer sandbox processes at once:
+``--threads-max`` (``threadsMax``) caps how many run side by side.
 
 *************
 Host commands

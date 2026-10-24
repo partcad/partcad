@@ -46,10 +46,29 @@ at all).
 
 - **Async naming**: every externally visible coroutine has a name ending in `_async`, paired with a synchronous
   wrapper of the same name without the suffix. Coroutines run on asyncio's event loop; CPU-heavy work runs on a
-  separate thread pool (sized to CPU cores minus 1). Tasks on the thread pool must not call coroutines that use
-  `asyncio.Lock()`. An assembly is instantiated on the *unconstrained* pool instead: it computes nothing itself,
-  it waits for its parts, and each of those takes a thread from the constrained one -- assemblies waiting there
-  is how enough of them at once run it out of threads, every one waiting for a part with nowhere left to run.
+  separate thread pool (sized by `threadsMax`, see `sync_threads.ThreadPoolManager`). Tasks on the thread pool
+  must not call coroutines that use `asyncio.Lock()`. An assembly is instantiated on the *unconstrained* pool
+  instead: it computes nothing itself, and the constrained pool's slots are for what does.
+
+- **Nested work on the thread pools** (`sync_threads`): an object built from another one -- an alias, an enrich,
+  an extrusion of a sketch, a compound of an assembly -- asks for that one from the thread it is itself being
+  built on, and a thread of a pool is a *slot*. **Work started on a slot runs on that slot**: `run_async` awaits
+  the coroutine where it is, in the loop already running there, and `run`, `run_detached` and `complete` start a
+  synchronous function at once on a thread that takes no slot. Only work asked for from outside the pools queues
+  for a slot, which is what still spreads a recursive render over the whole pool. Taking a second slot from a
+  slot is how `threadsMax: 2` stopped `pc render -r` for good -- and how pools of four and seven stopped with four
+  and seven such objects at once. **A slot waiting for a shape's lock gives the slot back** while the holder is
+  not itself working on a slot (`Shape.lock` is a `PoolAwareRLock`): the loop a command runs on holds an
+  assembly's lock while the assembly's children are built, and a part's while `get_solidity_async` asks for the
+  part inside it. `async with` on that lock polls instead of blocking the loop, as `sandbox_lock` does. A wait
+  for another caller's preparation of a shape gives the slot back by the same rule (`sync_threads.waiting`),
+  because a preparation can take such a lock. And a part or sketch a command asks for goes to the pool *before*
+  its lock is taken (`Shape.get_wrapped`), so the thread holding it while it is built is the one building it, and
+  objects built from it wait for that thread without giving their slots back -- except from inside a
+  preparation, whose chain is a context variable a thread hop would leave behind. Together these make the pools deadlock-free at any size, which
+  `tests/partcad/unit/test_sync_threads.py` and `test_nested_build.py` check with pools of one and two threads.
+  So do not wait from a pool thread for a pool's queue (`executor.submit(...).result()` -- use
+  `threadpool_manager.complete`), and do not take a shape's lock with a blocking `with` from a coroutine.
 
 - **No two actions open under one name** (`pc_logging.Action(op, package, item, extra)`): the progress display
   tracks running actions by `op`, package and item alone (`logging_ansi_terminal.action_key`), so a second one
@@ -94,7 +113,42 @@ at all).
   process and it is the machine, not the thread pool, that decides how many fit; `threadsMax` sizes it. Both are
   polled rather than blocked on: they are taken from several event loops at once (a part is instantiated on a
   worker thread running a loop of its own), and a task that blocked its own loop waiting for a lock the task
-  beside it is about to release would never see it released.
+  beside it is about to release would never see it released. The slots are a process-wide count that can be
+  **resized**, because a daemon outlives every configuration it serves: `sandbox_lock.follow(config)` sizes them
+  for the configuration a request carries, and the daemon calls it in `context.create` and in `_ctx` (see
+  `src/partcad_service_json_rpc/AGENTS.md`). Sized once at import, they ignored the `PC_THREADS_MAX` of every
+  command a warm daemon served.
+- **`threadsMax` is never below `THREADS_MAX_MINIMUM` (4)**, and the floor is applied where the value is read, in
+  `partcad_utils.user_config`: the file, `PC_THREADS_MAX`, a client's configuration (`from_dict`), and an
+  assignment (`--threads-max`) all go through the `threads_max` property, and what is unset is
+  `default_threads_max()` (one per core, at least 4). The floor is for performance: it is the least number of
+  sandbox processes PartCAD runs at once, and a recursive render spends most of its time waiting for those. It
+  was introduced against the nested-pool deadlock above, and only ever made that less likely; nesting cannot
+  deadlock a pool of any size now, so a lower value would not stop anything -- it is raised all the same. Warnings
+  about it go through
+  `pc_logging.warning_once`, which says a message once per process and holds it until a handler can render it --
+  both ends find these before their log is connected.
+- **A sandbox process is waited for until it is dead, not until its pipes are** (`runtime.communicate`,
+  `runtime.communicate_sync`, `partcad_utils.container_service.communicate`): `communicate()` -- asyncio's
+  and `subprocess`'s alike -- returns when stdout and stderr reach their end, and whatever a sandbox interpreter
+  starts inherits both. So an interpreter the out-of-memory killer took while a child of it lived on was
+  waited for as long as the child lived, holding its process slot, the environment's lock, the shape's lock
+  and the daemon's dispatch lock: every later command, `pc daemon status` included, stalled behind it. The
+  process is watched as well now: once it has exited, its output drains for `EXIT_GRACE` seconds, whatever
+  can still write into its pipes is found by the pipe (`pipe_holders`, through `/proc` on Linux) and killed,
+  and the pipes are closed from this end; the caller sees the signal (`process_crash.describe_termination`
+  says SIGKILL is probably out of memory) seconds after the death. Every launch point goes through one of
+  those three, and a bare `communicate()` on a sandbox process is this bug again. Nor is a pip that was killed
+  mid-install recorded as having installed anything (`record_install_unless_killed`): its death is raised as
+  the failure of whatever needed the package, and the next run installs it afresh. The container service
+  passes `wait_after_success`, because a command that exited 0 there may be an application's launcher that
+  handed its window to a child -- the wait `pc ide open` exists to make.
+
+  A container is a sandbox process too. A `docker exec` client reports a death by signal inside the
+  container as 128 plus the signal, which `runtime_python_docker.exec_status` turns back into the signal; and
+  a command that failed asks `containers.stopped` whether the *container* stopped, and if it did, says how
+  and lets go of it, so the next command starts it again (`DockerPythonRuntime._ended`, `Runtime._ended` /
+  `_endpoint_ended` for KiCad's and a plugin's container, `ContainerPool.discard` for the remote pool).
 - **A key is read once its shape is prepared** (`Shape.prepare_async(wait=True)`): a preparation hashes in what
   a shape is made of -- the file a `fileFrom` or a plugin fetches, the keys of what an assembly links to -- and a
   hash adds its files when it is first read, so a key read while one is under way is kept, half of it missing, for
@@ -187,6 +241,15 @@ at all).
   That test reads more than the shape's hash covers, which is what `Test.cache_key_suffix()` exists for: a
   corrected `fileHash` has to move the cache key, or `pc test` answers the new declaration with the old one's
   failure.
+
+- **A key must not depend on what else happens to be loaded.** A connected assembly keys on the interfaces its
+  links implement, and on the mates *among those interfaces* and what they are drop-ins for
+  (`AssemblyFactoryAssy.interfaces_of`), each of them instantiated before any is read, since instantiating an
+  interface is what registers the mates it declares. Each mate is held under the interface declaring it rather than
+  merged by target: an interface and its ancestor can both mate with one target, and a connection may read either.
+  Taken from every mate the context had registered, as it was, the key grew with whatever had been built first:
+  the LEGO castle's round bricks have a Technic axle hole, the castle has no axle, the car has, and the castle
+  keyed differently according to whether the car had been built before it.
 
 - **A file type may name the package that implements it** (`output.split_format`,
   `Shape._output_implementor`): `pc export -t sim-gazebo:world`, the spelling `import:`, `simulation:` and

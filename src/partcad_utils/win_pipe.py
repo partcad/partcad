@@ -20,6 +20,8 @@ import asyncio
 import hashlib
 import json
 
+from .workspace import LIVENESS_METHOD
+
 _HEADER_SEP = b"\r\n\r\n"
 STOP_METHOD = "daemon.stop"
 
@@ -37,7 +39,7 @@ def pipe_name(root_path: str) -> str:
 
 def is_pipe_alive(name: str, timeout: float = 1.0) -> bool:
     """True if a daemon answers rpc.discover on the named pipe."""
-    reply = pipe_request(name, "rpc.discover", timeout)
+    reply = pipe_request(name, LIVENESS_METHOD, timeout)
     return isinstance(reply, dict) and reply.get("id") == 0 and "result" in reply
 
 

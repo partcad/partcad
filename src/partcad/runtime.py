@@ -17,11 +17,11 @@ import threading
 
 import docker
 
-from partcad_utils import container_service
+from partcad_utils import container_service, containers
 
 from . import logging as pc_logging
 from . import sandbox_lock
-from .process_crash import describe_termination
+from .process_crash import describe_exit_code, describe_termination
 from .process_output import decode as decode_output
 
 # How long after its bound a run is killed from a thread of its own, in seconds,
@@ -155,12 +155,25 @@ def kill_process_tree(p, from_thread=False, owner=None) -> None:
 
 
 async def communicate(p, stdin: bytes, timeout=None):
-    """``p.communicate(stdin)``, bounded by ``timeout`` and never orphaning ``p``.
+    """``p.communicate(stdin)``, bounded by ``timeout``, never orphaning ``p``, and over when ``p`` is.
 
-    Two things asyncio does not do for a subprocess it stops waiting for, and
-    both have cost this project a wedged CI job.
+    Three things asyncio does not do for a subprocess it waits for, and a fourth
+    that the bound needs; each has cost this project a wedged daemon or CI job.
 
-    It does not bound the wait, so a sandbox interpreter that never finishes
+    It waits for the *pipes* rather than for the process: ``communicate`` returns
+    when standard output and standard error reach their end, and a pipe ends only
+    when every process holding it has let go. Whatever a sandbox interpreter
+    starts inherits both, so an interpreter killed by the out-of-memory killer
+    while something it started lived on was waited for as long as that lived --
+    forever, with no bound -- and with it the process slot, the environment's
+    lock, the shape's lock and, in the daemon, the lock every request is served
+    under. So the process is watched as well (`_watch`): once it has exited, its
+    output is drained for `container_service.EXIT_GRACE`, whatever still holds
+    it is stopped, and the pipes are closed from this end. The caller then sees
+    the death -- ``p.returncode`` is the signal -- seconds after it happened,
+    instead of a client giving up on a daemon that has stopped answering.
+
+    Nor does it bound the wait, so a sandbox interpreter that never finishes
     holds its caller forever. ``timeout`` (seconds, ``None`` for no bound) is
     that bound, and raises ``asyncio.TimeoutError`` when it passes.
 
@@ -184,7 +197,7 @@ async def communicate(p, stdin: bytes, timeout=None):
     owner = process_owner(p)
     try:
         if timeout is None:
-            return await p.communicate(input=stdin)
+            return await _watch(p, stdin)
         fired = threading.Event()
 
         def backstop():
@@ -200,7 +213,7 @@ async def communicate(p, stdin: bytes, timeout=None):
         timer.daemon = True
         timer.start()
         try:
-            out = await asyncio.wait_for(p.communicate(input=stdin), timeout)
+            out = await _watch(p, stdin, timeout)
         finally:
             timer.cancel()
         if fired.is_set():
@@ -261,6 +274,140 @@ def output_capture(to_files: bool):
         return
     with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
         yield OutputCapture(stdout, stderr)
+
+
+async def _watch(p, stdin: bytes, timeout=None):
+    """``p.communicate(stdin)``, ended by ``p`` exiting as well as by its pipes ending.
+
+    The asynchronous twin of `container_service.communicate`, and the same rule:
+    a process that has exited gets `EXIT_GRACE` for its output to drain, what
+    still holds that output then is stopped, and if the pipes have not ended
+    after as long again they are closed from this end. Whatever had been read is
+    the answer -- for a process that was killed, the traceback or the half an
+    answer it got as far as, which is what says where it was.
+
+    Polled, rather than awaiting ``p.wait()``: from Python 3.12 that resolves
+    only once the pipes have closed, which is the very wait this is getting out
+    of, while ``p.returncode`` is set the moment the child watcher reaps it.
+
+    ``timeout`` raises `asyncio.TimeoutError` when it passes, as `wait_for` did.
+    """
+    loop = asyncio.get_running_loop()
+    talking = asyncio.ensure_future(p.communicate(input=stdin))
+    deadline = None if timeout is None else loop.time() + timeout
+    exited = None
+    try:
+        while True:
+            interval = container_service.WATCH_INTERVAL
+            if deadline is not None:
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    raise asyncio.TimeoutError()
+                interval = min(interval, remaining)
+            done, _ = await asyncio.wait({talking}, timeout=interval)
+            if done:
+                return talking.result()
+            if p.returncode is None:
+                continue
+            if exited is None:
+                exited = loop.time()
+            elif loop.time() - exited >= container_service.EXIT_GRACE:
+                break
+
+        # Dead, and something it started is keeping its output open.
+        popen = _popen_of(p)
+        pipes = [getattr(popen, "stdout", None), getattr(popen, "stderr", None)] if popen is not None else []
+        left = container_service.stop_holders(pipes)
+        _report_left(p.pid, p.returncode, left)
+        done, _ = await asyncio.wait({talking}, timeout=container_service.EXIT_GRACE)
+        if not done:
+            # Held by something this could not find or could not kill. Closing
+            # the transport ends the pipes from this end: each reader is handed
+            # the end of its stream, and 'communicate' returns what it read.
+            transport = getattr(p, "_transport", None)
+            if transport is not None:
+                with contextlib.suppress(Exception):
+                    transport.close()
+            done, _ = await asyncio.wait({talking}, timeout=container_service.EXIT_GRACE)
+        if done:
+            return talking.result()
+        return b"", b""
+    finally:
+        if not talking.done():
+            talking.cancel()
+
+
+def _popen_of(p):
+    """The ``subprocess.Popen`` behind an asyncio process, whose pipes are the ones to look for; None if unreachable.
+
+    asyncio keeps it on the transport, under the extra 'subprocess', and offers
+    no public way to the transport; this is the one place that reaches for it.
+    """
+    transport = getattr(p, "_transport", None)
+    if transport is None:
+        return None
+    try:
+        return transport.get_extra_info("subprocess")
+    except Exception:  # pylint: disable=broad-except
+        return None
+
+
+def _report_left(pid, returncode, left) -> None:
+    """Say that a process ended and left something holding its output, once, as a warning.
+
+    A warning rather than an error: what the process itself ended with is
+    reported by whoever ran it, and that is the failure, if there is one. This
+    is only where the wait went.
+    """
+    pc_logging.warning(
+        "Process %s ended (%s), but %s it started kept its output open; %s, and the rest of its output is not "
+        "waited for."
+        % (
+            pid,
+            describe_exit_code(returncode),
+            "%d process(es)" % len(left) if left else "something",
+            "stopped " + ", ".join(str(held) for held in left) if left else "no longer reading it",
+        )
+    )
+
+
+def communicate_sync(p, stdin: bytes = None):
+    """``p.communicate(stdin)`` for a ``subprocess.Popen``, over when ``p`` is.
+
+    The synchronous runs -- provisioning goes through them -- waited for the
+    pipes exactly as the asynchronous ones did, and are held to the same rule
+    (see `container_service.communicate`).
+    """
+    stdout, stderr, left = container_service.communicate(p, stdin)
+    if left is not None:
+        _report_left(p.pid, p.returncode, left)
+    if getattr(p, "text_mode", False):
+        # What was read before the wait was cut short is bytes even for a
+        # text-mode Popen, which decodes only what it reads to the end; the
+        # conda provisioning calls are text-mode, and expect text either way.
+        return _text(stdout), _text(stderr)
+    # Empty rather than None, which is what a pipe that was read to its end
+    # gives and what every caller tests for -- but None where the output went
+    # to a file rather than a pipe ('output_capture'), which is how
+    # 'OutputCapture.collect' knows to read it from there.
+    return _or_empty(stdout, p, "stdout"), _or_empty(stderr, p, "stderr")
+
+
+def _or_empty(output, p, stream: str):
+    """'output' as read from 'p''s 'stream': empty for nothing read, None where it was no pipe.
+
+    A process that does not say what its stream was is taken to have had a pipe.
+    """
+    if output is None and getattr(p, stream, True) is not None:
+        return b""
+    return output
+
+
+def _text(output) -> str:
+    """Output as text, whichever of the two it arrived as."""
+    if isinstance(output, bytes):
+        return decode_output(output)
+    return output or ""
 
 
 def pack_directory(path: str) -> str:
@@ -410,6 +557,10 @@ class Runtime:
         # The container this runtime runs commands in, once it has one. See
         # 'use_container'.
         self.endpoint = None
+        # Set when that container was found to have stopped, so the next
+        # command starts it again first (see '_endpoint_ended').
+        self._endpoint_stopped = False
+        self._endpoint_guard = threading.Lock()
 
     def use_container(self, endpoint) -> None:
         """Run every command from now on in ``endpoint``'s container.
@@ -422,6 +573,53 @@ class Runtime:
         in a container another release had made.
         """
         self.endpoint = endpoint
+
+    def _endpoint_ended(self, endpoint, returncode, stderr):
+        """A container command's ``(returncode, stderr)``, saying so when what failed was the container.
+
+        A container is a sandbox process like any other: the out-of-memory
+        killer takes the service in it as readily as an interpreter, and from
+        then on every command sent to it comes back with no answer. So a failure
+        asks whether the container still runs (`containers.stopped`); when it
+        does not, how it stopped is added to the failure, and the next command
+        starts it again instead of being sent to it (`_current_endpoint`).
+        """
+        if returncode == 0:
+            return returncode, stderr
+        why = containers.stopped(getattr(endpoint, "container", None))
+        if why is None:
+            return returncode, stderr
+        with self._endpoint_guard:
+            if self.endpoint is endpoint:
+                self._endpoint_stopped = True
+        note = "The '%s' container %s; it is started again for the next command." % (
+            getattr(endpoint, "name", self.name),
+            why,
+        )
+        return returncode, note if not stderr else stderr.rstrip() + "\n" + note
+
+    def _current_endpoint(self):
+        """The container to send a command to: the one in use, or -- if that one stopped -- it, started again.
+
+        Started from the description it was made from, which is all
+        `containers.acquire` needs: it finds the stopped container by name and
+        starts it, or makes a new one where it is gone. Blocking, like every
+        acquire, so the asynchronous run calls it off the event loop -- and only
+        when there is something to start.
+        """
+        with self._endpoint_guard:
+            if not self._endpoint_stopped:
+                return self.endpoint
+            stale = self.endpoint
+        try:
+            fresh = containers.acquire(stale.spec)
+        except containers.ContainerUnavailable as e:
+            raise SandboxUnavailable(str(e))
+        with self._endpoint_guard:
+            if self.endpoint is stale:
+                self.endpoint = fresh
+                self._endpoint_stopped = False
+            return self.endpoint
 
     # ----------------------------------------------------------------- #
     # What 'run' and 'run_async' both do                                  #
@@ -575,6 +773,31 @@ class Runtime:
         """
         return cmd, cwd, env
 
+    def _ended(self, returncode, stderr):
+        """How a process this runtime launched ended, as the rest of PartCAD is to read it.
+
+        The other seam a sandbox overrides when what it launched is not what
+        ran: ``(returncode, stderr)`` back, unchanged here. The 'docker' sandbox
+        launches a 'docker exec' client, which reports a death by signal inside
+        the container the way a shell does, as 128 plus the signal, and whose
+        failure can be the container itself having stopped -- both of which are
+        for it to say, and both of which every launch point has to ask, the two
+        here and the two in 'PythonRuntime'.
+        """
+        return returncode, stderr
+
+    async def _ended_async(self, returncode, stderr):
+        """'_ended', from a coroutine: off the event loop when the process failed.
+
+        Asking whether a container has stopped is a synchronous request to
+        Docker's daemon, and a slow or wedged one would hold every coroutine on
+        the loop for as long as it takes. A success asks nothing, so it stays
+        here.
+        """
+        if returncode == 0:
+            return self._ended(returncode, stderr)
+        return await asyncio.get_running_loop().run_in_executor(None, self._ended, returncode, stderr)
+
     def run(
         self,
         cmd: list[str],
@@ -599,7 +822,8 @@ class Runtime:
             input_dirs = []
 
         if self.endpoint is not None:
-            returncode, stdout, stderr = self.endpoint.run(
+            endpoint = self._current_endpoint()
+            returncode, stdout, stderr = endpoint.run(
                 cmd,
                 stdin=stdin,
                 cwd=cwd,
@@ -607,25 +831,28 @@ class Runtime:
                 output_files=output_files,
                 input_dirs=input_dirs,
             )
+            returncode, stderr = self._endpoint_ended(endpoint, returncode, stderr)
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
             with sandbox_lock.process_slots.slot():
+                # Bytes, decoded by 'process_output', like every other launch
+                # point: what 'communicate_sync' hands back from a process it
+                # stopped waiting for is the bytes read so far, and a text-mode
+                # Popen would have mixed the two.
                 p = subprocess.Popen(
                     argv,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     shell=False,
-                    encoding="utf-8",
                     # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
                     cwd=spawn_cwd,
                     env=spawn_env,
                 )
-                stdout, stderr = p.communicate(
-                    input=stdin,
-                    # TODO(clairbee): add timeout
-                )
-            returncode = p.returncode
+                stdout, stderr = communicate_sync(p, stdin.encode("utf-8") if stdin else None)
+            stdout = decode_output(stdout)
+            stderr = decode_output(stderr)
+            returncode, stderr = self._ended(p.returncode, stderr)
             return self._finished(cmd, stdout, stderr, returncode)
 
         return self._finished(cmd, stdout, stderr, returncode)
@@ -649,7 +876,10 @@ class Runtime:
             input_dirs = []
 
         if self.endpoint is not None:
-            returncode, stdout, stderr = await self.endpoint.run_async(
+            endpoint = self.endpoint
+            if self._endpoint_stopped:
+                endpoint = await asyncio.get_running_loop().run_in_executor(None, self._current_endpoint)
+            returncode, stdout, stderr = await endpoint.run_async(
                 cmd,
                 stdin=stdin,
                 cwd=cwd,
@@ -658,6 +888,12 @@ class Runtime:
                 input_dirs=input_dirs,
                 timeout=timeout,
             )
+            if returncode != 0:
+                # Off the loop: '_endpoint_ended' asks Docker whether the
+                # container stopped (see '_ended_async').
+                returncode, stderr = await asyncio.get_running_loop().run_in_executor(
+                    None, self._endpoint_ended, endpoint, returncode, stderr
+                )
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
             async with sandbox_lock.process_slots.slot_async():
@@ -677,7 +913,7 @@ class Runtime:
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
-            returncode = p.returncode
+            returncode, stderr = await self._ended_async(p.returncode, stderr)
             return self._finished(cmd, stdout, stderr, returncode)
 
         return self._finished(cmd, stdout, stderr, returncode)

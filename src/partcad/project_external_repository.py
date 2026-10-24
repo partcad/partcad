@@ -363,8 +363,18 @@ class ProjectExternalRepository(ProjectPlugin):
 
     @staticmethod
     def _run_elsewhere(coroutine):
-        """Complete 'coroutine' on a worker thread's own loop, and wait for it."""
-        return threadpool_manager.unconstrained_executor.submit(lambda: asyncio.run(coroutine)).result()
+        """Complete 'coroutine' on a worker thread's own loop, and wait for it.
+
+        Through 'ThreadPoolManager.complete', which hands it to the unconstrained
+        pool -- or, from a thread that holds a slot of either pool already, runs
+        it on that slot instead of waiting for one. This thread blocks until it
+        is done, and a slot that blocks waiting for a slot is the deadlock that
+        'sync_threads' is written to rule out. Being on a slot already is no
+        corner case here: an extrusion looks its sketch up synchronously while
+        it is being built on one, and a sketch served by a plugin is fetched
+        from right here.
+        """
+        return threadpool_manager.complete(coroutine)
 
     async def ensure_enumerated_async(self):
         """Warm the package's structure (metadata and child list) from the plugin.

@@ -17,10 +17,16 @@ overridden, and CI overrides them on every run that rebuilt those images.
 They differ in when they have to act. The first is enough where the reference is
 built as the test runs; the second is for a module that builds it as it is
 imported, which has to be imported again rather than adjusted in place.
+
+The last, 'partcad_warnings', is here because what it captures is said by every
+package: a 'threadsMax' below the minimum is found by 'partcad_utils' on the
+client, by the daemon in a configuration a request carries, and by the CLI's own
+'--threads-max'.
 """
 
 import collections
 import importlib
+import logging
 import os
 import threading
 import traceback
@@ -194,3 +200,27 @@ def external_at_release():
         yield importlib.reload(external)
 
     importlib.reload(external)
+
+
+@pytest.fixture
+def partcad_warnings(monkeypatch):
+    """Every warning PartCAD says during the test, with nothing said once yet.
+
+    'pc_logging.warning_once' remembers, for the process, what it has said, so
+    whichever test warned first would silence the rest; the record is replaced
+    for the test instead. A handler is attached as well, because a warning that
+    nothing can hear yet is held rather than said.
+    """
+    monkeypatch.setattr(pc_logging, "_said_once", set())
+    monkeypatch.setattr(pc_logging, "_held", {})
+    messages = []
+
+    class Collect(logging.Handler):
+        def emit(self, record):
+            messages.append(record.getMessage())
+
+    logger = logging.getLogger("partcad")
+    handler = Collect(level=logging.WARNING)
+    logger.addHandler(handler)
+    yield messages
+    logger.removeHandler(handler)

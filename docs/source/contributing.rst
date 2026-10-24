@@ -1407,6 +1407,10 @@ Parallelism
 
   Coroutines can spawn tasks on the thread pool. Tasks on the thread pool can't call coroutines that use asyncio.Lock().
 
+  What a task on the thread pool asks the pool for -- an object built out of another one asks for that one --
+  runs on the thread the task already has rather than on a second one, so nesting cannot run the pool out of
+  threads however small it is. See ``partcad.sync_threads``.
+
 3. Digest external code properly
 
   Separate processes are spawned (optionally, in a sandboxed environment) to process third-party CAD-as-code parts and assemblies.

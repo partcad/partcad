@@ -7,6 +7,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 
+import atexit
 import logging
 import threading
 import time
@@ -49,6 +50,64 @@ debug = lambda *a, **kw: logging.getLogger("partcad").debug(*a, **kw)
 info = lambda *a, **kw: logging.getLogger("partcad").info(*a, **kw)
 warn = lambda *a, **kw: logging.getLogger("partcad").warn(*a, **kw)
 warning = lambda *a, **kw: logging.getLogger("partcad").warning(*a, **kw)
+
+
+# Warnings about the machine or the configuration rather than about the work: a
+# 'threadsMax' below the minimum, a machine with fewer cores than PartCAD wants.
+# Each stays true for as long as the process lives, so saying it on every
+# request a daemon serves would bury everything else -- and saying it the moment
+# it is found reaches nobody when that moment is before anything can render it.
+# Both ends find them that early: the CLI while 'partcad_utils.user_config' is
+# imported, long before its renderer exists, and the daemon while 'partcad' is
+# imported, before its log is connected to the client, where a plain warning
+# lands in the daemon's own log file and the user never sees it.
+#
+# So such a warning is said once per process, and only to a logger that has
+# somewhere to send it; until then it is held, and 'release_held_warnings' says
+# it. The CLI calls that once its renderer and its verbosity are in place (so
+# '--quiet' still silences it), and the daemon's log forwarding as it is
+# connected, inside the request whose client should hear it. A process that
+# never connects anything -- a script importing 'partcad' -- hears it at exit,
+# from Python's last-resort handler, rather than not at all.
+_once_lock = threading.Lock()
+_said_once: set = set()
+_held: dict = {}
+
+
+def warning_once(key, message: str) -> None:
+    """Warn with ``message`` once in this process, as soon as somebody can hear it.
+
+    ``key`` is what makes two warnings the same one: the same key is said once
+    however many times, and from however many places, it is warned about.
+    """
+    with _once_lock:
+        if key in _said_once or key in _held:
+            return
+        if not logging.getLogger("partcad").handlers:
+            _held[key] = message
+            return
+        _said_once.add(key)
+    warning(message)
+
+
+def release_held_warnings(say: bool = True) -> None:
+    """Say what 'warning_once' had to hold back, now that it can be heard.
+
+    With ``say`` false they are counted as said without being said, for a
+    process whose only listener has heard them already (see the '--stdio'
+    service in 'partcad_service_json_rpc.__main__').
+    """
+    with _once_lock:
+        held = list(_held.items())
+        _held.clear()
+        _said_once.update(key for key, _message in held)
+    if say:
+        for _key, message in held:
+            warning(message)
+
+
+# Registered after 'logging' registered its own shutdown, so it runs first.
+atexit.register(release_held_warnings)
 
 
 def reset_errors():

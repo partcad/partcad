@@ -120,6 +120,26 @@ class ContainerPool:
             lease.in_flight = max(0, lease.in_flight - 1)
             lease.used_at = time.monotonic()
 
+    def discard(self, lease: Lease) -> bool:
+        """Stop handing out a lease whose container has stopped; whether it was still the one held.
+
+        Without this a container the out-of-memory killer had taken stayed in
+        the map until it had been idle for `DEFAULT_IDLE_SECONDS` -- and every
+        request for its image in the meantime was sent to it and came back with
+        no answer. Dropped from the map and nothing more: the next `acquire`
+        for the image goes back to `start`, which finds the container stopped
+        and starts it again (or makes a new one), the way any container is had.
+
+        Only the lease that is still held for its image. One that has been
+        replaced already -- by a request that found the same death first --
+        is somebody else's to look after.
+        """
+        with self._lock:
+            if self._leases.get(lease.image) is not lease:
+                return False
+            del self._leases[lease.image]
+            return True
+
     def retire(self, now: Optional[float] = None) -> list:
         """Remove the containers nothing has used lately, and return them.
 

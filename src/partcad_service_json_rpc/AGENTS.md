@@ -70,6 +70,19 @@ caller's command runs under; that travels with every `context.create` and is reb
 print through `partcad_utils.config_report`, which is also where the redaction lives — the daemon scrubs a
 credential before logging it, so a value the client has no business holding never reaches the wire.
 
+Building the context from the caller's configuration covers whatever the context reads. It does not cover what
+the **process** owns, and an option that sizes something process-wide has to be re-applied per request instead.
+`threadsMax` is the one so far: the sandbox process slots (`partcad.sandbox_lock`) are the daemon's, sized at
+import from its own configuration, and were deaf to every `PC_THREADS_MAX` and `--threads-max` sent afterwards.
+So `context.create` calls `pc.sandbox_lock.follow()` with the configuration it is about to build from, and `_ctx`
+calls it again with the context's own -- requests are served one at a time, and another client's may have
+moved the slots in between. A request that names no context at all carries no configuration either, and is
+served with the slots the last one left. `--http` is the exception to "one at a time": it dispatches requests
+concurrently, so there the ceiling is the one the most recent request set. The thread pools (`partcad.sync_threads`) are not resized: they are not
+a strict limit, and nothing about them needs to follow the configuration -- nested work cannot starve a pool of
+any size (see `partcad.sync_threads`), and what does decide how much of the machine a command takes, the sandbox
+processes, already follows every request.
+
 ## Layout
 
 - `core/` — transport-agnostic operations shared with the legacy VS Code LSP server: `session.py` (PartCAD
@@ -79,6 +92,15 @@ credential before logging it, so a value the client has no business holding neve
   registry; `rpc.discover` returns the catalog).
 - `transport/` — `framing.py` (Content-Length codec), `stdio.py`, `socket_server.py` (threaded AF_UNIX server,
   the daemon's transport), `http.py` (optional HTTP+SSE).
+
+  Requests are dispatched one at a time, under one lock, by the socket server and the pipe server alike. A few
+  are answered at the transport level instead, beside whatever is being served: `daemon.stop`,
+  `daemon.settings`, `log.mode`, and the liveness probe `rpc.discover` (`partcad_utils.workspace.LIVENESS_METHOD`).
+  The probe has to be: queued behind a long request -- or behind one that never ended, which is what a sandbox
+  process that died used to leave (see "A sandbox process is waited for until it is dead" in
+  `src/partcad/AGENTS.md`) -- it timed out, and `pc daemon stop`, which asks it first, reported that no daemon
+  was running to the user the stalled client had just told to run it. Whatever is answered there must touch no
+  session state: the emitter's sink belongs to the request holding the lock.
 - `daemon.py` — workspace root discovery, hashing, socket path, liveness (`rpc.discover` probe), stale recovery,
   double-fork/detach, `daemon.stop`. `win_pipe.py` — the Windows named-pipe counterpart.
 

@@ -29,7 +29,7 @@ import sys
 import threading
 
 from partcad_utils.win_pipe import STOP_METHOD, pipe_name, read_frame, write_frame
-from partcad_utils.workspace import workspace_dir
+from partcad_utils.workspace import LIVENESS_METHOD, workspace_dir
 
 from . import config_restart
 from .rpc.dispatcher import Dispatcher
@@ -183,6 +183,15 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
                                 "result": {"restarting": differ, "settings": list(settings)},
                             },
                         )
+                        await writer.drain()
+                    continue
+
+                if isinstance(request, dict) and request.get("method") == LIVENESS_METHOD:
+                    # Answered now, outside the dispatch lock, as the socket
+                    # server answers it (see 'workspace.LIVENESS_METHOD').
+                    response = dispatcher.dispatch(request, session)
+                    if response is not None:
+                        write_frame(writer, response)
                         await writer.drain()
                     continue
 

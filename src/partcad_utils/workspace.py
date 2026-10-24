@@ -32,6 +32,15 @@ from .framing import read_message, write_message
 # How long to wait for a daemon to answer a liveness probe.
 LIVENESS_TIMEOUT = 1.0
 
+# What a liveness probe asks. The daemon answers it as it arrives, beside the
+# request it is serving rather than queued behind it (see the transports in
+# `partcad_service_json_rpc`): it serves one request at a time, so a probe that
+# waited its turn behind a long render -- or a wedged one -- was a probe that
+# timed out, and the daemon it asked about was taken for gone. `pc daemon stop`
+# asks it first, so the one command that could clear a stuck daemon reported
+# that there was none to stop.
+LIVENESS_METHOD = "rpc.discover"
+
 
 def determine_root_path(start: Optional[str] = None) -> str:
     """Find the workspace root the way ``partcad.Context`` does, without importing
@@ -82,7 +91,7 @@ def is_alive(path: str, timeout: float = LIVENESS_TIMEOUT) -> bool:
     try:
         client.connect(path)
         stream = client.makefile("rwb")
-        write_message(stream, {"jsonrpc": "2.0", "id": 0, "method": "rpc.discover", "params": {}})
+        write_message(stream, {"jsonrpc": "2.0", "id": 0, "method": LIVENESS_METHOD, "params": {}})
         response = read_message(stream)
         return isinstance(response, dict) and response.get("id") == 0 and "result" in response
     except OSError:
@@ -96,13 +105,14 @@ def is_listening(path: str, timeout: float = LIVENESS_TIMEOUT) -> bool:
     """True if something is listening on the socket, whether or not it answers.
 
     The question a launcher has to ask before it replaces a daemon, which is not
-    the one 'is_alive' asks. A daemon serves one request at a time, so one busy
-    with a long request does not answer 'rpc.discover' within a second - and
-    neither does one still building its session, since the socket is bound
-    before the session is. Reading either as dead is how a burst of clients
-    each unlinked the socket of a daemon that was working and started one of
-    their own: three daemons for one workspace, each holding some of the
-    clients.
+    the one 'is_alive' asks. A daemon still building its session does not answer
+    'rpc.discover' within a second, since the socket is bound before the session
+    is -- and until the probe was answered beside the request being served
+    (`LIVENESS_METHOD`), neither did one busy with a long request, which a
+    daemon of an older release still does not. Reading either as dead is how a
+    burst of clients each unlinked the socket of a daemon that was working and
+    started one of their own: three daemons for one workspace, each holding
+    some of the clients.
 
     A daemon that is gone cannot be mistaken for one that is busy. Its socket
     file outlives it, but nothing listens on it, and connecting is refused.

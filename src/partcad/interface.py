@@ -470,7 +470,7 @@ class Interface:
                 # Set on the object rather than written into 'param_config':
                 # normalization works on the declaration in place, and the
                 # declaration is part of the key of every assembly connecting
-                # through this interface (see 'add_interfaces_to_key').
+                # through this interface (see 'AssemblyFactoryAssy.interfaces_of').
                 self.params[param_name].unbounded = unbounded
 
         self.lock = threading.RLock()

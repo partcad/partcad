@@ -15,6 +15,7 @@ from .sync_threads import threadpool_manager
 
 class Sketch(Shape):
     path: typing.Optional[str] = None
+    built_on_pool = True
 
     def __init__(self, project_name: str, config: dict = {}) -> None:
         super().__init__(project_name, config)

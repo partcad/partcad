@@ -160,7 +160,7 @@ def test_readers_on_one_loop_do_not_wait_for_each_other(tmp_path):
 def test_process_slots_are_a_ceiling():
     slots = ProcessSlots(2)
     with slots.slot(), slots.slot():
-        assert not slots._semaphore.acquire(blocking=False)
+        assert not slots._try_acquire()
     with slots.slot():
         pass
 
@@ -208,5 +208,72 @@ def test_a_cancelled_wait_leaves_nothing_behind():
 
     asyncio.run(scenario())
     # One holder released one slot: exactly one is free, not two.
-    assert slots._semaphore.acquire(blocking=False)
-    assert not slots._semaphore.acquire(blocking=False)
+    assert slots._try_acquire()
+    assert not slots._try_acquire()
+
+
+# ---- how many: 'threadsMax', at least four, and moved per request -----------------
+
+
+def test_raising_the_ceiling_lets_a_waiter_in():
+    """A daemon is handed a larger 'threadsMax' while a render is waiting."""
+    slots = ProcessSlots(1)
+
+    async def scenario():
+        async with slots.slot_async():
+            waiter = asyncio.create_task(_take(slots))
+            await asyncio.sleep(0.02)
+            assert not waiter.done()
+            slots.resize(2)
+            await asyncio.wait_for(waiter, timeout=5)
+
+    asyncio.run(scenario())
+
+
+async def _take(slots):
+    async with slots.slot_async():
+        pass
+
+
+def test_lowering_the_ceiling_takes_nothing_away_and_gives_nothing_new():
+    """Slots already held stay held; nobody new gets one until they are under it."""
+    slots = ProcessSlots(3)
+    with slots.slot(), slots.slot():
+        slots.resize(1)
+        assert slots.count == 1
+        assert not slots._try_acquire()
+    assert slots._try_acquire()
+    assert not slots._try_acquire()
+
+
+class _Config:
+    def __init__(self, threads_max):
+        self.threads_max = threads_max
+
+
+@pytest.mark.parametrize("threads_max, expected", [(4, 4), (6, 6), (16, 16)])
+def test_the_count_is_what_threads_max_says(threads_max, expected):
+    assert sandbox_lock.process_slot_count(_Config(threads_max)) == expected
+
+
+def test_the_count_is_never_below_the_minimum_whatever_the_configuration_is():
+    """'UserConfig' raises a low value itself; this is the strict limit, and a
+    configuration need not be a 'UserConfig' to reach it."""
+    assert sandbox_lock.process_slot_count(_Config(2)) == 4
+
+
+@pytest.mark.parametrize("cores, expected", [(2, 4), (8, 8)])
+def test_nothing_set_is_one_per_core_and_at_least_the_minimum(monkeypatch, cores, expected):
+    monkeypatch.setattr("partcad_utils.user_config.os.cpu_count", lambda: cores)
+    assert sandbox_lock.process_slot_count(_Config(None)) == expected
+
+
+def test_follow_sizes_this_process_s_slots_for_a_configuration(monkeypatch):
+    """What the daemon does for every request, with the configuration it carries."""
+    monkeypatch.setattr(sandbox_lock, "process_slots", ProcessSlots(4))
+
+    sandbox_lock.follow(_Config(6))
+    assert sandbox_lock.process_slots.count == 6
+
+    sandbox_lock.follow(_Config(2))
+    assert sandbox_lock.process_slots.count == 4

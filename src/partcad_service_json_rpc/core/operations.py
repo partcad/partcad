@@ -80,6 +80,14 @@ def _ctx(session, params):
     else:
         ctx = session.partcad_ctx
     if ctx is not None:
+        # The sandbox process slots are this process's, and the configuration
+        # is this request's: sized once, at import, they kept the daemon's own
+        # 'threadsMax' and ignored the PC_THREADS_MAX or '--threads-max' of every
+        # command served afterwards. Re-applied here because this is where every
+        # operation on a context passes, after 'context.create' -- which applies
+        # it too -- and another client's request may have run in between.
+        session.partcad.sandbox_lock.follow(ctx.user_config)
+
         # Every operation on a context comes through here first, whichever
         # client sent it, and requests are dispatched one at a time: this is
         # the point between commands, where nothing is using the packages a
@@ -1428,7 +1436,9 @@ async def _test_async(
 
     test_ctx = {Test.NAMED: True} if named else {}
     tasks = []
-    tests_to_run = all_tests(pc.user_config.threads_max)
+    # The context's configuration -- the caller's -- rather than the daemon's
+    # own, which says nothing about how this command was invoked.
+    tests_to_run = all_tests(ctx.user_config.threads_max)
     if filter_prefix:
         tests_to_run = list(filter(lambda t: t.name.startswith(filter_prefix), tests_to_run))
 
@@ -1555,7 +1565,8 @@ async def _lint_async(ctx, pc, packages, filter_prefix):
     from partcad.lint.all import get_linting_checks
 
     tasks = []
-    lint_checks = get_linting_checks(pc.user_config.threads_max)
+    # The caller's, as for the tests above.
+    lint_checks = get_linting_checks(ctx.user_config.threads_max)
     if filter_prefix:
         lint_checks = list(filter(lambda check: check.name.startswith(filter_prefix), lint_checks))
 
@@ -2186,6 +2197,11 @@ def context_create(session, params):
     context_id = hashlib.sha256(root.encode("utf-8")).hexdigest()[:16]
 
     fingerprint, user_config = _caller_user_config(pc, params)
+
+    # Before the context is built, which can already run a sandbox (a plugin
+    # enumerating a package): with the slots this caller's 'threadsMax' asks
+    # for, not the ones the daemon was started with. See '_ctx'.
+    pc.sandbox_lock.follow(user_config)
 
     # A warm context resolved its package graph -- which dependencies, from
     # which revisions, through which proxy -- against the configuration it was
