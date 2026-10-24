@@ -132,6 +132,40 @@ has none), and the rest of this page is written with ``...``. Note that ``pc sup
 ``pc supply quote -r`` mean something else entirely — break every assembly down to its parts — and take no
 ``...``, and so does ``pc instructions -r``, which puts the steps of the sub-assemblies into the instructions.
 
+.. _parameter-values:
+
+************************************
+Naming an object with its parameters
+************************************
+
+An object that declares ``parameters:`` is asked for with particular values by writing them into its name, after
+a ``;`` and separated by commas -- every command that takes an object takes such a name, because an object with
+particular values *is* that name::
+
+    pc render "bolt;length=30,size=M4"
+    pc export -t step "//pub/std/metric/m:m-thru;size=4,depth=2"
+
+``-p``/``--param <name>=<value>`` says the same one value at a time, and is repeated for several. It is the
+spelling with nothing to quote: a shell takes the ``;`` above for the end of the command, so that ``pc render
+bolt;length=30`` unquoted renders the bolt at its default length and then sets a shell variable::
+
+    pc render bolt -p length=30 -p size=M4        # the same request as the first one above
+    pc render "bolt;length=20" -p length=30       # a value given with -p wins over the name's
+    pc render ...:bolt -p length=30               # every bolt from here down, each thirty long
+
+``pc render``, ``pc export``, ``pc test``, ``pc sim``, ``pc cam``, ``pc cae``, ``pc instructions``, ``pc info``,
+``pc bom`` and ``pc ide view`` take it. A list is written with commas, ``-p include=BEND_UP,BEND_DOWN``, and each
+value is read as the type its parameter declares. ``-p`` with no object to give the values to is refused.
+
+What either spelling produces is named by its values too -- in the log, in the cache, and in the files it is
+written to. In a file name the characters a shell or a filesystem would take for something else are written as
+``_``, so ``bolt;length=30`` renders to ``bolt_length_30.svg`` and ``room;medium=//pub/std/materials:air`` to
+``room_medium_pub_std_materials_air.svg``.
+
+``--extra-param <object>.<parameter>=<value>``, given before the command, is a different thing: it changes the
+*default* of a parameter wherever the object is used, inside other assemblies included, the way the ``parameters:``
+section of the user configuration does. ``-p`` asks for one instance and leaves the object's defaults alone.
+
 .. _fast-only:
 
 ***********************************
@@ -904,7 +938,9 @@ Object commands
   ``svg``, ``png``, ``jpeg``, ``dxf``, ``readme``, ``pdf``, ``html``, or any file type a package implements
   itself (see :ref:`output-files`). ``-e`` works the same way as it does for ``pc export``, reading the
   ``render:`` options from another package. ``-P <package>...`` and ``...:<name>`` render a whole subtree, the
-  same way they do for ``pc export`` (see :ref:`recursive-names`).
+  same way they do for ``pc export`` (see :ref:`recursive-names`). ``-p <name>=<value>`` renders the object
+  with that value of one of its parameters, the same as naming it ``<name>;<parameter>=<value>`` (see
+  :ref:`parameter-values`).
 
   ``--filter`` renders a *part* of one assembly or scene, exactly as it does for ``pc export`` above:
 
@@ -1208,14 +1244,25 @@ instead.
   -- a ``.py`` is a CadQuery script, a build123d one or an SDF one -- and the VS Code extension passes the
   declared type of the object you clicked.
 
+  ``--kind sketch`` says the file holds a sketch, which is converted between sketch formats rather than part
+  formats: an application that opens drawings -- CADCraft, from the ``partcad-cadcraft`` plugin, lists DWG and
+  DXF -- is handed a DXF sketch as it is, and an SVG sketch or a CadQuery or build123d one as the DXF PartCAD
+  draws of it::
+
+    pc ide open --with cadcraft --kind sketch --type svg outline.svg
+
+  The type alone does not say which: a ``cadquery`` file declared under ``sketches:`` is a drawing, the same
+  file under ``parts:`` a solid. The VS Code extension passes the kind of the object you clicked.
+
   When the application closes, the file it was given is compared with what it was before:
 
   * **Unchanged** -- nothing happens, and ``No changes.`` says so.
   * **Changed, and opened as it is** -- the edit is already in your file.
   * **Changed, and converted first** -- the edited copy is converted back into the object's own format and
     written over its source, when that source is a file PartCAD can write (``step``, ``brep``, ``stl``, ``3mf``,
-    ``obj``, ``iges``, ``gltf``). A script is not: its edit is kept where it was made and the path is printed,
-    because overwriting the program that generates a part with its output would destroy the program.
+    ``obj``, ``iges``, ``gltf``; for a sketch, ``dxf`` and ``svg``). A script is not: its edit is kept where it
+    was made and the path is printed, because overwriting the program that generates a part with its output would
+    destroy the program.
 
   An application that saves beside what it opened -- KiCad -- has its whole directory compared rather than
   the one file. Interrupting ``pc ide open`` (``Ctrl+C``) stops the wait and leaves the application open; what is

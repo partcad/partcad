@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.8.234",
+  "version": "0.8.237",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -251,13 +251,13 @@
         "properties": {
           "partcad.open.useDocker": {
             "default": true,
-            "description": "Let PartCAD run a third-party application (\"Open in...\": FreeCAD, Blender, Gazebo, MuJoCo, KiCad, SolidCraft) in a Docker container when it is not installed on this machine, and Docker is running here. The container is named after the application ('partcad-freecad', 'partcad-blender', 'partcad-gazebo', 'partcad-mujoco', 'partcad-kicad', 'partcad-solidcraft'), keeps the workspace mounted at the path it has here, and shows its windows on this machine's X display - which macOS and Windows need an X server for.",
+            "description": "Let PartCAD run a third-party application (\"Open in...\": FreeCAD, Blender, Gazebo, MuJoCo, KiCad, SolidCraft, CADCraft) in a Docker container when it is not installed on this machine, and Docker is running here. The container is named after the application ('partcad-freecad', 'partcad-blender', 'partcad-gazebo', 'partcad-mujoco', 'partcad-kicad', 'partcad-solidcraft', 'partcad-cadcraft'), keeps the workspace mounted at the path it has here, and shows its windows on this machine's X display - which macOS and Windows need an X server for.",
             "scope": "machine",
             "type": "boolean"
           },
           "partcad.open.dockerImage": {
             "default": "",
-            "description": "Create that container from this image instead of the application's default one (FreeCAD: 'linuxserver/freecad:latest', Blender: 'linuxserver/blender:latest', Gazebo: 'gazebosim/gz-harmonic:latest', MuJoCo: 'ghcr.io/google-deepmind/mujoco:latest', KiCad: the 'ghcr.io/partcad/partcad-container-kicad' image of this release, SolidCraft: the image its plugin package publishes). Applies to whichever application is opened next and only when its container is created; remove an existing one to have it recreated.",
+            "description": "Create that container from this image instead of the application's default one (FreeCAD: 'linuxserver/freecad:latest', Blender: 'linuxserver/blender:latest', Gazebo: 'gazebosim/gz-harmonic:latest', MuJoCo: 'ghcr.io/google-deepmind/mujoco:latest', KiCad: the 'ghcr.io/partcad/partcad-container-kicad' image of this release, SolidCraft and CADCraft: the image each one's plugin package publishes). Applies to whichever application is opened next and only when its container is created; remove an existing one to have it recreated.",
             "scope": "machine",
             "type": "string"
           }
@@ -817,6 +817,14 @@
         "title": "SolidCraft",
         "icon": "$(link-external)",
         "enablement": "!partcad.editingExternally"
+      },
+      {
+        "command": "partcad.openInCADCraft",
+        "category": "PartCAD",
+        "group": "Open in",
+        "title": "CADCraft",
+        "icon": "$(link-external)",
+        "enablement": "!partcad.editingExternally"
       }
     ],
     "submenus": [
@@ -903,7 +911,7 @@
         {
           "command": "partcad.inspectSketch",
           "group": "navigation",
-          "when": "view == partcadExplorer && (viewItem == sketch || viewItem == sketchWithCode)"
+          "when": "view == partcadExplorer && (viewItem == sketch || viewItem == sketchWithCode || viewItem == sketchDrawing || viewItem == sketchScript)"
         },
         {
           "command": "partcad.inspectInterface",
@@ -913,17 +921,17 @@
         {
           "command": "partcad.inspectPart",
           "group": "navigation",
-          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == partKicad)"
+          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == partKicad || viewItem == partDrawing)"
         },
         {
           "command": "partcad.inspectAssembly",
           "group": "navigation",
-          "when": "view == partcadExplorer && (viewItem == assembly || viewItem == assemblyWithCode)"
+          "when": "view == partcadExplorer && (viewItem == assembly || viewItem == assemblyWithCode || viewItem == assemblyDrawing)"
         },
         {
           "command": "partcad.inspectScene",
           "group": "navigation",
-          "when": "view == partcadExplorer && (viewItem == scene || viewItem == sceneWithCode || viewItem == sceneWorld)"
+          "when": "view == partcadExplorer && (viewItem == scene || viewItem == sceneWithCode || viewItem == sceneWorld || viewItem == sceneMjcf)"
         },
         {
           "command": "partcad.test",
@@ -932,12 +940,12 @@
         {
           "command": "partcad.inspectSource",
           "group": "inline",
-          "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode || viewItem == sceneWithCode || viewItem == sceneWorld || viewItem == packageWithCode || viewItem == interfaceWithCode)"
+          "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode || viewItem == sceneWithCode || viewItem == sceneWorld || viewItem == sceneMjcf || viewItem == packageWithCode || viewItem == interfaceWithCode)"
         },
         {
           "command": "partcad.inspectSource",
           "group": "navigation",
-          "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode || viewItem == sceneWithCode || viewItem == sceneWorld || viewItem == packageWithCode)"
+          "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode || viewItem == sceneWithCode || viewItem == sceneWorld || viewItem == sceneMjcf || viewItem == packageWithCode)"
         },
         {
           "submenu": "partcad.submenu.addItem",
@@ -951,17 +959,17 @@
         },
         {
           "submenu": "partcad.submenu.convert",
-          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == partKicad)",
+          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == partKicad || viewItem == partDrawing)",
           "group": "additional_commands"
         },
         {
           "submenu": "partcad.submenu.export",
-          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == partKicad || viewItem == assembly || viewItem == assemblyWithCode || viewItem == scene || viewItem == sceneWithCode || viewItem == sceneWorld)",
+          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == partKicad || viewItem == partDrawing || viewItem == assembly || viewItem == assemblyWithCode || viewItem == assemblyDrawing || viewItem == scene || viewItem == sceneWithCode || viewItem == sceneWorld || viewItem == sceneMjcf)",
           "group": "additional_commands"
         },
         {
           "submenu": "partcad.submenu.openWith",
-          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == partKicad || viewItem == assembly || viewItem == assemblyWithCode || viewItem == sceneWorld)",
+          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == partKicad || viewItem == partDrawing || viewItem == assembly || viewItem == assemblyWithCode || viewItem == assemblyDrawing || viewItem == sceneWorld || viewItem == sceneMjcf || viewItem == sketchDrawing || viewItem == sketchWithCode || viewItem == sketchScript)",
           "group": "additional_commands"
         }
       ],
@@ -1086,7 +1094,7 @@
       "partcad.submenu.openWith": [
         {
           "command": "partcad.openInFreeCAD",
-          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf"
+          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf && viewItem != sketchDrawing && viewItem != sketchWithCode && viewItem != sketchScript"
         },
         {
           "command": "partcad.openInGazebo",
@@ -1102,11 +1110,15 @@
         },
         {
           "command": "partcad.openInBlender",
-          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf"
+          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf && viewItem != sketchDrawing && viewItem != sketchWithCode && viewItem != sketchScript"
         },
         {
           "command": "partcad.openInSolidCraft",
-          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf"
+          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf && viewItem != sketchDrawing && viewItem != sketchWithCode && viewItem != sketchScript"
+        },
+        {
+          "command": "partcad.openInCADCraft",
+          "when": "view == partcadExplorer && (viewItem == sketchDrawing || viewItem == sketchWithCode || viewItem == sketchScript || viewItem == partDrawing || viewItem == assemblyDrawing)"
         }
       ]
     },

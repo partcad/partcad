@@ -1563,3 +1563,108 @@ def test_but_not_when_the_file_opened_is_in_it(tmp_path, docker, monkeypatch):
         external._open_in_container(
             external.TOOLS["freecad"], str(copy), str(tmp_path / "ws"), "img", lambda m: None, "mount"
         )
+
+
+# ---------------------------------------------------------------------------
+# Sketches: an application that opens drawings, and every sketch PartCAD reads
+# ---------------------------------------------------------------------------
+
+# What the CADCraft plugin package declares: a drafting application, DWG first.
+CADCRAFT_DECLARATION = {"formats": ["dwg", "dxf"], "binaries": ["cadcraft"]}
+
+
+@pytest.fixture
+def drafting():
+    previous = dict(external.TOOLS)
+    external.use_tools({"cadcraft": CADCRAFT_DECLARATION})
+    try:
+        yield
+    finally:
+        external.TOOLS.clear()
+        external.TOOLS.update(previous)
+
+
+def _sketch(tmp_path, name, content):
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    path = tmp_path / name
+    path.write_text(content)
+    return path
+
+
+def test_a_dxf_sketch_is_opened_as_it_is(monkeypatch, spawned, tmp_path, converter, drafting):
+    _installed(monkeypatch, "cadcraft")
+    sketch = _sketch(tmp_path, "outline.dxf", "0\nEOF\n")
+
+    result = external.open_file(str(sketch), tool="cadcraft", object_type="dxf", object_kind="sketch")
+
+    assert converter.calls == []
+    assert result.path == str(sketch)
+
+
+def test_an_svg_sketch_becomes_the_first_drawing_partcad_writes(monkeypatch, spawned, tmp_path, converter, drafting):
+    """DWG is first on CADCraft's list and PartCAD writes no DWG sketch; DXF is next."""
+    _installed(monkeypatch, "cadcraft")
+    sketch = _sketch(tmp_path, "outline.svg", "<svg/>")
+
+    result = external.open_file(
+        str(sketch), tool="cadcraft", object_type="svg", object_kind="sketch", transcode=converter
+    )
+
+    assert converter.calls[0][1] == "svg"
+    assert converter.calls[0][3] == "dxf"
+    assert converter.kinds == ["sketch"]
+    assert result.path.endswith(".dxf")
+
+
+def test_a_script_sketch_is_converted_and_an_edit_to_it_is_kept(monkeypatch, spawned, tmp_path, converter, drafting):
+    """A DXF cannot become a CadQuery script again: the edit stays where it was made."""
+    _installed(monkeypatch, "cadcraft")
+    spawned.edit = _edits()
+    sketch = _sketch(tmp_path, "slot.py", "import cadquery as cq\n")
+
+    result = external.open_file(
+        str(sketch), tool="cadcraft", object_type="cadquery", object_kind="sketch", transcode=converter
+    )
+
+    assert converter.calls[0][1:2] == ("cadquery",)
+    assert result.written_back is None
+    assert result.edited == result.path
+    assert len(converter.calls) == 1
+
+
+def test_an_edit_to_an_svg_sketch_s_drawing_goes_back_into_the_svg(monkeypatch, spawned, tmp_path, converter, drafting):
+    _installed(monkeypatch, "cadcraft")
+    spawned.edit = _edits()
+    sketch = _sketch(tmp_path, "outline.svg", "<svg/>")
+
+    result = external.open_file(
+        str(sketch), tool="cadcraft", object_type="svg", object_kind="sketch", transcode=converter
+    )
+
+    assert converter.calls[-1] == (result.path, "dxf", str(sketch), "svg")
+    assert converter.kinds == ["sketch", "sketch"]
+    assert result.written_back == str(sketch)
+
+
+def test_a_sketch_whose_type_cannot_be_told_says_what_to_pass(monkeypatch, tmp_path, converter, drafting):
+    """'.py' is a CadQuery sketch or a build123d one."""
+    _installed(monkeypatch, "cadcraft")
+    sketch = _sketch(tmp_path, "slot.py", "")
+
+    with pytest.raises(external.ExternalToolError) as error:
+        external.open_file(str(sketch), tool="cadcraft", object_kind="sketch", transcode=converter)
+
+    assert "--type" in str(error.value)
+    assert converter.calls == []
+
+
+def test_a_sketch_for_an_application_that_opens_no_drawing_is_refused(monkeypatch, tmp_path, converter):
+    """FreeCAD lists solids; PartCAD writes a sketch into none of them, and says so."""
+    _installed(monkeypatch, "freecad")
+    sketch = _sketch(tmp_path, "outline.svg", "<svg/>")
+
+    with pytest.raises(external.ExternalToolError) as error:
+        external.open_file(str(sketch), tool="freecad", object_type="svg", object_kind="sketch", transcode=converter)
+
+    assert "writes a sketch into none of them" in str(error.value)
+    assert converter.calls == []

@@ -7,17 +7,17 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import os
-
 from . import logging as pc_logging
 from . import telemetry
+from .file_source import SourceFile
 from .sketch_factory import SketchFactory
 
 
-# TODO(clairbee): create ShapeFactoryFile to be reused
-#                 by corresponding Sketch, Part and Assembly factories
 @telemetry.instrument()
-class SketchFactoryFile(SketchFactory):
+class SketchFactoryFile(SourceFile, SketchFactory):
+    """A sketch read from one file, handed to its wrapper as it is (see 'partcad.file_source')."""
+
+    SOURCE_NOUN = "sketch"
     extension: str
 
     def __init__(
@@ -30,27 +30,7 @@ class SketchFactoryFile(SketchFactory):
         can_create=False,
     ):
         super().__init__(ctx, source_project, target_project, config)
-        self.extension = extension
-
-        if "path" in config:
-            self.path = config["path"]
-        else:
-            self.path = self.orig_name + extension
-
-        if not os.path.isdir(source_project.config_dir):
-            raise Exception(
-                "ERROR: The project config directory must be a directory, found: '%s'" % source_project.config_dir
-            )
-        self.path = os.path.join(source_project.config_dir, self.path)
-
-        if self.fileFactory is None:
-            # If the user did not supply a way to download the file,
-            # check if the file exists
-            exists = os.path.exists(self.path)
-            if not can_create and not exists:
-                raise Exception("ERROR: The sketch path (%s) must exist" % self.path)
-            if exists and not os.path.isfile(self.path):
-                raise Exception("ERROR: The sketch path (%s) must be a file" % self.path)
+        self.locate_source(source_project, config, extension=extension, can_create=can_create)
 
     def post_create(self) -> None:
         if self.path:
@@ -59,21 +39,3 @@ class SketchFactoryFile(SketchFactory):
         else:
             pc_logging.warning(f"Sketch path is not set: {self.sketch.name}")
         super().post_create()
-
-    async def download_file_async(self, sketch) -> None:
-        """Fetch what 'fileFrom' points at, unless the file is already there."""
-        if self.fileFactory is not None and not os.path.exists(sketch.path):
-            with pc_logging.Action("File", self.target_project.name, sketch.name):
-                await self.fileFactory.download(sketch.path)
-
-    async def prepare_async(self, sketch) -> None:
-        """Download the source file without building the sketch.
-
-        The cache key hashes the file's content, so it only means anything once
-        the file is on disk. 'pc install' calls this for every object, which is
-        why the first build after an install is a cache hit and not a miss.
-        """
-        await self.download_file_async(sketch)
-
-    async def instantiate(self, sketch):
-        await self.download_file_async(sketch)

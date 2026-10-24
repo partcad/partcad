@@ -11,6 +11,7 @@ import rich_click as click
 from partcad_ide_client.protocol import VIEWER_TABS
 
 from ... import object_kind
+from ...parameters import param_option, param_params
 from ...service import run
 
 # What each tab is called on the command line, where it differs from its id:
@@ -124,15 +125,7 @@ def tab_options(command):
     is_flag=True,
     show_envvar=True,
 )
-@click.option(
-    "-p",
-    "--param",
-    "params",
-    multiple=True,
-    metavar="<param_name>=<param_value>",
-    help="Assign a value to the parameter",
-    show_envvar=True,
-)
+@param_option
 @tab_options
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
 @click.pass_context
@@ -146,7 +139,7 @@ def cli(cli_ctx, context, verbal, package, interface, assembly, sketch, scene, p
         "assembly": assembly,
         "sketch": sketch,
         "scene": scene,
-        "params": list(params),
+        **param_params(params),
         "object": object,
     }
     if package is not None:

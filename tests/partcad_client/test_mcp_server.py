@@ -181,6 +181,33 @@ def test_a_kind_is_the_flag_pc_sets_and_parameters_are_assignments(tmp_path):
     assert request["params"] == ["width=10", "hollow=true"]
 
 
+def test_a_list_value_is_written_the_way_a_name_spells_it(tmp_path):
+    """'{"include": ["UP", "DOWN"]}' is 'include=UP,DOWN', not "include=['UP', 'DOWN']"."""
+    daemon, server = serve(tmp_path, {"bom": lambda params, emit: None})
+    call(server, "bom", {"object": "panel", "params": {"include": ["UP", "DOWN"]}})
+    (request,) = requests(daemon, "bom")
+    assert request["params"] == ["include=UP,DOWN"]
+
+
+@pytest.mark.parametrize(
+    "tool, method, arguments",
+    [
+        ("render", "render.inline", {}),
+        ("export", "render.inline", {"format": "step", "path": "out/box.step"}),
+        ("test", "test.run", {}),
+        ("instructions", "assembly.guide", {}),
+    ],
+)
+def test_every_tool_naming_an_object_takes_its_parameter_values(tmp_path, tool, method, arguments):
+    """The values reach the daemon as `pc -p` sends them, and the daemon writes them into the name."""
+    answer = rendered("png", PNG) if method == "render.inline" else (lambda params, emit: None)
+    daemon, server = serve(tmp_path, {method: answer})
+    call(server, tool, {"object": "box", "params": {"width": 10}, **arguments})
+    (request,) = requests(daemon, method)
+    assert request["object"] == "box"
+    assert request["params"] == ["width=10"]
+
+
 def test_assembly_instructions_carry_this_machines_build_vs_buy_choices(tmp_path, monkeypatch):
     monkeypatch.setattr(mcp_server.garage, "load_all_bvb", lambda: {"//pkg:bolt": "buy"})
     daemon, server = serve(tmp_path, {"assembly.guide": lambda params, emit: {"steps": []}})

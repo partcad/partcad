@@ -35,65 +35,35 @@ import wrapper_common
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 
 
-def as_faces(layers, tolerance):
-    """The faces what the selected layers draw bound, holes included -- every one of them.
+def _faces(wires):
+    """The faces one layer's closed wires bound, each outline with the holes inside it.
 
-    CadQuery's importer, which this follows: each layer's entities are joined
-    into wires, the wires are sorted into outlines and the holes inside them,
-    and each outline becomes a face. Raises if a wire does not close, which is
-    the case 'as_wires' answers.
-
-    *Every* face is kept. A drawing of two outlines side by side, or one on
-    each of two layers, is a sketch of two faces -- not of whichever one the
-    importer happened to list first, which is what this used to keep. One face
-    comes back as that face, as it always has.
+    CadQuery's importer, which this follows, sorts the wires into outlines and
+    the holes inside them and makes a face of each outline.
     """
-    faces = [
-        Face.makeFromWires(wire_set[0], wire_set[1:])
-        for entities in layers.values()
-        for wire_set in sortWiresByBuildOrder(_dxf_convert(entities, tolerance))
-    ]
-    return dxf_drawing.one_shape(faces, Compound.makeCompound).wrapped
+    return [Face.makeFromWires(wire_set[0], wire_set[1:]) for wire_set in sortWiresByBuildOrder(wires)]
 
 
-def as_wires(layers, tolerance):
-    """What the selected layers draw, as wires, for a drawing that has no faces.
+def as_sketch(layers, tolerance):
+    """What the selected layers draw, as '(shape, warning)': see 'dxf_drawing.sketch'.
 
-    'as_faces' builds *faces*: it merges each layer's entities into wires and
-    then asks each wire for the face it bounds. A drawing whose lines do not
-    close bounds nothing, so the whole import fails - and a drawing whose lines
-    do not close is precisely what sheet metal bend instructions are. Two
-    parallel lines across a blank are where it is folded, and they are open by
-    nature.
-
-    So when the face import fails, the wires themselves are the answer. They are
-    what the drawing states, they are what an annotation is written against, and
-    a sketch of them is a perfectly good sketch - it is only not a face.
-
-    Only ever reached *after* the face import has raised, which is what keeps
-    every drawing that imports as faces importing as faces: this is a second
-    answer to a question that otherwise had none, never a different answer to
-    one that had one.
+    Each layer's entities are joined into wires by CadQuery's own converters;
+    which of them become faces, and what is said about the rest, is decided
+    there.
     """
-    wires = [wire for entities in layers.values() for wire in _dxf_convert(entities, tolerance)]
-    return dxf_drawing.one_shape(wires, Compound.makeCompound, always_compound=True).wrapped
+    wires = {layer: _dxf_convert(entities, tolerance) for layer, entities in layers.items()}
+    shape, warning = dxf_drawing.sketch(wires, lambda wire: wire.IsClosed(), _faces, Compound.makeCompound)
+    return shape.wrapped, warning
 
 
 def process(path, request):
     try:
-        layers, warnings = dxf_drawing.read(request["path"], request["include"], request["exclude"])
-        try:
-            shape = as_faces(layers, request["tolerance"])
-        except Exception as e:
-            # Said out loud rather than fallen back on quietly: a drawing of
-            # open lines is meant to import this way, and an outline with a gap
-            # in it is a mistake that would otherwise become a sketch nothing
-            # can extrude and nobody was told about.
-            shape = as_wires(layers, request["tolerance"])
-            warnings.append("no face could be built from the DXF file (%s); imported the wires it draws instead" % e)
+        drawing = dxf_drawing.read(request["path"], request["include"], request["exclude"], request.get("units"))
+        shape, warning = as_sketch(drawing.layers, request["tolerance"])
+        warnings = drawing.warnings + ([warning] if warning else [])
 
         # What the drawing says about its own elements, and about itself, which
         # the geometry cannot carry: BREP has nowhere to put an angle written
@@ -103,14 +73,16 @@ def process(path, request):
         # halves land on the envelope beside the BREP and, from there, in the
         # same cache entry as the geometry.
         #
-        # The same layer filters the import above was given, so the annotations
-        # describe what is in the sketch rather than what was filtered out of
-        # it. A drawing that cannot be read a second time is reported rather
-        # than passed off as one that annotates nothing.
-        read = dxf_metadata.read_file(
-            request["path"],
+        # Read off the same drawing the geometry was, with the same layer
+        # filters, so the annotations describe what is in the sketch: the
+        # elements a block reference placed rather than the reference, where
+        # the sketch has them and in the millimetres it is in.
+        read = dxf_metadata.read_document(
+            drawing.document,
             include=request["include"],
             exclude=request["exclude"],
+            origins=drawing.origins,
+            millimetres_per_unit=drawing.scale,
         )
         # Both halves go under the protocol's own section names - the per-element
         # records under 'annotations', what the drawing says about itself under

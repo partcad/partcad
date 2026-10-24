@@ -136,11 +136,11 @@ def test_each_set_of_layers_renders_to_a_file_of_its_own(tmp_path):
     """...and the file each is written to is its own too.
 
     The parameters are part of the object's name, so they are part of the file
-    named after it - 'panel;include=BEND_UP.svg'. Both characters are legal in
-    a filename on every platform PartCAD runs on ('/' and ':' are the ones that
-    are not, and neither can appear in an object name). Without this, two
-    readings of one drawing would overwrite each other's projection, and the
-    first one would also overwrite the base sketch's.
+    named after it - 'panel_include_BEND_UP.svg', with what a shell or a
+    filesystem would take for something else written as '_' (see
+    'output.name_to_segments'). Without this, two readings of one drawing would
+    overwrite each other's projection, and the first one would also overwrite
+    the base sketch's.
     """
     ctx = _package(tmp_path, {"panel": {"type": "dxf"}})
     paths = [
@@ -155,9 +155,9 @@ def test_each_set_of_layers_renders_to_a_file_of_its_own(tmp_path):
     assert len(set(paths)) == len(paths)
     assert [os.path.basename(path) for path in paths] == [
         "panel.svg",
-        "panel;include=BEND_UP.svg",
-        "panel;include=BEND_DOWN.svg",
-        "panel;include=BEND_UP,BEND_DOWN.svg",
+        "panel_include_BEND_UP.svg",
+        "panel_include_BEND_DOWN.svg",
+        "panel_include_BEND_UP_BEND_DOWN.svg",
     ]
 
 

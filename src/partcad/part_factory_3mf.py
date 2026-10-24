@@ -11,12 +11,13 @@ import os
 
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, telemetry, wrapper
+from .file_source import BinarySourceFile
 from .part_factory_file import PartFactoryFile
 from .process_crash import command_failure
 
 
 @telemetry.instrument()
-class PartFactory3mf(PartFactoryFile):
+class PartFactory3mf(BinarySourceFile, PartFactoryFile):  # a 3MF file is a zip archive
     WRAPPERS = ("import_mesh.py",)
 
     # The sandboxed runtime used to keep build123d out of the main process

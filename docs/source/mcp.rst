@@ -38,12 +38,13 @@ Setting up a client
 Claude Code
 ===========
 
-The ``pc`` plugin (see the README's *Plugin for Claude Code*) brings the server along with the skills, and
+The ``pc`` plugin (see :ref:`claude-plugin`) brings the server along with the skills, and
 ``pc init`` adds it to the ``.mcp.json`` of the repository it sets up. Anywhere else:
 
 .. code-block:: shell
 
-  claude mcp add partcad -- pc mcp
+  claude mcp add partcad -- pc mcp              # with PartCAD installed
+  claude mcp add partcad -- uvx partcad mcp     # without
   claude mcp add --scope project partcad -- pc -p packages/robot mcp
 
 Cursor
@@ -98,7 +99,10 @@ runs it as ``uvx partcad mcp``, and offers ``PC_PATH`` for the package to serve.
 Tools
 *****
 
-Each tool is one daemon method, with the parameters the ``pc`` command it mirrors sends.
+Each tool is one daemon method, with the parameters the ``pc`` command it mirrors sends. The ones that name an
+object -- ``info``, ``render``, ``export``, ``test``, ``bom`` and ``instructions`` -- take ``params``, the values of
+the object's own parameters by name, which is ``-p <name>=<value>`` on the command line (see
+:ref:`parameter-values`).
 
 .. list-table::
    :header-rows: 1

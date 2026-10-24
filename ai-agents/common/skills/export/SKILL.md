@@ -64,6 +64,7 @@ pc --no-ansi export -t stl -O ./out bracket          # a part
 pc --no-ansi export -t step -O ./out gearbox         # an assembly, found by its name
 pc --no-ansi export -t dxf -O ./out outline          # a sketch, the same way
 pc --no-ansi export -t stl -O ./out -P //pub/std bolt  # an object in another package
+pc --no-ansi export -t stl -O ./out bolt -p length=30  # with a value for one of its parameters
 ```
 
 Formats: `step`, `brep`, `stl`, `3mf`, `threejs`, `obj`, `gltf`, `iges`, `urdf`,
@@ -79,8 +80,12 @@ options exist only there.
 
 Useful options:
 
-- `-O <dir>` — where the files go. The directory must exist; add `-p` to create
+- `-O <dir>` — where the files go. The directory must exist; `mkdir -p` creates
   the structure a configured output path needs.
+- `-p <name>=<value>` — export the object with that value of one of its
+  `parameters:`, repeated for each; the same as naming it `"bolt;length=30"`
+  (quoted: a shell ends the command at the `;`). The file is named with the
+  values, `bolt_length_30.stl`.
 - **No object name** exports everything the package declares; a `...` suffix on
   the package (`-P //...`) walks the imported packages too, and `...:<name>`
   exports every object of that name from here down. Say what that will produce

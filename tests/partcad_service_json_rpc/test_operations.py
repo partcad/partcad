@@ -646,7 +646,7 @@ def test_inspect_part_shows_the_part_and_signals_done():
     part = FakeShape()
     session.partcad_ctx.shapes[("part", "//:foo")] = part
     operations.inspect_part(session, {"package": "//", "name": "foo"})
-    assert ("part", "//:foo", None) in session.partcad_ctx.requested
+    assert ("part", "//:foo", {}) in session.partcad_ctx.requested
     assert part.shown is True
     assert seen[-1] == (events.SHOW_PART_DONE, None)
 
@@ -2563,6 +2563,129 @@ def test_bom_names_the_scene_it_could_not_find():
 
     assert operations.bom(session, {"package": "//", "object": "world"}) is None
     assert session.partcad.logging.messages("error") == ["Scene //:world is not found"]
+
+
+def test_bom_of_an_instance_of_a_part_is_that_part_s(monkeypatch):
+    """'pc bom "blank;width=3"' and 'pc bom blank -p width=3' are the BoM of a part.
+
+    Which kind an object is comes from its declaration, and nothing declares
+    'blank;width=3': the name was looked for as written, missed, and the part
+    was taken for an assembly that is not found.
+    """
+    asked = []
+
+    async def part_bom_detailed_async(ctx, part):
+        asked.append(part)
+        return {}
+
+    install_fake_partcad_modules(
+        monkeypatch, {"partcad.assembly": {"part_bom_detailed_async": part_bom_detailed_async}}
+    )
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].add("parts", FakeObject("blank"))
+    blank = FakeObject("blank;width=3", project_name="//")
+    session.partcad_ctx.shapes[("part", "//:blank;width=3")] = blank
+
+    by_name = operations.bom(session, {"package": "//", "object": "blank;width=3", "json": True})
+    by_value = operations.bom(session, {"package": "//", "object": "blank", "params": ["width=3"], "json": True})
+
+    assert session.partcad.logging.messages("error") == []
+    assert asked == [blank, blank]
+    assert by_name["assembly"] == by_value["assembly"] == "//:blank;width=3"
+
+
+# ---- '-p'/'--param': the values a request assigns to its object --------------
+
+
+@pytest.mark.parametrize("assigned", [["length=10"], {"length": 10}])
+def test_assigned_values_are_written_into_the_name_of_the_object(assigned):
+    """Both shapes 'params' arrives in: 'pc' sends a list, the editor and an agent a mapping."""
+    assert operations._request({"object": "bolt", "params": assigned}) == (".", "bolt;length=10", False)
+
+
+def test_an_assigned_value_wins_over_the_one_the_name_carries():
+    assert operations._request({"object": "bolt;length=10", "params": ["length=12"]})[1] == "bolt;length=12"
+
+
+def test_assigned_values_reach_every_object_of_a_walk():
+    assert operations._request({"object": "...:bolt", "params": ["length=10"]}) == (".", "bolt;length=10", True)
+
+
+def test_values_with_no_object_to_give_them_to_are_refused():
+    """Not dropped: 'pc render -p length=10' with no object would render the whole package as it is."""
+    with pytest.raises(JsonRpcError) as e:
+        operations._request({"package": "//", "params": ["length=10"]})
+    assert e.value.code == operations.USAGE_ERROR
+
+
+def test_an_editor_request_naming_its_object_as_name_is_not_refused():
+    """'inspect.part' and the rest name the object as 'name' and hand the values over themselves."""
+    assert operations._request({"package": "//", "name": "bolt", "params": {"length": 10}}) == ("//", None, False)
+
+
+def test_a_value_with_no_name_is_refused():
+    with pytest.raises(JsonRpcError) as e:
+        operations._request({"object": "bolt", "params": ["length"]})
+    assert e.value.code == operations.USAGE_ERROR
+    assert "'length' is not '<name>=<value>'" in e.value.message
+
+
+@pytest.mark.parametrize("assigned", [["width=3"], {"width": "3"}])
+def test_an_editor_request_takes_either_shape_of_values(assigned):
+    session, _ = make_session()
+    session.partcad_ctx.shapes[("part", "//:foo")] = FakeShape()
+
+    operations.inspect_part(session, {"package": "//", "name": "foo", "params": assigned})
+
+    assert session.partcad_ctx.requested == [("part", "//:foo", {"width": "3"})]
+
+
+def test_an_editor_request_names_the_instance_the_command_line_would():
+    """'{"flat": true}' is 'flat=true', as '-p flat=true' is: one instance, one name.
+
+    A list stays a list, which is what a factory reading an array parameter
+    takes; the FreeCAD addon sends one.
+    """
+    session, _ = make_session()
+    session.partcad_ctx.shapes[("part", "//:foo")] = FakeShape()
+
+    operations.inspect_part(
+        session, {"package": "//", "name": "foo", "params": {"flat": True, "size": 4, "include": ["A", "B"]}}
+    )
+
+    assert session.partcad_ctx.requested == [("part", "//:foo", {"flat": "true", "size": "4", "include": ["A", "B"]})]
+
+
+def test_info_shows_the_instance_the_values_name():
+    session, _ = make_session()
+    session.partcad_ctx.shapes[("part", "//:widget;width=3")] = FakeObject("widget;width=3", config={"w": 3})
+
+    operations.info_object(session, {"package": "//", "object": "widget", "params": ["width=3"]})
+
+    assert session.partcad.logging.messages("error") == []
+    assert session.partcad.logging.messages("info")[0] == "CONFIGURATION: {'w': 3}"
+
+
+def test_a_walk_with_values_renders_that_instance_where_the_object_is(monkeypatch):
+    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    session, _ = make_session()
+    session.partcad.output = types.SimpleNamespace(
+        all_formats=lambda ctx: ["svg"],
+        NON_WRAPPER_FORMATS=set(),
+        SECTIONS=("export", "render"),
+        format_names=lambda section: [],
+        split_format=lambda project_name, fmt: (fmt, None),
+    )
+    ctx = session.partcad_ctx
+    has_it = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+    has_not = FakeProject(name="//bare").add("parts", FakeObject("other"))
+    ctx.projects["//sub"] = has_it
+    ctx.projects["//bare"] = has_not
+
+    operations.render_objects(session, {"format": "svg", "object": "...:widget", "params": ["width=3"]})
+
+    assert [request["parts"] for request in has_it.render_requests] == [["widget;width=3"]]
+    assert has_not.render_requests == []
 
 
 def open_tools_of(projects):

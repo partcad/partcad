@@ -98,3 +98,24 @@ def test_the_writable_formats_are_the_ones_partcad_exports_outside_a_package():
     with open(os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.EXPORT]], "partcad.yaml")) as f:
         exported = set((yaml.safe_load(f) or {}).get("export") or {})
     assert object_types.WRITABLE_PART_TYPES == exported - set(object_types.PACKAGE_ONLY_TYPES)
+
+
+def test_the_sketch_formats_are_the_ones_partcad_reads_a_sketch_from():
+    """The third table: what a sketch file can be, for an application that opens drawings."""
+    from partcad.shape import SKETCH_EXTENSION_MAPPING
+
+    assert object_types.SKETCH_TYPE_EXTENSION == SKETCH_EXTENSION_MAPPING
+
+
+def test_the_writable_sketch_formats_are_ones_partcad_renders_a_sketch_into():
+    """A sketch is written by rendering it ('adhoc.convert' for a sketch renders); each must be a render type."""
+    import os
+
+    import yaml
+
+    from partcad import output
+
+    with open(os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.RENDER]], "partcad.yaml")) as f:
+        rendered = set((yaml.safe_load(f) or {}).get("render") or {})
+    assert object_types.WRITABLE_SKETCH_TYPES <= rendered
+    assert object_types.WRITABLE_SKETCH_TYPES <= set(object_types.SKETCH_TYPE_EXTENSION)

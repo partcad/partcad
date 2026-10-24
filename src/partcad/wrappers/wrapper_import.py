@@ -32,8 +32,10 @@ The script is executed with these globals available:
                 what relative references inside the file resolve against),
                 ``output_folder`` (where generated geometry goes), ``kind``
                 ('assembly' or 'scene' -- some formats are read as either, and
-                a reader may word its warnings accordingly) and ``object_name``,
-                plus every parameter declared for this type
+                a reader may word its warnings accordingly), ``object_name``
+                and ``cache_dir`` (a directory belonging to the reader's
+                package, to keep what it downloads on first use in), plus every
+                parameter declared for this type
     path     -- an existing directory the run may write into
 
 and reports what it read in one of two ways, whichever suits it:

@@ -50,6 +50,7 @@ from . import logging as pc_logging
 from . import output, shape_envelope, telemetry, wrapper
 from .assembly import AssemblyChild
 from .assembly_factory_file import AssemblyFactoryFile
+from .file_source import BinarySourceFile
 from .geom import Location
 from .part_config import PartConfiguration
 from .process_crash import describe_exit_code
@@ -93,8 +94,27 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
 
     WRAPPERS = ("import.py",)
 
-    def __init__(self, ctx, source_project, target_project, config):
-        self.impl = output.import_declaration(ctx, target_project, config.get("type"))
+    @classmethod
+    def create(cls, ctx, source_project, target_project, config):
+        """Build an object of this 'import:' type, with the class its declaration calls for.
+
+        This class for a format whose files are text, and so templates; its
+        binary variant ('<cls>Binary', a 'BinarySourceFile') for a format the
+        declaration says is bytes with 'binary: true'. Decided here, by what
+        the declaration says, so that no file is ever opened to find out -- and
+        the declaration is resolved once, here, and handed to the constructor.
+
+        A type nothing declares reaches the constructor with no declaration,
+        which raises the 'ImportedTypeError' the caller already handles.
+        """
+        impl = output.import_declaration(ctx, target_project, config.get("type"))
+        factory_class = cls
+        if impl is not None and output.as_flag(impl.config.get(output.IMPORT_BINARY_KEY)):
+            factory_class = cls.BINARY_VARIANT
+        return factory_class(ctx, source_project, target_project, config, impl=impl)
+
+    def __init__(self, ctx, source_project, target_project, config, impl=None):
+        self.impl = impl if impl is not None else output.import_declaration(ctx, target_project, config.get("type"))
         if self.impl is None:
             raise ImportedTypeError(
                 "no 'import:' section declares the object type '%s'" % config.get("type"),
@@ -202,8 +222,16 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
         request.update(self.impl.parameters)
         request.update(self._declared_parameters())
         request[output.SCRIPT_KEY] = os.path.abspath(script)
+        # Where the reader's package keeps what it fetches for itself, as a
+        # partType's script and an output implementation are told (see
+        # 'output.package_cache_dir'): a reader that converts through a program
+        # pip cannot install downloads it once, not once per object.
+        request.setdefault("cache_dir", output.package_cache_dir(self.ctx, self.impl.project))
 
-        runtime = self.ctx.get_python_runtime(version=self.impl.python_version())
+        # The sandbox image is the implementing package's too, for the reason it
+        # is an output implementation's: what a reader needs to run is known to
+        # whoever wrote it, and the package declaring the object never heard of it.
+        runtime = self.ctx.get_python_runtime(version=self.impl.python_version(), image=self.impl.docker_image)
         await runtime.prepare_for_package(self.impl.project)
         # Installed one at a time, not with asyncio.gather(): the order matters,
         # since build123d overwrites the OCP native module that cadquery-ocp
@@ -483,3 +511,18 @@ class SceneFactoryImported(SceneFactoryMixin, AssemblyFactoryImported):
     from 'SceneFactoryMixin', which is mixed in ahead of the factory so its
     values win.
     """
+
+
+@telemetry.instrument()
+class AssemblyFactoryImportedBinary(BinarySourceFile, AssemblyFactoryImported):
+    """An assembly read from a binary file: its reader is handed the file as it is, never rendered."""
+
+
+@telemetry.instrument()
+class SceneFactoryImportedBinary(BinarySourceFile, SceneFactoryImported):
+    """A scene read from a binary file: its reader is handed the file as it is, never rendered."""
+
+
+# Set after the fact because each variant is a subclass of what points at it.
+AssemblyFactoryImported.BINARY_VARIANT = AssemblyFactoryImportedBinary
+SceneFactoryImported.BINARY_VARIANT = SceneFactoryImportedBinary

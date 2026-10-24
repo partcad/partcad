@@ -1378,11 +1378,12 @@ class Project(project_config.Configuration):
         """The interface of this package called 'interface_name', or None.
 
         The name may carry parameter values - 'm-thru;size=4,depth=3' - exactly
-        as a part's or a sketch's does, and 'func_params' adds to whatever the
-        name already says (that is what 'pc info -i -p size=4' passes). Each
-        distinct set of values is a distinct interface object, registered under
-        the canonical spelling of its name, so that two references asking for
-        the same values get the one interface and mate with each other.
+        as a part's or a sketch's does ('pc info -i m-thru -p size=4' asks for
+        'm-thru;size=4'), and 'func_params' adds to whatever the name already
+        says. Each distinct set of values is a distinct interface object,
+        registered under the canonical spelling of its name, so that two
+        references asking for the same values get the one interface and mate
+        with each other.
 
         Built here rather than through 'get_object' for the reason
         'get_material' gives: there is no factory to dispatch on a 'type'. What
@@ -3411,8 +3412,9 @@ class Project(project_config.Configuration):
         # URL a reader of the document follows rather than a path on the machine
         # that generated it. The file it points at is that same link spelled for
         # this filesystem, which for a name with a '/' in it is a file in a
-        # sub-directory -- see 'output.name_to_path()'.
-        image_path = os.path.join(return_path, prefix, name + extension)
+        # sub-directory -- see 'output.name_to_path()'. Both from the one list of
+        # segments, so that an instance's link names the file its render wrote.
+        image_path = os.path.join(return_path, prefix, "/".join(output.name_to_segments(name, extension)))
         test_image_path = os.path.join(prefix, output.name_to_path(name, extension))
         return image_path, test_image_path
 
@@ -3662,7 +3664,11 @@ class Project(project_config.Configuration):
         import base64
 
         with tempfile.TemporaryDirectory(prefix="partcad-guide-") as directory:
-            filename = "%s.%s" % (re.sub(r"[^A-Za-z0-9_.-]+", "_", name.rsplit("/", 1)[-1]) or "assembly", format)
+            # Named the way 'pc render' names this object's files, and then made
+            # safe as a whole: a download has no directory to put the declared
+            # half of a name in, and 'name_to_segments' leaves that half alone.
+            stem = output.name_to_segments(name)[-1]
+            filename = "%s.%s" % (re.sub(r"[^A-Za-z0-9_.-]+", "_", stem) or "assembly", format)
             path = os.path.join(directory, filename)
             await self._write_document_async(document, format, path)
             with open(path, "rb") as f:

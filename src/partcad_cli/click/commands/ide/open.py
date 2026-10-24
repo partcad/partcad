@@ -107,6 +107,16 @@ from ...service import run
     "decides whether the file has to be converted first.",
 )
 @click.option(
+    "--kind",
+    "object_kind",
+    type=click.Choice(["part", "sketch"]),
+    default="part",
+    show_default=True,
+    help="What the file holds. A sketch is converted between sketch formats -- into a DXF, for an "
+    "application that opens drawings, such as CADCraft -- rather than between part formats; the type "
+    "alone does not say, since a 'cadquery' file can hold either. A scene is the application's to say.",
+)
+@click.option(
     "--use-docker",
     is_flag=True,
     help="If the application is not installed here, run it in a container PartCAD keeps for it.",
@@ -126,7 +136,16 @@ from ...service import run
 )
 @click.argument("path", type=str, required=True)
 @click.pass_context
-def cli(click_ctx, tool: str, object_type: str, use_docker: bool, docker_image: str, as_json: bool, path: str) -> None:
+def cli(
+    click_ctx,
+    tool: str,
+    object_type: str,
+    object_kind: str,
+    use_docker: bool,
+    docker_image: str,
+    as_json: bool,
+    path: str,
+) -> None:
     # Deferred: `pc --help` imports every command module to print its short
     # help, and there is no reason for that to touch the tool tables.
     from partcad_client import external
@@ -137,8 +156,9 @@ def cli(click_ctx, tool: str, object_type: str, use_docker: bool, docker_image: 
         The only round trip this command makes, and it is made only for an
         application that cannot read what the user asked to open. ``kind`` says
         which of the two conversions it is -- a part, for an application that
-        reads meshes, or a scene, for one that reads only its own description of
-        an arrangement -- and it defaults to the older of the two so that a
+        reads meshes, a sketch, for one that opens drawings, or a scene, for one
+        that reads only its own description of an arrangement -- and it
+        defaults to the oldest of the three so that a
         caller written against the four-argument form still works. Paths are
         already absolute (`external` resolved them), which is what
         `adhoc.convert` expects.
@@ -196,6 +216,7 @@ def cli(click_ctx, tool: str, object_type: str, use_docker: bool, docker_image: 
             use_docker=use_docker,
             image=docker_image,
             object_type=object_type,
+            object_kind=object_kind,
             transcode=transcode,
             # Silent under --json: the caller parses stdout, and progress lines
             # would be in the way of the one thing it is there to read. (A

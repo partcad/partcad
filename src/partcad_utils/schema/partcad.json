@@ -375,6 +375,7 @@
           ]
         },
         "noun": { "type": "string", "minLength": 1, "description": "What one of these is called in a log line ('model', 'world', 'robot')" },
+        "binary": { "type": "boolean", "description": "The format's files are bytes rather than text: the reader is handed each one as it is, and it is never rendered as a Jinja2 template the way a text format's file is. False by default" },
         "dropped": {
           "type": "object",
           "description": "How each counter of the reader's 'dropped' summary is worded when it is reported. The reader counts; this names",
@@ -2245,6 +2246,11 @@
                 },
                 { "type": "null" }
               ]
+            },
+            "units": {
+              "description": "What the drawing's numbers are in ('dxf' only): 'auto', the default, reads it from the drawing's $INSUNITS and scales the sketch to millimetres by it; 'unitless' takes the numbers as millimetres as they are; a unit says what they are where the drawing does not, or says wrong",
+              "type": "string",
+              "enum": ["auto", "unitless", "mm", "cm", "dm", "m", "dam", "hm", "km", "Gm", "um", "nm", "angstrom", "in", "ft", "yd", "mi", "mil", "uin", "us-in", "us-ft", "us-yd", "us-mi", "au", "ly", "pc"]
             },
             "use-wires": { "type": "boolean", "default": false },
             "use-faces": { "type": "boolean", "default": false },

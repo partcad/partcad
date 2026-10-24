@@ -11,6 +11,7 @@ import rich_click as click
 from .. import fast_only, object_kind
 from ..exclude import exclude_option, exclude_params
 from ..link_filter import filter_option, filter_params
+from ..parameters import param_option, param_params
 from ..service import run
 
 
@@ -81,6 +82,7 @@ from ..service import run
 )
 @exclude_option
 @filter_option
+@param_option
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
 def cli(
@@ -97,6 +99,7 @@ def cli(
     scene,
     exclude,
     link_filter,
+    params,
     object,
 ):
     run(
@@ -116,6 +119,7 @@ def cli(
             "assembly": assembly,
             "scene": scene,
             "object": object,
+            **param_params(params),
             **exclude_params(exclude),
             **filter_params(link_filter),
         },

@@ -44,6 +44,7 @@ import rich_click as click
 
 from .. import fast_only, object_kind
 from ..exclude import exclude_option, exclude_params
+from ..parameters import param_option, param_params
 from ..service import run
 
 
@@ -129,6 +130,7 @@ from ..service import run
     help="Save the state the simulation ended in to this file (YAML, or JSON for a '.json' path)",
 )
 @exclude_option
+@param_option
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to simulate"
 @click.pass_obj
 def cli(
@@ -144,6 +146,7 @@ def cli(
     before_path,
     after_path,
     exclude,
+    params,
     object,
 ) -> None:
     if assembly and scene:
@@ -160,6 +163,7 @@ def cli(
             "filter": filter_name,
             "object": object,
             "plugin": plugin,
+            **param_params(params),
             **exclude_params(exclude),
         },
         needs_context=True,

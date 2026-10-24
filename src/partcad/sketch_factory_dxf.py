@@ -23,6 +23,10 @@ class SketchFactoryDxf(SketchFactoryPython):
     tolerance = 0.000001
     include = []
     exclude = []
+    # What the drawing's numbers are in, when it does not say or says wrong:
+    # 'auto' (what '$INSUNITS' says), 'unitless' (millimetres as they are), or a
+    # unit ('in', 'mm', ...). See 'dxf_drawing.millimetres_per_unit'.
+    units = "auto"
 
     # Which layers of the drawing are read is an object-type parameter (see
     # 'SketchFactory'), not merely a field of the declaration, and that is the
@@ -61,6 +65,8 @@ class SketchFactoryDxf(SketchFactoryPython):
 
             if "tolerance" in config:
                 self.tolerance = float(config["tolerance"])
+            if config.get("units"):
+                self.units = str(config["units"])
 
             self.include, self.exclude = self.filters(config)
 
@@ -160,6 +166,7 @@ class SketchFactoryDxf(SketchFactoryPython):
                     "tolerance": self.tolerance,
                     "include": self.include,
                     "exclude": self.exclude,
+                    "units": self.units,
                 }
                 request["name"] = "%s:%s" % (sketch.project_name, sketch.name)
                 request["label"] = sketch.name

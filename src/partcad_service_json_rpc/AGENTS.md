@@ -338,6 +338,27 @@ A walk over a named object (`_targets()`) asks each package what its own object 
 `(package, name, kind)`: the `bolt` of one package can be a part and the `bolt` of the next an assembly. A kind
 said with a flag narrows the walk to objects of that kind instead.
 
+### `params`: the values an object is asked for with
+
+An object with particular parameter values *is* a name -- `bolt;length=10` -- and every method that takes an
+object takes one. `params` is the same request one value at a time (`pc ... -p length=10`), and it arrives in
+two shapes that mean the same thing: a list of `<name>=<value>` from `pc`, and a mapping from the editor, the
+FreeCAD addon and an agent. `_assigned()` is the one reader of both, over
+`partcad_utils.parameters.assignments` -- the CLI checks each value with that same function before sending --
+and `_request()` and `_resolve_object()` write what it read into the object's name (`_assigned_name()`), so
+every operation that reads its object through either takes parameters without a line of its own, and its log,
+its files and its cache entries name the instance. A value given in `params` wins over one the name carries.
+
+Two consequences worth knowing:
+
+* Values with no object to give them to are a usage error, not something to drop. The exception is a request
+  that names its object as `name` -- the editor's per-kind methods (`inspect.part`, `export.assembly`, ...),
+  which hand `_assigned(params)` to the getter themselves and pass through `_request()` only to have their
+  package found.
+* Anything that asks what *kind* an object is must ask under the name it is **declared** as, which is the name
+  without its values (`parse_parameterized_name`): nothing declares `bolt;length=10`. `bom` asked under the
+  whole name, and took every part asked for with values for an assembly that is not found.
+
 ## Commit
 
 `pre-commit` hooks (`dev-tools/pre-commit-config.yaml`) run `pytest`, formatting, and lint checks on commit and

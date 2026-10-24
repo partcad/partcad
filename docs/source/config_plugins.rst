@@ -50,6 +50,33 @@ Only the primitives a format defines (a box, a cylinder, a sphere) have no file
 to name, and the reader writes those out itself. See
 ``wrappers/wrapper_import.py`` for the contract in full.
 
+The file is a Jinja2 template like every other text file an assembly or a
+scene is declared by, and is rendered before the reader sees it. A format whose
+files are bytes (a DWG, say) says so, and its files are handed to the reader
+exactly as they are on disk, never opened as text:
+
+.. code-block:: yaml
+
+  import:
+    dwg:
+      path: read_assembly.py
+      extension: dwg
+      binary: true
+
+It is the declaration that decides, never the file's content: a binary file
+whose bytes happen to decode is still not rendered, and a text format's file
+that is not UTF-8 is reported as the broken template it is. Every object
+PartCAD reads from a file is one of three kinds in this respect -- handed over
+as it is, rendered as a template, or bytes -- and ``partcad.file_source`` is
+where that is decided.
+
+A reader runs where an output implementation of the same package would: in the
+sandbox its own package describes (``pythonVersion``, ``pythonRequirements``,
+``dockerImage``), never the one the package declaring the object does. It is
+also handed ``request["cache_dir"]``, the directory its package keeps what it
+downloads on first use in -- a converter pip cannot install, for one -- exactly
+as a ``partType`` and an output implementation are.
+
 Two fields are worth dwelling on. ``kinds:`` is a claim the core holds the
 declaration to: a format that describes one robot is an assembly and declaring
 it under ``scenes:`` is an error, while a format used for both -- MJCF is the

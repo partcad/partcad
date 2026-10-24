@@ -40,11 +40,14 @@ __all__ = [
     "PART_TYPE_EXTENSION",
     "PART_TYPE_IS_MESH",
     "SCENE_TYPE_EXTENSION",
+    "SKETCH_TYPE_EXTENSION",
     "WRITABLE_PART_TYPES",
+    "WRITABLE_SKETCH_TYPES",
     "is_mesh",
     "is_mesh_file",
     "is_mesh_type",
     "readable_scene_type",
+    "readable_sketch_type",
     "readable_type",
     "scene_type_of_file",
     "type_of_file",
@@ -145,6 +148,27 @@ WRITABLE_PART_TYPES = frozenset({"step", "brep", "stl", "3mf", "obj", "iges", "g
 
 ASSY_EXTENSION = "assy"
 
+# The sketch types a file can hold, and the extension each is stored in, inlined
+# from `partcad.shape.SKETCH_EXTENSION_MAPPING` (the same reason as every other
+# table here, and the same completeness test).
+#
+# A third question, for a third kind of application: one that opens drawings
+# rather than solids or scenes -- CADCraft, which reads DXF and DWG. A sketch in
+# a format it does not open is converted into one it does, by the sketch
+# conversion, which reads every type below.
+SKETCH_TYPE_EXTENSION: Dict[str, str] = {
+    "svg": "svg",
+    "dxf": "dxf",
+    "cadquery": "py",
+    "build123d": "py",
+}
+
+# The sketch formats PartCAD can write as a file: the two drawings a sketch
+# renders to. What a sketch is converted into for an application that opens
+# drawings, and what an edit to such a copy can be converted back into -- which
+# needs the sketch's own source to be a file of one of these.
+WRITABLE_SKETCH_TYPES = frozenset({"dxf", "svg"})
+
 # The scene types that are file formats, and the extension each is stored in,
 # inlined from `partcad.shape.SCENE_EXTENSION_MAPPING` (the same reason as every
 # other table here, and the same completeness test).
@@ -240,6 +264,21 @@ def readable_type(path: str, object_type: Optional[str] = None) -> Optional[str]
     if object_type and object_type.lower() in PART_TYPE_EXTENSION:
         return object_type.lower()
     return type_of_file(path)
+
+
+def readable_sketch_type(path: str, object_type: Optional[str] = None) -> Optional[str]:
+    """The sketch type a conversion should read ``path`` as, or None when nothing says.
+
+    The declared type when it is a sketch format, and otherwise the file's name
+    -- when only one sketch type is stored in its extension. A '.py' is a
+    CadQuery sketch or a build123d one, and which is a fact about the package
+    that declares it: the same rule `readable_type` applies to parts.
+    """
+    if object_type and object_type.lower() in SKETCH_TYPE_EXTENSION:
+        return object_type.lower()
+    extension = _extension_of(path)
+    names = [name for name, stored in SKETCH_TYPE_EXTENSION.items() if stored == extension]
+    return names[0] if len(names) == 1 else None
 
 
 SCENE_EXTENSION_TYPES: Dict[str, str] = {

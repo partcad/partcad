@@ -21,7 +21,9 @@ parts:
     desc: Sweep a DXF sketch to create a 3D part.
     type: sweep
     sketch: ../produce_sketch_dxf:dxf_01
-    axis: [[0, 0, 10], [10, 0, 0]]
+    # Ten inches each way, for the one-inch profile the drawing is (it is drawn
+    # in inches, and a sketch is in millimetres).
+    axis: [[0, 0, 254], [254, 0, 0]]
   clock:
     desc: Sweep a clock sketch to create a 3D clock.
     type: sweep
