@@ -224,9 +224,12 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None):
     # it as the output path). This one writes no file - the glTF comes back over
     # the pipe - so it carries the operation name, which is what shows up in
     # process listings and logs.
+    # A tree is mostly repeats, and 'wrapper_gltf.py' reads its payloads written
+    # once each (see 'shape_envelope.KEY_BREPS') - serialized when the process
+    # starts, for the reason 'runtime.stdin_bytes' gives.
     exitcode, response_serialized, errors = await runtime.run_async(
         [wrapper.get("gltf.py"), "gltf"],
-        shape_envelope.serialize(request),
+        lambda: shape_envelope.serialize(request, share=True),
     )
     if exitcode != 0 and not errors:
         errors = "Failed to tessellate the shape tree (%s)" % describe_exit_code(exitcode)

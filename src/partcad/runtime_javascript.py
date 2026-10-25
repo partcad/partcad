@@ -612,7 +612,7 @@ class JavaScriptRuntime(runtime.Runtime):
             )
             # Over when Node.js is, not when the last process holding its
             # output lets go (see 'runtime.communicate').
-            stdout, stderr = runtime.communicate_sync(p, stdin.encode())
+            stdout, stderr = runtime.communicate_sync(p, runtime.stdin_bytes(stdin))
 
         return self._finish(argv, p.returncode, decode_output(stdout), decode_output(stderr), package_path)
 
@@ -635,14 +635,14 @@ class JavaScriptRuntime(runtime.Runtime):
                 env=self._subprocess_env(),
                 cwd=package_path,
             )
-            stdout, stderr = await runtime.communicate(p, stdin.encode(), timeout)
+            stdout, stderr = await runtime.communicate(p, runtime.stdin_bytes(stdin), timeout)
 
         return self._finish(argv, p.returncode, decode_output(stdout), decode_output(stderr), package_path)
 
     def _finish(self, cmd, returncode, stdout, stderr, path):
         """Log what a Node.js process produced and normalize its exit code."""
         if stdout:
-            pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+            pc_logging.debug("Output of %s: %s", cmd, stdout)
         if stderr:
             if returncode == 0:
                 pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))

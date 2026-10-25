@@ -240,6 +240,15 @@ def sandbox_note(ctx, impl) -> str:
     return "\n" + note if note else ""
 
 
+def _modified(path):
+    """When the file at 'path' was last written and how big it is, or None if there is none."""
+    try:
+        status = os.stat(path)
+    except OSError:
+        return None
+    return (status.st_mtime_ns, status.st_size)
+
+
 def _held_by_current_task(shape) -> bool:
     """Whether the task this is called from holds 'shape.locked()' already.
 
@@ -1897,13 +1906,22 @@ class Shape(ShapeConfiguration):
         if getattr(impl, "project", None) is not None:
             request.setdefault("cache_dir", output.package_cache_dir(ctx, impl.project))
 
-        request_serialized = shape_envelope.serialize(request)
-
         # Where this implementation runs. A container when it declared one --
         # the only sandbox that can carry what pip cannot install -- and the
         # Python sandbox otherwise, which is every implementation that ships
         # with PartCAD and most of those that do not.
         container = impl.container
+
+        # Serialized by the runtime when the process starts, not here: until a
+        # process slot is free this is a request waiting its turn, and the tree
+        # it carries is held anyway (see 'runtime.stdin_bytes'). In the Python
+        # sandbox the reader is 'wrapper_export.py', which takes the payloads of
+        # a tree written once each (see 'shape_envelope.KEY_BREPS'); a container
+        # runs a program of the implementation's own, handed the request as it
+        # has always been written.
+        def request_serialized():
+            return shape_envelope.serialize(request, share=not container)
+
         script_path = wrapper.get("export.py")
         config_dir = os.path.abspath(impl.project.config_dir)
         input_dirs = []
@@ -2086,7 +2104,7 @@ class Shape(ShapeConfiguration):
             # this run's.
             self.error("%s: %s" % (format_name, e))
             raise
-        result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+        result = await self._run_output_async(ctx, subject, impl, script, request, final_filepath)
         if result is None:
             return
 
@@ -2119,6 +2137,48 @@ class Shape(ShapeConfiguration):
                 "%s:%s: %s cannot state these properties, so they are not in the exported file: %s"
                 % (self.project_name, self.name, format_name.upper(), ", ".join(unsupported))
             )
+
+    async def _run_output_async(self, ctx, subject, impl, script, request, final_filepath):
+        """Write one output file: run its implementation, or put back what the same file was the last time.
+
+        A picture -- a file type of the 'render:' section -- is cached the way an
+        analysis is (see 'partcad.cache_artifacts'): under the key of the shape it
+        is a picture of ('subject', which is a filtered view where a filter
+        applies) and of everything the drawing adds to it, which is the request
+        less the geometry, the implementation, its script and the wrapper that
+        runs it ('_artifact_hash'). So a 'pc render' of a package in which nothing
+        changed starts no sandbox at all, and a picture that took the LEGO car's
+        six gigabytes to draw costs a read.
+
+        An export is not cached: an implementation of a format may write files
+        beside the one it was asked for (the meshes of a URDF), and the cache
+        holds the one file. A picture is one file, which 'render.inline' already
+        relies on.
+
+        Only a picture that was drawn is remembered: a run that failed, or that
+        reported success without touching the file, is not -- the file at that
+        path may be a previous run's, and would be handed out as this one's.
+        """
+        if impl.section != output.RENDER:
+            return await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+
+        cache = getattr(ctx, "cache_artifacts", None)
+        implementation = "%s:%s" % (getattr(impl.project, "name", None), impl.format_name)
+        artifact = await subject._artifact_hash(output.RENDER, impl.format_name, impl, script, request, implementation)
+        files = {"file": final_filepath}
+        # The same lock '_run_implementation_async' takes, around the read too:
+        # a picture put back while another call over the same shape writes the
+        # same path would land in the middle of that one.
+        async with self.locked():
+            result = await cache_artifacts.restore_async(cache, artifact, files=files)
+            if result is not None:
+                return result
+            before = _modified(final_filepath)
+            result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+            drawn = _modified(final_filepath)
+            if result and result.get("success") and not result.get("exception") and drawn not in (None, before):
+                await cache_artifacts.store_async(cache, artifact, result, files=files)
+            return result
 
     async def render_async(
         self,

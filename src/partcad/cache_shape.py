@@ -9,6 +9,18 @@
 
 import json
 
+try:
+    # As in 'shape_envelope': the standard library from 3.14, its backport below.
+    from compression.zstd import ZstdDecompressor as _ZstdDecompressor
+    from compression.zstd import compress as _zstd_compress
+except ImportError:  # pragma: no cover - exercised on the other interpreter
+    try:
+        from backports.zstd import ZstdDecompressor as _ZstdDecompressor
+        from backports.zstd import compress as _zstd_compress
+    except ImportError:
+        _ZstdDecompressor = None
+        _zstd_compress = None
+
 from . import shape_envelope, telemetry
 from .cache import Cache
 from .cache_backend import PROPERTIES_SUFFIX
@@ -42,13 +54,23 @@ from .utils import total_size
 # Instead it is framed in front of the BREP, which stays exactly the bytes it
 # was (see _FRAME_MAGIC).
 #
-# Anything else (an assembly tree, a list of components) has to be JSON, and
-# there each payload it holds is base64 - the one form JSON can carry.
+# An assembly's tree is mostly repeats: the LEGO castle is 731 placements of 9
+# bricks. Written as JSON with each node's payload in base64, that entry was
+# 33 MB for 4.6 MB of geometry - over every file tier's limit, so the castle was
+# never cached at all and every run put it together again. So a tree is framed
+# too (see _TREE_MAGIC): the tree as JSON with each node naming its payload, and
+# each distinct payload once, after it, as the bytes it is.
 #
-# The three are told apart on read by the leading bytes: the frame by its magic,
-# JSON produced here is always an object or an array, and a BREP payload is
-# either a zstd frame or, where the peer had no zstd, the ASCII BREP header -
-# the same distinction 'wrappers/ocp_serialize.py' already relies on.
+# A tree written as plain JSON, by an earlier release, is still read: JSON
+# produced here is always an object or an array. An earlier release reading a
+# framed tree finds neither and counts it a miss, which is the right answer for
+# an entry it cannot read; it builds the tree and writes it in its own form.
+# That is also why nothing but an assembly's tree is framed - see _serialize.
+#
+# They are told apart on read by the leading bytes: each frame by its magic, JSON
+# by its first character, and a BREP payload is either a zstd frame or, where the
+# peer had no zstd, the ASCII BREP header - the same distinction
+# 'wrappers/ocp_serialize.py' already relies on.
 _BREP_PREFIXES = (b"\x28\xb5\x2f\xfd", b"CASCADE Topology", b"DBRep_DrawableShape")
 
 # A BREP payload with metadata in front of it:
@@ -65,6 +87,29 @@ _BREP_PREFIXES = (b"\x28\xb5\x2f\xfd", b"CASCADE Topology", b"DBRep_DrawableShap
 # no BREP file begins with it, and neither does JSON.
 _FRAME_MAGIC = b"PCM1"
 _FRAME_HEADER = len(_FRAME_MAGIC) + 4
+
+# An assembly's tree, with each distinct payload once:
+#
+#     b"PCT1" | 1-byte encoding | 4-byte big-endian length of the header | header | payloads
+#
+# The header is JSON, zstd-compressed when the encoding byte is b"Z" and plain
+# when it is b"J": {"tree": <the tree, each node naming its payload by
+# 'shape_envelope.KEY_BREP_REF'>, "payloads": [[digest, length], ...]}. The
+# payloads follow in that order, each the compressed BREP it is in memory.
+# Reading it back gives every node naming one digest the same bytes object, so
+# the tree held in memory holds each payload once too.
+_TREE_MAGIC = b"PCT1"
+_TREE_COMPRESSED = b"Z"
+_TREE_PLAIN = b"J"
+_TREE_HEADER = len(_TREE_MAGIC) + 1 + 4
+
+# How far a tree's compressed header may expand when it is read back, as a
+# multiple of its compressed size and never less than the floor. A header is
+# names, labels, placements and ports, which compress well but not without
+# limit; what the bound is for is an entry that came out of a shared tier and
+# was not written by this code (see 'shape_envelope.MAX_BREP_EXPANSION').
+_TREE_MAX_EXPANSION = 200
+_TREE_MAX_EXPANSION_FLOOR = 64 << 20
 
 
 def _serialize(value) -> bytes:
@@ -94,11 +139,66 @@ def _serialize(value) -> bytes:
         return _FRAME_MAGIC + len(header).to_bytes(4, "big") + header + brep
     payload = geometry
     if metadata:
-        # An assembly or a component list: already JSON, so the metadata is one
-        # more key in it rather than a frame around it.
+        # An assembly or a component list: a tree, whose header is JSON, so the
+        # metadata is one more key in it rather than a frame of its own.
         payload = dict(payload)
         payload[shape_envelope.KEY_METADATA] = metadata
-    return json.dumps(shape_envelope.encode(payload)).encode("utf-8")
+    if not shape_envelope.is_assembly_object(payload):
+        # Everything else is the plain JSON it always was, and for a reason
+        # beyond there being nothing to share. A part's components ('cmps') sit
+        # beside its geometry in an entry of their own, and an earlier release
+        # reading a frame it does not know counts that one entry a miss: the
+        # geometry beside it would be a hit, and the part would come back
+        # without its components - a partial hit, which is worse than a miss.
+        # An assembly's tree is the whole of the assembly, so for it a frame an
+        # earlier release cannot read is a miss of everything, and a rebuild.
+        return json.dumps(shape_envelope.encode(payload)).encode("utf-8")
+    return _serialize_tree(payload)
+
+
+def _serialize_tree(payload) -> bytes:
+    """A tree as a _TREE_MAGIC frame: its structure, then each distinct payload once."""
+    payloads = shape_envelope.Payloads()
+    tree = shape_envelope.encode(payload, payloads=payloads)
+    order = list(payloads.by_digest.items())
+    header = json.dumps(
+        {"tree": tree, "payloads": [[digest, len(shape_envelope.brep_bytes(value))] for digest, value in order]}
+    ).encode("utf-8")
+    if _zstd_compress is not None:
+        encoding, header = _TREE_COMPRESSED, _zstd_compress(header)
+    else:  # pragma: no cover - PartCAD depends on zstd; see shape_envelope
+        encoding = _TREE_PLAIN
+    return b"".join(
+        [_TREE_MAGIC, encoding, len(header).to_bytes(4, "big"), header]
+        + [shape_envelope.brep_bytes(value) for _digest, value in order]
+    )
+
+
+def _deserialize_tree(data: bytes):
+    """Inverse of '_serialize_tree()'."""
+    encoding = data[len(_TREE_MAGIC) : len(_TREE_MAGIC) + 1]
+    length = int.from_bytes(data[len(_TREE_MAGIC) + 1 : _TREE_HEADER], "big")
+    header = data[_TREE_HEADER : _TREE_HEADER + length]
+    if encoding == _TREE_COMPRESSED:
+        if _ZstdDecompressor is None:  # pragma: no cover - see _serialize_tree
+            raise ValueError("this tree's header is zstd-compressed, and zstd is not available here")
+        limit = max(_TREE_MAX_EXPANSION_FLOOR, _TREE_MAX_EXPANSION * len(header))
+        decompressor = _ZstdDecompressor()
+        header = decompressor.decompress(header, max_length=limit)
+        if not decompressor.eof:
+            raise ValueError("this tree's header did not decompress into %d bytes or fewer" % limit)
+    elif encoding != _TREE_PLAIN:
+        raise ValueError("unknown tree encoding %r" % (encoding,))
+    header = json.loads(header.decode("utf-8"))
+    view = memoryview(data)
+    table = {}
+    offset = _TREE_HEADER + length
+    for digest, size in header["payloads"]:
+        if offset + size > len(data):
+            raise ValueError("this tree's payloads end before its header says they do")
+        table[digest] = bytes(view[offset : offset + size])
+        offset += size
+    return shape_envelope.decode(header["tree"], table)
 
 
 def _deserialize(data: bytes):
@@ -110,6 +210,8 @@ def _deserialize(data: bytes):
             shape_envelope.KEY_BREP: data[_FRAME_HEADER + length :],
             shape_envelope.KEY_METADATA: metadata,
         }
+    if data.startswith(_TREE_MAGIC):
+        return _deserialize_tree(data)
     if data.startswith(_BREP_PREFIXES):
         return {shape_envelope.KEY_BREP: data}
     return shape_envelope.decode(json.loads(data.decode("utf-8")))

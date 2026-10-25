@@ -621,14 +621,14 @@ class PythonRuntime(runtime.Runtime):
                     )
                     # Over when the interpreter is, not when the last process
                     # holding its output lets go (see 'runtime.communicate').
-                    stdout, stderr = capture.collect(*runtime.communicate_sync(p, stdin.encode()))
+                    stdout, stderr = capture.collect(*runtime.communicate_sync(p, runtime.stdin_bytes(stdin)))
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
             returncode, stderr = self._ended(p.returncode, stderr)
 
             if stdout:
-                pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+                pc_logging.debug("Output of %s: %s", cmd, stdout)
             if stderr:
                 if returncode == 0:
                     pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))
@@ -786,14 +786,16 @@ class PythonRuntime(runtime.Runtime):
                             # the bound stops all of it; see 'bounded_spawn_options'.
                             **runtime.bounded_spawn_options(timeout),
                         )
-                        stdout, stderr = capture.collect(*await runtime.communicate(p, stdin.encode(), timeout))
+                        stdout, stderr = capture.collect(
+                            *await runtime.communicate(p, runtime.stdin_bytes(stdin), timeout)
+                        )
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
             returncode, stderr = await self._ended_async(p.returncode, stderr)
 
             if stdout:
-                pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+                pc_logging.debug("Output of %s: %s", cmd, stdout)
             if stderr:
                 if returncode == 0:
                     pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))

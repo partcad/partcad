@@ -787,3 +787,128 @@ def test_what_a_run_writes_into_its_package_is_not_part_of_the_question(analysed
     (root / "notes.txt").write_text("measured 0.1655 mm\n")
     _run(part.analyze_async(ctx, cae.FEA))
     assert len(runs) == 1
+
+
+# --------------------------------------------------------------------------- #
+# `pc render`                                                                 #
+# --------------------------------------------------------------------------- #
+
+PICTURES = textwrap.dedent("""
+    name: //render-cache
+    parts:
+      bracket:
+        type: step
+        path: bracket.step
+    render:
+      sketch:
+        path: draw.py
+        extension: txt
+    export:
+      dump:
+        path: draw.py
+        extension: dump
+    """)
+
+
+@pytest.fixture
+def drawn(tmp_path, monkeypatch):
+    """A part whose drawing is a counter: the file it writes says which run it was."""
+    root = tmp_path / "package"
+    root.mkdir()
+    (root / "partcad.yaml").write_text(PICTURES)
+    (root / "draw.py").write_text("def process(path, request):\n    return {'success': True}\n")
+    (root / "bracket.step").write_text("ISO-10303-21; bracket")
+    ctx = pc.Context(str(root))
+    ctx.cache_artifacts = _cache(tmp_path)
+
+    part = ctx.get_part("//render-cache:bracket")
+    runs = []
+    behaviour = {"write": True, "fail": False}
+
+    async def get_wrapped(_ctx):
+        return {"brep": b"geometry"}
+
+    async def run(_ctx, _impl, _script, request, final_filepath):
+        runs.append(request)
+        if behaviour["write"]:
+            with open(final_filepath, "w") as f:
+                f.write("run %d" % len(runs))
+        if behaviour["fail"]:
+            return {"success": False, "exception": "no cairo"}
+        return {"success": True, "warnings": ["drawn coarse"]}
+
+    monkeypatch.setattr(part, "get_wrapped", get_wrapped)
+    monkeypatch.setattr(part, "_run_implementation_async", run)
+    return ctx, part, runs, behaviour, root
+
+
+def _draw(ctx, part, tmp_path, file_type="sketch", where="out", **kwargs):
+    directory = tmp_path / where
+    _run(part.render_async(ctx, file_type, output_dir=str(directory), **kwargs))
+    return directory
+
+
+def test_the_same_picture_twice_is_drawn_once(drawn, tmp_path):
+    ctx, part, runs, _behaviour, _root = drawn
+
+    _draw(ctx, part, tmp_path)
+    elsewhere = _draw(ctx, part, tmp_path, where="elsewhere")
+
+    assert len(runs) == 1
+    # Back where *this* call asked for it, and the picture the run drew.
+    (written,) = list(elsewhere.rglob("*.txt"))
+    assert written.read_text() == "run 1"
+
+
+def test_another_picture_is_drawn_again(drawn, tmp_path):
+    ctx, part, runs, _behaviour, root = drawn
+
+    _draw(ctx, part, tmp_path)
+    _draw(ctx, part, tmp_path, width=10)
+    assert len(runs) == 2
+
+    # The implementation changed: so did the picture it draws.
+    (root / "draw.py").write_text("def process(path, request):\n    return {'success': True, 'v': 2}\n")
+    _draw(ctx, part, tmp_path)
+    assert len(runs) == 3
+
+
+def test_a_failed_drawing_is_not_remembered(drawn, tmp_path):
+    ctx, part, runs, behaviour, _root = drawn
+    behaviour["fail"] = True
+
+    _draw(ctx, part, tmp_path)
+    _draw(ctx, part, tmp_path)
+    assert len(runs) == 2
+
+
+def test_a_drawing_that_wrote_nothing_is_not_remembered(drawn, tmp_path):
+    """The file at the path may be a previous run's, and would be handed out as this one's."""
+    ctx, part, runs, behaviour, _root = drawn
+    out = tmp_path / "out"
+    _draw(ctx, part, tmp_path)
+    behaviour["write"] = False
+    ctx.cache_artifacts = _cache(tmp_path / "fresh")
+
+    _draw(ctx, part, tmp_path)
+    _draw(ctx, part, tmp_path)
+    assert len(runs) == 3
+    assert [path.read_text() for path in out.rglob("*.txt")] == ["run 1"]
+
+
+def test_an_export_is_not_cached(drawn, tmp_path):
+    """An exporter may write files beside the one asked for, and the cache would hold only that one."""
+    ctx, part, runs, _behaviour, _root = drawn
+
+    _draw(ctx, part, tmp_path, file_type="dump")
+    _draw(ctx, part, tmp_path, file_type="dump")
+    assert len(runs) == 2
+
+
+def test_a_part_that_is_not_cached_is_drawn_every_time(drawn, tmp_path, monkeypatch):
+    ctx, part, runs, _behaviour, _root = drawn
+    monkeypatch.setattr(part, "cacheable", False)
+
+    _draw(ctx, part, tmp_path)
+    _draw(ctx, part, tmp_path)
+    assert len(runs) == 2

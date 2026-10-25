@@ -142,3 +142,66 @@ def test_standard_input_reaches_the_interpreter(python_runtime):
 
     assert exitcode == 0, stderr
     assert "A REQUEST" in stdout
+
+
+# --------------------------------------------------------------------------- #
+# The request, produced when the process starts                               #
+# --------------------------------------------------------------------------- #
+
+
+def test_standard_input_may_be_text_bytes_nothing_or_what_produces_them():
+    assert runtime.stdin_bytes("a request") == b"a request"
+    assert runtime.stdin_bytes(b"a request") == b"a request"
+    assert runtime.stdin_bytes(None) == b""
+    assert runtime.stdin_bytes("") == b""
+    assert runtime.stdin_bytes(lambda: "a request") == b"a request"
+    assert runtime.stdin_bytes(lambda: b"a request") == b"a request"
+
+
+@pytest.fixture
+def one_slot(monkeypatch):
+    """A machine with room for one sandbox process, so who holds it can be seen."""
+    from partcad import sandbox_lock
+
+    slots = sandbox_lock.ProcessSlots(1)
+    monkeypatch.setattr(sandbox_lock, "process_slots", slots)
+    return slots
+
+
+def _request_made_in(slots, made):
+    def request():
+        # Inside the slot: the one there is is taken by the launch this is for.
+        made.append(slots._in_use)
+        return "a request"
+
+    return request
+
+
+def test_a_request_is_produced_inside_the_process_slot(tmp_path, one_slot):
+    """Not when the caller built it: a request waiting for a slot is held as what it is made of, not as text."""
+    made = []
+    plain = runtime.Runtime(_ctx(tmp_path), "plain")
+
+    exitcode, stdout, stderr = asyncio.run(
+        plain.run_async(
+            [sys.executable, "-c", "import sys; print(sys.stdin.read().upper())"], _request_made_in(one_slot, made)
+        )
+    )
+
+    assert exitcode == 0, stderr
+    assert "A REQUEST" in stdout
+    assert made == [1]
+
+
+def test_the_python_runtime_produces_it_inside_the_slot_too(python_runtime, one_slot):
+    made = []
+
+    exitcode, stdout, stderr = asyncio.run(
+        python_runtime.run_async_onced(
+            ["-c", "import sys; print(sys.stdin.read().upper())"], stdin=_request_made_in(one_slot, made)
+        )
+    )
+
+    assert exitcode == 0, stderr
+    assert "A REQUEST" in stdout
+    assert made == [1]

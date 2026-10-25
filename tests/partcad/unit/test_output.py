@@ -1122,16 +1122,24 @@ def test_the_flag_reaches_the_request_of_every_implementation():
     is there, so this covers the request that declared nothing as much as the
     one that did.
     """
-    recorded = []
+
+    class _Stop(Exception):
+        pass
 
     class _Impl:
         decode = True
-        container = None
         format_name = "svg"
         project = None
 
         def __init__(self, reproducible):
             self.reproducible = reproducible
+
+        @property
+        def container(self):
+            # The first thing asked once the flag is in the request. The request
+            # itself is serialized later, by the runtime, as the process starts
+            # (see 'runtime.stdin_bytes'), so it is read here as the dict it is.
+            raise _Stop()
 
     class _Fake:
         name = "part"
@@ -1142,32 +1150,20 @@ def test_the_flag_reaches_the_request_of_every_implementation():
         def error(self, message):  # pragma: no cover - not reached here
             raise AssertionError(message)
 
-    def _serialize(request):
-        recorded.append(dict(request))
-        raise _Stop()
-
-    class _Stop(Exception):
-        pass
-
-    original = pc.shape.shape_envelope.serialize
-    pc.shape.shape_envelope.serialize = _serialize
-    try:
-        for declared, request, expected in (
-            (False, {}, False),
-            (True, {}, True),
-            # What the layered configuration produced, which is already in the
-            # request by the time it gets here, wins over the implementation's
-            # own reading of it -- that is where a command-line override lands.
-            (False, {"reproducible": True}, True),
-            (True, {"reproducible": False}, False),
-            # ...and is coerced on the way through.
-            (False, {"reproducible": "true"}, True),
-        ):
-            with pytest.raises(_Stop):
-                asyncio.run(_Fake()._run_implementation_locked(None, _Impl(declared), "s.py", request, "/tmp/out.svg"))
-            assert recorded[-1][output.REPRODUCIBLE_KEY] is expected
-    finally:
-        pc.shape.shape_envelope.serialize = original
+    for declared, request, expected in (
+        (False, {}, False),
+        (True, {}, True),
+        # What the layered configuration produced, which is already in the
+        # request by the time it gets here, wins over the implementation's
+        # own reading of it -- that is where a command-line override lands.
+        (False, {"reproducible": True}, True),
+        (True, {"reproducible": False}, False),
+        # ...and is coerced on the way through.
+        (False, {"reproducible": "true"}, True),
+    ):
+        with pytest.raises(_Stop):
+            asyncio.run(_Fake()._run_implementation_locked(None, _Impl(declared), "s.py", request, "/tmp/out.svg"))
+        assert request[output.REPRODUCIBLE_KEY] is expected
 
 
 def test_the_svg_renderer_rounds_every_number_to_the_precision_it_claims():
