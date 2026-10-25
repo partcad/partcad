@@ -359,7 +359,8 @@ def _resolve_port(
 
     The port itself is not moved - a port of a part stays a port of that part.
     What this object gets is a port of its own at the place that one ended up,
-    moved and turned by the entry's offset, and drawn with the same boundary.
+    moved and turned by the entry's offset, drawn with the same boundary and
+    cutting its own way in if that one does ('selfScrew').
     """
     ports = item.with_ports.get_ports()
     port = ports.get(port_name)
@@ -381,6 +382,7 @@ def _resolve_port(
         sketch=port.sketch,
         location=placement * port_location(port) * (offset if offset is not None else Location()),
         sketch_params=port.sketch_params,
+        self_screw=port.self_screw,
     )
 
 
@@ -554,6 +556,7 @@ def _adopt_all(shape, mapped: MappedPorts, source) -> None:
             sketch=port.sketch,
             location=port_location(port),
             sketch_params=port.sketch_params,
+            self_screw=port.self_screw,
         )
 
 

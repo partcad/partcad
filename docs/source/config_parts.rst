@@ -50,6 +50,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
         <another port name>:
           location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
+          selfScrew: <(optional) whether this port cuts its own way into what it is joined to, default: false>
 
       # What the shape this part produces reports about itself. See "Properties".
       properties: # (optional)

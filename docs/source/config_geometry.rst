@@ -344,6 +344,7 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
           sketch: <(optional) name of the sketch used for visualization>
           params: # (optional) the parameter values to build that sketch with
             <sketch parameter name>: <value or "%expression%">
+          selfScrew: <(optional) whether this port cuts its own way into what it is joined to, default: false>
       parameters:
         # The values this interface is built from, declared exactly as a part's
         # or a sketch's are, and set by a reference: "<interface>;<name>=<value>"

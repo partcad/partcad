@@ -271,9 +271,10 @@ springs holds it overlapping. Two things say so, and both are read from
 the joint, never declared against a pair of parts:
 
 * the mating or the `how` of the connection says `snapIn` or `selfScrew`, or an
-  interface it joins cuts its own thread (`selfScrew`). The overlap expected is
-  between the two parts that provide the joined ports - followed through any
-  `map:` of a sub-assembly to the part inside it that provides the port;
+  interface or a port it joins cuts its own way in (`selfScrew`). The overlap
+  expected is between the two parts that provide the joined ports - followed
+  through any `map:` of a sub-assembly to the part inside it that provides the
+  port;
 * `interferes` lists the further nodes the same act of joining drives into: a
   screw connected to the part its head bears on cuts its thread in the ones
   underneath as well, and a sub-assembly fitted by one of its pins drives its
@@ -564,6 +565,22 @@ one goes into. Then the thread of the end that does have to match one is the
 thread that gets cut, and failing that the one the self-tapping end brings with
 it.
 
+A port may say `selfScrew` of itself:
+
+  .. code-block:: yaml
+
+    interfaces:
+      nail-point:
+        ports:
+          tip:
+            selfScrew: true
+
+It says what the interface's says, for every joint made through that port - and
+it is what a connection naming the port alone (`withPort:`, `connectPorts:`)
+goes by, since such a connection looks up neither interface nor their mating.
+Every copy of the port keeps it: the `tip` of each part that implements
+`nail-point`, and the port an assembly's `map:` makes of it.
+
 How a mating goes together
 --------------------------
 
@@ -598,7 +615,8 @@ Every connection made through the pair gets them, and an ASSY file overrides
 them **field by field**: a step whose own ``how`` gives only ``turnTorqueMax``
 keeps the mating's thread and direction. The order, most specific first, is the
 connection's ``how``, the mating's ``how``, the mating's own ``selfScrew`` and
-``snapIn``, the interfaces' ``threadStep`` and ``selfScrew``, and the defaults.
+``snapIn``, the interfaces' ``threadStep`` and ``selfScrew`` and the ports'
+``selfScrew``, and the defaults.
 
 Reading the instructions back
 -----------------------------
@@ -677,8 +695,9 @@ snapped or screwed in. That is said by any of:
 * the mating of the two interfaces it connects through: any field of its
   ``how`` (see "How a mating goes together" above), or its own ``snapIn`` or
   ``selfScrew``, which then says it for every connection that pairs them;
-* the interfaces themselves, with a ``threadStep`` or ``selfScrew``: a thread is
-  screwed in.
+* the interfaces themselves, with a ``threadStep`` or ``selfScrew``, or the ports
+  that meet, with a ``selfScrew``: a thread is screwed in, and a way cut in is
+  driven.
 
 The ``manufacturability`` test reports each step that says none of these; an
 item placed by ``location:`` is the ``connectivity`` test's to report. The IDE's
