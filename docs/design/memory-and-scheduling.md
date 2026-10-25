@@ -28,10 +28,10 @@ decided and the design being discussed.
 
 ## 1. The problem
 
-`pc render -r` of partcad-ldraw-examples -- a 731-part castle and a 237-part Technic car, built from the LDraw
-library, and 33 pictures of them and of their sub-assemblies -- runs out of memory on a machine with 16 GB or less.
-That repository's CI runs it with an 8 GB swap file added for the purpose, and with a `threadsMax` it believes keeps
-three drawings at once (and which has been raised to four since 0.8.238).
+`pc render -r` of partcad-ldraw-examples -- a 731-part castle and a Technic car of 236 placed parts (237 pieces in its
+README's shopping list), built from the LDraw library, and 33 pictures of them and of their sub-assemblies -- runs out
+of memory on a machine with 16 GB or less. That repository's CI runs it with an 8 GB swap file added for the purpose,
+and with a `threadsMax` it believes keeps three drawings at once (and which has been raised to four since 0.8.238).
 
 Three things combine:
 
@@ -181,11 +181,12 @@ placement whether or not the geometry is shared, and that is what fills them (se
 reach them).
 
 The same sharing is already done by `wrapper_gltf.py` for the viewer, keyed by `payload_digest`; this does it for
-`decode_tree`, `decode_shape` and `wrapper_interference.py`, which still decode per node. What has to be checked is
-that no implementation modifies a shape it was handed in place, since a change to one placement would now be a change
-to all of them: the built-in exporters write files from the shapes and modify none; `cae_support.prepare()` imprints
-sketches on a *part*, which has one placement. The key is the payload string as it arrived, so two different
-geometries are never confused; hashing it is not needed in the sandbox.
+`decode_tree` and `decode_shape`. `wrapper_interference.py` still decodes per node, on purpose: it takes booleans
+between placements, and between two placements of one `TShape` that is a change of its own to make. What has to be
+checked is that no implementation modifies a shape it was handed in place, since a change to one placement would now
+be a change to all of them: the built-in exporters write files from the shapes and modify none;
+`cae_support.prepare()` imprints sketches on a *part*, which has one placement. The key is the payload string as it
+arrived, so two different geometries are never confused; hashing it is not needed in the sandbox.
 
 ### 5.2 Release what is no longer needed
 

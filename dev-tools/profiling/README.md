@@ -24,8 +24,20 @@ python3 ../partcad/dev-tools/profiling/memory_report.py /tmp/run.jsonl
 ```
 
 Stop the package's daemon first (`pc daemon stop`) when the code changed, or the run is served by the daemon that
-loaded the previous code. Run the command inside a memory-limited cgroup (`systemd-run --user --scope -p MemoryMax=8G
-...`) to see what a smaller machine would do; the sampler then reports that cgroup's usage and peak too.
+loaded the previous code.
+
+To see what a smaller machine would do, run the whole thing inside one memory-limited cgroup -- the sampler as well as
+`pc`, because the sampler reports the usage and peak of the cgroup *it* is in, and with the daemon stopped first, so
+that the daemon `pc` starts is in it too:
+
+```bash
+pc daemon stop
+systemd-run --user --scope -p MemoryMax=8G bash -c '
+    python3 ../partcad/dev-tools/profiling/memory_sampler.py /tmp/run.jsonl & sampler=$!
+    PC_DAEMON_IDLE_TIMEOUT=0 pc --no-ansi render -r
+    kill $sampler'
+pc daemon stop
+```
 
 ## One drawing, phase by phase
 

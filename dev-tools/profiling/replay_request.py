@@ -101,16 +101,24 @@ def main():
 
     phases.enter("imports")
     import ocp_serialize  # noqa: F401 - first, for the expat pin it makes
-    import render_raster
     import render_svg
     import wrapper_common
     import wrapper_export
 
+    try:
+        import render_raster
+    except ImportError:
+        # svglib and reportlab are what the raster file types add to the
+        # sandbox (builtin/render/partcad.yaml), so one that has only drawn
+        # SVG has neither - and an SVG capture has nothing to rasterize.
+        render_raster = None
+
     _wrap(wrapper_common, "handle_input", phases, "read and parse the request")
     _wrap(wrapper_export, "decode", phases, "decode the tree", "after decoding")
     _wrap(render_svg, "project_by_color", phases, "mesh and hidden-line removal", "edges to SVG")
-    _wrap(render_raster.svglib, "svg2rlg", phases, "parse the SVG")
-    _wrap(render_raster.renderPM, "drawToFile", phases, "rasterize", "done")
+    if render_raster is not None:
+        _wrap(render_raster.svglib, "svg2rlg", phases, "parse the SVG")
+        _wrap(render_raster.renderPM, "drawToFile", phases, "rasterize", "done")
 
     with open(wrapper_path) as f:
         source = f.read()

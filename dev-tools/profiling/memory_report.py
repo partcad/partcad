@@ -40,6 +40,18 @@ def main():
         print("no samples")
         return
 
+    # A process whose PSS could not be read (no smaps_rollup) is counted at its
+    # RSS, which counts the libraries it shares with the others again: say so
+    # wherever such a process is in a total.
+    def _label(sandboxes_only):
+        unread = {
+            p["pid"]
+            for row in rows
+            for p in row["procs"]
+            if p["pss"] is None and (p["role"] == "sandbox" or not sandboxes_only)
+        }
+        return "PSS" if not unread else "PSS, and RSS for %d processes whose PSS was unreadable" % len(unread)
+
     jobs = {}
     peak_total = peak_sandboxes = (0, rows[0])
     most_at_once = (0, rows[0])
@@ -70,8 +82,12 @@ def main():
             next_row = row["t"] + args.step
 
     print("samples: %d over %.0fs" % (len(rows), rows[-1]["t"]))
-    print("peak, every PartCAD process (PSS): %d MB at t=%.0fs" % (_mb(peak_total[0]), peak_total[1]["t"]))
-    print("peak, sandboxes alone (PSS): %d MB at t=%.0fs" % (_mb(peak_sandboxes[0]), peak_sandboxes[1]["t"]))
+    print(
+        "peak, every PartCAD process (%s): %d MB at t=%.0fs" % (_label(False), _mb(peak_total[0]), peak_total[1]["t"])
+    )
+    print(
+        "peak, sandboxes alone (%s): %d MB at t=%.0fs" % (_label(True), _mb(peak_sandboxes[0]), peak_sandboxes[1]["t"])
+    )
     print("peak, daemon (RSS): %d MB" % _mb(daemon_peak))
     if lowest[0] is not None:
         print("lowest MemAvailable: %d MB at t=%.0fs" % (_mb(lowest[0]), lowest[1]["t"]))
@@ -80,8 +96,13 @@ def main():
     print("\nat the peak (t=%.0fs):" % peak_total[1]["t"])
     for process in sorted(peak_total[1]["procs"], key=lambda p: -_size(p)):
         print(
-            "  %-8s rss %6d MB  pss %6d MB  %s"
-            % (process["role"], _mb(process["rss"]), _mb(process["pss"]), process["what"][:90])
+            "  %-8s rss %6d MB  pss %6s MB  %s"
+            % (
+                process["role"],
+                _mb(process["rss"]),
+                "?" if process["pss"] is None else _mb(process["pss"]),
+                process["what"][:90],
+            )
         )
 
     by_wrapper = collections.defaultdict(list)
