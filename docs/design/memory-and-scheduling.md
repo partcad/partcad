@@ -339,10 +339,12 @@ The design being discussed, **open** in every part:
 - **Usage is this daemon's own footprint**: its process and the sandbox processes it started (PSS where Linux has it,
   `psutil`'s USS elsewhere). **Capacity** is RAM plus swap, or the cgroup's `memory.max` plus `memory.swap.max` where
   that is smaller. The budget is `memoryBudget` (0.8) times capacity. Under a cgroup limit the two are not measured
-  alike: the kernel holds the limit against the cgroup's whole charge -- kernel memory, page cache, and every other
-  process in the cgroup, such as the rest of a dev container -- so a footprint can fit the budget while the cgroup
-  does not. There the measure that matches the limit is the cgroup's working set (`memory.current` less the
-  reclaimable `inactive_file` of `memory.stat`, plus `memory.swap.current`); which to use is part of question 2.
+  alike: the kernel charges the cgroup's whole usage against `memory.max` -- kernel memory, page cache, and every
+  other process in the cgroup, such as the rest of a dev container -- and its swap separately against
+  `memory.swap.max`, so a footprint can fit the budget while the cgroup does not. An admission estimate on the
+  cgroup's side would be its working set, `memory.current` less the `inactive_file` of `memory.stat` that the kernel
+  reclaims before it acts, beside `memory.swap.current`; it estimates the charge rather than reproducing it. Which to
+  use is part of question 2.
 - **Admission charges what a task will reach, not what it uses now.** In a warm run of the LDraw examples with #849 and
   #850, a picture's sandbox held 0.4 to 0.5 GB five seconds after it started and 1.4 to 2.7 GB ten seconds later,
   and the run's first four starts saw 234 MB in use. A test of present usage admits a slot's worth of tasks at once,
@@ -450,7 +452,7 @@ repository's code, and its effect is not measured.
 2. **"Available capacity"** (section 9): RAM plus swap (or the cgroup's limit), fixed -- or this daemon's usage plus
    what the machine has free right now, which shrinks the budget while a browser or another daemon holds memory without
    any agreement between them? Under a cgroup limit, the same question is whether usage is this daemon's footprint or
-   the cgroup's working set, which is what the kernel compares with the limit.
+   an estimate of the cgroup's own charge -- its working set and its swap.
 3. **What ranks a root**: when its first task started, or where it is declared? The first is what "finish what is
    started" says; the second is simpler and nearly always the same order.
 4. **What a root is** for `pc render -r`: each picture, or each top-level object with all of its pictures? The second
