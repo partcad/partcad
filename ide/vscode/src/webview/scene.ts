@@ -1220,8 +1220,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         // Create on-screen stats display
         if (!(window as any).pcViewerStats) {
             (window as any).pcViewerStats = {
-                frameTimeHistory: [],
-                lastLogTime: 0,
+                lastLogTime: performance.now(),
                 statsDisplay: null,
                 geometryInfo: '',
             };
@@ -1359,59 +1358,69 @@ function animate(): void {
             }
         }
     }
-    if (!dirty) {
-        // Nothing moved and nothing changed: the picture on screen is still it.
+    // Nothing moved and nothing changed: the picture on screen is still it.
+    const draws = dirty;
+    let drawTime = 0;
+    if (draws) {
+        dirty = false;
+        const started = performance.now();
+        drawStage();
+        labelRenderer.render(scene, camera);
+        drawTime = performance.now() - started;
+    }
+    reportFrameRate(now, draws, drawTime);
+}
+
+/**
+ * The performance readout, behind 'viewer.performanceDebug': once a second, how
+ * many frames were drawn in it and how long one took to draw.
+ *
+ * Counted on every frame, drawn or not, since a frame that draws nothing is the
+ * idle stage this readout has to be able to show: '0 drawn/s', and not the rate
+ * of the last second something moved.
+ */
+function reportFrameRate(now: number, drawn: boolean, drawTime: number): void {
+    const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
+    if (!perfDebug) {
         return;
     }
-    dirty = false;
-    drawStage();
-    labelRenderer.render(scene, camera);
-
-    // FPS tracking for performance logging (behind config flag). Frames drawn,
-    // not frames: an idle stage draws none, and reads as a low rate.
-    const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
-    if (perfDebug) {
-        if (!(window as any).pcViewerStats) {
-            (window as any).pcViewerStats = {
-                frameTimeHistory: [],
-                lastLogTime: 0,
-                lastFrameTime: now,
-                statsDisplay: null,
-                geometryInfo: '',
-            };
-        }
-        const stats = (window as any).pcViewerStats;
-        const frameInterval = now - stats.lastFrameTime;
-        stats.frameTimeHistory.push(frameInterval);
-        if (stats.frameTimeHistory.length > 60) {
-            stats.frameTimeHistory.shift();
-        }
-        stats.lastFrameTime = now;
-
-        // Log FPS every second
-        if (now - stats.lastLogTime > 1000) {
-            const avg =
-                stats.frameTimeHistory.reduce((a: number, b: number) => a + b, 0) / stats.frameTimeHistory.length;
-            const fps = 1000 / avg;
-            console.log(`[Digital Thread] FPS: ${fps.toFixed(1)} (frame time: ${avg.toFixed(2)}ms)`);
-
-            // Update on-screen display with FPS and graphics info
-            const renderInfo = surface.info?.render ?? { calls: 0, triangles: 0 };
-            const memInfo = surface.info?.memory ?? { geometries: 0, textures: 0 };
-            if (stats.statsDisplay) {
-                const fpsInfo = `\nFPS: ${fps.toFixed(1)} | Frame: ${avg.toFixed(1)}ms`;
-                const graphicsInfo = `\nDraw Calls: ${renderInfo.calls} | Geometries: ${memInfo.geometries}`;
-                stats.statsDisplay.textContent = stats.geometryInfo + fpsInfo + graphicsInfo;
-            }
-            console.log('[Digital Thread] Graphics Stats:', {
-                drawCalls: renderInfo.calls,
-                triangles: renderInfo.triangles,
-                geometries: memInfo.geometries,
-                textures: memInfo.textures,
-            });
-            stats.lastLogTime = now;
-        }
+    if (!(window as any).pcViewerStats) {
+        (window as any).pcViewerStats = {
+            lastLogTime: now,
+            statsDisplay: null,
+            geometryInfo: '',
+        };
     }
+    const stats = (window as any).pcViewerStats;
+    stats.lastLogTime ??= now;
+    stats.drawnFrames = (stats.drawnFrames ?? 0) + (drawn ? 1 : 0);
+    stats.drawTime = (stats.drawTime ?? 0) + drawTime;
+
+    const elapsed = now - stats.lastLogTime;
+    if (elapsed <= 1000) {
+        return;
+    }
+    const fps = (stats.drawnFrames * 1000) / elapsed;
+    const perDraw = stats.drawnFrames > 0 ? stats.drawTime / stats.drawnFrames : 0;
+    console.log(`[Digital Thread] Drawn: ${fps.toFixed(1)} frames/s (draw time: ${perDraw.toFixed(2)}ms)`);
+
+    // Update on-screen display with the frame rate and graphics info
+    const renderInfo = surface.info?.render ?? { calls: 0, triangles: 0 };
+    const memInfo = surface.info?.memory ?? { geometries: 0, textures: 0 };
+    if (stats.statsDisplay) {
+        const fpsInfo = `\nDrawn: ${fps.toFixed(1)}/s | Draw: ${perDraw.toFixed(1)}ms`;
+        const graphicsInfo = `\nDraw Calls: ${renderInfo.calls} | Geometries: ${memInfo.geometries}`;
+        stats.statsDisplay.textContent = stats.geometryInfo + fpsInfo + graphicsInfo;
+    }
+    console.log('[Digital Thread] Graphics Stats:', {
+        drawCalls: renderInfo.calls,
+        triangles: renderInfo.triangles,
+        geometries: memInfo.geometries,
+        textures: memInfo.textures,
+    });
+    stats.lastLogTime = now;
+    stats.drawnFrames = 0;
+    stats.drawTime = 0;
 }
 
 /** The boxes a big model is drawn as while it is being moved, or undefined. */
