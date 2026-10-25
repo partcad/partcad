@@ -217,7 +217,7 @@ where things are, and every element of one moves on its own. Which parts are one
 rigid body, and which move against which, follows from that: see
 :ref:`sim-bodies`.
 
-`pc info -a <assembly>` lists the joints under ``Joints``: the two links each one
+`pc info <assembly>` lists the joints under ``Joints``: the two links each one
 joins, every degree of freedom it keeps - its kind, axis, range, starting value,
 and which parameter and which declaration it came from - and its physics.
 
@@ -608,7 +608,7 @@ deduced push direction, the forces each end is held with - is reported by
 
 .. code-block:: shell
 
-    pc info -a <assembly>
+    pc info <assembly>
 
 under ``Connections``, one entry per connected object. That is the assembly's
 own account of how it is built, for a person or for whatever performs it.
@@ -658,7 +658,7 @@ assembly, whose key covers the interfaces it connects.
 
 .. code-block:: shell
 
-    pc test -a connect-instructions
+    pc test connect-instructions
 
 Steps that can be followed
 --------------------------
@@ -835,9 +835,9 @@ result, for this one file.
 
 .. code-block:: shell
 
-  pc render -a -t png --filter head.yaml -O ./ logo
-  pc render -a -t png --filter '{bone1: null, bone2: null}' -O ./ logo
-  pc export -a -t step --filter '[bone1, bone2]' -O ./ logo
+  pc render -t png --filter head.yaml -O ./ logo
+  pc render -t png --filter '{bone1: null, bone2: null}' -O ./ logo
+  pc export -t step --filter '[bone1, bone2]' -O ./ logo
 
 The argument is a **filename first**: a file somebody keeps beside the package
 and edits. Only when there is no such file is the text read as the filter

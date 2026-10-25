@@ -6,17 +6,17 @@
 
 import rich_click as click
 
+from .. import object_kind
 from ..exclude import exclude_option, exclude_params
 from ..parameters import param_option, param_params
 from ..service import run
 
 
-# TODO-94: @alexanderilyin: Replace -i, -a, -s, -S with --type; https://stackoverflow.com/a/37491504/25671117
 @click.command(
     help=(
         "Show detailed information about a part, assembly, scene, or software. "
         "OBJECT may be written '...:<name>' to mean every object of that name in this "
-        "package and in every package below it"
+        "package and in every package below it. " + object_kind.LOOKED_UP
     ),
 )
 @click.option(
@@ -33,7 +33,7 @@ from ..service import run
     "--interface",
     "interface",
     is_flag=True,
-    help="The object is an interface",
+    help=object_kind.flag_help("an interface"),
     show_envvar=True,
 )
 @click.option(
@@ -41,7 +41,7 @@ from ..service import run
     "--assembly",
     "assembly",
     is_flag=True,
-    help="The object is an assembly",
+    help=object_kind.flag_help("an assembly"),
     show_envvar=True,
 )
 @click.option(
@@ -49,7 +49,7 @@ from ..service import run
     "--sketch",
     "sketch",
     is_flag=True,
-    help="The object is a sketch",
+    help=object_kind.flag_help("a sketch"),
     show_envvar=True,
 )
 @click.option(
@@ -57,7 +57,7 @@ from ..service import run
     "--scene",
     "scene",
     is_flag=True,
-    help="The object is a scene",
+    help=object_kind.flag_help("a scene"),
     show_envvar=True,
 )
 @click.option(
@@ -65,7 +65,7 @@ from ..service import run
     "--software",
     "software",
     is_flag=True,
-    help="The object is software",
+    help=object_kind.flag_help("software"),
     show_envvar=True,
 )
 @param_option

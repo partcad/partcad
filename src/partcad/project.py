@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, List, Optional
 import ruamel.yaml
 from ruamel.yaml.scalarstring import SingleQuotedScalarString
 
-from partcad_utils import assy_filter, pcignore
+from partcad_utils import assy_filter, object_names, pcignore
 
 from . import (
     assembly,
@@ -152,6 +152,15 @@ OBJECT_KIND_SECTIONS = {
 # the parts that name them are created after them, which is the order
 # '_instantiate_objects' sets out.
 LAZY_OBJECT_KINDS = ("sketch", "part", "assembly", "scene")
+
+# The kinds of object a command names, in the order a name of unknown kind is
+# looked for in: the most frequent first. They share one namespace -- a name is
+# one object of a package, whatever its kind -- which is what lets a command take
+# a bare name and find out what it is ('Project.object_kind') instead of being
+# told with '-a', '-s' and the rest. See 'partcad_utils.object_names', which
+# both ends of the wire read this rule from, and '_refuse_duplicate_names' for
+# what happens to a package that breaks it.
+NAMED_OBJECT_KINDS = object_names.NAMED_KINDS
 
 # The object types that are references to another object rather than an object
 # of their own. Parametrizing one of these does not mean applying the values to
@@ -568,7 +577,7 @@ class Project(project_config.Configuration):
         # The objects already built to materialize a part of theirs (see
         # '_materialize_derived_part'), and the lock that keeps two threads from
         # building the same one. Keyed by '(kind, name)': 'assemblies:' and
-        # 'scenes:' are separate namespaces, and both hold types that produce
+        # 'scenes:' are separate sections, and both hold types that produce
         # parts.
         self._derived_parts_attempted: set[tuple] = set()
         # owner -> the event its builder sets when the build is over. A second
@@ -576,6 +585,14 @@ class Project(project_config.Configuration):
         # up while 'children' is still being filled.
         self._derived_parts_building: dict[tuple, threading.Event] = {}
         self._derived_parts_lock = threading.Lock()
+
+        # Declarations refused because another kind of object of this package
+        # has their name, as {kind: {name: reason}}. Checked here, before any
+        # object is made: interfaces are made as the package loads, and one
+        # made under a name that is not its own would already be in use. See
+        # '_refuse_duplicate_names'.
+        self._refused_names: dict[str, dict[str, str]] = {}
+        self._refuse_duplicate_names()
 
         if (
             "desc" in self.config_obj
@@ -684,6 +701,12 @@ class Project(project_config.Configuration):
         if configs is None:
             configs = {} if self.skipped else self._filter_skipped(kind, self._enumerate_object_configs(kind))
             self._object_configs[kind] = configs
+            if kind in NAMED_OBJECT_KINDS:
+                # A kind a plugin-backed package has only now listed: its names
+                # are compared with the kinds known so far, and either side may
+                # be the one to lose a name (see '_refuse_duplicate_names').
+                self._refuse_duplicate_names()
+                configs = self._object_configs[kind]
         return configs
 
     def _normalized(self, kind: str, name: str, config):
@@ -736,6 +759,11 @@ class Project(project_config.Configuration):
         plugin for just this one object and only falls back to listing
         everything if the targeted fetch is not supported.
         """
+        if name in self._refused_names.get(kind, ()):
+            # Refused for a name another kind of object has, and dropped from
+            # 'configs' for it. Asked here as well, because a plugin-backed
+            # package would otherwise serve it again through the fetch below.
+            return None
         configs = self._object_configs.get(kind)
         if configs is not None and name in configs:
             return self._normalized(kind, name, configs[name])
@@ -845,14 +873,166 @@ class Project(project_config.Configuration):
         base, _ = parse_parameterized_name(name)
         if self.object_config(kind, base) is not None:
             return True
+        if self.alias_declared_by(kind, name) is not None or self.alias_declared_by(kind, base) is not None:
+            # A name another declaration's 'aliases:' asks for: it has no
+            # declaration of its own, and it is created all the same.
+            return True
         if kind == "part" and "/" in base:
             # A part an assembly materializes -- '<assembly>/<link>' of a URDF
-            # or of a STEP assembly -- is declared nowhere: it exists once that
-            # assembly has been built. It is still nameable, and naming one is
-            # how it is asked for, so the package that declares the assembly it
-            # comes out of is the package that has it.
+            # or of a STEP assembly, '<scene>/<model>/<link>' of a Gazebo world
+            # -- is declared nowhere: it exists once that object has been built.
+            # It is still nameable, and naming one is how it is asked for, so
+            # the package that declares the object it comes out of is the
+            # package that has it.
+            if self._derived_part_owner(base) is not None:
+                return True
             return self.object_config("assembly", base.split("/")[0]) is not None
         return False
+
+    def object_kind(self, name: str, kinds=None) -> typing.Optional[str]:
+        """Which kind of object of this package 'name' is, or None if it is none of them.
+
+        What a command asks of a name it was handed without being told what it
+        names: a name is one object of a package whatever its kind (see
+        'NAMED_OBJECT_KINDS'), so the name is enough to find it, and the kind is
+        looked up rather than asked for. 'kinds' narrows the search to what the
+        caller can do anything with -- 'pc sim' simulates parts, assemblies and
+        scenes, and a sketch called 'bolt' is not one -- and is searched in the
+        order of 'NAMED_OBJECT_KINDS' whatever order it is given in.
+
+        Two passes, and the second only when the first has no answer. The first
+        reads what is in memory and nothing else -- the declarations a package
+        already holds, the objects it has made, the names their 'aliases:' ask
+        for and the parts an assembly produces -- every kind before any slow
+        question is asked. For a package read from a 'partcad.yaml' that is the
+        whole answer, since it parsed every declaration as it loaded. The second
+        asks the way a lookup by name does ('declares_object'), which is where a
+        plugin-backed package goes to its repository: one kind at a time, the
+        most frequent first, so that a part -- the usual answer -- costs the one
+        round trip it costs when the kind is given.
+
+        Parameters are not part of the name an object is declared under, and
+        are cut off before looking; the object they make is of the kind the
+        declaration is.
+        """
+        kinds = NAMED_OBJECT_KINDS if kinds is None else [kind for kind in NAMED_OBJECT_KINDS if kind in kinds]
+        for kind in kinds:
+            if self._knows_object(kind, name):
+                return kind
+        for kind in kinds:
+            if self.declares_object(kind, name):
+                return kind
+        return None
+
+    async def object_kind_async(self, name: str, kinds=None) -> typing.Optional[str]:
+        """'object_kind()' for a caller already running on a loop.
+
+        The cheap pass is the same dictionary lookups. The slow one awaits what
+        a plugin-backed package fetches for each kind before asking it, so that
+        the synchronous question then finds the answer memoized, rather than
+        waiting for the fetch with the loop stopped (see
+        'Context._warm_project_async' for what that costs).
+        """
+        kinds = NAMED_OBJECT_KINDS if kinds is None else [kind for kind in NAMED_OBJECT_KINDS if kind in kinds]
+        for kind in kinds:
+            if self._knows_object(kind, name):
+                return kind
+        base, _ = parse_parameterized_name(name)
+        for kind in kinds:
+            await self._warm_object_config_async(kind, base)
+            if self.declares_object(kind, name):
+                return kind
+        return None
+
+    def _knows_object(self, kind: str, name: str) -> bool:
+        """Whether what this package holds in memory already says 'name' is of 'kind'.
+
+        The cheap half of 'object_kind': dictionary lookups, and the pass over
+        declarations already read that builds the index of the names
+        'aliases:' ask for. Nothing is fetched, nothing is enumerated and
+        nothing is made, so a kind a plugin-backed package has not listed yet
+        answers "no" here and is asked properly by the second pass.
+        """
+        if name in self._refused_names.get(kind, ()):
+            return False
+        base, _ = parse_parameterized_name(name)
+        objects = self.objects(kind)
+        if name in objects or base in objects:
+            return True
+        if kind == "part" and self._derived_part_owner(base) is not None:
+            # Read off the assemblies and scenes already known, which is the
+            # reason it is cheap enough to ask on every part lookup.
+            return True
+        configs = self._object_configs.get(kind)
+        if configs is None:
+            return False
+        if base in configs:
+            return True
+        aliases = self._aliases_declared(kind)
+        return name in aliases or base in aliases
+
+    def _refuse_duplicate_names(self) -> None:
+        """Keep one object per name across the kinds a command names.
+
+        A name is one object of a package whatever its kind, and this is where
+        a package that declares one name twice -- a sketch and an interface
+        both called 'm3', an alias of a part called what a scene is -- is made
+        to hold to that. The declaration of the kind earlier in
+        'NAMED_OBJECT_KINDS' keeps the name, which is also the object a bare
+        name resolves to, and every other one is refused: dropped from the
+        declarations this package serves, and recorded as broken with the
+        reason, so that the log, 'pc test' and the Explorer all say what is
+        wrong and what to do about it. Refusing it rather than letting one
+        silently shadow the other is the point: otherwise a name would mean one
+        object to 'pc render' and another to whatever named it with a flag.
+
+        Run as the package loads, before any object is made, over every kind it
+        knows; and again each time a plugin-backed package lists a kind it had
+        not listed before, which can take a name away from a kind listed
+        earlier. An object that package has already made under that name stays
+        made -- nothing here takes an object back -- and a single object such a
+        package serves without listing it is compared with nothing, since
+        finding out would mean listing every other kind. What is refused stays
+        refused, and is said once.
+        """
+        sections = {kind: self._object_configs.get(kind) for kind in NAMED_OBJECT_KINDS}
+        found = object_names.duplicates(sections)
+        if not found:
+            return
+        for duplicate in found:
+            refused = self._refused_names.setdefault(duplicate.kind, {})
+            if duplicate.name in refused:
+                continue
+            reason = object_names.message(duplicate)
+            refused[duplicate.name] = reason
+            if duplicate.alias_of is None:
+                sections[duplicate.kind].pop(duplicate.name, None)
+            self.record_broken_object(duplicate.kind, duplicate.name, reason)
+        # Built out of the declarations, and built again without what was just
+        # refused the next time a lookup misses (see 'alias_declared_by').
+        self._alias_index.clear()
+
+    def name_taken(self, kind: str, name: str, config_obj=None) -> typing.Optional[str]:
+        """Why 'name' cannot be given to a new object of 'kind' here, or None if it can.
+
+        The rule '_refuse_duplicate_names' holds a loaded package to, asked
+        before a declaration is written rather than after it is read: a command
+        that adds an object refuses a name another kind of object already has,
+        instead of writing a declaration the next load refuses. 'config_obj' is
+        the configuration to look in, which is the file about to be written when
+        the caller has it open; the package's own otherwise.
+        """
+        if kind not in NAMED_OBJECT_KINDS:
+            return None
+        if config_obj is None:
+            config_obj = self.config_obj
+        for other in NAMED_OBJECT_KINDS:
+            if other == kind:
+                continue
+            for claimed, alias_of in object_names.claimed_names(config_obj.get(object_names.SECTIONS[other])):
+                if claimed == name:
+                    return object_names.message(object_names.Duplicate(kind, name, None, other, alias_of))
+        return None
 
     # Hooks for plugin-backed packages. Never reached for a local package,
     # whose '_object_configs' are all populated at construction.
@@ -1490,7 +1670,11 @@ class Project(project_config.Configuration):
         index = self._alias_index.get(kind)
         if index is None:
             index = {}
-            for owner, config in self.object_configs(kind).items():
+            # Listed first: listing a kind a plugin serves is what refuses its
+            # names, and the refusals read before it would miss those.
+            configs = self.object_configs(kind)
+            refused = self._refused_names.get(kind, {})
+            for owner, config in configs.items():
                 if not isinstance(config, dict):
                     continue
                 for alias in config.get("aliases") or []:
@@ -1501,6 +1685,10 @@ class Project(project_config.Configuration):
                         # to the aliases it asks for, exactly as they do where
                         # those aliases are created.
                         alias += owner[owner.index(";") :]
+                    if alias in refused:
+                        # Another kind of object has the name; see
+                        # '_refuse_duplicate_names'.
+                        continue
                     index.setdefault(alias, owner)
             self._alias_index[kind] = index
         return index
@@ -1745,10 +1933,20 @@ class Project(project_config.Configuration):
         # Initialize aliases if they are declared implicitly
         if alias_class and config.get("aliases"):
             object_name = config["name"]
+            refused = self._refused_names.get(factory_name, {})
             for alias in config["aliases"]:
+                declared = alias
                 if ";" in object_name:
                     # Copy parameters
                     alias += object_name[object_name.index(";") :]
+                if alias in refused or declared in refused:
+                    # Another kind of object of this package has the name, and
+                    # was given it; the refusal was reported as the package
+                    # loaded (see '_refuse_duplicate_names'). Asked with the
+                    # parameters as well as without: a parametrized
+                    # declaration's aliases are refused under the name they are
+                    # created under, which carries them.
+                    continue
                 alias_object_config = {
                     "type": "alias",
                     "name": alias,
@@ -1874,9 +2072,9 @@ class Project(project_config.Configuration):
         prefix = part_name.split(";")[0]
         while "/" in prefix:
             prefix = prefix.rsplit("/", 1)[0]
-            # Both namespaces are searched: 'assemblies:' and 'scenes:' are
-            # separate, and a format read as either ('mjcf') is declared in
-            # whichever the package meant.
+            # Both sections are searched: a format read as either ('mjcf') is
+            # declared in whichever the package meant, and the name is the one
+            # object of the package it is whichever that was.
             for kind in ("assembly", "scene"):
                 config = (self._object_configs.get(kind) or {}).get(prefix)
                 # Read before normalization, and so possibly still in a short
@@ -1898,7 +2096,7 @@ class Project(project_config.Configuration):
 
         Returns (owner, object), or None when there is nothing to build.
         'owner' is the '(kind, name)' pair '_derived_part_owner()' hands back,
-        because 'assemblies:' and 'scenes:' are separate namespaces and both
+        because 'assemblies:' and 'scenes:' are separate sections and both
         hold types that produce parts. Claims nothing: '_claim_derived_part()'
         does that, and only once the caller is known to be allowed to build at
         all.
@@ -2194,6 +2392,16 @@ class Project(project_config.Configuration):
                                     self.record_broken_object(factory_name, owner, e)
                         if objects.get(object_name) is not None:
                             return objects[object_name]
+                    # Refused for a name another kind of object has. Said as
+                    # that rather than as "not found": the package does declare
+                    # it, and the reason is what the user has to act on.
+                    reason = self._refused_names.get(factory_name, {}).get(object_name)
+                    if reason is not None:
+                        if not quiet:
+                            pc_logging.error(
+                                "The %s '%s:%s' is refused: %s", factory_name, self.name, object_name, reason
+                            )
+                        return None
                     # We don't know anything about such an object - unless it
                     # is one this context excluded, which is not an error and
                     # must not read like one: the package declares it, PartCAD
@@ -2252,6 +2460,13 @@ class Project(project_config.Configuration):
             # with a round trip for its entire catalog.
             config = get_config(base_object_name)
             if config is None:
+                reason = self._refused_names.get(factory_name, {}).get(base_object_name)
+                if reason is not None:
+                    if not quiet:
+                        pc_logging.error(
+                            "The %s '%s:%s' is refused: %s", factory_name, self.name, base_object_name, reason
+                        )
+                    return None
                 # The same distinction the unparametrized branch above makes:
                 # a base this context excluded is not a base that is missing,
                 # and 'gone;width=5' has to read the same way as 'gone'.
@@ -2530,6 +2745,9 @@ class Project(project_config.Configuration):
         The one place a declaration is added, so that a locally added file and
         one fetched from a URL land in the file the same way, and so that
         'ruamel' keeps the rest of the document as the author wrote it.
+
+        Refused, with the reason logged and False returned, for a name another
+        kind of object of the package already has (see 'name_taken').
         """
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
@@ -2545,6 +2763,12 @@ class Project(project_config.Configuration):
         # A 'partcad.yaml' holding nothing at all parses as None.
         if config is None:
             config = {}
+
+        kind = next((kind for kind, named in OBJECT_KIND_SECTIONS.items() if named == section), None)
+        taken = self.name_taken(kind, name, config) if kind is not None else None
+        if taken is not None:
+            pc_logging.error("Not adding the %s '%s' to '%s': %s" % (kind, name, self.name, taken))
+            return False
 
         config_section = config.get(section)
         if config_section is None:

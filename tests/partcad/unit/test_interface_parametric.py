@@ -353,13 +353,13 @@ def test_a_shape_declares_no_freedom_of_movement_of_its_own(ctx):
 def test_a_port_passes_its_parameter_values_to_its_sketch(ctx):
     """One sketch serves the family, instead of one sketch per size."""
     port = ctx.get_interface(":m-thru;size=4,depth=2").get_ports()["thru-opening-m"]
-    assert port.sketch.name == "m;size=4"
+    assert port.sketch.name == "m-boundary;size=4"
     assert port.sketch.info()["outline"] == {"circle": 2.0}
 
     # A value equal to the default still names an instance of its own, exactly
     # as 'cube;width=10' does where 10 is what 'cube' defaults to.
     port3 = ctx.get_interface(":m-thru;size=3,depth=2").get_ports()["thru-opening-m"]
-    assert port3.sketch.name == "m;size=3"
+    assert port3.sketch.name == "m-boundary;size=3"
     assert port3.sketch.info()["outline"] == {"circle": 1.5}
 
 
@@ -497,7 +497,7 @@ def test_an_inherited_port_keeps_its_boundary_where_nothing_restates_it(ctx):
     thru = ctx.get_interface(":m-thru;size=4,depth=1")
     thru.test()
     (port,) = thru.get_ports().values()
-    assert port.sketch.name == "m;size=4"
+    assert port.sketch.name == "m-boundary;size=4"
 
 
 # --- an interface that is another one under a different name -----------------

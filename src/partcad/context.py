@@ -1414,6 +1414,22 @@ class Context:
         pc_logging.debug("Retrieving %s from %s" % (material_name, project_name))
         return prj.get_material(material_name, quiet=quiet)
 
+    def get_object_kind(self, object_spec, kinds=None) -> Optional[str]:
+        """What the object named by '<package>:<name>' is -- 'part', 'sketch', ... -- or None.
+
+        Relative to the current package, like every accessor here. A name is
+        one object of its package whatever its kind, so this is a lookup and
+        not a guess; see 'Project.object_kind' for the order it is looked for
+        in, and 'kinds' for narrowing it. None when the package is not found,
+        having said so, or when it has no object of that name.
+        """
+        project_name, object_name = resolve_resource_path(self.current_project_path, object_spec)
+        prj = self.get_project(project_name)
+        if prj is None:
+            pc_logging.error("Package %s not found" % project_name)
+            return None
+        return prj.object_kind(object_name, kinds)
+
     def _get_interface(self, interface_spec, params=None):
         project_name, interface_name = resolve_resource_path(
             self.current_project_path,

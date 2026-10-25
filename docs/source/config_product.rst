@@ -345,7 +345,7 @@ The joint tree deliberately does not become nesting. A URDF's tree is its
 hanging off another says nothing that the link's own placement does not already
 say - while nesting per joint would make an arm as deep as it has joints. The
 kinematics are not lost: **every link carries the joint that moves it**, from the
-link it hangs off, with the joint's axis, limits and dynamics (``pc info -a``
+link it hangs off, with the joint's axis, limits and dynamics (``pc info``
 lists them), and a link on a fixed joint is welded to its parent, so the
 assembly is the robot's mechanism without being converted (see :ref:`sim-urdf`).
 The only nesting left is the one that means something, a link whose several
@@ -469,7 +469,7 @@ simply declared by the STEP file rather than by ``partcad.yaml``:
 
 .. code-block:: shell
 
-  pc ide view -a :gearbox             # the assembly
+  pc ide view :gearbox                # the assembly
   pc ide view :gearbox/output_shaft   # one component of it
 
 A group inside the STEP file becomes a nested assembly, so the tree PartCAD
@@ -712,7 +712,7 @@ world ``subject_kind: scene``:
           validation: |
             max(abs(after["bodies"][n]["pos"][2] - before["bodies"][n]["pos"][2]) for n in before["bodies"]) < 5.0
 
-``pc sim -S stable`` runs it, and ``pc test`` holds the scene to it as its
+``pc sim stable`` runs it, and ``pc test`` holds the scene to it as its
 ``sim`` check like any other object. ``examples/feature_simulate`` declares its
 three stacks this way.
 
@@ -789,7 +789,7 @@ the same package:
 
 .. code-block:: shell
 
-  pc export -S -t sim-gazebo:world :workcell    # writes workcell.world plus its meshes
+  pc export -t sim-gazebo:world :workcell       # writes workcell.world plus its meshes
 
 and ``pc convert scene`` moves a scene between the two formats, rewriting the
 package around it:
@@ -841,7 +841,7 @@ meshes it references:
 
 .. code-block:: shell
 
-  pc export -S -t sim-mujoco:mjcf :cell     # a scene
+  pc export -t sim-mujoco:mjcf :cell        # a scene
   pc export -t sim-mujoco:mjcf :arm         # or an assembly
 
 It is also the format ``pc sim`` hands a scene to MuJoCo in (see

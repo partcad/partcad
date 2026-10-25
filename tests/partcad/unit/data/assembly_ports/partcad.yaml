@@ -1,7 +1,7 @@
 desc: A package to exercise "map:" - the ports and interfaces an assembly externalizes
 
 sketches:
-  m3:
+  m3-boundary:
     type: basic
     circle: 1.5
 
@@ -11,7 +11,7 @@ interfaces:
     abstract: True
     ports:
       m3:
-        sketch: m3
+        sketch: m3-boundary
   m3-thru:
     desc: 3mm through hole
     inherits:

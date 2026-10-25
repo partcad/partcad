@@ -8,6 +8,7 @@ import os
 
 import rich_click as click
 
+from .. import object_kind
 from ..exclude import exclude_option, exclude_params
 from ..parameters import param_option, param_params
 from ..service import run
@@ -17,7 +18,7 @@ from ..service import run
     help=(
         "Produce the route files of the objects that declare a 'cam:' section. "
         "OBJECT may be written '...:<name>' to mean every object of that name in this "
-        "package and in every package below it"
+        "package and in every package below it. " + object_kind.LOOKED_UP
     ),
 )
 @click.option(
@@ -55,7 +56,7 @@ from ..service import run
 @click.option(
     "-s",
     "--sketch",
-    help="The object is a sketch",
+    help=object_kind.flag_help("a sketch"),
     is_flag=True,
     show_envvar=True,
 )

@@ -144,7 +144,7 @@ interfaces:
 ```
 
 Two connected interfaces must agree on `threadStep` unless one declares
-`selfScrew`. Run `pc test -a <name>` to check that: it fails an assembly whose
+`selfScrew`. Run `pc test <name>` to check that: it fails an assembly whose
 instructions contradict themselves — a mismatched thread, or a `*Min` above its
 `*Max` — and passes one that takes every default.
 
@@ -387,12 +387,12 @@ reasoning had each produced a different wrong answer.
 ## 6. Validate, render it from several angles, iterate
 
 ```sh
-pc --no-ansi test -a <name>          # build gate: geometry instantiates, and the requirements are met
+pc --no-ansi test <name>             # build gate: geometry instantiates, and the requirements are met
 ```
 
 Its `requirements` check holds the assembly to the `ports:`, `interfaces:` and
 `physics:` written down in §3 and says which one is not met and what it found;
-`pc --no-ansi -v test -a -f requirements <name>` lists every one. The features
+`pc --no-ansi -v test -f requirements <name>` lists every one. The features
 are yours to check, against the views below.
 
 ### Prove each step changed nothing
@@ -404,7 +404,7 @@ like the design.
 
 So compare, rather than look. Instantiate the assembly before and after, walk it
 down to the parts, and check every part is the same part at the same place. No
-CLI command prints that — `pc info -a` gives the configuration, the ports and a
+CLI command prints that — `pc info <name>` gives the configuration, the ports and a
 hash of the source, which changes when the file is rewritten however little the
 geometry moved — so walk the tree yourself:
 
@@ -462,7 +462,7 @@ other:
 ```sh
 for view in front top right iso; do
   mkdir -p /tmp/pc-render/$view                     # -O expects it to exist
-  pc --no-ansi render -a -t png --view $view -O /tmp/pc-render/$view <name>
+  pc --no-ansi render -t png --view $view -O /tmp/pc-render/$view <name>
 done
 ```
 
@@ -497,7 +497,7 @@ render. Draw them:
 mkdir -p /tmp/pc-render/ports
 # Every port of every part. Add --with-interfaces for each interface joined to
 # its ports, or --with-all for both.
-pc --no-ansi render -a -t png --view iso -O /tmp/pc-render/ports --with-ports <name>
+pc --no-ansi render -t png --view iso -O /tmp/pc-render/ports --with-ports <name>
 ```
 
 These write `<name>.png` like any other render, so an overlay needs a directory
@@ -542,7 +542,7 @@ is fixed in the part, not in the ASSY — render that part on its own with
 assembly that uses it.
 
 Then adjust the placements or mates, re-test, and re-render. Iterate until every
-view matches. `pc ide view -a <name>` gives an interactive view.
+view matches. `pc ide view <name>` gives an interactive view.
 
 ## 7. Make it ready to simulate
 
@@ -551,7 +551,7 @@ sink, and nothing above notices. `pc sim` places it in a world, runs a physics
 engine and checks a claim about what happens; what it needs from you are the
 facts the engine cannot guess.
 
-**Weigh it.** `pc --no-ansi info -a <name>` adds up `MassProperties` over the
+**Weigh it.** `pc --no-ansi info <name>` adds up `MassProperties` over the
 parts — the total `mass` (kg), the combined `centerOfMass` (mm) and the inertia —
 and names any part whose mass is not known. Check the total against the real
 product, and that the centre of mass is where it has to be: over the footprint
@@ -623,7 +623,7 @@ revolute}`; `motion: fixed` locks one). So a cantilever stands, and a hinge swin
 only where it is declared. When what you were asked for is an arrangement rather
 than a product — a stack of blocks, a workcell — declare it under `scenes:`
 instead, where every element is a free body, with the same `simulate:`, and run
-it with `pc sim -S <name>`.
+it with `pc sim <name>`.
 
 **Name the joint the mechanism has.** One `type` per physical joint:
 
@@ -684,16 +684,16 @@ links:
 **Run it:**
 
 ```sh
-pc --no-ansi sim -a <name>          # every claim; exits non-zero when one fails
-pc --no-ansi sim --json -a <name>   # what the engine reported, before and after
-pc --no-ansi test -a <name>         # runs the same claims as its `sim` check
+pc --no-ansi sim <name>             # every claim; exits non-zero when one fails
+pc --no-ansi sim --json <name>      # what the engine reported, before and after
+pc --no-ansi test <name>            # runs the same claims as its `sim` check
 ```
 
 ## 8. Finalize
 
 Summarize the structure — parts, sub-assemblies, key placements, total mass and
-what `pc sim` found — and how to view it (`pc ide view -a <name>`, or
-`pc render -a -t png --with-all <name>` for a picture with the connection
+what `pc sim` found — and how to view it (`pc ide view <name>`, or
+`pc render -t png --with-all <name>` for a picture with the connection
 metadata on it). Offer `/pc:validate <name>` (an assembly) for a verdict on
 every requirement, the features included: it reads the bill of materials and the
 assembly instructions as well as the renders.

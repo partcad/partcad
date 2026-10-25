@@ -55,6 +55,36 @@ one for the whole thing; nothing is built twice, since each one is cached as it 
 assembly that takes many minutes no longer has to fit into a single request, and it is entirely automatic --
 there is nothing to turn on and no command of your own to run.
 
+.. _object-names:
+
+****************
+Naming an object
+****************
+
+An object is named by its name and nothing else: ``pc render bolt``, ``pc test //pub/std/metric/m:m3-screw``,
+``pc info firmware``. Within a package a name means **one object, whatever kind of object it is** -- a part, an
+interface, an assembly, a sketch, a scene or a piece of software -- so the name alone says which one it is, and
+``pc`` finds out what kind it is rather than asking you.
+
+That is a rule a package has to keep, and PartCAD holds it to it. A package that declares one name twice -- a
+sketch and an interface both called ``m3``, or a part whose ``aliases:`` take the name of a scene -- keeps the
+name for one of them and refuses the other, with an error saying which and why, when it loads; ``pc lint``
+and the editor say the same where the second one is written. The one that keeps the name is the one a bare
+name finds, of the kind looked for first in the order below. Materials, providers, repositories and part types
+have names of their own: nothing names one of those without saying what it is.
+
+Finding the kind costs almost nothing. Everything already in memory is asked first, about every kind --
+which, for a package read from a ``partcad.yaml``, is the whole answer, since every declaration was read as it
+loaded. Only a name none of that knows is looked for the slow way, and that is where a package served by a
+repository plugin asks its repository: one kind at a time, the most frequent first -- parts, interfaces,
+assemblies, sketches, scenes, then software -- so that a part costs the one request it would have cost anyway.
+
+``-s``, ``-i``, ``-a``, ``-S`` and (for ``pc info``) ``-w`` are still accepted, and say the object is a sketch,
+an interface, an assembly, a scene or software. They are no longer needed for anything: what they do now is
+skip the lookup, for whoever knows the kind and would rather not pay for asking -- a script working through a
+catalog a plugin serves, say. Given one, ``pc`` takes it at its word, and on a ``...`` walk (below) it narrows
+the walk to the objects of that kind.
+
 .. _recursive-names:
 
 **********************************
@@ -74,8 +104,8 @@ the root down. The last path separator is optional, so ``//pub/examples/...`` is
 The suffix can also be written on an **object** name, in front of the ``:``, which is what makes it more than
 a flag::
 
-    pc render ...:bolt                   # every part named 'bolt', here and below
-    pc render //pub/examples...:bolt     # every part named 'bolt' in that subtree
+    pc render ...:bolt                   # every object named 'bolt', here and below
+    pc render //pub/examples...:bolt     # every object named 'bolt' in that subtree
     pc export -a ...:frame               # every assembly named 'frame', here and below
     pc info ...:bolt                     # what each of them is
 
@@ -85,7 +115,9 @@ a fully qualified ``//package:name`` already follows.
 A walk over a named object asks every package of the subtree for its **own** object of that name, and passes
 over the packages that declare none: a tree of forty packages in which three declare a ``bolt`` is three
 renders, not thirty-seven complaints. Finding it nowhere in the subtree is the one failure, and it is reported
-once.
+once. Each package also says what its own one is (see :ref:`object-names`), so the ``bolt`` of one package can
+be a part and the ``bolt`` of the next an assembly; a kind flag such as ``-a`` above keeps only the ones of that
+kind.
 
 ``-x``/``--exclude`` leaves a package **and everything below it** out of the walk, and can be given more than
 once::
@@ -402,7 +434,8 @@ Object commands
   Run tests on a part, assembly, or scene. Name the package as ``-P <package>...`` to test the packages
   below it too, or the object as ``...:<name>`` to test every object of that name from here down (see
   :ref:`recursive-names`). Use ``-f`` to filter
-  by name prefix, and ``-s``/``-i``/``-a``/``-S`` to indicate a sketch, interface, assembly, or scene.
+  by name prefix. The object is found by its name whatever its kind (see :ref:`object-names`), and
+  ``-s``/``-i``/``-a``/``-S`` say it is a sketch, interface, assembly, or scene instead of looking it up.
   The tests cover whether the object builds (``cad``), whether it can be manufactured or purchased
   (``manufacturability`` and the methods below it), whether an assembly's connection instructions can be
   followed (``connect``; see "Testing the instructions" in :doc:`assy`), whether the route a machine would cut
@@ -454,9 +487,9 @@ Object commands
 
 ``pc sim``
   Run the simulations a part, an assembly or a scene declares in its ``simulate:`` section, and check the
-  ``validation:`` condition each of them states. Use ``-a`` when the object is an assembly and ``-S`` when it
-  is a scene -- a stack of blocks is an arrangement rather than a product, so it is a scene (see
-  :ref:`sim-bodies`). Use ``-P <package>...`` or ``...:<name>`` to run everything the packages below declare
+  ``validation:`` condition each of them states. The object is found by its name whether it is a part, an
+  assembly or a scene -- a stack of blocks is an arrangement rather than a product, so it is a scene (see
+  :ref:`sim-bodies`) -- and ``-a`` or ``-S`` says which instead of looking it up (see :ref:`object-names`). Use ``-P <package>...`` or ``...:<name>`` to run everything the packages below declare
   too (see :ref:`recursive-names`), ``-f`` to run only the simulation of a given name, and ``--json`` to
   print the whole of what each simulation plugin reported. A validation that does not hold exits non-zero.
   A run whose plugin drew the scene -- before and after, from the scene's ``render: png:`` viewpoint -- also
@@ -758,7 +791,7 @@ Object commands
 
       pc cam                    # every object of this package that says how it is made
       pc cam :panel             # one of them
-      pc cam -s :nameplate      # one that is a sketch
+      pc cam :nameplate         # one that is a sketch, found by its name like a part
       pc cam -m laser :gasket   # one that could be made either way, written for the laser
       pc cam -P ...             # this package and everything it imports
       pc cam ...:panel          # every panel from here down
@@ -907,8 +940,7 @@ Object commands
   ``FILTER`` names the links to keep -- a JSON or YAML file, or the same written out on the command line --
   and ``DST`` is the new object: the ASSY file of ``SRC`` with everything the filter drops taken out of it,
   written as ``DST.assy`` and declared beside ``SRC``. If ``SRC`` is an assembly then ``DST`` is an assembly,
-  and if ``SRC`` is a scene then ``DST`` is a scene; ``-a``/``-S`` settle it only for a package that declares
-  both under one name. An existing ``DST`` is overwritten, and ``--dry-run`` says what would be written
+  and if ``SRC`` is a scene then ``DST`` is a scene; ``-a``/``-S`` say which, without looking it up. An existing ``DST`` is overwritten, and ``--dry-run`` says what would be written
   without writing it.
 
   .. code-block:: shell
@@ -932,8 +964,8 @@ Object commands
   afterwards.
 
 ``pc export``
-  Export a 3D view of parts, assemblies, or scenes. Use ``-a`` for an assembly and ``-S`` for a scene.
-  Choose the format with ``-t``:
+  Export a 3D view of parts, assemblies, or scenes. The object is found by its name whatever its kind (see
+  :ref:`object-names`). Choose the format with ``-t``:
   ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, ``iges``, ``urdf``, or any
   file type a package implements itself (see :ref:`output-files`). Use ``-O`` to set the output directory,
   and ``-P <package>...`` or ``...:<name>`` to export the packages below this one too (see
@@ -941,8 +973,8 @@ Object commands
   references.
 
   ``--filter`` exports a *part* of one assembly or scene: the links it names, where the assembly put
-  them, without writing anything into the package (see :ref:`assy-filter`). It applies to one named object --
-  ``-a`` or ``-S`` says which kind it is -- so it is refused for a whole package and for a ``...`` subtree.
+  them, without writing anything into the package (see :ref:`assy-filter`). It applies to one named assembly
+  or scene, so it is refused for a part, for a whole package and for a ``...`` subtree.
   A ``filter:`` on an ``export:`` file type asks for the same thing permanently, per file type, and this
   overrides it for one run.
 
@@ -971,8 +1003,8 @@ Object commands
 
   .. code-block:: shell
 
-    pc render -a -t png --filter head.yaml -O ./ logo
-    pc render -a -t png --filter '{bone1: null, bone2: null}' -O ./ logo
+    pc render -t png --filter head.yaml -O ./ logo
+    pc render -t png --filter '{bone1: null, bone2: null}' -O ./ logo
 
   The file it writes is the one an unfiltered render would have written, under the object's own name, so two
   filters of one object overwrite each other -- use ``-O`` to send them to directories of their own. Unlike
@@ -1056,7 +1088,7 @@ Object commands
     done
 
   ``-t readme`` generates a markdown document instead of a projection: the package document (``README.md``,
-  listing what the package declares) or, when ``-a`` names an assembly, that assembly's own document
+  listing what the package declares) or, when the object named is an assembly, that assembly's own document
   (``<assembly>.md``, listing the bill of materials — every part and sub-assembly it is made of, recursively,
   grouped by the package they come from and counted). An assembly can also ask for its own document in the
   package configuration, by declaring ``readme`` in its ``render`` section.
@@ -1065,7 +1097,7 @@ Object commands
   YAML file's nested ``links:`` section belongs to no package, so it is not listed on its own: the parts it
   holds are counted towards the assembly that embeds it.
 
-  ``-t pdf`` and ``-t html`` generate the assembly instruction book of the assembly named by ``-a``: a title
+  ``-t pdf`` and ``-t html`` generate the assembly instruction book of the assembly named: a title
   page, the same bill of materials, then a page per assembly step, in the order the Assembly YAML file lists
   the links. Whatever has to be made before a step can be done is explained just before it: a sub-assembly
   gets a page showing it as it should look once it is together, followed by its own steps, and a part that is
@@ -1169,9 +1201,9 @@ instead.
 
   .. code-block:: shell
 
-    pc ide view --design-2d -a :logo                                 # the logo assembly, rendered to a picture
-    pc ide view --analysis-fea :cantilever                           # the cantilever, with its first FEA scenario run
-    pc ide view --analysis-fea --scenario tip-load :cantilever       # that one by name
+    pc ide view --design-2d :logo                                 # the logo assembly, rendered to a picture
+    pc ide view --analysis-fea :cantilever                        # the cantilever, with its first FEA scenario run
+    pc ide view --analysis-fea --scenario tip-load :cantilever    # that one by name
 
 ``pc ide install``
   Install the PartCAD extension into an editor on this machine -- the PartCAD IDE, VSCodium or Visual Studio
@@ -1305,7 +1337,7 @@ instead.
 
   An object that only means something inside a package -- an ASSY file, a URDF -- has nothing to convert
   ad-hoc, and is refused with that for the same reason: export it to a mesh first (``pc export -t stl``), or
-  a scene to its engine's format (``pc export -S -t sim-mujoco:mjcf``), and open that.
+  a scene to its engine's format (``pc export -t sim-mujoco:mjcf``), and open that.
 
   KiCad is handed the board rather than the file named, when the two are not the same: a ``kicad`` part *is*
   the STEP file KiCad's command line writes out of the board, so ``pc ide open --with kicad`` on it opens the

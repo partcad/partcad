@@ -211,6 +211,30 @@ def test_a_fetch_that_fails_writes_nothing(package, served):
     assert yaml.safe_load((package / "partcad.yaml").read_text()) == {"desc": "A package under test"}
 
 
+def test_a_name_another_kind_has_is_refused_before_anything_is_fetched(package, served):
+    (package / "partcad.yaml").write_text("interfaces:\n  bolt:\n    desc: An interface\n")
+    with serve(served) as url:
+        ctx = pc.Context(str(package))
+        with pytest.raises(ValueError, match="already the name of an interface"):
+            asyncio.run(
+                add_object_from_url_async(ctx, ctx.get_project("//"), "parts", "%s/bolt.step" % url, kind="step")
+            )
+
+    assert "parts" not in yaml.safe_load((package / "partcad.yaml").read_text())
+
+
+def test_a_name_taken_while_the_file_was_fetched_is_not_reported_as_added(package, served):
+    """The package checked the name, and the file it writes into has taken it since."""
+    with serve(served) as url:
+        ctx = pc.Context(str(package))
+        project = ctx.get_project("//")
+        (package / "partcad.yaml").write_text("interfaces:\n  bolt:\n    desc: An interface\n")
+        with pytest.raises(ValueError, match="'bolt' was not added"):
+            asyncio.run(add_object_from_url_async(ctx, project, "parts", "%s/bolt.step" % url, kind="step"))
+
+    assert "parts" not in yaml.safe_load((package / "partcad.yaml").read_text())
+
+
 def test_the_declaration_is_written_on_one_line(package, served):
     """A URL folded across two lines is unreadable and easy to break by hand."""
     with serve(served) as url:

@@ -80,6 +80,28 @@ at all).
   and reads what it remembered (`get_bounding_box_async`, `get_solidity_async`). `tests/conftest.py` fails any
   test in which two open actions share a key, and says where each was opened.
 
+- **A name is one object of its package, whatever its kind** (`partcad_utils/object_names.py`,
+  `Project.object_kind`, `Project._refuse_duplicate_names`). Parts, interfaces, assemblies, sketches, scenes and
+  software share one namespace per package -- materials, providers, repositories and part types keep their own,
+  since nothing names one of those without saying what it is -- and that is what lets a command take a bare name
+  and find out what it is instead of being told with `-a`/`-s`/`-i`/`-S`/`-w`. `NAMED_OBJECT_KINDS` is both the
+  set and the order a name is looked for in, the most frequent first.
+
+  A package that breaks the rule keeps the name for the declaration of the kind earliest in that order -- the one
+  a bare name finds -- and refuses every other one as it loads: dropped from what the package serves, and
+  recorded through `record_broken_object` with the reason, so the log, `pc test` and the Explorer all say it. An
+  alias (`aliases:`) is a name like a declaration, and is refused the same way. A plugin-backed package is
+  checked again each time it lists a kind, which can take a name away from a kind listed earlier.
+  `add_object_config` (every `pc add`, `pc import`, `pc filter`) refuses a taken name before writing it, and
+  `assy_lint.check_unique_names` says the same where the refused one is written, in the words of
+  `object_names.message` -- one rule, read by both ends, so the load, the editor and `pc lint` cannot disagree.
+
+  `object_kind(name, kinds)` is two passes, and the second runs only when the first has no answer: first what is
+  in memory, about every kind -- the declarations already read, the objects already made, the alias index, the
+  parts an assembly produces (`_knows_object`) -- which for a package read from a `partcad.yaml` is the whole
+  answer; then `declares_object`, kind by kind in order, which is where a plugin-backed package goes to its
+  repository. A coroutine asks `object_kind_async`, which awaits those fetches rather than blocking its loop.
+
 - **What an assembly places, without building it** (`Assembly.get_subassemblies_async`,
   `get_uncached_subassemblies_async`, `Shape.is_cached_async`, `Cache.contains_data_async`): the assemblies a
   declaration points at, read from the declaration -- an ASSY file's `assembly:` links, the object an alias or

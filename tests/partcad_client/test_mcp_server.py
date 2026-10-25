@@ -315,8 +315,18 @@ def test_render_returns_the_picture_and_not_its_base64(tmp_path):
     assert result.content[1].mime_type == "image/png"
     assert base64.b64decode(result.content[1].data) == PNG
     assert base64.b64encode(PNG).decode() not in result.content[0].text
+    # No 'kind': the daemon looks it up from the name (see 'operations._kind_of').
     assert requests(daemon, "render.inline") == [
-        {"package": None, "object": "box", "kind": "part", "format": "png", "context": "ctx-1"}
+        {"package": None, "object": "box", "format": "png", "context": "ctx-1"}
+    ]
+
+
+def test_render_sends_the_kind_it_is_told(tmp_path):
+    """Saying the kind skips the daemon's lookup, so it travels as it was said."""
+    daemon, server = serve(tmp_path, {"render.inline": rendered("png", PNG)})
+    call(server, "render", {"object": "box", "kind": "assembly"})
+    assert requests(daemon, "render.inline") == [
+        {"package": None, "object": "box", "format": "png", "kind": "assembly", "context": "ctx-1"}
     ]
 
 

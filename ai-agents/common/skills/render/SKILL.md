@@ -61,8 +61,8 @@ capture both streams when reading them: `pc --no-ansi render ... 2>&1`.
 ```sh
 mkdir -p ./out                                          # -O expects the directory to exist
 pc --no-ansi render -t png -O ./out bracket             # a part
-pc --no-ansi render -t png -O ./out -a gearbox          # an assembly (-a)
-pc --no-ansi render -t svg -O ./out -s outline          # a sketch (-s; SVG suits one better than PNG)
+pc --no-ansi render -t png -O ./out gearbox             # an assembly, found by its name
+pc --no-ansi render -t svg -O ./out outline             # a sketch (SVG suits one better than PNG)
 pc --no-ansi render -t png -O ./out -P //pub/std bolt   # an object in another package
 pc --no-ansi render -t png -O ./out bolt -p length=30   # with a value for one of its parameters
 ```
@@ -206,9 +206,9 @@ can be of one sub-assembly without a declaration for it. It takes a JSON or YAML
 *file* naming the links, or the same written out on the command line:
 
 ```sh
-pc --no-ansi render -a -t png -O ./out --filter ./head.yaml logo
-pc --no-ansi render -a -t png -O ./out --filter '{bone1: null, bone2: null}' logo
-pc --no-ansi render -a -t png -O ./out --filter '[bone1, bone2]' logo
+pc --no-ansi render -t png -O ./out --filter ./head.yaml logo
+pc --no-ansi render -t png -O ./out --filter '{bone1: null, bone2: null}' logo
+pc --no-ansi render -t png -O ./out --filter '[bone1, bone2]' logo
 ```
 
 A link the filter names is kept and a link it does not name is dropped. A link
@@ -218,8 +218,8 @@ the Assembly YAML file names it — its `name:`, or the part or assembly it plac
 — which is also the name a `connect:` uses, so read the `.assy` file to find out
 what the names are.
 
-It needs the object named, with `-a` or `-S` saying which kind it is: a part has
-no links, and neither has a whole package, so both are refused. It is subject to
+It needs the object named, and an assembly or a scene: a part has no links, and
+neither has a whole package, so both are refused. It is subject to
 §6 as well — the file is the one an unfiltered render would have written, under
 the object's own name — so give each filter a directory of its own.
 
