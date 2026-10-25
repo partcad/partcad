@@ -185,6 +185,9 @@ def test_an_output_file_is_written_where_the_caller_asked(tmp_path, monkeypatch)
     """The file was written over there, under a name of the container's choosing."""
     import base64
 
+    # Into a directory that holds something already, which a file comes back
+    # to alone (see 'outputs_for').
+    (tmp_path / "already-here.txt").write_text("", encoding="utf-8")
     wanted = str(tmp_path / "out.glb")
     service = _Service(
         result={
@@ -236,6 +239,66 @@ def test_an_output_directory_comes_back_whole_where_the_caller_asked(tmp_path, m
     # is not written.
     assert (wanted / "scene.xml").exists()
     assert not os.path.exists(elsewhere)
+
+
+def test_a_file_written_into_an_empty_directory_comes_back_with_what_was_written_beside_it(tmp_path, monkeypatch):
+    """A world's meshes are written next to the world, named after it; sent back alone, it points at nothing."""
+    from partcad_utils import container_service
+
+    run = tmp_path / "run"
+    run.mkdir()
+    wanted = run / "scene.world"
+    over_there = tmp_path / "over-there"
+    (over_there / "scene_meshes").mkdir(parents=True)
+    (over_there / "scene.world").write_text("<sdf/>", encoding="utf-8")
+    (over_there / "scene_meshes" / "bottom.stl").write_bytes(b"solid")
+    service = _Service(
+        result={
+            "stdout": None,
+            "stderr": None,
+            "exit_code": 0,
+            "output_files": {},
+            "output_dirs": {str(run): container_service.pack_directory(str(over_there))},
+        }
+    )
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
+
+    exitcode, _, _ = _runtime(tmp_path).run(["-c", "pass", str(wanted)], output_files=[str(wanted)])
+
+    assert exitcode == 0
+    assert service.params["output_dirs"] == [str(run)]
+    assert str(wanted) not in service.params.get("output_files", [])
+    assert wanted.read_text(encoding="utf-8") == "<sdf/>"
+    assert (run / "scene_meshes" / "bottom.stl").read_bytes() == b"solid"
+
+
+def test_a_file_comes_back_alone_into_a_directory_that_holds_anything_or_is_sent(tmp_path):
+    """Somebody's directory is not packed and written back; nor is the package the command reads."""
+    occupied = tmp_path / "occupied"
+    occupied.mkdir()
+    (occupied / "theirs.txt").write_text("", encoding="utf-8")
+    package = tmp_path / "package"
+    package.mkdir()
+    fresh = tmp_path / "fresh"
+    missing = tmp_path / "not-there-yet"
+    fresh.mkdir()
+
+    files, directories = runtime_python_remote.outputs_for(
+        [str(occupied / "a.stl"), str(package / "b.stl"), str(fresh / "c.stl"), str(missing / "d.stl")],
+        None,
+        [str(package)],
+    )
+
+    assert files == [str(occupied / "a.stl"), str(package / "b.stl")]
+    assert directories == [str(fresh), str(missing)]
+
+
+def test_two_files_in_one_fresh_directory_bring_it_back_once(tmp_path):
+    files, directories = runtime_python_remote.outputs_for(
+        [str(tmp_path / "run" / "a.world"), str(tmp_path / "run" / "b.world")], [str(tmp_path / "run")], []
+    )
+    assert files == []
+    assert directories == [str(tmp_path / "run")]
 
 
 def test_a_command_that_asks_for_no_directory_sends_no_such_field(tmp_path, monkeypatch):

@@ -104,6 +104,35 @@ def input_dirs_for(command, cwd: Optional[str] = None) -> list:
     return kept
 
 
+def outputs_for(output_files, output_dirs, sent) -> tuple:
+    """What comes back of what a command writes, as (files, directories).
+
+    A file the caller names comes back as the directory it is in, when nothing
+    is there yet and nothing in it is being sent. An implementation may write
+    more than the file it was told to -- a world's meshes beside the world, a
+    URDF's beside the URDF -- and the service sends back a named file alone,
+    having written it under a name of its own ("2.world"), so what was written
+    beside it, named after it ("2_meshes"), was left in the container and the
+    file came back pointing at nothing. A directory comes back whole, under the
+    names written into it.
+
+    Only a directory that is empty or not there: one that already holds files
+    is somebody's, and one that is being sent is the package the command reads,
+    which would come back to be written over itself. A file there comes back
+    alone, as before.
+    """
+    files, directories = [], list(output_dirs or [])
+    for path in output_files or []:
+        directory = os.path.dirname(os.path.abspath(path))
+        sending = any(directory == outer or directory.startswith(outer.rstrip(os.sep) + os.sep) for outer in sent or [])
+        system = _is_root(directory) or directory.rstrip(os.sep) in {p.rstrip(os.sep) for p in NEVER_SEND}
+        if sending or system or (os.path.isdir(directory) and os.listdir(directory)):
+            files.append(path)
+        elif directory not in directories:
+            directories.append(directory)
+    return files, directories
+
+
 @telemetry.instrument()
 def _loopback(host: str) -> bool:
     """Whether an address reaches this machine and nothing else.
@@ -257,6 +286,14 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
             )
         return RuntimeJsonRpcClient(host, int(port), token=self._token(), scheme=scheme)
 
+    @staticmethod
+    def _exchanged(cmd, cwd, input_dirs, output_files, output_dirs):
+        """What is sent and what comes back, worked out once for the request and its answer."""
+        if input_dirs is None:
+            input_dirs = input_dirs_for(cmd, cwd)
+        output_files, output_dirs = outputs_for(output_files, output_dirs, input_dirs)
+        return input_dirs, output_files, output_dirs or None
+
     def _params(self, cmd, stdin, cwd, input_files, output_files, input_dirs, output_dirs=None) -> dict:
         if input_dirs is None:
             input_dirs = input_dirs_for(cmd, cwd)
@@ -295,6 +332,7 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
         # skipped it, so the base stack was never asked for and every wrapper
         # died on its first import.
         self.once()
+        input_dirs, output_files, output_dirs = self._exchanged(cmd, cwd, input_dirs, output_files, output_dirs)
         params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs, output_dirs)
         return self._answer(cmd, self._client().execute(list(cmd), params), output_files, output_dirs)
 
@@ -311,6 +349,7 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
         output_dirs=None,
     ):
         await self.once_async()
+        input_dirs, output_files, output_dirs = self._exchanged(cmd, cwd, input_dirs, output_files, output_dirs)
         params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs, output_dirs)
         # The bound the caller was given, honoured. Dropped, it meant an
         # unresponsive service held the render open with nothing to wait for.
