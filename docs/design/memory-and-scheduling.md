@@ -7,8 +7,8 @@ How to *use* any of it is the user documentation's job; this file is for whoever
 
 Status words used below: **built** is on `devel`; **decided** is agreed and not built; **open** is not agreed.
 
-Where it stands: step 1 is the pull request that adds this record; steps 2 and 3 are a second pull request; step 4 is
-being done separately. Steps 5 to 7 are **open**: the first proposal for them is withdrawn, and section 9 says what
+Where it stands: step 1 is #849, the pull request that adds this record; steps 2 and 3 are #850; step 4 is being
+done separately. Steps 5 to 7 are **open**: the first proposal for them is withdrawn, and section 9 says what
 is wanted instead and the design being discussed.
 
 ## Contents
@@ -338,7 +338,8 @@ The design being discussed, **open** in every part:
 - **Memory is watched against RAM plus swap**, the machine's or the cgroup's, whichever is smaller. Capacity cannot be
   waited for -- the kernel kills when it is reached -- so the trigger is a margin short of it, and what follows
   escalates: first no task is started, so tasks in flight fall below the core count as they finish; then the
-  lowest-ranked running task is paused (`psutil.Process.suspend()`, `docker pause` for a container) -- a paused task
+  lowest-ranked running task is paused (`psutil.Process.suspend()`; in a container, the task's own process and not
+  the container, since one sandbox container serves every task with its image and mounts) -- a paused task
   stops growing, and with swap its pages are the first to go out, which is the room the tasks ahead of it need -- and
   resumed when memory comes back; and last, at a critical margin, the lowest-ranked task is stopped and queued again,
   so that what is killed is PartCAD's choice rather than the kernel's, which may be the daemon. The best-ranked running
@@ -409,10 +410,10 @@ repository's code, and its effect is not measured.
 ## 12. Open questions
 
 1. **Sharing geometry in the sandbox** (5.1) makes every placement of a part the same OCCT shape. No built-in
-   implementation modifies what it is handed; an implementation published by another package might. The first pull
-   request states "do not modify the shapes you are handed" as part of the implementation contract. Acceptable, or
+   implementation modifies what it is handed; an implementation published by another package might. #849
+   states "do not modify the shapes you are handed" as part of the implementation contract. Acceptable, or
    should sharing be something an implementation opts into?
-2. **Caching pictures** (7.1) means `pc render` can write a file without running anything. The second pull request
+2. **Caching pictures** (7.1) means `pc render` can write a file without running anything. #850
    turns it on, as the shape cache is on; `--cache-bypass` and the tier switches apply. Right default?
 3. **What ranks a root** (section 9): when its first task started, or where it is declared? The first is what
    "finish what is started" says; the second is simpler and nearly always the same order.
