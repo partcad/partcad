@@ -160,7 +160,8 @@ at all).
   waited for as long as the child lived, holding its process slot, the environment's lock, the shape's lock
   and the daemon's dispatch lock: every later command, `pc daemon status` included, stalled behind it. The
   process is watched as well now: once it has exited, its output drains for `EXIT_GRACE` seconds, whatever
-  can still write into its pipes is found by the pipe (`pipe_holders`, through `/proc` on Linux) and killed,
+  can still write into its pipes is found by the pipe (`pipe_holders`: through `/proc` on Linux, and on macOS
+  through `lsof`, which names the kernel handle each end of a pipe is joined to) and killed,
   and the pipes are closed from this end; the caller sees the signal (`process_crash.describe_termination`
   says SIGKILL is probably out of memory) seconds after the death. Every launch point goes through one of
   those three, and a bare `communicate()` on a sandbox process is this bug again. Nor is a pip that was killed
