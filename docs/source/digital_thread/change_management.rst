@@ -1,5 +1,5 @@
-Managing changes in large projects
-##################################
+Change Management
+#################
 
 A product of any size soon depends on packages of its own: a library of the company's standard parts, the
 interfaces its products share, the assemblies one team builds and another uses. Those packages change, and a

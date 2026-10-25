@@ -44,7 +44,7 @@ Put together
 An assembly is put together by following its own Assembly YAML file: each link
 says what it is joined to and how -- pushed, snapped or screwed in -- so the steps
 can be written out for a person to follow (see
-:ref:`how an assembly is manufactured <assembly-manufacturing>` and :doc:`../assy`).
+:ref:`how an assembly is manufactured <assembly-manufacturing>` and :doc:`/assy`).
 
 Working on manufacturing
 ========================
@@ -78,4 +78,11 @@ and what ``pc instructions`` would tell somebody to do: the
 ``manufacturability`` check, and one for each method -- additive, subtractive,
 forming, sheet metal, and the laser, drill and cut machines -- plus ``cam``,
 whether the route a machine is to cut it with can be produced. See
-:doc:`testing`.
+:doc:`/digital_thread/workflows/testing`.
+
+
+.. toctree::
+   :maxdepth: 2
+
+   cam.rst
+   supply_chain.rst

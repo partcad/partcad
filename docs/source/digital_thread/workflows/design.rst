@@ -30,7 +30,7 @@ Objects
   Parts and other assemblies put together: each link placed by connecting one of
   its ports to a port of something already placed rather than by coordinates
   where it can be, so that the assembly says what holds each item and moves when
-  its parts change (see :doc:`../assy` and :ref:`joints`).
+  its parts change (see :doc:`/assy` and :ref:`joints`).
 
 :ref:`Scenes <scenes>`
   Where assemblies are placed in a world -- the floor a robot stands on, the

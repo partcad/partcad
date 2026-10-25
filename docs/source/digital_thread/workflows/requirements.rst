@@ -83,4 +83,4 @@ How requirements are checked
 - ``pc sim`` runs every simulation, including those that name a feature.
 - ``/pc:validate`` gathers the rest of the evidence -- renders from every angle
   that matters, the bill of materials and the assembly instructions -- and gives
-  each requirement a verdict. See :doc:`validation`.
+  each requirement a verdict. See :doc:`/digital_thread/workflows/validation`.

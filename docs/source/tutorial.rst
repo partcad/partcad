@@ -36,7 +36,7 @@ skills are ``/pc:gen-part``, ``/pc:render`` and the rest; Cursor, which has no p
 them, gets the same skills in ``.cursor/skills/`` named ``pc-gen-part``, ``pc-render`` and so on.
 They come from the PartCAD you have installed, so they always match it. Pass ``--no-skills`` if you
 would rather not have them, and ``pc init --skills-only`` to install them into a package you created
-before this version -- that touches nothing else. Each agent also gets PartCAD's :doc:`MCP server <mcp>`
+before this version -- that touches nothing else. Each agent also gets PartCAD's :doc:`MCP server </ai_agents/mcp>`
 in its ``.mcp.json`` or ``.cursor/mcp.json``, unless you pass ``--no-mcp``.
 
 Alternatively, manually create ``partcad.yaml`` with the following content:
@@ -382,7 +382,7 @@ From a STEP file it extracts the individual parts and creates an assembly YAML
 file that records each part along with its placement. From a URDF it creates an
 ``stl`` part per link carrying the physical properties the URDF stated, a pair
 of interfaces per joint, and an assembly that connects the parts through them
-rather than placing them by coordinates - see :doc:`configuration`.
+rather than placing them by coordinates - see :doc:`/config_geometry`.
 
 An import leaves the package holding PartCAD's own objects - parts it can render
 on their own and an assembly that places them - rather than a declaration that

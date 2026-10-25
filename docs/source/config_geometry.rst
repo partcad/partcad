@@ -2,6 +2,47 @@
 Sketches and interfaces
 #######################
 
+================
+What a sketch is
+================
+
+
+PartCAD uses 2D sketches to create 3D models (e.g. via `extrude` or `sweep`) and to maintain
+various metadata (such as the geometry of interfaces between parts,
+arbitrary part metadata like camera view angles and so on).
+
+- Basic shapes
+
+  - Outer shape: `circle`, `rectangle`, `square`, `slot`
+  - Optional inner shape: `circle`, `rectangle`, `square`, `slot`
+
+- Files
+
+  - DXF
+  - SVG
+
+- Scripts
+
+  - `build123d <https://github.com/gumyr/build123d>`_
+  - `CadQuery <https://github.com/CadQuery/cadquery>`_
+
+====================
+What an interface is
+====================
+
+
+PartCAD uses interfaces to define how parts and assemblies connect to each other.
+
+Each part may implement one or more interfaces, one or more instance of each.
+Interfaces may hierarchically inherit ports and other properties from each other.
+The information about compatibility between interfaces (mating)
+is optionally maintained as well.
+
+Whenever possible, PartCAD will be able to place parts and assemblies together
+with no coordinates provided by the user, based on the defined ports, interfaces
+and mating.
+
+
 .. _sketches:
 
 ========
@@ -683,7 +724,7 @@ assembly or a :ref:`scene <scenes>` is taken at its word -- what is drawn is
 what it says its ports are (see :ref:`assembly-ports`) -- and
 ``--with-internals`` draws what is inside one anyway, each child's ports placed
 where the assembly put the child, which is how a connection that did not come
-out as intended is found. See :doc:`cli`, and :ref:`drawing-ports` for asking a package to keep such a
+out as intended is found. See :doc:`/cli`, and :ref:`drawing-ports` for asking a package to keep such a
 drawing checked in.
 
 Port matching

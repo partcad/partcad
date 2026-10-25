@@ -548,7 +548,7 @@ and where it came from -- ``stated``, ``the material :aluminium``,
 ``derived: 8000 mm^3 at 2700 kg/m^3``, ``measured``. An assembly reports its
 parts added up in its own frame and names any part it could not weigh, and the
 material itself is reported as ``Material``, with its density and its friction.
-See ``pc info`` in :doc:`cli`.
+See ``pc info`` in :doc:`/cli`.
 
 The values are cached, keyed on the part's geometry and on what they were
 derived from, so an edit to the CAD, to the material's density or to a stated
@@ -584,7 +584,7 @@ how to look at what a plugin reports before writing the condition. Each run
 gets a directory of its own under PartCAD's state directory, one per object and
 simulation and emptied by the next run, holding the scene file the engine was
 handed, its meshes, whatever the plugin wrote and the pictures it took (see
-:ref:`sim-snapshots`). See ``pc sim`` in :doc:`cli` for every option.
+:ref:`sim-snapshots`). See ``pc sim`` in :doc:`/cli` for every option.
 
 Three of those options are about what is asked and what is kept:
 
@@ -1763,7 +1763,7 @@ out first, and open what was written:
 
 An ASSY scene is refused too, for a reason of its own: it is nothing but
 references to the parts of a package, and a file opened on its own has no
-package to resolve them against. See ``pc ide open`` in :doc:`cli`.
+package to resolve them against. See ``pc ide open`` in :doc:`/cli`.
 
 .. _sim-limitations:
 

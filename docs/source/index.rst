@@ -26,12 +26,30 @@ product development process.**
    intro.rst
    installation.rst
    tutorial.rst
+   public_repository.rst
 
 .. toctree::
    :maxdepth: 2
-   :caption: Concepts
+   :caption: Tools
 
-   design.rst
+   cli.rst
+   tools_vscode.rst
+   tools_vscodium.rst
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Product data
+
+   config_package.rst
+   config_objects.rst
+   config_geometry.rst
+   config_parts.rst
+   config_assemblies.rst
+   config_scenes.rst
+   config_making.rst
+   config_bom.rst
+   config_output.rst
+   plugins/index.rst
 
 .. toctree::
    :maxdepth: 2
@@ -41,41 +59,29 @@ product development process.**
 
 .. toctree::
    :maxdepth: 2
-   :caption: Command line
-
-   cli.rst
-
-.. toctree::
-   :maxdepth: 2
    :caption: AI agents
 
-   mcp.rst
+   ai_agents/skills.rst
+   ai_agents/plugins.rst
+   ai_agents/mcp.rst
 
 .. toctree::
    :maxdepth: 2
-   :caption: Package configuration
+   :caption: Maintenance
 
-   configuration.rst
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Assemblies
-
-   assy.rst
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Guides
-
-   simulation.rst
-   use_cases.rst
-   large_projects.rst
-   features.rst
-   supported.rst
+   maintenance/sandboxes.rst
+   maintenance/caching.rst
+   maintenance/automation.rst
+   maintenance/git.rst
+   maintenance/proxy.rst
+   maintenance/resources.rst
+   maintenance/security.rst
+   maintenance/telemetry.rst
 
 .. toctree::
    :maxdepth: 2
    :caption: Help
 
+   supported.rst
    troubleshooting.rst
    contributing.rst

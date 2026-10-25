@@ -175,7 +175,7 @@ manufacturing, say -- but those are not part of this section.
   What the object has to have or do: a name for each, and a sentence saying
   what. Most of what anybody asks of a product is said this way, and PartCAD
   does not judge it. A ``simulate:`` entry may name the feature it demonstrates
-  (``feature:``, see :doc:`simulation`); every feature, demonstrated or not, is
+  (``feature:``, see :doc:`/digital_thread/workflows/simulation`); every feature, demonstrated or not, is
   for whoever reads the evidence to judge -- the renders, the simulations, the
   bill of materials and the assembly instructions. That is what the
   ``/pc:validate`` agent skill does.
@@ -194,7 +194,7 @@ manufacturing, say -- but those are not part of this section.
 
 ``physics``
   The physical properties the object has to have: any field of a ``physics``
-  section a shape may state (see :doc:`simulation`) -- ``mass``,
+  section a shape may state (see :doc:`/digital_thread/workflows/simulation`) -- ``mass``,
   ``centerOfMass``, ``inertia``, ``density``, ``friction`` and the rest. The
   value checked is the one ``pc info`` reports: what the object states in
   ``properties: physics:``; failing that, what its material lends (its

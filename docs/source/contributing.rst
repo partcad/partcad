@@ -143,6 +143,22 @@ Help them migrate to PartCAD!
 How to contribute?
 ******************
 
+Installing a development version
+================================
+
+To run the latest ``devel`` branch without a checkout, create an isolated Python environment, make sure
+``pip``, ``setuptools`` and ``wheel`` are up to date, and then:
+
+.. code-block:: shell
+
+   $ python -m pip install --upgrade git+https://github.com/partcad/partcad.git@devel
+
+That is the whole thing. It used to be two commands naming two subdirectories, in the right order, because
+the repository shipped several packages that pinned each other; it ships one now.
+
+For a checkout you intend to change, set the environment up as described below instead -- an editable install
+is what makes ``pc`` run the code you are editing.
+
 .. _Environment:
 
 Environment
@@ -1279,7 +1295,7 @@ to the other. Both follow these rules:
 
 The same rules from a package maintainer's side, and how the index is released, are in the index's own
 `CONTRIBUTING.md <https://github.com/partcad/partcad-index/blob/devel/CONTRIBUTING.md>`_. For packages that are
-not in the index, :doc:`large_projects` gives the same advice.
+not in the index, :doc:`/digital_thread/change_management` gives the same advice.
 
 ``examples/partcad.yaml`` is the one deliberate exception to the last rule: it tracks the index and is not pinned,
 so that what it is built against is always the newest of whichever branch is in use -- and it breaks, often and

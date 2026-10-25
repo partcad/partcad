@@ -3,8 +3,8 @@ Supported formats and features
 ###############################
 
 What PartCAD reads, writes and does, in one place. An item marked *(in progress)* is accepted by the
-schema or planned, and not yet delivered. The :doc:`design` chapter says what each kind of object is, and
-:doc:`configuration` how it is declared.
+schema or planned, and not yet delivered. The :doc:`/config_package` chapter and those beside it say what each kind of object is, and
+:doc:`/config_package` and the chapters beside it how it is declared.
 
 =================
 Operating systems
@@ -96,7 +96,7 @@ Using file formats:
 Assembly models (3D)
 ====================
 
-- Using the ``Assembly YAML`` format (see :doc:`assy`)
+- Using the ``Assembly YAML`` format (see :doc:`/assy`)
 
   - Automatically maintaining the bill of materials
   - Generating user-friendly visual assembly instructions (PDF and HTML instruction books)
@@ -121,7 +121,7 @@ Placed arrangements of objects: a workcell, a table, a simulation world.
 Simulation
 ==========
 
-What an object is supposed to do once the world is switched on. See :doc:`simulation`.
+What an object is supposed to do once the world is switched on. See :doc:`/digital_thread/workflows/simulation`.
 
 - ``simulate:`` on a part, an assembly or a scene: a scene, where in it the object goes, and the condition
   that says whether it went as it should
@@ -187,7 +187,7 @@ How it gets made, and the program that makes it.
 AI agents
 =========
 
-Tooling for AI agents doing mechanical design. See :doc:`mcp`.
+Tooling for AI agents doing mechanical design. See :doc:`/ai_agents/mcp`.
 
 - Agent Skills any ``SKILL.md``-aware coding agent can load (``ai-agents/`` in the repository), installed by
   ``pc init``, and distributed as the ``pc`` plugin for Claude Code (see :ref:`claude-plugin`)
@@ -217,7 +217,7 @@ The Digital Thread
   and whether ``pc test`` finds them met, 2D renders, dimensioned drawings, engineering analysis, the
   build-or-buy decision, the bill of materials, the assembly instructions and supplier quotes on tabs beside
   the 3D view, and a software fallback that still draws the model in a window with no WebGL, such as a
-  virtual machine or a remote desktop (see :doc:`features`)
+  virtual machine or a remote desktop (see :doc:`/tools_vscode`)
 - Open an object in the application that made it (``pc ide open``): FreeCAD, Blender, KiCad, and Gazebo or
   MuJoCo from the plugin package for that engine, SolidCraft from its plugin package. Installed locally, or
   run in a container when it is not; an object the application cannot read is converted on the way, and
@@ -257,7 +257,7 @@ Documents:
 - Gazebo world (SDFormat) and MJCF (MuJoCo), from the plugin package for that engine
 - `SolidCraft`_ designs (``.solidcraft``), from the SolidCraft plugin package
 
-Output types a package implements itself, for both ``render:`` and ``export:``. See :doc:`config_output`.
+Output types a package implements itself, for both ``render:`` and ``export:``. See :doc:`/config_output`.
 
 .. _CadQuery: https://github.com/CadQuery/cadquery
 .. _build123d: https://github.com/gumyr/build123d

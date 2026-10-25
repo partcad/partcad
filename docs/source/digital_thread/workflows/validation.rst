@@ -15,7 +15,7 @@ Three ways of asking
   -- whether it builds, whether it can be made or bought, whether its parts
   overlap, whether its ports and physical properties are the ones required.
   Each check applies only to the objects it has something to ask of, and says
-  what it found when it fails. :doc:`testing` lists them all.
+  what it found when it fails. :doc:`/digital_thread/workflows/testing` lists them all.
 
 ``pc sim``
   Every claim about behaviour: each simulation an object declares is run, and
@@ -43,7 +43,7 @@ In the Digital Thread
   saying why, so a check that did not apply is never mistaken for one that
   passed.
 - In the middle, the check selected: what it asks, when it does not apply, what
-  each failure means and what to do about it -- the text of :doc:`testing` -- and
+  each failure means and what to do about it -- the text of :doc:`/digital_thread/workflows/testing` -- and
   above it what the check found this time.
 - For a failure that left something behind to look at, a button that opens it.
   An interference leaves an assembly of the two parts that overlap, placed where
@@ -58,7 +58,7 @@ shown from a script -- has nothing to ask PartCAD about, and the tab says so.
 **Simulation**, beside it, is for a part, an assembly or a scene that declares
 ``simulate:``: each simulation it declares, run as ``pc sim -f <name>`` runs it,
 with whether its ``validation:`` held and a picture of the scene before and after
-(see :doc:`../simulation`). **Process Emulation** holds nothing yet.
+(see :doc:`/digital_thread/workflows/simulation`). **Process Emulation** holds nothing yet.
 
 Validating continuously
 =======================

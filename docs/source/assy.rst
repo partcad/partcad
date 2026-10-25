@@ -334,7 +334,7 @@ description of a part or assembly node is shown with the step that adds it, as
 the instruction for that step - the book composes a sentence out of the
 connection only for a node that has no description, and sets it apart, smaller,
 for one that does. The description of a fastener that goes in at the step of the
-item it holds (see `pc render` in :doc:`cli`) is shown at that step, once
+item it holds (see `pc render` in :doc:`/cli`) is shown at that step, once
 however many fasteners say the same thing. Write it for whoever builds the
 thing: which faces meet, what is flush, how far in, which way up.
 Nothing else in PartCAD parses it or acts upon it.
@@ -1094,7 +1094,7 @@ Set ``partcad.lint.enabled`` to ``false`` to turn that off.
 
 ``partcad.yaml`` is checked the same way, by the same checker, against the
 configuration schema (``src/partcad_utils/schema/partcad.json``) -- see
-:doc:`configuration`. It is a Jinja2 template too, so it is rendered before it
+:doc:`/config_package`. It is a Jinja2 template too, so it is rendered before it
 is checked exactly as an ASSY file is, and it has no assembly/scene flavor:
 nothing points at a package configuration, so ``--schema`` does not apply to
 one.
