@@ -149,7 +149,10 @@ at all).
   deadlock a pool of any size now, so a lower value would not stop anything -- it is raised all the same. Warnings
   about it go through
   `pc_logging.warning_once`, which says a message once per process and holds it until a handler can render it --
-  both ends find these before their log is connected.
+  both ends find these before their log is connected. A machine with fewer cores than the floor is *noted*
+  (`pc_logging.info_once`), not warned of: nothing about a command changes it, and as a warning it reached the
+  first command each new daemon served, failing every "warns of nothing" check on a three-core runner. `pc
+  healthcheck`'s `CpuCores` is where it is a warning.
 - **A sandbox process is waited for until it is dead, not until its pipes are** (`runtime.communicate`,
   `runtime.communicate_sync`, `partcad_utils.container_service.communicate`): `communicate()` -- asyncio's
   and `subprocess`'s alike -- returns when stdout and stderr reach their end, and whatever a sandbox interpreter

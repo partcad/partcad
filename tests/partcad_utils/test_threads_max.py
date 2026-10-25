@@ -32,6 +32,31 @@ def heard(partcad_warnings):
 
 
 @pytest.fixture
+def noted(monkeypatch):
+    """Everything PartCAD says during the test, at every level, as (level, message).
+
+    'heard' collects warnings only, which is what most of these are about; the
+    note about a machine's cores is information, and it matters that it is.
+    """
+    monkeypatch.setattr(pc_logging, "_said_once", set())
+    monkeypatch.setattr(pc_logging, "_held", {})
+    said = []
+
+    class Collect(logging.Handler):
+        def emit(self, record):
+            said.append((record.levelname, record.getMessage()))
+
+    logger = logging.getLogger("partcad")
+    level = logger.level
+    logger.setLevel(logging.DEBUG)
+    handler = Collect()
+    logger.addHandler(handler)
+    yield said
+    logger.removeHandler(handler)
+    logger.setLevel(level)
+
+
+@pytest.fixture
 def home(tmp_path, monkeypatch):
     """A HOME of the test's own, with no 'threadsMax' anywhere around it."""
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -211,28 +236,57 @@ def test_a_warning_nobody_can_hear_yet_is_held_until_somebody_can(monkeypatch):
     assert messages == ["said once"]
 
 
+def test_a_note_nobody_can_hear_yet_is_held_and_said_at_its_own_level(monkeypatch):
+    monkeypatch.setattr(pc_logging, "_said_once", set())
+    monkeypatch.setattr(pc_logging, "_held", {})
+    logger = logging.getLogger("partcad")
+    monkeypatch.setattr(logger, "handlers", [])
+
+    pc_logging.info_once("note", "worth knowing")
+    pc_logging.warning_once("warning", "worth a warning")
+
+    said = []
+
+    class Collect(logging.Handler):
+        def emit(self, record):
+            said.append((record.levelname, record.getMessage()))
+
+    level = logger.level
+    logger.setLevel(logging.DEBUG)
+    try:
+        logger.addHandler(Collect())
+        pc_logging.release_held_warnings()
+        pc_logging.info_once("note", "worth knowing")
+    finally:
+        logger.setLevel(level)
+
+    assert said == [("INFO", "worth knowing"), ("WARNING", "worth a warning")]
+
+
 # ---- nothing set: the machine decides ----------------------------------------------
 
 
-def test_two_cores_still_get_the_minimum_and_are_told_once(heard, monkeypatch):
+def test_two_cores_still_get_the_minimum_and_are_told_once(noted, monkeypatch):
+    """Told, and not warned: nothing about a command changes a machine's cores,
+    and a check that a command warns of nothing should not depend on them."""
     monkeypatch.setattr(user_config_module.os, "cpu_count", lambda: 2)
 
     assert default_threads_max() == 4
     assert default_threads_max() == 4
 
-    assert heard == ["PartCAD needs at least 4 CPU cores for optimal performance, and found 2"]
+    assert noted == [("INFO", "PartCAD needs at least 4 CPU cores for optimal performance, and found 2")]
 
 
-def test_eight_cores_get_eight_and_nothing_is_said(heard, monkeypatch):
+def test_eight_cores_get_eight_and_nothing_is_said(noted, monkeypatch):
     monkeypatch.setattr(user_config_module.os, "cpu_count", lambda: 8)
 
     assert default_threads_max() == 8
-    assert heard == []
+    assert noted == []
 
 
-def test_a_core_count_python_cannot_tell_is_one(heard, monkeypatch):
+def test_a_core_count_python_cannot_tell_is_one(noted, monkeypatch):
     """'os.cpu_count()' answers None when it cannot tell."""
     monkeypatch.setattr(user_config_module.os, "cpu_count", lambda: None)
 
     assert default_threads_max() == 4
-    assert heard == ["PartCAD needs at least 4 CPU cores for optimal performance, and found 1"]
+    assert noted == [("INFO", "PartCAD needs at least 4 CPU cores for optimal performance, and found 1")]

@@ -472,9 +472,9 @@ def cpu_cores() -> int:
 def few_cores_warning(cores: int) -> str:
     """What a machine with fewer cores than the minimum is told.
 
-    The sizing below says it once per process, and 'pc healthcheck' says it
-    when asked (partcad.healthcheck.cpu_cores); one sentence, so that a search
-    for the one finds the other.
+    The sizing below notes it once per process, and 'pc healthcheck' warns of
+    it when asked (partcad.healthcheck.cpu_cores); one sentence, so that a
+    search for the one finds the other.
     """
     return "PartCAD needs at least %d CPU cores for optimal performance, and found %d" % (THREADS_MAX_MINIMUM, cores)
 
@@ -486,10 +486,17 @@ def default_threads_max() -> int:
     the minimum regardless, the least PartCAD runs with (see
     'THREADS_MAX_MINIMUM'), and that is more processes than it has cores to run
     them.
+
+    Told as information, not as a warning. Nothing about the command it is
+    said during can change it, and as a warning it was in the output of the
+    first command every new daemon served: a check that a command warns of
+    nothing -- 'enrich.feature' has one -- failed on a three-core machine and
+    nowhere else. 'pc healthcheck' is where it is a warning, being where the
+    machine is what is asked about.
     """
     cores = cpu_cores()
     if cores < THREADS_MAX_MINIMUM:
-        pc_logging.warning_once(("cpu_cores", cores), few_cores_warning(cores))
+        pc_logging.info_once(("cpu_cores", cores), few_cores_warning(cores))
     return max(THREADS_MAX_MINIMUM, cores)
 
 

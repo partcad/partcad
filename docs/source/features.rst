@@ -878,12 +878,14 @@ builds it on the thread it already has, on a pool of any size. A lower value
 would no longer stop anything; it is raised to four all the same.
 
 When nothing sets it, PartCAD runs one sandbox process per CPU core -- and still
-never fewer than four, so on a machine with fewer cores than that it says, once::
+never fewer than four, so on a machine with fewer cores than that it notes, once::
 
     PartCAD needs at least 4 CPU cores for optimal performance, and found 2
 
-Everything still works on such a machine, more slowly. ``pc healthcheck``
-reports the same thing as its ``CpuCores`` check. The cores counted are the ones
+Everything still works on such a machine, more slowly. The note is information
+rather than a warning, since nothing about the command it comes with can change
+it; ``pc healthcheck`` reports the same thing as a warning, in its ``CpuCores``
+check. The cores counted are the ones
 the machine has, not the ones a CPU affinity mask or a container's CPU quota
 leaves to PartCAD; set ``threadsMax`` where those are smaller.
 

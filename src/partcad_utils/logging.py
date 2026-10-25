@@ -64,7 +64,9 @@ warning = lambda *a, **kw: logging.getLogger("partcad").warning(*a, **kw)
 #
 # So such a warning is said once per process, and only to a logger that has
 # somewhere to send it; until then it is held, and 'release_held_warnings' says
-# it. The CLI calls that once its renderer and its verbosity are in place (so
+# it. A note about the machine that is not a warning -- that it has fewer cores
+# than PartCAD wants, which nothing about a command can change -- goes the same
+# way at its own level ('info_once'). The CLI calls that once its renderer and its verbosity are in place (so
 # '--quiet' still silences it), and the daemon's log forwarding as it is
 # connected, inside the request whose client should hear it. A process that
 # never connects anything -- a script importing 'partcad' -- hears it at exit,
@@ -80,30 +82,47 @@ def warning_once(key, message: str) -> None:
     ``key`` is what makes two warnings the same one: the same key is said once
     however many times, and from however many places, it is warned about.
     """
+    _say_once(key, message, logging.WARNING)
+
+
+def info_once(key, message: str) -> None:
+    """Say ``message`` once in this process, as information, as soon as somebody can hear it.
+
+    'warning_once' for what is worth knowing and not worth a warning: a check
+    for "no warnings" -- a script's, a test's -- is about the work, and should
+    not depend on the machine it runs on.
+    """
+    _say_once(key, message, logging.INFO)
+
+
+def _say_once(key, message: str, level: int) -> None:
     with _once_lock:
         if key in _said_once or key in _held:
             return
         if not logging.getLogger("partcad").handlers:
-            _held[key] = message
+            _held[key] = (level, message)
             return
         _said_once.add(key)
-    warning(message)
+    log(level, message)
 
 
 def release_held_warnings(say: bool = True) -> None:
-    """Say what 'warning_once' had to hold back, now that it can be heard.
+    """Say what 'warning_once' and 'info_once' had to hold back, now that it can be heard.
 
     With ``say`` false they are counted as said without being said, for a
     process whose only listener has heard them already (see the '--stdio'
     service in 'partcad_service_json_rpc.__main__').
+
+    At exit, with nothing connected, Python's last-resort handler says only
+    warnings: a held note is dropped there, which is what a note is for.
     """
     with _once_lock:
         held = list(_held.items())
         _held.clear()
-        _said_once.update(key for key, _message in held)
+        _said_once.update(key for key, _said in held)
     if say:
-        for _key, message in held:
-            warning(message)
+        for _key, (level, message) in held:
+            log(level, message)
 
 
 # Registered after 'logging' registered its own shutdown, so it runs first.
