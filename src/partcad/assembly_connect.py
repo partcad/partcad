@@ -740,6 +740,16 @@ def _measure_key(item, shape, frame):
     return (identity, None if frame is None else tuple(map(tuple, frame.as_packed()[:2])) + (frame.as_packed()[2],))
 
 
+def _cacheable(item) -> bool:
+    """Whether what the object measures may outlive this process (see 'measure').
+
+    An object that is not a shape says nothing about it, and is measured on the
+    envelope it handed over like anything else.
+    """
+    cacheable = getattr(item, "artifacts_cacheable", None)
+    return bool(cacheable()) if callable(cacheable) else True
+
+
 async def _measure_extent_z(ctx, item, shape, frame):
     """The object's length along the Z axis of 'frame', measured at most once."""
     from . import measure
@@ -747,7 +757,7 @@ async def _measure_extent_z(ctx, item, shape, frame):
     key = _measure_key(item, shape, frame)
     if key in _extent_cache:
         return _extent_cache[key]
-    length = await measure.extent_z(ctx, shape, frame)
+    length = await measure.extent_z(ctx, shape, frame, cacheable=_cacheable(item))
     _extent_cache[key] = length
     return length
 

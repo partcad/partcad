@@ -449,6 +449,34 @@ WORLD_KEY = "world"
 # precisely because implementations are meant to see it.
 REPRODUCIBLE_KEY = "reproducible"
 
+# The *result* key an export or render implementation says with what else it
+# wrote besides the file at 'path': a list of paths, relative to the directory
+# that file is in (or absolute, inside it). An empty list is the ordinary
+# answer -- "only the file I was asked for".
+#
+# The names are expected to begin the way 'path' does: asked for 'logo.urdf',
+# the URDF exporter writes its meshes as 'logo_meshes/...'; asked for
+# 'cube.gltf', a glTF file that is not binary keeps its buffers in 'cube.bin'.
+# That is what lets a cached answer be put back under another name (see
+# 'partcad.cache_artifacts.files_layout'): the part of 'path' the files share is
+# a prefix, what each adds to it is remembered, and 'xyz.urdf' asked for next
+# gets 'xyz_meshes/...'. Names that share nothing but the directory still work
+# for the same name in another directory, and are produced again for any other.
+#
+# It is what lets the answer be cached at all: a file that comes back from the
+# cache without the meshes it names is worse than the run it saved, and nothing
+# but the implementation knows what it wrote, since the directory it wrote into
+# is shared with every other object's output. So an implementation that does
+# not say -- one written before this existed -- is run every time.
+#
+# It says nothing about what a container or the 'remote' sandbox brings back,
+# which is still the one file at 'path': those have to be told before the run,
+# and this is said after it.
+#
+# Its twin is 'wrapper_export.FILES_KEY', spelled out there because a wrapper
+# runs in a sandbox and cannot import this.
+FILES_KEY = "files"
+
 
 def as_flag(value, name: str = REPRODUCIBLE_KEY) -> bool:
     """One of the protocol's boolean fields, however it was written.

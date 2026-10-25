@@ -273,7 +273,7 @@ def _measured(monkeypatch, length):
     assembly_connect._extent_cache.clear()
     calls = []
 
-    async def fake_extent_z(ctx, shape, frame=None):
+    async def fake_extent_z(ctx, shape, frame=None, cacheable=True):
         calls.append((shape, frame))
         return length
 
@@ -323,7 +323,7 @@ def test_connect_how_push_distance_measurement_failure_is_not_fatal(monkeypatch)
 
     assembly_connect._extent_cache.clear()
 
-    async def boom(ctx, shape, frame=None):
+    async def boom(ctx, shape, frame=None, cacheable=True):
         raise Exception("no CAD runtime here")
 
     monkeypatch.setattr(measure, "extent_z", boom)

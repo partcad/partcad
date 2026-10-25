@@ -229,7 +229,9 @@ def test_what_the_projection_warns_about_is_said_about_the_raster_too(tmp_path):
 
     result = raster.process(str(tmp_path / "picture.png"), {}, "PNG")
 
-    assert result == {"success": True, "exception": None, "warnings": [warning]}
+    # And it wrote nothing besides the picture: the projection it was drawn
+    # from is in a directory of its own, gone by now.
+    assert result == {"success": True, "exception": None, "files": [], "warnings": [warning]}
 
 
 def _readme_text(tmp_path):

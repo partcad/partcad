@@ -42,7 +42,7 @@ def process(path, request):
         if not success or not os.path.exists(path) or os.path.getsize(path) == 0:
             raise Exception(f"Failed to create STL file: {path}")
 
-        return {"success": True, "exception": None}
+        return {"success": True, "exception": None, "files": []}
 
     except Exception as e:
         wrapper_common.handle_exception(e)

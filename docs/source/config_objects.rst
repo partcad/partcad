@@ -458,6 +458,41 @@ Assemblies declare parameters the same way. Their values are passed to the
     - part: //package:part
       location: [[0, 0, {{ param_offset }}], [0, 0, 1], 0]
 
+One parameter of an ``assy`` assembly is PartCAD's own rather than the file's:
+``exploded``, ``false`` unless something sets it. Set, the assembly is drawn
+with its items pulled apart -- each one backed out of what it is connected to,
+along the connection, by the ``exploded:`` of its ``connect:`` or
+``connectPorts:`` section (see :doc:`assy`) or by half of the larger of the two,
+and carried along with whatever it is connected to that has moved itself. It is
+the same gap an assembly instruction book shows each step with.
+
+Only the assembly's own items move. An item that is an assembly itself -- a
+sub-assembly, or a nested ``links:`` list -- moves as one piece, with everything
+in it where it was. Whatever belongs to an item moves with it: its ports are
+drawn on it where it is drawn (``--with-ports``, ``--with-internals``), and so
+is a port the assembly's ``map:`` takes from it.
+
+``logo;exploded=true`` is a parametrized variant like any other: an object of
+its own, with a cache key of its own, so it is built, rendered and exported once
+and read back from the cache afterwards. ``pc render logo -p exploded=true``
+asks for it from the command line (see :ref:`parameter-values`), and an alias
+gives it a name of its own:
+
+.. code-block:: yaml
+
+  assemblies:
+    logo:
+      type: assy
+    logo_exploded:
+      type: alias
+      source: :logo
+      with:
+        exploded: true
+
+Only the ``assy`` type accepts it, because only an ASSY file says what each item
+is connected to; declaring ``exploded`` on an assembly read from a STEP file is
+an error.
+
 Other
 -----
 

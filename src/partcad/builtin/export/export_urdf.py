@@ -1083,6 +1083,10 @@ def process(path, request):
         "robot_name": robot_name,
         "mesh_dir": mesh_dir,
         "meshes": sorted(set(state["meshes"].values())),
+        # The meshes again, as what was written besides 'path' (see
+        # 'wrapper_export.FILES_KEY'): relative to the URDF's own directory,
+        # which is what each mesh reference in it is relative to as well.
+        "files": sorted(set(state["meshes"].values())),
         "warnings": warnings,
         # Properties PartCAD holds and URDF cannot state. Reported at info
         # level by the caller: nothing is wrong with the file, it just says

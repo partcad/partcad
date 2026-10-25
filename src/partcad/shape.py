@@ -254,6 +254,20 @@ def _held_by_current_task(shape) -> bool:
     return task is not None and bool(owners) and owners.get(id(shape)) is task
 
 
+def _file_identity(path: str):
+    """Which file is at 'path' and as of when, to tell afterwards whether a run replaced it; or None.
+
+    The inode as well as the size and the modification time, because an
+    implementation that writes a new file and renames it over the old one
+    changes the first even when the clock is too coarse to change the last.
+    """
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return None
+    return (stat.st_ino, stat.st_size, stat.st_mtime_ns)
+
+
 # The part types whose geometry is the file they are read from, and is handed
 # over as the file holds it: a closed shell in one is reported, not converted.
 FILE_AUTHORITY_TYPES = frozenset({"step", "brep"})
@@ -370,6 +384,16 @@ class Shape(ShapeConfiguration):
     # children are spread over the pool rather than built one after another on
     # the one thread it would have been given.
     built_on_pool = False
+
+    # What a shape built here rather than read from a declaration is a view of,
+    # and what about it: the picture of a step of an assembly instruction book
+    # (see 'assembly_guide'), a filtered view (see 'assembly_filter.derive').
+    # Neither has a cache key of its own - no declaration states it - but what
+    # it draws is that object's and this, so that is what its artifacts are
+    # keyed on (see 'get_artifact_key_async'). Class-level, so a shape made
+    # without the constructor has them too.
+    derived_from: Optional["Shape"] = None
+    artifact_identity: Optional[str] = None
 
     def __init__(self, project_name: str, config: dict) -> None:
         super().__init__(config)
@@ -628,19 +652,21 @@ class Shape(ShapeConfiguration):
         BREP is the tree the core builds, composes and caches, so that is what
         this is in the ordinary case and it costs a cache lookup. glTF is that
         same tree tessellated, in one sandbox, for a caller that has to draw it
-        rather than compute with it - a browser has no CAD kernel. It is not
-        cached: it is derived from the form that is, in one pass, and caching a
-        second copy of every assembly would cost more disk than it saves.
+        rather than compute with it - a browser has no CAD kernel. That is
+        cached too, as what the tessellation answered (see 'shape_gltf'): it is
+        what the IDE asks for every time an object is shown, and starting a
+        sandbox to answer it is most of the wait.
 
         The sketches this object's ports are drawn with come with it, on the root
-        node, in the same form (see 'port_sketches'). They are not in what is
-        cached, because what a node records about a port is the reference and not
-        the geometry.
+        node, in the same form (see 'port_sketches'). They are not in what the
+        shape cache holds, because what a node records about a port is the
+        reference and not the geometry - which is why the tessellation is keyed
+        on the tree it is handed rather than on this shape's key.
         """
         from . import port_sketches, shape_gltf
 
         tree = await port_sketches.attach_async(ctx, await self.get_wrapped(ctx))
-        return await shape_gltf.in_form_async(ctx, tree, form)
+        return await shape_gltf.in_form_async(ctx, tree, form, cacheable=self.artifacts_cacheable())
 
     def prepare(self):
         return asyncio.run(self.prepare_async())
@@ -795,6 +821,33 @@ class Shape(ShapeConfiguration):
 
     def get_cache_key(self) -> Optional[str]:
         return asyncio.run(self.get_cache_key_async())
+
+    async def get_artifact_key_async(self) -> Optional[str]:
+        """What a render, an export or an analysis of this shape is keyed on, or None.
+
+        Its cache key, for every shape that has one. A shape derived from
+        another one for a single purpose has none - an instruction book's step,
+        made of some of an assembly's items where the assembly put them - and is
+        keyed as what it was derived from and what it is of that ('derived_from',
+        'artifact_identity'): the assembly's key and the step. None when either
+        is missing, which is what keeps `cache: false` on the assembly meaning
+        nothing derived from it is cached.
+        """
+        key = await self.get_cache_key_async()
+        if key is not None or self.derived_from is None or not self.artifact_identity:
+            return key
+        source = await self.derived_from.get_artifact_key_async()
+        return "%s#%s" % (source, self.artifact_identity) if source else None
+
+    def artifacts_cacheable(self) -> bool:
+        """Whether what is made of this shape may be cached: the `cache: false` rule.
+
+        A derived shape is cacheable when what it was derived from is - its
+        own `cache: false` says only that it has no declaration to key it on.
+        """
+        if self.get_cacheable():
+            return True
+        return self.derived_from is not None and self.derived_from.artifacts_cacheable()
 
     async def is_cached_async(self, ctx) -> bool:
         """Whether this shape can be had without building it.
@@ -1859,11 +1912,12 @@ class Shape(ShapeConfiguration):
         that could be read - which has already been reported by then.
 
         Held under 'locked()' throughout: this is the single place a shape's
-        output file is written, whichever section asked for it, so it is the
+        output file is produced, whichever section asked for it, so it is the
         single place the rule belongs. Callers that need a wider critical
         section -- 'analyze_async' clears the path first and verifies it
-        afterwards -- take the same lock around the whole of it, which nests
-        because the lock is re-entrant.
+        afterwards, and every caller that asks the cache first puts a cached
+        file where this would have written it -- take the same lock around the
+        whole of it, which nests because the lock is re-entrant.
         """
         async with self.locked():
             return await self._run_implementation_locked(ctx, impl, script, request, final_filepath)
@@ -1980,6 +2034,82 @@ class Shape(ShapeConfiguration):
             self.error("Failed to deserialize response: %s" % e)
             return None
 
+    async def _output_run_async(self, ctx, impl, script, request, final_filepath, view=None):
+        """'_run_implementation_async' for an export or a render file, asked of the cache first.
+
+        The same file asked for again is a read, exactly as an analysis and a
+        route are (see 'partcad.cache_artifacts'): the file goes back where this
+        call would have written it, with whatever else the implementation wrote
+        beside it named after it, and the result - its warnings, what the
+        format could not state - comes with it, so a hit says what a run would
+        have said.
+
+        The question is '_artifact_hash()''s. The file's name is not in it: an
+        answer is stored with the names of its files as suffixes of the path it
+        was asked for, and put back under whatever path is asked for next
+        ('cache_artifacts.placed_files') - or dismissed, and produced again,
+        when the next path leaves nothing to name them by. A filtered view (see
+        'partcad.assembly_filter') adds its filter: a view has no key of its
+        own, so it is keyed as the assembly it is a view of and the links it
+        keeps - which is everything it is.
+
+        An answer is stored only when the implementation said what it wrote
+        (see 'output.FILES_KEY') and the file at 'final_filepath' is the one
+        this run wrote. Nothing clears that path before the run - a failed
+        render leaves the last good picture where it was, as it always has -
+        so what is there afterwards proves nothing until it is compared with
+        what was there before.
+        """
+        cache = getattr(ctx, "cache_artifacts", None)
+        artifact = await self._artifact_hash(
+            impl.section,
+            impl.format_name,
+            impl,
+            script,
+            request,
+            "%s:%s" % (impl.project.name, impl.format_name),
+            {"view": view.key()} if view is not None else None,
+        )
+
+        # Held across the read, the run and the write, for the reason
+        # 'analyze_async' holds it: the path is derived from the shape, so two
+        # renders of one shape name one file. Re-entrant, so the lock
+        # '_run_implementation_async' takes inside is passed straight through.
+        async with self.locked():
+            result = await cache_artifacts.restore_files_async(cache, artifact, final_filepath)
+            if result is not None:
+                return result
+
+            before = _file_identity(final_filepath)
+            result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+            if artifact is None or result is None or not result.get("success", False):
+                # Only an answer is remembered (see 'partcad.cache_artifacts').
+                return result
+            written = self._written_besides(impl, result, final_filepath, before)
+            if written is not None:
+                await cache_artifacts.store_files_async(cache, artifact, result, final_filepath, written)
+        return result
+
+    def _written_besides(self, impl, result, final_filepath, before) -> Optional[list]:
+        """What else one run wrote, as the implementation named it, or None if it cannot be said.
+
+        None is "do not remember this answer": the implementation did not say
+        what it wrote, or the file at 'final_filepath' is the one that was
+        there before the run. Whether what it named can be put back is
+        'cache_artifacts.files_layout''s to decide.
+        """
+        listed = result.get(output.FILES_KEY)
+        if not isinstance(listed, list):
+            pc_logging.debug(
+                "%s:%s: the '%s' implementation does not say what it wrote (%s), so it is not cached"
+                % (self.project_name, self.name, impl.format_name, output.FILES_KEY)
+            )
+            return None
+        after = _file_identity(final_filepath)
+        if after is None or after == before:
+            return None
+        return [str(name) for name in listed]
+
     async def filtered_view_async(self, mask):
         """This shape with only the links a filter keeps, or this shape.
 
@@ -2086,7 +2216,9 @@ class Shape(ShapeConfiguration):
             # this run's.
             self.error("%s: %s" % (format_name, e))
             raise
-        result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+        result = await self._output_run_async(
+            ctx, impl, script, request, final_filepath, view=mask if subject is not self else None
+        )
         if result is None:
             return
 
@@ -2818,13 +2950,17 @@ class Shape(ShapeConfiguration):
             "boundary": [{key: value for key, value in record.items() if key != "sketch"} for record in boundary],
         }
 
-    async def _artifact_hash(self, section: str, label: str, impl, script: str, request: dict, implementation: str):
-        """The cache key of one analysis's or one route's answer, or None.
+    async def _artifact_hash(
+        self, section: str, label: str, impl, script: str, request: dict, implementation: str, extra=None
+    ):
+        """The cache key of one analysis's, one route's or one output file's answer, or None.
 
-        'section' is the output section that produced it ('cae' or 'cam') and
-        'label' what this run is of the shape - the analysis, or the machine a
-        route is for - which only names the entry; what decides the key is the
-        rest. That is the shape's own key, and everything the run adds to it:
+        'section' is the output section that produced it ('cae', 'cam',
+        'export' or 'render') and 'label' what this run is of the shape - the
+        analysis, the machine a route is for, the file type - which only names
+        the entry; what decides the key is the rest. That is the shape's own
+        key, and everything the run adds to it ('extra' being whatever of that
+        the request does not carry - see '_output_run_async'):
         the request the implementation is handed (an analysis's boundary
         conditions as the user wrote them and where they landed, a route's job
         and the machine it is for, every resolved option, the shape's material
@@ -2848,7 +2984,7 @@ class Shape(ShapeConfiguration):
         the run itself is what reports why.
         """
         try:
-            subject_key = await self.get_cache_key_async()
+            subject_key = await self.get_artifact_key_async()
             question = {
                 "section": section,
                 "label": label,
@@ -2864,6 +3000,10 @@ class Shape(ShapeConfiguration):
                 "source": impl.source_cache_key(),
                 "wrappers": source_key.wrappers_key(),
             }
+            if extra:
+                # Only when there is some, so that an analysis and a route keep
+                # the keys - and the cached answers - they had before.
+                question.update(extra)
             return cache_artifacts.question_hash(
                 "%s:%s#%s" % (self.project_name, self.name, label),
                 subject_key,
@@ -3515,7 +3655,7 @@ class Shape(ShapeConfiguration):
             from . import measure as pc_measure
 
             with pc_logging.Action("BoundingBox", self.project_name, self.name):
-                box = await pc_measure.bbox(ctx, obj)
+                box = await pc_measure.bbox(ctx, obj, cacheable=self.artifacts_cacheable())
         if box is None:
             return None
 

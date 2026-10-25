@@ -13,6 +13,7 @@ import typing
 
 from partcad_utils import assy_filter, timeouts
 
+from . import assembly_explode
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, shape_ports
 from . import software as pc_software
@@ -164,6 +165,10 @@ class Assembly(Shape):
         # assembly nobody declared - one put together in Python with 'add()' -
         # which has no declaration to read them out of.
         self._subassemblies = None
+
+        # How far an exploded view moves each child, once it has been measured,
+        # with the children it was measured for (see 'exploded_offsets_async').
+        self._explode_offsets = None
 
     @property
     def timeout(self) -> typing.Optional[float]:
@@ -383,9 +388,65 @@ class Assembly(Shape):
         tasks = [asyncio.create_task(per_child(index, child)) for index, child in enumerate(self.children)]
         children = list(await asyncio.gather(*tasks))
 
+        if self.exploded:
+            children = await self._exploded(ctx, children)
+
         envelope = dict(self.get_cache_metadata())
         envelope[shape_envelope.KEY_ASSEMBLY] = children
         return envelope
+
+    @property
+    def exploded(self) -> bool:
+        """Whether this assembly is drawn with its items pulled apart.
+
+        An object-type parameter of the 'assy' type (see
+        'AssemblyFactoryAssy.ACCEPTED_OBJECT_TYPE_PARAMETERS'), so it is
+        declared under 'parameters:' or set on a reference -
+        'logo;exploded=true' is an object of its own, with a cache key of its
+        own, and everything drawn of it is cached like anything else.
+        """
+        from .output import as_flag
+
+        try:
+            return as_flag(self.get_object_type_parameter("exploded"), "exploded")
+        except ValueError as e:
+            pc_logging.error("%s:%s: %s" % (self.project_name, self.name, e))
+            return False
+
+    async def exploded_offsets_async(self, ctx) -> typing.Optional[list]:
+        """How far this assembly's exploded view moves each child, in order, or None.
+
+        None for an assembly that is not exploded. Otherwise one (x, y, z) per
+        child, the first of them nothing. Where each item goes is
+        'assembly_explode''s, which an instruction book asks too, so an item
+        backs out of what it is joined to the same way in both.
+
+        One answer for everything that places what is drawn: the shape, the
+        ports '--with-internals' draws, and the ports a 'map:' makes this
+        assembly's own (see 'assembly_explode.moved'). Measured once, from
+        where the assembly put everything, and kept with the children it was
+        measured for - a measurement is a bounding box per item.
+        """
+        if not self.exploded:
+            return None
+        await self.do_instantiate()
+        children = tuple(id(child) for child in self.children)
+        if self._explode_offsets is None or self._explode_offsets[0] != children:
+            self._explode_offsets = (children, await assembly_explode.offsets_async(ctx, self))
+        return self._explode_offsets[1]
+
+    async def _exploded(self, ctx, children: list) -> list:
+        """The placed 'children' of this assembly, each moved by its exploded view."""
+        offsets = await self.exploded_offsets_async(ctx)
+        moved = []
+        for node, offset in zip(children, offsets):
+            if any(offset):
+                node = dict(node)
+                node[shape_envelope.KEY_LOCATION] = assembly_explode.moved(
+                    node.get(shape_envelope.KEY_LOCATION), offset
+                ).as_packed()
+            moved.append(node)
+        return moved
 
     def get_cache_metadata(self):
         """The outer layer to wrap around this assembly's cached children.
@@ -550,24 +611,30 @@ class Assembly(Shape):
         the box around the turned child - never smaller. That is what a box is
         for here: deciding quickly what cannot touch what, which a box that is
         too large never gets wrong.
+
+        An exploded assembly's box is around its children where they are drawn
+        (see 'exploded_offsets_async'), which is the shape it is.
         """
         if self._bounding_box is not None:
             return self._bounding_box
         await self.do_instantiate()
+        offsets = await self.exploded_offsets_async(ctx) or [None] * len(self.children)
 
-        async def placed_corners(child):
+        async def placed_corners(child, offset):
             box = await _recorded_box(ctx, child.item)
             if box is None:
                 return []
             corners = [(x, y, z) for x in (box[0], box[3]) for y in (box[1], box[4]) for z in (box[2], box[5])]
-            location = child.location
+            location = assembly_explode.moved(child.location, offset)
             if location is None:
                 return corners
             if not isinstance(location, Location):
                 location = Location(location)
             return [location.transform_point(corner) for corner in corners]
 
-        points = [point for corners in await asyncio.gather(*map(placed_corners, self.children)) for point in corners]
+        points = [
+            point for corners in await asyncio.gather(*map(placed_corners, self.children, offsets)) for point in corners
+        ]
         if not points:
             return None
         root = self._root_location()

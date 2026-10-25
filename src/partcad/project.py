@@ -3558,7 +3558,9 @@ class Project(project_config.Configuration):
             choices=choices,
         ) as document:
             self.ctx.ensure_dirs_for_file(path)
-            await self._write_document_async(document, format, path, reproducible=reproducible)
+            await self._write_document_async(
+                document, format, path, reproducible=reproducible, cacheable=assembly.get_cacheable()
+            )
 
         return path
 
@@ -3593,15 +3595,19 @@ class Project(project_config.Configuration):
                 found = cfg[output.REPRODUCIBLE_KEY]
         return output.as_flag(found)
 
-    async def _write_document_async(self, document, format, path, reproducible=False):
-        """Write a generated document down in one of 'assembly_guide.GUIDE_FORMATS'."""
+    async def _write_document_async(self, document, format, path, reproducible=False, cacheable=True):
+        """Write a generated document down in one of 'assembly_guide.GUIDE_FORMATS'.
+
+        'cacheable' is whether the object the document is about may be cached,
+        which a PDF is (see 'document_pdf.render_pdf_async').
+        """
         if format == "html":
             # Already the same bytes every time: nothing in the HTML is read
             # off a clock, so there is no 'reproducible' to honour.
             with open(path, "w") as f:
                 f.write(pc_document.render_html(document))
         else:
-            await render_pdf_async(self.ctx, document, path, reproducible=reproducible)
+            await render_pdf_async(self.ctx, document, path, reproducible=reproducible, cacheable=cacheable)
 
     async def assembly_guide_data_async(
         self,
@@ -3659,10 +3665,12 @@ class Project(project_config.Configuration):
                 "manufacturable": bool(assembly_guide.resolve_alias(self.ctx, assembly).is_manufacturable),
             }
             if format is not None:
-                result["file"] = await self._document_file_async(guide.document, format, assembly_name)
+                result["file"] = await self._document_file_async(
+                    guide.document, format, assembly_name, cacheable=assembly.get_cacheable()
+                )
             return result
 
-    async def _document_file_async(self, document, format, name):
+    async def _document_file_async(self, document, format, name, cacheable=True):
         """A document written down in a format, as bytes a client can save."""
         import base64
 
@@ -3673,7 +3681,7 @@ class Project(project_config.Configuration):
             stem = output.name_to_segments(name)[-1]
             filename = "%s.%s" % (re.sub(r"[^A-Za-z0-9_.-]+", "_", stem) or "assembly", format)
             path = os.path.join(directory, filename)
-            await self._write_document_async(document, format, path)
+            await self._write_document_async(document, format, path, cacheable=cacheable)
             with open(path, "rb") as f:
                 content = base64.b64encode(f.read()).decode("ascii")
         return {"filename": filename, "extension": format, "content": content}

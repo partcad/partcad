@@ -17,7 +17,10 @@ It runs inside a PartCAD sandbox, so it may import OCP. PartCAD hands it:
     path     -- the file to write
 
 and reads back either a global 'output' or, as here, whatever
-'process(path, request)' returns.
+'process(path, request)' returns. 'files' in it says what else was written
+beside 'path' - nothing, here - which is what lets PartCAD keep the file and
+hand it back the next time the same STL is asked for, rather than run this
+again.
 
 What it does differently from the built-in exporter: it always writes ASCII STL,
 and it names the solid after the package's 'comment' - the closest thing the
@@ -63,6 +66,6 @@ def process(path, request):
         if comment:
             _rename_solid(path, comment)
 
-        return {"success": True, "exception": None}
+        return {"success": True, "exception": None, "files": []}
     except Exception as e:
         return {"success": False, "exception": str(e)}

@@ -150,7 +150,9 @@ The `withPort` and `toPort` fields are used to specify the names of ports.
 
 The `exploded` field does not affect the assembly itself: it is how far apart
 the two parts are drawn in the exploded view of this step in the assembly
-instruction book (`pc render -t pdf` and `pc render -t html`).
+instruction book (`pc render -t pdf` and `pc render -t html`), and in the
+assembly drawn whole with its `exploded` parameter set (see
+:doc:`config_objects`).
 Without it, the two are spaced by half of the largest dimension of the two.
 
 An interface built from parameters is implemented under the name it was built

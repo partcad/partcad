@@ -333,11 +333,19 @@ def own_placement(shape, placement: Location = None) -> Location:
     return root if placement is None else placement * root
 
 
-def child_placement(placement: Location, child) -> Location:
-    """Where one child of an assembly sits, in the frame 'placement' is expressed in."""
-    if child.location is None:
+def child_placement(placement: Location, child, offset=None) -> Location:
+    """Where one child of an assembly sits, in the frame 'placement' is expressed in.
+
+    'offset' is how far an exploded view moves it (see
+    'Assembly.exploded_offsets_async'): a port is drawn on the item where the
+    item is drawn.
+    """
+    from .assembly_explode import moved
+
+    location = moved(child.location, offset)
+    if location is None:
         return placement
-    location = as_location(child.location)
+    location = as_location(location)
     return location if placement is None else placement * location
 
 
@@ -359,12 +367,13 @@ async def _collect(shape, ctx, owner: str, placement: Location, deep: bool, out:
         return
 
     await shape.do_instantiate()
-    for index, child in enumerate(shape.children):
+    offsets = await shape.exploded_offsets_async(ctx) or [None] * len(shape.children)
+    for index, (child, offset) in enumerate(zip(shape.children, offsets)):
         await _collect(
             child.item,
             ctx,
             child_owner(owner, shape.link_name(index)),
-            child_placement(placement, child),
+            child_placement(placement, child, offset),
             deep,
             out,
         )
