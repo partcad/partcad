@@ -412,23 +412,26 @@ def pipe_holders(files):
 
     Found by the pipe itself rather than by ancestry: by the time anybody asks,
     the parent is dead and its children belong to whatever adopts orphans, so
-    nothing leads back to it. Linux only (``/proc``), and an empty list
-    elsewhere, which leaves the caller closing its own end instead.
+    nothing leads back to it. Read off ``/proc`` on Linux and asked of ``lsof``
+    on macOS (`_lsof_pipe_holders`); an empty list elsewhere, which leaves the
+    caller closing its own end instead.
     """
-    if not os.path.isdir("/proc/self/fd"):
-        return []
-    wanted = set()
+    pipes = {}
     for f in files:
         if f is None:
             continue
         try:
-            status = os.fstat(f if isinstance(f, int) else f.fileno())
+            descriptor = f if isinstance(f, int) else f.fileno()
+            status = os.fstat(descriptor)
         except (OSError, ValueError):
             continue
         if stat.S_ISFIFO(status.st_mode):
-            wanted.add("pipe:[%d]" % status.st_ino)
-    if not wanted:
+            pipes[descriptor] = "pipe:[%d]" % status.st_ino
+    if not pipes:
         return []
+    if not os.path.isdir("/proc/self/fd"):
+        return _lsof_pipe_holders(pipes) if sys.platform == "darwin" else []
+    wanted = set(pipes.values())
     found = []
     for entry in os.listdir("/proc"):
         if not entry.isdigit() or int(entry) == os.getpid():
@@ -452,6 +455,65 @@ def pipe_holders(files):
                 continue
             found.append(int(entry))
             break
+    return sorted(found)
+
+
+def _lsof_pipe_holders(descriptors, run=subprocess.run):
+    """`pipe_holders` where there is no ``/proc``: macOS, asked of ``lsof``.
+
+    A pipe on macOS has no inode another process can be matched by, but each of
+    its two ends has a kernel handle, and ``lsof`` names both: an end's own as
+    its device, and the end it is joined to as its name (``->0x...``). So the
+    handles of the ends these descriptors are joined to -- the writing ends,
+    these being the reading ones -- are read off this process, and whatever else
+    has a descriptor with one of them as its device holds a writing end. Only
+    this user's processes are listed, which is all that can have inherited a
+    pipe from this one, and which keeps the second call short.
+
+    ``lsof`` exits non-zero when anything asked for is missing, so its output is
+    read whatever its status; a machine without one, or one that does not
+    answer in time, has no holders found -- the caller closes its own end then,
+    as everywhere else.
+    """
+
+    def listed(*args):
+        try:
+            answer = run(["lsof", "-n", "-P", "-w", *args], capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            return []
+        # One field a line, its kind first: 'p' starts a process and 'f' a
+        # descriptor of it, and what follows belongs to that descriptor.
+        records, pid = [], None
+        for line in (answer.stdout or "").splitlines():
+            kind, value = line[:1], line[1:]
+            if kind == "p":
+                pid = value
+            elif kind == "f":
+                records.append({"p": pid, "f": value})
+            elif records and kind:
+                records[-1][kind] = value
+        return records
+
+    me = str(os.getpid())
+    ours = listed("-a", "-p", me, "-d", ",".join(str(d) for d in sorted(descriptors)), "-F", "fdn")
+    joined = set()
+    for record in ours:
+        name = record.get("n", "")
+        if record.get("p") == me and name.startswith("->"):
+            joined.update(name[2:].split()[:1])
+    joined.discard("0x0")
+    if not joined:
+        return []
+    found = set()
+    for record in listed("-u", str(os.getuid()), "-F", "pfad"):
+        if record.get("p") in (None, me) or record.get("d") not in joined:
+            continue
+        # The writing end, as on Linux; this end is its own, so a reader is not
+        # expected here at all, and is not a reason to wait if one is.
+        if record.get("a") == "r":
+            continue
+        if record["p"].isdigit():
+            found.add(int(record["p"]))
     return sorted(found)
 
 

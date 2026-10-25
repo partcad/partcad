@@ -398,6 +398,82 @@ def test_the_container_service_still_waits_for_what_a_launcher_handed_its_window
     assert took >= 2.5
 
 
+def _lsof(answers):
+    """A stand-in for 'subprocess.run' answering 'lsof' as macOS's does.
+
+    'answers' maps the first option after the common ones -- '-a' for the call
+    about this process's own descriptors, '-u' for the one listing this user's
+    -- to the field output it prints: 'p' a process, 'f' a descriptor, then its
+    access, device and name. On macOS a pipe end's device is its own kernel
+    handle and its name the handle of the end it is joined to.
+    """
+    asked = []
+
+    def run(argv, **kwargs):
+        asked.append(argv)
+        return types.SimpleNamespace(returncode=1, stdout=answers[argv[4]], stderr="")
+
+    return run, asked
+
+
+def test_on_macos_a_holder_is_what_has_the_writing_end_by_its_handle(monkeypatch):
+    # The user the listing is narrowed to, which Windows has no notion of; the
+    # path itself is only taken on macOS, and is checked here everywhere.
+    monkeypatch.setattr(container_service.os, "getuid", lambda: 501, raising=False)
+    me = os.getpid()
+    run, asked = _lsof(
+        {
+            # This process reads both pipes; their writing ends are 0xaaaa and 0xbbbb.
+            "-a": "p%d\nf5\nd0x1111\nn->0xaaaa\nf7\nd0x2222\nn->0xbbbb\n" % me,
+            "-u": (
+                # This process's own copy of a writing end is not a holder.
+                "p%d\nf5\nar\nd0x1111\nf6\naw\nd0xaaaa\n"
+                # What the dead sandbox started, holding both writing ends.
+                "p4242\nf1\naw\nd0xaaaa\nf2\nau\nd0xbbbb\n"
+                # A copy of a reading end, which is no reason to wait.
+                "p4343\nf0\nar\nd0x1111\n"
+                # Something else's pipe altogether.
+                "p5555\nf3\nau\nd0xcccc\n"
+            )
+            % me,
+        }
+    )
+
+    assert container_service._lsof_pipe_holders({5: "", 7: ""}, run=run) == [4242]
+    assert asked[0][4:] == ["-a", "-p", str(me), "-d", "5,7", "-F", "fdn"]
+    assert asked[1][4:] == ["-u", "501", "-F", "pfad"]
+
+
+def test_on_macos_without_lsof_nothing_is_found():
+    def run(argv, **kwargs):
+        raise FileNotFoundError(argv[0])
+
+    assert container_service._lsof_pipe_holders({5: ""}, run=run) == []
+
+
+def test_on_macos_a_pipe_joined_to_nothing_looks_no_further():
+    run, asked = _lsof({"-a": "p%d\nf5\nd0x1111\nn->0x0\n" % os.getpid()})
+
+    assert container_service._lsof_pipe_holders({5: ""}, run=run) == []
+    assert len(asked) == 1
+
+
+@posix
+def test_without_proc_macos_asks_lsof_and_anything_else_finds_nothing(monkeypatch):
+    real_isdir = os.path.isdir
+    monkeypatch.setattr(container_service.os.path, "isdir", lambda path: path != "/proc/self/fd" and real_isdir(path))
+    monkeypatch.setattr(container_service, "_lsof_pipe_holders", lambda descriptors: sorted(descriptors))
+    reader, writer = os.pipe()
+    try:
+        monkeypatch.setattr(container_service.sys, "platform", "darwin")
+        assert container_service.pipe_holders([reader]) == [reader]
+        monkeypatch.setattr(container_service.sys, "platform", "freebsd14")
+        assert container_service.pipe_holders([reader]) == []
+    finally:
+        os.close(reader)
+        os.close(writer)
+
+
 @posix
 def test_only_what_can_still_write_into_the_pipe_is_a_holder():
     """The reading end is this process's own, and a copy of it is no reason to wait."""

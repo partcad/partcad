@@ -151,7 +151,9 @@ def test_what_the_service_found_in_its_own_configuration_is_not_left_for_a_clien
     monkeypatch.setattr(m, "Session", mock.MagicMock())
     monkeypatch.setattr(m.config_restart, "remember", lambda: None)
     monkeypatch.setattr(pc_logging, "_said_once", set())
-    monkeypatch.setattr(pc_logging, "_held", {"key": "threadsMax 2 is below the minimum of 4; using 4 instead"})
+    monkeypatch.setattr(
+        pc_logging, "_held", {"key": (logging.WARNING, "threadsMax 2 is below the minimum of 4; using 4 instead")}
+    )
     logger = logging.getLogger("partcad")
     monkeypatch.setattr(logger, "handlers", [])
     level = logger.level

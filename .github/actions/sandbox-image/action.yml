@@ -28,12 +28,20 @@ description: >-
 # A build still happens here when the pull comes up empty, and it is worth
 # being precise about who that is for, because it is no longer any job in
 # `test.yml`: every job there waits for `build-containers`, so the tag it needs
-# is published before it starts. It is for `Examples via bundle` in
-# `build-standalone.yml`, which runs on the version bump in a *different*
-# workflow from the one publishing that release's images -- and a `needs:` does
-# not reach across a workflow, which is the fact this whole mechanism was
-# written around. There the fallback is the difference between testing the
-# bundle and failing on an image nothing has pushed yet.
+# is published before it starts. It is for the two callers in *other*
+# workflows, and a `needs:` does not reach across a workflow, which is the fact
+# this whole mechanism was written around:
+#
+# - `Examples via bundle` in `build-standalone.yml`, which runs on the version
+#   bump, in a different workflow from the one publishing that release's
+#   images.
+# - `Run: pc` in `test-dev.yml`, on a run that publishes images: a branch's
+#   own, or the release's on the version bump. It reaches its tests minutes
+#   after the push, while `build-containers` is still building those images,
+#   and its PartCAD fell back to conda without them.
+#
+# For both, the fallback is the difference between testing what the run is
+# about and failing on an image nothing has pushed yet.
 #
 # It is not a second implementation, though, which was the other half of the
 # problem: it runs `dev-tools/ci/build-sandbox-image.sh`, the same script

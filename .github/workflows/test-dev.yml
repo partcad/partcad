@@ -744,6 +744,26 @@ jobs:
           restore-keys: |
             devcontainer-poetry-v2-
 
+      # The images this run addresses are built by "Build Docker Containers" in
+      # "test.yml", and a "needs:" does not reach across workflows: this job got
+      # here in minutes, that build takes over half an hour, and the pull this
+      # job's PartCAD makes found "manifest unknown" and fell back to conda, so
+      # every example that needs a solver container failed. The action pulls
+      # the tag when it is there and builds it from this commit when it is not,
+      # with the script that build runs, on the runner's Docker -- which is the
+      # daemon the dev container talks to, so PartCAD finds the image locally.
+      # On every run that publishes images ("image-push"): a branch's own tag,
+      # and the release's on the version bump -- that bump is what publishes the
+      # release's tag, in "test.yml", while this job runs, so it is the same race
+      # with "image-override" empty. A run that publishes nothing pulls a tag a
+      # bump published long ago, and PartCAD does that by itself.
+      - name: The sandbox base image
+        if: needs.scope.outputs.image-push == 'true'
+        uses: ./.github/actions/sandbox-image
+        env:
+          PC_CONTAINER_IMAGE_TAG: ${{ needs.scope.outputs.image-override }}
+          PC_CONTAINER_IMAGE_OWNER: ${{ needs.scope.outputs.image-owner }}
+
       - name: Run Acceptance Tests
         uses: devcontainers/ci@v0.3
         with:
