@@ -33,6 +33,7 @@ from typing import Callable, Optional
 from partcad_utils import containers
 from partcad_utils.json_rpc_client import RuntimeJsonRpcClient
 
+from . import sandbox_versions
 from .process_crash import failure_detail
 
 # Where the volume is mounted inside every container this service starts. Fixed
@@ -67,9 +68,21 @@ def volume_name(image: str) -> str:
     return "pc-sandbox-" + hashlib.sha256(image.encode()).hexdigest()[:12]
 
 
+# Raised when the environments an earlier release built can be wrong in a way
+# this one cannot see from outside them, so that they are built again beside the
+# old ones rather than trusted. A volume outlives every release that writes to
+# it, and pip, asked about a damaged environment, says everything is installed.
+#
+# 2: until 'Environments._install' forced CadQuery's OCP back over the novtk
+# build build123d brings, every environment built here that held both had the
+# novtk one, and every CadQuery part in it failed to import. The old directory
+# stays in the volume until the volume is removed.
+GENERATION = 2
+
+
 def environment_path(version: str) -> str:
     """Where the environment for one Python version lives inside the volume."""
-    return "%s/v-env-%s" % (SANDBOX_ROOT, version)
+    return "%s/v%d-env-%s" % (SANDBOX_ROOT, GENERATION, version)
 
 
 def interpreter_path(version: str) -> str:
@@ -118,6 +131,9 @@ class Environments:
         self._built = set()
         # image -> the name its interpreter answers to; see '_image_python'.
         self._pythons = {}
+        # (image, version) -> requirements whose files an install since has
+        # overwritten, so that their next install is forced; see '_install'.
+        self._clobbered = {}
         # One lock per environment, so that two callers wanting two different
         # images do not queue behind each other's pip.
         self._gates = {}
@@ -143,14 +159,23 @@ class Environments:
                     self._built.add(key)
                     self._installed.setdefault(key, set())
 
-            with self._lock:
-                known = self._installed.setdefault(key, set())
-                wanted = [r for r in requirements if r not in known]
-
-            for requirement in wanted:
-                self._install(image, version, requirement)
+            # In order, and decided one at a time rather than up front: an
+            # install can overwrite what an earlier one put there, and the list
+            # is ordered so that the repair comes after it (see '_install').
+            for requirement in requirements:
+                with self._lock:
+                    clobbered = self._clobbered.setdefault(key, set())
+                    force = requirement in clobbered
+                    if requirement in self._installed.setdefault(key, set()) and not force:
+                        continue
+                replaced = self._install(image, version, requirement, force=force)
                 with self._lock:
                     self._installed[key].add(requirement)
+                    clobbered.discard(requirement)
+                    if replaced:
+                        for other in sandbox_versions.GUARD_INVALIDATED_BY.get(requirement, ()):
+                            self._installed[key].discard(other)
+                            clobbered.add(other)
 
         return interpreter_path(version)
 
@@ -220,21 +245,39 @@ class Environments:
             self._pythons[image] = name
         return name
 
-    def _install(self, image: str, version: str, requirement: str) -> None:
+    def _install(self, image: str, version: str, requirement: str, force: bool = False) -> bool:
+        """Install one requirement; whether pip really installed anything.
+
+        That answer is what the overwritten files are tracked by. build123d
+        depends on 'cadquery-ocp-novtk', which writes the same OCP module as
+        CadQuery's 'cadquery-ocp' without the VTK half "import cadquery" needs
+        (see 'sandbox_versions.GUARD_INVALIDATED_BY'). The base requirements end
+        with 'cadquery-ocp' to put it back, and pip, seeing it installed, did
+        nothing -- so every CadQuery part in an environment built here failed
+        on "cannot import name 'IVtkOCC_Shape'". After an install that replaced
+        files, the next install of what it overwrote is forced, as the local
+        sandboxes force theirs; one that found everything in place replaced
+        nothing, so a process finding the environment already built forces no
+        reinstall of the CAD stack.
+        """
         # '--prefer-binary' for the reason every other sandbox installs with it
         # (see 'pip_install_flags' in 'runtime_python'): a newer release with no
         # wheel for the image is a compile that fails, an older one with a wheel
         # is an install that works.
-        exitcode, _, stderr = self._run(
-            image,
-            [interpreter_path(version), "-m", "pip", "install", "--no-input", "--prefer-binary", requirement],
-            lock_for(version, exclusive=True),
-        )
+        command = [interpreter_path(version), "-m", "pip", "install", "--no-input", "--prefer-binary"]
+        if force:
+            # With its dependencies, for the reason 'FORCE_REINSTALL_FLAGS' in
+            # 'runtime_python' gives: the VTK build fails to load without VTK.
+            command.append("--force-reinstall")
+        exitcode, stdout, stderr = self._run(image, command + [requirement], lock_for(version, exclusive=True))
         if exitcode != 0:
             raise RuntimeError(
                 "Could not install '%s' into the remote environment for Python %s in %s: %s"
                 % (requirement, version, image, failure_detail(stderr, exitcode))
             )
+        # What pip prints when it changed anything, and only then; a requirement
+        # it found satisfied prints "Requirement already satisfied" instead.
+        return "Successfully installed" in (stdout or "")
 
     def forget(self, image: str) -> None:
         """Say the containers for this image are gone, so its environments are unknown.
@@ -243,6 +286,10 @@ class Environments:
         is the point of it. What is forgotten is only this service's belief
         about what is in there, so the next request re-checks rather than
         assuming a package is installed because a previous process installed it.
+
+        What an install has overwritten is kept: that is a fact about the
+        volume, which is still there, and a repair that had not run yet when
+        the container went is still owed.
         """
         with self._lock:
             for key in [k for k in self._built if k[0] == image]:

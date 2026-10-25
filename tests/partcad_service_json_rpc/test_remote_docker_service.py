@@ -50,7 +50,7 @@ def environments():
 
     def run(image, command, lock=None):
         if "sys.version_info" in " ".join(command):
-            return 0, command[0].split("v-env-")[1].split("/")[0], ""
+            return 0, command[0].split("-env-")[1].split("/")[0], ""
         return 0, "", ""
 
     return remote_sandbox.Environments(run)

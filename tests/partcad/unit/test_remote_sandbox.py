@@ -14,7 +14,7 @@ on every request would work perfectly and be unusable.
 
 import pytest
 
-from partcad import remote_sandbox
+from partcad import remote_sandbox, sandbox_versions
 
 
 class _Recorder:
@@ -25,12 +25,14 @@ class _Recorder:
     fail every creation for the wrong reason.
     """
 
-    def __init__(self, fail_on=None, version=None):
+    def __init__(self, fail_on=None, version=None, installs=()):
         self.calls = []
         self.locks = []
         self.fail_on = fail_on
         # What the image's interpreter reports, when that is not what was asked.
         self.version = version
+        # The requirements pip really installs, rather than finds satisfied.
+        self.installs = set(installs)
 
     def __call__(self, image, command, lock=None):
         self.calls.append((image, command))
@@ -39,6 +41,10 @@ class _Recorder:
             return 1, "", "it went wrong"
         if "sys.version_info" in " ".join(command):
             return 0, self.version or _asked_version(command[0]), ""
+        if "pip" in command:
+            if command[-1] in self.installs:
+                return 0, "Successfully installed %s" % command[-1], ""
+            return 0, "Requirement already satisfied: %s" % command[-1], ""
         return 0, "", ""
 
     def commands(self):
@@ -51,7 +57,7 @@ class _Recorder:
 
 def _asked_version(interpreter):
     """The version out of an environment's interpreter path."""
-    return interpreter.split("v-env-")[1].split("/")[0]
+    return interpreter.split("-env-")[1].split("/")[0]
 
 
 # --------------------------------------------------------------------------- #
@@ -70,6 +76,7 @@ def test_each_image_gets_a_volume_of_its_own():
 
 def test_each_python_version_gets_an_environment_of_its_own():
     assert remote_sandbox.environment_path("3.11") != remote_sandbox.environment_path("3.12")
+    assert remote_sandbox.environment_path("3.11") == "/pc-sandbox/v2-env-3.11"
     assert remote_sandbox.interpreter_path("3.11").endswith("/bin/python")
     assert remote_sandbox.interpreter_path("3.11").startswith(remote_sandbox.environment_path("3.11"))
 
@@ -303,6 +310,72 @@ def test_a_failed_install_is_not_remembered_as_installed():
     run.fail_on = None
     environments.ensure("ghcr.io/x/a:1", "3.11", ["numpy"])
     assert len([c for c in run.builds() if "install" in c]) == 2
+
+
+# --------------------------------------------------------------------------- #
+# What one install overwrites of another                                       #
+# --------------------------------------------------------------------------- #
+
+# What every sandbox installs last of the CAD stack, after what overwrites it.
+_STACK = [sandbox_versions.CADQUERY, sandbox_versions.BUILD123D, sandbox_versions.CADQUERY_OCP]
+
+
+def _forced(run):
+    """The requirements installed with '--force-reinstall', in order."""
+    return [c[-1] for c in run.builds() if "--force-reinstall" in c]
+
+
+def test_cadquerys_ocp_is_reinstalled_over_what_build123d_overwrote():
+    """build123d's novtk OCP replaces CadQuery's; asked for again, pip would see it installed and do nothing."""
+    run = _Recorder(installs=_STACK)
+    remote_sandbox.Environments(run).ensure("ghcr.io/x/a:1", "3.11", _STACK)
+
+    assert _forced(run) == [sandbox_versions.CADQUERY_OCP]
+    assert [c[-1] for c in run.builds() if "install" in c] == _STACK
+
+
+def test_it_is_reinstalled_even_when_it_was_installed_before_build123d_was():
+    run = _Recorder(installs=_STACK)
+    environments = remote_sandbox.Environments(run)
+
+    environments.ensure("ghcr.io/x/a:1", "3.11", [sandbox_versions.CADQUERY_OCP])
+    environments.ensure("ghcr.io/x/a:1", "3.11", [sandbox_versions.BUILD123D, sandbox_versions.CADQUERY_OCP])
+
+    assert _forced(run) == [sandbox_versions.CADQUERY_OCP]
+
+
+def test_an_environment_found_built_is_not_reinstalled():
+    """A process finding the CAD stack already in the volume forces nothing: nothing was overwritten."""
+    run = _Recorder()
+    remote_sandbox.Environments(run).ensure("ghcr.io/x/a:1", "3.11", _STACK)
+
+    assert _forced(run) == []
+
+
+def test_the_repair_is_made_once():
+    run = _Recorder(installs=_STACK)
+    environments = remote_sandbox.Environments(run)
+
+    environments.ensure("ghcr.io/x/a:1", "3.11", _STACK)
+    environments.ensure("ghcr.io/x/a:1", "3.11", _STACK)
+
+    assert _forced(run) == [sandbox_versions.CADQUERY_OCP]
+
+
+def test_a_repair_that_failed_is_still_owed_after_the_container_is_forgotten():
+    """What was overwritten is on the volume, which outlives the container."""
+    run = _Recorder(installs=_STACK, fail_on="--force-reinstall")
+    environments = remote_sandbox.Environments(run)
+    with pytest.raises(RuntimeError, match="cadquery-ocp"):
+        environments.ensure("ghcr.io/x/a:1", "3.11", _STACK)
+
+    environments.forget("ghcr.io/x/a:1")
+    run.fail_on = None
+    # This time pip finds build123d in place: it is the earlier install's damage being repaired.
+    run.installs = set()
+    environments.ensure("ghcr.io/x/a:1", "3.11", _STACK)
+
+    assert _forced(run)[-1] == sandbox_versions.CADQUERY_OCP
 
 
 # --------------------------------------------------------------------------- #
