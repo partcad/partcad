@@ -515,6 +515,15 @@ yours still conforms. Carry the ``partcad.*`` labels it documents: they are what
 ``pc system prune`` recognises, and an image without them is one PartCAD will
 leave behind when it cleans up after itself.
 
+An image that is not built on one of those -- a simulator's, a distribution's --
+needs a Python 3 on its ``PATH``, as ``python`` or as ``python3``: PartCAD runs
+``python`` where the image has it and ``python3`` otherwise, which is all that
+Debian and Ubuntu install. Say which version it is with ``pythonVersion`` beside
+the ``dockerImage``. An implementation that states none is given PartCAD's
+default, and under :ref:`useDockerRemote <use-docker-remote>`, where the
+environment is built inside the container, an image carrying another version is
+refused rather than used.
+
 What it costs
 ^^^^^^^^^^^^^
 

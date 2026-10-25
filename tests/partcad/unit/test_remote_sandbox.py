@@ -107,11 +107,78 @@ def test_the_environment_is_created_and_the_interpreter_returned():
     assert interpreter == remote_sandbox.interpreter_path("3.11")
     # By the name the image's allowlist gives its interpreter, not by the name
     # of the file: a command the service does not recognise is refused before
-    # anything runs.
-    assert run.builds() == [
-        [remote_sandbox.IMAGE_PYTHON, "-m", "venv", "--upgrade-deps", remote_sandbox.environment_path("3.11")]
-    ]
-    assert remote_sandbox.IMAGE_PYTHON == "python"
+    # anything runs. With nothing to ask, the first of the names.
+    assert run.builds() == [["python", "-m", "venv", "--upgrade-deps", remote_sandbox.environment_path("3.11")]]
+    assert remote_sandbox.IMAGE_PYTHONS == ("python", "python3")
+
+
+class _Which:
+    """What the image says it has, and how often it was asked."""
+
+    def __init__(self, found):
+        self.found = found
+        self.asked = []
+
+    def __call__(self, image, names):
+        self.asked.append((image, list(names)))
+        if self.found is None:
+            return None
+        return {name: self.found.get(name) for name in names}
+
+
+def _built_with(run):
+    """The name the environment was created with."""
+    return next(c for c in run.builds() if "venv" in c)[0]
+
+
+def test_an_image_with_python_is_built_with_it():
+    """PartCAD's base image pins "python" to its interpreter; that pin is the image's word."""
+    run = _Recorder()
+    which = _Which({"python": "/usr/local/bin/python3", "python3": "/usr/local/bin/python3"})
+    remote_sandbox.Environments(run, which=which).ensure("ghcr.io/x/a:1", "3.11")
+
+    assert which.asked == [("ghcr.io/x/a:1", ["python", "python3"])]
+    assert _built_with(run) == "python"
+
+
+def test_an_image_with_only_python3_is_built_with_python3():
+    """Debian and Ubuntu install no "python": Gazebo's image, ROS's, a stock distribution's."""
+    run = _Recorder()
+    which = _Which({"python": None, "python3": "/usr/bin/python3"})
+    remote_sandbox.Environments(run, which=which).ensure("ghcr.io/partcad/partcad-sim-gazebo:latest", "3.12")
+
+    assert _built_with(run) == "python3"
+
+
+def test_an_image_with_neither_is_refused_naming_both():
+    """Rather than the service turning down "python" with nothing said about "python3"."""
+    run = _Recorder()
+    which = _Which({"python": None, "python3": None})
+    with pytest.raises(RuntimeError, match="python and python3"):
+        remote_sandbox.Environments(run, which=which).ensure("ghcr.io/x/a:1", "3.11")
+    assert run.builds() == []
+
+
+def test_an_image_that_could_not_be_asked_is_built_with_the_first_name():
+    """No answer is not "neither": it fails, if it does, the way it did before there was a question."""
+    run = _Recorder()
+    remote_sandbox.Environments(run, which=_Which(None)).ensure("ghcr.io/x/a:1", "3.11")
+    assert _built_with(run) == "python"
+
+
+def test_an_image_is_asked_once_for_every_environment_in_it_and_again_once_forgotten():
+    run = _Recorder()
+    which = _Which({"python3": "/usr/bin/python3"})
+    environments = remote_sandbox.Environments(run, which=which)
+
+    environments.ensure("ghcr.io/x/a:1", "3.11")
+    environments.ensure("ghcr.io/x/a:1", "3.12")
+    assert len(which.asked) == 1
+
+    # The container is gone, and the next one may be another image's build.
+    environments.forget("ghcr.io/x/a:1")
+    environments.ensure("ghcr.io/x/a:1", "3.11")
+    assert len(which.asked) == 2
 
 
 def test_it_is_created_once_however_many_times_it_is_asked_for():
@@ -151,8 +218,11 @@ def test_an_image_carrying_another_version_is_a_failure():
     something imports a wheel built for the other one.
     """
     run = _Recorder(version="3.9")
-    with pytest.raises(RuntimeError, match="3.9"):
+    with pytest.raises(RuntimeError, match="3.9") as refused:
         remote_sandbox.Environments(run).ensure("ghcr.io/x/a:1", "3.11")
+    # With the way out: the one place that knows what the image carries is the
+    # implementation naming it, and the version asked for is usually a default.
+    assert "pythonVersion" in str(refused.value)
 
 
 def test_a_mismatched_version_is_not_remembered_as_built():

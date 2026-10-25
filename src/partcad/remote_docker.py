@@ -216,10 +216,11 @@ def start(image: str, role: str = "remote") -> Lease:
         mode=containers.UPLOAD,
         volumes={remote_sandbox.volume_name(image): {"bind": remote_sandbox.SANDBOX_ROOT, "mode": "rw"}},
         sandbox_root=remote_sandbox.SANDBOX_ROOT,
-        # The name the environments are built with, wherever the image put it.
-        # An image built on PartCAD's own pins it to a path, and that pin
+        # The names the environments may be built with, wherever the image put
+        # them: whichever of the two it has (see 'remote_sandbox.IMAGE_PYTHONS').
+        # An image built on PartCAD's own pins "python" to a path, and that pin
         # stands; see 'containers.acquire'.
-        allowed_commands={remote_sandbox.IMAGE_PYTHON: None},
+        allowed_commands={name: None for name in remote_sandbox.IMAGE_PYTHONS},
     )
     try:
         endpoint = containers.acquire(spec)
