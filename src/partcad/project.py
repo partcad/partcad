@@ -2313,6 +2313,23 @@ class Project(project_config.Configuration):
             quiet=quiet,
         )
 
+    def _normalized_array_values(self, factory_name: str, get_config: callable, base_object_name: str, params: dict):
+        """'params' with its array values read into lists, by what the object declares.
+
+        Read off the declaration before anything is looked up under the name,
+        because the name is what is looked up: the declared parameters, short
+        forms and all, and the ones the object's type contributes (a DXF
+        sketch's 'include' and 'exclude'). See 'config.normalized_array_values'.
+        """
+        config = get_config(base_object_name)
+        if not isinstance(config, dict):
+            return params
+        declarations = dict(factory.accepted_object_type_parameters(factory_name, config.get("type")))
+        declared = config.get("parameters")
+        if isinstance(declared, dict):
+            declarations.update(declared)
+        return pc_config.normalized_array_values(declarations, params, f"{self.name}:{base_object_name}")
+
     def get_object(
         self,
         factory_name: str,
@@ -2340,7 +2357,10 @@ class Project(project_config.Configuration):
         if not has_name_params:
             result_name = object_name
         else:
-            # Determine the name we want this parameterized object to have
+            # Determine the name we want this parameterized object to have:
+            # with every array value read into the list it is first, so that
+            # one set of list values is one instance however it was handed over.
+            params = self._normalized_array_values(factory_name, get_config, base_object_name, params)
             result_name = format_parameterized_name(base_object_name, params)
 
         # The package lock is released before the object's own lock is taken,

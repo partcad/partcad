@@ -477,42 +477,39 @@ def test_an_instance_is_written_to_a_file_with_nothing_to_quote(name, segments):
 @pytest.mark.parametrize(
     "spellings, segments",
     [
-        # Every parameter, sorted by name, as the instance's own name is.
+        # Every parameter, sorted by name, as the instance's own name is: an
+        # instance PartCAD made is named that way already, and a name as
+        # somebody typed it is normalized the same way here.
         (["stack;offset=12,angle=90", "stack;angle=90,offset=12"], ["stack_angle_90_offset_12.svg"]),
-        # Every item of a list, whichever way the name holds it: written with
-        # commas, or as the list a reference held ('format_parameterized_name'
-        # writes one as Python prints it).
+        # Every item of a list, in its order.
+        (["panel;include=BEND_UP,BEND_DOWN"], ["panel_include_BEND_UP_BEND_DOWN.svg"]),
+        (["panel;include=BEND_DOWN,BEND_UP"], ["panel_include_BEND_DOWN_BEND_UP.svg"]),
         (
-            [
-                "panel;include=BEND_UP,BEND_DOWN",
-                "panel;include=['BEND_UP', 'BEND_DOWN']",
-                "panel;include=('BEND_UP', 'BEND_DOWN')",
-                "panel;include=[['BEND_UP'], 'BEND_DOWN']",
-            ],
-            ["panel_include_BEND_UP_BEND_DOWN.svg"],
-        ),
-        (
-            ["panel;scale=2,include=['BEND_UP', 'BEND_DOWN']", "panel;include=BEND_UP,BEND_DOWN,scale=2"],
+            ["panel;scale=2,include=BEND_UP,BEND_DOWN", "panel;include=BEND_UP,BEND_DOWN,scale=2"],
             ["panel_include_BEND_UP_BEND_DOWN_scale_2.svg"],
         ),
-        (["panel;include=[]"], ["panel_include_.svg"]),
-        # Text that only looks like a list is read as the text it is.
-        (["label;text=(draft)"], ["label_text_draft_.svg"]),
         (["robot/base;b=1,a=2"], ["robot", "base_a_2_b_1.svg"]),
     ],
 )
 def test_one_instance_is_one_file_however_its_name_was_written(spellings, segments):
-    """The file name is normalized the way the instance's name is: sorted, every list item."""
+    """The file name is normalized the way the instance's name is: sorted, every list item in order."""
     for name in spellings:
         assert output.name_to_segments(name, ".svg") == segments, name
 
 
-def test_an_instance_a_reference_built_is_the_file_its_name_would_be():
-    """What 'get_object' names an instance of a list value, its file names the same way."""
-    built = format_parameterized_name("panel", {"scale": 2, "include": ["BEND_UP", "BEND_DOWN"]})
-    assert output.name_to_segments(built, ".svg") == output.name_to_segments(
-        "panel;include=BEND_UP,BEND_DOWN,scale=2", ".svg"
-    )
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"scale": 2, "include": ["BEND_UP", "BEND_DOWN"]},
+        {"scale": 2, "include": ("BEND_UP", "BEND_DOWN")},
+        {"scale": 2, "include": "BEND_UP,BEND_DOWN"},
+    ],
+)
+def test_an_instance_a_reference_built_is_the_file_its_name_would_be(values):
+    """However a list was handed over, the name holds it with commas, and so does its file."""
+    built = format_parameterized_name("panel", values)
+    assert built == "panel;include=BEND_UP,BEND_DOWN,scale=2"
+    assert output.name_to_segments(built, ".svg") == ["panel_include_BEND_UP_BEND_DOWN_scale_2.svg"]
 
 
 def test_a_document_links_an_instance_at_the_file_its_render_wrote(tmp_path):

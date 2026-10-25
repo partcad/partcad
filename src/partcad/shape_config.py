@@ -15,6 +15,7 @@ import string
 import typing
 
 from partcad.shape_config_store import ShapeConfigStore
+from partcad_utils.parameters import as_list
 
 from . import logging as pc_logging
 from . import tolerance_inspect
@@ -155,23 +156,6 @@ def object_type_parameter(config: dict, accepted: dict, name: str, kind: str = "
     if isinstance(default, list):
         return as_list(value)
     return value
-
-
-def as_list(value) -> list:
-    """A list-valued parameter, however it was written.
-
-    A list stays one; text is the spelling a reference has to use, because the
-    whole parameter section of a name is text, so it is split on commas. Empty
-    entries are dropped rather than kept as empty names: a trailing comma is a
-    typo, not a layer called ''.
-    """
-    if value is None:
-        return []
-    if isinstance(value, str):
-        return [item.strip() for item in value.split(",") if item.strip()]
-    if isinstance(value, (list, tuple)):
-        return [item for item in value if item not in (None, "")]
-    return [value]
 
 
 class ShapeConfiguration:
