@@ -47,25 +47,31 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
 
     import partcad as pc
-    from partcad import runtime_python, shape_envelope
+    from partcad import runtime_python, runtime_python_remote, shape_envelope
 
     base = os.path.join(args.outdir, "%s.%s" % (args.object.replace("/", "_").replace(":", "_"), args.file_type))
     captured = {}
-    original = runtime_python.PythonRuntime.run_async
 
-    async def intercept(self, cmd, stdin="", cwd=None, session=None, timeout=None):
-        if cmd and os.path.basename(cmd[0]) == "wrapper_export.py":
-            text = stdin() if callable(stdin) else stdin
-            text = text.decode("utf-8") if isinstance(text, bytes) else text
-            captured["request"] = len(text)
-            with open(base + ".cmd.json", "w") as f:
-                json.dump({"cmd": cmd}, f)
-            with open(base + ".stdin.json", "w") as f:
-                f.write(text)
-            return 0, json.dumps({"success": True, "exception": None}), ""
-        return await original(self, cmd, stdin=stdin, cwd=cwd, session=session, timeout=timeout)
+    def intercepting(original):
+        async def intercept(self, cmd, stdin="", *args, **kwargs):
+            if cmd and os.path.basename(cmd[0]) == "wrapper_export.py":
+                text = stdin() if callable(stdin) else stdin
+                text = text.decode("utf-8") if isinstance(text, bytes) else text
+                captured["request"] = len(text)
+                with open(base + ".cmd.json", "w") as f:
+                    json.dump({"cmd": cmd}, f)
+                with open(base + ".stdin.json", "w") as f:
+                    f.write(text)
+                return 0, json.dumps({"success": True, "exception": None}), ""
+            return await original(self, cmd, stdin, *args, **kwargs)
 
-    runtime_python.PythonRuntime.run_async = intercept
+        return intercept
+
+    # Every launch goes through one of these two: the remote sandbox (and a
+    # docker one in upload mode, which is the remote sandbox talking to its own
+    # container) replaces the local one's 'run_async' rather than extending it.
+    for runtime_class in (runtime_python.PythonRuntime, runtime_python_remote.RemotePythonRuntime):
+        runtime_class.run_async = intercepting(runtime_class.run_async)
 
     ctx = pc.init(".")
     project = ctx.get_project(ctx.get_current_project_path())
@@ -109,7 +115,10 @@ def main():
         )
     )
     if "request" not in captured:
-        print("no sandbox was asked to render it; is %s a file type of this package?" % args.file_type)
+        print(
+            "no sandbox was asked to render it: is %s a file type of this package, and is the picture not already in "
+            "the cache?" % args.file_type
+        )
         return
     print("request: %.1f MB, written to %s.stdin.json" % (captured["request"] / 1e6, base))
     print("peak RSS of this process: %d MB" % (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024))

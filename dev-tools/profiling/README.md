@@ -49,5 +49,5 @@ poetry --project ../partcad run python ../partcad/dev-tools/profiling/capture_re
     /tmp/capture/castle.png.cmd.json /tmp/capture/castle.png.stdin.json --output /tmp/castle.png
 ```
 
-The sandbox's interpreter is the one PartCAD renders with: `pc-py-venv-<version>` for the `venv` sandbox, the conda
-prefix for `conda`. The capture builds whatever the object is made of that is not cached yet.
+The sandbox's interpreter is the one PartCAD renders with: `pc-py-venv-<version>` for the `venv` sandbox -- 3.11
+above, the default, where a package asking for another Python has its own -- and the conda prefix for `conda`. The capture builds whatever the object is made of that is not cached yet.
