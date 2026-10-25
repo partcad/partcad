@@ -25,6 +25,7 @@ import yaml
 
 import partcad as pc
 from partcad import output, sandbox_versions
+from partcad_utils.utils import format_parameterized_name
 
 EXAMPLES = "examples"
 CUSTOM_EXAMPLE = "//feature_export_custom"
@@ -471,6 +472,47 @@ def test_an_instance_is_written_to_a_file_with_nothing_to_quote(name, segments):
     """'bolt;length=10' is written as 'bolt_length_10': no ';' for a shell to split on."""
     assert output.name_to_segments(name, ".step") == segments
     assert output.name_to_path(name, ".step").split(os.sep) == segments
+
+
+@pytest.mark.parametrize(
+    "spellings, segments",
+    [
+        # Every parameter, sorted by name, as the instance's own name is.
+        (["stack;offset=12,angle=90", "stack;angle=90,offset=12"], ["stack_angle_90_offset_12.svg"]),
+        # Every item of a list, whichever way the name holds it: written with
+        # commas, or as the list a reference held ('format_parameterized_name'
+        # writes one as Python prints it).
+        (
+            [
+                "panel;include=BEND_UP,BEND_DOWN",
+                "panel;include=['BEND_UP', 'BEND_DOWN']",
+                "panel;include=('BEND_UP', 'BEND_DOWN')",
+                "panel;include=[['BEND_UP'], 'BEND_DOWN']",
+            ],
+            ["panel_include_BEND_UP_BEND_DOWN.svg"],
+        ),
+        (
+            ["panel;scale=2,include=['BEND_UP', 'BEND_DOWN']", "panel;include=BEND_UP,BEND_DOWN,scale=2"],
+            ["panel_include_BEND_UP_BEND_DOWN_scale_2.svg"],
+        ),
+        (["panel;include=[]"], ["panel_include_.svg"]),
+        # Text that only looks like a list is read as the text it is.
+        (["label;text=(draft)"], ["label_text_draft_.svg"]),
+        (["robot/base;b=1,a=2"], ["robot", "base_a_2_b_1.svg"]),
+    ],
+)
+def test_one_instance_is_one_file_however_its_name_was_written(spellings, segments):
+    """The file name is normalized the way the instance's name is: sorted, every list item."""
+    for name in spellings:
+        assert output.name_to_segments(name, ".svg") == segments, name
+
+
+def test_an_instance_a_reference_built_is_the_file_its_name_would_be():
+    """What 'get_object' names an instance of a list value, its file names the same way."""
+    built = format_parameterized_name("panel", {"scale": 2, "include": ["BEND_UP", "BEND_DOWN"]})
+    assert output.name_to_segments(built, ".svg") == output.name_to_segments(
+        "panel;include=BEND_UP,BEND_DOWN,scale=2", ".svg"
+    )
 
 
 def test_a_document_links_an_instance_at_the_file_its_render_wrote(tmp_path):

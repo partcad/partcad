@@ -161,6 +161,23 @@ def test_each_set_of_layers_renders_to_a_file_of_its_own(tmp_path):
     ]
 
 
+def test_a_reading_asked_for_with_a_list_is_the_file_its_name_would_be(tmp_path):
+    """An ASSY link's 'params: {include: [BEND_UP, BEND_DOWN]}' writes the file 'include=BEND_UP,BEND_DOWN' does.
+
+    The two are named differently in memory -- a list a reference holds is
+    written into the name as Python prints it -- but they are one set of
+    values, and their file is named the way an instance's name is normalized:
+    sorted, every item of the list written out (see 'output.name_to_segments').
+    """
+    ctx = _package(tmp_path, {"panel": {"type": "dxf"}})
+    by_name = ctx.get_sketch("//test:panel;include=BEND_UP,BEND_DOWN")
+    by_list = ctx.get_sketch("//test:panel", {"include": ["BEND_UP", "BEND_DOWN"]})
+
+    assert [_layers(sketch, "include") for sketch in (by_name, by_list)] == [["BEND_UP", "BEND_DOWN"]] * 2
+    paths = [sketch._output_filepath({}, str(tmp_path), ".svg") for sketch in (by_name, by_list)]
+    assert [os.path.basename(path) for path in paths] == ["panel_include_BEND_UP_BEND_DOWN.svg"] * 2
+
+
 def test_a_reference_outranks_the_declared_default(tmp_path):
     """Whoever refers to a sketch is the outer of the two, as everywhere else."""
     ctx = _package(tmp_path, {"bends": {"type": "dxf", "include": ["OUTLINE"]}})

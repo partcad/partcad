@@ -42,11 +42,14 @@ declares only a parameter keeps the built-in implementation and re-tunes it.
 
 from __future__ import annotations
 
+import ast
 import base64
 import copy
 import os
 import re
 from typing import Optional
+
+from partcad_utils.utils import format_parameterized_name, parse_parameterized_name
 
 from . import logging as pc_logging
 from . import sandbox_versions
@@ -285,14 +288,47 @@ def name_to_segments(name: str, suffix: str = "") -> list:
     there, which made a directory of half a value and a file name Windows
     refuses. So the values are written into the file's name with every run of
     characters outside '[A-Za-z0-9_.-]' as one '_' -- 'bolt_length_10',
-    'room_medium_pub_std_materials_air' -- which is how 'pc instructions'
-    already named the book of one, and leaves nothing to quote in a shell.
+    'room_medium_pub_std_materials_air' -- which leaves nothing to quote in a
+    shell.
+
+    And they are written the way an instance's name is normalized for the
+    objects in memory and the cache, so that one instance has one file however
+    it was asked for: every parameter, sorted by name ('format_parameterized_name'),
+    and every item of a list ('_enumerated'). 'stack;offset=12,angle=90' is
+    'stack_angle_90_offset_12', as 'stack;angle=90,offset=12' is; and a list a
+    reference held as a list ('include=['A', 'B']', from an ASSY file's
+    'params:' or the editor) is 'include_A_B', as 'include=A,B' written in a
+    name is.
     """
-    base, separator, values = name.partition(";")
+    base, values = parse_parameterized_name(name)
     *directories, stem = base.split("/")
-    if separator:
-        stem += "_" + _UNSAFE_IN_FILE_NAME.sub("_", values)
+    if values:
+        normalized = format_parameterized_name("", {key: ",".join(_enumerated(value)) for key, value in values.items()})
+        stem += _UNSAFE_IN_FILE_NAME.sub("_", normalized)
     return [*directories, stem + suffix]
+
+
+def _enumerated(value: str) -> list:
+    """Every item of a parameter value, as text: one for a scalar, each of them for a list.
+
+    A name holds a list in one of two spellings. Written by hand, or by
+    'parse_parameterized_name' round-tripping one, its items are separated by
+    commas ('include=A,B'). Written from a value that was a list -- an ASSY
+    link's 'params:', a mapping the editor sent -- it is the list as Python
+    prints one ('include=['A', 'B']'), which 'format_parameterized_name' puts in
+    the name as it is. Both are read here into the same items, nested lists
+    flattened, so that neither leaves brackets and quotes for the file name to
+    turn into stray '_'.
+    """
+    text = str(value).strip()
+    if len(text) >= 2 and text[0] + text[-1] in ("[]", "()"):
+        try:
+            parsed = ast.literal_eval(text)
+        except (ValueError, SyntaxError):
+            parsed = None
+        if isinstance(parsed, (list, tuple)):
+            return [item for element in parsed for item in _enumerated(str(element))] if parsed else []
+    return [item for item in text.split(",") if item.strip()]
 
 
 def is_document_format(format_name: str, section_obj) -> bool:
