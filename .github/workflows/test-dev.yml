@@ -752,10 +752,13 @@ jobs:
       # the tag when it is there and builds it from this commit when it is not,
       # with the script that build runs, on the runner's Docker -- which is the
       # daemon the dev container talks to, so PartCAD finds the image locally.
-      # Only when this run addresses images of its own: the release's tag was
-      # published by the bump before any of this started.
+      # On every run that publishes images ("image-push"): a branch's own tag,
+      # and the release's on the version bump -- that bump is what publishes the
+      # release's tag, in "test.yml", while this job runs, so it is the same race
+      # with "image-override" empty. A run that publishes nothing pulls a tag a
+      # bump published long ago, and PartCAD does that by itself.
       - name: The sandbox base image
-        if: needs.scope.outputs.image-override != ''
+        if: needs.scope.outputs.image-push == 'true'
         uses: ./.github/actions/sandbox-image
         env:
           PC_CONTAINER_IMAGE_TAG: ${{ needs.scope.outputs.image-override }}

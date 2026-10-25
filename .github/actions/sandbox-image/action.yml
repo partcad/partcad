@@ -35,10 +35,10 @@ description: >-
 # - `Examples via bundle` in `build-standalone.yml`, which runs on the version
 #   bump, in a different workflow from the one publishing that release's
 #   images.
-# - `Run: pc` in `test-dev.yml`, on a run that addresses images of its own.
-#   It reaches its tests minutes after the push, while `build-containers` is
-#   still building those images, and its PartCAD fell back to conda without
-#   them.
+# - `Run: pc` in `test-dev.yml`, on a run that publishes images: a branch's
+#   own, or the release's on the version bump. It reaches its tests minutes
+#   after the push, while `build-containers` is still building those images,
+#   and its PartCAD fell back to conda without them.
 #
 # For both, the fallback is the difference between testing what the run is
 # about and failing on an image nothing has pushed yet.
