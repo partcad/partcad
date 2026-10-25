@@ -416,7 +416,10 @@ def _lsof(answers):
     return run, asked
 
 
-def test_on_macos_a_holder_is_what_has_the_writing_end_by_its_handle():
+def test_on_macos_a_holder_is_what_has_the_writing_end_by_its_handle(monkeypatch):
+    # The user the listing is narrowed to, which Windows has no notion of; the
+    # path itself is only taken on macOS, and is checked here everywhere.
+    monkeypatch.setattr(container_service.os, "getuid", lambda: 501, raising=False)
     me = os.getpid()
     run, asked = _lsof(
         {
@@ -438,7 +441,7 @@ def test_on_macos_a_holder_is_what_has_the_writing_end_by_its_handle():
 
     assert container_service._lsof_pipe_holders({5: "", 7: ""}, run=run) == [4242]
     assert asked[0][4:] == ["-a", "-p", str(me), "-d", "5,7", "-F", "fdn"]
-    assert asked[1][4:] == ["-u", str(os.getuid()), "-F", "pfad"]
+    assert asked[1][4:] == ["-u", "501", "-F", "pfad"]
 
 
 def test_on_macos_without_lsof_nothing_is_found():
