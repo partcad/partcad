@@ -234,3 +234,23 @@ def test_a_sample_s_scenario_is_named_after_when_it_was(part_loads):
     assert part_loads.scenario_name("dropped", "3", 0.02) == "dropped-t0.02"
     assert part_loads.scenario_name("dropped", "3", None) == "dropped-3"
     assert part_loads.scenario_name("held in place", "after") == "held-in-place"
+
+
+def test_a_simulation_named_after_a_key_gives_a_scenario_that_is_not(part_loads):
+    """A section holding 'load:' is read as the conditions themselves, so no scenario may be called that."""
+    assert part_loads.scenario_name("load") == "sim-load"
+    assert part_loads.scenario_name("fix", "before") == "fix-before"
+    assert part_loads.scenario_name("loaded") == "loaded"
+
+
+def test_the_reserved_names_are_partcad_s(part_loads):
+    """Spelt out beside the skill, which runs on the standard library alone, and held to 'partcad.cae' here."""
+    from partcad import cae
+
+    assert part_loads.RESERVED_SCENARIO_NAMES == {key for each in cae.ANALYSES for key in cae.section_keys(each)}
+
+
+def test_two_samples_are_never_given_one_name(part_loads):
+    assert part_loads.scenario_name("dropped", "3", 1e-07) != part_loads.scenario_name("dropped", "4", 2e-07)
+    assert part_loads.scenario_name("dropped", "3", 1e-07) == "dropped-t1e-07"
+    assert part_loads.scenario_name("dropped", "3", 1e20) == "dropped-t1e20"

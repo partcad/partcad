@@ -89,6 +89,11 @@ class FakeElement {
         (this.listeners[name] ??= []).push(handler);
     }
 
+    /** Take the focus, as far as 'document.activeElement' says. */
+    public focus(): void {
+        (globalThis as unknown as { document: { activeElement: unknown } }).document.activeElement = this;
+    }
+
     /** Raise an event the way the user would. */
     public fire(name: string, event?: unknown): void {
         (this.listeners[name] ?? []).forEach((handler) => handler(event));
@@ -344,6 +349,27 @@ suite('Digital Thread Analysis tabs', () => {
             ['loaded', undefined],
             ['dropped', undefined],
         ]);
+    });
+
+    test('the row with the focus keeps it when the list is drawn again, and the arrow keys move it', () => {
+        const { root, view } = pane();
+        view.setScenarios(listed());
+        view.start();
+        const active = () => (globalThis as unknown as { document: { activeElement: unknown } }).document.activeElement;
+        const key = (name: string) => ({ key: name, preventDefault: () => undefined });
+
+        rows(root)[0].focus();
+        // A run answering draws every row again: the focus is not left on a row that is gone.
+        view.showRun('loaded', ran('loaded'));
+        assert.strictEqual(active(), rows(root)[0]);
+
+        rows(root)[0].fire('keydown', key('ArrowDown'));
+        assert.strictEqual(view.current, 'dropped');
+        assert.strictEqual(active(), rows(root)[1]);
+
+        // Enter selects the row it is pressed on, which stays focused too.
+        rows(root)[1].fire('keydown', key('Enter'));
+        assert.strictEqual(active(), rows(root)[1]);
     });
 
     test('says how each run went before its name: found nothing, found something, could not run', () => {

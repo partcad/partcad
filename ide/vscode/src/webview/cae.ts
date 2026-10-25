@@ -491,7 +491,11 @@ export class CaeResult implements CaeResultView {
         if (!data.content) {
             // The analysis ran and the model did not come back: the daemon says
             // so in the log, and the findings above are the half that matters.
-            this.model.appendChild(placeholder(`The model was written to ${data.filepath}.`));
+            this.model.appendChild(
+                placeholder(
+                    data.filepath ? `The model was written to ${data.filepath}.` : 'The analysis returned no model.',
+                ),
+            );
             return;
         }
 
@@ -526,7 +530,7 @@ export class CaeResult implements CaeResultView {
         // have been drawn so an implementation author knows what to write.
         this.model.appendChild(
             placeholder(
-                `PartCAD cannot draw a '.${extension}' here. The model is at ${data.filepath}.\n` +
+                `PartCAD cannot draw a '.${extension || 'unknown'}' here. The model is at ${data.filepath || 'an unknown location'}.\n` +
                     `Drawable here: ${[...MESH_TYPES].join(', ')} in 3D, ${Object.keys(IMAGE_TYPES).join(', ')} as a picture.`,
             ),
         );

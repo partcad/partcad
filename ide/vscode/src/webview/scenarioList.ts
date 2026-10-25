@@ -64,6 +64,10 @@ export class ScenarioList {
     /** Draw the rows again, with 'selected' marked as the one on screen. */
     public draw(rows: ScenarioRow[], selected: string | undefined): void {
         this.rows = rows;
+        // Drawing again replaces the rows, and the focus with them: a run
+        // answering, or Enter on a row, would otherwise drop it on the page
+        // and the user would have to Tab back into the list.
+        const focused = this.focusedRow();
         empty(this.items);
         for (const entry of rows) {
             const row = el('div', `build-item ${this.prefix}-item`);
@@ -84,6 +88,9 @@ export class ScenarioList {
             row.addEventListener('keydown', (event: KeyboardEvent) => this.onKey(event, entry.name));
             this.items.appendChild(row);
         }
+        if (focused !== undefined) {
+            this.focusRow(focused);
+        }
     }
 
     /** Enter or Space selects; the arrow keys move through the list, as a listbox's do. */
@@ -103,8 +110,24 @@ export class ScenarioList {
             // Selecting draws the list again, so the row to focus is looked up
             // afterwards rather than kept from before.
             this.onSelect(next.name);
-            (this.items.querySelector(`[data-name="${CSS.escape(next.name)}"]`) as HTMLElement | null)?.focus();
+            this.focusRow(next.name);
         }
+    }
+
+    /** The rows, as drawn. */
+    private get rowElements(): HTMLElement[] {
+        return Array.from(this.items.children) as HTMLElement[];
+    }
+
+    /** The name of the row that has the focus, if one does. */
+    private focusedRow(): string | undefined {
+        const active = typeof document === 'undefined' ? null : document.activeElement;
+        return this.rowElements.find((row) => row === active)?.dataset.name;
+    }
+
+    /** Focus the row of 'name', looked up by what it is drawn for rather than by a selector it would have to escape. */
+    private focusRow(name: string): void {
+        this.rowElements.find((row) => row.dataset.name === name)?.focus?.();
     }
 }
 

@@ -736,8 +736,11 @@ Object commands
   way the analysis warns, naming the port and the area it loaded: the port's frame is still worth correcting.
 
   The model each scenario produces is written to ``<part>.<analysis>.<scenario>.<extension>``
-  (``bracket.fea.loaded.glb``) and saved as it stands. Which format that is — 3D or 2D — is the implementation's
-  choice, and PartCAD does not convert it. The **findings** are the other half of the answer: a JSON array of
+  (``bracket.fea.loaded.glb``, with a ``/`` in the name written ``_``) and saved as it stands. Two scenarios of
+  one section whose models would be one file -- ``arm/held`` and ``arm_held``, or ``Loaded`` and ``loaded``,
+  which are one file wherever a filesystem ignores case -- are refused rather than left to overwrite each
+  other's. Which format the model is — 3D or 2D — is the implementation's choice, and PartCAD does not convert
+  it. The **findings** are the other half of the answer: a JSON array of
   what the analysis has to say about the part, printed as a table under the scenario it is of, or with
   ``--json`` as one array of every scenario's findings, each carrying the ``scenario`` it is of. ``pc cae``
   exits non-zero when there is at least one, or when a scenario did not run -- each says why in the log, and

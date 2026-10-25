@@ -833,6 +833,14 @@ def test_a_section_that_is_not_a_map_of_scenarios_is_refused(section):
         cae.declared("fea", section)
 
 
+@pytest.mark.parametrize("names", [("arm/held", "arm_held"), ("Loaded", "loaded")])
+def test_two_scenarios_that_would_write_one_model_are_refused(names):
+    """Each would overwrite the other's model, and be handed back the other's answer."""
+    first, second = names
+    with pytest.raises(CaeConfigError, match="names the scenarios '%s' and '%s'" % (first, second)):
+        cae.declared("fea", {first: {"fix": ["x"]}, second: {"fix": ["x"]}})
+
+
 def test_a_scenario_name_is_spelt_as_every_other_name_is():
     with pytest.raises(CaeConfigError, match="names a scenario 'a b'"):
         cae.declared("fea", {"a b": {"fix": ["hub"]}})

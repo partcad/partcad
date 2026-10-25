@@ -156,6 +156,27 @@ def simulation_of(document, simulation=None):
     return (runs or [{}])[0].get("simulation")
 
 
+# The keys a scenario of any analysis takes, which no scenario may be named:
+# a section holding one of them is read as the conditions themselves (see
+# 'partcad.cae.declared'). The standard library alone runs this, so they are
+# spelt out here; a test holds them to 'partcad.cae'.
+RESERVED_SCENARIO_NAMES = frozenset(
+    (
+        "desc",
+        "feature",
+        "implementation",
+        "params",
+        "fix",
+        "load",
+        "gravity",
+        "outlet",
+        "temperature",
+        "heat",
+        "convection",
+    )
+)
+
+
 def scenario_name(simulation, which="after", time=None):
     """What to call the FEA scenario a reading's loads become: where they came from.
 
@@ -163,15 +184,18 @@ def scenario_name(simulation, which="after", time=None):
     the reading beside it for any other: '-before', or '-t<seconds>' for a
     sample, which says when without needing the index. A scenario's name is
     letters, digits and '_', '.', '-', '/', so anything else in a simulation's
-    name is spelt '-'.
+    name is spelt '-'; and it is none of 'RESERVED_SCENARIO_NAMES', so a
+    simulation called 'load' gives 'sim-load'. The time is written as exactly
+    as a float says it -- twelve significant figures, with no '+' -- so two
+    samples are never given one name.
     """
     base = re.sub(r"[^a-zA-Z0-9_./-]", "-", simulation or "simulated")
     if which == "after":
-        return base
+        return "sim-" + base if base in RESERVED_SCENARIO_NAMES else base
     if which == "before":
         return base + "-before"
     if time is not None:
-        return "%s-t%s" % (base, ("%.6f" % float(time)).rstrip("0").rstrip("."))
+        return "%s-t%s" % (base, ("%.12g" % float(time)).replace("+", ""))
     return "%s-%s" % (base, which)
 
 

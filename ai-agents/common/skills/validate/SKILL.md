@@ -115,8 +115,11 @@ the same reason -- `pc test`'s `fea`, `dynamic`, `thermal` and `cfd` checks give
 the verdict, and this gives what each scenario found:
 
 ```sh
-pc --no-ansi cae fea <part> --json 2>&1             # every scenario; -f <scenario> for one
+pc --no-ansi cae <analysis> <part> --json 2>&1      # every scenario; -f <scenario> for one
 ```
+
+once for each of `fea`, `dynamic`, `thermal` and `cfd` that the part declares
+(read in §1), and not for one it does not.
 
 A scenario that names a feature is evidence for it: no findings says the
 implementation saw nothing wrong under exactly those conditions, and the log

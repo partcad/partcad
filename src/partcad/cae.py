@@ -975,7 +975,9 @@ def declared(analysis: str, section) -> list:
         CaeConfigError: the section is empty or is not a mapping, or mixes the
             two forms -- a condition beside a named scenario, which is a
             scenario's conditions written one level too high, or a name written
-            one level too low.
+            one level too low -- or names two scenarios whose models would be
+            one file ('arm/held' and 'arm_held'; 'Loaded' and 'loaded', where a
+            filesystem ignores case).
     """
     if analysis not in ANALYSES:
         raise CaeConfigError("Unknown analysis '%s'; PartCAD runs %s" % (analysis, ", ".join(ANALYSES)))
@@ -1010,13 +1012,25 @@ def declared(analysis: str, section) -> list:
         return [Scenario(analysis, LEGACY_SCENARIO, section, legacy=True)]
 
     scenarios = []
+    # Which scenario each model file belongs to, by its name as a filesystem
+    # that ignores case sees it: two scenarios writing one file would each
+    # overwrite the other's model, and be handed back each other's answer.
+    models = {}
     for name, config in section.items():
         if not SCENARIO_NAME.match(str(name)):
             raise CaeConfigError(
                 "'%s:' names a scenario '%s', and a scenario's name is letters, digits and '_', '.', '-', '/'"
                 % (analysis, name)
             )
-        scenarios.append(Scenario(analysis, name, config))
+        scenario = Scenario(analysis, name, config)
+        model = model_suffix(analysis, scenario).lower()
+        if model in models:
+            raise CaeConfigError(
+                "'%s:' names the scenarios '%s' and '%s', whose models would be one file ('<part>%s.<extension>'): "
+                "rename one" % (analysis, models[model], name, model_suffix(analysis, scenario))
+            )
+        models[model] = name
+        scenarios.append(scenario)
     return scenarios
 
 
