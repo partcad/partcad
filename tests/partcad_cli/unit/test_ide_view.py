@@ -116,3 +116,23 @@ def test_the_old_name_takes_the_tab_flags_too(click_runner, shown):
     result = click_runner.invoke(cli, ["--no-ansi", "inspect", "--analysis-fea", ":cube"])
     assert result.exit_code == 0, result.output
     assert shown[0][1]["tab"] == "fea"
+
+
+def test_a_scenario_rides_with_the_tab_that_lists_it(click_runner, shown):
+    result = click_runner.invoke(cli, ["--no-ansi", "ide", "view", "--analysis-fea", "--scenario", "loaded", ":cube"])
+    assert result.exit_code == 0, result.output
+    assert (shown[0][1]["tab"], shown[0][1]["scenario"]) == ("fea", "loaded")
+
+
+def test_no_scenario_sends_no_scenario(click_runner, shown):
+    result = click_runner.invoke(cli, ["--no-ansi", "ide", "view", "--validation-simulation", ":cube"])
+    assert result.exit_code == 0, result.output
+    assert "scenario" not in shown[0][1]
+
+
+@pytest.mark.parametrize("flags", [[], ["--design-3d"]])
+def test_a_scenario_without_a_tab_that_lists_it_is_refused(click_runner, shown, flags):
+    result = click_runner.invoke(cli, ["--no-ansi", "ide", "view", *flags, "--scenario", "loaded", ":cube"])
+    assert result.exit_code != 0
+    assert "--analysis-fea" in result.output and "--validation-simulation" in result.output
+    assert shown == []

@@ -1452,8 +1452,8 @@ class Shape(ShapeConfiguration):
         )
         return await self.convert("build123d", ctx)
 
-    async def show_async(self, ctx=None, tab=None):
-        """Show this shape in the Digital Thread, on its tab 'tab' if one is named."""
+    async def show_async(self, ctx=None, tab=None, scenario=None):
+        """Show this shape in the Digital Thread, on its tab 'tab' if one is named, and that tab's 'scenario'."""
         from . import viewer
 
         # A caller that cannot pass one gets the process-wide context; one that
@@ -1479,10 +1479,12 @@ class Shape(ShapeConfiguration):
                 pc_logging.exception(e)
 
             if tree is not None:
-                await viewer.show(ctx, tree, name=self.name, kind=self.kind, package=self.project_name, tab=tab)
+                await viewer.show(
+                    ctx, tree, name=self.name, kind=self.kind, package=self.project_name, tab=tab, scenario=scenario
+                )
 
-    def show(self, ctx=None, tab=None):
-        asyncio.run(self.show_async(ctx, tab=tab))
+    def show(self, ctx=None, tab=None, scenario=None):
+        asyncio.run(self.show_async(ctx, tab=tab, scenario=scenario))
 
     def shape_info(self, ctx):
         """What 'pc info' reports of any shape, whatever kind or type it is.
@@ -2249,8 +2251,9 @@ class Shape(ShapeConfiguration):
     # ('render:'). It runs through exactly the same machinery - a file type
     # declared in a section, an implementation named by 'path' and 'package',
     # the same sandbox and the same meta-wrapper - and differs in two places
-    # only. What goes in carries the part's boundary conditions ('fea:'/'cfd:',
-    # see 'partcad.cae'), and what comes back carries findings beside the file.
+    # only. What goes in carries the boundary conditions of one of the part's
+    # scenarios ('fea: <name>:', see 'partcad.cae'), and what comes back
+    # carries findings beside the file.
 
     def analysis_getopts(
         self,
@@ -2261,6 +2264,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         options_project=None,
         output_dir=None,
+        scenario=None,
     ):
         """Resolve one analysis: its implementation, options and output path.
 
@@ -2268,8 +2272,10 @@ class Shape(ShapeConfiguration):
         from it in two ways that both follow from an analysis not being a file
         type of the object:
 
-        * The file is named after the analysis as well as the object, because a
-          part has as many results as it has analyses: 'bracket.fea.vtu'.
+        * The file is named after the analysis and the scenario as well as the
+          object, because a part has as many results as it has scenarios of
+          each analysis: 'bracket.fea.loaded.vtu' ('cae.model_suffix'; the
+          unnamed form a section had before scenarios keeps 'bracket.fea.vtu').
         * There is no default extension to fall back on. Which model format an
           analysis writes is the implementation's decision - a 3D field, a 2D
           plot - so the implementation has to state it, and an implementation
@@ -2299,7 +2305,7 @@ class Shape(ShapeConfiguration):
                 "The '%s' implementation does not say what file it writes: it needs an 'extension:'" % format_name
             )
         filepath = self._output_filepath(
-            opts, output_dir, "." + extension, project, filepath, stem_suffix="." + analysis
+            opts, output_dir, "." + extension, project, filepath, stem_suffix=pc_cae.model_suffix(analysis, scenario)
         )
         return impl, filepath
 
@@ -2542,7 +2548,7 @@ class Shape(ShapeConfiguration):
             records = await collect_async(self, ctx, Overlay(ports=True, interfaces=True, internals=True))
         except Exception as e:
             raise pc_cae.CaeConfigError(
-                "Failed to locate the ports the '%s:' section names: %s" % (config.analysis, e)
+                "Failed to locate the ports the '%s:' section names: %s" % (config.label, e)
             ) from e
 
         assigned, unmatched = pc_cae.assign_ports(config, records)
@@ -2554,12 +2560,11 @@ class Shape(ShapeConfiguration):
             # from an interface the object never implements.
             pc_logging.warning(
                 "%s:%s: '%s:' names the interface '%s', but %s"
-                % (self.project_name, self.name, config.analysis, name, reason)
+                % (self.project_name, self.name, config.label, name, reason)
             )
         if not assigned:
             raise pc_cae.CaeConfigError(
-                "'%s:' names no port of this object: none of the interfaces it lists is implemented here"
-                % config.analysis
+                "'%s:' names no port of this object: none of the interfaces it lists is implemented here" % config.label
             )
         return assigned
 
@@ -2571,9 +2576,10 @@ class Shape(ShapeConfiguration):
         project: Optional[Project] = None,
         filepath=None,
         output_dir=None,
+        scenario: Optional[str] = None,
         **kwargs,
     ) -> dict:
-        """Run one CAE analysis on this shape and report what it found.
+        """Run one scenario of one CAE analysis on this shape and report what it found.
 
         Args:
             ctx: Execution context.
@@ -2585,25 +2591,37 @@ class Shape(ShapeConfiguration):
             project: The package the object belongs to, whose 'cae:' section
                 re-tunes the implementation's parameters.
             filepath: The file to write. None resolves it from the
-                configuration and the object's name.
+                configuration, the object's name and the scenario's.
             output_dir: Where the file goes when 'filepath' does not say.
-            kwargs: Analysis parameters, overriding what the configuration says.
+            scenario: Which of the section's scenarios to run, by name: 'pc cae
+                fea -f'. None is the only one it declares, and is refused for a
+                section that declares several -- which one is meant is the
+                caller's to say (see 'partcad.cae.choose').
+            kwargs: Analysis parameters, overriding what the configuration and
+                the scenario's own 'params:' say.
 
         Returns:
             The model file that was written and the findings, as plain data.
 
         Raises:
             partcad.cae.CaeConfigError: the object declares no boundary
-                conditions for this analysis, or declares them wrongly. Both are
-                answers to the user's question rather than failures, and both
-                are reported as the sentence they carry.
+                conditions for this analysis, no scenario of that name, or
+                declares them wrongly. Every one is an answer to the user's
+                question rather than a failure, and each is reported as the
+                sentence it carries.
         """
-        config = pc_cae.config_of(self, analysis)
-        if config is None:
+        what = "%s:%s" % (self.project_name, self.name)
+        scenarios = pc_cae.of_shape(self, analysis)
+        if not scenarios:
             raise pc_cae.CaeConfigError(
-                "%s:%s declares no '%s:' section, so there is nothing to analyse"
-                % (self.project_name, self.name, analysis)
+                "%s declares no '%s:' section, so there is nothing to analyse" % (what, analysis)
             )
+        chosen = pc_cae.choose(scenarios, scenario, what, analysis)
+        config = chosen.conditions()
+        # The scenario's own parameters under the caller's: a scenario that
+        # says 'params: {mesh_size: 0.01}' asks this question on a finer mesh,
+        # and a run that says otherwise is the more specific of the two.
+        kwargs = {**config.params, **kwargs}
 
         if project is None:
             project = ctx.get_project(self.project_name)
@@ -2619,8 +2637,8 @@ class Shape(ShapeConfiguration):
         )
 
         try:
-            return await self._analysis_run_async(
-                ctx, analysis, config, project, options_project, format_name, filepath, output_dir, kwargs
+            result = await self._analysis_run_async(
+                ctx, analysis, chosen, config, project, options_project, format_name, filepath, output_dir, kwargs
             )
         except (pc_cae.CaeConfigError, pc_runtime.SandboxUnavailable):
             # Neither is the implementation failing, and neither gets the
@@ -2637,17 +2655,22 @@ class Shape(ShapeConfiguration):
             # the same thing about the same machine both times.
             raise pc_cae.CaeFailed(
                 pc_cae.dysfunction_report(
-                    "%s:%s" % (self.project_name, self.name),
+                    what,
                     analysis,
                     "%s:%s" % (options_project.name, format_name),
                     e,
+                    scenario=None if chosen.legacy else chosen.name,
                 )
             ) from e
+        result["scenario"] = chosen.name
+        result["desc"] = chosen.desc
+        return result
 
     async def _analysis_run_async(
         self,
         ctx: Context,
         analysis: str,
+        scenario,
         config,
         project: Project,
         options_project: Project,
@@ -2665,7 +2688,7 @@ class Shape(ShapeConfiguration):
         """
         with pc_logging.Action(analysis.upper(), self.project_name, self.name):
             impl, final_filepath = self.analysis_getopts(
-                ctx, analysis, format_name, project, filepath, options_project, output_dir
+                ctx, analysis, format_name, project, filepath, options_project, output_dir, scenario
             )
             final_filepath = os.path.abspath(final_filepath)
             # A load with a direction, or a gravity, asked of an implementation
@@ -2685,7 +2708,9 @@ class Shape(ShapeConfiguration):
             # announces that window for as long as the analysis runs, exactly as
             # it does for an assembly that declares one (see
             # 'partcad_utils.timeouts').
-            window = timeouts.seconds((impl.parameters or {}).get(timeouts.KEY))
+            # A scenario that says it takes longer ('params: {timeout: ...}')
+            # is taken at its word, as one run's parameters are.
+            window = timeouts.seconds({**(impl.parameters or {}), **kwargs}.get(timeouts.KEY))
             with pc_logging.Timeout(window, self.project_name, self.name):
                 # Clearing the path, writing it and reading the answer back are one
                 # operation on one file, and the path is derived from the shape --
@@ -2857,10 +2882,13 @@ class Shape(ShapeConfiguration):
         project: Optional[Project] = None,
         filepath=None,
         output_dir=None,
+        scenario: Optional[str] = None,
         **kwargs,
     ) -> dict:
         """`analyze_async` for a caller that has no event loop of its own."""
-        return asyncio.run(self.analyze_async(ctx, analysis, implementation, project, filepath, output_dir, **kwargs))
+        return asyncio.run(
+            self.analyze_async(ctx, analysis, implementation, project, filepath, output_dir, scenario, **kwargs)
+        )
 
     async def route_async(
         self,

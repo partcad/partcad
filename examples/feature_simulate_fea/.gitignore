@@ -1,12 +1,17 @@
 # What the analysis writes, which is a result and not a checked-in artifact.
 #
-# `pc test` runs the knee gear's `fea:`, and `Shape.analyze_async()` writes the
-# model it produced beside the package -- `knee-gear.fea.glb`. The `Examples
+# `pc test` runs every scenario of the knee gear's `fea:`, and
+# `Shape.analyze_async()` writes the model each produced beside the package --
+# `knee-gear.fea.dropped.glb`. The `Examples
 # (PartCAD)` job then runs `pc render -r` and fails if anything under
 # `examples/` changed; an untracked solver result is such a change. It is not
 # checked in, for the reason `examples/feature_cae/.gitignore` gives: it is
 # whatever the solver and the mesher produced on that machine, at those versions.
 *.fea.glb
+*.fea.*.glb
 *.dynamic.glb
+*.dynamic.*.glb
 *.thermal.glb
+*.thermal.*.glb
 *.cfd.glb
+*.cfd.*.glb

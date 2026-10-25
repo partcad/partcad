@@ -182,6 +182,12 @@ export interface ViewerMessage {
      * absent to stay on the one that is open. See KEY_TAB in the Python module.
      */
     tab?: string | null;
+    /**
+     * On a show with a 'tab' that lists scenarios (the Simulation tab, each
+     * analysis tab): which of them to select, by the name the object declares
+     * it under, or absent for the first. See KEY_SCENARIO in the Python module.
+     */
+    scenario?: string | null;
     /** The object itself, as the root node of its tree. */
     object?: ViewerNode | null;
 }

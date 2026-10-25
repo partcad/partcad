@@ -26,6 +26,14 @@ pc cae thermal :cantilever   # how hot does it get              section 3
 pc cae cfd :pipe             # how does oil flow through it     section 4
 ```
 
+Each analysis section of a part is a map of named **scenarios**, the way
+`simulate:` is a map of simulations: every question of that kind the part is
+asked, each under a name of its own. These parts declare one scenario each --
+`fea: tip-load`, `dynamic: clamped`, `thermal: tip-heated`, `cfd: poiseuille`
+-- because each is the one textbook case below; a part asked more than one
+question declares more than one. `pc cae fea :cantilever` runs every scenario of
+the analysis, and `-f` runs one: `pc cae fea -f tip-load :cantilever`.
+
 | analysis | the part names | also implemented by |
 | --- | --- | --- |
 | `fea` | [`calculix`](https://github.com/partcad/partcad-cae-calculix) | [`elmer`](https://github.com/partcad/partcad-cae-elmer), [`code_aster`](https://github.com/partcad/partcad-cae-code-aster), [`moose`](https://github.com/partcad/partcad-cae-moose) |
@@ -90,7 +98,7 @@ the middle of its end faces, so `fix: [beam-root]` clamps the whole 10 × 10 mm
 root face and `load: {beam-tip: 100 N}` spreads 100 N over the whole tip face —
 with no sketch to declare, because there is nothing to choose.
 
-## 1. Static stress — `cantilever`, `fea:`
+## 1. Static stress — `cantilever`, `fea: tip-load`
 
 A 100 × 10 × 10 mm steel bar, held at one end, pulled down by 100 N at the other.
 
@@ -152,7 +160,7 @@ Readings that would mean something else:
 | ~0.0006 mm too much | `self_weight` crept back on |
 | a finding that the port covers no surface | the port's frame is not on a face — `pc render -t svg --with-ports cantilever` |
 
-## 2. Natural frequencies — `cantilever`, `dynamic:`
+## 2. Natural frequencies — `cantilever`, `dynamic: clamped`
 
 The same bar, clamped at the root and left to ring. `dynamic:` takes `fix:` alone:
 a natural frequency is a property of the part and how it is held, not of what it
@@ -186,7 +194,7 @@ With `min_frequency` set in a package's `cae: dynamic:` section, a first
 frequency under it is a finding: the part would ring with whatever drives it
 there.
 
-## 3. Heat transfer — `cantilever`, `thermal:`
+## 3. Heat transfer — `cantilever`, `thermal: tip-heated`
 
 The same bar, its root held at 20 °C and 1 W put in through its tip face; every
 other surface insulated. Steel conducts at `k` = 50 W/(m·K).
@@ -205,7 +213,7 @@ without error, and the heat input is spread over exactly the tip face's area.
 With `max_temperature` set in a package's `cae: thermal:` section, a part hotter
 than that anywhere is a finding.
 
-## 4. Pipe flow — `pipe`, `cfd:`
+## 4. Pipe flow — `pipe`, `cfd: poiseuille`
 
 The **bore** of a 10 mm × 100 mm pipe (the fluid, not the tube), driven by 5 mN
 at the inlet and leaving at the outlet; every other surface is the wall, held
@@ -262,13 +270,16 @@ driven here, and why the pipe names OpenFOAM.
 ## Running them
 
 ```shell
-# the implementation the part names
+# the implementation each scenario names
 pc cae fea :cantilever
 pc cae dynamic :cantilever
 pc cae thermal :cantilever
 pc cae cfd :pipe
 
-# a particular implementation, this run only (outranks the part's own)
+# one scenario, by name
+pc cae fea -f tip-load :cantilever
+
+# a particular implementation, this run only (outranks the scenario's own)
 pc cae fea -i //pub/feature/cae/elmer:fea :cantilever
 pc cae cfd -i //pub/feature/cae/moose:cfd :pipe
 
@@ -289,10 +300,12 @@ act on — so a clean run prints `[]` rather than the numbers:
 pc --no-ansi cae fea --json :cantilever   # [] when the part is fine
 ```
 
-The model itself is written beside the package as `cantilever.fea.glb`,
-`cantilever.dynamic.glb`, `cantilever.thermal.glb` and `pipe.cfd.glb`, and the
-Digital Thread's FEA, Dynamic FEA, Heat Transfer and CFD tabs show the same thing
-with the findings under it.
+The model itself is written beside the package, one per scenario, as
+`cantilever.fea.tip-load.glb`, `cantilever.dynamic.clamped.glb`,
+`cantilever.thermal.tip-heated.glb` and `pipe.cfd.poiseuille.glb`, and the
+Digital Thread's FEA, Dynamic FEA, Heat Transfer and CFD tabs list each
+analysis's scenarios and show the same thing for the one selected, with the
+findings under it (`pc ide view --analysis-fea --scenario tip-load :cantilever`).
 
 ### Two things that will waste your time
 

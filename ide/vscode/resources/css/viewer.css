@@ -146,6 +146,102 @@ body {
     max-width: 50%;
 }
 
+/*
+ * The field a tab names a package in - "Drawn by", "Simulated by", "Analysed
+ * by" - which is a combo box: a text field, an arrow, and the quick choices
+ * under them, drawn in the editor's dropdown colours. See 'packagePicker.ts'.
+ */
+.package-picker {
+    position: relative;
+    display: inline-flex;
+    align-items: stretch;
+    max-width: 60%;
+}
+
+.package-picker-input.render-plugin {
+    width: 26em;
+    max-width: none;
+    min-width: 0;
+    flex: 1 1 auto;
+    border-right: none;
+    border-radius: 2px 0 0 2px;
+    font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.package-picker-toggle {
+    flex: 0 0 auto;
+    padding: 0 0.45em;
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border, transparent));
+    border-left: none;
+    border-radius: 0 2px 2px 0;
+    background: var(--vscode-dropdown-background);
+    color: var(--vscode-dropdown-foreground);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.package-picker-toggle:disabled,
+.package-picker-input:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.package-picker-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 20;
+    /* As wide as the field, and wider when a name and its note need it. */
+    min-width: 100%;
+    width: max-content;
+    max-width: 48em;
+    max-height: 14em;
+    margin-top: 1px;
+    overflow-y: auto;
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-focusBorder));
+    border-radius: 2px;
+    background: var(--vscode-dropdown-listBackground, var(--vscode-dropdown-background));
+    color: var(--vscode-dropdown-foreground);
+    box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+}
+
+.package-picker-option {
+    display: flex;
+    justify-content: space-between;
+    gap: 1em;
+    padding: 0.2em 0.5em;
+    font-family: var(--vscode-editor-font-family, monospace);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.package-picker-option:hover,
+.package-picker-option.active {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.package-picker-option.current {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.package-picker-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.package-picker-note {
+    flex: 0 0 auto;
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-font-family, sans-serif);
+    font-style: italic;
+}
+
+.package-picker-option.current .package-picker-note {
+    color: inherit;
+}
+
 .render-select:focus-visible,
 .render-save:focus-visible {
     outline: 1px solid var(--vscode-focusBorder);
@@ -578,7 +674,6 @@ table.grid .numeric {
     white-space: pre-wrap;
 }
 
-
 .requirements .banner {
     display: inline-block;
     margin: 0 0.35em 0.2em 0;
@@ -588,6 +683,14 @@ table.grid .numeric {
     color: var(--vscode-badge-foreground);
     font-size: 0.85em;
     cursor: default;
+}
+
+/* An analysis scenario that demonstrates a feature: a badge like a simulation's,
+   in a colour of its own, so that what was simulated and what was analysed are
+   told apart at a glance down the column. */
+.requirements .banner.analysis {
+    background: var(--vscode-charts-blue, var(--vscode-badge-background));
+    color: var(--vscode-button-foreground, var(--vscode-badge-foreground));
 }
 
 .requirements .banner.llm {
@@ -979,61 +1082,21 @@ a {
 /*
  * The analysis panes: FEA, Dynamic FEA, Heat Transfer and CFD.
  *
- * Three bands, and the middle one takes what is left. Which solver ran is on
- * top, centred, because it is the one thing about an analysis a user changes
- * without editing a file; the findings are the bottom fifth, and are not there
- * at all when the analysis found nothing - a pass should hand the model the
- * whole pane rather than a strip of white space saying "none".
+ * The Simulation tab's layout: the part's scenarios down the left, in the Build
+ * tab's list (see below, where the Simulation tab's is too), and the selected
+ * one beside it under the Simulation tab's toolbar - the Draft tab's
+ * '.render-header', with nothing of its own - and what the scenario says it is.
+ * Under those, the model takes what is left, and the findings the bottom fifth;
+ * they are not there at all when the analysis found nothing - a pass should
+ * hand the model the whole pane rather than a strip of white space saying
+ * "none".
  */
-.pane.cae {
+.cae-main {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
+    min-width: 0;
     overflow: hidden;
-}
-
-.cae-header {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0.4rem 1rem;
-    border-bottom: 1px solid var(--vscode-panel-border, transparent);
-}
-
-.cae-header-label {
-    color: var(--vscode-descriptionForeground);
-}
-
-.cae-implementation {
-    width: min(32rem, 60%);
-    padding: 0.25em 0.5em;
-    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, transparent));
-    border-radius: 2px;
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    font-family: var(--vscode-editor-font-family, monospace);
-    font-size: inherit;
-}
-
-.cae-implementation:focus-visible {
-    outline: 1px solid var(--vscode-focusBorder);
-    outline-offset: -1px;
-}
-
-.cae-run {
-    padding: 0.25em 0.9em;
-    border: none;
-    border-radius: 2px;
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
-    font-family: inherit;
-    font-size: inherit;
-    cursor: pointer;
-}
-
-.cae-run:hover {
-    background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
 }
 
 .cae-body {
@@ -1307,19 +1370,21 @@ input.switch:focus-visible {
 
 /*
  * Build: the list of steps on the left, the selected one on the right. The
- * Simulation tab is the same pane over a different list -- the simulations an
- * object declares -- so it shares these rules rather than having a look of its
- * own.
+ * Simulation tab and the Analysis tabs are the same pane over different lists --
+ * the simulations an object declares, the scenarios a part declares for an
+ * analysis -- so they share these rules rather than having a look of their own.
  */
 
 .pane.build,
-.pane.simulation {
+.pane.simulation,
+.pane.cae {
     display: flex;
     overflow: hidden;
 }
 
 .build-list,
-.simulation-list {
+.simulation-list,
+.cae-list {
     display: flex;
     flex: 0 0 18rem;
     flex-direction: column;
@@ -1329,7 +1394,8 @@ input.switch:focus-visible {
 }
 
 .build-tree,
-.simulation-items {
+.simulation-items,
+.cae-items {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
@@ -1406,13 +1472,22 @@ input.switch:focus-visible {
 
 .simulation-main {
     position: relative;
+    display: flex;
     flex: 1 1 auto;
+    flex-direction: column;
     min-width: 0;
     overflow: hidden;
 }
 
-.simulation-main > .placeholder,
-.simulation-main > .error {
+/* What the toolbar is over, which is what is drawn again when an answer arrives. */
+.simulation-content {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.simulation-content > .placeholder,
+.simulation-content > .error {
     padding: 1rem;
 }
 
@@ -1425,7 +1500,8 @@ input.switch:focus-visible {
 
 /* The toolbar is the Draft tab's ('.render-header'), with nothing of its own. */
 
-.simulation-desc {
+.simulation-desc,
+.cae-desc {
     flex: 0 0 auto;
     margin: 0 0 0.5rem;
     color: var(--vscode-descriptionForeground);
@@ -1445,29 +1521,35 @@ input.switch:focus-visible {
     padding: 0 0 0.5rem;
 }
 
-/* The verdict, before a simulation's name in the list: a symbol in its colour,
-   in a slot of one width whether or not there is one yet, so the names line
-   up. Coloured on a selected row too: the colour is what it says. */
-.simulation-mark {
+/* The verdict, before a simulation's or an analysis scenario's name in the
+   list: a symbol in its colour, in a slot of one width whether or not there is
+   one yet, so the names line up. Coloured on a selected row too: the colour is
+   what it says. */
+.simulation-mark,
+.cae-mark {
     flex: 0 0 1em;
     font-weight: 600;
     text-align: center;
 }
 
-.simulation-passed {
+.simulation-passed,
+.cae-passed {
     color: var(--vscode-testing-iconPassed, var(--vscode-charts-green, currentColor));
 }
 
-.simulation-failed {
+.simulation-failed,
+.cae-failed {
     color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground, currentColor));
 }
 
-.simulation-error {
+.simulation-error,
+.cae-error {
     color: var(--vscode-errorForeground, currentColor);
 }
 
 .simulation-running,
-.simulation-ran {
+.simulation-ran,
+.cae-running {
     color: var(--vscode-descriptionForeground);
 }
 

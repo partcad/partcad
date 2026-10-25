@@ -23,30 +23,58 @@ The boundary conditions are not part of that configuration. They belong to the
 part, because they are a property of the part rather than of whoever analyses it:
 a bracket is bolted down at the same holes and carries the same load whichever
 solver is asked about it. So a part declares them in a section named after the
-analysis::
+analysis -- and, since a part is asked more than one question of each kind (a
+shelf bracket loaded, and the same bracket dropped on its side), the section is
+a map of **scenarios**, each under a name of its own, exactly as `simulate:` is a
+map of simulations::
 
     parts:
       bracket:
         type: build123d
         path: bracket.py
         fea:
-          fix:
-            - m3-screw           # every instance of this interface is held
-          load:
-            mount-point: 5 kg    # every instance carries this
-            hook:
-              left: 30 N         # one named instance carries this
-              right: 30 N
+          loaded:
+            desc: A full shelf on it
+            feature: carries-a-shelf # the requirement it demonstrates
+            fix:
+              - m3-screw           # every instance of this interface is held
+            load:
+              mount-point: 5 kg    # every instance carries this
+              hook:
+                left: 30 N         # one named instance carries this
+                right: 30 N
+          on-its-side:
+            fix:
+              - m3-screw
+            load:
+              hook: [0 N, 30 N, 0 N]
         dynamic:
-          fix:
-            - m3-screw           # held where it is bolted down, and left to ring
+          bolted-down:
+            fix:
+              - m3-screw           # held where it is bolted down, and left to ring
         thermal:
-          temperature:
-            heatsink: 40 C       # held at a temperature
-          heat:
-            chip: 5 W            # heat put in through the port's surface
-          convection:
-            fins: 10             # cooled by the air around it, in W/(m^2*K)
+          in-use:
+            temperature:
+              heatsink: 40 C       # held at a temperature
+            heat:
+              chip: 5 W            # heat put in through the port's surface
+            convection:
+              fins: 10             # cooled by the air around it, in W/(m^2*K)
+
+The name is not ceremony, for the reason `simulate:` gives for its own: it is
+what `pc cae fea -f` selects, what a report prints beside the findings, what
+names the model file a run writes (`bracket.fea.loaded.glb`), and what the IDE
+lists on the analysis's tab. Beside the conditions a scenario may say what it is
+(`desc:`), which feature of the part's `requirements:` it demonstrates
+(`feature:`, a name or a list, read by `partcad.requirements` and by nothing that
+runs it), who runs it (`implementation:`) and what the implementation is told
+beyond its configuration (`params:`). A scenario cannot be named after any of
+those keys, nor after a key any analysis reads, and the reason is the one form
+there was before scenarios: a section holding the conditions themselves --
+`fea: {fix: [...], load: {...}}` -- is still read, as one scenario named
+`LEGACY_SCENARIO`, whose model keeps the name it always had
+(`bracket.fea.glb`). It is deprecated, and says so once, so that the packages
+written in it keep working while they move their conditions under a name.
 
 Every key names interfaces the part implements, in one of two shapes. A *set*
 (`fix:`, `outlet:`) is a list of interface types, or a map from an interface type
@@ -173,7 +201,7 @@ _NUMBER = re.compile(r"^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$")
 
 
 class CaeConfigError(ValueError):
-    """A `fea:`/`cfd:` section that cannot be made sense of.
+    """A `fea:`/`cfd:` section, or one scenario of it, that cannot be made sense of.
 
     Carried rather than logged, because every caller has a different place to put
     it: `pc cae` prints it, `pc test` fails the part with it, and the IDE's FEA
@@ -541,9 +569,49 @@ SECTION_KEYS = {
 # than answered as if it had not (see 'unread_by').
 READS = ("force", "gravity")
 
+# The keys of a scenario that are about the scenario rather than where anything
+# lands on the part: what it is, which requirement feature it demonstrates (see
+# 'partcad.requirements'), who runs it, and the parameters its implementation is
+# handed beyond its configuration -- a finer mesh for this question alone, say.
+DESC = "desc"
+FEATURE = "feature"
+IMPLEMENTATION = "implementation"
+PARAMS = "params"
+SCENARIO_KEYS = (DESC, FEATURE, IMPLEMENTATION, PARAMS)
+
+# The name a section written the way it was before scenarios -- the conditions
+# themselves, with no name over them -- is read under. What '-f' selects it by,
+# and what a report calls it; its model keeps the file name it always had (see
+# 'model_suffix').
+LEGACY_SCENARIO = "default"
+
+# What a scenario's name may be: the names 'simulate:' takes, which is what
+# every other named section of 'partcad.yaml' takes too.
+SCENARIO_NAME = re.compile(r"^[a-zA-Z0-9_/.-]+$")
+
+
+def section_keys(analysis: str) -> list:
+    """Every key one scenario of 'analysis' takes, in the order an error lists them."""
+    return [role.key for role in ROLES[analysis]] + list(SECTION_KEYS.get(analysis, {})) + list(SCENARIO_KEYS)
+
+
+def declared_features(value) -> list:
+    """The feature names a scenario's ``feature:`` gives, as a list.
+
+    One name or several; anything else names none -- the reading
+    'simulation.declared_features' gives a simulation's, for the same reason:
+    whether each is a feature the part's requirements declare is
+    'partcad.requirements' to say, since that is where the features are.
+    """
+    if isinstance(value, str):
+        return [value] if value else []
+    if isinstance(value, list):
+        return [str(item) for item in value if isinstance(item, str) and item]
+    return []
+
 
 class AnalysisConfig:
-    """The boundary conditions one part declares for one analysis.
+    """The boundary conditions one scenario of one analysis declares for a part.
 
     Every member is keyed by the interface type as the part spelled it -- short
     or fully qualified, exactly as `implements:` and `connect:` spell it -- and
@@ -551,6 +619,12 @@ class AnalysisConfig:
 
     Attributes:
         analysis: one of `ANALYSES`.
+        name: the scenario's name, or None for a section read on its own (the
+            form a section had before scenarios, and what a test hands this).
+        label: what an error calls the section: `fea` alone, or `fea: loaded`
+            for the scenario `loaded` of it, so that "'fea: loaded:' declares
+            neither 'fix:' nor 'load:'" says which of a part's scenarios is
+            wrong.
         conditions: key -> interface type -> the instances (a set) or
             instance -> value (a value), for every key `ROLES` gives this
             analysis, whether or not the part used it. The instance `"*"` is
@@ -568,8 +642,8 @@ class AnalysisConfig:
             pointing `caeFeaImplementation` at the right place.
     """
 
-    def __init__(self, analysis: str, config: Optional[dict]) -> None:
-        """Read one analysis section, converting every value to its stored unit.
+    def __init__(self, analysis: str, config: Optional[dict], name: Optional[str] = None) -> None:
+        """Read one scenario, converting every value to its stored unit.
 
         Raises:
             CaeConfigError: the section is absent, is not a mapping, names a key
@@ -581,6 +655,8 @@ class AnalysisConfig:
         if analysis not in ROLES:
             raise CaeConfigError("Unknown analysis '%s'; PartCAD runs %s" % (analysis, ", ".join(ANALYSES)))
         self.analysis = analysis
+        self.name = name
+        self.label = analysis if name is None else "%s: %s" % (analysis, name)
         self.roles = ROLES[analysis]
         self.conditions: dict[str, dict] = {role.key: {} for role in self.roles}
         self.implementation: Optional[str] = None
@@ -589,27 +665,41 @@ class AnalysisConfig:
         # that states one. Absent when it states none.
         self.section_keys = SECTION_KEYS.get(analysis, {})
         self.settings: dict = {}
+        self.desc: Optional[str] = None
+        self.features: list = []
+        # Parameters handed to the implementation for this scenario, over what
+        # its configuration says -- and under what a caller passes for one run.
+        self.params: dict = {}
 
+        label = self.label
         if config is None:
-            raise CaeConfigError("'%s:' is empty" % analysis)
+            raise CaeConfigError("'%s:' is empty" % label)
         if not isinstance(config, dict):
-            raise CaeConfigError("'%s:' is not a section: %r" % (analysis, config))
+            raise CaeConfigError("'%s:' is not a section: %r" % (label, config))
 
         # A key another analysis reads is refused here as firmly as a misspelt
         # one. `outlet:` on a stress analysis, or `fix:` on a heat one, would
         # read as a boundary condition and not be one.
-        keys = [role.key for role in self.roles] + list(self.section_keys) + ["desc", "implementation"]
+        keys = section_keys(analysis)
         unknown = [key for key in config if key not in keys]
         if unknown:
             raise CaeConfigError(
-                "'%s:' does not take %s; it takes %s and 'implementation:'"
+                "'%s:' does not take %s; it takes %s, and %s"
                 % (
-                    analysis,
-                    ", ".join(sorted(unknown)),
+                    label,
+                    ", ".join(sorted(str(key) for key in unknown)),
                     ", ".join("'%s:'" % key for key in [role.key for role in self.roles] + list(self.section_keys)),
+                    ", ".join("'%s:'" % key for key in SCENARIO_KEYS),
                 )
             )
 
+        desc = config.get(DESC)
+        self.desc = None if desc is None else str(desc)
+        self.features = declared_features(config.get(FEATURE))
+        params = config.get(PARAMS)
+        if params is not None and not isinstance(params, dict):
+            raise CaeConfigError("'%s: params:' is not a map of parameter names to values: %r" % (label, params))
+        self.params = dict(params or {})
         self._parse_implementation(config.get("implementation"))
         for role in self.roles:
             if role.is_set:
@@ -618,15 +708,15 @@ class AnalysisConfig:
                 self._parse_values(role, config.get(role.key))
         for key, parse in self.section_keys.items():
             if config.get(key) is not None:
-                self.settings[key] = parse(config[key], "'%s: %s:'" % (analysis, key))
+                self.settings[key] = parse(config[key], "'%s: %s:'" % (label, key))
 
         if not any(self.conditions.values()):
             if analysis in (FEA, CFD):
                 # The sentence these two always said, and that their tests and
                 # the IDE's tab still look for.
-                raise CaeConfigError("'%s:' declares neither 'fix:' nor 'load:'" % analysis)
+                raise CaeConfigError("'%s:' declares neither 'fix:' nor 'load:'" % label)
             raise CaeConfigError(
-                "'%s:' declares none of %s" % (analysis, ", ".join("'%s:'" % role.key for role in self.roles))
+                "'%s:' declares none of %s" % (label, ", ".join("'%s:'" % role.key for role in self.roles))
             )
 
     @property
@@ -676,7 +766,7 @@ class AnalysisConfig:
             return
         if not isinstance(implementation, str) or not implementation.strip():
             raise CaeConfigError(
-                "'%s: implementation:' is not a '<package>:<file type>' name: %r" % (self.analysis, implementation)
+                "'%s: implementation:' is not a '<package>:<file type>' name: %r" % (self.label, implementation)
             )
         self.implementation = implementation.strip()
 
@@ -697,6 +787,8 @@ class AnalysisConfig:
         """
         if value is None:
             return
+        # What an error calls the key: 'fea: loaded: fix', the scenario's own.
+        key = "%s: %s" % (self.label, role.key)
         found = self.conditions[role.key]
         if isinstance(value, str):
             # One interface type, held whole. The degenerate case of the list.
@@ -705,14 +797,14 @@ class AnalysisConfig:
         if isinstance(value, list):
             for entry in value:
                 if not isinstance(entry, str):
-                    raise CaeConfigError("'%s:' names an interface that is not a name: %r" % (role.key, entry))
+                    raise CaeConfigError("'%s:' names an interface that is not a name: %r" % (key, entry))
                 found[entry] = [EVERY_INSTANCE]
             return
         if isinstance(value, dict):
             for interface, instances in value.items():
-                found[interface] = _instance_names(instances, "'%s: %s:'" % (role.key, interface))
+                found[interface] = _instance_names(instances, "'%s: %s:'" % (key, interface))
             return
-        raise CaeConfigError("'%s:' is neither a list of interfaces nor a map of them: %r" % (role.key, value))
+        raise CaeConfigError("'%s:' is neither a list of interfaces nor a map of them: %r" % (key, value))
 
     def _parse_values(self, role: Role, value) -> None:
         """Read a value -- `load:`, `temperature:` -- converting each to its stored unit.
@@ -724,20 +816,21 @@ class AnalysisConfig:
         """
         if value is None:
             return
+        key = "%s: %s" % (self.label, role.key)
         if not isinstance(value, dict):
-            raise CaeConfigError("'%s:' is not a map of interfaces to values: %r" % (role.key, value))
+            raise CaeConfigError("'%s:' is not a map of interfaces to values: %r" % (key, value))
         found = self.conditions[role.key]
         for interface, amount in value.items():
             if isinstance(amount, dict):
                 # The nested form: one value per named instance.
                 if not amount:
-                    raise CaeConfigError("'%s: %s:' names no instance" % (role.key, interface))
+                    raise CaeConfigError("'%s: %s:' names no instance" % (key, interface))
                 found[interface] = {
-                    instance: role.parse(each, "'%s: %s: %s:'" % (role.key, interface, instance))
+                    instance: role.parse(each, "'%s: %s: %s:'" % (key, interface, instance))
                     for instance, each in amount.items()
                 }
             else:
-                found[interface] = {EVERY_INSTANCE: role.parse(amount, "'%s: %s:'" % (role.key, interface))}
+                found[interface] = {EVERY_INSTANCE: role.parse(amount, "'%s: %s:'" % (key, interface))}
 
     @property
     def interfaces(self) -> list[str]:
@@ -793,26 +886,241 @@ class AnalysisConfig:
     def __repr__(self) -> str:
         """The parsed conditions, with every value in the unit it became."""
         return "AnalysisConfig(%r, %s)" % (
-            self.analysis,
+            self.label,
             ", ".join("%s=%r" % (role.key, self.conditions[role.key]) for role in self.roles),
         )
 
 
-def config_of(shape, analysis: str) -> Optional[AnalysisConfig]:
-    """The boundary conditions a shape declares for an analysis, or None.
+class Scenario:
+    """One named entry of a part's analysis section, before its conditions are read.
 
-    None means the shape said nothing at all, which is the ordinary case and not
-    an error: most parts are never analysed. A shape that declared the section
-    but got it wrong raises `CaeConfigError`, because that is a mistake the user
-    wants to hear about.
+    What a listing needs -- the name, what it is, the requirement features it
+    demonstrates, who it names to run it -- is read here and never raises, so
+    that a part one of whose scenarios is malformed still lists all of them and
+    the IDE can offer each. The conditions are read by `conditions()`, which
+    does raise: a malformed scenario is a mistake its own run reports, and the
+    others are run regardless (see `partcad.test.cae`).
+
+    Attributes:
+        analysis: one of `ANALYSES`.
+        name: the scenario's name -- `LEGACY_SCENARIO` for a section written as
+            one unnamed set of conditions.
+        legacy: whether it is that unnamed set.
+        config: what the part wrote under the name, as written.
+        desc, features, implementation, params: the keys of `SCENARIO_KEYS`,
+            as far as they can be read without failing.
+    """
+
+    def __init__(self, analysis: str, name: str, config, legacy: bool = False) -> None:
+        """Hold one entry; see the class docstring for the fields."""
+        self.analysis = analysis
+        self.name = str(name)
+        self.legacy = legacy
+        self.config = config
+        raw = config if isinstance(config, dict) else {}
+        desc = raw.get(DESC)
+        self.desc = None if desc is None else str(desc)
+        self.features = declared_features(raw.get(FEATURE))
+        implementation = raw.get(IMPLEMENTATION)
+        self.implementation = (
+            implementation.strip() if isinstance(implementation, str) and implementation.strip() else None
+        )
+        self.params = dict(raw.get(PARAMS)) if isinstance(raw.get(PARAMS), dict) else {}
+
+    @property
+    def label(self) -> str:
+        """What an error calls it: `fea: loaded`, or `fea` for the unnamed form."""
+        return self.analysis if self.legacy else "%s: %s" % (self.analysis, self.name)
+
+    @property
+    def title(self) -> str:
+        """What a report heads it with: `FEA 'loaded'`, or `FEA` for the unnamed form."""
+        return self.analysis.upper() if self.legacy else "%s '%s'" % (self.analysis.upper(), self.name)
+
+    def conditions(self) -> AnalysisConfig:
+        """The boundary conditions it declares, in their stored units.
+
+        Raises:
+            CaeConfigError: they cannot be made sense of; the sentence names the
+                scenario.
+        """
+        return AnalysisConfig(self.analysis, self.config, name=None if self.legacy else self.name)
+
+    def to_dict(self) -> dict:
+        """What a listing says about it: 'cae.list', which the IDE's analysis tabs are drawn from."""
+        return {
+            "name": self.name,
+            "desc": self.desc,
+            "implementation": self.implementation,
+            "features": list(self.features),
+            "legacy": self.legacy,
+        }
+
+    def __repr__(self) -> str:
+        return "<%s scenario %s>" % (self.analysis, self.name)
+
+
+def declared(analysis: str, section) -> list:
+    """The scenarios one analysis section declares, in the order it declares them.
+
+    A mapping of names to scenarios, which is what 'simulate:' is and what every
+    other named section of 'partcad.yaml' is. A section whose keys are the
+    conditions themselves -- 'fix:', 'load:', and the rest of 'section_keys' --
+    is the form a section had before it had scenarios, and is read as one,
+    named `LEGACY_SCENARIO`; telling the two apart is unambiguous because a
+    scenario may not be named after a key a scenario of any analysis takes. That form is
+    deprecated, and said to be once per object (see 'of_shape').
+
+    Raises:
+        CaeConfigError: the section is empty or is not a mapping, or mixes the
+            two forms -- a condition beside a named scenario, which is a
+            scenario's conditions written one level too high, or a name written
+            one level too low -- or names two scenarios whose models would be
+            one file ('arm/held' and 'arm_held'; 'Loaded' and 'loaded', where a
+            filesystem ignores case).
+    """
+    if analysis not in ANALYSES:
+        raise CaeConfigError("Unknown analysis '%s'; PartCAD runs %s" % (analysis, ", ".join(ANALYSES)))
+    if section is None:
+        raise CaeConfigError("'%s:' is empty" % analysis)
+    if not isinstance(section, dict):
+        raise CaeConfigError(
+            "'%s:' is not a map of scenario names to their boundary conditions: %r" % (analysis, section)
+        )
+    if not section:
+        raise CaeConfigError("'%s:' declares no scenario" % analysis)
+
+    # Every key any analysis's scenario takes, not only this one's: 'outlet:'
+    # under 'fea:' is a condition in the wrong analysis, which the unnamed form
+    # refuses as such, and not a scenario that happens to be called 'outlet'.
+    keys = {key for each in ANALYSES for key in section_keys(each)}
+    conditions = [key for key in section if key in keys]
+    if conditions:
+        names = [key for key in section if key not in keys]
+        if names:
+            raise CaeConfigError(
+                "'%s:' mixes boundary conditions (%s) with scenarios (%s): every scenario goes under a name of "
+                "its own, as '%s: {<name>: {%s: ...}}'"
+                % (
+                    analysis,
+                    ", ".join("'%s:'" % key for key in conditions),
+                    ", ".join(str(name) for name in names),
+                    analysis,
+                    conditions[0],
+                )
+            )
+        return [Scenario(analysis, LEGACY_SCENARIO, section, legacy=True)]
+
+    scenarios = []
+    # Which scenario each model file belongs to, by its name as a filesystem
+    # that ignores case sees it: two scenarios writing one file would each
+    # overwrite the other's model, and be handed back each other's answer.
+    models = {}
+    for name, config in section.items():
+        if not SCENARIO_NAME.match(str(name)):
+            raise CaeConfigError(
+                "'%s:' names a scenario '%s', and a scenario's name is letters, digits and '_', '.', '-', '/'"
+                % (analysis, name)
+            )
+        scenario = Scenario(analysis, name, config)
+        model = model_suffix(analysis, scenario).lower()
+        if model in models:
+            raise CaeConfigError(
+                "'%s:' names the scenarios '%s' and '%s', whose models would be one file ('<part>%s.<extension>'): "
+                "rename one" % (analysis, models[model], name, model_suffix(analysis, scenario))
+            )
+        models[model] = name
+        scenarios.append(scenario)
+    return scenarios
+
+
+# The objects whose unnamed section has been said to be deprecated, by
+# (object, analysis): once a process, rather than on every listing, test and
+# run that reads it.
+_warned_legacy: set = set()
+
+
+def of_shape(shape, analysis: str) -> list:
+    """The scenarios a shape declares for an analysis: none when it declares no section.
+
+    No section is the ordinary case and not an error -- most parts are never
+    analysed. A section that is there but cannot be read raises
+    `CaeConfigError`, because that is a mistake the user wants to hear about.
+    Read through 'get_final_config()' where the shape has one, so that an alias
+    answers for what it restates.
     """
     if analysis not in ANALYSES:
         raise CaeConfigError("Unknown analysis '%s'; PartCAD runs %s" % (analysis, ", ".join(ANALYSES)))
     get_final_config = getattr(shape, "get_final_config", None)
     config = get_final_config() if callable(get_final_config) else getattr(shape, "config", None)
     if not isinstance(config, dict) or analysis not in config:
+        return []
+    where = "%s:%s" % (getattr(shape, "project_name", ""), getattr(shape, "name", ""))
+    scenarios = declared(analysis, config[analysis])
+    if scenarios and scenarios[0].legacy and (where, analysis) not in _warned_legacy:
+        _warned_legacy.add((where, analysis))
+        from . import logging as pc_logging
+
+        pc_logging.warning(
+            "%s: '%s:' is one unnamed set of boundary conditions, which is deprecated: put it under a name of "
+            "its own, as '%s: {<name>: {...}}'. Until then it is the scenario '%s'"
+            % (where, analysis, analysis, LEGACY_SCENARIO)
+        )
+    return scenarios
+
+
+def choose(scenarios: list, name: Optional[str], what: str, analysis: str) -> Scenario:
+    """The one scenario to run: the one named, or the only one there is.
+
+    Raises:
+        CaeConfigError: 'name' names none of them, or none was named and there
+            is more than one -- which one is meant is the caller's to say, and
+            saying it is '-f'.
+    """
+    if name is not None:
+        for scenario in scenarios:
+            if scenario.name == name:
+                return scenario
+        raise CaeConfigError(
+            "%s declares no %s scenario '%s'. It declares: %s"
+            % (what, analysis.upper(), name, ", ".join(scenario.name for scenario in scenarios) or "none")
+        )
+    if len(scenarios) == 1:
+        return scenarios[0]
+    raise CaeConfigError(
+        "%s declares %d %s scenarios (%s): name the one to run"
+        % (what, len(scenarios), analysis.upper(), ", ".join(scenario.name for scenario in scenarios))
+    )
+
+
+def config_of(shape, analysis: str, scenario: Optional[str] = None) -> Optional[AnalysisConfig]:
+    """The boundary conditions of one scenario a shape declares for an analysis, or None.
+
+    None means the shape said nothing at all. The scenario is the one named, or
+    the only one; see 'choose'. A shape that declared the section but got it
+    wrong raises `CaeConfigError`.
+    """
+    scenarios = of_shape(shape, analysis)
+    if not scenarios:
         return None
-    return AnalysisConfig(analysis, config[analysis])
+    what = "%s:%s" % (getattr(shape, "project_name", ""), getattr(shape, "name", ""))
+    return choose(scenarios, scenario, what, analysis).conditions()
+
+
+def model_suffix(analysis: str, scenario: Optional[Scenario]) -> str:
+    """What goes between a part's name and its model's extension: `.fea.loaded`.
+
+    The analysis, because a part has a result per analysis, and the scenario,
+    because it has one per scenario too -- a model named after the analysis
+    alone would be overwritten by every scenario run after it, and handed back
+    as the answer to the wrong one. The unnamed form keeps the name it always
+    had, `.fea`, which is what a package that has not moved its conditions under
+    a name has in its '.gitignore'. A '/' in a name would put the file in a
+    directory of its own, so it is spelt '_' here.
+    """
+    if scenario is None or scenario.legacy:
+        return "." + analysis
+    return ".%s.%s" % (analysis, re.sub(r"[^A-Za-z0-9_.-]", "_", scenario.name))
 
 
 def _matches(record_interface: Optional[str], declared_name: str) -> bool:
@@ -978,7 +1286,7 @@ def unread_by(config: AnalysisConfig, reads, implementation: str) -> Optional[st
         "'%s:' states %s, and %s does not read %s (its 'reads:' lists %s): it would answer as if %s. "
         "Name an implementation that reads %s, or state %s"
         % (
-            config.analysis,
+            config.label,
             " and ".join(said[key][0] for key in missing),
             implementation,
             "it" if len(missing) == 1 else "them",
@@ -1037,7 +1345,12 @@ NO_RUNTIME_REMEDY = (
 
 
 def dysfunction_report(
-    name: str, analysis: str, implementation: str, error: Exception, remedy: Optional[str] = None
+    name: str,
+    analysis: str,
+    implementation: str,
+    error: Exception,
+    remedy: Optional[str] = None,
+    scenario: Optional[str] = None,
 ) -> str:
     """Why an analysis produced no answer, as the failure a user has to act on.
 
@@ -1051,9 +1364,13 @@ def dysfunction_report(
     always needs: which implementation was asked, and which machine it did not
     work on. "gmsh is not installed" is a puzzle; the same sentence under
     `//pub/feature/cae/calculix:fea on Linux-aarch64` is an answer.
+
+    'scenario' is the name of the scenario that was asked, said beside the
+    analysis when there is one: a part has several, and "FEA could not be run"
+    does not say which of them did not.
     """
     lines = [
-        "%s: %s could not be run by %s" % (name, analysis.upper(), implementation),
+        "%s: %s could not be run by %s" % (name, titled(analysis, scenario), implementation),
         "\t%s" % str(error).replace("\n", "\n\t"),
         "\tplatform: %s-%s, Python %s" % (platform.system(), platform.machine(), platform.python_version()),
     ]
@@ -1062,15 +1379,20 @@ def dysfunction_report(
     return "\n".join(lines)
 
 
-def findings_report(name: str, analysis: str, findings: list) -> str:
-    """The findings as `pc cae` prints them: one line each, worst first."""
+def titled(analysis: str, scenario: Optional[str]) -> str:
+    """`FEA`, or `FEA 'loaded'` when a scenario is named."""
+    return analysis.upper() if not scenario else "%s '%s'" % (analysis.upper(), scenario)
+
+
+def findings_report(name: str, analysis: str, findings: list, scenario: Optional[str] = None) -> str:
+    """The findings as `pc cae` prints them: one line each, worst first, under the scenario they are of."""
     if not findings:
-        return "%s: %s found nothing to report" % (name, analysis.upper())
+        return "%s: %s found nothing to report" % (name, titled(analysis, scenario))
 
     order = {"error": 0, "critical": 0, "warning": 1, "info": 2}
     ranked = sorted(findings, key=lambda f: order.get(str(f.get("severity", "")).lower(), 1))
 
-    lines = ["%s: %s findings:" % (name, analysis.upper())]
+    lines = ["%s: %s findings:" % (name, titled(analysis, scenario))]
     for finding in ranked:
         severity = str(finding.get("severity") or "warning").upper()
         where = finding.get("where") or finding.get("location") or ""

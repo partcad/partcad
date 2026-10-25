@@ -188,9 +188,10 @@ class FakeShape:
         self.instantiated = True
         return {"shape": self.name}
 
-    def show(self, ctx=None, tab=None):
+    def show(self, ctx=None, tab=None, scenario=None):
         self.shown = True
         self.shown_on = tab
+        self.shown_scenario = scenario
         # Which context it was shown in, and not merely that it was shown. A
         # 'show()' with none falls back to a module-level context that a daemon
         # cannot count on having, and a fake that dropped the argument is what let
@@ -246,7 +247,7 @@ class FakeObject:
         self.summarized_for = project
         return self._summary
 
-    def show(self, ctx=None, tab=None):
+    def show(self, ctx=None, tab=None, scenario=None):
         self.shown = True
         self.shown_in = ctx
 
@@ -1672,6 +1673,34 @@ def test_a_show_with_no_tab_leaves_the_viewer_where_it_is():
     operations.inspect_object(session, {"package": "//", "object": "widget"})
 
     assert part.shown_on is None
+
+
+def test_the_scenario_asked_for_goes_with_the_tab():
+    """'pc ide view --analysis-fea --scenario loaded': the tab, and which of its scenarios to select."""
+    session, _ = make_session()
+    part = FakeShape(name="widget")
+    session.partcad_ctx.shapes[("part", "//:widget")] = part
+
+    operations.inspect_object(session, {"package": "//", "object": "widget", "tab": "fea", "scenario": "loaded"})
+
+    assert (part.shown_on, part.shown_scenario) == ("fea", "loaded")
+
+
+@pytest.mark.parametrize("tab", [None, "3d", "bom"])
+def test_a_scenario_on_a_tab_that_lists_none_is_refused(tab):
+    session, _ = make_session()
+    part = FakeShape(name="widget")
+    session.partcad_ctx.shapes[("part", "//:widget")] = part
+
+    params = {"package": "//", "object": "widget", "scenario": "loaded"}
+    if tab is not None:
+        params["tab"] = tab
+    with pytest.raises(JsonRpcError) as caught:
+        operations.inspect_object(session, params)
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "fea, dynamic, thermal, cfd, simulation" in caught.value.message
+    assert part.shown is False
 
 
 def test_a_tab_the_viewer_does_not_have_is_refused_before_anything_is_built():
@@ -3342,56 +3371,78 @@ def test_test_report_names_what_it_could_not_find(monkeypatch):
     assert asked == []
 
 
-# ---- cae.analyze / cae.defaults --------------------------------------------
+# ---- cae.analyze / cae.list / cae.defaults ---------------------------------
 #
-# The two methods behind `pc cae fea|cfd` and the IDE's FEA and CFD tabs. What
-# is pinned here is the operation glue: which shape is asked, what a refusal
-# reads as, and the two things a client gets that the analysis itself does not
-# produce -- the inlined bytes a webview needs, and the printed report a
-# terminal shows. Nothing here runs a solver.
+# The methods behind `pc cae <analysis>` and the IDE's analysis tabs. What is
+# pinned here is the operation glue: which shape is asked, which of its
+# scenarios, what a refusal reads as, and the things a client gets that the
+# analysis itself does not produce -- the inlined bytes a webview needs, and the
+# printed report a terminal shows. Nothing here runs a solver: how a scenario is
+# read is the real 'partcad.cae', which imports nothing heavy.
+
+
+class FakeSandboxUnavailable(Exception):
+    """Stands in for 'partcad.runtime.SandboxUnavailable'."""
 
 
 class FakeCae:
-    """The subset of ``partcad.cae`` these operations reach for."""
+    """The subset of ``partcad.cae`` these operations reach for: the real readers, a fake report."""
+
+    from partcad import cae as _real
 
     ANALYSES = ("fea", "dynamic", "thermal", "cfd")
     FEA = "fea"
     CFD = "cfd"
-
-    class CaeConfigError(ValueError):
-        pass
+    CaeConfigError = _real.CaeConfigError
+    CaeFailed = _real.CaeFailed
+    NO_RUNTIME_REMEDY = _real.NO_RUNTIME_REMEDY
+    of_shape = staticmethod(_real.of_shape)
+    choose = staticmethod(_real.choose)
+    titled = staticmethod(_real.titled)
+    dysfunction_report = staticmethod(_real.dysfunction_report)
 
     @staticmethod
-    def findings_report(path, analysis, findings):
-        return "%s %s: %d finding(s)" % (path, analysis, len(findings))
+    def findings_report(path, analysis, findings, scenario=None):
+        return "%s %s%s: %d finding(s)" % (path, analysis, "" if scenario is None else " " + scenario, len(findings))
+
+
+# What the fixture part declares unless a test says otherwise: one scenario of
+# FEA and one of CFD, in the unnamed form a section had before scenarios.
+UNNAMED = {"fea": {"fix": ["m3"]}, "cfd": {"load": {"inlet": "1 N"}}}
 
 
 class FakeAnalysablePart(FakeObject):
-    """A part that answers `analyze_async` with whatever a test decided."""
+    """A part that answers `analyze_async` with whatever a test decided, per scenario if it likes."""
 
-    def __init__(self, name, result=None, error=None):
-        super().__init__(name)
+    def __init__(self, name, result=None, error=None, config=None, results=None, errors=None):
+        super().__init__(name, config=copy.deepcopy(config if config is not None else UNNAMED))
+        self.project_name = "//"
         self.result = result if result is not None else {"findings": [], "filepath": "/w/bracket.fea.glb"}
+        self.results = results or {}
         self.error = error
+        self.errors = errors or {}
         self.calls = []
 
-    async def analyze_async(self, ctx, analysis, implementation=None, output_dir=None):
+    async def analyze_async(self, ctx, analysis, implementation=None, output_dir=None, scenario=None):
         self.calls.append(
             {
                 "analysis": analysis,
                 "implementation": implementation,
                 "output_dir": output_dir,
+                "scenario": scenario,
             }
         )
-        if self.error is not None:
-            raise self.error
-        return dict(self.result)
+        error = self.errors.get(scenario, self.error)
+        if error is not None:
+            raise error
+        return dict(self.results.get(scenario, self.result))
 
 
 def make_cae_session(part=None):
     """A session whose `//` package holds one analysable part called `bracket`."""
     session, seen = make_session()
     session.partcad.cae = FakeCae()
+    session.partcad.runtime = types.SimpleNamespace(SandboxUnavailable=FakeSandboxUnavailable)
     session.partcad_ctx.user_config.cae_implementation = lambda analysis: "//pub/feature/cae/calculix:" + analysis
     session.partcad.user_config.cae_implementation = session.partcad_ctx.user_config.cae_implementation
     part = part if part is not None else FakeAnalysablePart("bracket")
@@ -3400,13 +3451,24 @@ def make_cae_session(part=None):
     return session, part
 
 
+# Two scenarios of one analysis, which is what most of what follows is about.
+TWO = {
+    "fea": {
+        "loaded": {"desc": "A full shelf", "feature": "shelf", "fix": ["m3"], "load": {"hook": "5 kg"}},
+        "dropped": {"implementation": "//pkg:fea", "fix": ["m3"]},
+    }
+}
+
+
 def test_cae_analyze_runs_the_analysis_it_was_asked_for():
     session, part = make_cae_session()
 
     result = operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea"})
 
     assert result["findings"] == []
-    assert part.calls == [{"analysis": "fea", "implementation": None, "output_dir": None}]
+    assert result["ok"] is True
+    assert (result["total"], result["failed"]) == (1, 0)
+    assert part.calls == [{"analysis": "fea", "implementation": None, "output_dir": None, "scenario": "default"}]
 
 
 def test_cae_analyze_passes_the_per_run_overrides_through():
@@ -3423,7 +3485,64 @@ def test_cae_analyze_passes_the_per_run_overrides_through():
         },
     )
 
-    assert part.calls == [{"analysis": "cfd", "implementation": "//pkg:cfd", "output_dir": "/w/out"}]
+    assert part.calls == [
+        {"analysis": "cfd", "implementation": "//pkg:cfd", "output_dir": "/w/out", "scenario": "default"}
+    ]
+
+
+def test_cae_analyze_runs_every_scenario_one_after_another():
+    """'pc cae fea :bracket' is every scenario, as 'pc sim' is every simulation."""
+    session, part = make_cae_session(
+        FakeAnalysablePart(
+            "bracket",
+            config=TWO,
+            results={
+                "loaded": {"findings": [{"message": "too thin"}], "filepath": "/w/bracket.fea.loaded.glb"},
+                "dropped": {"findings": [], "filepath": "/w/bracket.fea.dropped.glb"},
+            },
+        )
+    )
+
+    result = operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea"})
+
+    assert [call["scenario"] for call in part.calls] == ["loaded", "dropped"]
+    assert [entry["scenario"] for entry in result["analyses"]] == ["loaded", "dropped"]
+    assert [entry["filepath"] for entry in result["analyses"]] == [
+        "/w/bracket.fea.loaded.glb",
+        "/w/bracket.fea.dropped.glb",
+    ]
+    assert result["analyses"][0]["desc"] == "A full shelf"
+    # Every finding, tagged with the scenario it is of: what '--json' prints.
+    assert result["findings"] == [{"message": "too thin", "scenario": "loaded"}]
+    assert (result["total"], result["failed"], result["ok"]) == (2, 0, False)
+    # Several ran, so nothing is promoted to the top for an older client.
+    assert "filepath" not in result
+
+
+def test_cae_analyze_runs_the_scenario_it_is_asked_for():
+    """'pc cae fea -f dropped' and the IDE's tab, one scenario at a time."""
+    session, part = make_cae_session(FakeAnalysablePart("bracket", config=TWO))
+
+    result = operations.cae_analyze(
+        session, {"package": "//", "object": "bracket", "analysis": "fea", "scenario": "dropped"}
+    )
+
+    assert [call["scenario"] for call in part.calls] == ["dropped"]
+    assert result["scenario"] == "dropped"
+    # The one it ran is where a client written before scenarios looks for it.
+    assert result["filepath"] == "/w/bracket.fea.glb"
+    # And who was asked is the scenario's own choice, when the run made none.
+    assert result["analyses"][0]["implementation"] == "//pkg:fea"
+
+
+def test_a_scenario_the_part_does_not_declare_is_refused_naming_those_it_does():
+    session, part = make_cae_session(FakeAnalysablePart("bracket", config=TWO))
+
+    with pytest.raises(JsonRpcError) as raised:
+        operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea", "scenario": "x"})
+    assert raised.value.code == operations.USAGE_ERROR
+    assert "declares no FEA scenario 'x'. It declares: loaded, dropped" in str(raised.value)
+    assert part.calls == []
 
 
 def test_cae_analyze_refuses_an_analysis_partcad_does_not_run():
@@ -3447,14 +3566,85 @@ def test_cae_analyze_says_which_part_it_could_not_find():
     assert "Part //:nope is not found" in str(raised.value)
 
 
-def test_a_malformed_section_is_the_answer_rather_than_a_crash():
-    # What the IDE prints in the tab, verbatim: a part that says nothing about
-    # FEA is a question with an answer, not a failure of the machinery.
-    session, _ = make_cae_session(FakeAnalysablePart("bracket", error=FakeCae.CaeConfigError("declares no 'fea:'")))
+def test_a_part_that_declares_nothing_is_told_so():
+    session, part = make_cae_session()
+
+    with pytest.raises(JsonRpcError) as raised:
+        operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "thermal"})
+    assert raised.value.code == operations.USAGE_ERROR
+    assert "//:bracket declares no 'thermal:' section" in str(raised.value)
+    assert part.calls == []
+
+
+def test_a_section_that_cannot_be_read_is_the_answer_rather_than_a_crash():
+    # What the command prints, verbatim: a part whose section is not a map of
+    # scenarios has asked nothing that can be run.
+    session, _ = make_cae_session(FakeAnalysablePart("bracket", config={"fea": "nonsense"}))
 
     with pytest.raises(JsonRpcError) as raised:
         operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea"})
-    assert "declares no 'fea:'" in str(raised.value)
+    assert raised.value.code == operations.USAGE_ERROR
+    assert "'fea:' is not a map of scenario names" in str(raised.value)
+
+
+def test_a_malformed_scenario_is_its_own_entry_and_the_rest_still_run():
+    # What the IDE prints in the scenario's tab, verbatim, and what the log
+    # says: one scenario's mistake does not cost the others their answers.
+    session, part = make_cae_session(
+        FakeAnalysablePart(
+            "bracket",
+            config=TWO,
+            errors={"loaded": FakeCae.CaeConfigError("'fea: loaded:' declares neither 'fix:' nor 'load:'")},
+        )
+    )
+
+    result = operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea"})
+
+    assert [call["scenario"] for call in part.calls] == ["loaded", "dropped"]
+    loaded, dropped = result["analyses"]
+    assert loaded["error"] == "'fea: loaded:' declares neither 'fix:' nor 'load:'"
+    assert dropped["error"] is None
+    assert (result["total"], result["failed"], result["ok"]) == (2, 1, False)
+    assert "'fea: loaded:' declares neither 'fix:' nor 'load:'" in session.partcad.logging.messages("error")
+
+
+def test_an_implementation_that_did_not_deliver_is_reported_as_it_said():
+    report = "//:bracket: FEA 'dropped' could not be run by //pkg:fea\n\tno ccx"
+    session, _ = make_cae_session(
+        FakeAnalysablePart("bracket", config=TWO, errors={"dropped": FakeCae.CaeFailed(report)})
+    )
+
+    result = operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea"})
+
+    assert result["analyses"][1]["error"] == report
+    assert report in session.partcad.logging.messages("error")
+
+
+def test_no_sandbox_is_reported_with_both_remedies():
+    session, _ = make_cae_session(
+        FakeAnalysablePart("bracket", config=TWO, errors={"dropped": FakeSandboxUnavailable("no docker")})
+    )
+
+    result = operations.cae_analyze(
+        session, {"package": "//", "object": "bracket", "analysis": "fea", "scenario": "dropped"}
+    )
+
+    error = result["analyses"][0]["error"]
+    assert error.startswith("//:bracket: FEA 'dropped' could not be run by //pkg:fea")
+    assert FakeCae.NO_RUNTIME_REMEDY in error
+
+
+def test_an_implementation_that_does_not_resolve_is_that_scenario_s_error():
+    session, _ = make_cae_session(
+        FakeAnalysablePart("bracket", config=TWO, errors={"loaded": Exception("//nowhere is not found")})
+    )
+
+    result = operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea"})
+
+    assert result["analyses"][0]["error"] == (
+        "//:bracket: the FEA 'loaded' implementation could not be resolved: //nowhere is not found"
+    )
+    assert result["analyses"][1]["error"] is None
 
 
 def test_inline_hands_the_model_back_as_bytes(tmp_path):
@@ -3468,7 +3658,8 @@ def test_inline_hands_the_model_back_as_bytes(tmp_path):
 
     result = operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea", "inline": True})
 
-    assert base64.b64decode(result["content"]) == b"glTF-ish"
+    assert base64.b64decode(result["analyses"][0]["content"]) == b"glTF-ish"
+    assert result["content"] == result["analyses"][0]["content"]
 
 
 def test_a_model_that_is_not_where_it_said_still_returns_the_findings(tmp_path):
@@ -3484,7 +3675,8 @@ def test_a_model_that_is_not_where_it_said_still_returns_the_findings(tmp_path):
     result = operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea", "inline": True})
 
     assert result["content"] is None
-    assert result["findings"] == [{"message": "too thin"}]
+    assert result["analyses"][0]["findings"] == [{"message": "too thin"}]
+    assert result["findings"] == [{"message": "too thin", "scenario": "default"}]
     assert any("Failed to read the FEA model back" in m for m in session.partcad.logging.messages("warning"))
 
 
@@ -3501,6 +3693,16 @@ def test_the_findings_are_printed_by_the_daemon_not_the_client():
     assert "FEA model: /w/b.glb" in printed
 
 
+def test_the_report_names_the_scenario_it_is_of():
+    session, _ = make_cae_session(FakeAnalysablePart("bracket", config=TWO))
+
+    operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea"})
+
+    printed = session.partcad.logging.messages("info")
+    assert "//:bracket fea loaded: 0 finding(s)" in printed
+    assert "FEA 'dropped' model: /w/bracket.fea.glb" in printed
+
+
 def test_json_keeps_the_report_off_the_stream_the_client_parses():
     # `--json` puts a machine-readable array on the client's stdout; a table
     # printed beside it would be in the way of whatever reads it.
@@ -3509,6 +3711,47 @@ def test_json_keeps_the_report_off_the_stream_the_client_parses():
     operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea", "json": True})
 
     assert session.partcad.logging.messages("info") == []
+
+
+def test_cae_list_says_what_each_analysis_declares_without_running_any():
+    session, part = make_cae_session(FakeAnalysablePart("bracket", config=dict(TWO, thermal=[1, 2])))
+
+    listed = operations.cae_list(session, {"package": "//", "object": "bracket"})
+
+    assert part.calls == []
+    assert listed["object"] == "//:bracket"
+    assert listed["kind"] == "part"
+    assert [scenario["name"] for scenario in listed["analyses"]["fea"]] == ["loaded", "dropped"]
+    assert listed["analyses"]["fea"][0] == {
+        "name": "loaded",
+        "desc": "A full shelf",
+        "implementation": None,
+        "features": ["shelf"],
+        "legacy": False,
+    }
+    assert listed["analyses"]["fea"][1]["implementation"] == "//pkg:fea"
+    # Nothing declared is nothing listed, and not an error.
+    assert listed["analyses"]["dynamic"] == [] and listed["analyses"]["cfd"] == []
+    # A section that cannot be read lists nothing, and says why.
+    assert listed["analyses"]["thermal"] == []
+    assert "'thermal:' is not a map of scenario names" in listed["errors"]["thermal"]
+    assert set(listed["errors"]) == {"thermal"}
+
+
+def test_cae_list_lists_the_unnamed_form_as_the_scenario_it_is_read_as():
+    session, _ = make_cae_session()
+
+    listed = operations.cae_list(session, {"package": "//", "object": "bracket"})
+
+    assert [(scenario["name"], scenario["legacy"]) for scenario in listed["analyses"]["fea"]] == [("default", True)]
+
+
+def test_cae_list_says_which_part_it_could_not_find():
+    session, _ = make_cae_session()
+
+    with pytest.raises(JsonRpcError) as raised:
+        operations.cae_list(session, {"package": "//", "object": "nope"})
+    assert "Part //:nope is not found" in str(raised.value)
 
 
 def test_cae_defaults_answers_for_every_analysis():

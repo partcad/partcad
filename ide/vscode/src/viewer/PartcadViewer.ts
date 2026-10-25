@@ -56,9 +56,14 @@ const TAB_COMMANDS: Record<string, string> = {
     supply: 'partcad.supplyQuote',
     // The assembly instructions, as a document and as the file Save writes.
     assembly: 'partcad.assemblyGuide',
-    // Every analysis is the one operation; which of them is asked for travels
-    // as an argument, exactly as every 'pc cae <analysis>' is one operation
-    // with the analysis in the request - and the tab's id is that argument.
+    // What a part declares for every analysis, read rather than run: asked once
+    // for all four tabs, under the id of the group they are in, because which
+    // of them apply is what decides whether the group does.
+    analysis: 'partcad.caeList',
+    // Running one scenario of one analysis. Every analysis is the one
+    // operation; which of them is asked for travels as an argument, exactly as
+    // every 'pc cae <analysis>' is one operation with the analysis in the
+    // request - and the tab's id is that argument.
     fea: 'partcad.cae',
     dynamic: 'partcad.cae',
     thermal: 'partcad.cae',
@@ -106,7 +111,11 @@ interface FetchTabRequest extends RenderRequest {
     buildParts?: boolean;
     document?: boolean;
     verify?: boolean;
-    /** On the Simulation tab: the simulation to run, by name; absent, the tab asks what there is. */
+    /**
+     * On the Simulation tab: the simulation to run, by name; absent, the tab
+     * asks what there is. On an analysis tab: the scenario to run, by name
+     * ('pc cae <analysis> -f'); absent, every scenario is run.
+     */
     scenario?: string;
 }
 
@@ -144,7 +153,7 @@ export class PartcadViewer implements vscode.Disposable {
     private readonly stateReplies = new Map<number, (reply: ViewerStateReply | undefined) => void>();
     private stateRequests = 0;
     /** The configured CAE implementations, once the daemon has been asked. */
-    private caeDefaults: Record<string, string> | undefined;
+    private configuredCae: Record<string, string> | undefined;
     /**
      * spacenavd, while the panel exists and the SpaceMouse is enabled - on Linux,
      * where the renderer cannot see the device itself. See 'spacenav.ts'.
@@ -261,6 +270,11 @@ export class PartcadViewer implements vscode.Disposable {
             // Which tab to open on, when the show asked for one. Passed as it
             // came: the renderer is what knows its tabs, and what applies.
             tab: typeof message.tab === 'string' ? message.tab : null,
+            // And which of that tab's scenarios to select, when it lists them
+            // ('pc ide view --analysis-fea --scenario loaded'). Passed as it
+            // came, for the same reason: what the object declares is the
+            // renderer's to know.
+            scenario: typeof message.scenario === 'string' ? message.scenario : null,
             // The object as it arrived, geometry aside: the hierarchy, the
             // placements, the ports and the interfaces are PartCAD's account of
             // what is on screen, and this side knows nothing about assemblies,
@@ -296,19 +310,8 @@ export class PartcadViewer implements vscode.Disposable {
             this.latestRender.set(tab, Math.max(token, this.latestRender.get(tab) ?? 0));
         }
         const analysis = ANALYSIS_TABS.has(tab);
-        // Which implementation the request ends up carrying, so that the field
-        // over the model can be pre-filled with it -- including when the
-        // analysis failed, which is exactly when the user needs to see what was
-        // tried and type something else.
-        const used = analysis ? implementation || (await this.caeDefault(tab)) : undefined;
         const post = (payload: { data?: unknown; error?: string }) =>
-            void this.panel?.webview.postMessage({
-                type: 'tabData',
-                tab,
-                token,
-                ...(used !== undefined ? { implementation: used } : {}),
-                ...payload,
-            });
+            void this.panel?.webview.postMessage({ type: 'tabData', tab, token, ...payload });
 
         const command = tab === 'simulation' && message.scenario ? SIMULATION_RUN : TAB_COMMANDS[tab];
         if (command === undefined) {
@@ -364,6 +367,16 @@ export class PartcadViewer implements vscode.Disposable {
                 post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
+            if (tab === 'analysis') {
+                const data = (await vscode.commands.executeCommand(command, args)) as
+                    Record<string, unknown> | undefined;
+                // With what each analysis runs under when neither the user nor
+                // the scenario names one -- the user configuration, which the
+                // field over the model is pre-filled with for such a scenario --
+                // added here as the garage's choices are added to the tree.
+                post({ data: data ? { ...data, defaults: await this.caeDefaults() } : data });
+                return;
+            }
             if (tab === 'simulation') {
                 args.kind = target.kind ?? 'part';
                 // A run carries its pictures back as bytes, for the reason a
@@ -408,7 +421,13 @@ export class PartcadViewer implements vscode.Disposable {
             }
             if (analysis) {
                 args.analysis = tab;
-                args.implementation = used;
+                args.scenario = message.scenario;
+                // Only what the user typed. Left out, the daemon runs the
+                // scenario with the implementation it names, and failing that
+                // with the configured default -- which is why the default is
+                // never filled in here: sent as an override, it would outrank
+                // the scenario's own.
+                args.implementation = implementation || undefined;
                 // The panel is a webview with no file system in reach, so the
                 // model has to arrive as bytes rather than as the path the
                 // daemon wrote it to -- which may not even be this machine.
@@ -582,7 +601,8 @@ export class PartcadViewer implements vscode.Disposable {
     }
 
     /**
-     * The implementation an analysis runs under when nobody has said otherwise.
+     * The implementation each analysis runs under when nobody has said
+     * otherwise, by analysis.
      *
      * Asked of the daemon once per panel and remembered, because it is the
      * user's configuration rather than anything about the object on screen. A
@@ -590,17 +610,17 @@ export class PartcadViewer implements vscode.Disposable {
      * empty rather than failing the fetch: the analysis itself will report the
      * real problem a moment later.
      */
-    private async caeDefault(analysis: string): Promise<string | undefined> {
-        if (this.caeDefaults === undefined) {
+    private async caeDefaults(): Promise<Record<string, string>> {
+        if (this.configuredCae === undefined) {
             try {
-                this.caeDefaults =
+                this.configuredCae =
                     ((await vscode.commands.executeCommand('partcad.caeDefaults')) as Record<string, string>) ?? {};
             } catch (error: any) {
                 traceVerbose(`Digital Thread: no CAE defaults: ${error?.message ?? error}`);
-                this.caeDefaults = {};
+                this.configuredCae = {};
             }
         }
-        return this.caeDefaults[analysis];
+        return this.configuredCae;
     }
 
     /**

@@ -117,6 +117,40 @@ export const DRAFT_PLUGINS = ['//pub/feature/render/draftwright'];
 export const SIMULATION_PLUGINS = ['//pub/feature/simulate/mujoco:mujoco', '//pub/feature/simulate/gazebo:gazebo'];
 
 /**
+ * The solvers each Analysis tab offers, as '<package>:<file type>': the ones
+ * registered at '//pub/feature/cae' that implement that analysis, the user
+ * configuration's default first ('caeFeaImplementation' and the rest). The one
+ * a scenario runs with unasked -- its own 'implementation:', or that default --
+ * is the one selected; see 'analysis.ts'. The Simulation tab's
+ * 'SIMULATION_PLUGINS', for an analysis.
+ */
+export const CAE_IMPLEMENTATIONS: Record<AnalysisTabId, string[]> = {
+    fea: [
+        '//pub/feature/cae/calculix:fea',
+        '//pub/feature/cae/code_aster:fea',
+        '//pub/feature/cae/elmer:fea',
+        '//pub/feature/cae/moose:fea',
+    ],
+    dynamic: [
+        '//pub/feature/cae/elmer:dynamic',
+        '//pub/feature/cae/code_aster:dynamic',
+        '//pub/feature/cae/moose:dynamic',
+    ],
+    thermal: [
+        '//pub/feature/cae/elmer:thermal',
+        '//pub/feature/cae/code_aster:thermal',
+        '//pub/feature/cae/moose:thermal',
+    ],
+    cfd: [
+        '//pub/feature/cae/openfoam:cfd',
+        '//pub/feature/cae/calculix:cfd',
+        '//pub/feature/cae/code_saturne:cfd',
+        '//pub/feature/cae/elmer:cfd',
+        '//pub/feature/cae/moose:cfd',
+    ],
+};
+
+/**
  * The tabs that run an analysis rather than ask a question about the object,
  * in the order the Analysis strip shows them: the structural ones first, static
  * then dynamic, then heat transfer, then flow.
@@ -143,6 +177,14 @@ export const ANALYSIS_LABELS: Record<AnalysisTabId, string> = {
 export function isAnalysisTab(tab: TabId): tab is AnalysisTabId {
     return (ANALYSIS_TABS as TabId[]).includes(tab);
 }
+
+/**
+ * The tabs whose pane is a list of what the object declares, one of which is
+ * selected and run: its simulations, and its scenarios of each analysis. What a
+ * show's 'scenario' can select on; 'SCENARIO_TABS' in
+ * 'src/partcad_ide_client/protocol.py' is the other copy.
+ */
+export const SCENARIO_TABS: TabId[] = [...ANALYSIS_TABS, 'simulation'];
 
 /** A packed rigid placement: [[tx, ty, tz], [ax, ay, az], angleInDegrees]. */
 export type Placement = [[number, number, number], [number, number, number], number];
@@ -318,6 +360,14 @@ export interface ShowMessage {
      * does not apply to this object is not opened.
      */
     tab?: TabId | null;
+    /**
+     * With a 'tab' that lists scenarios - the Simulation tab, and each analysis
+     * tab - which of them to select, by the name the object declares it under:
+     * what 'pc ide view --analysis-fea --scenario loaded' asks for. Null selects
+     * the first, as opening the tab by hand does, and so does a name the object
+     * does not declare. See 'SCENARIO_TABS'.
+     */
+    scenario?: string | null;
     /** The object itself, as the root node of its tree, or null when it is empty. */
     object: ShowNode | null;
     /** Configuration for the viewer, sent from the extension. */
@@ -349,15 +399,6 @@ export interface TabDataMessage {
     token: number;
     data?: unknown;
     error?: string;
-    /**
-     * Which implementation the host actually asked for, on an analysis tab.
-     *
-     * It comes back even when the analysis failed, and that is what it is for:
-     * the field over the model is pre-filled with it, so a user whose configured
-     * solver is not installed can see what was tried and type something else,
-     * rather than being shown an error about a package and an empty box.
-     */
-    implementation?: string;
 }
 
 /**
@@ -453,11 +494,14 @@ export interface FetchTabMessage {
     /**
      * Who should run this analysis, as '<package>:<file type>'.
      *
-     * Only the analysis tabs send it, and only once the user has typed one: left
-     * out, the daemon uses the configured default ('caeFeaImplementation',
+     * Only the analysis tabs send it, and only once the user has typed one and
+     * run it: left out, the daemon uses the scenario's own 'implementation:',
+     * and failing that the configured default ('caeFeaImplementation',
      * 'caeDynamicImplementation', 'caeThermalImplementation' or
-     * 'caeCfdImplementation'), which is the same default the CLI's
-     * '--implementation' overrides.
+     * 'caeCfdImplementation') - the same two the CLI's '--implementation'
+     * overrides, in the same order. Neither side of the panel fills it in from
+     * either of them, because a configured default sent as an override would
+     * outrank the scenario's own.
      */
     implementation?: string;
     /** On a render tab: which file type to render to ('png', 'svg', ...). */
@@ -526,6 +570,11 @@ export interface FetchTabMessage {
      * On the Simulation tab: the simulation to run, by the name the object's
      * 'simulate:' section declares it under -- 'pc sim -f'. Left out, the tab
      * is asking what the object declares rather than running anything.
+     *
+     * On an analysis tab: the scenario to run, by the name the part's section
+     * of that analysis declares it under -- 'pc cae <analysis> -f'. What the
+     * part declares is asked once for all four, under the group's own id
+     * ('analysis'), so an analysis tab always names one.
      */
     scenario?: string;
 }
@@ -716,26 +765,94 @@ export interface CaeFinding {
 }
 
 /**
- * What one run of 'pc cae <analysis>' produced - 'fea', 'dynamic', 'thermal' or
- * 'cfd' - as 'cae.analyze' returns it. The shape is the same whichever ran.
+ * What one scenario of 'pc cae <analysis>' produced - 'fea', 'dynamic',
+ * 'thermal' or 'cfd' - as an entry of what 'cae.analyze' returns. The shape is
+ * the same whichever ran.
  *
  * 'content' is the model file itself, base64-encoded, because the panel is a
  * webview with no file system in reach: a path it cannot open is a model it
  * cannot draw. 'extension' is what decides how it is drawn - a 3D field is
  * turned and zoomed, a 2D plot is panned and zoomed - and it is the
  * implementation's choice, not PartCAD's.
+ *
+ * 'error' is why the scenario produced nothing: a scenario that cannot be read,
+ * a solver that could not run, no sandbox to run it in, an implementation that
+ * does not resolve. Those are answers about the scenario and not failures of
+ * the request, so they come back here, one scenario's alone, and the tab shows
+ * the sentence where the model would have been.
  */
 export interface CaeData {
     object: string;
     analysis: string;
-    /** The implementation that actually ran, as '<package>:<file type>'. */
-    implementation: string;
-    /** Where the model was written on the machine running the daemon. */
-    filepath: string;
-    extension: string;
+    /** The scenario it is of, by the name the part declares it under. */
+    scenario?: string;
+    desc?: string | null;
+    /** Declared in the form a section had before it had scenarios, and read as one named 'default'. */
+    legacy?: boolean;
+    /** The implementation that ran, or was to, as '<package>:<file type>'; null when nothing named one. */
+    implementation?: string | null;
+    /** Where the model was written on the machine running the daemon; null when nothing was. */
+    filepath?: string | null;
+    extension?: string | null;
     content?: string | null;
     /** Empty when the analysis found nothing to report, which is a pass. */
     findings: CaeFinding[];
+    /** Why this scenario produced nothing, or null when it ran. */
+    error?: string | null;
+}
+
+/**
+ * One scenario a part declares for one analysis, as 'cae.list' answers: an entry
+ * of its 'fea:', 'dynamic:', 'thermal:' or 'cfd:' section, read rather than run.
+ */
+export interface CaeScenario {
+    name: string;
+    desc?: string | null;
+    /** The implementation the scenario names itself, as '<package>:<file type>'; null for the configured one. */
+    implementation?: string | null;
+    /** The requirement features it demonstrates ('feature:'). */
+    features?: string[];
+    /** The section is in the form it had before it had scenarios, and this is it, named 'default'. */
+    legacy?: boolean;
+}
+
+/**
+ * What a part declares for every analysis, without running any of it.
+ *
+ * Configuration, so it costs what reading the part costs: it is asked for on
+ * every show of a part, because which Analysis tabs apply depends on it. Every
+ * analysis is answered, with an empty list for one the part declares nothing
+ * for, and a section that cannot be read is answered under 'errors' with the
+ * sentence that says why.
+ */
+export interface CaeListData {
+    object: string;
+    kind: string;
+    analyses: Record<string, CaeScenario[]>;
+    errors?: Record<string, string>;
+    /**
+     * The implementation each analysis runs under when neither the user nor the
+     * scenario names one: 'cae.defaults', added to the answer by the host (the
+     * user configuration's 'cae<Analysis>Implementation'). What the field over
+     * the model is pre-filled with for a scenario that names none.
+     */
+    defaults?: Record<string, string>;
+}
+
+/**
+ * The answer to a run of an analysis: what 'pc cae <analysis> -f <name>' prints
+ * with '--json'. An entry per scenario run - the panel asks for one at a time -
+ * shaped like 'simulate.run''s answer.
+ */
+export interface CaeRunData {
+    object: string;
+    analysis: string;
+    analyses: CaeData[];
+    /** Every finding of every scenario, each with its 'scenario'. */
+    findings: CaeFinding[];
+    total: number;
+    failed: number;
+    ok: boolean;
 }
 
 /** One file type a package renders to, as 'render.formats' lists it. */
@@ -871,9 +988,11 @@ export interface PlanData {
 /**
  * One requirement of 'requirements.check', and what the model made of it.
  *
- * 'section' is 'ports', 'interfaces' or 'physics' for what 'pc test' measures,
- * and 'simulate' for a 'simulate:' entry naming a feature nobody declared.
- * 'passed' is null until the model has been asked.
+ * 'section' is 'ports', 'interfaces' or 'physics' for what 'pc test' measures;
+ * 'simulate' for a 'simulate:' entry naming a feature nobody declared; and the
+ * analysis ('fea', 'dynamic', 'thermal', 'cfd') for one of its scenarios that
+ * does the same, with the scenario as 'name'. 'passed' is null until the model
+ * has been asked.
  */
 export interface RequirementCheck {
     section: string;
@@ -883,11 +1002,17 @@ export interface RequirementCheck {
     detail?: string | null;
 }
 
-/** One feature: its name, what it is, and the 'simulate:' entries that name it. */
+/** One feature: its name, what it is, and the 'simulate:' entries and analysis scenarios that name it. */
 export interface RequirementFeature {
     name: string;
     desc: string;
     simulations: string[];
+    /**
+     * The analysis scenarios that demonstrate it ('feature:' on an entry of a
+     * part's 'fea:', 'dynamic:', 'thermal:' or 'cfd:'), in the order declared.
+     * Absent from a daemon from before analyses had scenarios.
+     */
+    analyses?: { analysis: string; name: string }[];
 }
 
 /** The 'requirements' tab's data: 'partcad.requirements.Report.to_dict()'. */

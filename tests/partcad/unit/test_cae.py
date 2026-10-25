@@ -648,7 +648,7 @@ def test_a_load_may_be_a_vector_in_the_parts_frame():
         ([1, 2], "list of 2"),
         ([0, 0, 0, 1], "list of 4"),
         (["0 N", "0 N", "0 N"], "nought in every direction"),
-        (["1 N", "west", "0 N"], "the y of 'load: tooth:' is not a force or a mass: 'west'"),
+        (["1 N", "west", "0 N"], "the y of 'fea: load: tooth:' is not a force or a mass: 'west'"),
     ],
 )
 def test_a_vector_load_that_is_not_three_forces_is_refused(value, message):
@@ -707,7 +707,7 @@ def test_gravity_that_is_not_three_accelerations_is_refused(value):
 def test_only_a_stress_analysis_takes_a_gravity():
     with pytest.raises(CaeConfigError, match="'dynamic:' does not take gravity"):
         AnalysisConfig("dynamic", {"fix": ["hub"], "gravity": [0, 0, -9.81]})
-    with pytest.raises(CaeConfigError, match="it takes 'fix:', 'load:', 'gravity:' and 'implementation:'"):
+    with pytest.raises(CaeConfigError, match="it takes 'fix:', 'load:', 'gravity:', and 'desc:', 'feature:'"):
         AnalysisConfig("fea", {"fix": ["hub"], "weight": 1})
 
 
@@ -775,3 +775,237 @@ def test_a_port_named_that_is_not_there_is_reported_as_neither():
         config, [{"interface": "gear", "instance": "", "port": "1-tooth"}, {"interface": "hub", "instance": ""}]
     )
     assert unmatched == [("gear", "no instance or port named 31-tooth")]
+
+
+# --------------------------------------------------------------------------- #
+# Named scenarios                                                             #
+# --------------------------------------------------------------------------- #
+#
+# An analysis section is a map of scenarios, each under a name of its own, as
+# 'simulate:' is a map of simulations. The form a section had before -- the
+# conditions themselves -- is still read, as one scenario named 'default'.
+
+
+def test_a_section_is_a_map_of_named_scenarios():
+    scenarios = cae.declared("fea", {"loaded": {"fix": ["hub"], "load": {"hook": "1 N"}}, "free": {"fix": ["hub"]}})
+    assert [scenario.name for scenario in scenarios] == ["loaded", "free"]
+    assert not any(scenario.legacy for scenario in scenarios)
+    assert scenarios[0].conditions().loads == {"hook": {EVERY_INSTANCE: 1.0}}
+    assert scenarios[1].conditions().fixtures == {"hub": [EVERY_INSTANCE]}
+
+
+def test_the_unnamed_form_is_one_scenario_named_default():
+    """What every section was before scenarios, read as it always was."""
+    (scenario,) = cae.declared("fea", {"fix": ["hub"], "load": {"hook": "1 N"}})
+    assert scenario.legacy
+    assert scenario.name == cae.LEGACY_SCENARIO
+    assert scenario.conditions().fixtures == {"hub": [EVERY_INSTANCE]}
+    # Its sentences read as they always did: no scenario name in them.
+    assert scenario.label == "fea"
+    assert scenario.title == "FEA"
+
+
+def test_the_unnamed_form_is_told_apart_by_its_keys_alone():
+    """'desc:' or 'implementation:' alone is the unnamed form too, and then names no condition."""
+    (scenario,) = cae.declared("dynamic", {"implementation": "elmer:dynamic"})
+    assert scenario.legacy
+    with pytest.raises(CaeConfigError, match="'dynamic:' declares none of 'fix:'"):
+        scenario.conditions()
+
+
+def test_another_analysis_s_condition_is_the_unnamed_form_refused_as_such():
+    """'outlet:' under 'fea:' is CFD's key in the wrong place, not a scenario called 'outlet'."""
+    (scenario,) = cae.declared("fea", {"fix": ["hub"], "outlet": ["tip"]})
+    assert scenario.legacy
+    with pytest.raises(CaeConfigError, match="'fea:' does not take outlet"):
+        scenario.conditions()
+
+
+def test_a_condition_beside_a_named_scenario_is_refused():
+    """A scenario's conditions one level too high, or a name one level too low."""
+    with pytest.raises(CaeConfigError, match="mixes boundary conditions .'fix:'. with scenarios .loaded."):
+        cae.declared("fea", {"fix": ["hub"], "loaded": {"load": {"hook": "1 N"}}})
+
+
+@pytest.mark.parametrize("section", [None, {}, [{"fix": ["hub"]}], "loaded"])
+def test_a_section_that_is_not_a_map_of_scenarios_is_refused(section):
+    with pytest.raises(CaeConfigError, match="'fea:'"):
+        cae.declared("fea", section)
+
+
+@pytest.mark.parametrize("names", [("arm/held", "arm_held"), ("Loaded", "loaded")])
+def test_two_scenarios_that_would_write_one_model_are_refused(names):
+    """Each would overwrite the other's model, and be handed back the other's answer."""
+    first, second = names
+    with pytest.raises(CaeConfigError, match="names the scenarios '%s' and '%s'" % (first, second)):
+        cae.declared("fea", {first: {"fix": ["x"]}, second: {"fix": ["x"]}})
+
+
+def test_a_scenario_name_is_spelt_as_every_other_name_is():
+    with pytest.raises(CaeConfigError, match="names a scenario 'a b'"):
+        cae.declared("fea", {"a b": {"fix": ["hub"]}})
+
+
+def test_a_malformed_scenario_names_itself_and_leaves_the_others_readable():
+    """Listing never fails on one scenario; its own run is what reports it."""
+    good, bad = cae.declared("fea", {"loaded": {"fix": ["hub"]}, "broken": {"load": {"hook": "5 bananas"}}})
+    assert good.conditions().fixtures
+    with pytest.raises(CaeConfigError, match="'fea: broken: load: hook:'") as raised:
+        bad.conditions()
+    assert "bananas" in str(raised.value)
+    with pytest.raises(CaeConfigError, match="'fea: empty:' is empty"):
+        cae.declared("fea", {"empty": None})[0].conditions()
+    with pytest.raises(CaeConfigError, match="'cfd: walls:' declares neither 'fix:' nor 'load:'"):
+        cae.declared("cfd", {"walls": {"desc": "nothing yet"}})[0].conditions()
+
+
+def test_what_a_scenario_says_about_itself():
+    """'desc:', 'feature:', 'implementation:' and 'params:', read without failing."""
+    (scenario,) = cae.declared(
+        "fea",
+        {
+            "loaded": {
+                "desc": "A full shelf",
+                "feature": "carries-a-shelf",
+                "implementation": " calculix:fea ",
+                "params": {"mesh_size": 0.01},
+                "fix": ["hub"],
+            }
+        },
+    )
+    assert scenario.desc == "A full shelf"
+    assert scenario.features == ["carries-a-shelf"]
+    assert scenario.implementation == "calculix:fea"
+    assert scenario.params == {"mesh_size": 0.01}
+    assert scenario.to_dict() == {
+        "name": "loaded",
+        "desc": "A full shelf",
+        "implementation": "calculix:fea",
+        "features": ["carries-a-shelf"],
+        "legacy": False,
+    }
+    config = scenario.conditions()
+    assert config.name == "loaded"
+    assert config.params == {"mesh_size": 0.01}
+    assert config.features == ["carries-a-shelf"]
+    assert config.implementation == "calculix:fea"
+
+
+def test_a_scenario_may_demonstrate_several_features():
+    (scenario,) = cae.declared("thermal", {"in-use": {"feature": ["cool", "", 7, "quiet"], "heat": {"chip": "1 W"}}})
+    assert scenario.features == ["cool", "quiet"]
+
+
+def test_params_have_to_be_a_map():
+    (scenario,) = cae.declared("fea", {"loaded": {"fix": ["hub"], "params": [1, 2]}})
+    with pytest.raises(CaeConfigError, match="'fea: loaded: params:' is not a map"):
+        scenario.conditions()
+
+
+def test_of_shape_reads_every_scenario_in_order():
+    shape = FakeShape({"fea": {"b": {"fix": ["x"]}, "a": {"fix": ["y"]}}})
+    assert [scenario.name for scenario in cae.of_shape(shape, "fea")] == ["b", "a"]
+    assert cae.of_shape(shape, "cfd") == []
+
+
+def test_the_unnamed_form_is_said_to_be_deprecated_once(caplog):
+    shape = FakeShape({"fea": {"fix": ["x"]}})
+    shape.project_name, shape.name = "//deprecation", "once"
+    with caplog.at_level("WARNING"):
+        cae.of_shape(shape, "fea")
+        cae.of_shape(shape, "fea")
+    assert caplog.text.count("deprecated") == 1
+    assert "//deprecation:once" in caplog.text
+
+
+def test_choose_takes_the_named_scenario_or_the_only_one():
+    scenarios = cae.declared("fea", {"a": {"fix": ["x"]}, "b": {"fix": ["y"]}})
+    assert cae.choose(scenarios, "b", "//p:q", "fea").name == "b"
+    assert cae.choose(scenarios[:1], None, "//p:q", "fea").name == "a"
+    with pytest.raises(CaeConfigError, match="declares 2 FEA scenarios .a, b.: name the one to run"):
+        cae.choose(scenarios, None, "//p:q", "fea")
+    with pytest.raises(CaeConfigError, match="declares no FEA scenario 'c'. It declares: a, b"):
+        cae.choose(scenarios, "c", "//p:q", "fea")
+
+
+def test_config_of_reads_one_scenario():
+    shape = FakeShape({"fea": {"a": {"fix": ["x"]}, "b": {"load": {"y": "2 N"}}}})
+    assert cae.config_of(shape, "fea", "b").loads == {"y": {EVERY_INSTANCE: 2.0}}
+    with pytest.raises(CaeConfigError, match="name the one to run"):
+        cae.config_of(shape, "fea")
+
+
+def test_each_scenario_writes_a_model_of_its_own():
+    """'bracket.fea.loaded.glb'; the unnamed form keeps 'bracket.fea.glb'."""
+    (named,) = cae.declared("fea", {"loaded": {"fix": ["x"]}})
+    (legacy,) = cae.declared("fea", {"fix": ["x"]})
+    (slashed,) = cae.declared("fea", {"arm/held": {"fix": ["x"]}})
+    assert cae.model_suffix("fea", named) == ".fea.loaded"
+    assert cae.model_suffix("fea", legacy) == ".fea"
+    assert cae.model_suffix("fea", None) == ".fea"
+    assert cae.model_suffix("cfd", slashed) == ".cfd.arm_held"
+
+
+def test_the_reports_name_the_scenario():
+    assert cae.findings_report("//p:q", "fea", [], scenario="loaded") == "//p:q: FEA 'loaded' found nothing to report"
+    assert cae.findings_report("//p:q", "fea", []) == "//p:q: FEA found nothing to report"
+    report = cae.findings_report("//p:q", "fea", [{"message": "too much"}], scenario="loaded")
+    assert report.startswith("//p:q: FEA 'loaded' findings:")
+    assert cae.dysfunction_report("//p:q", "fea", "//x:fea", Exception("no ccx"), scenario="loaded").startswith(
+        "//p:q: FEA 'loaded' could not be run by //x:fea"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# The schema                                                                  #
+# --------------------------------------------------------------------------- #
+
+
+def _valid(section, analysis="fea"):
+    import jsonschema
+
+    from partcad.lint.all import get_partcad_schema
+
+    config = {"parts": {"bracket": {"type": "step", analysis: section}}}
+    try:
+        jsonschema.validate(instance=config, schema=get_partcad_schema())
+    except jsonschema.exceptions.ValidationError:
+        return False
+    return True
+
+
+def test_the_schema_takes_named_scenarios():
+    assert _valid(
+        {
+            "loaded": {
+                "desc": "A full shelf",
+                "feature": ["carries-a-shelf"],
+                "params": {"mesh_size": 0.01},
+                "implementation": "//pub/feature/cae/calculix:fea",
+                "fix": ["m3-screw"],
+                "load": {"hook": "5 kg"},
+                "gravity": [0, 0, -9.81],
+            },
+            "dropped": {"fix": ["m3-screw"]},
+        }
+    )
+    assert _valid({"bolted-down": {"fix": ["m3-screw"]}}, "dynamic")
+    assert _valid({"in-use": {"heat": {"chip": "5 W"}}}, "thermal")
+    assert _valid({"poiseuille": {"load": {"inlet": "5 mN"}, "outlet": ["out"]}}, "cfd")
+
+
+def test_the_schema_still_takes_the_unnamed_form():
+    assert _valid({"fix": ["m3-screw"], "load": {"hook": "5 kg"}})
+    assert _valid({"implementation": "elmer:thermal", "temperature": {"root": 20}}, "thermal")
+
+
+def test_the_schema_refuses_what_the_reader_refuses():
+    # A scenario named after a key, which is what tells the two forms apart.
+    assert not _valid({"load": {"fix": ["m3-screw"]}})
+    # A condition beside a named scenario.
+    assert not _valid({"fix": ["m3-screw"], "loaded": {"load": {"hook": 1}}})
+    # A key the analysis does not read, in a scenario.
+    assert not _valid({"loaded": {"fix": ["m3-screw"], "outlet": ["out"]}})
+    # A name that is not one.
+    assert not _valid({"a b": {"fix": ["m3-screw"]}})
+    assert not _valid({})

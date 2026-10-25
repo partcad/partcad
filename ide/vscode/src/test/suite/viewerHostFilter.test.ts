@@ -9,7 +9,12 @@
 //
 // And when an Analysis tab asks for its analysis: the tab's id is the analysis
 // 'cae.analyze' is asked for, so a tab the renderer draws and the host does not
-// know is a tab that can only answer "nothing to fill it with".
+// know is a tab that can only answer "nothing to fill it with". What the part
+// declares for all four is asked under the group's id, 'analysis', and comes
+// back with the configured implementations beside it.
+//
+// And when a show arrives: the tab it asks for, and the scenario on that tab,
+// reach the renderer as they came.
 //
 
 import * as assert from 'assert';
@@ -69,18 +74,33 @@ suite('The Digital Thread host, asked to analyse', () => {
         cfd: '//pub/cae/openfoam:cfd',
     };
 
+    /** What 'cae.list' was asked with. */
+    const listed: Record<string, unknown>[] = [];
+
     suiteSetup(() => {
         registrations.push(
             vscode.commands.registerCommand('partcad.cae', (args: Record<string, unknown>) => {
                 sent.push(args);
-                return {
+                const entry = {
                     object: '//pkg:bracket',
                     analysis: args.analysis,
-                    implementation: args.implementation,
+                    scenario: args.scenario,
+                    implementation: args.implementation ?? defaults[args.analysis as string],
                     filepath: '/tmp/bracket.png',
                     extension: 'png',
                     content: '',
                     findings: [],
+                    error: null,
+                };
+                return { object: '//pkg:bracket', analysis: args.analysis, analyses: [entry], findings: [] };
+            }),
+            vscode.commands.registerCommand('partcad.caeList', (args: Record<string, unknown>) => {
+                listed.push(args);
+                return {
+                    object: '//pkg:bracket',
+                    kind: 'part',
+                    analyses: { fea: [{ name: 'loaded', implementation: null }], dynamic: [], thermal: [], cfd: [] },
+                    errors: {},
                 };
             }),
             vscode.commands.registerCommand('partcad.caeDefaults', () => defaults),
@@ -89,8 +109,12 @@ suite('The Digital Thread host, asked to analyse', () => {
 
     suiteTeardown(() => registrations.forEach((registration) => registration.dispose()));
 
-    test('asks for the analysis each tab is named after, and says which implementation it used', async () => {
-        sent.length = 0;
+    /** A host showing the bracket, and everything it posts to its webview. */
+    function bracket(): {
+        viewer: PartcadViewer;
+        host: { fetchTab(message: Record<string, unknown>): Promise<void> };
+        posted: Record<string, unknown>[];
+    } {
         const posted: Record<string, unknown>[] = [];
         const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
         const host = viewer as unknown as {
@@ -108,34 +132,97 @@ suite('The Digital Thread host, asked to analyse', () => {
             },
             dispose: () => undefined,
         };
+        return { viewer, host, posted };
+    }
+
+    test('runs the scenario asked for, of the analysis each tab is named after, overriding nothing it was not told to', async () => {
+        sent.length = 0;
+        const { viewer, host, posted } = bracket();
 
         let token = 0;
         for (const tab of ANALYSIS_TABS) {
-            await host.fetchTab({ tab, token: ++token });
+            await host.fetchTab({ tab, token: ++token, scenario: 'loaded' });
         }
         // A typed implementation is the override 'pc cae <analysis> --implementation' is.
-        await host.fetchTab({ tab: 'thermal', token: ++token, implementation: '//mine:thermal' });
+        await host.fetchTab({ tab: 'thermal', token: ++token, scenario: 'sunlit', implementation: '//mine:thermal' });
 
+        // Without one, none is sent: the daemon runs the scenario with the one
+        // it names, and failing that with the configured default. Sending the
+        // default from here would outrank what the scenario names.
         assert.deepStrictEqual(
-            sent.map((args) => [args.analysis, args.implementation, args.inline]),
+            sent.map((args) => [args.analysis, args.scenario, args.implementation, args.inline]),
             [
-                ['fea', defaults.fea, true],
-                ['dynamic', defaults.dynamic, true],
-                ['thermal', defaults.thermal, true],
-                ['cfd', defaults.cfd, true],
-                ['thermal', '//mine:thermal', true],
+                ['fea', 'loaded', undefined, true],
+                ['dynamic', 'loaded', undefined, true],
+                ['thermal', 'loaded', undefined, true],
+                ['cfd', 'loaded', undefined, true],
+                ['thermal', 'sunlit', '//mine:thermal', true],
             ],
         );
-        // Every answer carries the implementation back, to pre-fill the field
-        // over the model with - and none of them is a refusal.
+        // Every answer goes back to the tab that asked, and none of them is a refusal.
         assert.deepStrictEqual(
-            posted.map((message) => [message.tab, message.implementation, message.error]),
+            posted.map((message) => [message.tab, message.token, message.error]),
             [
-                ['fea', defaults.fea, undefined],
-                ['dynamic', defaults.dynamic, undefined],
-                ['thermal', defaults.thermal, undefined],
-                ['cfd', defaults.cfd, undefined],
-                ['thermal', '//mine:thermal', undefined],
+                ['fea', 1, undefined],
+                ['dynamic', 2, undefined],
+                ['thermal', 3, undefined],
+                ['cfd', 4, undefined],
+                ['thermal', 5, undefined],
+            ],
+        );
+        viewer.dispose();
+    });
+
+    test('asks what the part declares once, for all four, with the configured implementations beside it', async () => {
+        listed.length = 0;
+        const { viewer, host, posted } = bracket();
+
+        await host.fetchTab({ tab: 'analysis', token: 7 });
+
+        assert.deepStrictEqual(listed, [{ pkg: '//pkg', name: 'bracket' }]);
+        assert.strictEqual(posted.length, 1);
+        assert.strictEqual(posted[0].tab, 'analysis');
+        const data = posted[0].data as { analyses: Record<string, unknown[]>; defaults: Record<string, string> };
+        assert.deepStrictEqual(Object.keys(data.analyses), ['fea', 'dynamic', 'thermal', 'cfd']);
+        // The field over the model is pre-filled from these for a scenario that names none.
+        assert.deepStrictEqual(data.defaults, defaults);
+        viewer.dispose();
+    });
+});
+
+suite('The Digital Thread host, shown something', () => {
+    test('passes the tab and the scenario a show asks for on to the renderer, as they came', () => {
+        const posted: Record<string, unknown>[] = [];
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        const host = viewer as unknown as { panel: unknown };
+        host.panel = {
+            webview: {
+                postMessage: (message: Record<string, unknown>) => {
+                    posted.push(message);
+                    return Promise.resolve(true);
+                },
+            },
+            dispose: () => undefined,
+        };
+
+        // 'pc ide view --analysis-fea --scenario dropped'.
+        viewer.handle({
+            type: 'show',
+            name: 'bracket',
+            kind: 'part',
+            package: '//pkg',
+            tab: 'fea',
+            scenario: 'dropped',
+            object: null,
+        });
+        // And a show that asks for neither, which says so rather than leaving them out.
+        viewer.handle({ type: 'show', name: 'bracket', kind: 'part', package: '//pkg', object: null });
+
+        assert.deepStrictEqual(
+            posted.map((message) => [message.type, message.tab, message.scenario]),
+            [
+                ['show', 'fea', 'dropped'],
+                ['show', null, null],
             ],
         );
         viewer.dispose();

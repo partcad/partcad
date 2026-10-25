@@ -548,15 +548,20 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.supplyQuote', (a) =>
             this.send('supply.quote', { package: a.pkg, object: a.name, qos: a.qos, recursive: a.recursive }),
         );
-        // The Analysis tabs - FEA, Dynamic FEA, Heat Transfer and CFD. One
-        // command for all of them, as one operation backs every
-        // 'pc cae <analysis>' (fea, dynamic, thermal, cfd): which one is asked
-        // for is an argument, not a method.
+        // The Analysis tabs - FEA, Dynamic FEA, Heat Transfer and CFD. What a
+        // part declares for each of them is configuration, read on every show
+        // to decide which apply: the scenarios of every analysis, one request.
+        reg('partcad.caeList', (a) => this.send('cae.list', { package: a.pkg, object: a.name }));
+        // Running one is one command for all of them, as one operation backs
+        // every 'pc cae <analysis>' (fea, dynamic, thermal, cfd): which one is
+        // asked for is an argument, not a method, and so is the scenario of it
+        // ('pc cae <analysis> -f <name>'; left out, every scenario is run).
         reg('partcad.cae', (a) =>
             this.send('cae.analyze', {
                 package: a.pkg,
                 object: a.name,
                 analysis: a.analysis,
+                scenario: a.scenario,
                 implementation: a.implementation,
                 // The panel has no file system in reach, so the model comes back
                 // as bytes rather than as a path on the daemon's machine.

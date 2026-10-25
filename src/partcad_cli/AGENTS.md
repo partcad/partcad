@@ -48,10 +48,12 @@ drift apart.
 
 **`pc cae` is a daemon command, and the one thing about it that is not is the exit code.** An analysis reads
 the package graph and drives a CAD wrapper, which puts it squarely on the daemon's side; what stays in the
-client is that `pc cae fea` exits non-zero when the analysis produced a finding, so it can be used as a gate
-in a script. Both subcommands are the same operation with the analysis as an argument -- `click/analysis.py`
-holds the options and the body, the way `click/viewport.py` holds the three that `pc render` and
-`pc adhoc render` share, so the two commands are a name and a docstring each and cannot drift apart.
+client is that `pc cae fea` exits non-zero when one of the part's scenarios produced a finding or did not
+run, so it can be used as a gate in a script. Every scenario of the analysis is run, or the one `-f` names --
+the daemon's `cae.analyze` loops over them, as `simulate.run` does over simulations, and reports each. All
+four subcommands are the same operation with the analysis as an argument -- `click/analysis.py` holds the
+options and the body, the way `click/viewport.py` holds the three that `pc render` and `pc adhoc render`
+share, so the commands are a name and a docstring each and cannot drift apart.
 
 **`pc cam` is a daemon command too, and it is the one that is package-level.** A route reads the package graph
 and drives a CAD wrapper, like an analysis. What differs is what "no argument" means: `pc cae fea` is asked of
@@ -129,7 +131,8 @@ the two and is written down in both.
 `partcad_ide_client.protocol.VIEWER_TABS`, one per tab, and the tab goes to the daemon with `inspect.object` and
 from there onto the show itself (`KEY_TAB`) -- not as a message of its own from the client: the show is what
 decides which tabs apply, and two IDE windows sharing the viewer port share it by connection, so a second
-message could reach the other window.
+message could reach the other window. `--scenario` rides the same way (`KEY_SCENARIO`), and only with a tab
+that lists scenarios (`SCENARIO_TABS`): which simulation, or which scenario of an analysis, that tab selects.
 
 `pc ide state` is in-process for the same reason and makes **no** daemon call at all: it asks the PartCAD IDE
 on this machine what it is showing, over the socket the IDE already listens on for `show`

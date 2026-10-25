@@ -70,7 +70,7 @@ def context(ctx, name=None):
     return _partcad_context
 
 
-async def show(ctx, tree, name=None, kind=None, package=None, tab=None):
+async def show(ctx, tree, name=None, kind=None, package=None, tab=None, scenario=None):
     """Display one shape tree in the IDE's Digital Thread.
 
     'tree' is the object as 'Shape.get_representation(ctx, "gltf")' returns it:
@@ -83,7 +83,9 @@ async def show(ctx, tree, name=None, kind=None, package=None, tab=None):
     package and a name, not a name on its own.
 
     'tab' is the viewer tab to open on ('partcad_ide_client.protocol.KEY_TAB'),
-    or None to leave the viewer on whichever one it is on.
+    or None to leave the viewer on whichever one it is on; 'scenario' the
+    simulation or analysis scenario that tab is to select
+    ('partcad_ide_client.protocol.KEY_SCENARIO'), or None for its first.
 
     Never raises: a show is a side effect of browsing a package, and neither a
     missing IDE nor a shape that will not tessellate should fail the command
@@ -108,7 +110,7 @@ async def show(ctx, tree, name=None, kind=None, package=None, tab=None):
         _previously_displayed = name
 
         pc_logging.info('Visualizing in "Digital Thread"...')
-        client.show(tree, name=name, kind=kind, package=package, keep_camera=keep_camera, tab=tab)
+        client.show(tree, name=name, kind=kind, package=package, keep_camera=keep_camera, tab=tab, scenario=scenario)
         return True
     except client.ViewerNotAvailable as e:
         pc_logging.warning("%s" % e)

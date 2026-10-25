@@ -30,14 +30,14 @@ docs:
     force that holds that moment, and analysed under it.
 
     That last step is what the `/pc:sim-assembly-fea` skill does, and the
-    `fea:` section of `knee-gear` is what it wrote; see README.md for every
-    number, where it came from, and what the analysis found.
+    `dropped` scenario of `knee-gear`'s `fea:` is what it wrote; see README.md
+    for every number, where it came from, and what the analysis found.
 
   usage: |
     ```shell
-    pc sim -a arm --json     # both runs, and what acts on every body at their end
-    pc cae fea :knee-gear    # the gear under what the worm holds it with
-    pc test                  # both, as checks
+    pc sim -a arm --json              # both runs, and what acts on every body at their end
+    pc cae fea -f dropped :knee-gear  # the gear under what the worm holds it with
+    pc test                           # both, as checks
     ```
 
 assemblies:
@@ -143,29 +143,35 @@ parts:
     source: //pub/robotics/parts/gobilda:motion/worm_gear_28t
     desc: The worm gear of the arm's knee, under what the worm holds it with when the arm is at rest
     fea:
-      # It has to read a load's direction and a gravity ('reads:'), which
-      # CalculiX does -- and Elmer, Code_Aster and MOOSE, which README.md
-      # compares it with ('pc cae fea :knee-gear -i <implementation>').
-      implementation: //pub/feature/cae/calculix:fea
-      # Where its load leaves: it is bolted to its hub by the threaded holes of
-      # its hub side, as 'assembly-worm-gear' bolts it, and the hub is on the
-      # knee shaft.
-      fix:
-        //pub/robotics/parts/gobilda:4xM4-16mm-pattern-threaded-thru-4mm: [outer]
-      # Where it enters. The knee passes the lower arm -2.590 N*m about the
-      # gear's axis (its X); the worm holds that at the tooth in mesh, tooth 13
-      # -- 0.6 mm from where the worm's pitch cylinder touches the gear's pitch
-      # circle, at 159 degrees about X from +Y. On the pitch radius of 17.75 mm
-      # that is 145.9 N along the pitch circle, [0, -0.358, -0.934], and 53.1 N
-      # toward the axis, [0, 0.934, -0.358], from the 20 degree pressure angle.
-      # The worm's lead (5.7 degrees) adds 14.6 N along the axis, in a direction
-      # friction decides in a drive that holds; it is left out.
-      load:
-        "//pub/robotics/parts/gobilda:gear-28t;module=1.25,shift=0.2":
-          "13-tooth": [0 N, -2.7 N, -155.2 N]
-      # g - a in the gear's frame: at rest, the scene's gravity, which the gear
-      # standing on its edge has along its -Y and -Z.
-      gravity: [0, -8.962, -3.990]
+      # One scenario of the gear's stress analysis, named after the simulation
+      # and the reading it came from: the 'after' of 'dropped'. Another reading
+      # -- the worst moment of the swing, say (README.md, section 6) -- would be
+      # a scenario of its own beside it, which is what the skill writes.
+      dropped:
+        desc: At rest at the end of 'dropped', held by the worm at tooth 13
+        # It has to read a load's direction and a gravity ('reads:'), which
+        # CalculiX does -- and Elmer, Code_Aster and MOOSE, which README.md
+        # compares it with ('pc cae fea :knee-gear -i <implementation>').
+        implementation: //pub/feature/cae/calculix:fea
+        # Where its load leaves: it is bolted to its hub by the threaded holes of
+        # its hub side, as 'assembly-worm-gear' bolts it, and the hub is on the
+        # knee shaft.
+        fix:
+          //pub/robotics/parts/gobilda:4xM4-16mm-pattern-threaded-thru-4mm: [outer]
+        # Where it enters. The knee passes the lower arm -2.590 N*m about the
+        # gear's axis (its X); the worm holds that at the tooth in mesh, tooth 13
+        # -- 0.6 mm from where the worm's pitch cylinder touches the gear's pitch
+        # circle, at 159 degrees about X from +Y. On the pitch radius of 17.75 mm
+        # that is 145.9 N along the pitch circle, [0, -0.358, -0.934], and 53.1 N
+        # toward the axis, [0, 0.934, -0.358], from the 20 degree pressure angle.
+        # The worm's lead (5.7 degrees) adds 14.6 N along the axis, in a direction
+        # friction decides in a drive that holds; it is left out.
+        load:
+          "//pub/robotics/parts/gobilda:gear-28t;module=1.25,shift=0.2":
+            "13-tooth": [0 N, -2.7 N, -155.2 N]
+        # g - a in the gear's frame: at rest, the scene's gravity, which the gear
+        # standing on its edge has along its -Y and -Z.
+        gravity: [0, -8.962, -3.990]
     # What the gear is made of: goBILDA's 2314 series is brass. Free-cutting
     # brass (C36000), as cut: 97 GPa, 0.31, 124 MPa at yield, 8500 kg/m^3. Every
     # other parameter is the implementation's own.

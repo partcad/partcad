@@ -255,9 +255,10 @@ in the body's frame (`kinematics.parts_entry()`) -- and a run reports them as `r
 body, placement}` (`naming.parts_of()`). The body's pose and the placement are where the part is; the loads that act
 *on the part* are those whose `at` is on it -- a joint at one of its ports, a contact on its faces -- and the rest
 reach it through the parts it is welded to, which a rigid simulation does not see. Turning that into the part's
-boundary conditions is a modelling decision, and is the `/pc:sim-assembly-fea` skill's: it writes the part an
-`fea:` section with each load as a force with a direction in the part's frame and `gravity:` as `g - a` there, the
-two things a stress analysis needed and could not say until this (`partcad.cae`, `reads:`).
+boundary conditions is a modelling decision, and is the `/pc:sim-assembly-fea` skill's: it adds the part an
+FEA scenario -- one named entry of its `fea:`, beside any it has, named after the simulation and the reading --
+with each load as a force with a direction in the part's frame and `gravity:` as `g - a` there, the two things a
+stress analysis needed and could not say until this (`partcad.cae`, `reads:`).
 
 ### 4.3 What an exporter is handed (built)
 

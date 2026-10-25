@@ -2155,6 +2155,7 @@ def inspect_object(session, params):
     # Checked before anything is built: a misspelt tab costs a message, not a
     # tessellation.
     tab = _viewer_tab(params)
+    scenario = _viewer_scenario(params, tab)
     package = ctx.resolve_package_path(params.get("package"))
     package_obj = ctx.get_project(package)
     if not package_obj:
@@ -2200,9 +2201,10 @@ def inspect_object(session, params):
             # and builds nothing: there is nothing to stage for a question the
             # daemon answers without instantiating anything.
             _stage_subassemblies(session, ctx, obj)
-        # Which tab of the viewer to open on ('pc ide view --design-2d'). It
-        # rides on the show itself -- see 'partcad_ide_client.protocol.KEY_TAB'.
-        obj.show(ctx, tab=tab)
+        # Which tab of the viewer to open on ('pc ide view --design-2d'), and
+        # which of its scenarios to select ('--scenario'). Both ride on the show
+        # itself -- see 'partcad_ide_client.protocol.KEY_TAB'.
+        obj.show(ctx, tab=tab, scenario=scenario)
     return None
 
 
@@ -2216,6 +2218,22 @@ def _viewer_tab(params):
     if tab not in viewer_tab_ids():
         raise JsonRpcError(USAGE_ERROR, "Not a Digital Thread tab: %r (one of %s)" % (tab, ", ".join(viewer_tab_ids())))
     return tab
+
+
+def _viewer_scenario(params, tab):
+    """The scenario 'inspect.object' was asked to select on 'tab', or None; refused on a tab that lists none."""
+    scenario = params.get("scenario")
+    if scenario is None:
+        return None
+    from partcad_ide_client.protocol import SCENARIO_TABS
+
+    if tab not in SCENARIO_TABS:
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "A scenario is selected on a tab that lists them (one of %s), not on %s"
+            % (", ".join(SCENARIO_TABS), "no tab" if tab is None else repr(tab)),
+        )
+    return str(scenario)
 
 
 def version(session, params):
@@ -3323,8 +3341,8 @@ def manufacturing_plan(session, params):
 def cae_defaults(session, params):
     """Which implementation each CAE analysis runs under when nobody says otherwise.
 
-    Needed by a client that offers to change it -- the IDE's FEA and CFD tabs
-    have a field over the model -- because the answer is user configuration and
+    Needed by a client that offers to change it -- the IDE's analysis tabs have
+    a field over the model -- because the answer is user configuration and
     not anything about the object on screen. Not context-aware: nothing here
     reads a package.
     """
@@ -3434,25 +3452,37 @@ def test_report(session, params):
 
 
 def cae_analyze(session, params):
-    """Run a CAE analysis on a part and return the model it wrote and its findings.
+    """Run the scenarios of one CAE analysis a part declares, and return each one's model and findings.
 
-    Backs ``pc cae fea`` and ``pc cae cfd``; ``analysis`` says which. The part
-    declares the boundary conditions in a section of its own named after the
-    analysis (``fea:``/``cfd:``, see ``partcad.cae``) and the implementation is
-    whatever ``implementation`` -- or, failing that, the caller's user
-    configuration -- names, as ``<package>:<file type>``.
+    Backs ``pc cae fea``, ``pc cae dynamic``, ``pc cae thermal`` and ``pc cae
+    cfd``; ``analysis`` says which. The part declares its boundary conditions in
+    a section named after the analysis, as a map of named scenarios (``fea:
+    <name>:``, see ``partcad.cae``), and every one of them is run, one after
+    another -- or only the one ``scenario`` names, which is ``pc cae fea -f`` and
+    what the IDE's analysis tabs ask for, one scenario at a time. The
+    implementation is whatever ``implementation`` -- or, failing that, the
+    scenario's own ``implementation:``, or the caller's user configuration --
+    names, as ``<package>:<file type>``.
 
-    The model is written to ``<part>.<analysis>.<extension>`` beside the package,
-    as it stands: which format that is, and whether it is 2D or 3D, is the
-    implementation's decision and PartCAD does not convert it. ``inline`` asks
-    for its bytes to come back base64-encoded as well, which is what the IDE's
-    FEA and CFD tabs need -- a webview has no file system in reach, so a model it
+    Each model is written to ``<part>.<analysis>.<scenario>.<extension>`` beside
+    the package, as it stands: which format that is, and whether it is 2D or 3D,
+    is the implementation's decision and PartCAD does not convert it. ``inline``
+    asks for its bytes to come back base64-encoded as well, which is what the
+    IDE's tabs need -- a webview has no file system in reach, so a model it
     cannot be handed is a model it cannot draw.
 
-    A part that declares no such section, or declares it wrongly, is a
-    ``USAGE_ERROR`` carrying the sentence that says which: the answer the user
-    asked for rather than a failure of the machinery, and the very text the IDE
-    shows in the tab.
+    The answer is the one ``simulate.run`` gives for a part's simulations: an
+    entry per scenario under ``analyses``, each carrying ``error`` -- the
+    sentence that says why it produced no answer, or null -- and how many there
+    were and how many failed, with every finding of every scenario under
+    ``findings`` as well, tagged with its scenario, which is what ``pc cae
+    --json`` prints. One scenario's failure is that entry's and does not stop
+    the next: somebody fixing one wants to know about the others now.
+
+    What is refused as a ``USAGE_ERROR`` is what leaves nothing to run: an
+    analysis PartCAD does not run, a part that is not there, a part that
+    declares no such section or one that cannot be read, and a ``scenario`` the
+    section does not declare. Each carries the sentence that says which.
     """
     import asyncio
 
@@ -3481,66 +3511,175 @@ def cae_analyze(session, params):
         # nothing about which of its members carries it.
         raise JsonRpcError(USAGE_ERROR, "Part %s is not found" % path)
 
-    with pc.logging.Process(analysis.upper(), package, object_name):
-        try:
-            result = asyncio.run(
-                shape.analyze_async(
-                    ctx,
-                    analysis,
-                    implementation=params.get("implementation") or None,
-                    output_dir=params.get("output_dir") or None,
-                )
+    try:
+        scenarios = pc.cae.of_shape(shape, analysis)
+        if not scenarios:
+            raise pc.cae.CaeConfigError(
+                "%s declares no '%s:' section, so there is nothing to analyse" % (path, analysis)
             )
-        except pc.cae.CaeConfigError as e:
-            # "This part says nothing about FEA" and "what it says does not
-            # parse" are both answers, and both are what the tab prints.
-            raise JsonRpcError(USAGE_ERROR, str(e)) from e
-        except pc.runtime.SandboxUnavailable as e:
-            # No sandbox to run the analysis in is the same answer as an
-            # implementation that was asked and could not run: the part has no
-            # result, and the machine is why. Left to the dispatcher it came
-            # back as an internal error with a traceback -- a bug report about
-            # PartCAD rather than the two remedies the user needs. Reported the
-            # way 'pc test' reports it, so the command, the check and the IDE's
-            # tab say the same thing about the same machine.
-            raise JsonRpcError(
-                ANALYSIS_FAILED,
-                pc.cae.dysfunction_report(
-                    path,
-                    analysis,
-                    params.get("implementation") or "the configured implementation",
-                    e,
-                    remedy=pc.cae.NO_RUNTIME_REMEDY,
-                ),
-            ) from e
-        except pc.cae.CaeFailed as e:
-            # The implementation was asked and did not deliver. Reported as
-            # `Shape.analyze_async()` wrote it -- which implementation was
-            # asked, what it said, and which machine it did not work on -- so
-            # that `pc cae fea`, `pc test -f fea` and the IDE's FEA tab all say
-            # the same thing about the same machine. It is deliberately as loud
-            # as the check's failure: a user who ran the command and got one
-            # line, then ran the check and got the platform it failed on, was
-            # being told less by the command that exists to be asked.
-            raise JsonRpcError(ANALYSIS_FAILED, str(e)) from e
+        if params.get("scenario"):
+            scenarios = [pc.cae.choose(scenarios, params["scenario"], path, analysis)]
+    except pc.cae.CaeConfigError as e:
+        # "This part says nothing about FEA", "what it says does not parse" and
+        # "it has no scenario of that name" are all answers, and all are what
+        # the command prints.
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
 
-    if params.get("inline"):
-        import base64
+    entries = []
+    with pc.logging.Process(analysis.upper(), package, object_name):
+        for scenario in scenarios:
+            entries.append(asyncio.run(_cae_scenario_async(ctx, pc, shape, path, analysis, scenario, params)))
 
-        try:
-            with open(result["filepath"], "rb") as f:
-                result["content"] = base64.b64encode(f.read()).decode("ascii")
-        except OSError as e:
-            # The findings are still worth having: an implementation that
-            # reported them and then failed to leave the model where it said it
-            # would has answered the more important half of the question.
-            pc.logging.warning("Failed to read the %s model back: %s" % (analysis.upper(), e))
-            result["content"] = None
+    for entry in entries:
+        if entry["error"] is not None:
+            continue
+        if params.get("inline"):
+            import base64
 
-    if not params.get("json"):
-        pc.logging.info(pc.cae.findings_report(path, analysis, result["findings"]))
-        pc.logging.info("%s model: %s" % (analysis.upper(), result["filepath"]))
+            try:
+                with open(entry["filepath"], "rb") as f:
+                    entry["content"] = base64.b64encode(f.read()).decode("ascii")
+            except OSError as e:
+                # The findings are still worth having: an implementation that
+                # reported them and then failed to leave the model where it said
+                # it would has answered the more important half of the question.
+                pc.logging.warning("Failed to read the %s model back: %s" % (analysis.upper(), e))
+                entry["content"] = None
+        if not params.get("json"):
+            named = None if entry.get("legacy") else entry["scenario"]
+            pc.logging.info(pc.cae.findings_report(path, analysis, entry["findings"], scenario=named))
+            pc.logging.info("%s model: %s" % (pc.cae.titled(analysis, named), entry["filepath"]))
+
+    failed = [entry for entry in entries if entry["error"] is not None]
+    findings = [dict(finding, scenario=entry["scenario"]) for entry in entries for finding in entry["findings"]]
+    result = {
+        "object": path,
+        "analysis": analysis,
+        "analyses": entries,
+        "findings": findings,
+        "total": len(entries),
+        "failed": len(failed),
+        # What the CLI exits non-zero on, said once here rather than derived
+        # from the list by every caller: a finding is what the user asked
+        # about, so a run that produced one is a run whose answer is "no".
+        "ok": not failed and not findings,
+    }
+    if len(entries) == 1:
+        # The one scenario's model where a client written before there were
+        # scenarios reads it, which is the whole of what it asked for.
+        (entry,) = entries
+        for key in ("implementation", "filepath", "extension", "boundary", "content", "scenario"):
+            if key in entry:
+                result[key] = entry[key]
     return result
+
+
+async def _cae_scenario_async(ctx, pc, shape, path, analysis, scenario, params) -> dict:
+    """One scenario's run, as its entry of 'cae.analyze': what it produced, or why it produced nothing.
+
+    Every failure is said in the log as it is caught, by the report the command,
+    the check and the IDE's tab all say for it -- which implementation was asked,
+    what it said, and which machine it did not work on -- so that ``pc cae
+    fea``, ``pc test -f fea`` and the FEA tab tell a user the same thing about
+    the same machine.
+    """
+    named = None if scenario.legacy else scenario.name
+    entry = {
+        "object": path,
+        "analysis": analysis,
+        "scenario": scenario.name,
+        "desc": scenario.desc,
+        "legacy": scenario.legacy,
+        "implementation": params.get("implementation") or scenario.implementation,
+        "filepath": None,
+        "extension": None,
+        "findings": [],
+        "boundary": [],
+        "error": None,
+    }
+    try:
+        result = await shape.analyze_async(
+            ctx,
+            analysis,
+            implementation=params.get("implementation") or None,
+            output_dir=params.get("output_dir") or None,
+            scenario=scenario.name,
+        )
+    except pc.cae.CaeConfigError as e:
+        # The scenario is wrong: the sentence names it, and is what the tab
+        # prints where the model would have been.
+        entry["error"] = str(e)
+    except pc.runtime.SandboxUnavailable as e:
+        # No sandbox to run the analysis in is the same answer as an
+        # implementation that was asked and could not run: the part has no
+        # result, and the machine is why. Reported the way 'pc test' reports
+        # it, with both remedies.
+        entry["error"] = pc.cae.dysfunction_report(
+            path,
+            analysis,
+            params.get("implementation") or scenario.implementation or "the configured implementation",
+            e,
+            remedy=pc.cae.NO_RUNTIME_REMEDY,
+            scenario=named,
+        )
+    except pc.cae.CaeFailed as e:
+        # The implementation was asked and did not deliver. Reported as
+        # `Shape.analyze_async()` wrote it.
+        entry["error"] = str(e)
+    except Exception as e:
+        # Raised before the implementation was asked: it could not be resolved
+        # -- not a dependency, misspelt, a package that did not load. Wrong
+        # wherever the package is opened, and this scenario's alone: the next
+        # may name another one.
+        entry["error"] = "%s: the %s implementation could not be resolved: %s" % (
+            path,
+            pc.cae.titled(analysis, named),
+            e,
+        )
+    else:
+        entry.update(result)
+        entry["legacy"] = scenario.legacy
+        entry["error"] = None
+        return entry
+    pc.logging.error(entry["error"])
+    return entry
+
+
+def cae_list(session, params):
+    """The scenarios one part declares for each analysis, without running any.
+
+    What the IDE's Analysis tabs are enabled by and list: an analysis section is
+    configuration, so reading it costs what reading the part's configuration
+    costs -- nothing is built and nothing is run -- which is what makes it cheap
+    enough to ask on every show, the way ``simulate.list`` is for the Simulation
+    tab. Every analysis PartCAD runs is answered, with an empty list for one the
+    part declares nothing for: "nothing to analyse here" is the ordinary case. A
+    section that cannot be read is answered under ``errors`` with the sentence
+    that says why, and lists nothing.
+    """
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, object_name = resolved
+    path = _qualified(package, object_name)
+    shape = ctx.get_part(path)
+    if shape is None:
+        # Only a part is analysed; see 'cae_analyze'.
+        raise JsonRpcError(USAGE_ERROR, "Part %s is not found" % path)
+
+    analyses = {}
+    errors = {}
+    for analysis in pc.cae.ANALYSES:
+        try:
+            analyses[analysis] = [scenario.to_dict() for scenario in pc.cae.of_shape(shape, analysis)]
+        except pc.cae.CaeConfigError as e:
+            analyses[analysis] = []
+            errors[analysis] = str(e)
+    return {"object": path, "kind": "part", "analyses": analyses, "errors": errors}
 
 
 def cam_route(session, params):

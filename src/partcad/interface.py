@@ -1156,7 +1156,7 @@ class Interface:
         node.update(shape_ports.connection_metadata(self))
         return node
 
-    async def show_async(self, ctx=None, tab=None):
+    async def show_async(self, ctx=None, tab=None, scenario=None):
         from . import viewer
 
         ctx = viewer.context(ctx, self.name)
@@ -1170,7 +1170,9 @@ class Interface:
             pc_logging.error(e)
 
         if tree is not None:
-            await viewer.show(ctx, tree, name=self.name, kind="interface", package=self.project.name, tab=tab)
+            await viewer.show(
+                ctx, tree, name=self.name, kind="interface", package=self.project.name, tab=tab, scenario=scenario
+            )
 
-    def show(self, ctx=None, tab=None):
-        asyncio.run(self.show_async(ctx, tab=tab))
+    def show(self, ctx=None, tab=None, scenario=None):
+        asyncio.run(self.show_async(ctx, tab=tab, scenario=scenario))

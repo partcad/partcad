@@ -147,8 +147,10 @@ What the part does before anything is cut.
 - ``pc cae dynamic``, modal analysis: the natural frequencies of a part, held as it is
 - ``pc cae thermal``, heat transfer: what is held at a temperature, heated and cooled
 - ``pc cae cfd``, computational fluid dynamics: where the flow goes in and out, the rest a wall
-- The **FEA**, **Dynamic FEA**, **Heat Transfer** and **CFD** tabs of the Digital Thread run them on the
-  object on screen
+- Each a map of named scenarios, as ``simulate:`` is of simulations: ``pc cae fea`` runs them all, ``-f`` one,
+  and ``pc test`` holds the part to every one
+- The **FEA**, **Dynamic FEA**, **Heat Transfer** and **CFD** tabs of the Digital Thread list the scenarios of
+  the object on screen, and run the one selected
 
 =========
 Materials

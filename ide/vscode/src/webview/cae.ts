@@ -3,18 +3,16 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The Analysis tabs - FEA, Dynamic FEA, Heat Transfer and CFD: the model an
-// analysis produced, and what it found. One pane for all four, because what
-// differs between them is which solver runs and what it writes, and both of
-// those are the implementation's.
+// The Analysis tabs - FEA, Dynamic FEA, Heat Transfer and CFD: the model one
+// scenario of an analysis produced, and what it found. One drawing for all
+// four, because what differs between them is which solver runs and what it
+// writes, and both of those are the implementation's.
 //
-// The pane is three bands, top to bottom:
+// The pane is the part's scenarios down the left and, on the right, the field
+// naming which solver runs the selected one over two bands: that much is
+// 'analysis.ts', which lists and runs the scenarios and hands each answer here.
+// This file is the two bands, top to bottom:
 //
-//   * the implementation, in a field over the middle of the pane. It is the
-//     one thing about an analysis a user changes without editing a file - which
-//     solver ran it - and it is pre-filled with whichever one did, so that
-//     "CalculiX is not installed here" is a sentence with a box under it to type
-//     the answer into rather than an error and nowhere to go.
 //   * the model. Which of the two viewers draws it is decided by the file
 //     extension, because *which format* is the implementation's choice and not
 //     PartCAD's: a 3D field is turned and zoomed with an orbit camera, a 2D plot
@@ -43,6 +41,7 @@ import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
+import { CaeResultView } from './analysis';
 import { DEFAULT_COLOR } from './appearance';
 import { el, empty, placeholder } from './dom';
 import { IMAGE_TYPES, ImageView, decodeBase64 } from './image';
@@ -439,19 +438,17 @@ function dispose(object: THREE.Object3D): void {
 }
 
 /**
- * One analysis tab.
+ * What one analysis tab shows of the scenario selected in it: the model band and
+ * the findings band.
  *
- * It owns its pane outright - the header, the model band and the findings band -
- * and hands 'onRun' whatever the user typed into the implementation field.
- * Fetching is the shell's job ('viewer.ts'), the same as for every other tab.
+ * Built into the host 'analysis.ts' gives it - under the implementation field,
+ * beside the list of scenarios - and owned for the life of the panel, as that
+ * pane is. Which scenario's answer it is drawing is not its business: it draws
+ * what it is handed, and ends whatever it drew before.
  */
-export class CaeView {
+export class CaeResult implements CaeResultView {
     /** What the analysis is called on its tab, which is what the pane calls it too. */
     private readonly label: string;
-    private readonly field = el('input', 'cae-implementation') as HTMLInputElement;
-    /** Whether the user has typed in the field, which makes its value theirs. */
-    private edited = false;
-    private readonly body = el('div', 'cae-body');
     private readonly model = el('div', 'cae-model');
     private readonly findings = el('div', 'cae-findings');
     private imageView: ImageView | undefined;
@@ -465,58 +462,11 @@ export class CaeView {
      */
     private shown = 0;
 
-    constructor(pane: HTMLElement, analysis: AnalysisTabId, onRun: (implementation: string) => void) {
+    constructor(host: HTMLElement, analysis: AnalysisTabId) {
         this.label = ANALYSIS_LABELS[analysis];
-        pane.classList.add('cae');
-
-        const header = el('div', 'cae-header');
-        this.field.type = 'text';
-        this.field.spellcheck = false;
-        this.field.placeholder = '<package>:<file type>';
-        // The label where a person reads it, the id where they would type it:
-        // 'pc cae thermal' is the command, "Heat Transfer" is what it does.
-        this.field.title =
-            `Which implementation runs ${this.label}, as '<package>:<file type>'. ` +
-            `The same thing 'pc cae ${analysis} --implementation' names`;
-        this.field.setAttribute('aria-label', `${this.label} implementation`);
-
-        const run = el('button', 'cae-run', 'Run');
-        const fire = () => onRun(this.field.value.trim());
-        run.addEventListener('click', fire);
-        this.field.addEventListener('input', () => {
-            this.edited = true;
-        });
-        this.field.addEventListener('keydown', (event: KeyboardEvent) => {
-            if (event.key === 'Enter') {
-                fire();
-            }
-        });
-
-        header.appendChild(el('span', 'cae-header-label', 'Implementation'));
-        header.appendChild(this.field);
-        header.appendChild(run);
-
-        this.body.appendChild(this.model);
-        this.body.appendChild(this.findings);
-        pane.appendChild(header);
-        pane.appendChild(this.body);
-
+        host.appendChild(this.model);
+        host.appendChild(this.findings);
         this.setBusy('Waiting for PartCAD…');
-    }
-
-    /**
-     * Pre-fill the field with what the host used, without disturbing the user's.
-     *
-     * "Not disturbing" is not the same as "not focused". A user who types a
-     * package and clicks away has still typed it, and the answer to the run that
-     * was already in flight arrives afterwards - so what counts is whether this
-     * field has ever been edited, not where the caret is now. Once it has, the
-     * value is the user's and the host only ever gets to agree with it.
-     */
-    public suggest(implementation: string | undefined): void {
-        if (implementation && !this.edited) {
-            this.field.value = implementation;
-        }
     }
 
     /** The pane while the solver is running, which is not a quick thing. */
@@ -534,7 +484,6 @@ export class CaeView {
     }
 
     public render(data: CaeData): void {
-        this.suggest(data.implementation);
         this.showFindings(data.findings ?? []);
         const shown = this.clearModel();
 
@@ -542,7 +491,11 @@ export class CaeView {
         if (!data.content) {
             // The analysis ran and the model did not come back: the daemon says
             // so in the log, and the findings above are the half that matters.
-            this.model.appendChild(placeholder(`The model was written to ${data.filepath}.`));
+            this.model.appendChild(
+                placeholder(
+                    data.filepath ? `The model was written to ${data.filepath}.` : 'The analysis returned no model.',
+                ),
+            );
             return;
         }
 
@@ -577,7 +530,7 @@ export class CaeView {
         // have been drawn so an implementation author knows what to write.
         this.model.appendChild(
             placeholder(
-                `PartCAD cannot draw a '.${extension}' here. The model is at ${data.filepath}.\n` +
+                `PartCAD cannot draw a '.${extension || 'unknown'}' here. The model is at ${data.filepath || 'an unknown location'}.\n` +
                     `Drawable here: ${[...MESH_TYPES].join(', ')} in 3D, ${Object.keys(IMAGE_TYPES).join(', ')} as a picture.`,
             ),
         );

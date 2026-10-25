@@ -8,7 +8,7 @@ import functools
 
 import rich_click as click
 
-from partcad_ide_client.protocol import VIEWER_TABS
+from partcad_ide_client.protocol import SCENARIO_TABS, VIEWER_TABS
 
 from ... import object_kind
 from ...parameters import param_option, param_params
@@ -23,16 +23,16 @@ _TAB_HELP = {
     "3d": "the 3D view",
     "2d": "the 2D tab: the object rendered to a picture",
     "draft": "the Draft tab: a dimensioned drawing",
-    "fea": "the FEA tab, which runs the part's structural analysis",
-    "dynamic": "the Dynamic FEA tab, which finds the part's natural frequencies",
-    "thermal": "the Heat Transfer tab, which runs the part's thermal analysis",
-    "cfd": "the CFD tab, which runs the part's flow analysis",
+    "fea": "the FEA tab, which runs the first (or the '--scenario') of the part's structural analyses",
+    "dynamic": "the Dynamic FEA tab, which finds the part's natural frequencies in its first (or '--scenario') scenario",
+    "thermal": "the Heat Transfer tab, which runs the first (or the '--scenario') of the part's thermal analyses",
+    "cfd": "the CFD tab, which runs the first (or the '--scenario') of the part's flow analyses",
     "bvb": "the Build vs Buy tab",
     "build": "the Build tab: how what is built is made",
     "supply": "the Buy tab: where to buy what is bought",
     "bom": "the Bill of Materials tab",
     "assembly": "the Assembly tab: the assembly instructions",
-    "simulation": "the Simulation tab, which runs the first of the object's simulations",
+    "simulation": "the Simulation tab, which runs the first (or the '--scenario') of the object's simulations",
 }
 
 
@@ -125,14 +125,32 @@ def tab_options(command):
     is_flag=True,
     show_envvar=True,
 )
+@click.option(
+    "--scenario",
+    "scenario",
+    type=str,
+    default=None,
+    metavar="NAME",
+    help=(
+        "With the Simulation tab or an analysis tab: select the simulation or the analysis scenario the object "
+        "declares under this name, rather than the first"
+    ),
+)
 @param_option
 @tab_options
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
 @click.pass_context
 @click.pass_obj
-def cli(cli_ctx, context, verbal, package, interface, assembly, sketch, scene, params, object, tab):
+def cli(cli_ctx, context, verbal, package, interface, assembly, sketch, scene, scenario, params, object, tab):
     if tab is not None and verbal:
         raise click.UsageError("--verbal shows nothing in the viewer, so it opens no tab of it.")
+    if scenario is not None and tab not in SCENARIO_TABS:
+        # Before anything is asked of the daemon: a scenario is something a tab
+        # lists, and with no such tab there is nothing to select it in.
+        raise click.UsageError(
+            "--scenario selects one of what a tab lists; pass it with one of %s."
+            % ", ".join("--" + flag for flag, tab_id in _tab_flags() if tab_id in SCENARIO_TABS)
+        )
     rpc_params = {
         "verbal": verbal,
         "interface": interface,
@@ -148,6 +166,8 @@ def cli(cli_ctx, context, verbal, package, interface, assembly, sketch, scene, p
         # Only when asked for: a daemon from before the flags has no use for
         # the key, and every show without one leaves the viewer where it is.
         rpc_params["tab"] = tab
+    if scenario is not None:
+        rpc_params["scenario"] = scenario
 
     result = run(cli_ctx, "inspect.object", rpc_params, span_name="inspect", needs_context=True)
 

@@ -18,8 +18,9 @@ from .shape_config_store import resolve_store_properties
 from .utils import format_parameterized_name
 
 # What a reference may say about the object it points at, each section replacing
-# the source's whole: how it is made, and the boundary conditions each analysis
-# of it is run under (see 'get_final_config').
+# the source's whole: how it is made, and the scenarios each analysis of it is
+# run in -- all of them, so that a reference declaring one scenario is not asked
+# the source's others as well (see 'get_final_config').
 RESTATED = ("manufacturing",) + pc_cae.ANALYSES
 
 

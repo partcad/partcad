@@ -154,6 +154,25 @@
       "minLength": 1,
       "description": "Who runs this analysis, as '<package>:<file type>'. Overrides the user configuration option named after the analysis ('caeFeaImplementation', 'caeDynamicImplementation', 'caeThermalImplementation', 'caeCfdImplementation') for this object; '-i' on the command line overrides both. A part that names one is saying which solver it was written against"
     },
+    "cae-scenario-name": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_/./-]+$",
+      "description": "A scenario's name: what 'pc cae <analysis> -f' selects, what a report prints beside the findings, and what names the model file a run writes ('<part>.<analysis>.<name>.<extension>'). It cannot be a key a scenario takes, which is what tells a section of named scenarios from the one unnamed set of conditions a section used to be",
+      "not": {
+        "enum": ["desc", "feature", "implementation", "params", "fix", "load", "gravity", "outlet", "temperature", "heat", "convection"]
+      }
+    },
+    "cae-scenario-feature": {
+      "description": "The feature of this object's 'requirements:' that this scenario demonstrates, by name, or a list of them",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true }
+      ]
+    },
+    "cae-scenario-params": {
+      "type": "object",
+      "description": "Parameter values handed to the implementation for this scenario, overriding what its 'cae:' configuration says (e.g. 'mesh_size'); a run's own parameters override these in turn"
+    },
     "cae-set": {
       "description": "Interface types this object implements, each meaning every instance of it: a name, a list of names, or a map from a name to the instances meant (nothing under a name is all of them)",
       "oneOf": [
@@ -195,10 +214,24 @@
       "additionalProperties": false
     },
     "cae-fea": {
+      "description": "The scenarios a static stress analysis ('pc cae fea') is run in, each under a name of its own: 'fea: {<name>: {fix: ...}}'. The one unnamed set of conditions a section used to be is still read, as the scenario 'default', and is deprecated",
+      "oneOf": [
+        {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/cae-scenario-name" },
+          "additionalProperties": { "$ref": "#/definitions/cae-fea-scenario" },
+          "minProperties": 1
+        },
+        { "$ref": "#/definitions/cae-fea-scenario" }
+      ]
+    },
+    "cae-fea-scenario": {
       "type": "object",
-      "description": "The boundary conditions a static stress analysis ('pc cae fea') is run under. 'fix:' names what is held still, 'load:' what is pulled on; both name interface types this object implements, and 'load' values are a force (or a mass, which is the default reading of a bare number - in kilograms), or three of them, a force with a direction in the object's own frame. 'gravity:' is the acceleration of free fall the object is analysed in, in m/s^2 and its own frame",
+      "description": "One scenario: the boundary conditions a static stress analysis ('pc cae fea') is run under. 'fix:' names what is held still, 'load:' what is pulled on; both name interface types this object implements, and 'load' values are a force (or a mass, which is the default reading of a bare number - in kilograms), or three of them, a force with a direction in the object's own frame. 'gravity:' is the acceleration of free fall the object is analysed in, in m/s^2 and its own frame",
       "properties": {
         "desc": { "type": "string", "maxLength": 1000 },
+        "feature": { "$ref": "#/definitions/cae-scenario-feature" },
+        "params": { "$ref": "#/definitions/cae-scenario-params" },
         "implementation": { "$ref": "#/definitions/cae-implementation" },
         "fix": { "$ref": "#/definitions/cae-set" },
         "load": { "$ref": "#/definitions/cae-load-values" },
@@ -214,10 +247,24 @@
       "minProperties": 1
     },
     "cae-cfd": {
+      "description": "The scenarios a flow analysis ('pc cae cfd') is run in, each under a name of its own: 'cfd: {<name>: {fix: ...}}'. The one unnamed set of conditions a section used to be is still read, as the scenario 'default', and is deprecated",
+      "oneOf": [
+        {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/cae-scenario-name" },
+          "additionalProperties": { "$ref": "#/definitions/cae-cfd-scenario" },
+          "minProperties": 1
+        },
+        { "$ref": "#/definitions/cae-cfd-scenario" }
+      ]
+    },
+    "cae-cfd-scenario": {
       "type": "object",
-      "description": "The boundary conditions a flow analysis ('pc cae cfd') is run under. The object is the fluid volume. 'load:' names where the flow is driven in, as a force over the port's surface; 'outlet:' where it leaves, held at the reference pressure; 'fix:' names walls the fluid is held still against (an implementation treats every surface no condition names as a wall)",
+      "description": "One scenario: the boundary conditions a flow analysis ('pc cae cfd') is run under. The object is the fluid volume. 'load:' names where the flow is driven in, as a force over the port's surface; 'outlet:' where it leaves, held at the reference pressure; 'fix:' names walls the fluid is held still against (an implementation treats every surface no condition names as a wall)",
       "properties": {
         "desc": { "type": "string", "maxLength": 1000 },
+        "feature": { "$ref": "#/definitions/cae-scenario-feature" },
+        "params": { "$ref": "#/definitions/cae-scenario-params" },
         "implementation": { "$ref": "#/definitions/cae-implementation" },
         "fix": { "$ref": "#/definitions/cae-set" },
         "load": { "$ref": "#/definitions/cae-load-values" },
@@ -227,10 +274,24 @@
       "minProperties": 1
     },
     "cae-dynamic": {
+      "description": "The scenarios a dynamic (modal) analysis ('pc cae dynamic') is run in, each under a name of its own: 'dynamic: {<name>: {fix: ...}}'. The one unnamed set of conditions a section used to be is still read, as the scenario 'default', and is deprecated",
+      "oneOf": [
+        {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/cae-scenario-name" },
+          "additionalProperties": { "$ref": "#/definitions/cae-dynamic-scenario" },
+          "minProperties": 1
+        },
+        { "$ref": "#/definitions/cae-dynamic-scenario" }
+      ]
+    },
+    "cae-dynamic-scenario": {
       "type": "object",
-      "description": "The boundary conditions a dynamic (modal) analysis ('pc cae dynamic') is run under: 'fix:' names what is held still, and the analysis asks at which frequencies the object rings held so",
+      "description": "One scenario: the boundary conditions a dynamic (modal) analysis ('pc cae dynamic') is run under: 'fix:' names what is held still, and the analysis asks at which frequencies the object rings held so",
       "properties": {
         "desc": { "type": "string", "maxLength": 1000 },
+        "feature": { "$ref": "#/definitions/cae-scenario-feature" },
+        "params": { "$ref": "#/definitions/cae-scenario-params" },
         "implementation": { "$ref": "#/definitions/cae-implementation" },
         "fix": { "$ref": "#/definitions/cae-set" }
       },
@@ -238,10 +299,24 @@
       "minProperties": 1
     },
     "cae-thermal": {
+      "description": "The scenarios a heat transfer analysis ('pc cae thermal') is run in, each under a name of its own: 'thermal: {<name>: {temperature: ...}}'. The one unnamed set of conditions a section used to be is still read, as the scenario 'default', and is deprecated",
+      "oneOf": [
+        {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/cae-scenario-name" },
+          "additionalProperties": { "$ref": "#/definitions/cae-thermal-scenario" },
+          "minProperties": 1
+        },
+        { "$ref": "#/definitions/cae-thermal-scenario" }
+      ]
+    },
+    "cae-thermal-scenario": {
       "type": "object",
-      "description": "The boundary conditions a heat transfer analysis ('pc cae thermal') is run under. 'temperature:' names surfaces held at a temperature (a number is degrees Celsius; '300 K' and '100 F' are converted); 'heat:' surfaces heat is put in through, as a power (a number is watts; 'mW' and 'kW' are understood); 'convection:' surfaces cooled by the surrounding fluid, as a film coefficient in W/(m^2*K). Every other surface is insulated",
+      "description": "One scenario: the boundary conditions a heat transfer analysis ('pc cae thermal') is run under. 'temperature:' names surfaces held at a temperature (a number is degrees Celsius; '300 K' and '100 F' are converted); 'heat:' surfaces heat is put in through, as a power (a number is watts; 'mW' and 'kW' are understood); 'convection:' surfaces cooled by the surrounding fluid, as a film coefficient in W/(m^2*K). Every other surface is insulated",
       "properties": {
         "desc": { "type": "string", "maxLength": 1000 },
+        "feature": { "$ref": "#/definitions/cae-scenario-feature" },
+        "params": { "$ref": "#/definitions/cae-scenario-params" },
         "implementation": { "$ref": "#/definitions/cae-implementation" },
         "temperature": { "$ref": "#/definitions/cae-values" },
         "heat": { "$ref": "#/definitions/cae-values" },

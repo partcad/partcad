@@ -13,10 +13,12 @@ terms whoever asked for the design thinks in:
                 sentence saying what. Free text, because most of what a product
                 is asked for is not a number: "takes an M3 screw from either
                 side", "survives a drop from a desk". A ``simulate:`` entry can
-                name the feature it demonstrates (``feature:``), and everything
-                else is for a reader -- a person, or an LLM running
-                ``/pc:validate`` -- to judge against the renders, the bill of
-                materials and the instructions.
+                name the feature it demonstrates (``feature:``), and so can a
+                scenario of an engineering analysis (``fea: <name>:``, see
+                'partcad.cae') -- "carries a full shelf" is demonstrated by the
+                stress analysis under one. Everything else is for a reader -- a
+                person, or an LLM running ``/pc:validate`` -- to judge against
+                the renders, the bill of materials and the instructions.
     ports       the ports the object has to have, by name, and as much of where
                 each one is as matters. Every part of that may be null, and most
                 of it should be: "a port called 'top' that faces down" is a
@@ -63,7 +65,8 @@ written as a tilt about an axis across Z, it is 0.
 
 What is deliberately not here: any judgement about features. PartCAD checks
 what it can measure. Whether a part "survives a drop from a desk" is for a
-simulation that names the feature, or for whoever reads the evidence.
+simulation or an analysis that names the feature, or for whoever reads the
+evidence.
 """
 
 from __future__ import annotations
@@ -88,7 +91,8 @@ PHYSICS = "physics"
 STRUCTURED = (PORTS, INTERFACES, PHYSICS)
 
 # Where a feature reference that names nothing is reported: it is a mistake in
-# a 'simulate:' entry, not in the requirements.
+# a 'simulate:' entry, not in the requirements. One an analysis scenario makes
+# is reported under the analysis's own section ('fea', 'cfd', ...).
 SIMULATE = "simulate"
 
 # How close two numbers have to be to be the same number: a millimetre of
@@ -901,6 +905,10 @@ class Report:
         self.checks: list = []
         # feature name -> the 'simulate:' entries that name it, in declaration order.
         self.simulations: dict = {}
+        # feature name -> the analysis scenarios that name it, as
+        # {"analysis": "fea", "name": "<scenario>"}, in the order 'cae.ANALYSES'
+        # and then each section lists them.
+        self.analyses: dict = {}
 
     @property
     def defined(self) -> bool:
@@ -913,7 +921,14 @@ class Report:
     def to_dict(self) -> dict:
         features = []
         for name, desc in (self.declaration.features if self.declaration is not None else {}).items():
-            features.append({"name": name, "desc": desc, "simulations": list(self.simulations.get(name, []))})
+            features.append(
+                {
+                    "name": name,
+                    "desc": desc,
+                    "simulations": list(self.simulations.get(name, [])),
+                    "analyses": [dict(entry) for entry in self.analyses.get(name, [])],
+                }
+            )
         return {
             "object": self.object_name,
             "kind": self.kind,
@@ -925,10 +940,11 @@ class Report:
 
 
 def _feature_references(shape, declaration: typing.Optional[Declaration], report: Report) -> None:
-    """Which 'simulate:' entries demonstrate which feature, and which name a feature nobody declared."""
-    from . import simulation
+    """Which 'simulate:' entries and analysis scenarios demonstrate which feature, and which name one nobody declared."""
+    from . import cae, simulation
 
     features = declaration.features if declaration is not None else {}
+    declared = (": they declare %s" % ", ".join(sorted(features))) if features else ""
     for entry in simulation.of_shape(shape):
         for feature in entry.features:
             if feature in features:
@@ -941,10 +957,30 @@ def _feature_references(shape, declaration: typing.Optional[Declaration], report
                         "feature %s" % feature,
                         passed=False,
                         detail="the simulation names the feature '%s', which the requirements do not declare%s"
-                        % (
-                            feature,
-                            (": they declare %s" % ", ".join(sorted(features))) if features else "",
-                        ),
+                        % (feature, declared),
+                    )
+                )
+
+    for analysis in cae.ANALYSES:
+        try:
+            scenarios = cae.of_shape(shape, analysis)
+        except cae.CaeConfigError:
+            # A section that cannot be read is its analysis's own check to
+            # fail, with the sentence saying why; nothing in it names anything.
+            continue
+        for scenario in scenarios:
+            for feature in scenario.features:
+                if feature in features:
+                    report.analyses.setdefault(feature, []).append({"analysis": analysis, "name": scenario.name})
+                    continue
+                report.checks.append(
+                    Check(
+                        analysis,
+                        scenario.name,
+                        "feature %s" % feature,
+                        passed=False,
+                        detail="the %s scenario '%s' names the feature '%s', which the requirements do not declare%s"
+                        % (cae.LABELS[analysis], scenario.name, feature, declared),
                     )
                 )
 
@@ -1170,8 +1206,9 @@ def _declared(shape):
     """The report on 'shape' with nothing verified, and its checks by section.
 
     Every check a verified report will hold is already in it - the
-    declarations that cannot be read, a 'simulate:' entry naming a feature
-    nobody declares, and a line per port, interface and physical property -
+    declarations that cannot be read, a 'simulate:' entry or an analysis
+    scenario naming a feature nobody declares, and a line per port, interface
+    and physical property -
     so whether there is anything to check is known before anything is built.
     """
     object_name = "%s:%s" % (shape.project_name, shape.name)

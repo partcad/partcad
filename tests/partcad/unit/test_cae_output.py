@@ -782,8 +782,13 @@ def test_the_cache_key_of_a_malformed_section_is_its_own(package):
     good = asyncio.run(CaeTest(cae.FEA).cache_key_suffix(package, part))
     part.config["fea"] = {"load": {"hook": "5 bananas"}}
     broken = asyncio.run(CaeTest(cae.FEA).cache_key_suffix(package, part))
-    assert broken.startswith(".malformed=")
+    assert broken.startswith(".fea=")
     assert broken != good
+    # And a section that is not one at all, which no scenario can be read out of.
+    part.config["fea"] = "bananas"
+    unreadable = asyncio.run(CaeTest(cae.FEA).cache_key_suffix(package, part))
+    assert unreadable.startswith(".malformed=")
+    assert unreadable not in (good, broken)
 
 
 def test_an_undeclared_analysis_adds_nothing_to_the_cache_key(package):
@@ -1271,3 +1276,154 @@ def test_a_magnitude_is_still_answered_by_every_implementation(directed, monkeyp
     monkeypatch.setattr(part, "get_wrapped", run)
     with pytest.raises(cae.CaeFailed, match="reached the run"):
         asyncio.run(part.analyze_async(directed, cae.FEA))
+
+
+# --------------------------------------------------------------------------- #
+# Several scenarios of one analysis                                           #
+# --------------------------------------------------------------------------- #
+
+SCENARIOS = PACKAGE.replace(
+    """    fea:
+      fix:
+        - m3-screw
+      load:
+        hook: 5 kg
+""",
+    """    fea:
+      loaded:
+        desc: A full shelf on it
+        fix:
+          - m3-screw
+        load:
+          hook: 5 kg
+      finer:
+        params:
+          iterations: 7
+        fix:
+          - m3-screw
+        load:
+          hook: 10 kg
+""",
+)
+
+
+@pytest.fixture
+def scenarios(tmp_path, monkeypatch):
+    """The fixture package, its bracket asked two questions of one analysis."""
+    assert SCENARIOS != PACKAGE
+    (tmp_path / "partcad.yaml").write_text(SCENARIOS)
+    (tmp_path / "solve.py").write_text("def process(path, request):\n    return {'success': True}\n")
+    (tmp_path / "bracket.step").write_text("")
+    ctx = pc.Context(str(tmp_path))
+    monkeypatch.setattr(ctx.user_config, "cae_fea_implementation", "//cae-test:fea")
+    return ctx
+
+
+def test_each_scenario_names_its_own_model(scenarios):
+    """'bracket.fea.loaded.vtu': one model per scenario, or each run overwrites the last."""
+    part = _bracket(scenarios)
+    loaded, finer = cae.of_shape(part, cae.FEA)
+    project = scenarios.get_project("//cae-test")
+    _impl, first = part.analysis_getopts(scenarios, cae.FEA, cae.FEA, project, scenario=loaded)
+    _impl, second = part.analysis_getopts(scenarios, cae.FEA, cae.FEA, project, scenario=finer)
+    assert os.path.basename(first) == "bracket.fea.loaded.vtu"
+    assert os.path.basename(second) == "bracket.fea.finer.vtu"
+
+
+def test_the_unnamed_form_keeps_the_model_it_always_had(package):
+    """What a package's '.gitignore' already names, for a section not yet moved under a name."""
+    part = _bracket(package)
+    (legacy,) = cae.of_shape(part, cae.FEA)
+    assert legacy.legacy
+    _impl, filepath = part.analysis_getopts(
+        package, cae.FEA, cae.FEA, package.get_project("//cae-test"), scenario=legacy
+    )
+    assert os.path.basename(filepath) == "bracket.fea.vtu"
+
+
+def _capture_run(part, monkeypatch):
+    """Stand in for the solver run itself, recording what each scenario asked."""
+    asked = []
+
+    async def run_async(ctx, analysis, scenario, config, project, options_project, format_name, *args):
+        kwargs = args[-1]
+        asked.append((scenario.name, dict(kwargs), config.loads))
+        return {"findings": [], "filepath": "model"}
+
+    monkeypatch.setattr(part, "_analysis_run_async", run_async)
+    return asked
+
+
+def test_a_scenario_is_run_by_name(scenarios, monkeypatch):
+    part = _bracket(scenarios)
+    asked = _capture_run(part, monkeypatch)
+    result = asyncio.run(part.analyze_async(scenarios, cae.FEA, scenario="finer"))
+    assert result["scenario"] == "finer"
+    assert [name for name, _kwargs, _loads in asked] == ["finer"]
+    assert asked[0][2]["hook"][cae.EVERY_INSTANCE] == pytest.approx(10 * cae.GRAVITY)
+
+
+def test_the_scenario_s_params_are_under_the_run_s(scenarios, monkeypatch):
+    """'params:' re-tunes the implementation for one question; a run's own parameters win over it."""
+    part = _bracket(scenarios)
+    asked = _capture_run(part, monkeypatch)
+    asyncio.run(part.analyze_async(scenarios, cae.FEA, scenario="finer"))
+    asyncio.run(part.analyze_async(scenarios, cae.FEA, scenario="finer", iterations=11))
+    assert [kwargs for _name, kwargs, _loads in asked] == [{"iterations": 7}, {"iterations": 11}]
+
+
+def test_which_of_several_scenarios_is_meant_has_to_be_said(scenarios, monkeypatch):
+    part = _bracket(scenarios)
+    _capture_run(part, monkeypatch)
+    with pytest.raises(cae.CaeConfigError, match="declares 2 FEA scenarios .loaded, finer."):
+        asyncio.run(part.analyze_async(scenarios, cae.FEA))
+    with pytest.raises(cae.CaeConfigError, match="declares no FEA scenario 'heavier'"):
+        asyncio.run(part.analyze_async(scenarios, cae.FEA, scenario="heavier"))
+
+
+def test_the_check_runs_every_scenario_and_names_the_one_that_failed(scenarios, monkeypatch, caplog):
+    """One scenario's findings fail the part, and the other is run all the same."""
+    part = _bracket(scenarios)
+    asked = []
+
+    async def analyze_async(ctx, analysis, **kwargs):
+        asked.append(kwargs.get("scenario"))
+        if kwargs.get("scenario") == "loaded":
+            return {"findings": [{"message": "stress exceeds yield", "severity": "error"}]}
+        return {"findings": []}
+
+    monkeypatch.setattr(part, "analyze_async", analyze_async)
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], scenarios, part)) is CaeTest.TEST_FAILED
+    assert asked == ["loaded", "finer"]
+    assert "FEA 'loaded' findings" in caplog.text
+    assert "stress exceeds yield" in caplog.text
+    assert "finer" not in caplog.text
+
+
+def test_a_malformed_scenario_fails_alone(scenarios, monkeypatch, caplog):
+    part = _bracket(scenarios)
+    part.config["fea"]["finer"]["load"] = {"hook": "5 bananas"}
+    asked = []
+
+    async def analyze_async(ctx, analysis, **kwargs):
+        asked.append(kwargs.get("scenario"))
+        return {"findings": []}
+
+    monkeypatch.setattr(part, "analyze_async", analyze_async)
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], scenarios, part)) is CaeTest.TEST_FAILED
+    assert asked == ["loaded"]
+    assert "'fea: finer: load: hook:'" in caplog.text
+
+
+def test_every_scenario_is_in_the_cache_key(scenarios):
+    """Doubling the load of one scenario is a new question."""
+    part = _bracket(scenarios)
+    before = asyncio.run(CaeTest(cae.FEA).cache_key_suffix(scenarios, part))
+    part.config["fea"]["finer"]["load"] = {"hook": "20 kg"}
+    after = asyncio.run(CaeTest(cae.FEA).cache_key_suffix(scenarios, part))
+    part.config["fea"]["finer"]["load"] = {"hook": "10 kg"}
+    part.config["fea"]["finer"]["params"] = {"iterations": 8}
+    retuned = asyncio.run(CaeTest(cae.FEA).cache_key_suffix(scenarios, part))
+    assert len({before, after, retuned}) == 3

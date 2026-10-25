@@ -83,12 +83,22 @@ function data(overrides: Partial<RequirementsData> = {}): RequirementsData {
         features: [
             { name: 'stands', desc: 'Does not tip over', simulations: ['upright'] },
             { name: 'pretty', desc: 'Looks good', simulations: [] },
+            {
+                name: 'carries-a-shelf',
+                desc: 'Holds a full shelf',
+                simulations: [],
+                analyses: [
+                    { analysis: 'fea', name: 'loaded' },
+                    { analysis: 'thermal', name: 'sunlit' },
+                ],
+            },
         ],
         requirements: [
             check('physics', 'mass', true),
             check('ports', 'top', false),
             check('simulate', 'upright', false),
             check('interfaces', 'm3', true),
+            check('fea', 'dropped', false),
         ],
         ...overrides,
     };
@@ -120,7 +130,8 @@ suite('The Requirements tab', () => {
                 ['Ports', ['top']],
                 ['Interfaces', ['m3']],
                 ['Physics', ['mass']],
-                [PROBLEMS, ['upright']],
+                // A scenario naming a feature nobody declared is a problem too.
+                [PROBLEMS, ['upright', 'dropped']],
             ],
         );
     });
@@ -143,8 +154,47 @@ suite('The Requirements tab', () => {
         assert.strictEqual(LLM_HINT, 'Validate using /pc-validate');
     });
 
+    test('a feature lists the analysis scenarios that demonstrate it, after the simulations and before the LLM', () => {
+        const feature = {
+            name: 'carries-a-shelf',
+            desc: 'Holds a full shelf',
+            simulations: ['upright'],
+            analyses: [
+                { analysis: 'fea', name: 'loaded' },
+                { analysis: 'thermal', name: 'sunlit' },
+                // From a PartCAD that runs an analysis this extension has no tab for yet.
+                { analysis: 'acoustic', name: 'hum' },
+            ],
+        };
+
+        assert.deepStrictEqual(
+            bannersOf(feature).map((banner) => [banner.label, banner.kind]),
+            [
+                ['upright', 'simulation'],
+                ['FEA: loaded', 'analysis'],
+                ['Heat Transfer: sunlit', 'analysis'],
+                ['acoustic: hum', 'analysis'],
+                ['LLM', 'llm'],
+            ],
+        );
+        // The tooltip is the command that runs it, by the analysis's own id.
+        assert.strictEqual(
+            bannersOf(feature)[1].title,
+            "Demonstrated by the FEA scenario 'loaded' (pc cae fea -f loaded)",
+        );
+        assert.strictEqual(
+            bannersOf(feature)[2].title,
+            "Demonstrated by the Heat Transfer scenario 'sunlit' (pc cae thermal -f sunlit)",
+        );
+        // A daemon from before analyses had scenarios says nothing of them.
+        assert.deepStrictEqual(
+            bannersOf({ name: 'stands', desc: '', simulations: [] }).map((banner) => banner.kind),
+            ['llm'],
+        );
+    });
+
     test('the line over the lists says how it stands', () => {
-        assert.strictEqual(summary(data(), false), '2 of 4 requirements are met.');
+        assert.strictEqual(summary(data(), false), '2 of 5 requirements are met.');
         assert.strictEqual(
             summary(data({ requirements: [check('ports', 'top', true)] }), false),
             'The requirement is met.',
@@ -154,6 +204,7 @@ suite('The Requirements tab', () => {
             'Checking the model against what is required…',
         );
         assert.match(summary(data({ requirements: [] }), false), /Nothing here is for PartCAD to measure/);
+        assert.match(summary(data({ requirements: [] }), false), /by a simulation or an analysis/);
     });
 
     test('drawn, every requirement has its mark and every feature its banners', () => {
@@ -169,16 +220,21 @@ suite('The Requirements tab', () => {
                 ['mark pass', '✓'],
                 ['mark pass', '✓'],
                 ['mark fail', '✗'],
+                ['mark fail', '✗'],
             ],
         );
         const banners = find(root, 'banner');
         assert.deepStrictEqual(
             banners.map((banner) => banner.textContent),
-            ['upright', 'LLM', 'LLM'],
+            ['upright', 'LLM', 'LLM', 'FEA: loaded', 'Heat Transfer: sunlit', 'LLM'],
+        );
+        assert.deepStrictEqual(
+            find(root, 'analysis').map((banner) => banner.className),
+            ['banner analysis', 'banner analysis'],
         );
         assert.deepStrictEqual(
             find(root, 'llm').map((banner) => banner.title),
-            [LLM_HINT, LLM_HINT],
+            [LLM_HINT, LLM_HINT, LLM_HINT],
         );
     });
 

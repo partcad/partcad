@@ -1,6 +1,6 @@
 ---
 name: validate
-description: Validate a PartCAD part, assembly, scene or sketch against the requirements its `requirements:` section declares - run `pc test` for the ports, interfaces and physics PartCAD measures, run every simulation, render it from every angle that matters with its ports and interfaces drawn, read the bill of materials and the assembly instructions of an assembly, and reason about whether each feature is met. Use for /pc:validate, when the user asks whether a design meets its requirements, or when the IDE's Requirements tab points here ("Validate using /pc-validate").
+description: Validate a PartCAD part, assembly, scene or sketch against the requirements its `requirements:` section declares - run `pc test` for the ports, interfaces and physics PartCAD measures, run every simulation and every engineering analysis scenario, render it from every angle that matters with its ports and interfaces drawn, read the bill of materials and the assembly instructions of an assembly, and reason about whether each feature is met. Use for /pc:validate, when the user asks whether a design meets its requirements, or when the IDE's Requirements tab points here ("Validate using /pc-validate").
 ---
 
 # pc:validate
@@ -16,8 +16,10 @@ An object's `requirements:` has two halves, and they are validated two ways:
   verdict. You report it; you do not second-guess it.
 - **`features:`** — a name and a sentence each: "takes an M3 screw from either
   side", "does not tip over on a 10° slope". Some are demonstrated by a
-  simulation that names them (`feature:` on a `simulate:` entry). Every one of
-  them is for *you* to judge, from evidence you gathered and can point at.
+  simulation that names them (`feature:` on a `simulate:` entry), or by an
+  engineering analysis scenario that does (`feature:` on a scenario of a part's
+  `fea:`, `dynamic:`, `thermal:` or `cfd:`). Every one of them is for *you* to
+  judge, from evidence you gathered and can point at.
 
 The verdict on a feature is never a guess. If nothing you gathered shows it,
 the verdict is "cannot tell" and you say what evidence would settle it — not
@@ -29,10 +31,11 @@ Make sure PartCAD is available as `/pc:init` describes.
 
 ## 1. Read what is required
 
-Find the object in `partcad.yaml` and read its `requirements:` and its
-`simulate:` section. `pc --no-ansi info <object>` (whatever kind of
-object it is) prints the declaration too, through whatever an alias or an
-enrich points at.
+Find the object in `partcad.yaml` and read its `requirements:`, its
+`simulate:` section and, for a part, its analysis sections (`fea:`, `dynamic:`,
+`thermal:`, `cfd:`). `pc --no-ansi info <object>` (whatever kind of object it
+is) prints the declaration too, through whatever an alias or an enrich points
+at.
 
 ```yaml
 requirements:
@@ -47,6 +50,10 @@ requirements:
 simulate:
   <simulation>:
     feature: <name>                              # this simulation demonstrates that feature
+    ...
+fea:                                             # and dynamic:, thermal:, cfd:
+  <scenario>:
+    feature: <name>                              # this analysis scenario demonstrates that feature
     ...
 ```
 
@@ -102,6 +109,24 @@ simulator imported, no container runtime) is not evidence either way: say so.
 
 A `simulate:` entry naming a feature the requirements do not declare is a
 mistake `pc test` already reported; mention it.
+
+For a part, run the scenarios of every analysis it declares the same way, for
+the same reason -- `pc test`'s `fea`, `dynamic`, `thermal` and `cfd` checks give
+the verdict, and this gives what each scenario found:
+
+```sh
+pc --no-ansi cae <analysis> <part> --json 2>&1      # every scenario; -f <scenario> for one
+```
+
+once for each of `fea`, `dynamic`, `thermal` and `cfd` that the part declares
+(read in §1), and not for one it does not.
+
+A scenario that names a feature is evidence for it: no findings says the
+implementation saw nothing wrong under exactly those conditions, and the log
+carries what it measured (a peak stress, a first frequency, a temperature) --
+read that against the feature's sentence, since "holds 2 kg" is only shown by a
+scenario that loads it with 2 kg. One that could not run is not evidence either
+way: say so.
 
 ## 4. Look at it
 

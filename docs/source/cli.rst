@@ -439,8 +439,9 @@ Object commands
   The tests cover whether the object builds (``cad``), whether it can be manufactured or purchased
   (``manufacturability`` and the methods below it), whether an assembly's connection instructions can be
   followed (``connect``; see "Testing the instructions" in :doc:`assy`), whether the route a machine would cut
-  it with can be produced (``cam``; see :ref:`pc cam <cam>`), whether the engineering analyses a part asks
-  for come back clean (``fea``, ``dynamic``, ``thermal`` and ``cfd``; see :ref:`pc cae <cae>`), whether a
+  it with can be produced (``cam``; see :ref:`pc cam <cam>`), whether every scenario of the engineering
+  analyses a part asks for comes back clean (``fea``, ``dynamic``, ``thermal`` and ``cfd``; see
+  :ref:`pc cae <cae>`), whether a
   part or an assembly does what its ``simulate:`` section says it does (``sim``; see ``pc sim`` below), and
   whether the object has the ports, interfaces and physical properties its ``requirements:`` say it has to
   (``requirements``; see :ref:`requirements`). Those last seven apply only to an object that declares the
@@ -589,22 +590,28 @@ Object commands
 .. _cae:
 
 ``pc cae``
-  Run an engineering analysis on a part and report what it found. Subcommands, each its own question:
+  Run the scenarios of an engineering analysis of a part and report what each one found. Subcommands, each its
+  own question:
 
   - ``fea`` — finite element analysis: does the part hold up under what it carries;
   - ``dynamic`` — dynamic (modal) finite element analysis: at which frequencies does it ring, held as it is;
   - ``thermal`` — heat transfer: how hot does it get, heated and cooled as it is;
   - ``cfd`` — computational fluid dynamics: how does a fluid flow through it.
 
-  Each takes one part::
+  Each takes one part, and runs every scenario of the analysis the part declares, one after another -- or with
+  ``-f <scenario>`` only the one of that name, as ``pc sim -f`` runs one simulation::
 
-      pc cae fea :bracket
+      pc cae fea :bracket                 # every FEA scenario of the bracket
+      pc cae fea -f loaded :bracket       # one of them
       pc cae dynamic :bracket
       pc cae thermal :heatsink
       pc cae cfd -i //pub/feature/cae/openfoam:cfd :duct
 
-  The part declares its boundary conditions in a section named after the analysis, and each analysis reads its
-  own keys. Every key names interface types the part implements, in one of two shapes. A *set* — ``fix:``,
+  The part declares its boundary conditions in a section named after the analysis, as a map of named
+  **scenarios** -- every question of that kind it is asked, each under a name of its own, the way ``simulate:``
+  holds simulations. The name is what ``-f`` selects, what a report prints beside the findings, what names the
+  model file, and what the IDE lists on the analysis's tab. Each analysis reads its own keys. Every key names
+  interface types the part implements, in one of two shapes. A *set* — ``fix:``,
   ``outlet:`` — is a list of interface types, or a map from an interface type to the instances of it meant. A
   *value* — ``load:``, ``temperature:``, ``heat:``, ``convection:`` — is a map from an interface type to one
   value for all of its instances, or a nested map naming the instance::
@@ -614,23 +621,43 @@ Object commands
           type: build123d
           path: bracket.py
           fea:
-            fix:
-              - m3-screw          # every instance of it is held
-            load:
-              hook: 5 kg          # every instance carries this
-              rail:
-                left: 30 N        # one named instance carries this
-                right: 30 N
+            loaded:               # a scenario, by name
+              desc: A full shelf on it
+              feature: carries-a-shelf   # the requirement it demonstrates
+              fix:
+                - m3-screw        # every instance of it is held
+              load:
+                hook: 5 kg        # every instance carries this
+                rail:
+                  left: 30 N      # one named instance carries this
+                  right: 30 N
+            hook-only:            # another, asked of the same part
+              fix:
+                - m3-screw
+              load:
+                hook: 10 kg
           dynamic:
-            fix:
-              - m3-screw          # held, and left to ring
+            bolted-down:
+              fix:
+                - m3-screw        # held, and left to ring
           thermal:
-            temperature:
-              m3-screw: 40 C      # held at a temperature
-            heat:
-              hook: 2 W           # heat put in through the port's surface
-            convection:
-              rail: 10            # cooled by the air, W/(m^2*K)
+            in-use:
+              temperature:
+                m3-screw: 40 C    # held at a temperature
+              heat:
+                hook: 2 W         # heat put in through the port's surface
+              convection:
+                rail: 10          # cooled by the air, W/(m^2*K)
+
+  Beside its conditions, every scenario takes ``desc:``; ``feature:``, the feature of the part's
+  :ref:`requirements <requirements>` it demonstrates (a name or a list, which the IDE's Requirements tab lists
+  beside the simulations that name it, and which ``pc test`` fails when the requirements declare no such
+  feature); ``implementation:`` (see below); and ``params:``, the implementation's parameters for this scenario
+  alone -- a finer ``mesh_size`` where the load is concentrated, say -- over what its configuration says, and
+  under what ``-p`` says for one run. A scenario cannot be named after any of those keys or after a condition,
+  which is what tells a map of scenarios from the one unnamed set of conditions a section used to be. That form
+  -- ``fea: {fix: [...], load: {...}}`` -- is still read, as one scenario named ``default`` whose model keeps the
+  name it always had, and PartCAD warns once that it is deprecated.
 
   .. list-table::
      :header-rows: 1
@@ -665,23 +692,25 @@ Object commands
   A force so written is a magnitude, and the implementation applies it the way it always has — CalculiX straight
   down, along -Z, which is where a weight goes. A ``load`` may also be **three** of them, ``[x, y, z]`` in the
   part's own frame: a force *with a direction*, which is what a simulation measures acting on a part (see
-  :ref:`sim-loads`). And ``fea:`` takes one key that names no interface, ``gravity:``, the acceleration of free
-  fall the part is analysed in, in m/s² and the part's own frame — for a part a simulation found upside down, or
-  accelerating, whose weight is then its mass times ``g - a``. Without it the implementation weighs the part
-  under its own gravity::
+  :ref:`sim-loads`). And an ``fea:`` scenario takes one key that names no interface, ``gravity:``, the
+  acceleration of free fall the part is analysed in, in m/s² and the part's own frame — for a part a simulation
+  found upside down, or accelerating, whose weight is then its mass times ``g - a``. Without it the
+  implementation weighs the part under its own gravity::
 
       fea:
-        fix:
-          //pub/robotics/parts/gobilda:4xM4-16mm-pattern-threaded-thru-4mm: [outer]
-        load:
-          "//pub/robotics/parts/gobilda:gear-28t;module=1.25,shift=0.2":
-            "13-tooth": [0 N, -2.7 N, -155.2 N]    # the tooth the worm holds it by
-        gravity: [0, -8.962, -3.990]               # the gear stands on its edge here
+        dropped:
+          fix:
+            //pub/robotics/parts/gobilda:4xM4-16mm-pattern-threaded-thru-4mm: [outer]
+          load:
+            "//pub/robotics/parts/gobilda:gear-28t;module=1.25,shift=0.2":
+              "13-tooth": [0 N, -2.7 N, -155.2 N]    # the tooth the worm holds it by
+          gravity: [0, -8.962, -3.990]               # the gear stands on its edge here
 
   A name under an interface is one of its instances, or one of their **ports**: a gear draws each tooth as a
   port of one instance, so a tooth is loaded by its port's name. That is a whole example, in
   ``examples/feature_simulate_fea``: the gear in a robot arm's knee, under what the worm holds it with at the end
-  of a simulation of the arm.
+  of a simulation of the arm -- the scenario the ``/pc:sim-assembly-fea`` skill adds, named after the
+  simulation it came from.
 
   Both have to be *read* by the implementation, and one that does not would answer as if they had not been
   written. So an implementation says which it reads (``reads:`` on its file type, see :ref:`cae-section`), and an
@@ -706,17 +735,22 @@ Object commands
   a freeform face that comes that near whole, because a curve drawn on one is what a mesher fails on. Either
   way the analysis warns, naming the port and the area it loaded: the port's frame is still worth correcting.
 
-  The model the analysis produces is written to ``<part>.<analysis>.<extension>`` and saved as it stands.
-  Which format that is — 3D or 2D — is the implementation's choice, and PartCAD does not convert it. The
-  **findings** are the other half of the answer: a JSON array of what the analysis has to say about the part,
-  printed as a table, or as the array itself with ``--json``. ``pc cae`` exits non-zero when there is at least
-  one, so it can be used as a gate.
+  The model each scenario produces is written to ``<part>.<analysis>.<scenario>.<extension>``
+  (``bracket.fea.loaded.glb``, with a ``/`` in the name written ``_``) and saved as it stands. Two scenarios of
+  one section whose models would be one file -- ``arm/held`` and ``arm_held``, or ``Loaded`` and ``loaded``,
+  which are one file wherever a filesystem ignores case -- are refused rather than left to overwrite each
+  other's. Which format the model is — 3D or 2D — is the implementation's choice, and PartCAD does not convert
+  it. The **findings** are the other half of the answer: a JSON array of
+  what the analysis has to say about the part, printed as a table under the scenario it is of, or with
+  ``--json`` as one array of every scenario's findings, each carrying the ``scenario`` it is of. ``pc cae``
+  exits non-zero when there is at least one, or when a scenario did not run -- each says why in the log, and
+  the others are run all the same -- so it can be used as a gate.
 
   Who runs the analysis is ``<package>:<file type>``. It defaults to the :doc:`user configuration
   <configuration>` option named after the analysis — ``caeFeaImplementation`` (``//pub/feature/cae/calculix:fea``),
   ``caeDynamicImplementation`` (``//pub/feature/cae/elmer:dynamic``), ``caeThermalImplementation``
-  (``//pub/feature/cae/elmer:thermal``) and ``caeCfdImplementation`` (``//pub/feature/cae/openfoam:cfd``) — and
-  ``-i``/``--implementation`` overrides it for one run. PartCAD
+  (``//pub/feature/cae/elmer:thermal``) and ``caeCfdImplementation`` (``//pub/feature/cae/openfoam:cfd``) — a
+  scenario's own ``implementation:`` outranks that, and ``-i``/``--implementation`` outranks both for one run. PartCAD
   ships no solver: an implementation is a package like any other, declared in a ``cae:`` section exactly as an
   export or a render implementation is declared in its own (see :ref:`output-files`), and installed as a
   dependency.
@@ -728,8 +762,9 @@ Object commands
   who ran one of them and then the other must not be told two different things about the same machine.
 
   ``pc test`` runs the same analyses. Its ``fea``, ``dynamic``, ``thermal`` and ``cfd`` tests apply to a part that declares the matching
-  section — and to nothing else, so a package of bolts pays nothing for them. **One thing passes: the analysis
-  ran and reported no findings.** A malformed section fails; a plugin that cannot be resolved fails (the
+  section — and to nothing else, so a package of bolts pays nothing for them — and run every scenario of it,
+  failing the part on any of them and naming which. **One thing passes: every scenario ran and reported no
+  findings.** A malformed section fails; a plugin that cannot be resolved fails (the
   package is not a dependency, did not load, or declares no such file type — the configuration is wrong
   wherever the package is opened); a plugin that resolves and cannot run fails too, whether what is missing is
   the solver, the mesher, or a sandbox that will not build. That last one is not a skip on purpose: a part
@@ -1158,17 +1193,20 @@ instead.
   read: ``--design-3d``, ``--design-2d``, ``--design-draft``; ``--analysis-fea``, ``--analysis-dynamic``,
   ``--analysis-thermal``, ``--analysis-cfd``; ``--manufacturing-bvb``, ``--manufacturing-build``,
   ``--manufacturing-buy``, ``--manufacturing-bom``, ``--manufacturing-assembly``; ``--validation-test``,
-  ``--validation-simulation``. With none, the viewer stays on whichever tab it is on. The tab travels with the
+  ``--validation-simulation``. With none, the viewer stays on whichever tab it is on. The analysis tabs and the
+  Simulation tab list what the object declares -- its scenarios of that analysis, its simulations -- and select
+  the first; ``--scenario <name>`` selects the one of that name instead, and is refused with any other tab. The tab travels with the
   shape, so it is the window that draws the object that switches; a tab that does not apply to the object (FEA
   of an assembly) is not opened, and one that is not known yet (Build, until the viewer has worked out what is
   built; Simulation, until it has read what the object declares under ``simulate:``) is opened as soon as it
-  is. Opening an analysis tab runs the analysis, and opening Simulation runs the first simulation, as clicking
-  them does.
+  is. Opening an analysis tab runs the scenario it selects, and opening Simulation runs the simulation it
+  selects, as clicking them does.
 
   .. code-block:: shell
 
-    pc ide view --design-2d :logo              # the logo assembly, rendered to a picture
-    pc ide view --analysis-fea :cantilever     # the cantilever, with its FEA run
+    pc ide view --design-2d :logo                                 # the logo assembly, rendered to a picture
+    pc ide view --analysis-fea :cantilever                        # the cantilever, with its first FEA scenario run
+    pc ide view --analysis-fea --scenario tip-load :cantilever    # that one by name
 
 ``pc ide install``
   Install the PartCAD extension into an editor on this machine -- the PartCAD IDE, VSCodium or Visual Studio

@@ -376,12 +376,13 @@ read from the cache.
 
 The `features:` are sentences rather than measurements, and are judged by the
 `/pc:validate` agent skill. What this check asks of them is only that a
-`simulate:` entry naming one (`feature:`) names one that is declared.
+`simulate:` entry or an analysis scenario naming one (`feature:`) names one that
+is declared.
 
 ### When it does not apply
 
 An object that requires no port, interface or physical property, and whose
-simulations name no feature.
+simulations and analysis scenarios name no feature.
 
 ### When it fails
 
@@ -560,9 +561,10 @@ machine: start a container runtime, or install what it needs.
         "Structural analysis (FEA)",
         "parts that declare an `fea:` section",
         """
-Whether a part holds up under the loads its `fea:` section declares: the
-analysis is run by the implementation configured, and the part passes when it
-ran and found nothing - the same analysis as `pc cae fea`.
+Whether a part holds up under the loads each scenario of its `fea:` section
+declares: every scenario is run by the implementation configured, and the part
+passes when each of them ran and found nothing - the same analyses as `pc cae
+fea`, which runs one of them with `-f <scenario>`.
 
 ### When it does not apply
 
@@ -570,32 +572,35 @@ Anything but a part, and a part that declares no `fea:` section.
 
 ### When it fails
 
-- A sentence about the section (`'fea:' declares neither 'fix:' nor 'load:'`,
-  a key it does not take): fix the section.
-- `FEA could not be run by ...`: the solver or the mesher is not installed, or
-  failed; the report says which. Install it, or name another implementation.
-- `FEA findings: ...`: the analysis ran and found a problem - a stress, a
-  deflection - at the place named. Change the design, or the load if the load is
-  what is wrong.
+- A sentence about a scenario (`'fea: loaded:' declares neither 'fix:' nor
+  'load:'`, a key it does not take): fix the scenario it names.
+- `FEA 'loaded' could not be run by ...`: the solver or the mesher is not
+  installed, or failed; the report says which. Install it, or name another
+  implementation.
+- `FEA 'loaded' findings: ...`: the analysis ran and found a problem - a stress,
+  a deflection - at the place named. Change the design, or the load if the load
+  is what is wrong.
 
 It is skipped, with a warning, only where the implementation runs in a container
 and there is no container runtime here.
 
 ### Settings
 
-`fea: fix:`, `load:` (a force; a bare number is kilograms) and `implementation:`;
-the user setting `caeFeaImplementation`.
+`fea: <scenario>: fix:`, `load:` (a force; a bare number is kilograms),
+`gravity:`, `implementation:` and `params:`; the user setting
+`caeFeaImplementation`.
 """,
     ),
     "dynamic": Entry(
         "Vibration analysis (Dynamic FEA)",
         "parts that declare a `dynamic:` section",
         """
-Whether a part, held as its `dynamic:` section says, rings only where it may:
-the modal analysis is run by the implementation configured, and the part passes
-when it ran and found nothing - the same analysis as `pc cae dynamic`. A natural
+Whether a part, held as each scenario of its `dynamic:` section says, rings only
+where it may: the modal analysis of every scenario is run by the implementation
+configured, and the part passes when each ran and found nothing - the same
+analyses as `pc cae dynamic`. A natural
 frequency is a property of the part and how it is held, not of what it carries,
-so the section says only where it is held.
+so a scenario says only where it is held.
 
 ### When it does not apply
 
@@ -603,29 +608,32 @@ Anything but a part, and a part that declares no `dynamic:` section.
 
 ### When it fails
 
-- A sentence about the section (`'dynamic:' declares none of 'fix:'`, a key it
-  does not take, such as `load:`): fix the section.
-- `DYNAMIC could not be run by ...`: the solver or the mesher is not installed,
-  or failed; the report says which. Install it, or name another implementation.
-- `DYNAMIC findings: ...`: the analysis ran and found a problem - a mode where
-  the part must not ring. Change how it is held, or its stiffness or mass.
+- A sentence about a scenario (`'dynamic: bolted:' declares none of 'fix:'`, a
+  key it does not take, such as `load:`): fix the scenario it names.
+- `DYNAMIC 'bolted' could not be run by ...`: the solver or the mesher is not
+  installed, or failed; the report says which. Install it, or name another
+  implementation.
+- `DYNAMIC 'bolted' findings: ...`: the analysis ran and found a problem - a
+  mode where the part must not ring. Change how it is held, or its stiffness or
+  mass.
 
 It is skipped, with a warning, only where the implementation runs in a container
 and there is no container runtime here.
 
 ### Settings
 
-`dynamic: fix:` (the interfaces it is held by) and `implementation:`; the user
-setting `caeDynamicImplementation`.
+`dynamic: <scenario>: fix:` (the interfaces it is held by), `implementation:`
+and `params:`; the user setting `caeDynamicImplementation`.
 """,
     ),
     "thermal": Entry(
         "Heat transfer",
         "parts that declare a `thermal:` section",
         """
-Whether a part, heated and cooled as its `thermal:` section says, stays as cool
-as it has to: the analysis is run by the implementation configured, and the part
-passes when it ran and found nothing - the same analysis as `pc cae thermal`.
+Whether a part, heated and cooled as each scenario of its `thermal:` section
+says, stays as cool as it has to: every scenario is run by the implementation
+configured, and the part passes when each ran and found nothing - the same
+analyses as `pc cae thermal`.
 
 ### When it does not apply
 
@@ -633,11 +641,13 @@ Anything but a part, and a part that declares no `thermal:` section.
 
 ### When it fails
 
-- A sentence about the section (`'thermal:' declares none of 'temperature:',
-  'heat:', 'convection:'`, a key it does not take): fix the section.
-- `THERMAL could not be run by ...`: the solver or the mesher is not installed,
-  or failed; the report says which. Install it, or name another implementation.
-- `THERMAL findings: ...`: the analysis ran and found a problem - a temperature
+- A sentence about a scenario (`'thermal: in-use:' declares none of
+  'temperature:', 'heat:', 'convection:'`, a key it does not take): fix the
+  scenario it names.
+- `THERMAL 'in-use' could not be run by ...`: the solver or the mesher is not
+  installed, or failed; the report says which. Install it, or name another
+  implementation.
+- `THERMAL 'in-use' findings: ...`: the analysis ran and found a problem - a temperature
   the part must not reach - at the place named. Change the design, how it is
   cooled, or the heat if the heat is what is wrong.
 
@@ -646,18 +656,18 @@ and there is no container runtime here.
 
 ### Settings
 
-`thermal: temperature:` (held at, in Celsius), `heat:` (put in, in watts),
-`convection:` (a film coefficient, in W/(m^2*K)) and `implementation:`; the user
-setting `caeThermalImplementation`.
+`thermal: <scenario>: temperature:` (held at, in Celsius), `heat:` (put in, in
+watts), `convection:` (a film coefficient, in W/(m^2*K)), `implementation:` and
+`params:`; the user setting `caeThermalImplementation`.
 """,
     ),
     "cfd": Entry(
         "Flow analysis (CFD)",
         "parts that declare a `cfd:` section",
         """
-Whether a part behaves in the flow its `cfd:` section declares: the analysis is
-run by the implementation configured, and the part passes when it ran and found
-nothing - the same analysis as `pc cae cfd`.
+Whether a part behaves in the flow each scenario of its `cfd:` section declares:
+every scenario is run by the implementation configured, and the part passes when
+each ran and found nothing - the same analyses as `pc cae cfd`.
 
 ### When it does not apply
 
@@ -665,18 +675,19 @@ Anything but a part, and a part that declares no `cfd:` section.
 
 ### When it fails
 
-- A sentence about the section: fix the section.
-- `CFD could not be run by ...`: the solver is not installed, or failed; the
-  report says which.
-- `CFD findings: ...`: the analysis ran and found a problem at the place named.
+- A sentence about a scenario: fix the scenario it names.
+- `CFD '<scenario>' could not be run by ...`: the solver is not installed, or
+  failed; the report says which.
+- `CFD '<scenario>' findings: ...`: the analysis ran and found a problem at the
+  place named.
 
 It is skipped, with a warning, only where the implementation runs in a container
 and there is no container runtime here.
 
 ### Settings
 
-`cfd: fix:`, `load:`, `outlet:` and `implementation:`; the user setting
-`caeCfdImplementation`.
+`cfd: <scenario>: fix:`, `load:`, `outlet:`, `implementation:` and `params:`;
+the user setting `caeCfdImplementation`.
 """,
     ),
     "sim": Entry(

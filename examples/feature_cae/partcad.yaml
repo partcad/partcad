@@ -10,18 +10,22 @@ docs:
 
     The cantilever is analysed three ways -- for stress (`fea:`), for its
     natural frequencies (`dynamic:`) and for heat (`thermal:`) -- and the pipe
-    for flow (`cfd:`). See README.md for the derivations, the expected values,
-    what each implementation measured, and what a given disagreement would mean.
+    for flow (`cfd:`), each in one named scenario of that analysis. See
+    README.md for the derivations, the expected values, what each
+    implementation measured, and what a given disagreement would mean.
 
   usage: |
     ```shell
-    # The implementation each part names, or whatever the user configuration does
+    # The implementation each scenario names, or whatever the user configuration does
     pc cae fea :cantilever
     pc cae dynamic :cantilever
     pc cae thermal :cantilever
     pc cae cfd :pipe
 
-    # A particular one, for this run only
+    # One scenario, by name
+    pc cae fea -f tip-load :cantilever
+
+    # A particular implementation, for this run only
     pc cae fea -i //pub/feature/cae/elmer:fea :cantilever
 
     # All of them as checks that fail on any finding
@@ -100,26 +104,39 @@ parts:
     implements:
       beam-root: [[-50, 0, 0], [0, 0, 1], 0]
       beam-tip: [[50, 0, 0], [0, 0, 1], 0]
-    # Each analysis names its implementation, so that what README.md says each
+    # Each analysis is a map of named scenarios, as 'simulate:' is a map of
+    # simulations -- one each here, because each is the one textbook case
+    # README.md compares the solver with; a part asked more than one question
+    # of an analysis declares more than one. `pc cae fea -f tip-load
+    # :cantilever` runs one by name, and its model is written to
+    # `cantilever.fea.tip-load.glb`.
+    #
+    # Each scenario names its implementation, so that what README.md says each
     # one measured is what `pc test` runs here, whatever the user configuration
-    # would otherwise pick. Leave one out and that analysis falls back to the
+    # would otherwise pick. Leave one out and that scenario falls back to the
     # `cae*Implementation` option like any other part's.
     fea:
-      implementation: //pub/feature/cae/calculix:fea
-      fix:
-        - beam-root
-      load:
-        beam-tip: 100 N
+      tip-load:
+        desc: Clamped at the root and pulled down by 100 N at the tip
+        implementation: //pub/feature/cae/calculix:fea
+        fix:
+          - beam-root
+        load:
+          beam-tip: 100 N
     dynamic:
-      implementation: //pub/feature/cae/elmer:dynamic
-      fix:
-        - beam-root
+      clamped:
+        desc: Clamped at the root and left to ring
+        implementation: //pub/feature/cae/elmer:dynamic
+        fix:
+          - beam-root
     thermal:
-      implementation: //pub/feature/cae/elmer:thermal
-      temperature:
-        beam-root: 20 C
-      heat:
-        beam-tip: 1 W
+      tip-heated:
+        desc: Held at 20 C at the root and heated by 1 W at the tip
+        implementation: //pub/feature/cae/elmer:thermal
+        temperature:
+          beam-root: 20 C
+        heat:
+          beam-tip: 1 W
 
   pipe:
     type: build123d
@@ -135,11 +152,13 @@ parts:
     # not be named by a sketch anyway: a sketch is flat, and that surface is a
     # cylinder.
     cfd:
-      implementation: //pub/feature/cae/openfoam:cfd
-      load:
-        pipe-inlet: 0.005 N
-      outlet:
-        - pipe-outlet
+      poiseuille:
+        desc: Driven by 5 mN at the inlet and leaving at the outlet
+        implementation: //pub/feature/cae/openfoam:cfd
+        load:
+          pipe-inlet: 0.005 N
+        outlet:
+          - pipe-outlet
     # The drawing README.md shows: the bore, with both ports and the circle
     # each is drawn with. Declared here rather than as a package-wide file type
     # because it is this part's boundary that is worth looking at.
