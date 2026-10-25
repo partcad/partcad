@@ -5,8 +5,11 @@ next. It starts from a measurement -- `pc render -r` of
 [partcad-ldraw-examples](https://github.com/partcad/partcad-ldraw-examples) on a 16 GB machine -- and ends in a plan.
 How to *use* any of it is the user documentation's job; this file is for whoever changes it.
 
-Status words used below: **built** is on `devel`; **decided** is agreed and not built; **open** is not agreed. Every
-item of the plan is **open**: this is a proposal for review, and nothing in it has been implemented.
+Status words used below: **built** is on `devel`; **decided** is agreed and not built; **open** is not agreed.
+
+Where it stands: step 1 is the pull request that adds this record; steps 2 and 3 are a second pull request; step 4 is
+being done separately. Steps 5 to 7 are **open**: the first proposal for them is withdrawn, and section 9 says what
+is wanted instead and the design being discussed.
 
 ## Contents
 
@@ -18,12 +21,10 @@ item of the plan is **open**: this is a proposal for review, and nothing in it h
 6. [Step 2: the daemon and the wire](#6-step-2-the-daemon-and-the-wire)
 7. [Step 3: the disk cache](#7-step-3-the-disk-cache)
 8. [Step 4: the swap healthcheck](#8-step-4-the-swap-healthcheck)
-9. [Step 5: admission by memory](#9-step-5-admission-by-memory)
-10. [Step 6: finish what is started](#10-step-6-finish-what-is-started)
-11. [Step 7: one scheduler instead of the thread pools](#11-step-7-one-scheduler-instead-of-the-thread-pools)
-12. [The example repository and the parts library](#12-the-example-repository-and-the-parts-library)
-13. [Validation](#13-validation)
-14. [Open questions](#14-open-questions)
+9. [Steps 5 to 7: scheduling, reconsidered](#9-steps-5-to-7-scheduling-reconsidered)
+10. [The example repository and the parts library](#10-the-example-repository-and-the-parts-library)
+11. [Validation](#11-validation)
+12. [Open questions](#12-open-questions)
 
 ## 1. The problem
 
@@ -46,10 +47,10 @@ Three things combine:
    with backoff -- effectively at random -- so many large objects are half done at the same time, each holding its
    share of the daemon's memory, instead of a few being finished.
 
-The nested-wait deadlock the request also mentions -- N waiters holding the N slots of a pool, each waiting for work
-that cannot get one -- was ended for the cases known by #834 (0.8.238, two days before this record) by letting a
-waiting slot give itself back and the pool run over its size meanwhile. That fix and a memory limit pull in opposite
-directions, which is the reason for step 7.
+The nested-wait deadlock -- N waiters holding the N slots of a pool, each waiting for work that cannot get one -- was
+ended for the cases known by #834 (0.8.238, two days before this record): a slot waiting for work gives itself back,
+and the pool runs over its size meanwhile. None of the runs below stalled. Section 9 keeps the pools as they are and
+puts the decisions about memory and order where they belong, at the sandbox processes.
 
 ## 2. What was measured
 
@@ -60,7 +61,7 @@ processes at once), `PC_DAEMON_IDLE_TIMEOUT=0` as the examples' CI sets it. part
 **How.** A sampler recorded the RSS and PSS of the daemon, the client and every sandbox process once a second, with
 which wrapper and which output file each sandbox was working on. For the largest drawings, the request the daemon
 sends the sandbox was captured from an in-process run and replayed through `wrapper_export.py` itself, with the peak
-memory recorded per phase. The scripts are listed in section 13.
+memory recorded per phase. The scripts are in `dev-tools/profiling/` (section 11).
 
 **`pc render -r`, today:**
 
@@ -103,9 +104,9 @@ going on without its cache key" -- the backstop of #834 firing, for `f1` (once f
 **No run stalled.** The nested-wait deadlock did not occur in any of these runs, at the four slots that are now the
 floor; what ended them was memory.
 
-**With step 1 alone.** The same warm run with `decode_tree` sharing geometry (5.1), patched in for the measurement and
-reverted afterwards: **completed, 224 s, peak 8.1 GB, never under 7.5 GB available**, all 33 pictures written. The
-largest job is now an exact drawing (`f1/drivetrain.png`, 2.9 GB), and the whole models are 1.4-1.9 GB each.
+**With step 1.** The same warm run with `decode_tree` sharing geometry (5.1): **completed, 260 s, peak 7.6 GB, never
+under 7.5 GB available**, all 33 pictures written. The largest job is now an exact drawing (`f1/drivetrain.png`,
+2.9 GB), and the whole models are 1.4-1.9 GB each. The daemon still peaked at 923 MB, which is step 2's.
 
 ## 3. Where the memory goes
 
@@ -135,7 +136,7 @@ Three things follow.
 
 An exact drawing (`reproducible: true`) is different: `f1/tub.png` is 3.0 GB for 40 parts, and sharing takes it to
 2.9 GB. The exact algorithm's memory follows the number of edges in the picture, and every triangle of a sewn LDraw
-mesh has three (section 12).
+mesh has three (section 10).
 
 ## 4. The plan at a glance
 
@@ -145,15 +146,10 @@ mesh has three (section 12).
 | 2 | The daemon and the wire | `shape_envelope.py`, `shape.py`, `runtime*.py`, `cache_shape.py` | requests and cache entries one copy per distinct part; nothing serialized before it can run | medium: wire and cache format |
 | 3 | The disk cache | `shape.py` render/export path, `cache_artifacts.py` | an unchanged picture is not drawn again | low |
 | 4 | The swap healthcheck | `healthcheck/swap.py` | the user is told | low |
-| 5 | Admission by memory | `sandbox_lock.py`, then `scheduler.py` | no out-of-memory kill on a small machine; the biggest job still runs, alone | medium |
-| 6 | Finish what is started | the fan-out sites, the admission queue | depth-first completion; the daemon holds only what can run | medium |
-| 7 | One scheduler | `sync_threads.py`, `shape.py`, `concurrency.py`, the semaphores | the nested-wait deadlock gone as a class; limits that hold | high: several pull requests |
+| 5-7 | Scheduling | `sandbox_lock.py`, the fan-out sites, `sync_threads.py` | every core busy, started work first, fewer tasks than cores only at capacity | open: section 9 |
 
-The proposed order is 4, 1, 2, 3, then 5 and 6 together, then 7 -- with one piece of step 5, a failed picture no
-longer abandoning the pictures beside it (section 9), taken first because it is a few lines. The first four are
-independent and each pays for itself; step 1 alone is what got the examples through on this machine (section 2).
-Steps 5 and 6 are built on today's threading, so they help before the refactor and become its admission policy
-afterwards. They are what makes the result hold for the next, larger design rather than for this one.
+Steps 1 to 4 are independent and each pays for itself; step 1 alone is what got the examples through on this machine
+(section 2). Steps 5 to 7 are what makes the result hold for the next, larger design rather than for this one.
 
 ## 5. Step 1: release and share in the sandbox
 
@@ -181,7 +177,7 @@ breaks ties between coincident faces -- a brick standing exactly on another -- i
 sharing changes that order. A polygonal drawing is not promised to be reproducible in the first place
 (`reproducible: false`), but the examples check theirs in, so the pull request carrying this re-renders that one
 picture and says why. The exact drawings barely move: `HLRBRep_Algo` keeps per-edge data for every
-placement whether or not the geometry is shared, and that is what fills them (see section 12 for the lever that does
+placement whether or not the geometry is shared, and that is what fills them (see section 10 for the lever that does
 reach them).
 
 The same sharing is already done by `wrapper_gltf.py` for the viewer, keyed by `payload_digest`; this does it for
@@ -196,7 +192,7 @@ geometries are never confused; hashing it is not needed in the sandbox.
 The request text, the parsed JSON and the base64 of each BREP stay alive until the implementation returns, and so do
 the geometry and the hidden-line data while the SVG is rasterized. Dropping them is a few lines in `wrapper_export` and
 `render_raster`, and it was measured too: **20 to 40 MB** on the castle, because once 5.1 is in, none of these is
-large. It is worth doing for the cost of it, and it is not where the memory is.
+large. It is not where the memory is, and it is not in the pull request.
 
 ### 5.3 What was looked at and is not worth it
 
@@ -226,11 +222,13 @@ captured requests:
 | `f1/car.png` | 64.2 MB | 13.6 MB |
 | `f1/tub.png` | 12.4 MB | 3.6 MB |
 
-It is a change to the envelope, so it is made where the envelope is read and nowhere else: `shape_envelope` and
-`ocp_serialize` build and resolve the table; `decode_tree` resolves references before an implementation sees the tree,
-so `shape_tree` looks to an implementation as it does today; `deserialize_raw` callers get a `resolve_refs()` helper; a
-cache entry without a table still reads. `cache_shape` writes the table form, which is also what lets the trees in
-question be cached at all (7.2).
+It is a property of the serialized document only. In memory every node keeps its own `brep`, and the nodes that came
+out of one table entry hold the one object. `shape_envelope.dumps(share=True)` and `ocp_serialize.dumps(share=True)`
+write the table; both ends' `loads()`, and `ocp_serialize.deserialize_raw()`, take it back out before anything walks
+the tree, so no reader of a tree meets it. It is written only where the reader is known to understand it: requests to
+PartCAD's own Python wrappers (renders, exports, analyses, routes and the viewer's glTF), and every wrapper's answer,
+since the core reads both forms. A container implementation or a JavaScript one is handed the request as it always
+was. It is written only when it makes the document smaller, so a document with nothing repeated is unchanged.
 
 ### 6.2 Nothing serialized before it can run
 
@@ -239,20 +237,18 @@ for the environment lock and a process slot. Every drawing that is waiting there
 and the runtime adds a `bytes` copy for the pipe (`stdin.encode()`). That is what the daemon's 895 MB at the peak of
 the run was: four views of the car in flight, at about 66 MB of text and 66 MB of bytes each, on top of the trees.
 
-So the request is serialized under the lease, straight to `bytes`, and written to the pipe in chunks; the runtime's
-`run_async` takes the payload as a callable producing it. With the table of 6.1 as well, a drawing of the car costs
-the daemon about 15 MB while it runs and nothing while it waits.
+So a runtime's standard input may be a callable, which `runtime.stdin_bytes` calls as the process starts -- inside
+the process slot, after the environment lock -- and the render path passes one. With the table of 6.1 as well, a
+drawing of the car costs the daemon about 15 MB while it runs and nothing while it waits.
 
 ### 6.3 Smaller things in the same place
 
-- `pc_logging.debug("Output of %s: %s" % (cmd, stdout))` and the lines beside it format the whole output of every
-  sandbox -- a part's BREP, base64 -- whether or not debug logging is on. They take arguments instead.
-- `ShapeCache.write_async` serializes an entry before any tier is asked whether it would take an entry that size;
-  for the castle that is a 33 MB JSON document built to be refused. The size can be known from the payloads first.
-- The memory tier keeps every entry under 100 MB for the life of the context, and a warm daemon never drops a
-  context (the TODO in `core/session.py`). A byte budget for the tier (`cacheMemoryMaxSize`), least recently used out
-  first, with `Shape._wrapped` let go along with its entry, bounds what a long-lived daemon accumulates. Everything it
-  evicts is in the file tier or can be put back together from its children.
+- `pc_logging.debug("Output of %s: %s" % (cmd, stdout))` and the lines beside it formatted the whole output of every
+  sandbox -- a part's BREP, base64 -- whether or not debug logging was on. They take arguments instead.
+- Not done, and recorded: the memory tier keeps every entry under 100 MB for the life of the context, and a warm
+  daemon never drops a context (the TODO in `core/session.py`). A byte budget for the tier, least recently used out
+  first, with `Shape._wrapped` let go along with its entry, would bound what a long-lived daemon accumulates. It
+  changes the lifetime of every shape a context holds, which is a change of its own.
 
 ## 7. Step 3: the disk cache
 
@@ -264,17 +260,21 @@ are cached (`thumbnail.py`, `ctx.cache_renders`). The machinery for caching an o
 content of its script and of the wrapper, the code versions, and the request less the geometry; an entry holding the
 result and the files the run wrote.
 
-Using it for `render:` and `export:` means a warm `pc render -r` of the examples, with nothing changed, starts no
+Using it for the `render:` section means a warm `pc render -r` of the examples, with nothing changed, starts no
 drawing sandbox at all -- and the examples' CI already restores `~/.partcad/cache` between runs. A picture is a few
-hundred KB, well inside the tiers' windows. The question it raises is in section 14.
+hundred KB, well inside the tiers' windows. Exports are left out: an exporter may write files beside the one it was
+asked for (a URDF's meshes), and the cache holds the one. A picture is remembered only when the run succeeded and the
+file was written by it, so a file an earlier run left at the path is never handed out as this one's.
 
 ### 7.2 Let the big trees into the file tier
 
 The castle, `f1`, `f1/car` and `f1/front-end` trees are never written to the file cache: each is over
 `cacheFilesMaxEntrySize` (10 MB), because of the copies in 6.1. So a warm run puts them together again from their
-sub-assemblies every time. With the table, the castle's entry is 8.7 MB and fits; the car's is 15.5 MB and still does
-not, which is why the entry should also be compressed (the payloads are zstd already, the JSON around them is not),
-rather than the limit raised.
+sub-assemblies every time. A tree entry is therefore a frame of its own (`cache_shape._TREE_MAGIC`): the tree as
+compressed JSON in which each node names its payload, then each distinct payload once, as raw bytes rather than
+base64. The castle's entry fits easily; `f1`'s distinct geometry alone is 10.9 MB of compressed BREP, so it still does
+not, and the remedy for that is an entry that names its parts' own cache entries instead of carrying them. An earlier
+release reading a framed entry counts it a miss and writes its own form; the frame reads both.
 
 ### 7.3 Later: geometry by path rather than by pipe
 
@@ -307,199 +307,68 @@ never failing the run, tags `memory`, `swap`, `performance`.
 
 This is independent of everything else here and can land first.
 
-## 9. Step 5: admission by memory
+## 9. Steps 5 to 7: scheduling, reconsidered
 
-Every sandbox launch already passes through one place, `sandbox_lock.process_slots.slot_async()` -- the Python, the
-JavaScript, the docker and the remote sandboxes, KiCad's container, a plugin's. That is where the machine's memory
-gets a say, and it can be built on today's threading, before step 7.
+The first version of this record proposed admitting sandbox processes against a memory budget held below the
+machine's RAM, and replacing the thread pools with one scheduler. Both are withdrawn. A budget below RAM holds back
+cores long before the machine is out of memory, and PartCAD's threading exists to keep every core of a large machine
+busy -- 64 of them as much as 4 -- without oversubscribing them; a design that gives that up is not what is wanted.
+What is, as it now stands:
 
-**What a launch asks for.** A lease of one CPU slot (`threadsMax`, as now) and an *estimate* of the memory it will
-need. The estimate is, in order of preference:
+1. **Every core stays busy.** As many sandbox processes run as there are slots (`threadsMax`) while there is work
+   for them, as today.
+2. **What is started is finished first, without idle cores.** While the castle occupies only a few cores, the car's
+   tasks use the rest. When the castle fans out into more tasks, new starts go to the castle: the car's running tasks
+   are left to finish and none of its tasks are started in their place, so the number of car tasks in flight falls,
+   to none if need be.
+3. **Memory throttles only at capacity.** Fewer tasks than cores are kept in flight if, and only if, the memory in use
+   reaches capacity -- and swap counts as capacity.
 
-1. what the same job took the last time -- the peak recorded for this implementation (the wrapper, plus the
-   implementation script for an output) and this subject (the shape's cache key), kept as a small entry in the
-   cache beside the shape;
-2. otherwise a per-implementation ratio of peak memory to request size, learnt from every run of that
-   implementation and kept the same way;
-3. otherwise a floor, the size of an interpreter that has loaded the CAD stack (section 2: about 0.45 GB RSS,
-   0.3 GB PSS).
+The design being discussed, **open** in every part:
 
-**How a job is measured.** While a sandbox runs, the admission samples its memory about four times a second:
-`psutil` over the process and its children, PSS where the platform has it, so that the shared libraries of four
-interpreters are not counted four times. The peak is what is recorded. A container's own memory comes from the
-container runtime; the remote sandbox reports the peak in its answer. Sampling is also what step 5's second half
-watches.
+- **A task is one sandbox launch** -- what occupies a core. The coroutines and threads that wait for sandboxes are
+  not tasks and are not counted; nothing in the daemon computes geometry.
+- **Admission in the order of roots, then depth-first within one.** A root is one unit of a command's outermost
+  fan-out: one picture of `pc render -r`, one package of `pc test -r`. Roots rank by when their first task started,
+  and roots not started yet by declaration order; within a root a task ranks by its position in the order one slot
+  would reach it. When a slot frees, the first ready task in that order takes it. That is points 1 and 2 as they
+  stand: the castle takes every slot it has ready work for, the car the slots the castle cannot use, and nothing
+  running is pre-empted for it. A task building something that a better-ranked task waits for -- a brick two pictures
+  need -- ranks as the better of the two (priority inheritance), or a castle picture would wait behind the car's turn.
+- **Memory is watched against RAM plus swap**, the machine's or the cgroup's, whichever is smaller. Capacity cannot be
+  waited for -- the kernel kills when it is reached -- so the trigger is a margin short of it, and what follows
+  escalates: first no task is started, so tasks in flight fall below the core count as they finish; then the
+  lowest-ranked running task is paused (`psutil.Process.suspend()`, `docker pause` for a container) -- a paused task
+  stops growing, and with swap its pages are the first to go out, which is the room the tasks ahead of it need -- and
+  resumed when memory comes back; and last, at a critical margin, the lowest-ranked task is stopped and queued again,
+  so that what is killed is PartCAD's choice rather than the kernel's, which may be the daemon. The best-ranked running
+  task is never paused or stopped, which is what guarantees progress.
+- **Today's pools stay.** Since #834 they are deadlock-free at any size, and they are what point 1 is about. What
+  changes is around them: the rank travels with work across a thread hop, beside the OpenTelemetry context that
+  `sync_threads._Work` already carries; `ProcessSlots` wakes its waiters in rank order instead of letting whichever
+  polls first win; a shape's lock and a preparation lend their waiters' rank to the holder. Whether the pools should
+  one day give way to a single event loop per request is a question of its own, and none of this needs it.
+- **A failed task is one failure.** Whatever is decided above, `Project.render_async` should gather a package's
+  pictures with `return_exceptions`, as `_render_packages_async` already gathers packages, and raise the first failure
+  once the rest are done: today the first exception ends the package's render, which is how one kill in the warm run
+  cost eight pictures (section 2). A task stopped at the critical margin is queued again rather than failed, but a
+  real failure should not take its neighbours with it either. It is a few lines, and independent of the rest.
 
-**What may be admitted.** The budget is the smaller of the machine's memory and the cgroup's limit, less a reserve
-(`memoryReserve`, default the larger of 1 GB and a tenth of the budget), optionally capped by `memoryMax` (and
-`PC_MEMORY_MAX`); both are user configuration like `threadsMax`, and travel to the daemon with every request the same
-way. The head of the queue is admitted when a CPU slot is free and its estimate fits in what is left: the budget, less
-what the running jobs use, less what they are still expected to grow by (estimate minus current use, where positive),
-and never more than the memory the system currently reports as available. **When nothing is running, the head is
-admitted whatever its estimate**, so that a job bigger than the machine runs on its own -- into swap, where there is
-some -- rather than never.
+The questions it leaves are in section 12.
 
-**Watching, not only predicting.** An estimate can be wrong, and the first run of a job has none. So the same sampler
-watches the system as a whole:
-
-- under a low watermark of available memory, nothing new is admitted;
-- under a critical one, with more than one job running, the running job with the *lowest* priority (step 6) is
-  stopped and put back at the head of its place in the queue, with its estimate raised to what it had reached. A
-  sandbox job writes one file and is repeatable, so stopping one costs its time and nothing else, which is a better
-  trade than the kernel's out-of-memory killer choosing for us. `memoryPreempt: false` turns it off.
-
-**Being the one that is killed.** On Linux every sandbox child is started with a raised `oom_score_adj`, so that if the
-kernel has to kill something it picks a sandbox and not the daemon -- whose death loses every warm context and every
-request in flight. A sandbox that dies by `SIGKILL` (which `process_crash.describe_termination` already reads as
-probably out of memory) is retried once, admitted alone.
-
-**One failure is one failure.** `Project.render_async` gathers its pictures with `return_exceptions`, as
-`_render_packages_async` already gathers packages, and raises the first failure once the rest are done. Today the
-first exception ends the package's render, which is how one kill in the warm run cost eight pictures (section 2).
-This one is a few lines and does not wait for the rest of the step.
-
-**Saying why it waits.** A held-back job is silence on the wire, and a client gives up on a daemon that says nothing
-for five minutes (`PC_DAEMON_IDLE_TIMEOUT`, `partcad_utils.timeouts`). While anything waits for memory, the admission
-logs once a minute what it is waiting for and what is running ("castle-front.png waits for about 4.1 GB; 2.3 GB free;
-running: castle.png, f1.png"), which keeps the client waiting and tells the user why the run is slower than the cores
-would suggest.
-
-**What it replaces.** The polled count in `ProcessSlots`. Waiters are woken in priority order (step 6) by the lease
-that frees room, through `call_soon_threadsafe` on each waiter's own loop, so nothing polls.
-
-## 10. Step 6: finish what is started
-
-**A priority for every unit of work.** A tuple: the position of the work in the order a run with one slot would reach
-it. The root of a command is `(0,)`; a fan-out site gives its *i*-th child its own key plus `(i,)`. Tuples compare
-lexicographically, so a smaller key is earlier in the depth-first order -- the whole of the castle, every
-sub-assembly, part and picture of it, sorts before anything of the car. The key lives in a context variable,
-`scheduler.priority`, and is set at the fan-out sites that exist today:
-
-- `Project.render_async` (each shape, then each file type of it), `Project.test_async` and the lint equivalents;
-- `Assembly._get_shape_real` (each child, in declaration order);
-- `_render_packages_async`, `_route_packages_async` and the test and lint walks in the daemon (each package);
-- `Context` loading packages.
-
-Until step 7 removes the thread hops, the key travels across them by hand: `sync_threads._Work` captures it beside the
-OpenTelemetry context it already carries, and restores it on the thread that runs the work.
-
-**Admission in that order.** `Admission`'s queue (step 5) is a heap on the key. The slot pools' FIFO `deque` becomes
-the same heap, and the polled locks hand over in key order. The scheduler stays work-conserving: a lower key that
-is not ready (waiting for a part) does not keep a free lease idle, and the next key that is ready takes it.
-
-**Priority inheritance.** A shape used in two places is built once, by whoever asked first. If that was a late,
-low-priority caller -- the alias `castle-front` asking for `castle/spire` -- an early caller waiting for the same build
-lends it its key; otherwise a high-priority picture waits behind a low-priority build. Through the shape lock today,
-through the single-flight future after step 7.
-
-**What changes for `pc render -r` of the examples.** Today all 33 pictures start at once, every assembly tree is put
-together in the daemon at once, and whichever of them polls first after a release gets the next sandbox. With a
-priority, the castle's builds and its pictures take the leases first and finish first, the car's start as leases
-free up, and at any moment the trees and requests held in the daemon are those of the few pictures that can actually
-run. Admission in step 5 decides how many that is; this step decides which.
-
-## 11. Step 7: one scheduler instead of the thread pools
-
-Steps 5 and 6 put a memory bound and a priority on the one strict limit PartCAD has, the sandbox processes, and they
-can be built on today's threading. This step is the refactor that makes those two the *only* mechanism, and it is
-what retires the nested-wait deadlock as a class rather than case by case.
-
-### 11.1 Why the pools have to go
-
-Nothing in the daemon computes geometry. Every part, render, export, analysis and route is a sandbox process (or a
-container exec), and the Python side of PartCAD only prepares requests and waits for answers. The two thread pools of
-`sync_threads`, each thread running an `asyncio.run()` of its own, are left over from when factories built shapes
-in-process. What they cost now:
-
-- **The deadlock class.** A slot held by work that waits for other work: N waiters fill a pool of N and wait for a
-  task that cannot get a slot. #834 (0.8.238) ended the known cases with three rules -- nested work runs on the
-  caller's slot, a slot waiting for a lock gives itself back, a part goes to the pool before its lock is taken -- plus
-  a 60 s backstop on waiting for another thread's preparation (`_PREPARE_WAIT_MAX`, `PreparationInFlight`). Each rule
-  closes a path; none makes the class impossible, and each new way of nesting work has to be checked against all of
-  them.
-- **No limit that holds.** To stay deadlock-free a slot pool "runs over its size for as long as the wait lasts", with
-  `_THREADS_UNBOUNDED` threads behind it. That is the right trade for a pool, and the reason a pool cannot be where a
-  memory bound lives.
-- **Polling.** `PoolAwareRLock`, `ProcessSlots`, `EnvironmentLock` and the preparation wait all poll (2 ms backing off
-  to 50-100 ms), because they are taken from several event loops on several threads. Polling decides admission order
-  by whoever wakes first.
-- **Work that cannot be prioritised.** A priority has to follow the work across a thread hop by hand (an
-  `asyncio.run()` on a pool thread starts from that thread's context, not the submitter's).
-
-### 11.2 The model
-
-- **One event loop per request**, as the daemon already has at the top of each request, and as `asyncio.run()` gives
-  the synchronous library API at its entry points. Everything below it is coroutines.
-- **Work is a tree of tasks** (structured concurrency). A fan-out site -- a package's shapes, an assembly's children,
-  the packages of a recursive command -- starts its children through one helper, which gives each child its priority
-  (section 10) and gathers them in order.
-- **A join is an await.** A parent waiting for its children holds nothing: no thread, no slot. The deadlock of 11.1
-  needs a waiter that holds a scarce resource, and the only scarce resource left is the sandbox lease, which is held
-  only by a process that is running and never waits for another lease. That invariant is asserted (a launch from code
-  holding a lease raises) rather than argued.
-- **One admission point**, `scheduler.Admission` (steps 5 and 6), for every sandbox launch: Python, JavaScript,
-  docker, remote, KiCad, container plugins. It replaces `ProcessSlots`, `ReentrantGate`, and the ad hoc semaphores
-  (`at_once` in `_render_packages_async`, `_route_packages_async`, `_sandbox_budget` in `assembly_guide`, the one in
-  `actions/package/install.py`).
-- **Single-flight instead of shape locks.** Building a shape, or writing one of its files, is a future per (shape,
-  operation): the first caller starts it, the others await it and lend it their priority. Across threads (the daemon's
-  `--http` transport serves requests concurrently) it is a `concurrent.futures.Future` awaited with
-  `asyncio.wrap_future`, so nothing polls. A preparation is the same kind of future, which removes the preparation
-  wait and its backstop.
-- **Blocking calls are offloaded**, to a small plain `ThreadPoolExecutor`: a git operation, hashing a large file,
-  compressing or JSON-encoding a large payload, reading an ASSY file. Offloaded code may not await the scheduler
-  (enforced with a thread-local), so offloading cannot recreate the deadlock.
-
-### 11.3 Work stealing, or depth-first priority
-
-The properties asked for are three: a parent waiting for its children must never be what stops them; work already
-started is finished before new work fans out; and how much runs at once follows memory. Work stealing (Cilk, TBB,
-Java's ForkJoin, Tokio) gets the first two with per-worker deques: a worker runs its own newest task (depth-first), an
-idle worker steals the oldest task of another (breadth where it is free), and a worker that joins runs other work
-instead of blocking.
-
-Here a join already releases the worker, because it is an await, and the GIL means extra Python threads add no
-throughput to work that only waits. What remains of work stealing is its *order*. **Parallel depth-first** scheduling
--- run ready work in the order a run with one slot would reach it, and use the other slots for what comes next in that
-order -- gives the same "finish what is started" behaviour with a tighter memory bound: about S1 + P x D for P slots
-and a tree of depth D, against P x S1 for work stealing (Blelloch, Gibbons and Matias, 1999; Blumofe and Leiserson,
-1999). Memory is the reason for the change, so that is what this proposes: a priority queue keyed by position in the
-serial order (section 10), with no per-thread deques. If in-process CPU work ever comes back, a work-stealing executor
-can sit behind `offload()` without changing anything above it.
-
-### 11.4 Migration
-
-Each item is a pull request with the suite green, and the order keeps every intermediate state shippable:
-
-1. `src/partcad/scheduler.py`: priority, `Admission`, `offload()`, single-flight. At first it wraps today's pieces, so
-   steps 5 and 6 land on it.
-2. Parts and sketches built on the request's loop (`built_on_pool = False` throughout); `Assembly.instantiate()` and
-   the other synchronous factory bodies through `offload()`. The constrained pool goes unused.
-3. `Shape.locked()` becomes single-flight per (shape, operation) plus an `asyncio` lock per output path.
-4. The places that run a coroutine to completion from synchronous code inside a running loop
-   (`threadpool_manager.complete`, `project_external_repository`, and the rest of the ~75 `asyncio.run()` call sites
-   that can be reached from a loop) are made coroutines. A debug check raises on `asyncio.run()` from a thread whose
-   loop is running.
-5. `ReentrantGate` and the per-call semaphores go, replaced by priority children under `Admission`.
-6. `SlotPool`, `PoolAwareRLock`, the slot give-back and `sync_threads` are deleted. The tests that hold today's
-   guarantees -- `test_sync_threads.py` and `test_nested_build.py`, which run pools of one and two -- are kept and
-   re-pointed at an `Admission` of one and two leases.
-
-`docs/source/features.rst` says threads are raised to four "for performance" and that the pools keep the daemon's
-size; both paragraphs change with step 6 of this list.
-
-## 12. The example repository and the parts library
+## 10. The example repository and the parts library
 
 **partcad-ldraw-examples.** Its CI job carries two workarounds for this problem, and both comments have gone stale:
 
 - `threadsMax: 3`, with "Three is the fewest it works with: with two, a render waits on itself and never finishes."
   Since 0.8.238 (#834) the floor is four and a lower value is raised to it with a warning, so the job already runs four
-  sandboxes at once; and nested waits no longer deadlock at any size. The value does nothing today. Once step 5 is
-  released it should go, because memory, not a guess at a count, then decides how many drawings run together.
+  sandboxes at once; and nested waits no longer deadlock at any size. The value does nothing today, and can go.
 - An 8 GB swap file, "Paging is slower than having the memory, and much better than the kernel killing a drawing".
   That stays: it is exactly what the `Swap` healthcheck will recommend.
 
-Nothing in the repository has to change for steps 1 to 4. The `partcad: ">=0.8.191"` floor would rise to the release
+Nothing in the repository has to change for steps 1 to 4, with one exception: the release carrying step 1 draws
+`castle-front.png` 39 pixels differently (5.1), and the examples' CI renders with the latest PartCAD, so that picture
+is re-rendered and committed once that release is out. The `partcad: ">=0.8.191"` floor would rise to the release
 carrying step 3 if the job is to rely on the picture cache.
 
 **The parts library** (`//pub/universe/lego`, partcad/partcad-ldraw). An LDraw part is a mesh, and `ldraw.py` sews it
@@ -519,39 +388,44 @@ it already finds planar loops for the caps it adds (`_cap_planar_loops`). That i
 by its code version so every part is rebuilt once; it is recommended here and not planned, because it is not this
 repository's code, and its effect is not measured.
 
-## 13. Validation
+## 11. Validation
 
-- **The measurement is repeatable.** The three scripts behind section 2 -- a sampler of every PartCAD process's
-  memory, a driver that captures the exact request the daemon sends a render sandbox, and a harness that replays it
-  phase by phase -- go into `dev-tools/profiling/` with the first pull request, and every later one quotes their
-  before-and-after numbers for the examples.
-- **The policy is unit-tested without a machine to fill.** `Admission` takes its memory probe and its process sampler
-  as parameters, so the tests drive it with scripted numbers: admission in priority order; the progress guarantee (one
-  job bigger than the budget still runs, alone); the watermarks; preemption of the lowest-priority job and its
-  requeue; a lowered `threadsMax` or `memoryMax` while leases are held; and the log line that keeps a client waiting.
-- **The deadlock guarantees are kept.** `test_sync_threads.py` and `test_nested_build.py` run against an `Admission`
-  of one and two leases, plus a test that a sandbox launch from code holding a lease raises.
+- **The measurement is repeatable.** The scripts behind section 2 are in `dev-tools/profiling/` (see its README): a
+  sampler of every PartCAD process's memory, a report of what it recorded, a driver that captures the exact request
+  the daemon sends a render sandbox, and a harness that replays it phase by phase. A pull request that claims to move
+  these numbers quotes them before and after.
+- **Scheduling is unit-tested without a machine to fill**, once it exists: the admission takes its memory probe and
+  its process control as parameters, so tests drive it with scripted numbers -- rank order with spare slots; a fan-out
+  taking new starts from a later root without stopping its running tasks; the pause, the resume and the stop at the
+  margins; the progress guarantee. `test_sync_threads.py` and `test_nested_build.py` keep holding the pools to being
+  deadlock-free at sizes one and two.
 - **End to end.** `pc render -r` of partcad-ldraw-examples, default configuration, completes on a 16 GB machine with
-  no swap, with the peak under the budget; and it completes -- slower -- inside an 8 GB cgroup, where today it is
-  killed. The second runs in CI as a `docker run --memory=8g` job when the change touches `sandbox_lock`,
-  `scheduler` or the render wrappers; it is too slow for every pull request.
+  no swap -- which it does with step 1 -- and, once scheduling is built, inside an 8 GB cgroup with swap, where today
+  it is killed.
 - **Pictures.** Nothing here may change an exact (`reproducible: true`) picture, and `Examples (PartCAD)` fails if
   one does. A polygonal one may change once, by the tie-breaking 5.1 describes, and the pull request that changes it
   re-renders it and says so -- `castle-front.png` in partcad-ldraw-examples, measured at 39 pixels.
 
-## 14. Open questions
+## 12. Open questions
 
 1. **Sharing geometry in the sandbox** (5.1) makes every placement of a part the same OCCT shape. No built-in
-   implementation modifies what it is handed; an implementation published by another package might. Is "do not
-   modify the shapes you are handed" acceptable as a stated rule of the implementation contract, or should sharing be
-   something an implementation opts into?
-2. **Preemption** (step 5). Stopping and re-queuing the lowest-priority job under a critical watermark: on by
-   default, or opt-in?
-3. **The reserve.** The larger of 1 GB and a tenth of the budget, or something else?
-4. **Depth-first priority instead of work stealing** (11.3). The reasoning is that a join here is already an await,
-   so what is left to choose is the order, and depth-first order has the better memory bound. Agreed?
-5. **Caching pictures** (step 3). With it, `pc render` can write a file without running anything. Default on, as the
-   shape cache is, or behind a setting?
-6. **Where the learnt peaks live** (step 5). A small entry in the shape cache keyed like the shape (shared through
-   the remote tiers with everything else, so CI learns from developers and the other way round), or a local file
-   beside the cache that is never shared?
+   implementation modifies what it is handed; an implementation published by another package might. The first pull
+   request states "do not modify the shapes you are handed" as part of the implementation contract. Acceptable, or
+   should sharing be something an implementation opts into?
+2. **Caching pictures** (7.1) means `pc render` can write a file without running anything. The second pull request
+   turns it on, as the shape cache is on; `--cache-bypass` and the tier switches apply. Right default?
+3. **What ranks a root** (section 9): when its first task started, or where it is declared? The first is what
+   "finish what is started" says; the second is simpler and nearly always the same order.
+4. **What a root is** for `pc render -r`: each picture, or each top-level object with all of its pictures?
+5. **The margins.** "At capacity" has to mean "a margin short of it", because at capacity the kernel acts first.
+   Something like the larger of 512 MB and 2% of RAM plus swap to stop starting and pause, and half that to stop a
+   task?
+6. **Pausing before stopping.** Pausing loses no work but holds memory; stopping frees it and loses the task's time.
+   Pause first, stop only at the critical margin -- or stop straight away?
+7. **Predicting.** A task that ran before has a recorded peak. Is postponing one whose recorded peak would take the
+   machine past capacity still "throttling only at capacity", or should admission look at the present and nothing
+   else?
+8. **Thrashing.** With swap counted as capacity, a machine can be far from capacity and making almost no progress,
+   paging. Does sustained memory pressure (Linux PSI, `/proc/pressure/memory`) count as being at capacity?
+9. **Several daemons on one machine** -- a daemon per workspace -- each schedule their own work against the same
+   memory. Is that acceptable, with each reacting to what the machine reports, or do they need to agree on ranks?

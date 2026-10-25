@@ -1160,6 +1160,22 @@ at all).
   the same object. It is the arrangement `KEY_SKETCHES` already had, one level up, and sketches now name this
   table too.
 
+  **The BREP form gets the same sharing where it is decoded** (`ocp_serialize._shared_shape`, used by
+  `decode_shape`, `decode_tree` and `decode`): every node of one decoding that carries the same payload gets the
+  same `TShape`, each in a `TopoDS_Shape` handle of its own placed where its node says. That is OCCT's own
+  instancing, and it is what makes a big drawing affordable: meshing and hidden-line removal work per `TShape`,
+  so the LEGO castle (731 placements of 9 bricks) is meshed as nine bricks. Its `pc render` took 3.4 GB and
+  104 s decoded a node at a time, and 1.4 GB and 57 s shared; the car, 6.0 GB and 141 s against 1.7 GB and
+  57 s. The exact (`reproducible`) algorithm keeps its data per placement and barely moves (3.0 to 2.9 GB on
+  `f1/tub`). Keyed by the payload's content, never by object identity. The rule it implies is part of the
+  implementation contract: **an implementation must not modify a shape it is handed in place**, because a
+  change to one placement of a part is now a change to all of them. Nothing built in does. Two outputs know
+  sharing is there: the polygonal (`reproducible: false`) algorithm breaks ties between exactly coincident faces
+  in the order it meets them, so a drawing of bricks standing on bricks can come out a few pixels different
+  (39 of 218,112 for partcad-ldraw-examples' `castle-front.png`, none for the other 32 pictures there or for
+  anything under `examples/`). `wrapper_interference.py` still decodes a node at a time, on purpose: it takes
+  booleans between placements, and between two placements of one `TShape` that is a change of its own to make.
+
   **The sketches the ports are drawn with come with the representation** (`./src/partcad/port_sketches.py`), on
   the root node, keyed by the reference the ports already name. A port is a coordinate frame and is drawn as a
   triad; most ports also name a `sketch:`, which is the shape the connection happens across, and a viewer draws
