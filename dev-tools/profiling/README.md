@@ -34,8 +34,9 @@ that the daemon `pc` starts is in it too:
 pc daemon stop
 systemd-run --user --scope -p MemoryMax=8G bash -c '
     python3 ../partcad/dev-tools/profiling/memory_sampler.py /tmp/run.jsonl & sampler=$!
-    PC_DAEMON_IDLE_TIMEOUT=0 pc --no-ansi render -r
-    kill $sampler'
+    PC_DAEMON_IDLE_TIMEOUT=0 pc --no-ansi render -r; status=$?
+    kill $sampler
+    exit $status'
 pc daemon stop
 ```
 

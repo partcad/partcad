@@ -42,15 +42,15 @@ def main():
 
     # A process whose PSS could not be read (no smaps_rollup) is counted at its
     # RSS, which counts the libraries it shares with the others again: say so
-    # wherever such a process is in a total.
-    def _label(sandboxes_only):
-        unread = {
-            p["pid"]
-            for row in rows
-            for p in row["procs"]
-            if p["pss"] is None and (p["role"] == "sandbox" or not sandboxes_only)
-        }
-        return "PSS" if not unread else "PSS, and RSS for %d processes whose PSS was unreadable" % len(unread)
+    # wherever such a process is in a total - of the one sample the total is.
+    def _label(row, sandboxes_only):
+        unread = [p for p in row["procs"] if p["pss"] is None and (p["role"] == "sandbox" or not sandboxes_only)]
+        if not unread:
+            return "PSS"
+        return "PSS, and RSS for %d process%s whose PSS was unreadable" % (
+            len(unread),
+            "" if len(unread) == 1 else "es",
+        )
 
     jobs = {}
     peak_total = peak_sandboxes = (0, rows[0])
@@ -83,10 +83,12 @@ def main():
 
     print("samples: %d over %.0fs" % (len(rows), rows[-1]["t"]))
     print(
-        "peak, every PartCAD process (%s): %d MB at t=%.0fs" % (_label(False), _mb(peak_total[0]), peak_total[1]["t"])
+        "peak, every PartCAD process (%s): %d MB at t=%.0fs"
+        % (_label(peak_total[1], False), _mb(peak_total[0]), peak_total[1]["t"])
     )
     print(
-        "peak, sandboxes alone (%s): %d MB at t=%.0fs" % (_label(True), _mb(peak_sandboxes[0]), peak_sandboxes[1]["t"])
+        "peak, sandboxes alone (%s): %d MB at t=%.0fs"
+        % (_label(peak_sandboxes[1], True), _mb(peak_sandboxes[0]), peak_sandboxes[1]["t"])
     )
     print("peak, daemon (RSS): %d MB" % _mb(daemon_peak))
     if lowest[0] is not None:
