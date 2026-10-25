@@ -248,6 +248,15 @@ def test_a_command_that_asks_for_no_directory_sends_no_such_field(tmp_path, monk
     assert "output_dirs" not in service.params
 
 
+def test_a_command_that_printed_nothing_reports_empty_strings(tmp_path, monkeypatch):
+    """As a process run here does: a CadQuery part measures its stderr, and None has no length."""
+    service = _Service()
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
+
+    exitcode, stdout, stderr = _runtime(tmp_path).run(["-c", "pass"])
+    assert (exitcode, stdout, stderr) == (0, "", "")
+
+
 def test_an_error_from_the_service_is_reported_rather_than_swallowed(tmp_path, monkeypatch):
     class _Broken(_Service):
         def execute(self, command, params):
