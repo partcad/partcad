@@ -664,6 +664,15 @@ hour cold takes minutes warm. The ``pytest`` ``pre-commit`` hook allows 15 minut
 (``PC_PYTEST_TIMEOUT`` overrides it); a test reported as timing out on a cold cache is worth simply running
 again before it is treated as a bug.
 
+**Both gates run the tests in parallel.** The ``Pytest`` job in CI runs ``pytest-xdist`` with a worker per
+logical CPU, and the ``pytest`` ``pre-commit`` hook with one per physical core (``PC_PYTEST_WORKERS`` sets the
+number, for instance on a machine short of memory: every worker starts sandbox interpreters of its own). The
+workers are separate processes on one machine, and which tests each one runs, in which order, depends on how
+many there are. So a test that leaves a logger's level or a module's attribute changed for whatever runs next,
+that counts on a port it found free a moment ago, that lists the system's temporary directory, or that bounds a
+duration with no room for a busy machine passes on one computer and fails on the next. ``AGENTS.md`` lists what
+to do instead, under "Tests".
+
 **A gate reads the session's verdict, not pytest's exit code.** The two disagree on Windows, in both
 directions: pytest has exited ``0`` with a test having failed, and it exits ``127`` after a session in which
 every test passed. So a caller that must not be wrong sets ``PYTEST_RESULT_MARKER`` to a path, and the

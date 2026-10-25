@@ -280,7 +280,7 @@ are not sufficient because CI also gates on the example run:
 1. Unit tests:
 
    ```bash
-   pytest tests/partcad_cli -x -p no:error-for-skips -p no:warnings --dist no   # matches CI (test-pytest job)
+   pytest tests/partcad_cli -x -p no:error-for-skips -p no:warnings -n logical --dist worksteal   # matches CI (test-pytest job)
    ```
 
 2. End-to-end CLI validation against the example projects (matches CI's `test-examples-partcad` job in

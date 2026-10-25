@@ -86,6 +86,30 @@ def test_finishing_the_ansi_renderer_gives_back_the_ops_it_took():
     remote_client.fini()
 
 
+def test_finishing_gives_the_logger_back_the_level_it_had():
+    """The level outlived the renderer too, and the next test logged at DEBUG
+
+    Which is what failed 'test_import_section.py', asserting that nothing was
+    logged at ERROR while a package loaded, whenever it ran after this file in
+    one interpreter -- and under pytest-xdist that is a matter of which worker
+    is handed what. The level the command chose after 'init' goes too: it was
+    chosen for that command.
+    """
+    logger = logging.getLogger("partcad")
+    before = logger.level
+    logger.setLevel(logging.WARNING)
+    try:
+        remote_client.init(want_ansi=False, stream=io.StringIO())
+        assert logger.level == logging.DEBUG
+        logger.setLevel(logging.INFO)  # what the CLI does once it has read '--verbose'
+
+        remote_client.fini()
+
+        assert logger.level == logging.WARNING
+    finally:
+        logger.setLevel(before)
+
+
 def test_an_error_forwarded_from_the_daemon_is_recorded_for_the_exit():
     """Most of the work runs in the daemon, so most errors arrive this way.
 

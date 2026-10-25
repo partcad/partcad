@@ -13,7 +13,9 @@ that keeps the run open after it has returned. Each of those is a **stub plugin*
 here, run for real through PartCAD's own 'wrapper_simulate.py' by this
 interpreter, through the same bounded spawn and the same 'communicate' every
 sandbox uses -- so what is proven is the code that runs, with budgets of a second
-or two so that each test takes seconds.
+or two so that each test takes seconds. Those are for the runs that are meant to
+run out of time; a run that is meant to end some other way is given room, so
+that a busy runner cannot turn its crash into a timeout.
 
 What is left out is what would make every test a sandbox build, as in
 'test_sim_check.py': the sandbox (a runtime that is this interpreter) and the
@@ -205,8 +207,16 @@ def _part(ctx):
     return ctx.get_project("//sim").get_part("block")
 
 
-def _run(ctx, how, timeout=1.5, plugin=":stub"):
-    """One run of the stub, told 'how' to misbehave, under a budget of 'timeout' seconds."""
+def _run(ctx, how, timeout=30.0, plugin=":stub"):
+    """One run of the stub, told 'how' to misbehave, under a budget of 'timeout' seconds.
+
+    The default is for a run that is meant to end before its budget does -- by
+    answering, crashing, or saying something that is not an answer. A second
+    and a half was enough for that on an idle machine and not on a loaded one,
+    where the interpreter alone can take most of it to start, and a run that
+    ran out of time instead failed the test for the wrong reason. A test of the
+    budget itself passes a short one.
+    """
     part = _part(ctx)
     (declaration,) = simulation.of_shape(part)
     declaration.simulation = plugin
@@ -223,7 +233,7 @@ def _started(tmp_path):
     return [int(line) for line in listed.read_text().split()]
 
 
-def _gone(pid, within=5.0):
+def _gone(pid, within=15.0):
     """Whether 'pid' is no longer running (a zombie nobody reaped counts as gone)."""
     deadline = time.monotonic() + within
     while time.monotonic() < deadline:
@@ -366,7 +376,8 @@ def test_a_plugin_that_hangs_is_stopped_on_its_budget_with_everything_it_started
     result, took = _run(package, "hang", timeout=1.5)
 
     assert isinstance(result.exception, simulation.SimulationTimeout)
-    assert took < 15
+    # The wrapper's own watchdog, not PartCAD's bound a 'TIMEOUT_GRACE' later.
+    assert took < 25
     message = result.error
     assert message.startswith("timed out after 1.5 s")
     assert "//sim:stub" in message  # the plugin
@@ -386,7 +397,7 @@ def test_a_run_too_wedged_to_stop_itself_is_killed_from_outside_with_its_childre
     result, took = _run(package, "freeze", timeout=1.0)
 
     assert isinstance(result.exception, simulation.SimulationTimeout)
-    assert took < 15
+    assert took < 60
     assert "killed it, with everything it started" in result.error
     (child,) = _started(tmp_path)
     assert _gone(child)
@@ -484,14 +495,16 @@ def test_neither_a_timeout_nor_a_crash_is_cached_and_an_answer_is(package, monke
     assert len(stored) == 1
 
 
-@pytest.mark.parametrize("how, kind", [("hang", "timed out after"), ("exit", "exit code 3")])
-def test_pc_test_fails_a_run_that_did_not_deliver_and_says_why(package, monkeypatch, caplog, how, kind):
+# A short budget for the run that is meant to run out of it, and room for the one
+# that is meant to crash before it does (see '_run').
+@pytest.mark.parametrize("how, budget, kind", [("hang", 1.5, "timed out after"), ("exit", 30.0, "exit code 3")])
+def test_pc_test_fails_a_run_that_did_not_deliver_and_says_why(package, monkeypatch, caplog, how, budget, kind):
     part = _part(package)
     config = dict(part.config)
     config["simulate"] = {
         "stays": {
             "simulation": ":stub",
-            "params": {"how": how, "timeout": 1.5},
+            "params": {"how": how, "timeout": budget},
             "validation": 'after["bodies"]["block"]["pos"][2] > 5.0',
         }
     }

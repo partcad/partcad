@@ -814,7 +814,11 @@ def test_warming_several_packages_is_one_wait_rather_than_one_each(tmp_path):
     """They go in flight together, which is the whole of the difference."""
     import time
 
-    delay = 0.2
+    # Half a second rather than a fifth: the bound below is the same fraction of
+    # a serial run either way, but its headroom over one wait is a whole second
+    # instead of 0.4 s, and a loaded runner -- under pytest-xdist, every runner --
+    # spends some of that before the first wait has even begun.
+    delay = 0.5
     packages = 6
 
     class SlowRepository:

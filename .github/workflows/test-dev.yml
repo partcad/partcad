@@ -374,7 +374,9 @@ jobs:
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
             mkdir -pv pytest-results
             poetry --no-ansi --no-interaction show --tree
-            poetry --no-ansi --no-interaction run python -m pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --ignore-glob="ide/vscode/bundled" --dist no --verbose --color=no
+            # In parallel, as the "Pytest" job in test.yml runs it, and for the
+            # reasons given there ('-n logical', 'worksteal').
+            poetry --no-ansi --no-interaction run python -m pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --ignore-glob="ide/vscode/bundled" -n logical --dist worksteal --verbose --color=no
 
       - name: Upload test results
         if: always()

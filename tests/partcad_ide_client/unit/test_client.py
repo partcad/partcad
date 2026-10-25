@@ -110,11 +110,16 @@ def ide(monkeypatch):
 
 @pytest.fixture
 def no_ide(monkeypatch):
-    """Point the client at a port nothing is listening on."""
+    """Point the client at a port nothing is listening on.
+
+    The port stays bound, and not listening, for as long as the test runs: a
+    connection to it is refused all the same, and nothing else can take it in
+    the meantime -- which a port that was only free a moment ago does not
+    promise, with other pytest-xdist workers starting servers of their own.
+    """
     probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     probe.bind(("127.0.0.1", 0))
     port = probe.getsockname()[1]
-    probe.close()
 
     monkeypatch.setenv("PARTCAD_IDE_PORT", str(port))
     client.disconnect()
@@ -122,6 +127,7 @@ def no_ide(monkeypatch):
         yield port
     finally:
         client.disconnect()
+        probe.close()
 
 
 def test_show_sends_the_object_tree_and_returns_the_ack(ide):

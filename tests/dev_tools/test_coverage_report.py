@@ -348,6 +348,11 @@ def test_added_lines_reads_the_lines_a_commit_added(report_module, tmp_path):
     git("init", "-q")
     git("config", "user.email", "ci@partcad.org")
     git("config", "user.name", "CI")
+    # The repository is a throwaway, but the global configuration still applies
+    # to it, and a contributor who signs their commits has 'commit.gpgsign' on
+    # there -- with no key the commit below can be signed with, inside a dev
+    # container whose GPG agent nobody forwarded.
+    git("config", "commit.gpgsign", "false")
     (tmp_path / "module.py").write_text("a = 1\nb = 2\nc = 3\n")
     git("add", "module.py")
     git("commit", "-qm", "first")

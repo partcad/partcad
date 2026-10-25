@@ -189,17 +189,33 @@ def test_convert_stl_returns_bytes():
 
 @pytest.mark.slow
 def test_convert_leaves_no_temporary_file():
-    """The temporary file used by the exporter must not survive the call."""
+    """The temporary file used by the exporter must not survive the call.
+
+    Asked of the directories this conversion made, rather than of a listing of
+    the temporary directory taken before and after it: that directory is shared
+    with every other process on the machine, and under pytest-xdist with the
+    other workers of the same run, whose conversions make 'partcad-convert-*'
+    directories of their own while this one runs.
+    """
     import os
     import tempfile
 
     ctx, cube = _cube()
 
-    before = set(os.listdir(tempfile.gettempdir()))
-    asyncio.run(cube.convert("step", ctx))
-    after = set(os.listdir(tempfile.gettempdir()))
+    made = []
+    real = tempfile.TemporaryDirectory
 
-    leaked = [name for name in after - before if name.startswith("partcad-convert-")]
+    def recording(*args, **kwargs):
+        directory = real(*args, **kwargs)
+        made.append(directory.name)
+        return directory
+
+    with mock.patch.object(tempfile, "TemporaryDirectory", recording):
+        asyncio.run(cube.convert("step", ctx))
+
+    made = [path for path in made if os.path.basename(path).startswith("partcad-convert-")]
+    assert made, "the conversion made no temporary directory, so this asserted nothing"
+    leaked = [path for path in made if os.path.exists(path)]
     assert not leaked, leaked
 
 

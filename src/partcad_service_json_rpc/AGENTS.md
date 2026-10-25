@@ -163,7 +163,7 @@ poetry install   # from repo root; installs the whole `partcad` wheel in editabl
 ## Test and validate changes
 
 ```bash
-pytest tests/partcad_service_json_rpc -x -p no:error-for-skips -p no:warnings --dist no   # matches CI
+pytest tests/partcad_service_json_rpc -x -p no:error-for-skips -p no:warnings -n logical --dist worksteal   # matches CI
 ```
 
 Manual smoke over stdio (framed JSON-RPC; `rpc.discover` needs no package loaded):
