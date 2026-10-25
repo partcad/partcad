@@ -24,8 +24,11 @@
 //     needed, and given up on - for the canvas - if it does not start.
 //   * The canvas painter ('painter.ts'): the scene projected on the CPU and its
 //     triangles filled far to near, flat-shaded. No GPU at all, and slower for
-//     it - so a pane drawn this way draws only when something changed, and a
-//     big model is drawn as boxes while the camera is being moved ('boxesOf').
+//     it - so a big model is drawn as boxes while the camera is being moved
+//     ('boxesOf').
+//
+// Whichever it is, a pane draws only when something changed, not every frame:
+// a frame is the whole model again on the GPU as much as on the CPU.
 //
 // A backend that failed once is not asked again by the next pane: the answer
 // does not change while the window is open, and asking again would put the same
@@ -46,7 +49,7 @@ export interface Surface {
     readonly domElement: HTMLElement;
     setSize(width: number, height: number): void;
     render(scene: THREE.Scene, camera: THREE.Camera): void;
-    /** Draw every frame, through the backend's own loop. Absent for the painter, which draws on demand. */
+    /** Call back every frame, through the backend's own loop; the callback decides whether to draw. */
     setAnimationLoop?(callback: (() => void) | null): void;
     /** What the performance readout reports, where the backend counts it. */
     readonly info?: { render: { calls: number; triangles: number }; memory: { geometries: number; textures: number } };

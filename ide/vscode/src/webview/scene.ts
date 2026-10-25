@@ -106,9 +106,9 @@ const overlay = document.getElementById('overlay') as HTMLDivElement;
  * CPU into a canvas - the first of the three this window can give (see
  * 'surface.ts', which every 3D pane of the panel draws with).
  *
- * The canvas painter is a different renderer with different limits, and this
- * file says where it differs: it draws only when something changed
- * ('invalidate'), and a big model is drawn as boxes while the camera is being
+ * Every one of them draws only when something changed ('invalidate'). The canvas
+ * painter is a different renderer with different limits, and this file says
+ * where it differs: a big model is drawn as boxes while the camera is being
  * moved ('proxies').
  *
  * Tone-mapped with Khronos' PBR Neutral, because a shape is drawn in the colour
@@ -141,16 +141,27 @@ function drawStage(): void {
 }
 
 /**
- * Something on the stage changed: the painter draws on the next frame.
+ * Something on the stage changed: the stage is drawn on the next frame.
  *
- * A GPU renderer draws every frame anyway and ignores this. The painter draws
- * only when told, because a frame of it is every triangle filled on the CPU.
+ * Nothing is drawn otherwise, on any backend. A frame of the painter is every
+ * triangle filled on the CPU, and a frame of the GPU is every triangle of the
+ * model again: a complex assembly drawn sixty times a second kept a core busy
+ * for as long as the panel was open, with nothing on it moving (#838) - and
+ * every one of those frames is CPU time where Chromium draws WebGL on the CPU
+ * itself (SwiftShader), which this cannot tell from a GPU. So whatever changes
+ * what is on screen says so here.
  */
 let dirty = true;
 
 function invalidate(): void {
     dirty = true;
 }
+
+// A context the browser took away and gave back is an empty canvas; and a page
+// that was hidden may come back with its last frame gone, which costs one frame
+// to put back.
+surface.domElement.addEventListener('webglcontextrestored', invalidate);
+document.addEventListener('visibilitychange', invalidate);
 
 // The text pinned to the model - what its metadata says about its elements - is
 // DOM laid over the canvas rather than geometry drawn into it: text drawn as
@@ -1278,6 +1289,7 @@ let autoRotate = controls.autoRotate;
 export function setAutoRotate(enabled: boolean): void {
     autoRotate = enabled;
     controls.autoRotate = enabled;
+    invalidate();
 }
 
 /**
@@ -1328,6 +1340,9 @@ function animate(): void {
     // The model turning on its own while somebody is turning it by hand is two
     // hands on one wheel; it resumes when the cap is let go.
     controls.autoRotate = autoRotate && !moved;
+    if (moved) {
+        invalidate();
+    }
     controls.update();
     if (flickering !== undefined) {
         // A flicker is a change on every frame it lasts.
@@ -1344,7 +1359,7 @@ function animate(): void {
             }
         }
     }
-    if (software && !dirty) {
+    if (!dirty) {
         // Nothing moved and nothing changed: the picture on screen is still it.
         return;
     }
@@ -1352,7 +1367,8 @@ function animate(): void {
     drawStage();
     labelRenderer.render(scene, camera);
 
-    // FPS tracking for performance logging (behind config flag)
+    // FPS tracking for performance logging (behind config flag). Frames drawn,
+    // not frames: an idle stage draws none, and reads as a low rate.
     const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
     if (perfDebug) {
         if (!(window as any).pcViewerStats) {
