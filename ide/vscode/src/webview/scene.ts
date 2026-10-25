@@ -106,9 +106,9 @@ const overlay = document.getElementById('overlay') as HTMLDivElement;
  * CPU into a canvas - the first of the three this window can give (see
  * 'surface.ts', which every 3D pane of the panel draws with).
  *
- * The canvas painter is a different renderer with different limits, and this
- * file says where it differs: it draws only when something changed
- * ('invalidate'), and a big model is drawn as boxes while the camera is being
+ * Every one of them draws only when something changed ('invalidate'). The canvas
+ * painter is a different renderer with different limits, and this file says
+ * where it differs: a big model is drawn as boxes while the camera is being
  * moved ('proxies').
  *
  * Tone-mapped with Khronos' PBR Neutral, because a shape is drawn in the colour
@@ -141,16 +141,27 @@ function drawStage(): void {
 }
 
 /**
- * Something on the stage changed: the painter draws on the next frame.
+ * Something on the stage changed: the stage is drawn on the next frame.
  *
- * A GPU renderer draws every frame anyway and ignores this. The painter draws
- * only when told, because a frame of it is every triangle filled on the CPU.
+ * Nothing is drawn otherwise, on any backend. A frame of the painter is every
+ * triangle filled on the CPU, and a frame of the GPU is every triangle of the
+ * model again: a complex assembly drawn sixty times a second kept a core busy
+ * for as long as the panel was open, with nothing on it moving (#838) - and
+ * every one of those frames is CPU time where Chromium draws WebGL on the CPU
+ * itself (SwiftShader), which this cannot tell from a GPU. So whatever changes
+ * what is on screen says so here.
  */
 let dirty = true;
 
 function invalidate(): void {
     dirty = true;
 }
+
+// A context the browser took away and gave back is an empty canvas; and a page
+// that was hidden may come back with its last frame gone, which costs one frame
+// to put back.
+surface.domElement.addEventListener('webglcontextrestored', invalidate);
+document.addEventListener('visibilitychange', invalidate);
 
 // The text pinned to the model - what its metadata says about its elements - is
 // DOM laid over the canvas rather than geometry drawn into it: text drawn as
@@ -1209,8 +1220,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         // Create on-screen stats display
         if (!(window as any).pcViewerStats) {
             (window as any).pcViewerStats = {
-                frameTimeHistory: [],
-                lastLogTime: 0,
+                lastLogTime: performance.now(),
                 statsDisplay: null,
                 geometryInfo: '',
             };
@@ -1278,6 +1288,7 @@ let autoRotate = controls.autoRotate;
 export function setAutoRotate(enabled: boolean): void {
     autoRotate = enabled;
     controls.autoRotate = enabled;
+    invalidate();
 }
 
 /**
@@ -1328,6 +1339,9 @@ function animate(): void {
     // The model turning on its own while somebody is turning it by hand is two
     // hands on one wheel; it resumes when the cap is let go.
     controls.autoRotate = autoRotate && !moved;
+    if (moved) {
+        invalidate();
+    }
     controls.update();
     if (flickering !== undefined) {
         // A flicker is a change on every frame it lasts.
@@ -1344,58 +1358,69 @@ function animate(): void {
             }
         }
     }
-    if (software && !dirty) {
-        // Nothing moved and nothing changed: the picture on screen is still it.
+    // Nothing moved and nothing changed: the picture on screen is still it.
+    const draws = dirty;
+    let drawTime = 0;
+    if (draws) {
+        dirty = false;
+        const started = performance.now();
+        drawStage();
+        labelRenderer.render(scene, camera);
+        drawTime = performance.now() - started;
+    }
+    reportFrameRate(now, draws, drawTime);
+}
+
+/**
+ * The performance readout, behind 'viewer.performanceDebug': once a second, how
+ * many frames were drawn in it and how long one took to draw.
+ *
+ * Counted on every frame, drawn or not, since a frame that draws nothing is the
+ * idle stage this readout has to be able to show: '0 drawn/s', and not the rate
+ * of the last second something moved.
+ */
+function reportFrameRate(now: number, drawn: boolean, drawTime: number): void {
+    const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
+    if (!perfDebug) {
         return;
     }
-    dirty = false;
-    drawStage();
-    labelRenderer.render(scene, camera);
-
-    // FPS tracking for performance logging (behind config flag)
-    const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
-    if (perfDebug) {
-        if (!(window as any).pcViewerStats) {
-            (window as any).pcViewerStats = {
-                frameTimeHistory: [],
-                lastLogTime: 0,
-                lastFrameTime: now,
-                statsDisplay: null,
-                geometryInfo: '',
-            };
-        }
-        const stats = (window as any).pcViewerStats;
-        const frameInterval = now - stats.lastFrameTime;
-        stats.frameTimeHistory.push(frameInterval);
-        if (stats.frameTimeHistory.length > 60) {
-            stats.frameTimeHistory.shift();
-        }
-        stats.lastFrameTime = now;
-
-        // Log FPS every second
-        if (now - stats.lastLogTime > 1000) {
-            const avg =
-                stats.frameTimeHistory.reduce((a: number, b: number) => a + b, 0) / stats.frameTimeHistory.length;
-            const fps = 1000 / avg;
-            console.log(`[Digital Thread] FPS: ${fps.toFixed(1)} (frame time: ${avg.toFixed(2)}ms)`);
-
-            // Update on-screen display with FPS and graphics info
-            const renderInfo = surface.info?.render ?? { calls: 0, triangles: 0 };
-            const memInfo = surface.info?.memory ?? { geometries: 0, textures: 0 };
-            if (stats.statsDisplay) {
-                const fpsInfo = `\nFPS: ${fps.toFixed(1)} | Frame: ${avg.toFixed(1)}ms`;
-                const graphicsInfo = `\nDraw Calls: ${renderInfo.calls} | Geometries: ${memInfo.geometries}`;
-                stats.statsDisplay.textContent = stats.geometryInfo + fpsInfo + graphicsInfo;
-            }
-            console.log('[Digital Thread] Graphics Stats:', {
-                drawCalls: renderInfo.calls,
-                triangles: renderInfo.triangles,
-                geometries: memInfo.geometries,
-                textures: memInfo.textures,
-            });
-            stats.lastLogTime = now;
-        }
+    if (!(window as any).pcViewerStats) {
+        (window as any).pcViewerStats = {
+            lastLogTime: now,
+            statsDisplay: null,
+            geometryInfo: '',
+        };
     }
+    const stats = (window as any).pcViewerStats;
+    stats.lastLogTime ??= now;
+    stats.drawnFrames = (stats.drawnFrames ?? 0) + (drawn ? 1 : 0);
+    stats.drawTime = (stats.drawTime ?? 0) + drawTime;
+
+    const elapsed = now - stats.lastLogTime;
+    if (elapsed <= 1000) {
+        return;
+    }
+    const fps = (stats.drawnFrames * 1000) / elapsed;
+    const perDraw = stats.drawnFrames > 0 ? stats.drawTime / stats.drawnFrames : 0;
+    console.log(`[Digital Thread] Drawn: ${fps.toFixed(1)} frames/s (draw time: ${perDraw.toFixed(2)}ms)`);
+
+    // Update on-screen display with the frame rate and graphics info
+    const renderInfo = surface.info?.render ?? { calls: 0, triangles: 0 };
+    const memInfo = surface.info?.memory ?? { geometries: 0, textures: 0 };
+    if (stats.statsDisplay) {
+        const fpsInfo = `\nDrawn: ${fps.toFixed(1)}/s | Draw: ${perDraw.toFixed(1)}ms`;
+        const graphicsInfo = `\nDraw Calls: ${renderInfo.calls} | Geometries: ${memInfo.geometries}`;
+        stats.statsDisplay.textContent = stats.geometryInfo + fpsInfo + graphicsInfo;
+    }
+    console.log('[Digital Thread] Graphics Stats:', {
+        drawCalls: renderInfo.calls,
+        triangles: renderInfo.triangles,
+        geometries: memInfo.geometries,
+        textures: memInfo.textures,
+    });
+    stats.lastLogTime = now;
+    stats.drawnFrames = 0;
+    stats.drawTime = 0;
 }
 
 /** The boxes a big model is drawn as while it is being moved, or undefined. */

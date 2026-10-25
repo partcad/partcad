@@ -337,9 +337,9 @@ Four things about it are load-bearing:
   backend that failed once is not tried again by the next pane, so a window says why once. The painter is
   2.5-3.5x faster than three's `SVGRenderer` on the same scene (one DOM element per triangle is what that
   costs), which is why it is ours rather than theirs. It is a different renderer with different limits, and
-  the panes say where they differ: it draws only when something changed (`invalidate`), not every frame; the
-  model does not turn on its own until asked; it lights with ambient, hemisphere and directional lights only,
-  without three's 1/pi Lambert term and with no light probe, so the 3D view replaces its rig with a light
+  the panes say where they differ: the model does not turn on its own until asked; it lights with ambient,
+  hemisphere and directional lights only, without three's 1/pi Lambert term and with no light probe, so the
+  3D view replaces its rig with a light
   that moves with the camera and the analysis view gives it the same flat light over pi; a solid (and an
   analysis result, which is the surface of a part) is drawn front-side only, because it orders whole triangles
   by depth and a far face would stripe the near one; a face is one colour, so a result's per-vertex colours
@@ -359,6 +359,14 @@ Four things about it are load-bearing:
   "the device was lost". Where WebGL fails because the GPU process did, WebGPU usually fails with it -
   Chromium then offers the API and no adapter, not even the software fallback one - so the painter is what
   such a window ends up with; WebGPU is for a GPU WebGL could not use and WebGPU can.
+- **Every 3D pane draws only when something changed, on every backend -- not every frame.** The render loop
+  runs at the display's rate and draws only when `invalidate` (`scene.ts`) or `dirty` (`cae.ts`) says the
+  picture changed: the camera moved (OrbitControls' `change`, which auto-rotation and damping fire too), a
+  SpaceMouse moved it, the pane was resized, what is shown or how it is drawn changed, the context was given
+  back, the page was shown again. GPU panes used to draw every frame, and the painter alone did not: a complex
+  assembly sitting still kept a CPU core busy for as long as the panel was open (#838), all of it CPU where
+  Chromium draws WebGL with SwiftShader. Anything new that changes what a pane shows has to invalidate it,
+  or it reaches the screen only with the next turn of the camera.
 - **A shape is drawn in its own colour, and in goldenrod when it has none -- in every 3D pane, on every
   backend.** The colour is a node's `properties.color` (`#RRGGBB`, or `#RRGGBBAA` for a see-through one), or
   the nearest ancestor's, and `appearance.ts` decides it; a node that nothing colours is `DEFAULT_COLOR`,

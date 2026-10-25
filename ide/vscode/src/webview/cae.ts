@@ -82,10 +82,11 @@ const HEMISPHERE_INTENSITY = 1.0;
  *
  * What it draws with is chosen as the 3D view's is ('surface.ts'): WebGL, else
  * WebGPU, else the canvas painter - so a window with no GPU it can use shows an
- * analysis's result flat-shaded rather than not at all. Drawn by the painter, it
- * draws only when the camera moved, a closed result is drawn front-side only (as
- * the 3D view draws a solid, for the same reason), and a big one is drawn as
- * boxes while it is being turned.
+ * analysis's result flat-shaded rather than not at all. It draws only when the
+ * camera moved or the pane changed size, on every backend, as the 3D view does
+ * (see 'invalidate' there). Drawn by the painter, a closed result is drawn
+ * front-side only (as the 3D view draws a solid, for the same reason), and a big
+ * one is drawn as boxes while it is being turned.
  */
 class MeshView {
     private surface: Surface | undefined;
@@ -102,8 +103,11 @@ class MeshView {
     /** The boxes a big model is drawn as by the painter while it is turned. */
     private boxes: THREE.Group | undefined;
     private frameRequest: number | undefined;
-    /** Whether the painter has something new to draw; the GPU draws every frame regardless. */
+    /** Whether there is something new to draw; nothing is drawn otherwise, on any backend. */
     private dirty = true;
+    private readonly invalidate = () => {
+        this.dirty = true;
+    };
     private disposed = false;
 
     constructor(private readonly host: HTMLElement) {
@@ -135,6 +139,10 @@ class MeshView {
             this.dirty = true;
         });
         this.controls = controls;
+        // A context given back is an empty canvas, and a page shown again may
+        // have lost its last frame (see the 3D view's 'invalidate').
+        surface.domElement.addEventListener('webglcontextrestored', this.invalidate);
+        document.addEventListener('visibilitychange', this.invalidate);
 
         // A result is turned with the SpaceMouse as the 3D tab's model is, while
         // its tab is on screen, and "Fit" frames it the way it was first shown.
@@ -229,14 +237,14 @@ class MeshView {
         }
         const tick = () => {
             this.frameRequest = requestAnimationFrame(tick);
-            if (this.navigable !== undefined) {
-                spaceMouse.drive(this.navigable, performance.now());
+            if (this.navigable !== undefined && spaceMouse.drive(this.navigable, performance.now())) {
+                this.dirty = true;
             }
             this.controls?.update();
-            if (this.surface === undefined || (this.software && !this.dirty)) {
-                // The painter's picture on screen is still the picture: a frame
-                // of it is every triangle filled on the CPU, so it is not
-                // redrawn for nothing.
+            if (this.surface === undefined || !this.dirty) {
+                // The picture on screen is still the picture: a frame is every
+                // triangle of the result again, on the GPU or the CPU, so it is
+                // not redrawn for nothing.
                 return;
             }
             this.dirty = false;
@@ -273,6 +281,7 @@ class MeshView {
             this.frameRequest = undefined;
         }
         this.observer?.disconnect();
+        document.removeEventListener('visibilitychange', this.invalidate);
         if (this.navigable !== undefined) {
             spaceMouse.detach(this.navigable);
             this.navigable = undefined;
