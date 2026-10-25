@@ -825,8 +825,10 @@ def test_the_wrapper_runs_the_request_it_is_handed_and_cleans_up_after_it(monkey
     script = tmp_path / "plugin.py"
     script.write_text(STUB, encoding="utf-8")
     request = {"how": "answer", "timeout": 60, "scene_file": str(tmp_path / "scene.txt")}
-    if scripted:
-        request[wrapper_simulate.SCRIPT_KEY] = str(script)
+    # On the command line, after the two arguments 'handle_input' reads: a
+    # sandbox that sends files rewrites an argument, and not the request.
+    argv = ["wrapper_simulate.py", str(tmp_path), str(tmp_path)] + ([str(script)] if scripted else [])
+    monkeypatch.setattr(sys, "argv", argv)
     written, done = [], []
     monkeypatch.setattr(wrapper_simulate.wrapper_common, "handle_input", lambda decode: (str(tmp_path), request))
     monkeypatch.setattr(wrapper_simulate.wrapper_common, "handle_output", written.append)
