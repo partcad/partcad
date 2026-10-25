@@ -8,8 +8,8 @@ How to *use* any of it is the user documentation's job; this file is for whoever
 Status words used below: **built** is on `devel`; **decided** is agreed and not built; **open** is not agreed.
 
 Where it stands: step 1 is #849, the pull request that adds this record; steps 2 and 3 are #850; step 4 is being
-done separately. Steps 5 to 7 are **open**: the first proposal for them is withdrawn, and section 9 says what
-is wanted instead and the design being discussed.
+done separately. Steps 5 to 7 are **open**: two proposals for them are withdrawn, and section 9 says what is
+decided and the design being discussed.
 
 ## Contents
 
@@ -146,7 +146,7 @@ mesh has three (section 10).
 | 2 | The daemon and the wire | `shape_envelope.py`, `shape.py`, `runtime*.py`, `cache_shape.py` | requests and cache entries one copy per distinct part; nothing serialized before it can run | medium: wire and cache format |
 | 3 | The disk cache | `shape.py` render/export path, `cache_artifacts.py` | an unchanged picture is not drawn again | low |
 | 4 | The swap healthcheck | `healthcheck/swap.py` | the user is told | low |
-| 5-7 | Scheduling | `sandbox_lock.py`, the fan-out sites, `sync_threads.py` | every core busy, started work first, fewer tasks than cores only at capacity | open: section 9 |
+| 5-7 | Admission by memory | `sandbox_lock.py`, the fan-out sites, `sync_threads.py`, `shape.py` | every core busy, started work first, no new start past the daemon's budget; nothing running touched | open: section 9 |
 
 Steps 1 to 4 are independent and each pays for itself; step 1 alone is what got the examples through on this machine
 (section 2). Steps 5 to 7 are what makes the result hold for the next, larger design rather than for this one.
@@ -254,6 +254,8 @@ drawing of the car costs the daemon about 15 MB while it runs and nothing while 
 
 ### 7.1 Cache the pictures
 
+#848 caches every export and render, which covers this; #850 drops its own picture cache once #848 is in.
+
 `pc render` draws every picture every time, even when nothing it is drawn from has changed: only the IDE's thumbnails
 are cached (`thumbnail.py`, `ctx.cache_renders`). The machinery for caching an output already exists and is used by
 `pc cae`, `pc cam` and `pc sim` (`cache_artifacts.py`): a key made of the subject's cache key, the implementation, the
@@ -307,53 +309,77 @@ never failing the run, tags `memory`, `swap`, `performance`.
 
 This is independent of everything else here and can land first.
 
-## 9. Steps 5 to 7: scheduling, reconsidered
+## 9. Steps 5 to 7: admission by memory
 
-The first version of this record proposed admitting sandbox processes against a memory budget held below the
-machine's RAM, and replacing the thread pools with one scheduler. Both are withdrawn. A budget below RAM holds back
-cores long before the machine is out of memory, and PartCAD's threading exists to keep every core of a large machine
-busy -- 64 of them as much as 4 -- without oversubscribing them; a design that gives that up is not what is wanted.
-What is, as it now stands:
+Two proposals for these steps have been withdrawn: a budget held below RAM, which held cores back long before memory
+ran out, and then pausing or stopping running tasks at a margin short of capacity. What is **decided**:
 
-1. **Every core stays busy.** As many sandbox processes run as there are slots (`threadsMax`) while there is work
-   for them, as today.
-2. **What is started is finished first, without idle cores.** While the castle occupies only a few cores, the car's
-   tasks use the rest. When the castle fans out into more tasks, new starts go to the castle: the car's running tasks
-   are left to finish and none of its tasks are started in their place, so the number of car tasks in flight falls,
+1. **Every core stays busy while memory allows.** As many sandbox processes run as there are slots (`threadsMax`)
+   while there is work for them, as today.
+2. **What is started is finished first.** While the castle occupies only a few cores, the car's tasks use the rest.
+   When the castle fans out into more tasks, new starts go to the castle, and the number of car tasks in flight falls,
    to none if need be.
-3. **Memory throttles only at capacity.** Fewer tasks than cores are kept in flight if, and only if, the memory in use
-   reaches capacity -- and swap counts as capacity.
+3. **Each daemon budgets for itself**: it plans to use up to 80% (configurable) of the capacity, swap included, and
+   ignores every other daemon. There is no agreement between daemons.
+4. **Nothing running is touched.** No task is paused, frozen, stopped or made to wait once it has started. The one
+   lever is not starting new tasks until memory conditions improve.
+5. **Finishing work frees memory**, or conditions would never improve: a sandbox frees everything when its process
+   exits, and the daemon releases what has been used and can be had back from disk -- a sub-assembly's tree once its
+   parent is built, and in general an object that is not too small and is cached on disk.
 
 The design being discussed, **open** in every part:
 
-- **A task is one sandbox launch** -- what occupies a core. The coroutines and threads that wait for sandboxes are
-  not tasks and are not counted; nothing in the daemon computes geometry.
-- **Admission in the order of roots, then depth-first within one.** A root is one unit of a command's outermost
-  fan-out: one picture of `pc render -r`, one package of `pc test -r`. Roots rank by when their first task started,
-  and roots not started yet by declaration order; within a root a task ranks by its position in the order one slot
-  would reach it. When a slot frees, the first ready task in that order takes it. That is points 1 and 2 as they
-  stand: the castle takes every slot it has ready work for, the car the slots the castle cannot use, and nothing
-  running is pre-empted for it. A task building something that a better-ranked task waits for -- a brick two pictures
-  need -- ranks as the better of the two (priority inheritance), or a castle picture would wait behind the car's turn.
-- **Memory is watched against RAM plus swap**, the machine's or the cgroup's, whichever is smaller. Capacity cannot be
-  waited for -- the kernel kills when it is reached -- so the trigger is a margin short of it, and what follows
-  escalates: first no task is started, so tasks in flight fall below the core count as they finish; then the
-  lowest-ranked running task is paused (`psutil.Process.suspend()`; in a container, the task's own process and not
-  the container, since one sandbox container serves every task with its image and mounts) -- a paused task
-  stops growing, and with swap its pages are the first to go out, which is the room the tasks ahead of it need -- and
-  resumed when memory comes back; and last, at a critical margin, the lowest-ranked task is stopped and queued again,
-  so that what is killed is PartCAD's choice rather than the kernel's, which may be the daemon. The best-ranked running
-  task is never paused or stopped, which is what guarantees progress.
-- **Today's pools stay.** Since #834 they are deadlock-free at any size, and they are what point 1 is about. What
-  changes is around them: the rank travels with work across a thread hop, beside the OpenTelemetry context that
-  `sync_threads._Work` already carries; `ProcessSlots` wakes its waiters in rank order instead of letting whichever
-  polls first win; a shape's lock and a preparation lend their waiters' rank to the holder. Whether the pools should
-  one day give way to a single event loop per request is a question of its own, and none of this needs it.
-- **A failed task is one failure.** Whatever is decided above, `Project.render_async` should gather a package's
-  pictures with `return_exceptions`, as `_render_packages_async` already gathers packages, and raise the first failure
-  once the rest are done: today the first exception ends the package's render, which is how one kill in the warm run
-  cost eight pictures (section 2). A task stopped at the critical margin is queued again rather than failed, but a
-  real failure should not take its neighbours with it either. It is a few lines, and independent of the rest.
+- **A task is one sandbox launch**, and it is admitted where every launch already waits: the process slot
+  (`sandbox_lock.process_slots`). The coroutines and threads that wait for sandboxes are not tasks; nothing in the
+  daemon computes geometry.
+- **Usage is this daemon's own footprint**: its process and the sandbox processes it started (PSS where Linux has it,
+  `psutil`'s USS elsewhere). **Capacity** is RAM plus swap, or the cgroup's `memory.max` plus `memory.swap.max` where
+  that is smaller. The budget is `memoryBudget` (0.8) times capacity.
+- **Admission charges what a task will reach, not what it uses now.** In a warm run of the LDraw examples with #849 and
+  #850, a picture's sandbox held 0.4 to 0.5 GB five seconds after it started and 1.4 to 2.7 GB ten seconds later,
+  and the run's first four starts saw 234 MB in use. A test of present usage admits a slot's worth of tasks at once,
+  and they then grow together: since nothing running may be stopped, that is how a run reaches the kernel. So every
+  running task is charged the larger of its expected peak and what it uses now, and a task is started only if the
+  daemon's usage, plus the growth still expected of the running tasks, plus the new task's expected peak, fits the
+  budget. A task's expected peak is the peak recorded for the same task -- the same key as its cache entry -- on an
+  earlier run, and without a record a default (question 6). It is still only a decision not to start.
+- **Progress is guaranteed by construction.** A sandbox never waits for another sandbox, so every running task ends and
+  frees its process. When the daemon has no task running at all, the best-ranked ready task is started whatever it is
+  expected to need, with a warning when that is over the budget; otherwise a design bigger than the machine would stop
+  instead of failing.
+- **Order: roots, then first come first served.** A root is one unit of a command's outermost fan-out (question 4).
+  Roots rank by when their first task started, roots not started yet by declaration order; within a root, tasks are
+  taken in the order they asked. When a slot frees, the first ready task in that order that fits the budget takes it
+  (question 7 is whether a lower one that fits may go first). A task building something that a better-ranked task
+  waits for -- a brick two pictures need -- ranks as the better of the two, through the shape's lock and its
+  preparation. The rank travels with work across a thread hop, beside the OpenTelemetry context `sync_threads._Work`
+  already carries, and `ProcessSlots` wakes its waiters in rank order instead of letting whichever polls first win.
+  Today's pools stay: since #834 they are deadlock-free at any size.
+- **A postponed task holds nothing.** Today a picture builds its request, and so holds its tree, before it waits for a
+  slot (`_render_one_async` calls `_output_request`; the slot is taken in `runtime.py`). With 33 pictures waiting, the
+  daemon holds 33 trees, so postponing work would itself use memory. What a task is handed is put together once it is
+  admitted, and #850 already serializes it only then.
+- **The daemon's release.** Most of it exists: an entry over `cacheMemoryDoubleCacheMaxEntrySize` (1 MB) that a
+  persistent tier holds is not kept on its shape (`Shape._wrapped`) but read back for each use -- and with #850 the
+  castle's tree is such an entry, where before it was over the file tier and so kept for the daemon's lifetime. What
+  is left:
+  - an entry no persistent tier takes is kept for the daemon's lifetime, because nothing else has it: `f1`'s tree,
+    over the file tier's 10 MB (7.2). It needs a way onto disk to become releasable;
+  - an entry under 1 MB is kept for the daemon's lifetime too; a design of tens of thousands of parts adds those up
+    (question 8);
+  - memory Python frees has to be returned to the system to count. glibc raises its `mmap` threshold each time a
+    large block is freed, up to 32 MB, so later blocks of that size come from the heap and stay in the process after
+    they are freed. The daemon fixes the threshold (`M_MMAP_THRESHOLD`) and calls `malloc_trim(0)` after a release.
+    Without that, the daemon releases and its usage does not fall, and admission never resumes.
+- **The sandbox's own release** (5.2) was not worth a pull request while nothing charged a task for its peak. Now the
+  peak is what admission charges.
+- **The client keeps waiting.** A request whose tasks are postponed goes on logging, so the client's 300 s idle timeout
+  (`partcad_utils.timeouts`) does not fire, and time spent waiting to be admitted does not count against a task's own
+  timeout.
+- **A failed task is one failure.** `Project.render_async` should gather a package's pictures with
+  `return_exceptions`, as `_render_packages_async` already gathers packages, and raise the first failure once the rest
+  are done: today the first exception ends the package's render, which is how one kill in the warm run cost eight
+  pictures (section 2). It is a few lines, and independent of the rest.
 
 The questions it leaves are in section 12.
 
@@ -396,13 +422,13 @@ repository's code, and its effect is not measured.
   the daemon sends a render sandbox, and a harness that replays it phase by phase. A pull request that claims to move
   these numbers quotes them before and after.
 - **Scheduling is unit-tested without a machine to fill**, once it exists: the admission takes its memory probe and
-  its process control as parameters, so tests drive it with scripted numbers -- rank order with spare slots; a fan-out
-  taking new starts from a later root without stopping its running tasks; the pause, the resume and the stop at the
-  margins; the progress guarantee. `test_sync_threads.py` and `test_nested_build.py` keep holding the pools to being
-  deadlock-free at sizes one and two.
+  its expected peaks as parameters, so tests drive it with scripted numbers -- rank order with spare slots; a fan-out
+  taking new starts from a later root without touching its running tasks; no start past the budget, and starts
+  resuming as tasks end and the daemon releases; the progress guarantee. `test_sync_threads.py` and
+  `test_nested_build.py` keep holding the pools to being deadlock-free at sizes one and two.
 - **End to end.** `pc render -r` of partcad-ldraw-examples, default configuration, completes on a 16 GB machine with
-  no swap -- which it does with step 1 -- and, once scheduling is built, inside an 8 GB cgroup with swap, where today
-  it is killed.
+  no swap -- which it does with step 1 -- and, once admission is built, inside an 8 GB cgroup, where today it is
+  killed; and the daemon's usage falls between roots.
 - **Pictures.** Nothing here may change an exact (`reproducible: true`) picture, and `Examples (PartCAD)` fails if
   one does. A polygonal one may change once, by the tie-breaking 5.1 describes, and the pull request that changes it
   re-renders it and says so -- `castle-front.png` in partcad-ldraw-examples, measured at 39 pixels.
@@ -410,23 +436,24 @@ repository's code, and its effect is not measured.
 ## 12. Open questions
 
 1. **Sharing geometry in the sandbox** (5.1) makes every placement of a part the same OCCT shape. No built-in
-   implementation modifies what it is handed; an implementation published by another package might. #849
-   states "do not modify the shapes you are handed" as part of the implementation contract. Acceptable, or
-   should sharing be something an implementation opts into?
-2. **Caching pictures** (7.1) means `pc render` can write a file without running anything. #850
-   turns it on, as the shape cache is on; `--cache-bypass` and the tier switches apply. Right default?
-3. **What ranks a root** (section 9): when its first task started, or where it is declared? The first is what
-   "finish what is started" says; the second is simpler and nearly always the same order.
-4. **What a root is** for `pc render -r`: each picture, or each top-level object with all of its pictures?
-5. **The margins.** "At capacity" has to mean "a margin short of it", because at capacity the kernel acts first.
-   Something like the larger of 512 MB and 2% of RAM plus swap to stop starting and pause, and half that to stop a
-   task?
-6. **Pausing before stopping.** Pausing loses no work but holds memory; stopping frees it and loses the task's time.
-   Pause first, stop only at the critical margin -- or stop straight away?
-7. **Predicting.** A task that ran before has a recorded peak. Is postponing one whose recorded peak would take the
-   machine past capacity still "throttling only at capacity", or should admission look at the present and nothing
-   else?
-8. **Thrashing.** With swap counted as capacity, a machine can be far from capacity and making almost no progress,
-   paging. Does sustained memory pressure (Linux PSI, `/proc/pressure/memory`) count as being at capacity?
-9. **Several daemons on one machine** -- a daemon per workspace -- each schedule their own work against the same
-   memory. Is that acceptable, with each reacting to what the machine reports, or do they need to agree on ranks?
+   implementation modifies what it is handed; an implementation published by another package might. #849 states "do
+   not modify the shapes you are handed" as part of the implementation contract. Acceptable, or should sharing be
+   something an implementation opts into?
+2. **"Available capacity"** (section 9): RAM plus swap (or the cgroup's limit), fixed -- or this daemon's usage plus
+   what the machine has free right now, which shrinks the budget while a browser or another daemon holds memory without
+   any agreement between them?
+3. **What ranks a root**: when its first task started, or where it is declared? The first is what "finish what is
+   started" says; the second is simpler and nearly always the same order.
+4. **What a root is** for `pc render -r`: each picture, or each top-level object with all of its pictures? The second
+   makes `f1`'s four views one root, which is the fan-out point 2 is about.
+5. **Swap in the budget.** 80% of RAM plus swap is deep into swap on a machine with as much swap as RAM, and a machine
+   paging hard can be far from its budget and making little progress. Is sustained memory pressure (Linux PSI,
+   `/proc/pressure/memory`) also a reason not to start? And on macOS, where swap has no fixed size, is capacity RAM
+   alone?
+6. **Expected peaks.** Recorded per task from earlier runs, as section 9 says? And for a task never seen: the largest
+   peak seen so far in this run for the same wrapper and file type, or a fixed default?
+7. **Backfilling.** When the best-ranked ready task does not fit, may a lower-ranked one that does start first? It
+   keeps cores busy, and a stream of small tasks can then keep the big one waiting; one remedy is to stop backfilling
+   once the best-ranked task has waited long enough.
+8. **Small entries.** Keep the per-entry rule (over 1 MB and on disk is not kept), or also cap the memory tier's total,
+   least recently used first, so that many small entries cannot hold the budget?
