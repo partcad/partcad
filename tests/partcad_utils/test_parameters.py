@@ -11,7 +11,15 @@ request assigns to the object it names (`assignments`, `assign`).
 
 import pytest
 
-from partcad_utils.parameters import assign, assignments, format_assignment, parse_override
+from partcad_utils.parameters import (
+    array_item_type,
+    as_list,
+    assign,
+    assignments,
+    coerce_parameter_value,
+    format_assignment,
+    parse_override,
+)
 from partcad_utils.user_config import user_config
 
 
@@ -116,3 +124,57 @@ def test_a_value_is_written_the_way_a_name_spells_it(value, expected):
 )
 def test_assigned_values_are_written_into_the_name(name, values, expected):
     assert assign(name, values) == expected
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (None, []),
+        ("", []),
+        ("A,B", ["A", "B"]),
+        (" A , B ,", ["A", "B"]),
+        (["A", "B"], ["A", "B"]),
+        (("A", "B"), ["A", "B"]),
+        (["B", "A"], ["B", "A"]),
+        (["A", None, "", "B"], ["A", "B"]),
+        (4, [4]),
+    ],
+)
+def test_a_list_is_a_list_however_it_was_written(value, expected):
+    """In the order its items were given; a trailing comma is a typo, not an empty item."""
+    assert as_list(value) == expected
+
+
+@pytest.mark.parametrize(
+    "declaration, expected",
+    [
+        ([10, 20], "int"),
+        ({"type": "array", "default": [1.5, 2.5]}, "float"),
+        ([1, 2.5], "float"),
+        ([True, False], "bool"),
+        (["UP", "DOWN"], "string"),
+        ([], None),
+        ({"type": "array"}, None),
+        ([1, "a"], None),
+        (None, None),
+    ],
+)
+def test_an_array_s_items_are_the_type_its_declared_default_s_are(declaration, expected):
+    assert array_item_type(declaration) == expected
+
+
+@pytest.mark.parametrize("value", ["30,40", " 30 , 40 ", [30, 40], ["30", "40"], (30, 40), [30.0, 40.0]])
+def test_an_array_of_declared_integers_is_integers_however_it_was_written(value):
+    assert coerce_parameter_value("array", value, "holes", "plate", item_type="int") == [30, 40]
+
+
+@pytest.mark.parametrize("value", ["UP,DOWN", ["UP", "DOWN"], ("UP", "DOWN")])
+def test_an_array_with_no_declared_item_type_is_text(value):
+    """What every way of writing an item can agree on, in the order given."""
+    assert coerce_parameter_value("array", value, "include", "panel") == ["UP", "DOWN"]
+    assert coerce_parameter_value("array", [1, True], "include", "panel") == ["1", "true"]
+
+
+def test_an_array_item_that_is_not_its_declared_type_is_refused():
+    with pytest.raises(ValueError):
+        coerce_parameter_value("array", "1.5,2", "holes", "plate", item_type="int")

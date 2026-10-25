@@ -48,6 +48,8 @@ import os
 import re
 from typing import Optional
 
+from partcad_utils.utils import format_parameterized_name, parse_parameterized_name
+
 from . import logging as pc_logging
 from . import sandbox_versions
 
@@ -285,13 +287,22 @@ def name_to_segments(name: str, suffix: str = "") -> list:
     there, which made a directory of half a value and a file name Windows
     refuses. So the values are written into the file's name with every run of
     characters outside '[A-Za-z0-9_.-]' as one '_' -- 'bolt_length_10',
-    'room_medium_pub_std_materials_air' -- which is how 'pc instructions'
-    already named the book of one, and leaves nothing to quote in a shell.
+    'room_medium_pub_std_materials_air' -- which leaves nothing to quote in a
+    shell.
+
+    And they are written the way an instance's name is normalized for the
+    objects in memory and the cache, so that one instance has one file however
+    it was asked for: every parameter, sorted by name, and every item of a list,
+    in its order, separated by commas ('format_parameterized_name'). That is
+    already how an instance PartCAD made is named, and is done again here for a
+    name as somebody typed it -- 'pc instructions "stack;offset=12,angle=90"'
+    downloads 'stack_angle_90_offset_12.pdf', the file 'pc render' writes of
+    the same instance.
     """
-    base, separator, values = name.partition(";")
+    base, values = parse_parameterized_name(name)
     *directories, stem = base.split("/")
-    if separator:
-        stem += "_" + _UNSAFE_IN_FILE_NAME.sub("_", values)
+    if values:
+        stem += _UNSAFE_IN_FILE_NAME.sub("_", format_parameterized_name("", values))
     return [*directories, stem + suffix]
 
 

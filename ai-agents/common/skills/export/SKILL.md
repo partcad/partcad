@@ -85,7 +85,8 @@ Useful options:
 - `-p <name>=<value>` — export the object with that value of one of its
   `parameters:`, repeated for each; the same as naming it `"bolt;length=30"`
   (quoted: a shell ends the command at the `;`). The file is named with the
-  values, `bolt_length_30.stl`.
+  values, the parameters sorted by name: `-p size=M4 -p length=30` writes
+  `bolt_length_30_size_M4.stl`.
 - **No object name** exports everything the package declares; a `...` suffix on
   the package (`-P //...`) walks the imported packages too, and `...:<name>`
   exports every object of that name from here down. Say what that will produce

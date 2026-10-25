@@ -116,3 +116,17 @@ def test_an_instance_name_keeps_a_colon_and_a_double_slash_in_a_value():
     assert format_parameterized_name("//pkg:room", {"medium": "//pub/std/materials:water"}) == (
         "//pkg:room;medium=//pub/std/materials:water"
     )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [["BEND_UP", "BEND_DOWN"], ("BEND_UP", "BEND_DOWN"), [["BEND_UP"], "BEND_DOWN"], "BEND_UP,BEND_DOWN"],
+)
+def test_a_list_is_named_by_its_items_in_their_order(value):
+    """The one way a name holds a list, whatever it was handed over as; it reads back as the same text."""
+    name = format_parameterized_name("panel", {"include": value})
+    assert name == "panel;include=BEND_UP,BEND_DOWN"
+    assert parse_parameterized_name(name) == ("panel", {"include": "BEND_UP,BEND_DOWN"})
+    assert (
+        format_parameterized_name("panel", {"include": ["BEND_DOWN", "BEND_UP"]}) == "panel;include=BEND_DOWN,BEND_UP"
+    )

@@ -78,8 +78,9 @@ package changes.
 An object that declares `parameters:` is rendered with particular values by
 `-p <name>=<value>`, repeated for each — or by naming it `"bolt;length=30"`,
 which is the same request, quoted because a shell ends the command at the `;`.
-The file is named with the values, `bolt_length_30.png`, so renders of several
-values sit side by side.
+The file is named with the values, the parameters sorted by name and every
+item of a list written out — `-p size=M4 -p length=30` writes
+`bolt_length_30_size_M4.png` — so renders of several values sit side by side.
 
 ## 4. A file with no package — `pc adhoc render`
 

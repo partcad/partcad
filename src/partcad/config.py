@@ -1,4 +1,4 @@
-from partcad_utils.parameters import coerce_parameter_value, normalize_parameters  # noqa: F401
+from partcad_utils.parameters import array_item_type, coerce_parameter_value, normalize_parameters  # noqa: F401
 
 from . import expr
 from . import logging as pc_logging
@@ -52,7 +52,11 @@ def apply_user_parameter_overrides(
                 declared = config[section][param_name]
                 try:
                     value = coerce_parameter_value(
-                        declared_parameter_type(declared), parameter_config[param_name], param_name, object_name
+                        declared_parameter_type(declared),
+                        parameter_config[param_name],
+                        param_name,
+                        object_name,
+                        item_type=array_item_type(declared),
                     )
                 except (ArithmeticError, TypeError, ValueError) as e:
                     pc_logging.error(
@@ -101,7 +105,9 @@ def apply_parameter_values(parameters: dict, values: dict, object_name: str) -> 
         declared = parameters.get(param_name)
         if declared is None:
             raise ValueError("The parameter '%s' is not declared in '%s'" % (param_name, object_name))
-        declared["default"] = coerce_parameter_value(declared.get("type"), param_value, param_name, object_name)
+        declared["default"] = coerce_parameter_value(
+            declared.get("type"), param_value, param_name, object_name, item_type=array_item_type(declared)
+        )
     return parameters
 
 
@@ -149,12 +155,56 @@ def canonical_parameter_values(parameters: dict, values: dict, object_name: str)
             canonical[param_name] = param_value
             continue
         try:
-            value = coerce_parameter_value(declared_parameter_type(declaration), param_value, param_name, object_name)
+            value = coerce_parameter_value(
+                declared_parameter_type(declaration),
+                param_value,
+                param_name,
+                object_name,
+                item_type=array_item_type(declaration),
+            )
         except Exception:
             canonical[param_name] = param_value
             continue
-        canonical[param_name] = expr.format_value(value)
+        if isinstance(value, list):
+            # Each item spelled as a value is, and the list left a list: the
+            # name writes it with commas (see 'format_parameterized_name').
+            canonical[param_name] = [
+                item if isinstance(item, (list, dict)) else expr.format_value(item) for item in value
+            ]
+        else:
+            canonical[param_name] = expr.format_value(value)
     return canonical
+
+
+def normalized_array_values(declarations: dict, values: dict, object_name: str) -> dict:
+    """The values a reference gives, with every array value read into the list it is.
+
+    What makes one set of list values one instance, in memory and in the cache,
+    however it was handed over: 'include=A,B' in a name, '-p include=A,B', and
+    an ASSY link's or the editor's '[A, B]' are all the list ['A', 'B'], in the
+    order given, and so all name the instance 'panel;include=A,B' -- where a
+    list used to be written into the name as Python prints it, beside the text
+    that meant the same. An item is read as the type the declared default's
+    items share ('array_item_type'), so the values the shape is keyed on agree
+    as well as the name.
+
+    Only arrays: a scalar is named as it was written, as it always has been.
+    'declarations' is the object's parameter section, short forms and all, with
+    the ones its type contributes; a value that cannot be read is handed back
+    as it was, for 'apply_parameter_values' to refuse with its own message.
+    """
+    normalized = dict(values)
+    for param_name, param_value in values.items():
+        declaration = (declarations or {}).get(param_name)
+        if declared_parameter_type(declaration) != "array":
+            continue
+        try:
+            normalized[param_name] = coerce_parameter_value(
+                "array", param_value, param_name, object_name, item_type=array_item_type(declaration)
+            )
+        except (ArithmeticError, TypeError, ValueError):
+            continue
+    return normalized
 
 
 def parameter_values(parameters: dict) -> dict:
