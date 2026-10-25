@@ -146,7 +146,7 @@ mesh has three (section 10).
 | 2 | The daemon and the wire | `shape_envelope.py`, `shape.py`, `runtime*.py`, `cache_shape.py` | requests and cache entries one copy per distinct part; nothing serialized before it can run | medium: wire and cache format |
 | 3 | The disk cache | `shape.py` render/export path, `cache_artifacts.py` | an unchanged picture is not drawn again | low |
 | 4 | The swap healthcheck | `healthcheck/swap.py` | the user is told | low |
-| 5-7 | Admission by memory | `sandbox_lock.py`, the fan-out sites, `sync_threads.py`, `shape.py` | every core busy, started work first, no new start past the daemon's budget; nothing running touched | open: section 9 |
+| 5-7 | Admission by memory | `sandbox_lock.py`, the fan-out sites, `sync_threads.py`, `shape.py` | every core busy, started work first, no new start past the daemon's budget except the best-ranked one when nothing runs; nothing running touched | open: section 9 |
 
 Steps 1 to 4 are independent and each pays for itself; step 1 alone is what got the examples through on this machine
 (section 2). Steps 5 to 7 are what makes the result hold for the next, larger design rather than for this one.
@@ -255,7 +255,9 @@ drawing of the car costs the daemon about 15 MB while it runs and nothing while 
 
 ### 7.1 Cache the pictures
 
-#848 caches every export and render, which covers this; #850 drops its own picture cache once #848 is in.
+#848 caches every export and render -- exports too, with the files an exporter reports writing beside the one it was
+asked for (`output.FILES_KEY`), which is what the paragraphs below left exports out for. It covers this step and more;
+#850 drops its own picture cache once #848 is in.
 
 `pc render` draws every picture every time, even when nothing it is drawn from has changed: only the IDE's thumbnails
 are cached (`thumbnail.py`, `ctx.cache_renders`). The machinery for caching an output already exists and is used by
@@ -321,7 +323,8 @@ ran out, and then pausing or stopping running tasks at a margin short of capacit
    When the castle fans out into more tasks, new starts go to the castle, and the number of car tasks in flight falls,
    to none if need be.
 3. **Each daemon budgets for itself**: it plans to use up to 80% (configurable) of the capacity, swap included, and
-   ignores every other daemon. There is no agreement between daemons.
+   ignores every other daemon. There is no agreement between daemons, so two of them on one machine can between them
+   plan more than it has; that is accepted. Question 2 is whether what the machine has free should shrink the budget.
 4. **Nothing running is touched.** No task is paused, frozen, stopped or made to wait once it has started. The one
    lever is not starting new tasks until memory conditions improve.
 5. **Finishing work frees memory**, or conditions would never improve: a sandbox frees everything when its process
@@ -335,7 +338,11 @@ The design being discussed, **open** in every part:
   daemon computes geometry.
 - **Usage is this daemon's own footprint**: its process and the sandbox processes it started (PSS where Linux has it,
   `psutil`'s USS elsewhere). **Capacity** is RAM plus swap, or the cgroup's `memory.max` plus `memory.swap.max` where
-  that is smaller. The budget is `memoryBudget` (0.8) times capacity.
+  that is smaller. The budget is `memoryBudget` (0.8) times capacity. Under a cgroup limit the two are not measured
+  alike: the kernel holds the limit against the cgroup's whole charge -- kernel memory, page cache, and every other
+  process in the cgroup, such as the rest of a dev container -- so a footprint can fit the budget while the cgroup
+  does not. There the measure that matches the limit is the cgroup's working set (`memory.current` less the
+  reclaimable `inactive_file` of `memory.stat`, plus `memory.swap.current`); which to use is part of question 2.
 - **Admission charges what a task will reach, not what it uses now.** In a warm run of the LDraw examples with #849 and
   #850, a picture's sandbox held 0.4 to 0.5 GB five seconds after it started and 1.4 to 2.7 GB ten seconds later,
   and the run's first four starts saw 234 MB in use. A test of present usage admits a slot's worth of tasks at once,
@@ -442,7 +449,8 @@ repository's code, and its effect is not measured.
    something an implementation opts into?
 2. **"Available capacity"** (section 9): RAM plus swap (or the cgroup's limit), fixed -- or this daemon's usage plus
    what the machine has free right now, which shrinks the budget while a browser or another daemon holds memory without
-   any agreement between them?
+   any agreement between them? Under a cgroup limit, the same question is whether usage is this daemon's footprint or
+   the cgroup's working set, which is what the kernel compares with the limit.
 3. **What ranks a root**: when its first task started, or where it is declared? The first is what "finish what is
    started" says; the second is simpler and nearly always the same order.
 4. **What a root is** for `pc render -r`: each picture, or each top-level object with all of its pictures? The second
