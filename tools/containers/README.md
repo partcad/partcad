@@ -67,8 +67,8 @@ What a derived image is expected to change: the packages installed in it, and no
 packages, add wheels that need compiling, leave the service, the port, the working directory, the user and
 the allowlist alone. Adding an entry to the allowlist is fine and is how a package exposes a native tool to
 its own scripts; removing `python` is not — it is the name the `remote` sandbox builds its environment with,
-and the path it is pinned to is how the image says which interpreter is its own. An image with neither
-`python` nor `python3` serves no sandbox at all.
+and the path it is pinned to is how the image says which interpreter is its own. An image with no `python3`
+cannot run the service, and serves no sandbox at all.
 
 ## Why the wrappers are mounted and not baked in
 

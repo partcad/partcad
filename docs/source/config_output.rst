@@ -516,13 +516,14 @@ yours still conforms. Carry the ``partcad.*`` labels it documents: they are what
 leave behind when it cleans up after itself.
 
 An image that is not built on one of those -- a simulator's, a distribution's --
-needs a Python 3 on its ``PATH``, as ``python`` or as ``python3``: PartCAD runs
-``python`` where the image has it and ``python3`` otherwise, which is all that
-Debian and Ubuntu install. Say which version it is with ``pythonVersion`` beside
-the ``dockerImage``. An implementation that states none is given PartCAD's
-default, and under :ref:`useDockerRemote <use-docker-remote>`, where the
-environment is built inside the container, an image carrying another version is
-refused rather than used.
+needs a ``python3`` on its ``PATH``, which is all that Debian and Ubuntu install:
+it is what runs the service PartCAD starts in every container. Say which version
+it is with ``pythonVersion`` beside the ``dockerImage``. An implementation that
+states none is given PartCAD's default, and under
+:ref:`useDockerRemote <use-docker-remote>`, where the environment is built inside
+the container, an image carrying another version is refused rather than used.
+That environment is built with the image's ``python`` where it has one, as
+PartCAD's own images do, and with its ``python3`` otherwise.
 
 What it costs
 ^^^^^^^^^^^^^
