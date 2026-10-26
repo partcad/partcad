@@ -107,6 +107,15 @@ def test_a_null_allowlist_entry_that_is_not_on_path_is_refused():
         service.handle_execute_command(["no-such-tool-anywhere"], allowed={"no-such-tool-anywhere": None})
 
 
+def test_an_allowed_name_missing_from_path_is_not_called_disallowed():
+    """It is allowed; the image does not have it. Saying "not allowed" beside a list holding it misleads."""
+    with pytest.raises(service.ExecuteError) as refused:
+        service.handle_execute_command(["no-such-tool-anywhere"], allowed={"no-such-tool-anywhere": None})
+    assert refused.value.code == -32602
+    assert "not allowed" not in refused.value.message
+    assert "no 'no-such-tool-anywhere' on its PATH" in refused.value.message
+
+
 def test_the_allowlist_is_read_from_the_environment_once():
     allowed = service.load_allowlist({"PC_CONTAINER_ALLOWED_COMMANDS": json.dumps({"python": "/x/py", "app": None})})
     assert allowed["python"] == "/x/py"

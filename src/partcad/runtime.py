@@ -691,10 +691,15 @@ class Runtime:
         name of.
         """
         result = response["result"]
+        # Empty as a string, as a process run here reports it. None was what a
+        # command that printed nothing came back as, and the callers measure
+        # what came back: a CadQuery part whose script wrote nothing to stderr
+        # failed on "object of type 'NoneType' has no len()" -- in upload mode
+        # only, and only once nothing else had made it print.
         stdout = result["stdout"]
-        stdout = base64.b64decode(stdout).decode("utf-8") if stdout else None
+        stdout = base64.b64decode(stdout).decode("utf-8") if stdout else ""
         stderr = result["stderr"]
-        stderr = base64.b64decode(stderr).decode("utf-8") if stderr else None
+        stderr = base64.b64decode(stderr).decode("utf-8") if stderr else ""
         for file_name, file_contents in (result.get("output_files") or {}).items():
             if file_name in output_files:
                 with open(file_name, "wb") as f:

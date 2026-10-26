@@ -743,7 +743,8 @@ def _local_service():
         if _LOCAL is None:
             pool = remote_docker.ContainerPool(lambda image: remote_docker.start(image, role="sandbox"))
             environments = remote_sandbox.Environments(
-                lambda image, command, lock: remote_sandbox.forward(pool, image, command, {"lock": lock})
+                lambda image, command, lock: remote_sandbox.forward(pool, image, command, {"lock": lock}),
+                which=lambda image, names: remote_sandbox.which(pool, image, names),
             )
             _LOCAL = (pool, environments)
         return _LOCAL

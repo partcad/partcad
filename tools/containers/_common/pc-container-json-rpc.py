@@ -658,11 +658,19 @@ def _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_
     # Resolved before anything is unpacked: a refusal should cost nothing.
     executable = resolve_command(command[0], allowed)
     if executable is None:
-        names = sorted((ALLOWED_COMMANDS if allowed is None else allowed).keys())
+        table = ALLOWED_COMMANDS if allowed is None else allowed
+        if command[0] in table:
+            # Allowed, and left to PATH, and PATH has nothing by that name. Said
+            # as such: "not allowed", followed by a list of the allowed that
+            # holds it, sends whoever reads it after the wrong thing.
+            raise ExecuteError(
+                -32602,
+                "Command '%s' is allowed, but this container has no '%s' on its PATH" % (command[0], command[0]),
+            )
         raise ExecuteError(
             -32602,
             "Command '%s' is not allowed. Allowed commands: %s, and the interpreter of an environment under %s"
-            % (command[0], ", ".join(names), SANDBOX_ROOT),
+            % (command[0], ", ".join(sorted(table.keys())), SANDBOX_ROOT),
         )
 
     # Everything this call unpacks or exchanges, removed together at the end.

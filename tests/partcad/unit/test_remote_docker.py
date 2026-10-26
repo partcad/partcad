@@ -195,3 +195,48 @@ def test_one_image_is_started_once_under_concurrency():
     assert len(started) == 1, "the image was started more than once"
     assert results[0] is results[1]
     assert results[0].in_flight == 2
+
+
+# --------------------------------------------------------------------------- #
+# The image's interpreter                                                      #
+# --------------------------------------------------------------------------- #
+
+
+def test_a_container_is_started_allowing_either_name_for_the_interpreter(monkeypatch):
+    """An image not built on PartCAD's own has "python3" and no "python"; both may run."""
+    from partcad import remote_sandbox
+    from partcad_utils import containers
+
+    specs = []
+
+    def acquire(spec):
+        specs.append(spec)
+        return types.SimpleNamespace(name="n", container=object(), host="127.0.0.1", port=5000, token="t")
+
+    monkeypatch.setattr(containers, "acquire", acquire)
+    remote_docker.start("ghcr.io/partcad/partcad-sim-gazebo:latest", role="sandbox")
+
+    assert specs[0].allowed_commands == {name: None for name in remote_sandbox.IMAGE_PYTHONS}
+
+
+def test_asking_which_interpreter_an_image_has_goes_through_the_pool(monkeypatch):
+    """Through the container the pool holds for the image, like any command, and handed back after."""
+    from partcad import remote_sandbox
+
+    asked = []
+
+    class Client:
+        def __init__(self, host, port, token=None):
+            asked.append((host, port))
+
+        def which(self, names):
+            return {name: ("/usr/bin/python3" if name == "python3" else None) for name in names}
+
+    monkeypatch.setattr(remote_sandbox, "RuntimeJsonRpcClient", Client)
+    pool = _pool()
+
+    found = remote_sandbox.which(pool, "ghcr.io/x/a:1", ["python", "python3"])
+
+    assert found == {"python": None, "python3": "/usr/bin/python3"}
+    assert asked == [("127.0.0.1", 5001)]
+    assert pool.acquire("ghcr.io/x/a:1").in_flight == 1, "the lease was not released"
