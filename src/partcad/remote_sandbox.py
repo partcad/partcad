@@ -226,21 +226,25 @@ class Environments:
         anything else ends in the service turning down the first name, and
         nothing in that says the second was looked for too. No answer at all
         leaves the first name to be tried, so that a service that could not be
-        asked fails the way it did before it could be.
+        asked fails the way it did before it could be -- and is not remembered:
+        no answer is what a timeout gives too, and a guess kept for an image
+        with only 'python3' would fail every build in it until the container
+        went.
         """
         with self._lock:
             if image in self._pythons:
                 return self._pythons[image]
-        name = IMAGE_PYTHONS[0]
-        if self._which is not None:
-            found = self._which(image, list(IMAGE_PYTHONS))
-            if found is not None:
-                name = next((n for n in IMAGE_PYTHONS if found.get(n)), None)
-                if name is None:
-                    raise RuntimeError(
-                        "%s has no Python interpreter on its PATH (looked for %s), so no environment can be "
-                        "built in it. Name an image that has one." % (image, " and ".join(IMAGE_PYTHONS))
-                    )
+        if self._which is None:
+            return IMAGE_PYTHONS[0]
+        found = self._which(image, list(IMAGE_PYTHONS))
+        if found is None:
+            return IMAGE_PYTHONS[0]
+        name = next((n for n in IMAGE_PYTHONS if found.get(n)), None)
+        if name is None:
+            raise RuntimeError(
+                "%s has no Python interpreter on its PATH (looked for %s), so no environment can be "
+                "built in it. Name an image that has one." % (image, " and ".join(IMAGE_PYTHONS))
+            )
         with self._lock:
             self._pythons[image] = name
         return name

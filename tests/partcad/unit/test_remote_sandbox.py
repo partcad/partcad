@@ -173,6 +173,22 @@ def test_an_image_that_could_not_be_asked_is_built_with_the_first_name():
     assert _built_with(run) == "python"
 
 
+def test_an_image_that_could_not_be_asked_is_asked_again_next_time():
+    """No answer is what a timeout gives too; a "python" kept for a python3-only image fails every build in it."""
+    run = _Recorder(fail_on="venv")
+    which = _Which(None)
+    environments = remote_sandbox.Environments(run, which=which)
+    with pytest.raises(RuntimeError):
+        environments.ensure("ghcr.io/partcad/partcad-sim-gazebo:latest", "3.12")
+
+    which.found = {"python": None, "python3": "/usr/bin/python3"}
+    run.fail_on = None
+    environments.ensure("ghcr.io/partcad/partcad-sim-gazebo:latest", "3.12")
+
+    assert len(which.asked) == 2
+    assert [c[0] for c in run.builds() if "venv" in c] == ["python", "python3"]
+
+
 def test_an_image_is_asked_once_for_every_environment_in_it_and_again_once_forgotten():
     run = _Recorder()
     which = _Which({"python3": "/usr/bin/python3"})
