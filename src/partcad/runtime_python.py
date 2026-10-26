@@ -236,8 +236,15 @@ def base_requirements(version: str) -> list:
     The order is the install order and it matters: CadQuery's OCP comes last,
     re-asserting the VTK-enabled build that build123d's 'cadquery-ocp-novtk'
     dependency has just replaced. zstd is not here; see 'ensure_zstd_onced_locked'.
+
+    ezdxf comes first. CadQuery and build123d both depend on it with a wide
+    bound, so installed after them the pin found whatever newer release they had
+    pulled in, and the first DXF render then put the pinned one in its place -
+    rewriting the package under any other process importing it out of the same
+    sandbox (see 'sandbox_lock.EnvironmentLock'). Installed first, it is what
+    they find already satisfied, and nothing replaces it later.
     """
-    requirements = [sandbox_versions.OCP_TESSELLATE, sandbox_versions.NLOPT]
+    requirements = [sandbox_versions.EZDXF, sandbox_versions.OCP_TESSELLATE, sandbox_versions.NLOPT]
     # CadQuery has no release for Python 3.10, and pip fails the whole install
     # rather than skipping it. Nothing is lost by leaving it out: the factories
     # that need CadQuery render on MIN_PYTHON_VERSION_CADQUERY or newer, so they

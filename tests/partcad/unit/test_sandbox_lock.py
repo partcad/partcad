@@ -92,6 +92,41 @@ def test_another_process_is_kept_out_of_an_install(tmp_path):
     theirs._release(write=True)
 
 
+def test_a_wrapper_does_not_start_while_another_process_installs(tmp_path):
+    """Started then, it imported half a package.
+
+    That was the pytest workers -- separate processes sharing one '~/.partcad'
+    -- failing on "No module named 'ezdxf.lldxf'": one was replacing ezdxf in
+    the conda sandbox while another's wrapper imported it.
+    """
+    path = str(tmp_path / "env.lock")
+    mine, theirs = EnvironmentLock(path), EnvironmentLock(path)
+    with mine.acquire(write=True):
+        assert not theirs._try_acquire(write=False)
+    assert theirs._try_acquire(write=False)
+    theirs._release(write=False)
+
+
+def test_a_wrapper_starts_once_the_other_process_s_install_is_over(tmp_path):
+    path = str(tmp_path / "env.lock")
+    mine, theirs = EnvironmentLock(path), EnvironmentLock(path)
+    order = []
+
+    async def wrapper():
+        async with theirs.acquire_async(write=False):
+            order.append("wrapper")
+
+    async def main():
+        with mine.acquire(write=True):
+            waiting = asyncio.ensure_future(wrapper())
+            await asyncio.sleep(0.2)
+            order.append("installed")
+        await waiting
+
+    asyncio.run(main())
+    assert order == ["installed", "wrapper"]
+
+
 def test_another_process_reading_is_not_kept_out(tmp_path):
     """Deliberate: reader against reader needs no exclusion at all.
 

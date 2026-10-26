@@ -131,7 +131,12 @@ at all).
   session v-env of a package that has requirements of its own -- and `sandbox_lock.py` is what holds those
   apart. `EnvironmentLock` is a readers/writer lock keyed on the environment's path: running a wrapper reads it,
   installing into it or creating it writes, so any number of wrappers share an environment while an install has
-  it to itself. `process_slots` caps how many sandbox interpreters run at once, because a wrapper is a whole CAD
+  it to itself. Across processes, which is what the pytest workers and two daemons of one user are, an install
+  takes the environment's lock file, and a wrapper does not start while another process holds it -- it takes the
+  file lock and drops it at once, so readers never wait on each other. An install another process starts after
+  a wrapper has started is still not held off (see the class docstring). The base stack installs `ezdxf` before
+  CadQuery and build123d for the same reason: after them, the first DXF render replaced the release they had
+  pulled in with the pinned one, under whatever else was importing it. `process_slots` caps how many sandbox interpreters run at once, because a wrapper is a whole CAD
   process and it is the machine, not the thread pool, that decides how many fit; `threadsMax` sizes it. Both are
   polled rather than blocked on: they are taken from several event loops at once (a part is instantiated on a
   worker thread running a loop of its own), and a task that blocked its own loop waiting for a lock the task
