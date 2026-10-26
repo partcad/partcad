@@ -405,6 +405,8 @@ class ConnectHow:
         mated_frame=None,
         source_interface=None,
         target_interface=None,
+        source_port=None,
+        target_port=None,
     ):
         """Match the requested holds against the objects that are being connected.
 
@@ -423,6 +425,11 @@ class ConnectHow:
 
         'source_interface' and 'target_interface' are the two interface objects
         being mated. They are what an unspecified 'threadStep' is inherited from.
+
+        'source_port' and 'target_port' are the two ports that meet. A port that
+        cuts its own way in ('selfScrew' on the port) says so for this joint
+        whether or not the interfaces are known - and for a connection that
+        names ports alone, they are not.
         """
         self.problems = []
         self.motion_sources = ["how"] if self._motion_in_how else []
@@ -430,7 +437,7 @@ class ConnectHow:
         self._push_item = source_item
         self._push_frame = source_frame
         self.push_direction = _push_direction(mated_frame)
-        self._resolve_thread_step(source_interface, target_interface)
+        self._resolve_thread_step(source_interface, target_interface, source_port, target_port)
         self._resolve_snap_in(source_interface, target_interface)
 
         self.hold_with = _resolve_holds(
@@ -475,34 +482,49 @@ class ConnectHow:
             return
         self.snap_in = bool(getattr(mating, "snap_in", False))
 
-    def _resolve_thread_step(self, source_interface, target_interface):
+    def _resolve_thread_step(self, source_interface, target_interface, source_port=None, target_port=None):
         """Inherit 'threadStep' from the interfaces, and check that they agree.
 
         Two interfaces that are screwed together have to share a thread, unless
         one of them cuts its own - a self-tapping screw, or the plain hole it
         goes into. When they disagree and neither does, the connection cannot be
         made as described, so it is reported and the thread is left unset.
+
+        An end cuts its own when its interface says so or when the port it
+        meets the other end by does. The port is the one of the two that a
+        connection naming ports alone knows about.
         """
         ends = []
-        for side, interface in (("with", source_interface), ("to", target_interface)):
-            if interface is None:
+        cut_by_an_interface = False
+        cut_by_a_port = False
+        for side, interface, port in (
+            ("with", source_interface, source_port),
+            ("to", target_interface, target_port),
+        ):
+            if interface is None and port is None:
                 continue
             step = interface.get_thread_step() if hasattr(interface, "get_thread_step") else None
-            self_screw = bool(interface.get_self_screw()) if hasattr(interface, "get_self_screw") else False
-            ends.append((side, None if step is None else float(step), self_screw))
+            by_interface = bool(interface.get_self_screw()) if hasattr(interface, "get_self_screw") else False
+            by_port = bool(getattr(port, "self_screw", False))
+            cut_by_an_interface = cut_by_an_interface or by_interface
+            cut_by_a_port = cut_by_a_port or by_port
+            ends.append((side, None if step is None else float(step), by_interface or by_port))
 
         declared = {side: step for side, step, _ in ends if step is not None}
         # Three levels say whether this joint cuts its own thread, and the more
-        # specific one wins. The interface knows when it is true wherever the
-        # interface is used; the mating knows when it is true of this pairing -
-        # a screw in a tapped hole cuts nothing and the same screw in a pilot
-        # hole cuts its own thread, so only the pairing can tell them apart;
-        # and 'how' knows when it is true of this joint alone.
+        # specific one wins. An end knows when it is true wherever that end is
+        # used - its interface does, and so does the port it meets the other
+        # end by; the mating knows when it is true of this pairing - a screw in
+        # a tapped hole cuts nothing and the same screw in a pilot hole cuts its
+        # own thread, so only the pairing can tell them apart; and 'how' knows
+        # when it is true of this joint alone.
         mating = _mating_between(source_interface, target_interface)
         cuts_its_own = any(self_screw for _, _, self_screw in ends) or bool(getattr(mating, "self_screw", False))
         if getattr(mating, "self_screw", False):
             self._motion_from("mating")
-        if declared or any(self_screw for _, _, self_screw in ends):
+        if cut_by_a_port:
+            self._motion_from("port")
+        if declared or cut_by_an_interface:
             # A thread, or a thread cut, is how the object goes in: turned.
             self._motion_from("interface")
         if not self.self_screw_specified:
@@ -579,7 +601,8 @@ class ConnectHow:
 
         This connection's own 'how' - any of 'HOW_MOTION_FIELDS' - or the
         mating of the two interfaces it connects ('snapIn', 'selfScrew'), or
-        those interfaces themselves (a 'threadStep', a 'selfScrew'). Without
+        those interfaces themselves (a 'threadStep', a 'selfScrew'), or the
+        ports that meet (a 'selfScrew'). Without
         any of them every field takes its default, which is a complete
         description for a machine to fill in and none at all for the person
         doing the step: whether it is pushed, snapped or screwed in is not said.

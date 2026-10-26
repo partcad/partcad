@@ -135,6 +135,44 @@ def test_a_joint_that_has_to_match_a_thread_still_reports_a_disagreement():
     assert how.problems
 
 
+# An end that knows it of itself through the port it meets the other one by.
+
+
+class _Port:
+    def __init__(self, self_screw=False):
+        self.self_screw = self_screw
+
+
+def test_a_port_says_it_where_no_interface_is_known():
+    """A connection that names ports alone knows nothing else about its ends,
+    and a nail's point makes its own hole whatever it is driven into."""
+    how = ConnectHow({}, where="connect")
+    how._resolve_thread_step(None, None, _Port(self_screw=True), _Port())
+    assert how.self_screw
+    assert how.motion_sources == ["port"]
+
+    how = ConnectHow({}, where="connect")
+    how._resolve_thread_step(None, None, _Port(), _Port())
+    assert not how.self_screw
+    assert not how.motion_declared()
+
+
+def test_the_thread_of_the_end_whose_port_cuts_is_the_one_cut_into_the_other():
+    """The end the port belongs to cuts its own thread, exactly as one whose
+    interface says so would: the other end's thread is the one that is cut."""
+    ctx = _Ctx()
+    how = ConnectHow({}, where="connect")
+    how._resolve_thread_step(
+        _Iface("screw", thread_step=1.25, ctx=ctx),
+        _Iface("seat", thread_step=2.0, ctx=ctx),
+        _Port(self_screw=True),
+        _Port(),
+    )
+    assert how.self_screw
+    assert not how.problems
+    assert how.thread_step == 2.0
+
+
 # A joint that is pushed together rather than screwed in.
 
 

@@ -1113,6 +1113,11 @@
                 }
               },
               "additionalProperties": false
+            },
+            "selfScrew": {
+              "description": "Whether this port cuts its own way into whatever it is joined to - a self-tapping screw's thread, a nail's point - so that the two share space where they meet. Said of a port, it holds for every joint made through that port, including a connection that names the port alone ('withPort:', 'connectPorts:'), which looks up no interface and no mating that could say it instead. Kept by every copy of the port: in whatever implements the interface that declares it, and in an assembly that maps it.",
+              "type": "boolean",
+              "default": false
             }
           },
           "additionalProperties": false
@@ -1343,7 +1348,7 @@
       ]
     },
     "check-interference": {
-      "description": "What 'partcad.test.interference' does with this assembly. There is no list of pairs to excuse here: two parts have one relationship, the 'connect' that joins them, and that is where an overlap which is meant to be there is stated - with 'selfScrew' or 'snapIn' on the interface, the mating or the connection's 'how', or with 'interferes' naming the further items the same act of joining drives through.",
+      "description": "What 'partcad.test.interference' does with this assembly. There is no list of pairs to excuse here: two parts have one relationship, the 'connect' that joins them, and that is where an overlap which is meant to be there is stated - with 'selfScrew' on a port or an interface it joins, with 'selfScrew' or 'snapIn' on the mating or the connection's 'how', or with 'interferes' naming the further items the same act of joining drives through.",
       "type": "object",
       "properties": {
         "minVolume": {
