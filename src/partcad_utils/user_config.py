@@ -325,6 +325,8 @@ def _positive_seconds(value):
 # its own environment instead of the caller's.
 OPTION_KEYS = (
     "threadsMax",
+    "memoryBudget",
+    "memoryBudgetSwap",
     "cacheMem",
     "cacheFiles",
     "cacheFilesMaxEntrySize",
@@ -455,6 +457,41 @@ DEFAULT_CAM_IMPLEMENTATION = "//builtin/cam:gcode"
 # raised all the same: the floor is about how much PartCAD does at once, not
 # about whether it finishes.
 THREADS_MAX_MINIMUM = 4
+
+
+# The share of the machine's memory -- RAM, plus swap unless 'memoryBudgetSwap'
+# is false -- that a process doing PartCAD's work aims to stay under: a new task
+# starts only while what its work holds is below it (see 'partcad.admission').
+# Nothing is anticipated about a task, so a started one may grow past what was
+# free when it started; the rest of the machine is the room for that. Each
+# daemon budgets for itself, ignoring the others: where other work needs the
+# machine too, the share is what to lower.
+MEMORY_BUDGET_DEFAULT = 0.8
+
+
+def memory_budget_share(value, origin: str = None):
+    """'value' as a 'memoryBudget': a share of the machine above 0 and at most 1, or the default.
+
+    0 (or false) turns admission by memory off, leaving the process slots alone
+    to decide what starts. Anything else that is not a share is ignored, with a
+    warning that says where it came from.
+    """
+    if value is None:
+        return MEMORY_BUDGET_DEFAULT
+    if value is False or (isinstance(value, str) and value.strip().lower() in ("false", "off", "no")):
+        return 0.0
+    try:
+        share = float(value)
+    except (TypeError, ValueError):
+        share = None
+    if share is None or not math.isfinite(share) or share < 0 or share > 1:
+        where = " (from %s)" % origin if origin else ""
+        pc_logging.warning_once(
+            ("memoryBudget", repr(value)),
+            "memoryBudget %r%s is not a share between 0 and 1, and is ignored" % (value, where),
+        )
+        return MEMORY_BUDGET_DEFAULT
+    return share
 
 
 def cpu_cores() -> int:
@@ -737,12 +774,15 @@ class UserConfig(vyper.Vyper):
         # - objects of 1 byte bytes are cached both in memory and on the filesystem (to cache test results)
         # - objects from 2 bytes to 100 bytes are cached in memory only (avoid filesystem polution and overhead),
         # - objects from 100 bytes to 1MB are cached both in the filesystem and in memory (where most cache hits are expected),
-        # - objects from 1MB bytes to 50MB are cached in the filesystem only (optimize RAM usage).
-        # - objects from 50MB to 100MB are cached in memory only (avoid quick filesystem quota depletion).
-        # - object above 100MB are not cached and recomputed on each access (avoid RAM depletion).
+        # - objects from 1MB bytes to 50MB are cached in the filesystem only (optimize RAM usage), and kept
+        #   in memory only while something uses them.
+        # - objects from 50MB to 250MB are cached in memory only (avoid quick filesystem quota depletion).
+        # - object above 250MB are not cached and recomputed on each access (avoid RAM depletion).
         # If the filesystem cache is disabled then (by default):
-        # - objects from 1 to 100MB are cached in memory only.
-        # - object above 100MB are not cached and recomputed on each access.
+        # - objects from 1 to 250MB are cached in memory only.
+        # - object above 250MB are not cached and recomputed on each access.
+        # What is cached in memory only is freed again when memory is wanted back (see
+        # 'partcad.admission'): the objects over 1MB first, then the others, least recently used first.
         #
         # The cache is a hierarchy of tiers, and each one has its own switch and
         # its own size window, because what is worth keeping in RAM is not what
@@ -759,7 +799,11 @@ class UserConfig(vyper.Vyper):
         # tiers are off by default: they need an address that only a deployment
         # can supply.
         self.set_default("cacheMem", True)
-        self.set_default("cacheMemoryMaxEntrySize", 100 * 1024 * 1024)
+        # 250MB rather than 100MB: an idle object that no persistent tier holds
+        # stays in memory until memory is wanted back (see 'partcad.admission'),
+        # the large ones first, so the list of them has a range of sizes to
+        # hold above the file tier's 50MB.
+        self.set_default("cacheMemoryMaxEntrySize", 250 * 1024 * 1024)
         self.set_default("cacheMemoryDoubleCacheMaxEntrySize", 1 * 1024 * 1024)
         self.set_default("cacheFiles", True)
         # 50MB rather than 10MB: an assembly's tree is one entry, each distinct
@@ -908,6 +952,8 @@ class UserConfig(vyper.Vyper):
         # default: 180
         self.set_default("plugin.query.timeout", 180)
 
+        self.set_default("memoryBudget", MEMORY_BUDGET_DEFAULT)
+        self.set_default("memoryBudgetSwap", True)
         self.set_default("useDocker", True)
         self.set_default("useDockerPython", False)
         self.set_default("useDockerKicad", True)
@@ -934,6 +980,30 @@ class UserConfig(vyper.Vyper):
         else:
             self._threads_max = None
 
+        # option: memoryBudget
+        # description: the share of this machine's memory a PartCAD process aims
+        #              its work to stay under. A new task -- a wrapper call, or an
+        #              object read into memory -- starts only while what this
+        #              process, its sandboxes and its containers hold is below it;
+        #              nothing running is ever stopped, and when nothing runs the
+        #              next task starts whatever the usage. Each daemon budgets for
+        #              itself: lower the share where other work needs the machine.
+        # values: a share above 0 and at most 1; 0 or false turns it off
+        # default: 0.8
+        self.bind_env("memoryBudget", "PC_MEMORY_BUDGET")
+        self.memory_budget = memory_budget_share(
+            self.get("memoryBudget"),
+            "PC_MEMORY_BUDGET" if os.environ.get("PC_MEMORY_BUDGET") else None,
+        )
+
+        # option: memoryBudgetSwap
+        # description: whether the swap (or page file) counts as part of the
+        #              machine's memory that 'memoryBudget' is a share of
+        # values: [True | False]
+        # default: True
+        self.bind_env("memoryBudgetSwap", "PC_MEMORY_BUDGET_SWAP")
+        self.memory_budget_swap = self.get_bool("memoryBudgetSwap")
+
         # option: cacheFiles
         # description: enable caching of intermediate results to the filesystem
         # values: [True | False]
@@ -958,7 +1028,7 @@ class UserConfig(vyper.Vyper):
         # option: cacheMemoryMaxEntrySize
         # description: the maximum size of a single memory cache entry in bytes
         # values: >=0, 0 means no limit
-        # default: 100*1024*1024 (100MB)
+        # default: 250*1024*1024 (250MB)
         self.bind_env("cacheMemoryMaxEntrySize", "PC_CACHE_MEMORY_MAX_ENTRY_SIZE")
         self.cache_memory_max_entry_size = self.get_int("cacheMemoryMaxEntrySize")
 

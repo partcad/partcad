@@ -935,6 +935,52 @@ that has been running since before the variable was set. The thread pools are
 the exception: they belong to the daemon's process, and keep the size it started
 with.
 
+.. _memory-budget:
+
+How much of the machine's memory PartCAD uses
+---------------------------------------------
+
+``threadsMax`` counts processes; ``memoryBudget`` counts memory. It is the share
+of this machine's memory -- RAM, and the swap or page file as well unless
+``memoryBudgetSwap`` is ``false`` -- that PartCAD aims its work to stay under:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    memoryBudget: 0.8      # the default
+    memoryBudgetSwap: true # the default
+
+or ``PC_MEMORY_BUDGET`` and ``PC_MEMORY_BUDGET_SWAP`` in the environment. Where
+PartCAD runs in a container or a cgroup with a memory limit, the limit is the
+machine. What counts as PartCAD's work is the process doing it (the daemon, for
+a command it serves), every sandbox process it started, and the containers it
+runs work in on this machine.
+
+PartCAD divides its work into **tasks**: each run of a script in a sandbox or a
+container is one, and so is each object read from the cache into memory, so
+that putting a large assembly together is many of them. A new task starts only
+while the work's memory is under the budget. Nothing is guessed about how much a
+task will need, so a task may grow well past what was free when it started --
+the rest of the machine is the room for that -- and nothing that has started is
+ever stopped or paused: when memory is short, PartCAD only stops *starting*
+tasks, and the ones it holds back go first, in the order their objects started
+in, as soon as memory allows. When nothing is running at all, the next task
+starts whatever the memory, with a warning, so a design bigger than the machine
+is worked on one task at a time rather than not at all. While tasks wait for
+memory, PartCAD says so every thirty seconds::
+
+    3 task(s) wait for memory to start: PartCAD's work holds 6.6 GB of its 6.4 GB budget, 2 task(s) running
+
+From 90% of the budget, PartCAD also lets go of the geometry it keeps in memory
+between uses and that nothing is using: the largest objects first, which only
+memory holds, and the least recently used first.
+
+Each process budgets for itself. Two daemons on one machine each aim for their
+share of all of it, and so does anything else that runs there; where other work
+needs the machine too, lower the share. ``memoryBudget: 0`` turns all of this
+off, leaving ``threadsMax`` alone to decide what runs. Like ``threadsMax``, both
+travel with every request to the daemon.
+
 .. _caching:
 
 ========

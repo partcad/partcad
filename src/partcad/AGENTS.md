@@ -140,6 +140,21 @@ at all).
   for the configuration a request carries, and the daemon calls it in `context.create` and in `_ctx` (see
   `src/partcad_service_json_rpc/AGENTS.md`). Sized once at import, they ignored the `PC_THREADS_MAX` of every
   command a warm daemon served.
+- **Admission by memory** (`admission.py`, `memory.py`, `idle_objects.py`): `process_slots` is an
+  `admission.Admission`, which also decides *which* waiting task goes next and whether any may start at all. A
+  task is one wrapper call (it takes a slot -- a call into a container endpoint too) or one object read from a
+  cache tier into memory (`load_async`, no slot), and an admitted task never waits for anything: that is what
+  lets "nothing is running" always come, and when it does the best-ranked waiter starts whatever the memory. A
+  new task starts only while the work's memory -- this process less what its allocators hold for reuse, its
+  sandboxes (PSS), its containers on this machine -- is under `memoryBudget` of the machine (RAM plus swap, or a
+  cgroup's limit); `follow(config)` sets that per request too. Nothing running is ever paused or stopped. Waiters
+  go in rank order (`admission.Rank`: by when their object started, else by declaration), the rank travels in a
+  context variable and across `sync_threads._Work`, and a shape being built ranks as the best of whoever waits for
+  it. From 90% of the budget the monitor frees idle geometry (`idle_objects`: transient objects nothing uses,
+  then large ones only memory holds, then small, least recently used first); in use is the envelope's reference
+  count, so do not cache a `get_wrapped` result anywhere long-lived just to have it -- that keeps it from ever
+  being freed. Read `Shape._wrapped` once into a local: it can be set to `None` by the monitor between two reads.
+  The design and the decisions behind it are in `docs/design/memory-and-scheduling.md`, section 9.
 - **`threadsMax` is never below `THREADS_MAX_MINIMUM` (4)**, and the floor is applied where the value is read, in
   `partcad_utils.user_config`: the file, `PC_THREADS_MAX`, a client's configuration (`from_dict`), and an
   assignment (`--threads-max`) all go through the `threads_max` property, and what is unset is

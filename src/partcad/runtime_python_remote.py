@@ -32,6 +32,7 @@ same way it does for a container. A caller that only reads standard output needs
 nothing.
 """
 
+import contextlib
 import os
 from typing import Optional
 
@@ -296,7 +297,9 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
         # died on its first import.
         self.once()
         params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs, output_dirs)
-        return self._answer(cmd, self._client().execute(list(cmd), params), output_files, output_dirs)
+        with self._task():
+            answer = self._client().execute(list(cmd), params)
+        return self._answer(cmd, answer, output_files, output_dirs)
 
     async def run_async(
         self,
@@ -314,5 +317,18 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
         params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs, output_dirs)
         # The bound the caller was given, honoured. Dropped, it meant an
         # unresponsive service held the render open with nothing to wait for.
-        answer = await self._client().execute_async(list(cmd), params, timeout=timeout)
+        async with self._task_async():
+            answer = await self._client().execute_async(list(cmd), params, timeout=timeout)
         return self._answer(cmd, answer, output_files, output_dirs)
+
+    def _task(self):
+        """What a call waits for here before it is sent: nothing, for the remote sandbox.
+
+        The service's machine is one dedicated to the work, and it admits the
+        call on its own side; counting it here as well would hold back work this
+        machine has the room for (see 'partcad.admission').
+        """
+        return contextlib.nullcontext()
+
+    def _task_async(self):
+        return contextlib.nullcontext()

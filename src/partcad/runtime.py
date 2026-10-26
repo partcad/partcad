@@ -845,16 +845,20 @@ class Runtime:
 
         if self.endpoint is not None:
             endpoint = self._current_endpoint()
-            returncode, stdout, stderr = endpoint.run(
-                cmd,
-                # Resolved here like at every other launch point: a container's
-                # request may be the callable that writes it (see 'stdin_bytes').
-                stdin=stdin_bytes(stdin) or None,
-                cwd=cwd,
-                input_files=input_files,
-                output_files=output_files,
-                input_dirs=input_dirs,
-            )
+            # A call into a container is a wrapper call like any other, and takes
+            # a process slot like any other (see 'partcad.admission'): without
+            # one, a recursive render fanned out into the container unbounded.
+            with sandbox_lock.process_slots.slot():
+                returncode, stdout, stderr = endpoint.run(
+                    cmd,
+                    # Resolved here like at every other launch point: a container's
+                    # request may be the callable that writes it (see 'stdin_bytes').
+                    stdin=stdin_bytes(stdin) or None,
+                    cwd=cwd,
+                    input_files=input_files,
+                    output_files=output_files,
+                    input_dirs=input_dirs,
+                )
             returncode, stderr = self._endpoint_ended(endpoint, returncode, stderr)
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
@@ -903,15 +907,17 @@ class Runtime:
             endpoint = self.endpoint
             if self._endpoint_stopped:
                 endpoint = await asyncio.get_running_loop().run_in_executor(None, self._current_endpoint)
-            returncode, stdout, stderr = await endpoint.run_async(
-                cmd,
-                stdin=stdin_bytes(stdin) or None,
-                cwd=cwd,
-                input_files=input_files,
-                output_files=output_files,
-                input_dirs=input_dirs,
-                timeout=timeout,
-            )
+            # A slot, as in 'run'.
+            async with sandbox_lock.process_slots.slot_async():
+                returncode, stdout, stderr = await endpoint.run_async(
+                    cmd,
+                    stdin=stdin_bytes(stdin) or None,
+                    cwd=cwd,
+                    input_files=input_files,
+                    output_files=output_files,
+                    input_dirs=input_dirs,
+                    timeout=timeout,
+                )
             if returncode != 0:
                 # Off the loop: '_endpoint_ended' asks Docker whether the
                 # container stopped (see '_ended_async').

@@ -72,6 +72,7 @@ import time
 
 from opentelemetry import context as otel_context
 
+from . import admission
 from .user_config import cpu_cores, user_config
 
 # What the thread a piece of work runs on is doing it for, or None on a thread
@@ -136,9 +137,9 @@ class _Slot:
 
 
 class _Work:
-    """A call handed to a pool: what to run, the future it answers, its tracing context."""
+    """A call handed to a pool: what to run, the future it answers, its tracing context and its rank."""
 
-    __slots__ = ("fn", "args", "kwargs", "future", "context", "slot", "admitted")
+    __slots__ = ("fn", "args", "kwargs", "future", "context", "rank", "slot", "admitted")
 
     def __init__(self, fn, args, kwargs, slot=None):
         self.fn = fn
@@ -148,6 +149,9 @@ class _Work:
         # Taken here, on the thread that asks, because that is whose trace the
         # work belongs to; the thread that eventually runs it has no idea.
         self.context = otel_context.get_current()
+        # Where its tasks stand in the queue for sandboxes and memory, for the
+        # same reason: it is the asking thread's work (see 'partcad.admission').
+        self.rank = admission.current()
         # The slot it runs on: the one it was admitted to, or the one of
         # whoever asked for it (see 'SlotPool.submit_on').
         self.slot = slot
@@ -265,7 +269,8 @@ class SlotPool(concurrent.futures.Executor):
         _local.slot = work.slot
         token = otel_context.attach(work.context)
         try:
-            return True, work.fn(*work.args, **work.kwargs)
+            with admission.ranked(work.rank):
+                return True, work.fn(*work.args, **work.kwargs)
         except BaseException as e:
             return False, e
         finally:

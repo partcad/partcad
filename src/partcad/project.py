@@ -28,6 +28,7 @@ from ruamel.yaml.scalarstring import SingleQuotedScalarString
 from partcad_utils import assy_filter, object_names, pcignore
 
 from . import (
+    admission,
     assembly,
     assembly_config,
 )
@@ -295,6 +296,13 @@ def declare_object_type_parameters(factory_name: str, config: dict, params: dict
 
 
 @telemetry.instrument()
+async def _ranked_gather(rank, coroutines):
+    """Await 'coroutines' under 'rank', each to its end: what each of them came to, failures included."""
+    with admission.ranked(rank):
+        # The tasks are made here, inside, so that they take the rank with them.
+        return await asyncio.gather(*coroutines, return_exceptions=True)
+
+
 class Project(project_config.Configuration):
     sketches: dict[str, sketch.Sketch]
     parts: dict[str, Part]
@@ -3073,6 +3081,12 @@ class Project(project_config.Configuration):
             named_elsewhere = format is not None and output.split_format(self.name, format)[1] is not None
 
             for shape in shapes:
+                # The object's outputs, made under one rank: the object is
+                # ranked as one, by when it started, so that what is started is
+                # finished first (see 'admission'). Its outputs then share the
+                # one copy of its geometry the memory tier keeps while any of
+                # them uses it.
+                outputs = []
                 shape_cfg = self._output_cfg(shape, options_project)
                 configured[(shape.kind, shape.name)] = shape_cfg
                 formats = output_formats + [
@@ -3086,7 +3100,7 @@ class Project(project_config.Configuration):
                 for format_name in formats:
                     if named_elsewhere or self._should_render_format(format_name, shape_cfg, format, shape.kind):
                         if not hasattr(shape, "finalized") or shape.finalized:
-                            tasks.append(
+                            outputs.append(
                                 shape.render_async(
                                     ctx=self.ctx,
                                     format_name=format_name,
@@ -3113,7 +3127,21 @@ class Project(project_config.Configuration):
                                 )
                             )
 
-            await asyncio.gather(*tasks)
+                if outputs:
+                    tasks.append(_ranked_gather(admission.Rank("%s:%s" % (self.name, shape.name)), outputs))
+
+            # Every object to its end, whatever another one does: the first
+            # failure is raised once the rest are done, rather than leaving
+            # them unwatched -- one sandbox killed used to cost every picture
+            # of the package that had not been written yet.
+            failures = [
+                outcome
+                for results in await asyncio.gather(*tasks)
+                for outcome in results
+                if isinstance(outcome, BaseException)
+            ]
+            if failures:
+                raise failures[0]
 
             # The package document lists what the package declares; an assembly
             # document lists what that assembly is made of, and the assembly

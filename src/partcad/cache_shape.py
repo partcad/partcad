@@ -21,7 +21,7 @@ except ImportError:  # pragma: no cover - exercised on the other interpreter
         _ZstdDecompressor = None
         _zstd_compress = None
 
-from . import shape_envelope, telemetry
+from . import idle_objects, shape_envelope, telemetry
 from .cache import Cache
 from .cache_backend import PROPERTIES_SUFFIX
 from .cache_hash import CacheHash
@@ -255,13 +255,13 @@ class ShapeCache(Cache):
     def __init__(self, user_config=None) -> None:
         super().__init__("shapes", user_config)
 
-    def _keep_in_memory(self, data_len: int, stored: bool) -> bool:
-        """Whether an entry of this size is worth holding on to in memory.
+    def memory_kind(self, data_len: int, stored: bool):
+        """How an entry of this size is kept in memory: an 'idle_objects' kind, or False for not at all.
 
         'stored' says whether a persistent tier took it, which is what makes the
         second, tighter limit apply: an entry that is on disk or on a server
-        already is cheap to get back, so keeping a large copy of it in memory as
-        well buys little.
+        already is cheap to get back, so a large copy of it is kept in memory
+        only while something uses it (see 'idle_objects.TRANSIENT').
         """
         if not self.user_config.cache_memory:
             return False
@@ -270,12 +270,12 @@ class ShapeCache(Cache):
             # If the object is too big, we can free the memory
             return False
         double_max_size = self.user_config.cache_memory_double_cache_max_entry_size
-        if stored and double_max_size > 0 and data_len > double_max_size:
-            # The object is bigger than what we want to store in both caches
-            return False
-        return True
+        if double_max_size > 0 and data_len > double_max_size:
+            return idle_objects.TRANSIENT if stored else idle_objects.LARGE
+        return idle_objects.SMALL
 
-    async def write_async(self, hash: CacheHash, items: dict[str, object]) -> dict[str, bool]:
+    async def write_async(self, hash: CacheHash, items: dict[str, object]) -> dict:
+        """Store 'items', and say of each how it is kept in memory ('memory_kind')."""
         stored = {}
         if self.enabled:
             stored = await self.write_data_async(hash, {key: _serialize(value) for key, value in items.items()})
@@ -285,13 +285,14 @@ class ShapeCache(Cache):
             if not self.user_config.cache_memory:
                 results[key] = False
                 continue
-            results[key] = self._keep_in_memory(total_size(value), stored.get(key, False))
+            results[key] = self.memory_kind(total_size(value), stored.get(key, False))
         return results
 
-    async def read_async(
-        self, hash: CacheHash, keys: list[str], metadata: dict = None
-    ) -> tuple[dict[str, object], dict[str, bool]]:
+    async def read_async(self, hash: CacheHash, keys: list[str], metadata: dict = None) -> tuple[dict, dict]:
         """Read the cached payloads and materialize them as the caller's own objects.
+
+        Returns them, and how each is kept in memory ('memory_kind'), False for
+        a miss.
 
         'metadata' is the outer layer to wrap around every payload read back -
         the name, the label and anything else that identifies the object asking
@@ -331,6 +332,6 @@ class ShapeCache(Cache):
             results[key] = shape_envelope.apply_metadata(payload, metadata)
             # It came from a persistent tier, so the tighter of the two memory
             # limits is the one that applies.
-            in_memory[key] = self._keep_in_memory(len(data), True)
+            in_memory[key] = self.memory_kind(len(data), True)
 
         return results, in_memory

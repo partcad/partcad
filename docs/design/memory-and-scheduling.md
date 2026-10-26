@@ -373,8 +373,12 @@ The design that carries it out, **decided** with the points above and built in t
   point 6, when nothing is running at all. Admitted tasks never wait for anything, which is what makes "nothing
   running" a state the daemon always reaches.
 - **Usage is this daemon's own footprint**: its own process less what its allocators hold for reuse (point 11), the
-  processes it started (PSS where Linux has it, `psutil`'s USS elsewhere), and the containers it runs work in (their
-  memory less the file cache, as `docker stats` reports it). **Capacity** is RAM, plus swap by default, or a cgroup's
+  processes it started, and the containers it runs work in (their memory less the file cache, as `docker stats`
+  reports it). A process counts with the memory it holds of its own -- on Linux its anonymous pages (`RssAnon` and
+  `RssShmem`), on Windows its private bytes, RSS elsewhere -- which is where geometry lives. PSS was the first choice,
+  and was measured out of it: reading it walks a process's page tables, 24 ms for a 3 GB sandbox, so four of them
+  twice a second is a tenth of a core; this is microseconds. What it leaves out is the libraries mapped from files,
+  which the sandboxes share and the page cache holds once, and the share absorbs them. **Capacity** is RAM, plus swap by default, or a cgroup's
   `memory.max` (plus `memory.swap.max`) where that is smaller. Under a cgroup limit the kernel charges more than the
   footprint -- page cache, kernel memory, every other process in the cgroup -- and the share is what absorbs that, as
   it absorbs other processes on an ordinary machine. On macOS swap has no fixed size; there the swap counted is what is

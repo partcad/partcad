@@ -21,20 +21,21 @@ from typing import TYPE_CHECKING, Optional
 
 from partcad_utils import timeouts
 
-from . import cache_artifacts
+from . import admission, cache_artifacts
 from . import cae as pc_cae
 from . import cam as pc_cam
-from . import code_version
+from . import code_version, idle_objects
 from . import logging as pc_logging
 from . import material as pc_material
 from . import output
 from . import physics as pc_physics
 from . import render_overlay
 from . import runtime as pc_runtime
-from . import sandbox_versions, scene_world, shape_ports, source_key, sync_threads, wrapper
+from . import sandbox_lock, sandbox_versions, scene_world, shape_ports, source_key, sync_threads, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import ShapeConfiguration
+from .user_config import user_config
 from .utils import resolve_resource_path, total_size
 
 if TYPE_CHECKING:
@@ -372,6 +373,10 @@ class Shape(ShapeConfiguration):
 
     errors: list[str]
 
+    # The rank a build of this shape goes on under, while one does. Here as
+    # well as in '__init__' for a shape whose class builds it some other way.
+    _building_rank = None
+
     # Made by PartCAD for somebody to look at, rather than declared by the
     # package it is registered in: what a check leaves behind (see
     # 'test/interference_artifact.py'). It is found by name like any other
@@ -432,6 +437,8 @@ class Shape(ShapeConfiguration):
 
         # Memory cache
         self._wrapped = None
+        # The rank the build of '_wrapped' is going on under, while one is.
+        self._building_rank = None
         self._bounding_box = None
         # What 'get_solidity_async()' found, kept for the same reason as the box.
         self._solidity = None
@@ -938,12 +945,16 @@ class Shape(ShapeConfiguration):
 
     async def get_wrapped(self, ctx):
         if self.built_on_pool:
-            # Built already. Never unset again for a shape like this, so the
-            # answer needs no lock -- and must not wait for one: whoever holds
-            # it may be writing this shape's files for as long as that takes,
-            # and an object built from this one has no reason to wait for that.
-            if self._wrapped is not None:
-                return self._wrapped
+            # Built already, so the answer needs no lock -- and must not wait
+            # for one: whoever holds it may be writing this shape's files for as
+            # long as that takes, and an object built from this one has no
+            # reason to wait for that. Read once: it is let go of when memory is
+            # wanted back and nothing uses it (see 'idle_objects'), and then it
+            # is read or built again below like the first time.
+            wrapped = self._wrapped
+            if wrapped is not None:
+                idle_objects.idle_objects.touch(self)
+                return wrapped
             # Not on a slot of the pools yet, which is a command asking for this
             # shape rather than another shape being built out of it: go to the
             # pool *before* taking the lock, and take it there. Then whoever
@@ -986,9 +997,16 @@ class Shape(ShapeConfiguration):
             await self.prepare_async(wait=True)
         except PreparationInFlight as e:
             pc_logging.debug("Building without the cache: %s" % e)
+        # Whoever is building this shape now builds it for this caller too, and
+        # ranks as well as it does while it is at it (see 'admission.Rank').
+        building = self._building_rank
+        if building is not None:
+            building.lend(admission.current())
         async with self.locked():
-            if self._wrapped is not None:
-                return self._wrapped
+            wrapped = self._wrapped
+            if wrapped is not None:
+                idle_objects.idle_objects.touch(self)
+                return wrapped
 
             # Before the cache key means anything: the files this shape is
             # built from have to be on disk to be hashed, and a reference
@@ -1011,9 +1029,13 @@ class Shape(ShapeConfiguration):
             if is_cacheable:
                 cache_hash = self.hash
                 if cache_hash:
-                    cached, to_cache_in_memory = await ctx.cache_shapes.read_async(
-                        cache_hash, [self.kind, "cmps"], self.get_cache_metadata()
-                    )
+                    # One task: reading an object into memory is what putting a
+                    # large assembly together is made of, and it may wait for
+                    # memory between any two of them (see 'admission').
+                    async with sandbox_lock.process_slots.load_async():
+                        cached, to_cache_in_memory = await ctx.cache_shapes.read_async(
+                            cache_hash, [self.kind, "cmps"], self.get_cache_metadata()
+                        )
                     # Whatever was recorded about the geometry came back inside
                     # the same entry as the geometry (see cache_shape.py), so a
                     # hit is a hit: there is no sibling entry that might be
@@ -1025,9 +1047,11 @@ class Shape(ShapeConfiguration):
                     # build the shape. A miss here has to leave it saying that.
                     if cached.get(self.kind) is not None:
                         self._metadata = shape_envelope.metadata_of(cached[self.kind]) or {}
-                    if to_cache_in_memory.get(self.kind, False):
-                        self._wrapped = cached[self.kind]
-                    if to_cache_in_memory.get("cmps", False):
+                    if cached.get(self.kind) is not None and to_cache_in_memory.get(self.kind):
+                        self._keep_wrapped(cached[self.kind], to_cache_in_memory[self.kind], ctx)
+                    # Components are kept on the shape for as long as it lives,
+                    # so only those that would be kept that long anyway.
+                    if to_cache_in_memory.get("cmps") in (idle_objects.SMALL, idle_objects.LARGE):
                         self.components = cached["cmps"]
                     if self.kind in cached and cached[self.kind] is not None:
                         return cached[self.kind]
@@ -1037,122 +1061,147 @@ class Shape(ShapeConfiguration):
             else:
                 cache_hash = None
 
-            shape = await self.get_shape(ctx)
+            # Built under a rank of its own, so that whoever comes to wait for
+            # it can lend it theirs (above).
+            rank = admission.Rank(self.name, parent=admission.current())
+            self._building_rank = rank
+            try:
+                with admission.ranked(rank):
+                    return await self._build_wrapped(ctx, cache_hash, is_cacheable)
+            finally:
+                self._building_rank = None
 
-            # Normalize whatever the factory produced into a BREP envelope so
-            # the rest of the core - caching, offset/scale, the return value -
-            # only ever handles opaque envelopes, never live OCP objects. A
-            # factory that still builds a live shape in-process is encoded
-            # here, at the single choke point; factories that delegate to a
-            # wrapper already return an envelope and pass straight through.
-            shape = self._to_envelope(shape)
-            # Every part, by the one validation every part goes through,
-            # before anything is recorded or cached: see '_validated_part'.
-            if self.kind == "part" and shape_envelope.is_shape_object(shape) and ctx is not None:
-                shape = await self._validated_part(ctx, shape)
-            if self.components:
-                self.components = [self._component_to_envelope(c) for c in self.components]
+    async def _build_wrapped(self, ctx, cache_hash, is_cacheable):
+        """Build the envelope '_get_wrapped' found nowhere, keep it and cache it. Under the lock."""
+        shape = await self.get_shape(ctx)
 
-            # What the wrapper that produced this envelope recorded about it -
-            # the size it measured, and whatever the source file stated (see
-            # 'shape_envelope.KEY_METADATA'). Taken off here and not later
-            # because 'offset'/'scale' below go through a wrapper that decodes
-            # the envelope and encodes a fresh one, which cannot carry forward
-            # what it was never sent.
-            recorded = shape_envelope.metadata_of(shape)
+        # Normalize whatever the factory produced into a BREP envelope so
+        # the rest of the core - caching, offset/scale, the return value -
+        # only ever handles opaque envelopes, never live OCP objects. A
+        # factory that still builds a live shape in-process is encoded
+        # here, at the single choke point; factories that delegate to a
+        # wrapper already return an envelope and pass straight through.
+        shape = self._to_envelope(shape)
+        # Every part, by the one validation every part goes through,
+        # before anything is recorded or cached: see '_validated_part'.
+        if self.kind == "part" and shape_envelope.is_shape_object(shape) and ctx is not None:
+            shape = await self._validated_part(ctx, shape)
+        if self.components:
+            self.components = [self._component_to_envelope(c) for c in self.components]
 
-            # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
-            #                 apply to both 'wrapped' and 'components'
-            # 'offset'/'scale' are applied in a sandbox (see transform.py) so
-            # the core does not have to run build123d in-process to do it.
-            if shape is not None and ("offset" in self.config or "scale" in self.config):
-                from . import transform
-                from .geom import Location
+        # What the wrapper that produced this envelope recorded about it -
+        # the size it measured, and whatever the source file stated (see
+        # 'shape_envelope.KEY_METADATA'). Taken off here and not later
+        # because 'offset'/'scale' below go through a wrapper that decodes
+        # the envelope and encodes a fresh one, which cannot carry forward
+        # what it was never sent.
+        recorded = shape_envelope.metadata_of(shape)
 
-                if "offset" in self.config:
-                    shape = await transform.offset(ctx, shape, self.config["offset"])
-                if "scale" in self.config:
-                    shape = await transform.scale(ctx, shape, self.config["scale"])
+        # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
+        #                 apply to both 'wrapped' and 'components'
+        # 'offset'/'scale' are applied in a sandbox (see transform.py) so
+        # the core does not have to run build123d in-process to do it.
+        if shape is not None and ("offset" in self.config or "scale" in self.config):
+            from . import transform
+            from .geom import Location
 
-                # The transform rebuilt the geometry, so the encoder on the far
-                # side measured what came out and the numbers on the way back
-                # are the new ones - which is the point: a part scaled by two is
-                # not the size the file it was read from would suggest. What
-                # that wrapper could not know is what the *source* stated, so
-                # the sections read at import are laid back under the fresh
-                # measurements rather than lost with the envelope they rode in.
-                #
-                # The old measurements are dropped first rather than merged
-                # under. They describe a shape that no longer exists, so if the
-                # far side could not measure what came out, the honest answer is
-                # that this shape's size is unknown - not the size it used to
-                # be, which is the one answer nobody could detect as wrong.
-                recorded = shape_envelope.merge_metadata(
-                    shape_envelope.without_measurements(recorded),
-                    shape_envelope.metadata_of(shape),
-                )
+            if "offset" in self.config:
+                shape = await transform.offset(ctx, shape, self.config["offset"])
+            if "scale" in self.config:
+                shape = await transform.scale(ctx, shape, self.config["scale"])
 
-                # And what the source said about each element goes where the
-                # element went, moved the way the geometry was and in the same
-                # order - or a bend line's angle would go on being pinned to
-                # the place the line was drawn rather than the place it is.
-                if "offset" in self.config:
-                    offset = Location(self.config["offset"])
-                    recorded = shape_envelope.moved_annotations(recorded, offset.transform_point)
-                if "scale" in self.config:
-                    factor = float(self.config["scale"])
-                    recorded = shape_envelope.moved_annotations(
-                        recorded, lambda point: [factor * axis for axis in point]
-                    )
+            # The transform rebuilt the geometry, so the encoder on the far
+            # side measured what came out and the numbers on the way back
+            # are the new ones - which is the point: a part scaled by two is
+            # not the size the file it was read from would suggest. What
+            # that wrapper could not know is what the *source* stated, so
+            # the sections read at import are laid back under the fresh
+            # measurements rather than lost with the envelope they rode in.
+            #
+            # The old measurements are dropped first rather than merged
+            # under. They describe a shape that no longer exists, so if the
+            # far side could not measure what came out, the honest answer is
+            # that this shape's size is unknown - not the size it used to
+            # be, which is the one answer nobody could detect as wrong.
+            recorded = shape_envelope.merge_metadata(
+                shape_envelope.without_measurements(recorded),
+                shape_envelope.metadata_of(shape),
+            )
 
-            # Whatever produced the envelope - a factory, a wrapper, a
-            # transform - the outer layer around it is this shape's own. It
-            # is stamped here rather than left to whoever built the payload,
-            # so that a shape built now and the same shape materialized from
-            # the cache later carry exactly the same name and label.
-            shape = shape_envelope.apply_metadata(shape, self.get_cache_metadata())
+            # And what the source said about each element goes where the
+            # element went, moved the way the geometry was and in the same
+            # order - or a bend line's angle would go on being pinned to
+            # the place the line was drawn rather than the place it is.
+            if "offset" in self.config:
+                offset = Location(self.config["offset"])
+                recorded = shape_envelope.moved_annotations(recorded, offset.transform_point)
+            if "scale" in self.config:
+                factor = float(self.config["scale"])
+                recorded = shape_envelope.moved_annotations(recorded, lambda point: [factor * axis for axis in point])
 
-            # Kept on the object as well as cached, because the two answer for
-            # different runs. A shape with 'cache: false', one that does not own
-            # its entry, and a run with every tier switched off all reach here
-            # having built the shape and having nowhere to store what that
-            # produced - and 'pc info' should still be able to say how big it is.
-            self._metadata = recorded or {}
-            if recorded:
-                shape = dict(shape)
-                shape[shape_envelope.KEY_METADATA] = recorded
+        # Whatever produced the envelope - a factory, a wrapper, a
+        # transform - the outer layer around it is this shape's own. It
+        # is stamped here rather than left to whoever built the payload,
+        # so that a shape built now and the same shape materialized from
+        # the cache later carry exactly the same name and label.
+        shape = shape_envelope.apply_metadata(shape, self.get_cache_metadata())
 
-            if cache_hash:
-                if is_cacheable and self.owns_cache_entry:
-                    # The geometry and everything recorded about it go into the
-                    # one entry, in the one write, because they were produced
-                    # together and are valid together: the hash that keys the
-                    # entry covers what produced the geometry, so a shape that
-                    # rebuilds measures again and one that does not never needs
-                    # to. Separate entries could be separately present.
-                    to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
-                    if self.components and len(self.components) > 0:
-                        to_cache["cmps"] = self.components
-                    properties = self._shape_properties()
-                    if properties:
-                        # The one thing still kept beside the geometry rather
-                        # than in it, and the reason is that it is *declared*:
-                        # the hash does not cover a 'properties:' section, so
-                        # editing one leaves the geometry entry valid and a copy
-                        # buried inside it would go on answering with the values
-                        # it happened to be written with. See
-                        # 'cache_shape.properties_key()'.
-                        to_cache[properties_key(self.kind)] = properties
-                    to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
-                    do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
-                else:
-                    do_cache_in_memory = True
-                if do_cache_in_memory:
-                    self._wrapped = shape
+        # Kept on the object as well as cached, because the two answer for
+        # different runs. A shape with 'cache: false', one that does not own
+        # its entry, and a run with every tier switched off all reach here
+        # having built the shape and having nowhere to store what that
+        # produced - and 'pc info' should still be able to say how big it is.
+        self._metadata = recorded or {}
+        if recorded:
+            shape = dict(shape)
+            shape[shape_envelope.KEY_METADATA] = recorded
+
+        if cache_hash:
+            if is_cacheable and self.owns_cache_entry:
+                # The geometry and everything recorded about it go into the
+                # one entry, in the one write, because they were produced
+                # together and are valid together: the hash that keys the
+                # entry covers what produced the geometry, so a shape that
+                # rebuilds measures again and one that does not never needs
+                # to. Separate entries could be separately present.
+                to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
+                if self.components and len(self.components) > 0:
+                    to_cache["cmps"] = self.components
+                properties = self._shape_properties()
+                if properties:
+                    # The one thing still kept beside the geometry rather
+                    # than in it, and the reason is that it is *declared*:
+                    # the hash does not cover a 'properties:' section, so
+                    # editing one leaves the geometry entry valid and a copy
+                    # buried inside it would go on answering with the values
+                    # it happened to be written with. See
+                    # 'cache_shape.properties_key()'.
+                    to_cache[properties_key(self.kind)] = properties
+                to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
+                kind = to_cache_in_memory.get(self.kind, False)
+                if kind:
+                    self._keep_wrapped(shape, kind, ctx)
             else:
-                # Let the file cache tell us if we need to cache this in memory
-                self._wrapped = shape
-            return shape
+                self._keep_wrapped(shape, ctx=ctx)
+        else:
+            # Nowhere to cache it, so memory is where it is kept.
+            self._keep_wrapped(shape, ctx=ctx)
+        return shape
+
+    def _keep_wrapped(self, envelope, kind=None, ctx=None):
+        """Keep 'envelope' as this shape's, on the list of what memory can be freed from.
+
+        'kind' is the cache's answer ('ShapeCache.memory_kind'); without one the
+        shape is somewhere nothing persistent holds it, and is kept whatever its
+        size -- as it always was -- on the list that size belongs to.
+        """
+        self._wrapped = envelope
+        size = total_size(envelope)
+        if not kind:
+            config = getattr(ctx, "user_config", None) or user_config
+            double = config.cache_memory_double_cache_max_entry_size
+            kind = idle_objects.LARGE if double > 0 and size > double else idle_objects.SMALL
+        idle_objects.idle_objects.keep(self, envelope, size, kind)
 
     def _shape_properties(self):
         """What this shape reports about itself, or None if it reports nothing.

@@ -41,8 +41,8 @@ import time
 
 from filelock import FileLock, Timeout
 
-from . import logging as pc_logging
-from .user_config import THREADS_MAX_MINIMUM, default_threads_max, user_config
+from . import admission, idle_objects
+from .user_config import MEMORY_BUDGET_DEFAULT, THREADS_MAX_MINIMUM, default_threads_max, user_config
 
 # How long a contended acquire waits between attempts. Contention only happens
 # around an install, which takes seconds, so the upper bound costs nothing and
@@ -211,79 +211,15 @@ def conda(internal_state_dir: str) -> EnvironmentLock:
     return get(os.path.join(internal_state_dir, CONDA_LOCK_NAME))
 
 
-class ProcessSlots:
-    """How many sandbox interpreters may run at once.
-
-    A wrapper is a process, not a thread, and a CAD one at that: the ceiling
-    that matters is the machine's, not the thread pool's. Without this a
-    recursive render would fan out over every package, every shape and every
-    file type at once and ask the machine for hundreds of OpenCASCADE
-    interpreters.
-
-    Taken *inside* whatever environment lock the caller holds and released
-    before that lock is, so the two can never wait on each other: a slot holder
-    is always running, never waiting for a lock.
-
-    The ceiling can move while slots are held (see 'follow'), which is why this
-    is a count under a lock rather than a semaphore. Raised, a waiter takes the
-    new room on its next poll. Lowered, nobody is interrupted: the slots already
-    held stay held, and nobody new gets one until enough of them are given back
-    to be under the new ceiling.
-    """
-
-    def __init__(self, count: int):
-        self._mutex = threading.Lock()
-        self._count = count
-        self._in_use = 0
-
-    @property
-    def count(self) -> int:
-        return self._count
-
-    def resize(self, count: int) -> None:
-        with self._mutex:
-            if count == self._count:
-                return
-            was, self._count = self._count, count
-        # Debug, and only on a change: a daemon serving clients configured
-        # differently moves this on every request, and what it is at is a
-        # question for its log, not for the user's terminal.
-        pc_logging.debug("Sandbox processes at once: %d (was %d)" % (count, was))
-
-    def _try_acquire(self) -> bool:
-        with self._mutex:
-            if self._in_use >= self._count:
-                return False
-            self._in_use += 1
-            return True
-
-    def _release(self) -> None:
-        with self._mutex:
-            self._in_use -= 1
-
-    @contextlib.contextmanager
-    def slot(self):
-        if not self._try_acquire():
-            delay = _POLL_MIN
-            while not self._try_acquire():
-                time.sleep(delay)
-                delay = min(delay * 2, _POLL_MAX)
-        try:
-            yield
-        finally:
-            self._release()
-
-    @contextlib.asynccontextmanager
-    async def slot_async(self):
-        if not self._try_acquire():
-            delay = _POLL_MIN
-            while not self._try_acquire():
-                await asyncio.sleep(delay)
-                delay = min(delay * 2, _POLL_MAX)
-        try:
-            yield
-        finally:
-            self._release()
+# How many sandbox interpreters may run at once, and which waiting task starts
+# next: 'partcad.admission'. It is still called 'ProcessSlots' here because that
+# is what it was, and every launch point still takes one of its slots the way it
+# always did: *inside* whatever environment lock the caller holds, and released
+# before that lock is, so that the two can never wait on each other -- a slot
+# holder is always running, never waiting for a lock. What it adds is the order
+# waiters are let in ('admission.Rank') and the memory budget, which loads take
+# part in as well as calls ('Admission.load_async').
+ProcessSlots = admission.Admission
 
 
 def process_slot_count(config=None) -> int:
@@ -320,6 +256,26 @@ def follow(config) -> None:
     nothing needs to call this.
     """
     process_slots.resize(process_slot_count(config))
+    process_slots.set_budget(*memory_budget(config))
+
+
+def memory_budget(config=None) -> tuple:
+    """'memoryBudget' and 'memoryBudgetSwap': the share of the machine, and whether swap counts.
+
+    A share of 0 turns admission by memory off, leaving the process slots alone
+    to decide. 'config' is the configuration to size for, this process's own
+    when None; one that does not say gets the defaults.
+    """
+    if config is None:
+        config = user_config
+    share = getattr(config, "memory_budget", MEMORY_BUDGET_DEFAULT)
+    count_swap = getattr(config, "memory_budget_swap", True)
+    return share, bool(count_swap)
 
 
 process_slots = ProcessSlots(process_slot_count())
+process_slots.set_budget(*memory_budget())
+# What memory can be had back from without touching anything running: the
+# geometry nothing uses any more (see 'idle_objects').
+process_slots.on_pressure(idle_objects.idle_objects.free)
+process_slots.on_round(idle_objects.idle_objects.sweep)

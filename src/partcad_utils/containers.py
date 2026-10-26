@@ -508,6 +508,26 @@ _LOCKS: Dict[str, threading.Lock] = {}
 _LOCKS_GUARD = threading.Lock()
 
 
+# The containers this process has started work in, by name, where the Docker
+# daemon running them is on this machine: what 'partcad.memory' counts as this
+# process's, beside its sandboxes. One on another machine is that machine's.
+_in_use: Dict[str, object] = {}
+_in_use_lock = threading.Lock()
+
+
+def in_use() -> List[object]:
+    """The containers on this machine that this process has started work in."""
+    with _in_use_lock:
+        return list(_in_use.values())
+
+
+def _note_in_use(name: str, container, remote_host: Optional[str]) -> None:
+    if remote_host:
+        return
+    with _in_use_lock:
+        _in_use[name] = container
+
+
 def _lock(name: str) -> threading.Lock:
     with _LOCKS_GUARD:
         return _LOCKS.setdefault(name, threading.Lock())
@@ -792,6 +812,7 @@ def _start_and_wait(name, spec, container, remote_host, ping, created_here=False
             % (name, spec.image, e, ("\n" + logs) if logs else "", hint)
         )
     _open_volumes(name, spec, container)
+    _note_in_use(name, container, remote_host)
     return Endpoint(name=name, spec=spec, container=container, host=host, port=port, token=_token_of(container))
 
 

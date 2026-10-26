@@ -53,7 +53,7 @@ from partcad_utils import container_image, containers
 
 from . import container_mounts, docker_image, docker_mount
 from . import logging as pc_logging
-from . import runtime, runtime_python, runtime_python_remote, telemetry
+from . import runtime, runtime_python, runtime_python_remote, sandbox_lock, telemetry
 
 # The images PartCAD publishes to run its own sandboxes in, one per supported
 # Python version and architecture. The tag is completed by the release and the
@@ -789,6 +789,16 @@ class DockerUploadPythonRuntime(runtime_python_remote.RemotePythonRuntime):
 
     def __init__(self, ctx, version=None, image=None):
         super().__init__(ctx, version, image=image, endpoint="in-process")
+
+    def _task(self):
+        # Unlike the remote sandbox's, these calls are this daemon's to admit:
+        # it runs the container itself, a wrapper call in it is a process like
+        # one in any other sandbox, and its memory is counted as this daemon's
+        # where the container runs on this machine (see 'partcad.memory').
+        return sandbox_lock.process_slots.slot()
+
+    def _task_async(self):
+        return sandbox_lock.process_slots.slot_async()
 
     def _client(self):
         if not runtime.docker_available():
