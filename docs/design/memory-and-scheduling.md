@@ -9,7 +9,8 @@ Status words used below: **built** is on `devel`; **decided** is agreed and not 
 
 Where it stands: step 1 is **built** (#849, which added this record). Step 3 is **built** as part of #848, which
 caches every export and render; step 2 is #850, which drops its own picture cache in #848's favour. Step 4 is being
-done separately. Steps 5 to 7 are **decided** (section 9), and nothing about them is open.
+done separately. Steps 5 to 7 are **decided** (section 9) and implemented on top of #850, measured in 11.1; what the
+measurements leave open is in section 12.
 
 ## Contents
 
@@ -378,11 +379,12 @@ The design that carries it out, **decided** with the points above and built in t
   `RssShmem`), on Windows its private bytes, RSS elsewhere -- which is where geometry lives. PSS was the first choice,
   and was measured out of it: reading it walks a process's page tables, 24 ms for a 3 GB sandbox, so four of them
   twice a second is a tenth of a core; this is microseconds. What it leaves out is the libraries mapped from files,
-  which the sandboxes share and the page cache holds once, and the share absorbs them. **Capacity** is RAM, plus swap by default, or a cgroup's
-  `memory.max` (plus `memory.swap.max`) where that is smaller. Under a cgroup limit the kernel charges more than the
-  footprint -- page cache, kernel memory, every other process in the cgroup -- and the share is what absorbs that, as
-  it absorbs other processes on an ordinary machine. On macOS swap has no fixed size; there the swap counted is what is
-  allocated at the moment. Measured at most a few times a second, and again after freeing.
+  which the sandboxes share and the page cache holds once, and the share absorbs them. **Capacity** is RAM, plus
+  swap by default, or a cgroup's `memory.max` (plus `memory.swap.max`) where that is smaller. Under a cgroup limit
+  the kernel charges more than the footprint -- page cache, kernel memory, every other process in the cgroup -- and
+  the share is what absorbs that, as it absorbs other processes on an ordinary machine. On macOS swap has no fixed
+  size; there the swap counted is what is allocated at the moment. Measured twice a second while anything runs or
+  waits, and again after freeing.
 - **Freed memory is given back to the system where it can be.** glibc raises its `mmap` threshold each time a large
   block is freed, up to 32 MB, so later blocks of that size come from the heap and stay in the process after they are
   freed. The daemon fixes the threshold (`M_MMAP_THRESHOLD`), so a payload is unmapped as soon as it is freed, and
@@ -463,8 +465,58 @@ repository's code, and its effect is not measured.
   one does. A polygonal one may change once, by the tie-breaking 5.1 describes, and the pull request that changes it
   re-renders it and says so -- `castle-front.png` in partcad-ldraw-examples, measured at 39 pixels.
 
+### 11.1 Measured with admission
+
+`pc render -r` of partcad-ldraw-examples (`8bc2963`) on the machine of section 2, inside memory cgroups of the sizes
+given, no swap, default configuration (four sandbox processes; `memoryBudget` 0.8). Warm means the shape cache is
+warm and the pictures are not cached (#848 would otherwise draw nothing); cold means neither is, so every LDraw part
+is built from its `.dat` file. "#850" is that pull request, the base this is built on; "admission" is steps 5 to 7.
+Peaks are the sum of every PartCAD process's PSS, sampled once a second (`dev-tools/profiling`).
+
+| run | limit | build | pictures | time | peak | daemon peak |
+| --- | --- | --- | --- | --- | --- | --- |
+| warm | 14.3 GB | #850 | 33 of 33 | 253 s | 8.1 GB | 393 MB |
+| warm | 14.3 GB | admission | 33 of 33 | 258 s | 6.8 GB | 219 MB |
+| warm | 8 GB | #850 | 33 of 33 | 232 s | 7.5 GB | 380 MB |
+| warm | 8 GB | admission | 33 of 33 | 230 s | 7.4 GB | 278 MB |
+| cold | 8 GB | #850 | 33 of 33 | 976 s | 7.8 GB | 384 MB |
+| cold | 8 GB | admission | 33 of 33 | 980 s | 6.7 GB | 291 MB |
+| warm | 6 GB | #850 | 24 of 33: a kill at 116 s ends the render | -- | 6.4 GB | 357 MB |
+| warm | 6 GB | admission | 31 and 29 of 33, in two runs | 207-217 s | 6.4 GB | 276 MB |
+| warm | 6 GB, `memoryBudget: 0.5` | admission | 32 of 33, in two runs | 273-281 s | 6.4 GB | 211 MB |
+| warm | 6 GB | admission, starts paced (12) | 33 of 33 | 298 s | 6.2 GB | 230 MB |
+| warm | 14.3 GB | admission, starts paced (12) | 33 of 33 | 307 s | 6.5 GB | 196 MB |
+
+What it shows:
+
+- **Steps 1 and 2 are what moved the line.** With them, the warm and the cold run both fit 8 GB without admission;
+  admission costs nothing measurable there (230 s against 232 s, 980 s against 976 s), takes the peak down by up
+  to 1.3 GB, and the daemon's by a quarter to nearly half.
+- **Nothing stops.** Every run with admission started all 33 drawings, and a killed drawing cost that drawing alone
+  (`return_exceptions`); without it the first kill ended the render with nine pictures not drawn.
+- **Admission holds tasks back** -- "14 task(s) wait for memory to start: PartCAD's work holds 5.3 GB of its 4.8 GB
+  budget" -- **but at 6 GB it cannot keep the OOM killer away.** A drawing of the F1 or of its larger parts grows by
+  1.2 to 2.5 GB after it starts, more than the 1.2 GB the share leaves, so one started at 4.5 GB goes past 6 GB.
+  Halving the share does not help either: the four views of the F1 wait for one tree, become ready together with
+  nothing else running, and all four start at 1.9 GB of usage, as in section 2. Nothing anticipated means exactly
+  this, and section 12 has the question it leaves.
+- **A defect the 6 GB runs found and that is fixed:** the monitor forgot its measurement whenever nothing ran, if only
+  between two objects, and the next waiters all started as if the run were just beginning.
+
 ## 12. Open questions
 
-None. The four questions the previous round left are answered in section 9: freeing starts at 90% of the budget
-(point 9), the swap is counted by default (point 3), the memory tier's limit becomes 250 MB (point 10), and the burst
-at the start of a run is accepted (point 5), with every wrapper call and every load a task of its own (point 7).
+The four questions of the previous round are answered in section 9: freeing starts at 90% of the budget (point 9),
+the swap is counted by default (point 3), the memory tier's limit becomes 250 MB (point 10), and the burst at the start
+of a run is accepted (point 5), with every wrapper call and every load a task of its own (point 7). The measurements
+(11.1) leave one:
+
+1. **Bursts in the middle of a run.** The burst accepted at the start of a run happens in the middle of one too:
+   whenever several tasks become ready while little runs -- the views of one model, waiting for its one tree -- they
+   fill every free slot at once, and each then grows by up to 2.5 GB. Measured usage cannot see that coming, and the
+   share's margin absorbs it only where it is bigger than the growth of every task that can start together: a 16 GB
+   machine, and 8 GB for these examples. A rule that guesses nothing about any task closes it at 6 GB (11.1): **a
+   task starts only once the memory has stopped rising since the last one did** -- usage flat over two seconds of
+   measurements, the last start at least two seconds back -- with the usual exception when nothing runs. It costs a
+   fifth of the time on a machine with room to spare (307 s against 258 s), because every start waits for the one
+   before it to settle. Adopt it, always or only below some machine size; or keep the decided rule and leave small
+   machines to `memoryBudget` and swap?
