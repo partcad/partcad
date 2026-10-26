@@ -194,10 +194,17 @@ def _deserialize_tree(data: bytes):
     table = {}
     offset = _TREE_HEADER + length
     for digest, size in header["payloads"]:
+        # A size the writer could not have written -- negative, or not a whole
+        # number -- would read the wrong bytes for every payload after it.
+        if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+            raise ValueError("this tree's header gives a payload a size of %r" % (size,))
         if offset + size > len(data):
             raise ValueError("this tree's payloads end before its header says they do")
         table[digest] = bytes(view[offset : offset + size])
         offset += size
+    # And nothing after the last one: the writer writes nothing there.
+    if offset != len(data):
+        raise ValueError("this tree goes on %d bytes past its last payload" % (len(data) - offset))
     return shape_envelope.decode(header["tree"], table)
 
 
