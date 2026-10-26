@@ -205,3 +205,49 @@ def test_the_python_runtime_produces_it_inside_the_slot_too(python_runtime, one_
     assert exitcode == 0, stderr
     assert "A REQUEST" in stdout
     assert made == [1]
+
+
+class _Endpoint:
+    """A container that records what it was handed and answers at once."""
+
+    name = "recorded"
+    container = None
+
+    def __init__(self):
+        self.stdin = []
+
+    def run(self, cmd, stdin=None, **_kwargs):
+        self.stdin.append(stdin)
+        return 0, "", ""
+
+    async def run_async(self, cmd, stdin=None, **_kwargs):
+        self.stdin.append(stdin)
+        return 0, "", ""
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_a_container_is_handed_the_request_and_not_what_writes_it(tmp_path, asynchronous):
+    """The container path is a launch point too: a callable request reached 'Endpoint.params', which encodes text."""
+    endpoint = _Endpoint()
+    contained = runtime.Runtime(_ctx(tmp_path), "contained")
+    contained.use_container(endpoint)
+
+    if asynchronous:
+        asyncio.run(contained.run_async(["python", "wrapper.py"], lambda: "a request"))
+    else:
+        contained.run(["python", "wrapper.py"], lambda: "a request")
+
+    assert endpoint.stdin == [b"a request"]
+
+
+@pytest.mark.parametrize("stdin", ["a request", b"a request"])
+def test_a_container_endpoint_takes_its_request_as_text_or_bytes(stdin):
+    import base64
+
+    from partcad_utils import containers
+
+    endpoint = containers.Endpoint(
+        name="any", spec=types.SimpleNamespace(mode="mount"), container=None, host="", port=0, token=None
+    )
+
+    assert base64.b64decode(endpoint.params(stdin)["stdin"]) == b"a request"

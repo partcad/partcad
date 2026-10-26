@@ -847,7 +847,9 @@ class Runtime:
             endpoint = self._current_endpoint()
             returncode, stdout, stderr = endpoint.run(
                 cmd,
-                stdin=stdin,
+                # Resolved here like at every other launch point: a container's
+                # request may be the callable that writes it (see 'stdin_bytes').
+                stdin=stdin_bytes(stdin) or None,
                 cwd=cwd,
                 input_files=input_files,
                 output_files=output_files,
@@ -903,7 +905,7 @@ class Runtime:
                 endpoint = await asyncio.get_running_loop().run_in_executor(None, self._current_endpoint)
             returncode, stdout, stderr = await endpoint.run_async(
                 cmd,
-                stdin=stdin,
+                stdin=stdin_bytes(stdin) or None,
                 cwd=cwd,
                 input_files=input_files,
                 output_files=output_files,
