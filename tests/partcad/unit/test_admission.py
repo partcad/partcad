@@ -12,6 +12,7 @@ The memory is scripted rather than measured, and the monitor is driven by hand
 
 import asyncio
 import threading
+import time
 
 import pytest
 
@@ -243,6 +244,30 @@ def test_an_unmeasured_start_is_not_held_back():
     slots, machine = _budgeted(count=3, usage=20 * GB)
     assert all(slots._try_acquire() for _ in range(3))
     assert machine.measured == 0
+
+
+def test_a_moment_with_nothing_running_is_not_the_start_of_a_run():
+    """Regression: the monitor forgot its measurement whenever nothing ran, if only between two objects.
+
+    The next waiters then found memory unmeasured, which is how a run starts,
+    and all of them started at once over the budget.
+    """
+    machine = _Memory(usage=9 * GB)
+    slots = Admission(4)
+    slots.set_budget(0.8, measure=machine.measure, capacity_of=lambda count_swap: 10 * GB)
+    try:
+        with slots.slot():
+            deadline = time.monotonic() + 10
+            while slots.snapshot()["usage"] is None and time.monotonic() < deadline:
+                time.sleep(0.01)
+        # Long enough for the monitor to find nothing to do.
+        time.sleep(admission.INTERVAL * 2)
+
+        assert slots._try_acquire()
+        assert not slots._try_acquire()
+        slots._release()
+    finally:
+        slots.set_budget(0)
 
 
 def test_a_share_of_zero_turns_the_budget_off():

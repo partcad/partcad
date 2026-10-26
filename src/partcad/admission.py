@@ -602,8 +602,12 @@ class Admission:
     def _watch(self) -> None:
         while True:
             with self._mutex:
+                # Idle, keeping the last measurement: work that arrives finds
+                # it, and this wakes to measure again. Dropping it made the
+                # moment between one object's tasks and the next look like
+                # the start of a run, whose unmeasured burst is accepted, and
+                # every waiter started at once.
                 while self._budget is not None and not (self._waiting or self._running):
-                    self._footprint = None
                     self._poke.wait()
                 if self._budget is None:
                     self._monitor = None
