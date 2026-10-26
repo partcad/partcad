@@ -863,6 +863,9 @@ class Runtime:
                 # point: what 'communicate_sync' hands back from a process it
                 # stopped waiting for is the bytes read so far, and a text-mode
                 # Popen would have mixed the two.
+                # Written before the process starts: a request that cannot be written
+                # then fails with no child left waiting on its standard input.
+                data = stdin_bytes(stdin) or None
                 p = subprocess.Popen(
                     argv,
                     stdin=subprocess.PIPE,
@@ -873,7 +876,7 @@ class Runtime:
                     cwd=spawn_cwd,
                     env=spawn_env,
                 )
-                stdout, stderr = communicate_sync(p, stdin_bytes(stdin) or None)
+                stdout, stderr = communicate_sync(p, data)
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
             returncode, stderr = self._ended(p.returncode, stderr)
@@ -921,6 +924,8 @@ class Runtime:
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
             async with sandbox_lock.process_slots.slot_async():
+                # As in 'run'.
+                data = stdin_bytes(stdin)
                 with output_capture(self.OUTPUT_TO_FILES) as capture:
                     p = await asyncio.create_subprocess_exec(
                         *argv,
@@ -933,7 +938,7 @@ class Runtime:
                         env=spawn_env,
                         **bounded_spawn_options(timeout),
                     )
-                    stdout, stderr = capture.collect(*await communicate(p, stdin_bytes(stdin), timeout))
+                    stdout, stderr = capture.collect(*await communicate(p, data, timeout))
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)

@@ -601,6 +601,9 @@ class JavaScriptRuntime(runtime.Runtime):
             sanitized_cmd = copy.copy(argv)
             sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
             span.set_attribute("cmd", " ".join(sanitized_cmd))
+            # Written before the process starts: a request that cannot be written
+            # then fails with no child left waiting on its standard input.
+            data = runtime.stdin_bytes(stdin)
             p = subprocess.Popen(
                 argv,
                 stdin=subprocess.PIPE,
@@ -612,7 +615,7 @@ class JavaScriptRuntime(runtime.Runtime):
             )
             # Over when Node.js is, not when the last process holding its
             # output lets go (see 'runtime.communicate').
-            stdout, stderr = runtime.communicate_sync(p, runtime.stdin_bytes(stdin))
+            stdout, stderr = runtime.communicate_sync(p, data)
 
         return self._finish(argv, p.returncode, decode_output(stdout), decode_output(stderr), package_path)
 
@@ -626,6 +629,8 @@ class JavaScriptRuntime(runtime.Runtime):
             sanitized_cmd = copy.copy(argv)
             sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
             span.set_attribute("cmd", " ".join(sanitized_cmd))
+            # As in 'execute_onced_locked'.
+            data = runtime.stdin_bytes(stdin)
             p = await asyncio.create_subprocess_exec(
                 *argv,
                 stdin=subprocess.PIPE,
@@ -635,7 +640,7 @@ class JavaScriptRuntime(runtime.Runtime):
                 env=self._subprocess_env(),
                 cwd=package_path,
             )
-            stdout, stderr = await runtime.communicate(p, runtime.stdin_bytes(stdin), timeout)
+            stdout, stderr = await runtime.communicate(p, data, timeout)
 
         return self._finish(argv, p.returncode, decode_output(stdout), decode_output(stderr), package_path)
 

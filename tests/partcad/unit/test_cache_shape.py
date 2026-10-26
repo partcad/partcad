@@ -272,8 +272,11 @@ def test_what_is_not_an_assembly_stays_plain_json(tmp_path):
     assert [item["brep"] for item in cache_shape._deserialize(stored)] == [BREP, BREP]
 
 
-def test_the_file_tier_takes_a_tree_of_fifty_megabytes_by_default(monkeypatch):
+def test_the_file_tier_takes_a_tree_of_fifty_megabytes_by_default(monkeypatch, tmp_path):
     """Over 10 MB, the LEGO F1's tree (10.9 MB of distinct geometry) was put together again on every run."""
+    # A home with no configuration in it, so that the default is what is read
+    # and not whatever the machine running the test configured.
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.delenv("PC_CACHE_FILES_MAX_ENTRY_SIZE", raising=False)
     from partcad_utils.user_config import UserConfig
 

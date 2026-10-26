@@ -353,7 +353,7 @@ peak it is expected to reach, is withdrawn too. What is **decided**:
    persistent tier holds (most of them over the file tier's limit) and one for objects under 1 MB. When usage reaches
    **90% of the budget**, idle objects are freed: from the list of large ones first, then the small ones, the least
    recently used first in each, until usage is back under that mark or both lists are empty.
-10. **The memory tier keeps entries up to 250 MB** (`cacheMemoryMaxEntrySize`, was 100 MB), so that the large list
+10. **The memory tier keeps entries up to 250 MB** (`cacheMemoryMaxEntrySize`, 100 MB today), so that the large list
     has a range of sizes to hold -- 50 to 250 MB -- and the file tier takes entries up to 50 MB (7.2).
 11. **Usage is what Python cannot reuse.** Memory a process has freed is not always given back to the system: the
     allocator keeps it for the next allocation. Freeing runs the garbage collector, gives back what the allocator can

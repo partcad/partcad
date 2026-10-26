@@ -608,6 +608,9 @@ class PythonRuntime(runtime.Runtime):
                 # 'encoding="utf-8"' would decode strictly, before that ever ran
                 # -- and it also made 'communicate' reject the encoded stdin two
                 # lines below, so this path raised on the way in as well as out.
+                # Written before the process starts: a request that cannot be written
+                # then fails with no child left waiting on its standard input.
+                data = runtime.stdin_bytes(stdin)
                 with runtime.output_capture(self.OUTPUT_TO_FILES) as capture:
                     p = subprocess.Popen(
                         argv,
@@ -621,7 +624,7 @@ class PythonRuntime(runtime.Runtime):
                     )
                     # Over when the interpreter is, not when the last process
                     # holding its output lets go (see 'runtime.communicate').
-                    stdout, stderr = capture.collect(*runtime.communicate_sync(p, runtime.stdin_bytes(stdin)))
+                    stdout, stderr = capture.collect(*runtime.communicate_sync(p, data))
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
@@ -771,7 +774,8 @@ class PythonRuntime(runtime.Runtime):
                     sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
                     span.set_attribute("cmd", " ".join(sanitized_cmd))
                     argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, self._subprocess_env())
-                    # See the note beside the same line in 'run_onced'.
+                    # See the notes beside the same lines in 'run_onced'.
+                    data = runtime.stdin_bytes(stdin)
                     with runtime.output_capture(self.OUTPUT_TO_FILES) as capture:
                         p = await asyncio.create_subprocess_exec(
                             *argv,
@@ -786,9 +790,7 @@ class PythonRuntime(runtime.Runtime):
                             # the bound stops all of it; see 'bounded_spawn_options'.
                             **runtime.bounded_spawn_options(timeout),
                         )
-                        stdout, stderr = capture.collect(
-                            *await runtime.communicate(p, runtime.stdin_bytes(stdin), timeout)
-                        )
+                        stdout, stderr = capture.collect(*await runtime.communicate(p, data, timeout))
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
