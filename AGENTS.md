@@ -368,9 +368,30 @@ From the repo root, inside the environment:
 
 ```bash
 poetry run pytest tests cad/freecad \
-  -x -p no:error-for-skips -p no:warnings --dist no                                        # unit tests (matches CI)
+  -x -p no:error-for-skips -p no:warnings -n logical --dist worksteal                      # unit tests (matches CI)
 poetry run behave                                                                        # integration tests (./features)
 ```
+
+**pytest runs in parallel everywhere it gates, and a test has to hold up under that.** Both CI jobs run
+`pytest-xdist` with a worker per logical CPU (`-n logical --dist worksteal`), and the `pytest` `pre-commit` hook
+with one per physical core (`PC_PYTEST_WORKERS` overrides it). The workers are separate processes sharing one
+filesystem, one `$HOME`, one Docker daemon and one network, and which tests a worker gets, in which order,
+changes with the number of workers. So a test may not:
+
+* leave process-wide state behind for whatever the worker runs next -- a logger's level, a handler, a module
+  attribute, a cached context. A serial run happens to keep one order, and a test that passes only after (or
+  before) another is a test that fails on some machines and not others;
+* rely on a port having been free a moment ago -- keep the probe socket bound for as long as the port is meant
+  to stay unanswered;
+* list a directory other processes write to, such as the system temporary directory, and attribute what it
+  finds to itself;
+* rely on another test having started a daemon, or on being the one that starts it;
+* bound a duration tightly: a worker shares the machine with the others, so leave seconds of headroom, and
+  where a bound has to sit below some other timeout to mean anything, lengthen that timeout in the test.
+
+The suites that cannot be parallel run in jobs of their own, one file each and in one process:
+`tests/ide/test_ide_e2e.py` (`PC_TEST_IDE_E2E=1`) and `tests/partcad/unit/test_docker_sandbox_live.py`
+(`PC_TEST_SANDBOX_IMAGE`). Both skip in the parallel run.
 
 **A warm daemon outlives a checkout, and one test says so.** `pc version` reports the version of the
 `partcad` the *daemon* loaded, which is the useful answer and not this process's — so after anything that moves

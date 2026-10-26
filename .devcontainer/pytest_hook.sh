@@ -1,9 +1,20 @@
 #!/bin/bash
 
-CORES=$(lscpu -b -p=Core,Socket | grep -v "^#" | sort -u | wc -l)
-# Clamp to [1, 4]: CPU detection can return 0/empty, which would pass -n 0 to pytest.
-WORKERS=$(( CORES < 1 ? 1 : (CORES < 5 ? CORES : 4) ))
-echo "Detected $CORES cores"
+# One pytest-xdist worker per physical core -- not per logical CPU, which is
+# what the CI jobs use: a commit is made on a machine somebody is also working
+# on, and the hyperthreads are left to them. Each (Core,Socket) pair lscpu lists
+# is one physical core, however many threads it runs.
+#
+# There used to be a ceiling of four on top of this. Set PC_PYTEST_WORKERS to
+# choose the number yourself -- fewer on a machine short of memory, since every
+# worker starts sandbox interpreters of its own. More workers stop helping well
+# before a big machine runs out of cores: on a 24-core one this hook took about
+# four minutes on 4, 8 and 24 workers alike, its tests taking longer each the
+# more of them ran at once.
+CORES=$(lscpu -b -p=Core,Socket 2>/dev/null | grep -v "^#" | sort -u | wc -l)
+# At least one: CPU detection can return 0/empty, which would pass -n 0 to pytest.
+WORKERS="${PC_PYTEST_WORKERS:-$(( CORES < 1 ? 1 : CORES ))}"
+echo "Detected $CORES physical cores"
 echo "Running tests with $WORKERS workers"
 
 # How long one test may take before it is called a hang.
@@ -45,7 +56,12 @@ rm -f "$MARKER"
 
 # One definition of the run, so that what is executed and what the failure
 # message tells the user to execute cannot drift apart.
-PYTEST_ARGS=(tests/partcad -n "$WORKERS" -m "not slow" --timeout "$TIMEOUT")
+#
+# The paths are the ones the "Pytest" job in '.github/workflows/test.yml' runs.
+# This used to be 'tests/partcad' alone, so a change to the CLI, the client, the
+# daemon, the shared utilities or the FreeCAD addon was committed without any of
+# their tests having run. They are some 2,400 tests more, nearly all of them fast.
+PYTEST_ARGS=(tests cad/freecad -n "$WORKERS" -m "not slow" --timeout "$TIMEOUT")
 
 poetry run pytest "${PYTEST_ARGS[@]}"
 rc=$?

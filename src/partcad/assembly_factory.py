@@ -9,7 +9,7 @@
 
 import typing
 
-from . import telemetry
+from . import factory, telemetry
 from .assembly import Assembly
 from .shape_factory import ShapeFactory
 
@@ -37,14 +37,48 @@ class AssemblyFactory(ShapeFactory):
     OBJECT_CLASS = Assembly
     STATS_INSTANTIATED = "stats_assemblies_instantiated"
 
+    # The object-type parameters of an assembly: the names PartCAD gives a
+    # meaning to on the types that can honour it, and refuses on the others -
+    # the same arrangement a part has (see 'PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS',
+    # which says why a name outside this registry stays free, forever).
+    #
+    # 'exploded' is the one there is: the assembly drawn with its items pulled
+    # apart (see 'Assembly.exploded'). Only a type that knows what its items are
+    # joined to can do that, which is 'assy'; an assembly read from a STEP file
+    # holds geometry, not connections.
+    POLICED_OBJECT_TYPE_PARAMETERS: typing.FrozenSet[str] = frozenset({"exploded"})
+    ACCEPTED_OBJECT_TYPE_PARAMETERS: typing.Dict[str, typing.Any] = {}
+
     def __init__(self, ctx, source_project, target_project, config, extension=""):
         super().__init__(ctx, source_project, config)
         self.target_project = target_project
         self.name = config["name"]
         self.orig_name = config["orig_name"]
+        self._validate_object_type_parameters(config)
+
+    def _validate_object_type_parameters(self, config) -> None:
+        """Refuse an object-type parameter this assembly type does not accept.
+
+        From the constructor, before anything is registered, for the reason
+        'PartFactory._validate_object_type_parameters' gives: the refusal is
+        then filed against this one object and enforced, rather than reported
+        about an object that goes on being built. An alias and an enrich are let
+        through: they stand for another object, whose type is the one asked.
+        """
+        parameters = config.get("parameters") or {}
+        if not isinstance(parameters, dict) or config.get("type") in ("alias", "enrich"):
+            return
+        for name in sorted(parameters):
+            if name in self.POLICED_OBJECT_TYPE_PARAMETERS and name not in self.ACCEPTED_OBJECT_TYPE_PARAMETERS:
+                raise factory.ObjectTypeParameterException(
+                    self.OBJECT_KIND, config.get("type"), config.get("name"), name
+                )
 
     def _create(self, config) -> None:
         self.assembly = self.OBJECT_CLASS(self.target_project.name, config)
+        # What this type contributes, so reading one of them off the assembly
+        # applies the type's default (see 'ShapeConfiguration.get_object_type_parameter').
+        self.assembly.object_type_parameters = self.ACCEPTED_OBJECT_TYPE_PARAMETERS
         self.assembly.instantiate = lambda assembly_self: self.instantiate(assembly_self)
         self.assembly._prepare = lambda shape_self: self.prepare_async(shape_self)
         self.assembly._subassemblies = lambda assembly_self: self.subassemblies_async(assembly_self)

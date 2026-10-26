@@ -330,6 +330,16 @@ def test_schema_a_mating_does_not_take_what_it_cannot_mean(mating):
     failure({"interfaces": {"a": {"mates": {"b": mating}}}})
 
 
+def test_schema_a_port_may_say_it_cuts_its_own_way_in():
+    """'selfScrew' on a port says what it says on an interface, of that port
+    alone: a nail's point makes its own hole whatever the nail goes into. An
+    interface's port and a part's own take it alike, and only as a boolean."""
+    tip = {"location": [[0, 0, 0], [0, 0, 1], 0], "selfScrew": True}
+    validate({"interfaces": {"nail-point": {"ports": {"tip": tip}}}})
+    validate({"parts": {"pin": {"type": "stl", "path": "pin.stl", "ports": {"tip": tip}}}})
+    failure({"interfaces": {"nail-point": {"ports": {"tip": {**tip, "selfScrew": "yes"}}}}})
+
+
 # The instances of an interface that an interface inherits, or that a part or an
 # assembly implements. One class reads both sections ('InterfaceInherits'), and
 # they take the same forms - every case below runs against each of them - but

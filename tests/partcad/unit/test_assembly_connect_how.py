@@ -216,6 +216,74 @@ def test_connect_how_hold_unknown_instance_falls_back():
     assert how.hold_with == [ConnectHold("//test:grip", "left")]
 
 
+def _nail(config=None):
+    """A nail whose grip is built from its shank, as '//pub/std/fastener/nail' builds it."""
+    return _FakeItem(
+        config,
+        {
+            "//pub/std/fastener/nail:nail-grip;d=4.1148": {"": {"left-grip": "left-grip", "right-grip": "right-grip"}},
+            "//pub/std/fastener/nail:m-thru;depth=3,size=4": {"": {"m": "m"}},
+        },
+        project_name="//pub/std/fastener/nail/imperial",
+    )
+
+
+def test_connect_how_hold_names_a_parametrized_interface_by_its_values():
+    """An interface built from parameters is implemented under the name it was
+    built with, and a hold that says the same values names it - spelled however
+    they are spelled, qualified or not."""
+    grip = ConnectHold("//pub/std/fastener/nail:nail-grip;d=4.1148", "")
+    for spelling in (
+        "nail-grip;d=4.1148",
+        "nail-grip;d=4.11480",
+        "//pub/std/fastener/nail:nail-grip;d=4.1148",
+    ):
+        how = ConnectHow({"holdWith": spelling})
+        how.resolve(_nail(), None)
+        assert how.hold_with == [grip], spelling
+
+    thru = ConnectHold("//pub/std/fastener/nail:m-thru;depth=3,size=4", "")
+    for spelling in ("m-thru;size=4,depth=3", "m-thru;depth=3.0,size=4.0"):
+        how = ConnectHow({"holdWith": spelling})
+        how.resolve(_nail(), None)
+        assert how.hold_with == [thru], spelling
+
+
+def test_connect_how_hold_by_other_values_is_another_interface():
+    how = ConnectHow({"holdWith": "nail-grip;d=4.1"})
+    how.resolve(_nail(), None)
+    assert how.hold_with == [ConnectHold("nail-grip;d=4.1", None)]
+
+
+def test_connect_how_hold_default_names_a_parametrized_interface_by_its_values():
+    """The object's own 'hold' is matched the same way, and so is the
+    'holdInstance' it pairs with it."""
+    how = ConnectHow({"holdWith": "nail-grip;d=4.1148"})
+    how.resolve(_nail({"connect": {"hold": "nail-grip;d=4.11480", "holdInstance": ""}}), None)
+    assert how.hold_with == [ConnectHold("//pub/std/fastener/nail:nail-grip;d=4.1148", "")]
+
+    how = ConnectHow({})
+    how.resolve(_nail({"connect": {"hold": "nail-grip;d=4.11480"}}), None)
+    assert how.hold_with == [ConnectHold("//pub/std/fastener/nail:nail-grip;d=4.1148", "")]
+
+
+def test_connect_how_hold_value_holding_a_colon_keeps_its_package_apart():
+    """The package ends at the first ':' before the parameters. A value may
+    hold one, and splitting at the last ':' made a name of the end of the
+    value - 'air' for both of these, which are two interfaces."""
+    tank = _FakeItem(
+        interfaces={
+            "//test:room;medium=//pub/std/materials:air": {"": {"door": "door"}},
+            "//test:duct;medium=//pub/std/materials:air": {"": {"inlet": "inlet"}},
+        },
+        # Declared elsewhere, so that it is the short name that finds it.
+        project_name="//test/tanks",
+    )
+    how = ConnectHow({"holdWith": "room;medium=//pub/std/materials:air"})
+    how.resolve(tank, None)
+    assert how.hold_with == [ConnectHold("//test:room;medium=//pub/std/materials:air", "")]
+
+
 def test_connect_how_hold_without_interface_metadata():
     """An object with no interfaces at all is not a reason to fail"""
     how = ConnectHow({"holdWith": "grip", "holdWithInstance": "left"})
@@ -273,7 +341,7 @@ def _measured(monkeypatch, length):
     assembly_connect._extent_cache.clear()
     calls = []
 
-    async def fake_extent_z(ctx, shape, frame=None):
+    async def fake_extent_z(ctx, shape, frame=None, cacheable=True):
         calls.append((shape, frame))
         return length
 
@@ -323,7 +391,7 @@ def test_connect_how_push_distance_measurement_failure_is_not_fatal(monkeypatch)
 
     assembly_connect._extent_cache.clear()
 
-    async def boom(ctx, shape, frame=None):
+    async def boom(ctx, shape, frame=None, cacheable=True):
         raise Exception("no CAD runtime here")
 
     monkeypatch.setattr(measure, "extent_z", boom)

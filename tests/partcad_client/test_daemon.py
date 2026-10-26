@@ -192,7 +192,10 @@ def test_stop_all_daemons_reports_only_the_ones_that_went(home):
     willing = FakeDaemon(_workspace(0))
     obstinate = FakeDaemon(_workspace(1), obstinate=True)
     try:
-        stopped = daemon.stop_all_daemons(timeout=1.0)
+        # Three seconds, not one: the obstinate daemon costs the whole of it
+        # whatever it is, and the willing one has to be seen gone within it on
+        # a runner that may be busy with other work.
+        stopped = daemon.stop_all_daemons(timeout=3.0)
         assert stopped == [willing.wdir]
     finally:
         willing.stop()

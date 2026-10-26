@@ -573,11 +573,15 @@ def test_a_declared_timeout_outlasts_the_default(socket_dir):
 
 
 def test_a_closed_window_puts_the_default_back(socket_dir):
+    # A window far longer than the default, so that "gave up on the default"
+    # and "waited out the window" are ten seconds apart rather than a few: the
+    # bound below sits between them with room for a busy runner.
+    window = 15.0
     release = threading.Event()
 
     def slow_then_wedged(session, params):
-        _window(session, timeouts.START, 5.0)
-        _window(session, timeouts.END, 5.0)
+        _window(session, timeouts.START, window)
+        _window(session, timeouts.END, window)
         release.wait(30)
         return "eventually"
 
@@ -587,7 +591,7 @@ def test_a_closed_window_puts_the_default_back(socket_dir):
         started = time.monotonic()
         with pytest.raises(DaemonStalled):
             client.call("slow")
-        assert time.monotonic() - started < 4, "waited for a window that had closed"
+        assert time.monotonic() - started < window - 5, "waited for a window that had closed"
         client.close()
     finally:
         release.set()

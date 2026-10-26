@@ -565,7 +565,11 @@ def test_shared_holders_do_not_wait_for_each_other(allowed, sandbox_root, tmp_pa
     import time
 
     lock = {"path": str(sandbox_root / "v-env-3.11.lock")}
-    slow = script(tmp_path, "import time; time.sleep(1)", name="wrapper.py")
+    # Three seconds each: one after another is nine, and the bound below -- two
+    # of them -- leaves three seconds for starting three interpreters at once on
+    # a runner that may be busy with other work (every pytest-xdist worker is).
+    held = 3
+    slow = script(tmp_path, "import time; time.sleep(%d)" % held, name="wrapper.py")
     threads = [
         threading.Thread(
             target=service.handle_execute_command,
@@ -580,7 +584,7 @@ def test_shared_holders_do_not_wait_for_each_other(allowed, sandbox_root, tmp_pa
     for thread in threads:
         thread.join()
 
-    assert time.monotonic() - began < 2.5
+    assert time.monotonic() - began < 2 * held
 
 
 def test_the_lock_reaches_the_handler_through_the_protocol(monkeypatch):

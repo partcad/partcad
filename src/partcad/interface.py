@@ -80,6 +80,14 @@ class InterfacePort:
     # 'pc info' reports what the port was built from rather than only the name
     # it resolved to.
     sketch_params: dict
+    # Whether this port cuts its own way into whatever it is joined to - a
+    # self-tapping screw's thread, a nail's point. Said of the port, it holds
+    # for every joint made through it, and that includes a connection that
+    # names the port alone ('withPort:', 'connectPorts:'): that one looks up
+    # no interface and no mating that could say it instead. Carried by every
+    # copy of the port - into what implements its interface, and out of an
+    # assembly that maps it.
+    self_screw: bool = False
 
     def __init__(
         self,
@@ -89,9 +97,22 @@ class InterfacePort:
         sketch: Sketch = None,
         location: Location = None,
         sketch_params: dict = None,
+        self_screw: bool = None,
     ):
         self.name = name
         self.sketch_params = dict(sketch_params) if sketch_params else {}
+
+        if self_screw is not None:
+            self.self_screw = bool(self_screw)
+        elif config.get("selfScrew", None) is not None:
+            # Only a real boolean, for the reason 'ConnectHow._flag' gives: a
+            # quoted "false" is a non-empty string and would read as true.
+            if isinstance(config["selfScrew"], bool):
+                self.self_screw = config["selfScrew"]
+            else:
+                pc_logging.error(
+                    "Port %s: 'selfScrew' must be true or false, ignoring: %r" % (name, config["selfScrew"])
+                )
 
         if location is not None:
             self.location = location
@@ -983,6 +1004,7 @@ class Interface:
                     sketch=port_sketch,
                     location=inherited_location,
                     sketch_params=port_sketch_params,
+                    self_screw=port.self_screw,
                 )
 
             # TODO(clairbee): prepend the instance name to the param name

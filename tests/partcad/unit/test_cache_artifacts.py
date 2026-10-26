@@ -3,13 +3,14 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Unit tests for caching what an analysis or a simulation produced.
+"""Unit tests for caching what an analysis, a simulation or an output file produced.
 
 `partcad.cache_artifacts` on its own first - what goes into an entry, what comes
-back out, and what is refused - and then the two places that use it: a second
-`pc cae` of an unchanged part and a second `pc sim` of an unchanged object
-must be reads, with the files back where the caller expects them, and anything
-that changes the question must be a run.
+back out, and what is refused - and then the places that use it: a second
+`pc cae`, `pc cam`, `pc sim`, `pc export` or `pc render` of an unchanged object
+must be a read, with the files back where the caller expects them, and anything
+that changes the question must be a run. And the same for PartCAD's own
+wrappers: the IDE's tessellation, an instruction book's PDF, a measurement.
 
 No solver, no simulator and no sandbox: the implementation is stubbed where it
 would be started, and counted.
@@ -26,10 +27,13 @@ import types
 import pytest
 
 import partcad as pc
-from partcad import cache_artifacts, cae, simulation
+from partcad import cache_artifacts, cae
+from partcad import document as pc_document
+from partcad import document_pdf, measure, runtime, shape_envelope, shape_gltf, simulation
 from partcad.cache import Cache
 from partcad.cache_backend import ARTIFACT_KEY
 from partcad.cache_hash import CacheHash
+from partcad.geom import Location
 
 
 def _cache(tmp_path, max_size=10 * 1024 * 1024, min_size=100) -> Cache:
@@ -790,125 +794,566 @@ def test_what_a_run_writes_into_its_package_is_not_part_of_the_question(analysed
 
 
 # --------------------------------------------------------------------------- #
-# `pc render`                                                                 #
+# `pc export` and `pc render`                                                 #
 # --------------------------------------------------------------------------- #
 
-PICTURES = textwrap.dedent("""
-    name: //render-cache
+EXPORT_PACKAGE = textwrap.dedent("""
+    name: //export-cache
     parts:
       bracket:
         type: step
         path: bracket.step
-    render:
-      sketch:
-        path: draw.py
-        extension: txt
     export:
-      dump:
-        path: draw.py
-        extension: dump
+      toy:
+        path: write.py
+        extension: toy
     """)
 
 
 @pytest.fixture
-def drawn(tmp_path, monkeypatch):
-    """A part whose drawing is a counter: the file it writes says which run it was."""
+def exported(tmp_path, monkeypatch):
+    """A part whose file type is a counter: the file says which run wrote it.
+
+    What the stub is asked decides what it does, so each test can be the
+    implementation it needs: 'beside' lists what it writes next to the file,
+    named the way an exporter names them - after the file, as a suffix of its
+    stem ('_meshes/body.stl' beside 'bracket.toy' is 'bracket_meshes/body.stl')
+    - and says it wrote; 'link' has the file name those, the way a URDF names
+    its meshes; 'undeclared' keeps it from saying what it wrote at all, 'silent'
+    has it report success without writing anything, and 'fail' has it fail.
+    """
     root = tmp_path / "package"
     root.mkdir()
-    (root / "partcad.yaml").write_text(PICTURES)
-    (root / "draw.py").write_text("def process(path, request):\n    return {'success': True}\n")
+    (root / "partcad.yaml").write_text(EXPORT_PACKAGE)
+    (root / "write.py").write_text("def process(path, request):\n    return {'success': True, 'files': []}\n")
     (root / "bracket.step").write_text("ISO-10303-21; bracket")
     ctx = pc.Context(str(root))
     ctx.cache_artifacts = _cache(tmp_path)
-
-    part = ctx.get_part("//render-cache:bracket")
     runs = []
-    behaviour = {"write": True, "fail": False}
 
-    async def get_wrapped(_ctx):
+    async def get_wrapped(self, _ctx):
         return {"brep": b"geometry"}
 
-    async def run(_ctx, _impl, _script, request, final_filepath):
+    async def run(self, _ctx, _impl, _script, request, final_filepath):
         runs.append(request)
-        if behaviour["write"]:
+        if request.get("fail"):
+            return {"success": False, "exception": "exporter crashed"}
+        directory = os.path.dirname(final_filepath)
+        stem = os.path.splitext(os.path.basename(final_filepath))[0]
+        beside = [name if name.startswith("..") else stem + name for name in request.get("beside") or []]
+        if not request.get("silent"):
             with open(final_filepath, "w") as f:
                 f.write("run %d" % len(runs))
-        if behaviour["fail"]:
-            return {"success": False, "exception": "no cairo"}
-        return {"success": True, "warnings": ["drawn coarse"]}
+                if request.get("link"):
+                    f.write(" using %s" % ", ".join(beside))
+        for name in beside:
+            path = os.path.join(directory, name)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write("%s of run %d" % (name, len(runs)))
+        result = {"success": True, "warnings": ["coarse tessellation"]}
+        if not request.get("undeclared"):
+            result["files"] = beside
+        return result
 
-    monkeypatch.setattr(part, "get_wrapped", get_wrapped)
-    monkeypatch.setattr(part, "_run_implementation_async", run)
-    return ctx, part, runs, behaviour, root
+    monkeypatch.setattr(pc.shape.Shape, "get_wrapped", get_wrapped)
+    monkeypatch.setattr(pc.shape.Shape, "_run_implementation_async", run)
+    return ctx, ctx.get_part("//export-cache:bracket"), runs, root
 
 
-def _draw(ctx, part, tmp_path, file_type="sketch", where="out", **kwargs):
-    directory = tmp_path / where
-    _run(part.render_async(ctx, file_type, output_dir=str(directory), **kwargs))
-    return directory
+def _export(ctx, part, directory, name="bracket.toy", **kwargs):
+    path = os.path.join(str(directory), name)
+    _run(part.render_async(ctx, "toy", filepath=path, **kwargs))
+    return path
 
 
-def test_the_same_picture_twice_is_drawn_once(drawn, tmp_path):
-    ctx, part, runs, _behaviour, _root = drawn
+def test_the_same_file_twice_runs_the_exporter_once(exported, tmp_path):
+    ctx, part, runs, _root = exported
 
-    _draw(ctx, part, tmp_path)
-    elsewhere = _draw(ctx, part, tmp_path, where="elsewhere")
+    first = _export(ctx, part, tmp_path / "out")
+    os.remove(first)
+    second = _export(ctx, part, tmp_path / "elsewhere")
 
     assert len(runs) == 1
-    # Back where *this* call asked for it, and the picture the run drew.
-    (written,) = list(elsewhere.rglob("*.txt"))
-    assert written.read_text() == "run 1"
+    # Back where *this* call asked for it, and the file the run wrote.
+    with open(second) as f:
+        assert f.read() == "run 1"
 
 
-def test_another_picture_is_drawn_again(drawn, tmp_path):
-    ctx, part, runs, _behaviour, root = drawn
+def test_a_cached_file_says_what_the_run_said(exported, tmp_path, caplog):
+    ctx, part, runs, _root = exported
 
-    _draw(ctx, part, tmp_path)
-    _draw(ctx, part, tmp_path, width=10)
+    _export(ctx, part, tmp_path / "out")
+    caplog.clear()
+    _export(ctx, part, tmp_path / "out")
+
+    assert len(runs) == 1
+    assert "coarse tessellation" in caplog.text
+
+
+def test_another_question_is_another_file(exported, tmp_path):
+    ctx, part, runs, root = exported
+
+    _export(ctx, part, tmp_path / "out")
+    _export(ctx, part, tmp_path / "out", tolerance=0.5)
     assert len(runs) == 2
 
-    # The implementation changed: so did the picture it draws.
-    (root / "draw.py").write_text("def process(path, request):\n    return {'success': True, 'v': 2}\n")
-    _draw(ctx, part, tmp_path)
+    # The implementation changed: the question is asked again.
+    (root / "write.py").write_text("def process(path, request):\n    return {'success': True, 'files': ['v2']}\n")
+    _export(ctx, part, tmp_path / "out")
     assert len(runs) == 3
 
 
-def test_a_failed_drawing_is_not_remembered(drawn, tmp_path):
-    ctx, part, runs, behaviour, _root = drawn
-    behaviour["fail"] = True
+def test_a_file_asked_for_by_another_name_is_put_back_under_it(exported, tmp_path):
+    """The name is not part of the question: where the file goes is."""
+    ctx, part, runs, _root = exported
 
-    _draw(ctx, part, tmp_path)
-    _draw(ctx, part, tmp_path)
+    _export(ctx, part, tmp_path / "out", name="bracket.toy")
+    renamed = _export(ctx, part, tmp_path / "elsewhere", name="renamed.toy")
+
+    assert len(runs) == 1
+    with open(renamed) as f:
+        assert f.read() == "run 1"
+
+
+def test_what_was_written_beside_the_file_is_named_after_the_next_one(exported, tmp_path):
+    ctx, part, runs, _root = exported
+    beside = ["_meshes/body.stl", ".bin"]
+
+    _export(ctx, part, tmp_path / "out", beside=beside)
+    second = _export(ctx, part, tmp_path / "elsewhere", name="renamed.toy", beside=beside)
+
+    assert len(runs) == 1
+    with open(second) as f:
+        assert f.read() == "run 1"
+    # Named after the file asked for, holding what the run wrote.
+    with open(tmp_path / "elsewhere" / "renamed_meshes" / "body.stl") as f:
+        assert f.read() == "bracket_meshes/body.stl of run 1"
+    with open(tmp_path / "elsewhere" / "renamed.bin") as f:
+        assert f.read() == "bracket.bin of run 1"
+
+
+def test_a_name_ending_in_another_suffix_is_produced_again(exported, tmp_path):
+    """Nothing says what 'x.toyz' calls the other file: the hit is dismissed and the run happens."""
+    ctx, part, runs, _root = exported
+
+    _export(ctx, part, tmp_path / "out", beside=[".colors.txt"])
+    # The suffix in another case is the same suffix.
+    _export(ctx, part, tmp_path / "out", name="X.TOY", beside=[".colors.txt"])
+    assert len(runs) == 1
+    assert (tmp_path / "out" / "X.colors.txt").read_text() == "bracket.colors.txt of run 1"
+
+    _export(ctx, part, tmp_path / "out", name="x.toyz", beside=[".colors.txt"])
     assert len(runs) == 2
 
 
-def test_a_drawing_that_wrote_nothing_is_not_remembered(drawn, tmp_path):
-    """The file at the path may be a previous run's, and would be handed out as this one's."""
-    ctx, part, runs, behaviour, _root = drawn
-    out = tmp_path / "out"
-    _draw(ctx, part, tmp_path)
-    behaviour["write"] = False
-    ctx.cache_artifacts = _cache(tmp_path / "fresh")
+def test_files_that_name_each_other_are_produced_again_under_another_name(exported, tmp_path):
+    """Renamed, the file would name meshes that are not there; moved, it names them still."""
+    ctx, part, runs, _root = exported
+    beside = ["_meshes/body.stl"]
 
-    _draw(ctx, part, tmp_path)
-    _draw(ctx, part, tmp_path)
-    assert len(runs) == 3
-    assert [path.read_text() for path in out.rglob("*.txt")] == ["run 1"]
+    _export(ctx, part, tmp_path / "out", beside=beside, link=True)
+    moved = _export(ctx, part, tmp_path / "elsewhere", beside=beside, link=True)
+    assert len(runs) == 1
+    with open(moved) as f:
+        assert f.read() == "run 1 using bracket_meshes/body.stl"
 
-
-def test_an_export_is_not_cached(drawn, tmp_path):
-    """An exporter may write files beside the one asked for, and the cache would hold only that one."""
-    ctx, part, runs, _behaviour, _root = drawn
-
-    _draw(ctx, part, tmp_path, file_type="dump")
-    _draw(ctx, part, tmp_path, file_type="dump")
+    _export(ctx, part, tmp_path / "out", name="renamed.toy", beside=beside, link=True)
     assert len(runs) == 2
 
 
-def test_a_part_that_is_not_cached_is_drawn_every_time(drawn, tmp_path, monkeypatch):
-    ctx, part, runs, _behaviour, _root = drawn
+def test_an_exporter_that_does_not_say_what_it_wrote_is_run_every_time(exported, tmp_path):
+    """Its meshes could be anywhere beside the file, and a file without them is worse than a run."""
+    ctx, part, runs, _root = exported
+
+    _export(ctx, part, tmp_path / "out", undeclared=True)
+    _export(ctx, part, tmp_path / "out", undeclared=True)
+    assert len(runs) == 2
+
+
+def test_a_file_written_outside_the_directory_is_not_remembered(exported, tmp_path):
+    """It could not be put back where it was, relative to the file, wherever that is next."""
+    ctx, part, runs, _root = exported
+
+    _export(ctx, part, tmp_path / "out" / "deep", beside=["../outside.bin"])
+    _export(ctx, part, tmp_path / "out" / "deep", beside=["../outside.bin"])
+    assert len(runs) == 2
+
+
+def test_a_file_the_run_did_not_write_is_not_remembered(exported, tmp_path):
+    """Nothing clears the path first, so a file there afterwards proves nothing by itself."""
+    ctx, part, runs, _root = exported
+    stale = tmp_path / "out" / "bracket.toy"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("last week's")
+
+    _export(ctx, part, tmp_path / "out", silent=True)
+    _export(ctx, part, tmp_path / "out", silent=True)
+    assert len(runs) == 2
+
+
+def test_a_failed_export_is_not_remembered(exported, tmp_path):
+    ctx, part, runs, _root = exported
+
+    _export(ctx, part, tmp_path / "out", fail=True)
+    _export(ctx, part, tmp_path / "out", fail=True)
+    assert len(runs) == 2
+
+
+def test_a_part_that_is_not_cached_is_exported_every_time(exported, tmp_path, monkeypatch):
+    ctx, part, runs, _root = exported
     monkeypatch.setattr(part, "cacheable", False)
 
-    _draw(ctx, part, tmp_path)
-    _draw(ctx, part, tmp_path)
+    _export(ctx, part, tmp_path / "out")
+    _export(ctx, part, tmp_path / "out")
     assert len(runs) == 2
+
+
+def test_a_file_cached_in_one_sandbox_is_found_from_another(exported, tmp_path, monkeypatch):
+    ctx, part, runs, _root = exported
+    _export(ctx, part, tmp_path / "out")
+
+    monkeypatch.setattr(ctx.user_config, "python_sandbox", "remote")
+    monkeypatch.setattr(ctx, "get_python_runtime", _no_runtime)
+    monkeypatch.setattr(ctx, "get_container_runtime", _no_runtime)
+    _export(ctx, part, tmp_path / "out")
+
+    assert len(runs) == 1
+
+
+def test_a_view_is_keyed_as_the_links_it_keeps(exported, tmp_path):
+    """A filtered view has no key of its own: the object's and the filter are what it is."""
+    ctx, part, runs, _root = exported
+    project = ctx.get_project("//export-cache")
+    impl, path = part.output_getopts(ctx, "toy", project, filepath=str(tmp_path / "out" / "bracket.toy"))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    async def once(view):
+        script = await part._materialize_output_script(ctx, impl)
+        request = {"wrapped": {"brep": b"view"}, "shape_name": part.name}
+        return await part._output_run_async(ctx, impl, script, request, path, view=view)
+
+    def view(key):
+        return types.SimpleNamespace(key=lambda: key)
+
+    _run(once(view("{arm:*}")))
+    _run(once(view("{arm:*}")))
+    _run(once(view("{base:*}")))
+    _run(once(None))
+    assert len(runs) == 3
+
+
+# --------------------------------------------------------------------------- #
+# Naming the files of an answer after the next path asked for                 #
+# --------------------------------------------------------------------------- #
+
+
+def _written(directory, *names, content=None):
+    for name in names:
+        path = directory / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content.get(name, name) if content else name)
+    return [str(directory / name) for name in names]
+
+
+def test_a_layout_is_the_suffixes_of_a_shared_prefix(tmp_path):
+    _written(tmp_path, "logo.urdf", "logo_meshes/bolt.stl", "logo_meshes/bone.stl")
+
+    layout = cache_artifacts.files_layout(
+        str(tmp_path / "logo.urdf"), ["logo_meshes/bolt.stl", str(tmp_path / "logo_meshes" / "bone.stl")]
+    )
+
+    assert layout["suffix"] == ".urdf"
+    assert layout["others"] == ["_meshes/bolt.stl", "_meshes/bone.stl"]
+    assert layout["stem"] == "logo"
+    assert cache_artifacts.placed_files(layout, str(tmp_path / "next" / "xyz.urdf")) == [
+        str(tmp_path / "next" / "xyz.urdf"),
+        str(tmp_path / "next" / "xyz_meshes" / "bolt.stl"),
+        str(tmp_path / "next" / "xyz_meshes" / "bone.stl"),
+    ]
+
+
+def test_a_suffix_is_matched_in_any_case_and_in_no_other_spelling(tmp_path):
+    """'abc.jpg' with 'abc.colors.txt' says what 'xyz.JPG' writes, and nothing about 'xyz.JPEG'."""
+    _written(tmp_path, "abc.jpg", "abc.colors.txt")
+    layout = cache_artifacts.files_layout(str(tmp_path / "abc.jpg"), ["abc.colors.txt"])
+
+    assert cache_artifacts.placed_files(layout, str(tmp_path / "xyz.JPG")) == [
+        str(tmp_path / "xyz.JPG"),
+        str(tmp_path / "xyz.colors.txt"),
+    ]
+    assert cache_artifacts.placed_files(layout, str(tmp_path / "xyz.JPEG")) is None
+
+
+def test_a_prefix_is_never_cut_inside_a_word(tmp_path):
+    _written(tmp_path, "abc.jpg", "abc.jpeg")
+    layout = cache_artifacts.files_layout(str(tmp_path / "abc.jpg"), ["abc.jpeg"])
+
+    assert (layout["suffix"], layout["others"]) == (".jpg", [".jpeg"])
+
+
+def test_one_file_goes_wherever_it_is_asked_for(tmp_path):
+    _written(tmp_path, "bracket.svg")
+    layout = cache_artifacts.files_layout(str(tmp_path / "bracket.svg"), [])
+
+    assert layout["suffix"] == "" and layout["others"] == []
+    assert cache_artifacts.placed_files(layout, str(tmp_path / "x" / "Other.SVG")) == [
+        str(tmp_path / "x" / "Other.SVG")
+    ]
+
+
+def test_files_named_otherwise_come_back_only_under_the_same_name(tmp_path):
+    """Sharing nothing but the directory, the names are the names: moved, not renamed."""
+    _written(tmp_path, "robot.urdf", "meshes/body.stl")
+    layout = cache_artifacts.files_layout(str(tmp_path / "robot.urdf"), ["meshes/body.stl"])
+
+    assert (layout["suffix"], layout["others"], layout["stem"]) == ("robot.urdf", ["meshes/body.stl"], "")
+    assert cache_artifacts.placed_files(layout, str(tmp_path / "next" / "robot.urdf"))[1] == str(
+        tmp_path / "next" / "meshes" / "body.stl"
+    )
+    assert cache_artifacts.placed_files(layout, str(tmp_path / "next" / "other.urdf")) is None
+
+
+def test_files_that_name_each_other_can_move_but_not_be_renamed(tmp_path):
+    _written(tmp_path, "cube.gltf", "cube.bin", content={"cube.gltf": '{"uri": "cube.bin"}', "cube.bin": "\0"})
+    layout = cache_artifacts.files_layout(str(tmp_path / "cube.gltf"), ["cube.bin"])
+
+    assert layout["linked"] is True
+    assert cache_artifacts.placed_files(layout, str(tmp_path / "moved" / "cube.gltf")) is not None
+    assert cache_artifacts.placed_files(layout, str(tmp_path / "moved" / "xyz.gltf")) is None
+
+
+def test_files_that_name_their_directory_cannot_move(tmp_path):
+    _written(
+        tmp_path,
+        "cube.gltf",
+        "cube.bin",
+        content={"cube.gltf": '{"uri": "%s"}' % (tmp_path / "cube.bin"), "cube.bin": "\0"},
+    )
+    layout = cache_artifacts.files_layout(str(tmp_path / "cube.gltf"), ["cube.bin"])
+
+    assert cache_artifacts.placed_files(layout, str(tmp_path / "cube.gltf")) is not None
+    assert cache_artifacts.placed_files(layout, str(tmp_path / "moved" / "cube.gltf")) is None
+
+
+@pytest.mark.parametrize("other", ["../escape.bin", "/elsewhere/escape.bin"])
+def test_a_file_outside_the_directory_cannot_be_laid_out(tmp_path, other):
+    (tmp_path / "out").mkdir()
+    _written(tmp_path / "out", "cube.gltf")
+    assert cache_artifacts.files_layout(str(tmp_path / "out" / "cube.gltf"), [other]) is None
+
+
+@pytest.mark.parametrize("other", ["/../../escape", "_x/../../../escape", "a\\b"])
+def test_a_layout_read_from_a_tier_cannot_write_outside_the_directory(tmp_path, other):
+    """An entry is read from tiers others may write to, so its names are not trusted."""
+    layout = {"suffix": ".gltf", "others": [other], "stem": "cube", "linked": False}
+    assert cache_artifacts.placed_files(layout, str(tmp_path / "cube.gltf")) is None
+
+
+# --------------------------------------------------------------------------- #
+# What an implementation says it wrote                                        #
+# --------------------------------------------------------------------------- #
+
+
+def _wrapper_export():
+    import sys
+
+    sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
+    import wrapper_export
+
+    return wrapper_export
+
+
+@pytest.mark.parametrize(
+    "said, passed_on",
+    [
+        ("[]", []),
+        ("['meshes/a.stl']", ["meshes/a.stl"]),
+        (None, None),
+        ("'meshes/a.stl'", None),
+    ],
+)
+def test_what_an_implementation_wrote_reaches_the_core(tmp_path, said, passed_on):
+    """An empty list is passed on: it is a statement, and saying nothing is not."""
+    script = tmp_path / "write.py"
+    files = "" if said is None else ", 'files': %s" % said
+    script.write_text("def process(path, request):\n    return {'success': True%s}\n" % files)
+
+    result = _wrapper_export().process(str(script), str(tmp_path / "out.toy"), {})
+
+    assert result["success"] is True
+    assert result.get("files") == passed_on
+
+
+def test_every_built_in_implementation_says_what_it_wrote():
+    """Or the files PartCAD writes itself would never be cached.
+
+    Read rather than run, since running them takes a CAD sandbox: every dict
+    an export or a render implementation returns for a success has to say what
+    else it wrote, if only that it wrote nothing.
+    """
+    import ast
+
+    builtin = os.path.join(os.path.dirname(pc.__file__), "builtin")
+    checked = 0
+    for section in ("export", "render"):
+        directory = os.path.join(builtin, section)
+        for name in sorted(os.listdir(directory)):
+            if not name.endswith(".py"):
+                continue
+            with open(os.path.join(directory, name), encoding="utf-8") as f:
+                tree = ast.parse(f.read())
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Dict):
+                    continue
+                keys = {key.value: value for key, value in zip(node.keys, node.values) if isinstance(key, ast.Constant)}
+                success = keys.get("success")
+                if isinstance(success, ast.Constant) and success.value is True:
+                    checked += 1
+                    assert "files" in keys, "%s/%s returns a success without 'files'" % (section, name)
+    assert checked >= 10
+
+
+# --------------------------------------------------------------------------- #
+# PartCAD's own wrappers: the IDE's tessellation, a PDF, a measurement        #
+# --------------------------------------------------------------------------- #
+
+
+class _Sandbox:
+    """A runtime that answers with 'answer(request, run)' and counts how often it was asked."""
+
+    def __init__(self, answer):
+        self.answer = answer
+        self.runs = []
+
+    async def ensure_async(self, *_args, **_kwargs):
+        return None
+
+    async def run_async(self, command, request_serialized, **_kwargs):
+        # Resolved the way a real runtime resolves it, at the spawn: the request
+        # may be the callable that serializes it (see 'runtime.stdin_bytes').
+        request = shape_envelope.deserialize(runtime.stdin_bytes(request_serialized))
+        self.runs.append(request)
+        return 0, shape_envelope.serialize(self.answer(command, request, len(self.runs))), ""
+
+
+def _context(tmp_path, sandbox):
+    return types.SimpleNamespace(cache_artifacts=_cache(tmp_path), get_python_runtime=lambda **_kwargs: sandbox)
+
+
+def _tessellated(_command, request, run):
+    if request["tree"].get("fail"):
+        return {"success": False, "exception": "no OCP"}
+    return {"success": True, "tree": {"name": request["tree"]["name"], shape_envelope.KEY_GLTF: b"glb of run %d" % run}}
+
+
+def test_a_tessellation_is_tessellated_once(tmp_path):
+    sandbox = _Sandbox(_tessellated)
+    ctx = _context(tmp_path, sandbox)
+    tree = {"name": "cube", "brep": b"geometry"}
+
+    first = _run(shape_gltf.convert_async(ctx, tree))
+    # The next process asks without a sandbox to hand: it needs none.
+    ctx.get_python_runtime = _no_runtime
+    second = _run(shape_gltf.convert_async(ctx, dict(tree)))
+
+    assert len(sandbox.runs) == 1
+    assert second == first
+    assert second[shape_envelope.KEY_GLTF] == b"glb of run 1"
+
+
+def test_another_tree_is_another_tessellation(tmp_path):
+    """Keyed on what the sandbox is handed, the sketches of the ports included."""
+    sandbox = _Sandbox(_tessellated)
+    ctx = _context(tmp_path, sandbox)
+
+    _run(shape_gltf.convert_async(ctx, {"name": "cube", "brep": b"geometry"}))
+    _run(shape_gltf.convert_async(ctx, {"name": "cube", "brep": b"other geometry"}))
+    _run(shape_gltf.convert_async(ctx, {"name": "cube", "brep": b"geometry"}, tolerance=0.01))
+    assert len(sandbox.runs) == 3
+
+
+def test_a_tessellation_of_what_is_not_cached_is_not_remembered(tmp_path):
+    sandbox = _Sandbox(_tessellated)
+    ctx = _context(tmp_path, sandbox)
+    tree = {"name": "cube", "brep": b"geometry"}
+
+    _run(shape_gltf.convert_async(ctx, tree, cacheable=False))
+    _run(shape_gltf.convert_async(ctx, tree, cacheable=False))
+    assert len(sandbox.runs) == 2
+
+
+def test_a_failed_tessellation_is_not_remembered(tmp_path):
+    sandbox = _Sandbox(_tessellated)
+    ctx = _context(tmp_path, sandbox)
+    tree = {"name": "cube", "brep": b"geometry", "fail": True}
+
+    for _ in range(2):
+        with pytest.raises(Exception, match="no OCP"):
+            _run(shape_gltf.convert_async(ctx, tree))
+    assert len(sandbox.runs) == 2
+
+
+def _composed(command, _request, run):
+    with open(command[1], "w") as f:
+        f.write("pdf of run %d" % run)
+    return {"success": True}
+
+
+def _book(picture):
+    image = pc_document.Image(file=str(picture), alt="the widget")
+    return pc_document.Document(
+        title="widget",
+        pages=[pc_document.Page(blocks=[pc_document.Paragraph("A widget."), pc_document.ImageRow(images=[image])])],
+    )
+
+
+def test_a_book_is_composed_once(tmp_path):
+    """Its pictures are drawn into a new temporary directory every time, so they key by content."""
+    sandbox = _Sandbox(_composed)
+    ctx = _context(tmp_path, sandbox)
+    for directory in ("first", "second"):
+        (tmp_path / directory).mkdir()
+        (tmp_path / directory / "widget.svg").write_text("<svg/>")
+
+    _run(document_pdf.render_pdf_async(ctx, _book(tmp_path / "first" / "widget.svg"), str(tmp_path / "a.pdf")))
+    _run(document_pdf.render_pdf_async(ctx, _book(tmp_path / "second" / "widget.svg"), str(tmp_path / "b.pdf")))
+
+    assert len(sandbox.runs) == 1
+    assert (tmp_path / "b.pdf").read_text() == "pdf of run 1"
+
+
+def test_a_book_whose_picture_changed_is_composed_again(tmp_path):
+    sandbox = _Sandbox(_composed)
+    ctx = _context(tmp_path, sandbox)
+    picture = tmp_path / "widget.svg"
+
+    picture.write_text("<svg/>")
+    _run(document_pdf.render_pdf_async(ctx, _book(picture), str(tmp_path / "a.pdf")))
+    picture.write_text("<svg><path/></svg>")
+    _run(document_pdf.render_pdf_async(ctx, _book(picture), str(tmp_path / "a.pdf")))
+    _run(document_pdf.render_pdf_async(ctx, _book(picture), str(tmp_path / "a.pdf"), reproducible=True))
+    _run(document_pdf.render_pdf_async(ctx, _book(picture), str(tmp_path / "a.pdf"), cacheable=False))
+
+    assert len(sandbox.runs) == 4
+
+
+def _measured(_command, _request, _count):
+    return {"success": True, "result": [0.0, 0.0, 0.0, 1.0, 2.0, 3.0]}
+
+
+def test_a_measurement_is_measured_once(tmp_path):
+    sandbox = _Sandbox(_measured)
+    ctx = _context(tmp_path, sandbox)
+    shape = {"brep": b"geometry"}
+
+    assert _run(measure.extent_z(ctx, shape)) == 3.0
+    assert _run(measure.extent_z(ctx, shape)) == 3.0
+    assert len(sandbox.runs) == 1
+
+    # Measured from somewhere else, it is another measurement.
+    _run(measure.extent_z(ctx, shape, Location([[0, 0, 5], [0, 0, 1], 0])))
+    assert len(sandbox.runs) == 2
+
+    _run(measure.extent_z(ctx, shape, cacheable=False))
+    assert len(sandbox.runs) == 3

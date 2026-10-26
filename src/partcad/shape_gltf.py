@@ -27,6 +27,7 @@ a drawable tree asks the shape for one: 'shape.get_representation(ctx, "gltf")'.
 
 import math
 
+from . import cache_artifacts
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, wrapper
 from .process_crash import describe_exit_code
@@ -166,22 +167,25 @@ def tolerance_for(tree):
     return min(max(size / SCREEN_DIVISOR, MIN_TOLERANCE), MAX_TOLERANCE)
 
 
-async def in_form_async(ctx, tree, form):
+async def in_form_async(ctx, tree, form, cacheable: bool = True):
     """'tree' with its geometry in 'form', whatever form it arrived in.
 
     The one place that decides what a form means, so that every kind of subject -
     a part, an assembly, an interface - answers 'get_representation()' the same
     way and none of them has to know that glTF is produced by a sandbox.
+
+    'cacheable' is False for a subject that says `cache: false`, whose
+    tessellation is then never remembered (see 'convert_async').
     """
     if form == shape_envelope.FORM_BREP:
         return tree
     shape_envelope.geometry_key(form)
     if tree is None:
         return None
-    return await convert_async(ctx, tree)
+    return await convert_async(ctx, tree, cacheable=cacheable)
 
 
-async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None):
+async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None, cacheable: bool = True):
     """'tree' with its geometry tessellated into glTF, one copy per distinct shape.
 
     'tolerance' is the linear deflection in mm. Left at None - which is how the
@@ -198,17 +202,19 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None):
     geometry and with the reason logged, because the rest of the tree is still
     worth looking at. A sketch made of edges alone is not such a node: its edges
     are drawn as line segments (see 'wrapper_gltf._to_glb').
+
+    **The answer is cached** (see 'partcad.cache_artifacts'), keyed on exactly
+    what the sandbox is handed - the tree, every BREP in it, the sketches of its
+    ports, the tolerances - so that showing an object again, in this process or
+    the next, starts no sandbox. Keyed on the bytes rather than on the subject's
+    own cache key, because the port sketches are attached after the shape cache
+    has answered and no key of the subject covers them. 'cacheable' False - a
+    subject with `cache: false` - is tessellated every time.
     """
     if ctx is None:
         raise ValueError("A context is required to tessellate a shape tree")
     if not shape_envelope.is_node(tree):
         raise ValueError("Not a shape tree: %r" % (list(tree) if isinstance(tree, dict) else type(tree),))
-
-    runtime = ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
-    # Installed one at a time, not concurrently: the order matters because
-    # build123d overwrites the OCP native module cadquery-ocp installs.
-    for dep in _DEPENDENCIES:
-        await runtime.ensure_async(dep)
 
     # Decided here and sent as millimetres. The sandbox is handed a number rather
     # than a policy because the size it would be worked out from is already known
@@ -220,21 +226,37 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None):
         "angularTolerance": DEFAULT_ANGULAR_TOLERANCE if angular_tolerance is None else angular_tolerance,
     }
 
-    # argv[1] is mandatory for every wrapper (wrapper_common.handle_input reads
-    # it as the output path). This one writes no file - the glTF comes back over
-    # the pipe - so it carries the operation name, which is what shows up in
-    # process listings and logs.
-    # A tree is mostly repeats, and 'wrapper_gltf.py' reads its payloads written
-    # once each (see 'shape_envelope.KEY_BREPS') - serialized when the process
-    # starts, for the reason 'runtime.stdin_bytes' gives.
-    exitcode, response_serialized, errors = await runtime.run_async(
-        [wrapper.get("gltf.py"), "gltf"],
-        lambda: shape_envelope.serialize(request, share=True),
+    cache = getattr(ctx, "cache_artifacts", None)
+    artifact = cache_artifacts.wrapper_hash(
+        "%s#gltf" % (tree.get("name") or "tree"),
+        "gltf.py",
+        cache_artifacts.request_key(request) if cacheable else None,
+        _DEPENDENCIES,
     )
-    if exitcode != 0 and not errors:
-        errors = "Failed to tessellate the shape tree (%s)" % describe_exit_code(exitcode)
-    if errors:
-        raise Exception(errors)
+    response_serialized = await cache_artifacts.restore_response_async(cache, artifact)
+    cached = response_serialized is not None
+    if not cached:
+        runtime = ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
+        # Installed one at a time, not concurrently: the order matters because
+        # build123d overwrites the OCP native module cadquery-ocp installs.
+        for dep in _DEPENDENCIES:
+            await runtime.ensure_async(dep)
+
+        # argv[1] is mandatory for every wrapper (wrapper_common.handle_input reads
+        # it as the output path). This one writes no file - the glTF comes back over
+        # the pipe - so it carries the operation name, which is what shows up in
+        # process listings and logs.
+        # A tree is mostly repeats, and 'wrapper_gltf.py' reads its payloads written
+        # once each (see 'shape_envelope.KEY_BREPS') - serialized when the process
+        # starts, for the reason 'runtime.stdin_bytes' gives.
+        exitcode, response_serialized, errors = await runtime.run_async(
+            [wrapper.get("gltf.py"), "gltf"],
+            lambda: shape_envelope.serialize(request, share=True),
+        )
+        if exitcode != 0 and not errors:
+            errors = "Failed to tessellate the shape tree (%s)" % describe_exit_code(exitcode)
+        if errors:
+            raise Exception(errors)
 
     result = shape_envelope.deserialize(response_serialized)
     if not result.get("success", False):
@@ -254,6 +276,11 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None):
     converted = result.get("tree")
     if not shape_envelope.is_node(converted):
         raise Exception("The tessellation produced no shape tree")
+    if not cached:
+        # Only an answer is remembered: everything that failed has raised by
+        # now. A tree with a node that would not tessellate is an answer - the
+        # same tree gives the same nodes nothing to draw next time too.
+        await cache_artifacts.store_response_async(cache, artifact, response_serialized)
 
     # Worth one line in the log: it is the number that decides both how long this
     # took and how big what it produced is, and it is not in the configuration

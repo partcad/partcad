@@ -161,6 +161,70 @@ def test_each_set_of_layers_renders_to_a_file_of_its_own(tmp_path):
     ]
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        "BEND_UP,BEND_DOWN",
+        " BEND_UP , BEND_DOWN ,",
+        ["BEND_UP", "BEND_DOWN"],
+        ("BEND_UP", "BEND_DOWN"),
+    ],
+)
+def test_one_set_of_layers_is_one_instance_however_it_is_handed_over(tmp_path, value):
+    """'include=BEND_UP,BEND_DOWN' in a name, and the same list from an ASSY link or the editor.
+
+    One instance in memory, named the one way a name holds a list, with the
+    list as its value and its file named after it. A list used to be written
+    into the name as Python prints it, beside the text that meant the same, and
+    kept as text in the other: two objects, two cache entries, for one reading.
+    """
+    ctx = _package(tmp_path, {"panel": {"type": "dxf"}})
+    by_name = ctx.get_sketch("//test:panel;include=BEND_UP,BEND_DOWN")
+    handed_over = ctx.get_sketch("//test:panel", {"include": value})
+
+    assert handed_over is by_name
+    assert by_name.name == "panel;include=BEND_UP,BEND_DOWN"
+    assert by_name.config["parameters"]["include"]["default"] == ["BEND_UP", "BEND_DOWN"]
+    assert _layers(by_name, "include") == ["BEND_UP", "BEND_DOWN"]
+    path = by_name._output_filepath({}, str(tmp_path), ".svg")
+    assert os.path.basename(path) == "panel_include_BEND_UP_BEND_DOWN.svg"
+
+
+def test_the_cache_keys_one_set_of_layers_alike_however_it_was_handed_over(tmp_path):
+    """The values a shape is keyed on agree as well as its name, from one context to the next."""
+    _package(tmp_path, {"panel": {"type": "dxf"}})
+    by_name = pc.Context(str(tmp_path)).get_sketch("//test:panel;include=BEND_UP,BEND_DOWN")
+    by_list = pc.Context(str(tmp_path)).get_sketch("//test:panel", {"include": ["BEND_UP", "BEND_DOWN"]})
+    reordered = pc.Context(str(tmp_path)).get_sketch("//test:panel", {"include": ["BEND_DOWN", "BEND_UP"]})
+
+    assert by_name.hash.get() is not None
+    assert by_list.hash.get() == by_name.hash.get()
+    # The order of a list is kept: the same layers read in another order is
+    # another reading, and is named and keyed apart.
+    assert reordered.name == "panel;include=BEND_DOWN,BEND_UP"
+    assert reordered.hash.get() != by_name.hash.get()
+
+
+@pytest.mark.parametrize("value", ["30,40", " 30, 40", [30, 40], ["30", "40"], (30, 40)])
+def test_an_array_is_read_as_the_items_of_its_declared_default_are(tmp_path, value):
+    """'holes: [10, 20]' declares integers, so 'holes=30,40' is [30, 40] and not two strings."""
+    ctx = _package(tmp_path, {"plate": {"type": "dxf", "parameters": {"holes": [10, 20]}}})
+
+    sketch = ctx.get_sketch("//test:plate", {"holes": value})
+
+    assert sketch.name == "plate;holes=30,40"
+    assert sketch.config["parameters"]["holes"]["default"] == [30, 40]
+
+
+def test_an_array_in_a_name_is_read_as_its_declaration_says(tmp_path):
+    ctx = _package(tmp_path, {"plate": {"type": "dxf", "parameters": {"holes": [10, 20]}}})
+
+    sketch = ctx.get_sketch("//test:plate;holes=40,30")
+
+    assert sketch.name == "plate;holes=40,30"
+    assert sketch.config["parameters"]["holes"]["default"] == [40, 30]
+
+
 def test_a_reference_outranks_the_declared_default(tmp_path):
     """Whoever refers to a sketch is the outer of the two, as everywhere else."""
     ctx = _package(tmp_path, {"bends": {"type": "dxf", "include": ["OUTLINE"]}})

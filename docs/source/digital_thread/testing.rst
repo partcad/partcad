@@ -421,7 +421,7 @@ It does not fail. When it says ``the geometry is a solid but not a well formed o
 
 Whether the parts of an assembly share space. Boxes are used only to pick the pairs worth asking about; the answer comes from intersecting the two solids and measuring what they share. Each sub-assembly declared in the package answers for its own inside with its own verdict, so only what crosses its boundary is looked at here. It is the most expensive of the geometry checks.
 
-An overlap that is meant to be there is read from the joint between the two: an interface or a mating that says ``selfScrew`` (a screw cutting its own thread) or ``snapIn`` (a pin pushed past a feature), a connection whose ``how:`` says either, and a connection's ``interferes:``, naming the further items the same act of joining drives through. Nothing is ever excused for a pair of parts by name.
+An overlap that is meant to be there is read from the joint between the two: a port, an interface or a mating that says ``selfScrew`` (a screw cutting its own thread, a nail making its own hole), a mating that says ``snapIn`` (a pin pushed past a feature), a connection whose ``how:`` says either, and a connection's ``interferes:``, naming the further items the same act of joining drives through. Nothing is ever excused for a pair of parts by name.
 
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^

@@ -499,8 +499,9 @@ for its own inside with its own verdict, so only what crosses its boundary is
 looked at here. It is the most expensive of the geometry checks.
 
 An overlap that is meant to be there is read from the joint between the two:
-an interface or a mating that says `selfScrew` (a screw cutting its own thread)
-or `snapIn` (a pin pushed past a feature), a connection whose `how:` says either,
+a port, an interface or a mating that says `selfScrew` (a screw cutting its own
+thread, a nail making its own hole), a mating that says `snapIn` (a pin pushed
+past a feature), a connection whose `how:` says either,
 and a connection's `interferes:`, naming the further items the same act of
 joining drives through. Nothing is ever excused for a pair of parts by name.
 

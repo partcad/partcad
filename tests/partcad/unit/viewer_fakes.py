@@ -77,6 +77,17 @@ class FakeWithPorts:
         return self._interfaces
 
 
+def _cached_like_a_real_one(shape):
+    """What the constructor sets about caching, which 'get_cacheable()' reads.
+
+    Whether the object may be cached decides whether its tessellation is
+    remembered (see 'shape_gltf.convert_async'), so every shape is asked.
+    """
+    shape.cacheable = True
+    shape.cache_dependencies_broken = False
+    shape.cache_dependencies_ignore = False
+
+
 def fake_part(name, envelope=None, ports=None, interfaces=None, project="//pkg"):
     """A 'Shape' that is built already: one payload, and the ports it declares.
 
@@ -92,6 +103,7 @@ def fake_part(name, envelope=None, ports=None, interfaces=None, project="//pkg")
     shape.kind = "part"
     shape.project_name = project
     shape.config = {}
+    _cached_like_a_real_one(shape)
     shape.with_ports = FakeWithPorts(ports, interfaces) if (ports or interfaces) else None
     payload = {"brep": "..."} if envelope is None else envelope
 
@@ -119,6 +131,7 @@ def fake_assembly(name, children=(), location=None, ports=None, interfaces=None,
     assembly.kind = "assembly"
     assembly.project_name = project
     assembly.config = {"child": True} if child else {}
+    _cached_like_a_real_one(assembly)
     assembly.location = location
     assembly.children = list(children)
     assembly.lock = threading.RLock()

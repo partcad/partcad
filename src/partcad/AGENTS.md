@@ -21,8 +21,8 @@ poetry install   # from repo root; installs the whole `partcad` wheel in editabl
 Running `pytest` to a clean pass is the required validation step for any change under `partcad/`:
 
 ```bash
-pytest tests/partcad -x -p no:error-for-skips -p no:warnings --dist no   # matches CI (test-pytest job)
-pytest tests/partcad -n 4 --timeout 300 -m "not slow"              # matches the pre-commit hook, faster locally
+pytest tests/partcad -x -p no:error-for-skips -p no:warnings -n logical --dist worksteal   # matches CI (test-pytest job)
+pytest tests/partcad -n auto --timeout 900 -m "not slow"                                # the pre-commit hook's selection, faster locally
 ```
 
 Tests live in `./tests/partcad` (`tests/partcad/unit`); slow tests are marked `slow` and excluded by the pre-commit hook's `-m
@@ -411,14 +411,60 @@ at all).
   tests other objects on the way (an assembly's manufacturability) logs their failures too, and those are
   theirs to remember. Test entries are outside every tier's size window (`cache_backend.SIZED_KEYS`).
 
-- **What a solver, a route implementation or a simulator produced is cached**
+- **What a solver, a route implementation, a simulator or an exporter produced is cached**
   (`./src/partcad/cache_artifacts.py`, `ctx.cache_artifacts`): the verdict cache above remembers one bit, and
   `pc cae`, `pc cam` and the IDE's tab want the file and what came with it, so `Shape._analysis_run_async()`,
-  `Shape._route_run_async()` and `simulation.run_async()` all ask `cache_artifacts` before starting the
+  `Shape._route_run_async()`, `Shape._output_run_async()` (every `pc export`/`pc render` file, `convert()`,
+  an instruction book's pictures) and `simulation.run_async()` all ask `cache_artifacts` before starting the
   implementation and store what came back after. The entry is the result plus the files the run wrote -- the
-  model or the route program by *role*, so it goes back wherever the next caller asks for it; a simulation's whole run directory, with the directory's path in the result replaced by a
+  model, the route program or the exported file by *role*, so it goes back wherever the next caller asks for it; a simulation's whole run directory, with the directory's path in the result replaced by a
   placeholder, so a hit read through a shared tier points at this machine's copy. One entry, so a hit is never
   a result whose model went missing.
+
+  An export or a render writes into a directory it shares with every other object's output, so it cannot be
+  taken whole: the implementation says what it wrote besides `path` -- `files` in its result
+  (`output.FILES_KEY`), relative to that directory, `[]` for nothing -- and only those come back with the file.
+  An implementation that does not say is **not cached**: a URDF put back without its meshes is worse than a
+  run, and a simulation empties its run directory before exporting the scene into it, so an unlisted mesh
+  would be gone. Every built-in implementation says, and a test reads them to hold them to it.
+  `wrapper_export.py` passes `files` on even when it is empty, which is the difference between "nothing else"
+  and silence. Nothing clears the path before the run -- a failed render leaves the last picture where it
+  was -- so an answer is stored only when the file there afterwards is not the one that was there before
+  (inode, size, mtime).
+
+  **The file's name is not in the key.** Its companions are named after it (`logo.urdf` writes
+  `logo_meshes/...`, `cube.gltf` writes `cube.bin`), so `cache_artifacts.files_layout()` keeps the longest
+  prefix all of them share, cut between two words (`_boundary`: never `abc.jp` out of `abc.jpg`/`abc.jpeg`),
+  and each file's suffix beyond it; `placed_files()` puts them back under the prefix of the next path asked
+  for, which has to end in the same suffix, case aside. Three things dismiss a hit -- reported, then run --
+  rather than write files nothing looks for: a path ending otherwise (`xyz.JPEG` for an entry stored as
+  `abc.jpg` + `abc.colors.txt`); a rename of files that **name each other** (`linked`: some file holds
+  another's stem-plus-first-component, `logo_meshes` or `cube.bin`, so the renamed URDF/glTF would point at
+  nothing); and a move of files that hold their own directory's absolute path (`anchored`). Both are found by
+  searching the files when they are stored, because an implementation cannot know what a cache does with its
+  names. Every target is held to the directory of the asked-for path, at both ends: an entry is read from
+  tiers others may write to. A filtered view adds `view` (its mask's key) to the question.
+
+  An object without a cache key of its own can still key its artifacts: `Shape.get_artifact_key_async()` is
+  the cache key, or -- for a shape built for one purpose -- what it was derived from (`derived_from`, set by
+  `assembly_filter.derive()`) plus what it is of that (`artifact_identity`, set by whoever made it). The
+  instruction book keys a step's two pictures (`assembly_guide._keyed`) as
+  `guide-step-<n>-exploded;direction=...;distance=...;colors=...` and
+  `guide-step-<n>-fastened;<each fastener's direction and distance>;colors=...`, against the assembly the steps
+  are of (`GuideSection.content`), so drawing a book again draws nothing it drew before. Which items a picture
+  holds follows from the assembly and the step; how far they are pulled is worked out by code and the colours
+  are the module's, so those are in the identity. `artifacts_cacheable()` is the `cache: false` rule for the
+  same shapes, and what the content-keyed wrappers below are gated on.
+
+  PartCAD's own wrappers that are not an implementation of anybody's -- the IDE's tessellation
+  (`shape_gltf.convert_async`), an instruction book's PDF (`document_pdf`), a measurement (`measure`) -- are
+  keyed on **exactly the bytes they are handed** (`cache_artifacts.request_key`/`content_key`,
+  `wrapper_hash`), because no object key covers what they get: port sketches are attached after the shape
+  cache answers, and a book's pictures are in a fresh temporary directory every time (its key reads them by
+  content, never by path). What they answer is stored as the wrapper's response line. `cache: false` still
+  holds: the caller passes whether the object may be cached. The test wrappers (interference, solidity,
+  manufacturability) are deliberately not here -- they run only inside a `pc test` check, whose verdict is
+  cached already -- and neither is a shape's build, which is the shape cache.
 
   The key (`question_hash`, built by `Shape._artifact_hash()` for the two output sections) is the subject's
   `get_cache_key_async()` plus what the run adds: the request minus the geometry payload (boundary, job,
@@ -460,13 +506,6 @@ at all).
   The `artifact` key is in `cache_backend.MAX_ONLY_KEYS`: a tier's maximum applies and its minimum does not,
   and `store_async` stops packing as soon as the compressed entry outgrows every tier. A simulation's run
   directory is emptied before each run, so nothing an earlier run left there is stored as this one's.
-
-  **Pictures are cached the same way** (`Shape._run_output_async`): a file type of the `render:` section, keyed by
-  `_artifact_hash` on the shape the picture is of (a filtered view where a filter applies), the request less the
-  geometry, the implementation and the sources that run it. A `pc render` of a package in which nothing changed starts
-  no sandbox. Exports are not cached -- an exporter may write files beside the one it was asked for, and an entry holds
-  the one -- and a picture is remembered only when its run succeeded and wrote the file, so a file an earlier run left
-  at the path is never handed out as this one's.
 
 - **Routes** (`./src/partcad/cam.py`, `Shape.route_async()`, `./src/partcad/builtin/cam/`):
   `pc cam` is a fourth output section, `cam:`, resolved by the very code that resolves the other three, and
@@ -993,7 +1032,34 @@ at all).
   covers, so an entry written under the source's name would be served the next time the *whole* object was
   asked for. A view keeps the source's name, placement and declaration (unless the caller replaces it), which
   is what makes a filtered render land in the file the unfiltered one would have and keeps the package's file
-  types applying to it.
+  types applying to it. What is *drawn* of a view is keyed all the same, on its source (`derived_from`) and
+  what it is of it (see the artifact cache above), and it reads its source's object-type parameters, so a
+  view of an exploded assembly is exploded.
+
+- **An exploded view is an object-type parameter of `assy`** (`./src/partcad/assembly_explode.py`,
+  `Assembly.exploded`, `AssemblyFactoryAssy.ACCEPTED_OBJECT_TYPE_PARAMETERS`): `exploded: true` draws the
+  assembly with every item backed out of what it is connected to. Being a parameter is the point: an
+  assembly that declares it, a reference `logo;exploded=true`, or an alias `with: {exploded: true}` is an
+  object with a cache key of its own, so its geometry, its renders and its exports are cached like any other
+  object's, and one that never mentions it keeps its key (the default is applied when read, never written).
+  Assemblies police their object-type parameters the way parts and sketches do
+  (`AssemblyFactory.POLICED_OBJECT_TYPE_PARAMETERS`): only `assy` can say what is joined to what, so any other
+  type declaring it is refused; an alias and an enrich pass it on to their source.
+
+  Which way and how far an item backs out is **one rule shared with the instruction book**
+  (`counterpart`, `separation_async`): the joint's direction or the line between the two centers, by the
+  connection's `exploded:` or half of the larger item. The whole assembly adds that moves add up along the
+  connections (`offsets_async`), so a bolt goes with the bracket it is in; an item joined to "everything so
+  far" backs out of where that group was assembled. Measured once per assembly
+  (`Assembly.exploded_offsets_async`, from where the assembly put everything) and read by **everything that
+  places what is drawn**: the shape (`_get_shape_real`, a move in front of each child's node), the bounding
+  box, the ports `--with-internals` walks (`shape_ports._collect`) and the nodes a `map:` names
+  (`assembly_ports.node_index`) -- each composes it with `assembly_explode.moved`. So a port is drawn on its
+  item where the item is drawn, and a `connect:` to an exploded assembly's mapped port meets the moved item.
+  It is not applied at instantiation, which builds no geometry to measure. Only the assembly's own links move,
+  by decision rather than omission: a sub-assembly, or a `links:` container embedded in the file, moves as one
+  piece with everything inside it where it was -- it is put together before it is put in, and drawing it in
+  pieces is exploding *it*.
 
   **The mask itself is not here.** What a filter is, how it is written, and what naming a link with and without
   children means is `partcad_utils.assy_filter`, which also filters an ASSY *document* -- because `pc filter`
@@ -1166,6 +1232,22 @@ at all).
   content and not identity, because nodes arrive as separately deserialized dicts and the same shape is never
   the same object. It is the arrangement `KEY_SKETCHES` already had, one level up, and sketches now name this
   table too.
+
+  **The BREP form gets the same sharing where it is decoded** (`ocp_serialize._shared_shape`, used by
+  `decode_shape`, `decode_tree` and `decode`): every node of one decoding that carries the same payload gets the
+  same `TShape`, each in a `TopoDS_Shape` handle of its own placed where its node says. That is OCCT's own
+  instancing, and it is what makes a big drawing affordable: meshing and hidden-line removal work per `TShape`,
+  so the LEGO castle (731 placements of 9 bricks) is meshed as nine bricks. Its `pc render` took 3.4 GB and
+  104 s decoded a node at a time, and 1.4 GB and 57 s shared; the car, 6.0 GB and 141 s against 1.7 GB and
+  57 s. The exact (`reproducible`) algorithm keeps its data per placement and barely moves (3.0 to 2.9 GB on
+  `f1/tub`). Keyed by the payload's content, never by object identity. The rule it implies is part of the
+  implementation contract: **an implementation must not modify a shape it is handed in place**, because a
+  change to one placement of a part is now a change to all of them. Nothing built in does. Two outputs know
+  sharing is there: the polygonal (`reproducible: false`) algorithm breaks ties between exactly coincident faces
+  in the order it meets them, so a drawing of bricks standing on bricks can come out a few pixels different
+  (39 of 218,112 for partcad-ldraw-examples' `castle-front.png`, none for the other 32 pictures there or for
+  anything under `examples/`). `wrapper_interference.py` still decodes a node at a time, on purpose: it takes
+  booleans between placements, and between two placements of one `TShape` that is a change of its own to make.
 
   **The sketches the ports are drawn with come with the representation** (`./src/partcad/port_sketches.py`), on
   the root node, keyed by the reference the ports already name. A port is a coordinate frame and is drawn as a

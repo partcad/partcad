@@ -163,8 +163,13 @@ bolt;length=30`` unquoted renders the bolt at its default length and then sets a
 value is read as the type its parameter declares. ``-p`` with no object to give the values to is refused.
 
 What either spelling produces is named by its values too -- in the log, in the cache, and in the files it is
-written to. In a file name the characters a shell or a filesystem would take for something else are written as
-``_``, so ``bolt;length=30`` renders to ``bolt_length_30.svg`` and ``room;medium=//pub/std/materials:air`` to
+written to. The name lists the parameters sorted by name, and a list by its items in the order they were given,
+separated by commas, whether it was written ``include=BEND_UP,BEND_DOWN`` or handed over as a list by an
+assembly's ``params:`` or the editor: one list of values is one object in memory and one entry in the cache
+(see the ``array`` parameter type in :doc:`config_parts`). A file name is made the same way:
+``"bolt;size=M4,length=30"`` and ``bolt -p length=30 -p size=M4`` both render to ``bolt_length_30_size_M4.svg``,
+and the list above to ``panel_include_BEND_UP_BEND_DOWN.svg``. The characters a shell or a filesystem would take
+for something else are written as ``_``, so ``room;medium=//pub/std/materials:air`` renders to
 ``room_medium_pub_std_materials_air.svg``.
 
 ``--extra-param <object>.<parameter>=<value>``, given before the command, is a different thing: it changes the

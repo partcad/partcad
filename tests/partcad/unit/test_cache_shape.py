@@ -270,3 +270,11 @@ def test_what_is_not_an_assembly_stays_plain_json(tmp_path):
     assert not stored.startswith(cache_shape._TREE_MAGIC)
     assert json.loads(stored)
     assert [item["brep"] for item in cache_shape._deserialize(stored)] == [BREP, BREP]
+
+
+def test_the_file_tier_takes_a_tree_of_fifty_megabytes_by_default(monkeypatch):
+    """Over 10 MB, the LEGO F1's tree (10.9 MB of distinct geometry) was put together again on every run."""
+    monkeypatch.delenv("PC_CACHE_FILES_MAX_ENTRY_SIZE", raising=False)
+    from partcad_utils.user_config import UserConfig
+
+    assert UserConfig().cache_max_entry_size == 50 * 1024 * 1024

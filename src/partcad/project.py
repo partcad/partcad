@@ -2313,6 +2313,23 @@ class Project(project_config.Configuration):
             quiet=quiet,
         )
 
+    def _normalized_array_values(self, factory_name: str, get_config: callable, base_object_name: str, params: dict):
+        """'params' with its array values read into lists, by what the object declares.
+
+        Read off the declaration before anything is looked up under the name,
+        because the name is what is looked up: the declared parameters, short
+        forms and all, and the ones the object's type contributes (a DXF
+        sketch's 'include' and 'exclude'). See 'config.normalized_array_values'.
+        """
+        config = get_config(base_object_name)
+        if not isinstance(config, dict):
+            return params
+        declarations = dict(factory.accepted_object_type_parameters(factory_name, config.get("type")))
+        declared = config.get("parameters")
+        if isinstance(declared, dict):
+            declarations.update(declared)
+        return pc_config.normalized_array_values(declarations, params, f"{self.name}:{base_object_name}")
+
     def get_object(
         self,
         factory_name: str,
@@ -2340,7 +2357,10 @@ class Project(project_config.Configuration):
         if not has_name_params:
             result_name = object_name
         else:
-            # Determine the name we want this parameterized object to have
+            # Determine the name we want this parameterized object to have:
+            # with every array value read into the list it is first, so that
+            # one set of list values is one instance however it was handed over.
+            params = self._normalized_array_values(factory_name, get_config, base_object_name, params)
             result_name = format_parameterized_name(base_object_name, params)
 
         # The package lock is released before the object's own lock is taken,
@@ -3558,7 +3578,9 @@ class Project(project_config.Configuration):
             choices=choices,
         ) as document:
             self.ctx.ensure_dirs_for_file(path)
-            await self._write_document_async(document, format, path, reproducible=reproducible)
+            await self._write_document_async(
+                document, format, path, reproducible=reproducible, cacheable=assembly.get_cacheable()
+            )
 
         return path
 
@@ -3593,15 +3615,19 @@ class Project(project_config.Configuration):
                 found = cfg[output.REPRODUCIBLE_KEY]
         return output.as_flag(found)
 
-    async def _write_document_async(self, document, format, path, reproducible=False):
-        """Write a generated document down in one of 'assembly_guide.GUIDE_FORMATS'."""
+    async def _write_document_async(self, document, format, path, reproducible=False, cacheable=True):
+        """Write a generated document down in one of 'assembly_guide.GUIDE_FORMATS'.
+
+        'cacheable' is whether the object the document is about may be cached,
+        which a PDF is (see 'document_pdf.render_pdf_async').
+        """
         if format == "html":
             # Already the same bytes every time: nothing in the HTML is read
             # off a clock, so there is no 'reproducible' to honour.
             with open(path, "w") as f:
                 f.write(pc_document.render_html(document))
         else:
-            await render_pdf_async(self.ctx, document, path, reproducible=reproducible)
+            await render_pdf_async(self.ctx, document, path, reproducible=reproducible, cacheable=cacheable)
 
     async def assembly_guide_data_async(
         self,
@@ -3659,10 +3685,12 @@ class Project(project_config.Configuration):
                 "manufacturable": bool(assembly_guide.resolve_alias(self.ctx, assembly).is_manufacturable),
             }
             if format is not None:
-                result["file"] = await self._document_file_async(guide.document, format, assembly_name)
+                result["file"] = await self._document_file_async(
+                    guide.document, format, assembly_name, cacheable=assembly.get_cacheable()
+                )
             return result
 
-    async def _document_file_async(self, document, format, name):
+    async def _document_file_async(self, document, format, name, cacheable=True):
         """A document written down in a format, as bytes a client can save."""
         import base64
 
@@ -3673,7 +3701,7 @@ class Project(project_config.Configuration):
             stem = output.name_to_segments(name)[-1]
             filename = "%s.%s" % (re.sub(r"[^A-Za-z0-9_.-]+", "_", stem) or "assembly", format)
             path = os.path.join(directory, filename)
-            await self._write_document_async(document, format, path)
+            await self._write_document_async(document, format, path, cacheable=cacheable)
             with open(path, "rb") as f:
                 content = base64.b64encode(f.read()).decode("ascii")
         return {"filename": filename, "extension": format, "content": content}

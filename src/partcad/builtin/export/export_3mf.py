@@ -40,7 +40,7 @@ def process(path, request):
             angularTolerance=request.get("angularTolerance", 0.1),
         )
 
-        return {"success": True, "exception": None}
+        return {"success": True, "exception": None, "files": []}
     except Exception as e:
         wrapper_common.handle_exception(e)
         return {"success": False, "exception": wrapper_common.exception_to_str(e)}

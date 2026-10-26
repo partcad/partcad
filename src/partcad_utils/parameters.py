@@ -80,12 +80,21 @@ def normalize_parameters(parameters: dict) -> dict:
     return parameters
 
 
-def coerce_parameter_value(param_type, param_value, param_name: str, object_name: str):
+def coerce_parameter_value(param_type, param_value, param_name: str, object_name: str, item_type=None):
     """One parameter value, read as the type the parameter declares.
 
     The values arrive as the strings they were written as - '<name>;size=4' is
     text - and this is where each becomes the number, string or flag it stands
     for.
+
+    An array is a list however it was written: 'include=A,B' in a name, a list
+    or a tuple an ASSY link, the editor or an agent handed over (see
+    'as_list'), in the order its items were given. Each item is read as
+    'item_type', the type the items of the declared default share (see
+    'array_item_type'); with no such type declared it is text, which is the one
+    thing every way of writing an item can agree on. That is what makes
+    'include=A,B' and '[A, B]' one value to the cache, which keys a shape on
+    its parameters' values and not on its name.
     """
     if param_type == "string":
         return str(param_value)
@@ -108,9 +117,71 @@ def coerce_parameter_value(param_type, param_value, param_name: str, object_name
             return param_value.lower() == "true"
         return bool(param_value)
     if param_type == "array":
-        return param_value
+        return [_array_item(item_type, item, param_name, object_name) for item in as_list(param_value)]
     debug("The parameter '%s' of '%s' has no type; taking '%s' as it is" % (param_name, object_name, param_value))
     return param_value
+
+
+def _array_item(item_type, item, param_name: str, object_name: str):
+    """One item of an array, read as the declared item type, or as text when none is declared."""
+    if isinstance(item, (list, tuple, dict)):
+        # A nested value is kept as it is: a name cannot spell one, so there is
+        # nothing it has to agree with.
+        return list(item) if isinstance(item, tuple) else item
+    if item_type is None:
+        return item if isinstance(item, str) else format_assignment(item)
+    return coerce_parameter_value(item_type, item, param_name, object_name)
+
+
+def as_list(value) -> list:
+    """A list-valued parameter, however it was written.
+
+    A list stays one, in its own order, and a tuple becomes one; text is the
+    spelling a reference has to use, because the whole parameter section of a
+    name is text, so it is split on commas. Empty entries are dropped rather
+    than kept as empty names: a trailing comma is a typo, not a layer called
+    ''.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    if isinstance(value, (list, tuple)):
+        return [item for item in value if item not in (None, "")]
+    return [value]
+
+
+def _scalar_type(value):
+    """The parameter type a single value is, or None for one that is not a scalar."""
+    if isinstance(value, bool):
+        return "bool"
+    if isinstance(value, int):
+        return "int"
+    if isinstance(value, float):
+        return "float"
+    if isinstance(value, str):
+        return "string"
+    return None
+
+
+def array_item_type(declaration):
+    """The type an array parameter's items are read as: the one its declared default's items share.
+
+    A declaration says what an array holds by example. 'sizes: [10, 20]' is an
+    array of integers, so 'sizes=30,40' is [30, 40] rather than two strings,
+    exactly as an ASSY link's 'sizes: [30, 40]' is; whole numbers and fractions
+    together are floats. A default that is empty, mixed, or not there says
+    nothing, and the items are then read as text (see 'coerce_parameter_value').
+    """
+    default = declaration.get("default") if isinstance(declaration, dict) else declaration
+    if not isinstance(default, (list, tuple)) or not default:
+        return None
+    kinds = {_scalar_type(item) for item in default}
+    if len(kinds) == 1:
+        return next(iter(kinds))
+    if kinds == {"int", "float"}:
+        return "float"
+    return None
 
 
 def parse_override(text: str) -> tuple:

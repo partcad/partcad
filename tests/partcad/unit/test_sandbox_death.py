@@ -221,8 +221,16 @@ def test_a_sandbox_that_ends_well_is_not_held_open_by_what_it_left_behind(pids):
 
 
 @posix
-def test_a_sandbox_that_dies_alone_is_reported_at_once(tmp_path):
-    """Nothing holding its pipes: noticed the moment they close, as it always was."""
+def test_a_sandbox_that_dies_alone_is_reported_at_once(tmp_path, monkeypatch):
+    """Nothing holding its pipes: noticed the moment they close, as it always was.
+
+    "At once" is as against the grace a process whose pipes are still held is
+    given, and the grace is made long here so that the bound can be too. With
+    the real two seconds the bound had to sit under them, and a whole
+    interpreter has to start, read and kill itself inside it -- which a runner
+    busy with other work, as every pytest-xdist worker's is, does not always do.
+    """
+    monkeypatch.setattr(container_service, "EXIT_GRACE", 60.0)
 
     async def main():
         p = await asyncio.create_subprocess_exec(
@@ -240,7 +248,7 @@ def test_a_sandbox_that_dies_alone_is_reported_at_once(tmp_path):
     returncode, took = asyncio.run(main())
 
     assert returncode == -signal.SIGKILL
-    assert took < 2.0
+    assert took < 10.0
 
 
 # --------------------------------------------------------------------------- #

@@ -220,12 +220,25 @@ def format_parameterized_name(base: str, parameters: dict) -> str:
     for the same instance. 'base' may already carry parameters of its own, and
     the ones given here take precedence over those: they come from whoever is
     referring to it, which is the outer of the two.
+
+    A list is written as its items, in their order, separated by commas: the
+    one way a name holds a list, and the way 'parse_parameterized_name' reads
+    one back. It used to be written as Python prints it ("include=['A', 'B']"),
+    so that an ASSY link's list and the same items written by hand named two
+    instances of one set of values.
     """
     base, inherited = parse_parameterized_name(base)
     inherited.update(parameters)
     if not inherited:
         return base
-    return base + ";" + ",".join("%s=%s" % (name, inherited[name]) for name in sorted(inherited))
+    return base + ";" + ",".join("%s=%s" % (name, _name_value(inherited[name])) for name in sorted(inherited))
+
+
+def _name_value(value) -> str:
+    """One parameter value as an instance's name spells it: a list as its items joined by commas."""
+    if isinstance(value, (list, tuple)):
+        return ",".join(_name_value(item) for item in value)
+    return "%s" % (value,)
 
 
 def split_resource_path(pattern: str) -> tuple:

@@ -77,7 +77,9 @@ def test_socket_daemon_starts_reuses_and_stops(short_dirs):
         read_message(stream)
         client.close()
 
-    for _ in range(50):
+    # Up to 30 s, polled: a daemon that has been told to stop goes as soon as it
+    # can, and on a busy runner that can be longer than the 5 s this allowed.
+    for _ in range(300):
         if not workspace.is_alive(sock):
             break
         time.sleep(0.1)

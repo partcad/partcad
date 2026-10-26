@@ -32,7 +32,7 @@ import copy
 import os
 
 from . import __version__, assy_lint, config_template, config_yaml, pcignore, template_render
-from .parameters import coerce_parameter_value, normalize_parameters
+from .parameters import array_item_type, coerce_parameter_value, normalize_parameters
 
 # How far up from the file the search for a package declaring it goes. A
 # package's own directory is where it is normally declared; an ancestor package
@@ -194,7 +194,9 @@ def _template_params(name: str, declaration: dict, overrides: dict = None) -> di
                 # Not a parameter of this object: PartCAD ignores it too.
                 continue
             try:
-                value = coerce_parameter_value(param.get("type"), value, str(param_name), name)
+                value = coerce_parameter_value(
+                    param.get("type"), value, str(param_name), name, item_type=array_item_type(param)
+                )
             except (ArithmeticError, TypeError, ValueError):
                 continue
             params["param_" + str(param_name)] = value

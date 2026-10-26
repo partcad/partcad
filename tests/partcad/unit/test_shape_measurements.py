@@ -358,7 +358,7 @@ def test_only_a_shape_that_recorded_no_size_is_measured_on_demand(ctx, monkeypat
     """The one fallback, and it measures with the code that measures at build time."""
     asked = []
 
-    async def bbox(context, shape, frame=None):
+    async def bbox(context, shape, frame=None, cacheable=True):
         asked.append(shape)
         return [0.0, 0.0, 0.0, 1.0, 2.0, 3.0]
 

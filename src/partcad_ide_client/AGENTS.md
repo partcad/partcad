@@ -58,8 +58,8 @@ All commands run **inside the dev container** — see "Where commands run" in th
 ## Test and validate changes
 
 ```bash
-poetry run pytest tests/partcad_ide_client -x -p no:error-for-skips -p no:warnings --dist no   # matches CI
-poetry run behave                                                                            # integration tests
+poetry run pytest tests/partcad_ide_client -x -p no:error-for-skips -p no:warnings -n logical --dist worksteal   # matches CI
+poetry run behave                                                                                                # integration tests
 ```
 
 The client tests stand up a fake IDE on an ephemeral port and point the client at it with `PARTCAD_IDE_PORT`,

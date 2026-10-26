@@ -47,6 +47,10 @@ class InterferenceTest(Test):
 
     - an interface that declares 'selfScrew' cuts its own thread wherever it is
       used, so the two solids occupy the same space where that thread is formed;
+    - a port that declares it says the same of every joint made through that
+      port - a nail's point makes its own hole - which is what a connection
+      naming ports alone ('withPort:', 'connectPorts:') has to go by, since it
+      looks up neither interface nor their mating;
     - a mating that declares 'selfScrew' says it of the pairing, which is the
       only place it can be said when neither end knows on its own: the same
       screw cuts its own thread in a pilot hole and cuts nothing in a clearance
@@ -357,7 +361,14 @@ async def _port_owner(item, path, port):
 
 
 async def _joint_overlaps(ctx, child, connection):
-    """Whether the joint itself says its two items share space where they meet."""
+    """Whether the joint itself says its two items share space where they meet.
+
+    'how' is the connection's resolved one: what its own 'how' says, and what
+    the mating, the interfaces and the two ports that meet said where it does
+    not ('ConnectHow.resolve'). The ports are the only ones of those a
+    connection naming ports alone knows, so a port's 'selfScrew' reaches here
+    through it and nowhere else.
+    """
     how = getattr(child, "how", None)
     if how is not None and (getattr(how, "self_screw", False) or getattr(how, "snap_in", False)):
         return True
@@ -377,8 +388,9 @@ async def _plan(ctx, shape):
     its own joints are read, by its own check.
 
     Four ways a joint says its items overlap, none a property of the assembly:
-    an interface that cuts its own thread wherever it is used, a connection
-    that says this joint cuts one or snaps past a feature ('how'), and a
+    an interface or a port that cuts its own way in wherever it is used, a
+    connection that says this joint cuts a thread or snaps past a feature
+    ('how', which also carries what the mating and the ports said), and a
     connection that names the further links the same act of joining drives
     through ('interferes:'). The first three are about the two ends, and are
     resolved through any 'map:' to the parts that provide the joined ports.

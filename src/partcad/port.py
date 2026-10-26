@@ -18,11 +18,13 @@ def port_info(port) -> dict:
     data, so that it survives the trip to a client over JSON-RPC - and the
     boundary sketch only where the port has one. A port may have neither: a port
     declared by name alone is a frame at the origin of whatever declares it, and
-    nothing else.
+    nothing else. 'selfScrew' likewise appears only on a port that says it.
     """
     info = {"location": port_location(port).as_packed()}
     if port.sketch is not None:
         info["sketch"] = f"{port.sketch.project_name}:{port.sketch.name}"
+    if getattr(port, "self_screw", False):
+        info["selfScrew"] = True
     return info
 
 

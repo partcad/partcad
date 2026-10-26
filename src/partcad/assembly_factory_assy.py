@@ -59,6 +59,12 @@ def _uses_connections(node) -> bool:
 class AssemblyFactoryAssy(AssemblyFactoryFile):
     WRAPPERS = ("measure.py",)
 
+    # An ASSY file says what each item is joined to, which is what an exploded
+    # view pulls apart (see 'Assembly.exploded'). Off unless declared, and the
+    # default is never written into the declaration, so an assembly that does
+    # not mention it keeps the cache key it had (see 'object_type_parameter').
+    ACCEPTED_OBJECT_TYPE_PARAMETERS = {"exploded": False}
+
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitASSY", source_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config, extension=".assy")
@@ -1559,6 +1565,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 # The source port is the frame a derived "pushDistance" is
                 # measured along, and that same port once the object is in place
                 # is what the push direction is deduced from, so both go along.
+                # So do both ports themselves: one may say it cuts its own way
+                # in, which is all a connection by ports alone has to go by.
                 source_frame = None if source_port is None else port_location(source_port)
                 mated_frame = location if source_frame is None else location * source_frame
                 connect_how.resolve(
@@ -1568,6 +1576,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     mated_frame=mated_frame,
                     source_interface=source_iface_obj,
                     target_interface=target_iface_obj,
+                    source_port=source_port,
+                    target_port=target_port,
                 )
 
         if item is not None:

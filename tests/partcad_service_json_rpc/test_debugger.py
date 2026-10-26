@@ -89,7 +89,12 @@ def test_registered():
 
 
 def test_a_real_refusal(monkeypatch):
-    """The real debugpy, against a port nothing listens on."""
+    """The real debugpy, against a port nothing listens on.
+
+    Bound and not listening for the whole of the attempt, so that the refusal is
+    certain rather than likely: a port that was merely free a moment earlier is
+    one another pytest-xdist worker may be listening on by now.
+    """
     import pytest
 
     debugpy = pytest.importorskip("debugpy")
@@ -98,8 +103,8 @@ def test_a_real_refusal(monkeypatch):
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
-    monkeypatch.setenv(debugger.ENV, "127.0.0.1:%d" % port)
-    assert debugger.attach_from_env() is False
+        monkeypatch.setenv(debugger.ENV, "127.0.0.1:%d" % port)
+        assert debugger.attach_from_env() is False
 
 
 def test_a_handshake_that_never_finishes_does_not_keep_the_service_waiting(monkeypatch):

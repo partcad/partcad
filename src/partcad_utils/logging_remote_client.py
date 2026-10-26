@@ -36,6 +36,13 @@ from .logging_remote_server import PC_EVENTS
 
 _want_ansi: bool = False
 _plain_handler: logging.Handler = None
+# The level the ``partcad`` logger had before ``init`` opened it up, which
+# ``fini`` puts back; None while ``init`` has changed nothing. Without it the
+# logger stayed at DEBUG -- or at whatever verbosity the command then chose --
+# for everything the same process did afterwards: every test after the first
+# CLI command in a pytest worker logged at DEBUG, and one whose assertion was
+# "nothing went wrong while this loaded" read those lines as something.
+_level_before = None
 
 
 def plain_formatter() -> logging.Formatter:
@@ -60,10 +67,12 @@ def init(want_ansi: bool = True, stream=None) -> None:
     plain lines (to stderr, matching ``pc --no-ansi``). ``stream`` overrides the
     destination (used by tests).
     """
-    global _want_ansi, _plain_handler
+    global _want_ansi, _plain_handler, _level_before
 
     _want_ansi = want_ansi
     logger = logging.getLogger("partcad")
+    if _level_before is None:
+        _level_before = logger.level
     # The server already applied its own verbosity filter before forwarding, so
     # render everything that arrives.
     logger.setLevel(logging.DEBUG)
@@ -117,11 +126,14 @@ def _replay(levelno: int, message: str, created) -> None:
 
 
 def fini() -> None:
-    """Flush and detach whatever renderer ``init`` installed."""
-    global _plain_handler
+    """Flush and detach whatever renderer ``init`` installed, and give the logger its level back."""
+    global _plain_handler, _level_before
 
     if _want_ansi:
         logging_ansi_terminal.fini()
     if _plain_handler is not None:
         logging.getLogger("partcad").removeHandler(_plain_handler)
         _plain_handler = None
+    if _level_before is not None:
+        logging.getLogger("partcad").setLevel(_level_before)
+        _level_before = None

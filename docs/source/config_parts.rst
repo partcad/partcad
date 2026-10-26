@@ -50,6 +50,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
         <another port name>:
           location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
+          selfScrew: <(optional) whether this port cuts its own way into what it is joined to, default: false>
 
       # What the shape this part produces reports about itself. See "Properties".
       properties: # (optional)
@@ -684,7 +685,7 @@ assignments - so this never arose there.
 
 Each part may have a list of parameters that are passed into the scripts to
 modify the part.
-The parameters can be of types ``string``, ``float``, ``int`` and ``bool``.
+The parameters can be of types ``string``, ``float``, ``int``, ``bool`` and ``array``.
 The parameter values can be restricted by specifying the list of possible values
 in ``enum``.
 The initial parameter value is set using ``default``.
@@ -696,9 +697,18 @@ The initial parameter value is set using ``default``.
       # ...
       parameters:
         <param name>:
-          type: <string|float|int|bool>
+          type: <string|float|int|bool|array>
           enum: <(optional) list of possible values>
           default: <default value>
+
+An ``array`` is a list however a reference hands it over -- ``holes=30,40`` in a
+name or on the command line, ``holes: [30, 40]`` in an ASSY file's ``params:``,
+a list from the editor -- and its items keep the order they were given in. Each
+item is read as the type the items of the declared ``default`` share, so
+``default: [10, 20]`` makes ``holes=30,40`` the integers ``[30, 40]``; with an
+empty default, or none, the items are text. One list of values is therefore one
+instance, named ``<part>;holes=30,40`` and cached as one, whichever way it was
+written.
 
 There are several parameter names that are reserved for values used in
 visualization, simulation calculations and, if applicable, manufacturing

@@ -141,7 +141,17 @@ def test_daemon_status_env_reports_the_environment_of_whatever_answered(
 
     Asserting the POSIX half everywhere is what this test did first, and it
     failed on `Pytest (windows-2022, 3.14)` for exactly the second reason.
+
+    "Whatever environment started it" is the catch on POSIX: a daemon this
+    very call had to start would be started from this environment, variable
+    and all, and report it. So one is made to answer first, without the
+    variable. That used to be left to the tests above it in this file, which is
+    an order a serial run happens to keep and pytest-xdist does not -- under it
+    this test could be the first thing in the run to ask for the daemon.
     """
+    warm = click_runner.invoke(cli, ["--no-ansi", "daemon", "status"])
+    assert warm.exit_code == 0, warm.output
+
     result = click_runner.invoke(
         cli,
         ["--no-ansi", "daemon", "status", "env"],

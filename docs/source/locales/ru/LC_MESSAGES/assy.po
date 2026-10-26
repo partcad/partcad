@@ -232,18 +232,21 @@ msgstr ""
 "`toInstance` используются для указания имён экземпляров интерфейсов. Поля"
 " `withPort` и `toPort` используются для указания имён портов."
 
-#: ../../source/assy.rst:142
+#: ../../source/assy.rst:151
 msgid ""
 "The `exploded` field does not affect the assembly itself: it is how far "
 "apart the two parts are drawn in the exploded view of this step in the "
-"assembly instruction book (`pc render -t pdf` and `pc render -t html`). "
-"Without it, the two are spaced by half of the largest dimension of the "
-"two."
+"assembly instruction book (`pc render -t pdf` and `pc render -t html`), "
+"and in the assembly drawn whole with its `exploded` parameter set (see "
+":doc:`config_objects`). Without it, the two are spaced by half of the "
+"largest dimension of the two."
 msgstr ""
 "Поле `exploded` не влияет на саму сборку: оно задаёт, насколько далеко "
-"друг от друга рисуются две детали на разнесённом виде этого шага в книге "
-"инструкций по сборке (`pc render -t pdf` и `pc render -t html`). Без него"
-" они разносятся на половину наибольшего размера этих двух деталей."
+"друг от друга рисуются две детали на разнесённом виде этого шага в "
+"инструкции по сборке (`pc render -t pdf` и `pc render -t html`), а также "
+"в сборке, нарисованной целиком с заданным параметром `exploded` (см. "
+":doc:`config_objects`). Без него две детали разносятся на половину "
+"наибольшего из их размеров."
 
 #: ../../source/assy.rst:148
 msgid "Expected overlaps"

@@ -737,8 +737,8 @@ class UserConfig(vyper.Vyper):
         # - objects of 1 byte bytes are cached both in memory and on the filesystem (to cache test results)
         # - objects from 2 bytes to 100 bytes are cached in memory only (avoid filesystem polution and overhead),
         # - objects from 100 bytes to 1MB are cached both in the filesystem and in memory (where most cache hits are expected),
-        # - objects from 1MB bytes to 10MB are cached in the filesystem only (optimize RAM usage).
-        # - objects from 10MB to 100MB are cached in memory only (avoid quick filesystem quota depletion).
+        # - objects from 1MB bytes to 50MB are cached in the filesystem only (optimize RAM usage).
+        # - objects from 50MB to 100MB are cached in memory only (avoid quick filesystem quota depletion).
         # - object above 100MB are not cached and recomputed on each access (avoid RAM depletion).
         # If the filesystem cache is disabled then (by default):
         # - objects from 1 to 100MB are cached in memory only.
@@ -762,7 +762,11 @@ class UserConfig(vyper.Vyper):
         self.set_default("cacheMemoryMaxEntrySize", 100 * 1024 * 1024)
         self.set_default("cacheMemoryDoubleCacheMaxEntrySize", 1 * 1024 * 1024)
         self.set_default("cacheFiles", True)
-        self.set_default("cacheFilesMaxEntrySize", 10 * 1024 * 1024)
+        # 50MB rather than 10MB: an assembly's tree is one entry, each distinct
+        # payload in it once (see cache_shape._TREE_MAGIC), and the LEGO F1's
+        # distinct geometry alone is 10.9MB - over 10MB it was put together
+        # again from its sub-assemblies on every run.
+        self.set_default("cacheFilesMaxEntrySize", 50 * 1024 * 1024)
         self.set_default("cacheFilesMinEntrySize", 100)
         self.set_default("cacheRemote", False)
         self.set_default("cacheRemoteServer", "")
@@ -940,7 +944,7 @@ class UserConfig(vyper.Vyper):
         # option: cacheFilesMaxEntrySize
         # description: the maximum size of a single file cache entry in bytes
         # values: >0
-        # default: 10*1024*1024 (10MB)
+        # default: 50*1024*1024 (50MB)
         self.bind_env("cacheFilesMaxEntrySize", "PC_CACHE_FILES_MAX_ENTRY_SIZE")
         self.cache_max_entry_size = self.get_int("cacheFilesMaxEntrySize")
 

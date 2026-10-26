@@ -269,7 +269,7 @@ click.rich_click.COMMAND_GROUPS = {
     type=int,
     default=None,
     show_envvar=True,
-    help="Maximum size of a single file cache entry in bytes (defaults to 10485760 or 10MB)",
+    help="Maximum size of a single file cache entry in bytes (defaults to 52428800 or 50MB)",
 )
 @click.option(
     "--cache-min-entry-size",

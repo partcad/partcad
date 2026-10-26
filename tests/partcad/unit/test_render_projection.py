@@ -182,7 +182,11 @@ def test_every_projection_looks_along_the_direction_asked_for(render_svg, monkey
         }
     )
 
-    assert render_svg.process(str(tmp_path / "drawing.svg"), request) == {"success": True, "exception": None}
+    assert render_svg.process(str(tmp_path / "drawing.svg"), request) == {
+        "success": True,
+        "exception": None,
+        "files": [],
+    }
 
     # The shape, then the annotations drawn over it - from the one camera, or
     # they would land somewhere else on the page.
@@ -317,7 +321,7 @@ def _process(real_svg, shapes, tmp_path, name, reproducible, view):
     request = {"wrapped": shapes[name], "shape_kind": "part", "reproducible": reproducible}
     request.update(resolve_viewport(view))
 
-    assert real_svg.process(path, request) == {"success": True, "exception": None}
+    assert real_svg.process(path, request) == {"success": True, "exception": None, "files": []}
 
     with open(path, encoding="utf-8") as f:
         return _segments(f.read())

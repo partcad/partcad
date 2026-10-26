@@ -196,16 +196,18 @@ msgstr ""
 "是已经存在于装配体中的那个零件的接口。 `withInstance` 和 `toInstance` 字段用于指定接口实例的名称。 "
 "`withPort` 和 `toPort` 字段用于指定端口的名称。"
 
-#: ../../source/assy.rst:142
+#: ../../source/assy.rst:151
 msgid ""
 "The `exploded` field does not affect the assembly itself: it is how far "
 "apart the two parts are drawn in the exploded view of this step in the "
-"assembly instruction book (`pc render -t pdf` and `pc render -t html`). "
-"Without it, the two are spaced by half of the largest dimension of the "
-"two."
+"assembly instruction book (`pc render -t pdf` and `pc render -t html`), "
+"and in the assembly drawn whole with its `exploded` parameter set (see "
+":doc:`config_objects`). Without it, the two are spaced by half of the "
+"largest dimension of the two."
 msgstr ""
-"`exploded` 字段并不影响装配体本身：它决定的是在装配说明书（ `pc render -t pdf` 和 `pc render -t "
-"html` ）中，该步骤的爆炸视图里两个零件被画得相距多远。不给出它时，两者的间距为两者最大尺寸的一半。"
+"`exploded` 字段不影响装配体本身：它决定在装配说明书（`pc render -t pdf` 和 `pc render -t "
+"html`）中此步骤的爆炸视图里两个零件相距多远，以及在设置了 `exploded` 参数而整体绘制的装配体中相距多远（参见 "
+":doc:`config_objects`）。没有它时，两者之间的间隔为两者最大尺寸的一半。"
 
 #: ../../source/assy.rst:148
 msgid "Expected overlaps"
