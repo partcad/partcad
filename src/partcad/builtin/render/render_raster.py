@@ -144,7 +144,7 @@ def process(path, request, fmt, config_pil=None):
             configPIL=config_pil,
         )
 
-        result = {"success": True, "exception": None}
+        result = {"success": True, "exception": None, "files": []}
         # What the projection had to say about the shape - a colour a part
         # states that is not one - is said about this picture too, which is
         # drawn from it.

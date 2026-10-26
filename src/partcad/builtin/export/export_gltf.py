@@ -60,7 +60,15 @@ def process(path, request):
         if not os.path.exists(path) or os.path.getsize(path) == 0:
             raise Exception(f"Failed to create GLTF file: {path}")
 
-        return {"success": True, "exception": None}
+        # A '.gltf' that is not binary keeps its buffers in a file of their own,
+        # beside it and named after it, which OpenCASCADE's writer puts there
+        # and the '.gltf' names. It is part of the answer, so it is said to be.
+        files = []
+        buffers = os.path.splitext(path)[0] + ".bin"
+        if not binary and os.path.isfile(buffers):
+            files.append(os.path.basename(buffers))
+
+        return {"success": True, "exception": None, "files": files}
 
     except Exception as e:
         wrapper_common.handle_exception(e)

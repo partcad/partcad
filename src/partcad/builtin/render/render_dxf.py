@@ -119,7 +119,7 @@ def process(path, request):
         reproducible = bool(request.get("reproducible", False))
         convert_svg_to_dxf(svg_path, path, reproducible=reproducible)
 
-        return {"success": True, "exception": None}
+        return {"success": True, "exception": None, "files": []}
 
     except Exception as e:
         wrapper_common.handle_exception(e)

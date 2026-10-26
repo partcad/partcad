@@ -59,6 +59,12 @@ def _uses_connections(node) -> bool:
 class AssemblyFactoryAssy(AssemblyFactoryFile):
     WRAPPERS = ("measure.py",)
 
+    # An ASSY file says what each item is joined to, which is what an exploded
+    # view pulls apart (see 'Assembly.exploded'). Off unless declared, and the
+    # default is never written into the declaration, so an assembly that does
+    # not mention it keeps the cache key it had (see 'object_type_parameter').
+    ACCEPTED_OBJECT_TYPE_PARAMETERS = {"exploded": False}
+
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitASSY", source_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config, extension=".assy")

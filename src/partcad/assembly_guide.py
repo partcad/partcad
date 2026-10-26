@@ -32,7 +32,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Optional
 
-from . import assembly_filter
+from . import assembly_explode
 from . import document as doc
 from . import logging as pc_logging
 from .assembly import Assembly
@@ -41,9 +41,11 @@ from .geom import Location
 from .render import render_cfg_merge
 from .sandbox_lock import process_slots
 
-# How far apart an exploded view pulls the two items of a step, as a fraction of
-# the largest dimension of the two, unless the step says otherwise.
-EXPLODED_FRACTION = 0.5
+# How far apart an exploded view pulls the two items of a step, and what that
+# falls back to. The rules are 'assembly_explode''s, which an assembly declared
+# with 'exploded: true' is drawn by too, so that the two cannot disagree.
+EXPLODED_FRACTION = assembly_explode.EXPLODED_FRACTION
+FALLBACK_EXPLODED_DISTANCE = assembly_explode.FALLBACK_EXPLODED_DISTANCE
 
 # How far a fastener is pulled out of its hole in the picture of driving it in,
 # as a fraction of its own length: a little more than all of it, so that its
@@ -61,11 +63,6 @@ NEW_COLOR = "#1565C0"
 # hard to pick out in a picture of the whole - a screw, a bracket - while a
 # board or a panel is the thing the picture is of.
 SMALL_FRACTION = 0.25
-
-# What to space two items by when neither of them can be measured (an empty
-# shape, or a runtime that failed to hand a bounding box back). Small enough to
-# be harmless, large enough to be visible.
-FALLBACK_EXPLODED_DISTANCE = 10.0
 
 # How many parts a package has to contribute before the guide links to it. The
 # document is for whoever is assembling the thing, and a package that supplies a
@@ -540,6 +537,10 @@ class GuideSection:
     name: str
     steps: list = field(default_factory=list)
     top: bool = False
+    # The assembly whose children the steps place: the one above, or what it
+    # wraps (see '_step_source'). What a step's pictures are keyed on, with the
+    # step's number (see 'exploded_assembly').
+    content: Optional[Assembly] = None
     # The item everything else is added to. No step places it - there is nothing
     # yet to place it against - so it is named on the assembly's own page, and
     # it is the only item whose 'description' has nowhere else to go.
@@ -663,7 +664,7 @@ async def _build_section(ctx, assembly, content=None, top=False, budget=None):
     """
     if content is None:
         content = _step_source(assembly)
-    section = GuideSection(assembly=assembly, name=_display_name(assembly), top=top, ctx=ctx)
+    section = GuideSection(assembly=assembly, name=_display_name(assembly), top=top, ctx=ctx, content=content)
     section.children = list(content.children)
 
     placed = []
@@ -765,93 +766,27 @@ def _object_key(item) -> str:
 
 
 def _counterpart(assembly, placed, child):
-    """What the item of this step is joined to.
-
-    A step that names what it connects to is joined to that item alone. A step
-    that only gives a location is joined to everything placed so far, which is
-    what the person following the instructions has in their hands at that point.
-    """
-    target = (child.connection or {}).get("target")
-    if target is not None:
-        for candidate in placed:
-            if candidate.name == target:
-                return candidate.item, candidate.name or candidate.item.name, candidate.location or Location()
-
-    if len(placed) == 1:
-        only = placed[0]
-        return only.item, only.name or only.item.name, only.location or Location()
-
-    # The items placed so far, as an assembly in their own right -- which is what
-    # whoever is following the instructions is holding at this point. The same
-    # thing a filtered render is (see 'partcad.assembly_filter'): a view of an
-    # assembly made of some of its children, where the assembly put them. A
-    # declaration of its own, rather than this assembly's: a step is not the
-    # object, so it must not inherit the object's name, its placement or the file
-    # types configured for it.
-    partial = assembly_filter.derive(
-        assembly,
-        placed,
-        config={
-            "name": "%s-step-%d" % (assembly.name or "assembly", len(placed)),
-            "child": True,
-        },
-    )
-    return partial, "the sub-assembly so far", Location()
+    """What the item of this step is joined to (see 'assembly_explode.counterpart')."""
+    return assembly_explode.counterpart(assembly, placed, child)
 
 
 async def _resolve_step_geometry(ctx, step: GuideStep):
     """How far apart to pull the two items of a step, and which way.
 
-    The direction comes from the joint when there is one: the two were mated
-    face to face, so the item backs out along the normal of the port it was
-    connected to. Without a joint there is only the geometry to go by, and the
-    item backs out along the line between the two centers.
+    'assembly_explode.separation_async', which is also how far an item of an
+    assembly declared 'exploded: true' backs out of what it is joined to.
 
-    Each fastener of the step backs out the same way, from what it is driven
-    into: along the normal of the port it was connected to, away from that
-    item - which is the way its head is - by a little more than its own length,
-    so that its point clears whatever it goes through.
+    Each fastener of the step backs out of what it is driven into: along the
+    normal of the port it was connected to, away from that item - which is the
+    way its head is - by a little more than its own length, so that its point
+    clears whatever it goes through.
     """
-    connection = step.connection or {}
-
-    # Both centers at once: each is a bounding box measured in a sandbox, and
-    # neither is an input to the other.
-    item_center, counterpart_center = await asyncio.gather(
-        _placed_center(ctx, step.item, step.location),
-        _placed_center(ctx, step.counterpart, step.counterpart_location),
+    separation = await assembly_explode.separation_async(
+        ctx, step.item, step.location, step.counterpart, step.counterpart_location, step.connection
     )
-    away = [item_center[i] - counterpart_center[i] for i in range(3)]
-
-    direction = _normalized(connection.get("direction")) or _normalized(away)
-    if direction is None:
-        direction = (0.0, 0.0, 1.0)
-    # A port's normal is an axis, not a side: which end of it points out of the
-    # material depends on how the port was declared. Take the end that moves the
-    # item away from what it is being joined to, so that an exploded view always
-    # pulls the two apart rather than pushing one through the other.
-    if sum(direction[i] * away[i] for i in range(3)) < 0:
-        direction = tuple(-value for value in direction)
-    step.direction = direction
-
-    distance = connection.get("exploded")
-    if distance is None:
-        # Both bounding boxes were measured above and a shape remembers its own,
-        # so this is two dictionary lookups in the common case; it is gathered
-        # for the case where one of them could not be measured at all.
-        dimensions = await asyncio.gather(
-            step.item.get_max_dimension_async(ctx),
-            step.counterpart.get_max_dimension_async(ctx),
-        )
-        dimensions = [dimension for dimension in dimensions if dimension]
-        distance = EXPLODED_FRACTION * max(dimensions) if dimensions else FALLBACK_EXPLODED_DISTANCE
-    step.distance = float(distance)
-
-    # The line that shows the gap runs from where the two meet to where the item
-    # has been moved to. Without a joint to point at, it runs from the item's own
-    # center, which is where it came from.
-    start = connection.get("point") or item_center
-    end = [start[i] + step.direction[i] * step.distance for i in range(3)]
-    step.gap = (list(start), end)
+    step.direction = separation.direction
+    step.distance = separation.distance
+    step.gap = separation.gap
 
     await asyncio.gather(*[_resolve_fastener_geometry(ctx, step, fastener) for fastener in step.fasteners])
 
@@ -883,23 +818,9 @@ async def _resolve_fastener_geometry(ctx, step: GuideStep, fastener: GuideFasten
     fastener.gap = (list(center), end)
 
 
-async def _placed_center(ctx, shape, location):
-    """The center of a shape's bounding box, where the assembly puts it."""
-    box = await shape.get_bounding_box_async(ctx)
-    if box is None:
-        center = (0.0, 0.0, 0.0)
-    else:
-        center = ((box[0] + box[3]) / 2.0, (box[1] + box[4]) / 2.0, (box[2] + box[5]) / 2.0)
-    return location.transform_point(center) if location is not None else center
-
-
-def _normalized(vector):
-    if not vector:
-        return None
-    length = math.sqrt(sum(float(value) ** 2 for value in vector))
-    if length < 1e-9:
-        return None
-    return tuple(float(value) / length for value in vector)
+# The two 'view_along' reads, under the names this module has always had.
+_placed_center = assembly_explode.placed_center
+_normalized = assembly_explode.normalized
 
 
 def _group(project_name, name, color, children):
@@ -952,7 +873,7 @@ def exploded_assembly(section: GuideSection, step: GuideStep) -> Assembly:
         context = [(child.item, child.name, child.location or Location()) for child in step.context]
     else:
         context = [(step.counterpart, step.counterpart_name, step.counterpart_location)]
-    return _picture(
+    picture = _picture(
         project_name,
         prefix + "-exploded",
         [
@@ -964,6 +885,11 @@ def exploded_assembly(section: GuideSection, step: GuideStep) -> Assembly:
                 ),
             ),
         ],
+    )
+    return _keyed(
+        picture,
+        section,
+        "guide-step-%d-exploded;%s;%s" % (step.number, _pulled(step.direction, step.distance), _COLORS),
     )
 
 
@@ -985,7 +911,7 @@ def fastened_assembly(section: GuideSection, step: GuideStep) -> Assembly:
     held = [(child.item, child.name, child.location or Location()) for child in step.context if child.name in involved]
     held.append((step.item, step.item_name, step.location))
     fasteners = [(fastener.item, fastener.item_name, fastener.exploded_location()) for fastener in step.fasteners]
-    return _picture(
+    picture = _picture(
         project_name,
         prefix + "-fastened",
         [
@@ -993,6 +919,34 @@ def fastened_assembly(section: GuideSection, step: GuideStep) -> Assembly:
             ("fasteners", _group(project_name, prefix + "-fasteners", NEW_COLOR, fasteners)),
         ],
     )
+    pulled = "/".join(_pulled(fastener.direction, fastener.distance) for fastener in step.fasteners)
+    return _keyed(picture, section, "guide-step-%d-fastened;%s;%s" % (step.number, pulled, _COLORS))
+
+
+# The colours of a step's picture, as its key says them: they are this module's
+# rather than anything the package declares.
+_COLORS = "colors=%s,%s" % (CONTEXT_COLOR, NEW_COLOR)
+
+
+def _pulled(direction, distance) -> str:
+    """Which way and how far something of a picture is pulled, as its key says it."""
+    return "direction=%s;distance=%r" % (",".join("%r" % float(value) for value in direction), float(distance))
+
+
+def _keyed(picture: Assembly, section: GuideSection, identity: str) -> Assembly:
+    """A step's picture, keyed on the assembly the step is of and what the picture shows of it.
+
+    A picture is put together here rather than declared, so it has no cache key
+    of its own. What is in it is the assembly's own items, where the assembly
+    puts them, chosen by the step; what is not is how far and which way some of
+    them are pulled, which is worked out, and the colours. So those and the
+    step, with the assembly's key, are what it is cached under, and drawing the
+    book again draws nothing it has drawn before (see
+    'Shape.get_artifact_key_async').
+    """
+    picture.derived_from = section.content
+    picture.artifact_identity = identity
+    return picture
 
 
 #

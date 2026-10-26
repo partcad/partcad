@@ -978,7 +978,7 @@ def process(path, request):
         if reproducible:
             _normalize(path, precision(request))
 
-        result = {"success": True, "exception": None}
+        result = {"success": True, "exception": None, "files": []}
         # A colour a part states that is not one: drawn in the colour it would
         # have had without it, and said here, because the picture alone cannot
         # tell anybody why the red part came out goldenrod.

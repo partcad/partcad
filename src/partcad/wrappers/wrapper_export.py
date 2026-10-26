@@ -67,8 +67,17 @@ its output would want to know.
 
 and reports what happened in one of two ways, whichever suits it:
 
-    output = {"success": True}                        # wrote the file
+    output = {"success": True, "files": []}           # wrote the file, and only it
     output = {"success": False, "exception": "..."}   # did not
+
+'files' is what else the implementation wrote, as paths relative to the
+directory of 'path' - the meshes a URDF names, the '.bin' beside a '.gltf' - and
+an empty list when it wrote nothing else. Their names begin the way 'path' does
+('logo.urdf' writes 'logo_meshes/...'), which is what lets a cached answer be
+put back under another name. It is optional, and what it buys is the cache: an
+answer that says what it consists of is remembered and put back whole the next
+time the same file is asked for, and one that does not is produced again every
+time. See FILES_KEY.
 
 or by defining a function, which is called with the same two values:
 
@@ -205,6 +214,14 @@ PHYSICS_KEY = "__physics__"
 # implementation as the core sent it, beside 'wrapped', and is not folded into
 # the properties index.
 WORLD_KEY = "world"
+
+# What an implementation wrote besides the file at 'path', as a list of paths
+# relative to the directory that file is in, and the one result key passed on
+# even when it is empty: an empty list says "nothing else", which is a statement,
+# and the absence of the key says nothing at all. The core caches an answer only
+# when it was told what the answer consists of. Its twin is
+# 'partcad.output.FILES_KEY'.
+FILES_KEY = "files"
 
 
 def properties_index(request):
@@ -357,6 +374,11 @@ def process(script, path, request):
     for key in ("warnings", "unsupported", "findings", "stats"):
         if output.get(key):
             result[key] = output[key]
+    # Passed on when it is a list at all, empty included: see FILES_KEY. A value
+    # that is not one is the implementation saying something nobody can act on,
+    # which is the same as saying nothing.
+    if isinstance(output.get(FILES_KEY), (list, tuple)):
+        result[FILES_KEY] = [str(name) for name in output[FILES_KEY]]
     return result
 
 

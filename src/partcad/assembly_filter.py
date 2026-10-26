@@ -73,6 +73,13 @@ def derive(source, children, name=None, config=None):
     cfg["cache"] = False
 
     item = type(source)(source.project_name, cfg)
+    # Never cached as a shape, but what is drawn of it is keyed on its source
+    # when whoever made it says what it is of that (see
+    # 'Shape.get_artifact_key_async').
+    item.derived_from = source
+    # And read as its source's type reads it: a view of 'logo;exploded=true'
+    # is exploded too, when it keeps the declaration that says so.
+    item.object_type_parameters = getattr(source, "object_type_parameters", {})
     # Nothing instantiates this one: its children are put in here, once, and
     # there is no file to read them back from. 'Assembly.do_instantiate()' finds
     # them already there and returns, which is what keeps the two from racing.

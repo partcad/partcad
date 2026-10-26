@@ -224,8 +224,12 @@ def mapped_interface_names(config: dict) -> list:
     return names
 
 
-def node_index(assembly, prefix: str = "", placement: Location = None, index: dict = None) -> dict:
+def node_index(assembly, prefix: str = "", placement: Location = None, index: dict = None, offsets=None) -> dict:
     """{node path -> (item, where this assembly put it)}.
+
+    'offsets' is how far an exploded view moves each of the assembly's own
+    children (see 'Assembly.exploded_offsets_async'): a port it externalizes is
+    on the item where the item is drawn. What is inside a child moves with it.
 
     The nodes a 'map:' may name. Every level of the tree is one, because every
     link has a name: its own, or - for a 'links:' that gives itself neither a
@@ -245,9 +249,7 @@ def node_index(assembly, prefix: str = "", placement: Location = None, index: di
     placement = Location() if placement is None else placement
 
     for index_of, child in enumerate(assembly.children):
-        child_placement = placement
-        if child.location is not None:
-            child_placement = placement * shape_ports.as_location(child.location)
+        child_placement = shape_ports.child_placement(placement, child, offsets[index_of] if offsets else None)
 
         item = child.item
         container = isinstance(item, Assembly) and item.config.get("child", False)
@@ -642,7 +644,7 @@ async def resolve_async(shape, ctx) -> None:
         if isinstance(shape, Assembly) and any(not _names_no_node(spec) for spec in declared.values()):
             try:
                 await shape.do_instantiate()
-                nodes = node_index(shape)
+                nodes = node_index(shape, offsets=await shape.exploded_offsets_async(ctx))
             except Exception as e:
                 pc_logging.error("%s: failed to walk the assembly: %s" % (where, e))
                 with_ports.set_mapped(mapped)

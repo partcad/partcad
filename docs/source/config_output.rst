@@ -298,7 +298,7 @@ build123d or CadQuery, and it is executed with two globals available --
 
 .. code-block:: python
 
-  output = {"success": True}
+  output = {"success": True, "files": []}
   # or
   output = {"success": False, "exception": "..."}
 
@@ -309,7 +309,22 @@ implementation reuse another:
 
   def process(path, request):
       ...
-      return {"success": True, "exception": None}
+      return {"success": True, "exception": None, "files": []}
+
+``files`` is what the implementation wrote besides ``path``, as paths relative
+to the directory ``path`` is in -- the meshes a URDF file names, the ``.bin``
+beside a ``.gltf`` -- and an empty list when it wrote nothing else. It is
+optional, and what it buys is the cache: a file whose implementation says what
+it wrote is kept, with everything it lists, and the same file asked for again
+is put back rather than written again. An implementation that does not say is
+run every time, because a file put back without the meshes beside it would be
+worse than writing it again. Only files inside that directory can be listed.
+
+Name them after ``path``: asked for ``robot.urdf``, write ``robot_meshes/...``
+rather than ``meshes/...``. The part of each name that follows what it shares
+with ``path`` is what is kept, so the same file asked for under another name
+comes back with its companions named after that one. Names that share only the
+directory come back only under the same name.
 
 .. code-block:: yaml
 
@@ -324,10 +339,11 @@ implementation reuse another:
 no built-in package implements may be declared this way too, and is then
 nameable with ``pc export -t`` / ``pc render -t`` like any other.
 
-What an implementation produces is cached where PartCAD caches it -- an analysis,
-a route, a simulation -- under a key that includes the version its script
-reports: a module-level ``CACHE_VERSION = <int>``, read without running the
-script. Raise it whenever a change to the script changes what it produces, and
+What an implementation produces is cached -- an exported file or a picture
+whose implementation says what it wrote, an analysis, a route, a simulation --
+under a key that includes the version its script reports: a module-level
+``CACHE_VERSION = <int>``, read without running the script. Raise it whenever a
+change to the script changes what it produces, and
 every result it produced before is produced again. Every implementation and
 wrapper PartCAD ships states one. (Those results are keyed on the Python sources
 of the package the implementation comes from as well -- see :ref:`caching` -- so
