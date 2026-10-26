@@ -27,12 +27,14 @@ pinning is *which* commands are run, in what order, and how often.
 """
 
 import base64
+import json
 import threading
 from typing import Callable, Optional
 
 from partcad_utils import containers
 from partcad_utils.json_rpc_client import RuntimeJsonRpcClient
 
+from . import sandbox_versions
 from .process_crash import failure_detail
 
 # Where the volume is mounted inside every container this service starts. Fixed
@@ -41,13 +43,18 @@ from .process_crash import failure_detail
 # container.
 SANDBOX_ROOT = "/pc-sandbox"
 
-# What the image's own interpreter is called *to the service inside it*. That
-# service takes a command by the name its allowlist gives it, and the base image
-# allows "python" (see `tools/containers/README.md`); "python3" is what the file
-# is called, which is a different thing and is not allowed. The environment's
-# own interpreter is a path rather than a name -- it did not exist when the
-# image was built -- and the service recognises it by where it is.
-IMAGE_PYTHON = "python"
+# What the image's own interpreter may be called *to the service inside it*, in
+# the order they are tried. That service takes a command by the name its
+# allowlist gives it. PartCAD's base image pins "python" to its interpreter
+# (see `tools/containers/README.md`), and that name comes first so that an
+# image saying which interpreter is its own is taken at its word. "python3" is
+# second, for an image that was not built on that base and has only the name
+# Debian and Ubuntu install, with no "python" at all: Gazebo's, ROS's, anything
+# on a stock distribution. Which of the two an image has is asked of it (see
+# `Environments`) rather than found out from a refusal. The environment's own
+# interpreter is a path rather than a name -- it did not exist when the image
+# was built -- and the service recognises it by where it is.
+IMAGE_PYTHONS = ("python", "python3")
 
 
 def volume_name(image: str) -> str:
@@ -62,9 +69,21 @@ def volume_name(image: str) -> str:
     return "pc-sandbox-" + hashlib.sha256(image.encode()).hexdigest()[:12]
 
 
+# Raised when the environments an earlier release built can be wrong in a way
+# this one cannot see from outside them, so that they are built again beside the
+# old ones rather than trusted. A volume outlives every release that writes to
+# it, and pip, asked about a damaged environment, says everything is installed.
+#
+# 2: until 'Environments._install' forced CadQuery's OCP back over the novtk
+# build build123d brings, every environment built here that held both had the
+# novtk one, and every CadQuery part in it failed to import. The old directory
+# stays in the volume until the volume is removed.
+GENERATION = 2
+
+
 def environment_path(version: str) -> str:
     """Where the environment for one Python version lives inside the volume."""
-    return "%s/v-env-%s" % (SANDBOX_ROOT, version)
+    return "%s/v%d-env-%s" % (SANDBOX_ROOT, GENERATION, version)
 
 
 def interpreter_path(version: str) -> str:
@@ -85,6 +104,23 @@ def lock_for(version: str, exclusive: bool) -> dict:
     return {"path": environment_path(version) + ".lock", "exclusive": exclusive}
 
 
+def pip_installed(stdout: Optional[str]) -> bool:
+    """Whether 'pip install --quiet --report -' installed anything, from what it printed.
+
+    The report and not pip's log, because the log is the image's to configure:
+    one setting 'PIP_QUIET' or 'quiet' in its pip.conf hides "Successfully
+    installed", and with it the repair '_install' exists to trigger. A configured
+    verbosity can outweigh '--quiet' as well and put the log in front of the
+    report; that log says "Successfully installed" when anything was, so that is
+    what is read then.
+    """
+    try:
+        report = json.loads(stdout or "")
+    except ValueError:
+        return "Successfully installed" in (stdout or "")
+    return isinstance(report, dict) and bool(report.get("install"))
+
+
 class Environments:
     """The environments this service has built, and what is installed in them.
 
@@ -92,14 +128,30 @@ class Environments:
     something that forwards over JSON-RPC, and a test passes something that
     records. It is called as ``run(image, command, lock)``, ``lock`` being
     `lock_for` the environment, and must return ``(exit_code, stdout, stderr)``.
+
+    ``which`` is how the container is asked which of `IMAGE_PYTHONS` it has,
+    called as ``which(image, names)`` and answering what the service's ``which``
+    does (see `which` below): a path for each name it has, None for each it
+    does not, or None for no answer at all. Without it the first name is used
+    unasked, which is right only for an image known to have it.
     """
 
-    def __init__(self, run: Callable[[str, list], tuple]):
+    def __init__(
+        self,
+        run: Callable[[str, list], tuple],
+        which: Optional[Callable[[str, list], Optional[dict]]] = None,
+    ):
         self._run = run
+        self._which = which
         self._lock = threading.Lock()
         # (image, version) -> set of requirements already installed there.
         self._installed = {}
         self._built = set()
+        # image -> the name its interpreter answers to; see '_image_python'.
+        self._pythons = {}
+        # (image, version) -> requirements whose files an install since has
+        # overwritten, so that their next install is forced; see '_install'.
+        self._clobbered = {}
         # One lock per environment, so that two callers wanting two different
         # images do not queue behind each other's pip.
         self._gates = {}
@@ -125,14 +177,23 @@ class Environments:
                     self._built.add(key)
                     self._installed.setdefault(key, set())
 
-            with self._lock:
-                known = self._installed.setdefault(key, set())
-                wanted = [r for r in requirements if r not in known]
-
-            for requirement in wanted:
-                self._install(image, version, requirement)
+            # In order, and decided one at a time rather than up front: an
+            # install can overwrite what an earlier one put there, and the list
+            # is ordered so that the repair comes after it (see '_install').
+            for requirement in requirements:
+                with self._lock:
+                    clobbered = self._clobbered.setdefault(key, set())
+                    force = requirement in clobbered
+                    if requirement in self._installed.setdefault(key, set()) and not force:
+                        continue
+                replaced = self._install(image, version, requirement, force=force)
                 with self._lock:
                     self._installed[key].add(requirement)
+                    clobbered.discard(requirement)
+                    if replaced:
+                        for other in sandbox_versions.GUARD_INVALIDATED_BY.get(requirement, ()):
+                            self._installed[key].discard(other)
+                            clobbered.add(other)
 
         return interpreter_path(version)
 
@@ -145,7 +206,7 @@ class Environments:
         """
         exitcode, _, stderr = self._run(
             image,
-            [IMAGE_PYTHON, "-m", "venv", "--upgrade-deps", environment_path(version)],
+            [self._image_python(image), "-m", "venv", "--upgrade-deps", environment_path(version)],
             lock_for(version, exclusive=True),
         )
         if exitcode != 0:
@@ -166,26 +227,81 @@ class Environments:
         )
         built = (stdout or "").strip()
         if exitcode != 0 or built != version:
+            # Said with the way out, because the version asked for is rarely
+            # one anybody chose: an implementation that states none is given
+            # PartCAD's default, and the one place that knows what its image
+            # carries is the implementation naming that image.
             raise RuntimeError(
                 "The remote environment for Python %s in %s is Python %s: that image carries a different "
-                "interpreter than the version asked for." % (version, image, built or "unknown")
+                "interpreter than the version asked for. Declare the version the image carries "
+                "('pythonVersion') beside the 'dockerImage' that names it." % (version, image, built or "unknown")
             )
 
-    def _install(self, image: str, version: str, requirement: str) -> None:
+    def _image_python(self, image: str) -> str:
+        """The first of `IMAGE_PYTHONS` the image has, asked once per image.
+
+        An answer naming neither is a refusal here, with both names in it:
+        anything else ends in the service turning down the first name, and
+        nothing in that says the second was looked for too. No answer at all
+        leaves the first name to be tried, so that a service that could not be
+        asked fails the way it did before it could be -- and is not remembered:
+        no answer is what a timeout gives too, and a guess kept for an image
+        with only 'python3' would fail every build in it until the container
+        went.
+        """
+        with self._lock:
+            if image in self._pythons:
+                return self._pythons[image]
+        if self._which is None:
+            return IMAGE_PYTHONS[0]
+        found = self._which(image, list(IMAGE_PYTHONS))
+        if found is None:
+            return IMAGE_PYTHONS[0]
+        name = next((n for n in IMAGE_PYTHONS if found.get(n)), None)
+        if name is None:
+            raise RuntimeError(
+                "%s has no Python interpreter on its PATH (looked for %s), so no environment can be "
+                "built in it. Name an image that has one." % (image, " and ".join(IMAGE_PYTHONS))
+            )
+        with self._lock:
+            self._pythons[image] = name
+        return name
+
+    def _install(self, image: str, version: str, requirement: str, force: bool = False) -> bool:
+        """Install one requirement; whether pip really installed anything.
+
+        That answer is what the overwritten files are tracked by. build123d
+        depends on 'cadquery-ocp-novtk', which writes the same OCP module as
+        CadQuery's 'cadquery-ocp' without the VTK half "import cadquery" needs
+        (see 'sandbox_versions.GUARD_INVALIDATED_BY'). The base requirements end
+        with 'cadquery-ocp' to put it back, and pip, seeing it installed, did
+        nothing -- so every CadQuery part in an environment built here failed
+        on "cannot import name 'IVtkOCC_Shape'". After an install that replaced
+        files, the next install of what it overwrote is forced, as the local
+        sandboxes force theirs; one that found everything in place replaced
+        nothing, so a process finding the environment already built forces no
+        reinstall of the CAD stack.
+        """
         # '--prefer-binary' for the reason every other sandbox installs with it
         # (see 'pip_install_flags' in 'runtime_python'): a newer release with no
         # wheel for the image is a compile that fails, an older one with a wheel
         # is an install that works.
-        exitcode, _, stderr = self._run(
-            image,
-            [interpreter_path(version), "-m", "pip", "install", "--no-input", "--prefer-binary", requirement],
-            lock_for(version, exclusive=True),
-        )
+        #
+        # '--report -' is what says what was installed, and '--quiet' keeps
+        # pip's log out of the stream it is written to (see 'pip_installed').
+        command = [interpreter_path(version), "-m", "pip", "install", "--no-input", "--prefer-binary"]
+        command += ["--quiet", "--report", "-"]
+        if force:
+            # With its dependencies, for the reason 'FORCE_REINSTALL_FLAGS' in
+            # 'runtime_python' gives: the VTK build fails to load without VTK.
+            command.append("--force-reinstall")
+        exitcode, stdout, stderr = self._run(image, command + [requirement], lock_for(version, exclusive=True))
         if exitcode != 0:
             raise RuntimeError(
                 "Could not install '%s' into the remote environment for Python %s in %s: %s"
                 % (requirement, version, image, failure_detail(stderr, exitcode))
             )
+        return pip_installed(stdout)
 
     def forget(self, image: str) -> None:
         """Say the containers for this image are gone, so its environments are unknown.
@@ -194,11 +310,16 @@ class Environments:
         is the point of it. What is forgotten is only this service's belief
         about what is in there, so the next request re-checks rather than
         assuming a package is installed because a previous process installed it.
+
+        What an install has overwritten is kept: that is a fact about the
+        volume, which is still there, and a repair that had not run yet when
+        the container went is still owed.
         """
         with self._lock:
             for key in [k for k in self._built if k[0] == image]:
                 self._built.discard(key)
                 self._installed.pop(key, None)
+            self._pythons.pop(image, None)
 
 
 def _decoded(value) -> str:
@@ -265,6 +386,20 @@ def forward(pool, image: str, command: list, params: dict = None) -> tuple:
             return 1, "", _message(answer["error"])
         result = answer.get("result") or {}
         return int(result.get("exit_code") or 0), _decoded(result.get("stdout")), _decoded(result.get("stderr"))
+    finally:
+        pool.release(lease)
+
+
+def which(pool, image: str, names: list) -> Optional[dict]:
+    """Where each of ``names`` resolves in the container for ``image``; None for no answer.
+
+    What ``Environments`` is given to find the image's interpreter with, through
+    the same pool as ``forward`` -- the service's ``which``, which runs nothing.
+    """
+    lease = pool.acquire(image)
+    try:
+        host, port = lease.endpoint.rsplit(":", 1)
+        return RuntimeJsonRpcClient(host, int(port), token=lease.token).which(list(names))
     finally:
         pool.release(lease)
 

@@ -691,10 +691,15 @@ class Runtime:
         name of.
         """
         result = response["result"]
+        # Empty as a string, as a process run here reports it. None was what a
+        # command that printed nothing came back as, and the callers measure
+        # what came back: a CadQuery part whose script wrote nothing to stderr
+        # failed on "object of type 'NoneType' has no len()" -- in upload mode
+        # only, and only once nothing else had made it print.
         stdout = result["stdout"]
-        stdout = base64.b64decode(stdout).decode("utf-8") if stdout else None
+        stdout = base64.b64decode(stdout).decode("utf-8") if stdout else ""
         stderr = result["stderr"]
-        stderr = base64.b64decode(stderr).decode("utf-8") if stderr else None
+        stderr = base64.b64decode(stderr).decode("utf-8") if stderr else ""
         for file_name, file_contents in (result.get("output_files") or {}).items():
             if file_name in output_files:
                 with open(file_name, "wb") as f:
@@ -867,6 +872,9 @@ class Runtime:
                 # point: what 'communicate_sync' hands back from a process it
                 # stopped waiting for is the bytes read so far, and a text-mode
                 # Popen would have mixed the two.
+                # Written before the process starts: a request that cannot be written
+                # then fails with no child left waiting on its standard input.
+                data = stdin_bytes(stdin) or None
                 p = subprocess.Popen(
                     argv,
                     stdin=subprocess.PIPE,
@@ -877,7 +885,7 @@ class Runtime:
                     cwd=spawn_cwd,
                     env=spawn_env,
                 )
-                stdout, stderr = communicate_sync(p, stdin_bytes(stdin) or None)
+                stdout, stderr = communicate_sync(p, data)
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
             returncode, stderr = self._ended(p.returncode, stderr)
@@ -927,6 +935,8 @@ class Runtime:
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
             async with sandbox_lock.process_slots.slot_async():
+                # As in 'run'.
+                data = stdin_bytes(stdin)
                 with output_capture(self.OUTPUT_TO_FILES) as capture:
                     p = await asyncio.create_subprocess_exec(
                         *argv,
@@ -939,7 +949,7 @@ class Runtime:
                         env=spawn_env,
                         **bounded_spawn_options(timeout),
                     )
-                    stdout, stderr = capture.collect(*await communicate(p, stdin_bytes(stdin), timeout))
+                    stdout, stderr = capture.collect(*await communicate(p, data, timeout))
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)

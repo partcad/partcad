@@ -1137,9 +1137,6 @@ async def _run_plugin_async(
     if snapshot:
         # The pictures to take, and from where; see 'snapshot_request'.
         request["snapshot"] = snapshot
-    # The same key the export wrapper reads its script path under; one
-    # definition of it, in 'output', so the two wrappers cannot disagree.
-    request[output.SCRIPT_KEY] = os.path.abspath(script)
 
     # The image the plugin names, as for an export or a render implementation
     # (see 'Shape._run_implementation_locked'): a simulator that is not a wheel
@@ -1160,6 +1157,10 @@ async def _run_plugin_async(
         # wrapper.
         os.path.abspath(directory),
         os.path.abspath(impl.project.config_dir),
+        # The script, on the command line rather than in the request: an
+        # argument is rewritten to wherever a sandbox that sends files put it,
+        # and the request is not (see 'wrapper_simulate.SCRIPT_ARGUMENT').
+        os.path.abspath(script),
     ]
     # A sandbox that sends files rather than sharing a directory has to be told
     # what comes back: the pictures are written into the run directory, so the

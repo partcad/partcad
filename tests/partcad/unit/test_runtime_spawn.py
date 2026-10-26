@@ -251,3 +251,47 @@ def test_a_container_endpoint_takes_its_request_as_text_or_bytes(stdin):
     )
 
     assert base64.b64decode(endpoint.params(stdin)["stdin"]) == b"a request"
+
+
+def _unwritable():
+    raise ValueError("this request cannot be written")
+
+
+@pytest.fixture
+def spawns(monkeypatch):
+    """Every process the runtimes start, counted rather than started."""
+    started = []
+
+    def popen(*args, **kwargs):
+        started.append(args)
+        raise AssertionError("a process was started for a request that cannot be written")
+
+    async def create_subprocess_exec(*args, **kwargs):
+        started.append(args)
+        raise AssertionError("a process was started for a request that cannot be written")
+
+    monkeypatch.setattr(runtime.subprocess, "Popen", popen)
+    monkeypatch.setattr(runtime.asyncio, "create_subprocess_exec", create_subprocess_exec)
+    return started
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_a_request_that_cannot_be_written_starts_no_process(tmp_path, one_slot, spawns, asynchronous):
+    """Regression: written after the spawn, its failure left the child waiting on its standard input."""
+    plain = runtime.Runtime(_ctx(tmp_path), "plain")
+
+    with pytest.raises(ValueError, match="cannot be written"):
+        if asynchronous:
+            asyncio.run(plain.run_async([sys.executable, "-c", "pass"], _unwritable))
+        else:
+            plain.run([sys.executable, "-c", "pass"], _unwritable)
+
+    assert spawns == []
+    assert one_slot._in_use == 0
+
+
+def test_nor_does_the_python_runtime(python_runtime, one_slot, spawns):
+    with pytest.raises(ValueError, match="cannot be written"):
+        asyncio.run(python_runtime.run_async_onced(["-c", "pass"], stdin=_unwritable))
+
+    assert spawns == []
