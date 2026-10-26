@@ -7,9 +7,9 @@ How to *use* any of it is the user documentation's job; this file is for whoever
 
 Status words used below: **built** is on `devel`; **decided** is agreed and not built; **open** is not agreed.
 
-Where it stands: step 1 is #849, the pull request that adds this record; steps 2 and 3 are #850; step 4 is being
-done separately. Steps 5 to 7 are **open**: two proposals for them are withdrawn, and section 9 says what is
-decided and the design being discussed.
+Where it stands: step 1 is **built** (#849, which added this record). Step 3 is **built** as part of #848, which
+caches every export and render; step 2 is #850, which drops its own picture cache in #848's favour. Step 4 is being
+done separately. Steps 5 to 7 are **decided** (section 9), and nothing about them is open.
 
 ## Contents
 
@@ -21,7 +21,7 @@ decided and the design being discussed.
 6. [Step 2: the daemon and the wire](#6-step-2-the-daemon-and-the-wire)
 7. [Step 3: the disk cache](#7-step-3-the-disk-cache)
 8. [Step 4: the swap healthcheck](#8-step-4-the-swap-healthcheck)
-9. [Steps 5 to 7: scheduling, reconsidered](#9-steps-5-to-7-scheduling-reconsidered)
+9. [Steps 5 to 7: admission by memory](#9-steps-5-to-7-admission-by-memory)
 10. [The example repository and the parts library](#10-the-example-repository-and-the-parts-library)
 11. [Validation](#11-validation)
 12. [Open questions](#12-open-questions)
@@ -146,7 +146,7 @@ mesh has three (section 10).
 | 2 | The daemon and the wire | `shape_envelope.py`, `shape.py`, `runtime*.py`, `cache_shape.py` | requests and cache entries one copy per distinct part; nothing serialized before it can run | medium: wire and cache format |
 | 3 | The disk cache | `shape.py` render/export path, `cache_artifacts.py` | an unchanged picture is not drawn again | low |
 | 4 | The swap healthcheck | `healthcheck/swap.py` | the user is told | low |
-| 5-7 | Admission by memory | `sandbox_lock.py`, the fan-out sites, `sync_threads.py`, `shape.py` | every core busy, started work first, no new start past the daemon's budget except the best-ranked one when nothing runs; nothing running touched | open: section 9 |
+| 5-7 | Admission by memory | `sandbox_lock.py`, `cache_shape.py`, `shape.py`, `project.py`, `sync_threads.py`, `runtime.py` | every core busy, started work first, no new task past the daemon's budget except the best-ranked one when nothing runs; nothing running touched; idle objects freed on demand | decided: section 9 |
 
 Steps 1 to 4 are independent and each pays for itself; step 1 alone is what got the examples through on this machine
 (section 2). Steps 5 to 7 are what makes the result hold for the next, larger design rather than for this one.
@@ -246,10 +246,10 @@ drawing of the car costs the daemon about 15 MB while it runs and nothing while 
 
 - `pc_logging.debug("Output of %s: %s" % (cmd, stdout))` and the lines beside it formatted the whole output of every
   sandbox -- a part's BREP, base64 -- whether or not debug logging was on. They take arguments instead.
-- Not done, and recorded: the memory tier keeps every entry under 100 MB for the life of the context, and a warm
-  daemon never drops a context (the TODO in `core/session.py`). A byte budget for the tier, least recently used out
-  first, with `Shape._wrapped` let go along with its entry, would bound what a long-lived daemon accumulates. It
-  changes the lifetime of every shape a context holds, which is a change of its own.
+- Not done here: the memory tier keeps every entry under 100 MB for the life of the context, and a warm daemon never
+  drops a context (the TODO in `core/session.py`). Freeing idle objects on demand, least recently used first, with
+  `Shape._wrapped` let go along with its entry, is what bounds what a long-lived daemon accumulates; it changes the
+  lifetime of every shape a context holds, and is part of steps 5 to 7 (section 9, point 9).
 
 ## 7. Step 3: the disk cache
 
@@ -277,8 +277,9 @@ The castle, `f1`, `f1/car` and `f1/front-end` trees are never written to the fil
 `cacheFilesMaxEntrySize` (10 MB), because of the copies in 6.1. So a warm run puts them together again from their
 sub-assemblies every time. A tree entry is therefore a frame of its own (`cache_shape._TREE_MAGIC`): the tree as
 compressed JSON in which each node names its payload, then each distinct payload once, as raw bytes rather than
-base64. The castle's entry fits easily; `f1`'s distinct geometry alone is 10.9 MB of compressed BREP, so it still does
-not, and the remedy for that is an entry that names its parts' own cache entries instead of carrying them. An earlier
+base64. The castle's entry fits easily; `f1`'s distinct geometry alone is 10.9 MB of compressed BREP, so it does not fit
+the 10 MB limit. **Decided:** the default `cacheFilesMaxEntrySize` becomes 50 MB, which `f1` fits; an entry that
+names its parts' own cache entries instead of carrying them stays the remedy for a tree bigger than that. An earlier
 release reading a framed entry counts it a miss and writes its own form; the frame reads both.
 
 ### 7.3 Later: geometry by path rather than by pipe
@@ -315,83 +316,97 @@ This is independent of everything else here and can land first.
 ## 9. Steps 5 to 7: admission by memory
 
 Two proposals for these steps have been withdrawn: a budget held below RAM, which held cores back long before memory
-ran out, and then pausing or stopping running tasks at a margin short of capacity. What is **decided**:
+ran out, and then pausing or stopping running tasks at a margin short of capacity. A third, charging each task the
+peak it is expected to reach, is withdrawn too. What is **decided**:
 
 1. **Every core stays busy while memory allows.** As many sandbox processes run as there are slots (`threadsMax`)
    while there is work for them, as today.
 2. **What is started is finished first.** While the castle occupies only a few cores, the car's tasks use the rest.
    When the castle fans out into more tasks, new starts go to the castle, and the number of car tasks in flight falls,
    to none if need be.
-3. **Each daemon budgets for itself**: it plans to use up to 80% (configurable) of the capacity, swap included, and
-   ignores every other daemon. There is no agreement between daemons, so two of them on one machine can between them
-   plan more than it has; that is accepted. Question 2 is whether what the machine has free should shrink the budget.
+3. **The budget is a share of this machine's capacity, and each daemon budgets for itself.** Capacity is RAM plus
+   swap (or page file), and the swap is counted by default (`memoryBudgetSwap: true`; `false` leaves it out). The
+   share is `memoryBudget`, 0.8 by default. Other daemons and other processes are not accounted for: where they need
+   memory too, the administrator lowers the share. A remote renderer is a machine dedicated to rendering, and budgets
+   the same way on its own side; the daemon that sends it work does not count that work against its own budget.
 4. **Nothing running is touched.** No task is paused, frozen, stopped or made to wait once it has started. The one
    lever is not starting new tasks until memory conditions improve.
-5. **Finishing work frees memory**, or conditions would never improve: a sandbox frees everything when its process
-   exits, and the daemon releases what has been used and can be had back from disk -- a sub-assembly's tree once its
-   parent is built, and in general an object that is not too small and is cached on disk.
+5. **Nothing is anticipated.** No task is assumed to need any particular amount of memory, recorded or estimated. A
+   task starts while the daemon's usage is under the budget, and a started task may -- will -- overshoot: the 20% the
+   budget leaves is the room for that. The burst at the start of a run, when every slot fills while usage is still
+   near nothing, is accepted for the same reason.
+6. **Nothing is throttled to a stop.** Whenever no task is running, the best-ranked waiting one starts, whatever the
+   usage -- with a warning when usage is over the budget. Every running task ends, so a design bigger than the machine
+   is slowed down to one task at a time, and then fails or finishes; it never stops.
+7. **A task is one wrapper call, or one load in the daemon.** Not a process -- a container serves many calls, and a
+   call may start more than one -- and not an action, which may hold many tasks. Every call into a sandbox, an
+   implementation's container or a container sandbox is one task. So is each object the daemon reads into memory from
+   a cache tier: putting a large assembly together is many tasks, one per object it reads, and can be held back
+   between any two of them. (A client asking for one assembly already makes that many requests, one per sub-assembly,
+   through `partcad_utils.staging`; a recursive render makes one, and the tasks are what divides it.)
+8. **An object is built once and then drawn in every way it is asked for.** One copy of its geometry is in memory
+   while its pictures and exports are produced, one by one or in parallel where the budget allows -- not one tree per
+   picture -- and then it is released.
+9. **Finishing work frees memory.** A sandbox frees everything when its process exits. In the daemon, an object no
+   longer used is either dropped, when a disk tier holds it and it is over 1 MB (`cacheMemoryDoubleCacheMaxEntrySize`)
+   -- which is what happens today -- or kept on one of **two least-recently-used lists**: one for the large objects no
+   persistent tier holds (most of them over the file tier's limit) and one for objects under 1 MB. When usage reaches
+   **90% of the budget**, idle objects are freed: from the list of large ones first, then the small ones, the least
+   recently used first in each, until usage is back under that mark or both lists are empty.
+10. **The memory tier keeps entries up to 250 MB** (`cacheMemoryMaxEntrySize`, was 100 MB), so that the large list
+    has a range of sizes to hold -- 50 to 250 MB -- and the file tier takes entries up to 50 MB (7.2).
+11. **Usage is what Python cannot reuse.** Memory a process has freed is not always given back to the system: the
+    allocator keeps it for the next allocation. Freeing runs the garbage collector, gives back what the allocator can
+    give back, and counts what it keeps -- free blocks and pools in Python's own allocator, free chunks in C's -- as
+    available rather than used, since the daemon's next load reuses it. Without that, the daemon frees and its usage
+    does not fall, and admission does not resume.
 
-The design being discussed, **open** in every part:
+The design that carries it out, **decided** with the points above and built in the pull request that implements them:
 
-- **A task is one sandbox launch**, and it is admitted where every launch already waits: the process slot
-  (`sandbox_lock.process_slots`). The coroutines and threads that wait for sandboxes are not tasks; nothing in the
-  daemon computes geometry.
-- **Usage is this daemon's own footprint**: its process and the sandbox processes it started (PSS where Linux has it,
-  `psutil`'s USS elsewhere). **Capacity** is RAM plus swap, or the cgroup's `memory.max` plus `memory.swap.max` where
-  that is smaller. The budget is `memoryBudget` (0.8) times capacity. Under a cgroup limit the two are not measured
-  alike: the kernel charges the cgroup's whole usage against `memory.max` -- kernel memory, page cache, and every
-  other process in the cgroup, such as the rest of a dev container -- and its swap separately against
-  `memory.swap.max`, so a footprint can fit the budget while the cgroup does not. An admission estimate on the
-  cgroup's side would be its working set, `memory.current` less the `inactive_file` of `memory.stat` that the kernel
-  reclaims before it acts, beside `memory.swap.current`; it estimates the charge rather than reproducing it. Which to
-  use is part of question 2.
-- **Admission charges what a task will reach, not what it uses now.** In a warm run of the LDraw examples with #849 and
-  #850, a picture's sandbox held 0.4 to 0.5 GB five seconds after it started and 1.4 to 2.7 GB ten seconds later,
-  and the run's first four starts saw 234 MB in use. A test of present usage admits a slot's worth of tasks at once,
-  and they then grow together: since nothing running may be stopped, that is how a run reaches the kernel. So every
-  running task is charged the larger of its expected peak and what it uses now, and a task is started only if the
-  daemon's usage, plus the growth still expected of the running tasks, plus the new task's expected peak, fits the
-  budget. A task's expected peak is the peak recorded for the same task -- the same key as its cache entry -- on an
-  earlier run, and without a record a default (question 6). It is still only a decision not to start.
-- **Progress is guaranteed by construction.** A sandbox never waits for another sandbox, so every running task ends and
-  frees its process. When the daemon has no task running at all, the best-ranked ready task is started whatever it is
-  expected to need, with a warning when that is over the budget; otherwise a design bigger than the machine would stop
-  instead of failing.
-- **Order: roots, then first come first served.** A root is one unit of a command's outermost fan-out (question 4).
-  Roots rank by when their first task started, roots not started yet by declaration order; within a root, tasks are
-  taken in the order they asked. When a slot frees, the first ready task in that order that fits the budget takes it
-  (question 7 is whether a lower one that fits may go first). A task building something that a better-ranked task
-  waits for -- a brick two pictures need -- ranks as the better of the two, through the shape's lock and its
-  preparation. The rank travels with work across a thread hop, beside the OpenTelemetry context `sync_threads._Work`
-  already carries, and `ProcessSlots` wakes its waiters in rank order instead of letting whichever polls first win.
-  Today's pools stay: since #834 they are deadlock-free at any size.
-- **A postponed task holds nothing.** Today a picture builds its request, and so holds its tree, before it waits for a
-  slot (`_render_one_async` calls `_output_request`; the slot is taken in `runtime.py`). With 33 pictures waiting, the
-  daemon holds 33 trees, so postponing work would itself use memory. What a task is handed is put together once it is
-  admitted, and #850 already serializes it only then.
-- **The daemon's release.** Most of it exists: an entry over `cacheMemoryDoubleCacheMaxEntrySize` (1 MB) that a
-  persistent tier holds is not kept on its shape (`Shape._wrapped`) but read back for each use -- and with #850 the
-  castle's tree is such an entry, where before it was over the file tier and so kept for the daemon's lifetime. What
-  is left:
-  - an entry no persistent tier takes is kept for the daemon's lifetime, because nothing else has it: `f1`'s tree,
-    over the file tier's 10 MB (7.2). It needs a way onto disk to become releasable;
-  - an entry under 1 MB is kept for the daemon's lifetime too; a design of tens of thousands of parts adds those up
-    (question 8);
-  - memory Python frees has to be returned to the system to count. glibc raises its `mmap` threshold each time a
-    large block is freed, up to 32 MB, so later blocks of that size come from the heap and stay in the process after
-    they are freed. The daemon fixes the threshold (`M_MMAP_THRESHOLD`) and calls `malloc_trim(0)` after a release.
-    Without that, the daemon releases and its usage does not fall, and admission never resumes.
-- **The sandbox's own release** (5.2) was not worth a pull request while nothing charged a task for its peak. Now the
-  peak is what admission charges.
-- **The client keeps waiting.** A request whose tasks are postponed goes on logging, so the client's 300 s idle timeout
-  (`partcad_utils.timeouts`) does not fire, and time spent waiting to be admitted does not count against a task's own
-  timeout.
-- **A failed task is one failure.** `Project.render_async` should gather a package's pictures with
-  `return_exceptions`, as `_render_packages_async` already gathers packages, and raise the first failure once the rest
-  are done: today the first exception ends the package's render, which is how one kill in the warm run cost eight
-  pictures (section 2). It is a few lines, and independent of the rest.
-
-The questions it leaves are in section 12.
+- **Admission sits where every task already starts.** A wrapper call takes a process slot
+  (`sandbox_lock.process_slots`) and a load takes none; both are admitted by the one controller behind the slots. A
+  call into a container endpoint takes a slot now too: in docker's `upload` mode and for every implementation's
+  container it took none, so a recursive render fanned out into the container without a bound. The remote sandbox's
+  calls are admitted on the remote side (point 3). The coroutines and threads that wait for tasks are not tasks.
+- **The admission rule is one comparison.** A waiting task starts when it is the best-ranked of the waiters that can
+  use what is free -- a slot for a call, nothing for a load -- and the daemon's usage is under the budget; or, under
+  point 6, when nothing is running at all. Admitted tasks never wait for anything, which is what makes "nothing
+  running" a state the daemon always reaches.
+- **Usage is this daemon's own footprint**: its own process less what its allocators hold for reuse (point 11), the
+  processes it started (PSS where Linux has it, `psutil`'s USS elsewhere), and the containers it runs work in (their
+  memory less the file cache, as `docker stats` reports it). **Capacity** is RAM, plus swap by default, or a cgroup's
+  `memory.max` (plus `memory.swap.max`) where that is smaller. Under a cgroup limit the kernel charges more than the
+  footprint -- page cache, kernel memory, every other process in the cgroup -- and the share is what absorbs that, as
+  it absorbs other processes on an ordinary machine. On macOS swap has no fixed size; there the swap counted is what is
+  allocated at the moment. Measured at most a few times a second, and again after freeing.
+- **Freed memory is given back to the system where it can be.** glibc raises its `mmap` threshold each time a large
+  block is freed, up to 32 MB, so later blocks of that size come from the heap and stay in the process after they are
+  freed. The daemon fixes the threshold (`M_MMAP_THRESHOLD`), so a payload is unmapped as soon as it is freed, and
+  calls `malloc_trim(0)` after freeing idle objects.
+- **Order: objects, then first come first served.** For `pc render -r` and `pc export -r` the unit ranked is the
+  object, with all of its pictures and exports (point 8). Objects rank by when their first task started, objects not
+  started yet by declaration order; within an object, tasks are taken in the order they asked. A task building
+  something that a better-ranked task waits for -- a brick two pictures need -- ranks as the better of the two: a
+  shape being built carries the rank of the best of those waiting for it. The rank travels with work across a thread
+  hop, beside the OpenTelemetry context `sync_threads._Work` already carries. Today's pools stay: since #834 they are
+  deadlock-free at any size.
+- **An object's outputs share its one copy.** `Project.render_async` gathers its objects' outputs together, so that
+  the views of one model -- `f1` and its three views -- are produced from the one tree in memory while any of them
+  runs. An object over 1 MB that the file tier holds is kept while anything uses it (point 8), and dropped when nothing
+  does, rather than read again by each of its outputs.
+- **The two idle lists live in the memory tier** (`cache_shape.ShapeCache`), over what `Shape._wrapped` holds. An
+  object is in use while anything other than the memory tier holds its tree, which needs no bookkeeping from the
+  callers of `get_wrapped`; an idle one is on its list, most recently used last. An entry's recorded size is only a
+  guess at what freeing it returns, since entries share payloads (#849, #850); what counts is the usage measured
+  afterwards. Only what the memory tier was given is ever freed: a part made from a live shape has nothing to be
+  built again from.
+- **The sandbox's own release** (5.2) is worth doing now: the less a task overshoots, the less of the 20% it uses.
+- **The client keeps waiting.** A task held back by memory says so in the log, and goes on saying so every thirty
+  seconds, so the client's 300 s idle timeout (`partcad_utils.timeouts`) does not fire; and time spent waiting to be
+  admitted does not count against a task's own timeout, which starts with its process.
+- **A failed task is one failure.** `Project.render_async` gathers a package's pictures with `return_exceptions`, as
+  `_render_packages_async` already gathers packages, and raises the first failure once the rest are done: the first
+  exception used to end the package's render, which is how one kill in the warm run cost eight pictures (section 2).
 
 ## 10. The example repository and the parts library
 
@@ -431,11 +446,12 @@ repository's code, and its effect is not measured.
   sampler of every PartCAD process's memory, a report of what it recorded, a driver that captures the exact request
   the daemon sends a render sandbox, and a harness that replays it phase by phase. A pull request that claims to move
   these numbers quotes them before and after.
-- **Scheduling is unit-tested without a machine to fill**, once it exists: the admission takes its memory probe and
-  its expected peaks as parameters, so tests drive it with scripted numbers -- rank order with spare slots; a fan-out
-  taking new starts from a later root without touching its running tasks; no start past the budget, and starts
-  resuming as tasks end and the daemon releases; the progress guarantee. `test_sync_threads.py` and
-  `test_nested_build.py` keep holding the pools to being deadlock-free at sizes one and two.
+- **Scheduling is unit-tested without a machine to fill**, once it exists: the admission and the memory tier take
+  their memory probe as a parameter, so tests drive them with scripted numbers -- rank order with spare slots; a
+  fan-out taking new starts from a later object without touching its running tasks; no start over the budget, and
+  starts resuming as tasks end and the daemon frees; the large idle objects freed before the small ones; the progress
+  guarantee. `test_sync_threads.py` and `test_nested_build.py` keep holding the pools to being deadlock-free at sizes
+  one and two.
 - **End to end.** `pc render -r` of partcad-ldraw-examples, default configuration, completes on a 16 GB machine with
   no swap -- which it does with step 1 -- and, once admission is built, inside an 8 GB cgroup, where today it is
   killed; and the daemon's usage falls between roots.
@@ -445,26 +461,6 @@ repository's code, and its effect is not measured.
 
 ## 12. Open questions
 
-1. **Sharing geometry in the sandbox** (5.1) makes every placement of a part the same OCCT shape. No built-in
-   implementation modifies what it is handed; an implementation published by another package might. #849 states "do
-   not modify the shapes you are handed" as part of the implementation contract. Acceptable, or should sharing be
-   something an implementation opts into?
-2. **"Available capacity"** (section 9): RAM plus swap (or the cgroup's limit), fixed -- or this daemon's usage plus
-   what the machine has free right now, which shrinks the budget while a browser or another daemon holds memory without
-   any agreement between them? Under a cgroup limit, the same question is whether usage is this daemon's footprint or
-   an estimate of the cgroup's own charge -- its working set and its swap.
-3. **What ranks a root**: when its first task started, or where it is declared? The first is what "finish what is
-   started" says; the second is simpler and nearly always the same order.
-4. **What a root is** for `pc render -r`: each picture, or each top-level object with all of its pictures? The second
-   makes `f1`'s four views one root, which is the fan-out point 2 is about.
-5. **Swap in the budget.** 80% of RAM plus swap is deep into swap on a machine with as much swap as RAM, and a machine
-   paging hard can be far from its budget and making little progress. Is sustained memory pressure (Linux PSI,
-   `/proc/pressure/memory`) also a reason not to start? And on macOS, where swap has no fixed size, is capacity RAM
-   alone?
-6. **Expected peaks.** Recorded per task from earlier runs, as section 9 says? And for a task never seen: the largest
-   peak seen so far in this run for the same wrapper and file type, or a fixed default?
-7. **Backfilling.** When the best-ranked ready task does not fit, may a lower-ranked one that does start first? It
-   keeps cores busy, and a stream of small tasks can then keep the big one waiting; one remedy is to stop backfilling
-   once the best-ranked task has waited long enough.
-8. **Small entries.** Keep the per-entry rule (over 1 MB and on disk is not kept), or also cap the memory tier's total,
-   least recently used first, so that many small entries cannot hold the budget?
+None. The four questions the previous round left are answered in section 9: freeing starts at 90% of the budget
+(point 9), the swap is counted by default (point 3), the memory tier's limit becomes 250 MB (point 10), and the burst
+at the start of a run is accepted (point 5), with every wrapper call and every load a task of its own (point 7).
