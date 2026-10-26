@@ -267,6 +267,9 @@ let content: THREE.Group | undefined;
 /** What 'content' was built from, whose materials go when it does (see 'Geometry.disposeMaterials'). */
 let shownGeometry: Geometry | undefined;
 
+/** Half the largest dimension of what the current show was framed on (see 'frame'). */
+let framedRadius = 1;
+
 /**
  * What each item of the control tree put on the stage, by item id.
  *
@@ -457,11 +460,10 @@ export function clearGeometry(): void {
 }
 
 /**
- * Center the model at the origin and frame the camera on it, as
- * <Stage adjustCamera> does, and scale the light rig to it.
+ * Center 'box' at the origin, moving the model with it, and frame the camera on
+ * it, as <Stage adjustCamera> does, and scale the light rig to it.
  */
-function frame(group: THREE.Group, keepCamera: boolean): void {
-    const box = new THREE.Box3().setFromObject(group);
+function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean): void {
     if (box.isEmpty()) {
         return;
     }
@@ -469,6 +471,7 @@ function frame(group: THREE.Group, keepCamera: boolean): void {
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const radius = Math.max(size.x, size.y, size.z) / 2 || 1;
+    framedRadius = radius;
 
     // Stage centers the model rather than moving the camera to it, so that
     // orbiting turns the model about itself.
@@ -490,11 +493,19 @@ function frame(group: THREE.Group, keepCamera: boolean): void {
 }
 
 /**
- * Far enough back that the bounding sphere fits the vertical field of view, with
- * the same slight elevation Stage's default camera has.
+ * Far enough back that the bounding sphere fits the field of view, with the same
+ * slight elevation Stage's default camera has.
+ *
+ * Whichever of the two fields is the narrower: 'fov' is the vertical one, and a
+ * canvas taller than it is wide - a narrow panel, with the control pane beside
+ * it - sees less across than up, so a model fitted to the height alone runs off
+ * both sides. The canvas is measured first, because a show can arrive before
+ * anything has told the camera what shape the canvas has now.
  */
 function placeCamera(radius: number): void {
-    const distance = (radius * 1.6) / Math.tan((camera.fov * Math.PI) / 360);
+    resizeCanvas();
+    const halfHeight = Math.tan((camera.fov * Math.PI) / 360);
+    const distance = (radius * 1.6) / (halfHeight * Math.min(1, camera.aspect));
     camera.position.set(distance * 0.6, distance * 0.5, distance * 0.8);
     controls.target.set(0, 0, 0);
 }
@@ -510,12 +521,7 @@ function fitView(): void {
     if (content === undefined) {
         return;
     }
-    const box = new THREE.Box3().setFromObject(content);
-    if (box.isEmpty()) {
-        return;
-    }
-    const size = box.getSize(new THREE.Vector3());
-    placeCamera(Math.max(size.x, size.y, size.z) / 2 || 1);
+    placeCamera(framedRadius);
     controls.update();
 }
 
@@ -1106,10 +1112,17 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     shownGeometry = geometry;
     content = group;
     scene.add(group);
-    // Framed on everything the show carries, whether or not it is switched on:
+    // Framed on every shape the show carries, whether or not it is switched on:
     // the camera has to stay where it is when an item is unchecked, and a model
     // that reframed itself on every checkbox would be unusable.
-    frame(group, message.keepCamera);
+    //
+    // On the shapes and not on what is drawn on them: a triad is an 'AxesHelper',
+    // which reaches a quarter of the model out along +X, +Y and +Z and nowhere
+    // else, so a box that counts them leans toward every port's positive axes -
+    // and the ports of everything inside an assembly start out unticked, which
+    // is a model centred on something nobody can see. An interface has no shape
+    // but its ports, and is framed on those.
+    frame(group, geometryBox.isEmpty() ? new THREE.Box3().setFromObject(group) : geometryBox, message.keepCamera);
     buildProxies(group);
     invalidate();
 
@@ -1462,7 +1475,11 @@ if (software) {
     });
 }
 
-window.addEventListener('resize', resizeCanvas);
+// The canvas, and not the window: the canvas changes size without the window
+// doing so - the control pane appears with the first show, a strip of tabs over
+// it appears or goes - and a renderer that is not told draws the old size
+// stretched over the new one.
+new ResizeObserver(() => resizeCanvas()).observe(container);
 resizeCanvas();
 if (surface.setAnimationLoop !== undefined) {
     surface.setAnimationLoop(animate);

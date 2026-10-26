@@ -118,8 +118,12 @@ whose subtree is not entirely on is shown indeterminate, which is the only way a
 something below it is hidden. What the user switched off survives a show of the same object — the one that says
 `keepCamera`, an edit saved and re-rendered — for the reason the camera does.
 
-The camera is framed on everything the show carries, checked or not: a model that reframed itself on every
-checkbox would be unusable.
+The camera is framed on every shape the show carries, checked or not: a model that reframed itself on every
+checkbox would be unusable. On the shapes, and not on the triads and boundaries drawn at their ports: a triad
+reaches a quarter of the model out along its port's positive axes only, so counting them leans the frame toward
+every port — including the ports of everything inside an assembly, which start out unticked. An interface, which
+has no shape but its ports, is framed on those. It is fitted to the narrower of the canvas's two fields of view,
+so a model in a narrow panel is not cut off at both sides.
 
 **Placements are not baked into the geometry.** A node's `gltf` is its own shape in its own coordinate system
 and its `location` says where the node sits, exactly as the BREP form carries it, so the renderer composes the
