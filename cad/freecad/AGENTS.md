@@ -70,7 +70,7 @@ is worse than a repeated path.
 From the repository root, inside the [dev container](../../AGENTS.md):
 
 ```bash
-poetry run pytest cad/freecad -x -p no:error-for-skips -p no:warnings --dist no   # matches CI
+poetry run pytest cad/freecad -x -p no:error-for-skips -p no:warnings -n logical --dist worksteal   # matches CI
 ```
 
 `tests/test_gui_qt.py` drives the real widgets and **skips** when no Qt binding is installed, which is the case

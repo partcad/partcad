@@ -1069,11 +1069,36 @@ jobs:
           # 'pytest-results/' -- a directory this job does not upload, so the
           # JUnit report was written and then thrown away on every run. Point it
           # at the directory the upload step below actually reads.
+          #
+          # In parallel, one pytest-xdist worker per logical CPU. Measured in
+          # the dev container, the whole suite took 17m36s serially, 6m58s on 4
+          # workers and 3m23s on 8, with the same results each time and coverage
+          # within one line of 15,417 -- pytest-cov combines the workers' data into
+          # the one '.coverage' the steps below read, and the root 'conftest.py'
+          # writes the verdict from the controller only.
+          #
+          # '-n logical' rather than '-n auto': with psutil installed, which it
+          # is, 'auto' counts *physical* cores, and a 4-vCPU runner has two of
+          # those. Most of a test's time here is spent waiting on a sandbox
+          # interpreter or a container rather than computing, so the logical
+          # count is the one that keeps the runner busy.
+          #
+          # 'worksteal' because the time is in a few tests -- on 0.8.239's run,
+          # the ~300 tests over a second were 84% of it -- and an idle worker
+          # taking them off a busy one is what keeps those from deciding the
+          # wall time. The first build of each sandbox still happens once: the
+          # environment locks ('partcad.sandbox_lock') make a second worker
+          # needing it wait for it rather than build another.
+          #
+          # What this asks of a test is written down in "Tests" in AGENTS.md: no
+          # state left behind for the next test in the worker, no port that was
+          # merely free a moment ago, no listing of the shared temporary
+          # directory, and a time bound with room for a busy runner in it.
           rc=0
           pytest \
             tests cad/freecad \
             --junitxml=pytest-test-results/junit.xml \
-            -x -p no:error-for-skips -p no:warnings --dist no || rc=$?
+            -x -p no:error-for-skips -p no:warnings -n logical --dist worksteal || rc=$?
 
           verdict="$(cat "${marker}" 2>/dev/null || true)"
           rm -f "${marker}"

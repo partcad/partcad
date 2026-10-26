@@ -21,8 +21,8 @@ poetry install   # from repo root; installs the whole `partcad` wheel in editabl
 Running `pytest` to a clean pass is the required validation step for any change under `partcad/`:
 
 ```bash
-pytest tests/partcad -x -p no:error-for-skips -p no:warnings --dist no   # matches CI (test-pytest job)
-pytest tests/partcad -n 4 --timeout 300 -m "not slow"              # matches the pre-commit hook, faster locally
+pytest tests/partcad -x -p no:error-for-skips -p no:warnings -n logical --dist worksteal   # matches CI (test-pytest job)
+pytest tests/partcad -n auto --timeout 900 -m "not slow"                                # the pre-commit hook's selection, faster locally
 ```
 
 Tests live in `./tests/partcad` (`tests/partcad/unit`); slow tests are marked `slow` and excluded by the pre-commit hook's `-m
