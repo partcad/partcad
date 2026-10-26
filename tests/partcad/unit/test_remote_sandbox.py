@@ -12,6 +12,8 @@ half matters most, because a service that rebuilt the environment or re-ran pip
 on every request would work perfectly and be unusable.
 """
 
+import json
+
 import pytest
 
 from partcad import remote_sandbox, sandbox_versions
@@ -25,7 +27,7 @@ class _Recorder:
     fail every creation for the wrong reason.
     """
 
-    def __init__(self, fail_on=None, version=None, installs=()):
+    def __init__(self, fail_on=None, version=None, installs=(), log=False):
         self.calls = []
         self.locks = []
         self.fail_on = fail_on
@@ -33,6 +35,9 @@ class _Recorder:
         self.version = version
         # The requirements pip really installs, rather than finds satisfied.
         self.installs = set(installs)
+        # Whether the image's pip is configured loud enough to outweigh '--quiet',
+        # so that its log comes out in front of the report.
+        self.log = log
 
     def __call__(self, image, command, lock=None):
         self.calls.append((image, command))
@@ -42,10 +47,17 @@ class _Recorder:
         if "sys.version_info" in " ".join(command):
             return 0, self.version or _asked_version(command[0]), ""
         if "pip" in command:
-            if command[-1] in self.installs:
-                return 0, "Successfully installed %s" % command[-1], ""
-            return 0, "Requirement already satisfied: %s" % command[-1], ""
+            return 0, self._pip(command[-1]), ""
         return 0, "", ""
+
+    def _pip(self, requirement):
+        """What 'pip install --quiet --report -' prints."""
+        installed = requirement in self.installs
+        report = json.dumps({"version": "1", "install": [{"metadata": {"name": requirement}}] if installed else []})
+        if not self.log:
+            return report
+        said = "Successfully installed %s" if installed else "Requirement already satisfied: %s"
+        return "Collecting %s\n%s\n%s" % (requirement, report, said % requirement)
 
     def commands(self):
         return [command for _image, command in self.calls]
@@ -284,6 +296,16 @@ def test_a_requirement_is_installed_from_a_wheel_when_one_of_its_releases_has_on
     assert install.index("--prefer-binary") < install.index("mujoco>=3.2,<4")
 
 
+def test_what_was_installed_is_read_from_pips_report_and_not_its_log():
+    """An image may quiet pip's log (PIP_QUIET, pip.conf), and "Successfully installed" with it."""
+    run = _Recorder()
+    remote_sandbox.Environments(run).ensure("ghcr.io/x/a:1", "3.11", ["numpy"])
+
+    install = run.builds()[-1]
+    assert "--quiet" in install
+    assert install[install.index("--report") + 1] == "-"
+
+
 def test_a_requirement_already_installed_is_not_installed_again():
     """pip is idempotent and slow; a round trip per part is what this avoids."""
     run = _Recorder()
@@ -365,6 +387,17 @@ def test_an_environment_found_built_is_not_reinstalled():
     run = _Recorder()
     remote_sandbox.Environments(run).ensure("ghcr.io/x/a:1", "3.11", _STACK)
 
+    assert _forced(run) == []
+
+
+def test_the_repair_is_made_where_pips_log_outweighs_quiet():
+    """A configured verbosity puts pip's log in front of the report; the log then says what was installed."""
+    run = _Recorder(installs=_STACK, log=True)
+    remote_sandbox.Environments(run).ensure("ghcr.io/x/a:1", "3.11", _STACK)
+    assert _forced(run) == [sandbox_versions.CADQUERY_OCP]
+
+    run = _Recorder(log=True)
+    remote_sandbox.Environments(run).ensure("ghcr.io/x/a:1", "3.11", _STACK)
     assert _forced(run) == []
 
 

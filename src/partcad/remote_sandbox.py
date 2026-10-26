@@ -27,6 +27,7 @@ pinning is *which* commands are run, in what order, and how often.
 """
 
 import base64
+import json
 import threading
 from typing import Callable, Optional
 
@@ -101,6 +102,23 @@ def lock_for(version: str, exclusive: bool) -> dict:
     only thing all of them share is the volume -- and that is where the lock is.
     """
     return {"path": environment_path(version) + ".lock", "exclusive": exclusive}
+
+
+def pip_installed(stdout: Optional[str]) -> bool:
+    """Whether 'pip install --quiet --report -' installed anything, from what it printed.
+
+    The report and not pip's log, because the log is the image's to configure:
+    one setting 'PIP_QUIET' or 'quiet' in its pip.conf hides "Successfully
+    installed", and with it the repair '_install' exists to trigger. A configured
+    verbosity can outweigh '--quiet' as well and put the log in front of the
+    report; that log says "Successfully installed" when anything was, so that is
+    what is read then.
+    """
+    try:
+        report = json.loads(stdout or "")
+    except ValueError:
+        return "Successfully installed" in (stdout or "")
+    return isinstance(report, dict) and bool(report.get("install"))
 
 
 class Environments:
@@ -268,7 +286,11 @@ class Environments:
         # (see 'pip_install_flags' in 'runtime_python'): a newer release with no
         # wheel for the image is a compile that fails, an older one with a wheel
         # is an install that works.
+        #
+        # '--report -' is what says what was installed, and '--quiet' keeps
+        # pip's log out of the stream it is written to (see 'pip_installed').
         command = [interpreter_path(version), "-m", "pip", "install", "--no-input", "--prefer-binary"]
+        command += ["--quiet", "--report", "-"]
         if force:
             # With its dependencies, for the reason 'FORCE_REINSTALL_FLAGS' in
             # 'runtime_python' gives: the VTK build fails to load without VTK.
@@ -279,9 +301,7 @@ class Environments:
                 "Could not install '%s' into the remote environment for Python %s in %s: %s"
                 % (requirement, version, image, failure_detail(stderr, exitcode))
             )
-        # What pip prints when it changed anything, and only then; a requirement
-        # it found satisfied prints "Requirement already satisfied" instead.
-        return "Successfully installed" in (stdout or "")
+        return pip_installed(stdout)
 
     def forget(self, image: str) -> None:
         """Say the containers for this image are gone, so its environments are unknown.
