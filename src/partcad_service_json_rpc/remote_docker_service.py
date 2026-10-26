@@ -200,7 +200,8 @@ def main(argv=None) -> int:
     # Provisioning reaches a container the same way a forwarded request does,
     # so there is one path to a container and not two.
     environments = remote_sandbox.Environments(
-        lambda image, command, lock: _forward(pool, image, command, {"lock": lock})
+        lambda image, command, lock: _forward(pool, image, command, {"lock": lock}),
+        which=lambda image, names: remote_sandbox.which(pool, image, names),
     )
 
     # A service that starts containers and runs commands in them, reachable

@@ -114,10 +114,16 @@ import wrapper_common
 # before is produced again.
 CACHE_VERSION = 1
 
-# The key the request carries the implementation script under. Passed in the
-# request rather than on the command line for the reason 'wrapper_export' gives:
-# 'wrapper_common.handle_input()' already spends both positional arguments.
-SCRIPT_KEY = "__script__"
+# Where the implementation script's path is: the third argument, after the two
+# 'wrapper_common.handle_input()' spends on the run directory and the working
+# directory -- as 'wrapper_export.SCRIPT_ARGUMENT' is, and for its reason. A
+# sandbox that sends files rather than sharing them unpacks the directories
+# somewhere of its own choosing and rewrites every argument naming one; the
+# request is one opaque string on standard input and is not rewritten. It was
+# carried there, and in upload mode it named the plugin's script where it is on
+# PartCAD's side, which is nowhere in the container: "[Errno 2] No such file or
+# directory: '.../simulate_gazebo.py'".
+SCRIPT_ARGUMENT = 3
 
 # What a plugin's result has to carry. Everything else in it is the plugin's
 # own, and is passed through untouched.
@@ -282,7 +288,7 @@ def main():
     # sandbox that has no reason to carry it.
     path, request = wrapper_common.handle_input(decode=False)
     request = anchor(path, request)
-    script = request.pop(SCRIPT_KEY, None)
+    script = sys.argv[SCRIPT_ARGUMENT] if len(sys.argv) > SCRIPT_ARGUMENT else None
     answer = Answer()
     budget = budget_of(request)
     # Before the plugin starts anything, so that everything it starts is in

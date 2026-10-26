@@ -57,7 +57,7 @@ entitled to assume. Change any of it and PartCAD cannot run scripts in your imag
 | **Service** | PartCAD runs its own copy of the service in every container and does not use the image's entrypoint (see above). An image may still carry `pc-container-json-rpc.py` as its entrypoint, serving JSON-RPC on **port 5000** at `/jsonrpc`, for anybody running it by hand. What the image must have is a `python3` on `PATH`. |
 | **Working directory** | `/pc`, holding the service. |
 | **State** | `PC_INTERNAL_STATE_DIR` is set and writable by the running user. |
-| **Commands** | `PC_CONTAINER_ALLOWED_COMMANDS` maps a name to an absolute executable path, or to `null` for "wherever `PATH` finds it". A caller names `python`; the image decides what that is. PartCAD adds what a container needs on top of the image's own list when it creates the container, and a path the image pins is never unpinned by a `null`. A name not listed cannot be run. |
+| **Commands** | `PC_CONTAINER_ALLOWED_COMMANDS` maps a name to an absolute executable path, or to `null` for "wherever `PATH` finds it". A caller names `python`; the image decides what that is. A sandbox that builds its environment *in* the container (the `remote` one, and `docker` under `useDockerRemote`) asks which of `python` and `python3` the image has and uses the first, so an image not built on this one only needs a `python3` on `PATH`. PartCAD adds what a container needs on top of the image's own list when it creates the container, and a path the image pins is never unpinned by a `null`. A name not listed cannot be run. |
 | **Sandbox root** | `PC_CONTAINER_SANDBOX_ROOT` (default `/pc-sandbox`) is where the `remote` sandbox's environments are mounted. The service also accepts a command that *is* the `bin/python` of an environment under it, because an environment built at run time carries a Python version the allowlist could not have named. Nothing else there may be run, and the file has to exist. |
 | **User** | Not `root`. The mounted directories are the user's own files, and files the sandbox creates have to stay usable outside it. |
 | **Mounts** | The home directory, the temporary directory, the context root, the internal state directory and PartCAD's own installation, mounted at the paths they have on the host (drive-letter-mapped on Windows, where identical paths are not possible) and all writable. Nested paths are dropped, so on an ordinary machine the home directory covers the context root, the state directory and the installation, leaving it and the temporary directory -- two mounts, or one on Windows, where the temporary directory is inside the user profile. Nothing may occupy those paths in the image. The container is named after the image and the mount set, so it is reused across contexts and across runs that need the same mounts; a new version, a new tag or another mount set makes a new one. None of this applies in `upload` mode, which mounts nothing. |
@@ -67,7 +67,8 @@ What a derived image is expected to change: the packages installed in it, and no
 packages, add wheels that need compiling, leave the service, the port, the working directory, the user and
 the allowlist alone. Adding an entry to the allowlist is fine and is how a package exposes a native tool to
 its own scripts; removing `python` is not — it is the name the `remote` sandbox builds its environment with,
-and an image without it serves no sandbox at all.
+and the path it is pinned to is how the image says which interpreter is its own. An image with no `python3`
+cannot run the service, and serves no sandbox at all.
 
 ## Why the wrappers are mounted and not baked in
 
