@@ -489,20 +489,22 @@ def test_the_vtk_ocp_is_reasserted_after_build123d():
     assert order[-1] == sandbox_versions.CADQUERY_OCP
 
 
-def test_ezdxf_is_installed_before_what_would_pull_in_another():
-    """CadQuery and build123d take any ezdxf below 2; installed first, the pin is what they find.
+@pytest.mark.parametrize("pin", ["EZDXF", "SVGPATHTOOLS"])
+def test_what_the_dxf_render_pins_is_installed_before_what_would_pull_in_another(pin):
+    """CadQuery and build123d take any ezdxf and svgpathtools below 2; installed first, the pin is what they find.
 
     Installed after them, the first DXF render replaced the newer release they
     had pulled in, under any other process importing it out of the sandbox.
     """
     from partcad import runtime_python, sandbox_versions
 
+    requirement = getattr(sandbox_versions, pin)
     for version in ("3.10", "3.11"):
         order = runtime_python.base_requirements(version)
-        assert order[0] == sandbox_versions.EZDXF
-        assert order.index(sandbox_versions.EZDXF) < order.index(sandbox_versions.BUILD123D)
+        assert order.index(requirement) < order.index(sandbox_versions.BUILD123D)
+        assert order.index(requirement) < order.index(sandbox_versions.OCPSVG)
     order = runtime_python.base_requirements("3.11")
-    assert order.index(sandbox_versions.EZDXF) < order.index(sandbox_versions.CADQUERY)
+    assert order.index(requirement) < order.index(sandbox_versions.CADQUERY)
 
 
 def test_python_3_10_gets_no_cadquery():
