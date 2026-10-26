@@ -468,6 +468,36 @@ def _apply_location(shape, packed):
     return shape.Located(toploc_from_packed(packed))
 
 
+def _shared_shape(payload, shared):
+    """The shape a "brep" payload holds, read once however many nodes carry it.
+
+    'shared' is the payloads already read in this decoding, and what each one
+    was read into. An assembly is mostly repeats -- the LEGO castle is 731
+    placements of 9 bricks -- and a placement was never part of the geometry,
+    so every node carrying the same payload gets the same 'TShape' placed
+    where that node says. That is what OCCT's own instancing is: whatever is
+    computed on a shape is computed once per 'TShape', not once per placement,
+    so meshing the castle meshes nine bricks rather than 731, and the
+    hidden-line removal of a render works from nine triangulations. Decoded a
+    node at a time, the castle's drawing took 3.4 GB; shared, 1.4 GB, and the
+    picture is the same picture.
+
+    Keyed by the payload itself, content and not identity -- the nodes arrive
+    as separately parsed JSON, so the same geometry is the same text and never
+    the same object -- and so two different shapes are never confused.
+
+    Every node still gets a handle of its own: two nodes holding one Python
+    object would be two nodes in which setting a location on one moved the
+    other. The handle shares the 'TShape'; it is a new 'TopoDS_Shape' of the
+    same type, at the same (empty) location.
+    """
+    key = payload if isinstance(payload, (str, bytes)) else bytes(payload)
+    shape = shared.get(key)
+    if shape is None:
+        shape = shared[key] = _shape_from_b64(payload)
+    return downcast(shape.Located(shape.Location()))
+
+
 def decode_shape(obj):
     """Turn a shape or assembly object back into OCCT geometry.
 
@@ -476,12 +506,20 @@ def decode_shape(obj):
     carried by either kind is applied here - the core builds the assembly tree
     with locations as plain data and never places geometry itself, so this is
     where a child's placement becomes an actual TopLoc. name/label are metadata.
+
+    Nodes that carry the same payload share one 'TShape' (see '_shared_shape'),
+    so an implementation must not modify a shape it is handed in place: with
+    instancing, a change to one placement of a part is a change to all of them.
     """
     _ensure_ocp()
+    return _decode_shape(obj, {})
+
+
+def _decode_shape(obj, shared):
     if is_shape_object(obj):
-        return _apply_location(_shape_from_b64(obj[KEY_BREP]), obj.get(KEY_LOCATION))
+        return _apply_location(_shared_shape(obj[KEY_BREP], shared), obj.get(KEY_LOCATION))
     if is_assembly_object(obj):
-        compound = compound_of(decode_shape(child) for child in obj[KEY_ASSEMBLY])
+        compound = compound_of(_decode_shape(child, shared) for child in obj[KEY_ASSEMBLY])
         return _apply_location(compound, obj.get(KEY_LOCATION))
     raise ValueError("Not a shape or assembly object: %r" % (list(obj) if isinstance(obj, dict) else type(obj)))
 
@@ -502,16 +540,21 @@ def decode_tree(obj):
     part of it *is* - which link of a robot, which colour - and decoding the
     geometry is exactly what throws that away.
 
-    The nodes are copies; 'obj' is left as it was.
+    The nodes are copies; 'obj' is left as it was. Nodes carrying the same
+    payload share one 'TShape', as 'decode_shape' says.
     """
     _ensure_ocp()
+    return _decode_tree(obj, {})
+
+
+def _decode_tree(obj, shared):
     if is_shape_object(obj):
-        own = _shape_from_b64(obj[KEY_BREP])
+        own = _shared_shape(obj[KEY_BREP], shared)
         node = dict(obj)
         node[KEY_SHAPE] = own
         return _apply_location(own, obj.get(KEY_LOCATION)), node
     if is_assembly_object(obj):
-        decoded = [decode_tree(child) for child in obj[KEY_ASSEMBLY]]
+        decoded = [_decode_tree(child, shared) for child in obj[KEY_ASSEMBLY]]
         node = dict(obj)
         node[KEY_ASSEMBLY] = [child for _shape, child in decoded]
         compound = compound_of(shape for shape, _child in decoded)
@@ -584,16 +627,26 @@ def encode(obj, name=None, label=None):
 
 
 def decode(obj):
-    """Inverse of 'encode()'."""
+    """Inverse of 'encode()'.
+
+    Every shape found anywhere in 'obj' is decoded as 'decode_shape' decodes a
+    tree: the same payload twice -- two components of one request, two
+    placements of a part -- is one 'TShape'.
+    """
+    return _decode(obj, {})
+
+
+def _decode(obj, shared):
     if isinstance(obj, dict):
         if KEY_BREP in obj or KEY_ASSEMBLY in obj:
-            return decode_shape(obj)
+            _ensure_ocp()
+            return _decode_shape(obj, shared)
         if KEY_BYTES in obj and len(obj) == 1:
             return base64.b64decode(obj[KEY_BYTES])
-        return {key: decode(value) for key, value in obj.items()}
+        return {key: _decode(value, shared) for key, value in obj.items()}
 
     if isinstance(obj, list):
-        return [decode(item) for item in obj]
+        return [_decode(item, shared) for item in obj]
 
     return obj
 

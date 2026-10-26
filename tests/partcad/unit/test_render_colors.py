@@ -304,6 +304,31 @@ def test_a_sub_assembly_is_drawn_where_it_is_placed(real_svg, tmp_path, reproduc
     assert (min(xs), max(xs), min(ys), max(ys)) == pytest.approx((100, 110, 50, 60), abs=1e-3)
 
 
+@pytest.mark.parametrize("reproducible", [True, False])
+def test_one_part_in_two_colours_is_drawn_in_both(real_svg, tmp_path, reproducible):
+    """Two placements of one part share their geometry, and not their colour.
+
+    The decoder gives every node that carries the same BREP the same 'TShape'
+    (see 'ocp_serialize._shared_shape'), and the colours split the drawing by
+    node. The red placement is drawn red where it is and the plain one goldenrod
+    where it is: sharing the geometry must not let one colour, or one place,
+    stand for both.
+    """
+    plain = _box(10, 10, 10)
+    red = dict(plain, properties={"color": "#ff0000"}, location=[[100, 0, 0], [0, 0, 1], 0])
+
+    layers, _result = _draw(real_svg, tmp_path, _assembly(plain, red), reproducible)
+
+    assert {layer: stroke for layer, (stroke, _lines) in layers.items()} == {
+        "Visible": GOLDENROD,
+        "Visible-FF0000": RED,
+    }
+    for layer, x in (("Visible", 0), ("Visible-FF0000", 100)):
+        xs = [value for x1, _y1, x2, _y2 in layers[layer][1] for value in (x1, x2)]
+        assert len(layers[layer][1]) == 4
+        assert (min(xs), max(xs)) == pytest.approx((x, x + 10), abs=1e-3)
+
+
 def test_a_colour_that_is_not_one_is_reported(real_svg, tmp_path):
     tree = _box(10, 10, 10)
     tree["name"] = ":bolt"
