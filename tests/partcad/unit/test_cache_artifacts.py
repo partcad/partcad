@@ -1115,6 +1115,20 @@ def test_bytes_are_not_described_as_the_string_that_spells_their_digest():
     assert shape_envelope.description({"extra": b"opaque"}) != shape_envelope.description({"extra": digest})
 
 
+def test_only_nodes_lose_their_geometry():
+    """A child at any depth and a sketch in the root's table are nodes; a joint is data, whatever it names."""
+    joint = {"name": "hinge", "metadata": {"limit": 90}, "geometry": "revolute"}
+    tree = {
+        "assembly": [{"assembly": [{"brep": b"a pin", "metadata": {"volume": 1.0}, "joint": joint}]}],
+        "sketches": {"//pkg:circle": {"brep": b"a circle", "name": "circle"}},
+    }
+
+    assert shape_envelope.description(tree) == {
+        "assembly": [{"assembly": [{"joint": joint}]}],
+        "sketches": {"//pkg:circle": {"name": "circle"}},
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Naming the files of an answer after the next path asked for                 #
 # --------------------------------------------------------------------------- #
