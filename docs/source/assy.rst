@@ -492,7 +492,11 @@ the steps it names are then not consecutive and will not be performed together.
 assembly, to be used to hold that object while it is connected.
 `holdTo` names the interface of the object that is already in the assembly,
 which is held the same way.
-Either may be a single interface name or a list of them.
+Either may be a single interface name or a list of them. An interface built
+from parameters is named with its values, as the object implements it -
+`nail-grip;d=4.1148` - and however they are spelled: `d=4.11480` names the same
+grip, and `m-thru;size=4,depth=3` the same opening as `m-thru;depth=3,size=4`.
+The same holds for the `hold` field below.
 
   .. code-block:: yaml
 

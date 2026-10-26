@@ -18,6 +18,8 @@ that the assembler needs must be codified in the other ASSY fields.
 
 import math
 
+from partcad_utils.utils import parse_parameterized_name, split_resource_path
+
 from . import logging as pc_logging
 
 # 'how' defaults. See 'docs/source/assy.rst' for the units and the semantics.
@@ -862,17 +864,53 @@ def _item_interfaces(item):
 
 
 def _short_name(interface: str):
-    return interface.rsplit(":", 1)[-1] if isinstance(interface, str) else interface
+    """The interface's name without the package it is in.
+
+    The package ends at the first ':' before the parameters, and not at the
+    last ':' anywhere: a value may hold one ('medium=//pub/std/materials:air').
+    """
+    if not isinstance(interface, str):
+        return interface
+    return split_resource_path(interface)[1]
+
+
+def _spelled_one_way(interface: str):
+    """The name with its parameter values spelled one way, to compare two names by.
+
+    An interface built from parameters is implemented under the name it was
+    built with, and a 'hold' naming it has to say the same values - not the
+    same characters. 'nail-grip;d=4.1148' and 'nail-grip;d=4.11480' are one
+    grip, and so are 'm-thru;size=4' and 'm-thru;size=4.0', or two orders of
+    the same values. So the values are sorted, and each one that is a number
+    is compared as the number. Nothing is looked up: what the parameters are
+    declared as is the interface's business, and a value that is not a number
+    is compared as the text it is.
+    """
+    if not isinstance(interface, str) or ";" not in interface:
+        return interface
+    base, values = parse_parameterized_name(interface)
+    return base, tuple(sorted((name, _as_value(value)) for name, value in values.items()))
+
+
+def _as_value(text: str):
+    try:
+        return float(text)
+    except ValueError:
+        return text
 
 
 def _same_interface(one: str, other: str):
     if one == other:
         return True
-    return _short_name(one) == _short_name(other)
+    return _spelled_one_way(_short_name(one)) == _spelled_one_way(_short_name(other))
 
 
 def _match_interface(interface, available, item=None):
-    """Find 'interface' among the ones the object implements, qualified or not."""
+    """Find 'interface' among the ones the object implements, qualified or not.
+
+    A parametrized one is found by its values, however they are spelled (see
+    '_spelled_one_way').
+    """
     if not available:
         return None
     if interface in available:
