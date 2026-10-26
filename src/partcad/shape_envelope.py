@@ -554,14 +554,27 @@ def description(obj):
     covers the geometry, and nothing of the outer layer - not a placement it
     got from somewhere else, not the colour a renderer paints it with, since
     'properties' is no part of a shape's key. Any other bytes are kept as their
-    digest, which is all a key needs of them.
+    digest, marked as bytes the way 'encode' marks them, which is all a key needs
+    of them and cannot be mistaken for a string that happens to spell it.
+
+    The keys are left out of nodes only. What 'properties' holds is the user's,
+    under whatever names they chose - a 'physics' block may well say 'geometry'
+    - and is kept whole.
     """
+    return _described(obj, geometry=True)
+
+
+def _described(obj, geometry: bool):
     if isinstance(obj, dict):
-        return {key: description(value) for key, value in obj.items() if key not in _GEOMETRY_KEYS}
+        return {
+            key: _described(value, geometry and key != KEY_PROPERTIES)
+            for key, value in obj.items()
+            if not (geometry and key in _GEOMETRY_KEYS)
+        }
     if isinstance(obj, (list, tuple)):
-        return [description(item) for item in obj]
+        return [_described(item, geometry) for item in obj]
     if isinstance(obj, (bytes, bytearray)):
-        return hashlib.sha256(bytes(obj)).hexdigest()
+        return {KEY_BYTES: hashlib.sha256(bytes(obj)).hexdigest()}
     return obj
 
 

@@ -17,6 +17,7 @@ would be started, and counted.
 """
 
 import asyncio
+import hashlib
 import io
 import os
 import pathlib
@@ -1097,6 +1098,21 @@ def test_a_tree_is_described_without_its_geometry():
         "extra": shape_envelope.description(b"opaque"),
     }
     assert described["extra"] != shape_envelope.description(b"something else")
+
+
+def test_what_a_node_s_properties_say_is_described_whole():
+    """The user's names are the user's: a 'physics' block saying 'geometry' is a property, not a payload."""
+    node = {"brep": b"a brick", "properties": {"physics": {"geometry": "box", "metadata": {"source": "urdf"}}}}
+    other = {"brep": b"a brick", "properties": {"physics": {"geometry": "cylinder", "metadata": {"source": "urdf"}}}}
+
+    assert shape_envelope.description(node) == {"properties": node["properties"]}
+    assert shape_envelope.description(node) != shape_envelope.description(other)
+
+
+def test_bytes_are_not_described_as_the_string_that_spells_their_digest():
+    digest = hashlib.sha256(b"opaque").hexdigest()
+
+    assert shape_envelope.description({"extra": b"opaque"}) != shape_envelope.description({"extra": digest})
 
 
 # --------------------------------------------------------------------------- #
