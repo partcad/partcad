@@ -2053,6 +2053,14 @@ class Shape(ShapeConfiguration):
         own, so it is keyed as the assembly it is a view of and the links it
         keeps - which is everything it is.
 
+        And the tree the file is made of adds what it says about its shapes
+        ('shape_envelope.description()'): the geometry is the shape's key, but
+        what a renderer paints it with is not - 'properties' is no part of a
+        shape's key, so a part painted another colour kept its key, and was
+        handed the picture of it in the old colour. Analyses and routes are not
+        asked this: what they read of a shape's properties is in their request
+        (see '_output_request'), and their answers keep the keys they have.
+
         An answer is stored only when the implementation said what it wrote
         (see 'output.FILES_KEY') and the file at 'final_filepath' is the one
         this run wrote. Nothing clears that path before the run - a failed
@@ -2061,6 +2069,9 @@ class Shape(ShapeConfiguration):
         what was there before.
         """
         cache = getattr(ctx, "cache_artifacts", None)
+        extra = {"tree": shape_envelope.description(request.get("wrapped"))}
+        if view is not None:
+            extra["view"] = view.key()
         artifact = await self._artifact_hash(
             impl.section,
             impl.format_name,
@@ -2068,7 +2079,7 @@ class Shape(ShapeConfiguration):
             script,
             request,
             "%s:%s" % (impl.project.name, impl.format_name),
-            {"view": view.key()} if view is not None else None,
+            extra,
         )
 
         # Held across the read, the run and the write, for the reason

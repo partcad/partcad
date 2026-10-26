@@ -47,6 +47,7 @@ on the layer, and that is the whole reason this module exists:
 """
 
 import base64
+import hashlib
 import json
 
 try:
@@ -536,6 +537,32 @@ def apply_metadata(obj, metadata):
     if own:
         wrapped[KEY_METADATA] = own
     return wrapped
+
+
+# What a node holds of its geometry, or learnt from it, rather than says about it.
+_GEOMETRY_KEYS = frozenset((KEY_BREP, KEY_GLTF, KEY_GEOMETRY, KEY_METADATA))
+
+
+def description(obj):
+    """'obj' with its geometry left out: what a tree says about its shapes, as plain data.
+
+    Every node keeps its name and label, its placement, its properties, its
+    joint and the rest of its outer layer, and loses its payload (KEY_BREP,
+    KEY_GLTF), the root's table of tessellated geometry (KEY_GEOMETRY) and what
+    was measured of the geometry (KEY_METADATA). That is what a file made out
+    of a tree is keyed on beside the key of the shape it is of: the shape's key
+    covers the geometry, and nothing of the outer layer - not a placement it
+    got from somewhere else, not the colour a renderer paints it with, since
+    'properties' is no part of a shape's key. Any other bytes are kept as their
+    digest, which is all a key needs of them.
+    """
+    if isinstance(obj, dict):
+        return {key: description(value) for key, value in obj.items() if key not in _GEOMETRY_KEYS}
+    if isinstance(obj, (list, tuple)):
+        return [description(item) for item in obj]
+    if isinstance(obj, (bytes, bytearray)):
+        return hashlib.sha256(bytes(obj)).hexdigest()
+    return obj
 
 
 def encode(obj, name=None, label=None):

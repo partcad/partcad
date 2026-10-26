@@ -1043,6 +1043,62 @@ def test_a_view_is_keyed_as_the_links_it_keeps(exported, tmp_path):
     assert len(runs) == 3
 
 
+def test_a_part_painted_another_colour_is_drawn_again(exported, tmp_path, monkeypatch):
+    """'properties:' is no part of a shape's key - a part that gains a colour is the same solid.
+
+    But a renderer paints it, from the tree it is handed, and the picture of it
+    in red was handed back for it in blue. The tree reaches the renderer the way
+    'get_wrapped' builds it: the payload, with the shape's own outer layer
+    stamped on - its properties among it.
+    """
+    ctx, part, runs, _root = exported
+
+    async def get_wrapped(self, _ctx):
+        return shape_envelope.apply_metadata({"brep": b"geometry"}, self.get_cache_metadata())
+
+    monkeypatch.setattr(pc.shape.Shape, "get_wrapped", get_wrapped)
+
+    part.config["properties"] = {"color": "red"}
+    _export(ctx, part, tmp_path / "out")
+    _export(ctx, part, tmp_path / "out")
+    assert len(runs) == 1
+
+    part.config["properties"] = {"color": "blue"}
+    _export(ctx, part, tmp_path / "out")
+    assert len(runs) == 2
+    assert runs[-1]["wrapped"]["properties"] == {"color": "blue"}
+
+
+def test_a_tree_is_described_without_its_geometry():
+    """What decides a file beside the shape's key: everything the tree says, nothing it carries.
+
+    Without its payloads, so a large assembly's key is not a hash of every
+    brick; with everything else, at every depth.
+    """
+    brick = {"brep": b"a brick", "metadata": {"measurements": {"volume": 1.0}}, "name": "brick"}
+    tree = {
+        "assembly": [
+            dict(brick, label="left", location=[1, 0, 0], properties={"color": "red"}),
+            dict(brick, label="right", location=[2, 0, 0], properties={"color": "blue"}),
+        ],
+        "name": "wall",
+        "gltf": "...",
+        "geometry": {"digest": "..."},
+        "extra": b"opaque",
+    }
+    described = shape_envelope.description(tree)
+
+    assert described == {
+        "assembly": [
+            {"name": "brick", "label": "left", "location": [1, 0, 0], "properties": {"color": "red"}},
+            {"name": "brick", "label": "right", "location": [2, 0, 0], "properties": {"color": "blue"}},
+        ],
+        "name": "wall",
+        "extra": shape_envelope.description(b"opaque"),
+    }
+    assert described["extra"] != shape_envelope.description(b"something else")
+
+
 # --------------------------------------------------------------------------- #
 # Naming the files of an answer after the next path asked for                 #
 # --------------------------------------------------------------------------- #
