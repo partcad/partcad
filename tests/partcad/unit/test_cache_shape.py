@@ -256,6 +256,53 @@ def test_a_tree_cut_short_is_refused_and_so_a_miss(tmp_path):
     assert read["assembly"] is None
 
 
+def _header(stored):
+    """The length of a tree frame's header, and the header itself."""
+    length = int.from_bytes(stored[len(cache_shape._TREE_MAGIC) + 1 : cache_shape._TREE_HEADER], "big")
+    compressed = stored[cache_shape._TREE_HEADER : cache_shape._TREE_HEADER + length]
+    return length, json.loads(cache_shape._ZstdDecompressor().decompress(compressed))
+
+
+def _with_sizes(stored, sizes):
+    """'stored', a tree frame, with the sizes its header gives its payloads replaced."""
+    length, header = _header(stored)
+    header["payloads"] = [[digest, size] for (digest, _), size in zip(header["payloads"], sizes)]
+    encoded = json.dumps(header).encode("utf-8")
+    return b"".join(
+        [
+            cache_shape._TREE_MAGIC,
+            cache_shape._TREE_PLAIN,
+            len(encoded).to_bytes(4, "big"),
+            encoded,
+            stored[cache_shape._TREE_HEADER + length :],
+        ]
+    )
+
+
+def test_a_tree_whose_header_gives_an_impossible_size_is_refused():
+    """A negative size passed the bounds check and moved every later payload onto the wrong bytes."""
+    stored = cache_shape._serialize(_castle())
+    sizes = [size for _, size in _header(stored)[1]["payloads"]]
+    assert len(sizes) == 2
+    # Unchanged, the rewritten frame reads back: what follows is the sizes, not the rewriting.
+    assert cache_shape._deserialize(_with_sizes(stored, sizes)) == cache_shape._deserialize(stored)
+
+    for impossible in ([-1, sizes[0] + sizes[1] + 1], [1.5, sizes[1]], [True, sizes[1]]):
+        try:
+            cache_shape._deserialize(_with_sizes(stored, impossible))
+        except ValueError:
+            continue
+        raise AssertionError("a tree with payload sizes %r was read" % (impossible,))
+
+    # Sizes that stop short of the end leave bytes no payload accounts for.
+    try:
+        cache_shape._deserialize(_with_sizes(stored, [sizes[0], sizes[1] - 1]))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a tree with bytes after its last payload was read")
+
+
 def test_what_is_not_an_assembly_stays_plain_json(tmp_path):
     """A part's components sit beside its geometry; an earlier release must miss neither or both.
 
