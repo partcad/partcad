@@ -40,6 +40,18 @@ is running at all, the best-ranked waiting task starts whatever the usage: every
 running task ends, so a design bigger than the machine is slowed down to one
 task at a time and then finishes or fails -- it never stops.
 
+What that cannot see coming is tasks that start together and then grow
+together: the four views of one model, ready at once when its tree is, each
+grows by up to 2.5 GB after it starts. Where the budget leaves room for that,
+nothing more is needed. Where it does not -- a machine with little memory for
+the work, which `pc healthcheck` points out -- **pacing** can be turned on
+('memoryPacing'): once the work holds that share of its budget, a task starts
+only when the memory has stopped rising since the last one started (flat over
+SETTLE seconds of measurements, the last start at least SETTLE seconds back).
+It guesses nothing about any task either; it lets each one show what it takes
+before the next. Below the share nothing waits, and when nothing runs the next
+task starts as always, so it slows down only work that is already high.
+
 While anything runs or waits, a monitor measures the memory a few times a
 second. From 90% of the budget it asks for idle objects to be freed (see
 'partcad.idle_objects'), and while tasks are held back by memory it says so in
@@ -54,6 +66,7 @@ block the loop it is asked from.
 """
 
 import asyncio
+import collections
 import contextlib
 import contextvars
 import itertools
@@ -102,6 +115,14 @@ FREE_ROUNDS = 8
 # How long a measured capacity is trusted. A cgroup's limit can be changed under
 # a running process, and reading it costs a few file reads.
 CAPACITY_SECONDS = 60.0
+
+# With pacing on: how long the memory has to have stopped rising before the next
+# task starts, and the least time between two starts.
+SETTLE = 5.0
+
+# A rise smaller than this share of the budget is not one: it is what two
+# measurements in a row differ by while nothing grows.
+RISE = 0.01
 
 
 class Rank:
@@ -237,6 +258,10 @@ class Admission:
         self._last_over_notice = None
         self._last_release = None
         self._last_trace = None
+        self._pacing = 0.0
+        # (when, usage) of the measurements of the last SETTLE seconds.
+        self._history = collections.deque()
+        self._last_start = None
 
     # ---- the configuration ---------------------------------------------------
 
@@ -299,6 +324,24 @@ class Admission:
     @property
     def budget(self) -> Optional[memory.Budget]:
         return self._budget
+
+    def set_pacing(self, share: Optional[float]) -> None:
+        """Pace starts once the work holds 'share' of its budget; None or 0 never paces.
+
+        Pacing needs the budget: without one there is nothing to be a share of,
+        and starts are as the process slots have them.
+        """
+        share = min(float(share), 1.0) if share and share > 0 else 0.0
+        with self._mutex:
+            if share == self._pacing:
+                return
+            self._pacing = share
+            self._dispatch_locked()
+        pc_logging.debug("Memory pacing: %s" % ("from %d%% of the budget" % round(share * 100) if share else "off"))
+
+    @property
+    def pacing(self) -> float:
+        return self._pacing
 
     def on_pressure(self, free: Callable[[int], int]) -> None:
         """Ask 'free(excess)' to free idle memory when usage reaches the freeing mark.
@@ -398,6 +441,7 @@ class Admission:
                 "waiting": len(self._waiting),
                 "usage": footprint.usage if footprint is not None else None,
                 "budget": budget.limit if budget is not None else None,
+                "pacing": self._pacing,
             }
 
     def tick(self) -> None:
@@ -420,6 +464,7 @@ class Admission:
         with self._mutex:
             if footprint is not None and self._budget is budget:
                 self._footprint = footprint
+                self._remember_locked(now, footprint.usage)
             self._dispatch_locked()
             notice = self._held_notice_locked(now)
             trace = self._trace_locked(now)
@@ -477,8 +522,14 @@ class Admission:
                 return footprint
         return footprint
 
+    def _remember_locked(self, now: float, usage: int) -> None:
+        """Keep a measurement for as long as pacing looks back."""
+        self._history.append((now, usage))
+        while self._history and now - self._history[0][0] > SETTLE:
+            self._history.popleft()
+
     def _held_notice_locked(self, now: float) -> Optional[str]:
-        held = self._held_locked()
+        held = self._held_locked(now)
         if not held:
             self._held_since = None
             self._last_heartbeat = None
@@ -491,16 +542,32 @@ class Admission:
         if self._last_heartbeat is not None and now - self._last_heartbeat < HEARTBEAT:
             return None
         self._last_heartbeat = now
-        return "%d task(s) wait for memory to start: PartCAD's work holds %s of its %s budget, %d task(s) running" % (
-            held,
-            memory.size(self._footprint.usage),
-            memory.size(self._budget.limit),
-            self._running,
+        if self._over_locked():
+            return (
+                "%d task(s) wait for memory to start: PartCAD's work holds %s of its %s budget, %d task(s) running"
+                % (
+                    held,
+                    memory.size(self._footprint.usage),
+                    memory.size(self._budget.limit),
+                    self._running,
+                )
+            )
+        return (
+            "%d task(s) wait for memory to stop rising before they start (memoryPacing): PartCAD's work holds %s of"
+            " its %s budget, %d task(s) running"
+            % (
+                held,
+                memory.size(self._footprint.usage),
+                memory.size(self._budget.limit),
+                self._running,
+            )
         )
 
-    def _held_locked(self) -> int:
+    def _held_locked(self, now: float) -> int:
         """How many waiting tasks memory, and nothing else, is holding back."""
-        if not self._waiting or not self._over_locked() or not self._running:
+        if not self._waiting or not self._running:
+            return 0
+        if not (self._over_locked() or self._settling_locked(now)):
             return 0
         return sum(1 for w in self._waiting if w.kind != CALL or self._calls < self._count)
 
@@ -515,12 +582,34 @@ class Admission:
             return False
         return footprint.usage >= budget.limit
 
+    def _settling_locked(self, now: float) -> bool:
+        """Whether pacing holds the next start back: the work is high and its memory still rising.
+
+        Only from the pacing share of the budget on. There, the next task
+        starts once the last start is SETTLE seconds back and the memory has
+        not risen over the measurements of the last SETTLE seconds -- which
+        after a start means the task that started has stopped growing, or the
+        work as a whole is shrinking.
+        """
+        budget, footprint = self._budget, self._footprint
+        if not self._pacing or budget is None or footprint is None:
+            return False
+        if footprint.usage < self._pacing * budget.limit:
+            return False
+        if self._last_start is not None and now - self._last_start < SETTLE:
+            return True
+        lowest = min((usage for when, usage in self._history if now - when <= SETTLE), default=footprint.usage)
+        return footprint.usage - lowest > budget.limit * RISE
+
     def _dispatch_locked(self) -> None:
         if not self._waiting:
             return
         over = self._over_locked()
+        now = self._clock()
         for waiter in sorted(self._waiting, key=_Waiter.order):
-            if over and self._running > 0:
+            # Held back by memory only while something runs: when nothing
+            # does, the best-ranked task starts whatever the memory.
+            if self._running > 0 and (over or self._settling_locked(now)):
                 break
             if waiter.kind == CALL and self._calls >= self._count:
                 continue
@@ -544,7 +633,8 @@ class Admission:
         self._running += 1
         if waiter.kind == CALL:
             self._calls += 1
-        waiter.rank.mark_started(self._clock())
+        self._last_start = self._clock()
+        waiter.rank.mark_started(self._last_start)
         if waiter.event is not None:
             waiter.event.set()
         elif waiter.future is not None:

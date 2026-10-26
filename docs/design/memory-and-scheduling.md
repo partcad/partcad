@@ -9,8 +9,8 @@ Status words used below: **built** is on `devel`; **decided** is agreed and not 
 
 Where it stands: step 1 is **built** (#849, which added this record). Step 3 is **built** as part of #848, which
 caches every export and render; step 2 is #850, which drops its own picture cache in #848's favour. Step 4 is being
-done separately. Steps 5 to 7 are **decided** (section 9) and implemented on top of #850, measured in 11.1; what the
-measurements leave open is in section 12.
+done separately. Steps 5 to 7 are **decided** (section 9) and implemented on top of #850, measured in 11.1, pacing
+(point 12) included; the question the measurements left (section 12) is answered.
 
 ## Contents
 
@@ -361,6 +361,12 @@ peak it is expected to reach, is withdrawn too. What is **decided**:
     give back, and counts what it keeps -- free blocks and pools in Python's own allocator, free chunks in C's -- as
     available rather than used, since the daemon's next load reuses it. Without that, the daemon frees and its usage
     does not fall, and admission does not resume.
+12. **Pacing is an option, and slows nothing down while memory is low.** `memoryPacing` (off by default; `true`, or a
+    share of the budget) starts tasks one at a time once the work holds that share of its budget -- half of it for
+    `true` -- each once the memory has stopped rising since the last start. Below the share nothing waits; with
+    nothing running, nothing is held back at all (point 6). `pc healthcheck` (`MemoryPacing`) suggests it where the
+    budget comes to less than 2.5 GB for each sandbox process, or where that little is available right now; it is
+    never turned on by itself.
 
 The design that carries it out, **decided** with the points above and built in the pull request that implements them:
 
@@ -373,6 +379,11 @@ The design that carries it out, **decided** with the points above and built in t
   use what is free -- a slot for a call, nothing for a load -- and the daemon's usage is under the budget; or, under
   point 6, when nothing is running at all. Admitted tasks never wait for anything, which is what makes "nothing
   running" a state the daemon always reaches.
+- **Pacing adds one more, and only when asked for** (point 12): from the pacing share of the budget on, the last
+  start has to be `SETTLE` (5) seconds back and the usage no more than 1% of the budget above the lowest measurement
+  of those seconds. Five seconds, not two: a drawing's sandbox loads for a few seconds before it grows, and with two
+  seconds a start was let through while the one before it was still loading (11.1). The held-back notice says when
+  pacing, and not the budget, is what holds tasks back.
 - **Usage is this daemon's own footprint**: its own process less what its allocators hold for reuse (point 11), the
   processes it started, and the containers it runs work in (their memory less the file cache, as `docker stats`
   reports it). A process counts with the memory it holds of its own -- on Linux its anonymous pages (`RssAnon` and
@@ -503,6 +514,34 @@ What it shows:
 - **A defect the 6 GB runs found and that is fixed:** the monitor forgot its measurement whenever nothing ran, if only
   between two objects, and the next waiters all started as if the run were just beginning.
 
+**Pacing (point 12)**, measured the same way after it was built. The container had been restarted, so the run
+without pacing is repeated as the baseline; the machine is the same.
+
+| run | limit | configuration | pictures | time | cgroup peak |
+| --- | --- | --- | --- | --- | --- |
+| warm | 13.7 GB | default (no pacing) | 33 of 33 | 232 s | 7.4 GB |
+| warm | 13.7 GB | `memoryPacing: true` | 33 of 33 | 219 s | 7.5 GB |
+| warm | 6 GB | `memoryPacing: true`, `SETTLE` 2 s | 28 of 33 | 224 s | 6 GB, killed |
+| warm | 6 GB | `memoryPacing: true` | 31 of 33 | 291 s | 6 GB, killed |
+| warm | 6 GB | `memoryPacing: 0.25` | 31 of 33 | 341 s | 6 GB, killed |
+| warm | 6 GB | `memoryPacing: true`, `memoryBudget: 0.6` | 32 of 33 | 310 s | 6 GB, killed |
+| warm | 6 GB | `memoryPacing: 0.05`, `memoryBudget: 0.6` | 33 of 33 | 356 s | 5.4 GB, no reclaim |
+
+What it shows:
+
+- **Turned on where there is room, pacing costs nothing** (219 s against 232 s): the work rarely holds half of an
+  11 GB budget, and below that nothing waits. Paced from the start, the same run took 307 s (the experiment above).
+- **Above its share it does what it says.** In the 6 GB runs the F1's drawings start one at a time once memory is high,
+  each after the one before has stopped growing. With two seconds of settling a start was let through while the
+  drawing before it was still loading -- 0.3 GB for four seconds, then 1.4 GB more -- hence five.
+- **What it does not reach is a burst while memory is low**, which is the burst decision 5 accepts: the F1 and its
+  views become ready together when the work holds 0.8 to 1.9 GB, under any share that leaves memory "low", and grow
+  together past 6 GB. And **one task can outgrow the budget's margin on its own**: an F1 view started at 4.2 GB, under
+  the 4.8 GB budget, grew by 1.4 GB, more than the 1.2 GB the default share leaves of 6 GB.
+- So a machine that small needs both, and gets both from configuration: pacing from the start (`memoryPacing: 0.05`)
+  and a margin bigger than one task's growth (`memoryBudget: 0.6`) drew all 33 pictures with no reclaim at all, in
+  356 s. `MemoryPacing` and `features.rst` say so.
+
 ## 12. Open questions
 
 The four questions of the previous round are answered in section 9: freeing starts at 90% of the budget (point 9),
@@ -520,3 +559,7 @@ of a run is accepted (point 5), with every wrapper call and every load a task of
    fifth of the time on a machine with room to spare (307 s against 258 s), because every start waits for the one
    before it to settle. Adopt it, always or only below some machine size; or keep the decided rule and leave small
    machines to `memoryBudget` and swap?
+
+   **Answered:** as an option only, off by default, and slowing nothing down while memory is low -- point 12. A
+   healthcheck suggests it where memory is low for the processes PartCAD runs at once. Section 11.1 has what it does
+   and does not reach.

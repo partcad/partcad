@@ -327,6 +327,7 @@ OPTION_KEYS = (
     "threadsMax",
     "memoryBudget",
     "memoryBudgetSwap",
+    "memoryPacing",
     "cacheMem",
     "cacheFiles",
     "cacheFilesMaxEntrySize",
@@ -491,6 +492,52 @@ def memory_budget_share(value, origin: str = None):
             "memoryBudget %r%s is not a share between 0 and 1, and is ignored" % (value, where),
         )
         return MEMORY_BUDGET_DEFAULT
+    return share
+
+
+# Off unless asked for. Several tasks that start together all grow after they
+# start -- a drawing of a large model by up to 2.5 GB -- and measured usage
+# cannot see that coming, so on a machine with little memory for the work a
+# burst of starts can take it past what the budget leaves room for. Pacing
+# starts one task at a time once the work holds this share of its budget, each
+# waiting until the memory has stopped rising since the last one started (see
+# 'partcad.admission'). Below the share nothing waits, so it never slows down
+# work that is using little memory; above it, a run is slower, and safer.
+# `pc healthcheck` suggests it where the budget is small for the processes that
+# share it (see 'partcad.healthcheck.memory_pacing').
+MEMORY_PACING_DEFAULT = 0.0
+# What 'memoryPacing: true' means.
+MEMORY_PACING_ON = 0.5
+
+
+def memory_pacing_share(value, origin: str = None):
+    """'value' as a 'memoryPacing': the share of the budget from which starts are paced, or 0 for never.
+
+    True (or "true", "on", "yes") is MEMORY_PACING_ON; false, 0 and nothing
+    leave starts unpaced. Anything else that is not a share above 0 and at most
+    1 is ignored, with a warning that says where it came from.
+    """
+    if value is None or value is False:
+        return MEMORY_PACING_DEFAULT
+    if value is True:
+        return MEMORY_PACING_ON
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in ("", "false", "off", "no"):
+            return MEMORY_PACING_DEFAULT
+        if text in ("true", "on", "yes"):
+            return MEMORY_PACING_ON
+    try:
+        share = float(value)
+    except (TypeError, ValueError):
+        share = None
+    if share is None or not math.isfinite(share) or share < 0 or share > 1:
+        where = " (from %s)" % origin if origin else ""
+        pc_logging.warning_once(
+            ("memoryPacing", repr(value)),
+            "memoryPacing %r%s is not true, false or a share between 0 and 1, and is ignored" % (value, where),
+        )
+        return MEMORY_PACING_DEFAULT
     return share
 
 
@@ -954,6 +1001,7 @@ class UserConfig(vyper.Vyper):
 
         self.set_default("memoryBudget", MEMORY_BUDGET_DEFAULT)
         self.set_default("memoryBudgetSwap", True)
+        self.set_default("memoryPacing", False)
         self.set_default("useDocker", True)
         self.set_default("useDockerPython", False)
         self.set_default("useDockerKicad", True)
@@ -1003,6 +1051,24 @@ class UserConfig(vyper.Vyper):
         # default: True
         self.bind_env("memoryBudgetSwap", "PC_MEMORY_BUDGET_SWAP")
         self.memory_budget_swap = self.get_bool("memoryBudgetSwap")
+
+        # option: memoryPacing
+        # description: start new tasks one at a time once this process's work
+        #              holds this share of its memory budget, each waiting until
+        #              the memory has stopped rising since the last one started.
+        #              For a machine with little memory for the work it is given,
+        #              where tasks that start together grow past what the budget
+        #              leaves room for; `pc healthcheck` suggests it there. Below
+        #              the share nothing waits; when nothing runs, the next task
+        #              starts whatever the usage. Needs 'memoryBudget'.
+        # values: false; true (from half the budget); or a share above 0 and at
+        #         most 1 of the budget to start pacing at
+        # default: false
+        self.bind_env("memoryPacing", "PC_MEMORY_PACING")
+        self.memory_pacing = memory_pacing_share(
+            self.get("memoryPacing"),
+            "PC_MEMORY_PACING" if os.environ.get("PC_MEMORY_PACING") else None,
+        )
 
         # option: cacheFiles
         # description: enable caching of intermediate results to the filesystem

@@ -981,6 +981,32 @@ needs the machine too, lower the share. ``memoryBudget: 0`` turns all of this
 off, leaving ``threadsMax`` alone to decide what runs. Like ``threadsMax``, both
 travel with every request to the daemon.
 
+Tasks that start together can still grow together past what the budget leaves
+room for: the views of one large model all start when its tree is ready, and
+each can then grow by 2.5 GB. Where the machine is small for the processes that
+share it -- ``pc healthcheck`` says so (``MemoryPacing``) -- turn on pacing:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    memoryPacing: true     # off by default; or a share of the budget, e.g. 0.6
+
+or ``PC_MEMORY_PACING``. Once PartCAD's work holds that share of its budget --
+half of it for ``true`` -- a new task starts only when the memory has stopped
+rising since the last one started, so each shows what it takes before the next
+one starts. Below that share nothing waits, and when nothing runs the next task
+starts as always. Pacing makes a run that is high in memory slower, and keeps
+it from running the machine out of memory. It travels with every request to
+the daemon too.
+
+Work that becomes ready together while memory is still low -- the views of a
+model, once its tree is -- starts together all the same, below the share. On a
+machine small enough for that to matter, pace from the start with a share near
+0, and leave more room for what a task grows by after it starts with a lower
+``memoryBudget``: the LEGO examples drew all 33 of their pictures in 6 GB with
+``memoryPacing: 0.05`` and ``memoryBudget: 0.6``, where pacing from a quarter of
+the default budget lost two of them, and pacing from half of a 0.6 budget one.
+
 .. _caching:
 
 ========

@@ -125,25 +125,53 @@ def test_anything_else_is_ignored_for_the_default(value):
     assert user_config_module.memory_budget_share(value) == user_config_module.MEMORY_BUDGET_DEFAULT
 
 
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (None, 0.0),
+        (False, 0.0),
+        ("false", 0.0),
+        (0, 0.0),
+        (True, user_config_module.MEMORY_PACING_ON),
+        ("true", user_config_module.MEMORY_PACING_ON),
+        ("on", user_config_module.MEMORY_PACING_ON),
+        ("0.3", 0.3),
+        (0.7, 0.7),
+    ],
+)
+def test_memory_pacing_is_off_on_or_a_share(value, expected):
+    assert user_config_module.memory_pacing_share(value) == expected
+
+
+@pytest.mark.parametrize("value", [2, -0.1, "sometimes", float("nan")])
+def test_anything_else_leaves_starts_unpaced(value):
+    assert user_config_module.memory_pacing_share(value) == 0.0
+
+
 def test_the_defaults(tmp_path, monkeypatch):
     monkeypatch.delenv("PC_MEMORY_BUDGET", raising=False)
     monkeypatch.delenv("PC_MEMORY_BUDGET_SWAP", raising=False)
+    monkeypatch.delenv("PC_MEMORY_PACING", raising=False)
     monkeypatch.delenv("PC_CACHE_MEMORY_MAX_ENTRY_SIZE", raising=False)
     config = user_config_module.UserConfig(settings={"internalStateDir": str(tmp_path)})
     assert config.memory_budget == 0.8
     assert config.memory_budget_swap is True
+    assert config.memory_pacing == 0.0
     assert config.cache_memory_max_entry_size == 250 * 1024 * 1024
 
 
 def test_the_environment_sets_them(tmp_path, monkeypatch):
     monkeypatch.setenv("PC_MEMORY_BUDGET", "0.6")
     monkeypatch.setenv("PC_MEMORY_BUDGET_SWAP", "false")
+    monkeypatch.setenv("PC_MEMORY_PACING", "true")
     config = user_config_module.UserConfig(settings={"internalStateDir": str(tmp_path)})
     assert config.memory_budget == 0.6
     assert config.memory_budget_swap is False
+    assert config.memory_pacing == user_config_module.MEMORY_PACING_ON
 
 
 def test_they_travel_with_a_configuration():
     """A daemon budgets with the configuration a request carries, not its own."""
     assert "memoryBudget" in user_config_module.OPTION_KEYS
     assert "memoryBudgetSwap" in user_config_module.OPTION_KEYS
+    assert "memoryPacing" in user_config_module.OPTION_KEYS

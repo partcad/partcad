@@ -42,7 +42,13 @@ import time
 from filelock import FileLock, Timeout
 
 from . import admission, idle_objects
-from .user_config import MEMORY_BUDGET_DEFAULT, THREADS_MAX_MINIMUM, default_threads_max, user_config
+from .user_config import (
+    MEMORY_BUDGET_DEFAULT,
+    MEMORY_PACING_DEFAULT,
+    THREADS_MAX_MINIMUM,
+    default_threads_max,
+    user_config,
+)
 
 # How long a contended acquire waits between attempts. Contention only happens
 # around an install, which takes seconds, so the upper bound costs nothing and
@@ -257,6 +263,7 @@ def follow(config) -> None:
     """
     process_slots.resize(process_slot_count(config))
     process_slots.set_budget(*memory_budget(config))
+    process_slots.set_pacing(memory_pacing(config))
 
 
 def memory_budget(config=None) -> tuple:
@@ -273,8 +280,20 @@ def memory_budget(config=None) -> tuple:
     return share, bool(count_swap)
 
 
+def memory_pacing(config=None) -> float:
+    """'memoryPacing': the share of the budget from which starts are paced, 0 for never.
+
+    'config' is the configuration to size for, this process's own when None;
+    one that does not say is not paced.
+    """
+    if config is None:
+        config = user_config
+    return getattr(config, "memory_pacing", MEMORY_PACING_DEFAULT) or 0.0
+
+
 process_slots = ProcessSlots(process_slot_count())
 process_slots.set_budget(*memory_budget())
+process_slots.set_pacing(memory_pacing())
 # What memory can be had back from without touching anything running: the
 # geometry nothing uses any more (see 'idle_objects').
 process_slots.on_pressure(idle_objects.idle_objects.free)

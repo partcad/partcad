@@ -424,6 +424,88 @@ def test_a_task_waiting_for_a_slot_is_not_said_to_wait_for_memory(monkeypatch):
     assert said == []
 
 
+# ---- pacing ------------------------------------------------------------------------
+
+
+def _paced(usage, pacing=0.5, **kwargs):
+    """An admission with an 8 GB budget, paced from 'pacing' of it, and a scripted clock."""
+    clock = _Clock()
+    slots, machine = _budgeted(usage=usage, clock=clock, **kwargs)
+    slots.set_pacing(pacing)
+    slots.tick()
+    return slots, machine, clock
+
+
+def _measured_for(slots, machine, clock, seconds, change=0):
+    """'seconds' of the monitor's rounds, the usage moving by 'change' at every one."""
+    for _ in range(int(seconds / admission.INTERVAL)):
+        clock.now += admission.INTERVAL
+        machine.usage += change
+        slots.tick()
+
+
+def test_pacing_is_off_unless_asked_for():
+    slots, machine, clock = _paced(usage=7 * GB, pacing=0)
+    assert all(slots._try_acquire() for _ in range(4))
+
+
+def test_below_the_pacing_share_nothing_waits():
+    """Nothing in pacing slows down work that is using little memory."""
+    slots, machine, clock = _paced(usage=3 * GB)  # paced from 4 GB
+    assert all(slots._try_acquire() for _ in range(4))
+
+
+def test_from_the_pacing_share_tasks_start_one_at_a_time():
+    slots, machine, clock = _paced(usage=5 * GB)
+    assert slots._try_acquire()
+    # Just started: the next waits to see what this one takes.
+    assert not slots._try_acquire()
+    _measured_for(slots, machine, clock, admission.SETTLE + 0.5)
+    assert slots._try_acquire()
+    assert not slots._try_acquire()
+
+
+def test_a_start_waits_while_the_memory_still_rises():
+    slots, machine, clock = _paced(usage=5 * GB)
+    assert slots._try_acquire()
+    _measured_for(slots, machine, clock, 4.0, change=GB // 4)
+    assert not slots._try_acquire()
+    # Once it has stopped rising, the next starts.
+    _measured_for(slots, machine, clock, admission.SETTLE + 0.5)
+    assert slots._try_acquire()
+
+
+def test_falling_memory_holds_nothing_back():
+    slots, machine, clock = _paced(usage=7 * GB)
+    assert slots._try_acquire()
+    _measured_for(slots, machine, clock, admission.SETTLE + 0.5, change=-GB // 4)
+    assert slots._try_acquire()
+
+
+def test_pacing_never_holds_a_start_when_nothing_runs():
+    """Throttled to one at a time, never to a stop -- with pacing as without."""
+    slots, machine, clock = _paced(usage=5 * GB)
+    assert slots._try_acquire()
+    slots._release()
+    assert slots._try_acquire()
+
+
+def test_tasks_held_by_pacing_are_reported_as_such(monkeypatch):
+    said = []
+    monkeypatch.setattr(admission.pc_logging, "info", lambda message: said.append(message))
+    slots, machine, clock = _paced(usage=5 * GB)
+    assert slots._try_acquire()
+
+    async def scenario():
+        waiter = asyncio.create_task(_take(slots, Rank("held"), "held", []))
+        await asyncio.sleep(0.01)
+        _measured_for(slots, machine, clock, 8.0, change=GB // 8)
+        waiter.cancel()
+
+    asyncio.run(scenario())
+    assert said and "wait for memory to stop rising" in said[0] and "memoryPacing" in said[0]
+
+
 # ---- the process's own -----------------------------------------------------------
 
 
@@ -452,3 +534,16 @@ def test_a_configuration_that_says_nothing_gets_the_defaults():
     from partcad import sandbox_lock
 
     assert sandbox_lock.memory_budget(_Config()) == (0.8, True)
+    assert sandbox_lock.memory_pacing(_Config()) == 0
+
+
+def test_follow_takes_the_pacing_a_request_carries(monkeypatch):
+    from partcad import sandbox_lock
+
+    slots = Admission(4, monitor=False)
+    monkeypatch.setattr(sandbox_lock, "process_slots", slots)
+
+    sandbox_lock.follow(_Config(memory_budget=0.8, memory_pacing=0.5))
+    assert slots.pacing == 0.5
+    sandbox_lock.follow(_Config(memory_budget=0.8))
+    assert slots.pacing == 0

@@ -44,9 +44,13 @@ def test_statistics_with_nothing_free_say_nothing_is():
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="glibc and open_memstream")
 def test_what_python_frees_is_found_free_for_reuse():
-    """Not given back to the system, and not counted as used either."""
-    before = memory.reusable()
+    """Not given back to the system, and not counted as used either.
+
+    Measured after the allocation: a worker that already holds much free memory
+    fills it first, so a 'before' read ahead of it can exceed what is left.
+    """
     garbage = [str(i) * 3 for i in range(300_000)]
+    before = memory.reusable()
     del garbage[::2]
     gc.collect()
     assert memory.reusable() > before

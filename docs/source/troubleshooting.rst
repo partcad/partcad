@@ -167,6 +167,29 @@ PartCAD makes now -- the Python sandbox, KiCad imports, a plugin's
 ``container:`` and an application ``pc ide open`` runs -- is named
 ``partcad-<role>-<tag>-<identity>`` and labelled, and prune removes it.
 
+Is there enough memory for what PartCAD runs at once?
+-----------------------------------------------------
+
+PartCAD runs up to ``threadsMax`` sandbox processes at once, within a share of
+the machine's memory (see :ref:`memory-budget`). A drawing of a large assembly
+can grow by 2.5 GB after it starts, and several that start together -- the
+views of one model -- can run a small machine out of memory, which kills them.
+The ``MemoryPacing`` check warns when the budget comes to less than 2.5 GB for
+each of those processes, or when so much of the machine is in use by other
+programs that what is available now does:
+
+  .. code-block:: shell
+
+    pc healthcheck --filters memory
+
+and suggests ``memoryPacing: true`` (``PC_MEMORY_PACING=true``), which starts
+new work one task at a time once PartCAD's work holds half of its budget. It is
+a warning, and pacing is yours to turn on: below that share nothing waits, and
+above it a run is slower and safer. On a machine where drawings are still
+killed, pace from the start (``memoryPacing: 0.05``) and lower ``memoryBudget``
+(see :ref:`memory-budget`). Running fewer processes at once (``threadsMax``) is
+the other way to the same end. With pacing on, the check has nothing to suggest.
+
 Typical problems
 ----------------
 

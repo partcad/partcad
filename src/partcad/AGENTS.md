@@ -154,6 +154,11 @@ at all).
   then large ones only memory holds, then small, least recently used first); in use is the envelope's reference
   count, so do not cache a `get_wrapped` result anywhere long-lived just to have it -- that keeps it from ever
   being freed. Read `Shape._wrapped` once into a local: it can be set to `None` by the monitor between two reads.
+  `memoryPacing` (off by default; `set_pacing`, also per request through `follow`) adds one rule from a share of
+  the budget on: a task starts only once the last start is `SETTLE` seconds back and the memory has not risen over
+  the measurements of those seconds -- for machines where tasks that start together outgrow the budget's margin.
+  Below that share it must never hold a start back, and with nothing running nothing is held back at all; the
+  `MemoryPacing` healthcheck suggests it where the budget is small for the processes sharing it.
   The design and the decisions behind it are in `docs/design/memory-and-scheduling.md`, section 9.
 - **`threadsMax` is never below `THREADS_MAX_MINIMUM` (4)**, and the floor is applied where the value is read, in
   `partcad_utils.user_config`: the file, `PC_THREADS_MAX`, a client's configuration (`from_dict`), and an
