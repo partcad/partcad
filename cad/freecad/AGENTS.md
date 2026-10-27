@@ -31,7 +31,9 @@ package and does import FreeCAD — it is the root entry point FreeCAD itself ex
 - `InitGui.py` / `Init.py` — what FreeCAD executes; registration only.
 - `package.xml` — Addon Manager metadata.
 - `partcad_freecad/framing.py`, `client.py` — the JSON-RPC wire protocol (a copy of the service's own codec;
-  the addon cannot import the service's Python package, that is the point of the frozen bundle).
+  the addon cannot import the service's Python package, that is the point of the frozen bundle). A copy without
+  attachments: the service sends files as raw bytes only to a client that says it reads them, and the addon,
+  which is handed no file over the wire (an export is written to a path), never says so.
 - `partcad_freecad/provision.py` — locating/downloading/unpacking the standalone bundle.
 - `partcad_freecad/service.py` — the operations the addon uses, and the notification stream they really answer
   through (`items`, `log`, the `*Failed` signals).

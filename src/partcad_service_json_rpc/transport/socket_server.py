@@ -21,7 +21,8 @@ it owes a connection that is in the middle of a request.
 by the dispatcher: they are properties of the *connection*, and the dispatcher
 only ever sees ``(request, session)`` -- and the session is shared by every
 client of this daemon, so a setting stored there would be one client deciding
-for all of them.
+for all of them. Whether a connection's client reads attachments is the same
+kind of thing, and is kept beside them (a ``framing.Peer`` per connection).
 """
 
 import base64
@@ -30,7 +31,7 @@ import socket
 import threading
 from typing import Callable, Mapping, Optional
 
-from partcad_utils.framing import read_message, write_message
+from partcad_utils.framing import Peer, read_message, write_message
 from partcad_utils.logging_ansi_render import AnsiEventRenderer
 from partcad_utils.workspace import LIVENESS_METHOD
 
@@ -137,6 +138,13 @@ class SocketServer:
         rfile = conn.makefile("rb")
         wfile = conn.makefile("wb")
         write_lock = threading.Lock()
+        # What this client has said it reads: whether its files may go as raw
+        # attachments rather than as base64 (see 'partcad_utils.framing').
+        peer = Peer()
+
+        def write(message):
+            write_message(wfile, message, attachments=peer.attachments)
+
         # Per connection, because the ANSI footer is drawn by moving the cursor
         # back over the lines it last wrote: one renderer shared between two
         # clients would have each erasing lines from the other's terminal.
@@ -145,7 +153,7 @@ class SocketServer:
         def send(event, payload):
             try:
                 with write_lock:
-                    write_message(wfile, {"jsonrpc": "2.0", "method": event, "params": payload})
+                    write({"jsonrpc": "2.0", "method": event, "params": payload})
             except (OSError, ValueError):
                 # The client went away. The renderer's ticking thread outlives
                 # the read loop by up to one tick, so this is reached in normal
@@ -173,14 +181,14 @@ class SocketServer:
         self._connections.ready(token, send)
         try:
             while not self._stop.is_set():
-                request = read_message(rfile)
+                request = read_message(rfile, peer)
                 if request is None:
                     break
 
                 if isinstance(request, dict) and request.get("method") == STOP_METHOD:
                     if "id" in request:
                         with write_lock:
-                            write_message(wfile, {"jsonrpc": "2.0", "id": request["id"], "result": {"stopped": True}})
+                            write({"jsonrpc": "2.0", "id": request["id"], "result": {"stopped": True}})
                     self.stop()
                     break
 
@@ -246,7 +254,7 @@ class SocketServer:
                     response = self._dispatcher.dispatch(request, self._session)
                     if response is not None:
                         with write_lock:
-                            write_message(wfile, response)
+                            write(response)
                     continue
 
                 # Busy from here until the answer is written: a restart waits
@@ -261,7 +269,7 @@ class SocketServer:
                             self._session.emitter.set_sink(None)
                     if response is not None:
                         with write_lock:
-                            write_message(wfile, response)
+                            write(response)
                 finally:
                     self._connections.end(token)
         except OSError:

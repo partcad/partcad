@@ -28,6 +28,7 @@ import subprocess
 import sys
 import threading
 
+from partcad_utils.framing import Peer
 from partcad_utils.win_pipe import STOP_METHOD, pipe_name, read_frame, write_frame
 from partcad_utils.workspace import LIVENESS_METHOD, workspace_dir
 
@@ -137,9 +138,13 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
         stop_event.set()
 
     async def handle(reader, writer):
+        # Whether this client reads attachments, kept per connection as the
+        # socket server keeps it (see 'partcad_utils.framing').
+        peer = Peer()
+
         def sink(event, payload):
             # On the loop's thread only: an asyncio transport is not thread-safe.
-            write_frame(writer, {"jsonrpc": "2.0", "method": event, "params": payload})
+            write_frame(writer, {"jsonrpc": "2.0", "method": event, "params": payload}, peer.attachments)
 
         def notify(event, payload):
             # From another thread -- the worker a request is dispatched on, or
@@ -161,7 +166,7 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
         token = connections.add(notify)
         try:
             while not stop_event.is_set():
-                request = await read_frame(reader)
+                request = await read_frame(reader, peer)
                 if request is None:
                     break
                 if isinstance(request, dict) and request.get("method") == STOP_METHOD:
@@ -222,7 +227,7 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
                     response = await loop.run_in_executor(None, _run)
                     await emitted
                     if response is not None:
-                        write_frame(writer, response)
+                        write_frame(writer, response, peer.attachments)
                         await writer.drain()
                 finally:
                     connections.end(token)

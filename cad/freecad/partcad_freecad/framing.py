@@ -9,12 +9,15 @@ The same codec as ``partcad_utils.framing``, duplicated here
 on purpose: the addon talks to the *standalone* service, so it cannot import the
 service's Python package -- FreeCAD's interpreter has neither it nor ``partcad``
 installed, which is the whole point of using the frozen bundle.
+
+Less of it, though: no attachments. The service sends a file as raw bytes after
+a message only to a client that says it reads them, and this one never says so
+-- the addon is handed no file over the wire at all (an export is written to a
+path the addon names), so the service writes to it exactly what it always has.
 """
 
 import json
 from typing import Any, BinaryIO, Optional
-
-_HEADER_SEPARATOR = b"\r\n\r\n"
 
 
 def write_message(stream: BinaryIO, message: Any) -> None:
@@ -26,18 +29,26 @@ def write_message(stream: BinaryIO, message: Any) -> None:
 
 
 def _read_headers(stream: BinaryIO) -> Optional[dict]:
-    """Read header lines up to the blank separator. Returns None at EOF."""
+    """Read header lines up to the blank separator. Returns None at EOF.
+
+    A line at a time, as ``partcad_utils.framing`` reads them: on a buffered
+    stream a byte at a time was a call per byte of every header.
+    """
     raw = b""
-    while _HEADER_SEPARATOR not in raw:
-        chunk = stream.read(1)
-        if not chunk:
-            # Clean EOF only counts if we have not started a header.
-            return None if not raw else {}
-        raw += chunk
+    while True:
+        line = stream.readline()
+        if not line:
+            # End of stream, before a header or part way through one.
+            return None
+        if not line.strip():
+            if raw:
+                break
+            continue  # a blank line before any header
+        raw += line
 
     headers = {}
     for line in raw.split(b"\r\n"):
-        if not line:
+        if not line.strip():
             continue
         name, _, value = line.partition(b":")
         headers[name.strip().lower().decode("ascii")] = value.strip().decode("ascii")
@@ -54,4 +65,4 @@ def read_message(stream: BinaryIO) -> Optional[Any]:
     if len(body) < length:
         # Truncated stream: treat as end of input rather than raising.
         return None
-    return json.loads(body.decode("utf-8"))
+    return json.loads(body)

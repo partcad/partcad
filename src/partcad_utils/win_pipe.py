@@ -18,8 +18,8 @@ byte-compiles (and imports) on POSIX.
 
 import asyncio
 import hashlib
-import json
 
+from . import framing
 from .workspace import LIVENESS_METHOD
 
 _HEADER_SEP = b"\r\n\r\n"
@@ -68,23 +68,30 @@ async def _pipe_roundtrip(name: str, method: str, timeout: float, params=None): 
             transport.close()
 
 
-def write_frame(writer, message) -> None:
-    body = json.dumps(message, ensure_ascii=False).encode("utf-8")
-    writer.write(b"Content-Length: %d\r\n\r\n" % len(body) + body)
+def write_frame(writer, message, attachments: bool = False) -> None:
+    """One message on an asyncio stream, framed as ``partcad_utils.framing`` frames it.
+
+    ``attachments`` as there: only for a peer that said it reads them.
+    """
+    for chunk in framing.encode_message(message, attachments):
+        writer.write(chunk)
 
 
-async def read_frame(reader):
-    raw = b""
-    while _HEADER_SEP not in raw:
-        chunk = await reader.read(1)
-        if not chunk:
-            return None
-        raw += chunk
-    headers = {}
-    for line in raw.split(b"\r\n"):
-        if b":" in line:
-            k, _, v = line.partition(b":")
-            headers[k.strip().lower()] = v.strip()
-    length = int(headers.get(b"content-length", b"0"))
-    body = await reader.readexactly(length)
-    return json.loads(body.decode("utf-8"))
+async def read_frame(reader, peer=None):
+    """One message from an asyncio stream, or None at its end.
+
+    ``peer`` is told what the sender said it reads (``framing.Peer``).
+    """
+    try:
+        raw = await reader.readuntil(_HEADER_SEP)
+    except asyncio.IncompleteReadError:
+        return None
+    headers = framing.parse_headers(raw)
+    framing.observe(headers, peer)
+    length = int(headers.get("content-length", 0))
+    try:
+        body = await reader.readexactly(length)
+        segments = [await reader.readexactly(size) for size in framing.attachment_lengths(headers)]
+    except asyncio.IncompleteReadError:
+        return None
+    return framing.decode_body(body, segments)

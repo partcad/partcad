@@ -57,3 +57,37 @@ def test_serve_stops_at_eof_without_writing_anything():
     response_stream = io.BytesIO()
     stdio.serve(io.BytesIO(b""), response_stream, Session(), {})
     assert response_stream.getvalue() == b""
+
+
+def _render(session, params):
+    """A method answering with a file, as 'render.inline' does."""
+    session.emitter.emit(events.ITEMS, {"preview": b"tiny"})
+    return {"filename": "a.png", "content": b"\x89PNG"}
+
+
+def _served(*, accept: bool) -> bytes:
+    request_stream = io.BytesIO()
+    write_message(request_stream, {"jsonrpc": "2.0", "id": 1, "method": "render"}, accept_attachments=accept)
+    request_stream.seek(0)
+    response_stream = io.BytesIO()
+    stdio.serve(request_stream, response_stream, Session(), {"render": _render})
+    return response_stream.getvalue()
+
+
+def test_a_client_that_reads_attachments_is_sent_its_files_as_bytes():
+    # The editor on `partcad.serviceChannel: stdio` says so on every request;
+    # the answer and the events of the request it said it on carry raw bytes.
+    raw = _served(accept=True)
+    assert raw.count(b"Attachment-Lengths:") == 2
+    event, answer = _drain(io.BytesIO(raw))
+    assert event["params"] == {"preview": b"tiny"}
+    assert answer["result"] == {"filename": "a.png", "content": b"\x89PNG"}
+
+
+def test_a_client_from_before_attachments_is_sent_base64_as_it_always_was():
+    # An older extension, or the FreeCAD addon, which say nothing about them.
+    raw = _served(accept=False)
+    assert b"Attachment-Lengths" not in raw
+    event, answer = _drain(io.BytesIO(raw))
+    assert event["params"] == {"preview": "dGlueQ=="}
+    assert answer["result"] == {"filename": "a.png", "content": "iVBORw=="}
