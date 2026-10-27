@@ -271,16 +271,21 @@ let shownGeometry: Geometry | undefined;
 let framedRadius = 1;
 
 /**
- * Whether the camera is where the last fit put it, give or take the turntable.
+ * The radius the camera was last fitted to, while it is still where that fit put
+ * it, give or take the turntable.
  *
  * While it is, a canvas that changes shape is fitted again ('resizeCanvas'): the
  * fit depends on the canvas's shape, and a show can be fitted while the 3D tab is
  * hidden, which is to a shape the canvas no longer has. Moving the camera by hand
  * - a drag, the wheel, a SpaceMouse - ends that, and the camera stays put.
+ *
+ * The radius of that fit and not the current show's: a show that keeps the camera
+ * ('keepCamera', an edit re-rendered) keeps the view it had, and a resize after it
+ * changes that view by what the canvas did and not by what the edit did.
  */
-let fitted = false;
+let fittedTo: number | undefined;
 controls.addEventListener('start', () => {
-    fitted = false;
+    fittedTo = undefined;
 });
 
 /** Which way the camera looks at the model from: Stage's default, slightly above. */
@@ -522,7 +527,7 @@ function placeCamera(radius: number): void {
     resizeCanvas();
     camera.position.copy(VIEW_DIRECTION).multiplyScalar(fitDistance(radius));
     controls.target.set(0, 0, 0);
-    fitted = true;
+    fittedTo = radius;
 }
 
 /** How far along 'VIEW_DIRECTION' the camera fits a model of 'radius' into the canvas as it is now. */
@@ -1303,6 +1308,11 @@ export function screenshot(): string {
     return canvas.toDataURL('image/png');
 }
 
+/**
+ * Size the drawing buffer and the camera to the canvas as it is laid out now, and
+ * fit the camera again if it has not been moved since it was fitted ('fittedTo').
+ * A canvas with no size - its tab hidden - is left as it was.
+ */
 export function resizeCanvas(): void {
     const width = container.clientWidth;
     const height = container.clientHeight;
@@ -1313,10 +1323,10 @@ export function resizeCanvas(): void {
     labelRenderer.setSize(width, height);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    if (fitted) {
+    if (fittedTo !== undefined) {
         // Fitted again at the angle the turntable has it at now, along the line
         // it looks down: nearer or further, but not turned.
-        const length = fitDistance(framedRadius) * VIEW_DIRECTION.length();
+        const length = fitDistance(fittedTo) * VIEW_DIRECTION.length();
         camera.position.sub(controls.target).setLength(length).add(controls.target);
     }
     invalidate();
