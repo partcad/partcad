@@ -40,6 +40,16 @@ import wrapper_common
 # before is produced again.
 CACHE_VERSION = 4
 
+# How this implementation meshes what it is handed, for the files of one
+# object to share a decoding and a mesh when they are written together (see
+# 'wrapper_export.TESSELLATION_NAME'): the polygonal projection triangulates the
+# whole shape to a deflection worked out from its size ('_deflection'), and the
+# exact one does not triangulate it at all - hence 'reproducible' - and either
+# way the ports and annotations drawn on top go through the same projection.
+# Only the mesh is left on the shape. Every renderer that draws through
+# 'process()' below declares the same.
+TESSELLATION = ("projection", "reproducible", "normalize_mesh", "with_ports", "with_interfaces", "ports", "annotations")
+
 # Two points closer than this are the same point, as far as a drawn line goes.
 TOLERANCE = 1e-9
 

@@ -536,7 +536,7 @@ def _decode_shape(obj, shared):
     raise ValueError("Not a shape or assembly object: %r" % (list(obj) if isinstance(obj, dict) else type(obj)))
 
 
-def decode_tree(obj):
+def decode_tree(obj, shared=None):
     """'decode_shape(obj)', and the tree it was decoded from, in one pass.
 
     Returns '(shape, tree)'. 'shape' is exactly what 'decode_shape(obj)' returns:
@@ -554,9 +554,13 @@ def decode_tree(obj):
 
     The nodes are copies; 'obj' is left as it was. Nodes carrying the same
     payload share one 'TShape', as 'decode_shape' says.
+
+    'shared' is the payloads already read and what each was read into, for a
+    caller that decodes several documents into one set of shapes and so reads
+    each payload once across all of them (see 'wrapper_export.run_together').
     """
     _ensure_ocp()
-    return _decode_tree(obj, {})
+    return _decode_tree(obj, {} if shared is None else shared)
 
 
 def _decode_tree(obj, shared):
@@ -638,14 +642,14 @@ def encode(obj, name=None, label=None):
     raise TypeError("Cannot encode %s for the wrapper protocol" % type(obj))
 
 
-def decode(obj):
+def decode(obj, shared=None):
     """Inverse of 'encode()'.
 
     Every shape found anywhere in 'obj' is decoded as 'decode_shape' decodes a
     tree: the same payload twice -- two components of one request, two
-    placements of a part -- is one 'TShape'.
+    placements of a part -- is one 'TShape'. 'shared' is as 'decode_tree' has it.
     """
-    return _decode(obj, {})
+    return _decode(obj, {} if shared is None else shared)
 
 
 def _decode(obj, shared):

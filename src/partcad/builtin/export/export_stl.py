@@ -16,6 +16,15 @@ import wrapper_common
 # before is produced again.
 CACHE_VERSION = 1
 
+# How this implementation meshes what it is handed, so that the files of one
+# object written together can share one decoding of it and one mesh (see
+# 'wrapper_export.TESSELLATION_NAME'): relative to the size of each edge and
+# face, as 'BRepMesh_IncrementalMesh' does with 'isRelative' - which is what
+# cadquery does for the 3MF exporter too, though that one runs in another
+# environment. Only the mesh is left on the shape, and what is written is
+# decided by the geometry and that mesh alone.
+TESSELLATION = ("relative", "tolerance", "angularTolerance")
+
 
 def process(path, request):
     try:

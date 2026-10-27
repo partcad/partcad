@@ -150,6 +150,32 @@ at all).
   for the configuration a request carries, and the daemon calls it in `context.create` and in `_ctx` (see
   `src/partcad_service_json_rpc/AGENTS.md`). Sized once at import, they ignored the `PC_THREADS_MAX` of every
   command a warm daemon served.
+- **The file types of one object are written by one sandbox call** (`Shape.render_async` given a list,
+  `_OutputBatch`, `Shape._run_together_locked`, `wrapper_export.run_together`). `Project.render_async` asks for
+  every file type of a shape at once; each is still worked out, cached under its own key, logged under its own
+  `Render<TYPE>` action and reported on its own, and only the ones the cache does not hold go to the sandbox -- one
+  interpreter per environment (`_sandbox_of`: the interpreter, the image, and whose implementation it is, every
+  built-in package counting as one; a container's runs alone; and within a sandbox the layer a file type's
+  requirements put it in, `_layer_of_async` -- the 3MF exporter in CadQuery's, PNG and JPEG in the one that
+  rasterizes, the rest in the base), which imports the CAD stack once and runs each
+  implementation as it would have run alone, in its own working directory and with `sys.argv`/`sys.path` as it
+  would have found them. Nothing is lost in parallelism: a shape's files never ran at once (`Shape.locked()`), and a
+  call is one process slot and one task however many files it writes. Each file is answered on a line of its own as
+  soon as it is written, and one left unanswered -- the process died, or the wrapper failed before reaching it --
+  is written again by a call of its own, so it fails exactly as it does alone and takes nothing else with it. Two
+  rules are load-bearing. The requirements of several file types are asked for in `sandbox_versions.install_order`,
+  which re-imposes "what build123d overwrites goes after it" on their union rather than inheriting an order that
+  no single list has (the `remote` sandbox installs into one environment in the order asked); never
+  `asyncio.gather` them. And two file types that write one path (glTF and three.js are
+  both `.json`) never share a call (`_rounds`), or the first one's run would be remembered as the second one's file.
+
+  The object is decoded once for the files that may share a decoding, which is what an implementation's
+  `TESSELLATION` literal says (read, never run, like `CACHE_VERSION`): the only thing it leaves on the shape is a
+  mesh made the way it names with the parameters it names, so a second file finds the first one's mesh -- the mesh
+  it would have made itself -- and comes out byte for byte as it does alone. Saying nothing means a decoding of its
+  own, and so does every file of an object that arrived with a mesh on it. Declare it only when a file written
+  after another one has been shown to come out the same: glTF meshes like STL and 3MF and does not declare it,
+  because build123d turns the shape to Y-up first and a relative mesh of the turned shape differs by a few triangles.
 - **`threadsMax` is never below `THREADS_MAX_MINIMUM` (4)**, and the floor is applied where the value is read, in
   `partcad_utils.user_config`: the file, `PC_THREADS_MAX`, a client's configuration (`from_dict`), and an
   assignment (`--threads-max`) all go through the `threads_max` property, and what is unset is

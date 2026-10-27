@@ -20,6 +20,12 @@ import build123d as b3d
 # before is produced again.
 CACHE_VERSION = 1
 
+# Declares no TESSELLATION (see 'wrapper_export.TESSELLATION_NAME'), though it
+# meshes the way the STL and 3MF exporters do: build123d turns the shape to
+# glTF's Y-up before meshing it, and a relative mesh of the turned shape is not
+# the mesh of the shape as it lies, by a few triangles. So this file is written
+# from a decoding of its own, and comes out as it does on its own.
+
 
 def process(path, request):
     try:

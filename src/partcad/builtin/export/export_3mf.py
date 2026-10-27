@@ -25,6 +25,16 @@ import wrapper_common
 # before is produced again.
 CACHE_VERSION = 1
 
+# How this implementation meshes what it is handed, so that the files of one
+# object written together can share one decoding of it and one mesh (see
+# 'wrapper_export.TESSELLATION_NAME'): relative, through cadquery's
+# 'Shape.tessellate()', which meshes as the STL exporter does. Only the mesh is
+# left on the shape, and what is written is decided by the geometry and that
+# mesh alone. (It runs in CadQuery's layer and the STL exporter in the base, so
+# the two are not written by one process; a file type of the same layer that
+# meshes the same way would share with it.)
+TESSELLATION = ("relative", "tolerance", "angularTolerance")
+
 
 def process(path, request):
     try:

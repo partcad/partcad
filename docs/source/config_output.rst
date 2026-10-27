@@ -349,6 +349,30 @@ wrapper PartCAD ships states one. (Those results are keyed on the Python sources
 of the package the implementation comes from as well -- see :ref:`caching` -- so
 for them an edit already runs everything again on its own.)
 
+The file types of one object that are asked for together -- ``pc render`` of a
+package that declares several -- are written by one sandbox process for each
+environment they run in (the sandbox's own, or the layer over it that a file
+type's ``pythonRequirements`` call for), so the CAD stack is imported once for
+all of them, and only the ones the cache does not hold are written at all. Each implementation is run in it as it would be on its
+own: in its package's directory, with ``sys.argv`` and ``sys.path`` as it would
+have found them, and cached, logged and reported as a file of its own. A
+package's implementations share that process with one another and never with
+another package's, so an implementation that sets something process-wide for
+itself -- an OpenCASCADE ``Interface_Static`` parameter, say -- should set it
+every time it runs rather than count on a fresh process. One that changes
+nothing about the shape it is handed except by meshing it may say so with a
+module-level literal, read without running the script like ``CACHE_VERSION``:
+
+.. code-block:: python
+
+  TESSELLATION = ("relative", "tolerance", "angularTolerance")
+
+-- how it meshes, and which of its parameters it meshes with. File types of one
+object that declare the same, with the same values, are handed one decoding of
+it, and each after the first finds that one's mesh on the shape; a script that
+declares nothing is handed a decoding of its own. Declare it only once the file
+written after another of its group has been seen to be the file written alone.
+
 See ``examples/feature_export_custom`` for both halves of this.
 
 Using another package's implementation

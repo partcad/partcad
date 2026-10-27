@@ -26,6 +26,10 @@ import render_svg
 # before is produced again.
 CACHE_VERSION = 2
 
+# This projection's, for the reason 'render_svg.TESSELLATION' gives: it is drawn
+# by 'render_svg.process()'. A literal, because it is read without running this.
+TESSELLATION = ("projection", "reproducible", "normalize_mesh", "with_ports", "with_interfaces", "ports", "annotations")
+
 # How many straight segments a curve is approximated with. DXF R2010 has no
 # general Bezier entity, so curves are flattened.
 CURVE_SEGMENTS = 20

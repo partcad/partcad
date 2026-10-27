@@ -18,6 +18,14 @@ from utils_ocp import tessellate
 # before is produced again.
 CACHE_VERSION = 1
 
+# How this implementation meshes what it is handed, so that the files of one
+# object written together can share one decoding of it and one mesh (see
+# 'wrapper_export.TESSELLATION_NAME'): to an absolute deflection, through
+# 'utils_ocp.tessellate()', as the OBJ exporter does. Only the mesh is left on
+# the shape, and what is written is decided by the geometry and that mesh
+# alone.
+TESSELLATION = ("absolute", "tolerance", "angularTolerance")
+
 BUFFER_SIZE = 256 * 1024  # 256KB buffer for file writes
 
 

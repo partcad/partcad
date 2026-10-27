@@ -208,6 +208,45 @@ def reconcile_requirement(requirement: str) -> tuple[str, str | None]:
     return reconciled, requirement
 
 
+def install_order(requirements) -> list:
+    """'requirements' once each, in an order that, installed one by one, leaves every one of them installed.
+
+    Each file type's own list is written in such an order already (see
+    GUARD_INVALIDATED_BY), and lists put together are not: one asking for
+    'cadquery-ocp' and then one asking for 'build123d', 'cadquery-ocp', each
+    taken once where it first appears, install build123d last and leave OCP
+    without VTK. That is what a sandbox keeping one environment does with them
+    (the 'remote' one, which installs what it is asked in the order asked); a
+    layered one keeps the two builds apart anyway. So the order is imposed on
+    the union rather than inherited from its parts: whatever another of them
+    overwrites goes after it, and the rest stay in the order they came in.
+
+    Requirements are compared as 'reconcile_requirement' would install them, and
+    handed back as they were written. A cycle - two that overwrite each other -
+    has no such order, and is left in the order it came in.
+    """
+    ordered = []
+    seen = set()
+    for requirement in requirements:
+        key = reconcile_requirement(requirement)[0]
+        if key not in seen:
+            seen.add(key)
+            ordered.append((key, requirement))
+
+    result = []
+    while ordered:
+        for index, (key, requirement) in enumerate(ordered):
+            # Free to go next when nothing still to come overwrites it.
+            if not any(key in GUARD_INVALIDATED_BY.get(other, ()) for other, _ in ordered if other != key):
+                result.append(requirement)
+                del ordered[index]
+                break
+        else:
+            result.extend(requirement for _key, requirement in ordered)
+            break
+    return result
+
+
 # What a sandbox gets when the package does not ask for a specific interpreter.
 # One step ahead of the minimum PartCAD itself supports.
 DEFAULT_PYTHON_VERSION = "3.11"
