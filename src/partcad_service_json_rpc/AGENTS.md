@@ -52,7 +52,9 @@ The daemon owns two things its clients do not, and both decide what belongs on w
    in: `wrapper_import_assy` for STEP assemblies, the conversion wrappers behind `convert`/`--target-format`,
    the render/export wrappers. Those runtimes belong to the daemon's environment and **need not exist on the
    client side at all** — a thin client cannot do this work itself even in principle. Any command that drives a
-   wrapper is therefore a daemon command.
+   wrapper is therefore a daemon command. On Linux the daemon also keeps, per environment, the interpreter its
+   wrappers are forked from (`partcad.sandbox_zygote`), which is warm across commands the way the context is and
+   goes with the daemon.
 
 A command stays in the client only when its inputs and outputs are the *client's own* state, which cannot cross
 the wire: `init` (bootstraps a workspace before any package exists), `config` (prints the client's resolved

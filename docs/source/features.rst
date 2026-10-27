@@ -679,6 +679,22 @@ That is what lets one package render against build123d 0.11 while another wants
 The equivalents everywhere else are ``PC_PYTHON_SANDBOX`` in the environment and
 ``--python-sandbox`` on the command line, in the usual order of precedence.
 
+**A script is forked rather than started**, on Linux, in the sandboxes whose
+interpreter runs on this machine (``venv``, ``conda`` and ``none``). Starting an
+interpreter and importing the CAD stack into it takes seconds -- build123d alone
+is five or more -- and running a small part takes a few hundredths of one, so
+PartCAD keeps one interpreter per sandbox environment that has done those
+imports, and each script runs in a copy of it, made with ``fork``. A copy is
+made from an interpreter that has run nothing, so no script can see what
+another one did, and one that crashes takes only itself with it. The
+interpreter is started once an environment has had a second script to run --
+the scripts before it is ready start as they always did -- and is replaced
+whenever anything is installed into the environment, by this PartCAD or by any
+other. It holds a few hundred megabytes while it waits, and goes after ten
+minutes without a script. It is not used on macOS or Windows, nor in the
+``docker``, ``remote`` and ``pypy`` sandboxes, and ``pythonSandboxZygote:
+false`` (``PC_PYTHON_SANDBOX_ZYGOTE=false``) turns it off on Linux too.
+
 Which one is chosen for you, when you have said nothing, is the first of
 ``docker``, ``conda`` and ``venv`` that this machine can actually provide. A
 continuous integration runner with no container runtime therefore keeps

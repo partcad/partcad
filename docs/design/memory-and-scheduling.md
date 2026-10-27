@@ -374,11 +374,16 @@ The design that carries it out, **decided** with the points above and built in t
   running" a state the daemon always reaches.
 - **Usage is this daemon's own footprint**: its own process less what its allocators hold for reuse (point 11), the
   processes it started (PSS where Linux has it, `psutil`'s USS elsewhere), and the containers it runs work in (their
-  memory less the file cache, as `docker stats` reports it). **Capacity** is RAM, plus swap by default, or a cgroup's
-  `memory.max` (plus `memory.swap.max`) where that is smaller. Under a cgroup limit the kernel charges more than the
-  footprint -- page cache, kernel memory, every other process in the cgroup -- and the share is what absorbs that, as
-  it absorbs other processes on an ordinary machine. On macOS swap has no fixed size; there the swap counted is what is
-  allocated at the moment. Measured at most a few times a second, and again after freeing.
+  memory less the file cache, as `docker stats` reports it). A wrapper forked from a zygote (`sandbox_zygote`) is a
+  child of the zygote and a grandchild of the daemon: the processes it started are its descendants, not its children,
+  and PSS is what makes them add up -- a child shares the zygote's imported CAD stack, some 300 MB of it, and RSS would
+  charge that to every child as well as to the zygote. The zygote itself is resident between calls (about 400 MB of its
+  own) and is usage like any other; it is not a task, and it is started in a process slot like one. **Capacity** is RAM,
+  plus swap by default, or a cgroup's `memory.max` (plus `memory.swap.max`) where that is smaller. Under a cgroup limit
+  the kernel charges more than the footprint -- page cache, kernel memory, every other process in the cgroup -- and the
+  share is what absorbs that, as it absorbs other processes on an ordinary machine. On macOS swap has no fixed size;
+  there the swap counted is what is allocated at the moment. Measured at most a few times a second, and again after
+  freeing.
 - **Freed memory is given back to the system where it can be.** glibc raises its `mmap` threshold each time a large
   block is freed, up to 32 MB, so later blocks of that size come from the heap and stay in the process after they are
   freed. The daemon fixes the threshold (`M_MMAP_THRESHOLD`), so a payload is unmapped as soon as it is freed, and
