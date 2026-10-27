@@ -81,7 +81,8 @@ but one can be too big for memcached. An entry no tier would take is not even
 packed.
 
 **An entry is a tar, uncompressed, in one zstd frame**, and is read back in one
-pass in the order it was written. It used to be a gzipped tar at gzip's level 9
+pass in the order it was written, each file streamed to disk as it comes
+('_Staging'). It used to be a gzipped tar at gzip's level 9
 (tarfile's default), read by listing its members first and extracting them
 after; since every backward seek in a gzip stream decompresses it again from
 the start, an entry was decompressed at least twice to be put back. Over ASCII
@@ -99,6 +100,8 @@ import hashlib
 import io
 import json
 import os
+import secrets
+import shutil
 import tarfile
 from typing import Iterable, Optional
 
@@ -144,11 +147,18 @@ _ZSTD_LEVEL = 3
 # zstd can expand to hundreds of megabytes; deflate cannot expand by much more
 # than a thousand to one, which is what reading a gzipped entry was always
 # bounded by, so that is the bound - zstd does not widen what an entry from
-# somebody else can make this process hold. Nothing PartCAD stores comes near
+# somebody else can make this process write. Nothing PartCAD stores comes near
 # it: what compresses best is a tar's own padding, and the floor covers an
 # entry that is mostly that.
 _MAX_EXPANSION = 1032
 _MAX_EXPANSION_FLOOR = 16 << 20
+
+# How much of a member is held in memory at once as it is put back: it is
+# copied from the entry to a staged file this many bytes at a time (see
+# '_Staging').
+_COPY_CHUNK = 1 << 20
+# What a staged file's name ends in, until it is renamed into place.
+_STAGING_SUFFIX = ".partcad-staging"
 
 # What a wrapper answered, as the one line it wrote: the result of a run keyed
 # by 'wrapper_hash'. Kept as the line rather than as what it decodes to, because
@@ -360,28 +370,15 @@ def _add_members(tar, result: dict, files: dict, directory: Optional[str]) -> No
             tar.add(os.path.join(directory, relative), arcname=_DIRECTORY_PREFIX + relative, recursive=False)
 
 
-def _read_members(data: bytes) -> dict:
-    """Every regular file in a stored entry, by name, read in one pass in stream order.
-
-    Read whole before any of it is written, because what '_unpack' writes
-    depends on what is there: an entry missing a file the caller needs is a
-    miss, and nothing of it may be put back.
-    """
+def _open_entry(data: bytes):
+    """What a stored entry decompresses into, as a stream, told apart by its first bytes."""
     if data[: len(_ZSTD_MAGIC)] == _ZSTD_MAGIC:
         if _ZstdFile is None:  # pragma: no cover - see _pack
             raise ValueError("this entry is zstd-compressed, and zstd is not available here")
-        stream = _ZstdFile(io.BytesIO(data))
-    elif data[: len(_GZIP_MAGIC)] == _GZIP_MAGIC:
-        stream = gzip.GzipFile(fileobj=io.BytesIO(data), mode="rb")
-    else:
-        raise ValueError("this entry is neither zstd nor gzip")
-    reader = _BoundedReader(stream, max(_MAX_EXPANSION_FLOOR, _MAX_EXPANSION * len(data)))
-    members = {}
-    with stream, tarfile.open(fileobj=reader, mode="r|") as tar:
-        for member in tar:
-            if member.isfile():
-                members[member.name] = tar.extractfile(member).read()
-    return members
+        return _ZstdFile(io.BytesIO(data))
+    if data[: len(_GZIP_MAGIC)] == _GZIP_MAGIC:
+        return gzip.GzipFile(fileobj=io.BytesIO(data), mode="rb")
+    raise ValueError("this entry is neither zstd nor gzip")
 
 
 def _safe_relative(name: str) -> Optional[str]:
@@ -399,16 +396,23 @@ def _safe_relative(name: str) -> Optional[str]:
     return normalized
 
 
-def _write_inside(directory: str, path: str, data: bytes) -> None:
-    """Write 'path', which has to stay inside 'directory' once links are followed.
+def _destination(directory: Optional[str], path: str) -> str:
+    """Where 'path' is put back, checked before anything is created for it.
 
-    The member name was already checked by '_safe_relative', and that is a
-    check of the name alone: a link already in the directory - left by
-    something other than PartCAD, since nothing here writes one - would carry a
-    write through it to wherever it points. So the directory the file lands in
-    is resolved and held to the run directory, and the file itself is opened
-    without following a link. Raising is a miss (see 'restore_async').
+    Inside a run's directory ('directory'), a file has to stay inside it once
+    links are followed. The member name was already checked by
+    '_safe_relative', and that is a check of the name alone: a link already in
+    the directory - left by something other than PartCAD, since nothing here
+    writes one - would carry a write through it to wherever it points. So the
+    directory the file lands in is resolved and held to the run directory, and
+    a link where the file itself goes is refused rather than replaced. Raising
+    is a miss (see 'restore_async').
+
+    Anywhere else it is the caller's own output path, put back where the
+    implementation would have written it: through a link, if one is there.
     """
+    if not directory:
+        return os.path.realpath(path)
     # Resolved before anything is created: 'realpath' follows the links in the
     # part of the path that exists, and creating the rest first would create it
     # wherever such a link points.
@@ -416,55 +420,143 @@ def _write_inside(directory: str, path: str, data: bytes) -> None:
     resolved = os.path.realpath(os.path.dirname(path))
     if os.path.commonpath([root, resolved]) != root:
         raise ValueError("%s leads outside %s" % (path, directory))
-    os.makedirs(resolved, exist_ok=True)
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
-    with os.fdopen(os.open(path, flags, 0o644), "wb") as f:
-        f.write(data)
+    destination = os.path.join(resolved, os.path.basename(path))
+    if os.path.islink(destination):
+        raise ValueError("%s is a link" % path)
+    return destination
+
+
+class _Staging:
+    """The files of one entry, each staged beside where it goes until all of the entry is read.
+
+    An entry is read in one pass, and whether it is a hit is known only at the
+    end of it - an entry missing the model is a miss, and nothing of it may be
+    put back. Holding every member in memory until then made one entry cost as
+    much memory as everything in it, decompressed; so each member is streamed
+    to a file of its own instead, a hidden one in the directory it belongs in,
+    and the lot are renamed into place once the entry has turned out complete.
+    Beside rather than in one staging directory, so that the rename never
+    crosses a file system. Whatever goes wrong first, 'discard' removes what
+    was staged and every directory made for it.
+    """
+
+    def __init__(self) -> None:
+        # (member name, staged path, destination), in the order they were read.
+        self.staged = []
+        self.created = []
+
+    def stage(self, name: str, source, destination: str, mode: int) -> None:
+        parent = os.path.dirname(destination)
+        self._make_directories(parent)
+        # Hidden, and named for what it is, so one left behind by a process
+        # that died half way through says so. The name is not shortened from
+        # the destination's, so a long one can fail here, which is a miss.
+        staged = os.path.join(
+            parent, ".%s.%s%s" % (os.path.basename(destination), secrets.token_hex(6), _STAGING_SUFFIX)
+        )
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+        fd = os.open(staged, flags, mode)
+        self.staged.append((name, staged, destination))
+        with os.fdopen(fd, "wb") as f:
+            shutil.copyfileobj(source, f, _COPY_CHUNK)
+
+    def _make_directories(self, parent: str) -> None:
+        missing = []
+        current = parent
+        while current and not os.path.isdir(current):
+            missing.append(current)
+            above = os.path.dirname(current)
+            if above == current:
+                break
+            current = above
+        if missing:
+            os.makedirs(parent, exist_ok=True)
+            self.created.extend(missing)
+
+    def place(self, first=()) -> None:
+        """Rename everything staged into place: the members named in 'first' in that order, then the rest.
+
+        Touched as it is placed, so the order is also the order of their
+        modification times, as it is when a run writes them (see
+        'restore_files_async'): a rename keeps the time the file was staged.
+        """
+        rank = {name: index for index, name in enumerate(first)}
+        for _name, staged, destination in sorted(self.staged, key=lambda item: rank.get(item[0], len(rank))):
+            os.replace(staged, destination)
+            os.utime(destination)
+        self.staged = []
+        self.created = []
+
+    def discard(self) -> None:
+        for _name, staged, _destination in self.staged:
+            try:
+                os.unlink(staged)
+            except OSError:
+                pass
+        # The deepest first, and only while empty: whatever else is in one now
+        # is not ours.
+        for directory in sorted(set(self.created), key=len, reverse=True):
+            try:
+                os.rmdir(directory)
+            except OSError:
+                pass
+        self.staged = []
+        self.created = []
 
 
 def _unpack(data: bytes, files, directory: Optional[str]) -> Optional[dict]:
-    members = _read_members(data)
-    if _RESULT_MEMBER not in members:
-        return None
-    result = json.loads(members[_RESULT_MEMBER].decode("utf-8"))
-    if callable(files):
-        # Where the files go is decided by what was stored with them (see
-        # 'restore_files_async'), and None is the caller dismissing a hit
-        # it cannot put back.
-        files = files(result)
-        if files is None:
-            return None
-    # Everything the caller needs has to be there before anything is
-    # written: an entry missing the model is a miss, not half a hit.
-    for role in files:
-        if _FILES_PREFIX + role not in members:
-            return None
-    placed = []
-    if directory:
-        for name in members:
-            if not name.startswith(_DIRECTORY_PREFIX):
-                continue
-            relative = _safe_relative(name[len(_DIRECTORY_PREFIX) :])
-            if relative is None:
+    stream = _open_entry(data)
+    reader = _BoundedReader(stream, max(_MAX_EXPANSION_FLOOR, _MAX_EXPANSION * len(data)))
+    staging = _Staging()
+    try:
+        with stream, tarfile.open(fileobj=reader, mode="r|") as tar:
+            members = iter(tar)
+            # The result says where everything after it goes, so it is what
+            # '_pack' writes first, as every release has. An entry that starts
+            # with anything else was written by something else, and is a miss.
+            first = next(members, None)
+            if first is None or first.name != _RESULT_MEMBER or not first.isfile():
                 return None
-            placed.append((name, os.path.join(directory, relative)))
-
-    for role, path in files.items():
-        content = members[_FILES_PREFIX + role]
-        if directory:
-            # Named by what the entry says rather than by the caller alone,
-            # so held to the directory the way a directory's members are.
-            _write_inside(directory, path, content)
-            continue
-        # The caller's own output path, written exactly as the
-        # implementation would have written it.
-        parent = os.path.dirname(path)
-        if parent:
-            os.makedirs(parent, exist_ok=True)
-        with open(path, "wb") as f:
-            f.write(content)
-    for name, path in placed:
-        _write_inside(directory, path, members[name])
+            result = json.loads(tar.extractfile(first).read().decode("utf-8"))
+            if callable(files):
+                # Where the files go is decided by what was stored with them
+                # (see 'restore_files_async'), and None is the caller
+                # dismissing a hit it cannot put back.
+                files = files(result)
+                if files is None:
+                    return None
+            roles = {_FILES_PREFIX + role: path for role, path in files.items()}
+            found = set()
+            for member in members:
+                if not member.isfile():
+                    continue
+                if member.name in roles:
+                    # Named by what the entry says rather than by the caller
+                    # alone when there is a directory, so held to it the way a
+                    # directory's members are.
+                    destination = _destination(directory, roles[member.name])
+                    # The modes these were written with before there was any
+                    # staging, umask applied: 0o644 in a run's directory, and
+                    # what 'open()' gives anywhere else.
+                    mode = 0o644 if directory else 0o666
+                elif directory and member.name.startswith(_DIRECTORY_PREFIX):
+                    relative = _safe_relative(member.name[len(_DIRECTORY_PREFIX) :])
+                    if relative is None:
+                        return None
+                    destination = _destination(directory, os.path.join(directory, relative))
+                    mode = 0o644
+                else:
+                    continue
+                staging.stage(member.name, tar.extractfile(member), destination, mode)
+                found.add(member.name)
+            # Everything the caller needs has to be there before anything is
+            # put back: an entry missing the model is a miss, not half a hit.
+            if not found.issuperset(roles):
+                return None
+        # The caller's files in the caller's order, then the directory's.
+        staging.place(first=list(roles))
+    finally:
+        staging.discard()
 
     if directory:
         result = _relocate(result, DIRECTORY_PLACEHOLDER, directory)

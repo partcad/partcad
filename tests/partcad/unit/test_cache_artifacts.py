@@ -261,6 +261,125 @@ def test_an_entry_that_expands_past_what_gzip_could_is_a_miss(tmp_path, monkeypa
     target = tmp_path / "model.bin"
     assert _run(cache_artifacts.restore_async(cache, _hash(), files={"model": str(target)})) is None
     assert not target.exists()
+    assert _staged_files(tmp_path) == []
+
+
+def _staged_files(root) -> list:
+    """Every staged file left anywhere under 'root'."""
+    return [
+        os.path.join(where, name)
+        for where, _dirs, names in os.walk(root)
+        for name in names
+        if name.endswith(cache_artifacts._STAGING_SUFFIX)
+    ]
+
+
+def test_the_members_of_an_entry_are_put_back_without_being_held_in_memory_together(tmp_path, monkeypatch):
+    """Each member goes to disk as it is read, a chunk at a time, not all of them into memory first.
+
+    An entry is as large as a tier takes, decompressed further still; holding
+    the lot before writing any of it would cost all of that at once.
+    """
+    import random
+    import tracemalloc
+
+    member = 2 << 20
+    generator = random.Random(0)
+    stored = {"result.json": b'{"frames": 6}'}
+    for i in range(6):
+        # Incompressible, so the entry is not small because it is mostly zeros.
+        stored["directory/frame%d.bin" % i] = generator.randbytes(member)
+    data = _entry(stored)
+    run = tmp_path / "run"
+    run.mkdir()
+    monkeypatch.setattr(cache_artifacts, "_COPY_CHUNK", 64 * 1024)
+
+    tracing = tracemalloc.is_tracing()
+    if not tracing:
+        tracemalloc.start()
+    tracemalloc.reset_peak()
+    try:
+        restored = cache_artifacts._unpack(data, {}, str(run))
+        _current, peak = tracemalloc.get_traced_memory()
+    finally:
+        if not tracing:
+            tracemalloc.stop()
+
+    assert restored == {"frames": 6}
+    # Less than one member at the peak, where holding them all is six.
+    assert peak < member, "peaked at %d bytes" % peak
+    assert sorted(os.listdir(run)) == ["frame%d.bin" % i for i in range(6)]
+    for i in range(6):
+        assert (run / ("frame%d.bin" % i)).read_bytes() == stored["directory/frame%d.bin" % i]
+
+
+@pytest.mark.parametrize(
+    "members, files",
+    [
+        # The model is missing, which is known only once the whole entry is read.
+        ({"directory/a.bin": b"a" * 5000, "directory/sub/b.bin": b"b" * 5000}, {"model": "m.vtu"}),
+        # A member that would land outside the directory, after two that did not.
+        ({"directory/a.bin": b"a" * 5000, "directory/sub/b.bin": b"b", "directory/../out.txt": b"!"}, {}),
+        # A member that expands past the bound, after two that were staged.
+        ({"directory/a.bin": b"a" * 5000, "directory/sub/b.bin": b"b", "directory/z.bin": bytes(4 << 20)}, {}),
+    ],
+    ids=["missing", "escaping", "expanding"],
+)
+def test_an_entry_that_turns_out_a_miss_leaves_nothing_of_itself_behind(tmp_path, monkeypatch, members, files):
+    """What was staged before the entry turned out a miss is removed, directories and all."""
+    cache = _cache(tmp_path)
+    monkeypatch.setattr(cache_artifacts, "_MAX_EXPANSION_FLOOR", 1 << 20)
+    data = _entry(dict({"result.json": b"{}"}, **members))
+    assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
+
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "kept.txt").write_text("was here before")
+    asked = {role: str(run / name) for role, name in files.items()}
+    assert _run(cache_artifacts.restore_async(cache, _hash(), files=asked, directory=str(run))) is None
+
+    assert os.listdir(run) == ["kept.txt"]
+    assert not (tmp_path / "out.txt").exists()
+    assert _staged_files(tmp_path) == []
+
+
+def test_a_miss_removes_the_directories_it_made_for_a_file_and_no_others(tmp_path, monkeypatch):
+    cache = _cache(tmp_path)
+    monkeypatch.setattr(cache_artifacts, "_MAX_EXPANSION_FLOOR", 1 << 20)
+    data = _entry({"result.json": b"{}", "files/model": b"m" * 5000, "files/zzz": bytes(4 << 20)})
+    assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
+    (tmp_path / "out").mkdir()
+
+    target = tmp_path / "out" / "deep" / "er" / "model.vtu"
+    assert _run(cache_artifacts.restore_async(cache, _hash(), files={"model": str(target)})) is None
+
+    assert os.listdir(tmp_path / "out") == []
+    assert _staged_files(tmp_path) == []
+
+
+def test_an_entry_that_does_not_start_with_its_result_is_a_miss(tmp_path):
+    """Every release writes the result first: it says where the rest goes."""
+    cache = _cache(tmp_path)
+    data = _entry({"files/model": b"m" * 5000, "result.json": b"{}"})
+    assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
+
+    target = tmp_path / "model.vtu"
+    assert _run(cache_artifacts.restore_async(cache, _hash(), files={"model": str(target)})) is None
+    assert not target.exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
+def test_a_file_put_back_has_the_permissions_a_run_would_have_given_it(tmp_path):
+    """What is renamed into place is the staged file, so that is what has to have the right mode."""
+    cache = _cache(tmp_path)
+    model = tmp_path / "model.vtu"
+    model.write_bytes(b"<VTKFile/>" * 50)
+    assert _run(cache_artifacts.store_async(cache, _hash(), {}, files={"model": str(model)}))
+
+    target = tmp_path / "again" / "model.vtu"
+    assert _run(cache_artifacts.restore_async(cache, _hash(), files={"model": str(target)})) == {}
+    assert os.stat(target).st_mode & 0o777 == os.stat(model).st_mode & 0o777
+    assert sorted(os.listdir(target.parent)) == ["model.vtu"]
 
 
 @pytest.mark.parametrize("compression", ["zstd", "gzip"])
