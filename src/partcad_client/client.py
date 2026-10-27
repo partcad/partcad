@@ -181,6 +181,15 @@ def _launcher_start(cwd: Optional[str]) -> str:
     return os.path.abspath(cwd) if os.name == "nt" else os.path.realpath(cwd)
 
 
+def workspace_root(cwd: Optional[str] = None) -> str:
+    """The root of the workspace a launcher run in ``cwd`` would serve.
+
+    What a daemon is keyed by, and so what anything that has to find or stop
+    the daemon a command in ``cwd`` reached has to start from.
+    """
+    return determine_root_path(_launcher_start(cwd))
+
+
 def workspace_endpoint(cwd: Optional[str] = None) -> str:
     r"""Where the daemon serving the workspace at ``cwd`` listens, or would.
 
@@ -190,7 +199,7 @@ def workspace_endpoint(cwd: Optional[str] = None) -> str:
     ``\\.\pipe\...`` name on Windows. It says nothing about whether anything is
     listening there.
     """
-    root = determine_root_path(_launcher_start(cwd))
+    root = workspace_root(cwd)
     if os.name == "nt":
         # Here rather than at the top: the pipe half of the rendezvous is of
         # no use to a POSIX client.

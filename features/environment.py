@@ -43,6 +43,15 @@ def before_scenario(context: Context, scenario) -> None:
         scenario.skip("network not available: skipping @%s scenario" % NETWORK_TAG)
 
 
+def after_scenario(context: Context, scenario) -> None:
+    # Before the scenario's cleanups, which is when behave runs this: they
+    # remove the workspace and the $HOME the daemon is serving from, and on
+    # Windows cannot while it runs. See 'features/daemons.py'.
+    from features.daemons import stop_scenario_daemon
+
+    stop_scenario_daemon(context)
+
+
 # def before_all(context: Context) -> None:
 #     import steps
 
