@@ -6,10 +6,15 @@
 
 from unittest import mock
 
+# Loaded, as it is in any process that has initialized Sentry: the logging
+# functions only hand Sentry what a process that has it would (see
+# 'partcad_utils.telemetry._sentry'), and PartCAD itself loads it as it imports.
+import sentry_sdk  # noqa: F401
+
 import partcad.logging as pc_logging
 
-# All tests patch ``partcad.logging.sentry_sdk.capture_message`` and
-# ``partcad.logging.sentry_sdk.capture_exception`` directly. This makes the
+# All tests patch ``sentry_sdk.capture_message`` and
+# ``sentry_sdk.capture_exception`` directly. This makes the
 # assertions independent of whether a real Sentry backend is configured: even
 # when Sentry is disabled (and the real functions are no-ops), the mocks still
 # record exactly which API was invoked and with what arguments. Asserting the
@@ -26,8 +31,8 @@ def test_exception_with_plain_string_dispatches_capture_message():
     must be routed to capture_message(..., level="error") instead.
     """
     with (
-        mock.patch("partcad.logging.sentry_sdk.capture_message") as capture_message,
-        mock.patch("partcad.logging.sentry_sdk.capture_exception") as capture_exception,
+        mock.patch("sentry_sdk.capture_message") as capture_message,
+        mock.patch("sentry_sdk.capture_exception") as capture_exception,
     ):
         pc_logging.exception("a plain string, not an exception")
 
@@ -39,8 +44,8 @@ def test_exception_with_exception_object_dispatches_capture_exception():
     """An actual exception object must go to capture_exception unchanged."""
     err = ValueError("boom")
     with (
-        mock.patch("partcad.logging.sentry_sdk.capture_message") as capture_message,
-        mock.patch("partcad.logging.sentry_sdk.capture_exception") as capture_exception,
+        mock.patch("sentry_sdk.capture_message") as capture_message,
+        mock.patch("sentry_sdk.capture_exception") as capture_exception,
     ):
         try:
             raise err
@@ -72,8 +77,8 @@ def test_exception_with_format_string_and_arg_dispatches_capture_message():
     change to it is visible.
     """
     with (
-        mock.patch("partcad.logging.sentry_sdk.capture_message") as capture_message,
-        mock.patch("partcad.logging.sentry_sdk.capture_exception") as capture_exception,
+        mock.patch("sentry_sdk.capture_message") as capture_message,
+        mock.patch("sentry_sdk.capture_exception") as capture_exception,
     ):
         pc_logging.exception("formatted %s", 42)
 

@@ -7,12 +7,18 @@
 import functools
 import inspect
 import os
+import sys
 from contextlib import asynccontextmanager, contextmanager
 
 from opentelemetry import context, trace
 from opentelemetry.trace import Tracer
 
-from . import telemetry_none, telemetry_sentry
+# 'telemetry_sentry' is not imported here, and must not be: it imports the
+# Sentry SDK, which is half of what importing the CLI used to cost (~150 ms of
+# ~300 ms), and nothing needs it until 'once()' finds telemetry is to be
+# collected. Everything else that talks to Sentry goes through the functions
+# below instead of importing it (see '_sentry').
+from . import telemetry_none
 
 partcad_version = None
 # Annotation *and* an initialiser: a bare annotation binds no name, so before
@@ -130,7 +136,44 @@ def once():
         return
 
     # TODO(clairbee): add suport for alternate telemetry backends
+    from . import telemetry_sentry
+
     tracer = telemetry_sentry.init_sentry(partcad_version)
+
+
+def _sentry():
+    """The Sentry SDK if this process has loaded it, else ``None``.
+
+    Loaded is the question rather than initialized, because it is the one that
+    costs nothing to ask and gives the same answer: Sentry is initialized only
+    by 'telemetry_sentry', which loads it, and an SDK that was never initialized
+    drops whatever it is handed. So a process that has not loaded it -- a 'pc'
+    that has opted out of telemetry, or has not yet reached its first span --
+    loses nothing by not being asked, and does not pay to load it just to be
+    told no.
+    """
+    return sys.modules.get("sentry_sdk")
+
+
+def capture_message(message: str, level: str) -> None:
+    """``sentry_sdk.capture_message``, for a process that has Sentry."""
+    sentry = _sentry()
+    if sentry is not None:
+        sentry.capture_message(message, level=level)
+
+
+def capture_exception(error: BaseException) -> None:
+    """``sentry_sdk.capture_exception``, for a process that has Sentry."""
+    sentry = _sentry()
+    if sentry is not None:
+        sentry.capture_exception(error)
+
+
+def flush(timeout: float) -> None:
+    """``sentry_sdk.flush``, for a process that has Sentry."""
+    sentry = _sentry()
+    if sentry is not None:
+        sentry.flush(timeout=timeout)
 
 
 @asynccontextmanager

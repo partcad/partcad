@@ -12,8 +12,6 @@ import re
 import sys
 
 import rich_click as click
-import sentry_sdk
-import sentry_sdk.session
 import yaml
 
 import partcad_utils
@@ -593,7 +591,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                 cli_span.end()
                 cli_span = None
             # TODO(clairbee): investigate how is this value related to PC_TELEMETRY_SENTRY_SHUTDOWN_TIMEOUT and make it configurable
-            sentry_sdk.flush(timeout=1.5)
+            pc_telemetry.flush(timeout=1.5)
 
         atexit.register(telemetry_atexit)
 
@@ -763,7 +761,7 @@ def main():
     try:
         cli()
     except Exception as e:
-        sentry_sdk.capture_exception(e)
+        pc_telemetry.capture_exception(e)
         # When a clean error was already reported to the user (for example a
         # repository that could not be cloned), do not additionally dump a
         # traceback. Unexpected failures stay loud so that real bugs are not
