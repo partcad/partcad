@@ -256,12 +256,26 @@ def test_the_cache_key_moves_when_the_thresholds_do():
 # Nothing here exercised the handover. This does.
 
 
-def test_the_assembly_is_sent_as_json_rather_than_as_geometry():
+def test_the_assembly_is_sent_as_the_tree_it_is():
+    """Nested in the request, for a wrapper that reads its request undecoded.
+
+    It used to be a JSON string inside the request, so that a wrapper decoding
+    its request would not turn it into one compound - which wrote every payload
+    once per node carrying it, and escaped all of it again.
+    """
     import json as _json
 
+    from partcad import runtime, shape_envelope
     from partcad.assembly import Assembly
 
-    envelope = {"name": "asm", "label": "asm", "assembly": [{"name": "a", "brep": "..."}]}
+    # Large enough that writing it once in a table is worth it (see
+    # 'shape_envelope.table_saves_space'), as any real part is.
+    payload = b"\x00\x01 one part" * 100
+    envelope = {
+        "name": "asm",
+        "label": "asm",
+        "assembly": [{"name": "a", "label": "a%d" % index, "brep": payload} for index in range(3)],
+    }
     captured = {}
 
     class _Runtime:
@@ -269,7 +283,7 @@ def test_the_assembly_is_sent_as_json_rather_than_as_geometry():
             return None
 
         async def run_async(self, command, request_serialized):
-            captured["request"] = request_serialized
+            captured["request"] = runtime.stdin_bytes(request_serialized)
             return 0, '{"success": true, "overlaps": [], "unchecked": [], "parts": 0}', ""
 
     class _Ctx:
@@ -287,11 +301,13 @@ def test_the_assembly_is_sent_as_json_rather_than_as_geometry():
     asyncio.run(assembly.get_interference_async(_Ctx()))
 
     sent = _json.loads(captured["request"])
-    # Carried as a string: a dict shaped like an assembly would be decoded into
-    # a compound on arrival, and the names would go with it.
-    assert isinstance(sent["assembly_json"], str)
-    assert _json.loads(sent["assembly_json"]) == envelope
     assert "wrapped" not in sent, "the geometry key is decoded on arrival; do not use it here"
+    # The one part the three nodes are made of is written once, in the table.
+    assert len(sent[shape_envelope.KEY_BREPS]) == 1
+    # And what is read back is the tree that was sent, each node with its name.
+    read = shape_envelope.loads(captured["request"])
+    assert [child["label"] for child in read["tree"]["assembly"]] == ["a0", "a1", "a2"]
+    assert all(child["brep"] == payload for child in read["tree"]["assembly"])
 
 
 def test_an_envelope_carrying_bytes_can_still_be_sent():
@@ -305,8 +321,7 @@ def test_an_envelope_carrying_bytes_can_still_be_sent():
 
     The envelope above is all strings, which is exactly why it proved nothing.
     """
-    import json as _json
-
+    from partcad import runtime, shape_envelope
     from partcad.assembly import Assembly
 
     envelope = {
@@ -321,7 +336,7 @@ def test_an_envelope_carrying_bytes_can_still_be_sent():
             return None
 
         async def run_async(self, command, request_serialized):
-            captured["request"] = request_serialized
+            captured["request"] = runtime.stdin_bytes(request_serialized)
             return 0, '{"success": true, "overlaps": [], "unchecked": [], "parts": 0}', ""
 
     class _Ctx:
@@ -341,7 +356,8 @@ def test_an_envelope_carrying_bytes_can_still_be_sent():
     # assertion; the payload has to survive the trip as well.
     result = asyncio.run(assembly.get_interference_async(_Ctx()))
     assert result is not None
-    assert isinstance(_json.loads(captured["request"])["assembly_json"], str)
+    (child,) = shape_envelope.loads(captured["request"])["tree"]["assembly"]
+    assert child["brep"] == b"\x00\x01 not text"
 
 
 def test_an_indeterminate_pair_is_not_reported_as_no_overlap(caplog):
@@ -646,6 +662,7 @@ def test_the_pairs_the_joints_account_for_are_handed_to_the_check(monkeypatch):
 def test_the_expected_pairs_are_sent_to_the_wrapper():
     import json as _json
 
+    from partcad import runtime
     from partcad.assembly import Assembly
 
     captured = {}
@@ -655,7 +672,7 @@ def test_the_expected_pairs_are_sent_to_the_wrapper():
             return None
 
         async def run_async(self, command, request_serialized):
-            captured["request"] = request_serialized
+            captured["request"] = runtime.stdin_bytes(request_serialized)
             return 0, '{"success": true, "overlaps": [], "unchecked": [], "parts": 0}', ""
 
     class _Ctx:
