@@ -210,10 +210,15 @@ at all).
   `Cache.flush_async()`), and `tests/partcad/conftest.py` stops the thread after every test.
 - **A file is keyed on all of its content** (`cache_hash.file_digest`): the SHA-256 of it, never its path or its
   timestamps, so a shared tier is shared. The digest is remembered by the file's identity (`cache_hash.FileMemo`:
-  device, inode, size, modification and inode-change time) for the life of the process, and for a file of 1 MB or
+  device, inode, size, modification and change time) for the life of the process, and for a file of 1 MB or
   more under `<internalStateDir>/cache/digests/` too, so a daemon starting cold does not read a big STEP file
-  again. A file changed in the last `RACY_NS` (3 s) is read every time. `code_version` remembers a script's
-  `CACHE_VERSION` by the same rule, and `source_key` goes by the same `RACY_NS`.
+  again. A file changed in the last `RACY_NS` (3 s) is read every time. Every identity is taken from the open
+  file (`os.fstat`), never from `os.stat(path)`: on Windows from Python 3.12 the two report different times as
+  `st_ctime` (change vs creation), and mixing them made the memo miss every time on one runner and serve a file
+  rewritten in place on another. Windows before 3.12 reports the creation time from both, so the change time is
+  asked of Windows (`GetFileInformationByHandleEx`); where it cannot be had, nothing is remembered. A test that
+  changes a file it has declared settled waits for the file system's clock to move first. `code_version`
+  remembers a script's `CACHE_VERSION` by the same rule, and `source_key` goes by the same `RACY_NS`.
 
 - **Location/coordinate format**: 3D locations (OpenCASCADE `TopLoc_Location`) are represented as
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)

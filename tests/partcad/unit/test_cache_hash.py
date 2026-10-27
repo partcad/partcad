@@ -8,6 +8,7 @@
 
 import hashlib
 import os
+import time
 
 import pytest
 
@@ -209,7 +210,51 @@ def _settle(monkeypatch):
     monkeypatch.setattr(cache_hash_module, "_now_ns", lambda: now + 2 * cache_hash_module.RACY_NS)
 
 
-def test_a_file_that_has_not_changed_is_not_read_again(tmp_path, monkeypatch, cold):
+@pytest.fixture(params=["os.fstat", "asked of Windows"])
+def change_time(request, monkeypatch):
+    """Each of the two ways a file's change time is had: 'os.fstat()', or Windows itself.
+
+    The second is what Windows before Python 3.12 goes by (see
+    'cache_hash._WINDOWS_CREATION_CTIME'), and is run everywhere else with
+    'os.fstat()' answering for Windows, so that what is built on it is tested
+    on every platform and not only where it is real.
+    """
+    if request.param == "asked of Windows":
+        if os.name == "nt":
+            pytest.skip("Windows is asked for real here, by whichever branch this interpreter takes")
+        monkeypatch.setattr(cache_hash_module, "_WINDOWS_CREATION_CTIME", True)
+        monkeypatch.setattr(cache_hash_module, "_windows_change_time_ns", lambda fd: os.fstat(fd).st_ctime_ns)
+    return request.param
+
+
+def _identity(path):
+    with open(path, "rb") as f:
+        return cache_hash_module.file_identity(f)
+
+
+def _after_the_clock_moves_past(path, tmp_path):
+    """Wait until a write now is stamped later than everything 'path' was stamped with.
+
+    A file system stamps a file from a clock that ticks far more coarsely than
+    nanoseconds - every 15.6 ms on Windows by default, every few on Linux - and a
+    rewrite inside the tick its file was last written in keeps every timestamp
+    it had. That is what the racy rule ('settled') keeps from being trusted in
+    use, and '_settle' declares it trusted here; so a test that changes a file
+    it has settled first waits for a write to be stamped later, as one in use
+    would be. It asks the file system rather than sleeping for a guess at its
+    tick, so it holds on any of them, and returns at once where the tick has
+    already passed.
+    """
+    stamped = max(_identity(path)[3:])
+    probe = tmp_path / "clock-probe"
+    while True:
+        probe.write_bytes(b"tick")
+        if max(_identity(str(probe))[3:]) > stamped:
+            return
+        time.sleep(0.002)
+
+
+def test_a_file_that_has_not_changed_is_not_read_again(tmp_path, monkeypatch, cold, change_time):
     path = _large(tmp_path, b"m")
     _settle(monkeypatch)
 
@@ -220,19 +265,57 @@ def test_a_file_that_has_not_changed_is_not_read_again(tmp_path, monkeypatch, co
     assert cold == [path]
 
 
-def test_a_file_that_changed_is_read_again(tmp_path, monkeypatch, cold):
-    """However it changed: the same size, and the modification time put back."""
+def test_a_file_that_changed_is_read_again(tmp_path, monkeypatch, cold, change_time):
+    """However it changed: in place, the same size, and the modification time put back."""
     path = _large(tmp_path, b"m")
     _settle(monkeypatch)
     stat = os.stat(path)
     before = _files_key(path)
 
+    _after_the_clock_moves_past(path, tmp_path)
     _large(tmp_path, b"M")
     os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns))
     _settle(monkeypatch)
 
     assert _files_key(path) != before
     assert cold == [path, path]
+
+
+def test_a_files_identity_is_the_same_however_often_it_is_asked(tmp_path, monkeypatch):
+    """What a lookup compares has to be taken the way what was kept was.
+
+    The regression: the kept identity came from 'os.fstat()' and the lookup's
+    from 'os.stat()', which on Windows from Python 3.12 report different times
+    as 'st_ctime' - the change time and the creation time.
+    """
+    path = _large(tmp_path, b"m")
+    first = _identity(path)
+
+    assert first is not None
+    assert _identity(path) == first
+    # Reading it changes nothing a later lookup compares.
+    with open(path, "rb") as f:
+        f.read()
+    assert _identity(path) == first
+
+
+def test_a_file_with_no_change_time_to_go_by_is_never_kept(tmp_path, monkeypatch, cold):
+    """Where the platform cannot say when a file last changed, nothing about it is trusted.
+
+    Windows before Python 3.12 reports a creation time where the change time
+    should be, and the change time is asked of Windows itself; when that fails,
+    the file is read every time rather than risk an answer about it as it was.
+    """
+    monkeypatch.setattr(cache_hash_module, "_WINDOWS_CREATION_CTIME", True)
+    monkeypatch.setattr(cache_hash_module, "_windows_change_time_ns", lambda fd: None)
+    path = _large(tmp_path, b"m")
+    _settle(monkeypatch)
+
+    first = _files_key(path)
+    assert _files_key(path) == first
+
+    assert cold == [path, path]
+    assert not (tmp_path / "digests").exists()
 
 
 def test_a_file_written_a_moment_ago_is_read_every_time(tmp_path, cold):
@@ -266,6 +349,7 @@ def test_a_kept_digest_of_a_file_since_changed_is_not_believed(tmp_path, monkeyp
     before = _files_key(path)
     cache_hash_module._file_digests.forget()
 
+    _after_the_clock_moves_past(path, tmp_path)
     _large(tmp_path, b"M")
     _settle(monkeypatch)
 

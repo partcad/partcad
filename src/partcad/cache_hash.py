@@ -7,9 +7,11 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import functools
 import hashlib
 import json
 import os
+import sys
 import threading
 import time
 import uuid
@@ -199,20 +201,90 @@ def file_stat(filename: str):
     return (st.st_mtime_ns, st.st_size)
 
 
-def file_identity(stat: os.stat_result) -> tuple:
-    """What says, without reading it, that a file is still the one that was read.
+# Python before 3.12 reports a file's creation time as its 'st_ctime' on
+# Windows, from 'os.stat()' and 'os.fstat()' alike, and a creation time is not a
+# change time: a file rewritten in place keeps it, and so - through NTFS's
+# tunnelling - does one deleted and created again under the same name. There the
+# change time is asked of Windows itself (see '_windows_change_time_ns').
+_WINDOWS_CREATION_CTIME = os.name == "nt" and sys.version_info < (3, 12)
+
+# 1601-01-01, where a Windows FILETIME counts from, to 1970-01-01, in its 100 ns.
+_FILETIME_TO_UNIX = 116444736000000000
+
+
+@functools.lru_cache(maxsize=None)
+def _windows_basic_info():
+    """'GetFileInformationByHandleEx' and the FILE_BASIC_INFO it fills, bound once."""
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    class FileBasicInfo(ctypes.Structure):
+        _fields_ = [
+            ("CreationTime", ctypes.c_int64),
+            ("LastAccessTime", ctypes.c_int64),
+            ("LastWriteTime", ctypes.c_int64),
+            ("ChangeTime", ctypes.c_int64),
+            ("FileAttributes", wintypes.DWORD),
+        ]
+
+    function = ctypes.WinDLL("kernel32", use_last_error=True).GetFileInformationByHandleEx
+    function.argtypes = (wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD)
+    function.restype = wintypes.BOOL
+    return ctypes, msvcrt, FileBasicInfo, function
+
+
+def _windows_change_time_ns(fd: int):
+    """NTFS's change time of the open file 'fd', in nanoseconds since the epoch, or None.
+
+    What Python reports as 'st_ctime' from 3.12 on, through 'os.fstat()'. None
+    whenever it cannot be had - the call fails, or the file system keeps no
+    change time and answers nought - which leaves the file with no identity.
+    """
+    try:
+        ctypes, msvcrt, FileBasicInfo, function = _windows_basic_info()
+        info = FileBasicInfo()
+        # 0 is FileBasicInfo in FILE_INFO_BY_HANDLE_CLASS.
+        if not function(msvcrt.get_osfhandle(fd), 0, ctypes.byref(info), ctypes.sizeof(info)):
+            return None
+        if info.ChangeTime <= 0:
+            return None
+        return (info.ChangeTime - _FILETIME_TO_UNIX) * 100
+    except Exception:  # pylint: disable=broad-except
+        return None
+
+
+def file_identity(f):
+    """What says, without reading it, that the open file 'f' is still the one that was read - or None.
 
     The device and the inode say which file it is, and the size and the
-    modification time that it was not written since. The inode's change time
-    ('st_ctime_ns') covers what those can miss when a value worked out from the
-    content is kept for long: a file deleted and created again can be given the
-    same inode number back, and a tool that restores timestamps - tar, unzip,
-    'rsync -t', 'cp -p' - can give it the same modification time. Nothing in
-    user space sets the change time, which every write, rename and restore
-    moves to now; git's index keeps it for the same reason. (On Windows it is
-    the creation time, which a recreated file changes as well.)
+    modification time that it was not written since. The change time covers
+    what those can miss when a value worked out from the content is kept for
+    long: a file deleted and created again can be given the same inode number
+    back, and a tool that restores timestamps - tar, unzip, 'rsync -t', 'cp -p'
+    - can give it the same modification time, while every write, rename and
+    restore moves the change time to now. git's index keeps it for the same
+    reason.
+
+    Always of an open file, through 'os.fstat()', and never of a path through
+    'os.stat()': the two do not agree on Windows. From Python 3.12 'os.stat()'
+    goes on reporting the creation time as 'st_ctime', for compatibility, where
+    'os.fstat()' reports NTFS's change time - so an identity kept from one and
+    looked up with the other never matched on one runner, and on another, whose
+    clock had given the file one timestamp for both, matched a file rewritten in
+    place with its modification time put back. An identity taken the one way
+    every time cannot disagree with itself.
+
+    None where the change time cannot be had (see '_WINDOWS_CREATION_CTIME'):
+    such a file has no identity, and nothing about it is remembered.
     """
-    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+    stat = os.fstat(f.fileno())
+    changed = stat.st_ctime_ns
+    if _WINDOWS_CREATION_CTIME:
+        changed = _windows_change_time_ns(f.fileno())
+        if changed is None:
+            return None
+    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, changed)
 
 
 def _now_ns() -> int:
@@ -230,13 +302,14 @@ class FileMemo:
     'compute' is handed the file, open for reading in binary, and what it
     returns is kept against the file's identity ('file_identity'): asked again
     while the file has not changed, the answer is the kept one and the file is
-    not opened. Two things are never kept, so that a change is never hidden
-    behind an answer about the file as it was:
+    opened but not read. Three things are never kept, so that a change is never
+    hidden behind an answer about the file as it was:
 
     * an answer about a file that changed while it was being read - its
       identity before and after the read differ;
     * an answer about a file that changed so recently that the next change
-      could leave it looking the same ('settled').
+      could leave it looking the same ('settled');
+    * an answer about a file that has no identity on this platform.
 
     Either is worked out again next time, which costs only the file somebody
     is writing right now. 'load' and 'store', when given, are a second memory
@@ -252,25 +325,30 @@ class FileMemo:
         self._known = {}
 
     def get(self, filename: str):
-        """'compute' of 'filename', or the kept answer. Raises what os.stat() and open() raise."""
+        """'compute' of 'filename', or the kept answer. Raises what open() raises."""
         path = os.path.abspath(filename)
-        identity = file_identity(os.stat(path))
+        with open(path, "rb") as f:
+            # Every identity of the file here is taken from this one handle,
+            # the lookup's as much as the kept one's (see 'file_identity').
+            before = file_identity(f)
+            if before is not None:
+                with self._lock:
+                    known = self._known.get(path)
+                if known is not None and known[0] == before:
+                    return known[1]
+                value = self._load(path, before) if self._load is not None else None
+                if value is not None:
+                    with self._lock:
+                        self._known[path] = (before, value)
+                    return value
+            value = self._compute(f)
+            after = file_identity(f)
+        if before is None or after != before or not settled(after):
+            return value
+        if self._store is not None:
+            self._store(path, after, value)
         with self._lock:
-            known = self._known.get(path)
-        if known is not None and known[0] == identity:
-            return known[1]
-        value = self._load(path, identity) if self._load is not None else None
-        if value is None:
-            with open(path, "rb") as f:
-                before = file_identity(os.fstat(f.fileno()))
-                value = self._compute(f)
-                identity = file_identity(os.fstat(f.fileno()))
-            if before != identity or not settled(identity):
-                return value
-            if self._store is not None:
-                self._store(path, identity, value)
-        with self._lock:
-            self._known[path] = (identity, value)
+            self._known[path] = (after, value)
         return value
 
     def forget(self) -> None:
