@@ -271,6 +271,22 @@ let shownGeometry: Geometry | undefined;
 let framedRadius = 1;
 
 /**
+ * Whether the camera is where the last fit put it, give or take the turntable.
+ *
+ * While it is, a canvas that changes shape is fitted again ('resizeCanvas'): the
+ * fit depends on the canvas's shape, and a show can be fitted while the 3D tab is
+ * hidden, which is to a shape the canvas no longer has. Moving the camera by hand
+ * - a drag, the wheel, a SpaceMouse - ends that, and the camera stays put.
+ */
+let fitted = false;
+controls.addEventListener('start', () => {
+    fitted = false;
+});
+
+/** Which way the camera looks at the model from: Stage's default, slightly above. */
+const VIEW_DIRECTION = new THREE.Vector3(0.6, 0.5, 0.8);
+
+/**
  * What each item of the control tree put on the stage, by item id.
  *
  * The geometry of one node is one glTF (PartCAD cuts it up that way - see
@@ -504,10 +520,15 @@ function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean): void {
  */
 function placeCamera(radius: number): void {
     resizeCanvas();
-    const halfHeight = Math.tan((camera.fov * Math.PI) / 360);
-    const distance = (radius * 1.6) / (halfHeight * Math.min(1, camera.aspect));
-    camera.position.set(distance * 0.6, distance * 0.5, distance * 0.8);
+    camera.position.copy(VIEW_DIRECTION).multiplyScalar(fitDistance(radius));
     controls.target.set(0, 0, 0);
+    fitted = true;
+}
+
+/** How far along 'VIEW_DIRECTION' the camera fits a model of 'radius' into the canvas as it is now. */
+function fitDistance(radius: number): number {
+    const halfHeight = Math.tan((camera.fov * Math.PI) / 360);
+    return (radius * 1.6) / (halfHeight * Math.min(1, camera.aspect));
 }
 
 /**
@@ -1292,6 +1313,12 @@ export function resizeCanvas(): void {
     labelRenderer.setSize(width, height);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    if (fitted) {
+        // Fitted again at the angle the turntable has it at now, along the line
+        // it looks down: nearer or further, but not turned.
+        const length = fitDistance(framedRadius) * VIEW_DIRECTION.length();
+        camera.position.sub(controls.target).setLength(length).add(controls.target);
+    }
     invalidate();
 }
 

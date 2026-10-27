@@ -123,7 +123,9 @@ checkbox would be unusable. On the shapes, and not on the triads and boundaries 
 reaches a quarter of the model out along its port's positive axes only, so counting them leans the frame toward
 every port — including the ports of everything inside an assembly, which start out unticked. An interface, which
 has no shape but its ports, is framed on those. It is fitted to the narrower of the canvas's two fields of view,
-so a model in a narrow panel is not cut off at both sides.
+so a model in a narrow panel is not cut off at both sides, and fitted again whenever the canvas changes shape — a
+show fitted while the 3D tab was hidden was fitted to a shape the canvas no longer has — until the camera is moved
+by hand, after which it stays where the user put it.
 
 **Placements are not baked into the geometry.** A node's `gltf` is its own shape in its own coordinate system
 and its `location` says where the node sits, exactly as the BREP form carries it, so the renderer composes the
