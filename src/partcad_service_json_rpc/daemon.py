@@ -31,6 +31,7 @@ from partcad_utils.workspace import (
     is_listening,
     pid_path,
     socket_path,
+    workspace_dir,
 )
 
 from . import config_restart
@@ -115,7 +116,7 @@ def ensure_daemon(
                         "answering after %ss; run 'pc daemon stop' and try again" % (pipe, START_TIMEOUT)
                     )
         if not is_pipe_alive(pipe, liveness_timeout):
-            spawn_pipe_daemon(root, daemon_argv)
+            process = spawn_pipe_daemon(root, daemon_argv)
             # Wait for it to answer before saying where it is. The POSIX branch
             # below binds and listens in *this* process, so the socket is there
             # the moment it is printed and a client that arrives early simply
@@ -123,8 +124,7 @@ def ensure_daemon(
             # pipe once it is ready, and connecting to a pipe that does not
             # exist yet fails outright rather than waiting. Printing first
             # therefore handed every client a name it could not connect to.
-            if not _wait_for_pipe(pipe, liveness_timeout):
-                raise RuntimeError("the PartCAD daemon did not start serving %s in %ss" % (pipe, START_TIMEOUT))
+            _wait_for_pipe(pipe, liveness_timeout, process, root)
         print(pipe, flush=True)
         return pipe
 
@@ -232,16 +232,36 @@ def _wait_until(predicate: Callable[[], bool], timeout: float) -> bool:
     return True
 
 
-def _wait_for_pipe(pipe: str, liveness_timeout: float) -> bool:
-    """True once the named-pipe daemon answers, False if it never does."""
+def _wait_for_pipe(pipe: str, liveness_timeout: float, process=None, root: Optional[str] = None) -> None:
+    """Return once the named-pipe daemon answers; raise if it is not going to.
+
+    ``process`` is the daemon just spawned, when there is one to watch. One that
+    has exited is not going to start serving, and is reported then rather than
+    when :data:`START_TIMEOUT` runs out: every `pc` command on Windows reaches a
+    daemon through here when none is running, and falls back to a service of
+    its own only once this has given up -- two minutes per command, for a daemon
+    that died in its first second.
+    """
     from partcad_utils.win_pipe import is_pipe_alive
 
     deadline = time.monotonic() + START_TIMEOUT
-    while time.monotonic() < deadline:
+    while True:
         if is_pipe_alive(pipe, liveness_timeout):
-            return True
+            return
+        status = process.poll() if process is not None else None
+        if status is not None:
+            # Asked once more first: a daemon that found another one already
+            # serving the pipe -- started by a launcher racing this one --
+            # leaves too, and that one serves just as well.
+            if is_pipe_alive(pipe, liveness_timeout):
+                return
+            log = os.path.join(workspace_dir(root), "daemon.log") if root else "its daemon.log"
+            raise RuntimeError(
+                "the PartCAD daemon exited with status %s before it served %s; see %s" % (status, pipe, log)
+            )
+        if time.monotonic() >= deadline:
+            raise RuntimeError("the PartCAD daemon did not start serving %s in %ss" % (pipe, START_TIMEOUT))
         time.sleep(0.1)
-    return False
 
 
 def _serve_detached(

@@ -16,11 +16,14 @@ Windows-specific APIs are reached only inside functions so the module still
 byte-compiles (and imports) on POSIX.
 """
 
-import asyncio
 import hashlib
 
 from . import framing
 from .workspace import LIVENESS_METHOD
+
+# asyncio is imported by the two functions that speak over the pipe, not here: a
+# client that only needs the pipe's *name* (`partcad_client.client`, before it
+# connects) should not pay for an event loop it never runs.
 
 _HEADER_SEP = b"\r\n\r\n"
 STOP_METHOD = "daemon.stop"
@@ -45,6 +48,8 @@ def is_pipe_alive(name: str, timeout: float = 1.0) -> bool:
 
 def pipe_request(name: str, method: str, timeout: float, params=None):
     """Send one request over the named pipe and return the reply (None on error)."""
+    import asyncio
+
     try:
         return asyncio.run(_pipe_roundtrip(name, method, timeout, params))
     except Exception:  # pylint: disable=broad-except
@@ -52,6 +57,8 @@ def pipe_request(name: str, method: str, timeout: float, params=None):
 
 
 async def _pipe_roundtrip(name: str, method: str, timeout: float, params=None):  # pragma: no cover - Windows only
+    import asyncio
+
     loop = asyncio.get_event_loop()
     transport = None
     try:

@@ -115,3 +115,22 @@ def test_a_daemon_is_started_even_with_nowhere_to_log(spawns, monkeypatch):
 
     [(_, kwargs)] = spawns
     assert kwargs["stdout"] is None and kwargs["stderr"] is None
+
+
+def test_the_daemon_does_not_hold_the_directory_it_was_started_from(spawns, tmp_path):
+    # A Windows process's working directory cannot be deleted or renamed while
+    # it runs, and the launcher's is wherever its client ran -- a package, a
+    # test's temporary directory. The daemon is put in its own state directory.
+    spawn_pipe_daemon(WORKSPACE)
+
+    [(_, kwargs)] = spawns
+    assert kwargs["cwd"] == str(tmp_path / ".partcad" / "workspaces" / workspace_hash(WORKSPACE))
+
+
+def test_a_daemon_with_no_state_directory_keeps_the_launchers(spawns, monkeypatch):
+    monkeypatch.setattr(win_pipe.os, "makedirs", _raise(OSError("read-only")))
+
+    spawn_pipe_daemon(WORKSPACE)
+
+    [(_, kwargs)] = spawns
+    assert kwargs["cwd"] is None

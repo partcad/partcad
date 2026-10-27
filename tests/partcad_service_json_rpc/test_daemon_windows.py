@@ -107,3 +107,36 @@ def test_windows_reports_a_daemon_that_never_starts_serving(spawned, monkeypatch
         with _pretending_to_be_windows():
             daemon.ensure_daemon(lambda wdir: None, root_path=WORKSPACE)
     assert spawned == [(WORKSPACE, [])]
+
+
+class _Exited:
+    """A spawned daemon that is already gone, with ``status``."""
+
+    def __init__(self, status):
+        self.status = status
+
+    def poll(self):
+        return self.status
+
+
+def test_windows_reports_a_daemon_that_died_without_waiting_out_the_timeout(monkeypatch):
+    # Every `pc` command on Windows comes through here when no daemon is
+    # running, and falls back to a service of its own only once this gives up:
+    # waiting out START_TIMEOUT for a process that has already exited cost two
+    # minutes per command.
+    monkeypatch.setattr(service_win_pipe, "spawn_pipe_daemon", lambda root, extra=(): _Exited(3))
+    _answers(monkeypatch, False)
+    with pytest.raises(RuntimeError, match="exited with status 3") as caught:
+        with _pretending_to_be_windows():
+            daemon.ensure_daemon(lambda wdir: None, root_path=WORKSPACE)
+    assert "daemon.log" in str(caught.value)
+
+
+def test_windows_takes_the_pipe_of_a_daemon_that_won_the_race(monkeypatch, capsys):
+    # Two launchers at once each spawn a daemon; the one that finds the pipe
+    # already served exits, and the pipe it found is as good as its own.
+    monkeypatch.setattr(service_win_pipe, "spawn_pipe_daemon", lambda root, extra=(): _Exited(1))
+    _answers(monkeypatch, False, False, True)
+    with _pretending_to_be_windows():
+        pipe = daemon.ensure_daemon(lambda wdir: None, root_path=WORKSPACE)
+    assert capsys.readouterr().out.strip() == pipe == rendezvous.pipe_name(WORKSPACE)
