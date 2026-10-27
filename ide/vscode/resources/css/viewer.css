@@ -410,12 +410,15 @@ body {
     margin: 0;
 }
 
-/* The canvas takes whatever the control pane leaves. 'min-width: 0', because a
-   flex item's basis is its content and the canvas is sized from this element -
-   without it the two would push each other. */
+/* The canvas takes whatever the control pane leaves. The basis is the control
+   pane's, so that on a panel too narrow for both the two give way alike - and
+   not 'auto', which is the canvas's width attribute: the drawing buffer, in
+   device pixels. Sized from this element, a canvas with that basis moved the
+   control pane every time it was resized and was then drawn stretched over a
+   box it had not been measured in. 'min-width: 0' for the same reason. */
 .viewer {
     position: relative;
-    flex: 1 1 auto;
+    flex: 1 1 16rem;
     min-width: 0;
     min-height: 0;
 }
