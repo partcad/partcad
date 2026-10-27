@@ -10,6 +10,7 @@ from unittest.mock import mock_open, patch
 import pytest
 
 import partcad as pc
+from partcad import cache_io
 
 
 @pytest.fixture(autouse=True)
@@ -19,6 +20,22 @@ def setup_function() -> None:
     This fixture ensures a clean slate for testing.
     """
     pc.logging.reset_errors()
+
+
+@pytest.fixture(autouse=True)
+def no_cache_io_thread_left_behind():
+    """Stop the remote cache tiers' I/O thread after a test that started one.
+
+    It is process-wide and lives until the process exits (see
+    'partcad.cache_io'), which under xdist is the end of the worker: left
+    running, it would carry one test's clients, queued writes and remembered
+    misses into whatever the worker runs next, against servers that test has
+    already stopped. Stopping it sends what is queued first, as the process
+    would on its way out. Nothing to do, and nothing paid, after a test that
+    used no remote tier.
+    """
+    yield
+    cache_io.shutdown()
 
 
 @pytest.fixture(autouse=True)

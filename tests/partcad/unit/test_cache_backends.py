@@ -11,6 +11,10 @@ touched: the bytes a caller hands the cache are the bytes that go onto the
 socket and the bytes that come back. For a shape those bytes are a
 zstd-compressed BREP frame, and the whole point of compressing before the cache
 rather than inside it is that no tier has to know that.
+
+A remote tier's write is sent behind the caller's back (see partcad.cache_io),
+so a test that looks at what a server holds flushes first; what a read in the
+same process sees before then is in test_cache_io.py.
 """
 
 import asyncio
@@ -20,7 +24,7 @@ from cache_config import CacheUserConfig
 from memcached_server import serve_memcached
 from s3_server import serve_s3
 
-from partcad import cache_backend
+from partcad import cache_backend, cache_io
 from partcad.cache import Cache
 from partcad.cache_hash import CacheHash
 from partcad.cache_shape import ShapeCache
@@ -81,14 +85,16 @@ def test_memcache_round_trips_the_payload_untouched(tmp_path):
         async def main():
             cache = Cache("shapes", _memcache_config(tmp_path, server))
             written = await cache.write_data_async(_hash(), {"part": ZSTD_FRAME})
-            read = await cache.read_data_async(_hash(), ["part"])
-            return written, read
+            await cache.flush_async()
+            stored = list(server.storage.values())
+            read = await Cache("shapes", _memcache_config(tmp_path, server)).read_data_async(_hash(), ["part"])
+            return written, stored, read
 
-        written, read = asyncio.run(main())
+        written, stored, read = asyncio.run(main())
 
     assert written == {"part": True}
+    assert stored == [ZSTD_FRAME]
     assert read == {"part": ZSTD_FRAME}
-    assert list(server.storage.values()) == [ZSTD_FRAME]
 
 
 def test_memcache_keys_are_namespaced_by_installation_and_data_type(tmp_path):
@@ -97,7 +103,9 @@ def test_memcache_keys_are_namespaced_by_installation_and_data_type(tmp_path):
 
         async def main():
             config = _memcache_config(tmp_path, server, cache_remote_namespace="team-a")
-            await Cache("shapes", config).write_data_async(_hash(), {"part": ZSTD_FRAME})
+            cache = Cache("shapes", config)
+            await cache.write_data_async(_hash(), {"part": ZSTD_FRAME})
+            await cache.flush_async()
 
         asyncio.run(main())
 
@@ -129,7 +137,9 @@ def test_memcache_expiration_is_what_the_configuration_says(tmp_path):
 
         async def main():
             config = _memcache_config(tmp_path, server, cache_remote_expiration=3600)
-            await Cache("shapes", config).write_data_async(_hash(), {"part": ZSTD_FRAME})
+            cache = Cache("shapes", config)
+            await cache.write_data_async(_hash(), {"part": ZSTD_FRAME})
+            await cache.flush_async()
 
         asyncio.run(main())
 
@@ -147,7 +157,12 @@ def test_memcache_read_of_a_missing_entry_is_a_miss(tmp_path):
 
 
 def test_a_server_that_is_not_there_is_a_miss_and_not_a_failure(tmp_path):
-    """A cache is an optimization: losing a tier must never fail a build."""
+    """A cache is an optimization: losing a tier must never fail a build.
+
+    The write is taken - it is queued, and sent behind the caller's back - and
+    its failure is the tier's to log once it is sent. After that the entry is
+    not there, as an evicted one would not be.
+    """
 
     async def main():
         # Port 1 on loopback: nothing listens there, and connecting is refused
@@ -155,12 +170,13 @@ def test_a_server_that_is_not_there_is_a_miss_and_not_a_failure(tmp_path):
         config = CacheUserConfig(tmp_path, cache=False, cache_remote=True, cache_remote_server="127.0.0.1:1")
         cache = Cache("shapes", config)
         written = await cache.write_data_async(_hash(), {"part": ZSTD_FRAME})
+        await cache.flush_async()
         read = await cache.read_data_async(_hash(), ["part"])
         return written, read
 
     written, read = asyncio.run(main())
 
-    assert written == {}
+    assert written == {"part": True}
     assert read == {"part": None}
 
 
@@ -178,39 +194,55 @@ def test_a_second_event_loop_gets_a_working_client(tmp_path):
         cache = Cache("shapes", _memcache_config(tmp_path, server))
 
         asyncio.run(cache.write_data_async(_hash(), {"part": ZSTD_FRAME}))
-        # Same cache object, same backend, three more loops.
+        cache_io.flush()
+        # Same cache object, same backend, three more loops - and a cache of
+        # another context, whose tier is another object reaching the same server.
         for _ in range(3):
             assert asyncio.run(cache.read_data_async(_hash(), ["part"])) == {"part": ZSTD_FRAME}
+        other = Cache("shapes", _memcache_config(tmp_path, server))
+        assert asyncio.run(other.read_data_async(_hash(), ["part"])) == {"part": ZSTD_FRAME}
+        cache_io.shutdown()
 
 
-def test_one_client_serves_overlapping_requests_and_goes_when_they_do(tmp_path):
-    """The client is shared while requests overlap, and released once they finish.
+def test_one_client_serves_every_loop_and_is_closed_once(tmp_path, monkeypatch):
+    """The client outlives the loops that use it, and goes when the I/O thread does.
 
-    Both the client and the count of who is using it live per event loop, since
-    more than one can be live at a time, so the state is read out of the entry
-    belonging to the loop running the requests rather than off the backend.
+    Every pool task is an 'asyncio.run()' of its own, and a shape is read in one
+    and written in another: a client per loop was a connection per read and per
+    write. Now there is one for the server, opened by whichever tier asks first
+    and shared by every tier reaching that server, whatever data type it is for.
     """
+    from partcad.cache_backend_memcache import MemcacheCacheBackend
+
+    opened, closed = [], []
+    real_open, real_close = MemcacheCacheBackend._open, MemcacheCacheBackend._close
+
+    async def counting_open(self):
+        client = await real_open(self)
+        opened.append(client)
+        return client
+
+    async def counting_close(self, client):
+        closed.append(client)
+        await real_close(self, client)
+
+    monkeypatch.setattr(MemcacheCacheBackend, "_open", counting_open)
+    monkeypatch.setattr(MemcacheCacheBackend, "_close", counting_close)
+
     with serve_memcached() as server:
-        cache = Cache("shapes", _memcache_config(tmp_path, server))
-        remote = cache.backends[0]
+        shapes = Cache("shapes", _memcache_config(tmp_path, server))
+        tests = Cache("tests", _memcache_config(tmp_path, server))
+        for index in range(4):
+            asyncio.run(shapes.write_data_async(_hash(data=str(index)), {"part": ZSTD_FRAME}))
+            asyncio.run(tests.read_data_async(_hash(data=str(index)), ["verdict"]))
+        cache_io.flush()
+        assert len(server.storage) == 4
+        assert len(opened) == 1
+        assert closed == []
 
-        async def main():
-            depth = []
+        cache_io.shutdown()
 
-            async def one():
-                async with remote.connected():
-                    depth.append(remote._per_loop[asyncio.get_running_loop()]["users"])
-                    await asyncio.sleep(0)
-
-            await asyncio.gather(*[one() for _ in range(4)])
-            return depth
-
-        depth = asyncio.run(main())
-
-    # They really did overlap ...
-    assert max(depth) > 1
-    # ... and the last one out took the whole entry with it, client included.
-    assert remote._per_loop == {}
+    assert closed == opened
 
 
 # ----------------------------------------------------------------------- S3 --
@@ -222,14 +254,17 @@ def test_s3_round_trips_the_payload_untouched(tmp_path, aws_credentials):
         async def main():
             cache = Cache("shapes", _s3_config(tmp_path, url))
             written = await cache.write_data_async(_hash(), {"part": ZSTD_FRAME})
-            read = await cache.read_data_async(_hash(), ["part"])
-            return written, read
+            await cache.flush_async()
+            stored = list(storage.values())
+            read = await Cache("shapes", _s3_config(tmp_path, url)).read_data_async(_hash(), ["part"])
+            return written, stored, read
 
-        written, read = asyncio.run(main())
+        written, stored, read = asyncio.run(main())
+        cache_io.shutdown()
 
     assert written == {"part": True}
+    assert stored == [ZSTD_FRAME]
     assert read == {"part": ZSTD_FRAME}
-    assert list(storage.values()) == [ZSTD_FRAME]
 
 
 def test_s3_objects_live_under_the_configured_prefix_and_data_type(tmp_path, aws_credentials):
@@ -237,9 +272,12 @@ def test_s3_objects_live_under_the_configured_prefix_and_data_type(tmp_path, aws
 
         async def main():
             config = _s3_config(tmp_path, url, cache_s3_prefix="builds/main")
-            await Cache("shapes", config).write_data_async(_hash(), {"part": ZSTD_FRAME})
+            cache = Cache("shapes", config)
+            await cache.write_data_async(_hash(), {"part": ZSTD_FRAME})
+            await cache.flush_async()
 
         asyncio.run(main())
+        cache_io.shutdown()
 
     key = next(iter(storage))
     # A missing trailing slash on the prefix is not the user's problem.
@@ -255,6 +293,7 @@ def test_s3_read_of_a_missing_object_is_a_miss(tmp_path, aws_credentials):
             return await Cache("shapes", _s3_config(tmp_path, url)).read_data_async(_hash(), ["part"])
 
         read = asyncio.run(main())
+        cache_io.shutdown()
 
     assert read == {"part": None}
     assert storage == {}
@@ -280,17 +319,26 @@ def test_the_nearest_tier_wins_and_the_far_one_backs_it(tmp_path, aws_credential
 
         # A write reaches every tier that accepts it.
         asyncio.run(cache.write_data_async(_hash(), {"part": ZSTD_FRAME}))
+        cache_io.flush()
+
+        def forget_local():
+            for path in cache.backends[0].cache_dir.iterdir():
+                path.unlink()
 
         # With the local files gone, the read falls through to memcached.
-        for path in cache.backends[0].cache_dir.iterdir():
-            path.unlink()
+        forget_local()
+        storage.requests.clear()
         from_remote = asyncio.run(cache.read_data_async(_hash(), ["part"]))
+        s3_asked = list(storage.requests)
 
         # With memcached emptied too, S3 is what is left.
+        forget_local()
         server.storage.clear()
         from_s3 = asyncio.run(cache.read_data_async(_hash(), ["part"]))
+        cache_io.shutdown()
 
     assert from_remote == {"part": ZSTD_FRAME}
+    assert s3_asked == []
     assert from_s3 == {"part": ZSTD_FRAME}
     # Every tier held the same bytes, and they are the ones handed in.
     assert list(storage.values()) == [ZSTD_FRAME]
@@ -307,6 +355,7 @@ def test_only_the_local_tier_records_which_object_a_hash_belongs_to(tmp_path):
         )
         cache = Cache("shapes", config)
         asyncio.run(cache.write_data_async(_hash("pkg:widget"), {"part": ZSTD_FRAME}))
+        cache_io.flush()
 
         on_disk = sorted(p.name.rsplit(".", 1)[1] for p in cache.backends[0].cache_dir.iterdir())
 
@@ -322,6 +371,7 @@ def test_a_shape_reaches_the_remote_tier_as_the_compressed_frame(tmp_path):
         async def main():
             shape = {"name": "pkg:first", "label": "first", "brep": ZSTD_FRAME}
             await cache.write_async(_hash(), {"part": shape})
+            await cache.flush_async()
             read, _ = await cache.read_async(_hash(), ["part"], {"name": "pkg:second", "label": "second"})
             return read
 
@@ -481,7 +531,9 @@ def test_the_nearest_tier_holding_an_entry_answers_for_it(tmp_path):
 
         async def main():
             remote_only = _memcache_config(tmp_path, server)
-            await Cache("shapes", remote_only).write_data_async(_hash(), {"part": ZSTD_FRAME})
+            writer = Cache("shapes", remote_only)
+            await writer.write_data_async(_hash(), {"part": ZSTD_FRAME})
+            await writer.flush_async()
 
             both = CacheUserConfig(
                 tmp_path,
@@ -500,12 +552,13 @@ def test_s3_is_asked_with_a_head_rather_than_a_download(tmp_path, aws_credential
     with serve_s3() as (url, storage):
 
         async def main():
-            cache = Cache("shapes", _s3_config(tmp_path, url))
-            await cache.write_data_async(_hash(), {"part": ZSTD_FRAME})
+            await Cache("shapes", _s3_config(tmp_path, url)).write_data_async(_hash(), {"part": ZSTD_FRAME})
+            await cache_io.flush_async()
             storage.requests.clear()
-            return await cache.contains_data_async(_hash(), ["part", "cmps"])
+            return await Cache("shapes", _s3_config(tmp_path, url)).contains_data_async(_hash(), ["part", "cmps"])
 
         assert asyncio.run(main()) == {"part": True, "cmps": False}
+        cache_io.shutdown()
 
     assert {method for method, _ in storage.requests} == {"HEAD"}
 

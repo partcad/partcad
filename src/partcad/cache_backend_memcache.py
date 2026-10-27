@@ -25,9 +25,10 @@ run that never switches this tier on never pays for it.
 
 import asyncio
 
+from . import cache_io
 from . import logging as pc_logging
 from . import telemetry
-from .cache_backend import PooledCacheBackend, broken_dependency
+from .cache_backend import RemoteCacheBackend, broken_dependency
 
 # memcached refuses a key with whitespace or control characters, and caps it at
 # 250 bytes. A cache entry name is '<hex hash>.<key>' and a namespace is user
@@ -39,9 +40,14 @@ MAX_KEY_LENGTH = 250
 # is reserved here instead.
 HASH_KEY_LENGTH = 64 + len(".")
 
+# How many connections the client keeps to the server. One client serves the
+# whole process now (see cache_io.py), its reads and the writes sent behind
+# them, so it gets as many as are written at once rather than aiomcache's two.
+POOL_SIZE = cache_io.MAX_CONCURRENT_WRITES
+
 
 @telemetry.instrument()
-class MemcacheCacheBackend(PooledCacheBackend):
+class MemcacheCacheBackend(RemoteCacheBackend):
     """Cache entries as memcached items, keyed '<namespace>:<data type>:<name>'."""
 
     name = "remote"
@@ -73,6 +79,14 @@ class MemcacheCacheBackend(PooledCacheBackend):
                 % user_config.cache_remote_namespace
             )
 
+    @property
+    def client_key(self) -> tuple:
+        return ("memcache", self.host, self.port)
+
+    @property
+    def location(self) -> tuple:
+        return ("memcache", self.host, self.port, self._prefix)
+
     def _key(self, name: str) -> bytes:
         return (self._prefix + name).encode("utf-8")
 
@@ -86,7 +100,7 @@ class MemcacheCacheBackend(PooledCacheBackend):
     async def _open(self):
         # aiomcache connects lazily and pools connections of its own, so this
         # costs nothing until the first request actually goes out.
-        return self._aiomcache.Client(self.host, self.port)
+        return self._aiomcache.Client(self.host, self.port, pool_size=POOL_SIZE)
 
     async def _close(self, client) -> None:
         await client.close()

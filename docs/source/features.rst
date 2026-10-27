@@ -1037,6 +1037,15 @@ S3-compatible store that is not AWS.
 naming the package to install and leaves the remaining tiers working. See
 :doc:`installation` for both.
 
+A hit in a farther tier is copied into the nearer tiers that missed it, so an
+entry another machine put in S3 is downloaded once and is a local file from
+then on. Writes to the two shared tiers are sent in the background: a build
+does not wait for memcached or S3, what is still waiting to be sent is visible
+to the process that wrote it, and it is sent before PartCAD exits. What a
+shared tier answered it does not hold is believed for a minute, so the many
+lookups of entries that are usually absent -- a part's components, its
+properties -- cost a round trip a minute rather than one each.
+
 Cache keys
 ----------
 

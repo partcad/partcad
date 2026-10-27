@@ -1619,6 +1619,23 @@ msgstr ""
 " -U 'partcad[aws]'`` ）；没有安装它就启用，会报出一个指明待装包名的错误，其余层级则照常工作。两者的说明都参见 "
 ":doc:`installation` 。"
 
+#: ../../source/features.rst:1015
+msgid ""
+"A hit in a farther tier is copied into the nearer tiers that missed it, "
+"so an entry another machine put in S3 is downloaded once and is a local "
+"file from then on. Writes to the two shared tiers are sent in the "
+"background: a build does not wait for memcached or S3, what is still "
+"waiting to be sent is visible to the process that wrote it, and it is "
+"sent before PartCAD exits. What a shared tier answered it does not hold "
+"is believed for a minute, so the many lookups of entries that are "
+"usually absent -- a part's components, its properties -- cost a round "
+"trip a minute rather than one each."
+msgstr ""
+"在较远层级命中的条目会被复制到那些未命中的较近层级中，因此另一台机器放进 S3 的条目只需下载一次，此后就是一个本地文件"
+"。写入两个共享层级的操作在后台发送：构建不会等待 memcached 或 S3，尚在等待发送的内容对写入它的进程可见，并"
+"会在 PartCAD 退出前发送出去。共享层级回答“没有”的结果会被采信一分钟，因此对那些通常并不存在的条目（零件的组件"
+"、它的属性）的大量查询，每分钟只花一次网络往返，而不是每次都花一次。"
+
 #: ../../source/features.rst:839
 msgid "Cache keys"
 msgstr "缓存键"

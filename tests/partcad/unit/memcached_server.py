@@ -53,15 +53,29 @@ class MemcachedServer:
         # rather than only on the round trip.
         self.flags: dict[bytes, int] = {}
         self.expirations: dict[bytes, int] = {}
+        # The connections being served, so that stopping the server closes them
+        # the way a real memcached going away does. A client keeps its
+        # connections for as long as its process runs (see partcad.cache_io), so
+        # they outlive the server here, and a connection whose loop has closed
+        # under it fails as it is collected rather than being closed.
+        self._handlers: set = set()
 
     async def serve_forever(self, ready: threading.Event) -> None:
         server = await asyncio.start_server(self._serve, self.host, 0)
         self.port = server.sockets[0].getsockname()[1]
         ready.set()
         async with server:
-            await server.serve_forever()
+            try:
+                await server.serve_forever()
+            finally:
+                for handler, writer in list(self._handlers):
+                    writer.close()
+                    handler.cancel()
+                await asyncio.gather(*[handler for handler, _ in self._handlers], return_exceptions=True)
 
     async def _serve(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        handler = (asyncio.current_task(), writer)
+        self._handlers.add(handler)
         try:
             while True:
                 line = await reader.readline()
@@ -92,6 +106,7 @@ class MemcachedServer:
         except (asyncio.IncompleteReadError, ConnectionResetError):
             pass
         finally:
+            self._handlers.discard(handler)
             writer.close()
 
     def _write_values(self, writer: asyncio.StreamWriter, keys, with_cas: bool) -> None:
