@@ -21,6 +21,7 @@ import os
 import subprocess
 import sys
 import textwrap
+import types
 
 from partcad import wrapper as pc_wrapper
 
@@ -98,3 +99,34 @@ def test_what_printed_is_not_lost_but_moved(tmp_path):
     # And none of it is on the channel.
     assert "talking to itself" not in finished.stdout
     assert "OCCT" not in finished.stdout
+
+
+def test_an_answer_written_a_little_at_a_time_arrives_whole(monkeypatch):
+    """'os.write' may take less than it is handed; the rest is written from a view.
+
+    In this process, with a descriptor that takes a few kilobytes per call, so
+    that a multi-megabyte answer is written in hundreds of pieces -- each from
+    a view of the one buffer rather than a copy of what is left of it.
+    """
+    monkeypatch.syspath_prepend(WRAPPERS)
+    import ocp_serialize
+    import wrapper_common
+
+    received = []
+    handed = []
+
+    def write(fd, data):
+        handed.append(type(data))
+        taken = bytes(data[:4096])
+        received.append(taken)
+        return len(taken)
+
+    monkeypatch.setattr(wrapper_common, "_response_fd", 99)
+    monkeypatch.setattr(wrapper_common, "os", types.SimpleNamespace(write=write))
+    answer = {"success": True, "blob": "x" * (2 * 1024 * 1024)}
+
+    wrapper_common.handle_output(answer)
+
+    assert len(received) > 500
+    assert set(handed) == {memoryview}
+    assert ocp_serialize.deserialize(b"".join(received).decode("utf-8")) == answer
