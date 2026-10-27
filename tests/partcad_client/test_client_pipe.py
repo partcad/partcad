@@ -20,6 +20,7 @@ and `CancelIoEx` ending a read blocked in it.
 
 import contextlib
 import io
+import logging
 import os
 import threading
 import time
@@ -229,3 +230,36 @@ def _refuse(what):
         raise AssertionError("%s was not expected to run" % what)
 
     return refuse
+
+
+def test_a_pipe_that_stays_busy_is_given_up_on(monkeypatch):
+    """Busy for longer than a liveness probe would wait is the launcher's to look at."""
+    attempts = []
+
+    def fake_open(name, mode, buffering):
+        attempts.append(name)
+        raise OSError(22, "Invalid argument")
+
+    monkeypatch.setattr(client_module, "open", fake_open, raising=False)
+    monkeypatch.setattr(client_module, "LIVENESS_TIMEOUT", 0.05)
+    with pytest.raises(OSError):
+        client_module._pipe_file(PIPE)
+    assert len(attempts) > 1
+
+
+def test_falling_back_to_a_service_of_its_own_is_said(monkeypatch, caplog):
+    """A command that stopped using the daemon would otherwise give no sign of why."""
+
+    def no_daemon(cwd, extra_args):
+        raise RuntimeError("partcad-json-rpc exited with status 1")
+
+    fallback = object()
+    monkeypatch.setattr(client_module, "_connect_daemon", no_daemon)
+    monkeypatch.setattr(client_module, "_connect_stdio", lambda cwd, extra_args: fallback)
+
+    with caplog.at_level(logging.DEBUG, logger="partcad_client.client"):
+        assert client_module.connect() is fallback
+
+    [record] = [r for r in caplog.records if r.name == "partcad_client.client"]
+    assert record.levelno == logging.DEBUG
+    assert record.exc_info is not None and "exited with status 1" in str(record.exc_info[1])

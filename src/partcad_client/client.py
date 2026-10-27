@@ -703,5 +703,8 @@ def connect(cwd: Optional[str] = None, extra_args=()) -> DaemonClient:
     try:
         return _connect_daemon(cwd, extra_args)
     except Exception:  # pylint: disable=broad-except
-        pass  # fall back to a one-shot stdio service
+        # Said, if only at debug: a command that quietly stopped using the
+        # daemon is slower and serves from a configuration of its own, and
+        # nothing else would say why (see 'idle_timeout' for one way it did).
+        _logger.debug("No PartCAD daemon could be reached; starting a one-shot service instead", exc_info=True)
     return _connect_stdio(cwd, extra_args)

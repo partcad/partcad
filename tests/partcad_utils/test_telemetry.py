@@ -143,3 +143,18 @@ def test_a_process_without_sentry_hands_it_nothing(monkeypatch):
     telemetry.flush(timeout=1.5)
 
     assert "sentry_sdk" not in sys.modules
+
+
+def test_the_logging_functions_hand_sentry_what_they_always_did(monkeypatch):
+    """Through 'telemetry' now, with the same arguments as when they imported the SDK."""
+    from partcad_utils import logging as pc_logging
+
+    sentry, calls = _recording_sentry()
+    monkeypatch.setitem(sys.modules, "sentry_sdk", sentry)
+    monkeypatch.setattr(pc_logging, "had_errors", pc_logging.had_errors)
+    monkeypatch.setattr(pc_logging, "first_error", pc_logging.first_error)
+
+    pc_logging.error("broken")
+    pc_logging.critical("process_start: x")
+
+    assert calls == [("message", "('broken',){}", "error"), ("message", "('process_start: x',){}", "debug")]
