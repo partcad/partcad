@@ -24,20 +24,22 @@ one, through the sandbox, so what is checked is the sketch PartCAD hands back.
 
 import asyncio
 import math
+import os
+import sys
 
 import ezdxf
 import pytest
 import yaml
-from OCP.BRep import BRep_Builder
 from OCP.BRepGProp import BRepGProp
-from OCP.BRepTools import BRepTools
 from OCP.GProp import GProp_GProps
 from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
 from OCP.TopExp import TopExp_Explorer
-from OCP.TopoDS import TopoDS_Shape
 
 import partcad as pc
 from partcad import shape_envelope
+
+sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
+import ocp_serialize  # noqa: E402
 
 
 def _square(layout, x, y, size, layer="0"):
@@ -67,11 +69,11 @@ def _sketch(tmp_path, draw, drawn_in=ezdxf.units.MM, **declaration):
     envelope = asyncio.run(sketch.get_wrapped(ctx))
     assert envelope is not None, "the drawing did not import"
 
+    # Through a '.brep' file, as the payload a sandbox wrote - binary - and read
+    # back the way a 'brep' part reads one, whichever format it is in.
     brep = tmp_path / "drawing.brep"
     brep.write_bytes(shape_envelope.brep_plain(envelope["brep"]))
-    shape = TopoDS_Shape()
-    assert BRepTools.Read_s(shape, str(brep), BRep_Builder())
-    return shape
+    return ocp_serialize.shape_from_brep_file(str(brep))
 
 
 def _count(shape, kind):

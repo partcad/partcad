@@ -14,8 +14,10 @@ there is no solid it bounds.
 
 These run the real thing: a script in a sandbox, through the wrapper, into the
 BREP envelope the core carries. The verdict is read with 'partcad.brep_inspect',
-which is the core's own answer and needs no CAD kernel; OCCT is asked for the
-volume as well, so that "it became a solid" is not the only thing checked.
+which is the core's own answer and needs no CAD kernel - off the count the
+wrapper recorded as it encoded the shape, since the payload is binary; OCCT is
+asked for the shapes and the volume as well, so that "it became a solid" is not
+the only thing checked.
 
 The package declares no requirements of its own, so it renders in the CAD
 sandbox the other part tests provision rather than building one.
@@ -29,7 +31,9 @@ import textwrap
 import pytest
 from OCP.BRepGProp import BRepGProp
 from OCP.GProp import GProp_GProps
-from OCP.TopAbs import TopAbs_SOLID
+from OCP.TopAbs import TopAbs_SHELL, TopAbs_SOLID
+from OCP.TopExp import TopExp
+from OCP.TopTools import TopTools_IndexedMapOfShape
 
 import partcad as pc
 from partcad import brep_inspect
@@ -122,18 +126,22 @@ def _volume(shape):
     return props.Mass()
 
 
+def _count(shape, shape_type):
+    found = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(shape, shape_type, found)
+    return found.Extent()
+
+
 @pytest.mark.parametrize("name", ["closed_build123d", "closed_cadquery", "closed_part_type"])
 def test_a_script_that_returns_a_closed_shell_produces_a_solid(context, name):
     """Whichever way it arrives: the two script types, and a partType wrapper."""
     part, envelope = _envelope(context, name)
 
-    topology = brep_inspect.topology(envelope["brep"])
-    assert topology is not None
-    assert topology.free_shells == 0
-    assert topology.count("solid") == 1
+    assert brep_inspect.envelope_free_shells(envelope) == (0, 0)
 
     # The same box, not a new one: the solid states what the shell already was.
     shape = ocp_serialize.decode_shape(envelope)
+    assert _count(shape, TopAbs_SOLID) == 1
     assert _volume(shape) == pytest.approx(BOX_VOLUME)
 
 
@@ -157,11 +165,10 @@ def test_a_shell_that_does_not_close_stays_a_shell_and_is_reported(context):
     """There is no solid it bounds, so nothing invents one - and the core says so."""
     part, envelope = _envelope(context, "open_build123d")
 
-    topology = brep_inspect.topology(envelope["brep"])
-    assert topology is not None
-    assert topology.count("shell") == 1
-    assert topology.free_shells == 1
-    assert topology.count("solid") == 0
+    assert brep_inspect.envelope_free_shells(envelope) == (1, 0)
+    shape = ocp_serialize.decode_shape(envelope)
+    assert _count(shape, TopAbs_SHELL) == 1
+    assert _count(shape, TopAbs_SOLID) == 0
 
     assert asyncio.run(ShellTest().test([], context, part)) == ShellTest.TEST_FAILED
 
@@ -175,5 +182,5 @@ def test_a_part_cannot_declare_its_way_out_of_the_check(context):
     """
     part, envelope = _envelope(context, "open_declares_a_skip")
 
-    assert brep_inspect.topology(envelope["brep"]).free_shells == 1
+    assert brep_inspect.envelope_free_shells(envelope) == (1, 0)
     assert asyncio.run(ShellTest().test([], context, part)) == ShellTest.TEST_FAILED

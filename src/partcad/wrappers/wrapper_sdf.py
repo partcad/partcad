@@ -30,6 +30,9 @@ def sdf_triangles_to_topods(triangles: np.ndarray):
     triangle, so its length must be a positive multiple of three. The resulting
     face carries only a Poly_Triangulation; the 2D renderers normalize it (see
     the 'normalize_mesh' path in builtin/render/render_svg.py) before projecting it.
+    The triangles are the face's only geometry, so they are what its payload
+    carries, where a face with a surface travels without its mesh (see
+    'ocp_serialize.shape_to_brep').
     """
     arr = np.asarray(triangles)
     if arr.size == 0:

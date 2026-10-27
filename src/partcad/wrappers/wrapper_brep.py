@@ -11,11 +11,8 @@ import sys
 # dies with an undefined-symbol ImportError.
 import pyexpat  # noqa: F401
 
-from OCP.BRep import BRep_Builder
-from OCP.BRepTools import BRepTools
-from OCP.TopoDS import TopoDS_Shape
-
 sys.path.append(os.path.dirname(__file__))
+import ocp_serialize
 import wrapper_common
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
@@ -26,12 +23,10 @@ CACHE_VERSION = 1
 
 def process(path, request):
     try:
-        shape = TopoDS_Shape()
-        builder = BRep_Builder()
-        brep_tools = BRepTools()
-
-        if not brep_tools.Read_s(shape, path, builder):
-            raise Exception(f"Failed to load BREP file: {path}")
+        # Either format, as a payload is read: a package's '.brep' is ASCII,
+        # and the parts an interference check leaves behind are binary (see
+        # 'ocp_serialize.shape_from_brep_file').
+        shape = ocp_serialize.shape_from_brep_file(path)
     except Exception as e:
         wrapper_common.handle_exception(e)
         return {

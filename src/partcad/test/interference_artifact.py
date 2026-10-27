@@ -29,8 +29,11 @@ lists the package's declarations: a 'pc render' that writes the README after a
 'pc test' in the same daemon would otherwise list them.
 
 Each volume is a 'brep' part read from a file under PartCAD's own state
-directory ('internalStateDir'/interference), named after a digest of its bytes:
-the same overlap writes the same file, and the part's cache key -- which covers
+directory ('internalStateDir'/interference), named after a digest of its bytes.
+The bytes are the payload the check answered with, decompressed: OCCT's binary
+BREP, which the 'brep' part type reads as readily as the ASCII a package
+carries ('ocp_serialize.shape_from_brep_file'). The same overlap writes the same
+file, and the part's cache key -- which covers
 its configuration and the file's content -- is the same from one run and one
 process to the next, so its geometry is cached like any other part's. The two
 parts placed in the assembly are the objects themselves, not copies, cached as

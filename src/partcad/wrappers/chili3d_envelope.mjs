@@ -6,14 +6,18 @@
 // 'wrappers/ocp_serialize.py' and 'shape_envelope.py'.
 //
 // A single shape is '{"name", "label", "brep"}', where "brep" is the base64 of
-// the zstd-compressed bytes OCCT's BRepTools writer produces. An assembly is
-// '{"name", "label", "assembly": [...]}'. Requests and responses are ordinary
-// JSON objects carrying such objects under keys like "shape" or "components".
+// zstd-compressed BREP. An assembly is '{"name", "label", "assembly": [...]}'.
+// Requests and responses are ordinary JSON objects carrying such objects under
+// keys like "shape" or "components".
 //
-// Chili3D reaches the same writer through its WebAssembly build:
-// 'Converter.convertToBrep' returns exactly what 'BRepTools.Write_s' writes, so
-// the bytes the Python end reads back are the ones it would have produced
-// itself.
+// The Python end writes OCCT's binary BREP ('BinTools'); this end writes the
+// ASCII one, because that is the only writer Chili3D's WebAssembly build
+// exposes: 'Converter.convertToBrep' returns what 'BRepTools.Write_s' writes,
+// as a string, and 'convertFromBrep' reads only that. Every reader on the
+// Python end tells the two apart by their headers (see
+// 'ocp_serialize.shape_from_brep'), so the bytes from here are read back as
+// they always were. The other way does not work, and 'decodeShape' says so
+// rather than handing the kernel bytes it would misread.
 
 import zlib from "node:zlib";
 
@@ -25,9 +29,13 @@ export const KEY_LOCATION = "location";
 // The zstd frame header. The Python end sniffs for it rather than being told
 // which encoding a payload uses, so writing plain BREP where this Node.js has
 // no zstd stays readable there. It cannot collide with a raw payload: BREP
-// always begins with its own ASCII header ("CASCADE Topology" or
-// "DBRep_DrawableShape").
+// always begins with its own text header ("CASCADE Topology" or
+// "DBRep_DrawableShape", and "Open CASCADE Topology" for the binary format).
 const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
+
+// What OCCT's binary BREP begins with, past a newline; the twin of
+// 'ocp_serialize.BINARY_MAGIC'.
+const BINARY_MAGIC = "Open CASCADE Topology";
 
 // 'node:zlib' grew the zstd helpers in Node.js 22.15. Detected rather than
 // assumed, because a sandbox may be pinned to an older major line.
@@ -75,8 +83,14 @@ export function decodeShape(object) {
     if (!isShapeObject(object)) {
         throw new Error("Not a shape object: " + JSON.stringify(Object.keys(object ?? {})));
     }
-    const brep = decompress(Buffer.from(object[KEY_BREP], "base64")).toString("utf8");
-    return globalThis.wasm.Converter.convertFromBrep(brep);
+    const plain = decompress(Buffer.from(object[KEY_BREP], "base64"));
+    if (plain.subarray(0, 64).toString("latin1").trimStart().startsWith(BINARY_MAGIC)) {
+        throw new Error(
+            "This shape is OCCT's binary BREP, which Chili3D's kernel cannot read: " +
+                "it has an ASCII BREP reader and no binary one.",
+        );
+    }
+    return globalThis.wasm.Converter.convertFromBrep(plain.toString("utf8"));
 }
 
 export function isShapeObject(object) {

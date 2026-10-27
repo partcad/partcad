@@ -3,15 +3,31 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""What a BREP payload is made of, read off the bytes without a CAD kernel.
+"""What a BREP payload is made of, read without a CAD kernel.
 
 The core process never holds a live shape. A shape reaches it as the
 zstd-compressed BREP bytes of a '{"name", "label", "brep"}' envelope (see
 shape_envelope.py), and every question about geometry is put to a wrapper
 running in a sandbox, because answering one needs OCCT. That is the right
 arrangement for a question about geometry, and an expensive way to ask one
-about *topology* -- which the payload already answers, in plain text, in the
-section BRepTools writes last:
+about *topology*.
+
+Which is why the one topological fact the core asks for -- how many shells no
+solid bounds itself with -- is recorded as the payload is written: every
+wrapper encodes the shape it returns through 'ocp_serialize.encode_shape', in
+the process holding the live shape, and the count is in the envelope's
+measurements beside the solids it counts ('shape_measure.free_shells',
+'shape_envelope.METADATA_FREE_SHELLS'). It is read from there first, and that
+is a dictionary lookup.
+
+A payload is OCCT's *binary* BREP, and that is the other reason: the binary
+format has no line a record ends on. How long a record is depends on the
+representations it lists -- a curve, a curve on a surface, a polygon, each laid
+out its own way -- so finding where one ends means decoding them, which is a
+BREP reader and not a scan. An ASCII payload is still read here, for the envelopes that record no
+count: one Chili3D wrote (its kernel has no binary writer, and the JavaScript
+encoder measures nothing), or one an earlier release wrote. ASCII answers, in
+plain text, in the section BRepTools writes last:
 
     TShapes 34              the number of records that follow
     Ve                      a vertex: its type code, alone on the line
@@ -88,10 +104,14 @@ SHAPE_TYPES = {
     b"Co": "compound",
 }
 
-# What a BREP payload starts with. 'BRepTools.Write_s' writes the second one;
-# the first is what DBRep prepends when a shape is saved from Draw, and a
+# What an ASCII BREP payload starts with. 'BRepTools.Write_s' writes the first
+# one; the second is what DBRep prepends when a shape is saved from Draw, and a
 # '.brep' file a package carries may well have come from there.
 _MAGIC = (b"CASCADE Topology", b"DBRep_DrawableShape")
+# What a binary one starts with: "Open CASCADE Topology V4, ...". It contains
+# the first ASCII marker, so a payload is told to be binary first; the twin of
+# this constant is 'ocp_serialize.BINARY_MAGIC'.
+_BINARY_MAGIC = b"Open CASCADE Topology"
 # How far in to look for it. The marker is on the first or second line.
 _MAGIC_WINDOW = 128
 
@@ -127,12 +147,19 @@ class Topology:
         return "Topology(root=%r, free_shells=%r, counts=%r)" % (self.root, self.free_shells, self.counts)
 
 
+def is_binary_brep(data: bytes) -> bool:
+    """Whether 'data' is a BREP in OCCT's binary format, which this module does not scan."""
+    return bytes(data[:_MAGIC_WINDOW]).lstrip().startswith(_BINARY_MAGIC)
+
+
 def looks_like_brep(data: bytes) -> bool:
     """Whether 'data' is the ASCII BREP this module knows how to read.
 
     False for anything else, including a BREP written in OCCT's binary format:
     the answer is then "not read" rather than "no shell in it".
     """
+    if is_binary_brep(data):
+        return False
     head = bytes(data[:_MAGIC_WINDOW])
     return any(marker in head for marker in _MAGIC)
 
@@ -211,9 +238,10 @@ def topology(payload) -> Topology | None:
     compressed bytes, the base64 text of them, or uncompressed BREP.
 
     None means exactly that nothing was read -- an empty payload, a format
-    this does not recognize, a section that does not scan. It is never an
-    answer about the shape, and a caller has to treat it apart from a
-    Topology reporting no shell.
+    this does not recognize (a binary payload among them), a section that does
+    not scan. It is never an answer about the shape, and a caller has to treat
+    it apart from a Topology reporting no shell. What answers for a binary
+    payload is the count its envelope recorded: see 'payload_free_shells()'.
     """
     try:
         data = shape_envelope.brep_plain(payload)
@@ -247,6 +275,36 @@ def free_shells(payload) -> int | None:
     return None if result is None else result.free_shells
 
 
+def recorded_free_shells(node) -> int | None:
+    """The free shells a shape envelope recorded as it was encoded, or None.
+
+    None for an envelope that recorded none: one written before the count was,
+    or by an encoder that measures nothing (Chili3D's), or one whose shape was
+    too broken to measure at all.
+    """
+    measured = shape_envelope.metadata_section(shape_envelope.metadata_of(node), shape_envelope.METADATA_MEASUREMENTS)
+    count = measured.get(shape_envelope.METADATA_FREE_SHELLS) if isinstance(measured, dict) else None
+    # 'bool' is an 'int' too, and is not a count anybody wrote.
+    if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
+        return count
+    return None
+
+
+def payload_free_shells(node) -> int | None:
+    """How many free shells the payload of the shape envelope 'node' holds, or None if that is not known.
+
+    What the envelope recorded, when it did, and otherwise what an ASCII
+    payload says. The recorded count comes first, and not only because a
+    binary payload has no other answer: it is the same count, taken from the
+    live shape the payload was written from, and reading it costs neither a
+    decompression nor a scan.
+    """
+    recorded = recorded_free_shells(node)
+    if recorded is not None:
+        return recorded
+    return free_shells(node.get(shape_envelope.KEY_BREP))
+
+
 def envelope_free_shells(envelope) -> tuple[int, int]:
     """Walk a shape/assembly envelope: (free shells found, payloads not read).
 
@@ -271,7 +329,7 @@ def envelope_free_shells(envelope) -> tuple[int, int]:
             return
         if shape_envelope.KEY_BREP not in obj:
             return
-        count = free_shells(obj[shape_envelope.KEY_BREP])
+        count = payload_free_shells(obj)
         if count is None:
             unread += 1
         else:
