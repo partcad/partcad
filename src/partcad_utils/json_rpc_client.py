@@ -30,6 +30,7 @@ import threading
 from typing import Any, Dict, Optional, Union
 
 import requests
+import urllib3
 
 from . import container_files, container_service
 from . import logging as pc_logging
@@ -195,7 +196,16 @@ class RuntimeJsonRpcClient:
         # In one read rather than through `response.content`, which reads in
         # ten-kilobyte pieces: half the time for an answer of fifty megabytes.
         # Read to its end, the connection goes back to the pool by itself.
-        body = response.raw.read(decode_content=True)
+        try:
+            body = response.raw.read(decode_content=True)
+        except urllib3.exceptions.HTTPError as e:
+            # What `response.content` would have raised: `requests` wraps
+            # urllib3's errors only on its own way of reading. Unwrapped, an
+            # answer cut off by a container dying mid-reply escaped `call` as
+            # urllib3's, past every caller that asks whether the container
+            # stopped when no answer came.
+            response.close()
+            raise requests.exceptions.ConnectionError(e, response=response)
         return response.status_code, response.headers.get("Content-Type", ""), body
 
     def call(self, method: str, params: Dict[str, Any], timeout: float = None) -> Optional[Dict]:
