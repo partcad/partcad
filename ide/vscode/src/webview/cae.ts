@@ -44,7 +44,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CaeResultView } from './analysis';
 import { DEFAULT_COLOR } from './appearance';
 import { el, empty, placeholder } from './dom';
-import { IMAGE_TYPES, ImageView, decodeBase64 } from './image';
+import { IMAGE_TYPES, ImageView } from './image';
 import { ANALYSIS_LABELS, AnalysisTabId, CaeData, CaeFinding } from './messages';
 import { Navigable, onScreen, spaceMouse } from './spacemouse';
 import {
@@ -512,17 +512,14 @@ export class CaeResult implements CaeResultView {
             // A fresh one each time: 'clearModel()' disposed of whatever the
             // previous run put here, listeners included.
             this.imageView = new ImageView(this.model);
-            this.imageView.show(
-                `data:${IMAGE_TYPES[extension]};base64,${data.content}`,
-                `${this.label} result for ${data.object}`,
-            );
+            this.imageView.show(data.content, IMAGE_TYPES[extension], `${this.label} result for ${data.object}`);
             return;
         }
 
         if (MESH_TYPES.has(extension)) {
             const view = new MeshView(this.model);
             this.meshView = view;
-            void view.show(decodeBase64(data.content), extension).catch((error: unknown) => {
+            void view.show(data.content, extension).catch((error: unknown) => {
                 if (shown !== this.shown) {
                     // A later run already replaced this band. Reporting now
                     // would wipe its result and blame it for an older failure.

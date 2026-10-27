@@ -10,10 +10,12 @@
 // no DOM, so it is given the handful of things 'dom.ts' and the pane ask of an
 // element. The pictures are not decoded here; what is pinned is that the first
 // simulation is the one selected, that each is run once for an object however
-// often it is looked at, and that "before" is always on the left.
+// often it is looked at, and that "before" is always on the left -- named by a
+// Blob URL of the bytes the host posted, which Node resolves as a browser would.
 //
 
 import * as assert from 'assert';
+import { resolveObjectURL } from 'buffer';
 
 import { SimulationListData, SimulationRunData, groupOf } from '../../webview/messages';
 import { SimulationView, pluginChoices, prettyJson } from '../../webview/simulation';
@@ -105,6 +107,17 @@ const LIST: SimulationListData = {
 const BEFORE = { time: 0, bodies: { top: { pos: [18, 0, 30] } } };
 const AFTER = { time: 10, bodies: { top: { pos: [29.7, 0, 9.8] } } };
 
+function bytes(text: string): Uint8Array {
+    return new TextEncoder().encode(text);
+}
+
+/** What a Blob URL the pane made names: its media type and its bytes, as text. */
+async function blobAt(url: string): Promise<{ type: string; text: string }> {
+    const blob = resolveObjectURL(url);
+    assert.ok(blob, `${url} names nothing`);
+    return { type: blob.type, text: await blob.text() };
+}
+
 function ran(name: string, passed: boolean | null, images = true, error?: string): SimulationRunData {
     return {
         total: 1,
@@ -119,8 +132,8 @@ function ran(name: string, passed: boolean | null, images = true, error?: string
                 result: error ? {} : { before: BEFORE, after: AFTER },
                 images: images
                     ? {
-                          before: { filename: 'snapshot-before.png', extension: 'png', content: 'QkVGT1JF' },
-                          after: { filename: 'snapshot-after.png', extension: 'png', content: 'QUZURVI=' },
+                          before: { filename: 'snapshot-before.png', extension: 'png', content: bytes('BEFORE') },
+                          after: { filename: 'snapshot-after.png', extension: 'png', content: bytes('AFTER') },
                       }
                     : undefined,
             },
@@ -220,7 +233,7 @@ suite('Digital Thread Simulation tab', () => {
         assert.deepStrictEqual(runs, ['falls', 'falls_in_gazebo']);
     });
 
-    test('shows the scene before on the left and after on the right, with an arrow between', () => {
+    test('shows the scene before on the left and after on the right, with an arrow between', async () => {
         const { root, view } = pane();
         view.setScenarios(LIST);
         view.start();
@@ -233,8 +246,8 @@ suite('Digital Thread Simulation tab', () => {
             ['simulation-figure', 'simulation-arrow', 'simulation-figure'],
         );
         const [before, after] = root.find('simulation-image');
-        assert.strictEqual(before.src, 'data:image/png;base64,QkVGT1JF');
-        assert.strictEqual(after.src, 'data:image/png;base64,QUZURVI=');
+        assert.deepStrictEqual(await blobAt(before.src), { type: 'image/png', text: 'BEFORE' });
+        assert.deepStrictEqual(await blobAt(after.src), { type: 'image/png', text: 'AFTER' });
         assert.deepStrictEqual(
             row.children.filter((child) => child.tagName === 'figure').map((figure) => figure.children[1].textContent),
             ['Before', 'After'],

@@ -659,8 +659,15 @@ export interface BomData {
     total: number;
 }
 
-/** A picture of a generated document, carried inline (see 'document.to_data'). */
+/**
+ * A picture of a generated document, carried inline (see 'document.to_data').
+ *
+ * Its bytes and media type, which the extension asks for ('image_bytes'), or a
+ * data URI in 'src' from a daemon that predates them.
+ */
 export interface DocumentImage {
+    content?: Uint8Array | null;
+    type?: string | null;
     src?: string | null;
     alt?: string | null;
     caption?: string | null;
@@ -702,8 +709,8 @@ export interface GuideData {
     document: DocumentData;
     pages?: Record<string, number>;
     plan?: PlanItem;
-    /** The document written in the format asked for, for Save. */
-    file?: { filename: string; extension: string; content?: string };
+    /** The document written in the format asked for, for Save; its bytes stay with the host. */
+    file?: { filename: string; extension: string };
     /**
      * Whether the assembly is meant to be made ('manufacturable:', on it or its
      * package). The tab asks for the instructions regardless, and says so.
@@ -769,9 +776,10 @@ export interface CaeFinding {
  * 'thermal' or 'cfd' - as an entry of what 'cae.analyze' returns. The shape is
  * the same whichever ran.
  *
- * 'content' is the model file itself, base64-encoded, because the panel is a
- * webview with no file system in reach: a path it cannot open is a model it
- * cannot draw. 'extension' is what decides how it is drawn - a 3D field is
+ * 'content' is the model file itself, as bytes, because the panel is a webview
+ * with no file system in reach: a path it cannot open is a model it cannot
+ * draw. (Bytes whatever the daemon sent: the host makes base64 bytes before
+ * posting it -- see 'viewer/payloads.ts'.) 'extension' is what decides how it is drawn - a 3D field is
  * turned and zoomed, a 2D plot is panned and zoomed - and it is the
  * implementation's choice, not PartCAD's.
  *
@@ -794,7 +802,7 @@ export interface CaeData {
     /** Where the model was written on the machine running the daemon; null when nothing was. */
     filepath?: string | null;
     extension?: string | null;
-    content?: string | null;
+    content?: Uint8Array | null;
     /** Empty when the analysis found nothing to report, which is a pass. */
     findings: CaeFinding[];
     /** Why this scenario produced nothing, or null when it ran. */
@@ -865,16 +873,16 @@ export interface RenderFormat {
 /**
  * One object rendered to one file, as 'render.inline' returns it.
  *
- * The file itself, base64-encoded, because the panel has no file system in
- * reach - and the daemon may be on another machine, where a path would name
- * nothing the user has. 'extension' is what decides how it is shown.
+ * The file itself, as bytes, because the panel has no file system in reach -
+ * and the daemon may be on another machine, where a path would name nothing
+ * the user has. 'extension' is what decides how it is shown.
  */
 export interface RenderData {
     object: string;
     format: string;
     filename: string;
     extension: string;
-    content: string;
+    content: Uint8Array;
 }
 
 /** What the user chose for each line that can be both built and bought, by its full name. */
@@ -946,8 +954,8 @@ export interface BvbData {
 export interface ItemDetails {
     name: string;
     kind?: string;
-    /** Base64 SVG, already sized by the daemon. */
-    thumbnail?: string | null;
+    /** The SVG's bytes, already sized by the daemon. */
+    thumbnail?: Uint8Array | null;
     /** The bounding box's size, in millimetres. */
     size?: [number, number, number] | null;
     volume?: number | null;
@@ -1056,8 +1064,7 @@ export interface SimulationListData {
 export interface SimulationImage {
     filename: string;
     extension: string;
-    /** Base64. */
-    content: string;
+    content: Uint8Array;
 }
 
 /**

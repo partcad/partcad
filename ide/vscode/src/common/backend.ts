@@ -25,13 +25,9 @@ import * as net from 'net';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Disposable } from 'vscode';
-import {
-    createMessageConnection,
-    MessageConnection,
-    StreamMessageReader,
-    StreamMessageWriter,
-} from 'vscode-jsonrpc/node';
+import { createMessageConnection, MessageConnection } from 'vscode-jsonrpc/node';
 
+import { AttachmentMessageReader, AttachmentMessageWriter } from './framing';
 import { traceError, traceInfo } from './log/logging';
 import { identity, INSTANTIATE_METHOD, pendingSubassemblies, requestParams } from './staging';
 import { cliBeside, ensureServiceExecutable, locateCommand, resolveServicePath, ServiceResolution } from './provision';
@@ -509,6 +505,11 @@ class JsonRpcBackend implements PartcadBackend {
                 // When given, the document comes back written in it as well, for
                 // Save: the daemon may be on another machine.
                 format: a.format,
+                // Each picture as its bytes, not as a data URI: the panel makes a
+                // Blob URL of them. A daemon from before this sends data URIs,
+                // which the panel shows as it always did.
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                image_bytes: true,
             }),
         );
         // The Manufacturing tabs. The tree is what an object is made of and what
@@ -533,6 +534,9 @@ class JsonRpcBackend implements PartcadBackend {
                 document: a.document,
                 // eslint-disable-next-line @typescript-eslint/naming-convention
                 ignore_manufacturability: a.ignoreManufacturability,
+                // As for 'assembly.guide' above.
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                image_bytes: true,
             }),
         );
         // The Requirements tab: what the object is required to be, and with
@@ -904,7 +908,12 @@ async function connectSocket(
     const socketPath = await daemonEndpoint(cliPath, args, cwd, env, outputChannel);
     traceInfo(`PartCAD service: connecting to daemon at ${socketPath}`);
     const socket = await connectEndpoint(socketPath);
-    const connection = createMessageConnection(new StreamMessageReader(socket), new StreamMessageWriter(socket));
+    // vscode-jsonrpc's framing, with the files a message carries read as bytes
+    // rather than as base64 (see 'framing.ts').
+    const connection = createMessageConnection(
+        new AttachmentMessageReader(socket),
+        new AttachmentMessageWriter(socket),
+    );
     return new JsonRpcBackend(
         connection,
         () => {
@@ -983,8 +992,8 @@ function connectStdio(
         traceInfo(`PartCAD service exited (code=${code}, signal=${signal})`);
     });
     const connection = createMessageConnection(
-        new StreamMessageReader(proc.stdout),
-        new StreamMessageWriter(proc.stdin),
+        new AttachmentMessageReader(proc.stdout),
+        new AttachmentMessageWriter(proc.stdin),
     );
     return new JsonRpcBackend(
         connection,

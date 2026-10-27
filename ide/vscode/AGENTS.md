@@ -94,6 +94,18 @@ Three things about it are load-bearing:
   is set (the renderer already prints them, in colour), and what remains -- the no-backend reports below --
   happens only when there is no renderer running.
 
+**A file the daemon hands back arrives as bytes, not as base64.** The connection is vscode-jsonrpc's, but its
+reader and writer are `src/common/framing.ts`: the writer says `Accept-Attachments: 1` in the header of every
+message, and the reader takes the raw segments a daemon then writes after a message's body and puts each where
+the body names it (`{"$attachment": i}`), as a `Uint8Array`. `partcad_utils/framing.py` is the normative
+description and this is its one TypeScript copy; a frame pinned byte for byte in both suites keeps them in step.
+Base64 cost more than size: decoding a forty-megabyte render held this event loop -- and every webview of the
+window -- for a quarter of a second or more. The reader keeps what arrives as a list of chunks and copies each
+segment once, as its chunks come in; joining every chunk onto the last is the bug to avoid. A daemon from
+before attachments never looks at the header and goes on sending base64 under the same keys, so a field that
+carries a file is read with `bytesOf`, which takes both and never returns a Node `Buffer` (a `Buffer` posted
+to a webview is turned into an array of numbers by its `toJSON`).
+
 **A backend that never starts reports itself in the `PartCAD` terminal view**, not only in the output channel.
 Everything else in that view arrives over the backend's own `?/partcad/terminal` and `?/partcad/log`
 notifications, which is precisely what a missing backend cannot send, so `terminal.ts` carries a
@@ -317,6 +329,14 @@ Four things about it are load-bearing:
 - **The panel's CSP forbids network access.** Geometry arrives over `postMessage` and is parsed from memory;
   three.js is bundled rather than loaded from a CDN. Do not add an asset that is fetched at runtime — that is
   what rules out drei's `environment` presets, and why the renderer uses `RoomEnvironment`.
+- **A file a tab shows is posted as a `Uint8Array` and shown through a Blob URL.** `src/viewer/payloads.ts`
+  makes every file in a tab's answer bytes before it is posted -- a render, a model, a run's pictures, the Build
+  vs Buy thumbnails, a document's pictures (asked for with `image_bytes`) -- whether the daemon sent them as
+  attachments or as base64, so the panel has one way to show each and no `atob` loop. `postMessage` hands a
+  typed array over as it is. The CSP allows `blob:` for images, and a Blob URL holds its bytes until it is
+  revoked, in a panel kept alive while hidden: so `src/webview/blobs.ts`'s `ObjectUrls` is owned by the view
+  that shows the pictures and revoked when what it showed goes. A document from a daemon too old to send bytes
+  still carries data URIs in `src`, which are shown as they were.
 - **The wire format is shared with Python.** `src/viewer/protocol.ts` mirrors
   `src/partcad_ide_client/protocol.py`, which is the normative description. Changing one
   means changing both. `src/test/suite/viewerProtocol.test.ts` covers this side.

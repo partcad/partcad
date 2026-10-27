@@ -146,7 +146,13 @@ function saveButton(root: FakeElement): FakeElement {
 }
 
 function rendered(extension: string): RenderData {
-    return { object: '//pkg:cube', format: extension, filename: `cube.${extension}`, extension, content: 'AAAA' };
+    return {
+        object: '//pkg:cube',
+        format: extension,
+        filename: `cube.${extension}`,
+        extension,
+        content: new Uint8Array(3),
+    };
 }
 
 suite('The 2D and Draft tabs', () => {

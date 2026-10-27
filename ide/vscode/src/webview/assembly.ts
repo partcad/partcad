@@ -135,6 +135,7 @@ export class AssemblyView {
     }
 
     private clear(): void {
+        this.document?.dispose();
         this.document = undefined;
         empty(this.body);
         this.body.className = 'assembly-body';
