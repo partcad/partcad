@@ -176,8 +176,8 @@ def downcast(obj):
 # The three object shapes are told apart by which of these keys is present.
 KEY_BREP = "brep"
 KEY_ASSEMBLY = "assembly"
-# The other form a node's geometry can take: deflate-compressed base64 binary
-# glTF, written by 'wrapper_gltf.py'. The core's copy of this key, and the reason
+# The other form a node's geometry can take: binary glTF, as the bytes
+# 'encode_gltf()' leaves it, written by 'wrapper_gltf.py'. The core's copy of this key, and the reason
 # there are two forms at all, is 'partcad.shape_envelope'.
 KEY_GLTF = "gltf"
 # On the root of a converted tree: every distinct piece of tessellated geometry in
@@ -288,18 +288,21 @@ def _decompress(data: bytes) -> bytes:
     return _zstd_decompress(data)
 
 
-def encode_gltf(glb: bytes) -> str:
-    """Compress and base64 a binary glTF buffer for the IDE viewer protocol.
+def encode_gltf(glb: bytes) -> bytes:
+    """The payload a binary glTF buffer travels to the IDE viewer as: the buffer itself.
 
-    Deliberately zlib and not the zstd the BREP payloads above use: this payload
-    is not read by another Python process but by the PartCAD IDE extension, and
-    zlib is in the standard library of both Python and Node whereas zstd is not.
+    Not compressed, unlike the BREP payloads above. It is on its way to the PartCAD
+    IDE extension over a loopback socket, where zlib - which this used to be, at
+    level 6 - cost two seconds of this process for a 25 MB assembly to take a third
+    off a copy that costs milliseconds, and the extension then had to inflate it
+    again. Bytes rather than text, so that this pipe carries it as bytes (see
+    'encode()') and the viewer protocol as a blob; it is that protocol which decides
+    how an IDE from before binary frames is sent it.
+
     The mirror of this function - the only other implementation - is
     'partcad_ide_client.protocol.encode_gltf'; the two have to stay in step.
     """
-    import zlib
-
-    return base64.b64encode(zlib.compress(bytes(glb), 6)).decode("ascii")
+    return bytes(glb)
 
 
 def shape_to_brep(shape) -> bytes:

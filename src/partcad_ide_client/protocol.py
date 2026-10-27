@@ -11,18 +11,56 @@ The port is a constant rather than a negotiated one so that a 'partcad' process
 started outside the IDE - a CLI run, a notebook, a test - can find a running
 viewer without any discovery handshake.
 
-A frame is a fixed 10-byte header followed by a UTF-8 JSON payload:
+A frame is a fixed 10-byte header followed by its payload:
 
     offset  size  field
     0       4     magic, always b"PCAD"
     4       1     protocol version, currently 1
-    5       1     payload kind, currently only KIND_JSON
+    5       1     payload kind: KIND_JSON or KIND_BINARY
     6       4     payload length, big-endian uint32
     10      n     payload
 
 The magic and the explicit length let the reader on either side resynchronize
 instead of guessing, and keep a frame from being confused with the LSP traffic
 that also flows between these two processes.
+
+A KIND_JSON payload is the message as UTF-8 JSON. A KIND_BINARY payload is the
+message and the glTF it carries side by side, rather than one inside the other:
+
+    size  field
+    4     length J of the message, big-endian uint32
+    J     the message, as UTF-8 JSON
+    4     count N of blobs, big-endian uint32
+          then N times:
+    4       length L of the blob, big-endian uint32
+    L       the blob: one binary glTF, as it is
+
+In the message of a binary frame a glTF payload - a node's "gltf", an entry of a
+"geometry" table - is an integer: the index of its blob. Nothing else is read as
+one, and only nodes are looked in (the object, what is in its "assembly" and its
+"sketches"), so nothing a package says about itself - its metadata, its
+properties - can be mistaken for a blob. A JSON frame carries the same payloads
+as text instead (see "Payloads" below).
+
+**Which kinds an IDE reads is negotiated, per connection.** The extension and
+this package are released independently, and an IDE from before KIND_BINARY drops
+the connection at the first header it does not know. So every acknowledgement an
+IDE sends says what it accepts (KEY_CAPABILITIES), and a client sends a binary
+frame only over a connection whose IDE has said it reads them; an IDE that says
+nothing is sent JSON frames, exactly as before. A connection is to one IDE window
+and a reconnection may be to another (two windows share the port), so what was
+learnt goes with the connection.
+
+**An IDE that accepts CAP_OFFER is asked before it is sent geometry.** A show is
+mostly its geometry, and most of that is what the IDE was shown a moment ago: an
+edit re-renders one part of an assembly, a cross-section leaves the parts it
+misses as they were, a reader goes back to the object before. So the client
+offers the digests of the show's geometry table first (MSG_OFFER), the IDE
+answers which it lacks, those follow (MSG_GEOMETRY, in as many frames as they
+need), and then the show itself, with None for every entry of its table - "the
+one you hold". An IDE that no longer holds one by then answers the show with
+what is missing instead of showing it, and is sent that and the show again;
+after a second such answer the show is sent whole.
 
 What a "show" carries is one **object**, as the tree of nodes PartCAD carries
 every shape as (see 'partcad.shape_envelope'). There is no per-kind payload and
@@ -66,15 +104,35 @@ that declares it, and moves with the node that holds it.
 Geometry travels as glTF, never as BREP. The core used to hand live OCP objects
 to 'ocp_vscode', which meant the receiving side needed a full CAD stack to
 tessellate them; a browser cannot do that, so the sandbox tessellates first and
-what crosses the socket is a binary glTF (GLB) buffer, deflate-compressed and
-base64-encoded (see 'encode_gltf'/'decode_gltf'). Note that this is zlib and
-not the zstd the BREP envelopes in 'partcad.shape_envelope' use: both ends of
-*this* pipe have to decompress it, and zlib is in the standard library of both
-Python and Node, whereas zstd is not (Node gained it only in 23.8).
+what crosses the socket is a binary glTF (GLB) buffer.
 
 One glTF per node rather than one for the whole object, because a node is what a
 reader of the tree switches on and off, and what it switches off has to be its
 own buffer to be hideable.
+
+Payloads
+--------
+
+A glTF payload is the GLB itself, as bytes, from the sandbox that wrote it to
+the socket ('encode_gltf'): this pipe is loopback, where compressing costs more
+than it saves - zlib at its default level took two seconds for a 25 MB assembly,
+to take a third off a copy that then costs milliseconds - and the IDE only has
+to undo it. In a binary frame it is a blob.
+
+A JSON frame cannot hold bytes, and the IDE it goes to may be one from before
+KIND_BINARY, which reads a payload as base64 of a zlib stream and nothing else.
+So that is what a JSON frame carries: zlib at level 0 - a stored stream, which
+every inflater reads and which costs a copy rather than a compression - unless
+the frame would then be over MAX_FRAME_LENGTH, when it is compressed for real.
+Readers on both sides take both spellings, and the old one at any level
+('decode_gltf' sniffs the zlib header), because a PartCAD from before this
+change writes it, and so may whatever it cached.
+
+Remote-SSH changes none of that: the extension host runs where the workspace
+is, beside PartCAD, and this socket is loopback there too. What crosses the
+network is the extension host's message to its webview, which VS Code carries;
+compressing that would be a DecompressionStream in the webview, should it ever
+be worth it.
 """
 
 import base64
@@ -85,6 +143,18 @@ import zlib
 MAGIC = b"PCAD"
 VERSION = 1
 KIND_JSON = 1
+# The message and its glTF side by side; see the layout above. Sent only to an
+# IDE that has said it reads it (CAP_BINARY).
+KIND_BINARY = 2
+KINDS = (KIND_JSON, KIND_BINARY)
+
+# The lengths inside a binary payload: the message's, the count of blobs, and
+# each blob's.
+_LENGTH = struct.Struct(">I")
+
+# The glTF binary container's magic, which is how a payload is told from a
+# zlib stream of one.
+GLB_MAGIC = b"glTF"
 
 HEADER_FORMAT = ">4sBBI"
 HEADER_LENGTH = struct.calcsize(HEADER_FORMAT)
@@ -105,6 +175,33 @@ MSG_SHOW = "show"
 MSG_CLEAR = "clear"
 MSG_PING = "ping"
 MSG_ACK = "ack"
+# On every acknowledgement from an IDE that has any: what it accepts, as a list
+# of the CAP_ names below. An acknowledgement without it is from an IDE that
+# accepts JSON frames and nothing else, which is every IDE from before it.
+KEY_CAPABILITIES = "capabilities"
+# Reads KIND_BINARY frames.
+CAP_BINARY = "binary"
+# Answers MSG_OFFER, takes MSG_GEOMETRY, and resolves a show whose geometry
+# table names entries as None. Sent only beside CAP_BINARY: the geometry that
+# follows an offer goes as blobs.
+CAP_OFFER = "offer"
+# Before a show, to an IDE that accepts CAP_OFFER: these are the digests of the
+# geometry the show will name ({"type", "id", "digests": [digest, ...]}). The IDE
+# answers which of them it does not hold, under KEY_MISSING, and the client sends
+# those, and only those, before the show. An IDE from before it acknowledges it
+# like any message it does not understand, with no capabilities - which is how a
+# client asking it first, over a connection it knows nothing about yet, finds
+# out what it is talking to.
+MSG_OFFER = "offer"
+KEY_DIGESTS = "digests"
+# The digests an IDE lacks: in its answer to MSG_OFFER, and in its answer to a
+# show naming an entry it no longer holds, which it then has not shown.
+KEY_MISSING = "missing"
+# Geometry the IDE said it lacks, ahead of the show that names it:
+# {"type", "id", "geometry": {digest: payload}}, in a binary frame. Held by the
+# IDE for the connection it came over until a show there names it, which is
+# what keeps it from being let go of in between.
+MSG_GEOMETRY = "geometry"
 # A question rather than a display: what the IDE is showing, for 'pc ide state'.
 #
 # Answered in the acknowledgement every message gets, under KEY_STATE. An IDE
@@ -141,7 +238,7 @@ MSG_STATE = "state"
 KEY_STATE = "state"
 
 # The keys of a node. 'gltf' is to this protocol what 'brep' is to the shape
-# envelope: the compressed geometry payload of one node.
+# envelope: the geometry payload of one node (see "Payloads" above).
 KEY_GLTF = "gltf"
 KEY_NAME = "name"
 # The two names answer different questions and a reader needs both.
@@ -249,16 +346,52 @@ class ProtocolError(Exception):
     """A frame that could not be parsed, or a payload that is not a message."""
 
 
-def encode_gltf(glb: bytes) -> str:
-    """Compress and base64 a binary glTF buffer for transport."""
-    if not isinstance(glb, (bytes, bytearray)):
+class FrameTooLarge(ProtocolError):
+    """A message that does not fit in one frame (MAX_FRAME_LENGTH), found before any of it is written."""
+
+
+def encode_gltf(glb: bytes) -> bytes:
+    """The payload a binary glTF buffer travels as: the buffer itself, as bytes.
+
+    Not compressed, and not text: see "Payloads" in this module's description for
+    why, and 'frame_parts' for what a frame of either kind makes of it. The other
+    implementation - the one that wrote what PartCAD sends - is
+    'partcad.wrappers.ocp_serialize.encode_gltf' in the sandbox, which cannot import
+    this package; the two have to stay in step.
+    """
+    if not isinstance(glb, (bytes, bytearray, memoryview)):
         raise TypeError("glTF payload must be bytes, got %s" % type(glb))
-    return base64.b64encode(zlib.compress(bytes(glb), 6)).decode("ascii")
+    return bytes(glb)
 
 
-def decode_gltf(payload: str) -> bytes:
-    """Inverse of 'encode_gltf()'. Only used by tests and by Python-side tooling."""
-    return zlib.decompress(base64.b64decode(payload))
+def decode_gltf(payload) -> bytes:
+    """The binary glTF 'payload' carries, whichever of its spellings it is in.
+
+    Bytes, as 'encode_gltf' writes them; or text, as a JSON frame carries them and
+    as every PartCAD before KIND_BINARY wrote them everywhere - base64 of a zlib
+    stream, at whatever level. Either may hold a zlib stream (a cached tessellation
+    from such a release does), so the header is sniffed rather than the spelling
+    trusted: a GLB begins with "glTF", which no zlib header can.
+    """
+    if isinstance(payload, str):
+        data = base64.b64decode(payload)
+    elif isinstance(payload, (bytes, bytearray, memoryview)):
+        data = bytes(payload)
+    else:
+        raise TypeError("not a glTF payload: %s" % type(payload))
+    if is_zlib(data):
+        return zlib.decompress(data)
+    return data
+
+
+def is_zlib(data) -> bool:
+    """Whether 'data' begins with a zlib header (RFC 1950).
+
+    Deflate in the low nibble of the first byte, a window of at most 32 KiB in its
+    high one, and the first two bytes a multiple of 31 together. A GLB's "g" has 7
+    in its low nibble, so a glTF buffer is never mistaken for one.
+    """
+    return len(data) >= 2 and data[0] & 0x0F == 8 and data[0] >> 4 <= 7 and ((data[0] << 8) | data[1]) % 31 == 0
 
 
 def is_node(obj) -> bool:
@@ -281,16 +414,122 @@ def make_node(glb: bytes = None, name=None, label=None, children=None) -> dict:
     return node
 
 
-def encode_frame(message: dict) -> bytes:
-    """Serialize a message into a single frame."""
-    payload = json.dumps(message).encode("utf-8")
-    if len(payload) > MAX_FRAME_LENGTH:
-        raise ProtocolError("message of %d bytes exceeds the %d byte frame limit" % (len(payload), MAX_FRAME_LENGTH))
-    return struct.pack(HEADER_FORMAT, MAGIC, VERSION, KIND_JSON, len(payload)) + payload
+def is_payload(value) -> bool:
+    """Whether 'value' is a glTF payload in either spelling (see 'decode_gltf')."""
+    return isinstance(value, (bytes, bytearray, memoryview, str))
 
 
-def decode_header(header: bytes) -> int:
-    """Validate a frame header and return the payload length that follows it."""
+def map_payloads(message: dict, convert) -> dict:
+    """'message' with every glTF payload in it replaced by 'convert(payload)'.
+
+    Looked for where a payload can be and nowhere else: a node's KEY_GLTF and the
+    entries of a KEY_GEOMETRY table, on the nodes of the object (KEY_OBJECT, and
+    every node in a KEY_ASSEMBLY or a KEY_SKETCHES under it) and on the message
+    itself, which is where MSG_GEOMETRY carries its table. None - an entry the IDE
+    holds - stays None. Copies what it changes and shares the rest, so the tree
+    the caller passed, which is the one PartCAD keeps, is never written to.
+    """
+
+    def node(value):
+        if not isinstance(value, dict):
+            return value
+        mapped = dict(value)
+        if mapped.get(KEY_GLTF) is not None:
+            mapped[KEY_GLTF] = convert(mapped[KEY_GLTF])
+        table = mapped.get(KEY_GEOMETRY)
+        if isinstance(table, dict):
+            mapped[KEY_GEOMETRY] = {
+                digest: None if payload is None else convert(payload) for digest, payload in table.items()
+            }
+        children = mapped.get(KEY_ASSEMBLY)
+        if isinstance(children, list):
+            mapped[KEY_ASSEMBLY] = [node(child) for child in children]
+        sketches = mapped.get(KEY_SKETCHES)
+        if isinstance(sketches, dict):
+            mapped[KEY_SKETCHES] = {reference: node(sketch) for reference, sketch in sketches.items()}
+        return mapped
+
+    mapped = node(message)
+    if isinstance(message.get(KEY_OBJECT), dict):
+        mapped[KEY_OBJECT] = node(message[KEY_OBJECT])
+    return mapped
+
+
+def _legacy_payload(payload, level: int) -> str:
+    """'payload' as a JSON frame carries it: base64 of a zlib stream (see "Payloads")."""
+    if isinstance(payload, str):
+        # Already in that spelling: written by a PartCAD before this one, or
+        # cached by it.
+        return payload
+    return base64.b64encode(zlib.compress(bytes(payload), level)).decode("ascii")
+
+
+def frame_parts(message: dict, binary: bool = False) -> list:
+    """'message' as the buffers its frame is made of, in order; 'encode_frame' joins them.
+
+    'binary' writes a KIND_BINARY frame, every glTF payload a blob, and is only for
+    an IDE that has said it reads one (CAP_BINARY); otherwise the frame is
+    KIND_JSON, which every IDE reads, with each payload spelled as an IDE from
+    before KIND_BINARY reads it.
+
+    The parts rather than the frame because a binary frame is nearly all blobs, and
+    joining them would copy all of it once more just to write it out: the client
+    writes the parts one after another instead.
+    """
+    if binary:
+        blobs = []
+        # By identity: a payload named twice - one buffer on two nodes - is one
+        # blob. Every payload looked up is held by 'blobs', so no id is reused.
+        indices = {}
+
+        def blob(payload):
+            if isinstance(payload, str):
+                payload = decode_gltf(payload)
+            elif not isinstance(payload, (bytes, bytearray)):
+                payload = bytes(payload)
+            index = indices.get(id(payload))
+            if index is None:
+                index = indices[id(payload)] = len(blobs)
+                blobs.append(payload)
+            return index
+
+        text = json.dumps(map_payloads(message, blob)).encode("utf-8")
+        parts = [b"", _LENGTH.pack(len(text)), text, _LENGTH.pack(len(blobs))]
+        for payload in blobs:
+            parts.append(_LENGTH.pack(len(payload)))
+            parts.append(payload)
+        kind = KIND_BINARY
+    else:
+        carried = []
+
+        def legacy(level):
+            def spell(payload):
+                carried.append(payload)
+                return _legacy_payload(payload, level)
+
+            return json.dumps(map_payloads(message, spell)).encode("utf-8")
+
+        text = legacy(0)
+        if len(text) > MAX_FRAME_LENGTH and any(not isinstance(payload, str) for payload in carried):
+            # Stored, it does not fit; compressed, it may - which is what every
+            # payload was before KIND_BINARY, so nothing that fitted then fails now.
+            text = legacy(6)
+        parts = [b"", text]
+        kind = KIND_JSON
+    length = sum(len(part) for part in parts)
+    if length > MAX_FRAME_LENGTH:
+        raise FrameTooLarge("message of %d bytes exceeds the %d byte frame limit" % (length, MAX_FRAME_LENGTH))
+    parts[0] = struct.pack(HEADER_FORMAT, MAGIC, VERSION, kind, length)
+    return parts
+
+
+def encode_frame(message: dict, binary: bool = False) -> bytes:
+    """Serialize a message into a single frame (see 'frame_parts')."""
+    return b"".join(frame_parts(message, binary))
+
+
+def read_header(header: bytes) -> tuple:
+    """Validate a frame header and return the kind and the length of the payload that follows it."""
     if len(header) != HEADER_LENGTH:
         raise ProtocolError("frame header must be %d bytes, got %d" % (HEADER_LENGTH, len(header)))
     magic, version, kind, length = struct.unpack(HEADER_FORMAT, header)
@@ -298,17 +537,65 @@ def decode_header(header: bytes) -> int:
         raise ProtocolError("bad frame magic %r" % (magic,))
     if version != VERSION:
         raise ProtocolError("unsupported protocol version %d (this client speaks %d)" % (version, VERSION))
-    if kind != KIND_JSON:
+    if kind not in KINDS:
         raise ProtocolError("unsupported payload kind %d" % kind)
     if length > MAX_FRAME_LENGTH:
         raise ProtocolError("frame of %d bytes exceeds the %d byte limit" % (length, MAX_FRAME_LENGTH))
-    return length
+    return kind, length
 
 
-def decode_payload(payload: bytes) -> dict:
-    """Parse a frame payload into a message."""
+def decode_header(header: bytes) -> int:
+    """Validate a frame header and return the payload length that follows it (see 'read_header')."""
+    return read_header(header)[1]
+
+
+def decode_payload(payload: bytes, kind: int = KIND_JSON) -> dict:
+    """Parse a frame payload of 'kind' into a message.
+
+    A binary payload's blobs are put back where the message names them, as bytes,
+    so what comes back is the message 'frame_parts' was handed, in either kind -
+    with every payload as bytes rather than in the spelling it was sent in.
+    """
+    if kind != KIND_BINARY:
+        return _decode_json(payload)
+    view = memoryview(payload)
+
+    def length_at(offset):
+        if offset + _LENGTH.size > len(view):
+            raise ProtocolError("binary frame payload ends inside a length, at byte %d of %d" % (offset, len(view)))
+        return _LENGTH.unpack_from(view, offset)[0]
+
+    offset = _LENGTH.size + length_at(0)
+    if offset > len(view):
+        raise ProtocolError("binary frame payload ends inside its message")
+    message = _decode_json(bytes(view[_LENGTH.size : offset]))
+    count = length_at(offset)
+    offset += _LENGTH.size
+    blobs = []
+    for _ in range(count):
+        size = length_at(offset)
+        offset += _LENGTH.size
+        if offset + size > len(view):
+            raise ProtocolError("binary frame payload ends inside blob %d" % len(blobs))
+        blobs.append(bytes(view[offset : offset + size]))
+        offset += size
+    if offset != len(view):
+        raise ProtocolError("binary frame payload has %d bytes after its last blob" % (len(view) - offset))
+
+    def resolve(payload):
+        # 'type() is int' rather than isinstance: JSON's true is not blob 1.
+        if type(payload) is not int:
+            return payload
+        if not 0 <= payload < len(blobs):
+            raise ProtocolError("a payload names blob %d of %d" % (payload, len(blobs)))
+        return blobs[payload]
+
+    return map_payloads(message, resolve)
+
+
+def _decode_json(payload: bytes) -> dict:
     try:
-        message = json.loads(payload.decode("utf-8"))
+        message = json.loads(bytes(payload).decode("utf-8"))
     except (UnicodeDecodeError, ValueError) as e:
         raise ProtocolError("frame payload is not valid JSON: %s" % e) from e
     if not isinstance(message, dict):

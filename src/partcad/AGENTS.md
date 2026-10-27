@@ -1562,7 +1562,9 @@ Two properties of the package are deliberate and easy to break:
 The glTF payload codec (`encode_gltf`/`decode_gltf`) has two other implementations that have to agree with it:
 `ocp_serialize.encode_gltf` in the sandbox, and `decodeGltf` in the extension. Neither can import this package,
 which is why each carries its own copy; `tests/partcad/unit/test_viewer.py` and the extension's
-`viewerProtocol.test.ts` are what catch a drift.
+`viewerProtocol.test.ts` are what catch a drift. The payload is the GLB itself, as bytes, all the way from the
+sandbox (where the wrapper pipe carries it as bytes) to the extension host; how it is written onto the socket is
+negotiated with the IDE, which is released apart (see `src/partcad_ide_client/AGENTS.md`).
 
 Its own tests live in `tests/partcad_ide_client`.
 

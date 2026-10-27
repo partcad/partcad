@@ -238,8 +238,9 @@ Digital Thread
 
 The ``Digital Thread`` is a tab the extension opens when a part, assembly,
 scene, sketch or interface is inspected. PartCAD tessellates the shape in a
-sandboxed runtime, and sends the result to the extension as compressed glTF over
-a socket on ``127.0.0.1:9137``. The Python side of that connection is the
+sandboxed runtime, and sends the result to the extension as binary glTF over a
+socket on ``127.0.0.1:9137`` -- only the shapes that window has not been sent
+before. The Python side of that connection is the
 ``partcad_ide_client`` package, which ships inside ``partcad`` itself -- so
 ``pip install partcad`` is all that is needed, and there is nothing separate to
 install.

@@ -259,10 +259,34 @@ def test_encode_gltf_matches_the_client_side_codec():
     glb = b"glTF\x02\x00\x00\x00" + os.urandom(64) + b"\x00" * 4096
 
     encoded = ocp_serialize.encode_gltf(glb)
-    assert zlib.decompress(base64.b64decode(encoded)) == glb
+    # The GLB itself, as bytes: the viewer protocol decides how it is written out.
+    assert encoded == glb and type(encoded) is bytes
 
     assert partcad_ide_client.decode_gltf(encoded) == glb
     assert partcad_ide_client.encode_gltf(glb) == encoded
+    # And what the sandbox wrote before - which a cached tessellation may hold - is read too.
+    assert partcad_ide_client.decode_gltf(base64.b64encode(zlib.compress(glb, 6)).decode("ascii")) == glb
+
+
+def test_a_tessellation_crosses_the_wrapper_pipe_as_bytes():
+    """'wrapper_gltf' answers with the GLB as bytes, and the core reads it back as bytes, not text.
+
+    Which is what lets the viewer protocol send it as a blob without decoding
+    anything: a payload the pipe turned into text would have to be turned back.
+    """
+    from partcad import shape_envelope
+
+    glb = b"glTF\x02\x00\x00\x00" + os.urandom(256)
+    part = {"name": "//pkg:part", "gltfRef": "d", "geometry": {"d": glb}}
+    # On an assembly's root too, which the core reads as a node rather than as a
+    # plain dict: a table left as text there is what a show of any assembly
+    # would have sent.
+    assembly = {"name": "//pkg:assy", "assembly": [{"name": "//pkg:part", "gltfRef": "d"}], "geometry": {"d": glb}}
+
+    for tree in (part, assembly):
+        answer = {"success": True, "tree": tree}
+        decoded = shape_envelope.deserialize(ocp_serialize.serialize(answer, share=True))
+        assert decoded["tree"]["geometry"] == {"d": glb}
 
 
 def test_a_missing_client_package_is_not_an_import_error(monkeypatch):
