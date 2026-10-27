@@ -630,6 +630,59 @@ def apply_metadata(obj, metadata):
     return wrapped
 
 
+# What a node holds of its geometry, or learnt from it, rather than says about it.
+_GEOMETRY_KEYS = frozenset((KEY_BREP, KEY_GLTF, KEY_GEOMETRY, KEY_METADATA))
+
+
+def description(obj):
+    """'obj' with its geometry left out: what a tree says about its shapes, as plain data.
+
+    Every node keeps its name and label, its placement, its properties, its
+    joint and the rest of its outer layer, and loses its payload (KEY_BREP,
+    KEY_GLTF), the root's table of tessellated geometry (KEY_GEOMETRY) and what
+    was measured of the geometry (KEY_METADATA). That is what a file made out
+    of a tree is keyed on beside the key of the shape it is of: the shape's key
+    covers the geometry, and nothing of the outer layer - not a placement it
+    got from somewhere else, not the colour a renderer paints it with, since
+    'properties' is no part of a shape's key. Any other bytes are kept as their
+    digest, marked as bytes the way 'encode' marks them, which is all a key needs
+    of them and cannot be mistaken for a string that happens to spell it.
+
+    The keys are left out of nodes only: the root, the children in its
+    KEY_ASSEMBLY lists at every depth, and the sketches in its KEY_SKETCHES
+    table. Everything else a node holds is data under names its writer chose -
+    a 'physics' property may well say 'geometry', a joint 'metadata' - and is
+    kept whole.
+    """
+    return _described_node(obj)
+
+
+def _described_node(node):
+    if not isinstance(node, dict):
+        return _described_data(node)
+    described = {}
+    for key, value in node.items():
+        if key in _GEOMETRY_KEYS:
+            continue
+        if key == KEY_ASSEMBLY and isinstance(value, list):
+            described[key] = [_described_node(child) for child in value]
+        elif key == KEY_SKETCHES and isinstance(value, dict):
+            described[key] = {reference: _described_node(sketch) for reference, sketch in value.items()}
+        else:
+            described[key] = _described_data(value)
+    return described
+
+
+def _described_data(obj):
+    if isinstance(obj, dict):
+        return {key: _described_data(value) for key, value in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_described_data(item) for item in obj]
+    if isinstance(obj, (bytes, bytearray)):
+        return {KEY_BYTES: hashlib.sha256(bytes(obj)).hexdigest()}
+    return obj
+
+
 def encode(obj, name=None, label=None, payloads=None):
     """Convert 'obj' into a structure made only of JSON-native values.
 
