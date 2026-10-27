@@ -343,7 +343,7 @@ def _html_block(block: Block) -> str:
     raise TypeError("Unsupported document block: %s" % type(block).__name__)
 
 
-def to_data(document: Document, embed_images: bool = False) -> dict:
+def to_data(document: Document, embed_images: bool = False, image_bytes: bool = False) -> dict:
     """The document as plain data, for a renderer that runs somewhere else.
 
     The PDF is composed in a sandboxed runtime (that is where the libraries that
@@ -355,7 +355,17 @@ def to_data(document: Document, embed_images: bool = False) -> dict:
     webview on the other side of a JSON-RPC connection, and the illustrations of
     an instruction book live in a temporary directory that is deleted as soon as
     the document has been built.
+
+    With 'image_bytes' as well, a picture carries the bytes themselves and their
+    media type, as 'content' and 'type', rather than a data URI in 'src'. That is
+    for a reader at the end of a connection that carries bytes as they are (see
+    'partcad_utils.framing'): a data URI is base64, a third bigger than the
+    picture, and decoded again by the webview showing it. Either way a file is
+    read once however many pages show it -- the top assembly is on the title page
+    and on its own, an item on the step that places it and the one after -- and
+    as bytes it is one object, which such a connection sends once.
     """
+    embed = _Embedder(image_bytes) if embed_images else None
     return {
         "title": document.title,
         "subtitle": document.subtitle,
@@ -363,24 +373,46 @@ def to_data(document: Document, embed_images: bool = False) -> dict:
         "pages": [
             {
                 "title": page.title,
-                "blocks": [_block_to_data(block, embed_images) for block in page.blocks],
+                "blocks": [_block_to_data(block, embed) for block in page.blocks],
             }
             for page in document.pages
         ],
     }
 
 
-def _image_to_data(image: Image, embed: bool) -> Optional[dict]:
+class _Embedder:
+    """The pictures of one document as their bytes, each file read once."""
+
+    def __init__(self, image_bytes: bool):
+        self.image_bytes = image_bytes
+        self.read = {}
+
+    def __call__(self, image: Image) -> Optional[dict]:
+        if not (image.file and os.path.exists(image.file)):
+            # What '_image_source' falls back to as well: an address of its own.
+            return {"src": image.src, "caption": image.caption, "alt": image.alt} if image.src else None
+        found = self.read.get(image.file)
+        if found is None:
+            mime = mimetypes.guess_type(image.file)[0] or "application/octet-stream"
+            with open(image.file, "rb") as f:
+                payload = f.read()
+            if not self.image_bytes:
+                payload = "data:%s;base64,%s" % (mime, base64.b64encode(payload).decode("ascii"))
+            found = self.read[image.file] = (mime, payload)
+        mime, payload = found
+        if self.image_bytes:
+            return {"content": payload, "type": mime, "caption": image.caption, "alt": image.alt}
+        return {"src": payload, "caption": image.caption, "alt": image.alt}
+
+
+def _image_to_data(image: Image, embed: Optional[_Embedder]) -> Optional[dict]:
     """One picture as plain data, addressed the way the reader can reach it."""
-    if not embed:
+    if embed is None:
         return {"path": image.file, "caption": image.caption, "alt": image.alt} if image.file else None
-    source = _image_source(image)
-    if source is None:
-        return None
-    return {"src": source, "caption": image.caption, "alt": image.alt}
+    return embed(image)
 
 
-def _block_to_data(block: Block, embed_images: bool = False) -> dict:
+def _block_to_data(block: Block, embed: Optional[_Embedder] = None) -> dict:
     if isinstance(block, Heading):
         data = {"type": "heading", "text": block.text, "level": block.level, "url": block.url}
         if block.kicker:
@@ -394,7 +426,7 @@ def _block_to_data(block: Block, embed_images: bool = False) -> dict:
     if isinstance(block, Properties):
         return {"type": "properties", "items": [list(item) for item in block.items]}
     if isinstance(block, ImageRow):
-        images = [_image_to_data(image, embed_images) for image in block.images]
+        images = [_image_to_data(image, embed) for image in block.images]
         data = {
             "type": "images",
             "height": block.height,

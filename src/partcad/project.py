@@ -3637,13 +3637,16 @@ class Project(project_config.Configuration):
         build_parts=True,
         choices=None,
         format=None,
+        document=True,
+        image_bytes=False,
     ):
         """The assembly instruction book as plain data, pictures included.
 
         The same document 'render_assembly_guide_async()' writes to a file, for a
         reader that has no file system in reach: the IDE's viewer is a webview on
         the other side of a JSON-RPC connection, so every illustration is carried
-        inline as a data URI (see 'document.to_data()').
+        inline -- as a data URI, or with 'image_bytes' as its bytes (see
+        'document.to_data()').
 
         For the same reason the document is built with no 'dir_path': the links a
         generated document makes to the files of the package tree are relative to
@@ -3657,7 +3660,11 @@ class Project(project_config.Configuration):
         caller passing 'ignore_manufacturability' learns only from this - and,
         when a 'format' is given, '"file"': the very same
         document written down in it, as '{"filename", "extension", "content"}'
-        with the content base64-encoded, for a client to save on its own side.
+        with the content its bytes, for a client to save on its own side.
+
+        Without 'document' the model is left out, which is for a client that
+        wants only the file - 'pc instructions' - and would otherwise be sent
+        every illustration twice, once in the model and once inside the file.
         """
         assembly = self.get_assembly(assembly_name)
         if assembly is None:
@@ -3676,7 +3683,6 @@ class Project(project_config.Configuration):
             choices=choices,
         ) as guide:
             result = {
-                "document": pc_document.to_data(guide.document, embed_images=True),
                 "plan": guide.plan.to_data(),
                 "pages": guide.pages,
                 # Whether the assembly is meant to be made, judged exactly as
@@ -3684,6 +3690,8 @@ class Project(project_config.Configuration):
                 # 'ignore_manufacturability' still has to be able to say so.
                 "manufacturable": bool(assembly_guide.resolve_alias(self.ctx, assembly).is_manufacturable),
             }
+            if document:
+                result["document"] = pc_document.to_data(guide.document, embed_images=True, image_bytes=image_bytes)
             if format is not None:
                 result["file"] = await self._document_file_async(
                     guide.document, format, assembly_name, cacheable=assembly.get_cacheable()
@@ -3692,8 +3700,6 @@ class Project(project_config.Configuration):
 
     async def _document_file_async(self, document, format, name, cacheable=True):
         """A document written down in a format, as bytes a client can save."""
-        import base64
-
         with tempfile.TemporaryDirectory(prefix="partcad-guide-") as directory:
             # Named the way 'pc render' names this object's files, and then made
             # safe as a whole: a download has no directory to put the declared
@@ -3703,10 +3709,10 @@ class Project(project_config.Configuration):
             path = os.path.join(directory, filename)
             await self._write_document_async(document, format, path, cacheable=cacheable)
             with open(path, "rb") as f:
-                content = base64.b64encode(f.read()).decode("ascii")
+                content = f.read()
         return {"filename": filename, "extension": format, "content": content}
 
-    async def part_plan_data_async(self, part_name, choices=None):
+    async def part_plan_data_async(self, part_name, choices=None, image_bytes=False):
         """What making a part takes, as the IDE's Build tab shows it for a part.
 
         The plan of a part - the chain of stock it is made from, deepest first -
@@ -3718,7 +3724,7 @@ class Project(project_config.Configuration):
             return None
         async with assembly_guide.part_plan_async(self.ctx, self, part, choices) as guide:
             return {
-                "document": pc_document.to_data(guide.document, embed_images=True),
+                "document": pc_document.to_data(guide.document, embed_images=True, image_bytes=image_bytes),
                 "plan": guide.plan.to_data(),
                 "pages": guide.pages,
             }

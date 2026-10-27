@@ -297,18 +297,25 @@ def test_progress_reaches_a_client_that_asked_for_it(tmp_path):
 # --- Pictures and files ------------------------------------------------------
 
 
-def rendered(extension, data):
+def rendered(extension, data, attached=True):
+    """What `render.inline` answers: the file's bytes, which a daemon sends this
+    server as an attachment -- or, from a daemon older than those, base64."""
     return lambda params, emit: {
         "object": "//pkg:box",
         "format": params["format"],
         "filename": "box." + extension,
         "extension": extension,
-        "content": base64.b64encode(data).decode(),
+        "content": data if attached else base64.b64encode(data).decode(),
     }
 
 
-def test_render_returns_the_picture_and_not_its_base64(tmp_path):
-    daemon, server = serve(tmp_path, {"render.inline": rendered("png", PNG)})
+# A daemon that sends files as bytes, and one from before that, which sends base64.
+DAEMONS = pytest.mark.parametrize("attached", [True, False], ids=["bytes", "base64"])
+
+
+@DAEMONS
+def test_render_returns_the_picture_and_not_its_base64(tmp_path, attached):
+    daemon, server = serve(tmp_path, {"render.inline": rendered("png", PNG, attached)})
     result = call(server, "render", {"object": "box"})
     assert not result.is_error
     assert isinstance(result.content[1], ImageContent)
@@ -330,15 +337,17 @@ def test_render_sends_the_kind_it_is_told(tmp_path):
     ]
 
 
-def test_render_returns_an_svg_as_text(tmp_path):
+@DAEMONS
+def test_render_returns_an_svg_as_text(tmp_path, attached):
     svg = b"<svg xmlns='http://www.w3.org/2000/svg'/>"
-    _, server = serve(tmp_path, {"render.inline": rendered("svg", svg)})
+    _, server = serve(tmp_path, {"render.inline": rendered("svg", svg, attached)})
     result = call(server, "render", {"object": "box", "format": "svg"})
     assert result.content[1].text == svg.decode()
 
 
-def test_export_writes_the_file_into_the_workspace(tmp_path):
-    _, server = serve(tmp_path, {"render.inline": rendered("step", b"ISO-10303-21;")})
+@DAEMONS
+def test_export_writes_the_file_into_the_workspace(tmp_path, attached):
+    _, server = serve(tmp_path, {"render.inline": rendered("step", b"ISO-10303-21;", attached)})
     reply = body(call(server, "export", {"object": "box", "format": "step", "path": "out/box.step"}))
     assert reply["ok"] is True
     assert reply["result"]["path"] == "out/box.step"
@@ -419,13 +428,27 @@ def test_execute_asks_for_no_context_where_none_is_needed(tmp_path):
     assert [name for name, _ in daemon.calls] == ["daemon.status"]
 
 
-def test_execute_shows_a_picture_a_result_carries(tmp_path):
+@DAEMONS
+def test_execute_shows_a_picture_a_result_carries(tmp_path, attached):
     big = PNG + b"\0" * 8192
-    _, server = serve(tmp_path, {"render.inline": rendered("png", big)})
+    _, server = serve(tmp_path, {"render.inline": rendered("png", big, attached)})
     result = call(server, "execute", {"method": "render.inline", "params": {"object": "box", "format": "png"}})
     assert isinstance(result.content[1], ImageContent)
     assert base64.b64decode(result.content[1].data) == big
     assert "attached below" in body(result)["result"]["content"]
+
+
+def test_execute_never_shows_bytes_as_text(tmp_path):
+    # A file that is not a picture -- a thumbnail of a table, a model -- is said
+    # to be there, and how big, rather than written into the JSON as 'b"..."'.
+    details = {
+        "items": [{"name": "//pkg:box", "thumbnail": b"<svg/>"}],
+        "model": {"content": b"glTF", "extension": "glb"},
+    }
+    _, server = serve(tmp_path, {"manufacturing.details": lambda params, emit: details})
+    reply = body(call(server, "execute", {"method": "manufacturing.details", "params": {"objects": []}}))
+    assert reply["result"]["items"][0]["thumbnail"] == "<6 bytes>"
+    assert reply["result"]["model"]["content"] == "<4 bytes; the export tool writes it to a file>"
 
 
 def test_execute_of_an_unknown_method_says_so(tmp_path):

@@ -1890,14 +1890,16 @@ def simulate_run(session, params):
 
 
 def _inline_snapshots(pc, snapshots: dict) -> dict:
-    """Each snapshot of a run, as the file's name, extension and base64 bytes."""
-    import base64
+    """Each snapshot of a run, as the file's name, extension and bytes.
 
+    The bytes go as an attachment to a client that reads them, and as base64 to
+    any other (see 'partcad_utils.framing'), which is what this always sent.
+    """
     images = {}
     for moment, path in snapshots.items():
         try:
             with open(path, "rb") as f:
-                content = base64.b64encode(f.read()).decode("ascii")
+                content = f.read()
         except OSError as e:
             # The verdict stands without it; only the picture is missing.
             pc.logging.warning("Failed to read the '%s' snapshot back: %s" % (moment, e))
@@ -3097,6 +3099,15 @@ def assembly_guide(session, params):
     Assembly tab save it on their own side of a connection that may cross
     machines. ``plan`` and ``pages`` say which page explains which item of the
     build plan.
+
+    Two parameters are about what crosses the wire rather than what is written.
+    ``document: false`` leaves the model out, for a client that keeps only the
+    file - ``pc instructions`` - and was sent every illustration twice, once in
+    the model and once inside the file. ``image_bytes`` carries each picture of
+    the model as its bytes and media type rather than as a data URI (see
+    ``partcad.document.to_data``), for a client that reads attachments (see
+    ``partcad_utils.framing``). A daemon older than either ignores it and sends
+    what it always sent, which both clients still read.
     """
     import asyncio
 
@@ -3138,6 +3149,8 @@ def assembly_guide(session, params):
                     build_parts=_flag(params, "build_parts", True),
                     choices=_choices(params, path),
                     format=fmt,
+                    document=_flag(params, "document", True),
+                    image_bytes=bool(params.get("image_bytes")),
                 )
             )
         except AssemblyDocumentError as e:
@@ -3204,9 +3217,10 @@ def manufacturing_details(session, params):
 
     The rest of a row of the IDE's Build vs Buy table: ``objects`` are
     ``{"name": "//pkg:obj", "kind": "part"|"assembly"}``, and each comes back
-    with an SVG thumbnail ``width`` by ``height`` pixels (base64; see
-    ``partcad.thumbnail``, which keeps it in PartCAD's cache under the shape's
-    key and the size), its size in millimetres, its volume, and - for a part
+    with an SVG thumbnail ``width`` by ``height`` pixels (bytes, which a client
+    that reads no attachments is sent as base64; see ``partcad.thumbnail``,
+    which keeps it in PartCAD's cache under the shape's key and the size), its
+    size in millimetres, its volume, and - for a part
     whose mass is known, stated or worked out from what it is made of - its
     mass in grams.
 
@@ -3217,7 +3231,6 @@ def manufacturing_details(session, params):
     ``error``, not the request's.
     """
     import asyncio
-    import base64
 
     ctx = _ctx(session, params)
     if ctx is None:
@@ -3250,7 +3263,7 @@ def manufacturing_details(session, params):
             async with budget:
                 picture = await thumbnail.svg_thumbnail_async(ctx, obj, width, height)
             if picture is not None:
-                item["thumbnail"] = base64.b64encode(picture).decode("ascii")
+                item["thumbnail"] = picture
             measured = await obj.get_measurements_async(ctx) or {}
             box = measured.get("bbox")
             if box:
@@ -3289,6 +3302,7 @@ def manufacturing_plan(session, params):
     which item's, so that what the Build tab shows for a step is the page of
     the book for it. Without ``document`` nothing is built and the answer is
     quick, which is what lets the list appear before the pages are ready.
+    ``image_bytes`` is ``assembly.guide``'s: the pictures of the pages as bytes.
     """
     import asyncio
 
@@ -3305,6 +3319,7 @@ def manufacturing_plan(session, params):
     # Not 'recursive', which every request that names an object reads as a
     # walk over the packages below it (see '_request').
     recursive = bool(params.get("subassemblies"))
+    image_bytes = bool(params.get("image_bytes"))
 
     from partcad import build_plan
     from partcad.exception import AssemblyDocumentError
@@ -3326,10 +3341,11 @@ def manufacturing_plan(session, params):
                         recursive=recursive,
                         build_parts=True,
                         choices=choices,
+                        image_bytes=image_bytes,
                     )
                 )
             else:
-                data = asyncio.run(project.part_plan_data_async(name, choices=choices))
+                data = asyncio.run(project.part_plan_data_async(name, choices=choices, image_bytes=image_bytes))
         except AssemblyDocumentError as e:
             raise JsonRpcError(USAGE_ERROR, str(e)) from e
     if data is None:
@@ -3467,7 +3483,8 @@ def cae_analyze(session, params):
     Each model is written to ``<part>.<analysis>.<scenario>.<extension>`` beside
     the package, as it stands: which format that is, and whether it is 2D or 3D,
     is the implementation's decision and PartCAD does not convert it. ``inline``
-    asks for its bytes to come back base64-encoded as well, which is what the
+    asks for its bytes to come back as well (an attachment, or base64 for a
+    client that reads none: see ``partcad_utils.framing``), which is what the
     IDE's tabs need -- a webview has no file system in reach, so a model it
     cannot be handed is a model it cannot draw.
 
@@ -3534,11 +3551,9 @@ def cae_analyze(session, params):
         if entry["error"] is not None:
             continue
         if params.get("inline"):
-            import base64
-
             try:
                 with open(entry["filepath"], "rb") as f:
-                    entry["content"] = base64.b64encode(f.read()).decode("ascii")
+                    entry["content"] = f.read()
             except OSError as e:
                 # The findings are still worth having: an implementation that
                 # reported them and then failed to leave the model where it said
@@ -4444,17 +4459,18 @@ def render_inline(session, params):
     resolve to, so the tab and the command line produce the same picture.
 
     The file is written into a temporary directory on the daemon's machine, read
-    back and base64-encoded, and the directory removed. A path would not do:
-    the daemon may be on another machine, and the client decides where the file
-    is kept -- the IDE holds it in a temporary file of its own until the user
-    saves it somewhere. What comes back is the bytes, the file name PartCAD
-    chose, and its extension, which is what says how to show it.
+    back, and the directory removed. A path would not do: the daemon may be on
+    another machine, and the client decides where the file is kept -- the IDE
+    holds it in a temporary file of its own until the user saves it somewhere.
+    What comes back is the bytes, the file name PartCAD chose, and its
+    extension, which is what says how to show it. The bytes go as an attachment
+    to a client that reads them, and as base64 to any other (see
+    ``partcad_utils.framing``).
 
     An implementation that writes nothing has said why in the log, which the
     client is streaming; the error here says only that there is no file.
     """
     import asyncio
-    import base64
     import shutil
     import tempfile
 
@@ -4526,7 +4542,7 @@ def render_inline(session, params):
             raise JsonRpcError(USAGE_ERROR, "No %s file was produced for %s; the log says why." % (fmt, path))
         filepath = max(written, key=os.path.getmtime)
         with open(filepath, "rb") as f:
-            content = base64.b64encode(f.read()).decode("ascii")
+            content = f.read()
     finally:
         shutil.rmtree(directory, ignore_errors=True)
 

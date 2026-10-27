@@ -15,6 +15,7 @@ event emission, formatting) is exercised without a real CAD environment.
 import base64
 import contextlib
 import copy
+import json
 import os
 import sys
 import types
@@ -26,7 +27,7 @@ from partcad_service_json_rpc.core import events, operations
 from partcad_service_json_rpc.core.events import EventEmitter
 from partcad_service_json_rpc.core.session import Session
 from partcad_service_json_rpc.rpc.dispatcher import JsonRpcError
-from partcad_utils import staging
+from partcad_utils import framing, staging
 
 # ---- fakes -----------------------------------------------------------------
 
@@ -2491,9 +2492,9 @@ def test_assembly_guide_returns_the_document_of_the_assembly(monkeypatch):
     assert result == {"assembly": "//:top", **guide}
     assert session.partcad_ctx.projects["//"].guide_requests == [("top", False)]
     # A client that says nothing about what to include gets the whole book, which
-    # is what it always got.
+    # is what it always got -- the model included, its pictures as data URIs.
     assert session.partcad_ctx.projects["//"].guide_options == [
-        {"recursive": True, "build_parts": True, "choices": {}, "format": None}
+        {"recursive": True, "build_parts": True, "choices": {}, "format": None, "document": True, "image_bytes": False}
     ]
     assert ("Guide", "//") in session.partcad.logging.processes
 
@@ -2515,6 +2516,22 @@ def test_assembly_guide_passes_what_to_include_and_the_choices_of_the_object(mon
     assert options["recursive"] is False
     assert options["build_parts"] is True
     assert options["choices"] == {"//:bracket": "build"}
+
+
+def test_assembly_guide_leaves_out_what_the_client_does_not_keep(monkeypatch):
+    # 'pc instructions' keeps only the file, and the model beside it was every
+    # illustration sent a second time; the IDE asks for the model's pictures as
+    # bytes, which it makes Blob URLs of.
+    install_fake_partcad_modules(monkeypatch, {"partcad.exception": {"AssemblyDocumentError": FakeDocumentError}})
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].guides["top"] = {"plan": {}, "pages": {}}
+
+    operations.assembly_guide(session, {"package": "//", "object": "top", "format": "html", "document": False})
+    operations.assembly_guide(session, {"package": "//", "object": "top", "image_bytes": True})
+
+    first, second = session.partcad_ctx.projects["//"].guide_options
+    assert (first["format"], first["document"], first["image_bytes"]) == ("html", False, False)
+    assert (second["document"], second["image_bytes"]) == (True, True)
 
 
 def test_assembly_guide_refuses_a_format_it_does_not_write(monkeypatch):
@@ -3650,16 +3667,20 @@ def test_an_implementation_that_does_not_resolve_is_that_scenario_s_error():
 def test_inline_hands_the_model_back_as_bytes(tmp_path):
     # A webview has no file system in reach, so a model it cannot be handed is a
     # model it cannot draw.
-    import base64
-
     model = tmp_path / "bracket.fea.glb"
     model.write_bytes(b"glTF-ish")
     session, _ = make_cae_session(FakeAnalysablePart("bracket", result={"findings": [], "filepath": str(model)}))
 
     result = operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea", "inline": True})
 
-    assert base64.b64decode(result["analyses"][0]["content"]) == b"glTF-ish"
-    assert result["content"] == result["analyses"][0]["content"]
+    assert result["analyses"][0]["content"] == b"glTF-ish"
+    # The one object at both places, so that a client reading attachments is
+    # sent the model once; one that reads none gets the base64 twice, as before.
+    assert result["content"] is result["analyses"][0]["content"]
+    header, body, *segments = framing.encode_message(result, attachments=True)
+    assert segments == [b"glTF-ish"]
+    legacy = json.loads(framing.encode_message(result)[1])
+    assert legacy["content"] == legacy["analyses"][0]["content"] == base64.b64encode(b"glTF-ish").decode()
 
 
 def test_a_model_that_is_not_where_it_said_still_returns_the_findings(tmp_path):
@@ -3899,9 +3920,13 @@ def test_render_inline_returns_the_file_it_rendered():
         "format": "png",
         "filename": "cube.png",
         "extension": "png",
-        "content": "iVBORw==",
+        "content": b"\x89PNG",
     }
     assert part.render_calls == [("png", None)]
+    # On the wire: the bytes after the message for a client that reads them, and
+    # for any other the base64 this always sent.
+    assert framing.encode_message(result, attachments=True)[2:] == [b"\x89PNG"]
+    assert json.loads(framing.encode_message(result)[1])["content"] == "iVBORw=="
 
 
 def test_render_inline_names_the_extension_the_implementation_wrote():
@@ -4487,6 +4512,43 @@ def test_simulate_list_says_which_object_it_could_not_find(monkeypatch):
     assert "Assembly //:nope is not found" in str(raised.value)
 
 
+def test_the_thumbnails_of_a_build_vs_buy_table_come_back_as_bytes(monkeypatch):
+    # Forty of them to a request: as attachments, one copy each and nothing to
+    # encode; as base64 for a client that reads none, which is what it always got.
+    class Measured:
+        async def get_measurements_async(self, ctx):
+            return {"bbox": [0, 0, 0, 1, 2, 3], "volume": 6.0}
+
+    async def svg_thumbnail_async(ctx, obj, width, height):
+        return b"<svg>%dx%d</svg>" % (width, height)
+
+    async def part_mass_async(ctx, obj):
+        return None
+
+    install_fake_partcad_modules(
+        monkeypatch,
+        {
+            "partcad.thumbnail": {"svg_thumbnail_async": svg_thumbnail_async},
+            "partcad.physics": {"part_mass_async": part_mass_async},
+            "partcad.sandbox_lock": {"process_slots": types.SimpleNamespace(count=2)},
+        },
+    )
+    session, _ = make_session()
+    session.partcad_ctx.shapes[("part", "//:bolt")] = Measured()
+
+    result = operations.manufacturing_details(
+        session, {"objects": [{"name": "//:bolt", "kind": "part"}, {"name": "//:nut", "kind": "part"}], "width": 32}
+    )
+
+    bolt, nut = result["items"]
+    assert bolt["thumbnail"] == b"<svg>32x32</svg>"
+    assert bolt["size"] == [1, 2, 3]
+    assert nut["thumbnail"] is None and nut["error"] == "//:nut is not found"
+    assert json.loads(framing.encode_message(result)[1])["items"][0]["thumbnail"] == base64.b64encode(
+        b"<svg>32x32</svg>"
+    ).decode("ascii")
+
+
 def test_the_snapshots_of_a_run_come_back_as_bytes_when_asked(tmp_path):
     (tmp_path / "snapshot-before.png").write_bytes(b"\x89PNG before")
     session, _ = make_session()
@@ -4501,7 +4563,7 @@ def test_the_snapshots_of_a_run_come_back_as_bytes_when_asked(tmp_path):
     assert set(images) == {"before"}
     assert images["before"]["filename"] == "snapshot-before.png"
     assert images["before"]["extension"] == "png"
-    assert base64.b64decode(images["before"]["content"]) == b"\x89PNG before"
+    assert images["before"]["content"] == b"\x89PNG before"
 
 
 # ---- what an object is, looked up from its name ----------------------------

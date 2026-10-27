@@ -26,7 +26,7 @@ from mcp_types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from pydantic import Field
 
 from partcad_client import __version__
-from partcad_utils import garage, parameters
+from partcad_utils import framing, garage, parameters
 
 from .bridge import Bridge, CallFailed, Outcome
 from .sandbox import OutsideScope, PathScope
@@ -82,7 +82,10 @@ _LOG_HEAD = 40
 _LOG_TAIL = 300
 _TRACEBACK_TAIL = 12
 
-# Base64 longer than this in a result is a file, not something to read.
+# Base64 longer than this in a result is a file, not something to read. A file
+# that came as bytes is one whatever its size: the daemon sends a file to this
+# server as an attachment (see 'partcad_utils.framing'), and only an older one as
+# base64.
 _INLINE_LIMIT = 4096
 # And an SVG longer than this is better written to a file and looked at there.
 _SVG_LIMIT = 200_000
@@ -280,7 +283,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         produced = outcome.result
         if target.is_dir() or path.endswith(("/", "\\")):
             target = scope.check(str(target / produced.get("filename", "export." + format)))
-        data = base64.b64decode(produced.get("content") or "")
+        data = framing.as_bytes(produced.get("content")) or b""
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
         outcome.result = {"object": produced.get("object"), "format": format, "path": scope.relative(target)}
@@ -534,43 +537,52 @@ def _file_content(outcome: Outcome) -> list:
     """What to show of the file `render.inline` returned: the picture, or the SVG's text."""
     produced = outcome.result if isinstance(outcome.result, dict) else {}
     extension = str(produced.get("extension", "")).lower()
-    data = produced.get("content")
+    data = framing.as_bytes(produced.get("content"))
     if not data:
         return []
     if extension in _IMAGE_TYPES:
         # Taken out of the JSON here so that the text block says what it was
         # rather than carrying it a second time.
-        produced["content"] = "<the %s image below, %d bytes>" % (extension, len(data) * 3 // 4)
-        return [ImageContent(type="image", data=data, mime_type=_IMAGE_TYPES[extension])]
-    if extension == "svg" and len(data) * 3 // 4 <= _SVG_LIMIT:
+        produced["content"] = "<the %s image below, %d bytes>" % (extension, len(data))
+        return [_image(data, extension)]
+    if extension == "svg" and len(data) <= _SVG_LIMIT:
         produced["content"] = "<the SVG below>"
-        return [TextContent(type="text", text=base64.b64decode(data).decode("utf-8", errors="replace"))]
+        return [TextContent(type="text", text=data.decode("utf-8", errors="replace"))]
     return []
+
+
+def _image(data: bytes, extension: str) -> ImageContent:
+    """A picture as MCP carries one, which is base64: encoded here, at the one edge that needs it."""
+    return ImageContent(type="image", data=base64.b64encode(data).decode("ascii"), mime_type=_IMAGE_TYPES[extension])
 
 
 def _shrink(value, images: list):
     """``value`` with every embedded file taken out of it.
 
-    A result that carries a file -- ``{filename, extension, content}``, base64
-    -- has it replaced by a note, and an image among them is attached as an
-    image instead, so that `execute` of a method that returns a picture shows
-    the picture. Anything else that long is cut, since no agent reads a megabyte
-    of base64 and every one pays for it.
+    A result that carries a file -- ``{filename, extension, content}``, its
+    bytes or (from an older daemon) base64 -- has it replaced by a note, and an
+    image among them is attached as an image instead, so that `execute` of a
+    method that returns a picture shows the picture. Any other bytes are noted
+    too, and anything else that long is cut, since no agent reads a megabyte of
+    base64 and every one pays for it.
     """
     if isinstance(value, dict):
         extension = str(value.get("extension", "")).lower()
         shrunk = {}
         for key, item in value.items():
-            if key == "content" and isinstance(item, str) and len(item) > _INLINE_LIMIT:
-                size = len(item) * 3 // 4
+            binary = isinstance(item, (bytes, bytearray, memoryview))
+            if key == "content" and (binary or (isinstance(item, str) and len(item) > _INLINE_LIMIT)):
+                data = framing.as_bytes(item)
                 if extension in _IMAGE_TYPES:
-                    images.append(ImageContent(type="image", data=item, mime_type=_IMAGE_TYPES[extension]))
-                    shrunk[key] = "<a %s image, %d bytes, attached below>" % (extension, size)
+                    images.append(_image(data, extension))
+                    shrunk[key] = "<a %s image, %d bytes, attached below>" % (extension, len(data))
                 else:
-                    shrunk[key] = "<%d bytes of base64; the export tool writes it to a file>" % size
+                    shrunk[key] = "<%d bytes; the export tool writes it to a file>" % len(data)
             else:
                 shrunk[key] = _shrink(item, images)
         return shrunk
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return "<%d bytes>" % len(value)
     if isinstance(value, list):
         return [_shrink(item, images) for item in value]
     if isinstance(value, str) and len(value) > 4 * _INLINE_LIMIT:
