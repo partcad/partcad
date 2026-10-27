@@ -217,6 +217,17 @@ pythonpath = [
 # with their tests passing, and a pull request changing them told its patch was
 # untested.
 #
+# The ninth is the FreeCAD addon, which is not a package at all -- FreeCAD runs
+# the directory, and pytest imports `partcad_freecad` from it -- and is in the
+# report's scope (`coverage.rc`'s `include`, and `PACKAGES` in
+# `dev-tools/ci/coverage_report.py`) all the same. Nothing measured it, so the
+# report knew its files only as the ones no job had imported and put every one
+# of them at nought percent: the addon's own suite, which `pytest tests
+# cad/freecad` runs on every leg, counted for nothing, and any pull request
+# touching the addon was told its patch was uncovered.
+# `tests/dev_tools/test_coverage_report.py` now fails when an entry of
+# `PACKAGES` has no `--cov` here.
+#
 # Keep the list here, above the string -- `addopts` is a TOML string, so a '#'
 # line inside it is passed to pytest as an argument rather than ignored.
 addopts = """
@@ -233,6 +244,7 @@ addopts = """
     --cov=partcad_utils
     --cov=src/partcad/wrappers
     --cov=src/partcad/builtin
+    --cov=cad/freecad
     --durations-min=1.0
     --durations=0
     --html=pytest-results/report.html

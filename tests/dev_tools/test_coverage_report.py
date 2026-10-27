@@ -38,6 +38,7 @@ import io
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import types
@@ -223,6 +224,27 @@ def test_the_packages_the_report_groups_by_are_the_packages_that_exist(report_mo
     listed = {package for package in report_module.PACKAGES if package.startswith("src/")}
     assert listed == on_disk
     assert "cad/freecad" in report_module.PACKAGES
+
+
+def test_every_package_the_report_groups_by_is_one_pytest_measures(report_module):
+    """A package in the report that the pytest job does not trace reads as never run.
+
+    `--cov=` sets coverage.py's `source`, which beats `include` (see `addopts`
+    in `pyproject.toml`), so a package missing from that list is not measured
+    by the suite that tests it -- and the merge then adds its files at nought
+    percent, as files no job imported. `cad/freecad` sat there for as long as
+    it was in `PACKAGES`: its own tests passing on every leg, and every one of
+    its lines reported uncovered. A package of the wheel is named by its import
+    name; anything else, by its path.
+
+    Read with a pattern rather than `tomllib`, which the oldest Python the
+    suite runs on does not have.
+    """
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    measured = set(re.findall(r"^\s*--cov=(\S+)\s*$", pyproject, re.MULTILINE))
+    for package in report_module.PACKAGES:
+        name = package[len("src/") :] if package.startswith("src/") else package
+        assert name in measured, "%s is in the report but pytest does not measure it (--cov=%s)" % (package, name)
 
 
 def test_a_file_no_job_imported_is_nought_percent_rather_than_absent(report_module, tmp_path):
