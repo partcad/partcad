@@ -20,6 +20,7 @@ import asyncio
 import gzip
 import hashlib
 import io
+import json
 import os
 import pathlib
 import tarfile
@@ -208,8 +209,12 @@ def test_an_entry_is_an_uncompressed_tar_in_one_zstd_frame(tmp_path):
 def test_an_entry_an_earlier_release_gzipped_is_still_read(tmp_path):
     """Nothing in the key says which release wrote an entry, so the reader sniffs."""
     cache = _cache(tmp_path)
+    # What '_pack' stores for a result naming a file in its directory: the
+    # directory replaced by the placeholder, and the separator after it this
+    # platform's own -- it is the run's path that is substituted, not a name.
+    trajectory = cache_artifacts.DIRECTORY_PLACEHOLDER + os.sep + "t.csv"
     stored = {
-        "result.json": b'{"success": true, "trajectory": "@@partcad-artifact-directory@@/t.csv"}',
+        "result.json": json.dumps({"success": True, "trajectory": trajectory}).encode("utf-8"),
         "files/model": b"<VTKFile/>" * 50,
         "directory/t.csv": b"t,z\n0,10\n",
         "directory/meshes/block.stl": b"solid\n" * 40,
