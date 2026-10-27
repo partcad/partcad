@@ -21,6 +21,10 @@ import ocp_serialize
 _request_name = None
 _request_label = None
 
+# What the request asks to be done to the part on its way out, or None: see
+# 'finished()'. Only a part factory sends one.
+_request_finish = None
+
 # The response channel, once it has been taken away from everything else. See
 # 'protect_response_channel()'.
 _response_fd = None
@@ -103,11 +107,25 @@ def handle_input(decode=True):
     input_str = sys.stdin.read()
     #   - Unpack the content received via stdin
     request = ocp_serialize.deserialize(input_str) if decode else ocp_serialize.deserialize_raw(input_str)
-    global _request_name, _request_label
+    remember_request(request)
+    return path, request
+
+
+def remember_request(request):
+    """Keep what the response needs to know of 'request', and take off what is not the wrapper's.
+
+    The name and label are echoed onto the shape the response returns. What the
+    request asks to be done to a part on its way out is taken off rather than
+    left in: it is addressed to 'finished()', not to the wrapper - and least of
+    all to the package's own script, which a partType wrapper hands the request
+    on to.
+    """
+    global _request_name, _request_label, _request_finish
     if isinstance(request, dict):
         _request_name = request.get("name")
         _request_label = request.get("label")
-    return path, request
+        finish = request.pop(ocp_serialize.KEY_FINISH, None)
+        _request_finish = finish if isinstance(finish, dict) else None
 
 
 def handle_output(model):
@@ -322,6 +340,122 @@ def _shell_to_solid(shell):
         # can be read rather than failing the part over an improvement.
         sys.stderr.write("wrapper_common: could not turn a closed shell into a solid: %s\n" % e)
         return None
+
+
+def finished(shape, metadata=None):
+    """A part as it leaves the wrapper that built it: finished as its request asked, and encoded.
+
+    Every part leaves its factory through one step (see 'Shape.get_wrapped'):
+    a closed shell becomes the solid it bounds ('solidify', unless the part is
+    read from a file that is the authority on it), the result is judged
+    ('solid_problems'), and then it is moved by its 'offset' and scaled by its
+    'scale'. All of it is work on the geometry, and the core used to ask for
+    each step in a sandbox of its own: a fresh interpreter importing OCP and
+    parsing the BREP this one had just written, to do what is cheap here, where
+    the shape is still live. So the request says which of it to do
+    ('ocp_serialize.KEY_FINISH', from 'Shape.finish_request()'), and this does
+    it with the very functions those sandboxes ran, in the same order.
+
+    What was done is said in the envelope's METADATA_FINISHED section, each
+    step echoing what it was asked, so that the core does exactly what is left:
+    a step that fails here - an exception from OCCT, say - is not claimed, and
+    nothing after it is attempted, and the core takes it from there as it
+    always did, failing or warning in its own words. Nothing is written to
+    standard error for it, which on a run that succeeds would be a warning of
+    its own: whatever the core's sandbox then says is all that is said.
+
+    'metadata' is what the wrapper learnt that the geometry cannot answer, as
+    'ocp_serialize.encode_shape' takes it. A request that asks for nothing - a
+    sketch, built by the same script wrappers - and has nothing to add gets
+    the shape back as it was, for 'handle_output' to encode as it always has;
+    and so does anything that is not an OCCT shape, for 'handle_output' to
+    encode or refuse.
+    """
+    if shape is None or (not _request_finish and not metadata):
+        return shape
+    import OCP.TopoDS  # noqa: F401
+
+    if not isinstance(shape, OCP.TopoDS.TopoDS_Shape):
+        return shape
+    done = {}
+    if _request_finish:
+        shape, done = _finish(shape, _request_finish)
+    combined = dict(metadata or {})
+    if done:
+        combined[ocp_serialize.METADATA_FINISHED] = done
+    return ocp_serialize.encode_shape(shape, name=_request_name, label=_request_label, metadata=combined or None)
+
+
+def finished_shapes(shapes):
+    """'finished()' for a wrapper whose answer is a list of shapes: the one part they make.
+
+    A partType script, and an SDF script, may hand back several shapes, and a
+    part is one: the core compounded them, in a sandbox of its own, before it
+    validated the compound in another. Here they are compounded the way that
+    sandbox did ('ocp_serialize.compound_of', skipping what is not a shape or is
+    a null one) and finished as one shape, and the answer is a list holding it,
+    which the factory already takes as the part itself.
+
+    Without a request to finish, the list as it was: what the core asks for is
+    what the core gets. And as it was, too, when anything in it is something
+    'handle_output' would refuse to encode, so that it is refused as it always
+    was; an OCCT object that is not a shape (a location a script showed) is
+    dropped with the same warning it was dropped with on the way out.
+    """
+    if not _request_finish or not isinstance(shapes, list) or not shapes:
+        return shapes
+    if len(shapes) == 1:
+        return [finished(shapes[0])]
+
+    import OCP.TopoDS  # noqa: F401
+
+    def is_occt(value):
+        return type(value).__module__.split(".")[0] == "OCP"
+
+    if any(shape is not None and not is_occt(shape) for shape in shapes):
+        return shapes
+    kept = []
+    for shape in shapes:
+        if isinstance(shape, OCP.TopoDS.TopoDS_Shape):
+            if not shape.IsNull():
+                kept.append(shape)
+        elif shape is not None:
+            ocp_serialize.encode(shape)  # warns, as it did when every shape travelled
+    return [finished(ocp_serialize.compound_of(kept))]
+
+
+def _finish(shape, finish):
+    """Do to 'shape' what 'finish' asks, as far as that goes: '(result, what to claim)'."""
+    done = {}
+    validate = finish.get("validate")
+    if isinstance(validate, dict):
+        solid = bool(validate.get("solidify"))
+        try:
+            judged = solidify(shape) if solid else shape
+            problems = solid_problems(judged)
+        except Exception as e:
+            # Unclaimed, and so is everything after it: the core validates and
+            # then moves the part, and it cannot validate a part already moved.
+            done[ocp_serialize.FINISHED_DECLINED] = "validating it: %s" % exception_to_str(e)
+            return shape, done
+        shape = judged
+        done[ocp_serialize.FINISHED_VALIDATED] = {"solidify": solid, "problems": problems}
+    for operation in ("offset", "scale"):
+        if operation not in finish:
+            continue
+        try:
+            # The fallback's own functions, so that there is one definition of
+            # what moving a part means; imported only by a part that moves.
+            import wrapper_transform
+
+            apply = wrapper_transform.relocate if operation == "offset" else wrapper_transform.scale
+            moved = apply(shape, finish[operation])
+        except Exception as e:
+            done[ocp_serialize.FINISHED_DECLINED] = "%s: %s" % (operation, exception_to_str(e))
+            break
+        shape = moved
+        done[operation] = finish[operation]
+    return shape, done
 
 
 def combine(shapes, kind):

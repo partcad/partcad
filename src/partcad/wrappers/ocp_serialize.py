@@ -223,6 +223,14 @@ KEY_METADATA = "metadata"
 METADATA_MEASUREMENTS = "measurements"
 METADATA_ANNOTATIONS = "annotations"
 METADATA_SECTIONS = "sections"
+# What a part's request asks the wrapper building it to do to it on its way
+# out, and the section of that wrapper's answer that says how far it got.
+# Written by 'wrapper_common.finished()'; the core's twins, and what each one
+# holds, are 'shape_envelope.KEY_FINISH' and 'METADATA_FINISHED'.
+KEY_FINISH = "finish"
+METADATA_FINISHED = "finished"
+FINISHED_VALIDATED = "validated"
+FINISHED_DECLINED = "declined"
 
 # What 'BRepTools.Write_s' produces is verbose ASCII, and it is by far the
 # largest thing that either travels the wrapper pipe or lands in the shape

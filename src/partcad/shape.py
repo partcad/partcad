@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import contextvars
 import copy
+import json
 import os
 import sys
 import tempfile
@@ -1052,32 +1053,44 @@ class Shape(ShapeConfiguration):
             # here, at the single choke point; factories that delegate to a
             # wrapper already return an envelope and pass straight through.
             shape = self._to_envelope(shape)
+            # What the wrapper that built it has done of what comes next - the
+            # validation, the 'offset', the 'scale' - while the shape was live
+            # there (see 'finish_request'). Taken off first, so that nothing
+            # below, and nothing cached, ever sees the claim; what it does not
+            # claim is done below, as it always was.
+            shape, claim = shape_envelope.take_finished(shape)
+            finished = self._finished_by_wrapper(claim)
             # Every part, by the one validation every part goes through,
             # before anything is recorded or cached: see '_validated_part'.
-            if self.kind == "part" and shape_envelope.is_shape_object(shape) and ctx is not None:
-                shape = await self._validated_part(ctx, shape)
+            verdict = finished.get(shape_envelope.FINISHED_VALIDATED)
+            if self.kind == "part" and shape_envelope.is_shape_object(shape) and (ctx is not None or verdict):
+                shape = await self._validated_part(ctx, shape, verdict)
             if self.components:
                 self.components = [self._component_to_envelope(c) for c in self.components]
 
             # What the wrapper that produced this envelope recorded about it -
             # the size it measured, and whatever the source file stated (see
             # 'shape_envelope.KEY_METADATA'). Taken off here and not later
-            # because 'offset'/'scale' below go through a wrapper that decodes
-            # the envelope and encodes a fresh one, which cannot carry forward
-            # what it was never sent.
+            # because 'offset'/'scale' below may go through a wrapper that
+            # decodes the envelope and encodes a fresh one, which cannot carry
+            # forward what it was never sent.
             recorded = shape_envelope.metadata_of(shape)
 
-            # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
-            #                 apply to both 'wrapped' and 'components'
-            # 'offset'/'scale' are applied in a sandbox (see transform.py) so
-            # the core does not have to run build123d in-process to do it.
+            # TODO(clairbee): apply 'offset' and 'scale' to 'components' too
+            # 'offset'/'scale' are applied in a sandbox so the core does not
+            # have to run build123d in-process to do it: by the wrapper that
+            # built the shape, as it built it, wherever that wrapper could (see
+            # 'finish_request'), and otherwise here, by a sandbox of its own
+            # (transform.py) - which is the only way left for a shape that was
+            # never live in a wrapper of its own: a reference to another part,
+            # which moves the source's geometry.
             if shape is not None and ("offset" in self.config or "scale" in self.config):
                 from . import transform
                 from .geom import Location
 
-                if "offset" in self.config:
+                if "offset" in self.config and "offset" not in finished:
                     shape = await transform.offset(ctx, shape, self.config["offset"])
-                if "scale" in self.config:
+                if "scale" in self.config and "scale" not in finished:
                     shape = await transform.scale(ctx, shape, self.config["scale"])
 
                 # The transform rebuilt the geometry, so the encoder on the far
@@ -1087,6 +1100,8 @@ class Shape(ShapeConfiguration):
                 # that wrapper could not know is what the *source* stated, so
                 # the sections read at import are laid back under the fresh
                 # measurements rather than lost with the envelope they rode in.
+                # (Where the wrapper that built the shape moved it, the two are
+                # one envelope already, and this changes nothing.)
                 #
                 # The old measurements are dropped first rather than merged
                 # under. They describe a shape that no longer exists, so if the
@@ -3633,7 +3648,108 @@ class Shape(ShapeConfiguration):
                 return None
             return result
 
-    async def _validated_part(self, ctx, envelope):
+    def _solidifies(self) -> bool:
+        """Whether this part's closed shells are turned into the solids they bound as it leaves its factory.
+
+        All but a part read from a STEP or BREP file, which is judged and never
+        converted: those hand over what the file holds, because the file is the
+        authority on what the part is and 'pc convert' round-trips through them
+        (see "A part is a body, not a skin" in AGENTS.md). A shell in one is
+        reported, not quietly changed.
+        """
+        return (self.config or {}).get("type") not in FILE_AUTHORITY_TYPES
+
+    def finish_request(self):
+        """What the wrapper that builds this part is asked to do to it before it hands it over.
+
+        What 'get_wrapped' does to every part a factory returns, before it is
+        recorded or cached: validate it ('_validated_part'), then move it by its
+        'offset' and scale it by its 'scale'. Each is work on the geometry, so
+        done here it is a sandbox apiece - a fresh interpreter importing OCP
+        and parsing the BREP the factory's wrapper wrote a moment before, to do
+        what that wrapper could have done while the shape was live. A file part
+        with an 'offset' and a 'scale' was four interpreters; the wrapper that
+        read the file is one.
+
+        So a part factory puts this in its request (under
+        'shape_envelope.KEY_FINISH'), and a wrapper that can ('wrapper_common
+        .finished') does it and says so in its answer. 'get_wrapped' then does
+        whatever is left - all of it, for a wrapper that cannot - which is why
+        none of this changes what a part is, only where it is worked out: the
+        same functions, on the same shape, in the same order.
+
+        The cache key is untouched by it, and has to be: 'offset' and 'scale'
+        are in the key already (see '__init__', and 'transform.py' among the
+        code versions of a shape that declares either - 'code_versions'), and
+        what is cached is what comes out of all of it, wherever it was done.
+
+        None for anything but a part: a sketch's 'offset' and 'scale' are still
+        applied by 'get_wrapped' alone.
+        """
+        if self.kind != "part":
+            return None
+        request = {"validate": {"solidify": self._solidifies()}}
+        for key in ("offset", "scale"):
+            if key in self.config:
+                request[key] = self.config[key]
+        return request
+
+    def _finished_by_wrapper(self, claim) -> dict:
+        """The steps of 'finish_request()' the wrapper that built this part says it took, checked.
+
+        A dict holding what is accepted of 'claim' (see
+        'shape_envelope.METADATA_FINISHED'); empty when it claims nothing, which
+        leaves every step to 'get_wrapped'. What is accepted is what was asked,
+        exactly as it was asked, in the order it is done in - validated, moved,
+        scaled - and stopping where the wrapper stopped.
+
+        A claim of anything else is a wrapper saying it did to the geometry
+        something nobody can account for - moved it by another offset, or
+        scaled it without validating it first - and there is no undoing that
+        from here, so it is an error rather than something to work around.
+        """
+        if not claim:
+            return {}
+        declined = claim.get(shape_envelope.FINISHED_DECLINED)
+        if declined:
+            # Not a failure: whatever the wrapper could not do, 'get_wrapped'
+            # does in a sandbox of its own, and says so in its own words if it
+            # cannot do it either.
+            pc_logging.debug("%s:%s: left to a sandbox of its own: %s" % (self.project_name, self.name, declined))
+        asked = self.finish_request() or {}
+        steps = []
+        if "validate" in asked:
+            steps.append(shape_envelope.FINISHED_VALIDATED)
+        steps += [key for key in ("offset", "scale") if key in asked]
+
+        def same(a, b):
+            return json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
+
+        accepted = {}
+        for step in steps:
+            if step not in claim:
+                break
+            value = claim[step]
+            if step == shape_envelope.FINISHED_VALIDATED:
+                if not isinstance(value, dict) or value.get("solidify") != asked["validate"]["solidify"]:
+                    break
+            elif not same(value, asked[step]):
+                break
+            accepted[step] = value
+        unexplained = sorted(key for key in claim if key not in accepted and key != shape_envelope.FINISHED_DECLINED)
+        if unexplained:
+            raise Exception(
+                "%s:%s: the wrapper that built it says it did what it was not asked to: %s (asked: %s; claimed: %s)"
+                % (self.project_name, self.name, ", ".join(unexplained), asked, claim)
+            )
+        return accepted
+
+    def _not_a_solid(self, problems) -> None:
+        """Say what keeps this part from being a solid, if anything does - in the one wording, wherever it was judged."""
+        if problems:
+            pc_logging.warning("%s:%s is not a solid: %s" % (self.project_name, self.name, "; ".join(problems)))
+
+    async def _validated_part(self, ctx, envelope, verdict=None):
         """A part's envelope as every part leaves its factory: solidified, and judged.
 
         The one validation every part goes through, whatever made it - a
@@ -3656,13 +3772,21 @@ class Shape(ShapeConfiguration):
 
         A sandbox that cannot answer leaves the part as it was, with a warning;
         validating geometry is not a reason to stop building it.
+
+        Asked in that sandbox only of a part nothing has validated yet. The
+        wrapper that built the part does it itself wherever it can, on the live
+        shape and with the same two functions, and hands back the part already
+        converted ('wrapper_common.finished'): its 'verdict' - which conversion
+        it was asked for, and the problems it found - is all that is left to
+        report here, in the same words. What still comes here is what no such
+        wrapper built: a JavaScript part, a part an in-process factory made, a
+        reference to another part, and a wrapper that could not finish it.
         """
-        # Except a part read from a STEP or BREP file, which is judged and
-        # never converted: those hand over what the file holds, because the
-        # file is the authority on what the part is and 'pc convert'
-        # round-trips through them (see "A part is a body, not a skin" in
-        # AGENTS.md). A shell in one is reported, not quietly changed.
-        solidify = (self.config or {}).get("type") not in FILE_AUTHORITY_TYPES
+        if verdict is not None:
+            self._not_a_solid(verdict.get("problems") or [])
+            return envelope
+        # Except a part read from a STEP or BREP file: see '_solidifies'.
+        solidify = self._solidifies()
         try:
             result = await self._ask_solidity(
                 ctx, {shape_envelope.KEY_BREP: envelope[shape_envelope.KEY_BREP]}, solidify
@@ -3691,9 +3815,7 @@ class Shape(ShapeConfiguration):
                 envelope[shape_envelope.KEY_METADATA] = metadata
             else:
                 envelope.pop(shape_envelope.KEY_METADATA, None)
-        problems = result.get("problems") or []
-        if problems:
-            pc_logging.warning("%s:%s is not a solid: %s" % (self.project_name, self.name, "; ".join(problems)))
+        self._not_a_solid(result.get("problems") or [])
         return envelope
 
     async def get_bounding_box_async(self, ctx):

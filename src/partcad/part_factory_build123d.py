@@ -73,6 +73,8 @@ class PartFactoryBuild123d(PartFactoryPython):
             with telemetry.start_as_current_span("*PartFactoryBuild123d.instantiate.{shape_envelope.serialize}"):
                 request["name"] = "%s:%s" % (part.project_name, part.name)
                 request["label"] = part.name
+                # Validated and moved by the wrapper, while the shape is live (see 'Shape.finish_request').
+                request[shape_envelope.KEY_FINISH] = part.finish_request()
                 request["kind"] = "part"
                 request_serialized = shape_envelope.serialize(request)
 

@@ -32,18 +32,15 @@ from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "src", "partcad", "wrappers"))
 
+# Imported rather than run: everything it does as a wrapper is under its
+# '__main__' guard, which is what lets the wrappers that build a part move it
+# with these very functions (see 'wrapper_common.finished').
+import wrapper_transform  # noqa: E402
+
 
 def _relocate(shape, offset):
-    """The wrapper's own function, taken without running its __main__."""
-    path = os.path.join(
-        os.path.dirname(__file__), "..", "..", "..", "src", "partcad", "wrappers", "wrapper_transform.py"
-    )
-    source = open(path).read()
-    start = source.index("def _relocate(")
-    end = source.index("\ndef _scale(")
-    namespace = {}
-    exec(compile(source[start:end], path, "exec"), namespace)
-    return namespace["_relocate"](shape, offset)
+    """The wrapper's own function."""
+    return wrapper_transform.relocate(shape, offset)
 
 
 def _box(shape):
@@ -74,3 +71,4 @@ def test_nothing_is_left_behind_in_a_location():
     """
     moved = _relocate(BRepPrimAPI_MakeBox(1, 1, 1).Shape(), [[10, 20, 30], [1, 0, 0], 45])
     assert moved.Location().IsIdentity()
+

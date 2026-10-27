@@ -75,6 +75,13 @@ def process(path, request):
     # See wrapper_common.solidify.
     shapes = [wrapper_common.solidify(shape) for shape in shapes]
 
+    # And a part is one shape, validated and moved: the several a script may
+    # hand back are compounded here, and the compound finished, while all of it
+    # is still live - rather than each travelling to the core only to be sent
+    # into a sandbox of its own to be compounded (see
+    # wrapper_common.finished_shapes).
+    shapes = wrapper_common.finished_shapes(shapes)
+
     return {"success": True, "exception": None, "shapes": shapes}
 
 

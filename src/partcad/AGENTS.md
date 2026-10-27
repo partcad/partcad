@@ -812,6 +812,23 @@ at all).
   the reason above: judged, reported, not converted. Do not give a factory or a plugin a path around this step,
   and do not add a type to that set for any reason other than the file being the authority on the part.
 
+  **The step is taken where the shape is live, and the core does what is left** (`Shape.finish_request`,
+  `wrappers/wrapper_common.finished`, `shape_envelope.KEY_FINISH`/`METADATA_FINISHED`). Asked of the core, the
+  validation was a sandbox of its own and each of `offset` and `scale` another, every one of them an interpreter
+  importing OCP to parse back the BREP the factory's wrapper had just written: a STEP part with both was four
+  interpreters and 14 s, where the wrapper reading the file is one. So every Python part factory puts the part's
+  `finish_request()` in its request, and the wrapper hands its shape out through `finished()` (`finished_shapes()`
+  for a partType or SDF answer of several, which also takes over the compound `transform.compound` used to do):
+  `solidify`, `solid_problems`, then `wrapper_transform.relocate` and `scale` — the fallback's own functions, so
+  there is one definition of each — and it says in the envelope how far it got. `get_wrapped` takes that claim off
+  before anything reads the metadata, checks it against what was asked (in order, value for value; a claim of
+  anything else is an error, since it cannot be undone), reports the problems in the same words, and runs in a
+  sandbox only what is not claimed: everything, for a JavaScript part, an in-process factory, a reference (an alias
+  or enrich moving its source's geometry) and a wrapper that met an exception doing it, which claims nothing from
+  that step on and says nothing on stderr. The claim is never cached and changes nothing in the key — `offset` and
+  `scale` are in it already, and what is cached is what came out of all of it, wherever it was done. A wrapper that
+  returns a part and does not go through `finished()` costs every such part two to four interpreters.
+
   Which leaves the core to notice the ones that were not converted, and it does that **without a CAD kernel
   and without a sandbox**: `brep_inspect.py` reads the `TShapes` section of the BREP payload the core already
   holds — one record per shape, each opening with a two-letter type code — and counts the shells no solid

@@ -12,6 +12,15 @@ in-process. This module is the core-side entry point: it takes the operand
 shape(s) as BREP envelopes, runs the wrapper, and returns the result as a BREP
 envelope. Serialization goes through the pure 'shape_envelope' codec, so this
 module never touches OCP.
+
+It is the fallback, for geometry that is already a BREP when it is moved. A
+part's own 'offset' and 'scale', and the compound of the several shapes a
+partType or SDF script makes, are done by the wrapper that builds the part,
+while the shape is still live there ('Shape.finish_request',
+'wrapper_common.finished'): each call here is a whole interpreter importing OCP
+and parsing the BREP back. What still comes here is a reference to another part
+that moves it (an alias, an enrich), whose geometry was never live in a wrapper
+of its own; a sketch; and a part whose wrapper could not do it.
 """
 
 from . import logging as pc_logging

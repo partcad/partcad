@@ -9,6 +9,14 @@
 # core process never has to touch a live OCP object to perform them. The operand
 # shape(s) arrive in the request as BREP (see ocp_serialize) and the result goes
 # back the same way.
+#
+# That makes this the fallback, for a shape that is already a BREP when it is
+# moved: a reference to another part, or a part whose wrapper could not do it.
+# A part's own 'offset' and 'scale' are applied by the wrapper that builds it,
+# while the shape is still live ('wrapper_common.finished'), with the very same
+# 'relocate()' and 'scale()' below - one definition of what moving a part
+# means, and one CACHE_VERSION that says when it changed, whichever process
+# runs it.
 
 import os
 import sys
@@ -30,7 +38,7 @@ import wrapper_common
 CACHE_VERSION = 1
 
 
-def _relocate(shape, offset):
+def relocate(shape, offset):
     """Move 'shape' by the packed [translation, axis, angle] offset.
 
     The transform is applied to the geometry, so what comes back sits at the
@@ -61,7 +69,7 @@ def _relocate(shape, offset):
     return transform.Shape()
 
 
-def _scale(shape, factor):
+def scale(shape, factor):
     """Scale 'shape' by 'factor', mirroring the build123d scale() the core used."""
     import build123d as b3d
 
@@ -87,9 +95,9 @@ def _compound(shapes):
 def process(request):
     operation = request.get("operation")
     if operation == "offset":
-        return _relocate(request["shape"], request["offset"])
+        return relocate(request["shape"], request["offset"])
     if operation == "scale":
-        return _scale(request["shape"], request["scale"])
+        return scale(request["shape"], request["scale"])
     if operation == "compound":
         return _compound(request.get("shapes", []))
     raise ValueError("Unknown transform operation: %r" % (operation,))

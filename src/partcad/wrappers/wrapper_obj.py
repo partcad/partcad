@@ -69,7 +69,8 @@ def process(path, request):
     return {
         "success": True,
         "exception": None,
-        "shape": compound,
+        # Validated and moved here, while it is live (see wrapper_common.finished).
+        "shape": wrapper_common.finished(compound),
     }
 
 

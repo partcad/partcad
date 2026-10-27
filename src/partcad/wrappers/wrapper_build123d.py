@@ -196,6 +196,11 @@ def process(path, request):
     # Compound and filter here (see wrapper_common.combine) rather than in the
     # core process, so the factory just forwards the resulting envelope.
     compound, components = wrapper_common.combine(results, request.get("kind", "part"))
+    # A part is validated and moved here, while it is live (see
+    # wrapper_common.finished); a sketch asks for none of it. Not one the core
+    # is about to drop: a failed build, or one that showed nothing.
+    if build_result.success and components:
+        compound = wrapper_common.finished(compound)
     return {
         "success": build_result.success,
         "exception": wrapper_common.exception_to_str(build_result.exception),

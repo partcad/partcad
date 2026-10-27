@@ -51,6 +51,8 @@ class PartFactorySdf(PartFactoryPython):
             # Serialize the request into the wrapper wire format
             request["name"] = "%s:%s" % (part.project_name, part.name)
             request["label"] = part.name
+            # Validated and moved by the wrapper, while the shape is live (see 'Shape.finish_request').
+            request[shape_envelope.KEY_FINISH] = part.finish_request()
             request_serialized = shape_envelope.serialize(request)
 
             # The versions come from sandbox_versions, like every other factory's.
@@ -112,10 +114,15 @@ class PartFactorySdf(PartFactoryPython):
             shapes = response.get("shapes", [])
             if not shapes:
                 return None
+            # One shape, which is what the wrapper hands back for a part however
+            # many the script made: it compounds them itself, while they are
+            # live (see 'wrapper_common.finished_shapes').
             if len(shapes) == 1:
                 return shapes[0]
 
-            # Compounding now runs in a sandbox (transform.compound spawns a
+            # Several only from a wrapper that could not compound them (an
+            # answer holding something no shape is made of).
+            # Compounding then runs in a sandbox (transform.compound spawns a
             # runtime and raises on any failure), so it can fail where the old
             # in-process TopoDS_Compound could not. Keep this method's contract:
             # report via part.error() and return None instead of raising.

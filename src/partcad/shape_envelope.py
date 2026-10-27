@@ -228,6 +228,35 @@ METADATA_MEASUREMENTS = "measurements"
 METADATA_ANNOTATIONS = "annotations"
 METADATA_SECTIONS = "sections"
 
+# What a part is asked to go through on its way out of the wrapper that builds
+# it, and what that wrapper says it did. A part leaves its factory validated
+# and, when it declares 'offset' or 'scale', moved (see 'Shape.get_wrapped'):
+# work on the geometry, which the core cannot do. Done anywhere but in the
+# wrapper that built the shape, each step is another interpreter importing OCP
+# and parsing the BREP back, to do what was cheap while the shape was live.
+#
+# So a part factory puts KEY_FINISH in its request - '{"validate": {"solidify":
+# bool}, "offset": ..., "scale": ...}', from 'Shape.finish_request()' - and a
+# wrapper that can do it ('wrapper_common.finished') hands the shape back with a
+# METADATA_FINISHED section saying how far it got: '{"validated": {"solidify":
+# bool, "problems": [...]}, "offset": ..., "scale": ...}', each step echoing
+# what it was asked, in that order, and stopping at the first one it could not
+# take. Whatever is not claimed the core does as it always did, in a sandbox of
+# its own - which is the whole of the compatibility story: for a wrapper that
+# cannot (JavaScript), a factory that does not ask, and a shape that did not
+# come out of a wrapper at all (a reference to another part, a cache hit).
+#
+# A claim is between one request and its answer, and it is never stored: the
+# core takes it off the envelope before anything else reads the metadata (see
+# 'take_finished'), so no cache entry, no 'pc info' and no reference to the
+# part ever sees one.
+KEY_FINISH = "finish"
+METADATA_FINISHED = "finished"
+FINISHED_VALIDATED = "validated"
+# Beside the steps a claim names, why the wrapper stopped short of the rest, if
+# it did: for the log, never for deciding anything.
+FINISHED_DECLINED = "declined"
+
 # The fixed shape of the 'measurements' section. Named here, in the codec both
 # ends share, so that the sandbox that fills it in and the core that reports it
 # cannot come to disagree about a spelling.
@@ -509,6 +538,27 @@ def make_metadata(measurements=None, annotations=None, sections=None):
     if sections:
         metadata[METADATA_SECTIONS] = dict(sections)
     return metadata
+
+
+def take_finished(obj):
+    """'obj' without its METADATA_FINISHED claim, and the claim ('{}' when it makes none).
+
+    A copy when there was a claim to take, so that whatever else holds the
+    envelope keeps it as it was; 'obj' itself otherwise. The metadata goes too
+    when the claim was all it held, so that an envelope which recorded nothing
+    else still carries no metadata at all.
+    """
+    metadata = metadata_of(obj)
+    if not metadata or METADATA_FINISHED not in metadata:
+        return obj, {}
+    claim = metadata[METADATA_FINISHED]
+    rest = {key: value for key, value in metadata.items() if key != METADATA_FINISHED}
+    obj = dict(obj)
+    if rest:
+        obj[KEY_METADATA] = rest
+    else:
+        obj.pop(KEY_METADATA, None)
+    return obj, claim if isinstance(claim, dict) else {}
 
 
 def without_measurements(metadata):
