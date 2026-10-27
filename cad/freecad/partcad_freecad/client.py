@@ -11,9 +11,15 @@ Mirrors ``partcad_client.client`` (a thin client that does not import
 * the launcher is an explicit path to the frozen executable, not this
   interpreter -- FreeCAD's Python has no PartCAD in it;
 * :meth:`JsonRpcClient.call` is serialized with a lock, because the addon issues
-  calls from a worker thread while the Qt main thread stays responsive.
+  calls from a worker thread while the Qt main thread stays responsive;
+* where the daemon listens is not worked out here. That is the rendezvous
+  (``partcad_utils.workspace``), which this directory cannot import and must
+  not copy -- two copies of it are two answers, and a client acting on the
+  wrong one starts a second daemon. So the launcher is asked, once per package
+  directory, and its answer remembered (see :func:`_connect_socket`).
 """
 
+import io
 import os
 import socket
 import subprocess
@@ -27,6 +33,11 @@ _NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 # Seconds to wait for the local daemon socket to accept a connection.
 CONNECT_TIMEOUT = 10.0
+
+# The endpoint the launcher named for each (launcher, package directory), so
+# that connecting again does not start the launcher again. See
+# '_connect_socket'.
+_ENDPOINTS: dict = {}
 
 
 class ServiceError(RuntimeError):
@@ -95,19 +106,53 @@ def start_daemon(executable: str, cwd: Optional[str] = None, extra_args=()) -> s
 
 
 def _connect_socket(executable: str, cwd: Optional[str], extra_args) -> JsonRpcClient:
+    """The daemon for ``cwd``, at the endpoint the launcher named for it last time.
+
+    Asking the launcher is a process start of the frozen bundle, which loads the
+    service before it can say anything, for an endpoint that is a function of
+    the workspace and so does not change between asks. So it is asked once, and
+    asked again only when nothing takes a connection at the endpoint it named: a
+    daemon that stopped, or restarted because the user's configuration changed
+    (it takes its endpoint away first), or one too busy to accept -- which is
+    when the launcher, asked again, decides whether to replace it. Remembering
+    an answer is not computing one: it is the launcher's, and whatever it
+    decides, it decides as before.
+    """
+    key = (executable, os.path.abspath(cwd or os.getcwd()))
+    known = _ENDPOINTS.get(key)
+    if known is not None:
+        try:
+            return _open_endpoint(known)
+        except OSError:
+            _ENDPOINTS.pop(key, None)
     path = start_daemon(executable, cwd, extra_args)
-    if path.startswith("\\\\.\\pipe\\"):  # Windows named pipe
-        stream = open(path, "r+b", buffering=0)  # pragma: no cover - Windows only
+    client = _open_endpoint(path)
+    _ENDPOINTS[key] = path
+    return client
+
+
+def _open_endpoint(path: str) -> JsonRpcClient:
+    if path.startswith("\\\\.\\pipe\\"):  # Windows named pipe  # pragma: no cover - Windows only
+        raw = open(path, "r+b", buffering=0)
+        # Buffered: a read from a pipe returns what has arrived so far, and
+        # 'read_message' takes a body shorter than its length for the end of
+        # the stream. A buffered reader reads on until it has the whole length.
+        stream = io.BufferedRWPair(raw, raw)
         return JsonRpcClient(stream, stream, closer=stream.close)
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    # Bound the connect: the daemon is local and answers immediately or not at
-    # all, so a hang here means a stale socket, not slow work. The deadline is
-    # then cleared for the session -- PartCAD operations legitimately run for
-    # minutes (cloning a repository, building a sandbox, running a CAD script),
-    # and a read deadline would abort them mid-flight.
-    sock.settimeout(CONNECT_TIMEOUT)
-    sock.connect(path)
-    sock.settimeout(None)
+    try:
+        # Bound the connect: the daemon is local and answers immediately or not
+        # at all, so a hang here means a stale socket, not slow work. The
+        # deadline is then cleared for the session -- PartCAD operations
+        # legitimately run for minutes (cloning a repository, building a
+        # sandbox, running a CAD script), and a read deadline would abort them
+        # mid-flight.
+        sock.settimeout(CONNECT_TIMEOUT)
+        sock.connect(path)
+        sock.settimeout(None)
+    except BaseException:
+        sock.close()
+        raise
     stream = sock.makefile("rwb")
 
     def closer():
