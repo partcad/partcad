@@ -5,28 +5,29 @@
 #
 
 # This script is executed within the python sandbox environment (python runtime)
-# to turn a shape tree's geometry from BREP into glTF.
+# to turn pieces of exact geometry from BREP into glTF.
 #
-# It is the same tree either way - the nodes, their names, their placements, the
-# ports and interfaces each carries - with one payload swapped for the other:
-# 'brep' becomes 'gltf'. Which is the whole point of having two forms (see
-# 'partcad.shape_envelope'): the core composes and caches the exact form, and a
-# renderer can only draw a tessellated one. A browser has no CAD kernel, so the
-# conversion cannot happen there; the core has none either, so it cannot happen
-# there; it happens here.
+# It is handed geometry and nothing else: a list of distinct BREP payloads, each
+# under the digest the core names it by, and the deflection to tessellate them
+# at. Not the tree they come from. The tree - the nodes, their names, their
+# placements, the ports and interfaces each carries - is the same tree in either
+# form (see 'partcad.shape_envelope'), so the core keeps it and puts the answer
+# into it itself ('shape_gltf.convert_async'); only what sits at a node that has
+# geometry changes, and that is all that is computed here. Which is also what
+# lets the core remember each tessellation on its own, and send this process only
+# the geometry it has not tessellated before: edit one part of an assembly and
+# one part is tessellated again.
 #
-# One process for the whole tree, not one per leaf. Tessellating is a fraction of
+# One process for all of them, not one per shape. Tessellating is a fraction of
 # what a sandbox costs - starting an interpreter and importing OCP is seconds -
 # so an assembly of five hundred parts converted a part at a time would take
 # longer than building it did.
 #
-# A node's own placement is left exactly where it was found. The tree carries
-# placements as data and applies them where the tree is realized (see
-# 'ocp_serialize.decode_shape', which does it for the BREP form); so the glTF of
-# a node is its geometry in its own coordinate system, and whoever draws the tree
-# composes the locations down it. The same goes for a sketch a port is drawn with:
-# it arrives in its own coordinate system and is placed at the port by whoever
-# draws it.
+# The glTF of a shape is its geometry in its own coordinate system. The tree
+# carries placements as data and applies them where the tree is realized (see
+# 'ocp_serialize.decode_shape', which does it for the BREP form), and whoever
+# draws the tree composes the locations down it; a sketch a port is drawn with is
+# placed at the port the same way.
 
 import hashlib
 import json
@@ -372,6 +373,17 @@ def _draws_lines(glb: bytes) -> bool:
     )
 
 
+class NothingToDraw(Exception):
+    """A shape with no face and no edge: a point, an empty compound.
+
+    Told apart from every other reason a shape comes back without glTF because it
+    is a fact about the geometry and nothing else - the same payload has nothing
+    to draw on every machine, every time - so it is an answer the core may
+    remember, where a decoder or an exporter failing may be this sandbox's doing
+    (see 'shape_gltf.convert_async').
+    """
+
+
 def _to_glb(shape, tolerance, angular_tolerance):
     """Tessellate one shape into a binary glTF buffer, at an absolute deflection.
 
@@ -387,72 +399,26 @@ def _to_glb(shape, tolerance, angular_tolerance):
         if positions:
             glb = _with_lines(glb, positions)
     if glb is None:
-        raise Exception("there are no faces or edges to draw")
+        raise NothingToDraw("there are no faces or edges to draw")
     return glb
 
 
-def _shape(brep, shapes):
-    """The decoded shape for this payload, decoded once however often it turns up."""
-    digest = ocp_serialize.payload_digest(brep)
-    if digest not in shapes:
-        shapes[digest] = ocp_serialize.shape_from_payload(brep)
-    return digest, shapes[digest]
-
-
-def _convert(value, tolerance, angular_tolerance, errors, shapes, geometry, failed):
-    """'value' with every piece of BREP in it replaced by a reference to its glTF.
-
-    A walk of the whole structure rather than of the places a node's geometry is
-    known to sit. Geometry turns up in more than one of them - a node's own, the
-    nodes inside it, the sketches the ports of an object are drawn with - and which
-    ones those are is the core's business: it adds one without telling this file,
-    and a walk that knew the list would quietly hand the browser BREP the day it
-    did. Anything that is not geometry is copied through untouched.
-
-    The glTF itself goes into 'geometry', keyed by a digest of the exact geometry it
-    was made from, and what had the BREP gets that key. So one shape placed a
-    hundred times is tessellated once, and the answer carries one copy of it: the
-    placements are what differ between those hundred nodes, and placements are not
-    in the geometry.
-
-    A shape that will not tessellate loses its geometry and keeps its place, with
-    the reason collected for the caller to report - once per distinct shape rather
-    than once per node that names it. A sketch of nothing but edges is not that: its
-    edges are drawn as lines (see '_to_glb').
-    """
-    if isinstance(value, list):
-        return [_convert(item, tolerance, angular_tolerance, errors, shapes, geometry, failed) for item in value]
-    if not isinstance(value, dict):
-        return value
-
-    converted = {
-        key: _convert(item, tolerance, angular_tolerance, errors, shapes, geometry, failed)
-        for key, item in value.items()
-        if key != ocp_serialize.KEY_BREP
-    }
-
-    brep = value.get(ocp_serialize.KEY_BREP)
-    if brep:
-        try:
-            digest, shape = _shape(brep, shapes)
-            if digest not in geometry and digest not in failed:
-                geometry[digest] = ocp_serialize.encode_gltf(_to_glb(shape, tolerance, angular_tolerance))
-            if digest in geometry:
-                converted[ocp_serialize.KEY_GLTF_REF] = digest
-        except Exception as e:
-            try:
-                failed.add(ocp_serialize.payload_digest(brep))
-            except Exception:
-                pass
-            errors.append("%s: %s" % (value.get("label") or value.get("name") or "a shape", e))
-
-    return converted
-
-
 def process(request):
-    tree = request.get("tree")
-    if not isinstance(tree, dict):
-        raise Exception("No shape tree to convert into glTF")
+    """The glTF of every shape in 'request', by the digest the core named each one by.
+
+    'shapes' is a list of '{"digest", "brep"}', one per distinct payload: the core
+    has already found which of a tree's shapes are the same shape, and which of
+    them it tessellated before, so nothing here is decoded or tessellated twice and
+    nothing is recomputed to name it. What comes back is keyed by those same
+    digests, in one of three tables: 'geometry' for the glTF of each shape that has
+    some, 'empty' for a shape with nothing to draw ('NothingToDraw'), and 'failed'
+    for one that would not tessellate - each with the reason, which the core
+    reports against the nodes it belongs to. A shape that fails costs its own
+    entry and nothing else: the rest of the tree is still worth looking at.
+    """
+    shapes = request.get("shapes")
+    if not isinstance(shapes, list):
+        raise Exception("No shapes to convert into glTF")
     # In millimetres, and decided by the caller. Not worked out here, although this
     # is the one process holding a kernel: the size it would be worked out from is
     # recorded in the tree, the core reads it from there ('shape_gltf.size_of'), and
@@ -463,41 +429,35 @@ def process(request):
     tolerance = float(tolerance)
     angular_tolerance = float(request.get("angularTolerance", 0.4))
 
-    errors = []
-    # A cross-section, cut here rather than in a sandbox of its own: starting
-    # one is most of what a cut costs, and the viewer asks for a new one every
-    # time a slider is let go. A node cut away entirely is left with no geometry
-    # at all, which is a node this walk already copes with (see 'wrapper_section').
-    section = request.get("section")
-    if section:
-        import wrapper_section
-
-        tree = wrapper_section.section_tree(tree, section, errors, keep_empty=False)
-    # One decoded shape per distinct geometry, shared by every node naming it.
-    shapes = {}
-    geometry = {}
-    converted = _convert(tree, tolerance, angular_tolerance, errors, shapes, geometry, set())
-    converted[ocp_serialize.KEY_GEOMETRY] = geometry
+    geometry, empty, failed = {}, {}, {}
+    for entry in shapes:
+        digest = entry.get("digest")
+        try:
+            shape = ocp_serialize.shape_from_payload(entry[ocp_serialize.KEY_BREP])
+            geometry[digest] = ocp_serialize.encode_gltf(_to_glb(shape, tolerance, angular_tolerance))
+        except NothingToDraw as e:
+            empty[digest] = str(e)
+        except Exception as e:
+            failed[digest] = str(e) or type(e).__name__
     return {
         "success": True,
         "exception": None,
-        "tree": converted,
-        "errors": errors,
+        "geometry": geometry,
+        "empty": empty,
+        "failed": failed,
         # What was used, so that the core can say so rather than leave the numbers
         # that decide the size of all this unsaid. 'mergedFaces' is None when
         # nothing was exported and so nothing was found out.
         "tolerance": tolerance,
         "angularTolerance": angular_tolerance,
-        "section": section or None,
         "mergedFaces": None if _create_xde is False else (_create_xde is not None),
     }
 
 
 if __name__ == "__main__":
-    # The tree arrives undecoded, as the dicts it travelled in: decoding would
-    # rebuild it as one compound with the names, the placements and everything
-    # else dropped (see 'ocp_serialize.decode_shape'), which is the one thing
-    # this must not do - the tree *is* the answer.
+    # The shapes arrive undecoded, as the dicts they travelled in: decoding would
+    # turn each into a live shape and drop the digest beside it, which is the
+    # name the answer has to come back under. 'process' decodes them one by one.
     #
     # The path argv[1] carries is unused: the glTF comes back over the pipe
     # rather than as a file. handle_input() requires the argument all the same,
@@ -507,5 +467,5 @@ if __name__ == "__main__":
         model = process(request)
     except Exception as e:
         wrapper_common.handle_exception(e)
-        model = {"success": False, "exception": str(e), "tree": None, "errors": []}
+        model = {"success": False, "exception": str(e)}
     wrapper_common.handle_output(model)

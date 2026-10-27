@@ -471,7 +471,17 @@ at all).
   keyed on **exactly the bytes they are handed** (`cache_artifacts.request_key`/`content_key`,
   `wrapper_hash`), because no object key covers what they get: port sketches are attached after the shape
   cache answers, and a book's pictures are in a fresh temporary directory every time (its key reads them by
-  content, never by path). What they answer is stored as the wrapper's response line. `cache: false` still
+  content, never by path). What they answer is stored as the wrapper's response line -- except the
+  tessellation, which is stored **a shape at a time** (`wrapper_entries_hash`, `restore_entries_async`,
+  `store_entries_async`): one key for the run minus its subject -- the wrapper, the environment, the
+  tolerances -- and an entry under it per shape, named by the digest of that shape's BREP and holding its glTF
+  payload exactly as the wrapper wrote it, behind a one-byte tag (text, bytes, or "nothing to draw"). Not
+  packed and not compressed, because the payload is deflated already. So a hit is a digest per distinct payload
+  (`shape_envelope.Payloads`, once per payload object) and one batched read, with nothing serialized; and an
+  assembly shown after one part was edited sends that part, alone, to a sandbox. The tree is never in the key
+  and never sent: the core puts the answer together itself (`shape_gltf._Shapes`). A shape that would not
+  tessellate is not remembered and is tried again next time, alone; one with no face and no edge
+  (`wrapper_gltf.NothingToDraw`) is, since that is a fact about its geometry. `cache: false` still
   holds: the caller passes whether the object may be cached. The test wrappers (interference, solidity,
   manufacturability) are deliberately not here -- they run only inside a `pc test` check, whose verdict is
   cached already -- and neither is a shape's build, which is the shape cache.
@@ -1185,9 +1195,12 @@ at all).
 
   **The form is a parameter, not a second hierarchy.** `FORM_BREP` is what the core composes and caches because
   it is exact; `FORM_GLTF` is that same tree tessellated, for a caller that has to draw it rather than compute
-  with it — a browser has no CAD kernel. One sandbox converts the whole tree (`shape_gltf.convert_async` →
-  `wrappers/wrapper_gltf.py`), not one per node: starting an interpreter and importing OCP is seconds, so an
-  assembly of five hundred parts converted a node at a time would cost longer than building it. Placements are
+  with it — a browser has no CAD kernel. One sandbox converts every shape of the tree that is not cached yet
+  (`shape_gltf.convert_async` → `wrappers/wrapper_gltf.py`), not one per node: starting an interpreter and
+  importing OCP is seconds, so an assembly of five hundred parts converted a node at a time would cost longer
+  than building it. The sandbox is handed the distinct BREP payloads and nothing of the tree, and answers with
+  the glTF of each by its digest; the core keeps the tree and swaps each node's `brep` for a `gltfRef` itself,
+  which is what lets each shape's glTF be cached on its own (see the artifact cache above). Placements are
   never baked into the geometry in either form — a node's `location` places its geometry, its children *and*
   its ports, and whoever realizes or draws the tree composes them down it (`shape_envelope.placed()` is the one
   composition, shared by an assembly placing a child and an interface placing a sketch on a port).
@@ -1199,7 +1212,11 @@ at all).
   then get the same answer to "smooth enough" and deflections three orders apart to reach it. Clamped at both
   ends; a caller that passes `tolerance` in mm overrides the lot, and a tree that records no size at all gets
   `NOMINAL_SIZE` rather than the floor — the floor is the finest setting there is and the least-known tree is the
-  last one to spend it on.
+  last one to spend it on. Then **rounded down onto the R10 series** (`TOLERANCE_SERIES`, `bucketed`: 0.1, 0.125,
+  0.16, 0.2 ... mm), because each shape's tessellation is cached under the deflection it was made at: a tree
+  that grows by a washer keeps its deflection, and every shape in it stays a hit. Down, so a preview is at most
+  a step (about a fifth) finer than the budget and never coarser; written from its digits, so it is the same
+  float -- and the same key -- on every machine.
 
   **That size is read, not measured** (`shape_gltf.size_of`). Every shape a wrapper returned carries the box it
   was measured in as it was built (`metadata.measurements.bbox`), so sizing a tree is arithmetic over numbers
@@ -1238,9 +1255,10 @@ at all).
   each node naming its entry in `KEY_GLTF_REF`). An assembly places the same bolt a hundred times; that bolt is
   tessellated once, sent once, and parsed and uploaded to the GPU once, with a hundred nodes naming it. What
   makes it possible is that a placement was never part of the geometry — which is the same property the whole
-  two-form design rests on. The table is keyed by a digest of the exact BREP (`ocp_serialize.payload_digest`),
-  content and not identity, because nodes arrive as separately deserialized dicts and the same shape is never
-  the same object. It is the arrangement `KEY_SKETCHES` already had, one level up, and sketches now name this
+  two-form design rests on. The table is keyed by a digest of the exact BREP (`shape_envelope.payload_digest`,
+  the same function as `ocp_serialize.payload_digest`), content and not identity, because a part read back from
+  the cache beside one just built is the same shape in two objects; it is worked out once per payload *object*
+  (`shape_envelope.Payloads`), since every node of a tree built in one process holds its part's bytes object. It is the arrangement `KEY_SKETCHES` already had, one level up, and sketches now name this
   table too.
 
   **The BREP form gets the same sharing where it is decoded** (`ocp_serialize._shared_shape`, used by

@@ -1577,9 +1577,11 @@ def _context(tmp_path, sandbox):
 
 
 def _tessellated(_command, request, run):
-    if request["tree"].get("fail"):
+    """What 'wrapper_gltf.process' answers: the glTF of each shape it was handed, by digest."""
+    shapes = request["shapes"]
+    if any(shape["brep"] == b"fail" for shape in shapes):
         return {"success": False, "exception": "no OCP"}
-    return {"success": True, "tree": {"name": request["tree"]["name"], shape_envelope.KEY_GLTF: b"glb of run %d" % run}}
+    return {"success": True, "geometry": {shape["digest"]: "glb of run %d" % run for shape in shapes}}
 
 
 def test_a_tessellation_is_tessellated_once(tmp_path):
@@ -1594,11 +1596,15 @@ def test_a_tessellation_is_tessellated_once(tmp_path):
 
     assert len(sandbox.runs) == 1
     assert second == first
-    assert second[shape_envelope.KEY_GLTF] == b"glb of run 1"
+    assert second[shape_envelope.KEY_GEOMETRY][second[shape_envelope.KEY_GLTF_REF]] == "glb of run 1"
 
 
 def test_another_tree_is_another_tessellation(tmp_path):
-    """Keyed on what the sandbox is handed, the sketches of the ports included."""
+    """Keyed on the geometry each shape is made of and the tolerance it is tessellated at.
+
+    The rest - a tree that is a hair larger, a part edited among others that are
+    not - is 'test_shape_gltf_cache.py'.
+    """
     sandbox = _Sandbox(_tessellated)
     ctx = _context(tmp_path, sandbox)
 
@@ -1621,7 +1627,7 @@ def test_a_tessellation_of_what_is_not_cached_is_not_remembered(tmp_path):
 def test_a_failed_tessellation_is_not_remembered(tmp_path):
     sandbox = _Sandbox(_tessellated)
     ctx = _context(tmp_path, sandbox)
-    tree = {"name": "cube", "brep": b"geometry", "fail": True}
+    tree = {"name": "cube", "brep": b"fail"}
 
     for _ in range(2):
         with pytest.raises(Exception, match="no OCP"):

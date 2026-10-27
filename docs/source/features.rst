@@ -1091,9 +1091,11 @@ assembly instruction book as the assembly and the step.
 PartCAD's own sandboxed steps are cached the same way: the tessellation the IDE
 draws an object with, the PDF of an assembly instruction book, and the length a
 connection is pushed through. Those are keyed on exactly what the sandbox is
-handed -- every BREP in the tree, the sketches of its ports, the text and the
-pictures of the book -- so showing an object again, or printing the same book
-again, starts no sandbox.
+handed -- the text and the pictures of the book, the geometry of each shape --
+so showing an object again, or printing the same book again, starts no sandbox.
+The tessellation is kept a shape at a time, keyed on that shape's exact geometry
+and on how finely it is drawn, so an assembly shown after one of its parts was
+edited sends that part, and nothing else, to be tessellated again.
 
 The question is the object's own cache key plus everything the run adds to it:
 the boundary conditions and where they landed, a route's job and the machine it

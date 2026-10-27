@@ -19,16 +19,18 @@ answering to the budget, which is why one of these tests tessellates a real
 cylinder and counts the triangles rather than trusting the arrangement.
 """
 
+import asyncio
 import json
 import os
 import struct
 import sys
+import types
 
 import pytest
 from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
 
 import partcad as pc
-from partcad import shape_envelope, shape_gltf
+from partcad import runtime, shape_envelope, shape_gltf
 from partcad.geom import Location
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
@@ -188,7 +190,7 @@ class TestTolerance:
         small = shape_gltf.tolerance_for(measured([0, 0, 0, 10, 10, 10]))
         large = shape_gltf.tolerance_for(measured([0, 0, 0, 10000, 10000, 10000]))
         assert large == pytest.approx(small * 1000)
-        assert small == pytest.approx(3**0.5 * 10 / shape_gltf.SCREEN_DIVISOR)
+        assert small == shape_gltf.bucketed(3**0.5 * 10 / shape_gltf.SCREEN_DIVISOR)
 
     def test_it_is_clamped_at_both_ends(self):
         """The floor is for a tiny object, the ceiling for a bogus bounding box.
@@ -218,32 +220,100 @@ class TestTolerance:
         assert shape_gltf.SCREEN_DIVISOR == shape_gltf.SCREEN_PIXELS / shape_gltf.PIXEL_BUDGET
 
 
+class TestBucketing:
+    """The deflection is a value of a fixed series, so a tree keeps it while its size wobbles.
+
+    What it is for is the cache: each shape's tessellation is keyed on the deflection,
+    and the deflection on the size of the whole tree, so a deflection that followed
+    the size exactly would re-tessellate an assembly whenever anything in it moved.
+    """
+
+    def test_it_rounds_down_and_never_up(self):
+        """Down is finer: a preview may be smoother than the budget, never coarser."""
+        for raw in (0.00123, 0.0173, 0.05, 0.0866, 0.2066, 0.999, 1.0, 3.3, 7.99):
+            rounded = shape_gltf.bucketed(raw)
+            assert rounded <= raw
+            # And by less than one step of the series, the largest of which is 1.6/1.25.
+            assert rounded > raw / 1.29
+
+    def test_it_lands_on_the_series(self):
+        assert shape_gltf.bucketed(0.2066) == 0.2
+        assert shape_gltf.bucketed(0.0866) == 0.08
+        assert shape_gltf.bucketed(0.5) == 0.5
+        assert shape_gltf.bucketed(0.4999) == 0.4
+        assert shape_gltf.bucketed(3.2) == 3.15
+        assert shape_gltf.bucketed(9.99) == 8.0
+        assert shape_gltf.bucketed(shape_gltf.MIN_TOLERANCE) == shape_gltf.MIN_TOLERANCE
+        assert shape_gltf.bucketed(shape_gltf.MAX_TOLERANCE) == shape_gltf.MAX_TOLERANCE
+
+    def test_a_value_a_rounding_error_short_of_a_step_is_that_step(self):
+        """0.0125 worked out as 0.01249999... is still 0.0125, not 0.01."""
+        assert shape_gltf.bucketed(0.0125 * (1 - 1e-12)) == 0.0125
+        assert shape_gltf.bucketed(0.1 * (1 - 1e-12)) == 0.1
+
+    def test_it_is_written_from_its_digits(self):
+        """The same float everywhere: it is part of a key a shared cache tier is read by."""
+        assert repr(shape_gltf.bucketed(0.0173)) == "0.016"
+        assert repr(shape_gltf.bucketed(0.00316)) == "0.00315"
+
+    def test_a_tree_that_grows_a_little_keeps_its_deflection(self):
+        before = shape_gltf.tolerance_for(measured([0, 0, 0, 400, 200, 100]))
+        after = shape_gltf.tolerance_for(measured([0, 0, 0, 405, 200, 100]))
+        assert before == after
+
+
+class InProcess:
+    """A runtime that runs 'wrapper_gltf.process' in this process, over the wire format.
+
+    The request goes through the same serialization a sandbox reads it from and the
+    answer back through the one a sandbox writes it with, so what is tested is the
+    protocol between the core and the wrapper, with only the interpreter left out.
+    """
+
+    def __init__(self):
+        self.requests = []
+
+    async def ensure_async(self, *_args, **_kwargs):
+        return None
+
+    async def run_async(self, command, request, **_kwargs):
+        decoded = ocp_serialize.deserialize_raw(runtime.stdin_bytes(request))
+        self.requests.append(decoded)
+        return 0, ocp_serialize.serialize(wrapper_gltf.process(decoded), share=True), ""
+
+
+def show(tree, **kwargs):
+    """'tree' converted the way the viewer asks for it, by the wrapper itself, with no cache."""
+    sandbox = InProcess()
+    ctx = types.SimpleNamespace(cache_artifacts=None, get_python_runtime=lambda **_kwargs: sandbox)
+    return asyncio.run(shape_gltf.convert_async(ctx, tree, **kwargs)), sandbox
+
+
 class TestSharing:
     """One entry per distinct geometry, however many nodes are made of it."""
 
-    @staticmethod
-    def convert(tree, monkeypatch, tolerance=0.1, angular=0.4):
-        """'_convert' with the tessellation stubbed: the sharing is what is under test.
+    @pytest.fixture(autouse=True)
+    def stubbed(self, monkeypatch):
+        """The tessellation stubbed: the sharing is what is under test.
 
         The stub returns the BREP's own bytes, so an entry can be matched back to
-        the shape it came from without a CAD kernel in the loop.
+        the shape it came from.
         """
         monkeypatch.setattr(wrapper_gltf, "_to_glb", lambda shape, *_: ocp_serialize.shape_to_brep(shape))
-        errors, geometry = [], {}
-        converted = wrapper_gltf._convert(tree, tolerance, angular, errors, {}, geometry, set())
-        return converted, geometry, errors
 
-    def test_one_shape_placed_many_times_is_one_entry(self, monkeypatch):
+    def test_one_shape_placed_many_times_is_one_entry(self):
         payload = ocp_serialize.compressed_brep(box(10, 10, 10))
         tree = {
             ocp_serialize.KEY_ASSEMBLY: [
                 {ocp_serialize.KEY_BREP: payload, "name": "bolt-%d" % index} for index in range(100)
             ]
         }
-        converted, geometry, errors = self.convert(tree, monkeypatch)
+        converted, sandbox = show(tree)
+        geometry = converted[ocp_serialize.KEY_GEOMETRY]
 
-        assert errors == []
         assert len(geometry) == 1
+        # Handed to the sandbox once, too.
+        assert len(sandbox.requests[0]["shapes"]) == 1
         children = converted[ocp_serialize.KEY_ASSEMBLY]
         assert len(children) == 100
         # Every node names that one entry, and none of them carries a copy.
@@ -253,7 +323,7 @@ class TestSharing:
         # The names are the nodes' own: what is shared is geometry, not identity.
         assert [child["name"] for child in children][:2] == ["bolt-0", "bolt-1"]
 
-    def test_different_shapes_are_different_entries(self, monkeypatch):
+    def test_different_shapes_are_different_entries(self):
         tree = {
             ocp_serialize.KEY_ASSEMBLY: [
                 node(box(10, 10, 10)),
@@ -261,13 +331,27 @@ class TestSharing:
                 node(box(10, 10, 10)),
             ]
         }
-        converted, geometry, _ = self.convert(tree, monkeypatch)
+        converted, _ = show(tree)
 
         refs = [child[ocp_serialize.KEY_GLTF_REF] for child in converted[ocp_serialize.KEY_ASSEMBLY]]
-        assert len(geometry) == 2
+        assert len(converted[ocp_serialize.KEY_GEOMETRY]) == 2
         assert refs[0] == refs[2] != refs[1]
 
-    def test_a_placement_does_not_make_a_shape_a_different_shape(self, monkeypatch):
+    def test_the_same_bytes_in_two_objects_are_one_shape(self):
+        """Content and not identity: a part read back from the cache beside one just built."""
+        payload = ocp_serialize.compressed_brep(box(10, 10, 10))
+        tree = {
+            ocp_serialize.KEY_ASSEMBLY: [
+                {ocp_serialize.KEY_BREP: payload},
+                {ocp_serialize.KEY_BREP: bytes(bytearray(payload))},
+            ]
+        }
+        converted, sandbox = show(tree)
+
+        assert len(converted[ocp_serialize.KEY_GEOMETRY]) == 1
+        assert len(sandbox.requests[0]["shapes"]) == 1
+
+    def test_a_placement_does_not_make_a_shape_a_different_shape(self):
         """Which is what makes the sharing possible: placements are not in geometry."""
         payload = ocp_serialize.compressed_brep(box(10, 10, 10))
         tree = {
@@ -279,16 +363,16 @@ class TestSharing:
                 },
             ]
         }
-        converted, geometry, _ = self.convert(tree, monkeypatch)
+        converted, _ = show(tree)
 
-        assert len(geometry) == 1
+        assert len(converted[ocp_serialize.KEY_GEOMETRY]) == 1
         first, second = converted[ocp_serialize.KEY_ASSEMBLY]
         assert first[ocp_serialize.KEY_GLTF_REF] == second[ocp_serialize.KEY_GLTF_REF]
         # And the one that was placed still says where it sits.
         assert ocp_serialize.KEY_LOCATION not in first
         assert second[ocp_serialize.KEY_LOCATION][0] == [50, 0, 0]
 
-    def test_geometry_anywhere_in_the_structure_is_converted(self, monkeypatch):
+    def test_geometry_anywhere_in_the_structure_is_converted(self):
         """Including the sketches a port is drawn with, which are not nodes.
 
         The walk is of the whole structure rather than of the places geometry is
@@ -299,14 +383,14 @@ class TestSharing:
             ocp_serialize.KEY_BREP: ocp_serialize.compressed_brep(box(10, 10, 10)),
             "sketches": {"//pkg:m3": node(box(3, 3, 0.1))},
         }
-        converted, geometry, _ = self.convert(tree, monkeypatch)
+        converted, _ = show(tree)
 
-        assert len(geometry) == 2
+        assert len(converted[ocp_serialize.KEY_GEOMETRY]) == 2
         assert ocp_serialize.KEY_GLTF_REF in converted
         assert ocp_serialize.KEY_GLTF_REF in converted["sketches"]["//pkg:m3"]
         assert ocp_serialize.KEY_BREP not in converted["sketches"]["//pkg:m3"]
 
-    def test_a_shape_that_will_not_tessellate_is_reported_once(self, monkeypatch):
+    def test_a_shape_that_will_not_tessellate_is_reported_once(self, monkeypatch, caplog):
         """Once per distinct shape, not once per node that names it.
 
         A hundred instances of one unmeshable part are one thing wrong, and a
@@ -318,24 +402,53 @@ class TestSharing:
             raise Exception("no triangles here")
 
         monkeypatch.setattr(wrapper_gltf, "_to_glb", boom)
-        errors, geometry = [], {}
-        failed = set()
         tree = {ocp_serialize.KEY_ASSEMBLY: [{ocp_serialize.KEY_BREP: payload, "name": "a"} for _ in range(5)]}
-        converted = wrapper_gltf._convert(tree, 0.1, 0.4, errors, {}, geometry, failed)
+        with caplog.at_level("WARNING"):
+            converted, _ = show(tree)
 
-        assert len(errors) == 1
-        assert geometry == {}
+        assert caplog.text.count("Nothing to draw for a: no triangles here") == 1
+        assert converted[ocp_serialize.KEY_GEOMETRY] == {}
         # Every node keeps its place and simply has nothing to draw.
         for child in converted[ocp_serialize.KEY_ASSEMBLY]:
             assert ocp_serialize.KEY_GLTF_REF not in child
             assert child["name"] == "a"
 
-    def test_the_table_is_on_the_root_of_what_comes_back(self, monkeypatch):
-        monkeypatch.setattr(wrapper_gltf, "_to_glb", lambda shape, *_: b"glTF-stub")
-        result = wrapper_gltf.process({"tree": node(box(10, 10, 10)), "tolerance": 0.2})
+    def test_the_table_is_on_the_root_of_what_comes_back(self):
+        converted, _ = show(node(box(10, 10, 10)))
+        assert list(converted[ocp_serialize.KEY_GEOMETRY]) == [converted[ocp_serialize.KEY_GLTF_REF]]
+
+
+class TestTheWrapper:
+    """What 'wrapper_gltf.process' answers: glTF by the digest it was handed each shape under."""
+
+    def test_each_shape_comes_back_under_its_own_name(self, monkeypatch):
+        monkeypatch.setattr(wrapper_gltf, "_to_glb", lambda shape, *_: ocp_serialize.shape_to_brep(shape))
+        shapes = [
+            {"digest": "first", ocp_serialize.KEY_BREP: ocp_serialize.compressed_brep(box(10, 10, 10))},
+            {"digest": "second", ocp_serialize.KEY_BREP: ocp_serialize.compressed_brep(box(20, 10, 10))},
+        ]
+        result = wrapper_gltf.process({"shapes": shapes, "tolerance": 0.2})
 
         assert result["success"] is True
-        assert list(result["tree"][ocp_serialize.KEY_GEOMETRY]) == [result["tree"][ocp_serialize.KEY_GLTF_REF]]
+        assert set(result["geometry"]) == {"first", "second"}
+        assert result["empty"] == {} and result["failed"] == {}
+
+    def test_nothing_to_draw_is_told_apart_from_a_failure(self, monkeypatch):
+        """The first is a fact about the geometry, and the core remembers it; the second is not."""
+        from OCP.BRep import BRep_Builder
+        from OCP.TopoDS import TopoDS_Compound
+
+        nothing = TopoDS_Compound()
+        BRep_Builder().MakeCompound(nothing)
+        shapes = [
+            {"digest": "nothing", ocp_serialize.KEY_BREP: ocp_serialize.compressed_brep(nothing)},
+            {"digest": "garbage", ocp_serialize.KEY_BREP: b"not a BREP"},
+        ]
+        result = wrapper_gltf.process({"shapes": shapes, "tolerance": 0.2})
+
+        assert result["geometry"] == {}
+        assert result["empty"] == {"nothing": "there are no faces or edges to draw"}
+        assert list(result["failed"]) == ["garbage"]
 
 
 class TestDigest:
@@ -482,12 +595,10 @@ class TestEdges:
         assert sum(len(segments) for segments in line_primitives(glb)) == 2
 
     def test_a_node_of_lines_alone_gets_its_geometry(self):
-        errors, geometry = [], {}
         tree = node(ocp_serialize.compound_of([edge((0, 0, 0), (10, 0, 0))]), name="bends")
-        converted = wrapper_gltf._convert(tree, 0.1, 0.4, errors, {}, geometry, set())
+        converted, _ = show(tree, tolerance=0.1)
 
-        assert errors == []
-        assert list(geometry) == [converted[ocp_serialize.KEY_GLTF_REF]]
+        assert list(converted[ocp_serialize.KEY_GEOMETRY]) == [converted[ocp_serialize.KEY_GLTF_REF]]
 
     def test_what_the_drawing_says_about_its_lines_goes_with_them(self):
         """The metadata is not geometry, so it is carried through untouched.
@@ -500,7 +611,7 @@ class TestEdges:
             ocp_serialize.compound_of([edge((0, 0, 0), (10, 0, 0))]),
             metadata=ocp_serialize.make_metadata(annotations=annotations),
         )
-        converted = wrapper_gltf._convert(tree, 0.1, 0.4, [], {}, {}, set())
+        converted, _ = show(tree, tolerance=0.1)
 
         assert converted[ocp_serialize.KEY_METADATA][ocp_serialize.METADATA_ANNOTATIONS] == annotations
 
@@ -609,10 +720,22 @@ class TestTheSandboxDoesNotDecideTheBudget:
 
     def test_a_request_with_no_tolerance_is_refused(self):
         with pytest.raises(Exception, match="tolerance"):
-            wrapper_gltf.process({"tree": node(box(10, 10, 10))})
+            wrapper_gltf.process({"shapes": [dict(node(box(10, 10, 10)), digest="box")]})
 
     def test_what_it_was_given_is_what_it_reports(self, monkeypatch):
         monkeypatch.setattr(wrapper_gltf, "_to_glb", lambda shape, *_: b"glTF-stub")
-        result = wrapper_gltf.process({"tree": node(box(10, 10, 10)), "tolerance": 0.25})
+        result = wrapper_gltf.process({"shapes": [dict(node(box(10, 10, 10)), digest="box")], "tolerance": 0.25})
         assert result["tolerance"] == pytest.approx(0.25)
         assert result["angularTolerance"] == pytest.approx(0.4)
+
+    def test_it_is_handed_what_the_core_decided(self, monkeypatch):
+        """The tree's size, read off the tree, rounded onto the series - and nothing of the tree."""
+        monkeypatch.setattr(wrapper_gltf, "_to_glb", lambda shape, *_: b"glTF-stub")
+        tree = dict(node(box(10, 10, 10)), **{"name": "//pkg:box", "label": "box"})
+        tree[ocp_serialize.KEY_METADATA] = {"measurements": {"bbox": [0, 0, 0, 400, 200, 100]}}
+        _, sandbox = show(tree)
+
+        (request,) = sandbox.requests
+        assert request["tolerance"] == shape_gltf.tolerance_for(tree) == 0.2
+        assert set(request) == {"shapes", "tolerance", "angularTolerance"}
+        assert set(request["shapes"][0]) == {"digest", ocp_serialize.KEY_BREP}

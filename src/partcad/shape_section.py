@@ -100,7 +100,7 @@ def describe(section) -> str:
     return ", ".join("%s %g..%g" % (axis, section[axis][0], section[axis][1]) for axis in AXES if axis in section)
 
 
-async def section_async(ctx, tree, section, cacheable: bool = True):
+async def section_async(ctx, tree, section, cacheable: bool = True, keep_empty: bool = True):
     """'tree' - the BREP form - with the geometry of every node cut by 'section'.
 
     'section' is normalized first; one that cuts nothing hands back 'tree' as
@@ -110,6 +110,10 @@ async def section_async(ctx, tree, section, cacheable: bool = True):
     node that would not cut is left whole, and said so in the log.
 
     'cacheable' False - a subject with `cache: false` - cuts every time.
+
+    'keep_empty' False leaves such a node with no geometry at all instead, for
+    a reader that draws the tree rather than decodes it (see
+    'shape_gltf.convert_async').
 
     Raises if the sandbox could not be run or answered a failure.
     """
@@ -122,6 +126,10 @@ async def section_async(ctx, tree, section, cacheable: bool = True):
         raise ValueError("Not a shape tree: %r" % (list(tree) if isinstance(tree, dict) else type(tree),))
 
     request = {"tree": tree, "section": section}
+    if not keep_empty:
+        # Only when asked, so that a cut for a reader that decodes the tree is
+        # asked - and cached - as it always was.
+        request["keepEmpty"] = False
 
     cache = getattr(ctx, "cache_artifacts", None)
     artifact = cache_artifacts.wrapper_hash(
@@ -155,7 +163,9 @@ async def section_async(ctx, tree, section, cacheable: bool = True):
     for reason in result.get("errors") or []:
         pc_logging.warning("Shown uncut, because it could not be cut (%s): %s" % (describe(section), reason))
     cut = result.get("tree")
-    if not shape_envelope.is_node(cut):
+    # Kept empty or not, what comes back is a node: one with nothing left in the
+    # box and not kept empty is a node with no geometry, for its reader to say so.
+    if not (shape_envelope.is_node(cut) or (not keep_empty and isinstance(cut, dict))):
         raise Exception("Cutting produced no shape tree")
     if not cached:
         await cache_artifacts.store_response_async(cache, artifact, response_serialized)
