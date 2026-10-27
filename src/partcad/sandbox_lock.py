@@ -57,25 +57,21 @@ class EnvironmentLock:
     Readers run wrappers out of the environment; writers install into it or
     create it. Readers share it, a writer excludes everyone.
 
-    Within this process that is the whole story. Across processes the writers
-    are held apart by the file lock below - which is what the per-environment
-    lock file has always been for: two pip installs into one prefix are what
-    actually leaves an environment broken. And a reader does not start while
-    another process holds it: it takes the file lock and drops it again at
-    once, so it waits out an install already under way without ever holding
-    anything another reader waits for. Without that, a wrapper imported a
-    package that another process was halfway through replacing - which is how
-    the pytest workers, separate processes sharing one '~/.partcad', came to
-    fail on "No module named 'ezdxf.lldxf'".
+    Within this process that is the whole story. Across processes only the
+    writers are held apart, by the file lock below - which is what the
+    per-environment lock file has always been for: two pip installs into one
+    prefix are what actually leaves an environment broken. A wrapper reading an
+    environment that another process is installing into is not covered, and was
+    not covered before either for anything running out of the runtime's own
+    environment, since installs into it took one lock file and runs out of it
+    took another.
 
-    What is still not covered is an install that another process starts after
-    a reader here has started: the reader holds nothing for it to wait on.
-    Closing that needs a lock file a reader can hold in *shared* mode. Holding
-    this exclusive one for reading would do it, but it would also mean a busy
-    render in one workspace stopping every other PartCAD process on the machine
-    for as long as it runs, reader against reader included - a worse bargain
-    than the gap. filelock's SQLite-backed ReadWriteLock is what to reach for
-    when its floor can be raised.
+    Closing that gap needs a lock file a reader can hold in *shared* mode.
+    Holding this exclusive one for reading would do it, but it would also mean
+    a busy render in one workspace stopping every other PartCAD process on the
+    machine for as long as it runs, reader against reader included - a worse
+    bargain than the gap. filelock's SQLite-backed ReadWriteLock is what to
+    reach for when its floor can be raised.
 
     Only one instance may exist per lock file, which is what 'get()' is for:
     filelock counts recursive acquires per object, so two objects over one path
@@ -110,24 +106,8 @@ class EnvironmentLock:
             else:
                 if self._writer or self._writers_waiting:
                     return False
-                if not self._no_install_elsewhere():
-                    return False
                 self._readers += 1
             return True
-
-    def _no_install_elsewhere(self) -> bool:
-        """Whether no other process is installing into this environment right now.
-
-        Asked by every reader as it starts, and answered by taking the file lock
-        and dropping it, so that readers in different processes never wait on
-        each other: only an install does.
-        """
-        try:
-            self._file_lock.acquire(blocking=False)
-        except Timeout:
-            return False
-        self._file_lock.release()
-        return True
 
     def _release(self, write: bool) -> None:
         with self._mutex:
