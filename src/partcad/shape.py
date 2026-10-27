@@ -1951,13 +1951,22 @@ class Shape(ShapeConfiguration):
         if getattr(impl, "project", None) is not None:
             request.setdefault("cache_dir", output.package_cache_dir(ctx, impl.project))
 
-        request_serialized = shape_envelope.serialize(request)
-
         # Where this implementation runs. A container when it declared one --
         # the only sandbox that can carry what pip cannot install -- and the
         # Python sandbox otherwise, which is every implementation that ships
         # with PartCAD and most of those that do not.
         container = impl.container
+
+        # Serialized by the runtime when the process starts, not here: until a
+        # process slot is free this is a request waiting its turn, and the tree
+        # it carries is held anyway (see 'runtime.stdin_bytes'). In the Python
+        # sandbox the reader is 'wrapper_export.py', which takes the payloads of
+        # a tree written once each (see 'shape_envelope.KEY_BREPS'); a container
+        # runs a program of the implementation's own, handed the request as it
+        # has always been written.
+        def request_serialized():
+            return shape_envelope.serialize(request, share=not container)
+
         script_path = wrapper.get("export.py")
         config_dir = os.path.abspath(impl.project.config_dir)
         input_dirs = []

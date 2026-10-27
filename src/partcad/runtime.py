@@ -154,6 +154,27 @@ def kill_process_tree(p, from_thread=False, owner=None) -> None:
             child.kill()
 
 
+def stdin_bytes(stdin) -> bytes:
+    """What a sandbox process is handed on its standard input, as bytes.
+
+    'stdin' is text, bytes, nothing, or a callable producing text or bytes. The
+    callable is what a large request is passed as: it is called here, at the
+    moment the process is started -- inside the process slot, after the
+    environment lock and whatever was installed under it -- and not when the
+    caller built the request. A render waiting for a slot then holds the request
+    as the objects it is made of, which it holds anyway, rather than as a text of
+    it beside them: four drawings of the LEGO car waiting their turn were 66 MB
+    of text and 66 MB of bytes each, in the daemon, before any of them ran.
+    """
+    if callable(stdin):
+        stdin = stdin()
+    if not stdin:
+        return b""
+    if isinstance(stdin, str):
+        return stdin.encode("utf-8")
+    return bytes(stdin)
+
+
 async def communicate(p, stdin: bytes, timeout=None):
     """``p.communicate(stdin)``, bounded by ``timeout``, never orphaning ``p``, and over when ``p`` is.
 
@@ -647,8 +668,9 @@ class Runtime:
         for file_path in input_files:
             with open(file_path, "rb") as f:
                 file_contents[file_path] = base64.b64encode(f.read()).decode("utf-8")
+        data = stdin_bytes(stdin)
         params = {
-            "stdin": base64.b64encode(stdin.encode("utf-8")).decode("utf-8") if stdin else None,
+            "stdin": base64.b64encode(data).decode("utf-8") if data else None,
             "cwd": cwd,
             "input_files": file_contents,
             "output_files": output_files,
@@ -711,7 +733,7 @@ class Runtime:
         (see process_crash).
         """
         if stdout:
-            pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+            pc_logging.debug("Output of %s: %s", cmd, stdout)
         if stderr:
             # TODO(azhar): remove this when the issue is fixed
             keywords = [
@@ -830,7 +852,9 @@ class Runtime:
             endpoint = self._current_endpoint()
             returncode, stdout, stderr = endpoint.run(
                 cmd,
-                stdin=stdin,
+                # Resolved here like at every other launch point: a container's
+                # request may be the callable that writes it (see 'stdin_bytes').
+                stdin=stdin_bytes(stdin) or None,
                 cwd=cwd,
                 input_files=input_files,
                 output_files=output_files,
@@ -844,6 +868,9 @@ class Runtime:
                 # point: what 'communicate_sync' hands back from a process it
                 # stopped waiting for is the bytes read so far, and a text-mode
                 # Popen would have mixed the two.
+                # Written before the process starts: a request that cannot be written
+                # then fails with no child left waiting on its standard input.
+                data = stdin_bytes(stdin) or None
                 p = subprocess.Popen(
                     argv,
                     stdin=subprocess.PIPE,
@@ -854,7 +881,7 @@ class Runtime:
                     cwd=spawn_cwd,
                     env=spawn_env,
                 )
-                stdout, stderr = communicate_sync(p, stdin.encode("utf-8") if stdin else None)
+                stdout, stderr = communicate_sync(p, data)
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
             returncode, stderr = self._ended(p.returncode, stderr)
@@ -886,7 +913,7 @@ class Runtime:
                 endpoint = await asyncio.get_running_loop().run_in_executor(None, self._current_endpoint)
             returncode, stdout, stderr = await endpoint.run_async(
                 cmd,
-                stdin=stdin,
+                stdin=stdin_bytes(stdin) or None,
                 cwd=cwd,
                 input_files=input_files,
                 output_files=output_files,
@@ -902,6 +929,8 @@ class Runtime:
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
             async with sandbox_lock.process_slots.slot_async():
+                # As in 'run'.
+                data = stdin_bytes(stdin)
                 with output_capture(self.OUTPUT_TO_FILES) as capture:
                     p = await asyncio.create_subprocess_exec(
                         *argv,
@@ -914,7 +943,7 @@ class Runtime:
                         env=spawn_env,
                         **bounded_spawn_options(timeout),
                     )
-                    stdout, stderr = capture.collect(*await communicate(p, stdin.encode(), timeout))
+                    stdout, stderr = capture.collect(*await communicate(p, data, timeout))
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)

@@ -12,7 +12,7 @@ import json
 
 from cache_config import CacheUserConfig
 
-from partcad import shape_envelope
+from partcad import cache_shape, shape_envelope
 from partcad.assembly import Assembly
 from partcad.cache_hash import CacheHash
 from partcad.cache_shape import ShapeCache
@@ -93,11 +93,13 @@ def test_an_assembly_keeps_its_children_but_not_its_own_outer_layer(tmp_path):
     }
     asyncio.run(cache.write_async(cache_hash, {"assembly": tree}))
 
-    # JSON cannot hold the compressed payload as bytes, so a tree carries it
-    # base64-encoded - the same form the wrapper pipe uses.
-    stored = json.loads(_entry(tmp_path, cache_hash, "assembly").decode("utf-8"))
-    assert stored == {"assembly": [shape_envelope.encode(child)]}
-    assert stored["assembly"][0]["brep"] == base64.b64encode(BREP).decode("ascii")
+    # A tree is a frame (see 'cache_shape._TREE_MAGIC'): its structure, and each
+    # payload once after it, as the bytes it is rather than as base64.
+    stored = _entry(tmp_path, cache_hash, "assembly")
+    assert stored.startswith(cache_shape._TREE_MAGIC)
+    assert BREP in stored
+    assert base64.b64encode(BREP) not in stored
+    assert cache_shape._deserialize(stored) == {"assembly": [child]}
 
     metadata = {"name": "pkg:second", "label": "second", "location": [[1.0, 2.0, 3.0], [0.0, 0.0, 1.0], 0.0]}
     read, _ = asyncio.run(cache.read_async(cache_hash, ["assembly"], metadata))
@@ -177,3 +179,152 @@ def test_an_assembly_read_back_from_a_shared_entry_keeps_its_own_placement(tmp_p
     assert second["location"] == location
     # The children came from the cache, and they are what the entry is about.
     assert [child["name"] for child in second["assembly"]] == ["pkg:leaf"]
+
+
+# --------------------------------------------------------------------------- #
+# A tree, each distinct payload once                                          #
+# --------------------------------------------------------------------------- #
+
+
+def _castle(placements=50):
+    """Many placements of two parts, the way an assembly built in this process holds them."""
+    brick, cone = BREP + b"brick" * 200, BREP + b"cone" * 200
+    children = [
+        dict(_shape("pkg:part", "p%d" % i), brep=brick if i % 5 else cone, location=[[i, 0, 0], [0, 0, 1], 0])
+        for i in range(placements)
+    ]
+    return {"name": "pkg:castle", "label": "castle", "assembly": children}
+
+
+def test_a_tree_stores_each_distinct_payload_once(tmp_path):
+    cache = _cache(tmp_path)
+    cache_hash = _hash()
+    tree = _castle()
+    asyncio.run(cache.write_async(cache_hash, {"assembly": tree}))
+
+    stored = _entry(tmp_path, cache_hash, "assembly")
+    legacy = json.dumps(shape_envelope.encode(shape_envelope.strip_metadata(tree))).encode("utf-8")
+    assert stored.count(BREP) == 2
+    assert len(stored) * 10 < len(legacy)
+
+
+def test_a_tree_read_back_holds_each_payload_once(tmp_path):
+    """Every node that names one payload gets the same bytes object, as a tree built here does."""
+    cache = _cache(tmp_path)
+    cache_hash = _hash()
+    asyncio.run(cache.write_async(cache_hash, {"assembly": _castle()}))
+
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["assembly"], {"name": "pkg:castle", "label": "castle"}))
+
+    payloads = [child["brep"] for child in read["assembly"]["assembly"]]
+    assert read["assembly"]["assembly"] == _castle()["assembly"]
+    assert len({id(payload) for payload in payloads}) == 2
+
+
+def test_a_tree_keeps_what_was_recorded_about_it(tmp_path):
+    tree = dict(_castle(3), metadata={"measurements": {"bbox": [0, 0, 0, 1, 1, 1]}})
+
+    read = cache_shape._deserialize(cache_shape._serialize(tree))
+
+    assert read["metadata"] == {"measurements": {"bbox": [0, 0, 0, 1, 1, 1]}}
+    assert read["assembly"] == tree["assembly"]
+
+
+def test_a_tree_an_earlier_release_wrote_is_still_read(tmp_path):
+    """Plain JSON with a payload per node: what every entry was before the frame."""
+    tree = shape_envelope.strip_metadata(_castle(3))
+
+    read = cache_shape._deserialize(json.dumps(shape_envelope.encode(tree)).encode("utf-8"))
+
+    assert read == tree
+
+
+def test_a_tree_cut_short_is_refused_and_so_a_miss(tmp_path):
+    stored = cache_shape._serialize(_castle())
+
+    try:
+        cache_shape._deserialize(stored[: len(stored) - 10])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a truncated entry was read")
+
+    cache = _cache(tmp_path)
+    cache_hash = _hash()
+    asyncio.run(cache.write_data_async(cache_hash, {"assembly": stored[: len(stored) - 10]}))
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["assembly"]))
+    assert read["assembly"] is None
+
+
+def _header(stored):
+    """The length of a tree frame's header, and the header itself."""
+    length = int.from_bytes(stored[len(cache_shape._TREE_MAGIC) + 1 : cache_shape._TREE_HEADER], "big")
+    compressed = stored[cache_shape._TREE_HEADER : cache_shape._TREE_HEADER + length]
+    return length, json.loads(cache_shape._ZstdDecompressor().decompress(compressed))
+
+
+def _with_sizes(stored, sizes):
+    """'stored', a tree frame, with the sizes its header gives its payloads replaced."""
+    length, header = _header(stored)
+    header["payloads"] = [[digest, size] for (digest, _), size in zip(header["payloads"], sizes)]
+    encoded = json.dumps(header).encode("utf-8")
+    return b"".join(
+        [
+            cache_shape._TREE_MAGIC,
+            cache_shape._TREE_PLAIN,
+            len(encoded).to_bytes(4, "big"),
+            encoded,
+            stored[cache_shape._TREE_HEADER + length :],
+        ]
+    )
+
+
+def test_a_tree_whose_header_gives_an_impossible_size_is_refused():
+    """A negative size passed the bounds check and moved every later payload onto the wrong bytes."""
+    stored = cache_shape._serialize(_castle())
+    sizes = [size for _, size in _header(stored)[1]["payloads"]]
+    assert len(sizes) == 2
+    # Unchanged, the rewritten frame reads back: what follows is the sizes, not the rewriting.
+    assert cache_shape._deserialize(_with_sizes(stored, sizes)) == cache_shape._deserialize(stored)
+
+    for impossible in ([-1, sizes[0] + sizes[1] + 1], [1.5, sizes[1]], [True, sizes[1]]):
+        try:
+            cache_shape._deserialize(_with_sizes(stored, impossible))
+        except ValueError:
+            continue
+        raise AssertionError("a tree with payload sizes %r was read" % (impossible,))
+
+    # Sizes that stop short of the end leave bytes no payload accounts for.
+    try:
+        cache_shape._deserialize(_with_sizes(stored, [sizes[0], sizes[1] - 1]))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a tree with bytes after its last payload was read")
+
+
+def test_what_is_not_an_assembly_stays_plain_json(tmp_path):
+    """A part's components sit beside its geometry; an earlier release must miss neither or both.
+
+    It reads plain JSON and counts a frame it does not know a miss. Framed, the
+    components would be its miss while the geometry beside them was its hit: a
+    part handed back without its components.
+    """
+    components = [_shape("pkg:a", "a"), _shape("pkg:a", "b")]
+
+    stored = cache_shape._serialize(components)
+
+    assert not stored.startswith(cache_shape._TREE_MAGIC)
+    assert json.loads(stored)
+    assert [item["brep"] for item in cache_shape._deserialize(stored)] == [BREP, BREP]
+
+
+def test_the_file_tier_takes_a_tree_of_fifty_megabytes_by_default(monkeypatch, tmp_path):
+    """Over 10 MB, the LEGO F1's tree (10.9 MB of distinct geometry) was put together again on every run."""
+    # A home with no configuration in it, so that the default is what is read
+    # and not whatever the machine running the test configured.
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("PC_CACHE_FILES_MAX_ENTRY_SIZE", raising=False)
+    from partcad_utils.user_config import UserConfig
+
+    assert UserConfig().cache_max_entry_size == 50 * 1024 * 1024

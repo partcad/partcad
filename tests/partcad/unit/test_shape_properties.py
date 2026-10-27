@@ -27,7 +27,7 @@ import pytest
 from cache_config import CacheUserConfig
 
 import partcad as pc
-from partcad import shape_envelope
+from partcad import cache_shape, shape_envelope
 from partcad.assembly import Assembly
 from partcad.cache_hash import CacheHash
 from partcad.cache_shape import ShapeCache, properties_key
@@ -55,6 +55,11 @@ def _hash():
     # Every shape below builds the same geometry, and so shares one entry.
     cache_hash.add_string("identical-geometry")
     return cache_hash
+
+
+def _stored_tree(path):
+    """An assembly's entry as the JSON-native tree it holds, read through the frame a tree is written in."""
+    return shape_envelope.encode(cache_shape._deserialize(path.read_bytes()))
 
 
 def _entry(tmp_path, cache_hash, key):
@@ -270,7 +275,7 @@ def test_the_cache_stores_no_properties_of_its_own_but_keeps_a_child_s(tmp_path)
     tree = {"name": "pkg:first", "label": "first", "properties": BRASS, "assembly": [child]}
     asyncio.run(cache.write_async(cache_hash, {"assembly": tree}))
 
-    stored = json.loads(_entry(tmp_path, cache_hash, "assembly").read_bytes())
+    stored = _stored_tree(_entry(tmp_path, cache_hash, "assembly"))
     assert stored == {"assembly": [shape_envelope.encode(child)]}
     assert "brass" not in json.dumps(stored)
 
@@ -397,7 +402,7 @@ def test_an_assembly_s_own_go_to_its_entry_and_its_children_s_stay_in_the_tree(t
     rig = _Assembly("rig", BRASS, child_properties=STEEL)
     asyncio.run(rig.get_wrapped(ctx))
 
-    stored = json.loads(_entry(tmp_path, rig.hash, "assembly").read_bytes())
+    stored = _stored_tree(_entry(tmp_path, rig.hash, "assembly"))
     assert [child["properties"] for child in stored["assembly"]] == [STEEL]
     assert "brass" not in json.dumps(stored)
     assert json.loads(_entry(tmp_path, rig.hash, properties_key("assembly")).read_bytes()) == BRASS

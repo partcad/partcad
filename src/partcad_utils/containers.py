@@ -58,7 +58,7 @@ import tarfile
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from . import __version__, container_service, docker_image
 from . import logging as pc_logging
@@ -389,7 +389,7 @@ class Endpoint:
 
     def params(
         self,
-        stdin: Optional[str] = None,
+        stdin: Optional[Union[str, bytes]] = None,
         cwd: Optional[str] = None,
         input_files=None,
         output_files=None,
@@ -404,8 +404,12 @@ class Endpoint:
         ``upload`` mode every file a command reads is sent and every file it
         writes is named, so that it can be sent back.
         """
+        if isinstance(stdin, str):
+            stdin = stdin.encode("utf-8")
         params = {
-            "stdin": base64.b64encode(stdin.encode("utf-8")).decode("utf-8") if stdin else None,
+            # Text or bytes: a runtime hands the bytes it resolved its request
+            # to (see 'partcad.runtime.stdin_bytes').
+            "stdin": base64.b64encode(stdin).decode("utf-8") if stdin else None,
             "cwd": cwd,
         }
         if env:
@@ -466,7 +470,7 @@ class Endpoint:
     def run(
         self,
         command: List[str],
-        stdin: Optional[str] = None,
+        stdin: Optional[Union[str, bytes]] = None,
         cwd: Optional[str] = None,
         input_files=None,
         output_files=None,
@@ -482,7 +486,7 @@ class Endpoint:
     async def run_async(
         self,
         command: List[str],
-        stdin: Optional[str] = None,
+        stdin: Optional[Union[str, bytes]] = None,
         cwd: Optional[str] = None,
         input_files=None,
         output_files=None,

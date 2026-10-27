@@ -29,7 +29,7 @@ import pytest
 import partcad as pc
 from partcad import cache_artifacts, cae
 from partcad import document as pc_document
-from partcad import document_pdf, measure, shape_envelope, shape_gltf, simulation
+from partcad import document_pdf, measure, runtime, shape_envelope, shape_gltf, simulation
 from partcad.cache import Cache
 from partcad.cache_backend import ARTIFACT_KEY
 from partcad.cache_hash import CacheHash
@@ -1230,7 +1230,9 @@ class _Sandbox:
         return None
 
     async def run_async(self, command, request_serialized, **_kwargs):
-        request = shape_envelope.deserialize(request_serialized)
+        # Resolved the way a real runtime resolves it, at the spawn: the request
+        # may be the callable that serializes it (see 'runtime.stdin_bytes').
+        request = shape_envelope.deserialize(runtime.stdin_bytes(request_serialized))
         self.runs.append(request)
         return 0, shape_envelope.serialize(self.answer(command, request, len(self.runs))), ""
 
