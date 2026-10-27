@@ -8,7 +8,11 @@
 #
 
 import hashlib
+import json
 import os
+import threading
+import time
+import uuid
 
 from . import logging as pc_logging
 
@@ -50,7 +54,8 @@ from . import logging as pc_logging
 #      on were simply concatenated, so 'offset: [1, 23, 0]' and
 #      'offset: [12, 3, 0]' were one key - two different parts, one entry.
 #      A file is hashed by its size and a sample of its content rather than by
-#      all of it (see 'add_filename'). The keys an
+#      all of it (since replaced by a digest of all of it, which moved every
+#      key with a file in it by itself - see 'add_filename'). The keys an
 #      extrude, a sweep, a compound part and an ASSY assembly are stored under
 #      also cover the keys of what they are built from now, so an entry written
 #      under 5 was keyed on less than it needed to be.
@@ -116,14 +121,38 @@ VERSION = 14
 # confused with the data hashed after it.
 _VERSION_TAG = ("partcad-cache-v%d" % VERSION).encode()
 
-# How much of a file's content is hashed, at most: all of a file up to this
-# size, and half of it from each end of a larger one, which is what keeps
-# hashing a large STEP file from costing a read of all of it. What is in between
-# is covered by the size alone, so an edit there that keeps the size is not
-# seen. The modification time is not hashed, deliberately: it differs between
-# two clones of one repository, and a key that did would never be found by
-# another machine in a shared tier.
-_SAMPLE_SIZE = 1 << 20
+# A file a shape is built from is keyed on a digest of all of its content
+# ('file_digest'), and on nothing else about it. Not its path, nor its
+# modification time, deliberately: both differ between two clones of one
+# repository, and a key that covered either would never be found by another
+# machine in a shared tier.
+#
+# It used to be the file's size and its first and last half megabyte, which
+# kept a large STEP file from being read every time a key was asked for, at the
+# price of every edit in between that kept the size: the part went on being
+# served as it was before the edit, until '--cache-bypass'. The digest of the
+# whole file is remembered instead, for as long as the file looks the same from
+# outside ('file_identity'), so a file is read once per change rather than once
+# per question - and a large one once per change on this machine, rather than
+# once per process (see 'PERSIST_MIN_SIZE').
+_DIGEST = hashlib.sha256
+_READ_SIZE = 1 << 20
+
+# How recently a file may have changed and still be trusted to look different
+# the next time it changes: two writes inside one tick of the file system's
+# clock can leave its size and every timestamp as they were. Two seconds is the
+# coarsest clock a file system PartCAD runs on keeps (FAT); one more is margin.
+# This is git's "racy" index entry, and 'source_key' goes by it too.
+RACY_NS = 3 * 1_000_000_000
+
+# Files at least this big have their digest kept on disk as well, under the
+# cache directory, one small file per file hashed. Reading a big file is what a
+# process starting cold would otherwise pay for every one of them, every time:
+# a 200 MB STEP file is half a second of SHA-256 on a machine without the
+# instructions for it, where a new process with nothing else to do loads
+# PartCAD in about one. A small file is cheaper to hash again than the memo is
+# to read, which is also where the old sample stopped and read the whole file.
+PERSIST_MIN_SIZE = 1 << 20
 
 
 def _header(tag: bytes, length: int) -> bytes:
@@ -168,6 +197,170 @@ def file_stat(filename: str):
     except OSError:
         return None
     return (st.st_mtime_ns, st.st_size)
+
+
+def file_identity(stat: os.stat_result) -> tuple:
+    """What says, without reading it, that a file is still the one that was read.
+
+    The device and the inode say which file it is, and the size and the
+    modification time that it was not written since. The inode's change time
+    ('st_ctime_ns') covers what those can miss when a value worked out from the
+    content is kept for long: a file deleted and created again can be given the
+    same inode number back, and a tool that restores timestamps - tar, unzip,
+    'rsync -t', 'cp -p' - can give it the same modification time. Nothing in
+    user space sets the change time, which every write, rename and restore
+    moves to now; git's index keeps it for the same reason. (On Windows it is
+    the creation time, which a recreated file changes as well.)
+    """
+    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+
+
+def _now_ns() -> int:
+    return time.time_ns()
+
+
+def settled(identity: tuple) -> bool:
+    """Whether 'identity' is old enough that the next change to the file will show in it (see RACY_NS)."""
+    return _now_ns() - max(identity[3], identity[4]) > RACY_NS
+
+
+class FileMemo:
+    """Something worked out from a file's content, remembered for as long as the file looks the same.
+
+    'compute' is handed the file, open for reading in binary, and what it
+    returns is kept against the file's identity ('file_identity'): asked again
+    while the file has not changed, the answer is the kept one and the file is
+    not opened. Two things are never kept, so that a change is never hidden
+    behind an answer about the file as it was:
+
+    * an answer about a file that changed while it was being read - its
+      identity before and after the read differ;
+    * an answer about a file that changed so recently that the next change
+      could leave it looking the same ('settled').
+
+    Either is worked out again next time, which costs only the file somebody
+    is writing right now. 'load' and 'store', when given, are a second memory
+    behind this one, asked before the file is read and told what was read.
+    """
+
+    def __init__(self, compute, load=None, store=None) -> None:
+        self._compute = compute
+        self._load = load
+        self._store = store
+        self._lock = threading.Lock()
+        # absolute path -> (identity, value)
+        self._known = {}
+
+    def get(self, filename: str):
+        """'compute' of 'filename', or the kept answer. Raises what os.stat() and open() raise."""
+        path = os.path.abspath(filename)
+        identity = file_identity(os.stat(path))
+        with self._lock:
+            known = self._known.get(path)
+        if known is not None and known[0] == identity:
+            return known[1]
+        value = self._load(path, identity) if self._load is not None else None
+        if value is None:
+            with open(path, "rb") as f:
+                before = file_identity(os.fstat(f.fileno()))
+                value = self._compute(f)
+                identity = file_identity(os.fstat(f.fileno()))
+            if before != identity or not settled(identity):
+                return value
+            if self._store is not None:
+                self._store(path, identity, value)
+        with self._lock:
+            self._known[path] = (identity, value)
+        return value
+
+    def forget(self) -> None:
+        """Drop every kept answer. For tests, which have to start from a cold process."""
+        with self._lock:
+            self._known.clear()
+
+
+def _digest_of(f) -> bytes:
+    hasher = _DIGEST()
+    buffer = bytearray(_READ_SIZE)
+    view = memoryview(buffer)
+    while True:
+        count = f.readinto(buffer)
+        if not count:
+            break
+        hasher.update(view[:count])
+    return hasher.digest()
+
+
+def _digests_dir() -> str:
+    """Where the digests of large files are kept between processes.
+
+    Beside the cache tiers' own directories under the internal state directory
+    - the process's, because a digest says what a file holds whoever asks, and
+    so does not depend on the configuration a request was made with.
+    """
+    from .user_config import user_config
+
+    return os.path.join(user_config.internal_state_dir, "cache", "digests")
+
+
+def _digest_entry(path: str) -> str:
+    name = hashlib.sha256(path.encode("utf-8", "surrogateescape")).hexdigest()[:32]
+    return os.path.join(_digests_dir(), name)
+
+
+def _load_digest(path: str, identity: tuple):
+    """The digest kept on disk for 'path' as it is now, or None.
+
+    The entry names the path and the identity it was read at, and is believed
+    only when both are this file's now; anything else - another file whose
+    path hashed the same, a file that has changed, an entry that is not one -
+    is a miss and the file is read.
+    """
+    if identity[2] < PERSIST_MIN_SIZE:
+        return None
+    try:
+        with open(_digest_entry(path), "r", encoding="utf-8") as f:
+            entry = json.load(f)
+        if entry.get("path") == path and tuple(entry.get("identity", ())) == identity:
+            return bytes.fromhex(entry["digest"])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass
+    return None
+
+
+def _store_digest(path: str, identity: tuple, digest: bytes) -> None:
+    if identity[2] < PERSIST_MIN_SIZE:
+        return
+    entry = _digest_entry(path)
+    # Through a temporary file, as the files tier writes: another process may be
+    # reading this entry, or writing it too.
+    tmp = "%s.%s.tmp" % (entry, uuid.uuid4().hex)
+    try:
+        os.makedirs(os.path.dirname(entry), exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"path": path, "identity": list(identity), "digest": digest.hex()}, f)
+        os.replace(tmp, entry)
+    except OSError as e:
+        pc_logging.debug("Cannot keep the digest of %s: %s" % (path, e))
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+_file_digests = FileMemo(_digest_of, load=_load_digest, store=_store_digest)
+
+
+def file_digest(filename: str) -> bytes:
+    """The SHA-256 of all of the content of 'filename'.
+
+    Of the content only: the same bytes at another path, written at another
+    time, on another machine, have the same digest, which is what lets a shared
+    tier be shared. Read once per change of the file (see FileMemo), and for a
+    large file once per change on this machine. Raises FileNotFoundError for a
+    file that is not there.
+    """
+    return _file_digests.get(filename)
 
 
 class CacheHash:
@@ -274,18 +467,9 @@ class CacheHash:
             return
 
         try:
-            with open(filename, "rb") as f:
-                size = os.fstat(f.fileno()).st_size
-                # The size first: it is what tells two versions of a large file
-                # apart when an edit falls outside the sample below.
-                self.hasher.update(_frame(b"f", str(size).encode()))
-                if size <= _SAMPLE_SIZE:
-                    self.hasher.update(_frame(b"c", f.read()))
-                else:
-                    half = _SAMPLE_SIZE // 2
-                    self.hasher.update(_frame(b"c", f.read(half)))
-                    f.seek(-half, os.SEEK_END)
-                    self.hasher.update(_frame(b"c", f.read(half)))
+            # All of the content, by its digest (see 'file_digest'), which is
+            # all a key needs of it and the same wherever the file is.
+            self.hasher.update(_frame(b"h", file_digest(filename)))
         except FileNotFoundError:
             # Hashed as missing rather than skipped: skipped, a dependency that
             # is not there and one that is empty or absent from the list are all

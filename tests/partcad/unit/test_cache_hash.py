@@ -4,10 +4,12 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-"""The cache format version takes part in every hash, and only that."""
+"""What a cache key is made of: the format version, the values, and the files - by their whole content."""
 
 import hashlib
 import os
+
+import pytest
 
 from partcad import cache_hash as cache_hash_module
 from partcad.cache_hash import VERSION, CacheHash
@@ -138,10 +140,10 @@ def test_a_small_file_is_keyed_on_all_of_its_content(tmp_path):
     assert _files_key(str(path)) != before
 
 
-def _large(tmp_path, middle: bytes, head: bytes = b"h", tail: bytes = b"t"):
-    """A file over the sample size, with one byte set at each end and in the middle."""
-    path = tmp_path / "large.step"
-    size = cache_hash_module._SAMPLE_SIZE * 3
+def _large(tmp_path, middle: bytes, head: bytes = b"h", tail: bytes = b"t", name: str = "large.step"):
+    """A file over a megabyte, with one byte set at each end and in the middle."""
+    path = tmp_path / name
+    size = 3 << 20
     body = bytearray(size)
     body[0:1] = head
     body[size // 2 : size // 2 + 1] = middle
@@ -150,20 +152,148 @@ def _large(tmp_path, middle: bytes, head: bytes = b"h", tail: bytes = b"t"):
     return str(path)
 
 
-def test_a_large_file_is_keyed_on_its_head_and_its_tail(tmp_path):
+def test_a_large_file_is_keyed_on_all_of_its_content(tmp_path):
     base = _files_key(_large(tmp_path, b"m"))
     assert _files_key(_large(tmp_path, b"m", head=b"H")) != base
     assert _files_key(_large(tmp_path, b"m", tail=b"T")) != base
 
 
-def test_a_large_file_is_not_read_in_the_middle(tmp_path):
-    """What the sample leaves out is covered by the size alone, not read.
+def test_an_edit_in_the_middle_of_a_large_file_that_keeps_its_size_is_seen(tmp_path):
+    """The regression: a file used to be keyed on its size and its first and last half megabyte.
 
-    Asserted so that the saving is not quietly undone - and so that what it
-    costs is written down: an edit there that keeps the size is not seen, and
-    '--cache-bypass' is the way past it.
+    An edit in between that kept the size was not seen at all, and the part
+    went on being served as it was before the edit, until '--cache-bypass'.
     """
-    assert _files_key(_large(tmp_path, b"m")) == _files_key(_large(tmp_path, b"M"))
+    assert _files_key(_large(tmp_path, b"m")) != _files_key(_large(tmp_path, b"M"))
+
+
+def test_a_file_is_keyed_on_its_content_and_not_on_where_it_is(tmp_path):
+    """Two clones of one repository are two paths, and have to find each other's entries."""
+    (tmp_path / "one").mkdir()
+    (tmp_path / "two").mkdir()
+    assert _files_key(_large(tmp_path / "one", b"m")) == _files_key(_large(tmp_path / "two", b"m", name="other.step"))
+
+
+# ------------------------------------------------------------- the memo --
+#
+# A digest is remembered for as long as the file looks the same from outside,
+# so that it is read once per change rather than once per key asked for.
+
+
+@pytest.fixture
+def cold(monkeypatch, tmp_path):
+    """No digest remembered, in this process or on disk, and a clock to settle files by.
+
+    The disk memo goes to a directory of the test's own; what this process
+    remembers is forgotten before and after, so that no test finds another's.
+    Returns a function counting the reads of a file's content from here on.
+    """
+    monkeypatch.setattr(cache_hash_module, "_digests_dir", lambda: str(tmp_path / "digests"))
+    memo = cache_hash_module._file_digests
+    memo.forget()
+    reads = []
+    compute = memo._compute
+
+    def counting(f):
+        reads.append(f.name)
+        return compute(f)
+
+    monkeypatch.setattr(memo, "_compute", counting)
+    yield reads
+    memo.forget()
+
+
+def _settle(monkeypatch):
+    """Make every file on disk old enough to be trusted, as a checkout from yesterday is."""
+    now = cache_hash_module._now_ns()
+    monkeypatch.setattr(cache_hash_module, "_now_ns", lambda: now + 2 * cache_hash_module.RACY_NS)
+
+
+def test_a_file_that_has_not_changed_is_not_read_again(tmp_path, monkeypatch, cold):
+    path = _large(tmp_path, b"m")
+    _settle(monkeypatch)
+
+    first = _files_key(path)
+    assert _files_key(path) == first
+    assert _files_key(path) == first
+
+    assert cold == [path]
+
+
+def test_a_file_that_changed_is_read_again(tmp_path, monkeypatch, cold):
+    """However it changed: the same size, and the modification time put back."""
+    path = _large(tmp_path, b"m")
+    _settle(monkeypatch)
+    stat = os.stat(path)
+    before = _files_key(path)
+
+    _large(tmp_path, b"M")
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    _settle(monkeypatch)
+
+    assert _files_key(path) != before
+    assert cold == [path, path]
+
+
+def test_a_file_written_a_moment_ago_is_read_every_time(tmp_path, cold):
+    """Its next change could land in the same tick of the clock and leave it looking the same."""
+    path = _large(tmp_path, b"m")
+
+    _files_key(path)
+    _files_key(path)
+
+    assert cold == [path, path]
+
+
+def test_a_large_files_digest_is_kept_for_the_next_process(tmp_path, monkeypatch, cold):
+    path = _large(tmp_path, b"m")
+    _settle(monkeypatch)
+    first = _files_key(path)
+
+    # A new process: nothing remembered in memory.
+    cache_hash_module._file_digests.forget()
+    assert _files_key(path) == first
+    assert cold == [path]
+
+    # The entry names the file, never what is in it - and not the path in clear.
+    (entry,) = (tmp_path / "digests").iterdir()
+    assert path not in entry.name
+
+
+def test_a_kept_digest_of_a_file_since_changed_is_not_believed(tmp_path, monkeypatch, cold):
+    path = _large(tmp_path, b"m")
+    _settle(monkeypatch)
+    before = _files_key(path)
+    cache_hash_module._file_digests.forget()
+
+    _large(tmp_path, b"M")
+    _settle(monkeypatch)
+
+    assert _files_key(path) != before
+    assert cold == [path, path]
+
+
+def test_a_kept_digest_that_is_not_one_is_ignored(tmp_path, monkeypatch, cold):
+    path = _large(tmp_path, b"m")
+    _settle(monkeypatch)
+    expected = _files_key(path)
+    (entry,) = (tmp_path / "digests").iterdir()
+    entry.write_text("{not json")
+    cache_hash_module._file_digests.forget()
+
+    assert _files_key(path) == expected
+    assert cold == [path, path]
+
+
+def test_a_small_files_digest_is_not_kept_on_disk(tmp_path, monkeypatch, cold):
+    """Hashing it again costs less than the memo would to read."""
+    path = tmp_path / "part.py"
+    path.write_bytes(b"small")
+    _settle(monkeypatch)
+
+    _files_key(str(path))
+
+    assert not (tmp_path / "digests").exists()
 
 
 def test_a_key_and_the_string_spelling_it_are_different_keys():

@@ -60,6 +60,7 @@ import weakref
 from partcad_utils import pcignore
 
 from . import logging as pc_logging
+from .cache_hash import RACY_NS
 
 # Directories that hold no source a script imports: version control, caches,
 # environments. Hidden directories are skipped as a whole, which covers '.git',
@@ -71,9 +72,9 @@ _SKIPPED_DIRECTORIES = frozenset({"__pycache__", "node_modules", "site-packages"
 _PACKAGE_FILE = "partcad.yaml"
 
 # How recently a file may have been written before its timestamp is trusted to
-# tell a later write apart. Two seconds is the coarsest clock a file system
-# PartCAD runs on keeps (FAT); one more is margin.
-_RACY_NS = 3 * 1_000_000_000
+# tell a later write apart: the rule 'cache_hash.FileMemo' keeps a file's digest
+# by, for the same reason.
+_RACY_NS = RACY_NS
 
 _lock = threading.Lock()
 # directory -> (what the files looked like, the key they had). See 'directory_key'.

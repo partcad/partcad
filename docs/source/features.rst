@@ -1042,12 +1042,11 @@ Cache keys
 
 An object is cached under a hash of what produces it: its configuration (less
 the keys that only describe it, such as ``desc``), the environment it is built
-in, and the files it is built from. A file contributes its size and its content
--- all of it up to 1 MB, and the first and last 0.5 MB of a larger one -- but
-never its modification time, so a fresh clone on another machine produces the
-same keys and a shared tier is shared. An edit confined to the middle of a file
-over 1 MB that leaves its size unchanged is therefore not seen; run that command
-with ``--cache-bypass``.
+in, and the files it is built from. A file contributes a digest of all of its
+content, but never its path or its modification time, so a fresh clone on
+another machine produces the same keys and a shared tier is shared. The digest
+is worked out again only when the file changes, and a file of 1 MB or more is
+not read again by the next process either.
 
 An object made out of others is keyed on theirs as well: an ``extrude`` or
 ``sweep`` on its sketch, a ``compound`` part on its assembly, an ``assy``

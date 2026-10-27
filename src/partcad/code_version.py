@@ -34,11 +34,10 @@ is first raised.
 import ast
 import os
 import re
-import threading
 from typing import Iterable, Optional
 
 from . import logging as pc_logging
-from .cache_hash import file_stat
+from .cache_hash import FileMemo
 
 # The module-level name a script states its version with.
 NAME = "CACHE_VERSION"
@@ -48,11 +47,9 @@ _JS_DECLARATION = re.compile(
     re.MULTILINE,
 )
 
-# '(stat, version)' per path: a daemon holds a context for as long as it runs
-# and the scripts under it are edited in place, so a version is remembered only
-# for as long as the file looks the same from outside.
-_declared: dict = {}
-_declared_lock = threading.Lock()
+
+class _Unreadable(Exception):
+    """A script whose text could not be had, which states no version - and is not remembered."""
 
 
 def _parse_python(path: str, text: str) -> int:
@@ -90,6 +87,24 @@ def _parse_javascript(path: str, text: str) -> int:
         return 0
 
 
+def _version_of(f) -> int:
+    path = f.name
+    try:
+        # As text mode would read it, line endings and all.
+        text = f.read().decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    except (OSError, UnicodeDecodeError) as e:
+        raise _Unreadable(e)
+    if os.path.splitext(path)[1] in (".js", ".mjs", ".cjs"):
+        return _parse_javascript(path, text)
+    return _parse_python(path, text)
+
+
+# A daemon holds a context for as long as it runs and the scripts under it are
+# edited in place, so a version is remembered only for as long as the file looks
+# the same from outside - by the rule a dependency's digest is (see FileMemo).
+_declared = FileMemo(_version_of)
+
+
 def declared(path: Optional[str]) -> int:
     """The version the script at 'path' states, or 0 if it states none.
 
@@ -98,26 +113,11 @@ def declared(path: Optional[str]) -> int:
     """
     if not path:
         return 0
-    stat = file_stat(path)
-    if stat is None:
-        return 0
-    with _declared_lock:
-        known = _declared.get(path)
-    if known is not None and known[0] == stat:
-        return known[1]
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            text = f.read()
-    except (OSError, UnicodeDecodeError) as e:
+        return _declared.get(path)
+    except (OSError, _Unreadable) as e:
         pc_logging.debug("Cannot read the %s of %s: %s" % (NAME, path, e))
         return 0
-    if os.path.splitext(path)[1] in (".js", ".mjs", ".cjs"):
-        version = _parse_javascript(path, text)
-    else:
-        version = _parse_python(path, text)
-    with _declared_lock:
-        _declared[path] = (stat, version)
-    return version
 
 
 def wrapper(name: str) -> int:

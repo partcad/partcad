@@ -195,6 +195,12 @@ at all).
   wait raises `PreparationInFlight`, and the caller goes on without the key, uncached; `_PREPARE_WAIT_MAX` bounds
   the rest. `get_wrapped()` prepares before it takes its lock for the same reason. A caller that only needs the
   preparation started passes nothing and returns at once, as before.
+- **A file is keyed on all of its content** (`cache_hash.file_digest`): the SHA-256 of it, never its path or its
+  timestamps, so a shared tier is shared. The digest is remembered by the file's identity (`cache_hash.FileMemo`:
+  device, inode, size, modification and inode-change time) for the life of the process, and for a file of 1 MB or
+  more under `<internalStateDir>/cache/digests/` too, so a daemon starting cold does not read a big STEP file
+  again. A file changed in the last `RACY_NS` (3 s) is read every time. `code_version` remembers a script's
+  `CACHE_VERSION` by the same rule, and `source_key` goes by the same `RACY_NS`.
 
 - **Location/coordinate format**: 3D locations (OpenCASCADE `TopLoc_Location`) are represented as
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
