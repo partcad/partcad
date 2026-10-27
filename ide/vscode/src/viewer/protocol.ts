@@ -7,25 +7,35 @@
 // the wire format lives next to the other half, in
 // 'src/partcad_ide_client/protocol.py'; keep the two in step.
 //
-// A frame is a 10-byte header followed by a UTF-8 JSON payload:
+// A frame is a 10-byte header followed by its payload:
 //
 //     offset  size  field
 //     0       4     magic, always "PCAD"
 //     4       1     protocol version
-//     5       1     payload kind
+//     5       1     payload kind: KIND_JSON or KIND_BINARY
 //     6       4     payload length, big-endian uint32
 //     10      n     payload
 //
-// Geometry rides inside a "show" message as deflate-compressed, base64-encoded
-// binary glTF. It is deflate and not zstd (which PartCAD's BREP envelopes use)
-// precisely so that this side can decompress it with Node's built-in zlib:
-// zstd only reached Node in 23.8, well past what VS Code ships.
+// A JSON payload is the message. A binary one is the message and the binary
+// glTF it carries side by side - a length and the JSON, a count, then a length
+// and the bytes of each blob - with every glTF payload in the message the index
+// of its blob. Geometry in a JSON frame is base64 of a zlib stream, which is
+// what every PartCAD before binary frames sent and what it is still sent as to
+// an IDE that does not say it reads them.
+//
+// Which kinds this side reads, and that it can be offered geometry before it is
+// sent it, is said in every acknowledgement (KEY_CAPABILITIES): a PartCAD sends
+// a binary frame only to an IDE that said so, because one from before binary
+// frames drops the connection at the first header it does not know. The
+// Python module has the whole of it, offers included.
 
 import * as zlib from 'zlib';
 
 export const MAGIC = 'PCAD';
 export const VERSION = 1;
 export const KIND_JSON = 1;
+/** The message and its glTF side by side; see the layout above. */
+export const KIND_BINARY = 2;
 export const HEADER_LENGTH = 10;
 
 /** The constant port the viewer listens on. See the Python side for why it is fixed. */
@@ -72,6 +82,22 @@ export const MSG_CLEAR = 'clear';
 export const MSG_PING = 'ping';
 export const MSG_ACK = 'ack';
 /**
+ * Before a show: the digests of the geometry it will name. Answered with the ones
+ * this side does not hold, under KEY_MISSING, and only those are sent. See
+ * MSG_OFFER in the Python module.
+ */
+export const MSG_OFFER = 'offer';
+/** Geometry this side said it lacks, ahead of the show that names it, as blobs. */
+export const MSG_GEOMETRY = 'geometry';
+export const KEY_DIGESTS = 'digests';
+export const KEY_MISSING = 'missing';
+/** On every acknowledgement: what this side accepts. */
+export const KEY_CAPABILITIES = 'capabilities';
+export const CAP_BINARY = 'binary';
+export const CAP_OFFER = 'offer';
+/** What this build accepts, as every acknowledgement says it. */
+export const CAPABILITIES: readonly string[] = [CAP_BINARY, CAP_OFFER];
+/**
  * What the IDE is showing, for `pc ide state`: answered in the acknowledgement,
  * under KEY_STATE. The shape is specified once, beside `MSG_STATE` in
  * `src/partcad_ide_client/protocol.py`.
@@ -100,6 +126,13 @@ export interface ViewerInterface {
     instance?: string | null;
     ports?: string[];
 }
+
+/**
+ * A glTF payload as it arrives: base64 of a zlib stream in a JSON frame, the
+ * binary glTF itself - its blob - in a binary one, or null in a show's geometry
+ * table for an entry this side was offered and said it holds.
+ */
+export type GltfPayload = string | ArrayBuffer | null;
 
 /**
  * One node of the object being shown.
@@ -131,12 +164,12 @@ export interface ViewerNode {
     /** Which entry of the root's 'geometry' table is this node's geometry. */
     gltfRef?: string;
     /**
-     * This node's own geometry, compressed and base64-encoded, or absent.
+     * This node's own geometry, or absent.
      *
      * What 'gltfRef' resolves to. PartCAD sends the reference and the table; a
      * node carries the payload itself only where nothing built a table.
      */
-    gltf?: string;
+    gltf?: GltfPayload;
     ports?: ViewerPort[];
     interfaces?: ViewerInterface[];
     /** What is inside this node, or absent for a leaf. */
@@ -148,11 +181,11 @@ export interface ViewerNode {
      */
     sketches?: Record<string, ViewerNode>;
     /**
-     * On the root node: every distinct piece of geometry in the tree, compressed
-     * and base64-encoded, keyed by a digest of the exact shape it came from. One
-     * entry however many nodes name it through 'gltfRef'.
+     * On the root node: every distinct piece of geometry in the tree, keyed by a
+     * digest of the exact shape it came from. One entry however many nodes name
+     * it through 'gltfRef'.
      */
-    geometry?: Record<string, string>;
+    geometry?: Record<string, GltfPayload>;
     /**
      * What was learnt about this node's shape as it was built, passed through as
      * PartCAD carries it. The viewer pins its 'annotations' to the elements they
@@ -197,26 +230,113 @@ export interface ViewerMessage {
     section?: Record<string, [number, number]> | null;
     /** The object itself, as the root node of its tree. */
     object?: ViewerNode | null;
+    /** On an offer: the digests of the geometry the show will name. */
+    digests?: string[];
+    /** On a 'geometry' message: what was said to be lacking, by digest. */
+    geometry?: Record<string, GltfPayload>;
 }
 
 export class ProtocolError extends Error {}
 
-/** Serialize a message into a single frame. */
-export function encodeFrame(message: unknown): Buffer {
-    const payload = Buffer.from(JSON.stringify(message), 'utf-8');
+/** The two lengths every binary payload has before its blobs, and the one before each blob. */
+const LENGTH = 4;
+
+/**
+ * 'message' with every glTF payload in it replaced by 'convert(payload)'.
+ *
+ * Looked for where a payload can be and nowhere else: a node's 'gltf' and the
+ * entries of a 'geometry' table, on the nodes of the object ('object', and every
+ * node in an 'assembly' or 'sketches' under it) and on the message itself, which
+ * is where a 'geometry' message carries its table. Null stays null. Copies what it
+ * changes and shares the rest. The mirror of 'map_payloads' in the Python module.
+ */
+export function mapPayloads<T>(message: T, convert: (payload: unknown) => unknown): T {
+    const node = (value: unknown): unknown => {
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+            return value;
+        }
+        const mapped: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+        if (mapped.gltf !== undefined && mapped.gltf !== null) {
+            mapped.gltf = convert(mapped.gltf);
+        }
+        const table = mapped.geometry;
+        if (typeof table === 'object' && table !== null && !Array.isArray(table)) {
+            mapped.geometry = Object.fromEntries(
+                Object.entries(table).map(([digest, payload]) => [digest, payload === null ? null : convert(payload)]),
+            );
+        }
+        if (Array.isArray(mapped.assembly)) {
+            mapped.assembly = mapped.assembly.map(node);
+        }
+        const sketches = mapped.sketches;
+        if (typeof sketches === 'object' && sketches !== null && !Array.isArray(sketches)) {
+            mapped.sketches = Object.fromEntries(
+                Object.entries(sketches).map(([reference, sketch]) => [reference, node(sketch)]),
+            );
+        }
+        return mapped;
+    };
+    const mapped = node(message) as Record<string, unknown>;
+    const object = (message as Record<string, unknown>)?.object;
+    if (typeof object === 'object' && object !== null) {
+        mapped.object = node(object);
+    }
+    return mapped as T;
+}
+
+/**
+ * Serialize a message into a single frame.
+ *
+ * 'binary' writes a KIND_BINARY frame, with every ArrayBuffer or byte array at a
+ * payload position a blob; this side only ever sends acknowledgements, which are
+ * JSON, and the binary kind is here to build what PartCAD sends, in a test.
+ */
+export function encodeFrame(message: unknown, binary = false): Buffer {
+    let kind = KIND_JSON;
+    let payload: Buffer;
+    if (binary) {
+        const blobs: Buffer[] = [];
+        const json = JSON.stringify(
+            mapPayloads(message, (value) => {
+                if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+                    const view = ArrayBuffer.isView(value)
+                        ? Buffer.from(value.buffer, value.byteOffset, value.byteLength)
+                        : Buffer.from(value);
+                    blobs.push(view);
+                    return blobs.length - 1;
+                }
+                return value;
+            }),
+        );
+        const text = Buffer.from(json, 'utf-8');
+        const parts: Buffer[] = [uint32(text.length), text, uint32(blobs.length)];
+        for (const blob of blobs) {
+            parts.push(uint32(blob.length), blob);
+        }
+        payload = Buffer.concat(parts);
+        kind = KIND_BINARY;
+    } else {
+        payload = Buffer.from(JSON.stringify(message), 'utf-8');
+    }
     if (payload.length > MAX_FRAME_LENGTH) {
         throw new ProtocolError(`message of ${payload.length} bytes exceeds the ${MAX_FRAME_LENGTH} byte frame limit`);
     }
     const header = Buffer.alloc(HEADER_LENGTH);
     header.write(MAGIC, 0, 4, 'ascii');
     header.writeUInt8(VERSION, 4);
-    header.writeUInt8(KIND_JSON, 5);
+    header.writeUInt8(kind, 5);
     header.writeUInt32BE(payload.length, 6);
     return Buffer.concat([header, payload]);
 }
 
-/** Validate a frame header and return the payload length that follows it. */
-export function decodeHeader(header: Buffer): number {
+function uint32(value: number): Buffer {
+    const buffer = Buffer.alloc(LENGTH);
+    buffer.writeUInt32BE(value, 0);
+    return buffer;
+}
+
+/** Validate a frame header and return the kind and the length of the payload that follows it. */
+export function readHeader(header: Buffer): { kind: number; length: number } {
     if (header.length !== HEADER_LENGTH) {
         throw new ProtocolError(`frame header must be ${HEADER_LENGTH} bytes, got ${header.length}`);
     }
@@ -228,17 +348,22 @@ export function decodeHeader(header: Buffer): number {
         throw new ProtocolError(`unsupported protocol version ${version} (this viewer speaks ${VERSION})`);
     }
     const kind = header.readUInt8(5);
-    if (kind !== KIND_JSON) {
+    if (kind !== KIND_JSON && kind !== KIND_BINARY) {
         throw new ProtocolError(`unsupported payload kind ${kind}`);
     }
     const length = header.readUInt32BE(6);
     if (length > MAX_FRAME_LENGTH) {
         throw new ProtocolError(`frame of ${length} bytes exceeds the ${MAX_FRAME_LENGTH} byte limit`);
     }
-    return length;
+    return { kind, length };
 }
 
-/** Parse a frame payload into a message. */
+/** Validate a frame header and return the payload length that follows it. */
+export function decodeHeader(header: Buffer): number {
+    return readHeader(header).length;
+}
+
+/** Parse a JSON frame payload into a message. */
 export function decodePayload(payload: Buffer): ViewerMessage {
     let parsed: unknown;
     try {
@@ -256,9 +381,120 @@ export function decodePayload(payload: Buffer): ViewerMessage {
     return message;
 }
 
-/** Turn a wire payload back into the binary glTF buffer it carries. */
-export function decodeGltf(payload: string): Buffer {
-    return zlib.inflateSync(Buffer.from(payload, 'base64'));
+/** Where the bytes of a payload are, which a binary payload is read out of. */
+interface Bytes {
+    readonly length: number;
+    /** The bytes at 'offset', as a view where that is free and a copy where it is not. */
+    view(offset: number, length: number): Buffer;
+    /** The bytes at 'offset', in an ArrayBuffer of their own and exactly their size. */
+    copy(offset: number, length: number): ArrayBuffer;
+}
+
+/** A Buffer, as 'Bytes'. */
+function bytesOf(buffer: Buffer): Bytes {
+    return {
+        length: buffer.length,
+        view: (offset, length) => buffer.subarray(offset, offset + length),
+        copy: (offset, length) => exactArrayBuffer(buffer.subarray(offset, offset + length), true),
+    };
+}
+
+/**
+ * Parse a binary frame payload into a message, every blob where the message names it.
+ *
+ * A blob arrives as an ArrayBuffer of its own, exactly its size, rather than as a
+ * view into the frame: it is handed to the webview as it is, and VS Code posts the
+ * whole of the ArrayBuffer a view is over - which for a view into a frame is every
+ * other blob of it too, again and again for as long as the view is kept.
+ */
+function decodeBinary(bytes: Bytes): ViewerMessage {
+    const lengthAt = (offset: number): number => {
+        if (offset + LENGTH > bytes.length) {
+            throw new ProtocolError(`binary frame payload ends inside a length, at byte ${offset} of ${bytes.length}`);
+        }
+        return bytes.view(offset, LENGTH).readUInt32BE(0);
+    };
+    let offset = LENGTH + lengthAt(0);
+    if (offset > bytes.length) {
+        throw new ProtocolError('binary frame payload ends inside its message');
+    }
+    const message = decodePayload(bytes.view(LENGTH, offset - LENGTH));
+    const count = lengthAt(offset);
+    offset += LENGTH;
+    const blobs: ArrayBuffer[] = [];
+    for (let index = 0; index < count; index++) {
+        const size = lengthAt(offset);
+        offset += LENGTH;
+        if (offset + size > bytes.length) {
+            throw new ProtocolError(`binary frame payload ends inside blob ${index}`);
+        }
+        blobs.push(bytes.copy(offset, size));
+        offset += size;
+    }
+    if (offset !== bytes.length) {
+        throw new ProtocolError(`binary frame payload has ${bytes.length - offset} bytes after its last blob`);
+    }
+    return mapPayloads(message, (payload) => {
+        if (typeof payload !== 'number') {
+            return payload;
+        }
+        if (!Number.isInteger(payload) || payload < 0 || payload >= blobs.length) {
+            throw new ProtocolError(`a payload names blob ${payload} of ${blobs.length}`);
+        }
+        return blobs[payload];
+    });
+}
+
+/** Parse a binary frame payload into a message; see 'decodeBinary'. */
+export function decodeBinaryPayload(payload: Buffer): ViewerMessage {
+    return decodeBinary(bytesOf(payload));
+}
+
+/**
+ * The bytes of 'view' as an ArrayBuffer that holds exactly them: its own when it
+ * already does, else a copy - always a copy when 'copy' says so.
+ *
+ * What is posted to the webview and kept for the next show is this, never a view:
+ * a view keeps alive, and gets posted along with it, whatever else its ArrayBuffer
+ * holds - a frame's other blobs, or Node's pool of small allocations.
+ */
+export function exactArrayBuffer(view: Uint8Array, copy = false): ArrayBuffer {
+    if (!copy && view.byteOffset === 0 && view.byteLength === view.buffer.byteLength) {
+        return view.buffer as ArrayBuffer;
+    }
+    const exact = new Uint8Array(view.byteLength);
+    exact.set(view);
+    return exact.buffer;
+}
+
+/** Whether 'data' begins with a zlib header (RFC 1950); a GLB's "glTF" never does. See 'is_zlib' in Python. */
+export function isZlib(data: Uint8Array): boolean {
+    return data.length >= 2 && (data[0] & 0x0f) === 8 && data[0] >> 4 <= 7 && ((data[0] << 8) | data[1]) % 31 === 0;
+}
+
+/**
+ * The binary glTF a payload carries, whichever spelling it arrived in.
+ *
+ * A blob is the glTF itself; text is base64 of a zlib stream, at whatever level a
+ * PartCAD wrote it at. Either is sniffed rather than trusted, since a PartCAD
+ * from before binary frames may have cached a compressed one.
+ */
+export function decodeGltf(payload: string | ArrayBuffer | Uint8Array): Buffer {
+    const data =
+        typeof payload === 'string'
+            ? Buffer.from(payload, 'base64')
+            : payload instanceof ArrayBuffer
+              ? Buffer.from(payload)
+              : Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
+    return isZlib(data) ? zlib.inflateSync(data) : data;
+}
+
+/** 'decodeGltf', as an ArrayBuffer of exactly the glTF (see 'exactArrayBuffer'). */
+export function glbOf(payload: string | ArrayBuffer | Uint8Array): ArrayBuffer {
+    if (payload instanceof ArrayBuffer && !isZlib(new Uint8Array(payload, 0, Math.min(2, payload.byteLength)))) {
+        return payload;
+    }
+    return exactArrayBuffer(decodeGltf(payload));
 }
 
 /**
@@ -280,6 +516,11 @@ export function decodeGltf(payload: string): Buffer {
  * not at all when it lies inside one chunk, which is what several small frames
  * arriving together do. The 20 MiB show takes under a tenth of a second.
  *
+ * A binary frame is not put together at all: each of its blobs is copied out of
+ * the chunks into an ArrayBuffer of its own (see 'decodeBinary'), which is the
+ * one copy a blob has to have, rather than the frame being joined first and the
+ * blobs copied out of that.
+ *
  * A bad header or payload throws on every push from then on, as it always has:
  * nothing is consumed until it has been decoded, so the stream never resumes
  * mid-frame and reads the rest of a frame as a header.
@@ -291,6 +532,8 @@ export class FrameReader {
     private pending = 0;
     /** The length, header included, of the frame at the front once its header is in; -1 before. */
     private frameLength = -1;
+    /** The kind of that frame. */
+    private kind = KIND_JSON;
 
     /** Append received bytes and return every complete message they contain. */
     public push(chunk: Buffer): ViewerMessage[] {
@@ -308,12 +551,25 @@ export class FrameReader {
                 // Validated as soon as it is in, not once the payload is: a
                 // peer that is not speaking this protocol is refused at its
                 // first ten bytes rather than after up to MAX_FRAME_LENGTH more.
-                this.frameLength = HEADER_LENGTH + decodeHeader(this.peek(HEADER_LENGTH));
+                const { kind, length } = readHeader(this.peek(HEADER_LENGTH));
+                this.kind = kind;
+                this.frameLength = HEADER_LENGTH + length;
             }
             if (this.pending < this.frameLength) {
                 return messages;
             }
-            messages.push(decodePayload(this.peek(this.frameLength).subarray(HEADER_LENGTH)));
+            if (this.kind === KIND_BINARY) {
+                const length = this.frameLength - HEADER_LENGTH;
+                messages.push(
+                    decodeBinary({
+                        length,
+                        view: (offset, size) => this.view(HEADER_LENGTH + offset, size),
+                        copy: (offset, size) => this.copy(HEADER_LENGTH + offset, size),
+                    }),
+                );
+            } else {
+                messages.push(decodePayload(this.peek(this.frameLength).subarray(HEADER_LENGTH)));
+            }
             this.consume(this.frameLength);
             this.frameLength = -1;
         }
@@ -321,19 +577,54 @@ export class FrameReader {
 
     /** The first 'length' pending bytes, which must be there: a view where one chunk holds them, else a copy. */
     private peek(length: number): Buffer {
-        const first = this.chunks[0];
-        if (first.length >= length) {
-            return first.subarray(0, length);
+        return this.view(0, length);
+    }
+
+    /**
+     * The 'length' pending bytes at 'offset', which must be there: a view where one
+     * chunk holds them, else a copy.
+     */
+    private view(offset: number, length: number): Buffer {
+        const [first, skip] = this.locate(offset);
+        const chunk = this.chunks[first];
+        if (chunk.length - skip >= length) {
+            return chunk.subarray(skip, skip + length);
         }
-        let count = 0;
-        let collected = 0;
-        while (collected < length) {
-            collected += this.chunks[count].length;
-            count++;
+        const out = Buffer.allocUnsafe(length);
+        this.fill(out, first, skip);
+        return out;
+    }
+
+    /** The same bytes, always copied, into an ArrayBuffer of exactly their size. */
+    private copy(offset: number, length: number): ArrayBuffer {
+        const out = new Uint8Array(length);
+        if (length > 0) {
+            const [first, skip] = this.locate(offset);
+            this.fill(out, first, skip);
         }
-        // Truncated to 'length', so of the last chunk only what the frame
-        // takes is copied.
-        return Buffer.concat(this.chunks.slice(0, count), length);
+        return out.buffer;
+    }
+
+    /** Which chunk the pending byte at 'offset' is in, and how far into it. */
+    private locate(offset: number): [number, number] {
+        let index = 0;
+        while (offset >= this.chunks[index].length) {
+            offset -= this.chunks[index].length;
+            index++;
+        }
+        return [index, offset];
+    }
+
+    /** Fill 'out' with the pending bytes from 'skip' into chunk 'index' on. */
+    private fill(out: Uint8Array, index: number, skip: number): void {
+        let written = 0;
+        while (written < out.length) {
+            const chunk = this.chunks[index++];
+            const take = Math.min(chunk.length - skip, out.length - written);
+            out.set(chunk.subarray(skip, skip + take), written);
+            written += take;
+            skip = 0;
+        }
     }
 
     /** Drop the first 'length' pending bytes, which must be there. */

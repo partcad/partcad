@@ -255,19 +255,25 @@ Shape.show() / Interface.show()
 shape_gltf.convert_async()                  one node tree, BREP at its nodes
   │                                         (no OCP in this process)
   ▼
-wrapper_gltf.py  ── in a sandbox ──▶ build123d.export_gltf(binary=True), per node
+wrapper_gltf.py  ── in a sandbox ──▶ build123d.export_gltf(binary=True), per distinct shape
   │                                          │
-  │                                  GLB ──▶ zlib ──▶ base64
+  │                                         GLB, as bytes
   ▼
-partcad_ide_client.show()                   the same tree, glTF at its nodes
+partcad_ide_client.show()                   the same tree, a table of GLB on its root
   │
-  │  TCP 127.0.0.1:9137, framed JSON  ───────▶  PartcadViewerServer
+  │  TCP 127.0.0.1:9137                       PartcadViewerServer
+  │  offer: these digests  ─────────────────▶  (GeometryStore: what this window was sent)
+  │  ◀─────────────────────────  ack: missing
+  │  geometry: the missing GLB, as blobs ───▶
+  │  show: the tree, the table all null ────▶  table filled in from the store
   │  ◀───────────────────────────────────────  ack
                                                │
-                                               │ zlib.inflate, base64, per node
                                                ▼
-                                          PartcadViewer  ── postMessage ──▶  three.js
-                                                                             GLTFLoader
+                                          PartcadViewer  ── postMessage ──▶  geometryCache.ts
+                                          (WebviewLedger:     ArrayBuffers    (parsed, by digest)
+                                           what the webview   of what the        │
+                                           holds)             webview lacks      ▼
+                                                                             three.js GLTFLoader
 ```
 
 ## Why it is shaped this way
@@ -292,12 +298,14 @@ the protocol has no authentication.
 | `src/partcad/viewer.py` | Core entry point: calls the client, and decides about the camera |
 | `src/partcad/shape_envelope.py` | **The node**, in both forms, and the one composition that places one |
 | `src/partcad/shape_gltf.py` | The glTF form: the same tree, tessellated in one sandbox |
-| `src/partcad/wrappers/wrapper_gltf.py` | Sandbox: a tree's BREP → compressed glTF, node by node |
+| `src/partcad/wrappers/wrapper_gltf.py` | Sandbox: a tree's BREP → binary glTF, once per distinct shape |
 | `src/partcad/shape_ports.py` | What a node carries about connections |
 | `src/partcad_ide_client/protocol.py` | **Normative** description of the wire format |
 | `src/partcad_ide_client/client.py` | Python client |
 | `src/viewer/protocol.ts` | The same wire format, in TypeScript |
 | `src/viewer/PartcadViewerServer.ts` | The listening socket |
+| `src/viewer/geometryStore.ts` | What the host keeps of the geometry it was shown: its own copy, and its account of the webview's |
+| `src/webview/geometryCache.ts` | The geometry the webview keeps parsed across shows, as the host tells it to |
 | `src/viewer/PartcadViewer.ts` | The "Digital Thread" webview panel, and the tab fetches |
 | `src/webview/viewer.ts` | The panel shell inside the webview: tabs, routing |
 | `src/webview/messages.ts` | The `postMessage` contract between the two, and the daemon payloads |
@@ -352,16 +360,62 @@ FROM_GLTF` — convert the point into PartCAD's frame, move it there, convert th
 go under a group carrying `TO_GLTF`, which leaves each port's own transform expressed exactly as PartCAD stated
 it. Getting this wrong lays the model on its side or puts it a thousand times too far away.
 
-## Compression
+## Payloads, frames and what is kept
 
-The glTF payload is zlib (deflate), not the zstd that PartCAD's BREP envelopes use. Both ends of *this* pipe
-have to decompress it, and zlib is in the standard library of both Python and Node; zstd only reached Node in
-23.8, well past what VS Code ships.
+**The glTF is not compressed and not text, anywhere on the way.** The sandbox writes each distinct shape's GLB
+as bytes (`ocp_serialize.encode_gltf`), the core holds it as bytes, and `partcad_ide_client` writes it as a
+*blob* of a binary frame: the frame's JSON says where each payload is by the index of its blob, and the blobs
+follow it as they are (the layout is in `src/partcad_ide_client/protocol.py`). The extension host copies each
+blob out of the socket's chunks into an `ArrayBuffer` of its own, keeps it, and posts that `ArrayBuffer` to the
+webview, which hands it to three's `GLTFLoader` as it is. It used to be zlib and base64 at every step - and
+then base64 again, for `postMessage` - which on a 25 MB assembly was two seconds of zlib in the sandbox and
+another half second of inflating, re-encoding, serializing and decoding in the extension host and the webview,
+to take a third off a copy that crosses a loopback socket in milliseconds. Remote-SSH does not change that: the
+extension host runs beside PartCAD, and the socket is loopback there too. What crosses the network is the
+message to the webview, which VS Code carries; compressing that would be a `DecompressionStream` in the
+webview, should it ever be worth it.
 
-There are three implementations of that two-line codec, because none of the three can import either of the
+**What a frame can be is negotiated, because the two halves are released apart.** An extension from before
+binary frames drops the connection at the first header it does not know, so every acknowledgement says what
+this side accepts (`capabilities`), and `partcad_ide_client` sends a binary frame only to a connection whose
+IDE has said it reads them. An IDE that says nothing is sent JSON frames exactly as before - each payload base64
+of a zlib stream, stored at level 0 so that it costs a copy rather than a compression, unless it would not fit
+a frame that way. Both halves still read that spelling at any level, and sniff a zlib header in a blob too,
+because a PartCAD from before this, or a tessellation it cached, wrote it.
+
+**A show is offered before it is sent.** Most of a show is what the window was shown a moment ago: an edit
+re-renders one part of an assembly, a cross-section leaves the parts it misses as they were, a reader goes back
+to the object before. So `partcad_ide_client` sends the digests of the show's geometry table first (`offer`),
+the extension host answers which it lacks (`GeometryStore`, shared by every connection of the window, keeping
+the show on screen and up to 256 MB beyond it), those follow (`geometry`, held for that connection until its
+show), and the show names every entry as `null`. Showing the same assembly again sends the tree and nothing
+else. An IDE that let go of something between the two answers the show with what is missing; after a second
+such answer the show is sent whole.
+
+**The webview keeps what it parsed, and the host decides what.** Parsing a glTF and uploading it is where the
+time of opening a large object goes, so `geometryCache.ts` keeps each parsed shape by digest across shows - as
+a template that is never on the stage, only cloned - and a show it already holds a shape of is drawn without
+parsing it. The host has to know what the webview holds to leave those buffers out of the post, so it keeps
+the account (`WebviewLedger`, least recently used past 256 MB of glTF, never the show being posted) and says
+with each show what to let go of (`evict`). The webview takes a show's buffers and evictions in as the message
+arrives, before anything is awaited, so the account holds even for a show that is overtaken before it is drawn;
+a webview that reloaded says so (`ready`) and is sent everything again, from the host's own copy rather than
+from PartCAD. The panel reopened after it was closed is filled the same way.
+
+There are three implementations of the payload codec, because none of the three can import either of the
 others (the sandbox has no `partcad_ide_client`, the client has no `partcad`, the extension is not Python):
-`ocp_serialize.encode_gltf`, `partcad_ide_client.protocol.encode_gltf`, and `decodeGltf` in `protocol.ts`.
-`tests/partcad/unit/test_viewer.py` and `src/test/suite/viewerProtocol.test.ts` are what catch a drift.
+`ocp_serialize.encode_gltf`, `partcad_ide_client.protocol.encode_gltf`/`decode_gltf`, and `decodeGltf` in
+`protocol.ts`. `tests/partcad/unit/test_viewer.py`, `tests/partcad_ide_client/unit/test_protocol.py` (which
+reads `protocol.ts` for the kinds and capabilities) and `src/test/suite/viewerProtocol.test.ts` are what catch
+a drift; `src/test/suite/viewerGeometryCache.test.ts` covers what is kept, on both sides.
+
+**One mesh per instance, still.** A shape placed a hundred times is one parse and one upload, and a hundred
+`Object3D`s - a hundred draw calls. Instancing it (`InstancedMesh`, `BatchedMesh`) would make it one, but every
+per-node thing the 3D view does is done to a node's own object: its box in the control pane and the flicker of
+pointing at its row set `visible` on it, its colour is a material of its own (a see-through one a transparent
+material, which one instanced mesh cannot vary), the software painter's projector reads no instance matrices,
+and the proxies it draws while the camera moves are a box per mesh. So it is not done; doing it would mean an
+instanced path for opaque shapes on a GPU backend, with visibility and colour written into the instances.
 
 ## Rendering
 

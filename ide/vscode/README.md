@@ -19,9 +19,10 @@ Also, make sure to visit [our website](https://partcad.org/) and browse [the rep
 ## Digital Thread
 
 Selecting a part, assembly, scene, sketch or interface opens it in the **Digital Thread** tab. PartCAD
-tessellates the shape in a sandboxed runtime and sends the result to this extension as compressed glTF over a
-socket on `127.0.0.1:9137`, so the viewer needs no CAD library of its own. The Python side of that connection
-is the `partcad_ide_client` package, which ships inside `partcad` itself.
+tessellates the shape in a sandboxed runtime and sends the result to this extension as binary glTF over a
+socket on `127.0.0.1:9137` - only the shapes this window has not been sent before - so the viewer needs no CAD
+library of its own. The Python side of that connection is the `partcad_ide_client` package, which ships inside
+`partcad` itself.
 
 Anything that can reach that port displays into the same viewer, including a `pc ide view` run in a plain
 terminal. Set `PARTCAD_IDE_PORT` to move both ends off the default port.

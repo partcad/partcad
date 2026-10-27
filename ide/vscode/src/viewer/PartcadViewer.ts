@@ -13,25 +13,34 @@ import { readChoices, writeChoices } from '../common/garage';
 import { traceError, traceInfo, traceVerbose } from '../common/log/logging';
 import { getViewerPerformanceDebugFromSetting } from '../common/settings';
 import * as utils from '../utils';
+import { WebviewLedger } from './geometryStore';
 import { detailsBytes, filesAsBytes } from './payloads';
-import { MSG_CLEAR, MSG_SHOW, ViewerMessage, ViewerNode, decodeGltf } from './protocol';
+import { GltfPayload, MSG_CLEAR, MSG_SHOW, ViewerMessage, ViewerNode, glbOf } from './protocol';
 import { SpacenavClient } from './spacenav';
 
 /**
- * One node as the webview is handed it: the same node, with its glTF
- * decompressed into base64 and measured.
+ * One node as the webview is handed it: the same node, with its glTF as the
+ * ArrayBuffer of the binary glTF itself, and measured.
  *
- * Decompressed here, in the extension host, rather than in the webview: Node has
- * zlib built in, a webview would need either a bundled inflater or
+ * An ArrayBuffer because that is what VS Code posts to a webview as bytes - a
+ * string is serialized into the message's JSON, which for a 25 MB assembly was a
+ * quarter of a second here and as long again unpicking it on the other side - and
+ * the buffer itself because it is what three's loader parses. Text from a
+ * PartCAD from before binary frames is decoded here, once, as it arrives; Node
+ * has zlib built in, and a webview would need a bundled inflater or a
  * DecompressionStream. The size travels because the renderer shows what it is
- * loading, and it is the size of the buffer rather than of the payload.
+ * loading, and it is the size of the buffer.
  */
-interface WebviewNode extends Omit<ViewerNode, 'assembly' | 'sketches' | 'geometry'> {
+interface WebviewNode extends Omit<ViewerNode, 'gltf' | 'assembly' | 'sketches' | 'geometry'> {
+    gltf?: ArrayBuffer;
     size?: number;
     assembly?: WebviewNode[];
     sketches?: Record<string, WebviewNode>;
-    /** The root's geometry table, decompressed: each entry measured as it is inflated. */
-    geometry?: Record<string, { gltf: string; size: number }>;
+    /**
+     * The root's geometry table, each entry measured, and with its buffer only
+     * where the webview does not hold it parsed already (see 'WebviewLedger').
+     */
+    geometry?: Record<string, { gltf?: ArrayBuffer; size: number }>;
 }
 
 /**
@@ -158,7 +167,14 @@ export class PartcadViewer implements vscode.Disposable {
     public static readonly title = 'Digital Thread';
 
     private panel: vscode.WebviewPanel | undefined;
+    /**
+     * The show on screen, with its geometry decoded - every payload the
+     * ArrayBuffer of its binary glTF - so that showing it again, into a panel
+     * opened afresh or a webview that reloaded, is a post and not a decode.
+     */
     private lastShow: ViewerMessage | undefined;
+    /** What the webview holds parsed, by digest; see 'WebviewLedger'. Empty for a webview that has just booted. */
+    private readonly ledger = new WebviewLedger();
     /** The `pc ide state` questions the webview has not answered yet, by token. */
     private readonly stateReplies = new Map<number, (reply: ViewerStateReply | undefined) => void>();
     private stateRequests = 0;
@@ -220,8 +236,10 @@ export class PartcadViewer implements vscode.Disposable {
         this.create(vscode.ViewColumn.Beside, preserveFocus);
         if (this.lastShow !== undefined) {
             // Reopening after a close should not leave an empty canvas when we
-            // still know what was in it.
-            this.handle(this.lastShow);
+            // still know what was in it. Its geometry is still here, decoded; a
+            // file rendered into the panel that closed is not on screen to save.
+            this.forgetRendered();
+            this.post(this.lastShow);
         }
     }
 
@@ -242,16 +260,16 @@ export class PartcadViewer implements vscode.Disposable {
             return;
         }
 
-        let object: WebviewNode | null;
+        let object: ViewerNode | null;
         try {
-            object = message.object ? inflate(message.object) : null;
+            object = message.object ? decoded(message.object) : null;
         } catch (error: any) {
             traceError(`Digital Thread: failed to decode the geometry: ${error.message}`);
             void vscode.window.showErrorMessage(`Digital Thread: failed to decode the geometry: ${error.message}`);
             return;
         }
 
-        this.lastShow = message;
+        this.lastShow = { ...message, object };
         // A file rendered for the previous object is not this one's to save.
         this.forgetRendered();
 
@@ -260,6 +278,26 @@ export class PartcadViewer implements vscode.Disposable {
         if (this.panel === undefined) {
             this.create(vscode.ViewColumn.Beside, true);
         }
+        this.post(this.lastShow);
+    }
+
+    /**
+     * Post a decoded show to the webview, with the buffers of what it does not
+     * hold and the word to let go of what it no longer needs.
+     */
+    private post(message: ViewerMessage): void {
+        const panel = this.panel;
+        if (panel === undefined) {
+            return;
+        }
+        const sizes = new Map<string, number>();
+        for (const [digest, glb] of Object.entries(message.object?.geometry ?? {})) {
+            if (glb instanceof ArrayBuffer) {
+                sizes.set(digest, glb.byteLength);
+            }
+        }
+        const { send, evict } = this.ledger.plan(sizes);
+        const object = message.object ? forWebview(message.object, send) : null;
 
         let performanceDebug = false;
         try {
@@ -268,7 +306,7 @@ export class PartcadViewer implements vscode.Disposable {
             traceVerbose(`Digital Thread: failed to read performanceDebug setting: ${error?.message ?? error}`);
         }
 
-        void this.panel?.webview.postMessage({
+        const delivered = panel.webview.postMessage({
             type: 'show',
             name: message.name ?? null,
             kind: message.kind ?? null,
@@ -294,12 +332,25 @@ export class PartcadViewer implements vscode.Disposable {
             // what is on screen, and this side knows nothing about assemblies,
             // ports or interfaces.
             object,
+            // What the webview is to let go of, which it does before it reads
+            // the rest; see 'WebviewLedger'.
+            evict,
             config: {
                 viewer: {
                     performanceDebug,
                 },
             },
         });
+        // Not delivered, the ledger says the webview holds what it was never
+        // given; the next show then sends everything.
+        delivered.then(
+            (ok) => {
+                if (!ok) {
+                    this.ledger.clear();
+                }
+            },
+            () => this.ledger.clear(),
+        );
     }
 
     /**
@@ -747,6 +798,8 @@ export class PartcadViewer implements vscode.Disposable {
     }
 
     private attach(panel: vscode.WebviewPanel): void {
+        // A new webview, which holds nothing yet.
+        this.ledger.clear();
         panel.webview.options = this.webviewOptions();
         panel.iconPath = utils.joinPath(this.extensionUri, 'resources', 'logo.svg');
         panel.webview.html = this.html(panel.webview);
@@ -770,6 +823,7 @@ export class PartcadViewer implements vscode.Disposable {
                     objects?: unknown;
                     width?: number;
                     height?: number;
+                    digests?: string[];
                 } & Partial<ViewerStateReply>,
             ) => {
                 if (message.type === 'state') {
@@ -777,12 +831,28 @@ export class PartcadViewer implements vscode.Disposable {
                 } else if (message.type === 'error') {
                     traceError(`Digital Thread: ${message.message}`);
                 } else if (message.type === 'ready') {
+                    // A webview that has just booted holds nothing, whatever was
+                    // posted to the one before it - or to it, before it listened.
+                    this.ledger.clear();
                     this.postSpaceMouseState();
                     if (this.lastShow !== undefined) {
                         // The webview finished booting after we had already been
                         // asked to show something (a restored tab, or a show that
                         // raced the panel's first paint).
-                        this.handle(this.lastShow);
+                        this.forgetRendered();
+                        this.post(this.lastShow);
+                    }
+                } else if (message.type === 'geometryMissing') {
+                    // The ledger was wrong about the webview, which can only be a
+                    // webview that reloaded and has not said 'ready' yet: it keeps
+                    // what it is sent before anything else. Forget what it says it
+                    // lacks and post the show again, with those buffers.
+                    traceVerbose(`Digital Thread: the webview lacked geometry: ${message.digests}`);
+                    for (const digest of message.digests ?? []) {
+                        this.ledger.delete(digest);
+                    }
+                    if (this.lastShow !== undefined) {
+                        this.post(this.lastShow);
                     }
                 } else if (message.type === 'fetchTab') {
                     void this.fetchTab({ ...message, tab: message.tab ?? '', token: message.token ?? 0 });
@@ -1055,44 +1125,76 @@ function spaceMouseSettings(): { enabled: boolean; sensitivity: number; invert: 
     };
 }
 
-/** A node, and everything under it, with its geometry decompressed and measured.
+/**
+ * A node, and everything under it, with every glTF payload the ArrayBuffer of
+ * its binary glTF: a blob as it came, text from an older PartCAD decoded.
  *
- * The geometry is decompressed once per distinct shape rather than once per node,
- * because that is how it arrives: the table on the root holds one entry however
- * many nodes name it, and the nodes themselves carry only the name. An assembly
- * that places one bolt a hundred times is a hundred nodes and one inflate.
+ * Once per distinct shape rather than once per node, because that is how the
+ * geometry arrives: the table on the root holds one entry however many nodes
+ * name it, and the nodes themselves carry only the name. An entry still null is
+ * one the server could not fill in, and is left out.
  */
-function inflate(node: ViewerNode): WebviewNode {
-    // The three that change shape on the way through are taken out of the spread
-    // rather than overwritten after it: a compressed table and an inflated one are
-    // different types under one name, and spreading the first into the second is
-    // the kind of mismatch TypeScript resolves optimistically on a recursive type.
-    const { geometry, assembly, sketches, ...rest } = node;
-    const inflated: WebviewNode = { ...rest };
-    if (node.gltf !== undefined) {
-        const gltf = decodeGltf(node.gltf);
-        inflated.gltf = gltf.toString('base64');
-        inflated.size = gltf.length;
+function decoded(node: ViewerNode): ViewerNode {
+    const { geometry, assembly, sketches, gltf, ...rest } = node;
+    const result: ViewerNode = { ...rest };
+    if (gltf !== undefined && gltf !== null) {
+        result.gltf = glbOf(gltf);
     }
     if (geometry !== undefined) {
-        inflated.geometry = Object.fromEntries(
-            Object.entries(geometry).map(([digest, payload]) => {
-                const gltf = decodeGltf(payload);
-                return [digest, { gltf: gltf.toString('base64'), size: gltf.length }];
-            }),
-        );
+        const table: Record<string, GltfPayload> = {};
+        for (const [digest, payload] of Object.entries(geometry)) {
+            if (payload !== null) {
+                table[digest] = glbOf(payload);
+            }
+        }
+        result.geometry = table;
     }
     if (assembly !== undefined) {
-        inflated.assembly = assembly.map(inflate);
+        result.assembly = assembly.map(decoded);
     }
     if (sketches !== undefined) {
         // The sketches the ports are drawn with are nodes like any other, and
         // name their geometry the same way.
-        inflated.sketches = Object.fromEntries(
-            Object.entries(sketches).map(([reference, sketch]) => [reference, inflate(sketch)]),
+        result.sketches = Object.fromEntries(
+            Object.entries(sketches).map(([reference, sketch]) => [reference, decoded(sketch)]),
         );
     }
-    return inflated;
+    return result;
+}
+
+/**
+ * A decoded node, and everything under it, as the webview is handed it: each
+ * entry of the table measured, and carrying its buffer only if it is in 'send'.
+ */
+function forWebview(node: ViewerNode, send: ReadonlySet<string>): WebviewNode {
+    // The ones that change shape on the way through are taken out of the spread
+    // rather than overwritten after it: a wire table and a webview one are
+    // different types under one name, and spreading the first into the second is
+    // the kind of mismatch TypeScript resolves optimistically on a recursive type.
+    const { geometry, assembly, sketches, gltf, ...rest } = node;
+    const result: WebviewNode = { ...rest };
+    if (gltf instanceof ArrayBuffer) {
+        result.gltf = gltf;
+        result.size = gltf.byteLength;
+    }
+    if (geometry !== undefined) {
+        const table: Record<string, { gltf?: ArrayBuffer; size: number }> = {};
+        for (const [digest, glb] of Object.entries(geometry)) {
+            if (glb instanceof ArrayBuffer) {
+                table[digest] = send.has(digest) ? { gltf: glb, size: glb.byteLength } : { size: glb.byteLength };
+            }
+        }
+        result.geometry = table;
+    }
+    if (assembly !== undefined) {
+        result.assembly = assembly.map((child) => forWebview(child, send));
+    }
+    if (sketches !== undefined) {
+        result.sketches = Object.fromEntries(
+            Object.entries(sketches).map(([reference, sketch]) => [reference, forWebview(sketch, send)]),
+        );
+    }
+    return result;
 }
 
 function getNonce(): string {

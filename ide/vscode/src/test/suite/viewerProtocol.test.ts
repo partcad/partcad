@@ -10,6 +10,8 @@ import * as zlib from 'zlib';
 import {
     FrameReader,
     HEADER_LENGTH,
+    KIND_BINARY,
+    KIND_JSON,
     MAGIC,
     MAX_FRAME_LENGTH,
     MSG_SHOW,
@@ -17,11 +19,15 @@ import {
     ProtocolError,
     VERSION,
     ViewerMessage,
+    decodeBinaryPayload,
     decodeGltf,
     decodeHeader,
     decodePayload,
     encodeFrame,
+    glbOf,
+    isZlib,
     listenPort,
+    readHeader,
 } from '../../viewer/protocol';
 
 function header(magic: string, version: number, kind: number, length: number): Buffer {
@@ -278,14 +284,135 @@ suite('Digital Thread protocol', () => {
         assert.strictEqual(listenPort(env('99.5')), PARTCAD_IDE_PORT);
     });
 
-    test('glTF payloads written by the Python client are readable here', () => {
-        // 'partcad_ide_client.protocol.encode_gltf' is base64(zlib.compress(glb,
-        // 6)); this is that, spelled in Node, and decodeGltf has to undo it.
+    test('glTF payloads written by a PartCAD from before binary frames are readable here', () => {
+        // What every 'encode_gltf' wrote then, and a JSON frame still carries:
+        // base64(zlib.compress(glb, level)), spelled in Node, at every level.
         const glb = Buffer.concat([Buffer.from('glTF\x02\x00\x00\x00', 'binary'), Buffer.alloc(4096)]);
-        const payload = zlib.deflateSync(glb, { level: 6 }).toString('base64');
+        for (const level of [0, 1, 6, 9]) {
+            const payload = zlib.deflateSync(glb, { level }).toString('base64');
+            assert.deepStrictEqual(decodeGltf(payload), glb, `level ${level}`);
+            assert.deepStrictEqual(Buffer.from(glbOf(payload)), glb, `level ${level}`);
+        }
+    });
 
-        assert.deepStrictEqual(decodeGltf(payload), glb);
-        // Compression really happened: base64 alone would grow the input by 4/3.
-        assert.ok(payload.length < glb.length);
+    test('a blob is the glTF itself, and is handed on as it is', () => {
+        const glb = new Uint8Array(Buffer.from('glTF\x02\x00\x00\x00 the rest', 'binary')).buffer;
+        assert.strictEqual(glbOf(glb), glb);
+        assert.ok(!isZlib(new Uint8Array(glb)));
+        // A zlib stream in a blob - a cached one from before - is inflated all the same.
+        const stream = zlib.deflateSync(Buffer.from(glb));
+        assert.deepStrictEqual(Buffer.from(glbOf(new Uint8Array(stream).slice().buffer)), Buffer.from(glb));
+    });
+
+    test('a binary frame laid out by hand is read, every blob where the message names it', () => {
+        // The layout as 'src/partcad_ide_client/protocol.py' states it, written
+        // out here rather than through a helper both sides could share a bug in.
+        const bolt = Buffer.from('glTF bolt');
+        const sketch = Buffer.from('glTF sketch');
+        const message = {
+            type: MSG_SHOW,
+            id: 'one',
+            object: {
+                name: '//pkg:assy',
+                assembly: [{ name: '//pkg:bolt', gltfRef: 'bolt' }],
+                geometry: { bolt: 0, nut: null },
+                sketches: { circle: { name: '//pkg:circle', gltf: 1 } },
+                // Integers in a package's own words are its own.
+                metadata: { gltf: 1, count: 0 },
+            },
+        };
+        const frame = binaryFrame(message, [bolt, sketch]);
+
+        const decoded = decodeBinaryPayload(frame.subarray(HEADER_LENGTH));
+        const object = decoded.object!;
+        assert.deepStrictEqual(Buffer.from(object.geometry!.bolt as ArrayBuffer), bolt);
+        assert.strictEqual(object.geometry!.nut, null);
+        assert.deepStrictEqual(Buffer.from(object.sketches!.circle.gltf as ArrayBuffer), sketch);
+        assert.deepStrictEqual(object.metadata, { gltf: 1, count: 0 });
+        assert.deepStrictEqual(object.assembly, message.object.assembly);
+        // Each in an ArrayBuffer of its own, exactly its size: posted to the
+        // webview, a view would take the whole frame with it.
+        assert.strictEqual((object.geometry!.bolt as ArrayBuffer).byteLength, bolt.length);
+        assert.deepStrictEqual(readHeader(frame.subarray(0, HEADER_LENGTH)), {
+            kind: KIND_BINARY,
+            length: frame.length - HEADER_LENGTH,
+        });
+    });
+
+    test('a binary frame is read whatever chunks it arrives in, its blobs copied out once', () => {
+        const blobs = [0, 1, 2].map((index) => Buffer.alloc(10000 + index, index + 1));
+        const message = { type: MSG_SHOW, id: 'chunked', object: { geometry: { a: 0, b: 1, c: 2 } } };
+        const stream = Buffer.concat([binaryFrame(message, blobs), encodeFrame({ type: MSG_SHOW, id: 'after' })]);
+        for (const size of [1, 7, 4096, stream.length]) {
+            const reader = new FrameReader();
+            const received: ViewerMessage[] = [];
+            for (let i = 0; i < stream.length; i += size) {
+                received.push(...reader.push(stream.subarray(i, i + size)));
+            }
+            assert.deepStrictEqual(
+                received.map((m) => m.id),
+                ['chunked', 'after'],
+                `chunks of ${size}`,
+            );
+            const table = received[0].object!.geometry!;
+            for (const [index, digest] of ['a', 'b', 'c'].entries()) {
+                const glb = table[digest] as ArrayBuffer;
+                assert.ok(glb instanceof ArrayBuffer);
+                assert.strictEqual(glb.byteLength, blobs[index].length);
+                assert.deepStrictEqual(Buffer.from(glb), blobs[index], `blob ${digest} in chunks of ${size}`);
+            }
+        }
+    });
+
+    test('a binary frame this side builds is one it reads', () => {
+        const glb = Buffer.from('glTF built here');
+        const frame = encodeFrame({ type: MSG_SHOW, id: 'x', object: { geometry: { d: glb } } }, true);
+        const [message] = new FrameReader().push(frame);
+        assert.deepStrictEqual(Buffer.from(message.object!.geometry!.d as ArrayBuffer), glb);
+        assert.strictEqual(readHeader(frame.subarray(0, HEADER_LENGTH)).kind, KIND_BINARY);
+        assert.strictEqual(readHeader(encodeFrame({ type: MSG_SHOW }).subarray(0, HEADER_LENGTH)).kind, KIND_JSON);
+    });
+
+    test('a binary payload that does not add up is refused', () => {
+        const good = binaryFrame({ type: MSG_SHOW, object: { geometry: { a: 0 } } }, [Buffer.from('glTF')]).subarray(
+            HEADER_LENGTH,
+        );
+        const cases: [Buffer, RegExp][] = [
+            [Buffer.from([0, 0]), /inside a length/],
+            [Buffer.concat([uint32(1000), Buffer.from('{}')]), /inside its message/],
+            [good.subarray(0, good.length - 2), /inside blob 0/],
+            [Buffer.concat([good, Buffer.from('!')]), /after its last blob/],
+            [
+                binaryFrame({ type: MSG_SHOW, object: { geometry: { a: 1 } } }, [Buffer.from('glTF')]).subarray(
+                    HEADER_LENGTH,
+                ),
+                /names blob 1 of 1/,
+            ],
+        ];
+        for (const [payload, error] of cases) {
+            assert.throws(() => decodeBinaryPayload(payload), error);
+        }
+        // And a reader goes on refusing, as it does a bad JSON frame.
+        const reader = new FrameReader();
+        const bad = Buffer.concat([header(MAGIC, VERSION, KIND_BINARY, 2), Buffer.from([0, 0])]);
+        assert.throws(() => reader.push(bad), ProtocolError);
+        assert.throws(() => reader.push(encodeFrame({ type: MSG_SHOW })), ProtocolError);
     });
 });
+
+function uint32(value: number): Buffer {
+    const buffer = Buffer.alloc(4);
+    buffer.writeUInt32BE(value, 0);
+    return buffer;
+}
+
+/** A KIND_BINARY frame, by hand: the length of the JSON and the JSON, the count, then each blob's length and bytes. */
+function binaryFrame(message: unknown, blobs: Buffer[]): Buffer {
+    const json = Buffer.from(JSON.stringify(message), 'utf-8');
+    const parts = [uint32(json.length), json, uint32(blobs.length)];
+    for (const blob of blobs) {
+        parts.push(uint32(blob.length), blob);
+    }
+    const payload = Buffer.concat(parts);
+    return Buffer.concat([header(MAGIC, VERSION, KIND_BINARY, payload.length), payload]);
+}

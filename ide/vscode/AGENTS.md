@@ -231,15 +231,29 @@ box ticked on the 3D view reaches them.
 
 **The geometry itself arrives once per distinct shape, not once per node.** PartCAD sends it as a table on the
 root keyed by a digest of the exact shape, with every node naming an entry (`gltfRef`), so an assembly that
-places one bolt a hundred times is a hundred nodes and one piece of geometry. `PartcadViewer.inflate` therefore
-decompresses the table rather than the tree, `scene.ts` parses each entry once into a `THREE.Group`, and each
-node after the first adds a `clone()` of it -- fresh `Object3D`s over the same `BufferGeometry` and the one
-shared `MeshPhongMaterial`, which is one upload and one material for the lot while every node keeps its own
-object to switch on and off. It is the arrangement the port sketches already had ("cloned per port, so forty
-holes drawn with one circle upload one geometry"), applied to the model. Two consequences worth keeping: the
-loading readout is a fraction of the *table* (`totalSize`), because counting a shared shape once per node would
-report a download that never happened; and nothing may dispose a parsed group that has been handed out, since
-its geometry is the geometry of every clone of it.
+places one bolt a hundred times is a hundred nodes and one piece of geometry. `scene.ts` parses each entry once
+into a `THREE.Group`, and each node adds a `clone()` of it -- fresh `Object3D`s over the same `BufferGeometry`,
+painted in the node's colour, which is one upload for the lot while every node keeps its own object to switch on
+and off. It is the arrangement the port sketches already had ("cloned per port, so forty holes drawn with one
+circle upload one geometry"), applied to the model. The loading readout is a fraction of the *table*
+(`totalSize`), because counting a shared shape once per node would report a download that never happened.
+
+**And once across shows: what was drawn before is neither sent nor parsed again.** The geometry is the binary
+glTF itself, never zlib or base64 on this path: PartCAD sends it as the blobs of a binary frame, `FrameReader`
+copies each into an `ArrayBuffer` of its own, and `PartcadViewer` posts those to the webview, which parses them
+as they are (`decodeGltf` still reads the base64-of-zlib an older PartCAD sends in a JSON frame). Before a show
+PartCAD offers its digests and is told which this window lacks (`GeometryExchange`/`GeometryStore` in
+`src/viewer/geometryStore.ts`), and the host posts the webview only the buffers it does not hold parsed
+(`WebviewLedger`), telling it with each show what to let go of; `src/webview/geometryCache.ts` keeps the parsed
+shapes by digest, as templates that are never on the stage and only cloned. Three rules keep that honest: **the
+host decides what the webview keeps**, so that it knows what it need not post without asking; **the webview
+takes a show's buffers and evictions in as the message arrives** (`geometryCache.receive`, before anything is
+awaited), so the account holds for a show overtaken before it is drawn; and **nothing disposes a cached
+template's geometry but the cache** -- `disposeTree` passes over geometry marked `userData.cached`, and an
+evicted template is freed only once no show on the stage draws it. Every frame kind and capability is
+negotiated, because this extension and PartCAD are released apart: see "Payloads, frames and what is kept" in
+[docs/partcad-viewer.md](./docs/partcad-viewer.md), which also says why a shape placed many times is still a
+mesh per node rather than an `InstancedMesh`.
 
 **Every tab that shows the object has the view panel down its right** (`viewPanel.ts`; "The view panel" in
 [docs/partcad-viewer.md](./docs/partcad-viewer.md)): the orientation gizmo, the axis views, a section slider per
@@ -353,7 +367,10 @@ Four things about it are load-bearing:
   still carries data URIs in `src`, which are shown as they were.
 - **The wire format is shared with Python.** `src/viewer/protocol.ts` mirrors
   `src/partcad_ide_client/protocol.py`, which is the normative description. Changing one
-  means changing both. `src/test/suite/viewerProtocol.test.ts` covers this side.
+  means changing both. `src/test/suite/viewerProtocol.test.ts` covers this side, and a Python test reads
+  `protocol.ts` for the frame kinds and the capability names. **Every acknowledgement says what this side
+  accepts** (`CAPABILITIES`), and that is the only way PartCAD learns it may send a binary frame or an offer:
+  something new this side can read is a new capability, never a change to what an existing one means.
 - **A crash on the way up used to look like an idle panel.** The HTML's resting state is "Nothing to display
   yet.", and the renderer replaces it once geometry arrives -- so a renderer that never ran left exactly the
   message shown before the user has asked for anything. `scene.ts` builds its `THREE.WebGLRenderer` at module
@@ -441,7 +458,7 @@ is the host's, bound in by `.devcontainer/host-sockets-init.sh`. Every 3D pane a
 [docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 Geometry reaches the viewer already tessellated: `partcad` renders to binary glTF in a sandbox and sends it
-compressed, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party
+as it is, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party
 `OCP CAD Viewer` extension, which is why that dependency is gone.
 
 ## Opening a workspace from the command line

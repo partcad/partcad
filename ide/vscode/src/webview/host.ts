@@ -27,6 +27,7 @@ import {
     FetchDetailsMessage,
     FetchFormatsMessage,
     FetchTabMessage,
+    GeometryMissingMessage,
     SaveChoicesMessage,
     ShowObjectMessage,
     ShowSectionMessage,
@@ -86,6 +87,11 @@ export function saveRendered(tab: TabId): void {
 /** Say that something failed, over the 3D view and into the extension's log. */
 export function reportFailure(what: string, error: unknown): void {
     report(what, describe(error));
+}
+
+/** Tell the host a show named geometry this renderer does not hold; it posts the show again with it. */
+export function geometryMissing(message: GeometryMissingMessage): void {
+    vscode.postMessage(message);
 }
 
 /** Report something that went wrong in here into the extension's log. */

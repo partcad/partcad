@@ -6,8 +6,9 @@
 // The Digital Thread's 3D view: the renderer behind the first tab of the panel.
 //
 // Runs inside the webview, not in the extension host, so it has no access to
-// 'vscode' or to node - the geometry arrives over postMessage as base64 binary
-// glTF and is parsed straight out of memory. There is deliberately no network
+// 'vscode' or to node - the geometry arrives over postMessage as the ArrayBuffers
+// of binary glTF and is parsed straight out of memory, once per digest for as long
+// as the host has it kept ('geometryCache.ts'). There is deliberately no network
 // request anywhere in this file; the panel's CSP forbids one.
 //
 // The presentation follows 'react-partcad-prerendered' (see its
@@ -65,7 +66,8 @@ import { calloutsOf } from './callouts';
 import { SceneFrame, fromStage, placeCamera as aimCamera, readViewpoint } from './cameraView';
 import { el } from './dom';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
-import { reportError } from './host';
+import { GeometryCache, geometryCache } from './geometryCache';
+import { geometryMissing, reportError } from './host';
 import { ShowMessage, ShowNode } from './messages';
 import { ItemId, PORT_COLOR, PORT_OPACITY, flickerOn, nodeId, portId, totalSize } from './nodes';
 import { Bounds } from './section';
@@ -413,8 +415,16 @@ let generation = 0;
 
 const loader = new GLTFLoader();
 
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-    const binary = atob(base64);
+/**
+ * The bytes of a glTF payload as a webview receives one: the ArrayBuffer the
+ * host posted, as it is. Base64 only from a hand-written message or a test,
+ * which is the one place a loop over characters is still worth its cost.
+ */
+function bufferOf(payload: ArrayBuffer | string): ArrayBuffer {
+    if (payload instanceof ArrayBuffer) {
+        return payload;
+    }
+    const binary = atob(payload);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
         bytes[i] = binary.charCodeAt(i);
@@ -427,6 +437,62 @@ function parseGltf(buffer: ArrayBuffer): Promise<THREE.Group> {
         // parse(), not load(): the bytes are already here, and load() would mean
         // a URL and therefore a network request the CSP forbids.
         loader.parse(buffer, '', (gltf) => resolve(gltf.scene), reject);
+    });
+}
+
+/**
+ * The materials a cached shape carries while nothing draws it. Never drawn with:
+ * every instance of it is painted as it is handed out (see 'buildNode' and
+ * 'addPorts'). Shared, and never freed, so that freeing a show cannot free the
+ * cache's materials and the cache's cannot be any show's.
+ */
+const TEMPLATE_FACES = new THREE.MeshBasicMaterial();
+const TEMPLATE_LINES = new THREE.LineBasicMaterial();
+
+/**
+ * Every parsed shape the renderer keeps across shows, by digest; see
+ * 'geometryCache.ts'. What is kept is a template: never on the stage itself, and
+ * only ever cloned - a clone is new Object3Ds over the template's BufferGeometry -
+ * so that it is the same untouched group for every show that draws it.
+ */
+const templates = geometryCache as GeometryCache<THREE.Group>;
+templates.onRelease(releaseTemplate);
+
+/**
+ * A shape parsed for the cache: the file's own materials gone, and every geometry
+ * in it marked as the cache's, so that freeing a show's content leaves it alone.
+ */
+async function parseTemplate(buffer: ArrayBuffer): Promise<THREE.Group> {
+    const group = await parseGltf(buffer);
+    group.traverse((child) => {
+        const drawable = child as THREE.Mesh | THREE.Line;
+        if (drawable.geometry !== undefined) {
+            drawable.geometry.userData.cached = true;
+        }
+        if ((drawable as THREE.Mesh).isMesh || (drawable as THREE.Line).isLine) {
+            disposeMaterials(drawable.material as THREE.Material | THREE.Material[] | undefined);
+            drawable.material = (drawable as THREE.Mesh).isMesh ? TEMPLATE_FACES : TEMPLATE_LINES;
+        } else if (drawable.material !== undefined) {
+            // Neither faces nor lines - nothing PartCAD writes - and so kept,
+            // and marked to go with the template rather than with a show.
+            for (const material of [drawable.material].flat()) {
+                material.userData.cached = true;
+            }
+        }
+    });
+    return group;
+}
+
+/** Free a template the cache let go of, once nothing on the stage draws it. */
+function releaseTemplate(group: THREE.Group): void {
+    group.traverse((child) => {
+        const drawable = child as THREE.Mesh;
+        drawable.geometry?.dispose();
+        for (const material of [drawable.material ?? []].flat()) {
+            if (material !== TEMPLATE_FACES && material !== TEMPLATE_LINES) {
+                disposeMaterial(material);
+            }
+        }
     });
 }
 
@@ -459,6 +525,11 @@ function disposeMaterials(material: THREE.Material | THREE.Material[] | undefine
     }
 }
 
+/**
+ * Free what a show put on the stage - but not what the cache keeps: the geometry
+ * of a cached shape is the geometry of every show that draws it, the next one
+ * included, and goes when the cache lets go of it ('releaseTemplate').
+ */
 function disposeTree(root: THREE.Object3D): void {
     root.traverse((node) => {
         // A callout is an element in the DOM, not in the scene, and three removes
@@ -469,10 +540,14 @@ function disposeTree(root: THREE.Object3D): void {
             node.element.remove();
         }
         const mesh = node as THREE.Mesh;
-        if (mesh.geometry) {
+        if (mesh.geometry && !mesh.geometry.userData.cached) {
             mesh.geometry.dispose();
         }
-        disposeMaterials(mesh.material as THREE.Material | THREE.Material[] | undefined);
+        for (const material of [mesh.material ?? []].flat()) {
+            if (material !== TEMPLATE_FACES && material !== TEMPLATE_LINES && !material.userData.cached) {
+                disposeMaterial(material);
+            }
+        }
     });
 }
 
@@ -491,6 +566,8 @@ export function clearGeometry(): void {
     visibleItems = undefined;
     flickering = undefined;
     dropProxies();
+    // Nothing is drawn now, so whatever the cache let go of can go.
+    templates.use([]);
     invalidate();
     overlay.textContent = 'Nothing to display yet.';
     overlay.style.display = '';
@@ -740,13 +817,18 @@ function paint(group: THREE.Object3D, geometry: Geometry, appearance: Appearance
  * in it (see 'messages.ts'), so this parses the table - not the tree - and a shape
  * the tree holds a hundred times is parsed, and uploaded to the GPU, once.
  *
- * 'take' is what turns one parsed group into what a node adds to the stage: the
- * group itself for the first node that names it, and a clone for every node after
- * that. A clone is a fresh set of Object3Ds over the *same* BufferGeometry and the
- * same material, which is the whole point - one upload, one material, one instance
- * per node, and each node's own Object3D to switch on and off. Nothing is disposed
- * here: every group handed out ends up under the content group, and 'disposeTree'
- * frees it from there when the show is replaced.
+ * And once across shows, too: what is parsed is a template the cache keeps by
+ * digest ('geometryCache.ts'), so a shape this renderer has drawn before, and the
+ * host has not had it let go of, is not parsed again - nor even sent again.
+ *
+ * 'take' is what turns one parsed group into what a node adds to the stage: a
+ * clone of the template, for every node that names it. A clone is a fresh set of
+ * Object3Ds over the *same* BufferGeometry, which is the whole point - one upload,
+ * one material, one instance per node, and each node's own Object3D to switch on
+ * and off. The template itself is never on the stage, so it is the same for the
+ * next show as it was for this one. Every group handed out ends up under the
+ * content group, and 'disposeTree' frees what of it is the show's when the show is
+ * replaced; the geometry is the cache's, and stays.
  *
  * One material per colour for all of it, for the same reason: a material per node
  * is a material per node for the renderer to set up, and an assembly of a hundred
@@ -756,8 +838,9 @@ function paint(group: THREE.Object3D, geometry: Geometry, appearance: Appearance
  * the geometry is shared between them.
  */
 class Geometry {
+    /** The templates this show draws, by digest, and the groups it parsed for itself (hand-written base64). */
     private readonly parsed = new Map<string, THREE.Group>();
-    private readonly used = new Set<string>();
+    private readonly local = new Set<string>();
     /** The face and line materials of every colour this show has drawn in, by 'appearanceKey'. */
     private readonly faces = new Map<string, THREE.MeshPhongMaterial>();
     private readonly lines = new Map<string, THREE.LineBasicMaterial>();
@@ -821,25 +904,40 @@ class Geometry {
         return material;
     }
 
-    /** Parse the table, reporting progress as it goes. Returns what failed to parse. */
+    /**
+     * Parse the table - what of it the cache does not hold parsed already -
+     * reporting progress as it goes. Returns what failed to parse.
+     *
+     * The file's own materials go as a shape is parsed (see 'parseTemplate'), and
+     * every node is painted as it is handed out, in its own colour or the
+     * default one (see 'paint'), on both sides of every face. A part is a closed
+     * solid and would look the same either way, but a sketch and a port's
+     * boundary are laminae: drawn front-side only, one whose face winds away from
+     * the camera is not drawn at all, and the camera orbits past both sides of
+     * it. Nothing says which way a sketch's one face points - the ones in
+     * 'examples' happen to point up.
+     */
     async load(root: ShowNode, total: number, superseded: () => boolean): Promise<number> {
         let failed = 0;
         let bytes = 0;
+        const missing: string[] = [];
         for (const [digest, entry] of Object.entries(root.geometry ?? {})) {
             try {
-                const group = await parseGltf(base64ToArrayBuffer(entry.gltf));
-                // Done here, once per distinct geometry, rather than per node that
-                // draws it: the file's own materials go, and the default colour
-                // stands in until a node is painted in its own (see 'paint').
-                //
-                // Both sides of every face. A part is a closed solid and would look
-                // the same either way, but a sketch and a port's boundary are
-                // laminae: drawn front-side only, one whose face winds away from the
-                // camera is not drawn at all, and the camera orbits past both sides
-                // of it. Nothing says which way a sketch's one face points - the
-                // ones in 'examples' happen to point up.
-                paint(group, this, DEFAULT_APPEARANCE, true);
-                this.parsed.set(digest, group);
+                if (typeof entry.gltf === 'string') {
+                    // Hand-written: parsed for this show alone, painted with its
+                    // materials, and freed with it like anything else it drew.
+                    const group = await parseGltf(bufferOf(entry.gltf));
+                    paint(group, this, DEFAULT_APPEARANCE, true);
+                    this.parsed.set(digest, group);
+                    this.local.add(digest);
+                } else {
+                    const group = await templates.parsed(digest, parseTemplate);
+                    if (group === undefined) {
+                        missing.push(digest);
+                    } else {
+                        this.parsed.set(digest, group);
+                    }
+                }
             } catch (error: any) {
                 reportError(`failed to parse a shape of this object: ${error}`);
                 failed += 1;
@@ -852,6 +950,13 @@ class Geometry {
             const percent = total > 0 ? Math.round((bytes / total) * 100) : 100;
             overlay.textContent = `Model size: ${(total / 1048576.0).toFixed(2)}MB\n${percent}% loaded`;
         }
+        if (missing.length > 0) {
+            // Named, not sent, and not here: the host thought this renderer held
+            // them. It posts the show again with them; until then they are
+            // nodes with nothing to draw.
+            geometryMissing({ type: 'geometryMissing', digests: missing });
+            failed += missing.length;
+        }
         return failed;
     }
 
@@ -861,32 +966,27 @@ class Geometry {
 
     /** What the node naming 'digest' should add to the stage, or undefined. */
     take(digest: string): THREE.Group | undefined {
-        const group = this.parsed.get(digest);
-        if (group === undefined) {
-            return undefined;
-        }
-        if (this.used.has(digest)) {
-            return group.clone();
-        }
-        this.used.add(digest);
-        return group;
+        return this.parsed.get(digest)?.clone();
+    }
+
+    /** The cache's templates this show draws: what must not be freed while it is on the stage. */
+    templates(): THREE.Group[] {
+        return [...this.parsed].filter(([digest]) => !this.local.has(digest)).map(([, group]) => group);
     }
 
     /**
-     * Everything parsed but never handed out - only reached when a show is dropped.
-     *
-     * What *was* handed out is not touched: its geometry is the geometry of every
-     * clone of it, and those are under the content group, which 'disposeTree' frees
-     * when the show is replaced. The materials go here because on this path
-     * nothing is left holding them.
+     * What this show parsed for itself, and its materials - only reached when a
+     * show is dropped. The cache's templates stay: they are the next show's too.
      */
     dispose(): void {
-        for (const [digest, group] of this.parsed) {
-            if (!this.used.has(digest)) {
+        for (const digest of this.local) {
+            const group = this.parsed.get(digest);
+            if (group !== undefined) {
                 disposeTree(group);
             }
         }
         this.parsed.clear();
+        this.local.clear();
         this.disposeMaterials();
     }
 
@@ -939,7 +1039,7 @@ async function parseSketches(node: ShowNode, geometry: Geometry): Promise<Map<st
             continue;
         }
         try {
-            const group = await parseGltf(base64ToArrayBuffer(sketch.gltf));
+            const group = await parseGltf(bufferOf(sketch.gltf));
             // The file's materials go; its faces and its lines are given the
             // boundary's per port, in 'addPorts'.
             paint(group, geometry, DEFAULT_APPEARANCE, true);
@@ -1011,7 +1111,7 @@ async function buildNode(
         // A node carrying its geometry outright, which PartCAD no longer sends and
         // a hand-written message still can.
         try {
-            drawn = await parseGltf(base64ToArrayBuffer(node.gltf));
+            drawn = await parseGltf(bufferOf(node.gltf));
             paint(drawn, geometry, appearance, true);
         } catch (error: any) {
             reportError(`failed to parse '${node.name ?? group.name}': ${error}`);
@@ -1154,6 +1254,9 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         geometry.dispose();
         return;
     }
+    // What the cache let go of goes now, unless this show draws it too: the show
+    // it replaces is taken off the stage below, before anything is drawn again.
+    templates.use(geometry.templates());
 
     // A cut of the object on screen, or the whole of it after a cut: kept where
     // the object was, rather than centred on what is left of it (see 'frame()').

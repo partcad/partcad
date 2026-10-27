@@ -80,6 +80,7 @@ import { BvbResult, BvbView, THUMBNAIL_SIZE, visibleRows } from './bvb';
 import { hasCallouts } from './callouts';
 import { CaeResult } from './cae';
 import { el, empty, placeholder } from './dom';
+import { geometryCache } from './geometryCache';
 import {
     fetchDetails,
     fetchFormats,
@@ -2259,6 +2260,10 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
     } else if (message.type === 'clear') {
         clear();
     } else if (message.type === 'show') {
+        // Before anything else, and before anything is awaited: what the host
+        // sent is held from now on, and what it said to let go of is let go of,
+        // whichever show ends up drawn (see 'geometryCache.ts').
+        geometryCache.receive(message);
         show(message);
     } else if (message.type === 'tabData') {
         onTabData(message.tab, message.token, message.data, message.error);
