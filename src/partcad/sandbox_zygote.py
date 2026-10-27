@@ -128,6 +128,9 @@ RETRY = 600.0
 # How long a reply socket's message may be.
 _MAX_MESSAGE = 1 << 16
 
+# How long a zygote that was not started is given to exit by itself, in seconds.
+_REFUSED_EXIT = 5.0
+
 # What a zygote imports, when not its own 'PRELOAD'. Only ever set by a test,
 # whose interpreter is not a sandbox's and has no business importing a CAD stack.
 PRELOAD = None
@@ -399,11 +402,15 @@ class Zygote:
 
         def reap():
             # With its control socket closed it exits by itself, once its
-            # children have; one that has not answered at all may be stuck in
-            # an import, and has nothing running.
+            # children have. One that never became usable has no child: it
+            # exits by itself too once it has said why, and is killed if it
+            # does not -- stuck in an import, say.
             with contextlib.suppress(Exception):
                 if not self.usable:
-                    popen.kill()
+                    try:
+                        popen.wait(timeout=_REFUSED_EXIT)
+                    except subprocess.TimeoutExpired:
+                        popen.kill()
                 popen.wait()
             if log is not None:
                 with contextlib.suppress(Exception):

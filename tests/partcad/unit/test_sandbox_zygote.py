@@ -43,9 +43,33 @@ def isolated(monkeypatch):
     """A cheap preload, and every zygote this test started gone by the end of it."""
     monkeypatch.setattr(sandbox_zygote, "PRELOAD", ("json",))
     monkeypatch.setattr(sandbox_zygote, "WARM_AFTER", 1)
+    _measured(monkeypatch)
     before = {id(zygote) for zygote in sandbox_zygote.zygotes()}
     yield
     _retire_started(before)
+
+
+def _measured(monkeypatch):
+    """Have the zygotes, and the children they fork, measured by the coverage this test is measured by.
+
+    The code that runs in a zygote runs in no process of pytest's own, and
+    `wrappers/zygote.py` would otherwise count as untested however many tests
+    drive it. The zygote is this interpreter, which starts coverage itself when
+    'COVERAGE_PROCESS_START' names a configuration (coverage's own '.pth'
+    hook), and a forked child saves its own data on the way out ('atexit').
+    The data lands beside this process's, where pytest-cov combines it.
+    """
+    try:
+        import coverage
+
+        current = coverage.Coverage.current()
+    except Exception:
+        current = None
+    config_file = getattr(getattr(current, "config", None), "config_file", None)
+    if not config_file:
+        return
+    monkeypatch.setenv("COVERAGE_PROCESS_START", os.path.abspath(config_file))
+    monkeypatch.setenv("COVERAGE_FILE", os.path.abspath(current.config.data_file))
 
 
 def _retire_started(before):
@@ -728,3 +752,125 @@ def test_nothing_is_left_behind(tmp_path):
         # The reaper thread closes the zygote's log once it has waited for it.
         time.sleep(0.05)
     assert len(os.listdir("/proc/self/fd")) <= descriptors
+
+
+def test_a_request_the_zygote_refuses_is_started_the_ordinary_way(tmp_path):
+    """A missing script or directory is the error a fresh interpreter reports, so a fresh one has to report it."""
+    script = _script(tmp_path, ECHO)
+
+    async def calls():
+        await _call(tmp_path, script)
+        missing_script = await sandbox_zygote.process_async(
+            _environment(tmp_path), _argv(str(tmp_path / "missing.py")), 2, cwd=str(tmp_path)
+        )
+        missing_directory = await sandbox_zygote.process_async(
+            _environment(tmp_path), _argv(script), 2, cwd=str(tmp_path / "missing")
+        )
+        served = (await _call(tmp_path, script))[0]
+        return missing_script, missing_directory, served
+
+    missing_script, missing_directory, served = asyncio.run(calls())
+
+    assert missing_script is None and missing_directory is None
+    # A refusal is not a failure of the zygote.
+    assert served.returncode == 0
+
+
+# --------------------------------------------------------------------------- #
+# The zygote's own pieces, in this process                                     #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture(scope="module")
+def zygote():
+    """'wrappers/zygote.py' as a module of this process, not run: what it does in a child, done here."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("zygote_under_test", sandbox_zygote.SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_what_is_not_installed_is_passed_over(zygote):
+    assert zygote._preload(["json", "partcad_zygote_no_such_module"]) == (["json"], ["partcad_zygote_no_such_module"])
+
+
+def test_what_is_installed_and_broken_stops_the_preload(zygote, tmp_path, monkeypatch):
+    """A dependency missing is not the module missing: what half-imported is not what a fresh import would be."""
+    (tmp_path / "partcad_zygote_half_installed.py").write_text("import partcad_zygote_no_such_dependency\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    with pytest.raises(ModuleNotFoundError):
+        zygote._preload(["partcad_zygote_half_installed"])
+    assert "partcad_zygote_half_installed" not in sys.modules
+
+
+def test_a_message_with_too_many_descriptors_is_refused(zygote):
+    import socket
+
+    mine, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+    descriptors = [os.dup(0) for _ in range(zygote.MAX_FDS + 1)]
+    try:
+        socket.send_fds(mine, [b"{}"], descriptors)
+        with pytest.raises(ValueError):
+            zygote._receive(theirs)
+        mine.close()
+        assert zygote._receive(theirs) == (None, [])
+    finally:
+        for fd in descriptors:
+            os.close(fd)
+        theirs.close()
+
+
+def test_a_file_left_open_is_written_out(zygote, tmp_path):
+    left_open = open(tmp_path / "left-open.txt", "w")
+    left_open.write("buffered")
+
+    zygote._flush_writers()
+
+    assert (tmp_path / "left-open.txt").read_text() == "buffered"
+    left_open.close()
+
+
+def test_what_a_child_imported_is_released_the_way_shutdown_releases_it(zygote, monkeypatch):
+    finalized = []
+
+    class Finalized:
+        def __del__(self):
+            finalized.append(True)
+
+    main, late, inherited = (types.ModuleType(name) for name in ("__main__", "late", "inherited"))
+    main.kept = Finalized()
+    late._private, late.public = object(), object()
+    inherited.state = object()
+    modules = {"__main__": main, "inherited": inherited, "late": late}
+    monkeypatch.setattr(zygote, "sys", types.SimpleNamespace(modules=modules))
+    still_held = late
+
+    zygote._release({"__main__", "inherited"})
+
+    assert finalized == [True]
+    assert list(modules) == ["inherited"] and inherited.state is not None
+    # Alive after the collection, so cleared as the interpreter clears one.
+    assert still_held._private is None and still_held.public is None
+
+
+@pytest.mark.parametrize(
+    "body,expected",
+    [
+        ("pass\n", 0),
+        ("import sys\nsys.exit()\n", 0),
+        ("import sys\nsys.exit(4)\n", 4),
+        ("import sys\nsys.exit('said')\n", 1),
+        ("raise RuntimeError('raised')\n", 1),
+        ("raise KeyboardInterrupt\n", -signal.SIGINT),
+    ],
+)
+def test_how_a_script_ended_is_read_as_the_interpreter_reads_it(zygote, tmp_path, capsys, body, expected):
+    script = _script(tmp_path, body)
+
+    assert zygote._run(types.ModuleType("__main__"), script) == expected
+    stderr = capsys.readouterr().err
+    if expected == 1:
+        assert "said" in stderr or "RuntimeError: raised" in stderr
