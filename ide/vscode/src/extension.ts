@@ -8,7 +8,7 @@
 //
 
 import * as vscode from 'vscode';
-import { PartcadBackend, restartBackend } from './common/backend';
+import { PartcadBackend, restartBackend, terminalText } from './common/backend';
 import { registerLogger, traceError, traceInfo, traceLog, traceVerbose } from './common/log/logging';
 import {
     checkIfConfigurationChanged,
@@ -406,10 +406,8 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
                 // multi-line progress footer, rendered by the same code the CLI
                 // uses (see `requestRenderedLogs`). Written into the pty
                 // verbatim -- it is terminal control bytes, not text to format.
-                //
-                // `Buffer`, not `atob`: `atob` yields one character per byte, so
-                // any non-ASCII in a log line (a path, a description) would come
-                // out as mojibake. The extension host is Node; this is exact.
+                // As text from a current service, as base64 from an older one:
+                // `terminalText` reads either.
                 lsClient.onNotification('?/partcad/terminal', async (message) => {
                     // The renderer ends its lines with a bare "\n", which is
                     // right for the CLI: a real terminal has ONLCR on and turns
@@ -418,7 +416,7 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
                     // where the last one ended and the display walks off to the
                     // right. Translating here rather than in the renderer keeps
                     // this a property of the destination, which is what it is.
-                    const drawn = Buffer.from(message.line, 'base64').toString('utf8');
+                    const drawn = terminalText(message);
                     showInTerminal(drawn.replace(/\r?\n/g, '\r\n'));
                 }),
                 // The JSON-RPC service/daemon backend forwards structured log

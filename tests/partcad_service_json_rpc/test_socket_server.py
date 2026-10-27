@@ -248,6 +248,58 @@ def test_each_connection_is_sent_files_the_way_its_client_reads_them(socket_dir)
         server.stop()
 
 
+def test_each_connection_gets_the_log_display_in_the_encoding_it_asked_for(socket_dir):
+    """`log.mode {"text": true}` is per connection, like the renderer it configures.
+
+    An editor extension from before reads only the base64 `line`, and the daemon
+    it shares may be newer; one that says it reads `text` gets the text itself.
+    """
+    import base64
+    import logging
+
+    def speak(session, params):
+        session.emitter.emit(
+            "log", {"kind": "log", "levelno": logging.INFO, "levelname": "INFO", "message": "héllo \x1b"}
+        )
+        return "said"
+
+    def drawn(f, request_id):
+        """Every `terminal` notification's params up to the answer to ``request_id``."""
+        params = []
+        while True:
+            message = read_message(f)
+            if message.get("id") == request_id:
+                return params
+            if message.get("method") == events.TERMINAL:
+                params.append(message["params"])
+
+    server, path, _ = _serve(socket_dir, {"speak": speak})
+    try:
+        new, new_socket = _connect(path)
+        old, old_socket = _connect(path)
+
+        write_message(new, {"jsonrpc": "2.0", "id": 1, "method": "log.mode", "params": {"ansi": True, "text": True}})
+        assert read_message(new) == {"jsonrpc": "2.0", "id": 1, "result": {"ansi": True, "text": True}}
+        write_message(old, {"jsonrpc": "2.0", "id": 1, "method": "log.mode", "params": {"ansi": True}})
+        assert read_message(old) == {"jsonrpc": "2.0", "id": 1, "result": {"ansi": True}}
+
+        write_message(new, {"jsonrpc": "2.0", "id": 2, "method": "speak"})
+        as_text = drawn(new, 2)
+        write_message(old, {"jsonrpc": "2.0", "id": 2, "method": "speak"})
+        as_base64 = drawn(old, 2)
+
+        assert as_text and all(set(p) == {events.TERMINAL_TEXT} for p in as_text)
+        assert as_base64 and all(set(p) == {events.TERMINAL_LINE} for p in as_base64)
+        text = "".join(p[events.TERMINAL_TEXT] for p in as_text)
+        assert "héllo \x1b" in text
+        assert "".join(base64.b64decode(p[events.TERMINAL_LINE]).decode("utf-8") for p in as_base64) == text
+
+        new_socket.close()
+        old_socket.close()
+    finally:
+        server.stop()
+
+
 def test_the_daemon_client_says_it_reads_attachments(socket_dir):
     from partcad_client.client import DaemonClient
 

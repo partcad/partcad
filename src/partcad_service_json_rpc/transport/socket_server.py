@@ -25,7 +25,6 @@ for all of them. Whether a connection's client reads attachments is the same
 kind of thing, and is kept beside them (a ``framing.Peer`` per connection).
 """
 
-import base64
 import os
 import socket
 import threading
@@ -36,6 +35,7 @@ from partcad_utils.logging_ansi_render import AnsiEventRenderer
 from partcad_utils.workspace import LIVENESS_METHOD
 
 from ..config_restart import GRACE_SECONDS, SETTINGS_METHOD, Connections, settings_differ
+from ..core.events import TERMINAL, TERMINAL_TEXT, log_mode_result, terminal_params
 from ..rpc.dispatcher import INVALID_PARAMS, Dispatcher, Handler
 
 STOP_METHOD = "daemon.stop"
@@ -46,6 +46,11 @@ STOP_METHOD = "daemon.stop"
 # as rendered bytes on the ``terminal`` notification instead of as structured
 # records on ``log``. Instead of, not as well as: the two carry the same
 # information, and sending both would double the traffic to no end.
+#
+# `"text": true` beside it says the client reads each piece of the drawing as a
+# JSON string (`events.TERMINAL_TEXT`) rather than as base64; a client that does
+# not say so is one from before, and gets the base64 it reads. The answer
+# repeats both, so a client can tell which it got.
 LOG_MODE_METHOD = "log.mode"
 
 
@@ -149,6 +154,9 @@ class SocketServer:
         # back over the lines it last wrote: one renderer shared between two
         # clients would have each erasing lines from the other's terminal.
         renderer: list = [None]
+        # Whether this client reads the drawing as text rather than base64
+        # (see `events.terminal_params`); said with `log.mode`.
+        as_text = [False]
 
         def send(event, payload):
             try:
@@ -170,11 +178,7 @@ class SocketServer:
             send(event, payload)
 
         def start_rendering():
-            renderer[0] = AnsiEventRenderer(
-                # base64 because this is a text field carrying terminal control
-                # bytes, and the client writes it into a pty verbatim.
-                lambda text: send("terminal", {"line": base64.b64encode(text.encode("utf-8")).decode("ascii")})
-            )
+            renderer[0] = AnsiEventRenderer(lambda text: send(TERMINAL, terminal_params(text, as_text[0])))
 
         if token is None:
             token = self._connections.add()
@@ -232,6 +236,7 @@ class SocketServer:
                                 )
                         continue
                     wants_ansi = bool((params or {}).get("ansi"))
+                    as_text[0] = bool((params or {}).get(TERMINAL_TEXT))
                     if wants_ansi and renderer[0] is None:
                         start_rendering()
                     elif not wants_ansi and renderer[0] is not None:
@@ -241,7 +246,11 @@ class SocketServer:
                         with write_lock:
                             write_message(
                                 wfile,
-                                {"jsonrpc": "2.0", "id": request["id"], "result": {"ansi": renderer[0] is not None}},
+                                {
+                                    "jsonrpc": "2.0",
+                                    "id": request["id"],
+                                    "result": log_mode_result(renderer[0] is not None, as_text[0]),
+                                },
                             )
                     continue
 
