@@ -107,6 +107,51 @@ KEY_GEOMETRY = "geometry"
 # or KEY_GLTF, never both - a sketch in the KEY_SKETCHES table carries the geometry
 # itself, since its table already holds one copy per sketch.
 KEY_GLTF_REF = "gltfRef"
+# On the top level of a serialized document: every BREP payload the document
+# carries, once each, keyed by a digest of the payload; and on a node, which
+# entry of that table is this node's geometry, in place of KEY_BREP.
+#
+# The glTF form already had this (KEY_GEOMETRY above); this is the same thing
+# for BREP, and it exists for the same reason. An assembly is mostly repeats of
+# a few parts: the LEGO castle is 731 placements of 9 bricks, and written a node
+# at a time its render request was 33 MB of JSON for 4.6 MB of geometry. With a
+# table it is 8.7 MB.
+#
+# Unlike KEY_GEOMETRY it is a property of the *serialized* document and of
+# nothing in memory. In memory every node keeps its own KEY_BREP, which is what
+# every reader of a tree reads; the nodes that came out of one table entry
+# simply hold the one bytes object. 'dumps(share=True)' writes the table and
+# 'loads()' takes it back out, on both sides of the pipe (see the same pair in
+# 'wrappers/ocp_serialize.py'), so nothing that walks a tree ever sees it. It is
+# written only when it makes the document smaller ('table_saves_space'), so a
+# document with nothing repeated is exactly the document it always was.
+KEY_BREPS = "__breps__"
+KEY_BREP_REF = "brepRef"
+
+# What naming a payload costs in a document, as against carrying it: the
+# digest, as the node's reference and again as the table's key, and the JSON
+# around each. Generous rather than exact; it only decides whether a table is
+# worth writing, and for any real part it is.
+_REFERENCE_COST = 64 + 16
+
+
+def table_saves_space(lengths) -> bool:
+    """Whether a table makes a document smaller, given each payload's base64 length and how many nodes carry it.
+
+    'lengths' is '[(length, uses), ...]', one entry per distinct payload. One
+    rule for both ends of the pipe, so that the core and a sandbox writing the
+    same tree make the same decision.
+    """
+    carried = sum(length * uses for length, uses in lengths)
+    tabled = sum(length + _REFERENCE_COST + uses * _REFERENCE_COST for length, uses in lengths)
+    return tabled < carried
+
+
+def base64_length(size: int) -> int:
+    """How long 'size' bytes are in base64."""
+    return 4 * ((size + 2) // 3)
+
+
 # Optional placement on a shape/assembly object, carried opaquely by the core
 # and turned into a real location by the geometry-side codec (ocp_serialize).
 KEY_LOCATION = "location"
@@ -367,6 +412,52 @@ def brep_plain(value) -> bytes:
     return plain
 
 
+def payload_digest(value) -> str:
+    """A stable name for one piece of exact geometry: a digest of its compressed bytes.
+
+    The same function as 'ocp_serialize.payload_digest' on the far side of the
+    pipe, so a digest written by either end names the same payload for the other.
+    """
+    return hashlib.sha256(brep_bytes(value)).hexdigest()
+
+
+class Payloads:
+    """The distinct BREP payloads of one document, as 'encode()' meets them.
+
+    'ref(value)' answers the digest a node names its payload by, and keeps the
+    payload once under it. Every leaf of a tree built in this process shares the
+    bytes object of the part it holds, so the digest is computed once per object
+    rather than once per node; and two objects with the same bytes - a
+    sub-assembly read back from the cache next to one just built - still end up
+    as one entry.
+    """
+
+    def __init__(self):
+        self.by_digest = {}
+        self.uses = {}
+        # By the identity of the payload object, and holding on to each object so
+        # that its identity cannot be reused while the document is encoded.
+        self._digests = {}
+        self._held = []
+
+    def ref(self, value) -> str:
+        digest = self._digests.get(id(value))
+        if digest is None:
+            digest = payload_digest(value)
+            self._digests[id(value)] = digest
+            self._held.append(value)
+        self.by_digest.setdefault(digest, value)
+        self.uses[digest] = self.uses.get(digest, 0) + 1
+        return digest
+
+    @property
+    def worth_a_table(self) -> bool:
+        """Whether writing each payload once, in a table, makes the JSON document smaller."""
+        return table_saves_space(
+            [(base64_length(len(brep_bytes(value))), self.uses[digest]) for digest, value in self.by_digest.items()]
+        )
+
+
 def make_shape(brep, name=None, label=None) -> dict:
     """A shape envelope around a zstd-compressed BREP payload."""
     return {"name": name, "label": label, KEY_BREP: brep_bytes(brep)}
@@ -592,7 +683,7 @@ def _described_data(obj):
     return obj
 
 
-def encode(obj, name=None, label=None):
+def encode(obj, name=None, label=None, payloads=None):
     """Convert 'obj' into a structure made only of JSON-native values.
 
     Shape and assembly envelopes keep their metadata; their "brep" payload is
@@ -602,6 +693,10 @@ def encode(obj, name=None, label=None):
     message. A live OCP object is rejected: the core must not hand one to this
     codec - it has nothing to turn it into bytes, and encoding geometry is a
     wrapper's job.
+
+    Given 'payloads' (a 'Payloads'), a node names its payload by KEY_BREP_REF
+    instead, and the payload is kept there, unencoded, for whoever writes the
+    table: 'dumps()' as base64 JSON, the shape cache as raw bytes.
     """
     if obj is None or isinstance(obj, (bool, int, float, str)):
         return obj
@@ -612,18 +707,21 @@ def encode(obj, name=None, label=None):
             encoded = {}
             for key, value in obj.items():
                 if key == KEY_BREP:
-                    encoded[key] = brep_base64(value)
+                    if payloads is None:
+                        encoded[key] = brep_base64(value)
+                    else:
+                        encoded[KEY_BREP_REF] = payloads.ref(value)
                 elif key == KEY_ASSEMBLY:
-                    encoded[key] = [encode(child, name, label) for child in value]
+                    encoded[key] = [encode(child, name, label, payloads) for child in value]
                 elif key in (KEY_LOCATION, "name", "label"):
                     encoded[key] = value
                 else:
-                    encoded[key] = encode(value, name, label)
+                    encoded[key] = encode(value, name, label, payloads)
             return encoded
-        return {key: encode(value, name, label) for key, value in obj.items()}
+        return {key: encode(value, name, label, payloads) for key, value in obj.items()}
 
     if isinstance(obj, (list, tuple, set, frozenset)):
-        return [encode(item, name, label) for item in obj]
+        return [encode(item, name, label, payloads) for item in obj]
 
     if isinstance(obj, (bytes, bytearray)):
         return {KEY_BYTES: base64.b64encode(bytes(obj)).decode("ascii")}
@@ -640,7 +738,7 @@ def encode(obj, name=None, label=None):
     raise TypeError("Cannot encode %s for the wrapper protocol" % type(obj))
 
 
-def decode(obj):
+def decode(obj, table=None):
     """Inverse of 'encode()' - but shape/assembly objects stay as dicts.
 
     Unlike the sandbox codec, this never rebuilds a live 'TopoDS_Shape': a shape
@@ -648,40 +746,78 @@ def decode(obj):
     handling opaque BREP envelopes. The one thing that does change is the "brep"
     payload, which comes off the pipe as base64 text and is handed on as the
     compressed bytes every layer above this one carries.
+
+    'table' is the document's payloads by digest, as bytes (see KEY_BREPS): a
+    node naming one gets it under KEY_BREP, and every node naming the same entry
+    holds the same bytes object.
     """
     if isinstance(obj, dict):
+        if KEY_BREP_REF in obj:
+            obj = _with_payload(obj, table)
         if KEY_BREP in obj or KEY_ASSEMBLY in obj:
             decoded = dict(obj)
             if KEY_BREP in decoded:
                 decoded[KEY_BREP] = brep_bytes(decoded[KEY_BREP])
             if KEY_ASSEMBLY in decoded:
-                decoded[KEY_ASSEMBLY] = [decode(child) for child in decoded[KEY_ASSEMBLY]]
+                decoded[KEY_ASSEMBLY] = [decode(child, table) for child in decoded[KEY_ASSEMBLY]]
             return decoded
         if KEY_BYTES in obj and len(obj) == 1:
             return base64.b64decode(obj[KEY_BYTES])
-        return {key: decode(value) for key, value in obj.items()}
+        return {key: decode(value, table) for key, value in obj.items()}
 
     if isinstance(obj, list):
-        return [decode(item) for item in obj]
+        return [decode(item, table) for item in obj]
 
     return obj
 
 
-def dumps(obj, name=None, label=None) -> str:
-    """Serialize 'obj' into a single-line JSON string (used by the cache)."""
+def _with_payload(node, table):
+    """'node' with the payload its KEY_BREP_REF names, under KEY_BREP."""
+    ref = node[KEY_BREP_REF]
+    if table is None or ref not in table:
+        raise ValueError("A shape names the payload %r, which the document does not carry" % (ref,))
+    resolved = {key: value for key, value in node.items() if key != KEY_BREP_REF}
+    resolved[KEY_BREP] = table[ref]
+    return resolved
+
+
+def table_of(document):
+    """Take the table of payloads (KEY_BREPS) off a parsed document, as bytes by digest, or None."""
+    if not isinstance(document, dict) or KEY_BREPS not in document:
+        return None
+    return {digest: brep_bytes(value) for digest, value in document.pop(KEY_BREPS).items()}
+
+
+def dumps(obj, name=None, label=None, share=False) -> str:
+    """Serialize 'obj' into a single-line JSON string.
+
+    'share' writes each payload once, in a table on the top level (KEY_BREPS),
+    when that makes the document smaller ('table_saves_space') and 'obj' is a
+    dict to put the table on; otherwise the document is the one it has always
+    been. Only
+    a reader that knows the table may be handed it: 'loads()' here, and
+    'ocp_serialize' in a Python sandbox.
+    """
+    if share and isinstance(obj, dict):
+        payloads = Payloads()
+        encoded = encode(obj, name=name, label=label, payloads=payloads)
+        if payloads.worth_a_table:
+            encoded[KEY_BREPS] = {digest: brep_base64(value) for digest, value in payloads.by_digest.items()}
+            return json.dumps(encoded)
     return json.dumps(encode(obj, name=name, label=label))
 
 
 def loads(text) -> object:
-    """Deserialize a JSON string produced by 'dumps()'."""
+    """Deserialize a JSON string produced by 'dumps()', with or without its table."""
     if isinstance(text, (bytes, bytearray)):
         text = text.decode("utf-8")
-    return decode(json.loads(text))
+    document = json.loads(text)
+    return decode(document, table_of(document))
 
 
-def serialize(obj, name=None, label=None) -> str:
-    """Serialize 'obj' into the single-line form that travels over the pipe."""
-    return dumps(obj, name=name, label=label)
+def serialize(obj, name=None, label=None, share=False) -> str:
+    """Serialize 'obj' into the single-line form that travels over the pipe. See 'dumps()'."""
+    return dumps(obj, name=name, label=label, share=share)
 
 
 def deserialize(data) -> dict:

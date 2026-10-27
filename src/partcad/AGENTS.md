@@ -1261,6 +1261,29 @@ at all).
   and it is attached *after* `get_wrapped()` rather than recorded in a node, because what a node records about a
   port is the reference: reading a declaration is a lookup and building a sketch is not.
 
+  **BREP payloads travel and are cached one copy per distinct payload** (`shape_envelope.KEY_BREPS`,
+  `KEY_BREP_REF`, `Payloads`; the same two keys in `ocp_serialize`). Unlike `KEY_GEOMETRY` this is a property of the
+  *serialized* document and of nothing in memory: in memory every node keeps its own `brep`, and the nodes that came
+  out of one table entry hold the one bytes (or str) object. `dumps(share=True)` writes the table on the top level of
+  the document, only when that makes it smaller; both ends' `loads()` and `ocp_serialize.deserialize_raw()` take it
+  back out before anything walks the tree, so no reader of a tree meets either key. It is written only where the reader
+  is known to understand it -- requests to PartCAD's own Python wrappers (`Shape._run_implementation_locked` outside a
+  container, `shape_gltf`) and every Python wrapper's answer (`wrapper_common.handle_output`), since the core reads both
+  forms of every answer -- and never to a container or a JavaScript runtime, which parse their requests themselves.
+  The LEGO castle's render request went from 33 MB to 8.7 MB with it. In the shape cache an assembly's tree is a frame
+  of its own (`cache_shape._TREE_MAGIC`): the tree as compressed JSON naming its payloads, then each distinct payload
+  once as raw bytes, so the castle's tree, 33 MB of JSON before, fits the file tier. A tree an earlier release wrote as
+  JSON is still read; an earlier release reading a frame counts it a miss and writes its own form. **Nothing but an
+  assembly's tree is framed**, and that is about the earlier release rather than about sharing: a part's components
+  (`cmps`) are an entry beside its geometry, and framed they would be that release's miss while the geometry beside
+  them was its hit -- a part handed back with no components, which is worse than a miss of both.
+
+  **A request is serialized when its process starts** (`runtime.stdin_bytes`): a runtime's `stdin` may be a
+  callable, called at the spawn, inside the process slot. The render path passes one, so a drawing waiting for a slot
+  holds its request as the tree it holds anyway rather than as a text of it as well -- four views of the LEGO car
+  waiting their turn were 66 MB of text and 66 MB of bytes each. Every launch point resolves `stdin` through that one
+  function; a new one has to as well.
+
   **The connection layer is re-stamped rather than stored.** It rides in `get_cache_metadata()`, the layer
   `apply_metadata()` puts back around every payload as it is materialized, for the reason `properties:` does: a
   cache entry is keyed on geometry and shared by every object whose geometry is identical, and two parts cut

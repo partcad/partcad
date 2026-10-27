@@ -188,6 +188,18 @@ KEY_GLTF = "gltf"
 KEY_GEOMETRY = "geometry"
 KEY_GLTF_REF = "gltfRef"
 KEY_BYTES = "__bytes__"
+# On the top level of a serialized document: every BREP payload it carries, once
+# each, keyed by 'payload_digest'; and on a node, which entry is its geometry, in
+# place of KEY_BREP. The same two keys as 'shape_envelope.KEY_BREPS' and
+# 'KEY_BREP_REF', and the same rule: they exist only in the serialized form.
+# 'loads()' and 'deserialize_raw()' put every payload back on the nodes naming
+# it - the one string object for all of them - before anything here or in an
+# implementation sees the tree, so a reader of a tree never meets either key.
+KEY_BREPS = "__breps__"
+KEY_BREP_REF = "brepRef"
+# The cost of naming a payload rather than carrying it, as
+# 'shape_envelope._REFERENCE_COST' has it.
+_REFERENCE_COST = 64 + 16
 # Optional on a shape/assembly object: the placement, as the packed
 # [[tx,ty,tz], [ax,ay,az], angle] form, applied when the object is decoded.
 KEY_LOCATION = "location"
@@ -651,26 +663,112 @@ def _decode(obj, shared):
     return obj
 
 
-def dumps(obj, name=None, label=None) -> str:
-    """Serialize 'obj' into a single-line JSON string (used by the cache)."""
-    return json.dumps(encode(obj, name=name, label=label))
+def _shared_payloads(encoded):
+    """'encoded' with each payload carried by more than one node written once, in a table.
+
+    The answer of a wrapper that read a STEP assembly is a tree whose nodes are
+    mostly the same few parts, each encoded separately into the same text. So the
+    payloads are compared by value; when a table makes the document smaller,
+    every node names its entry instead (KEY_BREP_REF) and the table goes on the
+    top level (KEY_BREPS). When it does not, or 'encoded' is not a dict to put a
+    table on, it is returned as it is, which keeps every answer that is not a
+    tree of repeats the answer it always was. The rule is the core's, written out
+    again here because a sandbox cannot import the core: see
+    'shape_envelope.table_saves_space'.
+    """
+    if not isinstance(encoded, dict):
+        return encoded
+    counts = {}
+
+    def count(obj):
+        if isinstance(obj, dict):
+            payload = obj.get(KEY_BREP)
+            if isinstance(payload, str):
+                counts[payload] = counts.get(payload, 0) + 1
+            for value in obj.values():
+                count(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                count(item)
+
+    count(encoded)
+    carried = sum(len(payload) * uses for payload, uses in counts.items())
+    tabled = sum(len(payload) + _REFERENCE_COST + uses * _REFERENCE_COST for payload, uses in counts.items())
+    if tabled >= carried:
+        return encoded
+    digests = {payload: payload_digest(payload) for payload in counts}
+
+    def refer(obj):
+        if isinstance(obj, dict):
+            if isinstance(obj.get(KEY_BREP), str):
+                node = {key: refer(value) for key, value in obj.items() if key != KEY_BREP}
+                node[KEY_BREP_REF] = digests[obj[KEY_BREP]]
+                return node
+            return {key: refer(value) for key, value in obj.items()}
+        if isinstance(obj, list):
+            return [refer(item) for item in obj]
+        return obj
+
+    shared = refer(encoded)
+    shared[KEY_BREPS] = {digest: payload for payload, digest in digests.items()}
+    return shared
+
+
+def _inflate(document):
+    """'document' with the payload table taken off it and each payload put back on its nodes.
+
+    Every node naming one entry gets the same string object, so a payload read
+    once is held once, and decoding it once per distinct payload ('_shared_shape')
+    costs one dictionary lookup per node. A document without a table is returned
+    as it is.
+    """
+    if not isinstance(document, dict) or KEY_BREPS not in document:
+        return document
+    table = document.pop(KEY_BREPS)
+
+    def resolve(obj):
+        if isinstance(obj, dict):
+            if KEY_BREP_REF in obj:
+                ref = obj[KEY_BREP_REF]
+                if ref not in table:
+                    raise ValueError("A shape names the payload %r, which the document does not carry" % (ref,))
+                node = {key: resolve(value) for key, value in obj.items() if key != KEY_BREP_REF}
+                node[KEY_BREP] = table[ref]
+                return node
+            return {key: resolve(value) for key, value in obj.items()}
+        if isinstance(obj, list):
+            return [resolve(item) for item in obj]
+        return obj
+
+    return resolve(document)
+
+
+def dumps(obj, name=None, label=None, share=False) -> str:
+    """Serialize 'obj' into a single-line JSON string.
+
+    'share' writes a payload carried by more than one node once, in a table (see
+    KEY_BREPS). Only a reader that knows the table may be handed it - which the
+    core is, for every answer: 'shape_envelope.loads()' reads both forms.
+    """
+    encoded = encode(obj, name=name, label=label)
+    return json.dumps(_shared_payloads(encoded) if share else encoded)
 
 
 def loads(text) -> object:
-    """Deserialize a JSON string produced by 'dumps()'."""
+    """Deserialize a JSON string produced by 'dumps()', or by 'shape_envelope.dumps()', with or without a table."""
     if isinstance(text, (bytes, bytearray)):
         text = text.decode("utf-8")
-    return decode(json.loads(text))
+    return decode(_inflate(json.loads(text)))
 
 
-def serialize(obj, name=None, label=None) -> str:
+def serialize(obj, name=None, label=None, share=False) -> str:
     """Serialize 'obj' into the single-line form that travels over the pipe.
 
     Plain JSON, not base64-wrapped JSON: the JSON is already single-line and
     transport-safe (the BREP payload is base64), so an extra base64 layer would
-    only cost time and ~1.3x size.
+    only cost time and ~1.3x size. See 'dumps()' for 'share'.
     """
-    return dumps(obj, name=name, label=label)
+    return dumps(obj, name=name, label=label, share=share)
 
 
 def _payload_line(data) -> str:
@@ -705,5 +803,8 @@ def deserialize_raw(data) -> object:
     joint from what the envelope says about a node, and 'decode()' keeps none of
     that - the compound it builds mirrors the tree, but the names and labels are
     gone and the placements are baked into the geometry.
+
+    A document that carries its payloads in a table (KEY_BREPS) is handed back
+    with each payload on the nodes naming it, as though it never had one.
     """
-    return json.loads(_payload_line(data))
+    return _inflate(json.loads(_payload_line(data)))
