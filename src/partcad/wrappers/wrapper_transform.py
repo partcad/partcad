@@ -60,23 +60,81 @@ def relocate(shape, offset):
 
     Baking it into the geometry is what stops any of that being possible: an
     envelope is BREP bytes, and nothing downstream has to remember a frame.
+
+    What the offset means is build123d's 'Location(*offset)'. The packed form,
+    which is the one PartCAD documents, is built here the way that constructor
+    builds it, call for call, so that it does not cost importing build123d -
+    seconds of IPython and friends, in a wrapper that reads a STEP file and
+    would otherwise never load it; any other form is handed to build123d
+    itself. 'test_part_finish' holds the two to the same bytes.
     """
-    import build123d as b3d
     from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
 
-    location = b3d.Location(*offset)
-    transform = BRepBuilderAPI_Transform(shape, location.wrapped.Transformation(), True)
+    transformation = _packed_transformation(offset)
+    if transformation is None:
+        import build123d as b3d
+
+        transformation = b3d.Location(*offset).wrapped.Transformation()
+    transform = BRepBuilderAPI_Transform(shape, transformation, True)
     return transform.Shape()
 
 
 def scale(shape, factor):
-    """Scale 'shape' by 'factor', mirroring the build123d scale() the core used."""
+    """Scale 'shape' by 'factor' about its own position, as build123d's 'Shape.scale()' does.
+
+    A plain number is scaled here, by the very transformation that method
+    builds for one - about the translation of the shape's own location - and
+    without importing build123d for it (see 'relocate'); anything else goes to
+    build123d, which knows what else it accepts.
+    """
+    if _is_number(factor):
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.gp import gp_Pnt, gp_Trsf
+
+        transformation = gp_Trsf()
+        transformation.SetScale(gp_Pnt(shape.Location().Transformation().TranslationPart()), float(factor))
+        return ocp_serialize.downcast(BRepBuilderAPI_Transform(shape, transformation, True).Shape())
+
     import build123d as b3d
 
     solid = b3d.Solid.make_box(1, 1, 1)
     solid.wrapped = shape
     solid = solid.scale(factor)
     return solid.wrapped
+
+
+def _is_number(value):
+    # 'bool' is an 'int'; build123d takes one as a number too, and is left to.
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _packed_transformation(offset):
+    """What build123d's 'Location(*offset)' makes of '[[x, y, z], [ax, ay, az], angle]', or None for any other form.
+
+    That constructor, given a position, a direction and an angle in degrees,
+    rotates about the direction through the origin and then sets the
+    translation: the same three OCCT calls, with the same doubles, here.
+    """
+    if not isinstance(offset, (list, tuple)) or len(offset) != 3:
+        return None
+    translation, axis, angle = offset
+    for vector in (translation, axis):
+        if not isinstance(vector, (list, tuple)) or len(vector) != 3 or not all(map(_is_number, vector)):
+            return None
+    if not _is_number(angle):
+        return None
+
+    import math
+
+    from OCP.gp import gp_Ax1, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    from OCP.TopLoc import TopLoc_Location
+
+    transformation = gp_Trsf()
+    transformation.SetRotation(
+        gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(gp_Vec(*[float(value) for value in axis]).XYZ())), math.radians(angle)
+    )
+    transformation.SetTranslationPart(gp_Vec(*[float(value) for value in translation]))
+    return TopLoc_Location(transformation).Transformation()
 
 
 def _compound(shapes):

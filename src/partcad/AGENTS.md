@@ -820,7 +820,8 @@ at all).
   `finish_request()` in its request, and the wrapper hands its shape out through `finished()` (`finished_shapes()`
   for a partType or SDF answer of several, which also takes over the compound `transform.compound` used to do):
   `solidify`, `solid_problems`, then `wrapper_transform.relocate` and `scale` — the fallback's own functions, so
-  there is one definition of each — and it says in the envelope how far it got. `get_wrapped` takes that claim off
+  there is one definition of each, and ones that build the documented packed offset and a numeric scale with the
+  same OCCT calls build123d makes, so a STEP wrapper does not import build123d to move a part — and it says in the envelope how far it got. `get_wrapped` takes that claim off
   before anything reads the metadata, checks it against what was asked (in order, value for value; a claim of
   anything else is an error, since it cannot be undone), reports the problems in the same words, and runs in a
   sandbox only what is not claimed: everything, for a JavaScript part, an in-process factory, a reference (an alias
