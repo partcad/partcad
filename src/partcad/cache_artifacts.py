@@ -79,14 +79,38 @@ A tier's size window applies to an entry from above and never from below (see
 'cache_backend.MAX_ONLY_KEYS'): no answer from a solver is too small to keep,
 but one can be too big for memcached. An entry no tier would take is not even
 packed.
+
+**An entry is a tar, uncompressed, in one zstd frame**, and is read back in one
+pass in the order it was written. It used to be a gzipped tar at gzip's level 9
+(tarfile's default), read by listing its members first and extracting them
+after; since every backward seek in a gzip stream decompresses it again from
+the start, an entry was decompressed at least twice to be put back. Over ASCII
+mesh data, zstd at its default level packs in a tenth of the time or less and
+reads back in a third to a half, for an entry about 5% larger: a 5 MB file
+went from about a second to pack to a tenth of one. An entry is told apart by
+its first bytes ('_ZSTD_MAGIC', '_GZIP_MAGIC') rather than by its key, so that a
+gzipped one an earlier release wrote into a shared tier is still read: nothing
+in the key says which release wrote an entry. See '_MAX_EXPANSION' for what
+reading one from a shared tier is allowed to cost.
 """
 
+import gzip
 import hashlib
 import io
 import json
 import os
 import tarfile
 from typing import Iterable, Optional
+
+try:
+    # As in 'shape_envelope': the standard library from 3.14, its backport
+    # below, which PartCAD depends on there.
+    from compression.zstd import ZstdFile as _ZstdFile
+except ImportError:  # pragma: no cover - exercised on the other interpreter
+    try:
+        from backports.zstd import ZstdFile as _ZstdFile
+    except ImportError:
+        _ZstdFile = None
 
 from . import code_version
 from . import logging as pc_logging
@@ -104,6 +128,27 @@ DIRECTORY_PLACEHOLDER = "@@partcad-artifact-directory@@"
 _RESULT_MEMBER = "result.json"
 _FILES_PREFIX = "files/"
 _DIRECTORY_PREFIX = "directory/"
+
+# The first bytes of an entry, which say how it is compressed: a zstd frame
+# (what is written), or gzip (what releases before wrote).
+_ZSTD_MAGIC = shape_envelope.ZSTD_MAGIC
+_GZIP_MAGIC = b"\x1f\x8b"
+# zstd's own default: most of what level 9 of gzip saved, at a fraction of the
+# time. A higher level buys a few per cent of a tier's space for a pack that is
+# several times slower, on every answer stored.
+_ZSTD_LEVEL = 3
+
+# How far an entry may expand as it is read, as a multiple of its stored size
+# and never less than the floor. An entry can come from a shared tier
+# ('memcache', 's3') that this machine did not write, and a few kilobytes of
+# zstd can expand to hundreds of megabytes; deflate cannot expand by much more
+# than a thousand to one, which is what reading a gzipped entry was always
+# bounded by, so that is the bound - zstd does not widen what an entry from
+# somebody else can make this process hold. Nothing PartCAD stores comes near
+# it: what compresses best is a tar's own padding, and the floor covers an
+# entry that is mostly that.
+_MAX_EXPANSION = 1032
+_MAX_EXPANSION_FLOOR = 16 << 20
 
 # What a wrapper answered, as the one line it wrote: the result of a run keyed
 # by 'wrapper_hash'. Kept as the line rather than as what it decodes to, because
@@ -132,6 +177,22 @@ class _BoundedBuffer(io.BytesIO):
         if self.limit and self.tell() + len(data) > self.limit:
             raise _TooLarge()
         return super().write(data)
+
+
+class _BoundedReader:
+    """What an entry decompresses into, refused past 'limit' bytes (see '_MAX_EXPANSION')."""
+
+    def __init__(self, stream, limit: int) -> None:
+        self.stream = stream
+        self.limit = limit
+        self.read_so_far = 0
+
+    def read(self, size: int = -1) -> bytes:
+        data = self.stream.read(size)
+        self.read_so_far += len(data)
+        if self.read_so_far > self.limit:
+            raise ValueError("this entry expands past %d bytes" % self.limit)
+        return data
 
 
 def question_hash(name: str, subject_key: Optional[str], question: dict, files=()) -> Optional[CacheHash]:
@@ -274,17 +335,53 @@ def _pack(result: dict, files: dict, directory: Optional[str], limit: int) -> by
     if directory:
         result = _relocate(result, directory, DIRECTORY_PLACEHOLDER)
     buffer = _BoundedBuffer(limit)
-    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
-        encoded = json.dumps(result).encode("utf-8")
-        info = tarfile.TarInfo(_RESULT_MEMBER)
-        info.size = len(encoded)
-        tar.addfile(info, io.BytesIO(encoded))
-        for role, path in sorted(files.items()):
-            tar.add(path, arcname=_FILES_PREFIX + role, recursive=False)
-        if directory:
-            for relative in _directory_files(directory):
-                tar.add(os.path.join(directory, relative), arcname=_DIRECTORY_PREFIX + relative, recursive=False)
+    if _ZstdFile is None:  # pragma: no cover - PartCAD depends on zstd; see shape_envelope
+        with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+            _add_members(tar, result, files, directory)
+        return buffer.getvalue()
+    # Compressed as it is written, so that '_BoundedBuffer' sees the bytes that
+    # will be stored as they are made.
+    with _ZstdFile(buffer, mode="w", level=_ZSTD_LEVEL) as compressed:
+        with tarfile.open(fileobj=compressed, mode="w|") as tar:
+            _add_members(tar, result, files, directory)
     return buffer.getvalue()
+
+
+def _add_members(tar, result: dict, files: dict, directory: Optional[str]) -> None:
+    """The members of an entry: the result, the files by role, then the directory's."""
+    encoded = json.dumps(result).encode("utf-8")
+    info = tarfile.TarInfo(_RESULT_MEMBER)
+    info.size = len(encoded)
+    tar.addfile(info, io.BytesIO(encoded))
+    for role, path in sorted(files.items()):
+        tar.add(path, arcname=_FILES_PREFIX + role, recursive=False)
+    if directory:
+        for relative in _directory_files(directory):
+            tar.add(os.path.join(directory, relative), arcname=_DIRECTORY_PREFIX + relative, recursive=False)
+
+
+def _read_members(data: bytes) -> dict:
+    """Every regular file in a stored entry, by name, read in one pass in stream order.
+
+    Read whole before any of it is written, because what '_unpack' writes
+    depends on what is there: an entry missing a file the caller needs is a
+    miss, and nothing of it may be put back.
+    """
+    if data[: len(_ZSTD_MAGIC)] == _ZSTD_MAGIC:
+        if _ZstdFile is None:  # pragma: no cover - see _pack
+            raise ValueError("this entry is zstd-compressed, and zstd is not available here")
+        stream = _ZstdFile(io.BytesIO(data))
+    elif data[: len(_GZIP_MAGIC)] == _GZIP_MAGIC:
+        stream = gzip.GzipFile(fileobj=io.BytesIO(data), mode="rb")
+    else:
+        raise ValueError("this entry is neither zstd nor gzip")
+    reader = _BoundedReader(stream, max(_MAX_EXPANSION_FLOOR, _MAX_EXPANSION * len(data)))
+    members = {}
+    with stream, tarfile.open(fileobj=reader, mode="r|") as tar:
+        for member in tar:
+            if member.isfile():
+                members[member.name] = tar.extractfile(member).read()
+    return members
 
 
 def _safe_relative(name: str) -> Optional[str]:
@@ -326,49 +423,48 @@ def _write_inside(directory: str, path: str, data: bytes) -> None:
 
 
 def _unpack(data: bytes, files, directory: Optional[str]) -> Optional[dict]:
-    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
-        members = {member.name: member for member in tar.getmembers() if member.isfile()}
-        if _RESULT_MEMBER not in members:
+    members = _read_members(data)
+    if _RESULT_MEMBER not in members:
+        return None
+    result = json.loads(members[_RESULT_MEMBER].decode("utf-8"))
+    if callable(files):
+        # Where the files go is decided by what was stored with them (see
+        # 'restore_files_async'), and None is the caller dismissing a hit
+        # it cannot put back.
+        files = files(result)
+        if files is None:
             return None
-        result = json.loads(tar.extractfile(members[_RESULT_MEMBER]).read().decode("utf-8"))
-        if callable(files):
-            # Where the files go is decided by what was stored with them (see
-            # 'restore_files_async'), and None is the caller dismissing a hit
-            # it cannot put back.
-            files = files(result)
-            if files is None:
-                return None
-        # Everything the caller needs has to be there before anything is
-        # written: an entry missing the model is a miss, not half a hit.
-        for role in files:
-            if _FILES_PREFIX + role not in members:
-                return None
-        placed = []
-        if directory:
-            for name in members:
-                if not name.startswith(_DIRECTORY_PREFIX):
-                    continue
-                relative = _safe_relative(name[len(_DIRECTORY_PREFIX) :])
-                if relative is None:
-                    return None
-                placed.append((name, os.path.join(directory, relative)))
-
-        for role, path in files.items():
-            content = tar.extractfile(members[_FILES_PREFIX + role]).read()
-            if directory:
-                # Named by what the entry says rather than by the caller alone,
-                # so held to the directory the way a directory's members are.
-                _write_inside(directory, path, content)
+    # Everything the caller needs has to be there before anything is
+    # written: an entry missing the model is a miss, not half a hit.
+    for role in files:
+        if _FILES_PREFIX + role not in members:
+            return None
+    placed = []
+    if directory:
+        for name in members:
+            if not name.startswith(_DIRECTORY_PREFIX):
                 continue
-            # The caller's own output path, written exactly as the
-            # implementation would have written it.
-            parent = os.path.dirname(path)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
-            with open(path, "wb") as f:
-                f.write(content)
-        for name, path in placed:
-            _write_inside(directory, path, tar.extractfile(members[name]).read())
+            relative = _safe_relative(name[len(_DIRECTORY_PREFIX) :])
+            if relative is None:
+                return None
+            placed.append((name, os.path.join(directory, relative)))
+
+    for role, path in files.items():
+        content = members[_FILES_PREFIX + role]
+        if directory:
+            # Named by what the entry says rather than by the caller alone,
+            # so held to the directory the way a directory's members are.
+            _write_inside(directory, path, content)
+            continue
+        # The caller's own output path, written exactly as the
+        # implementation would have written it.
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(content)
+    for name, path in placed:
+        _write_inside(directory, path, members[name])
 
     if directory:
         result = _relocate(result, DIRECTORY_PLACEHOLDER, directory)

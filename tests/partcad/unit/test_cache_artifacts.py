@@ -17,6 +17,7 @@ would be started, and counted.
 """
 
 import asyncio
+import gzip
 import hashlib
 import io
 import os
@@ -35,6 +36,13 @@ from partcad.cache import Cache
 from partcad.cache_backend import ARTIFACT_KEY
 from partcad.cache_hash import CacheHash
 from partcad.geom import Location
+
+try:
+    from compression.zstd import compress as _zstd_compress
+    from compression.zstd import decompress as _zstd_decompress
+except ImportError:  # pragma: no cover - exercised on the other interpreter
+    from backports.zstd import compress as _zstd_compress
+    from backports.zstd import decompress as _zstd_decompress
 
 
 def _cache(tmp_path, max_size=10 * 1024 * 1024, min_size=100) -> Cache:
@@ -168,21 +176,94 @@ def test_an_entry_missing_a_file_the_caller_needs_is_a_miss(tmp_path):
     assert not target.exists()
 
 
-def _entry(members: dict) -> bytes:
-    buffer = io.BytesIO()
-    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+def _entry(members: dict, compression: str = "zstd") -> bytes:
+    """An entry as something other than this release may have written it.
+
+    "zstd" is the format '_pack' writes, "gzip" the one releases before it did,
+    which shared tiers can still hold.
+    """
+    tar_bytes = io.BytesIO()
+    with tarfile.open(fileobj=tar_bytes, mode="w") as tar:
         for name, data in members.items():
             info = tarfile.TarInfo(name)
             info.size = len(data)
             tar.addfile(info, io.BytesIO(data))
-    return buffer.getvalue()
+    if compression == "gzip":
+        return gzip.compress(tar_bytes.getvalue(), compresslevel=9)
+    return _zstd_compress(tar_bytes.getvalue())
 
 
+def test_an_entry_is_an_uncompressed_tar_in_one_zstd_frame(tmp_path):
+    model = tmp_path / "model.vtu"
+    model.write_bytes(b"<VTKFile/>" * 50)
+
+    data = cache_artifacts._pack({"success": True}, {"model": str(model)}, None, 0)
+
+    assert data[:4] == shape_envelope.ZSTD_MAGIC
+    with tarfile.open(fileobj=io.BytesIO(_zstd_decompress(data)), mode="r:") as tar:
+        # The result first: it says where everything after it goes.
+        assert tar.getnames() == ["result.json", "files/model"]
+
+
+def test_an_entry_an_earlier_release_gzipped_is_still_read(tmp_path):
+    """Nothing in the key says which release wrote an entry, so the reader sniffs."""
+    cache = _cache(tmp_path)
+    stored = {
+        "result.json": b'{"success": true, "trajectory": "@@partcad-artifact-directory@@/t.csv"}',
+        "files/model": b"<VTKFile/>" * 50,
+        "directory/t.csv": b"t,z\n0,10\n",
+        "directory/meshes/block.stl": b"solid\n" * 40,
+    }
+    data = _entry(stored, compression="gzip")
+    assert data[:2] == b"\x1f\x8b"
+    assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
+
+    run = tmp_path / "run"
+    run.mkdir()
+    restored = _run(
+        cache_artifacts.restore_async(cache, _hash(), files={"model": str(run / "m.vtu")}, directory=str(run))
+    )
+    assert restored == {"success": True, "trajectory": str(run / "t.csv")}
+    assert (run / "m.vtu").read_bytes() == b"<VTKFile/>" * 50
+    assert (run / "t.csv").read_bytes() == b"t,z\n0,10\n"
+    assert (run / "meshes" / "block.stl").read_bytes() == b"solid\n" * 40
+
+
+def test_many_files_come_back_from_one_pass_over_the_entry(tmp_path):
+    cache = _cache(tmp_path, max_size=64 * 1024 * 1024)
+    first = tmp_path / "run-a"
+    first.mkdir()
+    for i in range(40):
+        (first / ("frame%02d.bin" % i)).write_bytes(bytes([i]) * (64 * 1024 + i))
+    assert _run(cache_artifacts.store_async(cache, _hash(), {"frames": 40}, directory=str(first)))
+
+    second = tmp_path / "run-b"
+    second.mkdir()
+    assert _run(cache_artifacts.restore_async(cache, _hash(), directory=str(second))) == {"frames": 40}
+    for i in range(40):
+        assert (second / ("frame%02d.bin" % i)).read_bytes() == bytes([i]) * (64 * 1024 + i)
+
+
+def test_an_entry_that_expands_past_what_gzip_could_is_a_miss(tmp_path, monkeypatch):
+    """A few bytes of zstd can stand for gigabytes; one from a shared tier may not."""
+    cache = _cache(tmp_path)
+    # Scaled down, so the test does not have to build the entry it is about.
+    monkeypatch.setattr(cache_artifacts, "_MAX_EXPANSION_FLOOR", 1 << 20)
+    data = _entry({"result.json": b"{}", "files/model": bytes(4 << 20)})
+    assert len(data) * cache_artifacts._MAX_EXPANSION < 4 << 20
+    assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
+
+    target = tmp_path / "model.bin"
+    assert _run(cache_artifacts.restore_async(cache, _hash(), files={"model": str(target)})) is None
+    assert not target.exists()
+
+
+@pytest.mark.parametrize("compression", ["zstd", "gzip"])
 @pytest.mark.parametrize("name", ["directory/../escaped.txt", "directory//etc/escaped.txt"])
-def test_an_entry_that_would_write_outside_the_directory_is_refused(tmp_path, name):
+def test_an_entry_that_would_write_outside_the_directory_is_refused(tmp_path, name, compression):
     """Shared tiers are written by other people: nothing lands outside the run."""
     cache = _cache(tmp_path)
-    data = _entry({"result.json": b"{}", name: b"gotcha"})
+    data = _entry({"result.json": b"{}", name: b"gotcha"}, compression)
     assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
 
     directory = tmp_path / "run"
