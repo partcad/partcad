@@ -67,6 +67,10 @@ def process_owner(p):
     is taken is checked to be a child of *this* process. A pid the system gave
     to somebody else since has another parent; until ``p`` is reaped, nothing
     else can have its pid.
+
+    Or of its ``parent_pid``, for a process that says it has another parent: a
+    wrapper forked from a zygote is the zygote's child, and the zygote is what
+    reaps it (see `sandbox_zygote.ZygoteProcess`).
     """
     if getattr(p, "returncode", None) is not None or getattr(p, "pid", None) is None:
         return None
@@ -75,7 +79,7 @@ def process_owner(p):
 
         owner = psutil.Process(p.pid)
         # ppid() checks once more that the pid is still the process just read.
-        return owner if owner.ppid() == os.getpid() else None
+        return owner if owner.ppid() == (getattr(p, "parent_pid", None) or os.getpid()) else None
     except Exception:  # pylint: disable=broad-except
         return None
 
@@ -336,19 +340,14 @@ async def _watch(p, stdin: bytes, timeout=None):
                 break
 
         # Dead, and something it started is keeping its output open.
-        popen = _popen_of(p)
-        pipes = [getattr(popen, "stdout", None), getattr(popen, "stderr", None)] if popen is not None else []
-        left = container_service.stop_holders(pipes)
+        left = container_service.stop_holders(_output_pipes(p))
         _report_left(p.pid, p.returncode, left)
         done, _ = await asyncio.wait({talking}, timeout=container_service.EXIT_GRACE)
         if not done:
             # Held by something this could not find or could not kill. Closing
             # the transport ends the pipes from this end: each reader is handed
             # the end of its stream, and 'communicate' returns what it read.
-            transport = getattr(p, "_transport", None)
-            if transport is not None:
-                with contextlib.suppress(Exception):
-                    transport.close()
+            _close_output(p)
             done, _ = await asyncio.wait({talking}, timeout=container_service.EXIT_GRACE)
         if done:
             return talking.result()
@@ -356,6 +355,33 @@ async def _watch(p, stdin: bytes, timeout=None):
     finally:
         if not talking.done():
             talking.cancel()
+
+
+def _output_pipes(p) -> list:
+    """The reading ends of ``p``'s standard output and error, as `container_service.pipe_holders` takes them.
+
+    A process that keeps its own pipes says which they are (a wrapper forked
+    from a zygote, `sandbox_zygote.ZygoteProcess`); an asyncio one keeps them on
+    its transport.
+    """
+    own = getattr(p, "output_pipes", None)
+    if own is not None:
+        return list(own())
+    popen = _popen_of(p)
+    return [getattr(popen, "stdout", None), getattr(popen, "stderr", None)] if popen is not None else []
+
+
+def _close_output(p) -> None:
+    """Let go of ``p``'s pipes from this end, so that each read of them ends with what it had read."""
+    own = getattr(p, "close_output", None)
+    if own is not None:
+        with contextlib.suppress(Exception):
+            own()
+        return
+    transport = getattr(p, "_transport", None)
+    if transport is not None:
+        with contextlib.suppress(Exception):
+            transport.close()
 
 
 def _popen_of(p):
