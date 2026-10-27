@@ -20,9 +20,15 @@ happens to have -- PartCAD's own images, KiCad's, and the community images the
 an image without pip cannot satisfy. The web framework this used to be written
 against was the whole of its requirements file.
 
-The protocol is JSON-RPC 2.0 over HTTP. One method, `execute`, does the work::
+The protocol is JSON-RPC 2.0 over HTTP, in two dialects that say the same
+things. The JSON one is what anybody can type, and carries every payload as
+base64 -- which is how it began, and what an older client of
+`partcad-service-remote-docker` still speaks, so it stays. One method,
+`execute`, does the work::
 
     POST /jsonrpc
+    Content-Type: application/json
+
     {"jsonrpc": "2.0", "id": 1, "method": "execute", "params": {
         "command": ["kicad-cli", "pcb", "export", "step", "/w/board.kicad_pcb", "-o", "/w/board.step"],
         "stdin": "<base64>" | null,
@@ -33,6 +39,26 @@ The protocol is JSON-RPC 2.0 over HTTP. One method, `execute`, does the work::
         "output_dirs": ["/w/pkg"]
     }}
 
+The **frame** dialect (`FRAME_TYPE`) is what PartCAD itself speaks. A body is a
+JSON header followed by raw blobs, each one length-prefixed (see
+`encode_frame`), and every bytes value of the message -- standard input, a
+file, what a command printed -- is a blob rather than a string, so nothing is
+base64 in either direction. A wrapper's request is already base64 inside, and
+carried as base64 again it was 1.78 times the geometry it described, encoded
+and decoded once per hop. Directories travel by **content**, not as archives::
+
+    "input_trees": {"/w/pkg": {"files": [["solve.py", "<sha256>", 420], ...], "dirs": ["sub"]}},
+    "blobs": {"<sha256>": <blob> | {"zlib": <blob>}, ...}
+
+A tree names each file by the digest of what is in it, and the service keeps
+what it has been sent in a store of its own (`Store`), so a directory that has
+not changed costs its manifest and nothing else: the wrappers every sandbox
+command imports are sent once per container, not once per command. A caller
+asks `missing` (``{"digests": [...]}``, answered with the ones the store
+lacks) and sends those as ``blobs``; a request naming content the store no
+longer has -- it is bounded, and evicts what was used least recently -- is
+refused with `MISSING`, naming it, and the caller sends it and asks again.
+
 Every path in a request is the *caller's*. When the caller and the container
 share a filesystem -- the `mount` transfer mode -- none of the payloads are sent
 and the paths simply exist in here. When they do not -- `upload` -- the payloads
@@ -41,18 +67,21 @@ service put it before the command runs:
 
 * ``input_files`` are written into a directory of this call's own, and an
   argument equal to one of the names is rewritten to it.
-* ``input_dirs`` are extracted, and an argument *below* one of them -- matched by
-  prefix, longest first, separator-agnostic -- is rewritten into the extraction.
-  So is ``cwd``. A script imports its siblings, which is why a directory travels
-  whole rather than as the one file a command names.
+* ``input_dirs`` (JSON) are extracted and ``input_trees`` (frames) built from
+  the store, and an argument *below* one of them -- matched by prefix, longest
+  first, separator-agnostic -- is rewritten into it. So is ``cwd``. A script
+  imports its siblings, which is why a directory travels whole rather than as
+  the one file a command names.
 * ``output_files`` are names the command is expected to write. An argument equal
   to one is pointed into this call's directory, and whatever is there after the
   command ends is sent back under the caller's name. A name that is also an
   input is an *in-place edit* -- an application opening a file and saving it --
   and it comes back too.
-* ``output_dirs`` are directories to send back whole after the command, packed
-  the way ``input_dirs`` are. One that was also sent comes back with whatever
-  the command changed in it; one that was not is created empty first, for a
+* ``output_dirs`` are directories to send back whole after the command: packed
+  the way ``input_dirs`` are in JSON, and in frames as a tree whose files are
+  blobs -- leaving out every file that is exactly what the caller sent, since
+  the caller has it. One that was also sent comes back with whatever the
+  command changed in it; one that was not is created empty first, for a
   command that writes a directory of results.
 * ``env`` sets variables for this one command, over the container's own. Only
   the names in `ENV_ALLOWED` -- the display an application opens a window on,
@@ -77,25 +106,35 @@ has one anyway, since it costs nothing; one reached across a network needs it.
 ``GET /`` answers without authentication and without running anything, so that
 whoever started the container can tell when it is ready: Docker reports a
 container running some time before the process inside it is listening.
+
+A request is answered in the dialect it was asked in, and over a connection
+that stays open for the next one (HTTP/1.1 keep-alive), which is what a caller
+sending a command per part reuses.
 """
 
 import base64
 import contextlib
+import errno
 import gzip
+import hashlib
 import hmac
 import io
 import json
 import logging
 import os
+import re
 import shutil
 import signal
 import socket
 import stat
+import struct
 import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
+import zlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 
@@ -103,8 +142,25 @@ from socketserver import ThreadingMixIn
 # one of the additions below. 1 is the service as it was before them; 2 sends
 # in-place edits back, sends `output_dirs`, resolves a null allowlist entry on
 # PATH and rewrites `cwd`; 3 holds a `lock` around a command; 4 takes `env` and
-# answers `which`.
-PROTOCOL = 4
+# answers `which`; 5 speaks frames, keeps a store, and answers `missing`.
+#
+# A container always runs the release of the PartCAD that started it, so
+# nothing PartCAD starts needs to ask. `partcad-service-remote-docker` reports
+# the same number on its own `GET /`, and it is a service on another machine,
+# installed on its own -- so that is where a client does ask.
+PROTOCOL = 5
+
+# The protocol frames arrived in: what a client asks a service for before it
+# sends one, whatever the protocol has grown to since.
+FRAME_PROTOCOL = 5
+
+# The body of a request or an answer in the frame dialect: `encode_frame`.
+FRAME_TYPE = "application/x-partcad-frame"
+FRAME_MAGIC = b"PCF1"
+
+# The JSON-RPC error a request naming content the store does not have is
+# answered with. Its `data` is ``{"missing": [digests]}``; nothing has run.
+MISSING = -32010
 
 # The variables a request may set for its command, and no others. An application
 # opened for editing needs the display the user is sitting at *now* -- which is
@@ -149,10 +205,18 @@ log = logging.getLogger("partcad.container_service")
 class ExecuteError(Exception):
     """A request this service refuses, as the JSON-RPC error it becomes."""
 
-    def __init__(self, code, message):
+    def __init__(self, code, message, data=None):
         Exception.__init__(self, message)
         self.code = code
         self.message = message
+        self.data = data
+
+    def error(self):
+        """The JSON-RPC error object."""
+        error = {"code": self.code, "message": self.message}
+        if self.data is not None:
+            error["data"] = self.data
+        return error
 
 
 # The commands a container may run unless it is told otherwise. Kept because a
@@ -270,21 +334,79 @@ def _under(root, path):
         return False
 
 
+# Never sent, at the top of a directory: what a package carries that no command
+# run on it reads, and that can be most of what it weighs.
+SKIPPED_NAMES = (".git", "__pycache__", ".venv")
+
+
+def walk(path, skipped):
+    """Everything under ``path`` that is sent, as ``(kind, name, real path)``, in a fixed order.
+
+    ``kind`` is "dir" or "file", and ``name`` the path below ``path`` with "/"
+    between its parts, whichever platform this is: it is read on the other
+    side. Sorted, each directory before what is in it.
+
+    Nothing is a link, because neither end writes one (a link is how content
+    from elsewhere writes outside the directory it lands in). A symbolic link
+    resolving inside the directory is sent as what it points at; one resolving
+    outside it, or nowhere, is left out and its name appended to ``skipped`` --
+    following it would send a file that is not part of what was asked for. So
+    is a special file, and a link to a directory holding it, which never ends.
+
+    One walk for both ends and both dialects: what `pack_directory` archives,
+    what a caller sends as a tree and what this service sends back are the same
+    set of files, decided once.
+    """
+    root = os.path.realpath(path)
+
+    def visit(full, name, ancestors):
+        real = os.path.realpath(full)
+        if os.path.islink(full):
+            if not _under(root, real) or not os.path.exists(real):
+                skipped.append(name)
+                return
+        if os.path.isdir(real):
+            if real in ancestors:
+                skipped.append(name)
+                return
+            yield "dir", name, real
+            for entry in sorted(os.listdir(real)):
+                for item in visit(os.path.join(full, entry), name + "/" + entry, ancestors | {real}):
+                    yield item
+        elif os.path.isfile(real):
+            yield "file", name, real
+        else:
+            skipped.append(name)
+
+    for entry in sorted(os.listdir(path)):
+        if entry in SKIPPED_NAMES:
+            continue
+        for item in visit(os.path.join(path, entry), entry, frozenset({root})):
+            yield item
+
+
+def warn_skipped(skipped, path):
+    """Say what `walk` left out of ``path``, if anything."""
+    if skipped:
+        log.warning(
+            "Not sent: %s -- %s to nothing inside %s.",
+            ", ".join(skipped),
+            "a link that points" if len(skipped) == 1 else "links, or special files, that point",
+            path,
+        )
+
+
 def pack_directory(path):
     """A directory as a base64 gzipped tar, with nothing in it that varies between two packs.
 
-    The same packing the client uses for `input_dirs`, so that what goes out and
-    what comes back are one format. Entries sorted, owners and times zeroed, and
-    the gzip header's own time pinned -- otherwise two packs of one directory
-    differ in bytes 4 to 8 and nowhere else.
-
-    No member is a link, because `unpack_directory` refuses every one (a link is
-    how an archive from elsewhere writes outside the directory it lands in). A
-    symbolic link resolving inside the directory is sent as what it points at; one
-    resolving outside it, or nowhere, is left out with a warning -- following it
-    would send a file that is not part of what was asked for.
+    The JSON dialect's way of sending a directory (the frame dialect sends a
+    tree, by content). The same packing the client uses for `input_dirs`, so
+    that what goes out and what comes back are one format. Entries sorted,
+    owners and times zeroed, and the gzip header's own time pinned -- otherwise
+    two packs of one directory differ in bytes 4 to 8 and nowhere else. What is
+    in it is what `walk` says, so `unpack_directory`, which refuses every link,
+    never meets one.
     """
-    root = os.path.realpath(path)
     skipped = []
     buffer = io.BytesIO()
     with gzip.GzipFile(fileobj=buffer, mode="wb", compresslevel=6, mtime=0) as compressed:
@@ -298,39 +420,14 @@ def pack_directory(path):
                 info.uname = info.gname = ""
                 return info
 
-            def add(full, arcname, ancestors):
-                real = os.path.realpath(full)
-                if os.path.islink(full):
-                    inside = _under(root, real)
-                    if not inside or not os.path.exists(real):
-                        skipped.append(arcname)
-                        return
-                if os.path.isdir(real):
-                    if real in ancestors:
-                        # A link to a directory holding it: following it never ends.
-                        skipped.append(arcname)
-                        return
-                    tar.addfile(sanitize(tar.gettarinfo(real, arcname=arcname)))
-                    for entry in sorted(os.listdir(real)):
-                        add(os.path.join(full, entry), arcname + "/" + entry, ancestors | {real})
-                elif os.path.isfile(real):
-                    info = sanitize(tar.gettarinfo(real, arcname=arcname))
+            for kind, name, real in walk(path, skipped):
+                info = sanitize(tar.gettarinfo(real, arcname=name))
+                if kind == "dir":
+                    tar.addfile(info)
+                else:
                     with open(real, "rb") as content:
                         tar.addfile(info, content)
-                else:
-                    skipped.append(arcname)
-
-            for entry in sorted(os.listdir(path)):
-                if entry in (".git", "__pycache__", ".venv"):
-                    continue
-                add(os.path.join(path, entry), entry, frozenset({root}))
-    if skipped:
-        log.warning(
-            "Not sent: %s -- %s to nothing inside %s.",
-            ", ".join(skipped),
-            "a link that points" if len(skipped) == 1 else "links, or special files, that point",
-            path,
-        )
+    warn_skipped(skipped, path)
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
@@ -349,6 +446,404 @@ def unpack_directory(archive, target):
             if not (member.isfile() or member.isdir()):
                 raise ExecuteError(-32602, "Archive member is not a file or a directory: %s" % member.name)
         tar.extractall(target)
+
+
+# --------------------------------------------------------------------------- #
+# Frames                                                                       #
+# --------------------------------------------------------------------------- #
+#
+# A body in the frame dialect:
+#
+#     b"PCF1"          4 bytes
+#     header length    4 bytes, big-endian
+#     header           that many bytes of UTF-8 JSON: the JSON-RPC message
+#     then, once per blob:
+#       blob length    8 bytes, big-endian
+#       blob           that many bytes, as they are
+#
+# Every bytes value of the message is a blob, and stands in the header as
+# {"$blob": <its index>}. A message has no other object of that one key.
+
+_BLOB = "$blob"
+
+
+def _nbytes(value):
+    return memoryview(value).nbytes
+
+
+def encode_frame(message):
+    """``message`` as the buffers that make up its body, in order.
+
+    Not joined: a payload of fifty megabytes goes onto the socket as the
+    buffer it already is, and nothing here copies it.
+    """
+    blobs = []
+
+    def strip(value):
+        if isinstance(value, (bytes, bytearray, memoryview)):
+            blobs.append(value)
+            return {_BLOB: len(blobs) - 1}
+        if isinstance(value, dict):
+            return dict((key, strip(item)) for key, item in value.items())
+        if isinstance(value, (list, tuple)):
+            return [strip(item) for item in value]
+        return value
+
+    header = json.dumps(strip(message), separators=(",", ":")).encode("utf-8")
+    parts = [FRAME_MAGIC, struct.pack(">I", len(header)), header]
+    for blob in blobs:
+        parts.append(struct.pack(">Q", _nbytes(blob)))
+        parts.append(blob)
+    return parts
+
+
+def frame_length(parts):
+    """How many bytes `encode_frame`'s buffers come to."""
+    return sum(_nbytes(part) for part in parts)
+
+
+def decode_frame(body):
+    """The message an `encode_frame` body carries, each blob a `memoryview` of ``body``.
+
+    Views rather than copies: what a request carries is written to a file or
+    handed to a command, and either takes a view as it takes bytes. Raises
+    ValueError for anything that is not a whole frame.
+    """
+    view = memoryview(body)
+    if len(view) < 8 or view[:4].tobytes() != FRAME_MAGIC:
+        raise ValueError("not a PartCAD frame")
+    (length,) = struct.unpack_from(">I", view, 4)
+    offset = 8 + length
+    if offset > len(view):
+        raise ValueError("the frame's header is cut short")
+    header = json.loads(view[8:offset].tobytes().decode("utf-8"))
+    blobs = []
+    while offset < len(view):
+        if offset + 8 > len(view):
+            raise ValueError("the frame is cut short in a blob's length")
+        (size,) = struct.unpack_from(">Q", view, offset)
+        offset += 8
+        if offset + size > len(view):
+            raise ValueError("the frame is cut short in a blob")
+        blobs.append(view[offset : offset + size])
+        offset += size
+
+    def fill(value):
+        if isinstance(value, dict):
+            if len(value) == 1 and _BLOB in value:
+                index = value[_BLOB]
+                if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < len(blobs):
+                    raise ValueError("the frame names a blob it does not carry: %r" % (index,))
+                return blobs[index]
+            return dict((key, fill(item)) for key, item in value.items())
+        if isinstance(value, list):
+            return [fill(item) for item in value]
+        return value
+
+    return fill(header)
+
+
+# --------------------------------------------------------------------------- #
+# The store                                                                    #
+# --------------------------------------------------------------------------- #
+
+# Where it is kept, and how big it may get. In the container's own filesystem by
+# default, so that it goes when the container does: a container is replaced
+# whenever anything that makes it what it is changes, this file included, and
+# a store outliving it would be a store nothing bounds. The limit is for a
+# container that is not replaced for a long time while the packages sent to it
+# change; what it holds in the meantime is overwhelmingly the same few
+# directories.
+STORE_ROOT = os.environ.get("PC_CONTAINER_STORE") or os.path.join(tempfile.gettempdir(), "pc-store")
+STORE_LIMIT = int(os.environ.get("PC_CONTAINER_STORE_LIMIT") or 256 * 1024 * 1024)
+
+_DIGEST = re.compile(r"\A[0-9a-f]{64}\Z")
+
+
+def content_digest(data):
+    """What a file is called in the store: the SHA-256 of what is in it, in hex."""
+    return hashlib.sha256(data).hexdigest()
+
+
+def pack_blob(data):
+    """A file's content as it travels in a tree: compressed when that saves a tenth of it, else as it is.
+
+    A directory used to travel as a gzipped tar, and on the way to a container
+    on another machine -- which is what `upload` mode and the `remote` sandbox
+    are for -- a package's sources and STEP files are a third of their size
+    compressed. What travels in a tree travels once per container now, so the
+    compression is at the fastest level; a payload sent with every command
+    (standard input, a file on its own) is not compressed at all, and a file
+    that is compressed already comes out no smaller and is sent as it is.
+    """
+    size = _nbytes(data)
+    if size < 512:
+        return data
+    packed = zlib.compress(data, 1)
+    return {"zlib": packed} if len(packed) <= size * 9 // 10 else data
+
+
+def unpack_blob(value):
+    """What `pack_blob` made, as the bytes it was made from."""
+    if isinstance(value, dict) and list(value) == ["zlib"]:
+        if not isinstance(value["zlib"], (bytes, bytearray, memoryview)):
+            raise ExecuteError(-32602, "Compressed content must be carried as a blob")
+        try:
+            return zlib.decompress(value["zlib"])
+        except zlib.error as e:
+            raise ExecuteError(-32602, "Compressed content that does not decompress: %s" % e)
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return value
+    raise ExecuteError(-32602, "Content must be carried as a blob")
+
+
+class Store(object):
+    """What this service has been sent, by content, bounded in size.
+
+    Read by digest and written by digest, and a digest is checked against what
+    it names before anything is kept: a store a caller could write under a
+    wrong name is a store that hands the next caller somebody else's file --
+    and through `partcad-service-remote-docker`, the next caller is somebody
+    else.
+
+    A tree is built by *copying* out of the store, not by linking: a hard link
+    is the store's own file, and a command that saves over an input -- KiCad
+    saving a board beside the project it opened, a script rewriting a file next
+    to it -- would change what every later command is handed under that name,
+    with nothing to say so. A copy costs tens of microseconds a file.
+    """
+
+    def __init__(self, root, limit=None):
+        self.root = root
+        self.limit = STORE_LIMIT if limit is None else limit
+        self._lock = threading.Lock()
+        # digest -> size, for everything on disk; read from the disk once.
+        self._sizes = None
+        # digest -> when a command last used it, which is what goes first.
+        self._used = {}
+        self._total = 0
+
+    def path(self, digest):
+        """Where the content under ``digest`` is kept; refused for anything that is not a digest."""
+        # Checked before it is a path: a digest comes from the caller, and
+        # "../../bin/sh" is not one.
+        if not isinstance(digest, str) or not _DIGEST.match(digest):
+            raise ExecuteError(-32602, "Not a content digest: %r" % (digest,))
+        return os.path.join(self.root, digest[:2], digest)
+
+    def _loaded(self):
+        """The index, read off the disk the first time it is needed. Called under the lock."""
+        if self._sizes is None:
+            self._sizes = {}
+            self._total = 0
+            try:
+                shards = os.listdir(self.root)
+            except OSError:
+                shards = []
+            for shard in shards:
+                directory = os.path.join(self.root, shard)
+                try:
+                    entries = os.listdir(directory)
+                except OSError:
+                    continue
+                for entry in entries:
+                    full = os.path.join(directory, entry)
+                    try:
+                        status = os.stat(full)
+                    except OSError:
+                        continue
+                    if _DIGEST.match(entry):
+                        self._sizes[entry] = status.st_size
+                        self._used[entry] = status.st_mtime
+                        self._total += status.st_size
+                    elif entry.startswith(".in-") and time.time() - status.st_mtime > 3600:
+                        # Half-written by a service that died writing it.
+                        with contextlib.suppress(OSError):
+                            os.remove(full)
+        return self._sizes
+
+    def missing(self, digests):
+        """Those of ``digests`` the store does not have, each once, in the order asked."""
+        found, seen = [], set()
+        for digest in digests or ():
+            if digest in seen:
+                continue
+            seen.add(digest)
+            if not os.path.isfile(self.path(digest)):
+                found.append(digest)
+        return found
+
+    def add(self, digest, data):
+        """Keep ``data`` under ``digest``, having checked that it is what ``digest`` names.
+
+        A failure to write is not the request's failure -- the content is in
+        the request, and the command can be given it from there; the store
+        simply does not have it next time.
+        """
+        path = self.path(digest)
+        if content_digest(data) != digest:
+            raise ExecuteError(-32602, "Content sent as %s is not what that digest names" % digest)
+        size = _nbytes(data)
+        if os.path.isfile(path) or size > self.limit:
+            return
+        directory = os.path.dirname(path)
+        temporary = None
+        try:
+            os.makedirs(directory, exist_ok=True)
+            descriptor, temporary = tempfile.mkstemp(dir=directory, prefix=".in-")
+            with os.fdopen(descriptor, "wb") as f:
+                f.write(data)
+            # Whole or not at all: another request may be reading it already.
+            os.replace(temporary, path)
+            temporary = None
+        except OSError as e:
+            log.warning("Could not keep %s in %s: %s", digest, self.root, e)
+            return
+        finally:
+            if temporary is not None:
+                with contextlib.suppress(OSError):
+                    os.remove(temporary)
+        with self._lock:
+            sizes = self._loaded()
+            if digest not in sizes:
+                sizes[digest] = size
+                self._total += size
+            self._used[digest] = time.time()
+        self._trim()
+
+    def copy(self, digest, target):
+        """Write what is under ``digest`` to ``target``; False when the store does not have it."""
+        try:
+            shutil.copyfile(self.path(digest), target)
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT and not os.path.exists(self.path(digest)):
+                return False
+            raise
+        with self._lock:
+            self._used[digest] = time.time()
+        return True
+
+    def _trim(self):
+        """Remove what was used least recently until the store is well inside its limit.
+
+        To three quarters of it, so that a store at its limit is not trimmed
+        again by every file it is sent. A file a command is being built from
+        right now may go too: what was copied out of it stays where it was
+        copied, and a request that finds it gone is answered `MISSING` and
+        sends it again.
+        """
+        with self._lock:
+            sizes = self._loaded()
+            if self._total <= self.limit:
+                return
+            for digest in sorted(sizes, key=lambda d: self._used.get(d, 0)):
+                if self._total <= self.limit * 3 // 4:
+                    break
+                with contextlib.suppress(OSError):
+                    os.remove(self.path(digest))
+                self._total -= sizes.pop(digest)
+                self._used.pop(digest, None)
+
+
+_STORE = None
+_STORE_GUARD = threading.Lock()
+
+
+def default_store():
+    """The store a request is served from unless the server was given another."""
+    global _STORE
+    with _STORE_GUARD:
+        if _STORE is None or _STORE.root != STORE_ROOT:
+            _STORE = Store(STORE_ROOT)
+        return _STORE
+
+
+def _tree_files(tree):
+    """A tree's files as ``(name, digest, mode)``, each checked; refused when it is not a tree."""
+    if not isinstance(tree, dict):
+        raise ExecuteError(-32602, "A tree must be an object with 'files' and 'dirs'")
+    files = []
+    for entry in tree.get("files") or ():
+        if not (isinstance(entry, list) and len(entry) == 3 and isinstance(entry[0], str)):
+            raise ExecuteError(-32602, "A tree's file must be [name, digest, mode]: %r" % (entry,))
+        name, digest, mode = entry
+        if not isinstance(mode, int) or isinstance(mode, bool):
+            raise ExecuteError(-32602, "A tree's file mode must be a number: %r" % (entry,))
+        files.append((name, digest, mode))
+    dirs = tree.get("dirs") or []
+    if not isinstance(dirs, list) or not all(isinstance(name, str) for name in dirs):
+        raise ExecuteError(-32602, "A tree's 'dirs' must be a list of names")
+    return files, dirs
+
+
+def below(root, name):
+    """Where ``name`` -- "/"-separated, as `walk` writes it -- is under ``root``; refused if anywhere else.
+
+    Resolved through whatever links are already there, the way
+    `unpack_directory` checks an archive's members: a name that would land
+    outside ``root`` is how content from elsewhere becomes a write to /usr/bin.
+    """
+    parts = name.split("/") if isinstance(name, str) else [""]
+    if any(part in ("", ".", "..") or "\0" in part for part in parts):
+        raise ExecuteError(-32602, "Not a name inside a directory: %r" % (name,))
+    target = os.path.join(root, *parts)
+    if not _under(os.path.realpath(root), os.path.realpath(target)):
+        raise ExecuteError(-32602, "Escapes its directory: %s" % name)
+    return target
+
+
+def build_tree(tree, target, store, carried=None):
+    """Make ``target`` hold what ``tree`` names: content from ``carried`` (digest -> bytes) or ``store``.
+
+    Raises `MISSING` naming whatever neither has -- found by looking at each
+    first, so that no file is written for a request that is refused.
+    """
+    carried = carried or {}
+    files, dirs = _tree_files(tree)
+    lacking = store.missing([digest for _, digest, _ in files if digest not in carried])
+    if lacking:
+        raise ExecuteError(MISSING, "Content this service does not have", {"missing": lacking})
+    for name in dirs:
+        os.makedirs(below(target, name), exist_ok=True)
+    gone = []
+    for name, digest, mode in files:
+        path = below(target, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if digest in carried:
+            with open(path, "wb") as f:
+                f.write(carried[digest])
+        elif not store.copy(digest, path):
+            # Trimmed away since it was looked for (see `Store._trim`).
+            gone.append(digest)
+            continue
+        # What matters of a mode on the far side is whether it runs.
+        os.chmod(path, 0o755 if mode & 0o111 else 0o644)
+    if gone:
+        raise ExecuteError(MISSING, "Content this service no longer has", {"missing": sorted(set(gone))})
+
+
+def tree_back(directory, sent=None):
+    """``directory`` as a tree to send back: ``{"files": [[name, mode, content]], "dirs": [...]}``.
+
+    Each file's content is a blob, or a compressed one (see `pack_blob`).
+
+    Leaving out every file that is what the caller sent under that name
+    (``sent``: name -> digest), which the caller has: a project directory KiCad
+    saved one board in comes back as that board.
+    """
+    sent = sent or {}
+    skipped, files, dirs = [], [], []
+    for kind, name, real in walk(directory, skipped):
+        if kind == "dir":
+            dirs.append(name)
+            continue
+        with open(real, "rb") as f:
+            data = f.read()
+        if name in sent and sent[name] == content_digest(data):
+            continue
+        files.append([name, os.stat(real).st_mode & 0o777, pack_blob(data)])
+    warn_skipped(skipped, directory)
+    return {"files": files, "dirs": dirs}
 
 
 def _lock_path(lock):
@@ -610,6 +1105,123 @@ def communicate(process, input=None, grace=EXIT_GRACE, interval=WATCH_INTERVAL, 
     return stdout, stderr, left
 
 
+def _check_request(env, lock):
+    """``env`` and ``lock`` refused before anything is done, if either is not one a request may send."""
+    env = env or {}
+    if not isinstance(env, dict):
+        raise ExecuteError(-32602, "env must be an object")
+    refused = sorted(key for key in env if key not in ENV_ALLOWED)
+    if refused:
+        raise ExecuteError(
+            -32602, "env may not set %s; it may set: %s" % (", ".join(refused), ", ".join(sorted(ENV_ALLOWED)))
+        )
+    if lock is not None:
+        _lock_path(lock)
+    return env
+
+
+class _Json(object):
+    """What a request in the JSON dialect carries: base64 payloads, directories as gzipped tars."""
+
+    def __init__(self, stdin, input_files, input_dirs):
+        self._stdin = stdin
+        self._files = input_files or {}
+        self._dirs = input_dirs or {}
+
+    def prepare(self):
+        pass
+
+    def stdin(self):
+        return base64.b64decode(self._stdin) if self._stdin else None
+
+    def file_names(self):
+        return self._files
+
+    def file(self, name):
+        return base64.b64decode(self._files[name])
+
+    def directories(self, scratch):
+        directories = {}
+        for host_path, archive in self._dirs.items():
+            target = tempfile.mkdtemp(prefix="pc-in-")
+            scratch.append(target)
+            unpack_directory(archive, target)
+            directories[host_path] = target
+        return directories
+
+    def back(self, host_path, directory):
+        return pack_directory(directory)
+
+    @staticmethod
+    def answer(result):
+        """The result in this dialect's encoding."""
+        result["stdout"] = base64.b64encode(result["stdout"] or b"").decode("utf-8")
+        result["stderr"] = base64.b64encode(result["stderr"] or b"").decode("utf-8")
+        result["output_files"] = dict(
+            (name, base64.b64encode(data).decode("utf-8")) for name, data in result["output_files"].items()
+        )
+        return result
+
+
+class _Frames(object):
+    """What a request in the frame dialect carries: bytes, and directories as trees of the store's content."""
+
+    def __init__(self, stdin, input_files, input_trees, blobs, store):
+        self._stdin = stdin
+        self._files = input_files or {}
+        self._trees = input_trees or {}
+        self._store = store
+        for name, value in self._files.items():
+            if not isinstance(value, (bytes, bytearray, memoryview)):
+                raise ExecuteError(-32602, "%s must be carried as a blob" % name)
+        if not isinstance(self._trees, dict) or not isinstance(blobs or {}, dict):
+            raise ExecuteError(-32602, "input_trees and blobs must be objects")
+        # Each one as the bytes it names, whether it came compressed or not.
+        self._blobs = dict((digest, unpack_blob(value)) for digest, value in (blobs or {}).items())
+
+    def prepare(self):
+        """Keep what came with the request, and refuse it -- running nothing -- if it names what did not."""
+        for digest, data in self._blobs.items():
+            self._store.add(digest, data)
+        wanted = []
+        for tree in self._trees.values():
+            files, _ = _tree_files(tree)
+            wanted.extend(digest for _, digest, _ in files if digest not in self._blobs)
+        lacking = self._store.missing(wanted)
+        if lacking:
+            raise ExecuteError(MISSING, "Content this service does not have", {"missing": lacking})
+
+    def stdin(self):
+        if self._stdin is not None and not isinstance(self._stdin, (bytes, bytearray, memoryview)):
+            raise ExecuteError(-32602, "stdin must be carried as a blob")
+        return self._stdin if self._stdin is not None and _nbytes(self._stdin) else None
+
+    def file_names(self):
+        return self._files
+
+    def file(self, name):
+        return self._files[name]
+
+    def directories(self, scratch):
+        directories = {}
+        for host_path, tree in self._trees.items():
+            target = tempfile.mkdtemp(prefix="pc-in-")
+            scratch.append(target)
+            build_tree(tree, target, self._store, self._blobs)
+            directories[host_path] = target
+        return directories
+
+    def back(self, host_path, directory):
+        sent = {}
+        if host_path in self._trees:
+            sent = dict((name, digest) for name, digest, _ in _tree_files(self._trees[host_path])[0])
+        return tree_back(directory, sent)
+
+    @staticmethod
+    def answer(result):
+        return result
+
+
 def handle_execute_command(
     command,
     stdin=None,
@@ -622,30 +1234,55 @@ def handle_execute_command(
     lock=None,
     env=None,
 ):
-    """Run one command, with whatever files the caller sent, and answer with what it produced.
+    """Run one command in the JSON dialect, and answer with what it produced: payloads base64.
 
     ``lock`` is ``{"path": ..., "exclusive": bool}``: a file under the sandbox
     root held around the command (see `_held`). ``env`` sets variables for this
     one command, from `ENV_ALLOWED` only.
     """
-    env = env or {}
-    if not isinstance(env, dict):
-        raise ExecuteError(-32602, "env must be an object")
-    refused = sorted(key for key in env if key not in ENV_ALLOWED)
-    if refused:
-        raise ExecuteError(
-            -32602, "env may not set %s; it may set: %s" % (", ".join(refused), ", ".join(sorted(ENV_ALLOWED)))
-        )
-    if lock is not None:
-        _lock_path(lock)
+    env = _check_request(env, lock)
     with _held(lock):
-        return _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_dirs, allowed, env)
+        result = _execute(command, cwd, output_files, output_dirs, allowed, env, _Json(stdin, input_files, input_dirs))
+    return _Json.answer(result)
 
 
-def _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_dirs, allowed, env):
-    input_files = input_files or {}
+def handle_execute_frames(
+    command,
+    stdin=None,
+    cwd=None,
+    input_files=None,
+    output_files=None,
+    input_trees=None,
+    blobs=None,
+    output_dirs=None,
+    allowed=None,
+    lock=None,
+    env=None,
+    store=None,
+):
+    """Run one command in the frame dialect: every payload bytes, directories as trees.
+
+    ``blobs`` is what the caller sent of the content its trees name, kept in
+    ``store`` (the default one unless told) for the next request; a tree
+    naming content neither has is refused with `MISSING` before anything runs.
+    The answer's ``stdout``, ``stderr`` and ``output_files`` are bytes, and its
+    ``output_dirs`` trees (see `tree_back`).
+    """
+    env = _check_request(env, lock)
+    carried = _Frames(stdin, input_files, input_trees, blobs, store or default_store())
+    with _held(lock):
+        return _execute(command, cwd, output_files, output_dirs, allowed, env, carried)
+
+
+def handle_missing(digests, store=None):
+    """Which of ``digests`` the store does not have, for a caller deciding what to send."""
+    if not isinstance(digests, list):
+        raise ExecuteError(-32602, "digests must be a list")
+    return {"missing": (store or default_store()).missing(digests)}
+
+
+def _execute(command, cwd, output_files, output_dirs, allowed, env, carried):
     output_files = list(output_files or [])
-    input_dirs = input_dirs or {}
     output_dirs = list(output_dirs or [])
 
     if not command or not isinstance(command, list):
@@ -672,6 +1309,8 @@ def _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_
             "Command '%s' is not allowed. Allowed commands: %s, and the interpreter of an environment under %s"
             % (command[0], ", ".join(sorted(table.keys())), SANDBOX_ROOT),
         )
+    carried.prepare()
+    input_files = carried.file_names()
 
     # Everything this call unpacks or exchanges, removed together at the end.
     # The service is long-lived -- one container serves every command a machine
@@ -679,12 +1318,7 @@ def _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_
     # fills up.
     scratch = []
     try:
-        directories = {}
-        for host_path, archive in input_dirs.items():
-            target = tempfile.mkdtemp(prefix="pc-in-")
-            scratch.append(target)
-            unpack_directory(archive, target)
-            directories[host_path] = target
+        directories = carried.directories(scratch)
         for host_path in output_dirs:
             if host_path not in directories:
                 target = tempfile.mkdtemp(prefix="pc-out-")
@@ -707,7 +1341,7 @@ def _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_
             if original in input_files:
                 path = exchanged(i, original)
                 with open(path, "wb") as f:
-                    f.write(base64.b64decode(input_files[original]))
+                    f.write(carried.file(original))
                 command[i] = path
                 if original in output_files:
                     # Opened and saved: an in-place edit, which the caller wants back.
@@ -732,7 +1366,7 @@ def _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_
                 log.info("cwd %s does not exist here; running in %s", cwd, exchange)
                 cwd = exchange
 
-        stdin_bytes = base64.b64decode(stdin) if stdin else None
+        stdin_bytes = carried.stdin()
         environment = None
         if env:
             environment = dict(os.environ)
@@ -769,15 +1403,15 @@ def _execute(command, stdin, cwd, input_files, output_files, input_dirs, output_
             # than a refusal.
             if os.path.isfile(path):
                 with open(path, "rb") as f:
-                    files[name] = base64.b64encode(f.read()).decode("utf-8")
+                    files[name] = f.read()
         dirs = {}
         for host_path in output_dirs:
-            dirs[host_path] = pack_directory(directories[host_path])
+            dirs[host_path] = carried.back(host_path, directories[host_path])
 
         return {
             "exit_code": process.returncode,
-            "stdout": base64.b64encode(stdout or b"").decode("utf-8"),
-            "stderr": base64.b64encode(stderr or b"").decode("utf-8"),
+            "stdout": stdout or b"",
+            "stderr": stderr or b"",
             "output_files": files,
             "output_dirs": dirs,
         }
@@ -807,12 +1441,31 @@ def handle_which(names, allowed=None):
     return {name: (resolve_command(name, allowed) if name in allowed else None) for name in names}
 
 
-def dispatch(payload):
-    """One JSON-RPC request object, answered as one JSON-RPC response object."""
+_JSON_PARAMS = ("command", "stdin", "cwd", "input_files", "output_files", "input_dirs", "output_dirs", "lock", "env")
+_FRAME_PARAMS = (
+    "command",
+    "stdin",
+    "cwd",
+    "input_files",
+    "output_files",
+    "input_trees",
+    "blobs",
+    "output_dirs",
+    "lock",
+    "env",
+)
+
+
+def dispatch(payload, frames=False, store=None):
+    """One JSON-RPC request object, answered as one JSON-RPC response object.
+
+    ``frames`` says which dialect the request came in, and so which one
+    ``execute`` reads and answers in (see the module's docstring).
+    """
     request_id = payload.get("id") if isinstance(payload, dict) else None
     if not isinstance(payload, dict) or payload.get("method") is None:
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32600, "message": "Invalid request"}}
-    if payload["method"] not in ("execute", "which"):
+    if payload["method"] not in ("execute", "which", "missing"):
         return {
             "jsonrpc": "2.0",
             "id": request_id,
@@ -821,22 +1474,33 @@ def dispatch(payload):
     params = payload.get("params") or {}
     if not isinstance(params, dict):
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "Params must be an object"}}
-    known = ("command", "stdin", "cwd", "input_files", "output_files", "input_dirs", "output_dirs", "lock", "env")
     try:
         if payload["method"] == "which":
             result = handle_which(params.get("names"))
+        elif payload["method"] == "missing":
+            result = handle_missing(params.get("digests"), store)
+        elif frames:
+            result = handle_execute_frames(
+                store=store, **dict((key, params[key]) for key in _FRAME_PARAMS if key in params)
+            )
         else:
-            result = handle_execute_command(**{key: params[key] for key in known if key in params})
+            result = handle_execute_command(**dict((key, params[key]) for key in _JSON_PARAMS if key in params))
     except ExecuteError as e:
-        return {"jsonrpc": "2.0", "id": request_id, "error": {"code": e.code, "message": e.message}}
+        return {"jsonrpc": "2.0", "id": request_id, "error": e.error()}
     except Exception as e:  # pragma: no cover - reported, not crashed on
         log.exception("execute failed")
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32000, "message": "Execution error: %s" % e}}
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
 
+def is_frame(content_type):
+    """Whether a `Content-Type` says the body is a frame."""
+    return (content_type or "").split(";", 1)[0].strip().lower() == FRAME_TYPE
+
+
 class _Handler(BaseHTTPRequestHandler):
     token = None
+    store = None
     protocol_version = "HTTP/1.1"
 
     def _reply(self, status, body):
@@ -847,23 +1511,49 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _reply_frame(self, status, body):
+        # Buffer by buffer, as `encode_frame` made them: what a command wrote
+        # goes to the socket from where it was read into.
+        parts = encode_frame(body)
+        self.send_response(status)
+        self.send_header("Content-Type", FRAME_TYPE)
+        self.send_header("Content-Length", str(frame_length(parts)))
+        self.end_headers()
+        for part in parts:
+            self.wfile.write(part)
+
     def do_GET(self):  # noqa: N802 - the name BaseHTTPRequestHandler dispatches to
         self._reply(200, {"ok": True, "protocol": PROTOCOL})
 
     def do_POST(self):  # noqa: N802
+        length = int(self.headers.get("Content-Length") or 0)
         if self.path.rstrip("/") != "/jsonrpc":
+            # Read even so: the connection is kept open, and a body left
+            # unread would be read as the next request.
+            self.rfile.read(length)
             self._reply(404, {"error": "not found"})
             return
         if not _authorized(self.headers.get("Authorization"), self.token):
+            self.rfile.read(length)
             self._reply(401, {"jsonrpc": "2.0", "id": None, "error": {"code": -32001, "message": "Unauthorized"}})
             return
-        length = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(length)
+        if is_frame(self.headers.get("Content-Type")):
+            try:
+                payload = decode_frame(body)
+            except ValueError as e:
+                self._reply_frame(
+                    200, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error: %s" % e}}
+                )
+                return
+            self._reply_frame(200, dispatch(payload, frames=True, store=self.store))
+            return
         try:
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            payload = json.loads(body.decode("utf-8"))
         except ValueError:
             self._reply(200, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}})
             return
-        self._reply(200, dispatch(payload))
+        self._reply(200, dispatch(payload, store=self.store))
 
     def log_message(self, fmt, *args):
         log.debug("%s - %s", self.address_string(), fmt % args)
@@ -876,9 +1566,13 @@ class Server(ThreadingMixIn, HTTPServer):
     allow_reuse_address = True
 
 
-def serve(host="0.0.0.0", port=DEFAULT_PORT, token=None):
-    """A server bound and ready to `serve_forever()`, for this process or a test."""
-    handler = type("Handler", (_Handler,), {"token": token})
+def serve(host="0.0.0.0", port=DEFAULT_PORT, token=None, store=None):
+    """A server bound and ready to `serve_forever()`, for this process or a test.
+
+    ``store`` is where content sent by digest is kept; the default store
+    (`STORE_ROOT`) unless given.
+    """
+    handler = type("Handler", (_Handler,), {"token": token, "store": store})
     family = socket.AF_INET6 if ":" in host else socket.AF_INET
     server_class = type("BoundServer", (Server,), {"address_family": family})
     return server_class((host, port), handler)
@@ -890,10 +1584,11 @@ def main():
     token = os.environ.get("PC_CONTAINER_TOKEN") or None
     server = serve("0.0.0.0", port, token)
     log.info(
-        "PartCAD container service (protocol %d) on port %d; allowed: %s",
+        "PartCAD container service (protocol %d) on port %d; allowed: %s; store: %s",
         PROTOCOL,
         port,
         ", ".join(sorted(ALLOWED_COMMANDS)),
+        STORE_ROOT,
     )
     server.serve_forever()
 

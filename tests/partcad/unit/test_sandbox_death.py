@@ -691,6 +691,9 @@ class _Silent:
     def execute(self, command, params=None, timeout=None):
         return None
 
+    def call(self, method, params=None, timeout=None):
+        return None
+
 
 def test_a_remote_container_that_stopped_is_let_go_and_the_next_request_starts_another(monkeypatch):
     from partcad import remote_sandbox

@@ -227,7 +227,7 @@ class _Endpoint:
 
 @pytest.mark.parametrize("asynchronous", [False, True])
 def test_a_container_is_handed_the_request_and_not_what_writes_it(tmp_path, asynchronous):
-    """The container path is a launch point too: a callable request reached 'Endpoint.params', which encodes text."""
+    """The container path is a launch point too: a callable request reached 'Endpoint.params', which encoded text."""
     endpoint = _Endpoint()
     contained = runtime.Runtime(_ctx(tmp_path), "contained")
     contained.use_container(endpoint)
@@ -242,15 +242,14 @@ def test_a_container_is_handed_the_request_and_not_what_writes_it(tmp_path, asyn
 
 @pytest.mark.parametrize("stdin", ["a request", b"a request"])
 def test_a_container_endpoint_takes_its_request_as_text_or_bytes(stdin):
-    import base64
-
     from partcad_utils import containers
 
     endpoint = containers.Endpoint(
         name="any", spec=types.SimpleNamespace(mode="mount"), container=None, host="", port=0, token=None
     )
 
-    assert base64.b64decode(endpoint.params(stdin)["stdin"]) == b"a request"
+    # Bytes either way, and sent as such: the frame dialect does not base64 it.
+    assert endpoint.request(stdin).params["stdin"] == b"a request"
 
 
 def _unwritable():

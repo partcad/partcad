@@ -14,12 +14,14 @@ Nothing here provisions anything, because that is the whole point of the split:
 the service owns the environment, and this says what it wants run.
 """
 
+import base64
 import os
 import types
 
 import pytest
 
 from partcad import runtime, runtime_python_remote
+from partcad_utils import container_files, container_service
 
 IMAGE = "ghcr.io/x/solver:abc"
 
@@ -36,14 +38,15 @@ def _runtime(tmp_path, **kwargs):
 
 
 class _Service:
-    """The remote service, reduced to what it was asked."""
+    """The remote service, reduced to what it was asked: one of this release, which takes frames."""
 
     def __init__(self, result=None):
         self.command = None
         self.params = None
         self.token = None
         self.scheme = None
-        self.result = result or {"stdout": None, "stderr": None, "exit_code": 0, "output_files": {}}
+        self.asked = []
+        self.result = result or {"stdout": b"", "stderr": b"", "exit_code": 0, "output_files": {}}
 
     def __call__(self, host, port, token=None, scheme="http"):
         self.endpoint = "%s:%d" % (host, port)
@@ -51,7 +54,32 @@ class _Service:
         self.scheme = scheme
         return self
 
-    def execute(self, command, params):
+    def protocol(self):
+        return container_service.PROTOCOL
+
+    def call(self, method, params, timeout=None):
+        self.asked.append(method)
+        if method == "missing":
+            return {"jsonrpc": "2.0", "id": 1, "result": {"missing": list(params["digests"])}}
+        self.command = params["command"]
+        self.params = params
+        return {"jsonrpc": "2.0", "id": 1, "result": self.result}
+
+    def run(self, command, request, timeout=None, route=None):
+        self.route = route
+        return container_files.execute(self.call, ("test", id(self)), command, request, timeout=timeout, route=route)
+
+
+class _OldService(_Service):
+    """A service of a release from before frames: no `GET /`, and the JSON dialect."""
+
+    def protocol(self):
+        return 1
+
+    def call(self, method, params, timeout=None):
+        raise AssertionError("a service that predates frames was sent one")
+
+    def execute(self, command, params, timeout=None):
         self.command = command
         self.params = params
         return {"jsonrpc": "2.0", "id": 1, "result": self.result}
@@ -165,15 +193,70 @@ def test_requirements_accumulate_and_travel_with_every_request(tmp_path, monkeyp
     assert len(sent) == len(set(sent))
 
 
-def test_stdin_is_encoded_the_way_the_container_reads_it(tmp_path, monkeypatch):
-    """Base64, because the far end decodes base64 and does not complain if it is not."""
-    import base64
-
+def test_stdin_travels_as_the_bytes_it_is(tmp_path, monkeypatch):
+    """Not base64 again: a wrapper's request is base64 inside, and a third more of it was a third more to send."""
     service = _Service()
     monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
 
     _runtime(tmp_path).run(["-c", "pass"], stdin="a request")
+    assert bytes(service.params["stdin"]) == b"a request"
+
+
+def test_a_directory_travels_by_content_and_what_the_service_lacks_with_it(tmp_path, monkeypatch):
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "part.py").write_text("import helper\n")
+    (package / "helper.py").write_text("")
+    service = _Service()
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
+
+    _runtime(tmp_path).run(["-u", str(package / "part.py")])
+
+    tree = service.params["input_trees"][str(package)]
+    assert [name for name, _digest, _mode in tree["files"]] == ["helper.py", "part.py"]
+    # Asked first, about the image the command runs in, and sent what it said
+    # it lacked -- here, everything.
+    assert service.asked == ["missing", "execute"]
+    assert service.route == {"image": IMAGE}
+    assert set(service.params["blobs"]) == {digest for _name, digest, _mode in tree["files"]}
+    assert "input_dirs" not in service.params
+
+
+def test_a_service_from_before_frames_is_sent_json(tmp_path, monkeypatch):
+    """It runs on another machine and is installed there on its own: an older one is still a service.
+
+    Base64, because the far end decodes base64 and does not complain if it is not.
+    """
+    service = _OldService()
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "part.py").write_text("")
+
+    _runtime(tmp_path).run(["-c", "pass", str(package / "part.py")], stdin="a request")
+
     assert base64.b64decode(service.params["stdin"]).decode() == "a request"
+    assert service.params["input_dirs"][str(package)] == container_service.pack_directory(str(package))
+    assert service.params["image"] == IMAGE
+    assert service.command == ["-c", "pass", str(package / "part.py")]
+
+
+def test_an_older_services_answer_is_read_as_it_was(tmp_path, monkeypatch):
+    wanted = str(tmp_path / "out.glb")
+    (tmp_path / "already-here.txt").write_text("", encoding="utf-8")
+    service = _OldService(
+        result={
+            "stdout": base64.b64encode(b"said").decode(),
+            "stderr": None,
+            "exit_code": 0,
+            "output_files": {wanted: base64.b64encode(b"glTF").decode()},
+        }
+    )
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
+
+    assert _runtime(tmp_path).run(["-c", "pass"], output_files=[wanted]) == (0, "said", "")
+    with open(wanted, "rb") as f:
+        assert f.read() == b"glTF"
 
 
 # --------------------------------------------------------------------------- #
@@ -183,18 +266,16 @@ def test_stdin_is_encoded_the_way_the_container_reads_it(tmp_path, monkeypatch):
 
 def test_an_output_file_is_written_where_the_caller_asked(tmp_path, monkeypatch):
     """The file was written over there, under a name of the container's choosing."""
-    import base64
-
     # Into a directory that holds something already, which a file comes back
     # to alone (see 'outputs_for').
     (tmp_path / "already-here.txt").write_text("", encoding="utf-8")
     wanted = str(tmp_path / "out.glb")
     service = _Service(
         result={
-            "stdout": None,
-            "stderr": None,
+            "stdout": b"",
+            "stderr": b"",
             "exit_code": 0,
-            "output_files": {wanted: base64.b64encode(b"glTF").decode()},
+            "output_files": {wanted: b"glTF"},
         }
     )
     monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
@@ -209,8 +290,6 @@ def test_an_output_file_is_written_where_the_caller_asked(tmp_path, monkeypatch)
 def test_an_output_directory_comes_back_whole_where_the_caller_asked(tmp_path, monkeypatch):
     """For a command whose results are whatever it wrote into a directory -- a
     simulation plugin's pictures -- rather than a file it was told the name of."""
-    from partcad_utils import container_service
-
     written = tmp_path / "over-there"
     written.mkdir()
     (written / "snapshot-after.png").write_bytes(b"PNG")
@@ -218,14 +297,14 @@ def test_an_output_directory_comes_back_whole_where_the_caller_asked(tmp_path, m
     wanted.mkdir()
     (wanted / "scene.xml").write_text("<mujoco/>", encoding="utf-8")
     elsewhere = str(tmp_path / "not-asked-for")
-    archive = container_service.pack_directory(str(written))
+    back = container_service.tree_back(str(written))
     service = _Service(
         result={
-            "stdout": None,
-            "stderr": None,
+            "stdout": b"",
+            "stderr": b"",
             "exit_code": 0,
             "output_files": {},
-            "output_dirs": {str(wanted): archive, elsewhere: archive},
+            "output_dirs": {str(wanted): back, elsewhere: back},
         }
     )
     monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
@@ -243,8 +322,6 @@ def test_an_output_directory_comes_back_whole_where_the_caller_asked(tmp_path, m
 
 def test_a_file_written_into_an_empty_directory_comes_back_with_what_was_written_beside_it(tmp_path, monkeypatch):
     """A world's meshes are written next to the world, named after it; sent back alone, it points at nothing."""
-    from partcad_utils import container_service
-
     run = tmp_path / "run"
     run.mkdir()
     wanted = run / "scene.world"
@@ -254,11 +331,11 @@ def test_a_file_written_into_an_empty_directory_comes_back_with_what_was_written
     (over_there / "scene_meshes" / "bottom.stl").write_bytes(b"solid")
     service = _Service(
         result={
-            "stdout": None,
-            "stderr": None,
+            "stdout": b"",
+            "stderr": b"",
             "exit_code": 0,
             "output_files": {},
-            "output_dirs": {str(run): container_service.pack_directory(str(over_there))},
+            "output_dirs": {str(run): container_service.tree_back(str(over_there))},
         }
     )
     monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
@@ -322,7 +399,7 @@ def test_a_command_that_printed_nothing_reports_empty_strings(tmp_path, monkeypa
 
 def test_an_error_from_the_service_is_reported_rather_than_swallowed(tmp_path, monkeypatch):
     class _Broken(_Service):
-        def execute(self, command, params):
+        def call(self, method, params, timeout=None):
             return {"jsonrpc": "2.0", "id": 1, "error": {"code": -32603, "message": "no such image"}}
 
     service = _Broken()
@@ -337,7 +414,7 @@ def test_an_answer_with_neither_result_nor_error_is_a_failure(tmp_path, monkeypa
     """Reading 'result' blind turned that into a KeyError several layers away."""
 
     class _Odd(_Service):
-        def execute(self, command, params):
+        def call(self, method, params, timeout=None):
             return {"jsonrpc": "2.0", "id": 1}
 
     monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", _Odd())
@@ -349,7 +426,7 @@ def test_an_answer_with_neither_result_nor_error_is_a_failure(tmp_path, monkeypa
 
 def test_no_answer_at_all_is_a_failure_that_says_so(tmp_path, monkeypatch):
     class _Silent(_Service):
-        def execute(self, command, params):
+        def call(self, method, params, timeout=None):
             return None
 
     monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", _Silent())

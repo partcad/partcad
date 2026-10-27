@@ -18,6 +18,7 @@ service cannot tell from being in one.
 import base64
 import json
 import os
+import shutil
 import sys
 import threading
 
@@ -688,3 +689,511 @@ def test_which_over_http(http):
     url = http()
     body = _call(url, {"jsonrpc": "2.0", "id": 2, "method": "which", "params": {"names": ["python"]}}).json()
     assert body["result"] == {"python": sys.executable}
+
+
+# --------------------------------------------------------------------------- #
+# Frames                                                                       #
+# --------------------------------------------------------------------------- #
+
+
+def _wire(message):
+    """``message`` encoded and decoded again, through bytes, as it crosses a socket."""
+    return service.decode_frame(b"".join(bytes(memoryview(part)) for part in service.encode_frame(message)))
+
+
+def test_a_frame_carries_bytes_as_they_are_and_the_rest_as_json():
+    message = {
+        "id": 3,
+        "params": {"stdin": b"\x00\xffraw", "empty": b"", "files": {"/a": bytearray(b"A"), "/b": memoryview(b"B")}},
+        "list": [b"x", "text", 1, None, {"nested": b"y"}],
+    }
+    back = _wire(message)
+    assert back["id"] == 3
+    assert bytes(back["params"]["stdin"]) == b"\x00\xffraw"
+    assert bytes(back["params"]["empty"]) == b""
+    assert {k: bytes(v) for k, v in back["params"]["files"].items()} == {"/a": b"A", "/b": b"B"}
+    assert [bytes(back["list"][0]), back["list"][1], back["list"][2], back["list"][3]] == [b"x", "text", 1, None]
+    assert bytes(back["list"][4]["nested"]) == b"y"
+
+
+def test_a_frame_does_not_grow_what_it_carries():
+    """Base64 inside JSON was a third more on the wire for every byte, and an encode and a decode of it."""
+    payload = os.urandom(1 << 20)
+    parts = service.encode_frame({"params": {"stdin": payload}})
+    assert service.frame_length(parts) - len(payload) < 128
+    # Not copied on the way out: the payload is one of the buffers.
+    assert any(part is payload for part in parts)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"",
+        b"PCF2" + b"\x00" * 8,
+        b"PCF1\x00\x00\x00\x10{}",
+        b"PCF1\x00\x00\x00\x02{}\x00\x00\x00",
+        b"PCF1\x00\x00\x00\x02{}\x00\x00\x00\x00\x00\x00\x00\x09short",
+        b'PCF1\x00\x00\x00\x0c{"$blob": 0}',
+        b'PCF1\x00\x00\x00\x0f{"$blob": true}',
+    ],
+)
+def test_a_body_that_is_not_a_whole_frame_is_refused(body):
+    with pytest.raises(ValueError):
+        service.decode_frame(body)
+
+
+# --------------------------------------------------------------------------- #
+# The store, and directories by content                                        #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def store(tmp_path):
+    return service.Store(str(tmp_path / "store"))
+
+
+def _tree(directory):
+    """A directory as a caller sends it: its tree, and the content of every digest in it."""
+    files, dirs, blobs = [], [], {}
+    for kind, name, real in service.walk(str(directory), []):
+        if kind == "dir":
+            dirs.append(name)
+            continue
+        data = open(real, "rb").read()
+        digest = service.content_digest(data)
+        files.append([name, digest, os.stat(real).st_mode & 0o777])
+        blobs[digest] = data
+    return {"files": files, "dirs": dirs}, blobs
+
+
+def _package(tmp_path):
+    package = tmp_path / "pkg"
+    (package / "sub").mkdir(parents=True)
+    (package / "empty").mkdir()
+    (package / "helper.py").write_text("WORD = 'sibling'\n")
+    (package / "sub" / "data.txt").write_text("deep")
+    (package / "main.py").write_text(
+        "import os, sys\nsys.path.insert(0, os.path.dirname(__file__))\nimport helper\n"
+        "print(helper.WORD, open(os.path.join(os.path.dirname(__file__), 'sub', 'data.txt')).read(),"
+        " os.path.isdir(os.path.join(os.path.dirname(__file__), 'empty')))\n"
+    )
+    return package
+
+
+def test_a_tree_runs_from_the_store_once_it_has_been_sent(allowed, tmp_path, store):
+    package = _package(tmp_path)
+    tree, blobs = _tree(package)
+    run = ["python", "/callers/pkg/main.py"]
+
+    first = service.handle_execute_frames(
+        run, input_trees={"/callers/pkg": tree}, blobs=blobs, allowed=allowed, store=store
+    )
+    assert first["exit_code"] == 0, first["stderr"]
+    assert first["stdout"].strip() == b"sibling deep True"
+
+    # The second time, the tree alone: what is in it is the store's now.
+    second = service.handle_execute_frames(run, input_trees={"/callers/pkg": tree}, allowed=allowed, store=store)
+    assert second["stdout"].strip() == b"sibling deep True"
+    assert service.handle_missing(list(blobs), store) == {"missing": []}
+
+
+def test_a_tree_naming_what_the_store_lacks_is_refused_naming_it_and_runs_nothing(allowed, tmp_path, store):
+    package = _package(tmp_path)
+    tree, blobs = _tree(package)
+    marker = tmp_path / "ran"
+    with pytest.raises(service.ExecuteError) as refused:
+        service.handle_execute_frames(
+            ["python", "-c", "open(%r, 'w').write('x')" % str(marker)],
+            input_trees={"/callers/pkg": tree},
+            allowed=allowed,
+            store=store,
+        )
+    assert refused.value.code == service.MISSING
+    assert sorted(refused.value.data["missing"]) == sorted(blobs)
+    assert not marker.exists()
+    assert sorted(service.handle_missing(sorted(blobs) + sorted(blobs), store)["missing"]) == sorted(blobs)
+
+
+def test_content_that_is_not_what_its_digest_names_is_refused(allowed, store):
+    """Or a caller could hand the next caller -- through the remote service, somebody else -- any file it liked."""
+    with pytest.raises(service.ExecuteError, match="not what that digest names"):
+        service.handle_execute_frames(
+            ["python", "-c", "pass"],
+            input_trees={"/p": {"files": [["a.py", service.content_digest(b"good"), 0o644]], "dirs": []}},
+            blobs={service.content_digest(b"good"): b"evil"},
+            allowed=allowed,
+            store=store,
+        )
+    assert store.missing([service.content_digest(b"good")]) == [service.content_digest(b"good")]
+
+
+@pytest.mark.parametrize("digest", ["../../etc/passwd", "ab", "A" * 64, 7])
+def test_a_digest_that_is_not_one_is_refused_before_it_is_a_path(store, digest):
+    with pytest.raises(service.ExecuteError, match="Not a content digest"):
+        store.missing([digest])
+
+
+@pytest.mark.parametrize("name", ["../escaped", "a/../../escaped", "/abs", "", "a//b", "./a"])
+def test_a_tree_entry_outside_its_directory_is_refused(allowed, tmp_path, store, name):
+    data = b"x"
+    digest = service.content_digest(data)
+    with pytest.raises(service.ExecuteError):
+        service.handle_execute_frames(
+            ["python", "-c", "pass"],
+            input_trees={"/p": {"files": [[name, digest, 0o644]], "dirs": []}},
+            blobs={digest: data},
+            allowed=allowed,
+            store=store,
+        )
+    assert not (tmp_path / "escaped").exists()
+
+
+def test_a_command_writing_over_an_input_does_not_change_the_store(allowed, tmp_path, store):
+    """A tree is copied out of the store, not linked: a saved board must not become every later caller's board."""
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "board.kicad_pcb").write_text("v1")
+    tree, blobs = _tree(package)
+    edit = "import sys; open(sys.argv[1], 'w').write('v2')"
+    service.handle_execute_frames(
+        ["python", "-c", edit, "/p/board.kicad_pcb"],
+        input_trees={"/p": tree},
+        blobs=blobs,
+        allowed=allowed,
+        store=store,
+    )
+    again = service.handle_execute_frames(
+        ["python", "-c", "import sys; print(open(sys.argv[1]).read())", "/p/board.kicad_pcb"],
+        input_trees={"/p": tree},
+        allowed=allowed,
+        store=store,
+    )
+    assert again["stdout"].strip() == b"v1"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="an execute bit")
+def test_a_file_that_runs_still_runs_on_the_far_side(allowed, tmp_path, store):
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "tool.sh").write_text("#!/bin/sh\n")
+    (package / "tool.sh").chmod(0o755)
+    (package / "data.txt").write_text("")
+    tree, blobs = _tree(package)
+    result = service.handle_execute_frames(
+        [
+            "python",
+            "-c",
+            "import os, sys; print([os.access(p, os.X_OK) for p in sys.argv[1:]])",
+            "/p/tool.sh",
+            "/p/data.txt",
+        ],
+        input_trees={"/p": tree},
+        blobs=blobs,
+        allowed=allowed,
+        store=store,
+    )
+    assert result["stdout"].strip() == b"[True, False]"
+
+
+def test_an_output_directory_comes_back_as_what_changed_in_it(allowed, tmp_path, store):
+    """KiCad opens the project and saves the board beside it: what comes back is the board."""
+    project = tmp_path / "board"
+    project.mkdir()
+    (project / "board.kicad_pro").write_text("{}")
+    (project / "board.kicad_pcb").write_text("v1")
+    tree, blobs = _tree(project)
+    result = service.handle_execute_frames(
+        [
+            "python",
+            "-c",
+            "import os, sys; d = os.path.dirname(sys.argv[1]); open(os.path.join(d, 'board.kicad_pcb'), 'w').write('v2');"
+            " os.mkdir(os.path.join(d, 'plots')); open(os.path.join(d, 'plots', 'top.svg'), 'w').write('<svg/>')",
+            "/callers/board/board.kicad_pro",
+        ],
+        input_trees={"/callers/board": tree},
+        blobs=blobs,
+        output_dirs=["/callers/board"],
+        allowed=allowed,
+        store=store,
+    )
+    back = result["output_dirs"]["/callers/board"]
+    assert {name: bytes(data) for name, _mode, data in back["files"]} == {
+        "board.kicad_pcb": b"v2",
+        "plots/top.svg": b"<svg/>",
+    }
+    assert back["dirs"] == ["plots"]
+
+
+def test_an_output_directory_that_was_not_sent_comes_back_whole(allowed, store):
+    result = service.handle_execute_frames(
+        ["python", "-c", "import os, sys; open(os.path.join(sys.argv[1], 'a.txt'), 'w').write('A')", "/callers/r"],
+        output_dirs=["/callers/r"],
+        allowed=allowed,
+        store=store,
+    )
+    assert [(name, bytes(data)) for name, _mode, data in result["output_dirs"]["/callers/r"]["files"]] == [
+        ("a.txt", b"A")
+    ]
+
+
+def test_input_files_and_output_files_are_bytes_both_ways(allowed, store):
+    caller = "/callers/board.kicad_pcb"
+    result = service.handle_execute_frames(
+        ["python", "-c", "import sys; p = sys.argv[1]; open(p, 'ab').write(b'\\xff')", caller],
+        input_files={caller: b"\x00original"},
+        output_files=[caller],
+        allowed=allowed,
+        store=store,
+    )
+    assert result["output_files"] == {caller: b"\x00original\xff"}
+
+
+def test_empty_standard_input_is_none_rather_than_the_services_own(allowed, store):
+    result = service.handle_execute_frames(
+        ["python", "-c", "import sys; print(repr(sys.stdin.read()))"], stdin=b"", allowed=allowed, store=store
+    )
+    assert result["stdout"].strip() == b"''"
+
+
+def test_a_payload_that_is_not_bytes_is_refused_in_frames(allowed, store):
+    with pytest.raises(service.ExecuteError, match="blob"):
+        service.handle_execute_frames(
+            ["python", "-c", "pass"], input_files={"/a": "text"}, allowed=allowed, store=store
+        )
+
+
+def test_nothing_a_frames_call_built_is_left_behind_but_the_store(allowed, tmp_path, monkeypatch):
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setattr(service.tempfile, "tempdir", str(scratch))
+    kept = service.Store(str(tmp_path / "store"))
+    tree, blobs = _tree(_package(tmp_path))
+    service.handle_execute_frames(
+        ["python", "-c", "pass"],
+        input_trees={"/callers/pkg": tree},
+        blobs=blobs,
+        input_files={"/callers/f": b"f"},
+        output_dirs=["/callers/out"],
+        allowed=allowed,
+        store=kept,
+    )
+    assert os.listdir(scratch) == []
+    assert kept.missing(list(blobs)) == []
+
+
+def test_the_store_keeps_to_its_limit_by_letting_go_of_what_was_used_least_recently(tmp_path):
+    import time
+
+    kept = service.Store(str(tmp_path / "store"), limit=3000)
+    old, used, new = (os.urandom(1000) for _ in range(3))
+    for data in (old, used):
+        kept.add(service.content_digest(data), data)
+    time.sleep(0.01)
+    assert kept.copy(service.content_digest(used), str(tmp_path / "copy"))
+    time.sleep(0.01)
+    kept.add(service.content_digest(new), new)
+    assert kept.missing([service.content_digest(d) for d in (old, used, new)]) == []
+
+    kept.add(service.content_digest(b"x" * 1500), b"x" * 1500)
+    # Over the limit, and trimmed to three quarters of it: the least recently
+    # used go first.
+    assert kept.missing([service.content_digest(old)]) == [service.content_digest(old)]
+    assert kept.missing([service.content_digest(b"x" * 1500)]) == []
+    total = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(kept.root) for f in fs)
+    assert total <= 3000
+
+
+def test_content_bigger_than_the_whole_store_is_used_but_not_kept(allowed, tmp_path):
+    kept = service.Store(str(tmp_path / "store"), limit=10)
+    data = b"y" * 100
+    digest = service.content_digest(data)
+    result = service.handle_execute_frames(
+        ["python", "-c", "import sys; print(len(open(sys.argv[1]).read()))", "/p/big.txt"],
+        input_trees={"/p": {"files": [["big.txt", digest, 0o644]], "dirs": []}},
+        blobs={digest: data},
+        allowed=allowed,
+        store=kept,
+    )
+    assert result["stdout"].strip() == b"100"
+    assert kept.missing([digest]) == [digest]
+
+
+def test_a_store_found_on_disk_is_counted_and_trimmed(tmp_path):
+    """A service restarted in a container that kept its filesystem knows what it holds."""
+    root = str(tmp_path / "store")
+    first = service.Store(root)
+    for i in range(4):
+        data = bytes([i]) * 1000
+        first.add(service.content_digest(data), data)
+    again = service.Store(root, limit=2500)
+    again.add(service.content_digest(b"z" * 10), b"z" * 10)
+    total = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(root) for f in fs)
+    assert total <= 2500
+
+
+# --------------------------------------------------------------------------- #
+# Frames over HTTP                                                             #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def framed(monkeypatch, tmp_path):
+    """A real server on loopback with a store of this test's, and a client of it; and how many connections it took."""
+    from partcad_utils import container_files
+    from partcad_utils.json_rpc_client import RuntimeJsonRpcClient
+
+    monkeypatch.setattr(service, "ALLOWED_COMMANDS", {"python": sys.executable})
+    monkeypatch.setattr(container_files, "_KNOWN", container_files.collections.OrderedDict())
+    connections = []
+
+    class Counted(service.Server):
+        def process_request(self, request, client_address):
+            connections.append(client_address)
+            return service.Server.process_request(self, request, client_address)
+
+    token = "frames-%d" % id(tmp_path)
+    store = service.Store(str(tmp_path / "store"))
+    handler = type("Handler", (service._Handler,), {"token": token, "store": store})
+    server = Counted(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    client = RuntimeJsonRpcClient("127.0.0.1", server.server_address[1], token=token)
+    client.connections = connections
+    client.store = store
+    yield client
+    server.shutdown()
+    server.server_close()
+
+
+def test_frames_travel_over_http_and_come_back_as_they_went(framed):
+    for size in (0, 1, 5 * 1024 * 1024 + 7):
+        payload = os.urandom(size)
+        answer = framed.call(
+            "execute",
+            {
+                "command": ["python", "-c", "import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())"],
+                "stdin": payload,
+            },
+            timeout=120,
+        )
+        assert answer["result"]["exit_code"] == 0, bytes(answer["result"]["stderr"])
+        assert bytes(answer["result"]["stdout"]) == payload
+
+
+def test_one_connection_serves_one_thread_many_commands(framed):
+    """A connection per command was a handshake and a server thread per command."""
+    for _ in range(4):
+        assert framed.call("execute", {"command": ["python", "-c", "pass"]}, timeout=60)["result"]["exit_code"] == 0
+    assert len(framed.connections) == 1
+
+
+def test_a_refusal_in_frames_is_a_json_rpc_error(framed):
+    answer = framed.call("execute", {"command": ["rm", "-rf", "/"]}, timeout=30)
+    assert answer["error"]["code"] == -32602
+
+
+def test_a_frame_that_does_not_parse_is_a_parse_error_in_frames(framed):
+    response = requests.post(
+        framed.url + "/jsonrpc",
+        data=b"PCF1\x00\x00\x00\x09not json!",
+        headers={"Content-Type": service.FRAME_TYPE, "Authorization": "Bearer %s" % framed.token},
+        timeout=10,
+    )
+    assert service.is_frame(response.headers["Content-Type"])
+    assert service.decode_frame(response.content)["error"]["code"] == -32700
+
+
+def test_a_directory_is_sent_once_and_named_after_that(framed, tmp_path):
+    from partcad_utils import container_files
+
+    package = _package(tmp_path)
+    sent = []
+    original = framed._post_frame
+
+    def recording(parts, timeout):
+        payload = service.decode_frame(b"".join(bytes(memoryview(p)) for p in parts))
+        sent.append((payload["method"], sorted(payload["params"].get("blobs") or ())))
+        return original(parts, timeout)
+
+    framed._post_frame = recording
+    run = ["python", str(package / "main.py")]
+
+    answer = framed.run(run, container_files.Request(input_dirs=[str(package)]), timeout=60)
+    assert bytes(answer["result"]["stdout"]).strip() == b"sibling deep True"
+    digests = sorted(container_files.Request(input_dirs=[str(package)]).digests())
+    assert sent == [("missing", []), ("execute", digests)]
+
+    sent.clear()
+    answer = framed.run(run, container_files.Request(input_dirs=[str(package)]), timeout=60)
+    assert bytes(answer["result"]["stdout"]).strip() == b"sibling deep True"
+    assert sent == [("execute", [])]
+
+
+def test_content_the_store_let_go_of_is_sent_again_when_asked_for(framed, tmp_path):
+    """What this process remembers a container has is a hint; the container's answer is the fact."""
+    from partcad_utils import container_files
+
+    package = _package(tmp_path)
+    run = ["python", str(package / "main.py")]
+    assert framed.run(run, container_files.Request(input_dirs=[str(package)]), timeout=60)["result"]["exit_code"] == 0
+    shutil.rmtree(framed.store.root)
+    framed.store._sizes = None
+
+    answer = framed.run(run, container_files.Request(input_dirs=[str(package)]), timeout=60)
+    assert answer["result"]["exit_code"] == 0, bytes(answer["result"]["stderr"])
+    assert bytes(answer["result"]["stdout"]).strip() == b"sibling deep True"
+
+
+# --------------------------------------------------------------------------- #
+# What travels in a tree is compressed where that pays                         #
+# --------------------------------------------------------------------------- #
+
+
+def test_content_that_compresses_travels_compressed_and_what_does_not_travels_as_it_is():
+    text = b"solid cube\n" * 1000
+    noise = os.urandom(4096)
+    assert set(service.pack_blob(text)) == {"zlib"}
+    assert service.pack_blob(noise) is noise
+    assert service.pack_blob(b"tiny") == b"tiny"
+    for data in (text, noise, b"tiny"):
+        assert bytes(service.unpack_blob(_wire({"b": service.pack_blob(data)})["b"])) == data
+
+
+def test_a_tree_may_be_sent_compressed(allowed, store):
+    data = b"WORD = 'sibling'\n" + b"#" * 4000 + b"\n"
+    digest = service.content_digest(data)
+    result = service.handle_execute_frames(
+        ["python", "-c", "import sys; print(len(open(sys.argv[1]).read()))", "/p/helper.py"],
+        input_trees={"/p": {"files": [["helper.py", digest, 0o644]], "dirs": []}},
+        blobs=_wire({"b": {digest: service.pack_blob(data)}})["b"],
+        allowed=allowed,
+        store=store,
+    )
+    assert result["stdout"].strip() == str(len(data)).encode()
+    # Kept as what it is, not as it travelled.
+    with open(store.path(digest), "rb") as f:
+        assert f.read() == data
+
+
+def test_compressed_content_that_does_not_decompress_is_refused(allowed, store):
+    with pytest.raises(service.ExecuteError, match="does not decompress"):
+        service.handle_execute_frames(
+            ["python", "-c", "pass"], blobs={"0" * 64: {"zlib": b"not zlib"}}, allowed=allowed, store=store
+        )
+
+
+def test_an_output_directory_comes_back_compressed_and_is_written_as_it_was(allowed, tmp_path, store):
+    from partcad_utils import container_files
+
+    board = "(kicad_pcb (version 20240108))\n" * 200
+    result = service.handle_execute_frames(
+        ["python", "-c", "import os, sys; open(os.path.join(sys.argv[1], 'b.kicad_pcb'), 'w').write(%r)" % board, "/r"],
+        output_dirs=["/r"],
+        allowed=allowed,
+        store=store,
+    )
+    back = _wire(result)["output_dirs"]["/r"]
+    assert set(back["files"][0][2]) == {"zlib"}
+    target = tmp_path / "r"
+    container_files.write_back({"output_dirs": {str(target): back}}, output_dirs=[str(target)])
+    assert (target / "b.kicad_pcb").read_text() == board

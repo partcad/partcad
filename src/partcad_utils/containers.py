@@ -38,7 +38,9 @@ a `python3` on the image's PATH, which every image PartCAD uses has.
   needs the daemon to see this machine's filesystem.
 * ``upload`` -- nothing is mounted from here. The files a command reads travel
   with the request and the files it writes come back with the answer, through
-  the service's `input_files`/`input_dirs`/`output_files`/`output_dirs`. This is
+  the service's `input_files`/`input_trees`/`output_files`/`output_dirs` --
+  a directory by content, which the container keeps, so that only what it
+  does not have yet is sent (see `partcad_utils.container_files`). This is
   what `useDockerRemote` asks for: a daemon on another machine, which can see
   none of this one's files.
 
@@ -46,7 +48,7 @@ A caller does not have to know which: `Endpoint.run()` takes the same arguments
 either way and does what the mode requires with them.
 """
 
-import base64
+import asyncio
 import functools
 import hashlib
 import io
@@ -60,7 +62,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
-from . import __version__, container_service, docker_image
+from . import __version__, container_files, container_service, docker_image
 from . import logging as pc_logging
 from .json_rpc_client import RuntimeJsonRpcClient
 
@@ -387,7 +389,7 @@ class Endpoint:
 
     # ------------------------------------------------------------- running --
 
-    def params(
+    def request(
         self,
         stdin: Optional[Union[str, bytes]] = None,
         cwd: Optional[str] = None,
@@ -396,44 +398,34 @@ class Endpoint:
         input_dirs=None,
         output_dirs=None,
         env=None,
-    ) -> dict:
-        """The request parameters for one command, as this container's transfer mode needs them.
+    ) -> container_files.Request:
+        """What one command sends, as this container's transfer mode needs it.
 
         In ``mount`` mode the paths are the files: they exist in the container
         at the paths they have here, so nothing is sent but their names. In
-        ``upload`` mode every file a command reads is sent and every file it
-        writes is named, so that it can be sent back.
+        ``upload`` mode every file a command reads is sent -- a directory by
+        content, so that what the container has already is not sent again --
+        and every file it writes is named, so that it can be sent back.
         """
-        if isinstance(stdin, str):
-            stdin = stdin.encode("utf-8")
-        params = {
-            # Text or bytes: a runtime hands the bytes it resolved its request
-            # to (see 'partcad.runtime.stdin_bytes').
-            "stdin": base64.b64encode(stdin).decode("utf-8") if stdin else None,
-            "cwd": cwd,
-        }
-        if env:
-            params["env"] = dict(env)
-        if self.spec.mode != UPLOAD:
-            return params
-        files = {}
-        for path in input_files or ():
-            with open(path, "rb") as f:
-                files[path] = base64.b64encode(f.read()).decode("utf-8")
-        params["input_files"] = files
-        params["input_dirs"] = {path: container_service.pack_directory(path) for path in input_dirs or ()}
-        params["output_files"] = list(output_files or ())
-        params["output_dirs"] = list(output_dirs or ())
-        return params
+        # Text or bytes: a runtime hands the bytes it resolved its request to
+        # (see 'partcad.runtime.stdin_bytes').
+        return container_files.Request(
+            stdin=stdin,
+            cwd=cwd,
+            input_files=input_files or (),
+            output_files=output_files or (),
+            input_dirs=input_dirs or (),
+            output_dirs=output_dirs or (),
+            env=env,
+            upload=self.spec.mode == UPLOAD,
+        )
 
     def result(self, response, output_files=None, output_dirs=None) -> Tuple[int, str, str]:
         """What a command answered, as (exit code, stdout, stderr), with its files put back here.
 
-        Only the files the caller named are written: a server that sends back
-        something nobody asked for does not get to write it anywhere. A
-        directory is written over, not mirrored -- a file the command deleted is
-        left in place here rather than deleted, because a command that misbehaves
-        should cost a stale file and not somebody's work.
+        Only the files the caller named are written (see
+        `container_files.write_back`), and only in ``upload`` mode: in ``mount``
+        mode nothing was away.
         """
         if not response:
             return 1, "", "The '%s' container returned no response" % self.name
@@ -447,23 +439,10 @@ class Endpoint:
         if "result" not in response:
             return 1, "", "The '%s' container answered without a result: %s" % (self.name, response)
         result = response["result"]
-        stdout = base64.b64decode(result.get("stdout") or b"").decode("utf-8", errors="replace")
-        stderr = base64.b64decode(result.get("stderr") or b"").decode("utf-8", errors="replace")
+        stdout = container_files.text(result.get("stdout"))
+        stderr = container_files.text(result.get("stderr"))
         if self.spec.mode == UPLOAD:
-            wanted = set(output_files or ())
-            for name, payload in (result.get("output_files") or {}).items():
-                if name in wanted:
-                    with open(name, "wb") as f:
-                        f.write(base64.b64decode(payload))
-                else:
-                    pc_logging.error("The '%s' container sent a file nobody asked for: %s" % (self.name, name))
-            wanted_dirs = set(output_dirs or ())
-            for name, archive in (result.get("output_dirs") or {}).items():
-                if name in wanted_dirs:
-                    os.makedirs(name, exist_ok=True)
-                    container_service.unpack_directory(archive, name)
-                else:
-                    pc_logging.error("The '%s' container sent a directory nobody asked for: %s" % (self.name, name))
+            container_files.write_back(result, output_files, output_dirs, who="The '%s' container" % self.name)
         code = result.get("exit_code")
         return (int(bool(stderr)) if code is None else int(code)), stdout, stderr
 
@@ -479,8 +458,8 @@ class Endpoint:
         timeout: Optional[float] = None,
         env: Optional[Dict[str, str]] = None,
     ) -> Tuple[int, str, str]:
-        params = self.params(stdin, cwd, input_files, output_files, input_dirs, output_dirs, env)
-        response = self.client().execute(list(command), params, timeout=timeout)
+        request = self.request(stdin, cwd, input_files, output_files, input_dirs, output_dirs, env)
+        response = self.client().run(list(command), request, timeout=timeout)
         return self.result(response, output_files, output_dirs)
 
     async def run_async(
@@ -495,9 +474,20 @@ class Endpoint:
         timeout: Optional[float] = None,
         env: Optional[Dict[str, str]] = None,
     ) -> Tuple[int, str, str]:
-        params = self.params(stdin, cwd, input_files, output_files, input_dirs, output_dirs, env)
-        response = await self.client().execute_async(list(command), params, timeout=timeout)
-        return self.result(response, output_files, output_dirs)
+        """`run`, off the event loop: all of it.
+
+        Not only the wait for the container. Reading and hashing what is sent,
+        and writing back what came, are a package's worth of file I/O, and done
+        on the loop around an executor call they held up every other coroutine
+        for as long as they took.
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,
+            functools.partial(
+                self.run, command, stdin, cwd, input_files, output_files, input_dirs, output_dirs, timeout, env
+            ),
+        )
 
 
 # --------------------------------------------------------------------------- #

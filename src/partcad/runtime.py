@@ -656,7 +656,13 @@ class Runtime:
     # One copy of each is what keeps them from drifting again.
 
     def _rpc_params(self, stdin, cwd, input_files, output_files, input_dirs, output_dirs=None):
-        """The parameters a container is asked with.
+        """The parameters a service is asked with in the JSON dialect.
+
+        Which only a `partcad-service-remote-docker` of a release from before
+        frames is asked in now (see 'RemotePythonRuntime._speaks_frames'):
+        every container PartCAD starts is this release's, and is sent frames,
+        with bytes as bytes and directories by content (see
+        `partcad_utils.container_files`).
 
         'stdin' is base64 because the server decodes it as base64, which is not
         obvious from either end: 'base64.b64decode' does not refuse text that is
@@ -681,7 +687,7 @@ class Runtime:
         return params
 
     def _rpc_result(self, response, output_files, output_dirs=None):
-        """What a container answered, as (stdout, stderr, exit code).
+        """What a service answered in the JSON dialect, as (stdout, stderr, exit code).
 
         The output files it produced are written where the caller asked for
         them, which is the point of naming them: the file was written inside the

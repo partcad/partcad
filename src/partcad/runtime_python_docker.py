@@ -751,28 +751,41 @@ def _local_service():
 
 
 class _InProcessService:
-    """`partcad-service-remote-docker`'s ``execute``, called here rather than over HTTP.
+    """`partcad-service-remote-docker`'s ``execute`` and ``missing``, called here rather than over HTTP.
 
-    The same function, so a sandbox in ``upload`` mode provisions its
+    The same functions, so a sandbox in ``upload`` mode provisions its
     environment, prepends its interpreter and moves its files exactly as a
-    ``remote`` one does -- one implementation of all of that, not two.
+    ``remote`` one does -- one implementation of all of that, not two. In
+    frames, always: the containers behind it are this release's.
     """
 
-    def execute(self, command, params, timeout=None):
+    def protocol(self):
+        from partcad_utils import container_service
+
+        return container_service.PROTOCOL
+
+    @staticmethod
+    def call(method, params, timeout=None):
+        """One call, answered as the service would answer it over HTTP."""
         from . import remote_sandbox
 
         pool, environments = _local_service()
         try:
-            result = remote_sandbox.execute(pool, environments, {"command": list(command), **params}, timeout=timeout)
+            if method == "missing":
+                result = {"missing": remote_sandbox.missing(pool, params["image"], params["digests"], timeout=timeout)}
+            else:
+                result = remote_sandbox.execute(pool, environments, params, timeout=timeout, frames=True)
+        except remote_sandbox.ContainerError as e:
+            return {"error": e.error()}
         except Exception as e:
             return {"error": {"message": str(e)}}
         return {"result": result}
 
-    async def execute_async(self, command, params, timeout=None):
-        import asyncio
+    def run(self, command, request, timeout=None, route=None):
+        from partcad_utils import container_files
 
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, lambda: self.execute(command, params, timeout))
+        key = ("in-process", tuple(sorted((route or {}).items())))
+        return container_files.execute(self.call, key, command, request, timeout=timeout, route=route)
 
 
 class DockerUploadPythonRuntime(runtime_python_remote.RemotePythonRuntime):

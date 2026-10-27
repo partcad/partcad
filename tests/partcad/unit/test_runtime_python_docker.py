@@ -959,14 +959,21 @@ def test_an_upload_command_runs_through_the_same_execute_as_the_remote_service(t
     from partcad import remote_sandbox
 
     seen = {}
+    asked = []
 
-    def execute(pool, environments, params, timeout=None):
+    def execute(pool, environments, params, timeout=None, frames=False):
         seen.update(params)
         seen["timeout"] = timeout
-        return {"exit_code": 0, "stdout": "", "stderr": "", "output_files": {}}
+        seen["frames"] = frames
+        return {"exit_code": 0, "stdout": b"", "stderr": b"", "output_files": {}}
+
+    def missing(pool, image, digests, timeout=None):
+        asked.append(image)
+        return list(digests)
 
     monkeypatch.setattr(runtime, "docker_available", lambda: True)
     monkeypatch.setattr(remote_sandbox, "execute", execute)
+    monkeypatch.setattr(remote_sandbox, "missing", missing)
     made = runtime_python_docker.DockerUploadPythonRuntime(_upload_ctx(tmp_path), "3.11", image="ghcr.io/x/solver:abc")
     script = tmp_path / "pkg" / "part.py"
     script.parent.mkdir(parents=True)
@@ -977,8 +984,12 @@ def test_an_upload_command_runs_through_the_same_execute_as_the_remote_service(t
     assert seen["image"] == "ghcr.io/x/solver:abc"
     assert seen["python_version"] == "3.11"
     assert seen["command"] == ["part.py", str(script)]
-    # The script's directory travels; what it writes is named so it can come back.
-    assert str(script.parent) in seen["input_dirs"]
+    # The script's directory travels -- by content, in frames, the containers
+    # behind it being this release's -- and what it writes is named so it can
+    # come back. What the container lacks is asked of the same container.
+    assert seen["frames"] is True
+    assert str(script.parent) in seen["input_trees"]
+    assert asked == ["ghcr.io/x/solver:abc"]
     assert seen["output_files"] == [str(tmp_path / "out.stl")]
 
 
