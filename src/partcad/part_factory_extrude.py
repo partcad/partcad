@@ -102,7 +102,7 @@ class PartFactoryExtrude(PartFactoryHomogen):
                 # sketch and the resulting solid cross as BREP envelopes, so the
                 # core process never touches a live OCP object.
                 runtime = self.ctx.get_python_runtime(version=self.PYTHON_SANDBOX_VERSION)
-                await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+                await runtime.ensure_async(sandbox_versions.OCP)
 
                 wrapper_path = wrapper.get("extrude.py")
                 request = {

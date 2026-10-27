@@ -87,10 +87,8 @@ class SketchFactoryBuild123d(SketchFactoryPython):
                 sandbox_versions.BUILD123D,
                 session=self.session,
             )
-            # Last: re-asserts the VTK-enabled OCP that build123d's
-            # 'cadquery-ocp-novtk' dependency has just replaced.
             await self.runtime.ensure_async(
-                sandbox_versions.CADQUERY_OCP,
+                sandbox_versions.OCP,
                 session=self.session,
             )
             cwd = self.project.config_dir

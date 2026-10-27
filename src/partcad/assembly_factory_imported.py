@@ -232,18 +232,22 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
         # is an output implementation's: what a reader needs to run is known to
         # whoever wrote it, and the package declaring the object never heard of it.
         runtime = self.ctx.get_python_runtime(version=self.impl.python_version(), image=self.impl.docker_image)
-        await runtime.prepare_for_package(self.impl.project)
-        # Installed one at a time, not with asyncio.gather(): the order matters,
-        # since build123d overwrites the OCP native module that cadquery-ocp
-        # installs (see sandbox_versions.GUARD_INVALIDATED_BY).
+        # In a layer over the sandbox's own environment, as an output
+        # implementation's are (see 'Shape._run_implementation_locked').
+        session = runtime.get_session("%s:%s" % (self.impl.section, self.impl.format_name))
+        await runtime.prepare_for_package(self.impl.project, session=session)
+        # Installed one at a time, not with asyncio.gather(): the order a
+        # package declares its requirements in is part of what it declared.
         for dep in self.impl.python_requirements:
-            await runtime.ensure_async(dep)
+            await runtime.ensure_async(dep, session=session)
 
         command = [
             wrapper.get("import.py"),
             os.path.abspath(self.impl.project.config_dir),
         ]
-        exitcode, response_serialized, errors = await runtime.run_async(command, shape_envelope.serialize(request))
+        exitcode, response_serialized, errors = await runtime.run_async(
+            command, shape_envelope.serialize(request), session=session
+        )
         # Only on a non-zero exit; see the note in 'partcad.simulation'. The
         # runtime clears stderr for a run it forgave, but decides that before
         # normalizing the Windows fault codes, so stderr alone is not a failure.

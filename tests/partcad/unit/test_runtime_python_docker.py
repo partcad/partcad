@@ -242,7 +242,7 @@ def test_the_sandbox_directory_says_which_sandbox_it_is(tmp_path):
     """'pc-' and the method are what somebody reads in a file browser."""
     made = _runtime(tmp_path)
     assert os.path.basename(made.path).startswith("pc-py-docker-")
-    assert made.path.endswith("-3.11")
+    assert made.path.endswith("-3.11-layered")
 
 
 # --------------------------------------------------------------------------- #

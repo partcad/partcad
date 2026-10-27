@@ -38,13 +38,15 @@ desc: |
 # `examples/feature_interface`, which declares two drawings of its own against
 # `render_svg.py`.)
 #
-# The order matters and is the order `PythonRuntime.once()` uses: build123d
-# pulls `cadquery-ocp-novtk`, which overwrites the OCP native module, so the
-# VTK-enabled `cadquery-ocp` is asserted after it.
+# The OCP build is the one build123d depends on, `cadquery-ocp-novtk`, rather
+# than CadQuery's `cadquery-ocp`: the two write the same native module, and this
+# is the one every sandbox's own environment holds, so a projection runs there
+# with nothing installed for it. Asking for `cadquery-ocp` is asking for a layer
+# that carries it (see `runtime_python.base_requirements`).
 pythonRequirements:
   - ocpsvg==0.6.0
   - build123d==0.11.1
-  - cadquery-ocp==7.9.3.1.1
+  - cadquery-ocp-novtk==7.9.3.1.1
 
 render:
   svg:

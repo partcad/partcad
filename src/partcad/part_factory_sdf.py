@@ -73,11 +73,10 @@ class PartFactorySdf(PartFactoryPython):
                 sandbox_versions.OCP_TESSELLATE,
                 session=self.session,
             )
-            # Last, by the convention every install list here follows: it undoes
-            # any novtk OCP a build123d install elsewhere in this v-env left
-            # behind (see sandbox_versions.GUARD_INVALIDATED_BY).
+            # The OCP build the sandbox's own environment holds, so that only
+            # sdf itself goes into this part's layer.
             await self.runtime.ensure_async(
-                sandbox_versions.CADQUERY_OCP,
+                sandbox_versions.OCP,
                 session=self.session,
             )
 

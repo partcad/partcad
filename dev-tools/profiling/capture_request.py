@@ -58,8 +58,12 @@ def main():
                 text = stdin() if callable(stdin) else stdin
                 text = text.decode("utf-8") if isinstance(text, bytes) else text
                 captured["request"] = len(text)
+                # The interpreter the run would have started: the layer the
+                # file type's requirements put it in, which is what a replay
+                # has to run with (see 'runtime_python.VENV_PREFIX').
+                captured["python"] = self.get_venv_python_path(kwargs.get("session"))
                 with open(base + ".cmd.json", "w") as f:
-                    json.dump({"cmd": cmd}, f)
+                    json.dump({"cmd": cmd, "python": captured["python"]}, f)
                 with open(base + ".stdin.json", "w") as f:
                     f.write(text)
                 return 0, json.dumps({"success": True, "exception": None}), ""
@@ -121,6 +125,7 @@ def main():
         )
         return
     print("request: %.1f MB, written to %s.stdin.json" % (captured["request"] / 1e6, base))
+    print("replay it with: %s" % captured["python"])
     print("peak RSS of this process: %d MB" % (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024))
 
 

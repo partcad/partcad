@@ -21,9 +21,88 @@ from . import runtime, sandbox_lock, sandbox_versions, telemetry
 from .process_crash import describe_exit_code, describe_termination, killed_by_signal  # noqa: F401  (re-exported)
 from .process_output import decode as decode_output
 
-# Every session v-env directory is named this way, which is what lets the
-# environment lock recover the session hash from the path alone.
+# A sandbox is layered. Its own environment -- the conda prefix, the venv, the
+# image's interpreter -- holds what nearly every wrapper imports (see
+# base_requirements) and is written only while the sandbox is first provisioned.
+# Anything a run needs beyond that goes into a *layer*: a v-env inside the
+# sandbox that sees the base's site-packages through a .pth file, after its own,
+# so a layer carries only what differs from the base and anything it installs
+# comes first. A layer is named after what it adds, so every run asking for the
+# same additions shares one; it is written only while it is being provisioned,
+# and read by any number of runs at once afterwards.
+#
+# Why not '--system-site-packages': a v-env made by an interpreter that is
+# itself a venv's -- the 'venv' and 'docker' sandboxes -- would see the system
+# interpreter's site-packages through it rather than the sandbox's.
+#
+# Every layer directory is named this way, which is what lets the environment
+# lock recover the layer's hash from the path alone.
 VENV_PREFIX = "v-env-"
+
+# The file in a layer's site-packages that puts the base's site-packages on
+# sys.path after the layer's own.
+LAYER_PTH = "_partcad_base.pth"
+
+# The guard recording that a layer has been linked to its base -- written once
+# LAYER_PTH is, so a layer whose creation was interrupted is linked again.
+LAYER_GUARD = "partcad:layer"
+
+# What the base's own interpreter is asked for the directories its packages are
+# in: the ones a layer has to see.
+BASE_SITE_DIRS_COMMAND = (
+    "-c",
+    "import sysconfig; print(sysconfig.get_path('purelib')); print(sysconfig.get_path('platlib'))",
+)
+
+# Run by a layer's interpreter, with the base's directories as its arguments:
+# writes LAYER_PTH where that interpreter keeps its own packages. Run there
+# rather than written from here because only the layer's interpreter knows where
+# that is -- in the 'docker' sandbox it is a path inside the container.
+LINK_LAYER_COMMAND = (
+    "-c",
+    "import pathlib, sys, sysconfig; "
+    "pathlib.Path(sysconfig.get_path('purelib'), %r).write_text('\\n'.join(sys.argv[1:]) + '\\n')" % LAYER_PTH,
+)
+
+
+def read_site_dirs(exitcode, stdout, stderr) -> list:
+    """The base's package directories, from what BASE_SITE_DIRS_COMMAND printed, each once."""
+    site_dirs = []
+    for line in (stdout or "").splitlines():
+        line = line.strip()
+        if line and line not in site_dirs:
+            site_dirs.append(line)
+    if exitcode != 0 or not site_dirs:
+        raise Exception(
+            "Failed to find where the sandbox keeps its packages: %s"
+            % ((stderr or "").strip() or "exit code %s" % exitcode)
+        )
+    return site_dirs
+
+
+def layer_created(path, exitcode, stderr) -> None:
+    """Fail with what went wrong when '-m venv' did not build a layer."""
+    if exitcode != 0:
+        raise Exception(
+            "Failed to create the layer %s: %s" % (path, (stderr or "").strip() or "exit code %s" % exitcode)
+        )
+
+
+def layer_linked(path, exitcode, stderr) -> None:
+    """Record that a layer sees its base, or fail with why it does not."""
+    if exitcode != 0:
+        raise Exception(
+            "Failed to link the layer %s to its sandbox: %s"
+            % (path, (stderr or "").strip() or "exit code %s" % exitcode)
+        )
+    pathlib.Path(get_guard_path(path, LAYER_GUARD)).touch()
+
+
+# Part of every Python sandbox's directory name. A sandbox provisioned before
+# sandboxes were layered holds CadQuery's OCP in its own environment and was
+# written to by every render; it is left as it is -- a PartCAD of that release
+# may still be running out of it -- and the layered one is built beside it.
+SANDBOX_LAYOUT = "layered"
 
 
 def get_local_partcad_pkg(dep: str) -> str:
@@ -47,8 +126,10 @@ def get_local_partcad_pkg(dep: str) -> str:
 # would leave the novtk edge free to pull a different one.
 #
 # Note this does NOT decide which of the two builds wins: they ship the same
-# native module and overwrite each other. That is handled by install ordering,
-# see sandbox_versions.GUARD_INVALIDATED_BY.
+# native module and overwrite each other. That is handled by keeping them in
+# different environments (see base_requirements), and in the 'remote' sandbox,
+# which has only one, by install ordering (see
+# sandbox_versions.GUARD_INVALIDATED_BY).
 #
 # ocpsvg is bounded for the same reason: it depends on the proxy directly and
 # build123d's own bound on it is wide.
@@ -208,10 +289,10 @@ def shape_requirements(config) -> list[str]:
 def environment_requirements(project, config) -> list[str]:
     """Everything installed into the sandbox a shape renders in.
 
-    The CAD stack PartCAD supplies comes first: 'once()' preinstalls all of it
-    into every sandbox and 'reconcile_requirement()' holds a package to those
-    versions, so a bump moves every sandboxed shape - which is the point, since
-    those versions are what produced it.
+    The CAD stack PartCAD supplies comes first: every sandbox carries it, the
+    base or a layer over it, and 'reconcile_requirement()' holds a package to
+    those versions, so a bump moves every sandboxed shape - which is the point,
+    since those versions are what produced it.
 
     The package's and the shape's own requirements are then reconciled the same
     way the installer reconciles them, so that a requirement PartCAD would
@@ -233,35 +314,42 @@ def base_requirements(version: str) -> list:
     on "No module named 'OCP'" -- in the remote sandbox, and in the ``docker``
     sandbox in ``upload`` mode, which is the same code.
 
-    The order is the install order and it matters: CadQuery's OCP comes last,
-    re-asserting the VTK-enabled build that build123d's 'cadquery-ocp-novtk'
-    dependency has just replaced. zstd is not here; see 'ensure_zstd_onced_locked'.
+    It is what a sandbox's own environment holds, and all it holds: build123d,
+    the OCP build without VTK that build123d depends on, and what the wrappers
+    read a request with. That is everything a wrapper imports except CadQuery,
+    which needs the OCP build *with* VTK -- the two write the same native module,
+    so they cannot share an environment -- and so runs in a layer over this one
+    (see VENV_PREFIX). nlopt is here although only CadQuery uses it: with it,
+    every CadQuery run adds the same two requirements to the base and shares one
+    layer, rather than one layer for parts and another for the 3MF export.
+
+    The 'remote' sandbox installs this into its one environment and CadQuery's
+    OCP after it when asked; see sandbox_versions.GUARD_INVALIDATED_BY. zstd is
+    not here; see 'ensure_zstd_onced_locked'.
     """
-    requirements = [sandbox_versions.OCP_TESSELLATE, sandbox_versions.NLOPT]
-    # CadQuery has no release for Python 3.10, and pip fails the whole install
-    # rather than skipping it. Nothing is lost by leaving it out: the factories
-    # that need CadQuery render on MIN_PYTHON_VERSION_CADQUERY or newer, so they
-    # never look at a 3.10 sandbox in the first place.
-    if sandbox_versions.is_at_least(version, sandbox_versions.MIN_PYTHON_VERSION_CADQUERY):
-        requirements.append(sandbox_versions.CADQUERY)
-    requirements += [
+    return [
+        sandbox_versions.OCP_TESSELLATE,
+        sandbox_versions.NLOPT,
         sandbox_versions.NUMPY,
         sandbox_versions.TYPING_EXTENSIONS,
         sandbox_versions.OCPSVG,
         sandbox_versions.BUILD123D,
-        sandbox_versions.CADQUERY_OCP,
+        sandbox_versions.OCP,
     ]
-    return requirements
 
 
 class PythonRuntime(runtime.Runtime):
     def __init__(self, ctx, sandbox, version=None):
         if version is None:
             version = "%d.%d" % (sys.version_info.major, sys.version_info.minor)
-        super().__init__(ctx, "py-" + sandbox + "-" + version)
+        super().__init__(ctx, "py-" + sandbox + "-" + version + "-" + SANDBOX_LAYOUT)
         self.sandbox = sandbox
         self.version = version
         self.is_mamba = False
+
+        # Where the base keeps its packages, as its own interpreter reports
+        # them: what every layer's LAYER_PTH names. Asked once per runtime.
+        self.base_site_dirs = None
 
         # Whether once() has run to completion in this process. The sandbox
         # itself is provisioned once and for all, but every run_async(),
@@ -411,6 +499,56 @@ class PythonRuntime(runtime.Runtime):
         exitcode, stdout, stderr = await self.run_async_onced_locked(["-m", "pip", "check"], path=path)
         self.report_dependency_conflicts(exitcode, stdout, stderr, path=path)
 
+    # ------------------------------------------------------------- layers --
+    #
+    # Each step comes in the two flavours the rest of this class does, and the
+    # caller holds the layer's lock for writing. See VENV_PREFIX for what a
+    # layer is.
+
+    def provision_layer_onced_locked(self, session) -> None:
+        """Build a session's layer if need be, link it to the base and install what it adds."""
+        path = session["path"]
+        created = not os.path.exists(path)
+        if created:
+            with pc_logging.Action("v-env", self.version, session["name"]):
+                pc_logging.debug("Creating a layer: %s" % path)
+                exitcode, _, stderr = self.run_onced_locked(["-m", "venv", "--upgrade-deps", path])
+            layer_created(path, exitcode, stderr)
+        if not os.path.exists(get_guard_path(path, LAYER_GUARD)):
+            site_dirs = self.base_site_dirs
+            if site_dirs is None:
+                exitcode, stdout, stderr = self.run_onced_locked(list(BASE_SITE_DIRS_COMMAND))
+                site_dirs = read_site_dirs(exitcode, stdout, stderr)
+                self.base_site_dirs = site_dirs
+            exitcode, _, stderr = self.run_onced_locked([*LINK_LAYER_COMMAND, *site_dirs], path=path)
+            layer_linked(path, exitcode, stderr)
+        for requirement in session["missing"]:
+            self.ensure_onced_locked(requirement, path=path)
+        if created:
+            self.check_deps_onced_locked(path=path)
+
+    async def provision_layer_async_onced_locked(self, session) -> None:
+        """The asynchronous twin of provision_layer_onced_locked()."""
+        path = session["path"]
+        created = not os.path.exists(path)
+        if created:
+            with pc_logging.Action("v-env", self.version, session["name"]):
+                pc_logging.debug("Creating a layer: %s" % path)
+                exitcode, _, stderr = await self.run_async_onced_locked(["-m", "venv", "--upgrade-deps", path])
+            layer_created(path, exitcode, stderr)
+        if not os.path.exists(get_guard_path(path, LAYER_GUARD)):
+            site_dirs = self.base_site_dirs
+            if site_dirs is None:
+                exitcode, stdout, stderr = await self.run_async_onced_locked(list(BASE_SITE_DIRS_COMMAND))
+                site_dirs = read_site_dirs(exitcode, stdout, stderr)
+                self.base_site_dirs = site_dirs
+            exitcode, _, stderr = await self.run_async_onced_locked([*LINK_LAYER_COMMAND, *site_dirs], path=path)
+            layer_linked(path, exitcode, stderr)
+        for requirement in session["missing"]:
+            await self.ensure_async_onced_locked(requirement, path=path)
+        if created:
+            await self.check_deps_async_onced_locked(path=path)
+
     def environment_path(self, session=None, path=None) -> str:
         """The environment a command with these arguments runs out of.
 
@@ -428,10 +566,8 @@ class PythonRuntime(runtime.Runtime):
     def environment_lock(self, session=None, path=None):
         """The lock over the environment a command runs out of.
 
-        The lock file keeps the names the per-session v-env lock used, so that
-        an installing PartCAD of either vintage running beside this one still
-        contends over the same file: a v-env is named by the hash in its
-        directory name, and the runtime's own environment is "default".
+        A layer's lock is named by the hash in its directory name, and the
+        sandbox's own environment's is "default".
 
         What has changed is which of them a given command takes -- the
         environment it runs in, rather than the session it was asked for, which
@@ -485,11 +621,7 @@ class PythonRuntime(runtime.Runtime):
         the request the host writes to their stdin carries zstd-compressed BREP
         (see wrappers/ocp_serialize.py).
 
-        Deliberately outside the "not initialized" check in the callers. That
-        flag is set from the mere existence of the sandbox directory, so a
-        sandbox provisioned by an earlier PartCAD skips that whole block and
-        would never be told about a newly required package. The install guard
-        makes this a single stat() once it has run.
+        The install guard makes this a single stat() once it has run.
         """
         zstd = sandbox_versions.zstd_requirement(self.version)
         if zstd:
@@ -507,11 +639,15 @@ class PythonRuntime(runtime.Runtime):
         with self.sync_lock(write=True):
             with self.sync_lock_install():
                 self.ensure_zstd_onced_locked()
-                if not self.initialized:
-                    # Preinstall the most common packages to avoid race conditions
-                    for requirement in base_requirements(self.version):
-                        self.ensure_onced_locked(requirement)
-                    self.initialized = True
+                # Asked of the guards every time rather than only of a sandbox
+                # directory that did not exist yet: each is a stat() once it is
+                # installed, and a sandbox whose provisioning was interrupted
+                # is completed by the next process to use it -- rather than
+                # left short of part of its base, which every layer over it
+                # would then install a copy of.
+                for requirement in base_requirements(self.version):
+                    self.ensure_onced_locked(requirement)
+                self.initialized = True
         self.provisioned = True
 
     async def once_async(self):
@@ -520,11 +656,10 @@ class PythonRuntime(runtime.Runtime):
         async with self.async_lock(write=True):
             async with self.async_lock_install():
                 await self.ensure_zstd_onced_locked_async()
-                if not self.initialized:
-                    # Preinstall the most common packages to avoid race conditions
-                    for requirement in base_requirements(self.version):
-                        await self.ensure_async_onced_locked(requirement)
-                    self.initialized = True
+                # See the note beside the same lines in 'once'.
+                for requirement in base_requirements(self.version):
+                    await self.ensure_async_onced_locked(requirement)
+                self.initialized = True
         self.provisioned = True
 
     def _subprocess_env(self):
@@ -541,53 +676,24 @@ class PythonRuntime(runtime.Runtime):
         return self.run_onced(cmd, stdin=stdin, cwd=cwd, session=session)
 
     def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
-        # Hold the environment lock across BOTH provisioning and execution so a
-        # session's package installs and its interpreter run are one atomic
-        # critical section. Two parts of the same package (e.g. a CadQuery part
-        # and a build123d part) share a session v-env; if the install loop is
-        # left outside this lock, a build123d install -- which pulls
-        # 'cadquery-ocp-novtk' and overwrites the shared OCP native module --
-        # can slip in between another part's CADQUERY_OCP re-assertion and the
-        # moment that part actually runs "import cadquery", leaving it to import
-        # a novtk/half-installed OCP and fail with an unrelated-looking
-        # ImportError (e.g. a missing 'vtkmodules'). The guard bookkeeping makes
-        # the VTK build win once all installs settle, but not necessarily at the
-        # instant a run starts; serializing install+run per v-env closes that
-        # window.
+        # Hold the lock of the environment the run reads -- its layer, or the
+        # sandbox's own -- across both provisioning and execution, so that no
+        # interpreter starts in a layer while something is being installed into
+        # it: a package half written is a package that fails to import, with an
+        # error that names neither the install nor the run.
         #
-        # It is taken for writing only while that is still ahead: a session
-        # whose v-env has been provisioned, and every session that runs out of
-        # the runtime's own environment, is only reading what is installed, and
-        # any number of those may read it at once. See run_async_onced() for
+        # It is taken for writing only while that is still ahead: a run whose
+        # layer has been provisioned, and every run out of the sandbox's own
+        # environment, is only reading what is installed, and any number of
+        # those may read it at once. See run_async_onced() for
         # the async twin.
         with self.sync_lock(session, path=path, write=self.session_needs_install(session)):
             if self.session_needs_install(session):
-                # The venv environment has to be created
-                venv_created = not os.path.exists(session["path"])
-                if venv_created:
-                    with pc_logging.Action("v-env", self.version, session["name"]):
-                        # Create the venv environment
-                        pc_logging.debug("Creating venv: %s" % session["path"])
-                        self.run_onced_locked(
-                            [
-                                "-m",
-                                "venv",
-                                "--upgrade-deps",
-                                session["path"],
-                            ]
-                        )
-                # Install the dependencies into the venv. We already hold the
-                # venv lock, so use the *_locked ensure and take the install
-                # lock explicitly; the resulting order (venv lock, then the
-                # conda global lock) matches once()/ensure and cannot deadlock.
+                # We already hold the layer's lock, so take the install lock
+                # inside it; the resulting order (layer lock, then the conda
+                # global lock) matches once()/ensure and cannot deadlock.
                 with self.sync_lock_install():
-                    for dep in session["deps"]:
-                        if dep == "partcad":
-                            dep = get_local_partcad_pkg(dep)
-                        self.ensure_onced_locked(dep, path=session["path"])
-                    if venv_created:
-                        self.check_deps_onced_locked(path=session["path"])
-                session["installed"].update(session["deps"])
+                    self.provision_layer_onced_locked(session)
 
             python_path = self.get_venv_python_path(session, path)
             cmd = [python_path, *self.flags_for(cmd), *cmd]
@@ -675,28 +781,8 @@ class PythonRuntime(runtime.Runtime):
             return exitcode, stdout, stderr
 
     def run_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
-        if session and session["dirty"]:
-            # The venv environment has to be created
-            venv_created = not os.path.exists(session["path"])
-            if not os.path.exists(session["path"]):
-                with pc_logging.Action("v-env", self.version, session["name"]):
-                    # Create the venv environment
-                    pc_logging.debug("Creating venv: %s" % session["path"])
-                    self.run_onced_locked(
-                        [
-                            "-m",
-                            "venv",
-                            "--upgrade-deps",
-                            session["path"],
-                        ]
-                    )
-            # Install of the dependencies into the venv environment
-            for dep in session["deps"]:
-                if dep == "partcad":
-                    dep = get_local_partcad_pkg(dep)
-                self.ensure_onced_locked(dep, path=session["path"])
-            if venv_created:
-                self.check_deps_onced_locked(path=session["path"])
+        if self.session_needs_install(session):
+            self.provision_layer_onced_locked(session)
 
         python_path = self.get_venv_python_path(session, path)
         cmd = [python_path, *self.flags_for(cmd), *cmd]
@@ -716,52 +802,21 @@ class PythonRuntime(runtime.Runtime):
         # shared with every other caller of this sandbox and that legitimately
         # takes minutes on a cold machine. A bound that covered it would fire on
         # a slow install rather than on the script it is meant to bound.
-        # Hold the environment lock across BOTH provisioning and execution so a
-        # session's package installs and its interpreter run are one atomic
-        # critical section. Two parts of the same package (e.g. a CadQuery part
-        # and a build123d part) share a session v-env; if the install loop is
-        # left outside this lock, a build123d install -- which pulls
-        # 'cadquery-ocp-novtk' and overwrites the shared OCP native module --
-        # can slip in between another part's CADQUERY_OCP re-assertion and the
-        # moment that part actually runs "import cadquery", leaving it to import
-        # a novtk/half-installed OCP and fail with an unrelated-looking
-        # ImportError (e.g. a missing 'vtkmodules'). The guard bookkeeping makes
-        # the VTK build win once all installs settle, but not necessarily at the
-        # instant a run starts; serializing install+run per v-env closes that
-        # window.
+        # Hold the lock of the environment the run reads -- its layer, or the
+        # sandbox's own -- across both provisioning and execution, so that no
+        # interpreter starts in a layer while something is being installed into
+        # it: a package half written is a package that fails to import, with an
+        # error that names neither the install nor the run.
         #
-        # It is taken for writing only while that is still ahead: a session
-        # whose v-env has been provisioned, and every session that runs out of
-        # the runtime's own environment, is only reading what is installed, and
-        # any number of those may read it at once.
+        # It is taken for writing only while that is still ahead: a run whose
+        # layer has been provisioned, and every run out of the sandbox's own
+        # environment, is only reading what is installed, and any number of
+        # those may read it at once.
         async with self.async_lock(session, path=path, write=self.session_needs_install(session)):
             if self.session_needs_install(session):
-                # The venv environment has to be created
-                venv_created = not os.path.exists(session["path"])
-                if venv_created:
-                    with pc_logging.Action("v-env", self.version, session["name"]):
-                        # Create the venv environment
-                        pc_logging.debug("Creating venv: %s" % session["path"])
-                        await self.run_async_onced_locked(
-                            [
-                                "-m",
-                                "venv",
-                                "--upgrade-deps",
-                                session["path"],
-                            ]
-                        )
-                # Install the dependencies into the venv. We already hold the
-                # venv lock, so use the *_locked ensure and take the install
-                # lock explicitly; the resulting order (venv lock, then the
-                # conda global lock) matches once()/ensure and cannot deadlock.
+                # See the note beside the same lines in 'run_onced'.
                 async with self.async_lock_install():
-                    for dep in session["deps"]:
-                        if dep == "partcad":
-                            dep = get_local_partcad_pkg(dep)
-                        await self.ensure_async_onced_locked(dep, path=session["path"])
-                    if venv_created:
-                        await self.check_deps_async_onced_locked(path=session["path"])
-                session["installed"].update(session["deps"])
+                    await self.provision_layer_async_onced_locked(session)
 
             python_path = self.get_venv_python_path(session, path)
             cmd = [python_path, *self.flags_for(cmd), *cmd]
@@ -841,28 +896,8 @@ class PythonRuntime(runtime.Runtime):
             return exitcode, stdout, stderr
 
     async def run_async_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
-        if session and session["dirty"]:
-            # The venv environment has to be created
-            venv_created = not os.path.exists(session["path"])
-            if not os.path.exists(session["path"]):
-                with pc_logging.Action("v-env", self.version, session["name"]):
-                    # Create the venv environment
-                    pc_logging.debug("Creating venv: %s" % session["path"])
-                    await self.run_async_onced_locked(
-                        [
-                            "-m",
-                            "venv",
-                            "--upgrade-deps",
-                            session["path"],
-                        ]
-                    )
-            # Install of the dependencies into the venv environment
-            for dep in session["deps"]:
-                if dep == "partcad":
-                    dep = get_local_partcad_pkg(dep)
-                await self.ensure_async_onced_locked(dep, path=session["path"])
-            if venv_created:
-                await self.check_deps_async_onced_locked(path=session["path"])
+        if self.session_needs_install(session):
+            await self.provision_layer_async_onced_locked(session)
 
         python_path = self.get_venv_python_path(session, path)
         cmd = [python_path, *self.flags_for(cmd), *cmd]
@@ -877,12 +912,14 @@ class PythonRuntime(runtime.Runtime):
     def reconcile_requirement(self, python_package):
         """Hold the CAD stack in a sandbox to the versions PartCAD pins.
 
-        Every part of a package shares one session v-env, so a single part that
-        asks for its own version of cadquery-ocp, build123d, cadquery,
-        ocp-tessellate, ocpsvg or nlopt downgrades that stack under all the
-        others: the next part to run then dies inside its wrapper with an
-        ImportError or AttributeError that names neither the offending package
-        nor the version that caused it (see sandbox_versions.PINNED_REQUIREMENTS).
+        A part that asks for its own version of cadquery-ocp, build123d,
+        cadquery, ocp-tessellate, ocpsvg or nlopt would otherwise get it in a
+        layer of its own, over a sandbox holding the pinned one -- a second CAD
+        stack on disk, and half of each on sys.path, which dies inside the
+        wrapper with an ImportError or AttributeError that names neither the
+        offending package nor the version that caused it. Before sandboxes were
+        layered it downgraded the stack under every part sharing the package's
+        v-env instead (see sandbox_versions.PINNED_REQUIREMENTS).
 
         Substituting the pinned version keeps the sandbox coherent, and the
         warning - once per runtime, not once per part - says what was overridden
@@ -905,12 +942,9 @@ class PythonRuntime(runtime.Runtime):
 
         force = force or needs_reassert(path, python_package)
         if session:
-            # Add the dependency to the session dependencies
-            session["deps"].append(python_package)
-            if not self.installed_onced(python_package, path):
-                # Mark this session as needed if the dependency is not met by the runtime environment
-                session["dirty"] = True
+            self.ask_of_session(session, python_package, path)
         elif not self.installed_onced(python_package, path, force):
+            self.warn_base_install(python_package, path)
             with self.sync_lock(path=path, write=True):
                 with self.sync_lock_install():
                     self.install_onced_locked(python_package, path, force)
@@ -1004,11 +1038,7 @@ class PythonRuntime(runtime.Runtime):
 
         force = force or needs_reassert(path, python_package)
         if session:
-            # Add the dependency to the session dependencies
-            session["deps"].append(python_package)
-            if not self.installed_onced(python_package, path):
-                # Mark this session as needed if the dependency is not met by the runtime environment
-                session["dirty"] = True
+            self.ask_of_session(session, python_package, path)
         else:
             self.install_onced_locked(python_package, path, force)
 
@@ -1024,12 +1054,9 @@ class PythonRuntime(runtime.Runtime):
         # TODO(clairbee): expire the guard file after a certain time
         force = force or needs_reassert(path, python_package)
         if session:
-            # Add the dependency to the session dependencies
-            session["deps"].append(python_package)
-            if not self.installed_onced(python_package, path):
-                # Mark this session as needed if the dependency is not met by the runtime environment
-                session["dirty"] = True
+            self.ask_of_session(session, python_package, path)
         elif not self.installed_onced(python_package, path, force):
+            self.warn_base_install(python_package, path)
             async with self.async_lock(path=path, write=True):
                 async with self.async_lock_install():
                     await self.install_async_onced_locked(python_package, path, force)
@@ -1043,11 +1070,7 @@ class PythonRuntime(runtime.Runtime):
 
         force = force or needs_reassert(path, python_package)
         if session:
-            # Add the dependency to the session dependencies
-            session["deps"].append(python_package)
-            if not self.installed_onced(python_package, path):
-                # Mark this session as needed if the dependency is not met by the runtime environment
-                session["dirty"] = True
+            self.ask_of_session(session, python_package, path)
         else:
             await self.install_async_onced_locked(python_package, path, force)
 
@@ -1113,51 +1136,86 @@ class PythonRuntime(runtime.Runtime):
     def session_needs_install(self, session=None) -> bool:
         """Whether running this session still has to install anything.
 
-        Which is the same question as whether the run needs the environment for
+        Which is the same question as whether the run needs its layer for
         writing, so the two must be asked the same way: a run that installs
-        while holding the environment for reading is a run installing behind
-        the back of every wrapper reading it.
+        while holding the layer for reading is a run installing behind the back
+        of every wrapper reading it.
 
-        A session goes dirty the moment a requirement of its package is not
-        already met by the runtime environment, and stays dirty for good --
-        'dirty' is also what says the session runs out of its own v-env rather
-        than the runtime's, so it cannot be cleared once the v-env exists. What
-        the install pass leaves behind instead is the set of requirements it put
-        there; while that covers what the session asks for, its runs are readers
-        like any other, and a requirement added afterwards puts it back.
+        Asked of the layer itself -- its guards, which an install writes only
+        once it has finished -- rather than of what this session has seen
+        installed. Every part has a session of its own, and a session that had
+        to find out for itself would take its layer for writing on its first
+        run, and so wait for every run of the layer in progress to end; the
+        parts sharing a layer would start one after another.
         """
         if not session or not session["dirty"]:
             return False
-        return not set(session["deps"]).issubset(session["installed"])
+        return not self.layer_ready(session)
+
+    def layer_ready(self, session) -> bool:
+        """Whether a session's layer has been linked to the base and holds what the session adds."""
+        path = session["path"]
+        if not os.path.exists(get_guard_path(path, LAYER_GUARD)):
+            return False
+        return all(self.installed_onced(requirement, path) for requirement in session["missing"])
 
     def get_session(self, name: str):
-        """Create a context to describe the venv environment in case it is needed"""
-        name_hash = hashlib.sha256(name.encode()).hexdigest()[:16]
-        venv_path = os.path.join(self.path, VENV_PREFIX + name_hash)
+        """What a run needs beyond the base, and so which layer it runs in, if any.
 
-        # A v-env is created by "python -m venv" without --system-site-packages,
-        # so it does not see what the sandbox around it has installed: zstd has
-        # to be listed here to reach one. Without it a wrapper running in a
-        # v-env cannot read the compressed BREP the host sends it (see
-        # wrappers/ocp_serialize).
-        #
-        # Seeded directly rather than through ensure*(session=...), because that
-        # would also mark the session dirty and so force a v-env to be built for
-        # every package that has any Python requirements of its own. This way
-        # the dependency only materializes in v-envs that were going to exist.
-        deps = []
-        zstd = sandbox_versions.zstd_requirement(self.version)
-        if zstd:
-            deps.append(zstd)
-
+        A session collects what its run asks for ('ensure*(session=...)'). What
+        the base already holds costs nothing; anything else makes the session
+        'dirty' and is added to 'missing', and the session's layer is the one
+        named after 'missing' (see 'place_session'). 'name' is what the session
+        is for, and is only ever shown.
+        """
         return {
             "name": name,
-            "hash": name_hash,
-            "path": venv_path,
+            "hash": None,
+            "path": None,
             "dirty": False,
-            "deps": deps,
-            # What the v-env has been given so far. Once it covers 'deps', the
-            # runs that follow share the v-env instead of taking it exclusively
-            # one at a time (see session_needs_install()).
-            "installed": set(),
+            # Everything asked for, in the order asked.
+            "deps": [],
+            # What of 'deps' the base does not hold: what the layer adds.
+            "missing": [],
         }
+
+    def place_session(self, session) -> None:
+        """Name the layer a session runs in after what it adds to the base.
+
+        The name is a digest of those requirements as a set, so every run that
+        adds the same ones -- every CadQuery part, whatever its package, and the
+        3MF export -- shares one layer, and a package whose parts ask for
+        nothing the base lacks has none.
+        """
+        digest = hashlib.sha256("\n".join(sorted(set(session["missing"]))).encode()).hexdigest()[:16]
+        session["hash"] = digest
+        session["path"] = os.path.join(self.path, VENV_PREFIX + digest)
+
+    def ask_of_session(self, session, python_package, path=None) -> None:
+        """Note that a session's run needs a package, and whether the base has it."""
+        session["deps"].append(python_package)
+        if self.installed_onced(python_package, self.path if path is None else path):
+            return
+        if python_package == "partcad":
+            # The local package during tests (see get_local_partcad_pkg), which
+            # is what the layer's guard is then named after.
+            python_package = get_local_partcad_pkg(python_package)
+        if python_package not in session["missing"]:
+            session["missing"].append(python_package)
+            self.place_session(session)
+        session["dirty"] = True
+
+    def warn_base_install(self, python_package, path) -> None:
+        """Say so when something installs into the base after it was provisioned.
+
+        Nothing PartCAD runs should: what the base lacks belongs in a layer, and
+        an install into the base rewrites packages under every wrapper reading
+        it. A caller that asks for a package without a session is one that
+        meant a package the base has.
+        """
+        if os.path.normpath(path) != os.path.normpath(self.path):
+            return
+        pc_logging.warning(
+            "Installing '%s' into the %s sandbox's own environment after it was provisioned; "
+            "anything the base does not hold belongs in a layer" % (python_package, self.sandbox)
+        )

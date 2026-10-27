@@ -714,7 +714,7 @@ class Assembly(Shape):
             )
 
             runtime = ctx.get_python_runtime(version="3.11")
-            await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+            await runtime.ensure_async(sandbox_versions.OCP)
 
             # The wrapper writes nothing, but every wrapper is invoked with an
             # output path; give it one inside a directory of our own.

@@ -20,11 +20,17 @@ from typing import Optional
 # are NOT alternatives pip knows about: they are separate distributions that
 # both write the very same OCP native module, so whichever pip installs last
 # wins. The novtk build is compiled without the VTK-backed modules, and
-# "import cadquery" needs them (OCP.IVtkOCC), so a sandbox that ends up with
-# the novtk build fails every CadQuery render with an unrelated-looking
-# ImportError. See GUARD_INVALIDATED_BY below for how that is forced to come
-# out right.
+# "import cadquery" needs them (OCP.IVtkOCC), so an environment holding the
+# novtk build fails every CadQuery render with an unrelated-looking ImportError.
+#
+# So the two never share an environment (see runtime_python.base_requirements):
+# a sandbox's own environment holds build123d and the novtk build, which is all
+# that anything but CadQuery imports, and CadQuery runs in a layer over it whose
+# VTK build comes first on sys.path. CADQUERY_OCP is what asks for that layer;
+# OCP is what a wrapper that only needs OCP asks for, and the base has it.
 CADQUERY_OCP = "cadquery-ocp==7.9.3.1.1"
+CADQUERY_OCP_NOVTK = "cadquery-ocp-novtk==7.9.3.1.1"
+OCP = CADQUERY_OCP_NOVTK
 OCPSVG = "ocpsvg==0.6.0"
 BUILD123D = "build123d==0.11.1"
 CADQUERY = "cadquery==2.8.0"
@@ -114,25 +120,15 @@ EZDXF = "ezdxf==1.4.4"
 # pip otherwise considers them satisfied and leaves the clobbered files alone.
 # runtime_python.invalidate_dependent_guards() does the bookkeeping.
 #
-# The one case today is build123d, which depends on 'cadquery-ocp-novtk' and so
-# replaces the OCP native module with a build that has no VTK support. A later
-# build123d install cannot undo the repair, because pip by then already
-# considers novtk satisfied and does not reinstall it.
-#
-# Every install list in this package therefore ends with CADQUERY_OCP, so the
-# re-assertion happens within the same sequence rather than at some arbitrary
-# later point.
-#
-# The re-assertion makes the VTK build win once a sandbox's installs have all
-# settled, but it does not by itself guarantee the VTK build is the one on disk
-# at the instant an interpreter starts. When a CadQuery part and a build123d
-# part of the same package share a session v-env and render concurrently, a
-# build123d (novtk) install must not slip in between another part's re-assertion
-# and its "import cadquery". runtime_python.run_onced / run_async_onced close
-# that window by serializing a session's installs and its run under one v-env
-# lock.
+# The one case is the novtk OCP build -- build123d depends on it -- replacing
+# the VTK build CadQuery needs. A layered sandbox never meets it: the two builds
+# live in different environments. The 'remote' sandbox does, since it keeps one
+# environment per image and installs whatever is asked of it there, in the
+# order asked; installing CADQUERY_OCP after build123d is what makes the VTK
+# build win there, and this is what keeps a later novtk install from undoing it.
 GUARD_INVALIDATED_BY = {
     BUILD123D: (CADQUERY_OCP,),
+    CADQUERY_OCP_NOVTK: (CADQUERY_OCP,),
 }
 
 # The CAD stack this module pins, keyed by distribution name. These packages are
@@ -142,12 +138,13 @@ GUARD_INVALIDATED_BY = {
 # the same native module. Installing any one of them at a different version
 # breaks the others.
 #
-# That matters because a *session* v-env is shared by every part of a package.
 # A single part asking for its own version of one of these (part_factory_sdf.py
 # used to pin cadquery-ocp==7.7.2, ocp-tessellate==3.0.9 and build123d==0.8.0)
-# silently downgraded the stack under every other part in the same package, and
-# their renders then failed with errors that named neither the package nor the
-# part that caused it. reconcile_requirement() below makes that impossible.
+# silently downgraded the stack under every other part sharing its environment,
+# and their renders then failed with errors that named neither the package nor
+# the part that caused it. reconcile_requirement() below makes that impossible:
+# it is also what keeps such a part in the environment everything else shares,
+# rather than in a layer of its own carrying a whole second CAD stack.
 PINNED_REQUIREMENTS = (
     CADQUERY_OCP,
     OCPSVG,

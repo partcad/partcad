@@ -9,7 +9,7 @@
     <sandbox python> dev-tools/profiling/replay_request.py CMD.json STDIN.json [--output PATH]
 
 Run it with the sandbox's interpreter -- the one under ~/.partcad/sandbox that
-renders, which has the CAD stack -- not PartCAD's own. It runs the wrapper's own
+would have rendered, which CMD.json records as 'python' -- not PartCAD's own. It runs the wrapper's own
 '__main__' (wrapper_export.py) on the captured request, exactly as the sandbox
 would, with each step wrapped so that the peak RSS of the process is recorded
 per phase (a thread samples it every 20 ms): reading and parsing the request,

@@ -40,7 +40,7 @@ async def read_assembly_tree(ctx, assembly_file, output_folder, file_type="step"
 
     runtime = ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
     # The wrapper only needs OCCT (STEP-CAF), not build123d/cadquery.
-    await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+    await runtime.ensure_async(sandbox_versions.OCP)
 
     request = {
         "operation": "import_assy",

@@ -74,12 +74,12 @@ import:
     extension: urdf
     kinds: [assembly]
     noun: robot
-    # 'urdf-parser-py' is what parses the file; 'cadquery-ocp' turns URDF's box,
-    # cylinder and sphere into geometry. Order matters here as it does in every
-    # install list: OCP comes last (see 'sandbox_versions.GUARD_INVALIDATED_BY').
+    # 'urdf-parser-py' is what parses the file; OCP turns URDF's box, cylinder
+    # and sphere into geometry -- the build every sandbox's own environment
+    # holds, for the reason '//builtin/render' gives.
     pythonRequirements:
       - urdf-parser-py==0.0.4
-      - cadquery-ocp==7.9.3.1.1
+      - cadquery-ocp-novtk==7.9.3.1.1
     # How many digits the placements coming back are rounded to. Six is a
     # micrometre at millimetre scale, which is finer than any URDF states.
     precision: 6

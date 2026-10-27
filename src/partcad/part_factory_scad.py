@@ -304,9 +304,9 @@ class PartFactoryScad(PartFactoryHomogen, PartFactoryFile):
                 await self.runtime.ensure_async(sandbox_versions.TYPING_EXTENSIONS)
                 await self.runtime.ensure_async(sandbox_versions.OCPSVG)
                 await self.runtime.ensure_async(sandbox_versions.BUILD123D)
-                # Last: re-asserts the VTK-enabled OCP that build123d's
-                # 'cadquery-ocp-novtk' dependency has just replaced.
-                await self.runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+                # The OCP build the sandbox's own environment holds: what
+                # build123d depends on, and all this wrapper needs.
+                await self.runtime.ensure_async(sandbox_versions.OCP)
 
                 command = [
                     wrapper_path,

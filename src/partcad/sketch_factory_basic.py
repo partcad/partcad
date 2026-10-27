@@ -80,7 +80,7 @@ class SketchFactoryBasic(SketchFactory):
                 # object; only the shape parameters and the resulting BREP
                 # envelope cross the boundary.
                 runtime = self.ctx.get_python_runtime(version=self.PYTHON_SANDBOX_VERSION)
-                await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+                await runtime.ensure_async(sandbox_versions.OCP)
 
                 wrapper_path = wrapper.get("sketch_basic.py")
                 request = {

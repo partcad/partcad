@@ -226,6 +226,7 @@ def test_builtin_requirements_match_the_pinned_cad_stack():
     """
     known = {
         "cadquery-ocp": sandbox_versions.CADQUERY_OCP,
+        "cadquery-ocp-novtk": sandbox_versions.CADQUERY_OCP_NOVTK,
         "ocpsvg": sandbox_versions.OCPSVG,
         "build123d": sandbox_versions.BUILD123D,
         "cadquery": sandbox_versions.CADQUERY,
@@ -261,11 +262,18 @@ def _builtin_requirements():
             yield section, format_name, format_config.get("pythonRequirements") or []
 
 
-def test_cadquery_ocp_is_reasserted_after_build123d():
-    """Installing build123d replaces OCP, so the pin has to come after it."""
+def test_only_what_imports_cadquery_asks_for_its_ocp_build():
+    """Everything else asks for the build the sandbox's own environment holds.
+
+    CadQuery's build is what puts a run in a layer carrying it: asked for by a
+    script that only needs OCP, it is a layer with VTK in it provisioned for
+    nothing (see 'runtime_python.base_requirements').
+    """
     for _section, where, requirements in _builtin_requirements():
-        if sandbox_versions.BUILD123D in requirements:
-            assert requirements[-1] == sandbox_versions.CADQUERY_OCP, where
+        if sandbox_versions.CADQUERY_OCP in requirements:
+            assert sandbox_versions.CADQUERY in requirements, where
+        else:
+            assert sandbox_versions.CADQUERY not in requirements, where
 
 
 # --------------------------------------------------------------------------- #
@@ -859,7 +867,7 @@ def test_the_builtin_implementations_still_get_their_own_requirements(ctx):
     impl, _ = part.output_getopts(ctx, "step", project)
     impl.project = ctx.get_project(output.BUILTIN_PACKAGES[output.EXPORT])
     assert impl.python_version() == sandbox_versions.DEFAULT_PYTHON_VERSION
-    assert "cadquery-ocp==%s" % sandbox_versions.CADQUERY_OCP.split("==")[1] in impl.python_requirements
+    assert sandbox_versions.OCP in impl.python_requirements
 
 
 def test_no_file_type_chooses_how_it_is_handed_the_shape(ctx):

@@ -127,11 +127,21 @@ at all).
   reason `sandbox_lock.py` polls: these are taken from several loops at once, and the daemon runs one
   `asyncio.run()` per request, so a semaphore kept for the process belongs to whichever request created it.
 
-- **Sandbox concurrency**: a wrapper runs in a sandbox *environment* -- the runtime's own conda prefix, or the
-  session v-env of a package that has requirements of its own -- and `sandbox_lock.py` is what holds those
-  apart. `EnvironmentLock` is a readers/writer lock keyed on the environment's path: running a wrapper reads it,
-  installing into it or creating it writes, so any number of wrappers share an environment while an install has
-  it to itself. `process_slots` caps how many sandbox interpreters run at once, because a wrapper is a whole CAD
+- **Sandbox concurrency**: a wrapper runs in a sandbox *environment* -- the sandbox's own (the conda prefix, the
+  venv, the image's interpreter), or a *layer* over it -- and `sandbox_lock.py` is what holds those apart. The
+  sandbox's own environment holds build123d, the OCP build without VTK that build123d depends on, and what a
+  wrapper reads its request with (`runtime_python.base_requirements`), and it is written only while it is
+  provisioned. Whatever a run asks for beyond that goes into a layer: a v-env that sees the base through a `.pth`
+  file, after its own packages, and is named after what it adds, so every run adding the same packages shares
+  one. CadQuery runs in one, because its OCP build is the one *with* VTK and writes the same native module as the
+  other; so does a PNG, for the rasterizer. Nothing may install into the base afterwards -- an install there
+  rewrites packages under every wrapper reading it, which is the race layers exist to remove -- and one that
+  does is logged as a warning naming the package. A requirement asked for without a session is one the caller
+  expects the base to have. `EnvironmentLock` is a readers/writer lock keyed on the environment's path: running
+  a wrapper reads it, installing into it or creating it writes, so any number of wrappers share an environment
+  while an install has it to itself. Whether a layer still needs provisioning is read from its install guards,
+  not from what the asking run has seen, so the first run of each of a hundred parts sharing a layer does not
+  take it for writing and wait for the others. `process_slots` caps how many sandbox interpreters run at once, because a wrapper is a whole CAD
   process and it is the machine, not the thread pool, that decides how many fit; `threadsMax` sizes it. Both are
   polled rather than blocked on: they are taken from several event loops at once (a part is instantiated on a
   worker thread running a loop of its own), and a task that blocked its own loop waiting for a lock the task

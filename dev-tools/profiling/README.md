@@ -45,9 +45,12 @@ pc daemon stop
 ```bash
 cd ../partcad-ldraw-examples
 poetry --project ../partcad run python ../partcad/dev-tools/profiling/capture_request.py /tmp/capture castle png
-~/.partcad/sandbox/pc-py-venv-3.11/bin/python -sOO ../partcad/dev-tools/profiling/replay_request.py \
+"$(python3 -c 'import json; print(json.load(open("/tmp/capture/castle.png.cmd.json"))["python"])')" -sOO \
+    ../partcad/dev-tools/profiling/replay_request.py \
     /tmp/capture/castle.png.cmd.json /tmp/capture/castle.png.stdin.json --output /tmp/castle.png
 ```
 
-The sandbox's interpreter is the one PartCAD renders with: `pc-py-venv-<version>` for the `venv` sandbox -- 3.11
-above, the default, where a package asking for another Python has its own -- and the conda prefix for `conda`. The capture builds whatever the object is made of that is not cached yet.
+The interpreter is the one PartCAD would have rendered with, which the capture records (and prints): for a PNG, the
+layer under `~/.partcad/sandbox/pc-py-<sandbox>-<version>-layered/` that carries what rasterizing needs beyond the
+sandbox's own environment, which it sees through a `.pth` file (see `VENV_PREFIX` in `runtime_python.py`).
+The capture builds whatever the object is made of that is not cached yet.

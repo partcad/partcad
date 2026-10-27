@@ -26,7 +26,7 @@ for their engine.
       kinds: [assembly, scene]     # what it may be declared as
       noun: model                  # what one is called in a log line
       pythonRequirements:
-        - cadquery-ocp==7.9.3.1.1
+        - cadquery-ocp-novtk==7.9.3.1.1
       precision: 6                 # anything else is the reader's parameter
       dropped:
         joint: "joints (the object shows the bodies at their initial pose)"
