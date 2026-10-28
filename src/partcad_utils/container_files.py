@@ -346,8 +346,11 @@ def _write_tree(back: dict, target: str) -> None:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as f:
             f.write(container_service.unpack_blob(data))
-        if isinstance(mode, int) and mode & 0o111 and os.name != "nt":
-            os.chmod(path, os.stat(path).st_mode | 0o111)
+        # Whether it runs, both ways: a file written over keeps the mode it had,
+        # and one that stopped being executable over there stops here too.
+        if isinstance(mode, int) and os.name != "nt":
+            current = os.stat(path).st_mode & 0o7777
+            os.chmod(path, (current & ~0o111) | (mode & 0o111))
 
 
 def text(data) -> str:

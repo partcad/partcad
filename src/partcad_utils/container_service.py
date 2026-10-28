@@ -828,8 +828,10 @@ def tree_back(directory, sent=None):
     Each file's content is a blob, or a compressed one (see `pack_blob`).
 
     Leaving out every file that is what the caller sent under that name
-    (``sent``: name -> digest), which the caller has: a project directory KiCad
-    saved one board in comes back as that board.
+    (``sent``: name -> (digest, whether it runs)), which the caller has: a
+    project directory KiCad saved one board in comes back as that board. Whether
+    it runs is all of a mode that is compared, because it is all of one that was
+    sent (see `build_tree`): a file made executable and nothing else has changed.
     """
     sent = sent or {}
     skipped, files, dirs = [], [], []
@@ -839,9 +841,10 @@ def tree_back(directory, sent=None):
             continue
         with open(real, "rb") as f:
             data = f.read()
-        if name in sent and sent[name] == content_digest(data):
+        mode = os.stat(real).st_mode & 0o777
+        if sent.get(name) == (content_digest(data), bool(mode & 0o111)):
             continue
-        files.append([name, os.stat(real).st_mode & 0o777, pack_blob(data)])
+        files.append([name, mode, pack_blob(data)])
     warn_skipped(skipped, directory)
     return {"files": files, "dirs": dirs}
 
@@ -1214,7 +1217,8 @@ class _Frames(object):
     def back(self, host_path, directory):
         sent = {}
         if host_path in self._trees:
-            sent = dict((name, digest) for name, digest, _ in _tree_files(self._trees[host_path])[0])
+            files = _tree_files(self._trees[host_path])[0]
+            sent = dict((name, (digest, bool(mode & 0o111))) for name, digest, mode in files)
         return tree_back(directory, sent)
 
     @staticmethod

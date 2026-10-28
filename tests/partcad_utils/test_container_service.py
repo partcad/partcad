@@ -895,6 +895,29 @@ def test_a_file_that_runs_still_runs_on_the_far_side(allowed, tmp_path, store):
     assert result["stdout"].strip() == b"[True, False]"
 
 
+@pytest.mark.skipif(os.name == "nt", reason="an execute bit")
+def test_a_file_made_executable_and_nothing_else_comes_back(allowed, tmp_path, store):
+    """What was sent is left out of what comes back, but only while it would still run, or not, as it did."""
+    project = tmp_path / "pkg"
+    project.mkdir()
+    (project / "tool.sh").write_text("#!/bin/sh\n")
+    (project / "tool.sh").chmod(0o700)
+    (project / "build.sh").write_text("#!/bin/sh\n")
+    (project / "same.txt").write_text("")
+    tree, blobs = _tree(project)
+    result = service.handle_execute_frames(
+        ["python", "-c", "import os, sys; os.chmod(sys.argv[1], 0o755)", "/callers/pkg/build.sh"],
+        input_trees={"/callers/pkg": tree},
+        blobs=blobs,
+        output_dirs=["/callers/pkg"],
+        allowed=allowed,
+        store=store,
+    )
+    back = result["output_dirs"]["/callers/pkg"]
+    # 'tool.sh' was sent as 0o700 and is 0o755 over there: it runs either way.
+    assert [(name, bool(mode & 0o111)) for name, mode, _data in back["files"]] == [("build.sh", True)]
+
+
 def test_an_output_directory_comes_back_as_what_changed_in_it(allowed, tmp_path, store):
     """KiCad opens the project and saves the board beside it: what comes back is the board."""
     project = tmp_path / "board"

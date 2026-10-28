@@ -525,3 +525,27 @@ def test_a_path_that_is_not_there_is_refused_rather_than_run(server):
     """The shape is not the permission: it has to be an environment that exists."""
     with pytest.raises(Exception, match="not allowed"):
         server.handle_execute_command([os.path.join(server.SANDBOX_ROOT, "v-env-3.11", "bin", "python"), "-c", "pass"])
+
+
+@pytest.mark.skipif(os.name == "nt", reason="an execute bit")
+@pytest.mark.parametrize("before, sent, after", [(0o755, 0o644, False), (0o644, 0o755, True), (0o750, 0o755, True)])
+def test_a_file_written_back_runs_or_not_as_it_does_over_there(tmp_path, before, sent, after):
+    """Written over, a file keeps the mode it had here: whether it runs is set from what came back, both ways."""
+    target = tmp_path / "out"
+    target.mkdir()
+    (target / "tool.sh").write_text("old")
+    (target / "tool.sh").chmod(before)
+    back = {"files": [["tool.sh", sent, container_service.pack_blob(b"new")]], "dirs": []}
+    container_files.write_back({"output_dirs": {str(target): back}}, output_dirs=[str(target)])
+    assert (target / "tool.sh").read_bytes() == b"new"
+    assert bool(os.stat(target / "tool.sh").st_mode & 0o111) is after
+    # What does not decide whether it runs is left as it was here.
+    assert os.stat(target / "tool.sh").st_mode & 0o666 == before & 0o666
+
+
+@pytest.mark.parametrize("body", [b"[1]", b'"answer"', b"3", b"null"])
+def test_an_answer_that_is_not_an_object_is_no_answer(monkeypatch, body):
+    monkeypatch.setattr(
+        RuntimeJsonRpcClient, "_post_frame", lambda self, parts, timeout: (200, "application/json", body)
+    )
+    assert RuntimeJsonRpcClient("127.0.0.1", 1).call("execute", {"command": ["x"]}) is None

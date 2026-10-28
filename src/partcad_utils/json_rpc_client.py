@@ -221,11 +221,14 @@ class RuntimeJsonRpcClient:
             if status == 401:
                 return {"error": {"code": -32001, "message": "The container refused this client's token"}}
             if container_service.is_frame(content_type):
-                return container_service.decode_frame(body)
-            # What answers without speaking frames -- a proxy in front of the
-            # service, or the service refusing before it read the body -- may
-            # still have said something worth reading.
-            return json.loads(body)
+                answer = container_service.decode_frame(body)
+            else:
+                # What answers without speaking frames -- a proxy in front of
+                # the service, or the service refusing before it read the body --
+                # may still have said something worth reading.
+                answer = json.loads(body)
+            # A response is an object; anything else is no response at all.
+            return answer if isinstance(answer, dict) else None
         except (requests.exceptions.RequestException, ValueError) as e:
             pc_logging.error("Error during RPC call to %s: %s" % (self.url, e))
             return None
