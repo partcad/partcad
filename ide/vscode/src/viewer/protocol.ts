@@ -269,25 +269,86 @@ export function decodeGltf(payload: string): Buffer {
  * is present. It is deliberately a plain class rather than a stream transform so
  * that a protocol error can be surfaced to the caller as a thrown error and the
  * connection dropped, instead of being swallowed by a pipeline.
+ *
+ * What it buffers is the list of chunks as they arrived, and a running count of
+ * their bytes, rather than one buffer they are appended to. The reader runs on
+ * the extension host's main thread, which every extension in the window shares,
+ * and appending a ~64 KiB 'data' event to everything received so far copies all
+ * of it: quadratic in the frame, so a 20 MiB show arriving over a real socket
+ * held that thread for six seconds, and a 40 MiB one for over ten. Now nothing
+ * is copied until a whole frame is present, and then only that frame, once - or
+ * not at all when it lies inside one chunk, which is what several small frames
+ * arriving together do. The 20 MiB show takes under a tenth of a second.
+ *
+ * A bad header or payload throws on every push from then on, as it always has:
+ * nothing is consumed until it has been decoded, so the stream never resumes
+ * mid-frame and reads the rest of a frame as a header.
  */
 export class FrameReader {
-    private buffer: Buffer = Buffer.alloc(0);
+    /** The bytes received and not yet returned, in arrival order; none of them empty. */
+    private chunks: Buffer[] = [];
+    /** How many bytes 'chunks' holds altogether. */
+    private pending = 0;
+    /** The length, header included, of the frame at the front once its header is in; -1 before. */
+    private frameLength = -1;
 
     /** Append received bytes and return every complete message they contain. */
     public push(chunk: Buffer): ViewerMessage[] {
-        this.buffer = this.buffer.length === 0 ? chunk : Buffer.concat([this.buffer, chunk]);
+        if (chunk.length > 0) {
+            this.chunks.push(chunk);
+            this.pending += chunk.length;
+        }
 
         const messages: ViewerMessage[] = [];
         for (;;) {
-            if (this.buffer.length < HEADER_LENGTH) {
+            if (this.frameLength < 0) {
+                if (this.pending < HEADER_LENGTH) {
+                    return messages;
+                }
+                // Validated as soon as it is in, not once the payload is: a
+                // peer that is not speaking this protocol is refused at its
+                // first ten bytes rather than after up to MAX_FRAME_LENGTH more.
+                this.frameLength = HEADER_LENGTH + decodeHeader(this.peek(HEADER_LENGTH));
+            }
+            if (this.pending < this.frameLength) {
                 return messages;
             }
-            const length = decodeHeader(this.buffer.subarray(0, HEADER_LENGTH));
-            if (this.buffer.length < HEADER_LENGTH + length) {
-                return messages;
-            }
-            messages.push(decodePayload(this.buffer.subarray(HEADER_LENGTH, HEADER_LENGTH + length)));
-            this.buffer = this.buffer.subarray(HEADER_LENGTH + length);
+            messages.push(decodePayload(this.peek(this.frameLength).subarray(HEADER_LENGTH)));
+            this.consume(this.frameLength);
+            this.frameLength = -1;
+        }
+    }
+
+    /** The first 'length' pending bytes, which must be there: a view where one chunk holds them, else a copy. */
+    private peek(length: number): Buffer {
+        const first = this.chunks[0];
+        if (first.length >= length) {
+            return first.subarray(0, length);
+        }
+        let count = 0;
+        let collected = 0;
+        while (collected < length) {
+            collected += this.chunks[count].length;
+            count++;
+        }
+        // Truncated to 'length', so of the last chunk only what the frame
+        // takes is copied.
+        return Buffer.concat(this.chunks.slice(0, count), length);
+    }
+
+    /** Drop the first 'length' pending bytes, which must be there. */
+    private consume(length: number): void {
+        this.pending -= length;
+        let count = 0;
+        while (count < this.chunks.length && length >= this.chunks[count].length) {
+            length -= this.chunks[count].length;
+            count++;
+        }
+        // One splice per frame rather than a shift per chunk: a frame spanning
+        // hundreds of chunks would otherwise move the array as many times.
+        this.chunks.splice(0, count);
+        if (length > 0) {
+            this.chunks[0] = this.chunks[0].subarray(length);
         }
     }
 }

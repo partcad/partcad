@@ -75,10 +75,13 @@ TypeScript, and a second implementation of that footer is a second thing to keep
 runs it -- `partcad_utils.logging_ansi_render.AnsiEventRenderer`, one instance per connection -- and sends what
 it drew.
 
-`JsonRpcBackend` asks for that with `log.mode {"ansi": true}` as soon as it connects. The service then sends
-`?/partcad/terminal` (base64, written into the pty verbatim) **instead of** `?/partcad/log`, not as well as:
+`JsonRpcBackend` asks for that with `log.mode {"ansi": true, "text": true}` as soon as it connects. The service
+then sends `?/partcad/terminal` (written into the pty verbatim) **instead of** `?/partcad/log`, not as well as:
 the two carry the same information. The `?/partcad/log` handler stays as the fallback for a service too old to
-answer `log.mode`, and `rendersLogs` says which of the two is live.
+answer `log.mode`, and `rendersLogs` says which of the two is live. Each piece of the drawing arrives as a JSON
+string under `text`; a service from before `"text"` ignores it and sends the base64 of its UTF-8 under `line`
+instead, which is also what the service still sends an extension that did not ask, so `terminalText` reads both
+and the extension and the service can be updated in either order.
 
 Three things about it are load-bearing:
 

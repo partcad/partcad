@@ -3,12 +3,12 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// Reading `pc daemon start`'s answer.
+// Reading `pc daemon start`'s answer, and what the service sends the terminal view.
 //
 
 import * as assert from 'assert';
 
-import { CloseWatch, daemonEndpointIn } from '../../common/backend';
+import { CloseWatch, LOG_MODE_PARAMS, daemonEndpointIn, terminalText } from '../../common/backend';
 
 suite('Where the daemon is', () => {
     test('a socket path is the endpoint', () => {
@@ -101,5 +101,32 @@ suite('When the service goes away', () => {
         watch.onUnexpected(() => told++);
         watch.closed();
         assert.strictEqual(told, 1);
+    });
+});
+
+suite('What the service drew', () => {
+    const drawn = '\x1b[92m\x1b[1mINFO:\x1b[0m héllo, //pkg:part\n';
+
+    test('the text a service sends as text is drawn as it is', () => {
+        assert.strictEqual(terminalText({ text: drawn }), drawn);
+    });
+
+    test('the base64 an older service sends is still read, as UTF-8', () => {
+        // `atob` would turn the 'é' into two characters of mojibake.
+        assert.strictEqual(terminalText({ line: Buffer.from(drawn, 'utf8').toString('base64') }), drawn);
+    });
+
+    test('the text is preferred where a service sent both', () => {
+        assert.strictEqual(terminalText({ text: drawn, line: Buffer.from('other').toString('base64') }), drawn);
+    });
+
+    test('a notification carrying neither draws nothing rather than throwing', () => {
+        assert.strictEqual(terminalText({}), '');
+        assert.strictEqual(terminalText(undefined), '');
+        assert.strictEqual(terminalText({ text: 7 }), '');
+    });
+
+    test('the service is asked for text, which one from before ignores', () => {
+        assert.deepStrictEqual(LOG_MODE_PARAMS, { ansi: true, text: true });
     });
 });

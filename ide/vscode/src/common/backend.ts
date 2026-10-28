@@ -62,6 +62,36 @@ export interface PartcadBackend {
 // The extension subscribes and the legacy server published under this prefix.
 const NOTIFICATION_PREFIX = '?/partcad/';
 
+/**
+ * What `log.mode` asks for: the service's own rendering of the log display,
+ * each piece of it as a JSON string. `text` is the second half: a service that
+ * does not know it ignores it and sends base64, which `terminalText` reads too.
+ */
+export const LOG_MODE_PARAMS = { ansi: true, text: true };
+
+/**
+ * The text one `?/partcad/terminal` notification carries.
+ *
+ * A service that was asked for it sends the text as it is, under `text`;
+ * JSON carries any string, terminal control characters included. One from
+ * before that sends the base64 of its UTF-8 under `line`, and the editor and
+ * the service are installed and updated apart, so both are read. Decoded with
+ * `Buffer`, not `atob`: `atob` yields one character per byte, so any non-ASCII
+ * in a log line (a path, a description) would come out as mojibake.
+ *
+ * Anything else is nothing to draw, rather than an exception in a notification
+ * handler (`Buffer.from(undefined)` throws).
+ */
+export function terminalText(params: any): string {
+    if (typeof params?.text === 'string') {
+        return params.text;
+    }
+    if (typeof params?.line === 'string') {
+        return Buffer.from(params.line, 'base64').toString('utf8');
+    }
+    return '';
+}
+
 /** How this backend reaches the `pc` CLI, and what that CLI may be used for. */
 type CliAccess = {
     /** The `pc` beside the service executable, when there is one. */
@@ -165,7 +195,7 @@ class JsonRpcBackend implements PartcadBackend {
      * This extension cannot: it is TypeScript, and a second implementation of
      * that footer is a second thing to keep correct. So the service runs it
      * instead, once per connection, and sends what it drew -- which arrives on
-     * `?/partcad/terminal` and goes into the pty verbatim.
+     * `?/partcad/terminal` and goes into the pty verbatim (`terminalText`).
      *
      * From then on this connection gets no `?/partcad/log` events at all. They
      * carry the same information as the bytes, so the service sends one or the
@@ -176,7 +206,7 @@ class JsonRpcBackend implements PartcadBackend {
      * serialises them, so this is settled before the first thing that logs.
      */
     private requestRenderedLogs(): void {
-        this.connection.sendRequest('log.mode', { ansi: true }).then(
+        this.connection.sendRequest('log.mode', LOG_MODE_PARAMS).then(
             () => {
                 this.rendersLogs = true;
                 traceInfo('PartCAD service: rendering the log display service-side');

@@ -187,11 +187,42 @@ def test_asking_for_ansi_replaces_the_records_with_the_drawing():
     assert "log" not in methods, "the structured stream must stop, not run beside the drawing"
     assert "terminal" in methods
 
+    # A client that did not say it reads text is one from before, and reads base64.
     drawn = "".join(
         base64.b64decode(m["params"]["line"]).decode("utf-8") for m in messages if m.get("method") == "terminal"
     )
     assert "hello" in drawn
     assert ESC + "[92m" in drawn, "the drawing carries the colours, which the records did not"
+
+
+def test_a_client_that_reads_text_gets_the_drawing_as_text():
+    """No base64: JSON carries any string, the escape characters included."""
+    messages = _serve(
+        [
+            {"jsonrpc": "2.0", "id": 1, "method": "log.mode", "params": {"ansi": True, "text": True}},
+            {"jsonrpc": "2.0", "id": 2, "method": "speak", "params": {}},
+        ],
+        _speak,
+    )
+    assert {"jsonrpc": "2.0", "id": 1, "result": {"ansi": True, "text": True}} in messages
+
+    pieces = [m["params"] for m in messages if m.get("method") == "terminal"]
+    assert pieces and all(set(piece) == {"text"} for piece in pieces)
+    drawn = "".join(piece["text"] for piece in pieces)
+    assert "hello" in drawn
+    assert ESC + "[92m" in drawn
+
+
+def test_text_is_not_promised_to_a_client_that_turned_the_drawing_off():
+    messages = _serve(
+        [
+            {"jsonrpc": "2.0", "id": 1, "method": "log.mode", "params": {"ansi": False, "text": True}},
+            {"jsonrpc": "2.0", "id": 2, "method": "speak", "params": {}},
+        ],
+        _speak,
+    )
+    assert {"jsonrpc": "2.0", "id": 1, "result": {"ansi": False}} in messages
+    assert [m.get("method") for m in messages if "method" in m] == ["log"]
 
 
 def test_the_mode_can_be_turned_back_off():

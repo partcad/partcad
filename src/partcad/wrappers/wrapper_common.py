@@ -126,7 +126,10 @@ def handle_output(model):
         sys.stdout.write(serialized)
         sys.stdout.flush()
         return
-    payload = serialized.encode("utf-8")
+    # Through a view: 'os.write' may take less than it is given (a pipe, a
+    # signal), and slicing the bytes themselves would copy what is left of a
+    # multi-megabyte answer after every write that fell short.
+    payload = memoryview(serialized.encode("utf-8"))
     while payload:
         payload = payload[os.write(_response_fd, payload) :]
 

@@ -13,7 +13,9 @@ whatever interpreter the IDE happens to be driving.
 
 The module keeps one connection open per process and reuses it, because a show
 is interactive: reconnecting per part adds a round trip to every click in the
-IDE's tree. The connection is re-established transparently if the IDE restarts.
+IDE's tree. The connection is re-established transparently if the IDE restarts,
+and a message sent into the connection the restart left behind is sent again
+over the new one; a message the IDE is only slow to acknowledge is not.
 """
 
 import os
@@ -85,6 +87,10 @@ class Connection:
         self.port = port or _port()
         self.connect_timeout = connect_timeout
         self._socket = None
+        # Whether the last 'send' failed because the connection was gone; see there.
+        self.lost = False
+        # How much of the reply to the message being sent has arrived.
+        self._reply_bytes = 0
 
     def __enter__(self):
         self.connect()
@@ -118,16 +124,42 @@ class Connection:
                 self._socket = None
 
     def send(self, message: dict, reply_timeout: float = REPLY_TIMEOUT) -> dict:
-        """Send one message and return the IDE's acknowledgement."""
+        """Send one message and return the IDE's acknowledgement.
+
+        A connection that fails is dropped, and 'lost' then says whether the
+        failure was the connection turning out to be gone: refused as it was
+        written to, reset, or closed by the IDE before a byte of the reply. That
+        is what a connection held across an IDE restart does when it is next
+        used (a half-open connection is indistinguishable from a live one until
+        then), and the one failure after which the message can be sent again
+        over a new connection without handing it to an IDE that already has it.
+        Where it shows depends on the size of the frame: one that fits the
+        socket's send buffer is written without complaint into a connection
+        whose far end has gone, and the closure is seen only when the reply is
+        read -- so "the write failed" alone would not catch it.
+
+        A timeout is never that. The IDE is there, has the frame or as much of it
+        as it has read, and is slow to answer -- which is when the frame is
+        large, and when sending all of it again would only make it slower.
+        """
+        self.lost = False
+        self._reply_bytes = 0
         self.connect()
         try:
             self._socket.settimeout(reply_timeout)
             self._socket.sendall(protocol.encode_frame(message))
             return self._receive()
-        except (OSError, ProtocolError):
-            # A half-open connection (the IDE was restarted while we held it) is
-            # indistinguishable from a real failure until we try to use it, so
-            # drop it and let the caller decide whether to retry.
+        except TimeoutError:
+            self.close()
+            raise
+        except OSError:
+            # A broken pipe or a reset: the far end is gone, unless it had
+            # already begun to answer, in which case it had the message.
+            self.lost = self._reply_bytes == 0
+            self.close()
+            raise
+        except ProtocolError:
+            # An end of file before the reply set 'lost' where it was read.
             self.close()
             raise
 
@@ -141,7 +173,9 @@ class Connection:
         while remaining > 0:
             chunk = self._socket.recv(remaining)
             if not chunk:
+                self.lost = self._reply_bytes == 0
                 raise ProtocolError("the IDE closed the connection after %d of %d bytes" % (length - remaining, length))
+            self._reply_bytes += len(chunk)
             chunks.append(chunk)
             remaining -= len(chunk)
         return b"".join(chunks)
@@ -152,7 +186,14 @@ _shared_connection = None
 
 
 def _send(message: dict, reply_timeout: float = REPLY_TIMEOUT) -> dict:
-    """Send a message over the shared connection, reconnecting once if it is stale."""
+    """Send a message over the shared connection, reconnecting once if it is stale.
+
+    Stale means found gone ('Connection.lost'), and nothing else does: any other
+    failure is about a message the IDE has. A reply timeout used to count as
+    well, so a show slower to acknowledge than the timeout was sent again in
+    full -- a whole frame of geometry, to an IDE still busy with the first copy,
+    and then waited for as long again.
+    """
     global _shared_connection
 
     with _shared_lock:
@@ -165,8 +206,9 @@ def _send(message: dict, reply_timeout: float = REPLY_TIMEOUT) -> dict:
                 _shared_connection = None
                 raise
             except (OSError, ProtocolError):
+                lost = _shared_connection.lost
                 _shared_connection = None
-                if attempt == 1:
+                if attempt == 1 or not lost:
                     raise
         # Unreachable: the loop either returns or raises.
         raise ViewerNotAvailable("failed to reach the Digital Thread")  # pragma: no cover - unreachable, see above

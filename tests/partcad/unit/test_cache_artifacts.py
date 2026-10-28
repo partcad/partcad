@@ -17,8 +17,10 @@ would be started, and counted.
 """
 
 import asyncio
+import gzip
 import hashlib
 import io
+import json
 import os
 import pathlib
 import tarfile
@@ -35,6 +37,13 @@ from partcad.cache import Cache
 from partcad.cache_backend import ARTIFACT_KEY
 from partcad.cache_hash import CacheHash
 from partcad.geom import Location
+
+try:
+    from compression.zstd import compress as _zstd_compress
+    from compression.zstd import decompress as _zstd_decompress
+except ImportError:  # pragma: no cover - exercised on the other interpreter
+    from backports.zstd import compress as _zstd_compress
+    from backports.zstd import decompress as _zstd_decompress
 
 
 def _cache(tmp_path, max_size=10 * 1024 * 1024, min_size=100) -> Cache:
@@ -168,21 +177,236 @@ def test_an_entry_missing_a_file_the_caller_needs_is_a_miss(tmp_path):
     assert not target.exists()
 
 
-def _entry(members: dict) -> bytes:
-    buffer = io.BytesIO()
-    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+def _entry(members: dict, compression: str = "zstd") -> bytes:
+    """An entry as something other than this release may have written it.
+
+    "zstd" is the format '_pack' writes, "gzip" the one releases before it did,
+    which shared tiers can still hold.
+    """
+    tar_bytes = io.BytesIO()
+    with tarfile.open(fileobj=tar_bytes, mode="w") as tar:
         for name, data in members.items():
             info = tarfile.TarInfo(name)
             info.size = len(data)
             tar.addfile(info, io.BytesIO(data))
-    return buffer.getvalue()
+    if compression == "gzip":
+        return gzip.compress(tar_bytes.getvalue(), compresslevel=9)
+    return _zstd_compress(tar_bytes.getvalue())
 
 
+def test_an_entry_is_an_uncompressed_tar_in_one_zstd_frame(tmp_path):
+    model = tmp_path / "model.vtu"
+    model.write_bytes(b"<VTKFile/>" * 50)
+
+    data = cache_artifacts._pack({"success": True}, {"model": str(model)}, None, 0)
+
+    assert data[:4] == shape_envelope.ZSTD_MAGIC
+    with tarfile.open(fileobj=io.BytesIO(_zstd_decompress(data)), mode="r:") as tar:
+        # The result first: it says where everything after it goes.
+        assert tar.getnames() == ["result.json", "files/model"]
+
+
+def test_an_entry_an_earlier_release_gzipped_is_still_read(tmp_path):
+    """Nothing in the key says which release wrote an entry, so the reader sniffs."""
+    cache = _cache(tmp_path)
+    # What '_pack' stores for a result naming a file in its directory: the
+    # directory replaced by the placeholder, and the separator after it this
+    # platform's own -- it is the run's path that is substituted, not a name.
+    trajectory = cache_artifacts.DIRECTORY_PLACEHOLDER + os.sep + "t.csv"
+    stored = {
+        "result.json": json.dumps({"success": True, "trajectory": trajectory}).encode("utf-8"),
+        "files/model": b"<VTKFile/>" * 50,
+        "directory/t.csv": b"t,z\n0,10\n",
+        "directory/meshes/block.stl": b"solid\n" * 40,
+    }
+    data = _entry(stored, compression="gzip")
+    assert data[:2] == b"\x1f\x8b"
+    assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
+
+    run = tmp_path / "run"
+    run.mkdir()
+    restored = _run(
+        cache_artifacts.restore_async(cache, _hash(), files={"model": str(run / "m.vtu")}, directory=str(run))
+    )
+    assert restored == {"success": True, "trajectory": str(run / "t.csv")}
+    assert (run / "m.vtu").read_bytes() == b"<VTKFile/>" * 50
+    assert (run / "t.csv").read_bytes() == b"t,z\n0,10\n"
+    assert (run / "meshes" / "block.stl").read_bytes() == b"solid\n" * 40
+
+
+def test_many_files_come_back_from_one_pass_over_the_entry(tmp_path):
+    cache = _cache(tmp_path, max_size=64 * 1024 * 1024)
+    first = tmp_path / "run-a"
+    first.mkdir()
+    for i in range(40):
+        (first / ("frame%02d.bin" % i)).write_bytes(bytes([i]) * (64 * 1024 + i))
+    assert _run(cache_artifacts.store_async(cache, _hash(), {"frames": 40}, directory=str(first)))
+
+    second = tmp_path / "run-b"
+    second.mkdir()
+    assert _run(cache_artifacts.restore_async(cache, _hash(), directory=str(second))) == {"frames": 40}
+    for i in range(40):
+        assert (second / ("frame%02d.bin" % i)).read_bytes() == bytes([i]) * (64 * 1024 + i)
+
+
+def test_an_entry_that_expands_past_what_gzip_could_is_a_miss(tmp_path, monkeypatch):
+    """A few bytes of zstd can stand for gigabytes; one from a shared tier may not."""
+    cache = _cache(tmp_path)
+    # Scaled down, so the test does not have to build the entry it is about.
+    monkeypatch.setattr(cache_artifacts, "_MAX_EXPANSION_FLOOR", 1 << 20)
+    data = _entry({"result.json": b"{}", "files/model": bytes(4 << 20)})
+    assert len(data) * cache_artifacts._MAX_EXPANSION < 4 << 20
+    assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
+
+    target = tmp_path / "model.bin"
+    assert _run(cache_artifacts.restore_async(cache, _hash(), files={"model": str(target)})) is None
+    assert not target.exists()
+    assert _staged_files(tmp_path) == []
+
+
+def _staged_files(root) -> list:
+    """Every staged file left anywhere under 'root'."""
+    return [
+        os.path.join(where, name)
+        for where, _dirs, names in os.walk(root)
+        for name in names
+        if name.endswith(cache_artifacts._STAGING_SUFFIX)
+    ]
+
+
+def test_the_members_of_an_entry_are_put_back_without_being_held_in_memory_together(tmp_path, monkeypatch):
+    """Each member goes to disk as it is read, a chunk at a time, not all of them into memory first.
+
+    An entry is as large as a tier takes, decompressed further still; holding
+    the lot before writing any of it would cost all of that at once.
+    """
+    import random
+    import tracemalloc
+
+    member = 2 << 20
+    generator = random.Random(0)
+    stored = {"result.json": b'{"frames": 6}'}
+    for i in range(6):
+        # Incompressible, so the entry is not small because it is mostly zeros.
+        stored["directory/frame%d.bin" % i] = generator.randbytes(member)
+    data = _entry(stored)
+    run = tmp_path / "run"
+    run.mkdir()
+    monkeypatch.setattr(cache_artifacts, "_COPY_CHUNK", 64 * 1024)
+
+    tracing = tracemalloc.is_tracing()
+    if not tracing:
+        tracemalloc.start()
+    tracemalloc.reset_peak()
+    # What is traced already (the entry itself, and all the input when tracing was on before) is not `_unpack`'s.
+    baseline, _peak = tracemalloc.get_traced_memory()
+    try:
+        restored = cache_artifacts._unpack(data, {}, str(run))
+        _current, peak = tracemalloc.get_traced_memory()
+    finally:
+        if not tracing:
+            tracemalloc.stop()
+
+    assert restored == {"frames": 6}
+    # Less than one member at the peak, where holding them all is six.
+    assert peak - baseline < member, "peaked %d bytes above where it started" % (peak - baseline)
+    assert sorted(os.listdir(run)) == ["frame%d.bin" % i for i in range(6)]
+    for i in range(6):
+        assert (run / ("frame%d.bin" % i)).read_bytes() == stored["directory/frame%d.bin" % i]
+
+
+@pytest.mark.parametrize(
+    "members, files",
+    [
+        # The model is missing, which is known only once the whole entry is read.
+        ({"directory/a.bin": b"a" * 5000, "directory/sub/b.bin": b"b" * 5000}, {"model": "m.vtu"}),
+        # A member that would land outside the directory, after two that did not.
+        ({"directory/a.bin": b"a" * 5000, "directory/sub/b.bin": b"b", "directory/../out.txt": b"!"}, {}),
+        # A member that expands past the bound, after two that were staged.
+        ({"directory/a.bin": b"a" * 5000, "directory/sub/b.bin": b"b", "directory/z.bin": bytes(4 << 20)}, {}),
+    ],
+    ids=["missing", "escaping", "expanding"],
+)
+def test_an_entry_that_turns_out_a_miss_leaves_nothing_of_itself_behind(tmp_path, monkeypatch, members, files):
+    """What was staged before the entry turned out a miss is removed, directories and all."""
+    cache = _cache(tmp_path)
+    monkeypatch.setattr(cache_artifacts, "_MAX_EXPANSION_FLOOR", 1 << 20)
+    data = _entry(dict({"result.json": b"{}"}, **members))
+    assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
+
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "kept.txt").write_text("was here before")
+    asked = {role: str(run / name) for role, name in files.items()}
+    assert _run(cache_artifacts.restore_async(cache, _hash(), files=asked, directory=str(run))) is None
+
+    assert os.listdir(run) == ["kept.txt"]
+    assert not (tmp_path / "out.txt").exists()
+    assert _staged_files(tmp_path) == []
+
+
+def test_a_miss_removes_the_directories_it_made_for_a_file_and_no_others(tmp_path, monkeypatch):
+    cache = _cache(tmp_path)
+    monkeypatch.setattr(cache_artifacts, "_MAX_EXPANSION_FLOOR", 1 << 20)
+    data = _entry({"result.json": b"{}", "files/model": b"m" * 5000, "files/zzz": bytes(4 << 20)})
+    assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
+    (tmp_path / "out").mkdir()
+
+    target = tmp_path / "out" / "deep" / "er" / "model.vtu"
+    assert _run(cache_artifacts.restore_async(cache, _hash(), files={"model": str(target)})) is None
+
+    assert os.listdir(tmp_path / "out") == []
+    assert _staged_files(tmp_path) == []
+
+
+def test_a_directory_where_a_file_goes_is_a_miss_that_puts_nothing_in_place(tmp_path):
+    """Found while staging, not while placing: the file placed first would be left behind."""
+    cache = _cache(tmp_path)
+    data = _entry({"result.json": b"{}", "files/model": b"new model", "directory/frame.bin": b"frame"})
+    assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
+    run = tmp_path / "run"
+    (run / "frame.bin").mkdir(parents=True)
+    model = run / "m.vtu"
+    model.write_bytes(b"old model")
+
+    restored = _run(cache_artifacts.restore_async(cache, _hash(), files={"model": str(model)}, directory=str(run)))
+
+    assert restored is None
+    assert model.read_bytes() == b"old model"
+    assert _staged_files(tmp_path) == []
+
+
+def test_an_entry_that_does_not_start_with_its_result_is_a_miss(tmp_path):
+    """Every release writes the result first: it says where the rest goes."""
+    cache = _cache(tmp_path)
+    data = _entry({"files/model": b"m" * 5000, "result.json": b"{}"})
+    assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
+
+    target = tmp_path / "model.vtu"
+    assert _run(cache_artifacts.restore_async(cache, _hash(), files={"model": str(target)})) is None
+    assert not target.exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
+def test_a_file_put_back_has_the_permissions_a_run_would_have_given_it(tmp_path):
+    """What is renamed into place is the staged file, so that is what has to have the right mode."""
+    cache = _cache(tmp_path)
+    model = tmp_path / "model.vtu"
+    model.write_bytes(b"<VTKFile/>" * 50)
+    assert _run(cache_artifacts.store_async(cache, _hash(), {}, files={"model": str(model)}))
+
+    target = tmp_path / "again" / "model.vtu"
+    assert _run(cache_artifacts.restore_async(cache, _hash(), files={"model": str(target)})) == {}
+    assert os.stat(target).st_mode & 0o777 == os.stat(model).st_mode & 0o777
+    assert sorted(os.listdir(target.parent)) == ["model.vtu"]
+
+
+@pytest.mark.parametrize("compression", ["zstd", "gzip"])
 @pytest.mark.parametrize("name", ["directory/../escaped.txt", "directory//etc/escaped.txt"])
-def test_an_entry_that_would_write_outside_the_directory_is_refused(tmp_path, name):
+def test_an_entry_that_would_write_outside_the_directory_is_refused(tmp_path, name, compression):
     """Shared tiers are written by other people: nothing lands outside the run."""
     cache = _cache(tmp_path)
-    data = _entry({"result.json": b"{}", name: b"gotcha"})
+    data = _entry({"result.json": b"{}", name: b"gotcha"}, compression)
     assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
 
     directory = tmp_path / "run"
@@ -393,6 +617,10 @@ def simulated(tmp_path, monkeypatch):
     )
     ctx = pc.Context(str(root))
     ctx.cache_artifacts = _cache(tmp_path)
+    # A run's directory is named after what it simulates, which is the same in
+    # every test here: under the real state directory, a test on another
+    # worker would be rerunning into the directory this one reads back.
+    monkeypatch.setattr(ctx.user_config, "internal_state_dir", str(tmp_path / "state"))
     runs = []
 
     async def export(_ctx, _scene, _impl, directory):

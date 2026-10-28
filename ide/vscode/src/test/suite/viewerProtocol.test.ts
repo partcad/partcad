@@ -135,6 +135,108 @@ suite('Digital Thread protocol', () => {
         assert.deepStrictEqual(reader.push(secondFrame.subarray(4)), [second]);
     });
 
+    test('a header split across chunks is read once its last byte arrives', () => {
+        // The reader keeps the chunks as they came rather than one buffer, so a
+        // header straddling them is the case it has to put together itself.
+        const message = { type: MSG_SHOW, id: 'header', objects: [] };
+        const next = { type: MSG_SHOW, id: 'next', objects: [] };
+        const frame = encodeFrame(message);
+        const nextFrame = encodeFrame(next);
+        const reader = new FrameReader();
+
+        assert.deepStrictEqual(reader.push(frame.subarray(0, 3)), []);
+        assert.deepStrictEqual(reader.push(frame.subarray(3, 7)), []);
+        assert.deepStrictEqual(reader.push(frame.subarray(7, HEADER_LENGTH + 1)), []);
+        // The rest of this frame and the first half of the next one's header.
+        assert.deepStrictEqual(
+            reader.push(Buffer.concat([frame.subarray(HEADER_LENGTH + 1), nextFrame.subarray(0, 5)])),
+            [message],
+        );
+        assert.deepStrictEqual(reader.push(nextFrame.subarray(5)), [next]);
+    });
+
+    test('a stream of frames cut into tiny chunks of every size comes back whole and in order', () => {
+        const messages = Array.from({ length: 7 }, (_, i) => ({
+            type: MSG_SHOW,
+            id: `m${i}`,
+            objects: [],
+            pad: 'x'.repeat(i * 13),
+        }));
+        const stream = Buffer.concat(messages.map((message) => encodeFrame(message)));
+
+        for (let size = 1; size <= 23; size++) {
+            const reader = new FrameReader();
+            const received: ViewerMessage[] = [];
+            for (let i = 0; i < stream.length; i += size) {
+                received.push(...reader.push(stream.subarray(i, i + size)));
+            }
+            assert.deepStrictEqual(received, messages, `chunks of ${size} bytes`);
+        }
+    });
+
+    test('a frame spanning hundreds of chunks is reassembled, and a frame after it in its last chunk too', () => {
+        // The shape of a real show of a large assembly: megabytes of base64
+        // geometry, delivered by the socket a few KiB at a time.
+        const big = { type: MSG_SHOW, id: 'big', objects: [], blob: 'g'.repeat(2 * 1024 * 1024) };
+        const small = { type: MSG_SHOW, id: 'small', objects: [] };
+        const bigFrame = encodeFrame(big);
+        const stream = Buffer.concat([bigFrame, encodeFrame(small)]);
+        const chunk = 4096;
+        const reader = new FrameReader();
+
+        const received: ViewerMessage[] = [];
+        let pushes = 0;
+        for (let i = 0; i < stream.length; i += chunk) {
+            const messages = reader.push(stream.subarray(i, i + chunk));
+            pushes++;
+            if (i + chunk < bigFrame.length) {
+                assert.deepStrictEqual(messages, [], `chunk ${pushes} completed a frame early`);
+            }
+            received.push(...messages);
+        }
+        assert.ok(pushes > 500, `only ${pushes} chunks`);
+        assert.deepStrictEqual(received, [big, small]);
+    });
+
+    test('a frame inside one chunk is decoded where it lies', () => {
+        // Nothing to copy when the bytes are already contiguous: several small
+        // frames in one 'data' event are each decoded from a view of it.
+        const reader = new FrameReader();
+        const frames = [0, 1, 2].map((i) => encodeFrame({ type: MSG_SHOW, id: `${i}` }));
+        const chunk = Buffer.concat([...frames, frames[0].subarray(0, 2)]);
+
+        assert.deepStrictEqual(
+            reader.push(chunk).map((message) => message.id),
+            ['0', '1', '2'],
+        );
+        assert.deepStrictEqual(
+            reader.push(frames[0].subarray(2)).map((message) => message.id),
+            ['0'],
+        );
+    });
+
+    test('the reader refuses a bad header as soon as it is in, and goes on refusing it', () => {
+        // The caller drops the connection on the first throw, but a reader that
+        // consumed the bad bytes would read whatever followed as a header.
+        const bad = header('NOPE', VERSION, 1, 1000);
+        const reader = new FrameReader();
+
+        assert.deepStrictEqual(reader.push(bad.subarray(0, 6)), []);
+        // No payload yet: the header alone is enough to know.
+        assert.throws(() => reader.push(bad.subarray(6)), ProtocolError);
+        assert.throws(() => reader.push(encodeFrame({ type: MSG_SHOW })), ProtocolError);
+    });
+
+    test('the reader refuses a payload that is not a message, and goes on refusing it', () => {
+        const payload = Buffer.from('not json', 'utf-8');
+        const frame = Buffer.concat([header(MAGIC, VERSION, 1, payload.length), payload]);
+        const reader = new FrameReader();
+
+        assert.deepStrictEqual(reader.push(frame.subarray(0, 12)), []);
+        assert.throws(() => reader.push(frame.subarray(12)), ProtocolError);
+        assert.throws(() => reader.push(encodeFrame({ type: MSG_SHOW })), ProtocolError);
+    });
+
     test('a bad header is rejected rather than reinterpreted', () => {
         assert.throws(() => decodeHeader(header('NOPE', VERSION, 1, 0)), ProtocolError);
         assert.throws(() => decodeHeader(header(MAGIC, VERSION + 1, 1, 0)), ProtocolError);

@@ -12,7 +12,6 @@ output stream with responses, guarded by a lock so the log-streaming thread and
 the dispatch loop never interleave a frame.
 """
 
-import base64
 import sys
 import threading
 from typing import BinaryIO, Mapping
@@ -20,6 +19,7 @@ from typing import BinaryIO, Mapping
 from partcad_utils.framing import Peer, read_message, write_message
 from partcad_utils.logging_ansi_render import AnsiEventRenderer
 
+from ..core.events import TERMINAL, TERMINAL_TEXT, log_mode_result, terminal_params
 from ..rpc.dispatcher import INVALID_PARAMS, Dispatcher, Handler
 
 # The same opt-in the socket daemon answers; see the note on `LOG_MODE_METHOD`
@@ -36,6 +36,8 @@ def serve(read_stream: BinaryIO, write_stream: BinaryIO, session, registry: Mapp
     # Whether the client reads attachments, as the socket server keeps it: the
     # editor runs this channel too (`partcad.serviceChannel: stdio`).
     peer = Peer()
+    # Whether the client reads the drawing as text; see `socket_server.LOG_MODE_METHOD`.
+    as_text = [False]
 
     def send(event, payload):
         try:
@@ -82,10 +84,9 @@ def serve(read_stream: BinaryIO, write_stream: BinaryIO, session, registry: Mapp
                             )
                     continue
                 wants_ansi = bool((params or {}).get("ansi"))
+                as_text[0] = bool((params or {}).get(TERMINAL_TEXT))
                 if wants_ansi and renderer[0] is None:
-                    renderer[0] = AnsiEventRenderer(
-                        lambda text: send("terminal", {"line": base64.b64encode(text.encode("utf-8")).decode("ascii")})
-                    )
+                    renderer[0] = AnsiEventRenderer(lambda text: send(TERMINAL, terminal_params(text, as_text[0])))
                 elif not wants_ansi and renderer[0] is not None:
                     renderer[0].close()
                     renderer[0] = None
@@ -93,7 +94,11 @@ def serve(read_stream: BinaryIO, write_stream: BinaryIO, session, registry: Mapp
                     with lock:
                         write_message(
                             write_stream,
-                            {"jsonrpc": "2.0", "id": request["id"], "result": {"ansi": renderer[0] is not None}},
+                            {
+                                "jsonrpc": "2.0",
+                                "id": request["id"],
+                                "result": log_mode_result(renderer[0] is not None, as_text[0]),
+                            },
                         )
                 continue
 

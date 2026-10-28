@@ -35,6 +35,9 @@ class FakeIde:
         self._socket.settimeout(0.05)
         self.port = self._socket.getsockname()[1]
         self._stop = threading.Event()
+        # 'hang_up()': close the connection being served, from this end.
+        self._hang_up = threading.Event()
+        self._hung_up = threading.Event()
         self._thread = threading.Thread(target=self._serve, daemon=True)
         self._thread.start()
 
@@ -53,9 +56,14 @@ class FakeIde:
                     self._handle(conn)
                 except OSError:
                     pass
+            if self._hang_up.is_set():
+                self._hang_up.clear()
+                self._hung_up.set()
 
     def _handle(self, conn):
         while not self._stop.is_set():
+            if self._hang_up.is_set():
+                return
             try:
                 header = self._read_exactly(conn, protocol.HEADER_LENGTH)
             except TimeoutError:
@@ -89,6 +97,17 @@ class FakeIde:
             chunks.append(chunk)
             remaining -= len(chunk)
         return b"".join(chunks)
+
+    def hang_up(self):
+        """Close the connection being served from this end, as an IDE that restarts does.
+
+        Between frames, and only once it is closed: the client is left holding a
+        connection whose far end has gone, and nothing it writes afterwards is
+        read by this server.
+        """
+        self._hung_up.clear()
+        self._hang_up.set()
+        assert self._hung_up.wait(timeout=10), "the fake IDE did not hang up"
 
     def close(self):
         self._stop.set()
@@ -280,6 +299,154 @@ def test_show_reconnects_after_the_ide_restarts(ide):
     client.show(obj)
     assert len(ide.received) == 2
     assert ide.connections == 2
+
+
+def test_show_reconnects_after_the_ide_hangs_up_on_an_idle_connection(ide):
+    """The restart as it really happens: the IDE closes its end, not ours.
+
+    A small frame is then written into the dead connection without complaint,
+    and the connection is found gone only when the reply is read - so a client
+    that resent only after a failed write would not reconnect at all.
+    """
+    obj = protocol.make_node(b"glTF")
+    client.show(obj)
+
+    ide.hang_up()
+
+    client.show(obj)
+    assert len(ide.received) == 2
+    assert ide.connections == 2
+
+
+class FakeSocket:
+    """A connection to an IDE that does what a test says, with no network at all.
+
+    'behaviour' is what happens to the frame written to it:
+
+    * "ack": it is acknowledged.
+    * "timeout": nothing comes back before the reply timeout.
+    * "refused": the write fails, as it does into a connection reset by its peer.
+    * "closed": the write succeeds and the connection turns out closed when the
+      reply is read, as a small frame does into a connection whose IDE has gone.
+    * "reset": the same, ending in a reset rather than an end of file.
+    * "reset-mid-reply": part of the acknowledgement arrives, then a reset.
+    * "garbage": something answers that does not speak the protocol.
+    """
+
+    def __init__(self, behaviour, written):
+        self.behaviour = behaviour
+        self.written = written
+        self.reply = b""
+
+    def setsockopt(self, *args):
+        pass
+
+    def settimeout(self, timeout):
+        pass
+
+    def close(self):
+        pass
+
+    def sendall(self, data):
+        if self.behaviour == "refused":
+            raise BrokenPipeError(32, "Broken pipe")
+        message = protocol.decode_payload(bytes(data)[protocol.HEADER_LENGTH :])
+        self.written.append((self, message))
+        ack = protocol.encode_frame({"type": protocol.MSG_ACK, "id": message.get("id"), "ok": True})
+        if self.behaviour == "ack":
+            self.reply = ack
+        elif self.behaviour == "reset-mid-reply":
+            self.reply = ack[:4]
+        elif self.behaviour == "garbage":
+            self.reply = b"HTTP/1.1 400 Bad Request\r\n\r\n"
+
+    def recv(self, size):
+        if self.behaviour == "timeout":
+            raise TimeoutError("timed out")
+        if self.reply:
+            chunk, self.reply = self.reply[:size], self.reply[size:]
+            return chunk
+        if self.behaviour in ("reset", "reset-mid-reply"):
+            raise ConnectionResetError(104, "Connection reset by peer")
+        return b""
+
+
+@pytest.fixture
+def connections(monkeypatch):
+    """Script the connections the client makes: append a behaviour per connection.
+
+    Yields the list to append to and the list of (socket, message) pairs
+    written; a connection made past the end of the script is refused.
+    """
+    behaviours = []
+    written = []
+    sockets = []
+
+    def create_connection(address, timeout=None):
+        if len(sockets) == len(behaviours):
+            raise ConnectionRefusedError(111, "Connection refused")
+        sockets.append(FakeSocket(behaviours[len(sockets)], written))
+        return sockets[-1]
+
+    monkeypatch.setattr(client.socket, "create_connection", create_connection)
+    client.disconnect()
+    try:
+        yield behaviours, written, sockets
+    finally:
+        client.disconnect()
+
+
+def test_a_show_whose_reply_times_out_is_not_sent_again(connections):
+    # The IDE has the frame and is working through it; a second copy is a whole
+    # frame of geometry more for it to read, and another timeout to wait out.
+    behaviours, written, sockets = connections
+    behaviours += ["timeout", "ack"]
+
+    with pytest.raises(TimeoutError):
+        client.show(protocol.make_node(b"glTF"))
+    assert len(written) == 1
+    assert len(sockets) == 1
+
+    # The connection that timed out is not reused: the IDE may yet answer on it,
+    # and that answer would be read as the reply to the next message.
+    client.show(protocol.make_node(b"glTF"))
+    assert [connection for connection, _ in written] == sockets
+
+
+@pytest.mark.parametrize("behaviour", ["refused", "closed", "reset"])
+def test_a_connection_found_gone_is_replaced_and_the_message_sent_again(connections, behaviour):
+    behaviours, written, sockets = connections
+    behaviours += [behaviour, "ack"]
+
+    reply = client.show(protocol.make_node(b"glTF"))
+
+    assert reply["ok"] is True
+    assert len(sockets) == 2
+    # Answered over the second connection, with the message the first one lost.
+    assert written[-1][0] is sockets[1]
+    assert {message["id"] for _, message in written} == {reply["id"]}
+
+
+@pytest.mark.parametrize(
+    "behaviour, error", [("reset-mid-reply", ConnectionResetError), ("garbage", protocol.ProtocolError)]
+)
+def test_an_ide_that_began_to_answer_is_not_sent_the_message_again(connections, behaviour, error):
+    behaviours, written, sockets = connections
+    behaviours += [behaviour, "ack"]
+
+    with pytest.raises(error):
+        client.show(protocol.make_node(b"glTF"))
+    assert len(written) == 1
+    assert len(sockets) == 1
+
+
+def test_a_message_is_sent_again_once_and_no_more(connections):
+    behaviours, written, sockets = connections
+    behaviours += ["closed", "closed", "ack"]
+
+    with pytest.raises(protocol.ProtocolError, match="closed the connection"):
+        client.show(protocol.make_node(b"glTF"))
+    assert len(sockets) == 2
 
 
 def test_missing_viewer_raises_rather_than_hanging(no_ide):
