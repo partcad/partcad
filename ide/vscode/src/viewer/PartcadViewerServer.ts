@@ -7,10 +7,16 @@
 import * as net from 'net';
 import * as vscode from 'vscode';
 import { traceError, traceLog, traceVerbose } from '../common/log/logging';
+import { GeometryExchange } from './geometryStore';
 import {
+    CAPABILITIES,
     FrameReader,
+    KEY_CAPABILITIES,
+    KEY_MISSING,
     MSG_ACK,
     MSG_CLEAR,
+    MSG_GEOMETRY,
+    MSG_OFFER,
     MSG_PING,
     MSG_SHOW,
     MSG_STATE,
@@ -67,6 +73,14 @@ export function listenOptions(port: number, host: string): net.ListenOptions {
 }
 
 /**
+ * The acknowledgement of 'message', with 'fields': what every message is answered
+ * with, saying what this side accepts (see KEY_CAPABILITIES in the Python module).
+ */
+function acknowledgement(message: ViewerMessage, fields: Record<string, unknown>): Record<string, unknown> {
+    return { type: MSG_ACK, id: message.id ?? null, [KEY_CAPABILITIES]: CAPABILITIES, ...fields };
+}
+
+/**
  * Listens for PartCAD processes that want to display something.
  *
  * The IDE is the server half of the protocol: 'partcad' runs in a subprocess (or
@@ -86,6 +100,12 @@ export class PartcadViewerServer implements vscode.Disposable {
     private stateProvider: (() => Promise<unknown>) | undefined;
     private sockets = new Set<net.Socket>();
     private readonly onMessageEmitter = new vscode.EventEmitter<ViewerMessage>();
+    /**
+     * The geometry this window was sent, by digest, and what each connection sent
+     * ahead of its show: what an offer is answered from, and what a show naming
+     * an entry as held is filled in from.
+     */
+    private readonly geometry = new GeometryExchange<net.Socket>();
 
     /** Fires for every well-formed message received from any connected PartCAD. */
     public readonly onMessage = this.onMessageEmitter.event;
@@ -163,6 +183,7 @@ export class PartcadViewerServer implements vscode.Disposable {
         });
         socket.on('close', () => {
             this.sockets.delete(socket);
+            this.geometry.forget(socket);
         });
     }
 
@@ -172,11 +193,29 @@ export class PartcadViewerServer implements vscode.Disposable {
             return;
         }
         let ok = true;
+        const reply: Record<string, unknown> = {};
         try {
             switch (message.type) {
-                case MSG_SHOW:
+                case MSG_SHOW: {
+                    const missing = this.geometry.resolve(socket, message);
+                    if (missing.length > 0) {
+                        // Let go of since the offer: not shown, and the client
+                        // sends what is missing and the show again.
+                        ok = false;
+                        reply[KEY_MISSING] = missing;
+                        break;
+                    }
+                    this.onMessageEmitter.fire(message);
+                    break;
+                }
                 case MSG_CLEAR:
                     this.onMessageEmitter.fire(message);
+                    break;
+                case MSG_OFFER:
+                    reply[KEY_MISSING] = this.geometry.offer(socket, message.digests);
+                    break;
+                case MSG_GEOMETRY:
+                    this.geometry.stage(socket, message);
                     break;
                 case MSG_PING:
                     break;
@@ -196,7 +235,7 @@ export class PartcadViewerServer implements vscode.Disposable {
         // so staying silent would hang an older or newer PartCAD rather than
         // degrade it.
         if (!socket.destroyed) {
-            socket.write(encodeFrame({ type: MSG_ACK, id: message.id ?? null, ok }));
+            socket.write(encodeFrame(acknowledgement(message, { ok, ...reply })));
         }
     }
 
@@ -209,7 +248,7 @@ export class PartcadViewerServer implements vscode.Disposable {
      * hung `pc ide state`.
      */
     private async answerState(socket: net.Socket, message: ViewerMessage): Promise<void> {
-        const reply: Record<string, unknown> = { type: MSG_ACK, id: message.id ?? null };
+        const reply: Record<string, unknown> = acknowledgement(message, {});
         try {
             if (this.stateProvider === undefined) {
                 throw new Error('this window is not ready to report its state yet');

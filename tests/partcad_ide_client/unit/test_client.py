@@ -4,8 +4,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import base64
 import socket
 import threading
+import zlib
 
 import pytest
 
@@ -17,13 +19,24 @@ class FakeIde:
 
     Binds an ephemeral port rather than the constant one so the suite never
     collides with a PartCAD IDE the developer actually has open.
+
+    'capabilities' None is an IDE from before them, which says nothing and reads
+    JSON frames only - and drops the connection at a binary one, as such an IDE
+    does. Given CAP_OFFER it answers offers from what it holds, which is what it
+    was sent; 'forget' is how many shows it answers as having let go of
+    everything it was offered meanwhile.
     """
 
-    def __init__(self, reply=True, ack=None):
+    def __init__(self, reply=True, ack=None, capabilities=None, forget=0):
         self.reply = reply
         # More to say in the acknowledgement: what an IDE answers a 'state' with.
         self.ack = ack or {}
+        self.capabilities = capabilities
+        self.forget = forget
+        self.held = {}
         self.received = []
+        # The kind of frame each message came in.
+        self.kinds = []
         self.connections = 0
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -70,7 +83,10 @@ class FakeIde:
                 continue
             if header is None:
                 return
-            length = protocol.decode_header(header)
+            kind, length = protocol.read_header(header)
+            if kind != protocol.KIND_JSON and self.capabilities is None:
+                # What an extension from before binary frames does with one.
+                return
             # The idle poll above is only safe between frames; once a header has
             # arrived the rest of the frame is already on its way, so wait for it.
             conn.settimeout(5)
@@ -78,13 +94,46 @@ class FakeIde:
             conn.settimeout(0.05)
             if payload is None:
                 return
-            message = protocol.decode_payload(payload)
+            message = protocol.decode_payload(payload, kind)
             self.received.append(message)
+            self.kinds.append(kind)
             if not self.reply:
                 return
             ack = {"type": protocol.MSG_ACK, "id": message.get("id"), "ok": True}
+            if self.capabilities is not None:
+                ack[protocol.KEY_CAPABILITIES] = list(self.capabilities)
+                ack.update(self._answer(message))
             ack.update(self.ack.get(message.get("type"), {}))
             conn.sendall(protocol.encode_frame(ack))
+
+    def _answer(self, message):
+        """What an IDE that accepts offers says beyond 'ok'."""
+        if protocol.CAP_OFFER not in self.capabilities:
+            return {}
+        if message["type"] == protocol.MSG_OFFER:
+            return {protocol.KEY_MISSING: [d for d in message[protocol.KEY_DIGESTS] if d not in self.held]}
+        if message["type"] == protocol.MSG_GEOMETRY:
+            self.held.update(message[protocol.KEY_GEOMETRY])
+            return {}
+        if message["type"] == protocol.MSG_SHOW:
+            table = message[protocol.KEY_OBJECT].get(protocol.KEY_GEOMETRY) or {}
+            if self.forget > 0:
+                self.forget -= 1
+                self.held.clear()
+            missing = [digest for digest, payload in table.items() if payload is None and digest not in self.held]
+            if missing:
+                return {"ok": False, protocol.KEY_MISSING: missing}
+            self.held.update({digest: payload for digest, payload in table.items() if payload is not None})
+        return {}
+
+    def shown(self):
+        """The geometry of the last show as the IDE ends up with it: what came with it, or what it held."""
+        show = [message for message in self.received if message["type"] == protocol.MSG_SHOW][-1]
+        table = show[protocol.KEY_OBJECT].get(protocol.KEY_GEOMETRY) or {}
+        return {digest: self.held[digest] if payload is None else payload for digest, payload in table.items()}
+
+    def types(self):
+        return [message["type"] for message in self.received]
 
     @staticmethod
     def _read_exactly(conn, length):
@@ -125,6 +174,26 @@ def ide(monkeypatch):
     finally:
         client.disconnect()
         server.close()
+
+
+@pytest.fixture
+def ide_with(monkeypatch):
+    """A FakeIde made as the test says, connected to like 'ide'."""
+    servers = []
+
+    def make(**options):
+        server = FakeIde(**options)
+        servers.append(server)
+        monkeypatch.setenv("PARTCAD_IDE_PORT", str(server.port))
+        client.disconnect()
+        return server
+
+    try:
+        yield make
+    finally:
+        client.disconnect()
+        for server in servers:
+            server.close()
 
 
 @pytest.fixture
@@ -316,6 +385,237 @@ def test_show_reconnects_after_the_ide_hangs_up_on_an_idle_connection(ide):
     client.show(obj)
     assert len(ide.received) == 2
     assert ide.connections == 2
+
+
+# ---- how a show is sent, by what the IDE says it reads -----------------------
+
+BOLT = b"glTF-bolt" + bytes(range(256)) * 8
+NUT = b"glTF-nut" + bytes(range(255, -1, -1)) * 8
+WASHER = b"glTF-washer"
+
+
+def assembly(**geometry):
+    """A tree the way PartCAD sends one: nodes naming the entries of a table on the root."""
+    return {
+        "name": "//pkg:assy",
+        "label": None,
+        "assembly": [{"name": "//pkg:%s" % digest, "label": digest, "gltfRef": digest} for digest in geometry],
+        protocol.KEY_GEOMETRY: dict(geometry),
+    }
+
+
+def named(**geometry):
+    """The table an IDE is sent for 'geometry': each buffer under the name of its own bytes."""
+    return {protocol.geometry_name(payload): payload for payload in geometry.values()}
+
+
+NEW_IDE = (protocol.CAP_BINARY, protocol.CAP_OFFER)
+
+
+def test_an_ide_from_before_capabilities_is_asked_once_and_sent_json(ide_with):
+    old = ide_with()
+
+    client.show(assembly(bolt=BOLT, nut=NUT))
+    client.show(assembly(bolt=BOLT, nut=NUT))
+
+    # The offer is how the client finds out; an IDE that does not know it says
+    # nothing, and from then on, over that connection, is not asked again.
+    assert old.types() == [protocol.MSG_OFFER, protocol.MSG_SHOW, protocol.MSG_SHOW]
+    assert old.kinds == [protocol.KIND_JSON] * 3
+    assert old.connections == 1
+    # In the spelling such an IDE inflates.
+    table = old.received[-1][protocol.KEY_OBJECT][protocol.KEY_GEOMETRY]
+    assert {digest: zlib.decompress(base64.b64decode(payload)) for digest, payload in table.items()} == named(
+        bolt=BOLT, nut=NUT
+    )
+
+
+def test_an_ide_that_accepts_offers_is_sent_only_what_it_lacks(ide_with):
+    new = ide_with(capabilities=NEW_IDE)
+
+    client.show(assembly(bolt=BOLT, nut=NUT))
+    assert new.types() == [protocol.MSG_OFFER, protocol.MSG_GEOMETRY, protocol.MSG_SHOW]
+    assert new.received[1][protocol.KEY_GEOMETRY] == named(bolt=BOLT, nut=NUT)
+    # The show itself names everything and carries nothing.
+    assert new.received[2][protocol.KEY_OBJECT][protocol.KEY_GEOMETRY] == dict.fromkeys(named(bolt=BOLT, nut=NUT))
+    assert new.kinds[1:] == [protocol.KIND_BINARY, protocol.KIND_BINARY]
+    assert new.shown() == named(bolt=BOLT, nut=NUT)
+
+    # An edit: the nut changed, the bolt did not, a washer is new.
+    del new.received[:]
+    client.show(assembly(bolt=BOLT, washer=WASHER))
+    assert new.types() == [protocol.MSG_OFFER, protocol.MSG_GEOMETRY, protocol.MSG_SHOW]
+    assert new.received[1][protocol.KEY_GEOMETRY] == named(washer=WASHER)
+    assert new.shown() == named(bolt=BOLT, washer=WASHER)
+
+    # The same again: nothing to send but the tree.
+    del new.received[:]
+    client.show(assembly(bolt=BOLT, washer=WASHER))
+    assert new.types() == [protocol.MSG_OFFER, protocol.MSG_SHOW]
+    assert new.connections == 1
+
+
+def test_the_tree_shown_is_left_as_it_was(ide_with):
+    ide_with(capabilities=NEW_IDE)
+    tree = assembly(bolt=BOLT)
+
+    client.show(tree)
+
+    assert tree[protocol.KEY_GEOMETRY] == {"bolt": BOLT}
+    assert tree["assembly"][0]["gltfRef"] == "bolt"
+
+
+def test_one_shape_meshed_at_another_tolerance_is_another_buffer_and_is_sent(ide_with):
+    """PartCAD names an entry by the shape it was tessellated from, and the mesh is the whole tree's.
+
+    The same part shown inside a large assembly and then alone is one name and two
+    buffers. A window keeps what it was sent by name, so under PartCAD's name the
+    part alone was drawn with the assembly's coarser mesh.
+    """
+    new = ide_with(capabilities=NEW_IDE)
+    coarse, fine = b"glTF-bolt-coarse", b"glTF-bolt-fine" + bytes(64)
+
+    client.show(assembly(bolt=coarse))
+    del new.received[:]
+    client.show(assembly(bolt=fine))
+
+    assert new.types() == [protocol.MSG_OFFER, protocol.MSG_GEOMETRY, protocol.MSG_SHOW]
+    assert new.received[1][protocol.KEY_GEOMETRY] == named(bolt=fine)
+    assert new.shown() == named(bolt=fine)
+
+
+def test_one_buffer_is_sent_once_whatever_shape_it_is_named_after(ide_with):
+    """The same bytes again - the same part at the same tolerance - are not sent again, under any name."""
+    new = ide_with(capabilities=NEW_IDE)
+
+    client.show(assembly(bolt=BOLT))
+    del new.received[:]
+    client.show(assembly(screw=BOLT))
+
+    assert new.types() == [protocol.MSG_OFFER, protocol.MSG_SHOW]
+    assert new.shown() == named(bolt=BOLT)
+
+
+def test_every_reference_names_the_entry_it_was_sent_under(ide_with):
+    """Nodes, the nodes inside them and the sketches the ports are drawn with: wherever one is."""
+    new = ide_with(capabilities=NEW_IDE)
+    tree = assembly(bolt=BOLT, nut=NUT)
+    tree["assembly"][0]["assembly"] = [{"name": "//pkg:inner", "gltfRef": "nut"}]
+    tree[protocol.KEY_SKETCHES] = {"hole": {"name": "hole", "gltfRef": "bolt"}}
+
+    client.show(tree)
+
+    shown = new.received[-1][protocol.KEY_OBJECT]
+    bolt, nut = protocol.geometry_name(BOLT), protocol.geometry_name(NUT)
+    assert [node["gltfRef"] for node in shown["assembly"]] == [bolt, nut]
+    assert shown["assembly"][0]["assembly"][0]["gltfRef"] == nut
+    assert shown[protocol.KEY_SKETCHES]["hole"]["gltfRef"] == bolt
+    assert set(shown[protocol.KEY_GEOMETRY]) == {bolt, nut}
+
+
+def test_an_ide_that_let_go_between_the_offer_and_the_show_is_sent_it_again(ide_with):
+    new = ide_with(capabilities=NEW_IDE)
+    client.show(assembly(bolt=BOLT))
+    del new.received[:]
+    new.forget = 1
+
+    reply = client.show(assembly(bolt=BOLT, nut=NUT))
+
+    assert reply["ok"] is True
+    assert new.types() == [
+        protocol.MSG_OFFER,
+        protocol.MSG_GEOMETRY,
+        protocol.MSG_SHOW,
+        protocol.MSG_GEOMETRY,
+        protocol.MSG_SHOW,
+    ]
+    assert new.received[3][protocol.KEY_GEOMETRY] == named(bolt=BOLT, nut=NUT)
+    assert new.shown() == named(bolt=BOLT, nut=NUT)
+
+
+def test_an_ide_that_keeps_letting_go_is_sent_the_show_whole(ide_with):
+    new = ide_with(capabilities=NEW_IDE, forget=2)
+
+    reply = client.show(assembly(bolt=BOLT))
+
+    assert reply["ok"] is True
+    assert new.types()[-1] == protocol.MSG_SHOW
+    assert new.received[-1][protocol.KEY_OBJECT][protocol.KEY_GEOMETRY] == named(bolt=BOLT)
+    assert new.kinds[-1] == protocol.KIND_BINARY
+
+
+def test_an_ide_that_reads_binary_frames_and_takes_no_offers_is_sent_the_show_whole(ide_with):
+    binary = ide_with(capabilities=(protocol.CAP_BINARY,))
+
+    client.show(assembly(bolt=BOLT))
+    client.show(assembly(bolt=BOLT))
+
+    assert binary.types() == [protocol.MSG_OFFER, protocol.MSG_SHOW, protocol.MSG_SHOW]
+    assert binary.kinds[1:] == [protocol.KIND_BINARY, protocol.KIND_BINARY]
+    assert binary.received[-1][protocol.KEY_OBJECT][protocol.KEY_GEOMETRY] == named(bolt=BOLT)
+
+
+def test_what_an_ide_accepts_is_forgotten_with_its_connection(ide_with):
+    """The next connection may be to another window, which may be another release."""
+    new = ide_with(capabilities=NEW_IDE)
+    client.show(assembly(bolt=BOLT))
+    assert client._shared_connection.capabilities == frozenset(NEW_IDE)
+
+    new.hang_up()
+    del new.received[:]
+    new.held.clear()
+    client.show(assembly(bolt=BOLT))
+
+    assert new.connections == 2
+    assert new.types() == [protocol.MSG_OFFER, protocol.MSG_GEOMETRY, protocol.MSG_SHOW]
+
+
+def test_a_tree_without_a_table_goes_as_json_without_asking(ide_with):
+    new = ide_with(capabilities=NEW_IDE)
+
+    client.show(protocol.make_node(BOLT, name="//pkg:bolt"))
+
+    assert new.types() == [protocol.MSG_SHOW]
+    assert new.kinds == [protocol.KIND_JSON]
+    assert protocol.decode_gltf(new.received[0][protocol.KEY_OBJECT][protocol.KEY_GLTF]) == BOLT
+
+
+def test_geometry_larger_than_a_frame_follows_in_several(ide_with, monkeypatch):
+    new = ide_with(capabilities=NEW_IDE)
+    monkeypatch.setattr(client, "GEOMETRY_FRAME_BUDGET", len(BOLT) + len(NUT) // 2)
+
+    client.show(assembly(bolt=BOLT, nut=NUT, washer=WASHER))
+
+    assert new.types() == [protocol.MSG_OFFER, protocol.MSG_GEOMETRY, protocol.MSG_GEOMETRY, protocol.MSG_SHOW]
+    assert new.shown() == named(bolt=BOLT, nut=NUT, washer=WASHER)
+
+
+def test_a_shape_too_large_for_a_binary_frame_goes_compressed(ide_with, monkeypatch):
+    """What fitted a frame before binary frames - compressed - fits one still."""
+    new = ide_with(capabilities=NEW_IDE)
+    huge = b"glTF" + b"\x00" * 200000
+    monkeypatch.setattr(protocol, "MAX_FRAME_LENGTH", 50000)
+    monkeypatch.setattr(client, "GEOMETRY_FRAME_BUDGET", 40000)
+
+    reply = client.show(assembly(bolt=huge))
+
+    assert reply["ok"] is True
+    assert new.types()[-1] == protocol.MSG_SHOW
+    assert new.kinds[-1] == protocol.KIND_JSON
+    assert new.shown() == {protocol.geometry_name(huge): base64.b64encode(zlib.compress(huge, 6)).decode("ascii")}
+
+
+def test_a_show_offered_over_a_connection_found_gone_is_offered_again_over_a_new_one(ide_with):
+    new = ide_with(capabilities=NEW_IDE)
+    client.show(assembly(bolt=BOLT))
+    new.hang_up()
+    del new.received[:]
+
+    reply = client.show(assembly(bolt=BOLT, nut=NUT))
+
+    assert reply["ok"] is True
+    assert new.types() == [protocol.MSG_OFFER, protocol.MSG_GEOMETRY, protocol.MSG_SHOW]
+    assert new.shown() == named(bolt=BOLT, nut=NUT)
 
 
 class FakeSocket:

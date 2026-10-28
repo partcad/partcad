@@ -16,6 +16,11 @@ is interactive: reconnecting per part adds a round trip to every click in the
 IDE's tree. The connection is re-established transparently if the IDE restarts,
 and a message sent into the connection the restart left behind is sent again
 over the new one; a message the IDE is only slow to acknowledge is not.
+
+The connection is also what is known about the IDE at its far end: what it
+accepts (see 'protocol.KEY_CAPABILITIES'), which decides how a show is sent -
+offered first and sent as blobs, sent whole as blobs, or sent as the JSON frame
+every IDE reads.
 """
 
 import os
@@ -28,6 +33,7 @@ from . import protocol
 from .protocol import (
     PARTCAD_IDE_HOST,
     PARTCAD_IDE_PORT,
+    FrameTooLarge,
     ProtocolError,
 )
 
@@ -91,6 +97,11 @@ class Connection:
         self.lost = False
         # How much of the reply to the message being sent has arrived.
         self._reply_bytes = 0
+        # What the IDE at the far end accepts, as it said in its last
+        # acknowledgement: None until one has arrived, and empty for an IDE that
+        # says nothing, which reads JSON frames and nothing else. Forgotten with
+        # the connection, because the next one may be to another window.
+        self.capabilities = None
 
     def __enter__(self):
         self.connect()
@@ -117,14 +128,20 @@ class Connection:
             pass
 
     def close(self):
+        self.capabilities = None
         if self._socket is not None:
             try:
                 self._socket.close()
             finally:
                 self._socket = None
 
-    def send(self, message: dict, reply_timeout: float = REPLY_TIMEOUT) -> dict:
+    def send(self, message: dict, reply_timeout: float = REPLY_TIMEOUT, binary: bool = False) -> dict:
         """Send one message and return the IDE's acknowledgement.
+
+        'binary' sends it as a KIND_BINARY frame, which only an IDE that said it
+        reads one may be sent (see 'capabilities'). A message too large for a frame
+        raises 'FrameTooLarge' before anything is written, and the connection is
+        left as it was.
 
         A connection that fails is dropped, and 'lost' then says whether the
         failure was the connection turning out to be gone: refused as it was
@@ -142,13 +159,14 @@ class Connection:
         as it has read, and is slow to answer -- which is when the frame is
         large, and when sending all of it again would only make it slower.
         """
+        parts = protocol.frame_parts(message, binary=binary)
         self.lost = False
         self._reply_bytes = 0
         self.connect()
         try:
             self._socket.settimeout(reply_timeout)
-            self._socket.sendall(protocol.encode_frame(message))
-            return self._receive()
+            self._write(parts)
+            reply = self._receive()
         except TimeoutError:
             self.close()
             raise
@@ -162,6 +180,32 @@ class Connection:
             # An end of file before the reply set 'lost' where it was read.
             self.close()
             raise
+        capabilities = reply.get(protocol.KEY_CAPABILITIES)
+        self.capabilities = (
+            frozenset(capability for capability in capabilities or () if isinstance(capability, str))
+            if isinstance(capabilities, list)
+            else frozenset()
+        )
+        return reply
+
+    # Parts smaller than this are gathered and written together; larger ones -
+    # the blobs of a binary frame - are written as they are, rather than copied
+    # into one buffer first.
+    _GATHER = 64 * 1024
+
+    def _write(self, parts):
+        """Write a frame's parts in order, without joining the large ones into a copy."""
+        pending = bytearray()
+        for part in parts:
+            if len(part) < self._GATHER:
+                pending += part
+                continue
+            if pending:
+                self._socket.sendall(pending)
+                pending = bytearray()
+            self._socket.sendall(part)
+        if pending:
+            self._socket.sendall(pending)
 
     def _receive(self) -> dict:
         length = protocol.decode_header(self._read_exactly(protocol.HEADER_LENGTH))
@@ -186,13 +230,22 @@ _shared_connection = None
 
 
 def _send(message: dict, reply_timeout: float = REPLY_TIMEOUT) -> dict:
-    """Send a message over the shared connection, reconnecting once if it is stale.
+    """Send a message over the shared connection, reconnecting once if it is stale (see '_exchange')."""
+    return _exchange(lambda connection: connection.send(message, reply_timeout=reply_timeout))
+
+
+def _exchange(converse):
+    """Run 'converse(connection)' over the shared connection, again over a new one if it was stale.
 
     Stale means found gone ('Connection.lost'), and nothing else does: any other
     failure is about a message the IDE has. A reply timeout used to count as
     well, so a show slower to acknowledge than the timeout was sent again in
     full -- a whole frame of geometry, to an IDE still busy with the first copy,
     and then waited for as long again.
+
+    'converse' may be several messages - a show is offered, then sent - and is
+    run again from its start: a connection found gone at any of them is one the
+    IDE has not shown anything over yet, since the show is always the last.
     """
     global _shared_connection
 
@@ -201,12 +254,13 @@ def _send(message: dict, reply_timeout: float = REPLY_TIMEOUT) -> dict:
             if _shared_connection is None:
                 _shared_connection = Connection()
             try:
-                return _shared_connection.send(message, reply_timeout=reply_timeout)
+                return converse(_shared_connection)
             except ViewerNotAvailable:
                 _shared_connection = None
                 raise
             except (OSError, ProtocolError):
                 lost = _shared_connection.lost
+                _shared_connection.close()
                 _shared_connection = None
                 if attempt == 1 or not lost:
                     raise
@@ -253,9 +307,10 @@ def show(
     an interface - so nothing here or on the far side asks which it is. The
     protocol module documents the node.
 
-    The glTF of each node is compressed and base64-encoded by whoever produced
-    it, not here, so a caller that already holds an encoded payload (PartCAD's
-    sandbox does) never has to decode it just to hand it over.
+    The glTF of each node is bytes, as the sandbox wrote it ('encode_gltf'); how
+    it is written onto the socket is decided here, by what the IDE at the other
+    end has said it reads (see '_show'). A payload in the text spelling of a
+    PartCAD before this one is taken too.
 
     'package' is the package the shown object belongs to. The viewer has more to
     say about an object than its geometry - what an assembly is made of, how it
@@ -287,6 +342,7 @@ def show(
             "not a shape tree (no %r, %r or %r key): %r"
             % (protocol.KEY_GLTF, protocol.KEY_GLTF_REF, protocol.KEY_ASSEMBLY, obj)
         )
+    obj = _named_by_content(obj)
 
     message = {
         "type": protocol.MSG_SHOW,
@@ -302,7 +358,166 @@ def show(
         message[protocol.KEY_TAB] = tab
     if scenario is not None:
         message[protocol.KEY_SCENARIO] = scenario
-    return _send(message, reply_timeout=reply_timeout)
+    return _exchange(lambda connection: _show(connection, message, reply_timeout))
+
+
+def _named_by_content(obj: dict) -> dict:
+    """'obj' with its geometry table keyed by the buffers it holds, and every reference renamed to match.
+
+    The table PartCAD sends is keyed by the shape each entry was tessellated from,
+    and that is not enough for a window that keeps what it was sent across shows:
+    see 'protocol.geometry_name'. Renamed here, before anything is offered or sent,
+    so that every way a show goes - offered, sent whole, or as JSON to an IDE that
+    keeps nothing - names one buffer one way. Copies what it renames and shares the
+    rest: the tree passed in is the one PartCAD keeps.
+
+    The table on the root only, which is the one PartCAD writes; a reference is
+    renamed wherever it is, because the tessellation leaves one wherever it found
+    geometry.
+    """
+    table = obj.get(protocol.KEY_GEOMETRY)
+    if not isinstance(table, dict):
+        return obj
+    names = {}
+    renamed_table = {}
+    for digest, payload in table.items():
+        if protocol.is_payload(payload):
+            names[digest] = protocol.geometry_name(payload)
+            renamed_table[names[digest]] = payload
+        else:
+            renamed_table[digest] = payload
+    renamed = dict(_with_references_renamed(obj, names))
+    renamed[protocol.KEY_GEOMETRY] = renamed_table
+    return renamed
+
+
+def _with_references_renamed(value, names: dict):
+    """'value' with every KEY_GLTF_REF in it that 'names' renames renamed; the same object where none is."""
+    if isinstance(value, list):
+        items = [_with_references_renamed(item, names) for item in value]
+        return items if any(new is not old for new, old in zip(items, value)) else value
+    if not isinstance(value, dict):
+        return value
+    renamed = None
+    for key, item in value.items():
+        if key == protocol.KEY_GEOMETRY:
+            # The buffers themselves: nothing in them is a reference.
+            continue
+        if key == protocol.KEY_GLTF_REF and isinstance(item, str):
+            new = names.get(item, item)
+        else:
+            new = _with_references_renamed(item, names)
+        if new is not item:
+            if renamed is None:
+                renamed = dict(value)
+            renamed[key] = new
+    return value if renamed is None else renamed
+
+
+# How much geometry one MSG_GEOMETRY frame is given, short of the frame limit by
+# room for its message: a digest and an index an entry, a few thousand of them at
+# the most.
+GEOMETRY_FRAME_BUDGET = protocol.MAX_FRAME_LENGTH - (1 << 20)
+
+
+def _show(connection, message: dict, reply_timeout: float) -> dict:
+    """Send the show 'message' over 'connection', the way the IDE there reads one.
+
+    Offered first to an IDE that accepts offers, so that only the geometry it lacks
+    is sent (see 'protocol.MSG_OFFER'); sent whole, as blobs, to one that reads
+    binary frames and nothing more; and as a JSON frame to one that has said
+    nothing, which is any IDE from before either. A connection nothing is known
+    about yet is asked with the offer: a new IDE wants it first anyway, and an old
+    one acknowledges it without saying what it accepts.
+
+    A show with no geometry table - no geometry at all, or only on its nodes,
+    which PartCAD does not send and a hand-made tree can - goes as a JSON frame
+    straight away, which every IDE reads, rather than asking anything first.
+    """
+    table = message[protocol.KEY_OBJECT].get(protocol.KEY_GEOMETRY)
+    offered = {}
+    if isinstance(table, dict):
+        offered = {digest: payload for digest, payload in table.items() if protocol.is_payload(payload)}
+    if not offered:
+        return connection.send(message, reply_timeout)
+
+    missing = None
+    if connection.capabilities is None:
+        missing = _offer(connection, offered, reply_timeout)
+    capabilities = connection.capabilities or frozenset()
+    if protocol.CAP_BINARY not in capabilities:
+        return connection.send(message, reply_timeout)
+
+    if protocol.CAP_OFFER in capabilities:
+        if missing is None:
+            missing = _offer(connection, offered, reply_timeout)
+        held = dict(message)
+        held[protocol.KEY_OBJECT] = dict(message[protocol.KEY_OBJECT])
+        held[protocol.KEY_OBJECT][protocol.KEY_GEOMETRY] = {
+            digest: None if digest in offered else payload for digest, payload in table.items()
+        }
+        try:
+            # Twice at most: an IDE that let go of something between the offer
+            # and the show says so and is sent it; one that does it again is
+            # sent everything, below, rather than asked a third time.
+            for _ in range(2):
+                _send_geometry(connection, {digest: offered[digest] for digest in missing}, reply_timeout)
+                reply = connection.send(held, reply_timeout, binary=True)
+                missing = _missing(reply.get(protocol.KEY_MISSING), offered)
+                if not missing:
+                    return reply
+        except FrameTooLarge:
+            # One shape larger than a frame: only the compressed JSON frame below
+            # can still carry it.
+            pass
+
+    try:
+        return connection.send(message, reply_timeout, binary=True)
+    except FrameTooLarge:
+        # Compressed, as every show was before binary frames, it may fit.
+        return connection.send(message, reply_timeout)
+
+
+def _offer(connection, offered: dict, reply_timeout: float):
+    """Offer 'offered' by digest, and return the digests the IDE lacks - all of them, unless it says."""
+    reply = connection.send(
+        {"type": protocol.MSG_OFFER, "id": uuid.uuid4().hex, protocol.KEY_DIGESTS: list(offered)},
+        reply_timeout,
+    )
+    missing = reply.get(protocol.KEY_MISSING)
+    return list(offered) if missing is None else _missing(missing, offered)
+
+
+def _missing(missing, offered: dict) -> list:
+    """What of 'offered' an IDE said it lacks, leaving out anything it named that was not offered."""
+    if not isinstance(missing, list):
+        return []
+    return [digest for digest in missing if isinstance(digest, str) and digest in offered]
+
+
+def _send_geometry(connection, payloads: dict, reply_timeout: float) -> None:
+    """Send 'payloads' by digest, in as few MSG_GEOMETRY frames as hold them."""
+    batch = {}
+    size = 0
+
+    def flush():
+        connection.send(
+            {"type": protocol.MSG_GEOMETRY, "id": uuid.uuid4().hex, protocol.KEY_GEOMETRY: batch},
+            reply_timeout,
+            binary=True,
+        )
+
+    for digest, payload in payloads.items():
+        if isinstance(payload, str):
+            payload = protocol.decode_gltf(payload)
+        if batch and size + len(payload) > GEOMETRY_FRAME_BUDGET:
+            flush()
+            batch = {}
+            size = 0
+        batch[digest] = payload
+        size += len(payload) + 4
+    if batch:
+        flush()
 
 
 def clear() -> dict:

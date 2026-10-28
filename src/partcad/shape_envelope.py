@@ -69,9 +69,9 @@ except ImportError:  # pragma: no cover - exercised on the other interpreter
 KEY_BREP = "brep"
 KEY_ASSEMBLY = "assembly"
 KEY_BYTES = "__bytes__"
-# The geometry of a node, in the other form it can take: deflate-compressed,
-# base64 binary glTF. A node carries one form or the other and never both - see
-# FORM_BREP/FORM_GLTF below.
+# The geometry of a node, in the other form it can take: binary glTF, as bytes
+# (see 'ocp_serialize.encode_gltf'). A node carries one form or the other and
+# never both - see FORM_BREP/FORM_GLTF below.
 KEY_GLTF = "gltf"
 # What a node's object declares about connections, as plain data: where its ports
 # are, and which interface instance each belongs to. Stamped by the shape itself
@@ -760,6 +760,11 @@ def decode(obj, table=None):
                 decoded[KEY_BREP] = brep_bytes(decoded[KEY_BREP])
             if KEY_ASSEMBLY in decoded:
                 decoded[KEY_ASSEMBLY] = [decode(child, table) for child in decoded[KEY_ASSEMBLY]]
+            if KEY_GEOMETRY in decoded:
+                # The glTF form's table, on the root of a tessellated assembly: its
+                # entries are bytes (see 'ocp_serialize.encode_gltf'), which the
+                # pipe carries as KEY_BYTES objects like any other bytes.
+                decoded[KEY_GEOMETRY] = decode(decoded[KEY_GEOMETRY], table)
             return decoded
         if KEY_BYTES in obj and len(obj) == 1:
             return base64.b64decode(obj[KEY_BYTES])

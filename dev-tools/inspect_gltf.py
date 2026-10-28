@@ -18,22 +18,21 @@ Not a test and not part of the build: an eyeball on the geometry.
 
 import argparse
 import asyncio
-import base64
 import json
 import struct
 import sys
-import zlib
 
 import partcad as pc
+import partcad_ide_client
 from partcad import shape_envelope
 
 # glTF primitive modes, by the number the file states them as.
 MODES = {0: "POINTS", 1: "LINES", 2: "LINE_LOOP", 3: "LINE_STRIP", 4: "TRIANGLES", 5: "TRIANGLE_STRIP"}
 
 
-def glb_json(payload: str) -> dict:
-    """The JSON chunk of a compressed, base64-encoded binary glTF."""
-    glb = zlib.decompress(base64.b64decode(payload))
+def glb_json(payload) -> dict:
+    """The JSON chunk of a binary glTF payload, in either of its spellings (see 'decode_gltf')."""
+    glb = partcad_ide_client.decode_gltf(payload)
     _magic, _version, length = struct.unpack("<4sII", glb[:12])
     offset = 12
     while offset < length:
@@ -62,17 +61,24 @@ def describe(payload: str) -> str:
     return "%s, %d material(s)" % ("; ".join(drawn), materials)
 
 
-def walk(node, depth=0):
+def walk(node, depth=0, table=None):
+    # A node names its geometry in the root's table, or - hand-made - carries it.
+    if table is None:
+        table = node.get(shape_envelope.KEY_GEOMETRY) or {}
+
+    def geometry(of):
+        return of.get(shape_envelope.KEY_GLTF) or table.get(of.get(shape_envelope.KEY_GLTF_REF))
+
     label = node.get("label") or node.get("name") or "?"
-    payload = node.get(shape_envelope.KEY_GLTF)
+    payload = geometry(node)
     print("%s%s: %s" % ("  " * depth, label, describe(payload) if payload else "no geometry"))
     for port in node.get(shape_envelope.KEY_PORTS) or []:
         print("%s  port %s: sketch=%s" % ("  " * depth, port.get("name"), port.get("sketch")))
     for reference, sketch in (node.get(shape_envelope.KEY_SKETCHES) or {}).items():
-        drawn = sketch.get(shape_envelope.KEY_GLTF)
+        drawn = geometry(sketch)
         print("%s  sketch %s: %s" % ("  " * depth, reference, describe(drawn) if drawn else "no geometry"))
     for child in node.get(shape_envelope.KEY_ASSEMBLY) or []:
-        walk(child, depth + 1)
+        walk(child, depth + 1, table)
 
 
 def main():

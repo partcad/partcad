@@ -28,6 +28,7 @@ from .protocol import (
     PARTCAD_IDE_PORT,
     VERSION,
     VIEWER_TABS,
+    FrameTooLarge,
     ProtocolError,
     decode_gltf,
     encode_gltf,
@@ -41,6 +42,7 @@ __version__ = "0.8.255"
 __all__ = [
     "CONNECT_TIMEOUT",
     "Connection",
+    "FrameTooLarge",
     "PARTCAD_IDE_HOST",
     "PARTCAD_IDE_PORT",
     "ProtocolError",

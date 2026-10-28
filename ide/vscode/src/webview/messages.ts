@@ -252,12 +252,13 @@ export interface ShowNode {
      */
     gltfRef?: string;
     /**
-     * This node's geometry outright, as base64 binary glTF.
+     * This node's geometry outright: the binary glTF, or - from a hand-written
+     * message, a test - base64 of it.
      *
      * What 'gltfRef' resolves to, and what a node carries when nothing built a
-     * table - a hand-written message, a test. A node has one or the other.
+     * table. A node has one or the other.
      */
-    gltf?: string;
+    gltf?: ArrayBuffer | string;
     /** How many bytes that is, for the loading readout. */
     size?: number;
     ports?: ShowPort[];
@@ -275,14 +276,16 @@ export interface ShowNode {
      */
     sketches?: Record<string, ShowNode>;
     /**
-     * On the root node: every distinct piece of geometry in the tree, decompressed
-     * by the host, keyed by a digest of the exact shape it was tessellated from.
+     * On the root node: every distinct piece of geometry in the tree, keyed by a
+     * digest of the exact shape it was tessellated from.
      *
      * One entry however many nodes name it, so it is parsed and uploaded to the GPU
      * once and drawn as an instance of itself per node - the same arrangement the
      * port sketches above have always had, applied to the model itself. The
      * digests are opaque: nothing here computes or checks one, it only looks them
-     * up.
+     * up - in this table, and in what earlier shows left parsed
+     * ('geometryCache.ts'), which is where an entry that comes without its buffer
+     * is.
      */
     geometry?: Record<string, ShowGeometry>;
     /**
@@ -337,9 +340,15 @@ export interface ShowAnnotation {
     [field: string]: unknown;
 }
 
-/** One entry of that table: the geometry, and how many bytes it is. */
+/**
+ * One entry of that table: the geometry, and how many bytes it is.
+ *
+ * 'gltf' is the binary glTF, or absent for geometry the host knows this renderer
+ * holds parsed already, from an earlier show; base64 of it only in a hand-written
+ * message or a test.
+ */
 export interface ShowGeometry {
-    gltf: string;
+    gltf?: ArrayBuffer | string;
     size: number;
 }
 
@@ -379,6 +388,12 @@ export interface ShowMessage {
     section?: ViewSection | null;
     /** The object itself, as the root node of its tree, or null when it is empty. */
     object: ShowNode | null;
+    /**
+     * Geometry this renderer holds from earlier shows and is to let go of, by
+     * digest: the host decides what is kept, so that it knows what it need not
+     * send (see 'geometryCache.ts'). Never any this show names.
+     */
+    evict?: string[];
     /** Configuration for the viewer, sent from the extension. */
     config?: {
         viewer?: {
@@ -506,6 +521,16 @@ export type HostMessage =
     | SpaceMouseStateMessage
     | SpaceMouseEventMessage
     | UpdateConfigMessage;
+
+/**
+ * Renderer to host: a show named geometry this renderer was not sent and does not
+ * hold. The host's account of what is held was wrong - a renderer that reloaded
+ * before it said 'ready' - so it forgets these and posts the show again with them.
+ */
+export interface GeometryMissingMessage {
+    type: 'geometryMissing';
+    digests: string[];
+}
 
 /** Renderer to host: fill this tab in, quoting 'token' back in the answer. */
 export interface FetchTabMessage {

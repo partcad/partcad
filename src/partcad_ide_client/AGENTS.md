@@ -47,7 +47,22 @@ knew `KEY_GLTF` would stop seeing every node of an assembly the day the geometry
 The glTF payload codec (`encode_gltf`/`decode_gltf`) has two other implementations that have to agree with it:
 `ocp_serialize.encode_gltf` in the sandbox, and `decodeGltf` in the extension. Neither can import this package,
 which is why each carries its own copy; `tests/partcad/unit/test_viewer.py` and the extension's
-`viewerProtocol.test.ts` are what catch a drift.
+`viewerProtocol.test.ts` are what catch a drift. A payload is the GLB itself, as bytes: a binary frame carries
+it as a blob, and a JSON frame as base64 of a stored zlib stream, which is what an extension from before binary
+frames reads. Both readers still take base64-of-zlib at any level, which every earlier PartCAD wrote.
+
+**What the IDE at the far end reads is negotiated, per connection.** The extension is released apart from this
+package, and one from before binary frames drops the connection at a header it does not know. So `Connection`
+keeps what the last acknowledgement said (`capabilities`, forgotten with the connection, since the next may be
+to another window), and `show()` picks how to send a show from it: offered first and sent as blobs to an IDE
+that accepts offers, sent whole as blobs to one that reads binary frames, and as a JSON frame to one that says
+nothing. A connection nothing is known about yet is asked with the offer itself. `_exchange` runs the whole
+conversation again over a new connection when one is found gone part way, which is safe because the show is
+always the last message of it. A new capability is a new name in `KEY_CAPABILITIES`, and an old IDE is never
+sent anything it did not say it reads; `tests/partcad_ide_client/unit/test_client.py` holds both directions.
+Before any of it, `show()` renames the geometry table to digests of the glTF buffers (`geometry_name`): a
+window keeps what it was sent by name, and the names PartCAD writes are of the shape tessellated, which one
+part shown alone and inside an assembly shares at two tolerances.
 
 ## Setup
 
