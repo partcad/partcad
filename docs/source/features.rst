@@ -693,7 +693,10 @@ whenever anything is installed into the environment, by this PartCAD or by any
 other. It holds a few hundred megabytes while it waits, and goes after ten
 minutes without a script. It is not used on macOS or Windows, nor in the
 ``docker``, ``remote`` and ``pypy`` sandboxes, and ``pythonSandboxZygote:
-false`` (``PC_PYTHON_SANDBOX_ZYGOTE=false``) turns it off on Linux too.
+false`` (``PC_PYTHON_SANDBOX_ZYGOTE=false``) turns it off on Linux too. It is
+only ever a shortcut: a script it cannot take, or an environment whose
+interpreter refused to be one (something it imported left a thread running,
+say), is started the ordinary way.
 
 Which one is chosen for you, when you have said nothing, is the first of
 ``docker``, ``conda`` and ``venv`` that this machine can actually provide. A

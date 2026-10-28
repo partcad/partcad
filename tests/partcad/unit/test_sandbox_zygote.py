@@ -721,7 +721,9 @@ def test_an_idle_zygote_goes_by_itself(tmp_path, monkeypatch):
 def test_no_call_waits_for_a_zygote_to_start(tmp_path, monkeypatch):
     """The first calls of an environment, and every call while its zygote imports, are started the ordinary way."""
     site = _site(tmp_path)
-    (site / "slow_to_import.py").write_text("import time\ntime.sleep(3)\n")
+    # Far longer than the bound below, so that a call that waited for it could
+    # not pass however slow the machine is.
+    (site / "slow_to_import.py").write_text("import time\ntime.sleep(20)\n")
     monkeypatch.setattr(sandbox_zygote, "PRELOAD", ("slow_to_import",))
     monkeypatch.setattr(sandbox_zygote, "WARM_AFTER", 2)
     env = dict(os.environ, PYTHONPATH=str(site))
@@ -739,8 +741,9 @@ def test_no_call_waits_for_a_zygote_to_start(tmp_path, monkeypatch):
     assert [z for z in sandbox_zygote.zygotes() if z.environment == environment] == []
     second, took = asyncio.run(call())
     assert second is None
-    # Generously short of the three seconds the zygote spends importing.
-    assert took < 2.5
+    # A fresh interpreter's start, with seconds to spare on a loaded worker, and
+    # still far short of the twenty the zygote spends importing.
+    assert took < 5
     (starting,) = [z for z in sandbox_zygote.zygotes() if z.environment == environment]
     assert starting.ready.wait(120) and starting.usable
 
@@ -1158,6 +1161,9 @@ def test_nothing_is_left_behind(tmp_path):
     crash = _script(tmp_path, "import ctypes\nctypes.string_at(0)\n", name="crash.py")
     sleeper = _script(tmp_path, SLEEPER, name="sleeper.py")
     before = {id(zygote) for zygote in sandbox_zygote.zygotes()}
+    # What this worker had running already - another test's zygote waiting out
+    # its idle time - is not this test's to answer for.
+    children = {child.pid for child in psutil.Process().children(recursive=True)}
     descriptors = len(os.listdir("/proc/self/fd"))
 
     async def calls():
@@ -1172,7 +1178,7 @@ def test_nothing_is_left_behind(tmp_path):
     gc.collect()
 
     assert _dead(zygote)
-    assert psutil.Process().children(recursive=True) == []
+    assert [child for child in psutil.Process().children(recursive=True) if child.pid not in children] == []
     deadline = time.monotonic() + 30
     while len(os.listdir("/proc/self/fd")) > descriptors and time.monotonic() < deadline:
         # The reaper thread closes the zygote's log once it has waited for it.
