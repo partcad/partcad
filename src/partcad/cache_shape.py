@@ -65,7 +65,10 @@ from .utils import total_size
 # produced here is always an object or an array. An earlier release reading a
 # framed tree finds neither and counts it a miss, which is the right answer for
 # an entry it cannot read; it builds the tree and writes it in its own form.
-# That is also why nothing but an assembly's tree is framed - see _serialize.
+# That is also why nothing else is framed - see _serialize - with one exception
+# no earlier release can meet: the components of a shape that are pieces of it
+# (shape_envelope.KEY_CHILD), which name the payload of the geometry entry beside
+# them instead of holding a copy of it.
 #
 # They are told apart on read by the leading bytes: each frame by its magic, JSON
 # by its first character, and a BREP payload is either a zstd frame or, where the
@@ -105,6 +108,15 @@ _FRAME_HEADER = len(_FRAME_MAGIC) + 4
 # payloads follow in that order, each the compressed BREP it is in memory.
 # Reading it back gives every node naming one digest the same bytes object, so
 # the tree held in memory holds each payload once too.
+#
+# A header may also say "beside": {digest: key} - payloads the tree names that
+# are not in this entry at all, because they are the geometry of the entry
+# written beside it under 'key', in the same write. That is how a shape's
+# components are stored when they are pieces of it (shape_envelope.KEY_CHILD):
+# the shape's payload once, in its own entry, and in the components' entry
+# which piece of it each one is. Read back, such an entry needs that other entry
+# read with it, and holding the payload it names - checked by its digest -
+# or it is a miss.
 _TREE_MAGIC = b"PCT1"
 _TREE_COMPRESSED = b"Z"
 _TREE_PLAIN = b"J"
@@ -119,7 +131,7 @@ _TREE_MAX_EXPANSION = 200
 _TREE_MAX_EXPANSION_FLOOR = 64 << 20
 
 
-def _serialize(value) -> bytes:
+def _serialize(value, beside=None) -> bytes:
     """The bytes to store for a cache value, with no outer layer left in them.
 
     A lone shape with nothing recorded about it needs no conversion at all: the
@@ -128,6 +140,10 @@ def _serialize(value) -> bytes:
     One with metadata is the same bytes behind a small frame (see _FRAME_MAGIC),
     so that the geometry and what is known about it are one entry without the
     geometry paying for it.
+
+    'beside' is the payloads of the lone shapes written in the same write, by
+    their keys: a list of components that are pieces of one of them names it
+    rather than holding it (see _TREE_MAGIC).
     """
     metadata = shape_envelope.metadata_of(value)
     payload = shape_envelope.strip_metadata(value)
@@ -150,27 +166,56 @@ def _serialize(value) -> bytes:
         # metadata is one more key in it rather than a frame of its own.
         payload = dict(payload)
         payload[shape_envelope.KEY_METADATA] = metadata
-    if not shape_envelope.is_assembly_object(payload):
-        # Everything else is the plain JSON it always was, and for a reason
-        # beyond there being nothing to share. A part's components ('cmps') sit
-        # beside its geometry in an entry of their own, and an earlier release
-        # reading a frame it does not know counts that one entry a miss: the
-        # geometry beside it would be a hit, and the part would come back
-        # without its components - a partial hit, which is worse than a miss.
-        # An assembly's tree is the whole of the assembly, so for it a frame an
-        # earlier release cannot read is a miss of everything, and a rebuild.
-        return json.dumps(shape_envelope.encode(payload)).encode("utf-8")
-    return _serialize_tree(payload)
+    if shape_envelope.is_assembly_object(payload):
+        return _serialize_tree(payload)
+    if _holds_pieces(payload):
+        # Components that are pieces of the geometry beside them
+        # (shape_envelope.KEY_CHILD): as JSON, each would carry a copy of that
+        # geometry's payload, so they are framed, and name it instead. Framing
+        # is safe here, as it is not for the JSON below, because no earlier
+        # release ever reads such an entry: the wrappers that make these
+        # components raised their CACHE_VERSION when they started to, and the
+        # key of every shape carries the versions of the wrappers that build
+        # it - so a release that does not make them computes another key, and
+        # misses this entry and the geometry beside it alike.
+        return _serialize_tree(payload, beside)
+    # Everything else is the plain JSON it always was, and for a reason beyond
+    # there being nothing to share. A part's components ('cmps') sit beside its
+    # geometry in an entry of their own, and an earlier release reading a frame
+    # it does not know counts that one entry a miss: the geometry beside it
+    # would be a hit, and the part would come back without its components - a
+    # partial hit, which is worse than a miss. An assembly's tree is the whole
+    # of the assembly, so for it a frame an earlier release cannot read is a
+    # miss of everything, and a rebuild.
+    return json.dumps(shape_envelope.encode(payload)).encode("utf-8")
 
 
-def _serialize_tree(payload) -> bytes:
-    """A tree as a _TREE_MAGIC frame: its structure, then each distinct payload once."""
+def _holds_pieces(value) -> bool:
+    """Whether a list of components holds one that is a piece of another shape (KEY_CHILD)."""
+    if isinstance(value, list):
+        return any(_holds_pieces(item) for item in value)
+    return isinstance(value, dict) and shape_envelope.KEY_CHILD in value
+
+
+def _serialize_tree(payload, beside=None) -> bytes:
+    """A tree as a _TREE_MAGIC frame: its structure, then each distinct payload once.
+
+    A payload that is one of 'beside' (by key) is named rather than written.
+    """
     payloads = shape_envelope.Payloads()
     tree = shape_envelope.encode(payload, payloads=payloads)
-    order = list(payloads.by_digest.items())
-    header = json.dumps(
-        {"tree": tree, "payloads": [[digest, len(shape_envelope.brep_bytes(value))] for digest, value in order]}
-    ).encode("utf-8")
+    order = []
+    named = {}
+    for digest, value in payloads.by_digest.items():
+        key = _beside_key(value, beside)
+        if key is None:
+            order.append((digest, value))
+        else:
+            named[digest] = key
+    header = {"tree": tree, "payloads": [[digest, len(shape_envelope.brep_bytes(value))] for digest, value in order]}
+    if named:
+        header["beside"] = named
+    header = json.dumps(header).encode("utf-8")
     if _zstd_compress is not None:
         encoding, header = _TREE_COMPRESSED, _zstd_compress(header)
     else:  # pragma: no cover - PartCAD depends on zstd; see shape_envelope
@@ -181,8 +226,21 @@ def _serialize_tree(payload) -> bytes:
     )
 
 
-def _deserialize_tree(data: bytes):
-    """Inverse of '_serialize_tree()'."""
+def _beside_key(value, beside):
+    """The key of the entry in 'beside' whose payload 'value' is, or None."""
+    if not beside:
+        return None
+    data = shape_envelope.brep_bytes(value)
+    for key, other in beside.items():
+        # Usually the very object: the components were decoded out of the
+        # same answer as the shape, and hold the one bytes object.
+        if other is data or other == data:
+            return key
+    return None
+
+
+def _deserialize_tree(data: bytes, beside=None):
+    """Inverse of '_serialize_tree()'. 'beside' is the payloads read with it, by their keys."""
     encoding = data[len(_TREE_MAGIC) : len(_TREE_MAGIC) + 1]
     length = int.from_bytes(data[len(_TREE_MAGIC) + 1 : _TREE_HEADER], "big")
     header = data[_TREE_HEADER : _TREE_HEADER + length]
@@ -212,10 +270,25 @@ def _deserialize_tree(data: bytes):
     # And nothing after the last one: the writer writes nothing there.
     if offset != len(data):
         raise ValueError("this tree goes on %d bytes past its last payload" % (len(data) - offset))
+    for digest, key in (header.get("beside") or {}).items():
+        # The entry beside it could have been written by another build - a
+        # shared tier, an entry evicted and written again - and the pieces of
+        # one compound are not the pieces of another.
+        payload = (beside or {}).get(key)
+        if payload is None or shape_envelope.payload_digest(payload) != digest:
+            raise ValueError(
+                "this entry names the geometry of the entry %r beside it, which was not read with it" % key
+            )
+        table[digest] = payload
     return shape_envelope.decode(header["tree"], table)
 
 
-def _deserialize(data: bytes):
+def _is_tree(data) -> bool:
+    """Whether stored bytes are a _TREE_MAGIC frame."""
+    return data is not None and bytes(data[: len(_TREE_MAGIC)]) == _TREE_MAGIC
+
+
+def _deserialize(data: bytes, beside=None):
     """Inverse of '_serialize()' - the payload and its metadata, no outer layer."""
     if data.startswith(_FRAME_MAGIC):
         length = int.from_bytes(data[len(_FRAME_MAGIC) : _FRAME_HEADER], "big")
@@ -225,7 +298,7 @@ def _deserialize(data: bytes):
             shape_envelope.KEY_METADATA: metadata,
         }
     if data.startswith(_TREE_MAGIC):
-        return _deserialize_tree(data)
+        return _deserialize_tree(data, beside)
     if data.startswith(_BREP_PREFIXES):
         return {shape_envelope.KEY_BREP: data}
     return shape_envelope.decode(json.loads(data.decode("utf-8")))
@@ -292,7 +365,14 @@ class ShapeCache(Cache):
     async def write_async(self, hash: CacheHash, items: dict[str, object]) -> dict[str, bool]:
         stored = {}
         if self.enabled:
-            stored = await self.write_data_async(hash, {key: _serialize(value) for key, value in items.items()})
+            # The geometry written in this write, which components that are
+            # pieces of it name rather than repeat.
+            beside = {
+                key: shape_envelope.brep_bytes(value[shape_envelope.KEY_BREP])
+                for key, value in items.items()
+                if shape_envelope.is_shape_object(value) and shape_envelope.KEY_CHILD not in value
+            }
+            stored = await self.write_data_async(hash, {key: _serialize(value, beside) for key, value in items.items()})
 
         results = {}
         for key, value in items.items():
@@ -324,7 +404,10 @@ class ShapeCache(Cache):
         results = {}
         in_memory = {}
         values = await self.read_data_async(hash, keys)
-        for key in keys:
+        # Frames last: one may name the payload of another entry read in the
+        # same call (see _TREE_MAGIC), which has to have been read first.
+        beside = {}
+        for key in sorted(keys, key=lambda key: _is_tree(values.get(key))):
             if key not in values:
                 results[key] = None
                 in_memory[key] = False
@@ -337,11 +420,13 @@ class ShapeCache(Cache):
                 continue
 
             try:
-                payload = _deserialize(data)
+                payload = _deserialize(data, beside)
             except Exception:
                 results[key] = None
                 in_memory[key] = False
                 continue
+            if shape_envelope.is_shape_object(payload) and shape_envelope.KEY_CHILD not in payload:
+                beside[key] = payload[shape_envelope.KEY_BREP]
             results[key] = shape_envelope.apply_metadata(payload, metadata)
             # It came from a persistent tier, so the tighter of the two memory
             # limits is the one that applies.

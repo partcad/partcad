@@ -222,6 +222,22 @@ KEY_LOCATION = "location"
 # rather than in place of it, so what reads a node as an envelope (decoding it
 # again, or keying a mesh by its payload) reads it as it always did.
 KEY_SHAPE = "shape"
+# Optional on a shape object: which child of the shape its "brep" payload holds
+# this node is - an index into that shape's children, in the order
+# 'TopoDS_Iterator' visits them - when the node is a piece of a shape rather than
+# a shape of its own. That is what a script's components are: the solids, faces
+# and wires of the compound it returned, which used to be written, measured,
+# sent and cached a second time beside it. Now a component carries the
+# compound's own payload - the same string, which the payload table writes
+# once - and says which child of it it is ('encode_combined()'). The core's twin
+# of this constant is in 'shape_envelope.py'.
+#
+# 'decode_shape()', 'decode_tree()' and 'decode()' honour it, so a reader that
+# decodes a node through them gets the child and nothing else. A reader that
+# opens a payload itself ('shape_from_payload()', or keying a mesh by
+# 'payload_digest()') would have to honour it too; the two that do are handed
+# trees, whose nodes never carry it.
+KEY_CHILD = "child"
 # Optional on a shape object: everything learnt about this shape by whatever
 # produced it, at the moment it was produced. The one channel for such
 # knowledge; the core's twin of this constant, and of the three section names
@@ -610,6 +626,64 @@ def encode_assembly(children, name=None, label=None) -> dict:
     return {"name": name, "label": label, KEY_ASSEMBLY: list(children)}
 
 
+def encode_combined(compound, components, name=None, label=None):
+    """'compound' encoded, and 'components' as references into it: '(shape object, components)'.
+
+    What 'wrapper_common.combine()' hands back is a compound and the shapes it
+    was made of - the same geometry twice, since the compound holds those very
+    shapes. Encoded as it stands, every component was written as a BREP of its
+    own, measured again, sent at twice the size and cached again beside the
+    compound. So a component the compound holds is encoded as a node naming
+    the compound's payload and which child of it it is (KEY_CHILD), with the
+    measurements its child already got as the compound was measured: written
+    once, measured once, and - the payload being the one string - sent and
+    cached once.
+
+    A component the compound does not hold - a face a part's script returned
+    beside its solids, which a part's compound leaves out - is encoded as a
+    shape of its own, as before. 'components' keeps its nesting.
+    """
+    import shape_measure
+
+    _ensure_ocp()
+    measurer = shape_measure.Measurer()
+    shape = encode_shape(compound, name=name, label=label, measurer=measurer)
+
+    # Where each child sits in the compound, by what OCP hashes a shape by (its
+    # 'TShape' and location); 'IsEqual()' then adds the orientation.
+    children = {}
+    iterator = OCP.TopoDS.TopoDS_Iterator(compound)
+    index = 0
+    while iterator.More():
+        child = iterator.Value()
+        children.setdefault(_shape_hash(child), []).append((child, index))
+        index += 1
+        iterator.Next()
+
+    def refer(component):
+        if isinstance(component, list):
+            return [refer(item) for item in component]
+        if isinstance(component, OCP.TopoDS.TopoDS_Shape) and not component.IsNull():
+            for child, index in children.get(_shape_hash(component), ()):
+                if child.IsEqual(component):
+                    node = {"name": name, "label": label, KEY_BREP: shape[KEY_BREP], KEY_CHILD: index}
+                    measured = measurer.measurements_or_none(child)
+                    if measured:
+                        node[KEY_METADATA] = {METADATA_MEASUREMENTS: measured}
+                    return node
+        return encode(component, name=name, label=label, measurer=measurer)
+
+    return shape, refer(components)
+
+
+def _shape_hash(shape):
+    """What OCP hashes 'shape' by, or None for a build with no hash (every shape then collides)."""
+    try:
+        return hash(shape)
+    except TypeError:
+        return None
+
+
 def is_shape_object(obj) -> bool:
     return isinstance(obj, dict) and KEY_BREP in obj
 
@@ -644,7 +718,7 @@ def _apply_location(shape, packed):
     return shape.Located(toploc_from_packed(packed))
 
 
-def _shared_shape(payload, shared):
+def _shared_shape(payload, shared, child=None):
     """The shape a "brep" payload holds, read once however many nodes carry it.
 
     'shared' is the payloads already read in this decoding, and what each one
@@ -666,11 +740,28 @@ def _shared_shape(payload, shared):
     object would be two nodes in which setting a location on one moved the
     other. The handle shares the 'TShape'; it is a new 'TopoDS_Shape' of the
     same type, at the same (empty) location.
+
+    'child' is a node's KEY_CHILD: the shape handed back is then that child of
+    the payload's shape, placed and oriented as the shape holds it. The
+    payload is still read once, however many of its children are asked for.
     """
     key = payload if isinstance(payload, (str, bytes)) else bytes(payload)
     shape = shared.get(key)
     if shape is None:
         shape = shared[key] = _shape_from_b64(payload)
+    if child is not None:
+        # Keyed apart from every payload: a tuple is never a str or bytes.
+        children = shared.get((key, KEY_CHILD))
+        if children is None:
+            children = []
+            iterator = OCP.TopoDS.TopoDS_Iterator(shape)
+            while iterator.More():
+                children.append(iterator.Value())
+                iterator.Next()
+            shared[(key, KEY_CHILD)] = children
+        if not isinstance(child, int) or isinstance(child, bool) or not 0 <= child < len(children):
+            raise ValueError("A node names child %r of a shape that has %d" % (child, len(children)))
+        shape = children[child]
     return downcast(shape.Located(shape.Location()))
 
 
@@ -693,7 +784,7 @@ def decode_shape(obj):
 
 def _decode_shape(obj, shared):
     if is_shape_object(obj):
-        return _apply_location(_shared_shape(obj[KEY_BREP], shared), obj.get(KEY_LOCATION))
+        return _apply_location(_shared_shape(obj[KEY_BREP], shared, obj.get(KEY_CHILD)), obj.get(KEY_LOCATION))
     if is_assembly_object(obj):
         compound = compound_of(_decode_shape(child, shared) for child in obj[KEY_ASSEMBLY])
         return _apply_location(compound, obj.get(KEY_LOCATION))
@@ -729,7 +820,7 @@ def decode_tree(obj, shared=None):
 
 def _decode_tree(obj, shared):
     if is_shape_object(obj):
-        own = _shared_shape(obj[KEY_BREP], shared)
+        own = _shared_shape(obj[KEY_BREP], shared, obj.get(KEY_CHILD))
         node = dict(obj)
         node[KEY_SHAPE] = own
         return _apply_location(own, obj.get(KEY_LOCATION)), node

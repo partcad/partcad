@@ -848,6 +848,18 @@ at all).
   the compound. The numbers agree with integrating the compound whole to float rounding, which
   `tests/partcad/unit/test_shape_measure.py` holds them to.
 
+  **A script's components are references into its compound** (`ocp_serialize.encode_combined`,
+  `KEY_CHILD`). `wrapper_common.combine()` returns a compound and the shapes it was made of, which the compound
+  holds; the build123d and cadquery wrappers used to encode both, so the geometry was written, measured, sent
+  and cached twice. Now a component the compound holds is a node carrying the compound's own payload and
+  `child: <index>` - which of the compound's children it is, in `TopoDS_Iterator` order - so the payload table
+  sends it once, and in the core every component holds the compound's one bytes object. `decode_shape`,
+  `decode_tree` and `decode` hand back the child; `strip_metadata`/`apply_metadata` keep `child` with the
+  payload, because without it the payload is a different shape. A component the compound does not hold (a face
+  a part's script returned beside its solids) is still a shape of its own. A reader that opens a payload
+  itself rather than through those decoders (`shape_from_payload`, a mesh keyed by `payload_digest`) would have
+  to honour `child` too; nothing that does is handed components.
+
   `Shape.get_bounding_box_async` reads that recorded box too; it does not measure a shape that carries one.
   `wrapper_measure` still exists for what was not measured at build time: `measure.bbox(frame=...)`, which
   re-measures a shape in a **port's** frame rather than its own, and the bounding box of a shape that recorded
@@ -1400,7 +1412,15 @@ at all).
   JSON is still read; an earlier release reading a frame counts it a miss and writes its own form. **Nothing but an
   assembly's tree is framed**, and that is about the earlier release rather than about sharing: a part's components
   (`cmps`) are an entry beside its geometry, and framed they would be that release's miss while the geometry beside
-  them was its hit -- a part handed back with no components, which is worse than a miss of both.
+  them was its hit -- a part handed back with no components, which is worse than a miss of both. The one exception
+  is components that are references into their compound (`KEY_CHILD`, above): their entry is a tree frame whose
+  header says the payload is the one in the geometry entry written beside it (`"beside"`), so the cache holds the
+  geometry once; read back, it needs that entry read with it and holding the payload it names, by digest, or it is
+  a miss. No earlier release can be the one reading it, and that is why the frame is allowed there: the build123d and
+  cadquery wrappers raised their `CACHE_VERSION` when they started producing such components, a shape's key carries
+  the versions of the wrappers that build it (`ShapeFactory.code_versions`), so an earlier release computes another
+  key and misses the geometry and its components alike. A new kind of component entry gets the same treatment, or
+  stays JSON.
 
   **A request is serialized when its process starts** (`runtime.stdin_bytes`): a runtime's `stdin` may be a
   callable, called at the spawn, inside the process slot. The render path passes one, so a drawing waiting for a slot

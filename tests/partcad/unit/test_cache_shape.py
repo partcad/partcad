@@ -319,6 +319,98 @@ def test_what_is_not_an_assembly_stays_plain_json(tmp_path):
     assert [item["brep"] for item in cache_shape._deserialize(stored)] == [BREP, BREP]
 
 
+# A compound's payload, with something in it to find - and to find missing.
+COMPOUND = BREP + b"Compound of three solids\n" * 64
+
+
+def _piece(child, name="pkg:first", label="first", payload=COMPOUND):
+    """A component that is a piece of the compound beside it (shape_envelope.KEY_CHILD)."""
+    piece = {"name": name, "label": label, "brep": payload, shape_envelope.KEY_CHILD: child}
+    piece[shape_envelope.KEY_METADATA] = {"measurements": {"solids": 1, "volume": 10.0 + child}}
+    return piece
+
+
+def test_components_that_are_pieces_of_the_geometry_beside_them_do_not_repeat_it(tmp_path):
+    """The compound is cached once: its components' entry says which pieces of it they are."""
+    cache = _cache(tmp_path)
+    cache_hash = _hash()
+    shape = {"name": "pkg:first", "label": "first", "brep": COMPOUND}
+    components = [_piece(0), [_piece(1), _piece(2)]]
+
+    asyncio.run(cache.write_async(cache_hash, {"part": shape, "cmps": components}))
+
+    stored = _entry(tmp_path, cache_hash, "cmps")
+    assert COMPOUND not in stored
+    assert len(stored) < len(COMPOUND)
+
+    metadata = {"name": "pkg:second", "label": "second"}
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["part", "cmps"], metadata))
+
+    assert read["cmps"] == [
+        _piece(0, "pkg:second", "second"),
+        [_piece(1, "pkg:second", "second"), _piece(2, "pkg:second", "second")],
+    ]
+    # And held once in memory, too: every piece is the geometry's own bytes.
+    assert all(piece["brep"] is read["part"]["brep"] for piece in [read["cmps"][0]] + read["cmps"][1])
+
+
+def test_pieces_read_without_the_geometry_beside_them_are_a_miss(tmp_path):
+    cache = _cache(tmp_path)
+    cache_hash = _hash()
+    asyncio.run(cache.write_async(cache_hash, {"part": {"brep": COMPOUND}, "cmps": [_piece(0)]}))
+
+    read, in_memory = asyncio.run(cache.read_async(cache_hash, ["cmps"], {"name": "pkg:a", "label": "a"}))
+
+    assert read == {"cmps": None}
+    assert in_memory == {"cmps": False}
+
+
+def test_pieces_of_other_geometry_than_the_entry_beside_them_are_a_miss(tmp_path):
+    """Written beside one build's compound, read beside another's: not its pieces."""
+    cache = _cache(tmp_path)
+    cache_hash = _hash()
+    asyncio.run(cache.write_async(cache_hash, {"part": {"brep": COMPOUND}, "cmps": [_piece(0)]}))
+    asyncio.run(cache.write_async(cache_hash, {"part": {"brep": COMPOUND + b"rebuilt\n"}}))
+
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["part", "cmps"], {"name": "pkg:a", "label": "a"}))
+
+    assert read["part"]["brep"] == COMPOUND + b"rebuilt\n"
+    assert read["cmps"] is None
+
+
+def test_pieces_of_geometry_not_beside_them_carry_it_once(tmp_path):
+    """A part moved by its 'offset' keeps the components of what it moved, as it always did."""
+    cache = _cache(tmp_path)
+    cache_hash = _hash()
+    moved = {"brep": BREP + b"moved\n"}
+    components = [_piece(0), _piece(1), _piece(2)]
+
+    asyncio.run(cache.write_async(cache_hash, {"part": moved, "cmps": components}))
+
+    stored = _entry(tmp_path, cache_hash, "cmps")
+    assert stored.count(COMPOUND) == 1
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["cmps"], {"name": "pkg:first", "label": "first"}))
+    assert read["cmps"] == components
+
+
+def test_components_that_are_pieces_are_written_where_no_earlier_release_reads(tmp_path):
+    """The one framed component entry, and why that is safe: its key is one no earlier release computes.
+
+    'test_what_is_not_an_assembly_stays_plain_json' is the rule; this is its
+    exception. The wrappers that make pieces raised their CACHE_VERSION when
+    they started to, and a shape's key carries the versions of the wrappers
+    that build it - which is what keeps an earlier release from ever being the
+    one to read this frame and miss it while hitting the part beside it.
+    """
+    from partcad import code_version, wrapper
+
+    stored = cache_shape._serialize([_piece(0)], {"part": COMPOUND})
+
+    assert stored.startswith(cache_shape._TREE_MAGIC)
+    for name in ("build123d.py", "cadquery.py"):
+        assert code_version.declared(wrapper.get(name)) >= 2
+
+
 def test_the_file_tier_takes_a_tree_of_fifty_megabytes_by_default(monkeypatch, tmp_path):
     """Over 10 MB, the LEGO F1's tree (10.9 MB of distinct geometry) was put together again on every run."""
     # A home with no configuration in it, so that the default is what is read

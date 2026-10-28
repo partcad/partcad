@@ -526,6 +526,20 @@ def combine(shapes, kind):
     return compound, components
 
 
+def encode_combined(compound, components):
+    """'combine()'s compound and components, encoded as the answer carries them.
+
+    The compound holds the very shapes its components are, so each component it
+    holds is sent as a reference to the compound's geometry rather than as a
+    second copy of it - see 'ocp_serialize.encode_combined()', which also
+    measures each of them once. Echoes the request's name and label onto all of
+    them, as 'handle_output()' does onto a shape it encodes itself.
+
+    Returns (shape object, components).
+    """
+    return ocp_serialize.encode_combined(compound, components, name=_request_name, label=_request_label)
+
+
 def exception_to_str(exc):
     """Normalize an exception for the response envelope.
 
