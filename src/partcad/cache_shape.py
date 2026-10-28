@@ -197,18 +197,6 @@ def _holds_pieces(value) -> bool:
     return isinstance(value, dict) and shape_envelope.KEY_CHILD in value
 
 
-def _named_beside(value, beside) -> set:
-    """The keys of the entries in 'beside' whose geometry the pieces in 'value' name."""
-    if not beside:
-        return set()
-    if isinstance(value, list):
-        return set().union(*(_named_beside(item, beside) for item in value)) if value else set()
-    if isinstance(value, dict) and shape_envelope.KEY_CHILD in value:
-        key = _beside_key(value[shape_envelope.KEY_BREP], beside)
-        return {key} if key is not None else set()
-    return set()
-
-
 def _serialize_tree(payload, beside=None) -> bytes:
     """A tree as a _TREE_MAGIC frame: its structure, then each distinct payload once.
 
@@ -251,8 +239,8 @@ def _beside_key(value, beside):
     return None
 
 
-def _deserialize_tree(data: bytes, beside=None):
-    """Inverse of '_serialize_tree()'. 'beside' is the payloads read with it, by their keys."""
+def _tree_header(data: bytes):
+    """'(header, length)' of a _TREE_MAGIC frame: its header, parsed, and how many bytes it takes."""
     encoding = data[len(_TREE_MAGIC) : len(_TREE_MAGIC) + 1]
     length = int.from_bytes(data[len(_TREE_MAGIC) + 1 : _TREE_HEADER], "big")
     header = data[_TREE_HEADER : _TREE_HEADER + length]
@@ -266,7 +254,12 @@ def _deserialize_tree(data: bytes, beside=None):
             raise ValueError("this tree's header did not decompress into %d bytes or fewer" % limit)
     elif encoding != _TREE_PLAIN:
         raise ValueError("unknown tree encoding %r" % (encoding,))
-    header = json.loads(header.decode("utf-8"))
+    return json.loads(header.decode("utf-8")), length
+
+
+def _deserialize_tree(data: bytes, beside=None):
+    """Inverse of '_serialize_tree()'. 'beside' is the payloads read with it, by their keys."""
+    header, length = _tree_header(data)
     view = memoryview(data)
     table = {}
     offset = _TREE_HEADER + length
@@ -298,6 +291,51 @@ def _deserialize_tree(data: bytes, beside=None):
 def _is_tree(data) -> bool:
     """Whether stored bytes are a _TREE_MAGIC frame."""
     return data is not None and bytes(data[: len(_TREE_MAGIC)]) == _TREE_MAGIC
+
+
+def _named_by(data) -> set:
+    """The keys of the entries whose geometry stored bytes name rather than hold: a frame's "beside".
+
+    Empty for anything else, a frame that names nothing among them (an
+    assembly's tree), and bytes that do not parse as a frame at all - which no
+    reader takes for anything but a miss, so there is nothing to keep them
+    beside.
+    """
+    if not _is_tree(data):
+        return set()
+    try:
+        beside = _tree_header(data)[0].get("beside")
+    except Exception:
+        return set()
+    return {key for key in beside.values() if isinstance(key, str)} if isinstance(beside, dict) else set()
+
+
+def _sizes_naming(named: dict, entries: dict) -> dict:
+    """What each tier's window judges an entry by that names others' geometry: the size of theirs.
+
+    'named' is, by key, the keys each entry names ('_named_by'); 'entries' is
+    the stored bytes at hand, by key. An entry that names the geometry beside
+    it - a shape's components that are pieces of it (shape_envelope.KEY_CHILD)
+    - is a few hundred bytes whatever that geometry weighs, and a tier with a
+    minimum entry size (every persistent one, at 100 bytes by default) would
+    keep the geometry and refuse it: a hit that comes back without its
+    components. Judged at the size of the geometry instead, a tier keeps both
+    or neither.
+
+    None - no tier - for one that names an entry not at hand: read back
+    without that geometry it is a miss to every reader (see
+    '_deserialize_tree'), so a tier holding it would hold components with no
+    compound beside them.
+    """
+    sizes = {}
+    for key, others in named.items():
+        if not others:
+            continue
+        if any(not entries.get(other) for other in others):
+            sizes[key] = None
+        else:
+            sizes[key] = max(len(entries[other]) for other in others)
+    return sizes
 
 
 def _deserialize(data: bytes, beside=None):
@@ -374,6 +412,17 @@ class ShapeCache(Cache):
             return False
         return True
 
+    def _admission_sizes(self, entries: dict[str, bytes]) -> dict:
+        """An entry naming the geometry beside it is judged at that geometry's size (see '_sizes_naming').
+
+        What 'Cache' asks of every write and of every promotion: a hit copied
+        into a nearer tier is offered to it on the terms a write would have
+        offered it, so a tier never comes to hold a compound copied from a
+        farther one while refusing the components copied with it - or the
+        components without the compound, when only they were found.
+        """
+        return _sizes_naming({key: _named_by(data) for key, data in entries.items()}, entries)
+
     async def write_async(self, hash: CacheHash, items: dict[str, object]) -> dict[str, bool]:
         stored = {}
         if self.enabled:
@@ -385,18 +434,12 @@ class ShapeCache(Cache):
                 if shape_envelope.is_shape_object(value) and shape_envelope.KEY_CHILD not in value
             }
             serialized = {key: _serialize(value, beside) for key, value in items.items()}
-            # Components that name the geometry beside them are a few hundred
-            # bytes whatever that geometry weighs, and a tier with a minimum
-            # entry size would keep the geometry and refuse them - a hit that
-            # comes back without its components. So each tier is asked about
-            # them at the size of the geometry they name: it keeps both or
-            # neither.
-            sizes = {}
-            for key, value in items.items():
-                named = [serialized[other] for other in _named_beside(value, beside) if other in serialized]
-                if named:
-                    sizes[key] = max(len(data) for data in named)
-            stored = await self.write_data_async(hash, serialized, sizes)
+            # Each tier keeps the components that name the geometry beside them
+            # exactly where it keeps that geometry (see '_admission_sizes').
+            # Asked only of what can name anything, so that an assembly's tree,
+            # which names nothing, is not parsed back as it is written.
+            named = {key: _named_by(serialized[key]) for key, value in items.items() if _holds_pieces(value)}
+            stored = await self.write_data_async(hash, serialized, _sizes_naming(named, serialized))
 
         results = {}
         for key, value in items.items():

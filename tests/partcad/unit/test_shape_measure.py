@@ -31,7 +31,7 @@ from OCP.BRepGProp import BRepGProp
 from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCone, BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakeSphere
 from OCP.gp import gp_Ax1, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
 from OCP.GProp import GProp_GProps
-from OCP.TopAbs import TopAbs_FACE, TopAbs_SOLID
+from OCP.TopAbs import TopAbs_FACE, TopAbs_SHELL, TopAbs_SOLID
 from OCP.TopExp import TopExp_Explorer
 from OCP.TopLoc import TopLoc_Location
 from OCP.TopoDS import TopoDS_Compound
@@ -55,7 +55,14 @@ def _integrated_whole(shape):
         solids.append(props)
         explorer.Next()
     found = sorted((props.Mass() for props in solids), reverse=True)
-    measured = {"bbox": shape_measure.bbox(shape), "volume": sum(found) if found else None, "solids": len(found)}
+    measured = {
+        "bbox": shape_measure.bbox(shape),
+        "volume": sum(found) if found else None,
+        "solids": len(found),
+        # Not integrated, and not worked out from children: counted on the
+        # whole shape, as it always was.
+        "freeShells": shape_measure.free_shells(shape),
+    }
     if solids and all(props.Mass() > 0.0 for props in solids):
         total = GProp_GProps()
         for props in solids:
@@ -71,6 +78,7 @@ def _assert_same(measured, expected):
     """The same measurements, to float rounding - and the box exactly."""
     assert set(measured) == set(expected)
     assert measured["solids"] == expected["solids"]
+    assert measured["freeShells"] == expected["freeShells"]
     # The union of the children's boxes is the box OCCT draws round the whole:
     # min and max are exact, so this is equality, not closeness.
     assert measured["bbox"] == expected["bbox"]
@@ -140,6 +148,7 @@ def _compounds():
             distinct[0], TopExp_Explorer(_box(), TopAbs_FACE).Current(), _wire(), distinct[3]
         ),
         "a solid turned inside out beside a correct one": _compound(distinct[0], distinct[1].Reversed()),
+        "a skin beside a solid": _compound(TopExp_Explorer(_box(), TopAbs_SHELL).Current(), distinct[2]),
         "nothing at all": _compound(),
         "a placed compound": _placed(_compound(*placements[:3]), (-500.0, 3.0, 9.0), (0.0, 1.0, 0.0), 90.0),
     }
@@ -255,6 +264,6 @@ def test_a_null_shape_measures_as_holding_nothing():
     """As it did measured whole - and without asking OCCT anything, which would crash."""
     from OCP.TopoDS import TopoDS_Shape
 
-    nothing = {"bbox": None, "volume": None, "solids": 0}
+    nothing = {"bbox": None, "volume": None, "solids": 0, "freeShells": 0}
     assert shape_measure.Measurer().measurements(TopoDS_Shape()) == nothing
     assert shape_measure.measurements_or_none(TopoDS_Shape()) == nothing

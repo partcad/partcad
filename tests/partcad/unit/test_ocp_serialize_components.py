@@ -199,3 +199,61 @@ def test_what_is_encoded_travels_as_json():
 
     assert json.loads(json.dumps(components))[0][ocp_serialize.KEY_CHILD] == 0
     assert list(_leaves(components))
+
+
+# What a part factory asks of the wrapper building a part (see 'Shape.finish_request').
+_VALIDATE = {"validate": {"solidify": True}}
+_MOVE = [[0.0, 0.0, 1000.0], [0.0, 0.0, 1.0], 0.0]
+
+
+def _finishing(monkeypatch, finish):
+    """The request this test's wrapper answers asks for 'finish' (see 'wrapper_common.finished')."""
+    monkeypatch.setattr(wrapper_common, "_request_finish", finish)
+    monkeypatch.setattr(wrapper_common, "_request_name", "//pkg:part")
+    monkeypatch.setattr(wrapper_common, "_request_label", "part")
+
+
+def test_a_finished_part_s_components_refer_into_the_compound_it_was_finished_into(monkeypatch):
+    """What the core is handed is the finished compound, so that is what the components are pieces of."""
+    _finishing(monkeypatch, _VALIDATE)
+    compound, raw = wrapper_common.combine(_solids(), "part")
+
+    shape, components = wrapper_common.encode_combined(compound, raw, finish=True)
+
+    metadata = shape[ocp_serialize.KEY_METADATA]
+    assert metadata[ocp_serialize.METADATA_FINISHED] == {
+        ocp_serialize.FINISHED_VALIDATED: {"solidify": True, "problems": []}
+    }
+    assert metadata[ocp_serialize.METADATA_MEASUREMENTS]["solids"] == 3
+    assert [component[ocp_serialize.KEY_CHILD] for component in components] == [0, 1, 2]
+    for component in components:
+        assert component[ocp_serialize.KEY_BREP] is shape[ocp_serialize.KEY_BREP]
+        # The claim is about the part, and the core takes it off the part alone.
+        assert set(component[ocp_serialize.KEY_METADATA]) == {ocp_serialize.METADATA_MEASUREMENTS}
+
+
+def test_a_moved_part_s_components_stay_where_the_script_left_them(monkeypatch):
+    """Moving a part copies it, so it holds none of them - and the core has never moved them with it."""
+    _finishing(monkeypatch, dict(_VALIDATE, offset=_MOVE))
+    solids = _solids()
+    compound, raw = wrapper_common.combine(solids, "part")
+
+    shape, components = wrapper_common.encode_combined(compound, raw, finish=True)
+
+    assert shape[ocp_serialize.KEY_METADATA][ocp_serialize.METADATA_FINISHED]["offset"] == _MOVE
+    moved = shape_measure.bbox(ocp_serialize.decode_shape(shape))
+    assert moved[2] == pytest.approx(shape_measure.bbox(compound)[2] + 1000.0)
+    for component, solid in zip(components, solids):
+        assert ocp_serialize.KEY_CHILD not in component
+        assert shape_measure.bbox(ocp_serialize.decode_shape(component)) == pytest.approx(shape_measure.bbox(solid))
+
+
+def test_a_part_that_asked_for_nothing_is_not_finished(monkeypatch):
+    """A sketch, a failed build: the compound as 'combine()' made it, claiming nothing."""
+    _finishing(monkeypatch, _VALIDATE)
+    compound, raw = wrapper_common.combine(_solids(), "part")
+
+    shape, components = wrapper_common.encode_combined(compound, raw, finish=False)
+
+    assert ocp_serialize.METADATA_FINISHED not in shape[ocp_serialize.KEY_METADATA]
+    assert [component[ocp_serialize.KEY_CHILD] for component in components] == [0, 1, 2]

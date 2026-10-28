@@ -235,7 +235,7 @@ at all).
   "not here" is remembered for `KNOWN_MISS_TTL` (60 s) and cleared by this process's own write of it; a lookup that
   failed says nothing and is not remembered (`CacheBackend._read_guarded` answers None for "could not find out").
   A hit in a farther tier is copied into the nearer ones that missed it, within each one's size window
-  (`Cache._promote_async`). So a test asserting on what a server holds flushes first (`cache_io.flush()`,
+  (`Cache._promote_async`), which judges it exactly as a write would (`Cache._admission_sizes`). So a test asserting on what a server holds flushes first (`cache_io.flush()`,
   `Cache.flush_async()`), and `tests/partcad/conftest.py` stops the thread after every test.
 - **A file is keyed on all of its content** (`cache_hash.file_digest`): the SHA-256 of it, never its path or its
   timestamps, so a shared tier is shared. The digest is remembered by the file's identity (`cache_hash.FileMemo`:
@@ -858,7 +858,13 @@ at all).
   payload, because without it the payload is a different shape. A component the compound does not hold (a face
   a part's script returned beside its solids) is still a shape of its own. A reader that opens a payload
   itself rather than through those decoders (`shape_from_payload`, a mesh keyed by `payload_digest`) would have
-  to honour `child` too; nothing that does is handed components.
+  to honour `child` too; nothing that does is handed components. The compound they refer into is the *finished*
+  one, the part the core is handed: `wrapper_common.encode_combined` validates, moves and scales the live
+  compound as `finished()` would (below) before it encodes it and refers the components into it, so the
+  compound is measured once, as it leaves. Validating what `combine()` made changes nothing in it, so its
+  components are still its children; a part moved or scaled is a copy holding none of them, and its
+  components are then shapes of their own, where the script left them - the core has never moved a part's
+  components with it.
 
   `Shape.get_bounding_box_async` reads that recorded box too; it does not measure a shape that carries one.
   `wrapper_measure` still exists for what was not measured at build time: `measure.bbox(frame=...)`, which
@@ -1416,7 +1422,10 @@ at all).
   is components that are references into their compound (`KEY_CHILD`, above): their entry is a tree frame whose
   header says the payload is the one in the geometry entry written beside it (`"beside"`), so the cache holds the
   geometry once; read back, it needs that entry read with it and holding the payload it names, by digest, or it is
-  a miss. No earlier release can be the one reading it, and that is why the frame is allowed there: the build123d and
+  a miss. Being a few hundred bytes whatever the geometry weighs, such an entry is offered to each tier at the size
+  of the geometry it names (`ShapeCache._admission_sizes`), on a write and on a promotion alike, so a tier with a
+  minimum entry size holds both or neither; copied from a farther tier without that geometry, it is copied nowhere.
+  No earlier release can be the one reading it, and that is why the frame is allowed there: the build123d and
   cadquery wrappers raised their `CACHE_VERSION` when they started producing such components, a shape's key carries
   the versions of the wrappers that build it (`ShapeFactory.code_versions`), so an earlier release computes another
   key and misses the geometry and its components alike. A new kind of component entry gets the same treatment, or

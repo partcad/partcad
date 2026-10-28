@@ -626,7 +626,7 @@ def encode_assembly(children, name=None, label=None) -> dict:
     return {"name": name, "label": label, KEY_ASSEMBLY: list(children)}
 
 
-def encode_combined(compound, components, name=None, label=None):
+def encode_combined(compound, components, name=None, label=None, metadata=None):
     """'compound' encoded, and 'components' as references into it: '(shape object, components)'.
 
     What 'wrapper_common.combine()' hands back is a compound and the shapes it
@@ -640,14 +640,19 @@ def encode_combined(compound, components, name=None, label=None):
     cached once.
 
     A component the compound does not hold - a face a part's script returned
-    beside its solids, which a part's compound leaves out - is encoded as a
-    shape of its own, as before. 'components' keeps its nesting.
+    beside its solids, which a part's compound leaves out, or any of them once
+    the part has been moved, which copies the compound - is encoded as a shape
+    of its own, as before. 'components' keeps its nesting.
+
+    'metadata' is the compound's, as 'encode_shape()' takes it: what finishing
+    the part said about it ('wrapper_common.encode_combined()'). The
+    components carry their measurements alone.
     """
     import shape_measure
 
     _ensure_ocp()
     measurer = shape_measure.Measurer()
-    shape = encode_shape(compound, name=name, label=label, measurer=measurer)
+    shape = encode_shape(compound, name=name, label=label, metadata=metadata, measurer=measurer)
 
     # Where each child sits in the compound, by what OCP hashes a shape by (its
     # 'TShape' and location); 'IsEqual()' then adds the orientation.

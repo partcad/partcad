@@ -1255,7 +1255,8 @@ class Shape(ShapeConfiguration):
                     # the same entry as the geometry (see cache_shape.py). The
                     # components are an entry of their own; one that names the
                     # geometry beside it is admitted to a tier exactly where
-                    # that geometry is (see 'ShapeCache.write_async'), so a tier's
+                    # that geometry is, written or copied there from a farther
+                    # tier (see 'ShapeCache._admission_sizes'), so a tier's
                     # size window cannot keep the one and drop the other.
                     #
                     # Set only on a hit, and to '{}' rather than None when the

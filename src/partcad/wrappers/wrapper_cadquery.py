@@ -95,12 +95,12 @@ def process(path, request):
     # (see wrapper_common.encode_combined).
     compound, components = wrapper_common.combine(shapes, request.get("kind", "part"))
     # A part is validated and moved here, while it is live (see
-    # wrapper_common.finished); a sketch asks for none of it. Not one the core
-    # is about to drop: a failed build, or one that showed nothing.
-    if build_result.success and components:
-        compound = wrapper_common.finished(compound)
-    else:
-        compound, components = wrapper_common.encode_combined(compound, components)
+    # wrapper_common.finished), and its components refer into what that made of
+    # it; a sketch asks for none of it. Not one the core is about to drop: a
+    # failed build, or one that showed nothing.
+    compound, components = wrapper_common.encode_combined(
+        compound, components, finish=bool(build_result.success and components)
+    )
     return {
         "success": build_result.success,
         "exception": wrapper_common.exception_to_str(build_result.exception),
